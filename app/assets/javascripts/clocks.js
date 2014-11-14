@@ -6,15 +6,39 @@ var ready = function() {
     var W = 100;
     var H = 100;
 
-    function draw_face () {
+    function drawFace () {
       ctx.clearRect(0, 0, W, H);
       ctx.beginPath();
-      ctx.arc(51, 51, 45, 0, 2*Math.PI);
-      ctx.lineWidth = 5;
+      t = new Date();
+      ctx.arc(50, 50, 45, 0, 2*Math.PI);
+      ctx.lineWidth = 4;
+      ctx.fillStyle = "white";
+      ctx.fill();
       ctx.stroke();
+      ctx.closePath();
     }
 
-    function deg_sin (angle) {
+    function drawNumbers () {
+      ctx.beginPath();
+      ctx.fillStyle = "black";
+      for (var i=0;i<12;i++) {
+        sides = calculateSides(35, ((i + 1) * 30 - 90));
+        if (i < 9) {sides[0] += 2};
+        ctx.fillText((i+1).toString(), sides[0] - 5, sides[1] + 4);
+      }
+      ctx.lineWidth = 1;
+      ctx.moveTo(50, 50);
+      for (var i=0;i<60;i++) {
+        tick_mark_length = (i*6%30 == 0 ? 38 : 41)
+        tick_mark_start = calculateSides(tick_mark_length, i*6);
+        tick_mark_end = calculateSides(45, i*6);
+        ctx.moveTo(tick_mark_start[0], tick_mark_start[1]);
+        ctx.lineTo(tick_mark_end[0], tick_mark_end[1]);
+        ctx.stroke();
+      }
+    }
+
+    function degSin (angle) {
       return Math.sin(Math.PI * (angle/180));
     }
 
@@ -22,23 +46,24 @@ var ready = function() {
       var t = new Date();
       var hr = t.getHours() > 12 ? t.getHours() - 12 : t.getHours();
       var sec_deg = (360/60) * t.getSeconds();
-      var min_deg = (360/60) * t.getMinutes() + (sec_deg / (12*60));
+      var min_deg = (360/60) * t.getMinutes() + (sec_deg / 60);
       var hr_deg = (360/12) * hr + (min_deg / 12);
       return [sec_deg - 90, min_deg - 90, hr_deg - 90];
     }
 
     function calculateSides (side_c, angle_a) {
-      x = deg_sin(90 - angle_a) * side_c
-      y = deg_sin(angle_a) * side_c
+      x = degSin(90 - angle_a) * side_c
+      y = degSin(angle_a) * side_c
       return [x + 50, y + 50];
     }
 
     function draw () {
-      draw_face();
+      drawFace();
+      drawNumbers();
 
       time_deg = degrees();
-      sec_hand_sides = calculateSides(35, time_deg[0]);
-      min_hand_sides = calculateSides(30, time_deg[1]);
+      sec_hand_sides = calculateSides(40, time_deg[0]);
+      min_hand_sides = calculateSides(32, time_deg[1]);
       hr_hand_sides = calculateSides(25, time_deg[2]);
 
       ctx.beginPath();
@@ -46,7 +71,7 @@ var ready = function() {
       ctx.moveTo(50, 50);
       ctx.lineTo(hr_hand_sides[0], hr_hand_sides[1]);
       ctx.stroke();
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 3;
       ctx.moveTo(50, 50);
       ctx.lineTo(min_hand_sides[0], min_hand_sides[1]);
       ctx.stroke();
@@ -55,7 +80,7 @@ var ready = function() {
       ctx.lineTo(sec_hand_sides[0], sec_hand_sides[1]);
       ctx.stroke();
     }
-
+    draw();
     setInterval(function(){draw();}, 1000);
   }
 }
