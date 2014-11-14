@@ -7,16 +7,16 @@ var ready = function() {
     var H = 250;
 
     var particles = [];
-    for (var i=0;i<500;i++) {
+    for (var i=0;i<250;i++) {
       particles.push(new create_particle());
     };
 
     function create_particle() {
-      this.myX = Math.random()*(W) + 15;
-      this.myY = Math.random()*15 + (H/2) - 40;
+      this.myX = W/2
+      this.myY = H/2
 
-      this.velX = Math.random()*8 - 4;
-      this.velY = Math.random()*8 - 4;
+      this.velX = Math.random()*4 - 2;
+      this.velY = Math.random()*4 - 2;
 
       this.myRad = Math.random()*10+1;
     }
