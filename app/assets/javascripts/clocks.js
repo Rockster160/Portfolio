@@ -1,68 +1,62 @@
 var ready = function() {
   var canvas = document.getElementById("clocks");
   if (canvas) {
-  console.log("Hello")
     var ctx = canvas.getContext("2d");
 
-    var W = 500;
-    var H = 500;
+    var W = 100;
+    var H = 100;
 
-    var particles = [];
-    for (var i=0;i<1000;i++) {
-      particles.push(new create_particle());
-    };
-
-    function create_particle() {
-      this.myX = Math.random()*(W) + 15;
-      this.myY = Math.random()*15 + (H/2) - 40;
-
-      this.velX = Math.random()*10 - 5;
-      this.velY = Math.random()*10 - 5;
-
-      this.myRad = Math.random()*10+1;
-    }
-
-    function draw() {
+    function draw_face () {
       ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = "rgba(255,255,255, 0)";
-      ctx.fillRect(0, 0, W, H);
-        // ctx.fillStyle = "rgba(255,255,25, 1)";
-        // ctx.fillRect(10, 10, (W), 15);
-
-      for (var t=0;t<particles.length;t++) {
-        var par = particles[t];
-        ctx.beginPath();
-
-        var grad = ctx.createRadialGradient(par.myX,par.myY,0,par.myX,par.myY,par.myRad);
-        grad.addColorStop(0,"cyan"); //Core
-        grad.addColorStop(0.5,"blue"); //Body
-        grad.addColorStop(1,"white"); //Background fade
-
-        ctx.fillStyle = grad;
-        ctx.arc(par.myX,par.myY,par.myRad,Math.PI*2,false);
-        ctx.fill();
-
-        par.myX += par.velX;
-        par.myY += par.velY;
-
-        if (par.myX > W) {par.myX = 0;};
-        if (par.myX < 0) {par.myX = W;};
-        if (par.myY > H) {par.myY = 0;};
-        if (par.myY < 0) {par.myY = H;};
-      }
+      ctx.beginPath();
+      ctx.arc(51, 51, 45, 0, 2*Math.PI);
+      ctx.lineWidth = 5;
+      ctx.stroke();
     }
 
-    setTimeout(function () {
-        var x = 0;
-        var intervalID = window.setInterval(function () {
+    function deg_sin (angle) {
+      return Math.sin(Math.PI * (angle/180));
+    }
 
-           draw();
+    function degrees () {
+      var t = new Date();
+      var hr = t.getHours() > 12 ? t.getHours() - 12 : t.getHours();
+      var sec_deg = (360/60) * t.getSeconds();
+      var min_deg = (360/60) * t.getMinutes() + (sec_deg / (12*60));
+      var hr_deg = (360/12) * hr + (min_deg / 12);
+      return [sec_deg - 90, min_deg - 90, hr_deg - 90];
+    }
 
-           if (++x === 4000) {
-               window.clearInterval(intervalID);
-           }
-        }, 40);
-    }, 500);
+    function calculateSides (side_c, angle_a) {
+      x = deg_sin(90 - angle_a) * side_c
+      y = deg_sin(angle_a) * side_c
+      return [x + 50, y + 50];
+    }
+
+    function draw () {
+      draw_face();
+
+      time_deg = degrees();
+      sec_hand_sides = calculateSides(35, time_deg[0]);
+      min_hand_sides = calculateSides(30, time_deg[1]);
+      hr_hand_sides = calculateSides(25, time_deg[2]);
+
+      ctx.beginPath();
+      ctx.lineWidth = 6;
+      ctx.moveTo(50, 50);
+      ctx.lineTo(hr_hand_sides[0], hr_hand_sides[1]);
+      ctx.stroke();
+      ctx.lineWidth = 4;
+      ctx.moveTo(50, 50);
+      ctx.lineTo(min_hand_sides[0], min_hand_sides[1]);
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.moveTo(50, 50);
+      ctx.lineTo(sec_hand_sides[0], sec_hand_sides[1]);
+      ctx.stroke();
+    }
+
+    setInterval(function(){draw();}, 1000);
   }
 }
 
