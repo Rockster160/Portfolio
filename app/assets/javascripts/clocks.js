@@ -97,10 +97,13 @@ var ready = function() {
       mn = (str_minute.length < 2 ? "0" : "") + str_minute + ":";
       sc = (str_second.length < 2 ? "0" : "") + str_second;
       ctx.fillText(hr + mn + sc, 10, 10);
-      // drawSeg(20, 20, 0); //up
-      drawSeg(50, 25, 1); //right√√
-      drawSeg(20, 45, 2); //down
-      drawSeg(25, 25, 3); //left
+      drawSeg(20, 20, 0); //A - up √√
+      drawSeg(44, 44, 1); //B - right √√
+      drawSeg(44, 70, 1); //C - right √√
+      drawSeg(42, 72, 2); //D - down √√
+      drawSeg(18, 22, 3); //E - left √√
+      drawSeg(18, 48, 3); //F - left √√
+      drawSeg(20, 46, 4); //G - mid √
     }
 
     function drawSeg (x, y, index) {
@@ -108,16 +111,17 @@ var ready = function() {
       ctx.moveTo(x, y);
       var up = [[4, -1], [18, -1], [22, 0], [18, 4], [4, 4]];
       var right = [], down = [], left = []
-      for (i=0;i<up.length;i++) {
-        // left.push(up[i].reverse());
+      for ( i = 0; i < up.length; i++ ) {
         down.push([up[i][0] * -1, up[i][1] * -1]);
-        // down.push(left[i].reverse());
+        right.push([up[i][1] * -1, up[i][0] * -1]);
+        left.push([up[i][1], up[i][0]]);
       }
-      var mid = [[4, -1], [18, -1], [22, 0], [18, 4], [4, 4]];
+      var mid = [[4, -3], [18, -3], [22, 0], [18, 3], [4, 3]];
       if (index == 0) { drawLine(x, y, up); };
       if (index == 1) { drawLine(x, y, right); };
       if (index == 2) { drawLine(x, y, down); };
       if (index == 3) { drawLine(x, y, left); };
+      if (index == 4) { drawLine(x, y, mid); };
     }
 
     function drawLine (x, y, array) {
