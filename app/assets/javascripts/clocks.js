@@ -93,21 +93,95 @@ var ready = function() {
       str_hour = no_military.toString()
       str_minute = t.getMinutes().toString();
       str_second = t.getSeconds().toString();
-      hr = (str_hour.length < 2 ? "0" : "") + str_hour + ":";
-      mn = (str_minute.length < 2 ? "0" : "") + str_minute + ":";
+      hr = (str_hour.length < 2 ? "0" : "") + str_hour;
+      mn = (str_minute.length < 2 ? "0" : "") + str_minute;
       sc = (str_second.length < 2 ? "0" : "") + str_second;
-      ctx.fillText(hr + mn + sc, 10, 10);
-      drawSeg(20, 20, 0); //A - up √√
-      drawSeg(44, 44, 1); //B - right √√
-      drawSeg(44, 70, 1); //C - right √√
-      drawSeg(42, 72, 2); //D - down √√
-      drawSeg(18, 22, 3); //E - left √√
-      drawSeg(18, 48, 3); //F - left √√
-      drawSeg(20, 46, 4); //G - mid √
+      time = (hr+mn+sc).split("");
+      var blankSegment = [5, 38, 80, 112, 155, 187];
+      for (var i=0;i<6;i++) {
+        selectSeg(blankSegment[i], 5, 0);
+        drawSevenSeg(i, time[i].toString())
+      }
+    }
+
+    function drawSevenSeg (index, number) {
+      var x = 0, y = 5;
+      if (index == 0) { x = 5; };
+      if (index == 1) { x = 38; };
+      if (index == 2) { x = 80; };
+      if (index == 3) { x = 112; };
+      if (index == 4) { x = 155; };
+      if (index == 5) { x = 187; };
+      // 0, 2, 3, 5, 6, 7, 8, 9 - A
+      if (number == 0 || number == 2 || number == 3 || number == 5 || number == 6 || number == 7 || number == 8 || number == 9) {
+        selectSeg(x, y, "A");
+      }
+      // 0, 1, 2, 3, 4, 7, 8, 9 - B
+      if (number == 0 || number == 1 || number == 2 || number == 3 || number == 4 || number == 7 || number == 8 || number == 9) {
+        selectSeg(x, y, "B");
+      }
+      // 0, 1, 3, 4, 5, 6, 8, 9 - C
+      if (number == 0 || number == 1 || number == 3 || number == 4 || number == 5 || number == 6 || number == 7 || number == 8 || number == 9) {
+        selectSeg(x, y, "C");
+      }
+      // 0, 2, 3, 5, 6, 8, 9 - D
+      if (number == 0 || number == 2 || number == 3 || number == 5 || number == 6 || number == 8 || number == 9) {
+        selectSeg(x, y, "D");
+      }
+      // 0, 2, 6, 8 - E
+      if (number == 0 || number == 4 || number == 5 || number == 6 || number == 8 || number == 9) {
+        selectSeg(x, y, "E");
+      }
+      // 0, 4, 5, 6, 8, 9 - F
+      if (number == 0 || number == 2 || number == 6 || number == 8) {
+        selectSeg(x, y, "F");
+      }
+      // 2, 3, 4, 5, 6, 8, 9 - G
+      if (number == 2 || number == 3 || number == 4 || number == 5 || number == 6 || number == 8 || number == 9) {
+        selectSeg(x, y, "G");
+      }
+    }
+
+    function selectSeg(x, y, segment) {
+      ctx.beginPath();
+      ctx.fillStyle = "blue";
+      switch (segment) {
+        case "A":
+          drawSeg(x, y, 0); //A - up
+          break;
+        case "B":
+          drawSeg(x + 24, y + 24, 1); //B - right
+          break;
+        case "C":
+          drawSeg(x + 24, y + 50, 1); //C - right
+          break;
+        case "D":
+          drawSeg(x + 22, y + 52, 2); //D - down
+          break;
+        case "E":
+          drawSeg(x - 2, y + 2, 3); //E - left
+          break;
+        case "F":
+          drawSeg(x - 2, y + 28, 3); //F - left
+          break;
+        case "G":
+          drawSeg(x, y + 26, 4); //G - mid
+          break;
+        default: {
+            ctx.fillStyle = "#DDD";
+            drawSeg(x, y, 0); //A - up
+            drawSeg(x + 24, y + 24, 1); //B - right
+            drawSeg(x + 24, y + 50, 1); //C - right
+            drawSeg(x + 22, y + 52, 2); //D - down
+            drawSeg(x - 2, y + 2, 3); //E - left
+            drawSeg(x - 2, y + 28, 3); //F - left
+            drawSeg(x, y + 26, 4); //G - mid
+        }
+      }
+      ctx.fillStyle = "black";
     }
 
     function drawSeg (x, y, index) {
-      ctx.fillStyle = "black";
       ctx.moveTo(x, y);
       var up = [[4, -1], [18, -1], [22, 0], [18, 4], [4, 4]];
       var right = [], down = [], left = []
