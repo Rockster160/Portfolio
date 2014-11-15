@@ -33,8 +33,8 @@ var ready = function() {
         ctx.beginPath();
 
         var grad = ctx.createRadialGradient(par.myX,par.myY,0,par.myX,par.myY,par.myRad);
-        grad.addColorStop(0,"cyan"); //Core
-        grad.addColorStop(0.5,"blue"); //Body
+        grad.addColorStop(0,"pink"); //Core
+        grad.addColorStop(0.5,"red"); //Body
         grad.addColorStop(1,"white"); //Background fade
 
         ctx.fillStyle = grad;
