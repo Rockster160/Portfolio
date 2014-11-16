@@ -233,9 +233,9 @@ var ready = function() {
         binary(t);
       }
     }
-    
+
     draw();
-    setInterval(function(){draw();}, 1000);
+    setInterval(function(){draw();}, 100);
   }
 }
 
