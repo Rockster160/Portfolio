@@ -1,3 +1,7 @@
+$( window ).load(function() {
+  $('canvas').hide().fadeIn('slow');
+});
+
 var ready = function() {
   var canvas = document.getElementById("clocks");
   if (canvas) {
@@ -12,6 +16,11 @@ var ready = function() {
       which_clock += 1;
       if (which_clock == 3) {which_clock = 0};
       draw();
+      $('#clocks').addClass('clock_animations');
+      setTimeout(function(){
+        $('#clocks').removeClass('clock_animations');
+      },500);
+      
     })
 // ----------------------------- Analog ----------------------------------------
     function analog (t) {

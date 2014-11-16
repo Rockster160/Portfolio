@@ -13,3 +13,26 @@
  *= require_tree .
  *= require_self
  */
+
+.clock_animations{
+  position: relative; 
+  -webkit-animation: slideclockfromright .5s ease;
+  -webkit-animation-delay: 0s;
+  animation: slideclockfromright .5s ease;
+  animation-delay: 0s;
+}
+
+
+@-webkit-keyframes slideclockfromright {
+  0% { left: 100%;
+  opacity: 0; }
+  100% { left: 0%; 
+  	opacity: 1;}
+}
+
+@keyframes slideclockfromright {
+  0% { left: 100%;
+  opacity: 0; }
+  100% { left: 0%;
+  opacity: 1; }
+}
