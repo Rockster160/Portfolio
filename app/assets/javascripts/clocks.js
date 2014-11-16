@@ -1,3 +1,4 @@
+// Clock animation - on page load clock fades in after hidden
 $( window ).load(function() {
   $('canvas').hide().fadeIn('slow');
 });
@@ -16,6 +17,13 @@ var ready = function() {
       which_clock += 1;
       if (which_clock == 3) {which_clock = 0};
       draw();
+      // clocks get added a class that triggers
+      // the css animation 
+      // then the time the animation ends
+      // is the time that then the class is removed
+      // via a set timeout function so that
+      // upon another click the clock will keep doing
+      // the animations per clock change 
       $('#clocks').addClass('clock_animations');
       setTimeout(function(){
         $('#clocks').removeClass('clock_animations');
