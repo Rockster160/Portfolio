@@ -13,6 +13,30 @@ var ready = function() {
       if (which_clock == 3) {which_clock = 0};
       draw();
     })
+// ----------------------------- Analog ----------------------------------------
+    function analog (t) {
+      drawFace();
+      drawNumbers();
+
+      time_deg = degrees(t);
+      sec_hand_sides = calculateSides(40, time_deg[0]);
+      min_hand_sides = calculateSides(32, time_deg[1]);
+      hr_hand_sides = calculateSides(25, time_deg[2]);
+
+      ctx.beginPath();
+      ctx.lineWidth = 5;
+      ctx.moveTo(50, 50);
+      ctx.lineTo(hr_hand_sides[0], hr_hand_sides[1]);
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.moveTo(50, 50);
+      ctx.lineTo(min_hand_sides[0], min_hand_sides[1]);
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.moveTo(50, 50);
+      ctx.lineTo(sec_hand_sides[0], sec_hand_sides[1]);
+      ctx.stroke();
+    }
 
     function drawFace () {
       ctx.clearRect(0, 0, W, H);
@@ -45,6 +69,12 @@ var ready = function() {
       }
     }
 
+    function calculateSides (side_c, angle_a) {
+      x = degSin(90 - angle_a) * side_c
+      y = degSin(angle_a) * side_c
+      return [x + 50, y + 50];
+    }
+
     function degSin (angle) {
       return Math.sin(Math.PI * (angle/180));
     }
@@ -56,36 +86,7 @@ var ready = function() {
       var hr_deg = (360/12) * hr + (min_deg / 12);
       return [sec_deg - 90, min_deg - 90, hr_deg - 90];
     }
-
-    function calculateSides (side_c, angle_a) {
-      x = degSin(90 - angle_a) * side_c
-      y = degSin(angle_a) * side_c
-      return [x + 50, y + 50];
-    }
-
-    function analog (t) {
-      drawFace();
-      drawNumbers();
-
-      time_deg = degrees(t);
-      sec_hand_sides = calculateSides(40, time_deg[0]);
-      min_hand_sides = calculateSides(32, time_deg[1]);
-      hr_hand_sides = calculateSides(25, time_deg[2]);
-
-      ctx.beginPath();
-      ctx.lineWidth = 5;
-      ctx.moveTo(50, 50);
-      ctx.lineTo(hr_hand_sides[0], hr_hand_sides[1]);
-      ctx.stroke();
-      ctx.lineWidth = 3;
-      ctx.moveTo(50, 50);
-      ctx.lineTo(min_hand_sides[0], min_hand_sides[1]);
-      ctx.stroke();
-      ctx.lineWidth = 2;
-      ctx.moveTo(50, 50);
-      ctx.lineTo(sec_hand_sides[0], sec_hand_sides[1]);
-      ctx.stroke();
-    }
+// --------------------------- /Analog -----------------------------------------
 // --------------------------- Digital -----------------------------------------
     function digital (t) {
       no_military = t.getHours() > 12 ? t.getHours() - 12 : t.getHours();
@@ -207,6 +208,7 @@ var ready = function() {
       }
     }
 // --------------------------- /Digital ----------------------------------------
+// ---------------------------- Binary -----------------------------------------
     function binary (t) {
       ctx.clearRect(0, 0, W, H);
       times = [t.getHours(), t.getMinutes(), t.getSeconds()]
@@ -218,7 +220,7 @@ var ready = function() {
         ctx.fillText(piece.join(""), 10, 10 + (i*10));
       }
     }
-
+// ---------------------------- /Binary ----------------------------------------
     function draw () {
       var t = new Date();
       if (which_clock == 0) {
