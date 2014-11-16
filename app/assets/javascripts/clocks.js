@@ -233,6 +233,7 @@ var ready = function() {
         binary(t);
       }
     }
+    
     draw();
     setInterval(function(){draw();}, 1000);
   }
