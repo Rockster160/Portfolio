@@ -4,7 +4,7 @@ var ready = function() {
     var ctx = canvas.getContext("2d");
 
     var which_clock = 1;
-    var W = 200;
+    var W = 250;
     var H = 100;
 
     $('#clocks').click(function() {
@@ -86,9 +86,8 @@ var ready = function() {
       ctx.lineTo(sec_hand_sides[0], sec_hand_sides[1]);
       ctx.stroke();
     }
-
+// --------------------------- Digital -----------------------------------------
     function digital (t) {
-      ctx.clearRect(0, 0, W, H);
       no_military = t.getHours() > 12 ? t.getHours() - 12 : t.getHours();
       str_hour = no_military.toString()
       str_minute = t.getMinutes().toString();
@@ -97,11 +96,77 @@ var ready = function() {
       mn = (str_minute.length < 2 ? "0" : "") + str_minute;
       sc = (str_second.length < 2 ? "0" : "") + str_second;
       time = (hr+mn+sc).split("");
+
+      ctx.clearRect(0, 0, W, H);
       var blankSegment = [5, 38, 80, 112, 155, 187];
       for (var i=0;i<6;i++) {
         selectSeg(blankSegment[i], 5, 0);
         drawSevenSeg(i, time[i].toString())
       }
+    }
+
+    function selectSeg(x, y, segment) {
+      ctx.beginPath();
+      ctx.fillStyle = "blue";
+      switch (segment) {
+        case "A":
+          drawSeg(x, y, 0); //A - up
+          break;
+        case "B":
+          drawSeg(x + 24, y + 24, 1); //B - right
+          break;
+        case "C":
+          drawSeg(x + 24, y + 50, 1); //C - right
+          break;
+        case "D":
+          drawSeg(x + 22, y + 52, 2); //D - down
+          break;
+        case "E":
+          drawSeg(x - 2, y + 2, 3); //E - left
+          break;
+        case "F":
+          drawSeg(x - 2, y + 28, 3); //F - left
+          break;
+        case "G":
+          drawSeg(x, y + 26, 4); //G - mid
+          break;
+        default: {
+            ctx.fillStyle = "#EEE"
+            drawSeg(x, y, 0); //A - up
+            drawSeg(x + 24, y + 24, 1); //B - right
+            drawSeg(x + 24, y + 50, 1); //C - right
+            drawSeg(x + 22, y + 52, 2); //D - down
+            drawSeg(x - 2, y + 2, 3); //E - left
+            drawSeg(x - 2, y + 28, 3); //F - left
+            drawSeg(x, y + 26, 4); //G - mid
+        }
+      }
+      ctx.fillStyle = "black";
+    }
+
+    function drawSeg (x, y, index) {
+      ctx.moveTo(x, y);
+      var up = [[4, -1], [18, -1], [22, 0], [18, 4], [4, 4]];
+      var right = [], down = [], left = []
+      for ( i = 0; i < up.length; i++ ) {
+        down.push([up[i][0] * -1, up[i][1] * -1]);
+        right.push([up[i][1] * -1, up[i][0] * -1]);
+        left.push([up[i][1], up[i][0]]);
+      }
+      var mid = [[4, -3], [18, -3], [22, 0], [18, 3], [4, 3]];
+      if (index == 0) { drawLine(x, y, up); };
+      if (index == 1) { drawLine(x, y, right); };
+      if (index == 2) { drawLine(x, y, down); };
+      if (index == 3) { drawLine(x, y, left); };
+      if (index == 4) { drawLine(x, y, mid); };
+    }
+
+    function drawLine (x, y, array) {
+      for (var i=0;i<array.length;i++) {
+        ctx.lineTo(x + array[i][0], y + array[i][1]);
+      }
+      ctx.closePath();
+      ctx.fill();
     }
 
     function drawSevenSeg (index, number) {
@@ -141,72 +206,7 @@ var ready = function() {
         selectSeg(x, y, "G");
       }
     }
-
-    function selectSeg(x, y, segment) {
-      ctx.beginPath();
-      ctx.fillStyle = "blue";
-      switch (segment) {
-        case "A":
-          drawSeg(x, y, 0); //A - up
-          break;
-        case "B":
-          drawSeg(x + 24, y + 24, 1); //B - right
-          break;
-        case "C":
-          drawSeg(x + 24, y + 50, 1); //C - right
-          break;
-        case "D":
-          drawSeg(x + 22, y + 52, 2); //D - down
-          break;
-        case "E":
-          drawSeg(x - 2, y + 2, 3); //E - left
-          break;
-        case "F":
-          drawSeg(x - 2, y + 28, 3); //F - left
-          break;
-        case "G":
-          drawSeg(x, y + 26, 4); //G - mid
-          break;
-        default: {
-            ctx.fillStyle = "#DDD";
-            drawSeg(x, y, 0); //A - up
-            drawSeg(x + 24, y + 24, 1); //B - right
-            drawSeg(x + 24, y + 50, 1); //C - right
-            drawSeg(x + 22, y + 52, 2); //D - down
-            drawSeg(x - 2, y + 2, 3); //E - left
-            drawSeg(x - 2, y + 28, 3); //F - left
-            drawSeg(x, y + 26, 4); //G - mid
-        }
-      }
-      ctx.fillStyle = "black";
-    }
-
-    function drawSeg (x, y, index) {
-      ctx.moveTo(x, y);
-      var up = [[4, -1], [18, -1], [22, 0], [18, 4], [4, 4]];
-      var right = [], down = [], left = []
-      for ( i = 0; i < up.length; i++ ) {
-        down.push([up[i][0] * -1, up[i][1] * -1]);
-        right.push([up[i][1] * -1, up[i][0] * -1]);
-        left.push([up[i][1], up[i][0]]);
-      }
-      var mid = [[4, -3], [18, -3], [22, 0], [18, 3], [4, 3]];
-      if (index == 0) { drawLine(x, y, up); };
-      if (index == 1) { drawLine(x, y, right); };
-      if (index == 2) { drawLine(x, y, down); };
-      if (index == 3) { drawLine(x, y, left); };
-      if (index == 4) { drawLine(x, y, mid); };
-    }
-
-    function drawLine (x, y, array) {
-      for (var i=0;i<array.length;i++) {
-        ctx.lineTo(x + array[i][0], y + array[i][1]);
-      }
-      ctx.stroke();
-      ctx.closePath();
-      ctx.fill();
-    }
-
+// --------------------------- /Digital ----------------------------------------
     function binary (t) {
       ctx.clearRect(0, 0, W, H);
       times = [t.getHours(), t.getMinutes(), t.getSeconds()]
