@@ -241,15 +241,18 @@ var ready = function() {
 
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = "black";
-      ctx.fillText("Click Me!", 10, 15);
+      ctx.fillText("Click me!", 10, 15);
 
       if (which_clock == 0) {
+        ctx.fillText("Analog", W - 40, H - 10);
         analog(t);
       }
       if (which_clock == 1) {
+        ctx.fillText("Digital", W - 40, H - 10);
         digital(t);
       }
       if (which_clock == 2) {
+        ctx.fillText("Binary", W - 40, H - 10);
         binary(t);
       }
 
