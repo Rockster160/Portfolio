@@ -3,9 +3,9 @@ var ready = function() {
   if (canvas) {
     var ctx = canvas.getContext("2d");
 
-    var which_clock = 1;
-    var W = 250;
-    var H = 100;
+    var which_clock = 0;
+    var W = canvas.width;
+    var H = canvas.height;
 
     $('#clocks').click(function() {
       console.log('Clicked');
@@ -25,15 +25,15 @@ var ready = function() {
 
       ctx.beginPath();
       ctx.lineWidth = 5;
-      ctx.moveTo(50, 50);
+      ctx.moveTo(W/2, H/2);
       ctx.lineTo(hr_hand_sides[0], hr_hand_sides[1]);
       ctx.stroke();
       ctx.lineWidth = 3;
-      ctx.moveTo(50, 50);
+      ctx.moveTo(W/2, H/2);
       ctx.lineTo(min_hand_sides[0], min_hand_sides[1]);
       ctx.stroke();
       ctx.lineWidth = 2;
-      ctx.moveTo(50, 50);
+      ctx.moveTo(W/2, H/2);
       ctx.lineTo(sec_hand_sides[0], sec_hand_sides[1]);
       ctx.stroke();
     }
@@ -41,7 +41,7 @@ var ready = function() {
     function drawFace () {
       ctx.clearRect(0, 0, W, H);
       ctx.beginPath();
-      ctx.arc(50, 50, 45, 0, 2*Math.PI);
+      ctx.arc(W/2, H/2, 45, 0, 2*Math.PI);
       ctx.lineWidth = 4;
       ctx.fillStyle = "white";
       ctx.fill();
@@ -60,7 +60,7 @@ var ready = function() {
       ctx.lineWidth = 1;
       ctx.moveTo(50, 50);
       for (var i=0;i<60;i++) {
-        tick_mark_length = (i*6%30 == 0 ? 38 : 41)
+        tick_mark_length = (i*6%30 == 0 ? 38 : 41);
         tick_mark_start = calculateSides(tick_mark_length, i*6);
         tick_mark_end = calculateSides(45, i*6);
         ctx.moveTo(tick_mark_start[0], tick_mark_start[1]);
@@ -97,6 +97,7 @@ var ready = function() {
       mn = (str_minute.length < 2 ? "0" : "") + str_minute;
       sc = (str_second.length < 2 ? "0" : "") + str_second;
       time = (hr+mn+sc).split("");
+      y = (H/2)
 
       ctx.clearRect(0, 0, W, H);
       var blankSegment = [5, 38, 80, 112, 155, 187];
@@ -109,30 +110,15 @@ var ready = function() {
     function selectSeg(x, y, segment) {
       ctx.beginPath();
       ctx.fillStyle = "blue";
-      switch (segment) {
-        case "A":
-          drawSeg(x, y, 0); //A - up
-          break;
-        case "B":
-          drawSeg(x + 24, y + 24, 1); //B - right
-          break;
-        case "C":
-          drawSeg(x + 24, y + 50, 1); //C - right
-          break;
-        case "D":
-          drawSeg(x + 22, y + 52, 2); //D - down
-          break;
-        case "E":
-          drawSeg(x - 2, y + 2, 3); //E - left
-          break;
-        case "F":
-          drawSeg(x - 2, y + 28, 3); //F - left
-          break;
-        case "G":
-          drawSeg(x, y + 26, 4); //G - mid
-          break;
-        default: {
-            ctx.fillStyle = "#EEE"
+      if (segment == "A") { drawSeg(x, y, 0) }
+      else if (segment == "B") { drawSeg(x + 24, y + 24, 1) }
+      else if (segment == "C") { drawSeg(x + 24, y + 50, 1) }
+      else if (segment == "D") { drawSeg(x + 22, y + 52, 2) }
+      else if (segment == "E") { drawSeg(x - 2, y + 2, 3) }
+      else if (segment == "F") { drawSeg(x - 2, y + 28, 3) }
+      else if (segment == "G") { drawSeg(x, y + 26, 4) }
+      else {
+            ctx.fillStyle = "#DDD";
             drawSeg(x, y, 0); //A - up
             drawSeg(x + 24, y + 24, 1); //B - right
             drawSeg(x + 24, y + 50, 1); //C - right
@@ -140,8 +126,7 @@ var ready = function() {
             drawSeg(x - 2, y + 2, 3); //E - left
             drawSeg(x - 2, y + 28, 3); //F - left
             drawSeg(x, y + 26, 4); //G - mid
-        }
-      }
+        };
       ctx.fillStyle = "black";
     }
 
@@ -212,12 +197,28 @@ var ready = function() {
     function binary (t) {
       ctx.clearRect(0, 0, W, H);
       times = [t.getHours(), t.getMinutes(), t.getSeconds()]
-      for (i=0;i<times.length;i++) {
+      for ( var i=0;i<times.length;i++ ) {
         piece = times[i].toString(2).split("");
         while (piece.length < 6) {
           piece.unshift("0");
         }
-        ctx.fillText(piece.join(""), 10, 10 + (i*10));
+        for ( var j=0;j<piece.length;j++ ) {
+          var x = 25 + (j*40);
+          var y = 45 + (20*i);
+          var circle_color = "";
+          if (i == 0) { circle_color = "blue" };
+          if (i == 1) { circle_color = "green" };
+          if (i == 2) { circle_color = "red" };
+
+          ctx.beginPath();
+          ctx.fillStyle = (piece[j] == "0" ? "#DDD" : circle_color);
+          ctx.moveTo(x, y);
+          // ctx.arc(x, y, 10, 0, Math.PI*2); //Multiple Rows - Change Single to y = 15
+          ctx.moveTo(x, 10);
+          var radius = (3-i)*5;
+          if (piece[j] == "1" || i == 0) { ctx.arc(x, H/2, radius, 0, Math.PI*2) }; //Single Row
+          ctx.fill();
+        }
       }
     }
 // ---------------------------- /Binary ----------------------------------------
