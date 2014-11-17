@@ -3,16 +3,24 @@ var ready = function() {
   if (canvas) {
     var ctx = canvas.getContext("2d");
 
-    var which_clock = 0;
+    var which_clock = 1;
     var W = canvas.width;
     var H = canvas.height;
+    var X = (W/2);
+    var Y = (H/2);
+    var particles = [];
 
     $('#clocks').click(function() {
-      console.log('Clicked');
       which_clock += 1;
-      if (which_clock == 3) {which_clock = 0};
+      if (which_clock == 3) { which_clock = 0 };
       draw();
-    })
+    });
+
+    canvas.addEventListener('click', function(evt) {
+      var mousePos = getMousePos(canvas, evt);
+      var amount = 20;
+      for (var i=0;i<amount;i++) { particles.push(new createParticle(mousePos.x, mousePos.y, amount)) };
+    }, false);
 // ----------------------------- Analog ----------------------------------------
     function analog (t) {
       drawFace();
@@ -25,23 +33,22 @@ var ready = function() {
 
       ctx.beginPath();
       ctx.lineWidth = 5;
-      ctx.moveTo(W/2, H/2);
+      ctx.moveTo(X, Y);
       ctx.lineTo(hr_hand_sides[0], hr_hand_sides[1]);
       ctx.stroke();
       ctx.lineWidth = 3;
-      ctx.moveTo(W/2, H/2);
+      ctx.moveTo(X, Y);
       ctx.lineTo(min_hand_sides[0], min_hand_sides[1]);
       ctx.stroke();
       ctx.lineWidth = 2;
-      ctx.moveTo(W/2, H/2);
+      ctx.moveTo(X, Y);
       ctx.lineTo(sec_hand_sides[0], sec_hand_sides[1]);
       ctx.stroke();
     }
 
     function drawFace () {
-      ctx.clearRect(0, 0, W, H);
       ctx.beginPath();
-      ctx.arc(W/2, H/2, 45, 0, 2*Math.PI);
+      ctx.arc(X, Y, 45, 0, 2*Math.PI);
       ctx.lineWidth = 4;
       ctx.fillStyle = "white";
       ctx.fill();
@@ -72,7 +79,7 @@ var ready = function() {
     function calculateSides (side_c, angle_a) {
       x = degSin(90 - angle_a) * side_c
       y = degSin(angle_a) * side_c
-      return [x + 50, y + 50];
+      return [x + X, y + Y];
     }
 
     function degSin (angle) {
@@ -97,12 +104,20 @@ var ready = function() {
       mn = (str_minute.length < 2 ? "0" : "") + str_minute;
       sc = (str_second.length < 2 ? "0" : "") + str_second;
       time = (hr+mn+sc).split("");
-      y = (H/2)
 
-      ctx.clearRect(0, 0, W, H);
       var blankSegment = [5, 38, 80, 112, 155, 187];
+      ctx.beginPath();
+      // ctx.moveTo((X - 215/2), (Y - 60/2));
+      ctx.arc((X - 215/2) + 70, (Y - 60/2) + 20, 3, 0, Math.PI*2);
+      ctx.arc((X - 215/2) + 70, (Y - 60/2) + 40, 3, 0, Math.PI*2);
+      ctx.fillStyle = "blue";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc((X - 215/2) + 144, (Y - 60/2) + 20, 3, 0, Math.PI*2);
+      ctx.arc((X - 215/2) + 144, (Y - 60/2) + 40, 3, 0, Math.PI*2);
+      ctx.fill();
       for (var i=0;i<6;i++) {
-        selectSeg(blankSegment[i], 5, 0);
+        selectSeg((X - 215/2) + blankSegment[i], (Y - 60/2) + 5, 0);
         drawSevenSeg(i, time[i].toString())
       }
     }
@@ -156,13 +171,13 @@ var ready = function() {
     }
 
     function drawSevenSeg (index, number) {
-      var x = 0, y = 5;
-      if (index == 0) { x = 5; };
-      if (index == 1) { x = 38; };
-      if (index == 2) { x = 80; };
-      if (index == 3) { x = 112; };
-      if (index == 4) { x = 155; };
-      if (index == 5) { x = 187; };
+      var x = (X - 215/2), y =  (Y - 60/2) + 5;
+      if (index == 0) { x += 5; };
+      if (index == 1) { x += 38; };
+      if (index == 2) { x += 80; };
+      if (index == 3) { x += 112; };
+      if (index == 4) { x += 155; };
+      if (index == 5) { x += 187; };
       // 0, 2, 3, 5, 6, 7, 8, 9 - A
       if (number == 0 || number == 2 || number == 3 || number == 5 || number == 6 || number == 7 || number == 8 || number == 9) {
         selectSeg(x, y, "A");
@@ -195,7 +210,6 @@ var ready = function() {
 // --------------------------- /Digital ----------------------------------------
 // ---------------------------- Binary -----------------------------------------
     function binary (t) {
-      ctx.clearRect(0, 0, W, H);
       times = [t.getHours(), t.getMinutes(), t.getSeconds()]
       for ( var i=0;i<times.length;i++ ) {
         piece = times[i].toString(2).split("");
@@ -203,7 +217,7 @@ var ready = function() {
           piece.unshift("0");
         }
         for ( var j=0;j<piece.length;j++ ) {
-          var x = 25 + (j*40);
+          var x = (X - 250/2) + 25 + (j*40);
           var y = 45 + (20*i);
           var circle_color = "";
           if (i == 0) { circle_color = "blue" };
@@ -216,7 +230,7 @@ var ready = function() {
           // ctx.arc(x, y, 10, 0, Math.PI*2); //Multiple Rows - Change Single to y = 15
           ctx.moveTo(x, 10);
           var radius = (3-i)*5;
-          if (piece[j] == "1" || i == 0) { ctx.arc(x, H/2, radius, 0, Math.PI*2) }; //Single Row
+          if (piece[j] == "1" || i == 0) { ctx.arc(x, Y, radius, 0, Math.PI*2) }; //Single Row
           ctx.fill();
         }
       }
@@ -224,6 +238,11 @@ var ready = function() {
 // ---------------------------- /Binary ----------------------------------------
     function draw () {
       var t = new Date();
+
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "black";
+      ctx.fillText("Click Me!", 10, 15);
+
       if (which_clock == 0) {
         analog(t);
       }
@@ -233,10 +252,55 @@ var ready = function() {
       if (which_clock == 2) {
         binary(t);
       }
+
+      if (particles.length > 1) { drawParticle() };
+    }
+
+    function createParticle(x, y, amount) {
+      this.myX = x;
+      this.myY = y;
+
+      this.life = 50;
+
+      this.velX = Math.random()*10 - 5;
+      this.velY = -Math.random()*8;
+
+      this.myRad = Math.random()*3+1;
+    }
+
+    function drawParticle() {
+      for (var t=0;t<particles.length;t++) {
+        var par = particles[t];
+        ctx.beginPath();
+
+        var grad = ctx.createRadialGradient(par.myX,par.myY,0,par.myX,par.myY,par.myRad);
+        grad.addColorStop(0,"red"); //Core
+        grad.addColorStop(0.8,"pink"); //Body
+        grad.addColorStop(1,"white"); //Background fade
+
+        ctx.fillStyle = grad;
+        ctx.arc(par.myX,par.myY,par.myRad,Math.PI*2,false);
+        ctx.fill();
+
+        par.velY += 1;
+        par.myX += par.velX;
+        par.myY += par.velY;
+        par.life -= 1;
+
+        if (par.myX > W || par.myX < 0 || par.myY > H || par.life <= 0) { particles.splice(t, 1) };
+      }
+    }
+
+    function getMousePos(canvas, evt) {
+      var rect = canvas.getBoundingClientRect();
+      return {
+        x: evt.clientX - rect.left,
+        y: evt.clientY - rect.top
+      };
     }
 
     draw();
-    setInterval(function(){draw();}, 100);
+    setInterval(function(){draw();}, 50);
   }
 }
 
