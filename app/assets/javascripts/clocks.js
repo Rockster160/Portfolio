@@ -27,7 +27,7 @@ var ready = function() {
       drawNumbers();
 
       time_deg = degrees(t);
-      sec_hand_sides = calculateSides(38, time_deg[0]);
+      sec_hand_sides = calculateSides(36, time_deg[0]);
       sec_hand_sides_neg = calculateSides(-8, time_deg[0]);
       min_hand_sides = calculateSides(35, time_deg[1]);
       hr_hand_sides = calculateSides(25, time_deg[2]);
@@ -47,8 +47,10 @@ var ready = function() {
       ctx.beginPath();
       ctx.moveTo(X, Y);
       ctx.strokeStyle = "red";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 4;
       ctx.lineTo(sec_hand_sides_neg[0], sec_hand_sides_neg[1]);
+      ctx.stroke();
+      ctx.lineWidth = 2;
       ctx.lineTo(sec_hand_sides[0], sec_hand_sides[1]);
       ctx.stroke();
       ctx.strokeStyle = "black";
