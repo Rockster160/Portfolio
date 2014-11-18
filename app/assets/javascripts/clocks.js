@@ -227,7 +227,8 @@ var ready = function() {
 // --------------------------- /Digital ----------------------------------------
 // ---------------------------- Binary -----------------------------------------
     function binary (t) {
-      times = [t.getHours(), t.getMinutes(), t.getSeconds()]
+      no_military = t.getHours() > 12 ? t.getHours() - 12 : t.getHours();
+      times = [no_military, t.getMinutes(), t.getSeconds()]
       for ( var i=0;i<times.length;i++ ) {
         piece = times[i].toString(2).split("");
         while (piece.length < 6) {
