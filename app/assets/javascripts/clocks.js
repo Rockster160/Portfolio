@@ -3,7 +3,7 @@ var ready = function() {
   if (canvas) {
     var ctx = canvas.getContext("2d");
 
-    var which_clock = 1;
+    var which_clock = 0;
     var W = canvas.width;
     var H = canvas.height;
     var X = (W/2);
@@ -27,28 +27,38 @@ var ready = function() {
       drawNumbers();
 
       time_deg = degrees(t);
-      sec_hand_sides = calculateSides(40, time_deg[0]);
-      min_hand_sides = calculateSides(32, time_deg[1]);
+      sec_hand_sides = calculateSides(38, time_deg[0]);
+      sec_hand_sides_neg = calculateSides(-8, time_deg[0]);
+      min_hand_sides = calculateSides(35, time_deg[1]);
       hr_hand_sides = calculateSides(25, time_deg[2]);
-
       ctx.beginPath();
-      ctx.lineWidth = 5;
+      ctx.strokeStyle = "black";
       ctx.moveTo(X, Y);
+      ctx.lineWidth = 5;
       ctx.lineTo(hr_hand_sides[0], hr_hand_sides[1]);
       ctx.stroke();
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2;
+      ctx.arc(hr_hand_sides[0], hr_hand_sides[1], 1, 0, Math.PI*2);
+      ctx.stroke();
       ctx.moveTo(X, Y);
+      ctx.lineWidth = 3;
       ctx.lineTo(min_hand_sides[0], min_hand_sides[1]);
       ctx.stroke();
-      ctx.lineWidth = 2;
+      ctx.beginPath();
       ctx.moveTo(X, Y);
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 2;
+      ctx.lineTo(sec_hand_sides_neg[0], sec_hand_sides_neg[1]);
       ctx.lineTo(sec_hand_sides[0], sec_hand_sides[1]);
       ctx.stroke();
+      ctx.strokeStyle = "black";
     }
 
     function drawFace () {
       ctx.beginPath();
       ctx.arc(X, Y, 45, 0, 2*Math.PI);
+      ctx.moveTo(X, Y);
+      ctx.arc(X, Y, 1, 0, 2*Math.PI);
       ctx.lineWidth = 4;
       ctx.fillStyle = "white";
       ctx.fill();
