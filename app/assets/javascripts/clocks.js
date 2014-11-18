@@ -31,20 +31,25 @@ var ready = function() {
       sec_hand_sides_neg = calculateSides(-8, time_deg[0]);
       min_hand_sides = calculateSides(35, time_deg[1]);
       hr_hand_sides = calculateSides(25, time_deg[2]);
+
       ctx.beginPath();
       ctx.strokeStyle = "black";
+
       ctx.moveTo(X, Y);
       ctx.lineWidth = 5;
       ctx.lineTo(hr_hand_sides[0], hr_hand_sides[1]);
       ctx.stroke();
+      ctx.moveTo(hr_hand_sides[0], hr_hand_sides[1]);
       ctx.lineWidth = 2;
       ctx.arc(hr_hand_sides[0], hr_hand_sides[1], 1, 0, Math.PI*2);
       ctx.stroke();
+
       ctx.moveTo(X, Y);
       ctx.lineWidth = 3;
       ctx.lineTo(min_hand_sides[0], min_hand_sides[1]);
       ctx.stroke();
       ctx.beginPath();
+
       ctx.moveTo(X, Y);
       ctx.strokeStyle = "red";
       ctx.lineWidth = 4;
@@ -145,15 +150,15 @@ var ready = function() {
       else if (segment == "F") { drawSeg(x - 2, y + 28, 3) }
       else if (segment == "G") { drawSeg(x, y + 26, 4) }
       else {
-            ctx.fillStyle = "#DDD";
-            drawSeg(x, y, 0); //A - up
-            drawSeg(x + 24, y + 24, 1); //B - right
-            drawSeg(x + 24, y + 50, 1); //C - right
-            drawSeg(x + 22, y + 52, 2); //D - down
-            drawSeg(x - 2, y + 2, 3); //E - left
-            drawSeg(x - 2, y + 28, 3); //F - left
-            drawSeg(x, y + 26, 4); //G - mid
-        };
+        ctx.fillStyle = "#DDD";
+        drawSeg(x, y, 0); //A - up
+        drawSeg(x + 24, y + 24, 1); //B - right
+        drawSeg(x + 24, y + 50, 1); //C - right
+        drawSeg(x + 22, y + 52, 2); //D - down
+        drawSeg(x - 2, y + 2, 3); //E - left
+        drawSeg(x - 2, y + 28, 3); //F - left
+        drawSeg(x, y + 26, 4); //G - mid
+      };
       ctx.fillStyle = "black";
     }
 
