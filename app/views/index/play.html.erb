@@ -1,4 +1,21 @@
 <canvas id="clocks" width=235 height=120></canvas>
 <!-- binary x = 235, analog y = 100 -->
-<!-- <canvas id="spaks" width=250 height=250></canvas> -->
+<div>
+  <%#= form_for flashCards do |f| %>
+    <%#= f.text_field :pin %>
+    <%#= f.text_field :batch %>
+    <%#= f.checkbox :searchBatch %>
+    <%#= f.checkbox :searchTitle %>
+    <%#= f.checkbox :searchBody %>
+    <%#= f.checkbox :searchType %>
+  <%# end %>
+  <input type="password" name="pin"></br>
+  <input type="text" name="batch"></br>
+  <input type="checkbox" name="searchable" value="batch"> Batch</br>
+  <input type="checkbox" name="searchable" value="title"> Title</br>
+  <input type="checkbox" name="searchable" value="body"> Body</br>
+  <input type="checkbox" name="searchable" value="type"> Type</br>
+  <div id="flashcard">
+  </div>
+</div>
 <!--   -->
