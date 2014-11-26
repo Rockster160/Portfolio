@@ -26,11 +26,12 @@
       <div id="right"></div>
     </div>
     <div id="flashCard">
-      <li id="cardrule"> &nbsp; </li>
-      <hr style="border-color: #FF7B7B;">
-      <% 7.times do |line| %>
-        <li id="cardrule"> &nbsp; </li>
-        <hr style="border-color: #A8ABFF;">
+      <input type="text" id="flashcard-title" class="flashcard-class" maxlength="20">
+      <% 8.times do |line| %>
+        <div>
+          <button style="position:absolute;right:0;" id="center-button">(c)</button>
+          <input type="text" id="flashcard-line" class="flashcard-class">
+        </div>
       <% end %>
     </div>
   </div>

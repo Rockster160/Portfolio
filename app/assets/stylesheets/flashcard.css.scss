@@ -24,11 +24,37 @@
   margin: 0 20px 50px 0;
   width: 400px;
   height: 240px;
-  background: #FFFFDD;
-  box-shadow: 10px 10px 10px #EEE;
-  padding: 18px 0 0 0;
+  background: #FFFFFF;
+  box-shadow: 0 0 5px #000;
+  // padding: 18px 0 0 0;
   #cardrule {
     list-style: none;
     line-height: 12px;
+  }
+
+  #flashcard-title {
+    border-bottom: 2px #FF7B7B solid;
+    height: 30px;
+    font-weight: bold;
+  }
+
+  #flashcard-line {
+    border-bottom: 2px #A8ABFF solid;
+    height: 20px;
+  }
+
+  .flashcard-class {
+    font-family: "Comic Sans MS";
+    font-size: 16px;
+    width: 398px;
+    border: none;
+    &:focus {
+      outline: 0;
+    }
+  }
+
+  #center-button {
+    padding: 2px 1px 3px;
+    margin: 2px 22px 0 0;
   }
 }
