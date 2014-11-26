@@ -9,13 +9,15 @@
     <%#= f.checkbox :searchBody %>
     <%#= f.checkbox :searchType %>
   <%# end %>
-  <input type="password" name="pin"></br>
-  <input type="text" name="batch"></br>
-  <input type="checkbox" name="searchable" value="batch"> Batch</br>
-  <input type="checkbox" name="searchable" value="title"> Title</br>
-  <input type="checkbox" name="searchable" value="body"> Body</br>
-  <input type="checkbox" name="searchable" value="type"> Type</br>
-  <div id="flashcard">
+  <div id="flashcards">
+    <input type="password" name="pin" maxlength="4" size="2" ></br>
+    <input type="text" name="batch"></br>
+    <input type="checkbox" name="searchable" value="batch"> Batch</br>
+    <input type="checkbox" name="searchable" value="title"> Title</br>
+    <input type="checkbox" name="searchable" value="body"> Body</br>
+    <input type="checkbox" name="searchable" value="type"> Type</br>
+    <div id="searchResults"></div>
+    <div id="flashCard"></div>
   </div>
 </div>
 <!--   -->
