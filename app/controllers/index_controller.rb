@@ -3,5 +3,7 @@ class IndexController < ApplicationController
   end
 
   def play
+    @cards = FlashCard.all
+    # @card = FlashCard.find(0)
   end
 end
