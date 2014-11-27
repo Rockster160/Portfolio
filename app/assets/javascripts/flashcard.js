@@ -13,7 +13,6 @@ $(document).ready(function() {
     }
 
     function tooWide(width) {
-      console.log(width);
       if (width > 290) {
         str = $(':focus').val().split("");
         str.pop();
