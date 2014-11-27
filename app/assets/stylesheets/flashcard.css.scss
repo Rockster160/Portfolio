@@ -21,7 +21,7 @@
 }
 
 #flashCard {
-  margin: 0 20px 50px 0;
+  margin: 0 20px 20px 20px;
   width: 400px;
   height: 240px;
   background: #FFFFFF;
@@ -68,4 +68,37 @@
   .flip-btn {
     margin: 7px 22px 0 0;
   }
+}
+
+.flashcard-container {
+  -webkit-perspective: 1000;
+}
+
+.flashcard-container.flip {
+	-webkit-transform: rotateY(180deg);
+}
+
+#flashCard {
+  -webkit-transition: 0.6s;
+  -webkit-transform-style: preserve-3d;
+  position: relative;
+}
+
+.front, .back {
+  width: 400px;
+  height: 240px;
+  -webkit-backface-visibility: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.front {
+  z-index: 2;
+  -webkit-transform: rotateY(0deg);
+}
+
+.back {
+  -webkit-transform: rotateY(180deg);
+  background: red;
 }
