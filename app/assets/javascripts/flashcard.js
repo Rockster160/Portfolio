@@ -9,12 +9,19 @@ $(document).ready(function() {
     focused = document.activeElement.className;
     if (focused == "flashcard-class" || focused == "flashcard-class center") {
       var width = textWidth($(':focus').val(), "Comic Sans MS");
-      if (width > 300) {
+      tooWide(width);
+    }
+
+    function tooWide(width) {
+      console.log(width);
+      if (width > 290) {
         str = $(':focus').val().split("");
         str.pop();
         $(':focus').val(str.join(""));
+        tooWide(textWidth($(':focus').val(), "Comic Sans MS"));
       }
     }
+
   };
 
   function textWidth(text, font) {
