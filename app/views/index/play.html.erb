@@ -16,10 +16,17 @@
     <hr width="1" size="130">
     <div id="right"></div>
   </div> <!-- searchResults -->
+  <% if @read == false %>
+    <button class="flashcard-btn">Edit</button>
+    <button class="flashcard-btn">New</button>
+  <% else %>
+    <button class="flashcard-btn">Delete</button>
+    <button class="flashcard-btn">Save</button>
+  <% end %>
   <div class="flashcard-container" onClick="this.classList.toggle('flip');">
   <%#= form_for FlashCard.new do |f| %>
-    <div id="flashCard">
-      <div class="front">
+    <div id="flashCard" class="card">
+      <div class="front face">
         <button class="flashcard-btn flip-btn">v^</button>
         <input type="text" id="flashcard-title" class="flashcard-class" value="<%= @card.title %>">
         <% 8.times do |row| %>
@@ -43,17 +50,11 @@
           </div> <!--  -->
         <% end %>
       </div> <!-- front -->
-      <div class="back">
+      <div class="back face">
+        Hello this is some text for the backside,
       </div> <!-- back -->
     </div> <!-- flashCard -->
   <%# end %>
   </div> <!-- container -->
-  <% if @read == false %>
-    <button class="flashcard-btn">Edit</button>
-    <button class="flashcard-btn">New</button>
-  <% else %>
-    <button class="flashcard-btn">Delete</button>
-    <button class="flashcard-btn">Save</button>
-  <% end %>
 </div> <!-- flashcards -->
  <!--  -->
