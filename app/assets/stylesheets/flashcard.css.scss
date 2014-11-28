@@ -35,6 +35,7 @@
     border-bottom: 2px #FF7B7B solid;
     height: 30px;
     font-weight: bold;
+    background: transparent;
   }
 
   #flashcard-line {
@@ -45,8 +46,9 @@
   .flashcard-class {
     font-family: "Comic Sans MS";
     padding-right: 21px;
+    padding-left: 8px;
     font-size: 16px;
-    width: 378px;
+    width: 371px;
     border: none;
     &:focus {
       outline: 0;
@@ -63,10 +65,27 @@
     padding: 2px 1px 3px;
   }
   .center-btn {
-    margin: 2px 22px 0 0;
+    margin: 2px 3px 0 0;
   }
-  .flip-btn {
-    margin: 7px 22px 0 0;
+  .front-btn {
+    margin: 7px 3px 0 0;
+  }
+  .back-btn {
+    margin: 7px 3px 0 0;
+  }
+  .back-body {
+    padding: 20px;
+  }
+  .back-textbox {
+    font-family: "Comic Sans MS";
+    font-size: 16px;
+    line-height: 16px;
+    resize: none;
+    border: none;
+    overflow: hidden;
+    &:focus {
+      outline: 0;
+    }
   }
 }
 
@@ -78,8 +97,6 @@
 }
 
 .flashcard-container.flip .card {
-  -webkit-perspective: 1000;
-  -moz-perspective: 1000;
   -webkit-transform: rotateY(180deg)translateX(-200px);
   -moz-transform: rotateY(180deg)translateX(-200px);
 }

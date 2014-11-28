@@ -5,21 +5,41 @@ $(document).ready(function() {
     c.toggleClass("center");
   });
 
+  $(".flip-btn").click(function() {
+    $('.flashcard-container').toggleClass('flip');
+  });
+
   document.onkeyup = function () {
     focused = document.activeElement.className;
     if (focused == "flashcard-class" || focused == "flashcard-class center") {
       var width = textWidth($(':focus').val(), "Comic Sans MS");
-      tooWide(width);
+      tooWide(width, 290);
+    }
+    if (focused == "back-textbox") {
+      restrictScroll('back-textbox-id', 12);
     }
 
-    function tooWide(width) {
-      if (width > 290) {
+    function tooWide(width, length) {
+      if (width > length) {
         str = $(':focus').val().split("");
         str.pop();
         $(':focus').val(str.join(""));
-        tooWide(textWidth($(':focus').val(), "Comic Sans MS"));
+        tooWide(textWidth($(':focus').val(), "Comic Sans MS"), length);
       }
     }
+
+    function restrictScroll(id, max_lines) {
+      var $foc = document.getElementById(id),
+        style = (window.getComputedStyle) ? window.getComputedStyle($foc) : $foc.currentStyle,
+        lineHeight = parseInt(style.lineHeight, 10),
+        height = $foc.scrollHeight,
+        lines = Math.floor(height/lineHeight);
+
+      if (lines > max_lines) {
+        $foc.value = $foc.value.substring(0, $foc.value.length-1);
+        restrictScroll(id, max_lines);
+      }
+    };
 
   };
 
