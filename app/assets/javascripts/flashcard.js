@@ -1,15 +1,9 @@
 $(document).ready(function() {
 
   function reloadFlashCards(id) {
-    url = 'sad';
-    $.get(url, {
-      dataType : 'html',
-      success : function(data){
-        $('#flashcard-placeholder').html(data);
-      },
-      error : function(XMLHttpRequest, textStatus, errorThrown) {
-        console.log('Error!');
-      }
+    url = 'playground';
+    $.get(url, {pass_id : id}, function(data) {
+      console.log(data);
     });
   }
 

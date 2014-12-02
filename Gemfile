@@ -37,3 +37,13 @@ gem 'spring',        group: :development
 
 # Use debugger
 # gem 'debugger', group: [:development, :test]
+
+
+group :development, :test do
+  gem 'pry-byebug'
+  gem 'pry-rails'
+  gem 'pry-nav'
+  gem 'spring-commands-rspec'
+  gem 'better_errors'
+  gem 'simplecov', :require => false, :group => :test
+end
