@@ -1,0 +1,60 @@
+<% if is_read == true %>
+  <button class="flashcard-btn edit-flashcard-btn">Edit</button>
+  <button class="flashcard-btn new-flashcard-btn">New</button>
+<% else %>
+  <% if card.id == 0 %>
+    <button class="flashcard-btn" disabled>Delete</button>
+    <button class="flashcard-btn" disabled>Save</button>
+  <% else %>
+    <button class="flashcard-btn del-flashcard-btn">Delete</button>
+    <button class="flashcard-btn save-flashcard-btn">Save</button>
+  <% end %>
+<% end %>
+<div class="flashcard-container">
+<%#= form_for(card, remote: true) do |f| %>
+  <div id="flashCard" class="card">
+    <div class="front face">
+      <button class="flashcard-btn flip-btn front-btn">v^</button>
+        <% if is_read == true %>
+          <div id="flashcard-title" class="flashcard-class" style="padding-top:4px;">
+            <%= card.title %>
+          </div>
+        <% else %>
+          <input type="text" id="flashcard-title" class="flashcard-class" value="<%= card.title %>">
+        <% end %>
+      <% 8.times do |row| %>
+        <div>
+          <% if is_read == true %>
+<% if card.line[row][1] == "0" %>
+              <div id="flashcard-line" class="flashcard-class" style="margin:2px 0;">
+<% else %>
+              <div id="flashcard-line" class="flashcard-class center" style="margin:2px 0;">
+<% end %>
+                <%= card.line[row][0] %>
+              </div> <!-- flashcard-line -->
+          <% else %>
+            <button class="flashcard-btn center-btn">(c)</button>
+            <% if card.line[row][1] == "0" %>
+              <input type="text" id="flashcard-line" class="flashcard-class" value="<%= card.line[row][0] %>">
+            <% else %>
+              <input type="text" id="flashcard-line" class="flashcard-class center" value="<%= card.line[row][0] %>">
+            <% end %>
+          <% end %>
+        </div> <!--  -->
+      <% end %>
+    </div> <!-- front -->
+    <div class="back face">
+      <button class="flashcard-btn flip-btn back-btn">v^</button>
+      <div class="back-body flashcard-class">
+        <% if is_read == true %>
+          <%= card.body %>
+        <% else %>
+          <textarea cols="48" rows="12" class="back-textbox" id="back-textbox-id">
+            <%= card.body %>
+          </textarea>
+        <% end %>
+      </div>
+    </div> <!-- back -->
+  </div> <!-- flashCard -->
+<%# end %>
+</div> <!-- container -->

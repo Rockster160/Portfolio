@@ -1,5 +1,22 @@
 $(document).ready(function() {
 
+  function reloadFlashCards(id) {
+    url = 'sad';
+    $.get(url, {
+      dataType : 'html',
+      success : function(data){
+        $('#flashcard-placeholder').html(data);
+      },
+      error : function(XMLHttpRequest, textStatus, errorThrown) {
+        console.log('Error!');
+      }
+    });
+  }
+
+  $('.new-flashcard-btn').click(function() {
+    reloadFlashCards(1);
+  })
+
   $(".center-btn").click(function() {
     c = $(this).siblings("#flashcard-line");
     c.toggleClass("center");

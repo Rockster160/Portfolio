@@ -6,5 +6,10 @@ class IndexController < ApplicationController
     @read = true
     @cards = FlashCard.all
     @card = FlashCard.find(0)
+
+    respond_to do |format|
+      format.html
+      format.js
+    end
   end
 end

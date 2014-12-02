@@ -1,77 +1,27 @@
 <canvas id="clocks" width=235 height=120></canvas>
 <!-- binary x = 235, analog y = 100 -->
-<div id="flashcards">
-  <div id="options">
-    <div id="textfields">
-      <input type="password" name="pin" maxlength="4" size="2" placeholder=" PIN">
-      <input type="text" name="batch" placeholder=" Search by:"></br>
-    </div> <!-- textfields -->
-    <input type="checkbox" name="searchable" value="batch"> Batch
-    <input type="checkbox" name="searchable" value="title"> Title</br>
-    <input type="checkbox" name="searchable" value="body"> Body
-    <input type="checkbox" name="searchable" value="type" disabled="disabled"> <span style="color: gray;">Type</span></br>
-  </div> <!-- options -->
-  <div id="searchResults">
-    <div id="left"></div>
-    <hr width="1" size="130">
-    <div id="right"></div>
-  </div> <!-- searchResults -->
-  <% if @read == true %>
-    <button class="flashcard-btn">Edit</button>
-    <button class="flashcard-btn">New</button>
-  <% else %>
-    <button class="flashcard-btn">Delete</button>
-    <button class="flashcard-btn">Save</button>
-  <% end %>
-  <div class="flashcard-container">
-  <%#= form_for @card do |f| %>
-    <div id="flashCard" class="card">
-      <div class="front face">
-        <button class="flashcard-btn flip-btn front-btn">v^</button>
-          <% if @read == true %>
-            <div id="flashcard-title" class="flashcard-class" style="padding-top:4px;">
-              <%= @card.title %>
-            </div>
-          <% else %>
-            <input type="text" id="flashcard-title" class="flashcard-class" value="<%= @card.title %>">
-          <% end %>
-        <% 8.times do |row| %>
-          <div>
-            <% if @read == true %>
-  <% if @card.line[row][1] == "0" %>
-                <div id="flashcard-line" class="flashcard-class" style="margin:2px 0;">
-  <% else %>
-                <div id="flashcard-line" class="flashcard-class center" style="margin:2px 0;">
-  <% end %>
-                  <%= @card.line[row][0] %>
-                </div> <!-- flashcard-line -->
-            <% else %>
-              <button class="flashcard-btn center-btn">(c)</button>
-              <% if @card.line[row][1] == "0" %>
-                <input type="text" id="flashcard-line" class="flashcard-class" value="<%= @card.line[row][0] %>">
-              <% else %>
-                <input type="text" id="flashcard-line" class="flashcard-class center" value="<%= @card.line[row][0] %>">
-              <% end %>
-            <% end %>
-          </div> <!--  -->
-        <% end %>
-      </div> <!-- front -->
-      <div class="back face">
-        <button class="flashcard-btn flip-btn back-btn">v^</button>
-        <div class="back-body flashcard-class">
-          <% if @read == true %>
-            <%= @card.body %>
-          <% else %>
-            <textarea cols="48" rows="12" class="back-textbox" id="back-textbox-id">
-              <%= @card.body %>
-            </textarea>
-          <% end %>
-        </div>
-      </div> <!-- back -->
-    </div> <!-- flashCard -->
-  <%# end %>
-  </div> <!-- container -->
-</div> <!-- flashcards -->
+<div id="flashcard-holder">
+  <div id="flashcards">
+    <div id="options">
+      <div id="textfields">
+        <input type="password" name="pin" maxlength="4" size="2" placeholder=" PIN">
+        <input type="text" name="batch" placeholder=" Search by:"></br>
+      </div> <!-- textfields -->
+      <input type="checkbox" name="searchable" value="batch"> Batch
+      <input type="checkbox" name="searchable" value="title"> Title</br>
+      <input type="checkbox" name="searchable" value="body"> Body
+      <input type="checkbox" name="searchable" value="type" disabled="disabled"> <span style="color: gray;">Type</span></br>
+    </div> <!-- options -->
+    <div id="searchResults">
+      <div id="left"></div>
+      <hr width="1" size="130">
+      <div id="right"></div>
+    </div> <!-- searchResults -->
+    <div id="flashcard-placeholder">
+      <%= render "flashcard", :card => @card, :is_read => @read %>
+    </div>
+  </div> <!-- flashcards -->
+</div>
 
  <div id="hover-tests">
    <div id="hover-inner-box-container">

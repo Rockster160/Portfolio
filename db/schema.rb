@@ -18,7 +18,7 @@ ActiveRecord::Schema.define(version: 20141127033307) do
 
   create_table "flash_cards", force: true do |t|
     t.string   "title"
-    t.string   "line",       default: [["", "0"], ["", "0"], ["", "0"], ["", "0"], ["", "0"], ["", "0"], ["", "0"]], array: true
+    t.string   "line",       default: [["", "0"], ["", "0"], ["", "0"], ["", "0"], ["", "0"], ["", "0"], ["", "0"], ["", "0"]], array: true
     t.text     "body"
     t.integer  "pin"
     t.datetime "created_at"
