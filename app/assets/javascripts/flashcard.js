@@ -1,9 +1,10 @@
 $(document).ready(function() {
 
   function reloadFlashCards(id) {
-    url = 'playground';
+    url = 'flashcard';
     $.get(url, {pass_id : id}, function(data) {
       console.log(data);
+      // $('html').html(data);
     });
   }
 
