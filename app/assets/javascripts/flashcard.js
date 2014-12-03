@@ -1,4 +1,4 @@
-function ready() {
+function flashReady() {
   function reloadFlashCards(id) {
     url = 'flashcard';
     $.get(url, {pass_id : id}, function(data) {
@@ -17,6 +17,7 @@ function ready() {
 
   $(".flip-btn").click(function() {
     $('.flashcard-container').toggleClass('flip');
+    console.log('Flipped!');
   });
 
   document.onkeyup = function () {
@@ -63,6 +64,10 @@ function ready() {
   };
 }
 
-$(document).ready(ready);
-$(document).on('page:load', ready);
-$('.flashcard-container').click(ready);
+$(document).ready(flashReady);
+$(document).on('page:load', flashReady);
+$(document).on('page:change', flashReady);
+$('.flashcard-container').click(function() {
+  flashReady;
+  console.log('load it again');
+});

@@ -1,6 +1,6 @@
 <% if is_read == true %>
   <button class="flashcard-btn edit-flashcard-btn">Edit</button>
-  <%= link_to "New", flashcard_path(type: 1), remote: true %>
+  <%= link_to "New", flashcard_path(type: "new"), remote: true %>
   <button class="flashcard-btn new-flashcard-btn">New</button>
 <% else %>
   <% if card.id == 0 %>

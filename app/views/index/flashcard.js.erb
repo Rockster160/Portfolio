@@ -1,1 +1,1 @@
-$('#flashcard-placeholder').html("<%= escape_javascript(render partial: 'flashcard', :locals => {:card => FlashCard.new, :is_read => @read}) %>");
+$('#flashcard-placeholder').html("<%= escape_javascript(render partial: 'flashcard', :locals => {:card => @card, :is_read => @read}) %>");

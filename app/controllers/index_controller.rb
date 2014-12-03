@@ -13,7 +13,15 @@ class IndexController < ApplicationController
   end
 
   def flashcard
-    @card = FlashCard.find(1)
+    case params[:type]
+    when "new"
+      @card = FlashCard.new
+      @read = false
+    when ""
+    else
+      @card = FlashCard.find(1)
+      @read = true
+    end
     respond_to do |format|
       format.html
       format.js
