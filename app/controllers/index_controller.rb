@@ -13,9 +13,10 @@ class IndexController < ApplicationController
   end
 
   def flashcard
-  respond_to do |format|
-    format.html
-    format.js { render :partial => "flashcard", :locals => {:card => FlashCard.find(params[:pass_id].to_i), :is_read => @read} }
-  end
+    @card = FlashCard.find(1)
+    respond_to do |format|
+      format.html
+      format.js
+    end
   end
 end

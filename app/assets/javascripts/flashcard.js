@@ -1,10 +1,8 @@
-$(document).ready(function() {
-
+function ready() {
   function reloadFlashCards(id) {
     url = 'flashcard';
     $.get(url, {pass_id : id}, function(data) {
       console.log(data);
-      // $('html').html(data);
     });
   }
 
@@ -52,7 +50,6 @@ $(document).ready(function() {
         restrictScroll(id, max_lines);
       }
     };
-
   };
 
   function textWidth(text, font) {
@@ -64,4 +61,8 @@ $(document).ready(function() {
     width = textWidth.fakeEl.width();
     return width;
   };
-})
+}
+
+$(document).ready(ready);
+$(document).on('page:load', ready);
+$('.flashcard-container').click(ready);
