@@ -62,16 +62,15 @@
   .flashcard-btn {
     position: absolute;
     right: 0;
-    padding: 2px 1px 3px;
+    padding: 2px;
+    width: 14px;
+    height: 14px;
+  }
+  .jsflip-btn {
+    margin: 6px 3px 0 0;
   }
   .center-btn {
-    margin: 2px 3px 0 0;
-  }
-  .front-btn {
-    margin: 7px 3px 0 0;
-  }
-  .back-btn {
-    margin: 7px 3px 0 0;
+    margin: 1px 3px 0 0;
   }
   .back-body {
     padding: 20px;

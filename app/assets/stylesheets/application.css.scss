@@ -21,3 +21,29 @@
 .hidden {
   visibility: hidden;
 }
+
+.btn {
+  border: 1px outset buttonface;
+  border-radius: 5px;
+  text-align: center;
+  padding: 2px 6px 3px;
+  background-color: #EFEFEF;
+  margin: 0em;
+  font: -webkit-small-control;
+  letter-spacing: normal;
+  text-indent: 0;
+  text-shadow: none;
+  display: inline-block;
+  font-style: normal;
+  text-decoration: none;
+  color: black;
+  cursor: default;
+  &:hover {
+    background: #DDD;
+  }
+}
+
+.btn-disabled {
+  background: #DDD;
+  color: #AAA;
+}

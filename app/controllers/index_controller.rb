@@ -3,7 +3,7 @@ class IndexController < ApplicationController
   end
 
   def play
-    @read = true
+    @read = false
     @cards = FlashCard.all
     if params[:pass_id]
       @card = FlashCard.find(params[:pass_id].to_i)
@@ -17,7 +17,9 @@ class IndexController < ApplicationController
     when "new"
       @card = FlashCard.new
       @read = false
-    when ""
+    when "edit"
+    when "save"
+    when "delete"
     else
       @card = FlashCard.find(1)
       @read = true

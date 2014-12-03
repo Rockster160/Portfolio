@@ -1,13 +1,13 @@
 function flashReady() {
-  function reloadFlashCards(id) {
-    url = 'flashcard';
-    $.get(url, {pass_id : id}, function(data) {
-      console.log(data);
-    });
-  }
+  // function reloadFlashCards(id) {
+  //   url = 'flashcard';
+  //   $.get(url, {pass_id : id}, function(data) {
+  //     console.log(data);
+  //   });
+  // }
 
   $('.new-flashcard-btn').click(function() {
-    reloadFlashCards(1);
+    // reloadFlashCards(1);
   })
 
   $(".center-btn").click(function() {
@@ -15,7 +15,7 @@ function flashReady() {
     c.toggleClass("center");
   });
 
-  $(".flip-btn").click(function() {
+  $(".jsflip-btn").click(function() {
     $('.flashcard-container').toggleClass('flip');
     console.log('Flipped!');
   });
