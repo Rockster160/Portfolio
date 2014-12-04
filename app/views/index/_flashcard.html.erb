@@ -1,6 +1,6 @@
 <% if is_read == true %>
-  <%= link_to "Edit", flashcard_path(type: "edit"), remote: true, class: "btn" %>
-  <%= link_to "New", flashcard_path(type: "new"), remote: true, class: "btn" %>
+  <%= link_to "Edit", flashcard_path(type: "edit", old: @card), remote: true, class: "btn" %>
+  <%= link_to "New", flashcard_path(type: "new", old: @card), remote: true, class: "btn" %>
 <% else %>
   <% if card.id == 0 %>
     <%= link_to "Save", "", remote: true, class: "btn btn-disabled" %>
