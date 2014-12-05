@@ -58,13 +58,18 @@ function flashReady() {
 }
 
 function reloadJS() {
-  setTimeout(function() {
-    flashReady();
-  }, 200);
+  if (document.getElementById('flashCard')) {
+    setTimeout(function() {
+      flashReady();
+    }, 200);
+  } else {
+console.log('Not ready...');
+    setTimeout(function() {
+      reloadJS();
+    }, 100);
+  }
 }
 
 $(document).ready(flashReady);
 $(document).on('page:load', flashReady());
-$(document).click(function() {
-  // flashReady();
-});
+setInterval(function() {reloadJS()}, 500);
