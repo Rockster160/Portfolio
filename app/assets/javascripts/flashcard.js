@@ -4,7 +4,7 @@ function flashReady() {
     reloadJS();
   })
 
-  $(".center-btn").click(function() {
+  $(".center-btn").mouseup(function() {
     c = $(this).siblings("#flashcard-line");
     c.toggleClass("center");
   });
@@ -57,8 +57,9 @@ function flashReady() {
   };
 }
 
-function reloadJS() {
+function reloadJS() { //Syop calling this
   if (document.getElementById('flashCard')) {
+console.log('Ready!');
     setTimeout(function() {
       flashReady();
     }, 200);
@@ -72,4 +73,4 @@ console.log('Not ready...');
 
 $(document).ready(flashReady);
 $(document).on('page:load', flashReady());
-// setInterval(function() {reloadJS()}, 500);
+// setInterval(function() {reloadJS()}, 5000);

@@ -7,8 +7,8 @@
   <div class="flashcard-container">
     <div id="flashCard" class="card">
       <div class="front face">
-        <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn", id: "flip-test" %>
-        <div id="flashcard-title" class="flashcard-class" style="padding-top:4px;">
+        <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn btn-updateJS", id: "flip-test" %>
+        <div id="flashcard-title" class="flashcard-class flashcard-read-title" style="padding-top:4px;">
           <%= card.title %>
         </div>
         <% 8.times do |row| %>
@@ -26,7 +26,7 @@
         <% end %>
       </div> <!-- front -->
       <div class="back face">
-        <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn", id: "flip-test" %>
+        <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn btn-updateJS", id: "flip-test" %>
         <div class="back-body flashcard-class">
           <%= card.body %>
         </div>
@@ -48,11 +48,14 @@
     <div class="flashcard-container">
       <div id="flashCard" class="card">
         <div class="front face">
-          <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn", id: "flip-test" %>
-          <%= f.text_field :title, id: "flashcard-title", class: "flashcard-class", value: card.title %>
+          <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn btn-updateJS", id: "flip-test" %>
+          <%= f.text_field :title, id: "flashcard-title", class: "flashcard-class flashcard-edit-title", value: card.title %>
+          <% @card.line.each do |line| %>
+            <%#= f.text_field line %>
+          <% end %>
           <% 8.times do |row| %>
             <div>
-              <%= link_to "(c)", "", remote: true, class: "btn flashcard-btn center-btn" %>
+              <%= link_to "(c)", "", remote: true, class: "btn flashcard-btn center-btn btn-updateJS" %>
               <% if card.line[row][1] == "0" %>
                 <%= f.text_field @card.line[row][0], id: "flashcard-line", class: "flashcard-class", value: card.line[row][0] %>
               <% else %>
@@ -62,7 +65,7 @@
           <% end %>
         </div> <!-- front -->
         <div class="back face">
-          <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn", id: "flip-test" %>
+          <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn btn-updateJS", id: "flip-test" %>
           <div class="back-body flashcard-class">
             <%= f.text_area :body, id: "back-textbox-id", class: "back-textbox", rows: "12", cols: "48", placeholder: card.body %>
           </div>

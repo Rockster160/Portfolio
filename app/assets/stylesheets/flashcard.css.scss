@@ -33,9 +33,14 @@
 
   #flashcard-title {
     border-bottom: 2px #FF7B7B solid;
-    height: 30px;
     font-weight: bold;
     background: transparent;
+  }
+  .flashcard-read-title {
+    height: 23px;
+  }
+  .flashcard-edit-title {
+    height: 25px;
   }
 
   #flashcard-line {
