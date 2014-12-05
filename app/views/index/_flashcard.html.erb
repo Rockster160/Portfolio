@@ -2,9 +2,9 @@
   <%= link_to "Edit", flashcard_path(type: "edit", old: card), remote: true, class: "btn btn-updateJS" %>
   <%= link_to "New", flashcard_path(type: "new", old: card), remote: true, class: "btn btn-updateJS" %>
   <%= link_to "<", flashcard_path(type: "back", old: card), remote: true, class: "btn btn-updateJS" %>
+  <span id="id_number"><%= @card_num + 1 %></span>
   <%= link_to ">", flashcard_path(type: "next", old: card), remote: true, class: "btn btn-updateJS" %>
   <div class="flashcard-container">
-    <div id="id-number"><%= @card_num + 1 %></div>
     <div id="flashCard" class="card">
       <div class="front face">
         <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn", id: "flip-test" %>
@@ -46,7 +46,6 @@
       <%= link_to "Delete", flashcard_path(type: "delete", old: card), remote: true, class: "btn btn-updateJS" %>
     <% end %>
     <div class="flashcard-container">
-      <div id="id-number"><%= @card_num + 1 %></div>
       <div id="flashCard" class="card">
         <div class="front face">
           <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn", id: "flip-test" %>
