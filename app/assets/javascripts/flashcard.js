@@ -72,4 +72,4 @@ console.log('Not ready...');
 
 $(document).ready(flashReady);
 $(document).on('page:load', flashReady());
-setInterval(function() {reloadJS()}, 500);
+// setInterval(function() {reloadJS()}, 500);

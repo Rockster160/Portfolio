@@ -14,7 +14,8 @@ class IndexController < ApplicationController
   end
 
   def flashcard
-    # binding.pry
+    all = FlashCard.all
+    old = FlashCard.all.index(FlashCard.find(params[:old].to_i))
     case params[:type]
     when "new"
       @card = FlashCard.new
@@ -23,6 +24,22 @@ class IndexController < ApplicationController
     when "edit"
       @card = FlashCard.find(params[:old].to_i)
       @read = false
+    when "next"
+      if old == all.length - 1
+        back = 0
+      else
+        back = old + 1
+      end
+      @card = all[back]
+      @read = true
+    when "back"
+      if old == 0
+        back = all.length - 1
+      else
+        back = old - 1
+      end
+      @card = all[back]
+      @read = true
     when "save"
       FlashCard.find(params[:old].to_i).save
       @card = FlashCard.find(params[:old].to_i)
