@@ -11,16 +11,23 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20141127033307) do
+ActiveRecord::Schema.define(version: 20141206013456) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
   create_table "flash_cards", force: true do |t|
     t.string   "title"
-    t.string   "line",       default: [["", "0"], ["", "0"], ["", "0"], ["", "0"], ["", "0"], ["", "0"], ["", "0"], ["", "0"]], array: true
     t.text     "body"
     t.integer  "pin"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "lines", force: true do |t|
+    t.integer  "flash_card_id"
+    t.string   "text"
+    t.boolean  "center"
     t.datetime "created_at"
     t.datetime "updated_at"
   end

@@ -12,15 +12,15 @@
         <div id="flashcard-title" class="flashcard-class flashcard-read-title" style="padding-top:4px;">
           <%= card.title %>
         </div>
-        <% 8.times do |row| %>
+        <% card.lines.each do |row| %>
           <div>
-            <% if card.line[row][1] == "0" %>
+            <% if row.center == false %>
               <div id="flashcard-line" class="flashcard-class" style="margin:2px 0;">
-                <%= card.line[row][0] %>
+                <%= row.text %>
               </div> <!-- flashcard-line -->
             <% else %>
               <div id="flashcard-line" class="flashcard-class center" style="margin:2px 0;">
-                <%= card.line[row][0] %>
+                <%= row.text %>
               </div> <!-- flashcard-line -->
             <% end %>
           </div> <!--  -->

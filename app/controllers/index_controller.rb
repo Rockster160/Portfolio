@@ -8,7 +8,7 @@ class IndexController < ApplicationController
     if params[:pass_id]
       @card = FlashCard.find(params[:pass_id].to_i)
     else
-      @card = FlashCard.find(0)
+      @card = FlashCard.find(1)
     end
     @card_num = FlashCard.all.index(@card)
   end
