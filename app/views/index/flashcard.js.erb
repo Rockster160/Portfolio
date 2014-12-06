@@ -1,3 +1,6 @@
 // #$('#flashcard-placeholder').html('');
 //#$('#flashcard-placeholder').html("<%#= escape_javascript(render partial: 'flashcard', :locals => {:card => @card, :is_read => @read}) %>");
-$('#flashcard-placeholder').html("<%= escape_javascript() %>");
+$('#id_number').html("<%= @card_num %>");
+$('#flashcard-title').html("<%= escape_javascript(@card.title) %>");
+$('#flashcard-lines').html("<%= escape_javascript(render partial: 'flashcard_lines', :locals => { card: @card, is_read: @read }) %>");
+$('#flashcard-body').html("<%= escape_javascript(@card.body) %>");

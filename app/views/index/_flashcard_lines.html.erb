@@ -1,0 +1,13 @@
+<% card.lines.each do |row| %>
+  <div>
+    <% if row.center == false %>
+      <div id="flashcard-line" class="flashcard-class" style="margin:2px 0;">
+        <%= row.text %>
+      </div> <!-- flashcard-line -->
+    <% else %>
+      <div id="flashcard-line" class="flashcard-class center" style="margin:2px 0;">
+        <%= row.text %>
+      </div> <!-- flashcard-line -->
+    <% end %>
+  </div> <!--  -->
+<% end %>
