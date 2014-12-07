@@ -27,7 +27,6 @@ class IndexController < ApplicationController
       else
         back = old_index + 1
       end
-      binding.pry
       @card = all[back]
       @read = true
     when "back"
@@ -39,6 +38,7 @@ class IndexController < ApplicationController
       @card = all[back]
       @read = true
     when "save"
+      binding.pry
       old_flashcard.save
       @card = old_flashcard
       @read = true
@@ -49,8 +49,10 @@ class IndexController < ApplicationController
       @card = FlashCard.find(0)
       @read = true
     end
-    if params[:status]
-      @read = params[:status]
+    if params[:status] == "true"
+      @read = true
+    else
+      @read = false
     end
     @card_num = FlashCard.all.index(@card) + 1
     respond_to do |format|

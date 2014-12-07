@@ -1,13 +1,30 @@
-<% card.lines.each do |row| %>
-  <div>
-    <% if row.center == false %>
-      <div id="flashcard-line" class="flashcard-class" style="margin:2px 0;">
-        <%= row.text %>
-      </div> <!-- flashcard-line -->
-    <% else %>
-      <div id="flashcard-line" class="flashcard-class center" style="margin:2px 0;">
-        <%= row.text %>
-      </div> <!-- flashcard-line -->
-    <% end %>
-  </div> <!--  -->
+<% if is_read == true %>
+
+  <% card.lines.each do |row| %>
+    <div>
+      <% if row.center == false %>
+        <div id="flashcard-line" class="flashcard-class" style="margin:2px 0;">
+          <%= row.text %>
+        </div> <!-- flashcard-line -->
+      <% else %>
+        <div id="flashcard-line" class="flashcard-class center" style="margin:2px 0;">
+          <%= row.text %>
+        </div> <!-- flashcard-line -->
+      <% end %>
+    </div> <!--  -->
+  <% end %>
+
+<% else %>
+
+  <% card.lines.each do |row| %>
+    <div>
+      <%= link_to "(c)", "", remote: true, class: "btn flashcard-btn center-btn" %>
+      <% if row.center == false %>
+        <%#= f.text_field :row, id: "flashcard-line", class: "flashcard-class", value: row.text %>
+      <% else %>
+        <%#= f.text_field :row, id: "flashcard-line", class: "flashcard-class center", value: row.text %>
+      <% end %>
+    </div> <!--  -->
+  <% end %>
+
 <% end %>
