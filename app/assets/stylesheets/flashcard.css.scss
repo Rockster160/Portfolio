@@ -79,11 +79,18 @@
   }
   .back-body {
     padding: 20px;
+    height: 207px;
+    width: 351px;
   }
   .back-textbox {
+    position: absolute;
+    top: 18px;
+    left: 20px;
     font-family: "Comic Sans MS";
     font-size: 16px;
-    line-height: 16px;
+    line-height: 23px;
+    padding: 0;
+    margin: 0;
     resize: none;
     border: none;
     overflow: hidden;

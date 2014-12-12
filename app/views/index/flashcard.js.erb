@@ -1,8 +1,33 @@
 // #$('#flashcard-placeholder').html('');
 //#$('#flashcard-placeholder').html("<%#= escape_javascript(render partial: 'flashcard', :locals => {:card => @card, :is_read => @read}) %>");
+<% if @read %>
+  document.getElementById("edit-btn").href = "flashcard/edit/<%= @card.id %>";
+  $('#edit-btn').html("Edit");
+  document.getElementById("new-btn").href = "flashcard/new/<%= @card.id %>";
+  $('#new-btn').html("New");
+  $('.center-btn').addClass('hidden');
+  $('#title-placeholder').html("<div id='flashcard-title' class='flashcard-class flashcard-read-title' style='padding-top:4px;'><%= @card.title %></div>");
+  $('#back-textbox-id').addClass('hidden')
+  $('#back-textbox-id').val("<%= @card.body.to_s.html_safe %>");
+  $('#back-text').removeClass('hidden')
+  $('#back-text').html("<%= @card.body.to_s.html_safe %>");
+<% else %>
+  document.getElementById("edit-btn").href = "flashcard/save/<%= @card.id %>";
+  $('#edit-btn').html("Save");
+  document.getElementById("new-btn").href = "flashcard/delete/<%= @card.id %>";
+  $('#new-btn').html("Delete");
+  $('.center-btn').removeClass('hidden');
+  $('#title-placeholder').html("<input type='text' name='title' id='flashcard-title' class='flashcard-class flashcard-read-title' style='padding-top:3px;' value='<%= @card.title %>'>");
+  $('#back-textbox-id').removeClass('hidden')
+  $('#back-textbox-id').val("<%= @card.body.to_s.html_safe %>");
+  $('#back-text').addClass('hidden')
+  $('#back-text').html("<%= @card.body.to_s.html_safe %>");
+<% end %>
 document.getElementById("back-btn").href = "flashcard/back/<%= @card.id %>?status=<%= @read %>";
 $('#id_number').html("<%= @card_num %>");
 document.getElementById("next-btn").href = "flashcard/next/<%= @card.id %>?status=<%= @read %>";
-$('#flashcard-title').html("<%= escape_javascript(@card.title) %>");
-$('#flashcard-lines').html("<%= escape_javascript(render partial: 'flashcard_lines', :locals => { card: @card, is_read: @read }) %>");
-$('#flashcard-body').html("<%= escape_javascript(@card.body) %>");
+
+$('.flashcard-line').remove()
+<% @card.lines.each_with_index do |row, pos| %>
+  $('#line-placeholder-<%= pos %>').append("<%= escape_javascript(render partial: 'flashcard_lines', :locals => { card: @card, is_read: @read, row: row, pos: pos }) %>");
+<% end %>

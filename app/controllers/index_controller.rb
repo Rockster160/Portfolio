@@ -3,7 +3,7 @@ class IndexController < ApplicationController
   end
 
   def play
-    @read = true
+    @read = false
     @cards = FlashCard.all
     @card = FlashCard.find(1)
     @card_num = FlashCard.all.index(@card) + 1
@@ -11,6 +11,7 @@ class IndexController < ApplicationController
 
   def flashcard
     all = FlashCard.all
+    # binding.pry
     old_flashcard = FlashCard.find(params[:old].to_i)
     old_index = FlashCard.all.index(old_flashcard)
     case params[:type]
@@ -38,8 +39,7 @@ class IndexController < ApplicationController
       @card = all[back]
       @read = true
     when "save"
-      binding.pry
-      old_flashcard.save
+      # old_flashcard.save
       @card = old_flashcard
       @read = true
     when "delete"
@@ -49,12 +49,23 @@ class IndexController < ApplicationController
       @card = FlashCard.find(0)
       @read = true
     end
-    if params[:status] == "true"
-      @read = true
-    else
-      @read = false
+    if params[:status]
+      status = params[:status]
+      if status == "true"
+        @read = true
+      else
+        @read = false
+      end
     end
     @card_num = FlashCard.all.index(@card) + 1
+    respond_to do |format|
+      format.html
+      format.js
+    end
+  end
+
+  def saveCard
+    binding.pry
     respond_to do |format|
       format.html
       format.js

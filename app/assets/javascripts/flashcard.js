@@ -20,7 +20,7 @@ function flashReady() {
       tooWide(width, 290);
     }
     if (focused == "back-textbox") {
-      restrictScroll('back-textbox-id', 12);
+      restrictScroll('back-textbox-id', 9);
     }
 
     function tooWide(width, length) {
