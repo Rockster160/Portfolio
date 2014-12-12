@@ -2,12 +2,12 @@
   <% if @read == true %>
     <div id="flashcard-line" class="flashcard-line flashcard-class" style="margin:2px 0;"><%= row.text %></div>
   <% else %>
-    <input type="text" id="flashcard-line" name="line[<%= pos %>][0]" class="flashcard-line flashcard-class" style="margin:0px 0;" value="<%= row.text %>">
+    <input type="text" id="flashcard-line" name="line[<%= pos %>]" class="flashcard-line flashcard-class" style="margin:0px 0;" value="<%= row.text %>">
   <% end %>
 <% else %>
   <% if @read == true %>
     <div id="flashcard-line" class="flashcard-line flashcard-class center" style="margin:2px 0;"><%= row.text %></div>
   <% else %>
-    <input type="text" id="flashcard-line" name="line[<%= pos %>][0]" class="flashcard-line flashcard-class center" style="margin:0px 0;" value="<%= row.text %>">
+    <input type="text" id="flashcard-line" name="line[<%= pos %>]" class="flashcard-line flashcard-class center" style="margin:0px 0;" value="<%= row.text %>">
   <% end %>
 <% end %>

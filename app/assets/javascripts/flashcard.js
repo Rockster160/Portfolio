@@ -13,6 +13,12 @@ function flashReady() {
     $('.flashcard-container').toggleClass('flip');
   });
 
+  $("#edit-btn").click(function() {
+    if ($(this).html() == "Save") {
+      $(this).closest('form').submit();
+    }
+  });
+
   document.onkeyup = function () {
     focused = document.activeElement.className;
     if (focused == "flashcard-class" || focused == "flashcard-class center") {

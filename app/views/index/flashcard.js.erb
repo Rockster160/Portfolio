@@ -12,7 +12,7 @@
   $('#back-text').removeClass('hidden')
   $('#back-text').html("<%= @card.body.to_s.html_safe %>");
 <% else %>
-  document.getElementById("edit-btn").href = "flashcard/save/<%= @card.id %>";
+  document.getElementById("edit-btn").href = "#";
   $('#edit-btn').html("Save");
   document.getElementById("new-btn").href = "flashcard/delete/<%= @card.id %>";
   $('#new-btn').html("Delete");
@@ -29,5 +29,10 @@ document.getElementById("next-btn").href = "flashcard/next/<%= @card.id %>?statu
 
 $('.flashcard-line').remove()
 <% @card.lines.each_with_index do |row, pos| %>
+  <% if row.center == true %>
+    $('#center-box-<%= pos %>').prop("checked", true);
+  <% else %>
+    $('#center-box-<%= pos %>').prop("checked", false);
+  <% end %>
   $('#line-placeholder-<%= pos %>').append("<%= escape_javascript(render partial: 'flashcard_lines', :locals => { card: @card, is_read: @read, row: row, pos: pos }) %>");
 <% end %>

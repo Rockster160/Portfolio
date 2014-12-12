@@ -1,37 +1,35 @@
 <%= form_tag('flashcard/save/' + card.id.to_s, method: "get", remote: true) do %>
-<a href="flashcard/edit/<%= card.id %>" id="edit-btn" class="btn" data-remote="true">Edit</a>
-<a href="flashcard/new/<%= card.id %>" id="new-btn" class="btn" data-remote="true">New</a>
-<a href="flashcard/back/<%= card.id %>?status=<%= is_read %>" id="back-btn" class="btn" data-remote="true"><</a>
-<span id="id_number"><%= @card_num %></span>
-<a href="flashcard/next/<%= card.id %>?status=<%= is_read %>" id="next-btn" class="btn" data-remote="true">></a>
-<div class="flashcard-container">
-  <div id="flashCard" class="card">
-    <div class="front face">
-      <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn", id: "flip-test" %>
-      <div id="title-placeholder">
-        <div id="flashcard-title" class="flashcard-class flashcard-read-title" style="padding-top:4px;"><%= card.title %></div>
-      </div>
-      <div id="flashcard-lines">
-        <% @card.lines.each_with_index do |row, pos| %>
-          <div id="line-placeholder-<%= pos %>" class="line-placeholder">
-          <%#= link_to "(c)", "", remote: true, class: "btn flashcard-btn center-btn" %>
-          <input name="line[<%= pos %>][1]" id="center-box-<%= pos %>" class="check btn flashcard-btn" type="checkbox"/>
-          <label for="center-box-<%= pos %>" class="btn flashcard-btn center-btn">(c)</label>
-            <%= render partial: 'flashcard_lines', :locals => { card: @card, is_read: @read, row: row, pos: pos } %>
-          </div> <!--  -->
-        <% end %>
-      </div>
-    </div> <!-- front -->
-    <div class="back face">
-      <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn", id: "flip-test" %>
-      <div id="flashcard-body" class="back-body flashcard-class">
-        <span id='back-text'><%= card.body %></span>
-        <textarea id='back-textbox-id' class='back-textbox hidden' rows='9' cols='48'>
-          <%= card.body %>
-        </textarea>
-      </div><!-- body -->
-    </div> <!-- back -->
-  </div> <!-- flashCard -->
-</div> <!-- container -->
-<%= submit_tag("Submit") %>
+  <a href="flashcard/edit/<%= card.id %>" id="edit-btn" class="btn" onclick="" data-remote="true">Edit</a>
+  <a href="flashcard/new/<%= card.id %>" id="new-btn" class="btn" data-remote="true">New</a>
+  <a href="flashcard/back/<%= card.id %>?status=<%= is_read %>" id="back-btn" class="btn" data-remote="true"><</a>
+  <span id="id_number"><%= @card_num %></span>
+  <a href="flashcard/next/<%= card.id %>?status=<%= is_read %>" id="next-btn" class="btn" data-remote="true">></a>
+  <div class="flashcard-container">
+    <div id="flashCard" class="card">
+      <div class="front face">
+        <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn", id: "flip-test" %>
+        <div id="title-placeholder">
+          <div id="flashcard-title" class="flashcard-class flashcard-read-title" style="padding-top:4px;"><%= card.title %></div>
+        </div>
+        <div id="flashcard-lines">
+          <% @card.lines.each_with_index do |row, pos| %>
+            <div id="line-placeholder-<%= pos %>" class="line-placeholder">
+            <input name="center[<%= pos %>]" id="center-box-<%= pos %>" class="check btn flashcard-btn" type="checkbox" value="true"/>
+            <label for="center-box-<%= pos %>" class="btn flashcard-btn center-btn hidden">(c)</label>
+              <%= render partial: 'flashcard_lines', :locals => { card: @card, is_read: @read, row: row, pos: pos } %>
+            </div> <!--  -->
+          <% end %>
+        </div>
+      </div> <!-- front -->
+      <div class="back face">
+        <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn", id: "flip-test" %>
+        <div id="flashcard-body" class="back-body flashcard-class">
+          <span id='back-text'><%= card.body %></span>
+          <textarea id='back-textbox-id' class='back-textbox hidden' rows='9' cols='48'>
+            <%= card.body %>
+          </textarea>
+        </div><!-- body -->
+      </div> <!-- back -->
+    </div> <!-- flashCard -->
+  </div> <!-- container -->
 <% end %>
