@@ -77,6 +77,15 @@
   .center-btn {
     margin: 1px 3px 0 0;
   }
+  .check {
+    display: none;
+  }
+  .check + label {
+    display: inline-block;
+  }
+  .check:checked + label {
+    background-color: #BBB;
+  }
   .back-body {
     padding: 20px;
     height: 207px;
