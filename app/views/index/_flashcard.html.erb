@@ -1,4 +1,4 @@
-<%= form_tag('flashcard/save/' + card.id.to_s, method: "get", remote: true) do %>
+<form action="flashcard/save/<%= card.id.to_s %>" id="flashcard-form" method="get" data-remote="true">
   <a href="flashcard/edit/<%= card.id %>" id="edit-btn" class="btn" onclick="" data-remote="true">Edit</a>
   <a href="flashcard/new/<%= card.id %>" id="new-btn" class="btn" data-remote="true">New</a>
   <a href="flashcard/back/<%= card.id %>?status=<%= is_read %>" id="back-btn" class="btn" data-remote="true"><</a>
@@ -25,11 +25,14 @@
         <%= link_to "v^", "", remote: true, class: "btn flashcard-btn jsflip-btn", id: "flip-test" %>
         <div id="flashcard-body" class="back-body flashcard-class">
           <span id='back-text'><%= card.body %></span>
-          <textarea id='back-textbox-id' class='back-textbox hidden' rows='9' cols='48'>
+          <textarea id='back-textbox-id' name="body" class='back-textbox hidden' rows='9' cols='48'>
             <%= card.body %>
           </textarea>
         </div><!-- body -->
       </div> <!-- back -->
     </div> <!-- flashCard -->
   </div> <!-- container -->
-<% end %>
+</form>
+<%# end %>
+
+<!-- Have to update the form with Javascript! Otherwise changes will always affect card 1 -->

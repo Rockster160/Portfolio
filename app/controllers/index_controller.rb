@@ -43,20 +43,23 @@ class IndexController < ApplicationController
       old_flashcard.lines.each do |index|
         line_index << index.id
       end
+      old_flashcard.update_attribute(:title, params[:title])
       if params[:center]
         params[:center].each do |on|
           center << on[0].to_i
         end
       end
       params[:line].each do |line|
-        this_index = line_index[line[0].to_i]
-        old_flashcard.lines.find(this_index).update_attribute(:text, line[1])
+        this_line = old_flashcard.lines.find(line_index[line[0].to_i])
+        this_line.update_attribute(:text, line[1])
         if center.include?(line[0].to_i)
-          old_flashcard.lines.find(this_index).update_attribute(:center, true)
+          this_line.update_attribute(:center, true)
         else
-          old_flashcard.lines.find(this_index).update_attribute(:center, false)
+          this_line.update_attribute(:center, false)
         end
       end
+      old_flashcard.update_attribute(:body, params[:body])
+      old_flashcard.save
       @card = old_flashcard
       @read = true
     when "delete"

@@ -7,9 +7,9 @@
   $('#new-btn').html("New");
   $('.center-btn').addClass('hidden');
   $('#title-placeholder').html("<div id='flashcard-title' class='flashcard-class flashcard-read-title' style='padding-top:4px;'><%= @card.title %></div>");
-  $('#back-textbox-id').addClass('hidden')
+  $('#back-textbox-id').addClass('hidden');
   $('#back-textbox-id').val("<%= @card.body.to_s.html_safe %>");
-  $('#back-text').removeClass('hidden')
+  $('#back-text').removeClass('hidden');
   $('#back-text').html("<%= @card.body.to_s.html_safe %>");
 <% else %>
   document.getElementById("edit-btn").href = "#";
@@ -18,11 +18,14 @@
   $('#new-btn').html("Delete");
   $('.center-btn').removeClass('hidden');
   $('#title-placeholder').html("<input type='text' name='title' id='flashcard-title' class='flashcard-class flashcard-read-title' style='padding-top:3px;' value='<%= @card.title %>'>");
-  $('#back-textbox-id').removeClass('hidden')
+  $('#back-textbox-id').removeClass('hidden');
   $('#back-textbox-id').val("<%= @card.body.to_s.html_safe %>");
-  $('#back-text').addClass('hidden')
+  $('#back-text').addClass('hidden');
   $('#back-text').html("<%= @card.body.to_s.html_safe %>");
 <% end %>
+// console.log(document.getElementById('flashcard-form').action)
+document.getElementById('flashcard-form').action = "flashcard/save/<%= @card.id %>";
+// console.log(document.getElementById('flashcard-form').action)
 document.getElementById("back-btn").href = "flashcard/back/<%= @card.id %>?status=<%= @read %>";
 $('#id_number').html("<%= @card_num %>");
 document.getElementById("next-btn").href = "flashcard/next/<%= @card.id %>?status=<%= @read %>";
