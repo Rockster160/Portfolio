@@ -1,5 +1,3 @@
-// #$('#flashcard-placeholder').html('');
-//#$('#flashcard-placeholder').html("<%#= escape_javascript(render partial: 'flashcard', :locals => {:card => @card, :is_read => @read}) %>");
 <% if @read %>
   document.getElementById("edit-btn").href = "flashcard/edit/<%= @card.id %>";
   $('#edit-btn').html("Edit");
@@ -23,9 +21,8 @@
   $('#back-text').addClass('hidden');
   $('#back-text').html("<%= @card.body.to_s.html_safe %>");
 <% end %>
-// console.log(document.getElementById('flashcard-form').action)
+
 document.getElementById('flashcard-form').action = "flashcard/save/<%= @card.id %>";
-// console.log(document.getElementById('flashcard-form').action)
 document.getElementById("back-btn").href = "flashcard/back/<%= @card.id %>?status=<%= @read %>";
 $('#id_number').html("<%= @card_num %>");
 document.getElementById("next-btn").href = "flashcard/next/<%= @card.id %>?status=<%= @read %>";
