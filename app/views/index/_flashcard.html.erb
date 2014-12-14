@@ -1,9 +1,18 @@
 <form action="flashcard/save/<%= card.id.to_s %>" id="flashcard-form" method="get" data-remote="true">
+  <!-- <input type="password" name="pin" maxlength="4" size="2" placeholder=" PIN"> -->
   <a href="flashcard/edit/<%= card.id %>" id="edit-btn" class="btn" onclick="" data-remote="true">Edit</a>
   <a href="flashcard/new/<%= card.id %>" id="new-btn" class="btn" data-remote="true">New</a>
   <a href="flashcard/back/<%= card.id %>?status=<%= is_read %>" id="back-btn" class="btn" data-remote="true"><</a>
   <span id="id_number"><%= @card_num %></span>
   <a href="flashcard/next/<%= card.id %>?status=<%= is_read %>" id="next-btn" class="btn" data-remote="true">></a>
+  <!-- <select name="known">
+    <option>Clueless</option>
+    <option>Poor</option>
+    <option>Average</option>
+    <option>Known</option>
+    <option>Mastered</option>
+  </select>
+  <input type="checkbox" name="shuffle">Shuffle</input> -->
   <div class="flashcard-container">
     <div id="flashCard" class="card">
       <div class="front face">

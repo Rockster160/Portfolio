@@ -1,0 +1,32 @@
+$(document).keyup(function() {
+  focused = document.activeElement.className;
+  if (focused == "search-box") {
+    console.log();
+  }
+
+  function updateSearch() {
+    str = $('.search-box').val();
+    url = "/";
+  }
+
+    url = "/search.json";
+    var str = $('#live-search').serialize().substr(2);
+    $.get(url, {q : str}, function(searchResults) {
+      if (str.length > 0) {
+        $('#live-search-results').html("")
+        for(var i=0;i<searchResults.length;i++){
+          $('#live-search-results').append('<li id="live-search-list" style="list-style-type:none;" onClick="liveBeenClicked(' +
+            searchResults[i][0] +
+            ', ' +
+            favParam +
+            ');"><img src="/images/' +
+            searchResults[i][2] +
+            '" id="circle-image">' +
+            searchResults[i][1] +
+            '</li>');
+        }
+      }
+      if (str.length == 0) { $('#live-search-results').html("") }
+    });
+  }
+})

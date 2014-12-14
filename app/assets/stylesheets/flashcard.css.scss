@@ -3,21 +3,53 @@
 }
 
 #flashcards {
+  background: #EEE;
   right: 0;
 }
 
 #options {
   margin-left: 140px;
-  #textfields {
-    margin-left: -40px;
-  }
 }
 
 #searchResults {
+  position: relative;
   margin: 10px 0 10px 75px;
   width: 250px;
   height: 150px;
   border: gray 3px ridge;
+
+  #rule, #left, #right {
+    position: absolute;
+  }
+  #rule {
+    left: 125px;
+  }
+  #left {
+    white-space: nowrap;
+    padding: 10px;
+    width: 105px;
+    height: 120px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  #right {
+    white-space: nowrap;
+    padding: 10px;
+    left: 125px;
+    width: 105px;
+    height: 120px;
+    overflow-y: auto;
+  }
+  .piece {
+    height: 20px;
+    padding-left: 3px;
+    border: 1px black solid;
+    overflow-x: hidden;
+  }
+  .piece:hover {
+    background: #FEEDBB;
+    cursor: pointer;
+  }
 }
 
 #flashCard {
@@ -93,6 +125,7 @@
   }
   .back-textbox {
     position: absolute;
+    background: transparent;
     top: 18px;
     left: 20px;
     font-family: "Comic Sans MS";

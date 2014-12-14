@@ -8,10 +8,14 @@
 FlashCard.create(
   title: "Rocco's Flash Cards!",
   body: "You've flipped the card! On the back, you can store much more information that elaborates on the front side hints. As a recipe card, the directions can be saved on the back while the ingredients are kept on the front and the title is the name of the recipe.",
-  pin: 2207
+  pin: 11111
 )
 FlashCard.find(1).lines[0].update_attributes(
   text: "Click the rotate button to flip the card.",
+  center: false
+)
+FlashCard.find(1).lines[1].update_attributes(
+  text: "Or click the Edit button to change the text!",
   center: false
 )
 FlashCard.find(1).lines[3].update_attributes(
@@ -22,7 +26,7 @@ FlashCard.find(1).lines[3].update_attributes(
 FlashCard.create(
   title: "Error Card",
   body: "I'm not sure exactly what happened, but something somehow broke and you have been redirected to this card. This could have been caused if you deleted the last card in a batch or somehow broke the system in some other way. If the latter is true, please let me know what happened so I can fix it!",
-  pin: 2207
+  pin: 11111
 )
 FlashCard.find(2).lines[0].update_attributes(
   text: "Something went wrong!",

@@ -28,6 +28,7 @@ class IndexController < ApplicationController
         back = old_index + 1
       end
       @card = all[back]
+      # @card = all[rand(all.length)] if params[:shuffle] #Won't work because params only pass through form submission. Would have to add in an extra parameter.
       @read = true
     when "back"
       if old_index == 0

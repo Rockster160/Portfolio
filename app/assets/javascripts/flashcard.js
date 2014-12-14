@@ -25,8 +25,9 @@ function flashReady() {
       var width = textWidth($(':focus').val(), "Comic Sans MS");
       tooWide(width, 290);
     }
-    if (focused == "back-textbox") {
-      restrictScroll('back-textbox-id', 9);
+    if (focused == "flashcard-class" || focused == "flashcard-class center") {
+      var width = textWidth($(':focus').val(), "Comic Sans MS");
+      tooWide(width, 290);
     }
 
     function tooWide(width, length) {
