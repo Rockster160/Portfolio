@@ -23,6 +23,7 @@ ActiveRecord::Schema.define(version: 20141214044759) do
   end
 
   create_table "flash_cards", force: true do |t|
+    t.integer  "batch_id"
     t.string   "title"
     t.text     "body"
     t.integer  "pin"

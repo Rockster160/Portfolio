@@ -8,7 +8,7 @@ Rails.application.routes.draw do
   get 'playground' => 'index#play', as: 'playground'
   get 'flashcard/:type/:old' => 'index#flashcard', as: 'flashcard'
 
-  get '/search' => 'search_results#index'
+  get '/search' => 'search#index'
 
   # The priority is based upon order of creation: first created -> highest priority.
   # See how all your routes lay out with "rake routes".

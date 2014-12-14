@@ -29,6 +29,9 @@ function flashReady() {
       var width = textWidth($(':focus').val(), "Comic Sans MS");
       tooWide(width, 290);
     }
+    if (focused == "search-box") {
+      updateSearch();
+    }
 
     function tooWide(width, length) {
       if (width > length) {
@@ -64,17 +67,32 @@ function flashReady() {
   };
 }
 
-function reloadJS() { //Syop calling this
-  if (document.getElementById('flashCard')) {
-console.log('Ready!');
-    setTimeout(function() {
-      flashReady();
-    }, 200);
-  } else {
-console.log('Not ready...');
-    setTimeout(function() {
-      reloadJS();
-    }, 100);
+function updateSearch() {
+  var str = $('.search-box').val();
+  var url = "/search.json";
+  $.get(url, {q : str}, function(searchResults) {
+    if (str.length > 0) {
+      $('#left').html("")
+      for(var i=0;i<searchResults.length;i++){
+        console.log(searchResults[i][0]);
+        $('#left').append('<div class="piece" onClick="liveBeenClicked(' +
+          searchResults[i][0] +
+          ');">' +
+          searchResults[i][1] +
+          '</div>');
+      }
+    }
+    if (str.length == 0) { $('#left').html("") }
+  });
+}
+
+function liveBeenClicked() {
+  console.log(arguments);
+  $('#right').html("")
+  for(var i=0;i<arguments.length;i++){
+    $('#right').append('<div class="piece">' +
+      arguments[i] +
+      '</div>');
   }
 }
 
