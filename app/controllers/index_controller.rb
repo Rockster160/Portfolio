@@ -5,7 +5,7 @@ class IndexController < ApplicationController
   def play
     @read = true
     @cards = FlashCard.all
-    @card = FlashCard.find(1)
+    @card = @cards.first
     @card_num = FlashCard.all.index(@card) + 1
   end
 

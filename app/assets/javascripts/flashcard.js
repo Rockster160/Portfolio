@@ -87,15 +87,16 @@ function updateSearch() {
 }
 
 function liveBeenClicked() {
-  console.log(arguments);
+  // console.log(arguments);
+  var args = Array.prototype.slice.call(arguments, 1);
+  console.log(args);
   $('#right').html("")
-  for(var i=0;i<arguments.length;i++){
-    $('#right').append('<div class="piece">' +
-      arguments[i] +
-      '</div>');
+  for(var i=0;i<args.length;i++){
+    $('#right').append('<div class="piece"><% FlashCard.find(' +
+      args[i] +
+    ').title %></div>');
   }
 }
 
 $(document).ready(flashReady);
 $(document).on('page:load', flashReady());
-// setInterval(function() {reloadJS()}, 5000);

@@ -17,7 +17,7 @@ class SearchController < ApplicationController
     # end
     # @fwd = @len_of_str
     # @listuser = @listuser.sort_by{|x,y|y}.reverse
-    cards = ["4", "7"]
+    cards = ["Go", "Hello"]
     # FlashCard.all.each do |card|
     #   cards << card.title
     # end
