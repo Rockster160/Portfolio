@@ -75,9 +75,12 @@ function updateSearch() {
       $('#left').html("")
       for(var i=0;i<searchResults.length;i++){
         console.log(searchResults[i][0]);
-        $('#left').append('<div class="piece" onClick="liveBeenClicked(' +
+        //Change all of this to a partial with a local of the integer card id.
+        // Add onclick events to the partial:
+        // function, remove classes, add class to self
+        $('#left').append('<div class="cell batch highlight" onClick="liveBeenClicked(' +
           searchResults[i][0] +
-          ');">' +
+          ');$(this).addClass();">' +
           searchResults[i][1] +
           '</div>');
       }
@@ -88,13 +91,16 @@ function updateSearch() {
 
 function liveBeenClicked() {
   // console.log(arguments);
-  var args = Array.prototype.slice.call(arguments, 1);
-  console.log(args);
-  $('#right').html("")
+  // $('.cell').removeClass('highlight');
+  // $(this).addClass('highlight');
+  // var args = Array.prototype.slice.call(arguments, 1);
+  var args = arguments
+  // console.log(args);
+  $('#right').html("");
   for(var i=0;i<args.length;i++){
-    $('#right').append('<div class="piece"><% FlashCard.find(' +
+    $('#right').append('<div class="cell card">' +
       args[i] +
-    ').title %></div>');
+    '</div>');
   }
 }
 

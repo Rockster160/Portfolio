@@ -17,7 +17,7 @@ class SearchController < ApplicationController
     # end
     # @fwd = @len_of_str
     # @listuser = @listuser.sort_by{|x,y|y}.reverse
-    cards = ["Go", "Hello"]
+    cards = [1, 5, 9, 7, 4, 223, 567, 12, 235]
     # FlashCard.all.each do |card|
     #   cards << card.title
     # end
@@ -26,6 +26,13 @@ class SearchController < ApplicationController
     #   game = Game.find(x[0])
     #   liveResults << [ game.id, game.name, game.ava ]
     # end
+    # Faster search algorithms are based on preprocessing of the text.
+    # After building a substring index, for example a suffix tree or suffix array,
+    # the occurrences of a pattern can be found quickly. As an example, a suffix tree can be
+    # built in \Theta(n) time, and all z occurrences of a pattern can be found in O(m) time
+    # under the assumption that the alphabet has a constant size and all inner nodes in the
+    # suffix tree knows what leafs are underneath them. The latter can be accomplished by
+    # running a DFS algorithm from the root of the suffix tree.
     respond_to do |format|
       format.html
       format.json {render json: liveResults.to_json }

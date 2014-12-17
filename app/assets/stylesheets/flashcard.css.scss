@@ -2,6 +2,10 @@
   position: absolute;
 }
 
+.highlight {
+  background: #FEEDBB;
+}
+
 #flashcards {
   right: 0;
 }
@@ -39,13 +43,13 @@
     height: 120px;
     overflow-y: auto;
   }
-  .piece {
+  .cell {
     height: 20px;
     padding-left: 3px;
     border: 1px black solid;
     overflow-x: hidden;
   }
-  .piece:hover {
+  .cell:hover {
     background: #FEEDBB;
     cursor: pointer;
   }
