@@ -4,9 +4,8 @@ class IndexController < ApplicationController
 
   def play
     @read = true
-    @cards = FlashCard.all
-    @card = @cards.first
-    @card_num = FlashCard.all.index(@card) + 1
+    @card = FlashCard.first
+    # @card_num = FlashCard.all.index(@card) + 1 if @cards.many?
   end
 
   def flashcard

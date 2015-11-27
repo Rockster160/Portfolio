@@ -47,7 +47,9 @@
       </div>
     </div> <!-- searchResults -->
     <div id="flashcard-placeholder">
-      <%= render "flashcard", :card => @card, :is_read => @read %>
+      <% if @card %>
+        <%= render "flashcard", :card => @card, :is_read => @read %>
+      <% end %>
     </div>
   </div> <!-- flashcards -->
 </div>
