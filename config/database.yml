@@ -10,7 +10,6 @@ default: &default
 
 development:
   <<: *default
-  username: postgres
   database: Portfolio_development
 
 # Warning: The database defined as "test" will be erased and
