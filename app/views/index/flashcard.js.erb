@@ -1,4 +1,4 @@
-<% if @read %>
+<% if @read_card %>
   document.getElementById("edit-btn").href = "flashcard/edit/<%= @card.id %>";
   $('#edit-btn').html("Edit");
   document.getElementById("new-btn").href = "flashcard/new/<%= @card.id %>";
@@ -23,9 +23,9 @@
 <% end %>
 
 document.getElementById('flashcard-form').action = "flashcard/save/<%= @card.id %>";
-document.getElementById("back-btn").href = "flashcard/back/<%= @card.id %>?status=<%= @read %>";
+document.getElementById("back-btn").href = "flashcard/back/<%= @card.id %>?status=<%= @read_card %>";
 $('#id_number').html("<%= @card_num %>");
-document.getElementById("next-btn").href = "flashcard/next/<%= @card.id %>?status=<%= @read %>";
+document.getElementById("next-btn").href = "flashcard/next/<%= @card.id %>?status=<%= @read_card %>";
 
 $('.flashcard-line').remove()
 <% @card.lines.each_with_index do |row, pos| %>
@@ -34,5 +34,5 @@ $('.flashcard-line').remove()
   <% else %>
     $('#center-box-<%= pos %>').prop("checked", false);
   <% end %>
-  $('#line-placeholder-<%= pos %>').append("<%= escape_javascript(render partial: 'flashcard_lines', :locals => { card: @card, is_read: @read, row: row, pos: pos }) %>");
+  $('#line-placeholder-<%= pos %>').append("<%= escape_javascript(render partial: 'flashcard_lines', :locals => { card: @card, is_read: @read_card, row: row, pos: pos }) %>");
 <% end %>

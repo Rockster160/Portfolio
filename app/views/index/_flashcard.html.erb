@@ -23,9 +23,9 @@
         <div id="flashcard-lines">
           <% @card.lines.each_with_index do |row, pos| %>
             <div id="line-placeholder-<%= pos %>" class="line-placeholder">
-            <input name="center[<%= pos %>]" id="center-box-<%= pos %>" class="check btn flashcard-btn" type="checkbox" value="true"/>
-            <label for="center-box-<%= pos %>" class="btn flashcard-btn center-btn hidden">(c)</label>
-              <%= render partial: 'flashcard_lines', :locals => { card: @card, is_read: @read, row: row, pos: pos } %>
+              <input name="center[<%= pos %>]" id="center-box-<%= pos %>" class="check btn flashcard-btn" type="checkbox" value="true"/>
+              <label for="center-box-<%= pos %>" class="btn flashcard-btn center-btn hidden">(c)</label>
+              <%= render partial: 'flashcard_lines', :locals => { card: @card, is_read: @read_card, row: row, pos: pos } %>
             </div> <!--  -->
           <% end %>
         </div>

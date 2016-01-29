@@ -24,28 +24,6 @@ FlashCard.find(1).lines[3].update_attributes(
 )
 
 FlashCard.create(
-  title: "Error Card",
-  body: "I'm not sure exactly what happened, but something somehow broke and you have been redirected to this card. This could have been caused if you deleted the last card in a batch or somehow broke the system in some other way. If the latter is true, please let me know what happened so I can fix it!",
-  pin: 11111
-)
-FlashCard.find(2).lines[0].update_attributes(
-  text: "Something went wrong!",
-  center: true
-)
-FlashCard.find(2).lines[1].update_attributes(
-  text: "Something is broken....",
-  center: false
-)
-FlashCard.find(2).lines[2].update_attributes(
-  text: "Rocco should probably fix this.",
-  center: true
-)
-FlashCard.find(2).lines[5].update_attributes(
-  text: "Tell me what you did!",
-  center: true
-)
-
-FlashCard.create(
   title: "Random Card",
   body: "This is a random card that can be edited by anybody! There is no pin on it, so feel free to edit, delete, or save it to your will!"
 )

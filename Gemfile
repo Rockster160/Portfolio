@@ -8,9 +8,17 @@ gem 'jquery-rails'
 gem 'jbuilder', '~> 2.0'
 gem 'sdoc', '~> 0.4.0',          group: :doc
 gem 'spring',        group: :development
-gem 'unicorn'
+gem 'puma'
+gem 'sidekiq'
+gem 'sidekiq-cron'
+gem 'twilio-ruby'
+gem 'autoprefixer-rails'
+gem 'annotate'
 
 group :development, :test do
+  gem 'annotate'
+  gem 'better_errors'
+  gem 'binding_of_caller'
   gem 'pry-byebug'
   gem 'pry-rails'
   gem 'pry-nav'

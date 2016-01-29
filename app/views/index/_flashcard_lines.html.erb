@@ -1,13 +1,5 @@
-<% if row.center == false %>
-  <% if @read == true %>
-    <div id="flashcard-line" class="flashcard-line flashcard-class" style="margin:2px 0;"><%= row.text %></div>
-  <% else %>
-    <input type="text" id="flashcard-line" name="line[<%= pos %>]" class="flashcard-line flashcard-class" style="margin:0px 0;" value="<%= row.text %>">
-  <% end %>
+<% if @read_card == true %>
+  <div id="flashcard-line" class="flashcard-line flashcard-class <%= row.center ? 'center' : '' %>" style="margin:2px 0;"><%= row.text %></div>
 <% else %>
-  <% if @read == true %>
-    <div id="flashcard-line" class="flashcard-line flashcard-class center" style="margin:2px 0;"><%= row.text %></div>
-  <% else %>
-    <input type="text" id="flashcard-line" name="line[<%= pos %>]" class="flashcard-line flashcard-class center" style="margin:0px 0;" value="<%= row.text %>">
-  <% end %>
+  <input type="text" id="flashcard-line" name="line[<%= pos %>]" class="flashcard-line flashcard-class <%= row.center ? 'center' : '' %>" style="margin:0px 0;" value="<%= row.text %>">
 <% end %>
