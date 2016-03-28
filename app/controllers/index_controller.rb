@@ -16,9 +16,9 @@ class IndexController < ApplicationController
     stripped_text = params["Body"].downcase.gsub(/[^a-z0-9\s]/i, '')
     if stripped_text =~ /done/
       if params["From"] == "+13852599640"
-        first.update(turn: "8019317892")
+        LitterTextReminder.first.update(turn: "8019317892")
       elsif params["From"] == "+18019317892"
-        first.update(turn: "3852599640")
+        LitterTextReminder.first.update(turn: "3852599640")
       end
     end
 
