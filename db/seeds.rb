@@ -1,24 +1,18 @@
-# # This file should contain all the record creation needed to seed the database with its default values.
-# # The data can then be loaded with the rake db:seed (or created alongside the db with db:setup).
-# #
-# # Examples:
-# #
-# #   cities = City.create([{ name: 'Chicago' }, { name: 'Copenhagen' }])
-# #   Mayor.create(name: 'Emanuel', city: cities.first)
+LitterTextReminder.create
 FlashCard.create(
   title: "Rocco's Flash Cards!",
   body: "You've flipped the card! On the back, you can store much more information that elaborates on the front side hints. As a recipe card, the directions can be saved on the back while the ingredients are kept on the front and the title is the name of the recipe.",
   pin: 11111
 )
-FlashCard.find(1).lines[0].update_attributes(
+FlashCard.last.lines[0].update_attributes(
   text: "Click the rotate button to flip the card.",
   center: false
 )
-FlashCard.find(1).lines[1].update_attributes(
+FlashCard.last.lines[1].update_attributes(
   text: "Or click the Edit button to change the text!",
   center: false
 )
-FlashCard.find(1).lines[3].update_attributes(
+FlashCard.last.lines[3].update_attributes(
   text: "Center text by clicking the 'c' at the end.",
   center: true
 )

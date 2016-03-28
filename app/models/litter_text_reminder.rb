@@ -1,0 +1,27 @@
+# == Schema Information
+#
+# Table name: litter_text_reminders
+#
+#  id         :integer          not null, primary key
+#  turn       :integer          default(0)
+#  created_at :datetime
+#  updated_at :datetime
+#
+
+class LitterTextReminder < ActiveRecord::Base
+
+  enum turn: {
+    "3852599640" => 0,
+    "8019317892" => 1
+  }
+
+  def self.toggle!
+    if first.turn == LitterTextReminder.turns[0]
+      first.update(turn: "8019317892")
+    else
+      first.update(turn: "3852599640")
+    end
+    first.turn
+  end
+
+end

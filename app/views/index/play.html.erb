@@ -2,50 +2,54 @@
 <!-- binary x = 235, analog y = 100 -->
 <div id="flashcard-holder">
   <div id="flashcards">
-    <div id="options">
-      <!-- <input type="checkbox" name="searchable" value="batch"> Batch
-      <input type="checkbox" name="searchable" value="title"> Title</br>
-      <input type="checkbox" name="searchable" value="body"> Body
-      <input type="checkbox" name="searchable" value="type" disabled="disabled"> <span style="color: gray;">Type</span></br> -->
-      <input type="text" name="batch" class="search-box" placeholder=" Search batches">
-    </div> <!-- options -->
-    <div id="searchResults">
-      <div id="left">
-        <div class="cell batch">Card 1 Recipe Book</div> <!-- onClick="function to update right column" -->
-        <div class="piece">Card 2 Recipe Book</div>
-        <div class="piece">Card 3 Recipe Book</div>
-        <div class="piece">Card 4 Recipe Book</div>
-        <div class="piece">Card 5 Recipe Book</div>
-        <div class="piece">Card 6 Recipe Book</div>
-        <div class="piece">Card 7 Recipe Book</div>
-        <div class="piece">Card 8 Recipe Book</div>
-        <div class="piece">Card 9 Recipe Book</div>
-        <div class="piece">Card 10 Recipe Book</div>
-        <div class="piece">Card 11 Recipe Book</div>
-        <div class="piece">Card 12 Recipe Book</div>
-        <div class="piece">Card 13 Recipe Book</div>
-        <div class="piece">Card 14 Recipe Book</div>
-        <div class="piece">Card 15 Recipe Book</div>
-      </div>
-      <hr width="1" size="130" id="rule">
-      <div id="right">
-        <div class="cell card">Card 1 Recipe Book</div> <!-- onClick="function to update batch and current card" -->
-        <div class="piece">Card 2 Recipe Book</div>
-        <div class="piece">Card 3 Recipe Book</div>
-        <div class="piece">Card 4 Recipe Book</div>
-        <div class="piece">Card 5 Recipe Book</div>
-        <div class="piece">Card 6 Recipe Book</div>
-        <div class="piece">Card 7 Recipe Book</div>
-        <div class="piece">Card 8 Recipe Book</div>
-        <div class="piece">Card 9 Recipe Book</div>
-        <div class="piece">Card 10 Recipe Book</div>
-        <div class="piece">Card 11 Recipe Book</div>
-        <div class="piece">Card 12 Recipe Book</div>
-        <div class="piece">Card 13 Recipe Book</div>
-        <div class="piece">Card 14 Recipe Book</div>
-        <div class="piece">Card 15 Recipe Book</div>
-      </div>
-    </div> <!-- searchResults -->
+    <!-- <div id="options"> -->
+      <!-- <input type="checkbox" name="searchable" value="batch"> Batch -->
+      <!-- <input type="checkbox" name="searchable" value="title"> Title</br> -->
+      <!-- <input type="checkbox" name="searchable" value="body"> Body -->
+      <!-- <input type="checkbox" name="searchable" value="type" disabled="disabled"> <span style="color: gray;">Type</span></br> -->
+      <!-- <input type="text" name="batch" class="search-box" placeholder=" Search batches"> -->
+    <!-- </div> -->
+    <!-- options -->
+    <!-- <div id="searchResults"> -->
+      <!-- <div id="left"> -->
+        <!-- <div class="cell batch">Card 1 Recipe Book</div> -->
+        <!-- onClick="function to update right column" -->
+        <!-- <div class="piece">Card 2 Recipe Book</div> -->
+        <!-- <div class="piece">Card 3 Recipe Book</div> -->
+        <!-- <div class="piece">Card 4 Recipe Book</div> -->
+        <!-- <div class="piece">Card 5 Recipe Book</div> -->
+        <!-- <div class="piece">Card 6 Recipe Book</div> -->
+        <!-- <div class="piece">Card 7 Recipe Book</div> -->
+        <!-- <div class="piece">Card 8 Recipe Book</div> -->
+        <!-- <div class="piece">Card 9 Recipe Book</div> -->
+        <!-- <div class="piece">Card 10 Recipe Book</div> -->
+        <!-- <div class="piece">Card 11 Recipe Book</div> -->
+        <!-- <div class="piece">Card 12 Recipe Book</div> -->
+        <!-- <div class="piece">Card 13 Recipe Book</div> -->
+        <!-- <div class="piece">Card 14 Recipe Book</div> -->
+        <!-- <div class="piece">Card 15 Recipe Book</div> -->
+      <!-- </div> -->
+      <!-- <hr width="1" size="130" id="rule"> -->
+      <!-- <div id="right"> -->
+        <!-- <div class="cell card">Card 1 Recipe Book</div> -->
+        <!-- onClick="function to update batch and current card" -->
+        <!-- <div class="piece">Card 2 Recipe Book</div> -->
+        <!-- <div class="piece">Card 3 Recipe Book</div> -->
+        <!-- <div class="piece">Card 4 Recipe Book</div> -->
+        <!-- <div class="piece">Card 5 Recipe Book</div> -->
+        <!-- <div class="piece">Card 6 Recipe Book</div> -->
+        <!-- <div class="piece">Card 7 Recipe Book</div> -->
+        <!-- <div class="piece">Card 8 Recipe Book</div> -->
+        <!-- <div class="piece">Card 9 Recipe Book</div> -->
+        <!-- <div class="piece">Card 10 Recipe Book</div> -->
+        <!-- <div class="piece">Card 11 Recipe Book</div> -->
+        <!-- <div class="piece">Card 12 Recipe Book</div> -->
+        <!-- <div class="piece">Card 13 Recipe Book</div> -->
+        <!-- <div class="piece">Card 14 Recipe Book</div> -->
+        <!-- <div class="piece">Card 15 Recipe Book</div> -->
+      <!-- </div> -->
+    <!-- </div> -->
+    <!-- searchResults -->
     <div id="flashcard-placeholder">
       <% if @card %>
         <%= render "flashcard", :card => @card, :is_read => @read_card %>

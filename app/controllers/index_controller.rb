@@ -1,4 +1,5 @@
 class IndexController < ApplicationController
+
   def home
   end
 
@@ -6,6 +7,21 @@ class IndexController < ApplicationController
     @read_card = true
     @card = FlashCard.first
     @card_num = FlashCard.all.index(@card) + 1 if FlashCard.all.many?
+  end
+
+  def talk
+    is_me = params["From"] == "+13852599640"
+
+    stripped_text = params["Body"].downcase.gsub(/[^a-z0-9\s]/i, '')
+    if stripped_text =~ /done/
+      if params["From"] == "+13852599640"
+        first.update(turn: "8019317892")
+      elsif params["From"] == "+18019317892"
+        first.update(turn: "3852599640")
+      end
+    end
+
+    head :ok
   end
 
   def flashcard

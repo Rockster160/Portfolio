@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20141214044759) do
+ActiveRecord::Schema.define(version: 20160328183657) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -35,6 +35,12 @@ ActiveRecord::Schema.define(version: 20141214044759) do
     t.integer  "flash_card_id"
     t.string   "text"
     t.boolean  "center"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "litter_text_reminders", force: true do |t|
+    t.integer  "turn",       default: 0
     t.datetime "created_at"
     t.datetime "updated_at"
   end

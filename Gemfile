@@ -19,6 +19,8 @@ gem 'font-awesome-rails'
 gem 'colorize'
 gem 'sidekiq'
 gem 'sidekiq-cron'
+gem 'twilio-ruby', '~> 4.11.1'
+gem 'sinatra', :require => nil
 
 group :development, :test do
   gem 'annotate'
