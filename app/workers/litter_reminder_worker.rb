@@ -11,7 +11,7 @@ class LitterReminderWorker
         from: "+18018500855"
       )
     rescue Twilio::REST::RequestError => e
-      ::Rails::Logger.warn e
+      Rails.logger.warn e
     end
   end
 
