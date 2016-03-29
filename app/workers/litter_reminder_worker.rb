@@ -2,6 +2,8 @@ class LitterReminderWorker
   include Sidekiq::Worker
 
   def perform
+    return true if LitterTextReminder.first.updated_at > 12.hours.ago
+    
     api = Twilio::REST::Client.new(ENV['PORTFOLIO_TWILIO_ACCOUNT_SID'], ENV['PORTFOLIO_TWILIO_AUTH_TOKEN'])
 
     begin
