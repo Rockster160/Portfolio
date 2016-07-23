@@ -1,0 +1,11 @@
+<div class="error-container"></div>
+<div class="scan" style="background: blue; color: white; width: 100px; height: auto; line-height: 2; text-align: center; cursor: pointer;">
+  Scan!
+</div>
+<% @pokemon.each do |pokemon| %>
+  <h4 style="margin: 20px 0 5px 5px;"><%= pokemon.pokedex_id %> - <%= pokemon.name %></h4>
+  <span><%= pokemon.location.join(', ') %></span> <br>
+  <span><%= pokemon.directions(@location.map(&:to_f)) %></span> <br>
+  <span><%= pokemon.bearing(@location.map(&:to_f)) %></span> <br>
+  <span><%= pokemon.time_until_expired %></span> <br>
+<% end %>

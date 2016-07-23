@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20160328183657) do
+ActiveRecord::Schema.define(version: 20160723202401) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -41,6 +41,16 @@ ActiveRecord::Schema.define(version: 20160328183657) do
 
   create_table "litter_text_reminders", force: true do |t|
     t.integer  "turn",       default: 0
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "pokemons", force: true do |t|
+    t.integer  "pokedex_id"
+    t.string   "lat"
+    t.string   "lon"
+    t.string   "name"
+    t.datetime "expires_at"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
