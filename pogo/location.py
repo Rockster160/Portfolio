@@ -9,11 +9,8 @@ def getLocation(search):
     return loc
 
 def getCoords(latitude, longitude):
-    try:
-        loc = geolocator.reverse((latitude, longitude))
-        return loc[0]
-    except Exception as e:
-        return 'fail'
+    loc = geolocator.reverse((latitude, longitude))
+    return loc[0]
 
 def getRadianDistance(latitude, longitude, olatitude, olongitude):
     # approximate radius of earth in km
