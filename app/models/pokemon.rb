@@ -18,8 +18,8 @@ class Pokemon < ActiveRecord::Base
 
   validate :not_duplicate
 
-  scope :spawned, -> { where(nil) }
-  # scope :spawned, -> { where('expires_at > ?', DateTime.current) }
+  # scope :spawned, -> { where(nil) }
+  scope :spawned, -> { where('expires_at > ?', DateTime.current) }
   def self.sort_by_distance(loc)
     spawned.sort_by { |pk| Pokemon.distance_between(loc, pk.location) }
   end

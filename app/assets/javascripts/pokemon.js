@@ -44,7 +44,7 @@ $(document).ready(function() {
       var endsAt = $(this).attr('data-countdown-to') * 1000;
       var remaining = getTimeRemaining(endsAt);
       if (remaining.total < 0) {
-        // $(this).parents('.pokemon-container').remove();
+        $(this).parents('.pokemon-container').remove();
       } else {
         var words = remainingToWords(remaining);
         $(this).html(words);
