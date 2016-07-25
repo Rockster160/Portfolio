@@ -16,18 +16,25 @@ class Pokemon < ActiveRecord::Base
   require 'action_view'
   include ActionView::Helpers::DateHelper
 
-  scope :spawned, -> { where('expires_at > ?', DateTime.current) }
+  validate :not_duplicate
+
+  scope :spawned, -> { where(nil) }
+  # scope :spawned, -> { where('expires_at > ?', DateTime.current) }
   def self.sort_by_distance(loc)
     spawned.sort_by { |pk| Pokemon.distance_between(loc, pk.location) }
   end
 
-  validate :not_duplicate
+  def self.last_update
+    last_poke_updated_at = order(updated_at: :desc).last.try(:updated_at)
+    last_poke_created_at = order(created_at: :desc).last.try(:created_at)
+    [last_poke_updated_at, last_poke_created_at].compact.sort.last
+  end
 
   def self.add_from_python_str(str)
     # "74:40.539857,-111.978192:653028"
     poke_id, lat_lon_str, expires_in_ms = str.split(":")
     poke_loc = lat_lon_str.split(',')
-    expires_at = DateTime.current + (expires_in_ms.to_i / 100).seconds
+    expires_at = DateTime.current + (expires_in_ms.to_i / 1000).seconds
     add(poke_id, poke_loc, expires_at)
   end
 

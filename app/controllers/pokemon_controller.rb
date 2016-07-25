@@ -2,14 +2,30 @@ class PokemonController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def index
-    @location = params[:loc].present? ? params[:loc].split(',') : [40.53796850822244,-111.97944975576598]
-    @pokemon = Pokemon.sort_by_distance(@location)
+    # @location = params[:loc].present? ? params[:loc].split(',') : [40.53796850822244,-111.97944975576598]
+    # @pokemon = Pokemon.where(nil)
+    @pokemon = Pokemon.spawned
+  end
+
+  def pokemon_list
+    @pokemon = Pokemon.spawned
+    respond_to do |format|
+      format.html { render layout: !request.xhr? }
+    end
+  end
+
+  def recently_updated
+    updating_response = {still_updating: still_updating?, last_updated: Pokemon.last_update.to_i}
+
+    respond_to do |format|
+      format.json { render json: updating_response }
+    end
   end
 
   def scan
     # lat = 40.53793474945806
     # lon = -111.97962070833802
-    result = `python2 pogo/demo.py -a ptc -u Caitherra -p password --location "#{params[:lat]},#{params[:lon]}"`
+    PokemonFinderWorker.perform_async(params[:lat], params[:lon])
     respond_to do |format|
       format.json { render nothing: true }
     end
@@ -39,6 +55,13 @@ class PokemonController < ApplicationController
     end
     puts "\e[0m"
     head 200
+  end
+
+  private
+
+  def still_updating?
+    ps = Sidekiq::ProcessSet.new
+    ps.map { |process| process['busy'].to_i }.sum > 0
   end
 
 end

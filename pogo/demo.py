@@ -75,6 +75,7 @@ if __name__ == '__main__':
                 #     pokemonBest = pokemon
 
         url = 'http://localhost:3141/pokemon'
+        # url = 'http://rocconicholls.me/pokemon'
         values = {'nearby' : pokestr, 'from' : from_location}
         data = urllib.urlencode(values)
         req = urllib2.Request(url, data)
