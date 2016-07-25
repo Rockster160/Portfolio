@@ -96,8 +96,13 @@ $(document).ready(function() {
       $.get('/recently_updated', {}).success(function(data) {
         if (!data.still_updating) {
           is_scanning = false
+          var failed_to_update = data.last_updated * 1000 < new Date() - 20
           $.get('/pokemon_list', {}).done(function(data) {
-            $('.error-container').html('')
+            if (failed_to_update) {
+              $('.error-container').html('Trouble connecting to Pokemon Servers')
+            } else {
+              $('.error-container').html('')
+            }
             $('.scan').removeClass('hidden')
             $('.pokemon-list-container').html(data)
             getLocation()
