@@ -3,6 +3,7 @@ source 'https://rubygems.org'
 gem 'rails', '4.1.5'
 gem 'pg'
 gem 'therubyracer'
+gem 'coffee-rails'
 gem 'sass-rails', '~> 4.0.3'
 gem 'uglifier', '>= 1.3.0'
 gem 'jquery-rails'
@@ -21,6 +22,8 @@ gem 'sidekiq'
 gem 'sidekiq-cron'
 gem 'twilio-ruby', '~> 4.11.1'
 gem 'sinatra', :require => nil
+gem 'gmaps4rails'
+gem 'underscore-rails'
 # gem 'poke-api', git: "git@github.com:nabeelamjad/poke-api.git", tag: '0.0.1'
 
 group :development, :test do

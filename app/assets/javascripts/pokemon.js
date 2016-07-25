@@ -173,7 +173,7 @@ $(document).ready(function() {
     var lat_distance = distanceBetween(from_lat, from_lon, to_lat, from_lon)
     var lon_distance = distanceBetween(from_lat, from_lon, from_lat, to_lon)
     var lat_cardinal_direction = from_lat < to_lat ? 'N' : 'S'
-    var lon_cardinal_direction = from_lon < to_lon ? 'E' : 'W'
+    var lon_cardinal_direction = from_lon < to_lon ? 'W' : 'E'
     var lat_distance_str = (Math.round(lat_distance * 100) / 100) + 'ft ' + lat_cardinal_direction
     var lon_distance_str = (Math.round(lon_distance * 100) / 100) + 'ft ' + lon_cardinal_direction
     return [lat_distance_str, lon_distance_str].join(', ')
@@ -184,4 +184,38 @@ $(document).ready(function() {
   setTimeout(function() {
     sortByDistance();
   }, 500)
+})
+
+
+$(document).ready(function() {
+  if ($('#map').length > 0) {
+
+    handler = Gmaps.build('Google');
+    handler.buildMap(
+      {
+        provider: {
+          disableDefaultUI: true
+          // pass in other Google Maps API options here
+        },
+        internal: {
+          id: 'map'
+        }
+      }, function() {
+        markers = handler.addMarkers([
+          {
+            "lat": 0,
+            "lng": 0,
+            "picture": {
+              "url": "http://people.mozilla.com/~faaborg/files/shiretoko/firefoxIcon/firefox-32.png",
+              "width":  32,
+              "height": 32
+            },
+            "infowindow": "hello!"
+          }
+        ]);
+        handler.bounds.extendWith(markers);
+        handler.fitMapToBounds();
+      }
+    );
+  }
 })

@@ -6,7 +6,7 @@ class PokemonController < ApplicationController
     # @pokemon = Pokemon.where(nil)
     @pokemon = Pokemon.spawned
   end
-
+# export PORTFOLIO_GMAPS_KEY=AIzaSyC14AY3v_rzKYnSnX7fdJpiMeeWgp39Hn8
   def pokemon_list
     @pokemon = Pokemon.spawned
     respond_to do |format|
