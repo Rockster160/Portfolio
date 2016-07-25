@@ -1,8 +1,8 @@
 class PokemonFinderWorker
   include Sidekiq::Worker
 
-  def perform(lat, lon)
-    result = `python2 pogo/demo.py -a ptc -u Caitherra -p password --location "#{lat},#{lon}"`
+  def perform(loc)
+    result = `python2 pogo/demo.py -a ptc -u Caitherra -p password --location "#{loc}"`
   end
 
 end

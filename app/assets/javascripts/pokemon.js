@@ -39,7 +39,7 @@ $(document).ready(function() {
     return words.join(", ");
   }
 
-  countDown = function() {
+  function countDown() {
     $('.countdown').each(function() {
       var endsAt = $(this).attr('data-countdown-to') * 1000;
       var remaining = getTimeRemaining(endsAt);
@@ -81,7 +81,9 @@ $(document).ready(function() {
   scan = function() {
     pos = currentPosition()
     $('.error-container').html("Latitude: " + pos.latitude + "<br>Longitude: " + pos.longitude + "<br><span class=\"scan-progress\">Scanning.... Please Wait</span>")
-    $.post('/scan', {lat: pos.latitude, lon: pos.longitude}).always(function() {
+    var location = $('.input-location').val()
+    var loc = location.length > 0 ? location : (pos.latitude + ',' + pos.longitude)
+    $.post('/scan', {loc: loc}).always(function() {
       is_scanning = true;
       last_update = new Date();
       pollScan();
@@ -92,8 +94,6 @@ $(document).ready(function() {
     if (!is_scanning) { return true; }
     setTimeout(function() {
       $.get('/recently_updated', {}).success(function(data) {
-        console.log("completed update check");
-        // data.last_updated * 1000 > last_update
         if (!data.still_updating) {
           is_scanning = false
           $.get('/pokemon_list', {}).done(function(data) {

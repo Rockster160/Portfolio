@@ -25,7 +25,7 @@ class PokemonController < ApplicationController
   def scan
     # lat = 40.53793474945806
     # lon = -111.97962070833802
-    PokemonFinderWorker.perform_async(params[:lat], params[:lon])
+    PokemonFinderWorker.perform_async(params[:loc])
     respond_to do |format|
       format.json { render nothing: true }
     end
