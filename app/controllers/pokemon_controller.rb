@@ -2,9 +2,10 @@ class PokemonController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def index
-    # @location = params[:loc].present? ? params[:loc].split(',') : [40.53796850822244,-111.97944975576598]
-    # @pokemon = Pokemon.where(nil)
     @pokemon = Pokemon.spawned
+    lat = params[:lat] || 40.53793474945806
+    lon = params[:lon] || -111.97962070833802
+    @location = [lat, lon]
   end
 # export PORTFOLIO_GMAPS_KEY=AIzaSyC14AY3v_rzKYnSnX7fdJpiMeeWgp39Hn8
   def pokemon_list

@@ -129,6 +129,7 @@ $(document).ready(function() {
     })
 
     $('.pokemon-list-container').html(getSortedPokemon())
+    addPokemonToMap()
   }
 
   getSortedPokemon = function() {
@@ -186,10 +187,10 @@ $(document).ready(function() {
   }, 500)
 })
 
-
 $(document).ready(function() {
   if ($('#map').length > 0) {
 
+    poke_markers = []
     handler = Gmaps.build('Google');
     handler.buildMap(
       {
@@ -197,25 +198,49 @@ $(document).ready(function() {
           disableDefaultUI: true
           // pass in other Google Maps API options here
         },
-        internal: {
-          id: 'map'
-        }
+        internal: { id: 'map' }
       }, function() {
-        markers = handler.addMarkers([
-          {
-            "lat": 0,
-            "lng": 0,
-            "picture": {
-              "url": "http://people.mozilla.com/~faaborg/files/shiretoko/firefoxIcon/firefox-32.png",
-              "width":  32,
-              "height": 32
-            },
-            "infowindow": "hello!"
-          }
-        ]);
-        handler.bounds.extendWith(markers);
+
+        current_location_marker = handler.addMarker({
+          "lat": currentPosition().latitude,
+          "lng": currentPosition().longitude,
+          'draggable': true
+        })
+        handler.bounds.extendWith(current_location_marker);
         handler.fitMapToBounds();
       }
     );
+
+    addPokemonToMap = function() {
+      $(poke_markers).each(function() {
+        this.clear()
+      })
+      $('.pokemon-container').each(function() {
+        var poke_marker = handler.addMarker({
+          "lat": $(this).attr('data-lat'),
+          "lng": $(this).attr('data-lon'),
+          'picture': {
+            'url': 'http://pokeapi.co/media/sprites/pokemon/' + $(this).attr('data-poke-id') + '.png',
+            'width': 100,
+            'height': 100
+          }
+        })
+        poke_markers.push(poke_marker);
+      })
+    }
+
   }
 })
+
+
+// {
+//   "lat": 40.53793474945806,
+//   "lng": -111.97962070833802,
+//   "picture": {
+//     "url": "http://people.mozilla.com/~faaborg/files/shiretoko/firefoxIcon/firefox-32.png",
+//     "width":  32,
+//     "height": 32
+//   },
+//   "infowindow": "hello!"
+// }
+// http://pokeapi.co/media/sprites/pokemon/43.png

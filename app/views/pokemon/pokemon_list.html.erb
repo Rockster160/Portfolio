@@ -1,7 +1,7 @@
 <% pokemon ||= @pokemon %>
 <% pokemon.each do |poke| %>
   <% loc = poke.location %>
-  <div class="pokemon-container" data-lat="<%= loc[0] %>" data-lon="<%= loc[1] %>">
+  <div class="pokemon-container" data-lat="<%= loc[0] %>" data-lon="<%= loc[1] %>" data-poke-id="<%= poke.pokedex_id %>">
     <h4 style="margin: 20px 0 5px 5px;"><%= poke.pokedex_id %> - <%= poke.name %></h4>
     <div class="relative-directions"></div>
     <div class="relative-bearing"></div>
