@@ -1,14 +1,18 @@
 is_scanning = true;
 last_update = 0;
+pokeTimer = null;
+locationTimer = null;
 $(document).ready(function() {
 
-  if ($('.countdown').length > 0) {
-    pokeTimer = setInterval(function() {
-      countDown()
-    }, 1000)
-    locationTimer = setInterval(function() {
-      sortByDistance()
-    }, 5000)
+  setClocks = function() {
+    if ($('.countdown').length > 0) {
+      pokeTimer = setInterval(function() {
+        countDown()
+      }, 1000)
+      locationTimer = setInterval(function() {
+        sortByDistance()
+      }, 5000)
+    }
   }
 
   getTimeRemaining = function(endtime) {
@@ -41,9 +45,15 @@ $(document).ready(function() {
 
   function countDown() {
     $('.countdown').each(function() {
+      var parentUid = $(this).parents('.pokemon-container').attr('uid')
       var endsAt = $(this).attr('data-countdown-to') * 1000;
       var remaining = getTimeRemaining(endsAt);
       if (remaining.total < 0) {
+        $(poke_markers).each(function() {
+          if (parseInt(this.serviceObject.uid) == parseInt(parentUid)) {
+            handler.removeMarker(this)
+          }
+        })
         $(this).parents('.pokemon-container').remove();
       } else {
         var words = remainingToWords(remaining);
@@ -185,6 +195,7 @@ $(document).ready(function() {
   setTimeout(function() {
     sortByDistance();
   }, 500)
+  setClocks()
 })
 
 $(document).ready(function() {
@@ -195,8 +206,8 @@ $(document).ready(function() {
     handler.buildMap(
       {
         provider: {
-          disableDefaultUI: true
-          // pass in other Google Maps API options here
+          disableDefaultUI: true,
+          zoom: 18,
         },
         internal: { id: 'map' }
       }, function() {
@@ -206,8 +217,7 @@ $(document).ready(function() {
           "lng": currentPosition().longitude,
           'draggable': true
         })
-        handler.bounds.extendWith(current_location_marker);
-        handler.fitMapToBounds();
+        handler.map.centerOn({ lat: current_location_marker.serviceObject.position.lat(), lng: current_location_marker.serviceObject.position.lng() })
       }
     );
 
@@ -225,6 +235,9 @@ $(document).ready(function() {
             'height': 100
           }
         })
+        var uid = Math.round(Math.random() * 100000)
+        poke_marker.serviceObject.set('uid', uid)
+        $(this).attr('data-uid', uid)
         poke_markers.push(poke_marker);
       })
     }

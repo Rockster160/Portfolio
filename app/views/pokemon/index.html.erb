@@ -3,10 +3,10 @@
   <div class="error-container" style="color: red"></div>
   <input type="text" name="loc" value="" class="input-location" placeholder="Enter address/Coordinate">
   <div class="scan">Scan!</div>
+  <div class="map-container">
+    <div id="map"></div>
+  </div>
   <div class="pokemon-list-container" data-latitude="<%= @location[0] %>" data-longitude="<%= @location[1] %>">
     <%= render template: 'pokemon/pokemon_list', locals: {pokemon: @pokemon} %>
   </div>
 </div>
-<!-- <div style="width: 800px;">
-  <div id="map" style="width: 800px; height: 400px;"></div>
-</div> -->
