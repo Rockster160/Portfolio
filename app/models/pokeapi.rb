@@ -2,6 +2,12 @@ class Pokeapi
   include CoordCalculator
   attr_accessor :client, :lat, :lon
 
+  def self.login
+    pk = new
+    pk.login
+    pk
+  end
+
   def login
     @client = Poke::API::Client.new
     @client.login('Caitherra', 'password', 'ptc')
@@ -9,6 +15,7 @@ class Pokeapi
 
   def scan_area(loc=[@lat,@lon], radius=2)
     distance_per_block = 0.0005
+    loc = goto('home') if loc.compact.empty?
     lat, lon = loc
     coords = spiral_coords(radius)
     coords.each do |x, y|
@@ -58,10 +65,10 @@ class Pokeapi
   end
 
   def get_pokemon(search_results)
-    return logger.error("No Response") unless search_results.response.present?
-    return logger.error("No Map") unless search_results.response[:GET_MAP_OBJECTS].present?
-    return logger.error("No Status") unless search_results.response[:GET_MAP_OBJECTS][:status].present?
-    return logger.error("No Cells") unless search_results.response[:GET_MAP_OBJECTS][:map_cells].present?
+    return Rails.logger.error("No Response") unless search_results.response.present?
+    return Rails.logger.error("No Map") unless search_results.response[:GET_MAP_OBJECTS].present?
+    return Rails.logger.error("No Status") unless search_results.response[:GET_MAP_OBJECTS][:status].present?
+    return Rails.logger.error("No Cells") unless search_results.response[:GET_MAP_OBJECTS][:map_cells].present?
     map_cells = search_results.response[:GET_MAP_OBJECTS][:map_cells]
     relevant_data = map_cells.map { |cell| cell.extract!(:wild_pokemons) }.reject { |cell| cell[:wild_pokemons].empty? }
     relevant_data.each do |wild_pokemons|

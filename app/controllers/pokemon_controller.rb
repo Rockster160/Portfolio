@@ -7,7 +7,7 @@ class PokemonController < ApplicationController
     lon = params[:lon] || -111.97962070833802
     @location = [lat, lon]
   end
-# export PORTFOLIO_GMAPS_KEY=AIzaSyC14AY3v_rzKYnSnX7fdJpiMeeWgp39Hn8
+
   def pokemon_list
     @pokemon = Pokemon.spawned
     respond_to do |format|

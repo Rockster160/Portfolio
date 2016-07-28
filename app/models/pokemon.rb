@@ -18,6 +18,7 @@ class Pokemon < ActiveRecord::Base
   include CoordCalculator
 
   validate :not_duplicate
+  validates :name, :pokedex_id, presence: true
 
   # scope :spawned, -> { where(nil) }
   scope :spawned, -> { where('expires_at > ?', DateTime.current) }
