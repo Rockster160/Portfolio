@@ -280,7 +280,7 @@ $(document).ready(function() {
       }
 
       countDown();
-      getLocation();
+      // getLocation();
       setTimeout(function() {
         sortByDistance();
       }, 1000)
