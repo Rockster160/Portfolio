@@ -2,6 +2,8 @@ is_scanning = true;
 last_update = 0;
 pokeTimer = null;
 locationTimer = null;
+poke_markers = [];
+current_location_marker = null;
 $(document).ready(function() {
 
   setClocks = function() {
@@ -9,9 +11,9 @@ $(document).ready(function() {
       pokeTimer = setInterval(function() {
         countDown()
       }, 1000)
-      locationTimer = setInterval(function() {
-        sortByDistance()
-      }, 5000)
+      // locationTimer = setInterval(function() {
+      //   sortByDistance()
+      // }, 5000)
     }
   }
 
@@ -106,7 +108,8 @@ $(document).ready(function() {
       $.get('/recently_updated', {}).success(function(data) {
         if (!data.still_updating) {
           is_scanning = false
-          var failed_to_update = data.last_updated * 1000 < new Date() - 20
+          var twenty_seconds_ago = (new Date()).getTime() - 20000
+          var failed_to_update = data.last_updated * 1000 > twenty_seconds_ago
           $.get('/pokemon_list', {}).done(function(data) {
             if (failed_to_update) {
               $('.error-container').html('Trouble connecting to Pokemon Servers')
@@ -194,30 +197,34 @@ $(document).ready(function() {
   getLocation();
   setTimeout(function() {
     sortByDistance();
-  }, 500)
+  }, 1000)
   setClocks()
 })
 
 $(document).ready(function() {
   if ($('#map').length > 0) {
 
-    poke_markers = []
     handler = Gmaps.build('Google');
     handler.buildMap(
       {
         provider: {
           disableDefaultUI: true,
-          zoom: 18,
+          zoom: 17,
         },
         internal: { id: 'map' }
       }, function() {
-
         current_location_marker = handler.addMarker({
           "lat": currentPosition().latitude,
-          "lng": currentPosition().longitude,
+          "lng": currentPosition().longitude
+        }, {
+          'z-index': 10,
           'draggable': true
         })
         handler.map.centerOn({ lat: current_location_marker.serviceObject.position.lat(), lng: current_location_marker.serviceObject.position.lng() })
+
+        google.maps.event.addListener(current_location_marker.getServiceObject(), 'dragend', function() {
+          $('.input-location').val(this.position.lat() + ',' + this.position.lng())
+        })
       }
     );
 
@@ -239,6 +246,13 @@ $(document).ready(function() {
         poke_marker.serviceObject.set('uid', uid)
         $(this).attr('data-uid', uid)
         poke_markers.push(poke_marker);
+      })
+    }
+
+    dropPin = function(lat, lon) {
+      handler.addMarker({
+        'lat': lat,
+        'lng': lon
       })
     }
 

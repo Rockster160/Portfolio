@@ -1,6 +1,5 @@
 require 'csv'
 class Pokedex
-  attr_reader :pokelist
 
   def self.pokelist
     list = []
@@ -10,15 +9,17 @@ class Pokedex
     list
   end
 
+  def self.id_and_name_by_id_or_name(id_or_name)
+    is_id = id_or_name.is_a?(Integer) || id_or_name.to_i.to_s == id_or_name
+    is_id ? pokelist[id_or_name.to_i - 1] : row_by_name(id_or_name)
+  end
+
   def self.name_by_id(id)
     pokelist[id.to_i - 1].try(:last)
   end
 
-  def dostuff
-    pk = Poke::API::Client.new
-    pk.login('Caitherra', 'password', 'ptc')
-    # 40.53807962696459,-111.97943799266993
-    pk.store_location('11748 S. Atenis Dr. South Jordan, UT')
+  def self.row_by_name(name)
+    pokelist.select { |pl| pl[1].downcase == name.downcase }.first
   end
 
 end

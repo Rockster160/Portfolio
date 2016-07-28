@@ -48,11 +48,11 @@ class PokemonController < ApplicationController
       pokemon << poke
     end
     puts "\e[33m(#{my_loc.join(',')})"
-    pokemon.sort_by {|pk|Pokemon.distance_between(my_loc, pk.location)}.each do |poke|
+    pokemon.sort_by { |pk| Pokemon.sort_by_distance(my_loc) }.each do |poke|
       puts "#{poke.pokedex_id} - #{poke.name}"
       puts "     #{poke.location.join(', ')}"
-      puts "     #{poke.directions(my_loc.map(&:to_f))}"
-      puts "     #{poke.bearing(my_loc.map(&:to_f))}"
+      puts "     #{poke.relative_directions(my_loc.map(&:to_f))}"
+      puts "     #{poke.relative_bearing(my_loc.map(&:to_f))}"
     end
     puts "\e[0m"
     head 200
