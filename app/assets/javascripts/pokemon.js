@@ -5,7 +5,7 @@ current_location_marker = null;
 
 $(document).ready(function() {
   if ($('#map').length > 0) {
-
+    customMarkerJs()
     handler = Gmaps.build('Google');
     handler.buildMap(
       {
@@ -18,6 +18,7 @@ $(document).ready(function() {
         resetMarker(currentPosition().latitude, currentPosition().longitude)
       }
     );
+    map = handler.getMap()
 
     resetMarker = function(latitude, longitude) {
       if (current_location_marker != undefined) {
@@ -49,49 +50,47 @@ $(document).ready(function() {
       handler.map.centerOn({ lat: current_location_marker.serviceObject.position.lat(), lng: current_location_marker.serviceObject.position.lng() })
     }
 
-    findMarkerByDbId = function(db_id) {
+    findPokemonByDbId = function(db_id) {
       var marker = null;
       $(poke_markers).each(function() {
-        if (parseInt(this.serviceObject.db_id) == parseInt(db_id)) {
+        if (parseInt(this.args.db_id) == parseInt(db_id)) {
           marker = this;
         }
       })
       return marker;
     }
 
-    removeMarkerFromMap = function(marker) {
+    removePokemonFromMap = function(marker) {
       if (marker != null) {
         poke_markers = poke_markers.filter(function() {return this != marker})
-        marker.clear()
-        handler.removeMarker(marker)
+        marker.remove()
       }
     }
 
     updatePokemonOnMap = function() {
-      var expired_marker_ids = $(poke_markers).map(function() {return this.serviceObject.db_id})
+      var expired_marker_ids = $(poke_markers).map(function() {return this.args.db_id})
       $('.pokemon-container').each(function() {
-        var db_id = $(this).attr('data-db-id'), marker = findMarkerByDbId(db_id);
+        var db_id = $(this).attr('data-db-id'), marker = findPokemonByDbId(db_id);
         if (marker == null) {
-          var poke_marker = handler.addMarker({
-            "lat": $(this).attr('data-lat'),
-            "lng": $(this).attr('data-lng'),
-            'picture': {
-              'url': 'http://pokeapi.co/media/sprites/pokemon/' + $(this).attr('data-poke-id') + '.png',
-              'width': 100,
-              'height': 100
-            }
-          })
-          poke_marker.serviceObject.set('db_id', db_id)
-          poke_markers.push(poke_marker)
+          var lat = $(this).attr('data-lat'),
+            lng = $(this).attr('data-lng'),
+            poke_id = $(this).attr('data-poke-id')
+          addPokemon(lat, lng, poke_id, db_id)
         } else {
-          expired_marker_ids = expired_marker_ids.filter(function() {return this != marker.serviceObject.db_id})
+          expired_marker_ids = expired_marker_ids.filter(function() {return this != marker.args.db_id})
         }
       })
       $(expired_marker_ids).each(function() {
         var id = parseInt(this)
-        marker = findMarkerByDbId(id)
-        removeMarkerFromMap(marker)
+        marker = findPokemonByDbId(id)
+        removePokemonFromMap(marker)
       })
+    }
+
+    addPokemon = function(lat, lng, poke_id, db_id) {
+      var myLatLng = new google.maps.LatLng(lat, lng)
+      var poke_marker = new CustomMarker(myLatLng, map, {poke_id: poke_id, db_id: db_id})
+      poke_markers.push(poke_marker)
     }
 
     dropPin = function(lat, lng) {
@@ -101,9 +100,9 @@ $(document).ready(function() {
     setClocks = function() {
       if ($('.poke-page').length > 0) {
         pokeTimer = setInterval(function() {
-          updateCounters()
           checkPokemon()
           updatePokemonOnMap()
+          updateCounters()
         }, 1000)
       }
     }
@@ -136,6 +135,16 @@ $(document).ready(function() {
       return words.join(", ");
     }
 
+    remainingToTimer = function(remaining) {
+      var words = [], minutes = '', seconds = '';
+
+      minutes = remaining.minutes < 10 ? '0' + remaining.minutes : remaining.minutes;
+      seconds = remaining.seconds < 10 ? '0' + remaining.seconds : remaining.seconds;
+      words.push(minutes);
+      words.push(seconds);
+      return words.join(':')
+    }
+
     function updateCounters() {
       $('.countdown').each(function() {
         var endsAt = $(this).attr('data-countdown-to') * 1000;
@@ -143,6 +152,10 @@ $(document).ready(function() {
         if (remaining.total <= 0) {
           $(this).parents('.pokemon-container').remove();
         } else {
+          var poke_marker = pokemonFromContainer($(this).parents('.pokemon-container'))
+          if (poke_marker != undefined) {
+            $(poke_marker.div).find('.poke-timer').html(remainingToTimer(remaining))
+          }
           var words = remainingToWords(remaining);
           $(this).html(words);
         }
@@ -150,8 +163,16 @@ $(document).ready(function() {
     }
 
     $('.scan').click(function() {
-      scan();
-      // $(this).addClass('hidden');
+      if ($(this).hasClass('scanning')) {
+      } else {
+        scan();
+        $('.scan').addClass('scanning');
+        $('.scan').html('Scanning...')
+        setTimeout(function() {
+          $('.scan').removeClass('scanning');
+          $('.scan').html('SCAN')
+        }, 30000)
+      }
     })
 
     $('.search-btn').click(function() {
@@ -204,6 +225,11 @@ $(document).ready(function() {
       $.post('/scan', {loc: loc})
     }
 
+    pokemonFromContainer = function(container) {
+      var db_id = $(container).attr('data-db-id');
+      return findPokemonByDbId(db_id)
+    }
+
     checkPokemon = function() {
       $.get('/pokemon_list', {since: last_update}).done(function(data) {
         var temp_container = $('<div/>').addClass('hidden')
@@ -211,7 +237,7 @@ $(document).ready(function() {
         temp_container.html(data)
 
         var all_pokemon = $('.pokemon-container'),
-          uniq_pokemon = getUniqPokemon(all_pokemon);
+        uniq_pokemon = getUniqPokemon(all_pokemon);
         temp_container.html(uniq_pokemon)
         $('.pokemon-list-container').html('')
         updatePokemonDistance()
@@ -307,9 +333,9 @@ $(document).ready(function() {
       return [lat_distance_str, lng_distance_str].join(', ')
     }
 
-    updateCounters();
     setTimeout(function() {
       updatePokemonDistance();
+      updateCounters();
     }, 1000)
     setClocks()
   }
