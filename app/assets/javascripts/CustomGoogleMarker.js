@@ -14,8 +14,10 @@ customMarkerJs = function() {
       var timer = $('<div/>').addClass('poke-timer');
       $(div).append(timer)
       if (typeof(self.args.poke_id) !== 'undefined') {
+        var low_res = 'http://pokeapi.co/media/sprites/pokemon/'
+        var high_res = 'http://pokeapi.co/media/img/'
         $(div).css({
-          'background-image': 'url("http://pokeapi.co/media/sprites/pokemon/' + self.args.poke_id + '.png")',
+          'background-image': 'url("' + low_res + self.args.poke_id + '.png")',
           'background-size': 'cover',
           'background-repeat': 'no-repeat',
           'background-position': 'center center'
