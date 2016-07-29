@@ -7,12 +7,12 @@ module CoordCalculator
     rm = rkm * 1000             # Radius in meters
 
     dlat_rad = (loc2[0]-loc1[0]) * rad_per_deg  # Delta, converted to rad
-    dlon_rad = (loc2[1]-loc1[1]) * rad_per_deg
+    dlng_rad = (loc2[1]-loc1[1]) * rad_per_deg
 
-    lat1_rad, lon1_rad = loc1.map {|i| i * rad_per_deg }
-    lat2_rad, lon2_rad = loc2.map {|i| i * rad_per_deg }
+    lat1_rad, lng1_rad = loc1.map {|i| i * rad_per_deg }
+    lat2_rad, lng2_rad = loc2.map {|i| i * rad_per_deg }
 
-    a = Math.sin(dlat_rad/2)**2 + Math.cos(lat1_rad) * Math.cos(lat2_rad) * Math.sin(dlon_rad/2)**2
+    a = Math.sin(dlat_rad/2)**2 + Math.cos(lat1_rad) * Math.cos(lat2_rad) * Math.sin(dlng_rad/2)**2
     c = 2 * Math::atan2(Math::sqrt(a), Math::sqrt(1-a))
 
     meters = rm * c
@@ -30,28 +30,28 @@ module CoordCalculator
   end
 
   def calc_cardinal_direction(from_loc, to_loc)
-    from_lat, from_lon = from_loc
-    to_lat, to_lon = to_loc
+    from_lat, from_lng = from_loc
+    to_lat, to_lng = to_loc
     # N = + Lat
-    # E = + Lon
+    # E = + Lng
     # S = - Lat
-    # W = - Lon
-    lat_distance = distance_between([from_lat, from_lon], [to_lat, from_lon])
-    lon_distance = distance_between([from_lat, from_lon], [from_lat, to_lon])
+    # W = - Lng
+    lat_distance = distance_between([from_lat, from_lng], [to_lat, from_lng])
+    lng_distance = distance_between([from_lat, from_lng], [from_lat, to_lng])
     lat_cardinal_direction = from_lat < to_lat ? 'N' : 'S'
-    lon_cardinal_direction = from_lon < to_lon ? 'E' : 'W'
+    lng_cardinal_direction = from_lng < to_lng ? 'E' : 'W'
     lat_distance_str = "#{lat_distance.round(2)}ft #{lat_cardinal_direction}"
-    lon_distance_str = "#{lon_distance.round(2)}ft #{lon_cardinal_direction}"
-    [lat_distance_str, lon_distance_str].join(', ')
+    lng_distance_str = "#{lng_distance.round(2)}ft #{lng_cardinal_direction}"
+    [lat_distance_str, lng_distance_str].join(', ')
   end
 
   def calc_bearing(from_loc, to_loc)
-    from_lat, from_lon = from_loc
-    to_lat, to_lon = to_loc
-    delta_lon = (from_lon - to_lon)
+    from_lat, from_lng = from_loc
+    to_lat, to_lng = to_loc
+    delta_lng = (from_lng - to_lng)
 
-    y = Math.sin(delta_lon) * Math.cos(to_lat)
-    x = Math.cos(from_lat) * Math.sin(to_lat) - Math.sin(from_lat) * Math.cos(to_lat) * Math.cos(delta_lon)
+    y = Math.sin(delta_lng) * Math.cos(to_lat)
+    x = Math.cos(from_lat) * Math.sin(to_lat) - Math.sin(from_lat) * Math.cos(to_lat) * Math.cos(delta_lng)
 
     brng = Math.atan2(y, x)
 

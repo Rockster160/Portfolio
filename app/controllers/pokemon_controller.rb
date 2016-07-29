@@ -3,13 +3,19 @@ class PokemonController < ApplicationController
 
   def index
     @pokemon = Pokemon.spawned
-    lat = params[:lat] || 40.53793474945806
-    lon = params[:lon] || -111.97962070833802
-    @location = [lat, lon]
+    lat = params[:lat] || 40.539541000405805
+    lng = params[:lng] || -111.98068286310792
+
+    @location = [lat, lng]
   end
 
   def pokemon_list
-    @pokemon = Pokemon.spawned
+    since_milliseconds = params[:since].to_i
+    since_seconds = since_milliseconds / 1000.to_f
+    time = Time.at(since_seconds)
+    datetime = time.to_datetime
+    @pokemon = Pokemon.spawned.since(datetime)
+
     respond_to do |format|
       format.html { render layout: !request.xhr? }
     end
@@ -25,7 +31,7 @@ class PokemonController < ApplicationController
 
   def scan
     # lat = 40.53793474945806
-    # lon = -111.97962070833802
+    # lng = -111.97962070833802
     PokemonFinderWorker.perform_async(params[:loc])
     respond_to do |format|
       format.json { render nothing: true }

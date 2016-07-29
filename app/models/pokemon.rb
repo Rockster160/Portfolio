@@ -5,7 +5,7 @@
 #  id         :integer          not null, primary key
 #  pokedex_id :integer
 #  lat        :string(255)
-#  lon        :string(255)
+#  lng        :string(255)
 #  name       :string(255)
 #  expires_at :datetime
 #  created_at :datetime
@@ -22,6 +22,7 @@ class Pokemon < ActiveRecord::Base
 
   # scope :spawned, -> { where(nil) }
   scope :spawned, -> { where('expires_at > ?', DateTime.current) }
+  scope :since, lambda { |datetime| where('updated_at > ?', datetime) }
   def self.sort_by_distance(loc)
     spawned.sort_by { |pk| distance_between(loc, pk.location) }
   end
@@ -34,8 +35,8 @@ class Pokemon < ActiveRecord::Base
 
   def self.add_from_python_str(str)
     # "74:40.539857,-111.978192:653028"
-    poke_id, lat_lon_str, expires_in_ms = str.split(":")
-    poke_loc = lat_lon_str.split(',')
+    poke_id, lat_lng_str, expires_in_ms = str.split(":")
+    poke_loc = lat_lng_str.split(',')
     expires_at = DateTime.current + (expires_in_ms.to_i / 1000).seconds
     add(poke_id, poke_loc, expires_at)
   end
@@ -45,13 +46,13 @@ class Pokemon < ActiveRecord::Base
     pokemon.pokedex_id = poke_id.to_i
     pokemon.expires_at = expires_at
     pokemon.name = Pokedex.name_by_id(pokemon.pokedex_id)
-    pokemon.lat, pokemon.lon = loc.map(&:to_s) if loc.present?
+    pokemon.lat, pokemon.lng = loc.map(&:to_s) if loc.present?
     pokemon.save
     pokemon
   end
 
   def location
-    [lat.to_f, lon.to_f]
+    [lat.to_f, lng.to_f]
   end
 
   def relative_directions(to_loc)
@@ -74,7 +75,7 @@ class Pokemon < ActiveRecord::Base
   private
 
   def not_duplicate
-    dups = Pokemon.where(pokedex_id: pokedex_id).where(lat: lat).where(lon: lon).where(expires_at: (expires_at - 30.seconds)..(expires_at + 30.seconds))
+    dups = Pokemon.where(pokedex_id: pokedex_id).where(lat: lat).where(lng: lng).where(expires_at: (expires_at - 30.seconds)..(expires_at + 30.seconds))
     if dups.any?
       errors.add(:base, "This Pokemon has already been added.")
     end

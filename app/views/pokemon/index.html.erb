@@ -1,7 +1,11 @@
 <div class="poke-page">
-  <a href="http://ispokemongodownornot.com">API working? Check PTC for US</a>
+  <!-- <a href="http://ispokemongodownornot.com">API working? Check PTC for US</a> -->
   <div class="error-container" style="color: red"></div>
-  <input type="text" name="loc" value="" class="input-location" placeholder="Enter address/Coordinate">
+  <div class="location-options">
+    <div class="location-btn"><i class="fa fa-location-arrow"></i></div>
+    <input type="text" name="loc" id="location-field" placeholder="Enter address/Coordinate">
+    <div class="search-btn">Search</div>
+  </div>
   <div class="scan">Scan!</div>
   <div class="map-container">
     <div id="map"></div>

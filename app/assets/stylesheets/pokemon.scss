@@ -26,3 +26,27 @@
     cursor: pointer;
   }
 }
+
+.location-options {
+  .location-btn {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 100%;
+    margin-right: 10px;
+    line-height: 20px;
+    text-align: center;
+    cursor: pointer;
+    color: white;
+    background: black;
+  }
+  .search-btn {
+    display: inline-block;
+    width: auto;
+    background-image: linear-gradient(#1565c0, lighten(#1565c0, 10%));
+    border-radius: 8px;
+    color: white;
+    padding: 5px;
+    cursor: pointer;
+  }
+}

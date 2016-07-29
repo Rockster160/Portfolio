@@ -1,8 +1,11 @@
 class PokemonFinderWorker
   include Sidekiq::Worker
+  sidekiq_options retry: false
 
   def perform(loc)
-    result = `python2 pogo/demo.py -a ptc -u Caitherra -p password --location "#{loc}"`
+    lat, lng = loc.split(',')
+    pk = Pokeapi.login
+    pk.scan([lat, lng])
   end
 
 end

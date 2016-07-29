@@ -1,6 +1,6 @@
 class Pokeapi
   include CoordCalculator
-  attr_accessor :client, :lat, :lon
+  attr_accessor :client, :lat, :lng
 
   def self.login
     pk = new
@@ -13,17 +13,16 @@ class Pokeapi
     @client.login('Caitherra', 'password', 'ptc')
   end
 
-  def scan_area(loc=[@lat,@lon], radius=2)
-    distance_per_block = 0.0005
+  def scan(loc=[@lat,@lng], radius=2, distance_per_block=0.0005)
     loc = goto('home') if loc.compact.empty?
-    lat, lon = loc
+    lat, lng = loc.map(&:to_f)
     coords = spiral_coords(radius)
     coords.each do |x, y|
       sleep 0.5
       new_lat = lat + (x * distance_per_block)
-      new_lon = lon + (y * distance_per_block)
-      puts "Scanning (#{new_lat},#{new_lon})"
-      goto("#{new_lat},#{new_lon}")
+      new_lng = lng + (y * distance_per_block)
+      puts "Scanning (#{new_lat},#{new_lng})"
+      goto("#{new_lat},#{new_lng}")
       search
     end
   end
@@ -39,9 +38,9 @@ class Pokeapi
     end
   end
 
-  def my_loc; [lat, lon]; end
+  def my_loc; [lat, lng]; end
   def from_lat; lat; end
-  def from_lon; lon; end
+  def from_lng; lng; end
 
   def goto(location)
     loc = case location
@@ -50,7 +49,7 @@ class Pokeapi
     else location
     end
     @client.store_location(loc)
-    [@lat = @client.lat, @lon = @client.lng]
+    [@lat = @client.lat, @lng = @client.lng]
   end
 
   def search
@@ -79,7 +78,7 @@ class Pokeapi
         Pokemon.create(
           pokedex_id: poke_id.to_s,
           lat: wild_pokemon[:latitude].to_s,
-          lon: wild_pokemon[:longitude].to_s,
+          lng: wild_pokemon[:longitude].to_s,
           name: name,
           expires_at: expires_at
         )

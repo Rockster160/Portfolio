@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20160723202401) do
+ActiveRecord::Schema.define(version: 20160729005545) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -48,7 +48,7 @@ ActiveRecord::Schema.define(version: 20160723202401) do
   create_table "pokemons", force: true do |t|
     t.integer  "pokedex_id"
     t.string   "lat"
-    t.string   "lon"
+    t.string   "lng"
     t.string   "name"
     t.datetime "expires_at"
     t.datetime "created_at"

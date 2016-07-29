@@ -1,7 +1,7 @@
 from s2sphere import CellId, LatLng
 
-def get_cell_ids(lat, long, radius = 10):
-    origin = CellId.from_lat_lng(LatLng.from_degrees(lat, long)).parent(15)
+def get_cell_ids(lat, lng, radius = 10):
+    origin = CellId.from_lat_lng(LatLng.from_degrees(lat, lng)).parent(15)
     walk = [origin.id()]
     right = origin.next()
     left = origin.prev()
