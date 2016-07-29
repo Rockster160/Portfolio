@@ -5,6 +5,7 @@ current_location_marker = null;
 
 $(document).ready(function() {
   if ($('#map').length > 0) {
+    
     customMarkerJs()
     handler = Gmaps.build('Google');
     handler.buildMap(
@@ -340,16 +341,3 @@ $(document).ready(function() {
     setClocks()
   }
 })
-
-
-// {
-//   "lat": 40.53793474945806,
-//   "lng": -111.97962070833802,
-//   "picture": {
-//     "url": "http://people.mozilla.com/~faaborg/files/shiretoko/firefoxIcon/firefox-32.png",
-//     "width":  32,
-//     "height": 32
-//   },
-//   "infowindow": "hello!"
-// }
-// http://pokeapi.co/media/sprites/pokemon/43.png

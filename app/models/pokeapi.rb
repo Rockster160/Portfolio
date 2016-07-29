@@ -86,12 +86,4 @@ class Pokeapi
     end
   end
 
-  def self.login_and_scan
-    pk = Pokeapi.new
-    pk.login
-    pk.goto('home')
-    pk.scan_area
-    pk
-  end
-
 end
