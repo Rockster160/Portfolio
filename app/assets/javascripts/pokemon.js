@@ -70,6 +70,7 @@ $(document).ready(function() {
 
     updatePokemonOnMap = function() {
       var expired_marker_ids = $(poke_markers).map(function() {return this.args.db_id})
+      console.log($('.pokemon-container').length);
       $('.pokemon-container').each(function() {
         var db_id = $(this).attr('data-db-id'), marker = findPokemonByDbId(db_id);
         if (marker == null) {
@@ -101,9 +102,7 @@ $(document).ready(function() {
     setClocks = function() {
       if ($('.poke-page').length > 0) {
         pokeTimer = setInterval(function() {
-          console.log("tick");
           checkPokemon()
-          updatePokemonOnMap()
           updateCounters()
         }, 1000)
       }
@@ -245,6 +244,7 @@ $(document).ready(function() {
         updatePokemonDistance()
         var sortedPokemon = getSortedPokemon(uniq_pokemon)
         $('.pokemon-list-container').html(sortedPokemon)
+        console.log("tick");
         temp_container.remove()
         updatePokemonOnMap()
       })
