@@ -4,7 +4,7 @@ class PokemonFinderWorker
 
   def perform(loc)
     lat, lng = loc.split(',')
-    pk = Pokeapi.login
+    pk = Pokeapi.login(Pokewalker.all.sample)
     pk.scan([lat, lng])
   end
 
