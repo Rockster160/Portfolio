@@ -24,7 +24,7 @@ gem 'twilio-ruby', '~> 4.11.1'
 gem 'sinatra', :require => nil
 gem 'gmaps4rails'
 gem 'underscore-rails'
-gem 'poke-go-api'
+gem 'poke-api', git: "https://github.com/nabeelamjad/poke-api.git", tag: '0.0.4'
 
 group :development, :test do
   gem 'annotate'

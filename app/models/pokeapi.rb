@@ -22,6 +22,7 @@ class Pokeapi
     distance_per_block = options[:distance_per_block] || 0.0005
     delay = options[:delay] || 0.5
     loc = goto('home') if loc.compact.empty?
+    loc = loc.is_a?(String) ? loc.split(',') : loc
     lat, lng = loc.map(&:to_f)
     coords = spiral_coords(radius)
     pokemon_found = []

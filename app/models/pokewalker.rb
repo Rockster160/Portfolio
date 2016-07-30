@@ -23,7 +23,8 @@ class Pokewalker < ActiveRecord::Base
 
   def goto(loc)
     return 'Not logged in' unless @pk
-    @pk.goto(loc)
+    new_loc = @pk.goto(loc)
+    update(last_loc: new_loc.join(',')) if new_loc.length == 2
   end
 
   def walk_to(loc, options={})
