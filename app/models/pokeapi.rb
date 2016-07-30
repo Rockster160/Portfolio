@@ -68,7 +68,7 @@ class Pokeapi
   end
 
   def call_python
-    cell_id_string_list = `python -c 'from get_cell_id import get_cell_ids; print(get_cell_ids(#{@client.lat},#{@client.lng}, 40))'`
+    cell_id_string_list = `python -c 'from get_cell_id import get_cell_ids; print(get_cell_ids(#{@client.lat},#{@client.lng}, 15))'`
     cell_ids = cell_id_string_list.tr('[L]', '').split.map(&:to_i)
     map_objects = @client.get_map_objects(latitude: @client.lat, longitude: @client.lng, since_timestamp_ms: [0] * cell_ids.length, cell_id: cell_ids)
     response = @client.call
