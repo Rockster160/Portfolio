@@ -1,11 +1,11 @@
-function CustomMarker(latlng, map, args) {
+function PokeMarker(latlng, map, args) {
   this.latlng = latlng;
   this.args = args;
   this.setMap(map);
 }
-customMarkerJs = function() {
-  CustomMarker.prototype = new google.maps.OverlayView();
-  CustomMarker.prototype.draw = function() {
+pokeMarkerJs = function() {
+  PokeMarker.prototype = new google.maps.OverlayView();
+  PokeMarker.prototype.draw = function() {
     var self = this;
     var div = this.div;
     if (!div) {
@@ -23,12 +23,6 @@ customMarkerJs = function() {
           'background-position': 'center center'
         })
       }
-      google.maps.event.addDomListener(div, 'click', function(event) {
-        google.maps.event.trigger(self, 'click');
-      });
-      google.maps.event.addDomListener(div, 'hover', function(event) {
-        google.maps.event.trigger(self, 'hover');
-      });
       var panes = this.getPanes();
       panes.overlayImage.appendChild(div);
     }
@@ -38,13 +32,13 @@ customMarkerJs = function() {
       div.style.top = (point.y - 70) + 'px';
     }
   };
-  CustomMarker.prototype.remove = function() {
+  PokeMarker.prototype.remove = function() {
     if (this.div) {
       this.div.parentNode.removeChild(this.div);
       this.div = null;
     }
   };
-  CustomMarker.prototype.getPosition = function() {
+  PokeMarker.prototype.getPosition = function() {
     return this.latlng;
   };
 }

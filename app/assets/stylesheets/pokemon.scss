@@ -4,13 +4,14 @@
   width: 70px;
   height: 70px;
   .poke-timer {
-    width: 60%;
     position: absolute;
     bottom: 10px;
     left: 20%;
-    border-radius: 10px;
+    width: 60%;
     height: 16px;
     background: rgba(0, 0, 0, 0.6);
+
+    border-radius: 10px;
     line-height: 16px;
     font-size: 12px;
     color: white;

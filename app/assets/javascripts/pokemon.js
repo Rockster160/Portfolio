@@ -5,8 +5,8 @@ current_location_marker = null;
 
 $(document).ready(function() {
   if ($('#map').length > 0) {
-    
-    customMarkerJs()
+
+    pokeMarkerJs()
     handler = Gmaps.build('Google');
     handler.buildMap(
       {
@@ -90,7 +90,7 @@ $(document).ready(function() {
 
     addPokemon = function(lat, lng, poke_id, db_id) {
       var myLatLng = new google.maps.LatLng(lat, lng)
-      var poke_marker = new CustomMarker(myLatLng, map, {poke_id: poke_id, db_id: db_id})
+      var poke_marker = new PokeMarker(myLatLng, map, {poke_id: poke_id, db_id: db_id})
       poke_markers.push(poke_marker)
     }
 

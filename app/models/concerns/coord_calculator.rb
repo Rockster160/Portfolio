@@ -1,4 +1,25 @@
 module CoordCalculator
+  
+  def get_coords_between_points(loc, last_loc, distance_per_block)
+    lat, lng = loc.is_a?(String) ? loc.split(',').map(&:to_f) : loc.map(&:to_f)
+    last_lat, last_lng = last_loc.is_a?(String) ? last_loc.split(',').map(&:to_f) : last_loc.map(&:to_f)
+    d_lat = (lat - last_lat).abs
+    d_lng = (lng - last_lng).abs
+    lat_laps = (d_lat / distance_per_block).round
+    lat_laps = lat_laps.odd? ? lat_laps : lat_laps + 1
+    lng_laps = (d_lng / distance_per_block).round
+    lng_laps = lng_laps.odd? ? lng_laps : lng_laps + 1
+    lat_list = lat_laps.times.map { |lat_lap| last_lat + (lat_lap * distance_per_block) }
+    lng_list = lng_laps.times.map { |lng_lap| last_lng + (lng_lap * distance_per_block) }
+    coord_list = []
+    lat_list.each_with_index do |lat_item, lat_dx|
+      lng_list.each_with_index do |lng_item, lng_dx|
+        coord_list << [lat_item, lng_item]
+      end
+      lng_list.reverse!
+    end
+    coord_list
+  end
 
   def distance_between(loc1, loc2)
     loc1, loc2 = loc1.map(&:to_f), loc2.map(&:to_f)

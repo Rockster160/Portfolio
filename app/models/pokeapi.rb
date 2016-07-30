@@ -2,29 +2,38 @@ class Pokeapi
   include CoordCalculator
   attr_accessor :client, :lat, :lng
 
-  def self.login
+  def self.login(user)
     pk = new
-    pk.login
+    pk.login(user)
     pk
   end
 
-  def login
+  def login(user)
     @client = Poke::API::Client.new
-    @client.login('Caitherra', 'password', 'ptc')
+    begin
+      @client.login(user.username, user.password, 'ptc')
+    rescue Poke::API::Errors::LoginFailure => e
+      puts "\e[31m Failed to login: #{e}\e[0m"
+    end
   end
 
-  def scan(loc=[@lat,@lng], radius=2, distance_per_block=0.0005)
+  def scan(loc=[@lat,@lng], options={})
+    radius = options[:radius] || 2
+    distance_per_block = options[:distance_per_block] || 0.0005
+    delay = options[:delay] || 0.5
     loc = goto('home') if loc.compact.empty?
     lat, lng = loc.map(&:to_f)
     coords = spiral_coords(radius)
+    pokemon_found = []
     coords.each do |x, y|
-      sleep 0.5
+      sleep delay
       new_lat = lat + (x * distance_per_block)
       new_lng = lng + (y * distance_per_block)
-      puts "Scanning (#{new_lat},#{new_lng})"
+      # puts "Scanning (#{new_lat},#{new_lng})"
       goto("#{new_lat},#{new_lng}")
-      search
+      pokemon_found += search
     end
+    pokemon_found
   end
 
   def spiral_coords(radius)
@@ -43,6 +52,7 @@ class Pokeapi
   def from_lng; lng; end
 
   def goto(location)
+    location = location.is_a?(String) ? location : location.join(',')
     loc = case location
     when 'home' then '40.53807962696459,-111.97943799266993'
     when 'office' then '40.57031218969614,-111.89489496028821'
@@ -57,33 +67,40 @@ class Pokeapi
   end
 
   def call_python
-    cell_id_string_list = `python -c 'from get_cell_id import get_cell_ids; print(get_cell_ids(#{@client.lat},#{@client.lng}, 15))'`
+    cell_id_string_list = `python -c 'from get_cell_id import get_cell_ids; print(get_cell_ids(#{@client.lat},#{@client.lng}, 40))'`
     cell_ids = cell_id_string_list.tr('[L]', '').split.map(&:to_i)
     map_objects = @client.get_map_objects(latitude: @client.lat, longitude: @client.lng, since_timestamp_ms: [0] * cell_ids.length, cell_id: cell_ids)
     response = @client.call
   end
 
   def get_pokemon(search_results)
-    return Rails.logger.error("No Response") unless search_results.response.present?
-    return Rails.logger.error("No Map") unless search_results.response[:GET_MAP_OBJECTS].present?
-    return Rails.logger.error("No Status") unless search_results.response[:GET_MAP_OBJECTS][:status].present?
-    return Rails.logger.error("No Cells") unless search_results.response[:GET_MAP_OBJECTS][:map_cells].present?
+    return ["No Response"] unless search_results.response.present?
+    return ["No Map"] unless search_results.response[:GET_MAP_OBJECTS].present?
+    return ["No Status"] unless search_results.response[:GET_MAP_OBJECTS][:status].present?
+    return ["No Cells"] unless search_results.response[:GET_MAP_OBJECTS][:map_cells].present?
     map_cells = search_results.response[:GET_MAP_OBJECTS][:map_cells]
     relevant_data = map_cells.map { |cell| cell.extract!(:wild_pokemons) }.reject { |cell| cell[:wild_pokemons].empty? }
+    pokemon_found = []
     relevant_data.each do |wild_pokemons|
       wild_pokemons[:wild_pokemons].each do |wild_pokemon|
         expires_in_seconds = (wild_pokemon[:time_till_hidden_ms].to_f / 1000.to_f).seconds
         expires_at = DateTime.current + expires_in_seconds
         poke_id, name = Pokedex.id_and_name_by_id_or_name(wild_pokemon[:pokemon_data][:pokemon_id].to_s)
-        Pokemon.create(
+        pokemon = Pokemon.create(
           pokedex_id: poke_id.to_s,
           lat: wild_pokemon[:latitude].to_s,
           lng: wild_pokemon[:longitude].to_s,
           name: name,
           expires_at: expires_at
         )
+        puts "\e[31m Pokemon! #{pokemon.name} \e[0m"
+        if pokemon.persisted?
+          puts "\e[31m Saved! \e[0m"
+          pokemon_found << pokemon
+        end
       end
     end
+    pokemon_found
   end
 
 end
