@@ -10,11 +10,10 @@ class PokemonController < ApplicationController
   end
 
   def pokemon_list
-    since_milliseconds = params[:since].to_i
-    since_seconds = since_milliseconds / 1000.to_f
-    time = Time.at(since_seconds)
+    time = Time.at(params[:since].to_i)
     datetime = time.to_datetime
     @pokemon = Pokemon.spawned.since(datetime)
+    @since = datetime.to_i
 
     respond_to do |format|
       format.html { render layout: !request.xhr? }

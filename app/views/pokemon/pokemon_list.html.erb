@@ -1,10 +1,13 @@
 <% pokemon ||= @pokemon %>
 <% pokemon.each do |poke| %>
   <% loc = poke.location %>
-  <div class="pokemon-container" data-lat="<%= loc[0] %>" data-lng="<%= loc[1] %>" data-poke-id="<%= poke.pokedex_id %>" data-db-id="<%= poke.id %>">
+  <div class="pokemon-container" data-since="<%= @since %>" data-lat="<%= loc[0] %>" data-lng="<%= loc[1] %>" data-poke-id="<%= poke.pokedex_id %>" data-db-id="<%= poke.id %>">
     <h4 style="margin: 20px 0 5px 5px;"><%= poke.pokedex_id %> - <%= poke.name %></h4>
     <div class="relative-directions"></div>
     <div class="relative-bearing"></div>
     <div class="countdown" data-countdown-to="<%= poke.expires_at.to_i - 1 %>"></div>
   </div>
+<% end %>
+<% if @since %>
+  <div class="hidden since-container" data-since="<%= @since %>"></div>
 <% end %>

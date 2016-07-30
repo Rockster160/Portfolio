@@ -70,7 +70,6 @@ $(document).ready(function() {
 
     updatePokemonOnMap = function() {
       var expired_marker_ids = $(poke_markers).map(function() {return this.args.db_id})
-      console.log($('.pokemon-container').length);
       $('.pokemon-container').each(function() {
         var db_id = $(this).attr('data-db-id'), marker = findPokemonByDbId(db_id);
         if (marker == null) {
@@ -232,13 +231,17 @@ $(document).ready(function() {
     }
 
     checkPokemon = function() {
+      if ($('.since-container').length > 0) {
+        last_update = $('.since-container').attr('data-since')
+        $('.since-container').remove()
+      }
       $.get('/pokemon_list', {since: last_update}).done(function(data) {
         var temp_container = $('<div/>').addClass('hidden')
         $('body').append(temp_container)
         temp_container.html(data)
 
         var all_pokemon = $('.pokemon-container'),
-        uniq_pokemon = getUniqPokemon(all_pokemon);
+          uniq_pokemon = getUniqPokemon(all_pokemon);
         temp_container.html(uniq_pokemon)
         $('.pokemon-list-container').html('')
         updatePokemonDistance()
@@ -248,7 +251,6 @@ $(document).ready(function() {
         temp_container.remove()
         updatePokemonOnMap()
       })
-      last_update = (new Date()).getTime()
     }
 
     getUniqPokemon = function(pokemon) {
