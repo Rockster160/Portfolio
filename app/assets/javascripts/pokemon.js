@@ -101,6 +101,7 @@ $(document).ready(function() {
     setClocks = function() {
       if ($('.poke-page').length > 0) {
         pokeTimer = setInterval(function() {
+          console.log("tick");
           checkPokemon()
           updatePokemonOnMap()
           updateCounters()
