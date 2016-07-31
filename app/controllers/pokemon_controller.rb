@@ -14,6 +14,7 @@ class PokemonController < ApplicationController
     datetime = time.to_datetime
     @pokemon = Pokemon.spawned.since(datetime)
     @since = datetime.to_i
+    check_sidekiq
 
     respond_to do |format|
       format.html { render layout: !request.xhr? }
@@ -28,6 +29,15 @@ class PokemonController < ApplicationController
   end
 
   private
+
+  def check_sidekiq
+    greps = `ps aux | grep '[s]idekiq'`
+    sidekiq_running = greps.split("\n").any? { |str| str.include?("Portfolio") }
+    unless sidekiq_running
+      Rails.logger.warn "Sidekiq Died!!!"
+      # `./restart_sidekiq`
+    end
+  end
 
   def still_updating?
     ps = Sidekiq::ProcessSet.new
