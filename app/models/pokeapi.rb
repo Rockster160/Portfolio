@@ -24,11 +24,11 @@ class Pokeapi
     loc = goto('home') if loc.compact.empty?
     loc = loc.is_a?(String) ? loc.split(',') : loc
     lat, lng = loc.map(&:to_f)
-    coords = get_actual_coords_from_spiral(radius, distance_per_block, [lat, ])
+    coords = get_actual_coords_from_spiral(radius, distance_per_block, [lat, lng])
     search_coords(coords, delay)
   end
 
-  def get_actual_coords_from_spiral(radius, distance_per_block); Pokeapi.get_actual_coords_from_spiral(radius, distance_per_block); end
+  def get_actual_coords_from_spiral(radius, distance_per_block, origin); Pokeapi.get_actual_coords_from_spiral(radius, distance_per_block, origin); end
   def self.get_actual_coords_from_spiral(radius, distance_per_block, origin)
     lat, lng = origin
     relative_coords = spiral_coords(radius)
