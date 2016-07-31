@@ -17,9 +17,9 @@ class Pokewalker < ActiveRecord::Base
   include CoordCalculator
   attr_accessor :pk
 
-  def login
+  def login(should_goto=false)
     @pk = Pokeapi.login(self)
-    @pk.goto(last_loc) if last_loc
+    @pk.goto(last_loc) if last_loc && should_goto
     @pk
   end
 
@@ -39,6 +39,11 @@ class Pokewalker < ActiveRecord::Base
       goto(coord)
       check
     end
+  end
+
+  def search_coords(coords, delay=0.5)
+    return 'Not logged in' unless @pk
+    @pk.search_coords(coords, delay=0.5)
   end
 
   def check

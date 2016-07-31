@@ -24,19 +24,29 @@ class Pokeapi
     loc = goto('home') if loc.compact.empty?
     loc = loc.is_a?(String) ? loc.split(',') : loc
     lat, lng = loc.map(&:to_f)
-    coords = spiral_coords(radius)
+    coords = get_actual_coords_from_spiral(radius, distance_per_block, [lat, ])
+    search_coords(coords, delay)
+  end
+
+  def get_actual_coords_from_spiral(radius, distance_per_block); Pokeapi.get_actual_coords_from_spiral(radius, distance_per_block); end
+  def self.get_actual_coords_from_spiral(radius, distance_per_block, origin)
+    lat, lng = origin
+    relative_coords = spiral_coords(radius)
+    relative_coords.map { |x, y| [lat + (x * distance_per_block), lng + (y * distance_per_block)] }
+  end
+
+  def search_coords(coords, delay=0.5)
     pokemon_found = []
-    coords.each do |x, y|
+    coords.each do |new_lat, new_lng|
       sleep delay
-      new_lat = lat + (x * distance_per_block)
-      new_lng = lng + (y * distance_per_block)
       goto("#{new_lat},#{new_lng}")
       pokemon_found += search
     end
     pokemon_found
   end
 
-  def spiral_coords(radius)
+  def spiral_coords(radius); Pokeapi.spiral_coords(radius); end
+  def self.spiral_coords(radius)
     width = (radius * 2) + 1
     steps = width ** 2
     (0...steps).map do |i|
@@ -69,7 +79,12 @@ class Pokeapi
   end
 
   def search
-    get_pokemon(call_python)
+    begin
+      get_pokemon(call_python)
+    rescue
+      Rails.logger.error "Failed to call Python!"
+      []
+    end
   end
 
   def call_python
