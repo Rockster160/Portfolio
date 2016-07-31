@@ -21,7 +21,8 @@ $(document).ready(function() {
     );
     map = handler.getMap()
 
-    resetMarker = function(latitude, longitude) {
+    resetMarker = function(latitude, longitude, shouldCenter) {
+      if (shouldCenter == undefined) { shouldCenter = true }
       if (current_location_marker != undefined) {
         handler.removeMarker(current_location_marker)
       }
@@ -39,8 +40,14 @@ $(document).ready(function() {
       })
       setLocation(latitude, longitude)
       $('#location-field').val(latitude + ',' + longitude)
-      centerOnMarker()
+      if (shouldCenter) {
+        centerOnMarker()
+      }
     }
+
+    map.addListener('click', function(e) {
+      resetMarker(e.latLng.lat(), e.latLng.lng(), false)
+    })
 
     setLocation = function(lat, lng) {
       $('.pokemon-list-container').attr('data-latitude', lat)
@@ -177,7 +184,7 @@ $(document).ready(function() {
         setTimeout(function() {
           $('.scan').removeClass('scanning');
           $('.scan').html('SCAN')
-        }, 30000)
+        }, 10000)
       }
     })
 
