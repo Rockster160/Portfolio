@@ -11,3 +11,12 @@ def get_cell_ids(lat, lng, radius = 10):
         right = right.next()
         left = left.prev()
     return sorted(walk)
+
+try:
+    sys.stdout.close()
+except:
+    pass
+try:
+    sys.stderr.close()
+except:
+    pass
