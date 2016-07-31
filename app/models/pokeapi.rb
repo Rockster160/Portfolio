@@ -30,7 +30,6 @@ class Pokeapi
       sleep delay
       new_lat = lat + (x * distance_per_block)
       new_lng = lng + (y * distance_per_block)
-      # puts "Scanning (#{new_lat},#{new_lng})"
       goto("#{new_lat},#{new_lng}")
       pokemon_found += search
     end
@@ -53,13 +52,19 @@ class Pokeapi
   def from_lng; lng; end
 
   def goto(location)
+    return nil unless location
     location = location.is_a?(String) ? location : location.join(',')
     loc = case location
     when 'home' then '40.53807962696459,-111.97943799266993'
     when 'office' then '40.57031218969614,-111.89489496028821'
     else location
     end
-    @client.store_location(loc)
+    coord_str = loc.split(',')
+    if coord_str.present? && coord_str.length == 2 && coord_str.map(&:to_f).map(&:to_s) == coord_str
+      @client.lat, @client.lng = coord_str.map(&:to_f)
+    else
+      @client.store_location(loc)
+    end
     [@lat = @client.lat, @lng = @client.lng]
   end
 

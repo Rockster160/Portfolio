@@ -63,8 +63,9 @@ $(document).ready(function() {
 
     removePokemonFromMap = function(marker) {
       if (marker != null) {
-        poke_markers = poke_markers.filter(function() {return this != marker})
-        marker.remove()
+        poke_markers = poke_markers.filter(function() {return this != marker});
+        marker.setMap(null);
+        marker.remove();
       }
     }
 
@@ -95,7 +96,12 @@ $(document).ready(function() {
     }
 
     dropPin = function(lat, lng) {
-      handler.addMarker( { 'lat': lat, 'lng': lng }, { 'animated': true, 'draggable': true } )
+      handler.addMarker( { 'lat': lat, 'lng': lng }, { 'animated': google.maps.Animation.DROP, 'draggable': true } )
+    }
+    dropPins = function(pins_locs) {
+      $(pins_locs).each(function() {
+        dropPin(this[0], this[1])
+      })
     }
 
     setClocks = function() {
@@ -247,7 +253,6 @@ $(document).ready(function() {
         updatePokemonDistance()
         var sortedPokemon = getSortedPokemon(uniq_pokemon)
         $('.pokemon-list-container').html(sortedPokemon)
-        console.log("tick");
         temp_container.remove()
         updatePokemonOnMap()
       })

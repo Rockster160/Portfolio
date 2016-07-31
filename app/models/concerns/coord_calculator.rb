@@ -1,5 +1,5 @@
 module CoordCalculator
-  
+
   def get_coords_between_points(loc, last_loc, distance_per_block)
     lat, lng = loc.is_a?(String) ? loc.split(',').map(&:to_f) : loc.map(&:to_f)
     last_lat, last_lng = last_loc.is_a?(String) ? last_loc.split(',').map(&:to_f) : last_loc.map(&:to_f)
@@ -9,14 +9,16 @@ module CoordCalculator
     lat_laps = lat_laps.odd? ? lat_laps : lat_laps + 1
     lng_laps = (d_lng / distance_per_block).round
     lng_laps = lng_laps.odd? ? lng_laps : lng_laps + 1
-    lat_list = lat_laps.times.map { |lat_lap| last_lat + (lat_lap * distance_per_block) }
-    lng_list = lng_laps.times.map { |lng_lap| last_lng + (lng_lap * distance_per_block) }
     coord_list = []
-    lat_list.each_with_index do |lat_item, lat_dx|
-      lng_list.each_with_index do |lng_item, lng_dx|
-        coord_list << [lat_item, lng_item]
+    lat_laps.times do |lap_dx|
+      x = lat < last_lat ? (lat + (lap_dx * distance_per_block)) : (lat - (lap_dx * distance_per_block))
+      coords = []
+      lng_laps.times do |lap_dy|
+        y = lng < last_lng ? (lng + (lap_dy * distance_per_block)) : (lng - (lap_dy * distance_per_block))
+        coords << [x, y]
       end
-      lng_list.reverse!
+      coords.reverse! if lap_dx.odd?
+      coord_list += coords
     end
     coord_list
   end
