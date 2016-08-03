@@ -12,6 +12,12 @@ Rails.application.routes.draw do
   post 'scan' => 'pokemon#scan'
   get 'pokemon_list' => 'pokemon#pokemon_list'
 
+  resources :mazes, only: [] do
+    collection do
+      get 'random.txt', action: 'random'
+    end
+  end
+
   require 'sidekiq/web'
   mount Sidekiq::Web => '/sidekiq'
 

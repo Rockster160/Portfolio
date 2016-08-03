@@ -33,9 +33,10 @@ class PokemonController < ApplicationController
   def check_sidekiq
     greps = `ps aux | grep '[s]idekiq'`
     sidekiq_running = greps.split("\n").any? { |str| str.include?("Portfolio") }
-    unless sidekiq_running
+    unless sidekiq_running && (session[:restarting_sidekiq].nil? || session[:restarting_sidekiq] > Time.now.to_i + 60)
+      session[:restarting_sidekiq] = Time.now.to_i
       Rails.logger.warn "Sidekiq Died!!!"
-      # `./restart_sidekiq`
+      `./restart_sidekiq`
     end
   end
 
