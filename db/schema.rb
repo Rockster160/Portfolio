@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20160729224921) do
+ActiveRecord::Schema.define(version: 20160805005250) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -62,6 +62,15 @@ ActiveRecord::Schema.define(version: 20160729224921) do
     t.boolean  "banned",            default: false
     t.string   "monitor_loc_start"
     t.string   "monitor_loc_end"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "venmos", force: true do |t|
+    t.string   "access_code"
+    t.string   "access_token"
+    t.string   "refresh_token"
+    t.datetime "expires_at"
     t.datetime "created_at"
     t.datetime "updated_at"
   end

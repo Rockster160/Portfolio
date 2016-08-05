@@ -3,18 +3,7 @@ class LitterReminderWorker
 
   def perform
     return true if LitterTextReminder.first.updated_at > 12.hours.ago
-    
-    api = Twilio::REST::Client.new(ENV['PORTFOLIO_TWILIO_ACCOUNT_SID'], ENV['PORTFOLIO_TWILIO_AUTH_TOKEN'])
-
-    begin
-      api.account.messages.create(
-        body: "It's your turn to do the litter box! Respond with 'Done!' when you have completed the task.",
-        to: LitterTextReminder.first.turn,
-        from: "+18018500855"
-      )
-    rescue Twilio::REST::RequestError => e
-      Rails.logger.warn e
-    end
+    SmsWorker.perform_async(LitterTextReminder.first.turn, "It's your turn to do the litter box! Respond with 'Done!' when you have completed the task.")
   end
 
 end

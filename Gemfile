@@ -25,6 +25,7 @@ gem 'sinatra', :require => nil
 gem 'gmaps4rails'
 gem 'underscore-rails'
 gem 'poke-api', git: "https://github.com/nabeelamjad/poke-api.git", tag: '0.0.4'
+gem 'httparty'
 
 group :development, :test do
   gem 'annotate'

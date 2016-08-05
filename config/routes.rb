@@ -18,6 +18,12 @@ Rails.application.routes.draw do
     end
   end
 
+  resources :venmos, path: 'venmo' do
+    collection do
+      get 'auth'
+    end
+  end
+
   require 'sidekiq/web'
   mount Sidekiq::Web => '/sidekiq'
 
