@@ -12,6 +12,8 @@ Rails.application.routes.draw do
   post 'scan' => 'pokemon#scan'
   get 'pokemon_list' => 'pokemon#pokemon_list'
 
+  post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
+
   resources :mazes, only: [] do
     collection do
       get 'random.txt', action: 'random'
