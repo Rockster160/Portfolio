@@ -8,7 +8,7 @@ class WebhooksController < ApplicationController
   private
 
   def post_params
-    puts "#{params}"
+    Rails.logger.warn "#{params}"
   end
 
 end
