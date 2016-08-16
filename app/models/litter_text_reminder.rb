@@ -17,9 +17,9 @@ class LitterTextReminder < ActiveRecord::Base
 
   def toggle!
     if turn == LitterTextReminder.turns[0]
-      first.update(turn: "8019317892")
+      update(turn: "8019317892")
     else
-      first.update(turn: "3852599640")
+      update(turn: "3852599640")
     end
     first.turn
   end
