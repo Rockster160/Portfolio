@@ -14,11 +14,13 @@ class IndexController < ApplicationController
     is_me = params["From"] == "+13852599640"
 
     stripped_text = params["Body"].downcase.gsub(/[^a-z0-9\s]/i, '')
-    if stripped_text =~ /done/
-      if params["From"] == "+13852599640"
-        LitterTextReminder.first.update(turn: "8019317892")
-      elsif params["From"] == "+18019317892"
-        LitterTextReminder.first.update(turn: "3852599640")
+    LitterTextReminder.all.each do |rem|
+      if stripped_text =~ /#{rem.regex}/
+        if params["From"] == "+13852599640"
+          rem.update(turn: "8019317892")
+        elsif params["From"] == "+18019317892"
+          rem.update(turn: "3852599640")
+        end
       end
     end
 

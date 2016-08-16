@@ -8,9 +8,11 @@ Rails.application.routes.draw do
   post '/talk' => 'index#talk'
   get 'playground' => 'index#play', as: 'playground'
 
-  get 'pokemon' => 'pokemon#index'
-  post 'scan' => 'pokemon#scan'
-  get 'pokemon_list' => 'pokemon#pokemon_list'
+  get 'map' => 'index#map'
+
+  # get 'pokemon' => 'pokemon#index'
+  # post 'scan' => 'pokemon#scan'
+  # get 'pokemon_list' => 'pokemon#pokemon_list'
 
   post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
 
