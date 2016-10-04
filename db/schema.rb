@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20160805005250) do
+ActiveRecord::Schema.define(version: 20160816054010) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -43,6 +43,8 @@ ActiveRecord::Schema.define(version: 20160805005250) do
     t.integer  "turn",       default: 0
     t.datetime "created_at"
     t.datetime "updated_at"
+    t.string   "regex"
+    t.string   "message"
   end
 
   create_table "pokemons", force: true do |t|

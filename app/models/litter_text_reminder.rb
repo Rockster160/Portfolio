@@ -6,6 +6,8 @@
 #  turn       :integer          default(0)
 #  created_at :datetime
 #  updated_at :datetime
+#  regex      :string(255)
+#  message    :string(255)
 #
 
 class LitterTextReminder < ActiveRecord::Base
