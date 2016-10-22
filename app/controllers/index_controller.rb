@@ -15,18 +15,21 @@ class IndexController < ApplicationController
 
     stripped_text = params["Body"].downcase.gsub(/[^a-z0-9\s]/i, '')
 
+    reminder_received = false
     LitterTextReminder.all.each do |rem|
       if stripped_text =~ /#{rem.regex}/
         if params["From"] == "+13852599640"
           rem.update(turn: "8019317892")
+          reminder_received = true
         elsif params["From"] == "+18019317892"
           rem.update(turn: "3852599640")
+          reminder_received = true
         end
       end
     end
 
     list = List.select { |l| check_string_contains_word?(stripped_text, l.name) }.first || List.first
-    if list.present?
+    if list.present? && !reminder_received
       if check_string_contains_word?(stripped_text, 'add')
         item = list.list_items.create(name: clean_list_text(stripped_text, [list.name]))
         SmsWorker.perform_async(params["From"], "Added #{item.name} to #{list.name}.") if item.present? && item.persisted?
@@ -37,7 +40,11 @@ class IndexController < ApplicationController
         items = list.list_items.destroy_all
         SmsWorker.perform_async(params["From"], "Removed items from #{list.name}: \n#{items.map(&:name).join("\n")}")
       else
-        SmsWorker.perform_async(params["From"], "#{list.name.capitalize}: \n#{list.list_items.map(&:name).join("\n")}")
+        if (items = list.list_items).any?
+          SmsWorker.perform_async(params["From"], "#{list.name.capitalize}: \n#{items.map(&:name).join("\n")}")
+        else
+          SmsWorker.perform_async(params["From"], "There are no items in #{list.name.capitalize}.")
+        end
       end
     end
 
