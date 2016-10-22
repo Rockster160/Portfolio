@@ -25,8 +25,8 @@ class IndexController < ApplicationController
       end
     end
 
-    current_list = List.select { |l| check_string_contains_word?(stripped_text, l.name) }.first || List.first
-    if current_list.present?
+    list = List.select { |l| check_string_contains_word?(stripped_text, l.name) }.first || List.first
+    if list.present?
       if check_string_contains_word?(stripped_text, 'add')
         item = list.list_items.create(name: clean_list_text(stripped_text, [list.name]))
         SmsWorker.perform_async(params["From"], "Added #{item.name} to #{list.name}.") if item.present? && item.persisted?
