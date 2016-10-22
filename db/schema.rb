@@ -11,10 +11,17 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20160816054010) do
+ActiveRecord::Schema.define(version: 20161022033925) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
+
+  create_table "ar_internal_metadata", id: false, force: true do |t|
+    t.string   "key",        limit: nil, null: false
+    t.string   "value",      limit: nil
+    t.datetime "created_at",             null: false
+    t.datetime "updated_at",             null: false
+  end
 
   create_table "batches", force: true do |t|
     t.string   "text"
@@ -35,6 +42,21 @@ ActiveRecord::Schema.define(version: 20160816054010) do
     t.integer  "flash_card_id"
     t.string   "text"
     t.boolean  "center"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "list_items", force: true do |t|
+    t.string   "name"
+    t.integer  "list_id"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  add_index "list_items", ["list_id"], name: "index_list_items_on_list_id", using: :btree
+
+  create_table "lists", force: true do |t|
+    t.string   "name"
     t.datetime "created_at"
     t.datetime "updated_at"
   end

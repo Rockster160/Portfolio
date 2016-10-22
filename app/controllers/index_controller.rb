@@ -14,12 +14,30 @@ class IndexController < ApplicationController
     is_me = params["From"] == "+13852599640"
 
     stripped_text = params["Body"].downcase.gsub(/[^a-z0-9\s]/i, '')
+
     LitterTextReminder.all.each do |rem|
       if stripped_text =~ /#{rem.regex}/
         if params["From"] == "+13852599640"
           rem.update(turn: "8019317892")
         elsif params["From"] == "+18019317892"
           rem.update(turn: "3852599640")
+        end
+      end
+    end
+
+    List.all.each do |list|
+      if check_string_contains_word?(stripped_text, list.name)
+        if check_string_contains_word?(stripped_text, 'add')
+          item = list.list_items.create(name: clean_list_text(stripped_text, list.name))
+          SmsWorker.perform_async(params["From"], "Added #{item.name} to #{list.name}.") if item.present? && item.persisted?
+        elsif check_string_contains_word?(stripped_text, 'remove')
+          item = list.list_items.where(name: "%#{clean_list_text(stripped_text, list.name)}%").first.try(:destroy)
+          SmsWorker.perform_async(params["From"], "Removed #{item.name} from #{list.name}.") if item.present? && item.destroyed?
+        elsif check_string_contains_word?(stripped_text, 'clear')
+          items = list.list_items.destroy_all
+          SmsWorker.perform_async(params["From"], "Removed items from #{list.name}: \n#{items.map(&:name).join("\n")}")
+        else
+          SmsWorker.perform_async(params["From"], "The running list for #{list.name} is: \n#{list.list_items.map(&:name).join("\n")}")
         end
       end
     end
@@ -84,6 +102,24 @@ class IndexController < ApplicationController
     old_card = @card
     next_card
     old_card.destroy
+  end
+
+  def check_string_contains_word?(sentence, word)
+    (sentence =~ split_from_word_regex(word)) >= 0
+  end
+
+  def split_from_word_regex(word)
+    /(\W|^)#{word}(\W|$)/
+  end
+
+  def clean_list_text(stripped_text, words_to_clean)
+    stripped_text.gsub!(split_from_word_regex('add'), ' ')
+    stripped_text.gsub!(split_from_word_regex('remove'), ' ')
+    stripped_text.gsub!(split_from_word_regex('to'), ' ')
+    words_to_clean.each do |word|
+      stripped_text.gsub!(split_from_word_regex(word), ' ')
+    end
+    stripped_text.squish
   end
 
 end
