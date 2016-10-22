@@ -25,20 +25,19 @@ class IndexController < ApplicationController
       end
     end
 
-    List.all.each do |list|
-      if check_string_contains_word?(stripped_text, list.name)
-        if check_string_contains_word?(stripped_text, 'add')
-          item = list.list_items.create(name: clean_list_text(stripped_text, [list.name]))
-          SmsWorker.perform_async(params["From"], "Added #{item.name} to #{list.name}.") if item.present? && item.persisted?
-        elsif check_string_contains_word?(stripped_text, 'remove')
-          item = list.list_items.where(name: "%#{clean_list_text(stripped_text, [list.name])}%").first.try(:destroy)
-          SmsWorker.perform_async(params["From"], "Removed #{item.name} from #{list.name}.") if item.present? && item.destroyed?
-        elsif check_string_contains_word?(stripped_text, 'clear')
-          items = list.list_items.destroy_all
-          SmsWorker.perform_async(params["From"], "Removed items from #{list.name}: \n#{items.map(&:name).join("\n")}")
-        else
-          SmsWorker.perform_async(params["From"], "The running list for #{list.name} is: \n#{list.list_items.map(&:name).join("\n")}")
-        end
+    current_list = List.select { |l| check_string_contains_word?(l.name) }.first || List.first
+    if current_list.present?
+      if check_string_contains_word?(stripped_text, 'add')
+        item = list.list_items.create(name: clean_list_text(stripped_text, [list.name]))
+        SmsWorker.perform_async(params["From"], "Added #{item.name} to #{list.name}.") if item.present? && item.persisted?
+      elsif check_string_contains_word?(stripped_text, 'remove')
+        item = list.list_items.where(name: "%#{clean_list_text(stripped_text, [list.name])}%").first.try(:destroy)
+        SmsWorker.perform_async(params["From"], "Removed #{item.name} from #{list.name}.") if item.present? && item.destroyed?
+      elsif check_string_contains_word?(stripped_text, 'clear')
+        items = list.list_items.destroy_all
+        SmsWorker.perform_async(params["From"], "Removed items from #{list.name}: \n#{items.map(&:name).join("\n")}")
+      else
+        SmsWorker.perform_async(params["From"], "#{list.name.capitalize}: \n#{list.list_items.map(&:name).join("\n")}")
       end
     end
 
@@ -118,6 +117,7 @@ class IndexController < ApplicationController
     stripped_text.gsub!(split_from_word_regex('add'), ' ')
     stripped_text.gsub!(split_from_word_regex('remove'), ' ')
     stripped_text.gsub!(split_from_word_regex('to'), ' ')
+    stripped_text.gsub!(split_from_word_regex('from'), ' ')
     words_to_clean.each do |word|
       stripped_text.gsub!(split_from_word_regex(word), ' ')
     end
