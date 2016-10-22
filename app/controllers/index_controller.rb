@@ -105,7 +105,9 @@ class IndexController < ApplicationController
   end
 
   def check_string_contains_word?(sentence, word)
-    (sentence =~ split_from_word_regex(word)) >= 0
+    did_match = (sentence =~ split_from_word_regex(word))
+    return false if did_match.nil?
+    did_match >= 0
   end
 
   def split_from_word_regex(word)
