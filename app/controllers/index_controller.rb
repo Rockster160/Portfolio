@@ -28,10 +28,10 @@ class IndexController < ApplicationController
     List.all.each do |list|
       if check_string_contains_word?(stripped_text, list.name)
         if check_string_contains_word?(stripped_text, 'add')
-          item = list.list_items.create(name: clean_list_text(stripped_text, list.name))
+          item = list.list_items.create(name: clean_list_text(stripped_text, [list.name]))
           SmsWorker.perform_async(params["From"], "Added #{item.name} to #{list.name}.") if item.present? && item.persisted?
         elsif check_string_contains_word?(stripped_text, 'remove')
-          item = list.list_items.where(name: "%#{clean_list_text(stripped_text, list.name)}%").first.try(:destroy)
+          item = list.list_items.where(name: "%#{clean_list_text(stripped_text, [list.name])}%").first.try(:destroy)
           SmsWorker.perform_async(params["From"], "Removed #{item.name} from #{list.name}.") if item.present? && item.destroyed?
         elsif check_string_contains_word?(stripped_text, 'clear')
           items = list.list_items.destroy_all
