@@ -17,7 +17,7 @@ class ListItem < ActiveRecord::Base
   private
 
   def format_words
-    name.squish.split(' ').map(&:capitalize).join(' ')
+    self.name = self.name.squish.split(' ').map(&:capitalize).join(' ')
   end
 
 end
