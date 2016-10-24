@@ -11,4 +11,13 @@
 
 class ListItem < ActiveRecord::Base
   belongs_to :list
+
+  before_save :format_words
+
+  private
+
+  def format_words
+    name.squish.split(' ').map(&:capitalize).join(' ')
+  end
+
 end

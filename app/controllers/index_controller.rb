@@ -34,8 +34,12 @@ class IndexController < ApplicationController
         item = list.list_items.create(name: clean_list_text(stripped_text, [list.name]))
         SmsWorker.perform_async(params["From"], "Added #{item.name} to #{list.name}.") if item.present? && item.persisted?
       elsif check_string_contains_word?(stripped_text, 'remove')
-        item = list.list_items.where(name: "%#{clean_list_text(stripped_text, [list.name])}%").first.try(:destroy)
-        SmsWorker.perform_async(params["From"], "Removed #{item.name} from #{list.name}.") if item.present? && item.destroyed?
+        item = list.list_items.where("name ILIKE ?", "%#{clean_list_text(stripped_text, [list.name])}%").first.try(:destroy)
+        if item.present? && item.destroyed?
+          SmsWorker.perform_async(params["From"], "Removed #{item.name} from #{list.name}.")
+        else
+          SmsWorker.perform_async(params["From"], "Couldn't find #{clean_list_text(stripped_text, [list.name])} in #{list.name}.") 
+        end
       elsif check_string_contains_word?(stripped_text, 'clear')
         items = list.list_items.destroy_all
         SmsWorker.perform_async(params["From"], "Removed items from #{list.name}: \n#{items.map(&:name).join("\n")}")
