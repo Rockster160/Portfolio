@@ -139,16 +139,17 @@ class IndexController < ApplicationController
   end
 
   def clean_list_text(stripped_text, words_to_clean)
-    stripped_text.gsub!(split_from_word_regex('add'), ' ')
-    stripped_text.gsub!(split_from_word_regex('remove'), ' ')
-    stripped_text.gsub!(split_from_word_regex('to'), ' ')
-    stripped_text.gsub!(split_from_word_regex('from'), ' ')
-    stripped_text.gsub!(split_from_word_regex('the'), ' ')
-    stripped_text.gsub!(split_from_word_regex(', and'), ',')
+    new_text = stripped_text
+    new_text.gsub!(split_from_word_regex('add'), ' ')
+    new_text.gsub!(split_from_word_regex('remove'), ' ')
+    new_text.gsub!(split_from_word_regex('to'), ' ')
+    new_text.gsub!(split_from_word_regex('from'), ' ')
+    new_text.gsub!(split_from_word_regex('the'), ' ')
+    new_text.gsub!(split_from_word_regex(', and'), ',')
     words_to_clean.each do |word|
-      stripped_text.gsub!(split_from_word_regex(word), ' ')
+      new_text.gsub!(split_from_word_regex(word), ' ')
     end
-    stripped_text.squish
+    new_text.squish
   end
 
   def items_from_list_text(clean_text)
