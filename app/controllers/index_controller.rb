@@ -28,18 +28,32 @@ class IndexController < ApplicationController
       end
     end
 
-    list = List.select { |l| check_string_contains_word?(stripped_text, l.name) }.first || List.first
+    list = List.select { |l| check_string_contains_word?(stripped_text, l.name) || check_string_contains_word?(stripped_text, l.name.split(' ').join('')) }.first || List.first
     if list.present? && !reminder_received
+      item_names = items_from_list_text(clean_list_text(stripped_text, [list.name]))
       if check_string_contains_word?(stripped_text, 'add')
-        item = list.list_items.create(name: clean_list_text(stripped_text, [list.name]))
-        SmsWorker.perform_async(params["From"], "Added #{item.name} to #{list.name}.") if item.present? && item.persisted?
-      elsif check_string_contains_word?(stripped_text, 'remove')
-        item = list.list_items.where("name ILIKE ?", "%#{clean_list_text(stripped_text, [list.name])}%").first.try(:destroy)
-        if item.present? && item.destroyed?
-          SmsWorker.perform_async(params["From"], "Removed #{item.name} from #{list.name}.")
-        else
-          SmsWorker.perform_async(params["From"], "Couldn't find #{clean_list_text(stripped_text, [list.name])} in #{list.name}.") 
+        items = item_names.map do |item_name|
+          list.list_items.create(name: item_name)
         end
+        SmsWorker.perform_async(params["From"], "Added #{items.map(&:name).to_sentence} to #{list.name}.\nRunning list:\n#{list.list_items.map(&:name).join("\n")}") if item.present? && item.persisted?
+      elsif check_string_contains_word?(stripped_text, 'remove')
+        not_destroyed = []
+        destroyed_items = []
+        item_names.map do |item_name|
+          if (item = list.list_items.where("name ILIKE ?", "%#{item_name}%").first).try(:destroy)
+            destroyed_items << item
+          else
+            not_destroyed << item_name
+          end
+        end.compact
+        sms_messages = []
+        if not_destroyed.any?
+          sms_messages << "Could not remove #{not_destroyed.to_sentence} from #{list.name}.")
+        end
+        if destroyed_items.any?
+          sms_messages << "Removed #{destroyed_items.to_sentence} from #{list.name}.")
+        end
+        SmsWorker.perform_async(params["From"], sms_messages.join("\n")) if sms_message.any?
       elsif check_string_contains_word?(stripped_text, 'clear')
         items = list.list_items.destroy_all
         SmsWorker.perform_async(params["From"], "Removed items from #{list.name}: \n#{items.map(&:name).join("\n")}")
@@ -129,10 +143,16 @@ class IndexController < ApplicationController
     stripped_text.gsub!(split_from_word_regex('remove'), ' ')
     stripped_text.gsub!(split_from_word_regex('to'), ' ')
     stripped_text.gsub!(split_from_word_regex('from'), ' ')
+    stripped_text.gsub!(split_from_word_regex('the'), ' ')
+    stripped_text.gsub!(split_from_word_regex(', and'), ',')
     words_to_clean.each do |word|
       stripped_text.gsub!(split_from_word_regex(word), ' ')
     end
     stripped_text.squish
+  end
+
+  def items_from_list_text(clean_text)
+    clean_text.split(', ')
   end
 
 end
