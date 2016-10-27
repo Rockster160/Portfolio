@@ -48,10 +48,10 @@ class IndexController < ApplicationController
         end.compact
         sms_messages = []
         if not_destroyed.any?
-          sms_messages << "Could not remove #{not_destroyed.to_sentence} from #{list.name}.")
+          sms_messages << "Could not remove #{not_destroyed.to_sentence} from #{list.name}."
         end
         if destroyed_items.any?
-          sms_messages << "Removed #{destroyed_items.to_sentence} from #{list.name}.")
+          sms_messages << "Removed #{destroyed_items.to_sentence} from #{list.name}."
         end
         SmsWorker.perform_async(params["From"], sms_messages.join("\n")) if sms_message.any?
       elsif check_string_contains_word?(stripped_text, 'clear')
