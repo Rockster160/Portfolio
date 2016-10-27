@@ -28,7 +28,7 @@ class IndexController < ApplicationController
       end
     end
 
-    list = List.select { |l| check_string_contains_word?(stripped_text, l.name) || check_string_contains_word?(stripped_text, l.name.split(' ').join('')) }.first || List.first
+    list = List.select { |l| check_string_contains_word?(stripped_text, l.name) || check_string_contains_word?(stripped_text, l.name.split(' ').join('')) }.last || List.first
     if list.present? && !reminder_received
       item_names = items_from_list_text(clean_list_text(stripped_text, [list.name]))
       if check_string_contains_word?(stripped_text, 'add')
@@ -145,7 +145,7 @@ class IndexController < ApplicationController
     new_text.gsub!(split_from_word_regex('to'), ' ')
     new_text.gsub!(split_from_word_regex('from'), ' ')
     new_text.gsub!(split_from_word_regex('the'), ' ')
-    new_text.gsub!(split_from_word_regex(', and'), ',')
+    new_text.gsub!(", and\W", ',')
     words_to_clean.each do |word|
       new_text.gsub!(split_from_word_regex(word), ' ')
     end
