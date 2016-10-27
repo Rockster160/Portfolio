@@ -139,7 +139,7 @@ class IndexController < ApplicationController
   end
 
   def clean_list_text(stripped_text, words_to_clean)
-    new_text = stripped_text
+    new_text = stripped_text.dup
     new_text.gsub!(split_from_word_regex('add'), ' ')
     new_text.gsub!(split_from_word_regex('remove'), ' ')
     new_text.gsub!(split_from_word_regex('to'), ' ')
