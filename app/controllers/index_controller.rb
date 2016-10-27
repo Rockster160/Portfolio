@@ -35,7 +35,7 @@ class IndexController < ApplicationController
         items = item_names.map do |item_name|
           list.list_items.create(name: item_name)
         end
-        SmsWorker.perform_async(params["From"], "Added #{items.map(&:name).to_sentence} to #{list.name}.\nRunning list:\n#{list.list_items.map(&:name).join("\n")}") if item.present? && item.persisted?
+        SmsWorker.perform_async(params["From"], "Added #{items.map(&:name).to_sentence} to #{list.name}.\nRunning list:\n#{list.list_items.map(&:name).join("\n")}") if items.any?
       elsif check_string_contains_word?(stripped_text, 'remove')
         not_destroyed = []
         destroyed_items = []
