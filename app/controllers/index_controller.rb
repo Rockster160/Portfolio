@@ -13,7 +13,7 @@ class IndexController < ApplicationController
   def talk
     is_me = params["From"] == "+13852599640"
 
-    stripped_text = params["Body"].downcase.gsub(/[^a-z0-9\s]/i, '')
+    stripped_text = params["Body"].downcase.gsub(/[^a-z0-9,\s]/i, '')
 
     reminder_received = false
     LitterTextReminder.all.each do |rem|
