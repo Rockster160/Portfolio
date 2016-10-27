@@ -145,7 +145,7 @@ class IndexController < ApplicationController
     new_text.gsub!(split_from_word_regex('to'), ' ')
     new_text.gsub!(split_from_word_regex('from'), ' ')
     new_text.gsub!(split_from_word_regex('the'), ' ')
-    new_text.gsub!(", and\W", ',')
+    new_text.gsub!(", and\W", ', ')
     words_to_clean.each do |word|
       new_text.gsub!(split_from_word_regex(word), ' ')
     end
