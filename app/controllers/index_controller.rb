@@ -53,10 +53,11 @@ class IndexController < ApplicationController
         if destroyed_items.any?
           sms_messages << "Removed #{destroyed_items.map(&:name).to_sentence} from #{list.name}."
         end
+        sms_messages << "Running list:\n#{list.list_items.map(&:name).join("\n")}"
         SmsWorker.perform_async(params["From"], sms_messages.join("\n")) if sms_messages.any?
       elsif check_string_contains_word?(stripped_text, 'clear')
         items = list.list_items.destroy_all
-        SmsWorker.perform_async(params["From"], "Removed items from #{list.name}: \n#{items.map(&:name).join("\n")}")
+        SmsWorker.perform_async(params["From"], "Removed all items from #{list.name}: \n#{items.map(&:name).join("\n")}")
       else
         if (items = list.list_items).any?
           SmsWorker.perform_async(params["From"], "#{list.name.capitalize}: \n#{items.map(&:name).join("\n")}")
