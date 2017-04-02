@@ -11,60 +11,19 @@ class IndexController < ApplicationController
   end
 
   def talk
-    is_me = params["From"] == "+13852599640"
-
-    stripped_text = params["Body"].downcase.gsub(/[^a-z0-9,\s]/i, '')
+    from = params["From"]
+    body = params["Body"]
 
     reminder_received = false
     LitterTextReminder.all.each do |rem|
-      if stripped_text =~ /#{rem.regex}/
-        if params["From"] == "+13852599640"
-          rem.update(turn: "8019317892")
-          reminder_received = true
-        elsif params["From"] == "+18019317892"
-          rem.update(turn: "3852599640")
-          reminder_received = true
-        end
+      if body.gsub(/[^a-z0-9,\s]/i, '') =~ /#{rem.regex}/i
+        reminder_received = true if rem.done_by(from, body)
       end
     end
 
-    list = List.select { |l| check_string_contains_word?(stripped_text, l.name) || check_string_contains_word?(stripped_text, l.name.split(' ').join('')) }.last || List.first
-    if list.present? && !reminder_received
-      item_names = items_from_list_text(clean_list_text(stripped_text, [list.name]))
-      if check_string_contains_word?(stripped_text, 'add')
-        items = item_names.map do |item_name|
-          list.list_items.create(name: item_name)
-        end
-        SmsWorker.perform_async(params["From"], "Added #{items.map(&:name).to_sentence} to #{list.name}.\nRunning list:\n#{list.list_items.map(&:name).join("\n")}") if items.any?
-      elsif check_string_contains_word?(stripped_text, 'remove')
-        not_destroyed = []
-        destroyed_items = []
-        item_names.map do |item_name|
-          if (item = list.list_items.where("name ILIKE ?", "%#{item_name}%").first).try(:destroy)
-            destroyed_items << item
-          else
-            not_destroyed << item_name
-          end
-        end.compact
-        sms_messages = []
-        if not_destroyed.any?
-          sms_messages << "Could not remove #{not_destroyed.to_sentence} from #{list.name}."
-        end
-        if destroyed_items.any?
-          sms_messages << "Removed #{destroyed_items.map(&:name).to_sentence} from #{list.name}."
-        end
-        sms_messages << "Running list:\n#{list.list_items.map(&:name).join("\n")}"
-        SmsWorker.perform_async(params["From"], sms_messages.join("\n")) if sms_messages.any?
-      elsif check_string_contains_word?(stripped_text, 'clear')
-        items = list.list_items.destroy_all
-        SmsWorker.perform_async(params["From"], "Removed all items from #{list.name}: \n#{items.map(&:name).join("\n")}")
-      else
-        if (items = list.list_items).any?
-          SmsWorker.perform_async(params["From"], "#{list.name.capitalize}: \n#{items.map(&:name).join("\n")}")
-        else
-          SmsWorker.perform_async(params["From"], "There are no items in #{list.name.capitalize}.")
-        end
-      end
+    unless reminder_received
+      response_message = List.find_and_modify(body)
+      SmsWorker.perform_async(params["From"], response_message) if response_message.present?
     end
 
     head :ok
@@ -127,34 +86,6 @@ class IndexController < ApplicationController
     old_card = @card
     next_card
     old_card.destroy
-  end
-
-  def check_string_contains_word?(sentence, word)
-    did_match = (sentence =~ split_from_word_regex(word))
-    return false if did_match.nil?
-    did_match >= 0
-  end
-
-  def split_from_word_regex(word)
-    /(\W|^)#{word}(\W|$)/
-  end
-
-  def clean_list_text(stripped_text, words_to_clean)
-    new_text = stripped_text.dup
-    new_text.gsub!(split_from_word_regex('add'), ' ')
-    new_text.gsub!(split_from_word_regex('remove'), ' ')
-    new_text.gsub!(split_from_word_regex('to'), ' ')
-    new_text.gsub!(split_from_word_regex('from'), ' ')
-    new_text.gsub!(split_from_word_regex('the'), ' ')
-    new_text.gsub!(/, and\W/, ', ')
-    words_to_clean.each do |word|
-      new_text.gsub!(split_from_word_regex(word), ' ')
-    end
-    new_text.squish
-  end
-
-  def items_from_list_text(clean_text)
-    clean_text.split(', ')
   end
 
 end

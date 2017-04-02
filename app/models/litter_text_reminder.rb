@@ -26,4 +26,11 @@ class LitterTextReminder < ActiveRecord::Base
     first.turn
   end
 
+  def done_by(number, msg)
+    turn_idx = LitterTextReminder.turns[number.to_s.last(10)]
+    return false if turn_idx.nil?
+    new_idx = (turn_idx + 1) % LitterTextReminder.turns.count
+    update(turn: LitterTextReminder.turns.keys[new_idx], updated_at: stripped_text.include?("yesterday") ? 12.hours.ago : 1.minute.ago)
+  end
+
 end
