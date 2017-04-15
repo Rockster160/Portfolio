@@ -1,0 +1,112 @@
+.list-container {
+  position: relative;
+  width: 600px;
+  max-width: 100%;
+  padding-bottom: 40px;
+  margin: 0 auto;
+
+  .list-title {
+    text-align: center;
+    padding: 10px 0;
+    font-size: 24px;
+  }
+
+  .list-field {
+    position: fixed;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    text-align: center;
+
+    input.new-list-item {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 600px;
+      font-size: 24px;
+      line-height: 30px;
+      padding: 0 10px;
+      border-radius: 2px;
+      border-color: black;
+    }
+  }
+
+  .list-items {
+    input[type=checkbox] { display: none; }
+    label.list-item {
+      position: relative;
+      display: block;
+      border: 1px solid black;
+      padding: 20px 5px 20px 40px;
+
+      .checkbox-wrapper {}
+      .item-name {}
+    }
+
+    input[type=checkbox]:checked + label {
+      color: red;
+      background: pink;
+      border-color: red;
+      text-decoration: line-through;
+      &:after {
+        content: "\2713 ";
+        position: absolute;
+        line-height: 1;
+        font-size: 35px;
+        top: 10px;
+        left: 10px;
+      }
+    }
+  }
+}
+
+//
+// .orca-checkbox {
+//   position: relative;
+//   width: 100%;
+//   label {
+//     padding-left: 25px;
+//     text-align: left;
+//     font-weight: normal;
+//     position: relative;
+//     font-size: 18px;
+//     min-height: 25px;
+//     &:before {
+//       content: "";
+//       left: 0px; top: 0;
+//       position: absolute;
+//       width: 20px;
+//       height: 20px;
+//       border: 1px solid $light-blue;
+//       border-radius: 4px;
+//     }
+//     &:hover {
+//       cursor: pointer;
+//       &:after {
+//         content: "\2713 ";
+//         position: absolute;
+//         line-height: 1;
+//         color: #EEE;
+//         font-size: 35px;
+//         top: -10px;
+//         left: -4px;
+//       }
+//     }
+//   }
+//   input[type=checkbox] {
+//     display: none;
+//   }
+//   input[type=checkbox]:checked + label {
+//     &:after {
+//       content: "\2713 ";
+//       position: absolute;
+//       line-height: 1;
+//       color: $light-blue;
+//       font-size: 35px;
+//       top: -8px;
+//       left: -4px;
+//     }
+//   }
+//   &.parsley-error > label:before {
+//     background: $white-pink;
+//   }
+// }

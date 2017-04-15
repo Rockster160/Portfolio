@@ -16,6 +16,13 @@ Rails.application.routes.draw do
 
   post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
 
+  resources :lists, only: [ :index ] do
+    collection do
+      get ":list_name", action: :show, constraints: lambda { |request| List.pluck(:name).map(&:parameterize).include?(request.path_parameters[:list_name]) }
+    end
+    resources :list_items, only: [ :create, :destroy ]
+  end
+
   resources :mazes, only: [] do
     collection do
       get 'random.txt', action: 'random'
