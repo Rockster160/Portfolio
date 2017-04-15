@@ -87,39 +87,4 @@ $(document).ready(function() {
     }
   }
 
-  var places = [{address: "13842 S Kyle Earl Ln Herriman, UT ", price: "$289,900", url: "/homes/listing/40069448"}, {address: "10897 S Topview Rd South Jordan, UT ", price: "$269,999", url: "/homes/listing/40068817"}, {address: "668 E WYNGATE POINTE  LN Draper, UT ", price: "$269,900", url: "/homes/listing/40068458"}, {address: "4844 W SO. JORDAN PKWY #658 South Jordan, UT ", price: "$269,900", url: "/homes/listing/40027850"}, {address: "7217 S CAPRINE CT West Jordan, UT ", price: "$259,900", url: "/homes/listing/40064912"}, {address: "7159 W 8090 S West Jordan, UT ", price: "$299,900", url: "/homes/listing/40063230"}, {address: "10207 S YUBA WAY South Jordan, UT ", price: "$279,500", url: "/homes/listing/40062115"}, {address: "16064 S Chimney Stone Rd Draper, UT ", price: "$299,400", url: "/homes/listing/40046742"},{address: "6445 S Fire Sky Ct West Jordan, UT ", price: "$278,900", url: "/homes/listing/40059515"}, {address: "11219 S Crescent Oak Way Sandy, UT ", price: "$290,000", url: "/homes/listing/40059153"}, {address: "12468 S Saquamish St Riverton, UT ", price: "$282,000", url: "/homes/listing/40057418"}, {address: "4472 W Osage Rd Riverton, UT ", price: "$269,900", url: "/homes/listing/40057255"}, {address: "6852 W Grevillea Ln West Jordan, UT ", price: "$234,900", url: "/homes/listing/40050747"}, {address: "10243 S Clarks Hill Dr South Jordan, UT ", price: "$269,900", url: "/homes/listing/40048436"}, {address: "11658 S Oakmond Rd South Jordan, UT ", price: "$288,400", url: "/homes/listing/40022409"}, {address: "6842 W Grevillea Ln West Jordan, UT ", price: "$234,000", url: "/homes/listing/40018798"},{address: "6890 S High Bluff Dr West Jordan, UT ", price: "$280,000", url: "/homes/listing/40008935"}];
-  $(places).each(function() {
-    var place = this;
-    var geocoder = new google.maps.Geocoder();
-    geocoder.geocode({
-      address: this.address
-    }, function(results, status) {
-      if (status == google.maps.GeocoderStatus.OK) {
-        var latitude = results[0].geometry.location.lat();
-        var longitude = results[0].geometry.location.lng();
-        var html = '<div><h1><a href="https://www.ksl.com' + place.url + '">' + place.price + '</a></h1><p>' + place.address + '</p></div>'
-        handler.addMarker({
-          'lat': latitude,
-          'lng': longitude,
-          'infowindow': html
-        })
-      }
-    })
-  })
-
-
 })
-
-
-
-
-// $('.FavoriteHomeItem-infoHomeDetails').map(function() {
-//   var address = $(this).children('.FavoriteHomeItem-infoHomeTitle').text() + ' ' + $(this).children('.FavoriteHomeItem-infoHomeLocation').text().split('|')[0];
-//   var price = $(this).children('.FavoriteHomeItem-infoHomePrice').text();
-//   var url = $(this).find('.FavoriteHomeItem-infoHomeTitle a').attr('href');
-//   return {
-//     'address': address,
-//     'price': price,
-//     'url': url
-//   }
-// })
