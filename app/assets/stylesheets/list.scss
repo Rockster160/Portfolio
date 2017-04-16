@@ -1,3 +1,5 @@
+.black { background: black; }
+
 .list-container {
   position: relative;
   width: 600px;
@@ -5,6 +7,7 @@
   padding-bottom: 40px;
   margin: 0 auto;
   font-family: "Comic Sans MS", sans-serif;
+  color: white;
 
   .list-title {
     text-align: center;
@@ -37,6 +40,7 @@
       position: relative;
       display: block;
       border: 1px solid black;
+      border-bottom-color: white;
       padding: 20px 5px 20px 40px;
 
       .checkbox-wrapper {}
