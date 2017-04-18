@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20161022033925) do
+ActiveRecord::Schema.define(version: 20170418235324) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -67,27 +67,6 @@ ActiveRecord::Schema.define(version: 20161022033925) do
     t.datetime "updated_at"
     t.string   "regex"
     t.string   "message"
-  end
-
-  create_table "pokemons", force: true do |t|
-    t.integer  "pokedex_id"
-    t.string   "lat"
-    t.string   "lng"
-    t.string   "name"
-    t.datetime "expires_at"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  create_table "pokewalkers", force: true do |t|
-    t.string   "username"
-    t.string   "password"
-    t.string   "last_loc"
-    t.boolean  "banned",            default: false
-    t.string   "monitor_loc_start"
-    t.string   "monitor_loc_end"
-    t.datetime "created_at"
-    t.datetime "updated_at"
   end
 
   create_table "venmos", force: true do |t|

@@ -10,10 +10,6 @@ Rails.application.routes.draw do
 
   get 'map' => 'index#map'
 
-  # get 'pokemon' => 'pokemon#index'
-  # post 'scan' => 'pokemon#scan'
-  # get 'pokemon_list' => 'pokemon#pokemon_list'
-
   post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
 
   resources :lists, only: [ :index ] do

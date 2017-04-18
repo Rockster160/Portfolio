@@ -1,7 +1,6 @@
 $(document).ready(function() {
   if ($('#map').length > 0) {
 
-    // pokeMarkerJs()
     handler = Gmaps.build('Google');
     handler.buildMap(
       {
@@ -42,10 +41,6 @@ $(document).ready(function() {
       }
     }
 
-    // map.addListener('click', function(e) {
-    //   resetMarker(e.latLng.lat(), e.latLng.lng(), false)
-    // })
-
     centerOnMarker = function(current_location_marker) {
       handler.map.centerOn({ lat: current_location_marker.serviceObject.position.lat(), lng: current_location_marker.serviceObject.position.lng() })
     }
@@ -82,8 +77,7 @@ $(document).ready(function() {
 
     geolocatedPosition = function(position) {
       var lat = position.coords.latitude, lng = position.coords.longitude;
-      resetMarker(lat, lng)
-      centerOnMarker()
+      resetMarker(lat, lng, true);
     }
   }
 
