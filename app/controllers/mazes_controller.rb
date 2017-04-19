@@ -5,6 +5,8 @@ class MazesController < ApplicationController
   end
 
   def random
+    seed = (params[:seed] || rand(999999)).to_i
+    srand(seed)
     width = params[:width] || (rand(20) + 10)
     height = params[:height] || (rand(20) + 10)
     options = {

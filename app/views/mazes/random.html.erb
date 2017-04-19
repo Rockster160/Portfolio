@@ -1,7 +1,6 @@
 <h5>Use Arrow Keys or WASD to play!</h5>
 <p>Seed: <%= @maze.seed.to_s.rjust(6, "0") %></p>
 
-<!-- :start_str, :end_str, :path, :wall, :width, :height, :seed -->
 <div id="maze">
   <% @maze.draw.each do |line| %>
     <div class="maze-row">

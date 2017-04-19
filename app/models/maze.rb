@@ -6,22 +6,23 @@ class Maze
 
   def initialize(width, height, options={})
     @seed = (options[:seed] || rand(999999)).to_i
+    srand(@seed)
 
     @start_str = options[:start_str].present? ? options[:start_str][0] : 'o'
-    @end_str = options[:end_str].present? ? options[:end_str][0] : 'x'
-    @path = options[:path].present? ? options[:path][0] : ' '
-    @wall = options[:wall].present? ? options[:wall][0] : '#'
+    @end_str   = options[:end_str].present? ? options[:end_str][0] : 'x'
+    @path      = options[:path].present? ? options[:path][0] : ' '
+    @wall      = options[:wall].present? ? options[:wall][0] : '#'
 
-    @width   = width
-    @height  = height
-    @visited = Array.new(@width) { Array.new(@height) }
+    @width     = width
+    @height    = height
+    @visited   = Array.new(@width) { Array.new(@height) }
 
-    @start_x = rand(width)
-    @start_y = rand(height)
+    @start_x   = rand(width)
+    @start_y   = rand(height)
     @dead_ends = [{x: @start_x, y: @start_y}]
 
-    @vertical_walls   = Array.new(width) { Array.new(height) {true} }
-    @horizontal_walls = Array.new(width) { Array.new(height) {true} }
+    @vertical_walls   = Array.new(width) { Array.new(height) { true } }
+    @horizontal_walls = Array.new(width) { Array.new(height) { true } }
 
     generate_visit_cell(@start_x, @start_y)
   end
@@ -33,7 +34,6 @@ class Maze
   def to_array
     array = []
     array << @width.times.inject("#{@wall} ") {|str, x| str << "#{@wall} #{@wall} "}.scan(/../)
-    srand(@seed)
     end_x, end_y = @dead_ends.sample.to_a.map(&:last)
 
     @height.times do |y|

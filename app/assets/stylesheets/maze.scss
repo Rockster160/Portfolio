@@ -6,9 +6,9 @@
     white-space: nowrap;
     .cell {
       display: inline-block;
-      width: 8px;
-      height: 8px;
-      margin: 0; padding: 0;
+      width: 10px;
+      height: 10px;
+      margin: -1px; padding: 0;
       &.cell-player { background: blue; }
       &.cell-finish { background: red; }
       &.cell-open { background: yellow; }
