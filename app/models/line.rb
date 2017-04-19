@@ -10,7 +10,7 @@
 #  updated_at    :datetime
 #
 
-class Line < ActiveRecord::Base
+class Line < ApplicationRecord
 
   belongs_to :flash_card
   default_scope { order('id ASC') }

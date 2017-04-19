@@ -11,7 +11,7 @@
 #  updated_at    :datetime
 #
 
-class Venmo < ActiveRecord::Base
+class Venmo < ApplicationRecord
   class << self
     def charge(to, amount, note)
       Venmo.first.charge(to, amount, note)

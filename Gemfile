@@ -1,17 +1,17 @@
 source 'https://rubygems.org'
 
-gem 'rails', '4.1.5'
+gem 'rails', '5.0.2'
 gem 'pg'
 gem 'therubyracer'
 gem 'coffee-rails'
-gem 'sass-rails', '~> 4.0.3'
+gem 'sass-rails'
 gem 'uglifier', '>= 1.3.0'
 gem 'jquery-rails'
 gem 'jquery-ui-rails'
 gem 'jbuilder', '~> 2.0'
 gem 'sdoc', '~> 0.4.0',          group: :doc
 gem 'spring',        group: :development
-# gem 'devise'
+
 gem 'puma'
 gem 'sidekiq'
 gem 'sidekiq-cron'
@@ -19,8 +19,6 @@ gem 'autoprefixer-rails'
 gem 'faker'
 gem 'font-awesome-rails'
 gem 'colorize'
-gem 'sidekiq'
-gem 'sidekiq-cron'
 gem 'twilio-ruby', '~> 4.11.1'
 gem 'sinatra', :require => nil
 gem 'gmaps4rails'
@@ -29,7 +27,6 @@ gem 'httparty'
 
 group :development, :test do
   gem 'annotate'
-  gem 'better_errors'
   gem 'binding_of_caller'
   gem 'pry-rails'
   gem 'pry-byebug'

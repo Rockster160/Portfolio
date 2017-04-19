@@ -9,7 +9,7 @@
 #  updated_at :datetime
 #
 
-class ListItem < ActiveRecord::Base
+class ListItem < ApplicationRecord
   belongs_to :list
 
   before_save :format_words

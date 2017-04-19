@@ -11,7 +11,7 @@
 #  updated_at :datetime
 #
 
-class FlashCard < ActiveRecord::Base
+class FlashCard < ApplicationRecord
 
   default_scope { order('id ASC') }
 

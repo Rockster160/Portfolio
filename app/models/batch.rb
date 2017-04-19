@@ -8,7 +8,7 @@
 #  updated_at :datetime
 #
 
-class Batch < ActiveRecord::Base
+class Batch < ApplicationRecord
 
   has_many :flash_cards
   

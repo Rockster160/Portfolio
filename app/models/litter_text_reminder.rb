@@ -10,7 +10,7 @@
 #  message    :string(255)
 #
 
-class LitterTextReminder < ActiveRecord::Base
+class LitterTextReminder < ApplicationRecord
 
   enum turn: {
     "3852599640" => 0,

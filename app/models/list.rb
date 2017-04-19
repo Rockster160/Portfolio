@@ -8,7 +8,7 @@
 #  updated_at :datetime
 #
 
-class List < ActiveRecord::Base
+class List < ApplicationRecord
   has_many :list_items
 
   def self.find_and_modify(msg)
