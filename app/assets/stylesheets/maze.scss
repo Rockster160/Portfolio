@@ -3,6 +3,7 @@
   text-align: center;
   .maze-row {
     font-size: 0;
+    white-space: nowrap;
     .cell {
       display: inline-block;
       width: 8px;

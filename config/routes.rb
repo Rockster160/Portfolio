@@ -13,7 +13,7 @@ Rails.application.routes.draw do
     resources :list_items, only: [ :create, :destroy ]
   end
 
-  resources :mazes, only: [] do
+  resources :mazes, only: [ :index ] do
     collection do
       get 'random', action: 'random'
       get ':seed', action: 'random'

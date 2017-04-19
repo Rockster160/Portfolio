@@ -1,5 +1,9 @@
 class MazesController < ApplicationController
 
+  def index
+    redirect_to random_mazes_path
+  end
+
   def random
     width = params[:width] || (rand(20) + 10)
     height = params[:height] || (rand(20) + 10)
