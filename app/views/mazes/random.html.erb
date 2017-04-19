@@ -1,0 +1,21 @@
+<h5>Use Arrow Keys or WASD to play!</h5>
+<p>Seed: <%= @maze.seed.to_s.rjust(6, "0") %></p>
+
+<!-- :start_str, :end_str, :path, :wall, :width, :height, :seed -->
+<div id="maze">
+  <% @maze.draw.each do |line| %>
+    <div class="maze-row">
+      <% line.scan(/../).each do |char| %>
+        <%
+          char_klass = case char.first
+          when @maze.start_str then "player"
+          when @maze.end_str then "finish"
+          when @maze.path then "open"
+          when @maze.wall then "wall"
+          end
+        %>
+        <div class="cell cell-<%= char_klass %>"></div>
+      <% end %>
+    </div>
+  <% end %>
+</div>

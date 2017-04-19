@@ -11,13 +11,10 @@
  * file per style scope.
  *
  *= require_tree .
+ *= require jquery-ui
  *= require_self
  */
  @import "font-awesome";
-
- body {
-  //  background: blue;
- }
 
 .hidden {
   visibility: hidden;

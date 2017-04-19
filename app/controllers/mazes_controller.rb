@@ -10,8 +10,13 @@ class MazesController < ApplicationController
       path: params[:path],
       wall: params[:wall]
     }
-    @maze = Maze.new(30, 30, options)
-    render text: @maze.draw.join('\n')
+
+    @maze = Maze.new(width, height, options)
+
+    respond_to do |format|
+      format.text { render text: @maze.draw.join('\n') }
+      format.html
+    end
   end
 
 end

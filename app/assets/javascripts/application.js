@@ -12,11 +12,19 @@
 //
 //= require jquery
 //= require jquery_ujs
+//= require jquery-ui
 //= require underscore
 //= require gmaps/google
 //= require_tree .
 
+// http://keycode.info
 const KEY_EVENT_ENTER = 13,
       KEY_EVENT_TAB = 9,
       KEY_EVENT_LEFT = 37,
-      KEY_EVENT_RIGHT = 39;
+      KEY_EVENT_UP = 38,
+      KEY_EVENT_DOWN = 40,
+      KEY_EVENT_RIGHT = 39,
+      KEY_EVENT_W = 87;
+      KEY_EVENT_A = 83;
+      KEY_EVENT_S = 65;
+      KEY_EVENT_D = 68;

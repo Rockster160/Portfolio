@@ -1,11 +1,11 @@
 # maze = Maze.new(20, 20)
-# maze.read
+# maze.draw
 class Maze
   DIRECTIONS = [ [1, 0], [-1, 0], [0, 1], [0, -1] ]
+  attr_accessor :start_str, :end_str, :path, :wall, :width, :height, :seed
 
   def initialize(width, height, options={})
-    @seed = options[:seed] || rand(9999)
-    srand(@seed)
+    @seed = (options[:seed] || rand(999999)).to_i
 
     @start_str = options[:start_str].present? ? options[:start_str][0] : 'o'
     @end_str = options[:end_str].present? ? options[:end_str][0] : 'x'
@@ -33,6 +33,7 @@ class Maze
   def to_array
     array = []
     array << @width.times.inject("#{@wall} ") {|str, x| str << "#{@wall} #{@wall} "}.scan(/../)
+    srand(@seed)
     end_x, end_y = @dead_ends.sample.to_a.map(&:last)
 
     @height.times do |y|

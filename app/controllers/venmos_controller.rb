@@ -1,3 +1,16 @@
+# == Schema Information
+#
+# Table name: venmos
+#
+#  id            :integer          not null, primary key
+#  access_code   :string(255)
+#  access_token  :string(255)
+#  refresh_token :string(255)
+#  expires_at    :datetime
+#  created_at    :datetime
+#  updated_at    :datetime
+#
+
 class VenmosController < ApplicationController
 
   def index

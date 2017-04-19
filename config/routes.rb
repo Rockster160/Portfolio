@@ -2,7 +2,6 @@ Rails.application.routes.draw do
 
   root 'index#home'
   post '/talk' => 'index#talk'
-
   get 'map' => 'index#map'
 
   post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
@@ -16,6 +15,8 @@ Rails.application.routes.draw do
 
   resources :mazes, only: [] do
     collection do
+      get 'random', action: 'random'
+      get ':seed', action: 'random'
       get 'random.txt', action: 'random'
     end
   end

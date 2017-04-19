@@ -1,0 +1,23 @@
+#maze {
+  margin: 0 auto;
+  text-align: center;
+  .maze-row {
+    font-size: 0;
+    .cell {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin: 0; padding: 0;
+      &.cell-player { background: blue; }
+      &.cell-finish { background: red; }
+      &.cell-open { background: yellow; }
+      &.cell-wall { background: black; }
+    }
+  }
+}
+.maze-victory {
+  line-height: 100px;
+  font-size: 72px;
+  color: green;
+  text-align: center;
+}
