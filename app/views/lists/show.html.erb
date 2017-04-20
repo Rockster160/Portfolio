@@ -2,9 +2,7 @@
 <div class="list-container">
   <div class="list-title"><%= @list.name.titleize %></div>
   <div class="list-items">
-    <% @list.list_items.order(:created_at).each do |item| %>
-      <%= render template: "list_items/show", layout: false, locals: { item: item } %>
-    <% end %>
+    <%= render template: "list_items/index", locals: { list: @list }, layout: false %>
   </div>
   <%= form_for [@list, @list.list_items.new], html: {class: "new-list-item-form"} do |f| %>
     <div class="list-field">
