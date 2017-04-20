@@ -5,6 +5,8 @@ class IndexController < ApplicationController
     from = params["From"]
     body = params["Body"]
 
+    return head :ok unless from.present? && body.present?
+
     text_action = body.to_s.squish.split(" ").first
 
     reminder_received = case text_action
@@ -24,5 +26,5 @@ class IndexController < ApplicationController
 
     head :ok
   end
-  
+
 end
