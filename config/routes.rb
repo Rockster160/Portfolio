@@ -29,5 +29,8 @@ Rails.application.routes.draw do
 
   require 'sidekiq/web'
   mount Sidekiq::Web => '/sidekiq'
+  
+  # Websockets
+  mount ActionCable.server => '/cable'
 
 end
