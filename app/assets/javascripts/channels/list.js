@@ -26,9 +26,11 @@ $(document).ready(function() {
         $('.list-items').append(new_items);
 
         $(".list-items .list-item-container").each(function() {
-          var current_item = $(this)
+          var current_item = $(this);
           var item_name = current_item.find(".item-name").text();
-          if (!updated_names.toArray().includes(item_name)) {
+          if (updated_names.toArray().includes(item_name)) {
+            $(this).find("input[type=checkbox]").prop("checked", false);
+          } else {
             $(this).find("input[type=checkbox]").prop("checked", true);
           }
         })

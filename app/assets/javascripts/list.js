@@ -3,8 +3,9 @@ $(document).ready(function() {
   $('.new-list-item-form').submit(function(e) {
     e.preventDefault();
     $.post(this.action, $(this).serialize()).success(function(data) {
-      $('.list-items').append(data);
-      $("html, body").animate({scrollTop: $('.list-items').height() + "px"}, 300);
+      setTimeout(function() {
+        $("html, body").animate({scrollTop: $('.list-items').height() + "px"}, 300);
+      }, 500);
     })
     $('.new-list-item').val("");
     return false;
