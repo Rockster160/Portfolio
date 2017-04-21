@@ -14,6 +14,7 @@ module Portfolio
 
     config.secret_key_base = '9066475dd7ba28f4609cdf0e6df34d97216ef815207da74518a2da39f9a9d816a0463f555007fa99eb8f8ac2c875f23d370c2db41387cbfd621e6dca77b19ba4'
     config.active_record.belongs_to_required_by_default = true
+    config.assets.quiet = true
 
     # Set Time.zone default to the specified zone and make Active Record auto-convert to this zone.
     # Run "rake -D time" for a list of tasks for finding time zone names. Default is UTC.

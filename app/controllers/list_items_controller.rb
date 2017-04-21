@@ -14,7 +14,7 @@ class ListItemsController < ApplicationController
   def create
     @list = List.find(params[:list_id])
 
-    new_item = @list.list_items.create(list_item_params)
+    new_item = @list.list_items.find_or_create_by(list_item_params)
 
     if params[:as_json]
       render json: new_item
