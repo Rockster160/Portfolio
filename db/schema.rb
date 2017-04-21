@@ -1,4 +1,3 @@
-# encoding: UTF-8
 # This file is auto-generated from the current state of the database. Instead
 # of editing this file, please use the migrations feature of Active Record to
 # incrementally modify your database, and then regenerate this schema definition.
@@ -16,63 +15,55 @@ ActiveRecord::Schema.define(version: 20170418235324) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
-  create_table "ar_internal_metadata", id: false, force: true do |t|
-    t.string   "key",        limit: nil, null: false
-    t.string   "value",      limit: nil
-    t.datetime "created_at",             null: false
-    t.datetime "updated_at",             null: false
-  end
-
-  create_table "batches", force: true do |t|
-    t.string   "text"
+  create_table "batches", force: :cascade do |t|
+    t.string   "text",       limit: 255
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
-  create_table "flash_cards", force: true do |t|
+  create_table "flash_cards", force: :cascade do |t|
     t.integer  "batch_id"
-    t.string   "title"
+    t.string   "title",      limit: 255
     t.text     "body"
     t.integer  "pin"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
-  create_table "lines", force: true do |t|
+  create_table "lines", force: :cascade do |t|
     t.integer  "flash_card_id"
-    t.string   "text"
+    t.string   "text",          limit: 255
     t.boolean  "center"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
-  create_table "list_items", force: true do |t|
-    t.string   "name"
+  create_table "list_items", force: :cascade do |t|
+    t.string   "name",       limit: 255
     t.integer  "list_id"
     t.datetime "created_at"
     t.datetime "updated_at"
+    t.index ["list_id"], name: "index_list_items_on_list_id", using: :btree
   end
 
-  add_index "list_items", ["list_id"], name: "index_list_items_on_list_id", using: :btree
-
-  create_table "lists", force: true do |t|
-    t.string   "name"
+  create_table "lists", force: :cascade do |t|
+    t.string   "name",       limit: 255
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
-  create_table "litter_text_reminders", force: true do |t|
-    t.integer  "turn",       default: 0
+  create_table "litter_text_reminders", force: :cascade do |t|
+    t.integer  "turn",                   default: 0
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.string   "regex"
-    t.string   "message"
+    t.string   "regex",      limit: 255
+    t.string   "message",    limit: 255
   end
 
-  create_table "venmos", force: true do |t|
-    t.string   "access_code"
-    t.string   "access_token"
-    t.string   "refresh_token"
+  create_table "venmos", force: :cascade do |t|
+    t.string   "access_code",   limit: 255
+    t.string   "access_token",  limit: 255
+    t.string   "refresh_token", limit: 255
     t.datetime "expires_at"
     t.datetime "created_at"
     t.datetime "updated_at"

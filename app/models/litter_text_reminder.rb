@@ -3,7 +3,7 @@
 # Table name: litter_text_reminders
 #
 #  id         :integer          not null, primary key
-#  turn       :integer          default(0)
+#  turn       :integer          default("3852599640")
 #  created_at :datetime
 #  updated_at :datetime
 #  regex      :string(255)
