@@ -16,6 +16,8 @@ module Portfolio
     config.active_record.belongs_to_required_by_default = true
     config.assets.quiet = true
 
+    config.action_cable.mount_path = '/cable'
+
     # Set Time.zone default to the specified zone and make Active Record auto-convert to this zone.
     # Run "rake -D time" for a list of tasks for finding time zone names. Default is UTC.
     # config.time_zone = 'Central Time (US & Canada)'
