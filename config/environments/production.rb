@@ -13,7 +13,7 @@ Rails.application.configure do
   # Full error reports are disabled and caching is turned on.
   config.consider_all_requests_local       = false
   config.action_controller.perform_caching = true
-  
+
   config.action_cable.url = 'ws://rocconicholls.me/cable'
   config.action_cable.allowed_request_origins = ['http://rocconicholls.me']
 
