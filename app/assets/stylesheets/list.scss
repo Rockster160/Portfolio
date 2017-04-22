@@ -6,7 +6,9 @@
   max-width: 100%;
   padding-bottom: 40px;
   margin: 0 auto;
-  font-family: "Comic Sans MS", sans-serif;
+  font-family: "gunny_rewrittenregular", "claire_handregular", "Comic Sans MS", sans-serif;
+  font-weight: bold;
+  font-size: 20px;
   color: white;
 
   .list-title {
@@ -63,55 +65,3 @@
     }
   }
 }
-
-//
-// .orca-checkbox {
-//   position: relative;
-//   width: 100%;
-//   label {
-//     padding-left: 25px;
-//     text-align: left;
-//     font-weight: normal;
-//     position: relative;
-//     font-size: 18px;
-//     min-height: 25px;
-//     &:before {
-//       content: "";
-//       left: 0px; top: 0;
-//       position: absolute;
-//       width: 20px;
-//       height: 20px;
-//       border: 1px solid $light-blue;
-//       border-radius: 4px;
-//     }
-//     &:hover {
-//       cursor: pointer;
-//       &:after {
-//         content: "\2713 ";
-//         position: absolute;
-//         line-height: 1;
-//         color: #EEE;
-//         font-size: 35px;
-//         top: -10px;
-//         left: -4px;
-//       }
-//     }
-//   }
-//   input[type=checkbox] {
-//     display: none;
-//   }
-//   input[type=checkbox]:checked + label {
-//     &:after {
-//       content: "\2713 ";
-//       position: absolute;
-//       line-height: 1;
-//       color: $light-blue;
-//       font-size: 35px;
-//       top: -8px;
-//       left: -4px;
-//     }
-//   }
-//   &.parsley-error > label:before {
-//     background: $white-pink;
-//   }
-// }
