@@ -28,6 +28,7 @@ gem 'httparty'
 
 group :development, :test do
   gem 'annotate'
+  gem 'rails_real_favicon'
   gem 'binding_of_caller'
   gem 'pry-rails'
   gem 'pry-byebug'
