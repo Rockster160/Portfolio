@@ -16,7 +16,8 @@ Rails.application.configure do
 
   config.action_cable.url = 'ws://rocconicholls.me/cable'
   config.action_cable.allowed_request_origins = ['http://rocconicholls.me']
-  config.web_socket_server_url = "ws://rocconicholls.me/cable" 
+  config.web_socket_server_url = "ws://rocconicholls.me/cable"
+  config.action_cable.disable_request_forgery_protection = true
 
   # Enable Rack::Cache to put a simple HTTP cache in front of your application
   # Add `rack-cache` to your Gemfile before enabling this.
