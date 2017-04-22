@@ -1,6 +1,7 @@
 <%= content_for(:favicon) { render 'application/favicon' } %>
 <%= content_for(:body_classes) { "black" } %>
 <div class="list-container">
+  sup
   <div class="list-title"><%= @list.name.titleize %></div>
   <div class="list-items">
     <%= render template: "list_items/index", locals: { list: @list }, layout: false %>
