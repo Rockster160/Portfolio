@@ -18,7 +18,7 @@
   <%= csrf_meta_tags %>
 </head>
 <body class="<%= content_for :body_classes %>">
-
+  <%= render 'layouts/flashes' %>
   <%= yield %>
 
 </body>

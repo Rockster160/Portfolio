@@ -27,6 +27,8 @@ gem 'underscore-rails'
 gem 'httparty'
 gem 'touchpunch-rails'
 
+gem 'bcrypt'
+
 group :development, :test do
   gem 'annotate'
   gem 'rails_real_favicon'

@@ -4,6 +4,13 @@ Rails.application.routes.draw do
   post '/talk' => 'index#talk'
   get 'map' => 'index#map'
 
+  get 'login' => 'users/sessions#new'
+  post 'login' => 'users/sessions#create'
+  get 'register' => 'users/registrations#new'
+  post 'register' => 'users/registrations#create'
+  get 'logout' => 'users/sessions#destroy'
+  delete 'logout' => 'users/sessions#destroy'
+
   post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
 
   resources :lists, only: [ :index ] do

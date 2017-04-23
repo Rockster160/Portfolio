@@ -1,5 +1,4 @@
-# Server time is -3 hours from Utah Time!!
-
+# Up to date with Local Time
 
 # ::Sidekiq::Cron::Job.destroy_all!
 # ::Sidekiq::Cron::Job.all/count

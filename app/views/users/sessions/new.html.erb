@@ -1,0 +1,38 @@
+<div class="skinny-container">
+
+  <%= form_for @user, url: login_path do |f| %>
+    <div class="form-title">
+      Login
+    </div>
+
+    <% if @user.errors.any? %>
+      <div class="error-container">
+        <ul>
+          <% @user.errors.full_messages.each do |error| %>
+            <li><%= error %></li>
+          <% end %>
+        </ul>
+      </div>
+    <% end %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= f.label :username %>
+        <%= f.text_field :username %>
+      </div>
+      <div class="form-field">
+        <%= f.label :password %>
+        <%= f.password_field :password %>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit "Login" %>
+    </div>
+
+    <div class="helpful-links">
+      <a href="<%= register_path %>">Don't have an account?</a>
+    </div>
+  <% end %>
+
+</div>
