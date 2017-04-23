@@ -13,10 +13,6 @@ $(document).ready(function() {
     }
   });
 
-  $(".list-items").on("mousedown touchstart", function(evt) {
-    evt.preventDefault();
-  })
-
   $('.new-list-item-form').submit(function(e) {
     e.preventDefault();
     $.post(this.action, $(this).serialize());
