@@ -21,7 +21,7 @@ $(document).ready(function() {
   })
 
   $(document).on('change', '.list-item-checkbox', function() {
-    var checkbox = $(this)
+    var checkbox = $(this);
     if (this.checked) {
       $.ajax({
         url: $(this).attr("data-destroy-url"),
@@ -31,7 +31,7 @@ $(document).ready(function() {
       $.ajax({
         url: $(this).attr("data-create-url"),
         type: "POST",
-        data: {list_item: {name: this.value}, as_json: true},
+        data: {list_item: {name: this.value, sort_order: $(this).parents('.list-item-container').index()}, as_json: true},
         success: function(data) {
           new_name = "list_item[" + data.id + "]";
           new_destroy_url = checkbox.attr("data-create-url") + "/" + data.id;

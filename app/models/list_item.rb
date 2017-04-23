@@ -16,6 +16,7 @@ class ListItem < ApplicationRecord
 
   before_save :format_words
   before_save :set_sort_order
+  after_commit :reorder_conflict_orders
   after_commit :broadcast_commit
 
   private
@@ -32,6 +33,18 @@ class ListItem < ApplicationRecord
     return if do_not_broadcast
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
     ActionCable.server.broadcast "list_channel", list_html: rendered_message
+  end
+
+  def reorder_conflict_orders
+    conflicted_items = list.list_items.where.not(id: self.id).where(sort_order: self.sort_order)
+    if conflicted_items.any?
+      do_not_broadcast = true
+      conflicted_items.each do |conflicted_item|
+        conflicted_items.update(sort_order: conflicted_item.sort_order + 1, do_not_broadcast: true)
+      end
+    else
+      do_not_broadcast = false
+    end
   end
 
 end

@@ -21,7 +21,10 @@ class ListsController < ApplicationController
     new_order = params[:list_item_order] || []
     new_order.each_with_index do |list_item_id, idx|
       list_item = @list.list_items.find_by_id(list_item_id)
-      next unless list_item.present?
+      unless list_item.present?
+        puts "#{'~'*500}\n\n #SKIP! #{list_item_id} \n\n#{'~'*500}".colorize(:red)
+        next
+      end
       list_item.update(sort_order: idx, do_not_broadcast: true)
     end
     @list.broadcast!

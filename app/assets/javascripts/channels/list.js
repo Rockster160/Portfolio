@@ -26,6 +26,7 @@ $(document).ready(function() {
 
           var existing_items = $('.list-items .list-item-container .item-name:contains("' + item_name + '")').parents(".list-item-container");
           existing_items.attr("data-sort-order", $(this).attr("data-sort-order"));
+          existing_items.attr("data-item-id", $(this).attr("data-item-id"));
           return existing_items.length == 0;
         })
         $('.list-items').append(new_items);
