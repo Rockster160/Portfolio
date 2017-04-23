@@ -14,7 +14,10 @@ $(document).ready(function() {
     App.messages = App.cable.subscriptions.create({
       channel: "ListChannel",
     }, {
-      connected: function() {},
+      connected: function() {
+        var url = $(".list-items").attr("data-update-url");
+        $.post(url, {});
+      },
       disconnected: function() {},
       received: function(data) {
         var updated_list = $(data.list_html);
