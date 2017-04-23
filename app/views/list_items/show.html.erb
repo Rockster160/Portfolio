@@ -1,5 +1,6 @@
 <% list ||= @list || item.list || binding.pry %>
 <div class="list-item-container" data-sort-order="<%= item.sort_order.to_i %>" data-item-id="<%= item.id %>">
+  <div class="list-item-handle"><i class="fa fa-arrows"></i></div>
   <input type="checkbox" id="list_item[<%= item.id %>]" class="list-item-checkbox" name="list_item[<%= item.id %>]" value="<%= item.name %>" data-destroy-url="<%= list_list_item_path(list, item) %>" data-create-url="<%= list_list_items_path(list) %>">
   <label for="list_item[<%= item.id %>]" class="list-item">
     <div class="checkbox-wrapper"></div>

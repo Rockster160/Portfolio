@@ -25,6 +25,7 @@ gem 'sinatra', :require => nil
 gem 'gmaps4rails'
 gem 'underscore-rails'
 gem 'httparty'
+gem 'touchpunch-rails'
 
 group :development, :test do
   gem 'annotate'

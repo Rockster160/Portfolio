@@ -1,6 +1,7 @@
 $(document).ready(function() {
 
   $(".list-items").sortable({
+    handle: ".list-item-handle",
     update: function(evt, ui) {
       var list_item_order = $(this).children().filter(function() {
         return !$(this).children("input").prop("checked");
@@ -11,6 +12,10 @@ $(document).ready(function() {
       $.post(url, params);
     }
   });
+
+  $(".list-items").on("mousedown touchstart", function(evt) {
+    evt.preventDefault();
+  })
 
   $('.new-list-item-form').submit(function(e) {
     e.preventDefault();
