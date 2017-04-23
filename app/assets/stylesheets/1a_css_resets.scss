@@ -1,0 +1,25 @@
+a {
+  &:link, &:visited, &:hover, &:active {
+    color: inherit;
+  }
+}
+
+.btn, button, input[type=button], input[type=reset], input[type=submit], input[type=image] {
+  display: inline-block;
+  cursor: pointer;
+
+  list-style-type: none;
+  appearance: none;
+  background: none;
+
+  height: auto;
+  width: auto;
+
+  border-radius: 0;
+  border: 0;
+  margin: 0;
+
+  &:link, &:visited, &:hover, &:active {
+    text-decoration: none;
+  }
+}
