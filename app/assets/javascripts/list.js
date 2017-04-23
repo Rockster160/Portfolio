@@ -1,12 +1,20 @@
 $(document).ready(function() {
 
+  $(".list-items").sortable({
+    update: function(evt, ui) {
+      var list_item_order = $(this).children().filter(function() {
+        return !$(this).children("input").prop("checked");
+      }).map(function() { return $(this).attr("data-item-id") });
+
+      var url = $(this).attr("data-update-url");
+      var params = { list_item_order: list_item_order.toArray() };
+      $.post(url, params);
+    }
+  });
+
   $('.new-list-item-form').submit(function(e) {
     e.preventDefault();
-    $.post(this.action, $(this).serialize()).success(function(data) {
-      setTimeout(function() {
-        $("html, body").animate({scrollTop: $('.list-items').height() + "px"}, 300);
-      }, 500);
-    })
+    $.post(this.action, $(this).serialize());
     $('.new-list-item').val("");
     return false;
   })

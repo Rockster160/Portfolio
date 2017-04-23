@@ -102,4 +102,15 @@ class List < ApplicationRecord
     new_text.split(/, and\W|,\W?/)
   end
 
+  def fix_list_items_order
+    list_items.order(:sort_order).each_with_index do |list_item, idx|
+      list_item.update(sort_order: idx, do_not_bump_order: true)
+    end
+  end
+
+  def broadcast!
+    rendered_message = ListsController.render template: "list_items/index", locals: { list: self }, layout: false
+    ActionCable.server.broadcast "list_channel", list_html: rendered_message
+  end
+
 end

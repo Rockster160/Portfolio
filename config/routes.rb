@@ -7,6 +7,7 @@ Rails.application.routes.draw do
   post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
 
   resources :lists, only: [ :index ] do
+    post :update, on: :member
     collection do
       get ":list_name", action: :show, constraints: lambda { |request| List.pluck(:name).map(&:parameterize).include?(request.path_parameters[:list_name]) }
     end
@@ -29,7 +30,7 @@ Rails.application.routes.draw do
 
   require 'sidekiq/web'
   mount Sidekiq::Web => '/sidekiq'
-  
+
   # Websockets
   mount ActionCable.server => '/cable'
 

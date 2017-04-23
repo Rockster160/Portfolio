@@ -2,7 +2,7 @@
 <%= content_for(:body_classes) { "black" } %>
 <div class="list-container">
   <div class="list-title"><%= @list.name.titleize %></div>
-  <div class="list-items">
+  <div class="list-items" data-update-url="<%= list_path(@list) %>">
     <%= render template: "list_items/index", locals: { list: @list }, layout: false %>
   </div>
   <%= form_for [@list, @list.list_items.new], html: {class: "new-list-item-form"} do |f| %>
