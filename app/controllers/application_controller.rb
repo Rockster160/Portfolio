@@ -19,14 +19,17 @@ class ApplicationController < ActionController::Base
 
   def authorize_user
     unless current_user.present?
+      session[:forwarding_url] = request.original_url if request.get?
       redirect_to login_path, notice: "You must be logged in to do that!"
     end
   end
 
   def current_user
     @_current_user ||= begin
-      session[:user_id].present?
-      User.find_by_id(session[:user_id])
+      if session[:user_id].present?
+        cookies.signed[:user_id] = session[:user_id]
+        User.find_by_id(session[:user_id])
+      end
     end
   end
 
@@ -35,7 +38,9 @@ class ApplicationController < ActionController::Base
   end
 
   def sign_out
+    session[:forwarding_url] = nil
     session[:user_id] = nil
+    cookies.signed[:user_id] = nil
     @_current_user = nil
   end
 

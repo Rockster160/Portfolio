@@ -11,7 +11,7 @@ class Users::SessionsController < ApplicationController
 
     if @user.present?
       sign_in @user
-      redirect_to lists_path
+      redirect_to session[:forwarding_url] || lists_path
     else
       @user = User.new(username: user_params[:username])
       @user.errors.add(:base, "Username and password combination not found.")

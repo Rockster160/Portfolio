@@ -32,7 +32,7 @@ class ListItem < ApplicationRecord
   def broadcast_commit
     return if do_not_broadcast
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
-    ActionCable.server.broadcast "list_channel", list_html: rendered_message
+    ActionCable.server.broadcast "list_#{self.list_id}_channel", list_html: rendered_message
   end
 
   def reorder_conflict_orders

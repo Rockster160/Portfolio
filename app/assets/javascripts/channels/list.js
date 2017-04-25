@@ -1,6 +1,8 @@
 $(document).ready(function() {
   if ($('.list-container').length > 0) {
 
+    var list_id = $(".list-container").attr("data-list-id");
+
     reorderList = function() {
       var ordered_list = $('.list-item-container').sort(function (a, b) {
         var contentA = parseInt($(a).attr("data-sort-order"));
@@ -13,6 +15,7 @@ $(document).ready(function() {
 
     App.messages = App.cable.subscriptions.create({
       channel: "ListChannel",
+      channel_id: "list_" + list_id
     }, {
       connected: function() {
         var url = $(".list-items").attr("data-update-url");
