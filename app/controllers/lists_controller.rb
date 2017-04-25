@@ -12,8 +12,7 @@ class ListsController < ApplicationController
   before_action :authorize_user
 
   def index
-    @list = List.where(name: "list").first
-    render :show
+    @lists = List.all
   end
 
   def update

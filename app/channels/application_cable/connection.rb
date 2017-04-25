@@ -9,7 +9,7 @@ module ApplicationCable
 
     protected
 
-    def find_verified_user # this checks whether a user is authenticated with devise
+    def find_verified_user # this checks whether a user is authenticated
       if verified_user = User.find_by_id(cookies.signed[:user_id])
         verified_user
       else
