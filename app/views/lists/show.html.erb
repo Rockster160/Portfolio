@@ -1,11 +1,11 @@
 <%= content_for(:title) { @list.name.capitalize } %>
-<%= content_for(:favicon) { render 'application/favicon' } %>
+<%= content_for(:favicon) { render "application/favicon" } %>
 <%= content_for(:body_classes) { "black" } %>
 
 <div class="skinny-container list-container" data-list-id="<%= @list.id %>">
   <div class="btn-container">
     <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
-    <a href="<%= new_user_path %>" class="btn pull-right">Invite User</a>
+    <a href="<%= new_user_path(list_id: @list.id) %>" class="btn pull-right">Invite User</a>
   </div>
   <div class="list-title"><%= @list.name.titleize %></div>
   <div class="list-items" data-update-url="<%= list_path(@list) %>"></div>

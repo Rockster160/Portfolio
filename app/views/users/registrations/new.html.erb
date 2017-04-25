@@ -1,19 +1,12 @@
 <div class="skinny-container">
 
   <%= form_for @user, url: register_path do |f| %>
+    <%= f.hidden_field :invitation_token, value: @user.invitation_token || params[:invitation_token] %>
     <div class="form-title">
       Sign Up
     </div>
 
-    <% if @user.errors.any? %>
-      <div class="error-container">
-        <ul>
-          <% @user.errors.full_messages.each do |error| %>
-            <li><%= error %></li>
-          <% end %>
-        </ul>
-      </div>
-    <% end %>
+    <%= render partial: 'layouts/error_container', locals: { resource: @user } %>
 
     <div class="form-fields">
       <div class="form-field">

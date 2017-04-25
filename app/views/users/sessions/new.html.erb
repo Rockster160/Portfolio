@@ -5,15 +5,7 @@
       Login
     </div>
 
-    <% if @user.errors.any? %>
-      <div class="error-container">
-        <ul>
-          <% @user.errors.full_messages.each do |error| %>
-            <li><%= error %></li>
-          <% end %>
-        </ul>
-      </div>
-    <% end %>
+    <%= render partial: 'layouts/error_container', locals: { resource: @user } %>
 
     <div class="form-fields">
       <div class="form-field">

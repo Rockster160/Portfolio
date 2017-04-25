@@ -14,6 +14,8 @@ class List < ApplicationRecord
   has_many :user_lists
   has_many :users, through: :user_lists
 
+  validates_presence_of :name
+
   def self.find_and_modify(msg)
     list = List.first
     List.all.each do |try_list|

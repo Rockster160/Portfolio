@@ -1,0 +1,26 @@
+<%= content_for(:body_classes) { "black" } %>
+
+<div class="skinny-container">
+  <div class="btn-container">
+    <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
+  </div>
+  <%= form_for @user do |f| %>
+    <%= hidden_field_tag :list_id, params[:list_id] %>
+    <div class="form-title">
+      Invite User
+    </div>
+
+    <%= render partial: 'layouts/error_container', locals: { resource: @user } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= f.label :phone %>
+        <%= f.telephone_field :phone %>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit %>
+    </div>
+  <% end %>
+</div>

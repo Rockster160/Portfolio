@@ -25,6 +25,21 @@ class ListsController < ApplicationController
     raise ActionController::RoutingError.new('Not Found') unless @list.present?
   end
 
+  def new
+    @list = List.new
+  end
+
+  def create
+    @list = List.create(list_params)
+
+    if @list.persisted?
+      current_user.user_lists.create(list_id: @list.id, is_owner: true)
+      redirect_to @list
+    else
+      render :new
+    end
+  end
+
   def update
     @list = List.find(params[:id])
 
@@ -35,6 +50,12 @@ class ListsController < ApplicationController
       list_item.update(sort_order: idx, do_not_broadcast: true)
     end
     @list.broadcast!
+  end
+
+  private
+
+  def list_params
+    params.require(:list).permit(:name)
   end
 
 end
