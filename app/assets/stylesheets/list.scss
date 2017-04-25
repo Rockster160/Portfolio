@@ -1,11 +1,15 @@
 .black { background: black; }
 
-.list-container {
+.list-container, .lists-index-container {
   padding-bottom: 40px;
   font-family: "gunny_rewrittenregular", "claire_handregular", "Comic Sans MS", sans-serif;
   font-weight: bold;
   font-size: 20px;
   color: white;
+
+  .btn-container {
+    padding: 0 3px;
+  }
 
   .list-item-container {
     position: relative;
@@ -19,7 +23,7 @@
   }
 
 
-  .list-title {
+  .list-title, .lists-title {
     text-align: center;
     padding: 10px 0;
     font-size: 24px;
@@ -44,9 +48,10 @@
     }
   }
 
-  .list-items {
+  .list-items, .lists {
     input[type=checkbox] { display: none; }
-    label.list-item {
+    .list-item {
+      text-decoration: none;
       position: relative;
       display: block;
       border: 1px solid black;
@@ -55,6 +60,10 @@
 
       .checkbox-wrapper {}
       .item-name {}
+      &:hover {
+        text-decoration: none;
+        background: lighten(black, 10%);
+      }
     }
 
     input[type=checkbox]:checked + label {

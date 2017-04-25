@@ -13,14 +13,14 @@ class ApplicationController < ActionController::Base
 
   def unauthorize_user
     if current_user.present?
-      redirect_to lists_path, notice: "You're already logged in!"
+      redirect_to lists_path
     end
   end
 
   def authorize_user
     unless current_user.present?
       session[:forwarding_url] = request.original_url if request.get?
-      redirect_to login_path, notice: "You must be logged in to do that!"
+      redirect_to login_path
     end
   end
 

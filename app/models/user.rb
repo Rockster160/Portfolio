@@ -11,6 +11,9 @@
 
 class User < ApplicationRecord
 
+  has_many :user_lists
+  has_many :lists, through: :user_lists
+
   has_secure_password
   validates :password, length: { minimum: 8, maximum: 32 }, on: :create
   validates_presence_of :username
@@ -26,6 +29,10 @@ class User < ApplicationRecord
     else
       false
     end
+  end
+
+  def owns_list?(list)
+    !!user_lists.where(list_id: list.try(:id)).try(:is_owner)
   end
 
   private

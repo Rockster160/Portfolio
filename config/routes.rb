@@ -13,11 +13,8 @@ Rails.application.routes.draw do
 
   post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
 
-  resources :lists, only: [ :index ] do
+  resources :lists, except: [ :edit, :update ] do
     post :update, on: :member
-    collection do
-      get ":list_name", action: :show, constraints: lambda { |request| List.pluck(:name).map(&:parameterize).include?(request.path_parameters[:list_name]) }
-    end
     resources :list_items, only: [ :create, :destroy ]
   end
 

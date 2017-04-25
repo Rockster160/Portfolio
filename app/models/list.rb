@@ -9,7 +9,10 @@
 #
 
 class List < ApplicationRecord
+
   has_many :list_items
+  has_many :user_lists
+  has_many :users, through: :user_lists
 
   def self.find_and_modify(msg)
     list = List.first
@@ -21,6 +24,10 @@ class List < ApplicationRecord
     end
 
     list.modify_from_message(msg) if list.present?
+  end
+
+  def owned_by_user?(user)
+    !!user_lists.where(user_id: user.try(:id)).try(:is_owner)
   end
 
   def modify_from_message(msg)
