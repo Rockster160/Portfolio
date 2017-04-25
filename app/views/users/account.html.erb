@@ -1,0 +1,46 @@
+<%= content_for(:body_classes) { "black" } %>
+
+<div class="skinny-container">
+  <div class="btn-container">
+    <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
+    <a href="<%= logout_path %>" class="btn pull-right">Logout</a>
+  </div>
+  <%= form_for @user do |f| %>
+    <%= hidden_field_tag :list_id, params[:list_id] %>
+    <div class="form-title">
+      Account
+    </div>
+
+    <%= render partial: 'layouts/error_container', locals: { resource: @user } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= f.label :username %>
+        <%= f.text_field :username %>
+      </div>
+      <div class="form-field">
+        <%= f.label :phone %>
+        <%= f.telephone_field :phone %>
+      </div>
+      <div class="form-field">
+        <%= f.label :current_password, "Current password *" %>
+        <%= f.password_field :current_password %>
+      </div>
+      <div class="change-password-fields" style="margin-top: 20px;">
+        <p class="text-center">Use the fields below to change password</p>
+        <div class="form-field">
+          <%= f.label :password %>
+          <%= f.password_field :password %>
+        </div>
+        <div class="form-field">
+          <%= f.label :password_confirmation %>
+          <%= f.password_field :password_confirmation %>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit "Update" %>
+    </div>
+  <% end %>
+</div>

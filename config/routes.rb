@@ -14,7 +14,8 @@ Rails.application.routes.draw do
 
   post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
 
-  resources :users, only: [ :new, :create ]
+  get :account, controller: :users
+  resources :users, only: [ :new, :create, :update ]
   resources :lists, except: [ :edit, :update ] do
     post :update, on: :member
     resources :list_items, only: [ :create, :destroy ]

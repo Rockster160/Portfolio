@@ -19,6 +19,26 @@ class UsersController < ApplicationController
     end
   end
 
+  def update
+    @user = current_user
+
+    if user_params[:password].blank?
+      success = @user.update_with_password(user_params_without_password)
+    else
+      success = @user.update_with_password(user_params)
+    end
+
+    if success
+      redirect_to account_path
+    else
+      render :account
+    end
+  end
+
+  def account
+    @user = current_user
+  end
+
   private
 
   def add_user_to_list
@@ -27,7 +47,11 @@ class UsersController < ApplicationController
   end
 
   def user_params
-    params.require(:user).permit(:phone)
+    params.require(:user).permit(:phone, :username, :password, :password_confirmation, :current_password)
+  end
+
+  def user_params_without_password
+    user_params.except(:password, :password_confirmation)
   end
 
 end

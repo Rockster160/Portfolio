@@ -12,16 +12,20 @@
 #
 
 class User < ApplicationRecord
+  attr_accessor :should_require_current_password, :current_password
 
   has_many :user_lists
   has_many :lists, through: :user_lists
 
   has_secure_password validations: false
   validates :password, length: { minimum: 8, maximum: 32 }, on: :create, unless: :invited?
-  validates_presence_of :username, :password, unless: :invited?
+  validates_presence_of :password, unless: :invited?, on: :create
+  validates_presence_of :username, unless: :invited?
   validate :confirmation_matches_password, unless: :invited?
   validate :username_constraints, unless: :invited?
-  validate :formatted_phone, if: :invited?
+  validate :formatted_phone
+  validate :correct_current_password
+  validates_uniqueness_of :phone, allow_nil: true
 
   scope :by_username, ->(username) { where("lower(username) = ?", username.to_s.downcase) }
 
@@ -33,6 +37,11 @@ class User < ApplicationRecord
     else
       false
     end
+  end
+
+  def update_with_password(new_attrs)
+    should_require_current_password = true
+    update(new_attrs)
   end
 
   def owns_list?(list)
@@ -61,8 +70,16 @@ class User < ApplicationRecord
 
     if stripped_phone.length == 10
       self.phone = stripped_phone
-    else
+    elsif stripped_phone.present?
       errors.add(:phone, "must be a valid, 10 digit number.")
+    else
+      self.phone = nil
+    end
+  end
+
+  def correct_current_password
+    unless authenticate(current_password)
+      errors.add(:current_password, "wasn't right.")
     end
   end
 
