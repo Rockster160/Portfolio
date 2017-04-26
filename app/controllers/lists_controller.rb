@@ -40,7 +40,7 @@ class ListsController < ApplicationController
     end
   end
 
-  def update
+  def receive_update
     @list = List.find(params[:id])
 
     new_order = params[:list_item_order] || []

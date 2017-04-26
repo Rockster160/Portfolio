@@ -1,4 +1,5 @@
 class UsersController < ApplicationController
+  before_action :authorize_user
 
   def new
     @user = User.new
@@ -11,12 +12,15 @@ class UsersController < ApplicationController
     @user.assign_invitation_token unless @user.persisted?
 
     if @user.save
-      add_user_to_list
-      # TODO: Invite user via Text with invitation token
+      @user.invite!(@list)
       redirect_to @list
     else
       render :new
     end
+  end
+
+  def account
+    @user = current_user
   end
 
   def update
@@ -35,16 +39,7 @@ class UsersController < ApplicationController
     end
   end
 
-  def account
-    @user = current_user
-  end
-
   private
-
-  def add_user_to_list
-    return unless @list.present?
-    @list.user_lists.create(user_id: @user.id)
-  end
 
   def user_params
     params.require(:user).permit(:phone, :username, :password, :password_confirmation, :current_password)

@@ -17,7 +17,7 @@ Rails.application.routes.draw do
   get :account, controller: :users
   resources :users, only: [ :new, :create, :update ]
   resources :lists, except: [ :edit, :update ] do
-    post :update, on: :member
+    post :receive_update, on: :member
     resources :list_items, only: [ :create, :destroy ]
   end
 

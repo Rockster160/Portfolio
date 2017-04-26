@@ -59,6 +59,18 @@ class User < ApplicationRecord
     end
   end
 
+  def invite!(list)
+    user_lists.create(list_id: list.id)
+
+    message = "You've been added to the list: \"#{list.name.titleize}\". Click the link below to join:\n"
+    if invited?
+      message += Rails.application.routes.url_helpers.register_url(invitation_token: invitation_token)
+    else
+      message += Rails.application.routes.url_helpers.list_url(list.name.parameterize)
+    end
+    SmsWorker.perform_async(phone, message)
+  end
+
   def invited?
     invitation_token.present?
   end
@@ -78,6 +90,7 @@ class User < ApplicationRecord
   end
 
   def correct_current_password
+    return unless should_require_current_password
     unless authenticate(current_password)
       errors.add(:current_password, "wasn't right.")
     end

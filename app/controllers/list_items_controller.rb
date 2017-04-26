@@ -10,6 +10,7 @@
 #
 
 class ListItemsController < ApplicationController
+  before_action :authorize_user
 
   def create
     @list = List.find(params[:list_id])

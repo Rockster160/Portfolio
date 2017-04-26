@@ -19,6 +19,8 @@ Rails.application.configure do
   config.web_socket_server_url = "ws://rocconicholls.me/cable"
   config.action_cable.disable_request_forgery_protection = true
 
+  routes.default_url_options = { protocol: "http://", host: "rocconicholls.me", port: nil }
+
   # Enable Rack::Cache to put a simple HTTP cache in front of your application
   # Add `rack-cache` to your Gemfile before enabling this.
   # For large-scale production use, consider using a caching reverse proxy like nginx, varnish or squid.
