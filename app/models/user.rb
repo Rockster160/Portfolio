@@ -112,7 +112,7 @@ class User < ApplicationRecord
     if username.length < 3 || username.length > 20
       errors.add(:username, "must be between 3 and 20 characters in length.")
     end
-    unless (username =~ /[^a-zA-Z0-9]/).nil?
+    unless (username =~ /[^a-zA-Z0-9_-]/).nil?
       errors.add(:username, "can only contain alphanumeric characters.")
     end
   end
