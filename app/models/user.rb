@@ -79,43 +79,43 @@ class User < ApplicationRecord
   private
 
   def formatted_phone
-    stripped_phone = phone.gsub(/[^0-9]/, "").last(10)
-
-    if stripped_phone.length == 10
-      self.phone = stripped_phone
-    elsif stripped_phone.present?
-      errors.add(:phone, "must be a valid, 10 digit number.")
-    else
-      self.phone = nil
-    end
+    # stripped_phone = phone.gsub(/[^0-9]/, "").last(10)
+    #
+    # if stripped_phone.length == 10
+    #   self.phone = stripped_phone
+    # elsif stripped_phone.present?
+    #   errors.add(:phone, "must be a valid, 10 digit number.")
+    # else
+    #   self.phone = nil
+    # end
   end
 
   def correct_current_password
-    return unless should_require_current_password
-    unless authenticate(current_password)
-      errors.add(:current_password, "wasn't right.")
-    end
+    # return unless should_require_current_password
+    # unless authenticate(current_password)
+    #   errors.add(:current_password, "wasn't right.")
+    # end
   end
 
   def confirmation_matches_password
-    unless @password == @password_confirmation
-      errors.add(:password, "must match confirmation.")
-    end
+    # unless @password == @password_confirmation
+    #   errors.add(:password, "must match confirmation.")
+    # end
   end
 
   def username_constraints
-    self.username = username.to_s.squish
-
-    if User.by_username(username).where.not(id: self.id).any?
-      errors.add(:base, "Sorry! That username has already been taken.")
-      return
-    end
-    if username.length < 3 || username.length > 20
-      errors.add(:username, "must be between 3 and 20 characters in length.")
-    end
-    unless (username =~ /[^a-zA-Z0-9]/).nil?
-      errors.add(:username, "can only contain alphanumeric characters.")
-    end
+    # self.username = username.to_s.squish
+    #
+    # if User.by_username(username).where.not(id: self.id).any?
+    #   errors.add(:base, "Sorry! That username has already been taken.")
+    #   return
+    # end
+    # if username.length < 3 || username.length > 20
+    #   errors.add(:username, "must be between 3 and 20 characters in length.")
+    # end
+    # unless (username =~ /[^a-zA-Z0-9]/).nil?
+    #   errors.add(:username, "can only contain alphanumeric characters.")
+    # end
   end
 
 end
