@@ -18,14 +18,14 @@ class User < ApplicationRecord
   has_many :lists, through: :user_lists
 
   has_secure_password validations: false
-  validates :password, length: { minimum: 8, maximum: 32 }, on: :create, unless: :invited?
-  validates_presence_of :password, unless: :invited?, on: :create
-  validates_presence_of :username, unless: :invited?
-  validate :confirmation_matches_password, unless: :invited?
-  validate :username_constraints, unless: :invited?
-  validate :formatted_phone
-  validate :correct_current_password
-  validates_uniqueness_of :phone, allow_nil: true
+  # validates :password, length: { minimum: 8, maximum: 32 }, on: :create, unless: :invited?
+  # validates_presence_of :password, unless: :invited?, on: :create
+  # validates_presence_of :username, unless: :invited?
+  # validate :confirmation_matches_password, unless: :invited?
+  # validate :username_constraints, unless: :invited?
+  # validate :formatted_phone
+  # validate :correct_current_password
+  # validates_uniqueness_of :phone, allow_nil: true
 
   scope :by_username, ->(username) { where("lower(username) = ?", username.to_s.downcase) }
 
