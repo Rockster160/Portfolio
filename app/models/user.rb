@@ -72,7 +72,8 @@ class User < ApplicationRecord
   end
 
   def invited?
-    invitation_token.present?
+    false
+    # invitation_token.present?
   end
 
   private
