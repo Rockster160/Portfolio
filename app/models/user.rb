@@ -61,6 +61,7 @@ class User < ApplicationRecord
 
   def invite!(list)
     user_lists.create(list_id: list.id)
+    return unless Rails.env.production?
 
     message = "You've been added to the list: \"#{list.name.titleize}\". Click the link below to join:\n"
     if invited?
@@ -78,6 +79,7 @@ class User < ApplicationRecord
   private
 
   def formatted_phone
+    return unless phone.present?
     stripped_phone = phone.gsub(/[^0-9]/, "").last(10)
 
     if stripped_phone.length == 10
