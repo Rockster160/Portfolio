@@ -1,18 +1,22 @@
-# == Schema Information
-#
-# Table name: lists
-#
-#  id         :integer          not null, primary key
-#  name       :string(255)
-#  created_at :datetime
-#  updated_at :datetime
-#
-
 class ListsController < ApplicationController
   before_action :authorize_user
 
   def index
     @lists = current_user.lists
+  end
+
+  def edit
+    @list = current_user.lists.find(params[:id])
+  end
+
+  def update
+    @list = current_user.lists.find(params[:id])
+
+    if @list.update(list_params)
+      redirect_to list_path(@list)
+    else
+      render :edit
+    end
   end
 
   def show
@@ -40,6 +44,20 @@ class ListsController < ApplicationController
     end
   end
 
+  def destroy
+    @list = List.find(params[:id])
+
+    if @list.destroy
+      redirect_to lists_path
+    else
+      redirect_to edit_list_path(@list)
+    end
+  end
+
+  def details
+    @list = current_user.lists.find(params[:id])
+  end
+
   def receive_update
     @list = List.find(params[:id])
 
@@ -55,7 +73,7 @@ class ListsController < ApplicationController
   private
 
   def list_params
-    params.require(:list).permit(:name)
+    params.require(:list).permit(:name, :description)
   end
 
 end

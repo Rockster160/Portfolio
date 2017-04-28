@@ -14,7 +14,7 @@
 class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 
-  has_many :user_lists
+  has_many :user_lists, dependent: :destroy
   has_many :lists, through: :user_lists
 
   has_secure_password validations: false

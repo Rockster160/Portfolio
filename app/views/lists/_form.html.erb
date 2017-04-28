@@ -1,0 +1,43 @@
+<%= content_for(:body_classes) { "black" } %>
+
+<div class="skinny-container">
+  <div class="btn-container">
+    <% if @list.persisted? %>
+      <a href="<%= list_path(@list) %>" class="btn">&larr; Back to List</a>
+      <%= link_to list_path(@list), method: :delete, class: "btn danger pull-right" do %>
+        Delete List
+      <% end %>
+    <% else %>
+      <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
+    <% end %>
+  </div>
+
+  <% if @list.persisted? %>
+    <div class="text-center">
+      <a href="<%= new_user_path(list_id: @list.id) %>" class="btn">Invite User to List</a>
+    </div>
+  <% end %>
+
+  <%= form_for @list do |f| %>
+    <div class="form-title">
+      <%= params[:action].to_s.capitalize %> List
+    </div>
+
+    <%= render partial: 'layouts/error_container', locals: { resource: @list } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= f.label :name %>
+        <%= f.text_field :name %>
+      </div>
+      <div class="form-field">
+        <%= f.label :description %>
+        <%= f.text_area :description %>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit %>
+    </div>
+  <% end %>
+</div>

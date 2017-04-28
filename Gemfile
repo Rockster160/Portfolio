@@ -28,6 +28,7 @@ gem 'httparty'
 gem 'touchpunch-rails'
 
 gem 'bcrypt'
+gem 'rails_autolink'
 
 group :development, :test do
   gem 'annotate'

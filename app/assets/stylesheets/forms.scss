@@ -1,4 +1,5 @@
 $light-blue: #3D94F6;
+$danger: #F6433D;
 $grey-blue: #6481A1;
 $white-blue: #F4F7F8;
 
@@ -21,9 +22,7 @@ form {
 
     .form-field {
       padding: 0 15px;
-      label {
-        color: darken($grey-blue, 15%);
-      }
+      label { color: darken($grey-blue, 15%); }
       &:not(:last-of-type) {
         margin-bottom: 15px;
       }
@@ -37,9 +36,7 @@ form {
     text-align: center;
     font-size: 14px;
     margin-bottom: 10px;
-    a {
-      display: block;
-    }
+    a { display: block; }
   }
 }
 
@@ -47,12 +44,11 @@ form {
 input[type=color], input[type=date], input[type=datetime], input[type=email],
 input[type=month], input[type=number], input[type=password], input[type=search],
 input[type=tel], input[type=text], input[type=time], input[type=url],
-input[type=week] {
+input[type=week], textarea {
   width: 100%;
   height: 28px;
 
-  border-color: darken($grey-blue, 10%);
-  border-style: solid;
+  border: 2px solid darken($grey-blue, 10%);
   border-radius: 4px;
   margin: 4px auto;
 
@@ -60,6 +56,10 @@ input[type=week] {
   color: darken($grey-blue, 10%);
   box-sizing: border-box;
   padding: 0 8px;
+}
+textarea {
+  resize: vertical;
+  min-height: 50px;
 }
 
 // Button-ish
@@ -89,6 +89,16 @@ input[type=week] {
   &:active {
     position: relative;
     top: 1px;
+  }
+  &.danger {
+    background: linear-gradient(to bottom, $danger 5%, darken($danger, 15%) 100%);
+    background-color: $danger;
+    box-shadow: inset 0px 1px 0px 0px lighten($danger, 15%);
+    border: 1px solid darken($danger, 5%);
+    &:hover {
+      background: linear-gradient(to bottom, darken($danger, 15%) 5%, $danger 100%);
+      background-color: darken($danger, 15%);
+    }
   }
 }
 

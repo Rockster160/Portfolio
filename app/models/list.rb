@@ -2,16 +2,17 @@
 #
 # Table name: lists
 #
-#  id         :integer          not null, primary key
-#  name       :string(255)
-#  created_at :datetime
-#  updated_at :datetime
+#  id          :integer          not null, primary key
+#  name        :string(255)
+#  created_at  :datetime
+#  updated_at  :datetime
+#  description :text
 #
 
 class List < ApplicationRecord
 
-  has_many :list_items
-  has_many :user_lists
+  has_many :list_items, dependent: :destroy
+  has_many :user_lists, dependent: :destroy
   has_many :users, through: :user_lists
 
   validates_presence_of :name

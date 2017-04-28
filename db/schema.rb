@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20170425023507) do
+ActiveRecord::Schema.define(version: 20170428033402) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -48,9 +48,10 @@ ActiveRecord::Schema.define(version: 20170425023507) do
   end
 
   create_table "lists", force: :cascade do |t|
-    t.string   "name",       limit: 255
+    t.string   "name",        limit: 255
     t.datetime "created_at"
     t.datetime "updated_at"
+    t.text     "description"
   end
 
   create_table "litter_text_reminders", force: :cascade do |t|
