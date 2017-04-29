@@ -14,6 +14,8 @@ Rails.application.routes.draw do
 
   post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
 
+  get 'cube' => 'cubes#show'
+
   get :account, controller: :users
   resources :users, only: [ :new, :create, :update ]
   resources :lists do
