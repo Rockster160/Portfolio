@@ -26,9 +26,13 @@ class ApplicationController < ActionController::Base
 
   def current_user
     @_current_user ||= begin
-      if session[:user_id].present?
-        cookies.signed[:user_id] = session[:user_id]
-        User.find_by_id(session[:user_id])
+      cookies.signed[:current_user_id] ||= session[:user_id] || cookies.signed[:user_id]
+      session[:current_user_id] ||= session[:user_id] || cookies.signed[:user_id]
+
+      if session[:current_user_id].present? || cookies.signed[:current_user_id].present?
+        cookies.signed[:current_user_id] = session[:current_user_id] if session[:current_user_id].nil?
+        session[:current_user_id] = cookies.signed[:current_user_id] if cookies.signed[:current_user_id].nil?
+        User.find_by_id(session[:current_user_id])
       end
     end
   end
@@ -47,6 +51,7 @@ class ApplicationController < ActionController::Base
   def sign_in(user)
     sign_out
     session[:user_id] = user.id
+    cookies.signed[:user_id] = user.id
     current_user
   end
 
