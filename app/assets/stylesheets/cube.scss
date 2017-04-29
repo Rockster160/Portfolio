@@ -1,40 +1,40 @@
-#cube-page {
-  text-align: center;
-}
-
 #cube-container {
   position: absolute;
   cursor: grab;
   left: calc(50% - 200px);
-  top: 5%;
+  top: 100px;
 }
 
-#cube-viewport {
-  perspective: 800px;
-  perspective-origin: 50% 200px;
-}
+// #cube-viewport {
+//   perspective: 800px;
+//   perspective-origin: 50% 200px;
+// }
 
 #cube {
   position: relative;
   height: 400px;
   width: 400px;
   transform-style: preserve-3d;
+  transition: all .2s linear;
   .cubie {
     position: absolute;
     margin: 1px;
-    // border: 3px solid black;
-    // border-radius: 15px;
-    width:  100px;
-    height: 100px;
-    background-size: 100px;
+    backface-visibility: hidden;
+    border-radius: 15px;
+    width:  95px;
+    height: 95px;
+    background-size: 95px;
     opacity: 1;
     z-index: -1;
     text-align: center;
     font-size: 30px;
+    border: 3px solid #333;
+    overflow: hidden;
     & > div {
-      line-height: 100px;
-      // border-radius: 8px;
-      span { /* visibility: hidden; */ }
+      line-height: 95px;
+      box-sizing: border-box;
+      border-collapse: collapse;
+      span { visibility: hidden; }
       &.face1 { background: blue; }
       &.face2 { background: red; }
       &.face3 { background: #DDD; }
@@ -46,11 +46,10 @@
 }
 
 /* PLANES & ROTATIONS */
-
 #plane { transform-style: preserve-3d; }
 .moving { transition: all .2s linear; }
 
-/*PLANE M */
+/* PLANE M */
 .M-left {
   transform-origin: 0px 200px;
   transform: rotateX(90deg);
@@ -60,11 +59,15 @@
   transform: rotateX(-90deg);
 }
 
-/*PLANE E */
-.E-right { transform: rotateY(90deg); }
-.E-left { transform: rotateY(-90deg); }
+/* PLANE E */
+.E-right {
+  transform: rotateY(90deg);
+}
+.E-left {
+  transform: rotateY(-90deg);
+}
 
-/*PLANE S */
+/* PLANE S */
 .S-left {
   transform-origin: 200px 200px;
   transform: rotateZ(-90deg);

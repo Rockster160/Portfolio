@@ -15,6 +15,7 @@ Rails.application.routes.draw do
   post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
 
   get 'cube' => 'cubes#show'
+  get 'cube2' => 'cubes#traqball'
 
   get :account, controller: :users
   resources :users, only: [ :new, :create, :update ]
