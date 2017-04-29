@@ -21,5 +21,8 @@
   <%= render 'layouts/flashes' %>
   <%= yield %>
 
+  <% if content_for? :after_js %>
+    <%= yield :after_js %>
+  <% end %>
 </body>
 </html>
