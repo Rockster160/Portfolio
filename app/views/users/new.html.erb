@@ -13,9 +13,16 @@
     <%= render partial: 'layouts/error_container', locals: { resource: @user } %>
 
     <div class="form-fields">
-      <div class="form-field">
-        <%= f.label :phone %>
-        <%= f.telephone_field :phone %>
+      <p class="text-center">Enter Username or Phone Number to invite a user.</p>
+      <div class="split-fields">
+        <div class="form-field">
+          <%= f.label :phone %>
+          <%= f.telephone_field :phone %>
+        </div>
+        <div class="form-field">
+          <%= f.label :username %>
+          <%= f.telephone_field :username %>
+        </div>
       </div>
     </div>
 

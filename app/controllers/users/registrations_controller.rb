@@ -8,7 +8,8 @@ class Users::RegistrationsController < ApplicationController
   def create
     @invitation_token = params.dig(:user, :invitation_token)
     if @invitation_token.present?
-      @user = User.where.not(invitation_token: nil).find_by_invitation_token(@invitation_token) || User.new(user_params)
+      @user = User.where.not(invitation_token: nil).find_by_invitation_token(@invitation_token)
+      @user ||= User.new(user_params)
       @user.assign_attributes(user_params)
       @user.invitation_token = nil
     else

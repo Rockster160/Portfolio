@@ -32,7 +32,9 @@ class ApplicationController < ActionController::Base
       if session[:current_user_id].present? || cookies.signed[:current_user_id].present?
         cookies.signed[:current_user_id] = session[:current_user_id] if session[:current_user_id].nil?
         session[:current_user_id] = cookies.signed[:current_user_id] if cookies.signed[:current_user_id].nil?
-        User.find_by_id(session[:current_user_id])
+        user = User.find_by_id(session[:current_user_id])
+        sign_out if user.nil?
+        user
       end
     end
   end
@@ -43,15 +45,15 @@ class ApplicationController < ActionController::Base
 
   def sign_out
     session[:forwarding_url] = nil
-    session[:user_id] = nil
-    cookies.signed[:user_id] = nil
+    session[:current_user_id] = nil
+    cookies.signed[:current_user_id] = nil
     @_current_user = nil
   end
 
   def sign_in(user)
     sign_out
-    session[:user_id] = user.id
-    cookies.signed[:user_id] = user.id
+    session[:current_user_id] = user.id
+    cookies.signed[:current_user_id] = user.id
     current_user
   end
 

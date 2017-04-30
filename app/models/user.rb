@@ -18,14 +18,9 @@ class User < ApplicationRecord
   has_many :lists, through: :user_lists
 
   has_secure_password validations: false
-  validates :password, length: { minimum: 8, maximum: 32 }, on: :create, unless: :invited?
-  validates_presence_of :password, unless: :invited?, on: :create
-  validates_presence_of :username, unless: :invited?
-  validate :confirmation_matches_password, unless: :invited?
-  validate :username_constraints, unless: :invited?
-  validate :formatted_phone
-  validate :correct_current_password
+
   validates_uniqueness_of :phone, allow_nil: true
+  validate :proper_fields_present?
 
   scope :by_username, ->(username) { where("lower(username) = ?", username.to_s.downcase) }
 
@@ -37,6 +32,15 @@ class User < ApplicationRecord
     else
       false
     end
+  end
+
+  def self.find_or_create_by_filtered_params(raw_params)
+    return User.new if raw_params.blank?
+    user_scope = User.all
+    user_scope = user_scope.where("lower(username) = ?", raw_params[:username]) if raw_params[:username].present?
+    user_scope = user_scope.where(phone: raw_params[:phone].gsub(/[^0-9]/, "").last(10)) if raw_params[:phone].present?
+    user_scope = user_scope.where(raw_params.except(:username, :phone))
+    user_scope.one? ? user_scope.first : User.new(raw_params)
   end
 
   def update_with_password(new_attrs)
@@ -77,6 +81,34 @@ class User < ApplicationRecord
   end
 
   private
+
+  def proper_fields_present?
+    if invited?
+      if phone.blank? && username.blank?
+        errors.add(:base, "User must have a Username or Phone Number")
+      end
+    else
+      if new_record?
+        password_length = @password.try(:length).to_i
+        if password_length < 8 || password_length > 32
+          errors.add(:password, "must be at least 8 and no more than 32 characters.")
+        end
+      end
+      valid_presence?(:password_digest, :password)
+      valid_presence?(:username)
+      confirmation_matches_password
+      username_constraints
+      formatted_phone
+      correct_current_password
+    end
+  end
+
+  def valid_presence?(sym, error_sym=nil)
+    error_sym ||= sym
+    unless send(sym).present?
+      errors.add(error_sym, "must be present.")
+    end
+  end
 
   def formatted_phone
     return unless phone.present?
