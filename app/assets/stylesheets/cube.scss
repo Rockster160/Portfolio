@@ -1,11 +1,11 @@
+#cube-body, #container {
+  margin: 0px;
+  padding: 0px;
+  width: 100%;
+  height: 100%;
+}
 #cube-body {
 
-  #container{
-    margin: 0px;
-    padding: 0px;
-    width: 100%;
-    height: 100%;
-  }
 
   /************/
   /*          */
@@ -29,6 +29,17 @@
     position: absolute;
     box-sizing: border-box;
   }
+
+/* This next bit is just for labeling a Cube's face. */
+.faceLabel {
+  display: none;
+  position: absolute;
+  font-size: 60px;
+  text-align: center;
+  font-family: "RubikExtended";
+  text-shadow: 0 0 24px rgba( 0, 0, 0, 0.3 );
+  color: #FFF;
+}
 
   /*********************/
   /*                   */
