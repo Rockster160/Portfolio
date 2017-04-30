@@ -7,9 +7,7 @@ class UsersController < ApplicationController
 
   def create
     @list = List.find_by_id(params[:list_id])
-
     @user = User.find_or_create_by_filtered_params(user_params)
-
     @user.assign_invitation_token unless @user.persisted?
 
     if @user.save

@@ -54,7 +54,7 @@ class ListsController < ApplicationController
     end
   end
 
-  def details
+  def users
     @list = current_user.lists.find(params[:id])
   end
 

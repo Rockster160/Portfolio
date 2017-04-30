@@ -2,7 +2,11 @@
 
 <div class="skinny-container">
   <div class="btn-container">
-    <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
+    <% if params[:list_id].present? %>
+      <a href="<%= users_list_path(params[:list_id]) %>" class="btn">&larr; Back to List</a>
+    <% else %>
+      <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
+    <% end %>
   </div>
   <%= form_for @user do |f| %>
     <%= hidden_field_tag :list_id, params[:list_id] %>

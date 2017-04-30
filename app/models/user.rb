@@ -66,6 +66,7 @@ class User < ApplicationRecord
   def invite!(list)
     user_lists.create(list_id: list.id)
     return unless Rails.env.production?
+    return unless phone.present?
 
     message = "You've been added to the list: \"#{list.name.titleize}\". Click the link below to join:\n"
     if invited?

@@ -14,7 +14,7 @@
 
   <% if @list.persisted? %>
     <div class="text-center">
-      <a href="<%= new_user_path(list_id: @list.id) %>" class="btn">Invite User to List</a>
+      <a href="<%= users_list_path(@list) %>" class="btn">List Users</a>
     </div>
   <% end %>
 
