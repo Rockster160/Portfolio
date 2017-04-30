@@ -29,6 +29,7 @@ gem 'touchpunch-rails'
 
 gem 'bcrypt'
 gem 'rails_autolink'
+gem 'exception_notification'
 
 group :development, :test do
   gem 'annotate'
