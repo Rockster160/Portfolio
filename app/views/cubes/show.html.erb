@@ -1,62 +1,24 @@
-<div id="bg"></div>
-<div id="container"></div>
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no"/>
+		<link rel="stylesheet" type="text/css" href="cube.css">
+		<title>Cube</title>
+	</head>
+	<body id="cube-body">
+		<div id="container"></div>
 
-<div id="fail">
-  <%= image_path "" %>
-  <div id="upgradeText" class="bubble fadeTransition">
-    <div class="upgradetext">To play, please use a supported hardware configuration and the latest version of one of these browsers:</div>
-    <br>
-    <a class="upgradetext" href="https://www.google.com/chrome/browser/" target="_blank">Chrome</a><br>
-    <a class="upgradetext" href="https://www.mozilla.org/firefox" target="_blank">Firefox</a><br>
-    <a class="upgradetext" href="https://www.apple.com/safari" target="_blank">Safari</a><br>
-    <span class="pointerleft SPRITE_carrot_down_2x"></span>
-  </div>
-</div>
-<div id="uipanel" class="fadeTransition" style="display:none">
-  <div id="movecounter">0</div>
-  <div id="buttonpanel">
-    <div id="sharebubble" class="fadeTransition" style="opacity:0">
-      <input id="shareshortlink" type="text" value="google.com/doodles" readonly="readonly"/>
-      <div id="sharegplus" class="bubbleicon SPRITE_google_plus_64_2x"></div>
-      <div id="sharefacebook" class="bubbleicon SPRITE_facebook_64_2x"></div>
-      <div id="sharetwitter" class="bubbleicon SPRITE_twitter_64_2x"></div>
-      <div id="shareemail" class="bubbleicon SPRITE_email_64_2x"></div>
-    </div>
-    <div id="uibuttons">
-      <div id="sharebutton" class="bubbleicon SPRITE_share_64_2x"></div>
-      <div id="helpbutton" class="bubbleicon SPRITE_help_64_2x"></div>
-      <div id="searchbutton" class="bubbleicon SPRITE_search_64_2x"></div>
-    </div>
-  </div>
-  <div id="helpbubble" class="bubble" style="display:none">
-    <span class="pointerup SPRITE_carrot_grey_up_2x"></span>
-    <div id="helpimage" class="one"></div>
-    <div id="helptext" class="helptext"></div>
-    <div id="helpnext" class="helptext"></div>
-    <span class="pointerdown SPRITE_carrot_down_2x"></span><br>
-  </div>
-</div>
+		<%= javascript_include_tag "cube_scripts/cuber.js" %>
+		<%= javascript_include_tag "cube_scripts/photon.js" %>
+		<!-- <script src="http://code.jquery.com/jquery-2.1.1.min.js"></script> -->
 
-<%= content_for :after_js do %>
-  <%= javascript_include_tag "cube_scripts/iecss3d.js" %>
-  <%= javascript_include_tag "cube_scripts/ierenderer.js" %>
-  <%= javascript_include_tag "cube_scripts/deviceMotion.js" %>
-  <%= javascript_include_tag "cube_scripts/locked.js" %>
+		<script>
+			var container	= document.querySelector('#container'),
+				  cube  		= new ERNO.Cube();
+				  light 		= new Photon.Light(10, 0, 100);
 
-  <%= javascript_include_tag "cube_scripts/divBox.js" %>
-  <%= javascript_include_tag "cube_scripts/frames.js" %>
-  <%= javascript_include_tag "cube_scripts/certificate.js" %>
-  <%= javascript_include_tag "cube_scripts/main3.js" %>
-
-
-<!-- <script charset="utf-8" src="scripts/iecss3d.js"></script> -->
-<!-- <script charset="utf-8" src="scripts/ierenderer.js"></script>
-<script charset="utf-8" src="scripts/deviceMotion.js"></script>
-<script charset="utf-8" src="scripts/locked.js"></script> -->
-<!-- XX <script charset="utf-8" src="scripts/textBox.js"></script>
-XX <script charset="utf-8" src="scripts/ResizeableTextBox.3.js"></script> -->
-<!-- <script charset="utf-8" src="scripts/divBox.js"></script>
-<script charset="utf-8" src="scripts/frames.js"></script>
-<script charset="utf-8" src="scripts/certificate.js"></script>
-<script charset="utf-8" src="scripts/main3.js"></script> -->
-<% end %>
+			container.appendChild(cube.domElement);
+		</script>
+	</body>
+</html>

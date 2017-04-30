@@ -1,6 +1,3 @@
 class CubesController < ApplicationController
-
-  def show
-  end
-
+  layout nil
 end
