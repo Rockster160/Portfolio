@@ -16,7 +16,7 @@ class CustomLogger
       else
         ip_address = "IP: #{request.try(:remote_ip)}\n"
       end
-      display_name = user.present? ? "#{user.try(:id)}: #{user.try(:email)}\n" : ''
+      display_name = user.present? ? "#{user.try(:id)}: #{user.try(:username)}\n" : ''
       formatted_time = Time.zone.now.in_time_zone('America/Denver').strftime('%b %d, %Y %H:%M:%S.%L')
       message_to_log = "\n#{formatted_time} - #{message}\n#{ip_address}#{display_name}\n"
       Rails.logger.info "\nCustomLogger: #{message_to_log}\n\n"
