@@ -9000,12 +9000,12 @@ ERNO.Slice = function( indices, cube ){
 		//	We'll reuse the, so it's best to define them up front
 		//	to avoid allocating new memeory at runtime
 
-		var absAxis = new THREE.Vector3(),
-			max 	= new THREE.Vector3( 1.0, 1.0, 1.0 ),
-			point 	= new THREE.Vector3(),
-			origin 	= new THREE.Vector3(),
-			rotation= new THREE.Matrix4(),
-			faceArray;
+		var absAxis  = new THREE.Vector3(),
+			  max      = new THREE.Vector3( 1.0, 1.0, 1.0 ),
+        point 	 = new THREE.Vector3(),
+        origin 	 = new THREE.Vector3(),
+        rotation = new THREE.Matrix4(),
+        faceArray;
 
 
 		return function ( angle ){
@@ -10951,19 +10951,13 @@ ERNO.renderers.CSS3DCubelet.methods = (function(){
 				tweenDuration = ( opacityTarget - this.opacity ).absolute().scale( 0, 1, 0, 1000 * 0.2 )
 
 				this.opacityTween = new TWEEN.Tween({ opacity: this.opacity })
-				.to({
-
-					opacity: opacityTarget
-
-				}, tweenDuration )
+				.to({ opacity: opacityTarget }, tweenDuration )
 				.easing( TWEEN.Easing.Quadratic.InOut )
 				.onUpdate( function(){
-
 					that.css3DObject.element.style.opacity =  this.opacity;
 					that.opacity = this.opacity//opacityTarget
 				})
 				.onComplete( function(){
-
 					if( onComplete instanceof Function ) onComplete()
 				})
 				.start()
@@ -11521,6 +11515,7 @@ ERNO.Cube = function( parameters ){
 			!this.mouseInteraction.active &&
 			this.keyboardControlsEnabled ){
 
+// ROCCO TODO allow jump to faces
 				var key = String.fromCharCode( event.which );
 				if( 'XxRrMmLlYyUuEeDdZzFfSsBb'.indexOf( key ) >= 0 ) this.twist( key );
 
@@ -11541,7 +11536,6 @@ ERNO.extend( ERNO.Cube.prototype, {
 
 
 	shuffle: function( amount, sequence ){
-
 
 		//	How many times should we shuffle?
 		amount = amount || 30;
@@ -11661,7 +11655,8 @@ ERNO.extend( ERNO.Cube.prototype, {
 	},
 
 
-	immediateTwist: function( twist ){
+
+  immediateTwist: function( twist ){
 
 
 		if( this.verbosity >= 0.8 ){
@@ -11681,7 +11676,6 @@ ERNO.extend( ERNO.Cube.prototype, {
 			rotation = ( twist.degrees === undefined ? 90 : twist.degrees ) * twist.vector,
 			radians  = rotation.degreesToRadians(),
 			duration = Math.abs( radians - slice.rotation ) / ( Math.PI * 0.5 ) * this.twistDuration;
-
 
 
 		var l = slice.indices.length,
@@ -11811,7 +11805,6 @@ ERNO.extend( ERNO.Cube.prototype, {
 
 
 
-
 	//  Shuffle methods.
 
 	PRESERVE_LOGO: 'RrLlUuDdSsBb',             //  Preserve the logo position and rotation.
@@ -11923,7 +11916,11 @@ ERNO.extend( ERNO.Cube.prototype, {
 							//  change any slices, ie, we're rotating back to 0,
 							//  then we don't need to remember it.
 							if( twist.degrees === 0 || twist.isShuffle ) queue.purge( twist );
-
+              if (twist.isShuffle) {
+                this.twistDuration = 100;
+              } else {
+                this.twistDuration = 500;
+              }
 
 							this.immediateTwist( twist );
 
@@ -12067,12 +12064,16 @@ ERNO.Solver.prototype.explain = function( text ){
 	);
 };
 
-
-
-
-
 	window.ERNO = ERNO;
 	window._ = _;
 	window.TWEEN = window.TWEEN || TWEEN;
 	window.THREE = window.THREE || THREE;
 }())
+
+rotate = function(x, y, z) { cube.rotation.set(y * Math.PI / 180, x * Math.PI / 180, z * Math.PI / 180) }
+rotate(-45, 25, 0)
+
+// white: 0, 0, 0
+// orange: 90, 0, 0
+// red: 270, 0, 0
+// yellow: 180, 0, 0
