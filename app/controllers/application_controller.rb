@@ -47,6 +47,7 @@ class ApplicationController < ActionController::Base
         session[:current_user_id] = current_user_id
         cookies.signed[:current_user_id] = current_user_id
         cookies.permanent[:current_user_id] = current_user_id
+        cookies.delete(:current_user_id)
         user = User.find_by_id(current_user_id)
         sign_out if user.nil?
         user
@@ -65,6 +66,7 @@ class ApplicationController < ActionController::Base
     session[:current_user_id] = nil
     cookies.signed[:current_user_id] = nil
     cookies.permanent[:current_user_id] = nil
+    cookies.delete(:current_user_id)
     @_current_user = nil
   end
 
