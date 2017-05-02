@@ -10,7 +10,7 @@ module ApplicationCable
     protected
 
     def find_verified_user # this checks whether a user is authenticated
-      current_user_id = session[:current_user_id].presence || cookies.signed[:current_user_id].presence || cookies.permanent[:current_user_id].presence || session[:user_id].presence || cookies.signed[:user_id].presence
+      current_user_id = cookies.signed[:current_user_id].presence || cookies.permanent[:current_user_id].presence || cookies.signed[:user_id].presence
       if verified_user = User.find_by_id(current_user_id)
         verified_user
       else

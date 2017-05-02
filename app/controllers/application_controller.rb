@@ -59,13 +59,12 @@ class ApplicationController < ActionController::Base
   end
 
   def sign_out
+    session[:forwarding_url] = nil
     session[:user_id] = nil
     cookies.signed[:user_id] = nil
-    session[:forwarding_url] = nil
     session[:current_user_id] = nil
     cookies.signed[:current_user_id] = nil
     cookies.permanent[:current_user_id] = nil
-    cookies.delete(:current_user_id)
     @_current_user = nil
   end
 
