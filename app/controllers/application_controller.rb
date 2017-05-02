@@ -41,13 +41,13 @@ class ApplicationController < ActionController::Base
 
   def current_user
     @_current_user ||= begin
-      cookies.signed[:current_user_id] ||= session[:user_id] || cookies.signed[:user_id]
-      session[:current_user_id] ||= session[:user_id] || cookies.signed[:user_id]
+      current_user_id = session[:current_user_id].presence? || cookies.signed[:current_user_id].presence? || cookies.permanent[:current_user_id].presence? || session[:user_id].presence? || cookies.signed[:user_id].presence?
 
-      if session[:current_user_id].present? || cookies.signed[:current_user_id].present?
-        cookies.signed[:current_user_id] = session[:current_user_id] if session[:current_user_id].nil?
-        session[:current_user_id] = cookies.signed[:current_user_id] if cookies.signed[:current_user_id].nil?
-        user = User.find_by_id(session[:current_user_id])
+      if current_user_id.present?
+        session[:current_user_id] = current_user_id
+        cookies.signed[:current_user_id] = current_user_id
+        cookies.permanent[:current_user_id] = current_user_id
+        user = User.find_by_id(current_user_id)
         sign_out if user.nil?
         user
       end
@@ -59,9 +59,12 @@ class ApplicationController < ActionController::Base
   end
 
   def sign_out
+    session[:user_id] = nil
+    cookies.signed[:user_id] = nil
     session[:forwarding_url] = nil
     session[:current_user_id] = nil
     cookies.signed[:current_user_id] = nil
+    cookies.permanent[:current_user_id] = nil
     @_current_user = nil
   end
 
