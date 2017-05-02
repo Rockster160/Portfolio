@@ -14,12 +14,12 @@ $(document).ready(function() {
     $(this).removeClass("hover-highlight");
   })
 
-  $(document).keydown(function() {
+  $(document).keydown(function(evt) {
     if ($('.hover-highlight').length > 0) {
       sticker = $('.hover-highlight');
-      cubelet = sticker.parents('.cubelet');
-      possibleSlices  = [ cube.slices[ cubelet.addressX + 1 ], cube.slices[ cubelet.addressY + 4 ], cube.slices[ cubelet.addressZ + 7 ]];
-      debugger
+      dom_cubelet = sticker.parents('.cubelet');
+      // cubelet = cube.cubelets[getCubeletIdFromDomCubelet(dom_cubelet)];
+      dom_cubelet.trigger("mousedown", { clientX: dom_cubelet.offset().left, clientY: dom_cubelet.offset().top })
     }
   })
 
@@ -29,6 +29,11 @@ $(document).ready(function() {
   // yellow: 180, 0, 0
 
 })
+
+getCubeletIdFromDomCubelet = function(dom_cubelet) {
+  var cubelet_id_class = dom_cubelet.attr("class").match(/cubeletId-\d+/)[0]
+  return cubelet_id_class.match(/\d+/);
+}
 
 performMove = function(moveString) {
   var direction = moveString[1] == "'" ? "counter-clockwise" : "clockwise";

@@ -10009,7 +10009,6 @@ ERNO.Interaction = (function(){
 
     function onInteractStart( event ){
 
-
       if( event.touches != null ) event.preventDefault()
 
 
@@ -10107,7 +10106,7 @@ ERNO.Interaction = (function(){
 
 
       var x = ( event.touches && event.touches[0] || event ).clientX,
-        y = ( event.touches && event.touches[0] || event ).clientY;
+          y = ( event.touches && event.touches[0] || event ).clientY;
 
 
       api.active = false;
