@@ -1,4 +1,5 @@
 #cube-body, #container {
+  max-height: 600px;
   margin: 0px;
   padding: 0px;
   width: 100%;
@@ -130,6 +131,12 @@
     background-color: #F0F;
     border-radius: 0.1em;
     text-align: center;
+    &.hover-highlight {
+      opacity: 0.8;
+    }
+    &.lookit {
+      background-color: #F0F;
+    }
   }
 
   .cube .stickerLogo {

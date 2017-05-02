@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html style="margin: 0px; padding: 0px; width: 100%; height: 100%;">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no"/>
-		<link rel="stylesheet" type="text/css" href="cube.css">
-		<title>Cube</title>
-	</head>
-	<body id="cube-body">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no"/>
+    <link rel="stylesheet" type="text/css" href="cube.css">
+    <title>Cube</title>
+  </head>
+  <body id="cube-body">
     <div class="legend">
       <ul>
         <li>Xx - Rotate (X) Vertical</li>
@@ -27,18 +27,18 @@
         <li>Bb - Twist Back Face</li>
       </ul>
     </div>
-		<div id="container"></div>
+    <div id="container"></div>
 
-		<%= javascript_include_tag "cube_scripts/cuber.js" %>
-		<%= javascript_include_tag "cube_scripts/photon.js" %>
-		<!-- <script src="http://code.jquery.com/jquery-2.1.1.min.js"></script> -->
+    <%= javascript_include_tag "cube_scripts/cuber.js" %>
+    <%= javascript_include_tag "cube_scripts/photon.js" %>
+    <!-- <script src="http://code.jquery.com/jquery-2.1.1.min.js"></script> -->
 
-		<script>
-			var container	= document.querySelector('#container'),
-				  cube  		= new ERNO.Cube();
-				  light 		= new Photon.Light(10, 0, 100);
+    <script>
+      var container  = document.querySelector('#container'),
+          cube     = new ERNO.Cube();
+          light    = new Photon.Light(10, 0, 100);
 
-			container.appendChild(cube.domElement);
-		</script>
-	</body>
+      container.appendChild(cube.domElement);
+    </script>
+  </body>
 </html>
