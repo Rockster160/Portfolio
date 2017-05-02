@@ -41,7 +41,7 @@ class ApplicationController < ActionController::Base
 
   def current_user
     @_current_user ||= begin
-      current_user_id = session[:current_user_id].presence? || cookies.signed[:current_user_id].presence? || cookies.permanent[:current_user_id].presence? || session[:user_id].presence? || cookies.signed[:user_id].presence?
+      current_user_id = session[:current_user_id].presence || cookies.signed[:current_user_id].presence || cookies.permanent[:current_user_id].presence || session[:user_id].presence || cookies.signed[:user_id].presence
 
       if current_user_id.present?
         session[:current_user_id] = current_user_id
