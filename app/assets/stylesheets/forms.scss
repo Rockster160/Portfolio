@@ -27,6 +27,15 @@ form {
         margin-bottom: 15px;
       }
     }
+    .split-fields {
+      font-size: 0;
+      .form-field {
+        font-size: 16px;
+        display: inline-block;
+        width: 50%;
+        box-sizing: border-box;
+      }
+    }
   }
   .form-submission {
     margin-bottom: 15px;

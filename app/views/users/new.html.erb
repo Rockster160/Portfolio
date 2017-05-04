@@ -2,7 +2,11 @@
 
 <div class="skinny-container">
   <div class="btn-container">
-    <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
+    <% if params[:list_id].present? %>
+      <a href="<%= users_list_path(params[:list_id]) %>" class="btn">&larr; Back to List</a>
+    <% else %>
+      <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
+    <% end %>
   </div>
   <%= form_for @user do |f| %>
     <%= hidden_field_tag :list_id, params[:list_id] %>
@@ -13,9 +17,16 @@
     <%= render partial: 'layouts/error_container', locals: { resource: @user } %>
 
     <div class="form-fields">
-      <div class="form-field">
-        <%= f.label :phone %>
-        <%= f.telephone_field :phone %>
+      <p class="text-center">Enter Username or Phone Number to invite a user.</p>
+      <div class="split-fields">
+        <div class="form-field">
+          <%= f.label :phone %>
+          <%= f.telephone_field :phone %>
+        </div>
+        <div class="form-field">
+          <%= f.label :username %>
+          <%= f.text_field :username %>
+        </div>
       </div>
     </div>
 

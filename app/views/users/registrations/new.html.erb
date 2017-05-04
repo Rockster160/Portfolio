@@ -28,7 +28,7 @@
     </div>
 
     <div class="helpful-links">
-      <a href="<%= login_path %>">Already have an account?</a>
+      <a href="<%= login_path(params.permit(:invitation_token)) %>">Already have an account?</a>
     </div>
   <% end %>
 

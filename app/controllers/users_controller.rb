@@ -7,8 +7,7 @@ class UsersController < ApplicationController
 
   def create
     @list = List.find_by_id(params[:list_id])
-    @user = User.find_by(user_params) || User.new(user_params)
-
+    @user = User.find_or_create_by_filtered_params(user_params)
     @user.assign_invitation_token unless @user.persisted?
 
     if @user.save
@@ -42,7 +41,7 @@ class UsersController < ApplicationController
   private
 
   def user_params
-    params.require(:user).permit(:phone, :username, :password, :password_confirmation, :current_password)
+    params.require(:user).permit(:phone, :username, :password, :password_confirmation, :current_password).reject { |_, v| v.blank? }
   end
 
   def user_params_without_password

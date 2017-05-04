@@ -1,0 +1,18 @@
+<%= content_for(:title) { "#{@list.name}'s Users" } %>
+<%= content_for(:body_classes) { "black" } %>
+
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <a href="<%= edit_list_path(@list) %>" class="btn">&larr; Back to List info</a>
+    <a href="<%= new_user_path(list_id: @list.id) %>" class="btn pull-right">Invite <i class="fa fa-plus"></i></a>
+  </div>
+  <div class="lists-title"><%= @list.name %>'s Users</div>
+  <div class="lists">
+    <% @list.user_lists.each do |list_user| %>
+      <% user = list_user.user %>
+      <div class="list-item-container">
+        <a href="<%=  %>" class="list-item"><%= user.username || user.phone || user.invitation_token %> <%= "(Pending #{user.invitation_token})" if user.invited? %></a>
+       </div>
+    <% end %>
+  </div>
+</div>

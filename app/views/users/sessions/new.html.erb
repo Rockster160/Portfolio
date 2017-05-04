@@ -23,7 +23,7 @@
     </div>
 
     <div class="helpful-links">
-      <a href="<%= register_path %>">Don't have an account?</a>
+      <a href="<%= register_path(params.permit(:invitation_token)) %>">Don't have an account?</a>
     </div>
   <% end %>
 

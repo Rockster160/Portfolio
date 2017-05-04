@@ -21,6 +21,7 @@ Rails.application.routes.draw do
   resources :users, only: [ :new, :create, :update ]
   resources :lists do
     post :receive_update, on: :member
+    get :users, on: :member
     resources :list_items, only: [ :create, :destroy ]
   end
 
