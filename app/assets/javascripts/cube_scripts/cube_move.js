@@ -139,6 +139,7 @@ $(document).ready(function() {
       }
     }
   })
+  $(window, document).blur(function() { keysPressed = []; })
 
   tick = setInterval(function() {
     if ($('.hover-highlight').length == 0) {
