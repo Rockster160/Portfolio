@@ -11514,16 +11514,13 @@ ERNO.Cube = function( parameters ){
       !this.mouseInteraction.active &&
       this.keyboardControlsEnabled ){
 
-// ROCCO TODO allow jump to faces
         var key = String.fromCharCode( event.which );
         if( 'XxRrMmLlYyUuEeDdZzFfSsBb'.indexOf( key ) >= 0 ) this.twist( key );
 
     }
   }.bind( this ));
 
-
-
-
+  
 }
 
 

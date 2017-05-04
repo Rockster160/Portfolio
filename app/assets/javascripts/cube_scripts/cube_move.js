@@ -1,7 +1,9 @@
+keysPressed = [];
 const KEY_EVENT_LEFT = 37,
       KEY_EVENT_UP = 38,
       KEY_EVENT_DOWN = 40,
-      KEY_EVENT_RIGHT = 39;
+      KEY_EVENT_RIGHT = 39,
+      KET_EVENT_SHIFT = 16;
 
 $(document).ready(function() {
   var easeMotionTimer;
@@ -48,9 +50,6 @@ $(document).ready(function() {
         zStep = zDiff / frames;
     if (xDiff == 0 && yDiff == 0 && zDiff == 0) { return }
 
-    console.log("Start: (" + xStart.toFixed(2) + ", " + yStart.toFixed(2) + ", " + zStart.toFixed(2) + ")");
-    console.log("Steps: (" + xStep.toFixed(2) + ", " + yStep.toFixed(2) + ", " + zStep.toFixed(2) + ") * " + frames);
-    console.log("Finish: (" + xEnd.toFixed(2) + ", " + yEnd.toFixed(2) + ", " + zEnd.toFixed(2) + ")");
     easeMotion = function() {
       if (currentFrame < frames) {
         currentFrame += 1;
@@ -68,6 +67,18 @@ $(document).ready(function() {
       easeMotion()
     }, msPerFrame);
   }
+  relativeRotate = function(x, y, z) {
+    var currentRotation = getRotation();
+    immediateRotate(x + currentRotation.x, y + currentRotation.y, z + currentRotation.z);
+  }
+  easeRelativeRotate = function(x, y, z) {
+    var currentRotation = getRotation();
+    easeRotate({x: x + currentRotation.x, y: y + currentRotation.y, z: z + currentRotation.z}, 500);
+  }
+  rotateLeft = function() { relativeRotate(-2, 0, 0) }
+  rotateUp = function() { relativeRotate(0, -2, 0) }
+  rotateDown = function() { relativeRotate(0, 2, 0) }
+  rotateRight = function() { relativeRotate(2, 0, 0) }
   // 1 - ( --k * k * k * k )
   immediateRotate = function(x, y, z) { cube.rotation.set(y * Math.PI / 180, x * Math.PI / 180, z * Math.PI / 180) }
   immediateRotate(335, 25, 0);
@@ -78,9 +89,10 @@ $(document).ready(function() {
     $(this).removeClass("hover-highlight");
   })
 
-  $(document).keypress(function(evt) {
+  $(document).keydown(function(evt) {
+    if (keysPressed.indexOf(evt.which) == -1) { keysPressed.push(evt.which) };
     var key = String.fromCharCode( evt.which )
-    console.log("Pressed: " + key);
+    // console.log("Pressed: " + key);
     if ($('.hover-highlight').length > 0) {
       // sticker = $('.hover-highlight');
       // dom_cubelet = sticker.parents('.cubelet');
@@ -91,33 +103,62 @@ $(document).ready(function() {
     switch (key) {
       case "1": // White
       easeRotate({x: 335, y: 25, z: 0}, 500);
-        break;
+      break;
       case "2": // Orange
       easeRotate({x: 0, y: 295, z: 155}, 500);
-        break;
+      break;
       case "3": // Blue
       easeRotate({x: 245, y: 25, z: 0}, 500);
-        break;
+      break;
       case "4": // Red
       easeRotate({x: 0, y: 295, z: 335}, 500);
-        break;
+      break;
       case "5": // Green
       easeRotate({x: 65, y: 25, z: 0}, 500);
-        break;
+      break;
       case "6": // Yellow
       easeRotate({x: 155, y: 25, z: 0}, 500);
-        break;
+      break;
+    }
+  }).keyup(function(evt) {
+    keysPressed = keysPressed.filter(function(e) { return e != evt.which });
+    if (evt.shiftKey) {
+      switch (evt.which) {
+        case KEY_EVENT_LEFT:
+          easeRelativeRotate(-90, 0, 0);
+          break;
+        case KEY_EVENT_UP:
+          easeRelativeRotate(0, -90, 0);
+          break;
+        case KEY_EVENT_DOWN:
+          easeRelativeRotate(0, 90, 0);
+          break;
+        case KEY_EVENT_RIGHT:
+          easeRelativeRotate(90, 0, 0);
+          break;
+      }
     }
   })
+
+  tick = setInterval(function() {
+    if ($('.hover-highlight').length == 0) {
+      var shiftPressed = keysPressed.includes(KET_EVENT_SHIFT);
+      if (shiftPressed) { return }
+      if (keysPressed.includes(KEY_EVENT_LEFT)) { rotateLeft() };
+      if (keysPressed.includes(KEY_EVENT_UP)) { rotateUp() };
+      if (keysPressed.includes(KEY_EVENT_DOWN)) { rotateDown() };
+      if (keysPressed.includes(KEY_EVENT_RIGHT)) { rotateRight() };
+    }
+  }, 10)
 })
 
-getCubeletIdFromDomCubelet = function(dom_cubelet) {
-  var cubelet_id_class = dom_cubelet.attr("class").match(/cubeletId-\d+/)[0]
-  return cubelet_id_class.match(/\d+/);
-}
-
-performMove = function(moveString) {
-  var direction = moveString[1] == "'" ? "counter-clockwise" : "clockwise";
-  var moveCount = moveString[1] == "2" ? 2 : 1;
-  var face = moveString[0];
-}
+// getCubeletIdFromDomCubelet = function(dom_cubelet) {
+//   var cubelet_id_class = dom_cubelet.attr("class").match(/cubeletId-\d+/)[0]
+//   return cubelet_id_class.match(/\d+/);
+// }
+//
+// performMove = function(moveString) {
+//   var direction = moveString[1] == "'" ? "counter-clockwise" : "clockwise";
+//   var moveCount = moveString[1] == "2" ? 2 : 1;
+//   var face = moveString[0];
+// }
