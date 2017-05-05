@@ -52,7 +52,7 @@ module ColorGenerator
       new_hex = hex_try.to_s.squish.upcase
       new_hex = new_hex.gsub("#", '')
       raise ColorGenerationError.new("Hex values can only be characters A-F and numbers 0-9") if new_hex =~ /[^a-f0-9]/i
-      raise ColorGenerationError.new("Colors must be valid 3 or 6 character Hex values.") unless new_hex.length == 3 || new_hex.length == 6
+      raise ColorGenerationError.new("Colors must be valid 3 or 6 character Hex value.") unless new_hex.length == 3 || new_hex.length == 6
       new_hex = new_hex.split("").map { |single_hex| "#{single_hex}#{single_hex}" }.join("") if new_hex.length == 3
       "##{new_hex}"
     end
