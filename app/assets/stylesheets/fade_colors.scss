@@ -17,15 +17,8 @@
       display: block;
       position: relative;
       font-family: monospace;
-      .color-preview {
-        display: inline-block;
-        vertical-align: middle;
-        width: 13px;
-        height: 13px;
-        border: 1px solid #BBB;
-        border-radius: 4px;
-        margin: 0 0 3px 3px;
-      }
+      text-align: center;
+      padding: 10px;
     }
   }
 }

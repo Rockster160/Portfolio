@@ -34,7 +34,7 @@ $(document).ready(function() {
 
   generateColorPreviews = function() {
     $("color").each(function() {
-      $(this).append($("<div>", { class: "color-preview", style: "background-color: " + $(this).text().trim() }));
+      $(this).css({ "background-color": $(this).text().trim() });
     })
   }
   $('.color-field').blur()
