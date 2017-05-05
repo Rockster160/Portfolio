@@ -5,7 +5,7 @@ module ColorGenerator
     def fade(from_hex, to_hex, steps=10, fade_back=false)
       steps ||= 10
       steps = steps.to_i
-      # raise ColorGenerationError.new("Cannot fade more than 100 steps!") if steps > 100
+      raise ColorGenerationError.new("Cannot fade more than 256 steps!") if steps > 256
       start_hex = validHex(from_hex)
       end_hex = validHex(to_hex)
       fade_back = (fade_back || fade_back == 'true')
