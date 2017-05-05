@@ -10,12 +10,20 @@
     <div class="form-fields">
       <div class="split-fields">
         <div class="form-field">
-          <%= label_tag :start_color %>
-          <%= text_field_tag :start_color, params[:start_color], class: "text-right" %>
+          <%= label_tag :start_color do %>
+            Start Color
+            <input type="text" name="" value="" class="colorpicker">
+            <a href="#" class="btn pull-right random-color">Random</a>
+          <% end %>
+          <%= text_field_tag :start_color, params[:start_color], class: "text-right color-field" %>
         </div>
         <div class="form-field">
-          <%= label_tag :end_color %>
-          <%= text_field_tag :end_color, params[:end_color], class: "text-right" %>
+          <%= label_tag :end_color do %>
+            End Color
+            <input type="text" name="" value="" class="colorpicker">
+            <a href="#" class="btn pull-right random-color">Random</a>
+          <% end %>
+          <%= text_field_tag :end_color, params[:end_color], class: "text-right color-field" %>
         </div>
       </div>
       <div class="split-fields">
