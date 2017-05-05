@@ -3,6 +3,7 @@ module ColorGenerator
   class << self
 
     def fade(from_hex, to_hex, steps=10, fade_back=false)
+      steps ||= 10
       start_hex = validHex(from_hex)
       end_hex = validHex(to_hex)
       steps = steps.to_i
