@@ -18,6 +18,7 @@ $(document).ready(function() {
       rand_str.push(chosen);
     }
     $(this).parents('.form-field').children(".color-field").val(rand_str.join(""));
+    $(this).parents('.form-field').children(".color-field").blur();
     $("#color-form").submit();
     return false;
   })

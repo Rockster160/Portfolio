@@ -4,9 +4,10 @@ module ColorGenerator
 
     def fade(from_hex, to_hex, steps=10, fade_back=false)
       steps ||= 10
+      steps = steps.to_i
+      # raise ColorGenerationError.new("Cannot fade more than 100 steps!") if steps > 100
       start_hex = validHex(from_hex)
       end_hex = validHex(to_hex)
-      steps = steps.to_i
       fade_back = (fade_back || fade_back == 'true')
       return [] if steps <= 0
       return [start_hex] if steps == 1
@@ -15,14 +16,16 @@ module ColorGenerator
       raise ColorGenerationError.new("Start color must be a Hex value!") unless [from_red, from_green, from_blue].compact.length == 3
       to_red, to_green, to_blue = hex_to_rgb(end_hex)
       raise ColorGenerationError.new("End color must be a Hex value!") unless [to_red, to_green, to_blue].compact.length == 3
-      step_red, step_green, step_blue = [(to_red - from_red) / steps.to_f, (to_green - from_green) / steps.to_f, (to_blue - from_blue) / steps.to_f]
+      temp_steps = steps - 1
+      step_red, step_green, step_blue = [(to_red - from_red) / temp_steps.to_f, (to_green - from_green) / temp_steps.to_f, (to_blue - from_blue) / temp_steps.to_f]
       colors = []
-      (steps + 1).times do |t|
+      (steps - 1).times do |t|
         nr = from_red + (step_red * t)
         ng = from_green + (step_green * t)
         nb = from_blue + (step_blue * t)
         colors << rgb_to_hex([nr, ng, nb])
       end
+      colors << end_hex
       if fade_back
         back_colors = colors.dup
         back_colors.pop # Remove the first color
