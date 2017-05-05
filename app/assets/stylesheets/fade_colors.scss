@@ -1,0 +1,30 @@
+.colors-wrapper {
+  width: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+  .colors-container {
+    box-sizing: border-box;
+    width: 100%;
+    border: 1px solid black;
+    background: #EEF;
+    padding: 15px;
+    .color-error {
+      color: red;
+      text-align: center;
+    }
+
+    color {
+      display: block;
+      position: relative;
+      .color-preview {
+        display: inline-block;
+        vertical-align: middle;
+        width: 13px;
+        height: 13px;
+        border: 1px solid #BBB;
+        border-radius: 4px;
+        margin: 0 0 3px 3px;
+      }
+    }
+  }
+}

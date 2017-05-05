@@ -22,6 +22,8 @@ Rails.application.routes.draw do
     resources :list_items, only: [ :create, :destroy ]
   end
 
+  resources :colors, only: [ :index ]
+
   resources :mazes, only: [ :index ] do
     collection do
       get 'random', action: 'random'

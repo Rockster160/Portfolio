@@ -1,0 +1,6 @@
+<% if (error ||= nil).present? %>
+  <div class="color-error"><%= error %></div>
+<% end %>
+<% colors.each do |color| %>
+  <color><%= color %></color>
+<% end %>

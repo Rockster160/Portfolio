@@ -1,0 +1,44 @@
+<div class="skinny-container">
+
+  <%= form_tag colors_path, id: "color-form" do |f| %>
+    <div class="form-title">
+      Colors
+    </div>
+
+    <%= render partial: 'layouts/error_container', locals: { resource: @user } %>
+
+    <div class="form-fields">
+      <div class="split-fields">
+        <div class="form-field">
+          <%= label_tag :start_color %>
+          <%= text_field_tag :start_color, params[:start_color], class: "text-right" %>
+        </div>
+        <div class="form-field">
+          <%= label_tag :end_color %>
+          <%= text_field_tag :end_color, params[:end_color], class: "text-right" %>
+        </div>
+      </div>
+      <div class="split-fields">
+        <div class="form-field">
+          <%= label_tag :steps %>
+          <%= text_field_tag :steps, params[:steps] || 10, class: "text-right" %>
+        </div>
+        <div class="form-field">
+          <!-- <%= label_tag :end_color %>
+          <%= text_field_tag :end_color %> -->
+        </div>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= submit_tag "Fade!" %>
+    </div>
+
+    <div class="colors-wrapper">
+      <div class="colors-container">
+        <%= render partial: "colors", locals: { colors: @colors, error: @error } %>
+      </div>
+    </div>
+  <% end %>
+
+</div>
