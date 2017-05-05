@@ -4907,7 +4907,7 @@ ERNO.renderers.CSS3DCubelet = (function(){
     cubelet.add( cubelet.css3DObject );
 
 
-    console.log( cubelet.size )
+    // console.log( cubelet.size )
     var faceSpacing = ( cubelet.size / 2 );
 
     var transformMap = [
@@ -6344,7 +6344,7 @@ ERNO.Solver.prototype.explain = function( text ){
 
 
 
-//@ sourceMappingURL=../build/cuber.no3D.js.map
+// @ sourceMappingURL=../build/cuber.no3D.js.map
   window.ERNO = ERNO;
 window._ = _;
   window.TWEEN = window.TWEEN || TWEEN;

@@ -36,9 +36,10 @@
     </div>
     <div id="container"></div>
 
+    <%= javascript_include_tag "cube_scripts/cube_move.js" %>
     <%= javascript_include_tag "cube_scripts/cuber.js" %>
+    <%= javascript_include_tag "cube_scripts/cuber.no3d.js" %>
     <%= javascript_include_tag "cube_scripts/photon.js" %>
-    <!-- <script src="http://code.jquery.com/jquery-2.1.1.min.js"></script> -->
 
     <script>
       var container  = document.querySelector('#container'),

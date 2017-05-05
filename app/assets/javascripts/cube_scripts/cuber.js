@@ -11520,7 +11520,7 @@ ERNO.Cube = function( parameters ){
     }
   }.bind( this ));
 
-  
+
 }
 
 

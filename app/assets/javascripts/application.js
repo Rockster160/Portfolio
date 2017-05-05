@@ -17,6 +17,10 @@
 //= require underscore
 //= require gmaps/google
 //= require_tree .
+//= stub cube_scripts/cube_move.js
+//= stub cube_scripts/cuber.js
+//= stub cube_scripts/cuber.no3d.js
+//= stub cube_scripts/photon.js
 
 // http://keycode.info
 const KEY_EVENT_ENTER = 13,
