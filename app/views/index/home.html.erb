@@ -1,5 +1,15 @@
-<h1>Rocco Nicholls</h1>
-<p>Welcome to my portfolio!</p>
-<p>Everything I do here is hidden behind secret urls. Good luck!</p>
+<%= content_for :head do %>
+  <%= javascript_include_tag "support/particles_json.js" %>
+  <%= javascript_include_tag "support/particles.js" %>
+<% end %>
 
-<canvas id="clocks" width=235 height=120></canvas>
+<div id="particles-js">
+  <div class="portfolio-wrapper">
+    <div class="portfolio-container">
+      <h1>Rocco Nicholls</h1>
+      <p>Web Developer</p>
+    </div>
+  </div>
+
+  <!-- <canvas id="clocks" width=235 height=120></canvas> -->
+</div>

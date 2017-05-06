@@ -49,3 +49,12 @@
   font-weight: normal;
   font-style: normal;
 }
+
+@font-face {
+  font-family: 'CodenameCoder-Bold';
+  src: font-url('CodenameCoder-Bold.eot');
+  src: font-url('CodenameCoder-Bold.eot?#iefix') format('embedded-opentype'),
+       font-url('CodenameCoder-Bold.woff2') format('woff2'),
+       font-url('CodenameCoder-Bold.woff') format('woff'),
+       font-url('CodenameCoder-Bold.ttf') format('truetype');
+}

@@ -17,6 +17,8 @@
 //= require gmaps/google
 //= require_tree .
 //= stub support/colorpicker.js
+//= stub support/particles.js
+//= stub support/particles_json.js
 //= stub support/touch_punch.js
 //= stub cube_scripts/cube_move.js
 //= stub cube_scripts/cuber.js
