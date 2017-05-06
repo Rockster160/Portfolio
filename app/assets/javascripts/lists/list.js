@@ -1,4 +1,4 @@
-$(document).ready(function() {
+$('.ctr-lists.act-show').ready(function() {
 
   $(".list-items").sortable({
     handle: ".list-item-handle",

@@ -1,4 +1,4 @@
-$(document).ready(function() {
+$('.ctr-colors.act-index').ready(function() {
 
   $('.colorpicker').spectrum({
     change: function(spectrumColor) {

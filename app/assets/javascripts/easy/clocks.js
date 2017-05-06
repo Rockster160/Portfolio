@@ -1,4 +1,4 @@
-var ready = function() {
+$(document).ready(function() {
   var canvas = document.getElementById("clocks");
   if (canvas) {
     var ctx = canvas.getContext("2d");
@@ -323,7 +323,4 @@ var ready = function() {
     draw();
     setInterval(function(){draw();}, 50);
   }
-}
-
-$(document).ready(ready);
-$(document).on('page:load', ready);
+})

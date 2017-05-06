@@ -1,3 +1,7 @@
+<% content_for :head do %>
+  <%= javascript_include_tag 'support/colorpicker.js' %>
+<% end %>
+
 <div class="skinny-container">
 
   <%= form_tag colors_path, id: "color-form" do |f| %>

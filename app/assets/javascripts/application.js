@@ -13,10 +13,11 @@
 //= require jquery
 //= require jquery_ujs
 //= require jquery-ui
-//  require jquery.ui.touch-punch
 //= require underscore
 //= require gmaps/google
 //= require_tree .
+//= stub support/colorpicker.js
+//= stub support/touch_punch.js
 //= stub cube_scripts/cube_move.js
 //= stub cube_scripts/cuber.js
 //= stub cube_scripts/cuber.no3d.js
@@ -29,7 +30,7 @@ const KEY_EVENT_ENTER = 13,
       KEY_EVENT_UP = 38,
       KEY_EVENT_DOWN = 40,
       KEY_EVENT_RIGHT = 39,
-      KEY_EVENT_W = 87;
-      KEY_EVENT_A = 83;
-      KEY_EVENT_S = 65;
+      KEY_EVENT_W = 87,
+      KEY_EVENT_A = 83,
+      KEY_EVENT_S = 65,
       KEY_EVENT_D = 68;
