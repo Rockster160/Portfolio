@@ -3,6 +3,7 @@ Rails.application.routes.draw do
   root 'index#home'
   post '/talk' => 'index#talk'
   get 'map' => 'index#map'
+  get 'playground' => 'index#playground'
 
   get 'login' => 'users/sessions#new'
   post 'login' => 'users/sessions#create'

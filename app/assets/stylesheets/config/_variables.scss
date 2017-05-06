@@ -1,4 +1,13 @@
-$light-blue: #3D94F6;
+$base-blue: #3D94F6;
+$blue-1: lighten($base-blue, 50%);
+$blue-2: lighten($base-blue, 25%);
+$blue-3: $base-blue;
+$blue-4: darken($base-blue, 25%);
+$blue-5: darken($base-blue, 50%);
+
 $danger: #F6433D;
 $grey-blue: #6481A1;
-$white-blue: #F4F7F8;
+
+$dpl-purple: #8168B1;
+$facebook-blue: #3B5998;
+$github-black: black;
