@@ -1,0 +1,7 @@
+<div class="playing-field">
+  <div class="deck">
+    <% @deck.cards.count.times do %>
+      <%= render partial: 'card', locals: { card: @deck.draw } %>
+    <% end %>
+  </div>
+</div>

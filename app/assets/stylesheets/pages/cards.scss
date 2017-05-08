@@ -1,0 +1,129 @@
+$card-height: 100px;
+$card-width: $card-height * 0.714285714;
+$card-radius: $card-height / 28;
+
+.ctr-cards {
+  text-align: center;
+  font-size: 0;
+
+  .playing-field {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    bottom: 20px;
+    background: #246E20;
+    padding: 20px;
+    border-radius: 20px;
+    font-size: 0;
+  }
+
+  .card-container {
+    height: 0;
+    width: 0;
+    z-index: 0;
+    font-size: 0;
+    position: absolute;
+    perspective: 800;
+    display: inline-block;
+
+    .card {
+      position: absolute;
+      transform-style: preserve-3d;
+      transition: transform 0.6s;
+
+      height: $card-height;
+      width: $card-width;
+      border-radius: $card-radius;
+      box-sizing: border-box;
+
+      &.flipped {
+        transform: rotateY(180deg);
+      }
+
+      .face {
+        transform-style: preserve-3d;
+        margin: 0;
+        display: block;
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        border-radius: $card-radius;
+        backface-visibility: hidden;
+        box-shadow: 1px 1px 4px rgba(50, 50, 50, 0.5);
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+
+      .front {
+        transform-style: preserve-3d;
+        transform: rotateY(180deg);
+        height: 100%;
+        width: 100%;
+        padding: 5px;
+        background: white;
+        font-family: 'Card';
+        position: relative;
+        box-sizing: border-box;
+        .rank, .suit {
+          width: 14px;
+          text-align: center;
+        }
+        .rank { font-size: 16px; }
+        .suit { font-size: 14px; }
+        .large-suit {
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          text-align: center;
+          font-size: 40px;
+          line-height: $card-height;
+          backface-visibility: hidden;
+          z-index: 0;
+        }
+      }
+
+      .back {
+        padding: 5px;
+        background: white;
+        .card-background {
+          width: 100%;
+          height: 100%;
+          border-radius: $card-radius / 2;
+          box-sizing: border-box;
+
+          background-color: #4F7CAC;
+          border: 2px solid #3066BE;
+          $back-circle-1: #BBDEF0; // 1 - Most Inner
+          $back-circle-2: #0047A5; // 2
+          $back-circle-3: #2176AE; // 3
+          $back-circle-4: #FFFFFF; // 4
+          $back-circle-5: #3D94F6; // 5
+          $back-circle-6: #0A2463; // 6
+          $back-circle-7: #07A0C3; // 7 - Most Outer
+          $one-third: 100% / 3;
+          background-image:
+            radial-gradient(closest-side, transparent 0%, transparent 75%, $back-circle-7 76%, $back-circle-7 85%, $back-circle-6 86%, $back-circle-6 94%, $back-circle-4 95%, $back-circle-4 103%, $back-circle-5 104%, $back-circle-5 112%, $back-circle-3 113%, $back-circle-3 121%, $back-circle-2 122%, $back-circle-2 130%, $back-circle-1 131%, $back-circle-1 140%),
+            radial-gradient(closest-side, transparent 0%, transparent 75%, $back-circle-7 76%, $back-circle-7 85%, $back-circle-6 86%, $back-circle-6 94%, $back-circle-4 95%, $back-circle-4 103%, $back-circle-5 104%, $back-circle-5 112%, $back-circle-3 113%, $back-circle-3 121%, $back-circle-2 122%, $back-circle-2 130%, $back-circle-1 131%, $back-circle-1 140%);
+          background-size: $one-third $one-third;
+          background-position: 25% 25%, 0 0;
+        }
+      }
+
+      &[suit="D"] { color: red; }
+      &[suit="H"] { color: red; }
+      &[suit="C"] { color: black; }
+      &[suit="S"] { color: black; }
+    }
+  }
+
+  .deck {
+    position: absolute;
+    top: 50px;
+    left: 50%;
+    font-size: 0px;
+    .card-container {
+      position: relative;
+      margin: 0;
+      width: 1px;
+    }
+  }
+}

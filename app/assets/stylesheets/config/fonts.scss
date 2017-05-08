@@ -58,3 +58,15 @@
        font-url('CodenameCoder-Bold.woff') format('woff'),
        font-url('CodenameCoder-Bold.ttf') format('truetype');
 }
+
+@font-face {
+  font-family: 'Card';
+  src: font-url('cardfont.eot');
+  src: font-url('cardfont.eot?#iefix') format('embedded-opentype'),
+       font-url('cardfont.woff2') format('woff2'),
+       font-url('cardfont.woff') format('woff'),
+       font-url('cardfont.ttf') format('truetype'),
+       font-url('cardfont.svg#card_characters_narrow_figuRg') format('svg');
+  font-weight: normal;
+  font-style: normal;
+}

@@ -1,0 +1,26 @@
+<% if card %>
+  <% pieces = card.split("") %>
+  <% suit_first = %w( D H S C ).include?(pieces.first.upcase) %>
+  <% rank = pieces[suit_first ? 1 : 0] %>
+  <% suit = pieces[suit_first ? 0 : 1] %>
+<% end %>
+
+<% return unless (suit && rank) %>
+<% suit_unicodes = { D: "&#9830;", H: "&#9829;", S: "&#9824;", C: "&#9827;" } %>
+<% suit = suit.upcase %>
+<% rank = rank.upcase %>
+<% rank = 10 if rank == "T" %>
+<% flipped ||= false %>
+
+<div class="card-container no-zoom">
+  <div class="card <%= 'flipped' if flipped %>" rank="<%= rank %>" suit="<%= suit %>">
+    <div class="face back">
+      <div class="card-background"></div>
+    </div>
+    <div class="face front">
+      <div class="rank"><%= rank %></div>
+      <div class="suit"><%= suit_unicodes[suit.to_sym].html_safe %></div>
+      <div class="large-suit"><%= suit_unicodes[suit.to_sym].html_safe %></div>
+    </div>
+  </div>
+</div>

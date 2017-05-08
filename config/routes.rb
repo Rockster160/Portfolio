@@ -25,6 +25,12 @@ Rails.application.routes.draw do
     resources :list_items, only: [ :create, :destroy ]
   end
 
+  resources :cards, only: [] do
+    collection do
+      get :deck
+    end
+  end
+
   resources :colors, only: [ :index ]
 
   resources :mazes, only: [ :index ] do

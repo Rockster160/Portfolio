@@ -28,6 +28,8 @@
 // http://keycode.info
 const KEY_EVENT_ENTER = 13,
       KEY_EVENT_TAB = 9,
+      KEY_EVENT_SPACE = 32,
+      KEY_EVENT_ESC = 27,
       KEY_EVENT_LEFT = 37,
       KEY_EVENT_UP = 38,
       KEY_EVENT_DOWN = 40,
