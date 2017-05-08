@@ -66,6 +66,7 @@ $('.ctr-cards').ready(function() {
   })
 
   $('.card').draggable({
+    containment: '.playing-field',
     start: function(evt) {
       $(this).parent().css("z-index", cardsInPlay().length + 10);
     },

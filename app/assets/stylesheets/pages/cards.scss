@@ -1,4 +1,4 @@
-$card-height: 100px;
+$card-height: 50px;
 $card-width: $card-height * 0.714285714;
 $card-radius: $card-height / 28;
 
@@ -7,11 +7,10 @@ $card-radius: $card-height / 28;
   font-size: 0;
 
   .playing-field {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    right: 20px;
-    bottom: 20px;
+    position: relative;
+    margin: 20px;
+    width: 1000px;
+    height: 500px;
     background: #246E20;
     padding: 20px;
     border-radius: 20px;
@@ -59,22 +58,22 @@ $card-radius: $card-height / 28;
         transform: rotateY(180deg);
         height: 100%;
         width: 100%;
-        padding: 5px;
+        padding: 5%;
         background: white;
         font-family: 'Card';
         position: relative;
         box-sizing: border-box;
         .rank, .suit {
-          width: 14px;
+          width: $card-height * 0.14;
           text-align: center;
         }
-        .rank { font-size: 16px; }
-        .suit { font-size: 14px; }
+        .rank { font-size: $card-height * 0.16; }
+        .suit { font-size: $card-height * 0.14; }
         .large-suit {
           position: absolute;
           top: 0; left: 0; right: 0; bottom: 0;
           text-align: center;
-          font-size: 40px;
+          font-size: $card-height * 0.4;
           line-height: $card-height;
           backface-visibility: hidden;
           z-index: 0;
@@ -82,7 +81,7 @@ $card-radius: $card-height / 28;
       }
 
       .back {
-        padding: 5px;
+        padding: 5%;
         background: white;
         .card-background {
           width: 100%;
