@@ -74,8 +74,12 @@ $('.ctr-cards').ready(function() {
     },
     stop: function(evt) {
       if (cardIsInDeck(this)) {
+        var deckOffsetX = $('.deck').offset().left - $(this).parent().offset().left,
+            currentOffsetX = parseInt($(this).css("left")),
+            cardOffsetX = currentOffsetX + deckOffsetX + ($('.deck').outerWidth() * 2) - 2,
+            cardOffsetY = 30;
         $('.playing-field').append($(this).parent());
-        $(this).css({"top": parseInt($(this).css("top")) + 28 + "px", "left": parseInt($(this).css("left")) + 49 + "px"});
+        $(this).css({"left": cardOffsetX + "px", "top": parseInt($(this).css("top")) + cardOffsetY + "px"});
       }
       moveCardsToTopAndReorder();
     }
