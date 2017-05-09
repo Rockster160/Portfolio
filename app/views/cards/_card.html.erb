@@ -14,13 +14,13 @@
 
 <div class="card-container no-zoom">
   <div class="card <%= 'flipped' if flipped %>" rank="<%= rank %>" suit="<%= suit %>">
-    <div class="face back">
-      <div class="card-background"></div>
-    </div>
     <div class="face front">
       <div class="rank"><%= rank %></div>
       <div class="suit"><%= suit_unicodes[suit.to_sym].html_safe %></div>
       <div class="large-suit"><%= suit_unicodes[suit.to_sym].html_safe %></div>
+    </div>
+    <div class="face back">
+      <div class="card-background"></div>
     </div>
   </div>
 </div>

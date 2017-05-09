@@ -122,10 +122,10 @@ $('.ctr-cards').ready(function() {
 
   moveCardsToTopAndReorder = function(cards) {
     $(cards).each(function(idx) {
-      $(this).parent().css('z-index', cardsInPlay().length + 1 + idx);
+      $(this).parent().css('z-index', cardsInPlay().length + 2 + idx);
     })
     sortCardsByStackOrder(cardsInPlay()).each(function(idx) {
-      $(this).parent().css('z-index', idx);
+      $(this).parent().css('z-index', idx + 1);
     })
   }
 

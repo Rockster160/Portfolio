@@ -4,4 +4,8 @@ class CardsController < ApplicationController
     @deck = CardDeck.new
   end
 
+  def zone
+    # Authenticate for Dealer
+  end
+
 end

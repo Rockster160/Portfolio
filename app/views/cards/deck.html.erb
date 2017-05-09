@@ -1,7 +1,14 @@
-<div class="playing-field">
-  <div class="deck">
-    <% @deck.cards.count.times do %>
-      <%= render partial: 'card', locals: { card: @deck.draw } %>
-    <% end %>
+<div class="card-game-container">
+  <div class="playing-field">
+    <div class="deck">
+      <% @deck.cards.count.times do %>
+        <%= render partial: 'card', locals: { card: @deck.draw } %>
+      <% end %>
+    </div>
   </div>
+  <% if true || dealer? %>
+    <div class="dealer-controls">
+      <a href="#" class="btn add-zone" data-type="no-flip">New Zone</a>
+    </div>
+  <% end %>
 </div>
