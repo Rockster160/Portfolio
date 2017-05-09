@@ -1,4 +1,98 @@
+var currentMouseCoord;
 $('.ctr-cards').ready(function() {
+
+  addDot = function(x, y) {
+    var dot = $("<div>");
+    dot.css({
+      position: "absolute",
+      top: y + "px",
+      left: x + "px",
+      width: "1px",
+      height: "1px",
+      zIndex: 9999,
+      background: "red"
+    })
+    $('.playing-field').append(dot)
+  }
+
+  optimizeCardCoordsForField = function(coord) {
+    return constrainCenteredCardCoordToField(removeFieldPadding(offsetCenterOfCard(coord)));
+  }
+
+  offsetCenterOfCard = function(coord) {
+    var cardSize = {width: $('.card').outerWidth(), height: $('.card').outerHeight()}
+    return {left: coord.left - (cardSize.width / 2), top: coord.top - (cardSize.height / 2)}
+  }
+
+  removeFieldPadding = function(coord) {
+    var fieldPaddingLeft = parseInt($('.playing-field').css("padding-left")),
+        fieldPaddingTop = parseInt($('.playing-field').css("padding-top"));
+    return {left: coord.left - fieldPaddingLeft, top: coord.top - fieldPaddingTop};
+  }
+
+  constrainCenteredCardCoordToField = function(coord) {
+    var cardSize = {width: $('.card').outerWidth(), height: $('.card').outerHeight()},
+        fieldPaddingLeft = parseInt($('.playing-field').css("padding-left")),
+        fieldPaddingTop = parseInt($('.playing-field').css("padding-top")),
+        minX = fieldPaddingLeft + (cardSize.width / 2),
+        maxX = $('.playing-field').outerWidth() - fieldPaddingLeft - (cardSize.width / 2),
+        minY = fieldPaddingTop + (cardSize.height / 2),
+        maxY = $('.playing-field').outerHeight() - fieldPaddingTop - (cardSize.height / 2);
+    var constrainedCoord = {
+      left: [minX, maxX, coord.left].sort(function(a, b) { return a - b; })[1],
+      top: [minY, maxY, coord.top].sort(function(a, b) { return a - b; })[1]
+    }
+    return constrainedCoord;
+  }
+
+  $.fn.jump = function(x, y) {
+    this.css({"left": x + "px", "top": y + "px"});
+    console.log("JUMP (" + x + ", " + y + ")");
+    return this;
+  }
+
+  drawCard = function() {
+    var topCard = deckTopCard();
+    if (topCard == undefined) { return }
+    popCardOffDeck(topCard);
+    return topCard;
+  }
+
+  popCardOffDeck = function(card) {
+    $('.playing-field').append($(card).parent());
+    moveCardsToTopAndReorder(card);
+    var deckCoords = $('.deck').position(), cardCoords = removeFieldPadding(deckCoords)
+    $(card).jump(cardCoords.left + $('.deck').outerWidth(), cardCoords.top);
+    return card;
+  }
+
+  deckTopCard = function() {
+    return $('.deck .card-container:last-of-type .card');
+  }
+
+  animateCardToCoords = function(card, destCoord, duration) {
+    duration = duration || 200;
+    var cardPos = $(card).position(),
+        startCoord = { left: cardPos.left, top: cardPos.top },
+        xDelta = destCoord.left - startCoord.left,
+        yDelta = destCoord.top - startCoord.top,
+        xPerMs = xDelta / duration,
+        yPerMs = yDelta / duration,
+        msPerFrame = 10,
+        currentFrame = 0,
+        frameCount = duration / msPerFrame;
+
+    var cardAnimateInterval = setInterval(function() {
+      var relX = (xPerMs * msPerFrame) * currentFrame;
+      var relY = (yPerMs * msPerFrame) * currentFrame;
+      $(card).jump(startCoord.left + relX, startCoord.top + relY)
+      currentFrame += 1;
+      if (currentFrame >= frameCount) {
+        $(card).jump(destCoord.left, destCoord.top);
+        clearInterval(cardAnimateInterval);
+      }
+    }, msPerFrame);
+  }
 
   cardIsInDeck = function(card) {
     return $(card).parents(".deck").length > 0;
@@ -41,7 +135,7 @@ $('.ctr-cards').ready(function() {
   }
 
   var allFlipped = false;
-  $(window).keypress(function(evt) {
+  $(window).keydown(function(evt) {
     if (evt.which == KEY_EVENT_SPACE) {
       if (allFlipped) {
         flipCard(cardsInPlay(), "up");
@@ -50,13 +144,34 @@ $('.ctr-cards').ready(function() {
         flipCard(cardsInPlay(), "down");
         allFlipped = true;
       }
+    } else {
+
+      switch (String.fromCharCode(evt.which)) {
+        case "d", "D":
+          animateCardToCoords(drawCard(), offsetCenterOfCard(removeFieldPadding(currentMouseCoord)));
+          break;
+      }
     }
   });
+
+  $(window).mousemove(function(evt) {
+    // offset, client, screen
+    currentMouseCoord = {left: evt.clientX, top: evt.clientY};
+  })
 
   $('.card').mousedown(function(evt) {
     if (!cardIsInDeck(this)) {
       $(this).addClass("selected");
     }
+    $(this).one('mouseup', function() {
+      $(this).off('mousemove.beforeDrag');
+    });
+
+    $(this).one('mousemove.beforeDrag', function() {
+      if (cardIsInDeck(this)) {
+        popCardOffDeck(this);
+      }
+    });
   }).mouseup(function(evt) {
     if (!$(this).hasClass("dragging") && $(this).hasClass("selected")) {
       flipCard(this);
@@ -74,14 +189,6 @@ $('.ctr-cards').ready(function() {
       $(this).addClass("dragging");
     },
     stop: function(evt) {
-      if (cardIsInDeck(this)) {
-        var deckOffsetX = $('.deck').offset().left - $(this).parent().offset().left,
-            currentOffsetX = parseInt($(this).css("left")),
-            cardOffsetX = currentOffsetX + deckOffsetX + ($('.deck').outerWidth() * 2) - 2,
-            cardOffsetY = 30;
-        $('.playing-field').append($(this).parent());
-        $(this).css({"left": cardOffsetX + "px", "top": parseInt($(this).css("top")) + cardOffsetY + "px"});
-      }
       moveCardsToTopAndReorder();
     }
   });

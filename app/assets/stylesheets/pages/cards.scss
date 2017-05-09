@@ -1,9 +1,8 @@
-$card-height: 50px;
+$card-height: 100px;
 $card-width: $card-height * 0.714285714;
 $card-radius: $card-height / 28;
 
 .ctr-cards {
-  text-align: center;
   font-size: 0;
 
   .playing-field {
@@ -23,7 +22,7 @@ $card-radius: $card-height / 28;
     z-index: 0;
     font-size: 0;
     position: absolute;
-    perspective: 800;
+    perspective: 800px;
     display: inline-block;
 
     .card {
@@ -90,7 +89,7 @@ $card-radius: $card-height / 28;
           box-sizing: border-box;
 
           background-color: #4F7CAC;
-          border: 2px solid #3066BE;
+          border: 1px solid #3066BE;
           $back-circle-1: #BBDEF0; // 1 - Most Inner
           $back-circle-2: #0047A5; // 2
           $back-circle-3: #2176AE; // 3
@@ -122,7 +121,7 @@ $card-radius: $card-height / 28;
     .card-container {
       position: relative;
       margin: 0;
-      width: 1px;
+      width: $card-width / 100;
     }
   }
 }
