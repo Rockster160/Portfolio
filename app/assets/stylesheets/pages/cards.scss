@@ -1,4 +1,4 @@
-$card-height: 100px;
+$card-height: 82px;
 $card-width: $card-height * 0.714285714;
 $card-radius: $card-height / 28;
 
@@ -8,6 +8,8 @@ $card-radius: $card-height / 28;
   .playing-field {
     position: relative;
     margin: 20px;
+    margin-top: 62px;
+    margin-left: 84px;
     width: 1000px;
     height: 500px;
     background: #246E20;

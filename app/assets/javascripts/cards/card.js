@@ -16,28 +16,44 @@ $('.ctr-cards').ready(function() {
   }
 
   optimizeCardCoordsForField = function(coord) {
-    return constrainCenteredCardCoordToField(removeFieldPadding(offsetCenterOfCard(coord)));
+    return constrainCenteredCardCoordToField(offsetCenterOfCard(calibrateCoordForFieldPadding(coord)));
   }
 
-  offsetCenterOfCard = function(coord) {
+  offsetCenterOfCard = function(coord, currentPositionIsTopLeft) {
+    currentPositionIsTopLeft = currentPositionIsTopLeft || false;
+
     var cardSize = {width: $('.card').outerWidth(), height: $('.card').outerHeight()}
-    return {left: coord.left - (cardSize.width / 2), top: coord.top - (cardSize.height / 2)}
+    var tempCoord = {
+      left: coord.left - (cardSize.width / 2),
+      top: coord.top - (cardSize.height / 2)
+    }
+    if (currentPositionIsTopLeft) {
+      tempCoord = { left: tempCoord.left - cardSize.width, top: tempCoord.top - cardSize.height }
+    }
+    return tempCoord;
   }
 
-  removeFieldPadding = function(coord) {
+  calibrateCoordForFieldPadding = function(coord) {
     var fieldPaddingLeft = parseInt($('.playing-field').css("padding-left")),
         fieldPaddingTop = parseInt($('.playing-field').css("padding-top"));
     return {left: coord.left - fieldPaddingLeft, top: coord.top - fieldPaddingTop};
+  }
+
+  calibrateCoordForFieldOffset = function(coord) {
+    var fieldOffset = $('.playing-field').offset(),
+        fieldOffsetLeft = fieldOffset.left,
+        fieldOffsetTop = fieldOffset.top;
+    return {left: coord.left - fieldOffsetLeft, top: coord.top - fieldOffsetTop};
   }
 
   constrainCenteredCardCoordToField = function(coord) {
     var cardSize = {width: $('.card').outerWidth(), height: $('.card').outerHeight()},
         fieldPaddingLeft = parseInt($('.playing-field').css("padding-left")),
         fieldPaddingTop = parseInt($('.playing-field').css("padding-top")),
-        minX = fieldPaddingLeft + (cardSize.width / 2),
-        maxX = $('.playing-field').outerWidth() - fieldPaddingLeft - (cardSize.width / 2),
-        minY = fieldPaddingTop + (cardSize.height / 2),
-        maxY = $('.playing-field').outerHeight() - fieldPaddingTop - (cardSize.height / 2);
+        minX = 0,
+        maxX = $('.playing-field').width() - cardSize.width,
+        minY = 0,
+        maxY = $('.playing-field').height() - cardSize.height;
     var constrainedCoord = {
       left: [minX, maxX, coord.left].sort(function(a, b) { return a - b; })[1],
       top: [minY, maxY, coord.top].sort(function(a, b) { return a - b; })[1]
@@ -61,7 +77,8 @@ $('.ctr-cards').ready(function() {
   popCardOffDeck = function(card) {
     $('.playing-field').append($(card).parent());
     moveCardsToTopAndReorder(card);
-    var deckCoords = $('.deck').position(), cardCoords = removeFieldPadding(deckCoords)
+    var deckCoords = $('.deck').position(),
+        cardCoords = calibrateCoordForFieldPadding(deckCoords);
     $(card).jump(cardCoords.left + $('.deck').outerWidth(), cardCoords.top);
     return card;
   }
@@ -148,7 +165,10 @@ $('.ctr-cards').ready(function() {
 
       switch (String.fromCharCode(evt.which)) {
         case "d", "D":
-          animateCardToCoords(drawCard(), offsetCenterOfCard(removeFieldPadding(currentMouseCoord)));
+          animateCardToCoords(drawCard(), optimizeCardCoordsForField(currentMouseCoord));
+          break;
+        case "T":
+          addDot(currentMouseCoord.left, currentMouseCoord.top);
           break;
       }
     }
@@ -156,7 +176,7 @@ $('.ctr-cards').ready(function() {
 
   $(window).mousemove(function(evt) {
     // offset, client, screen
-    currentMouseCoord = {left: evt.clientX, top: evt.clientY};
+    currentMouseCoord = calibrateCoordForFieldOffset({left: evt.clientX, top: evt.clientY});
   })
 
   $('.card').mousedown(function(evt) {
