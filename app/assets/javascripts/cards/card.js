@@ -88,6 +88,7 @@ $('.ctr-cards').ready(function() {
   }
 
   animateCardToCoords = function(card, destCoord, duration) {
+    if (card.length == 0) { return };
     duration = duration || 200;
     var cardPos = $(card).position(),
         startCoord = { left: cardPos.left, top: cardPos.top },
