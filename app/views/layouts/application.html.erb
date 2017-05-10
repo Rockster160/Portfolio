@@ -3,7 +3,11 @@
 <head>
   <title><%= content_for(:title) || "Rocco Nicholls" %></title>
   <%= action_cable_meta_tag %>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <% if content_for? :viewport_tag %>
+    <%= content_for :viewport_tag %>
+  <% else %>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  <% end %>
   <meta name="google-site-verification" content="dA8F2chnGYw0DrE-uUDKK6j9UTtuCBcLhPgd3hOYqAk" />
   <%= stylesheet_link_tag    'application', media: 'all' %>
   <%= javascript_include_tag 'application' %>
