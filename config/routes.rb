@@ -17,6 +17,10 @@ Rails.application.routes.draw do
 
   get 'cube' => 'cubes#show'
 
+  resource :summoners_war do
+    
+  end
+
   get :account, controller: :users
   resources :users, only: [ :new, :create, :update ]
   resources :lists do

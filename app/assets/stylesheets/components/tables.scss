@@ -1,0 +1,25 @@
+table.monsters {
+  margin: 0 auto;
+  text-align: left;
+  tr {
+    td {
+      width: 100px;
+      border: 1px solid black;
+      border-collapse: collapse;
+
+      &:not(.rune-value) {
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+      &:first-of-type {
+        font-weight: bold;
+      }
+      &:not(:first-of-type) {
+        text-align: right;
+        input {
+          text-align: right;
+        }
+      }
+    }
+  }
+}
