@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20170428033402) do
+ActiveRecord::Schema.define(version: 20170511003751) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -60,6 +60,28 @@ ActiveRecord::Schema.define(version: 20170428033402) do
     t.datetime "updated_at"
     t.string   "regex",      limit: 255
     t.string   "message",    limit: 255
+  end
+
+  create_table "monster_skills", force: :cascade do |t|
+    t.integer "monster_id"
+    t.string  "name"
+    t.text    "description"
+    t.string  "stat"
+    t.index ["monster_id"], name: "index_monster_skills_on_monster_id", using: :btree
+  end
+
+  create_table "monsters", force: :cascade do |t|
+    t.string  "name"
+    t.string  "url"
+    t.integer "element"
+    t.integer "health"
+    t.integer "attack"
+    t.integer "defense"
+    t.integer "speed"
+    t.integer "crit_rate"
+    t.integer "crit_damage"
+    t.integer "resistance"
+    t.integer "accuracy"
   end
 
   create_table "user_lists", force: :cascade do |t|

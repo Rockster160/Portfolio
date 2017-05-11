@@ -1,56 +1,20 @@
 <div class="text-center">
-  <select class="monster-selector" name="monster-selector">
+  <select class="monster-selector" name="monster-selector" data-monster-details="<%= summoners_war_monsters_path %>">
     <option value=""></option>
+    <% @monsters.each do |monster| %>
+      <option value="<%= monster.id %>"><%= monster.name %></option>
+    <% end %>
   </select>
 
   <table class="monsters">
-    <tr type="health">
-      <td class="attr-title">Health</td>
-      <td class="attr-value"></td>
-      <td class="rune-value"><input type="text" name="health"></td>
-      <td class="computed-total"></td>
-    </tr>
-    <tr type="attack">
-      <td class="attr-title">Attack</td>
-      <td class="attr-value"></td>
-      <td class="rune-value"><input type="text" name="attack"></td>
-      <td class="computed-total"></td>
-    </tr>
-    <tr type="defense">
-      <td class="attr-title">Defense</td>
-      <td class="attr-value"></td>
-      <td class="rune-value"><input type="text" name="defense"></td>
-      <td class="computed-total"></td>
-    </tr>
-    <tr type="speed">
-      <td class="attr-title">Speed</td>
-      <td class="attr-value"></td>
-      <td class="rune-value"><input type="text" name="speed"></td>
-      <td class="computed-total"></td>
-    </tr>
-    <tr type="crit_rate">
-      <td class="attr-title">Crit rate</td>
-      <td class="attr-value"></td>
-      <td class="rune-value"><input type="text" name="crit_rate"></td>
-      <td class="computed-total"></td>
-    </tr>
-    <tr type="crit_dmg">
-      <td class="attr-title">Crit dmg</td>
-      <td class="attr-value"></td>
-      <td class="rune-value"><input type="text" name="crit_dmg"></td>
-      <td class="computed-total"></td>
-    </tr>
-    <tr type="accuracy">
-      <td class="attr-title">Accuracy</td>
-      <td class="attr-value"></td>
-      <td class="rune-value"><input type="text" name="accuracy"></td>
-      <td class="computed-total"></td>
-    </tr>
-    <tr type="resistance">
-      <td class="attr-title">Resistance</td>
-      <td class="attr-value"></td>
-      <td class="rune-value"><input type="text" name="resistance"></td>
-      <td class="computed-total"></td>
-    </tr>
+    <% [ :HP, :ATK, :DEF, :SPD, :CRI_RATE, :CRI_DMG, :RES, :ACC ].each do |attr_sym| %>
+      <% long_sym = Monster.long_code(attr_sym) %>
+      <tr type="<%= long_sym %>">
+        <td class="attr-title"><%= attr_sym.to_s.titleize.upcase %></td>
+        <td class="attr-value"></td>
+        <td class="rune-value"><input type="text" name="<%= long_sym %>"></td>
+        <td class="computed-total"></td>
+      </tr>
+    <% end %>
   </table>
 </div>

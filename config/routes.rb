@@ -18,7 +18,8 @@ Rails.application.routes.draw do
   get 'cube' => 'cubes#show'
 
   resource :summoners_war do
-    
+    resources :monsters
+    resources :monster_skills
   end
 
   get :account, controller: :users

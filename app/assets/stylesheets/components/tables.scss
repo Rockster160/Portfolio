@@ -7,6 +7,7 @@ table.monsters {
       border: 1px solid black;
       border-collapse: collapse;
 
+      p { text-align: left; }
       &:not(.rune-value) {
         padding-left: 10px;
         padding-right: 10px;
