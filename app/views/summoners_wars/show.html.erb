@@ -1,3 +1,7 @@
+<% content_for :head do %>
+  <%= javascript_include_tag 'support/words_to_numbers.js' %>
+<% end %>
+
 <div class="text-center">
   <select class="monster-selector" name="monster-selector" data-monster-details="<%= summoners_war_monsters_path %>">
     <option value=""></option>
@@ -9,7 +13,7 @@
   <table class="monsters">
     <% [ :HP, :ATK, :DEF, :SPD, :CRI_RATE, :CRI_DMG, :RES, :ACC ].each do |attr_sym| %>
       <% long_sym = Monster.long_code(attr_sym) %>
-      <tr type="<%= long_sym %>">
+      <tr type="<%= attr_sym %>" data-long-type="<%= long_sym %>">
         <td class="attr-title"><%= attr_sym.to_s.titleize.upcase %></td>
         <td class="attr-value"></td>
         <td class="rune-value"><input type="text" name="<%= long_sym %>"></td>
