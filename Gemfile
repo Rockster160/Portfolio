@@ -35,6 +35,7 @@ gem 'nokogiri'
 gem 'capybara'
 gem 'poltergeist'
 gem 'launchy'
+gem 'numbers_in_words'
 
 group :development, :test do
   gem 'annotate'

@@ -50,6 +50,7 @@ module MonsterScraper
       monster_attrs = {
         name: monster_name,
         image_url: monster_section.all('.monster-box')[1].find('.monster-box-thumb > img')['src'],
+        stars: monster_section.all('.monster-box')[1].all('.monster-box-thumb span > *').count,
         element: monster_section.all('.bestiary-name h1 img')[1]['src'].split(/\/|\./).second_to_last,
         archetype: monster_section.all('.bestiary-name h1 small')[1].text.squish.downcase,
         health: value_from_tr(stats.all('tr')[1]).to_i,
@@ -61,17 +62,26 @@ module MonsterScraper
         accuracy: value_from_tr(stats.all('tr')[7]).to_i,
         resistance: value_from_tr(stats.all('tr')[8]).to_i,
         last_updated: DateTime.current
-      }
-      binding.pry
+      }.reject { |mk,mv| mv.blank? }
+      monster.update(monster_attrs)
 
-      skill_attrs = {
-        name: '',
-        description: '',
-        muliplier_formula: ''
-      }
-      # Fix multiplier:
-      # remove (Fixed)
-      # Change "MAX HP" to HP
+      skill_containers = info.first('.row').all('.col-lg-4 .panel')
+      skill_containers.each do |skill_container|
+        multiplier = skill_container.all('.list-group .list-group-item p').last.text
+        multiplier = multiplier.gsub("(Fixed)", "").gsub(/max hp/i, "HP").squish
+
+        description = skill_container.all('.list-group .list-group-item p').first.text
+        hit_count = NumbersInWords.in_numbers(description.match(/attacks the enemy \w+ times/i).to_s[18..-7]).to_i
+
+        skill_attrs = {
+          name: skill_container.find('.panel-heading .panel-title strong').text,
+          description: description,
+          muliplier_formula: multiplier + (hit_count.to_i > 1 ? " x#{hit_count}" : "")
+        }.reject { |mk,mv| mv.blank? }
+        monster.monster_skills.find_or_create_by(name: skill_attrs[:name]).update(skill_attrs)
+      end
+
+      monster
     end
 
 

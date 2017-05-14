@@ -74,6 +74,7 @@ ActiveRecord::Schema.define(version: 20170511003751) do
     t.string   "name"
     t.string   "url"
     t.string   "image_url"
+    t.integer  "stars"
     t.integer  "element"
     t.integer  "archetype"
     t.integer  "health"

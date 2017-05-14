@@ -4,6 +4,7 @@ class CreateSwMonsters < ActiveRecord::Migration[5.0]
       t.string :name
       t.string :url
       t.string :image_url
+      t.integer :stars
       t.integer :element # Enum
       t.integer :archetype # Enum
 

@@ -53,8 +53,8 @@ $('.ctr-summoners_wars').ready(function() {
     var skills = currentMonster["monster_skills"];
     $(skills).each(function(idx) {
       var skillRow = $("<tr>", {type: "SKILL"}),
-          skillNameCol = $("<td>").html(this["name"] + "<br>" + '<ul class="stats"></ul>'),
-          skillDescCol = $("<td>", {colspan: "2"}).html("<p>" + this["description"] + "</p><p>" + this["stat"] + "</p>"),
+          skillNameCol = $("<td>").html(this['name'] + '<br><p class="normal">' + this["muliplier_formula"] + '</p>'),
+          skillDescCol = $("<td>", {colspan: "2"}).html("<p>" + this["description"] + "</p>"),
           skillValCol = $("<td>").html(calculateSkill(this, skillNameCol));
       $('table.monsters').append(skillRow.append(skillNameCol, skillDescCol, skillValCol));
     })
@@ -72,57 +72,54 @@ $('.ctr-summoners_wars').ready(function() {
   }
 
   formatNum = function(num) {
-    var chars = num.toString(), charCount = chars.length, formattedStrParts = [];
+    var splitByDecimal = num.toString().split(".");
+    var chars = splitByDecimal[0], decimals = splitByDecimal[1], charCount = chars.length, formattedStrParts = [];
     while (chars.length > 3) {
       formattedStrParts.push(chars.substr(-3))
       chars = chars.substring(0, chars.length - 3)
     }
     formattedStrParts.push(chars)
-    return formattedStrParts.reverse().filter(function(part) { return parseInt(part) > 0 || part == "0" }).join(",")
+    var withCommas = formattedStrParts.reverse().filter(function(part) { return parseInt(part) > 0 || part == "0" }).join(",")
+    if (decimals) { withCommas = withCommas + "." + decimals };
+
+    return withCommas;
+  }
+
+  formatStringOfNums = function(str) {
+    $(str.match(/\d+(\.\d+)?/g)).each(function() {
+      var isNum = !Number.isNaN(parseFloat(this));
+      if (isNum) {
+        var rounded = Math.round(this * 10) / 10
+        str = str.replace(this, formatNum(rounded))
+      }
+    })
+    return str
+  }
+
+  monsterStats = function() {
+    var stats = {};
+    $('tr[type!=SKILL]').each(function() {
+      stats[$(this).attr("type")] = getValueFromField($(this).find('.computed-total'));
+    })
+    return stats;
   }
 
   calculateSkill = function(skillJson, skillNameCol) {
-    var skill = skillJson.stat.split("if")[0],
-        skillStrings = skill.match(/(\d+|\(.*?\))%( x\d+)?( of the .*? stat)( \+ \d+ damage)?( per hit for \w+ hits)?/g)
-        hitsCount = 1,
+    var skill = skillJson.muliplier_formula,
+        hitsCount = $(skill.match(/x\d+$/))[0],
         multipliers = [];
 
-    $(skillStrings).each(function() {
-      var skillStr = this.toString(),
-          statStr = skillStr.match(/of the .*? stat/g)[0],
-          stat = statStr.substr(7, statStr.length - 12).replace("MAX ", ""),
-          hitsStrings = skillStr.match(/(per hit for \w+ hit)|(x\d+)/g),
-          hitsStr = hitsStrings == null ? "1" : hitsStrings[0].replace("per hit for ", "").replace(/ hit(s?)/, "").replace("x", ""),
-          tempHitsCount = W2N.wordToNumber(hitsStr) || 1;
-          multiplier = skillStr.match(/(\d+|\(.*?\))%/g)[0];
-      hitsCount = tempHitsCount > hitsCount ? tempHitsCount : hitsCount;
-      multipliers.push(multiplier + stat);
+    $(skill.match(/(HP|ATK|DEF|SPD|CRI_Rate|CRI_DMG|RES|ACC)/ig)).each(function() {
+      skill = skill.replace(this, getValueFromField($('tr[type=' + this + '] .computed-total')));
     })
 
-    $(skillNameCol).find(".stats").append($("<li>").html(multipliers.join(" + ")));
-    $(skillNameCol).find(".stats").append($("<li>").html("Hits: " + hitsCount));
-    // $(data[1][0]).find(".basic-tooltip").map(function() { return $(this).attr("title") })
-    // Show ?? if based on enemies / if stat cannot be found
+    var expr = Parser.parse(skill.replace(/ x\d+$/, ""));
+    // toString twice because toString on the expression returns a number if the
+    //   the evaluation completes
+    var simplified = expr.simplify(monsterStats()).toString().toString();
+    var formatted = formatStringOfNums(simplified);
 
-    var skillVal = 0;
-    $(multipliers).each(function(idx) {
-      var statName = this.match(/\w+$/)[0],
-          statModifier = this.substr(0, this.length - statName.length);
-      //
-      var statValue = getValueFromField($('tr[type=' + statName + '] .computed-total'));
-      $(statModifier.match(/[a-zA-Z]+/g)).each(function() {
-        var statCalc = getValueFromField($('tr[type=' + this.toString() + '] .computed-total'));
-        if (statCalc) { statModifier = statModifier.replace(this, statCalc) };
-      })
-      if (statModifier.trim().slice(-1) == "%") {
-        var evaluatedModifier = Math.round(parseFloat(eval(statModifier.slice(0, -1))) / 100);
-      } else {
-        return skillVal = "??";
-      }
-      skillVal += evaluatedModifier * statValue;
-    })
-
-    return skillVal == "??" ? "??" : formatNum(skillVal);
+    return formatted;
   }
 
   parseNum = function(numStr) {

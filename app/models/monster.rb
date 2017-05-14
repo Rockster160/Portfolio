@@ -6,6 +6,7 @@
 #  name         :string
 #  url          :string
 #  image_url    :string
+#  stars        :integer
 #  element      :integer
 #  archetype    :integer
 #  health       :integer
