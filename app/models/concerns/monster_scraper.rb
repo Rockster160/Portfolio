@@ -38,10 +38,42 @@ module MonsterScraper
       return unless monster.try(:url).present?
       puts "Visiting Monster page..."
       page.visit(monster.url)
+
+      monster_section = page.first('.tab-pane')
+      monster_name = text_without_children(monster_section.all('.bestiary-name')[1], 'h1')
+      puts "Found #{monster_name}"
+
+      monster_content = monster_section.all('.clearfix + .row')[1]
+      info = monster_content.all('.col-lg-6')[0]
+      stats = monster_content.all('.col-lg-6')[1]
+
+      monster_attrs = {
+        name: monster_name,
+        image_url: monster_section.all('.monster-box')[1].find('.monster-box-thumb > img')['src'],
+        element: monster_section.all('.bestiary-name h1 img')[1]['src'].split(/\/|\./).second_to_last,
+        archetype: monster_section.all('.bestiary-name h1 small')[1].text.squish.downcase,
+        health: value_from_tr(stats.all('tr')[1]).to_i,
+        attack: value_from_tr(stats.all('tr')[2]).to_i,
+        defense: value_from_tr(stats.all('tr')[3]).to_i,
+        speed: value_from_tr(stats.all('tr')[4]).to_i,
+        crit_rate: value_from_tr(stats.all('tr')[5]).to_i,
+        crit_damage: value_from_tr(stats.all('tr')[6]).to_i,
+        accuracy: value_from_tr(stats.all('tr')[7]).to_i,
+        resistance: value_from_tr(stats.all('tr')[8]).to_i,
+        last_updated: DateTime.current
+      }
       binding.pry
 
-      # $('.tab-pane')
+      skill_attrs = {
+        name: '',
+        description: '',
+        muliplier_formula: ''
+      }
+      # Fix multiplier:
+      # remove (Fixed)
+      # Change "MAX HP" to HP
     end
+
 
     private
 
@@ -74,6 +106,15 @@ module MonsterScraper
 
     def url_from_row(row)
       row.first("td a")['href']
+    end
+
+    def text_without_children(parent, selector)
+      child_selectors = parent.all("#{selector} > *").map(&:text).join("|")
+      parent.find(selector).text.gsub(/#{child_selectors}/i, "").squish
+    end
+
+    def value_from_tr(tr)
+      tr.all("td").map(&:text).map(&:presence).compact.last
     end
 
   end
