@@ -2,18 +2,21 @@
 #
 # Table name: monsters
 #
-#  id          :integer          not null, primary key
-#  name        :string
-#  url         :string
-#  element     :integer
-#  health      :integer
-#  attack      :integer
-#  defense     :integer
-#  speed       :integer
-#  crit_rate   :integer
-#  crit_damage :integer
-#  resistance  :integer
-#  accuracy    :integer
+#  id           :integer          not null, primary key
+#  name         :string
+#  url          :string
+#  image_url    :string
+#  element      :integer
+#  archetype    :integer
+#  health       :integer
+#  attack       :integer
+#  defense      :integer
+#  speed        :integer
+#  crit_rate    :integer
+#  crit_damage  :integer
+#  resistance   :integer
+#  accuracy     :integer
+#  last_updated :datetime
 #
 
 class Monster < ApplicationRecord
@@ -29,11 +32,19 @@ class Monster < ApplicationRecord
   # ACC
 
   enum element: {
-    fire:  1,
-    water: 2,
-    wind:  3,
-    light: 4,
-    dark:  5
+    fire:  0,
+    water: 1,
+    wind:  2,
+    light: 3,
+    dark:  4
+  }
+
+  enum archetype: {
+    attack:   0,
+    hp:       1,
+    support:  2,
+    defense:  3,
+    material: 4
   }
 
   def short_code; self.class.short_code; end
@@ -75,6 +86,10 @@ class Monster < ApplicationRecord
     when :RES,      :resistance  then resistance
     when :ACC,      :accuracy    then accuracy
     end
+  end
+
+  def reload_data
+    MonsterScraper.update_monster_data(self)
   end
 
 end

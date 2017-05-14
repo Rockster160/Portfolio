@@ -66,22 +66,25 @@ ActiveRecord::Schema.define(version: 20170511003751) do
     t.integer "monster_id"
     t.string  "name"
     t.text    "description"
-    t.string  "stat"
+    t.string  "muliplier_formula"
     t.index ["monster_id"], name: "index_monster_skills_on_monster_id", using: :btree
   end
 
   create_table "monsters", force: :cascade do |t|
-    t.string  "name"
-    t.string  "url"
-    t.integer "element"
-    t.integer "health"
-    t.integer "attack"
-    t.integer "defense"
-    t.integer "speed"
-    t.integer "crit_rate"
-    t.integer "crit_damage"
-    t.integer "resistance"
-    t.integer "accuracy"
+    t.string   "name"
+    t.string   "url"
+    t.string   "image_url"
+    t.integer  "element"
+    t.integer  "archetype"
+    t.integer  "health"
+    t.integer  "attack"
+    t.integer  "defense"
+    t.integer  "speed"
+    t.integer  "crit_rate"
+    t.integer  "crit_damage"
+    t.integer  "resistance"
+    t.integer  "accuracy"
+    t.datetime "last_updated"
   end
 
   create_table "user_lists", force: :cascade do |t|

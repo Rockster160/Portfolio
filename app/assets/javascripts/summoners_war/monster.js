@@ -81,15 +81,6 @@ $('.ctr-summoners_wars').ready(function() {
     return formattedStrParts.reverse().filter(function(part) { return parseInt(part) > 0 || part == "0" }).join(",")
   }
 
-
-
-  skillsFrom = function(url) {
-    $.get(url).success(function(data) {
-      $(data).find(".basic-tooltip").map(function() { console.log($(this).attr("title")); })
-    })
-  }
-
-
   calculateSkill = function(skillJson, skillNameCol) {
     var skill = skillJson.stat.split("if")[0],
         skillStrings = skill.match(/(\d+|\(.*?\))%( x\d+)?( of the .*? stat)( \+ \d+ damage)?( per hit for \w+ hits)?/g)

@@ -31,6 +31,10 @@ gem 'bcrypt'
 gem 'rails_autolink'
 gem 'exception_notification'
 gem 'slack-notifier'
+gem 'nokogiri'
+gem 'capybara'
+gem 'poltergeist'
+gem 'launchy'
 
 group :development, :test do
   gem 'annotate'
