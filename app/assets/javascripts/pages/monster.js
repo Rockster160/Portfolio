@@ -59,9 +59,13 @@ $('.ctr-summoners_wars').ready(function() {
     var skills = currentMonster["monster_skills"];
     $(skills).each(function(idx) {
       var skillRow = $("<tr>", {type: "SKILL"}),
-          skillNameCol = $("<td>").html(this['name'] + '<br><p class="normal">' + this["muliplier_formula"] + '</p>'),
+          skillNameCol = $("<td>").html('<p>' + this['name'] + '</p><p class="normal">' + this["muliplier_formula"] + '</p>'),
           skillDescCol = $("<td>", {colspan: "2"}).html("<p>" + this["description"] + "</p>"),
-          skillValCol = $("<td>").html(calculateSkill(this, skillNameCol));
+          skillVal = calculateSkill(this, skillNameCol)
+          skillValCol = $("<td>").html(skillVal);
+      if (!skillVal.match(/[^\d,\.( x\d+$)]/)) {
+        skillValCol.append('<span class="crit">Crit: ' + calculateCrit(skillVal) + '</span>')
+      }
       $('table.monsters').append(skillRow.append(skillNameCol, skillDescCol, skillValCol));
     })
   }
@@ -72,7 +76,11 @@ $('.ctr-summoners_wars').ready(function() {
       if (!(fieldVal == 0 || fieldVal)) {
         $(this).html("N/A");
       } else {
-        $(this).html(formatNum(fieldVal));
+        if ([ "CRI_RATE", "CRI_DMG", "RES", "ACC" ].includes($(this).parent().attr("type"))) {
+          $(this).html(formatNum(fieldVal) + "%");
+        } else {
+          $(this).html(formatNum(fieldVal));
+        }
       }
     })
   }
@@ -95,7 +103,7 @@ $('.ctr-summoners_wars').ready(function() {
     $(str.match(/\d+(\.\d+)?/g)).each(function() {
       var isNum = !Number.isNaN(parseFloat(this));
       if (isNum) {
-        var rounded = Math.round(this * 10) / 10
+        var rounded = round(this);
         str = str.replace(this, formatNum(rounded))
       }
     })
@@ -127,6 +135,15 @@ $('.ctr-summoners_wars').ready(function() {
     if (hitsCount) { formatted = formatted + " " + hitsCount };
 
     return formatted;
+  }
+
+  calculateCrit = function(skillValStr) {
+    var skillDMG = parseFloat(skillValStr.replace(/[^\d\.]/g, "")), critMult = getValueFromField($('tr[type=CRI_DMG] .computed-total'));
+    return formatNum(round(skillDMG + (skillDMG * (critMult / 100))));
+  }
+
+  round = function(num) {
+    return Math.round(num * 100) / 100;
   }
 
   parseNum = function(numStr) {

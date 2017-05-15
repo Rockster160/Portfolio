@@ -11,4 +11,5 @@
 
 class MonsterSkill < ApplicationRecord
   belongs_to :monster
+  default_scope { order(id: :asc) }
 end

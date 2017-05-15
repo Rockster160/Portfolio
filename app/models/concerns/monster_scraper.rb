@@ -68,6 +68,7 @@ module MonsterScraper
         multiplier = multiplier.gsub("(Fixed)", "").gsub(/max hp/i, "HP").squish
 
         description = skill_container.all('.list-group .list-group-item p').first.try(:text).to_s
+        multiplier = description == multiplier ? "" : multiplier
         hit_count = NumbersInWords.in_numbers(description.match(/attacks the enemy \w+ times/i).to_s[18..-7]).to_i
         binding.pry unless skill_container.all('.panel-heading .panel-title strong').any?
         skill_attrs = {
