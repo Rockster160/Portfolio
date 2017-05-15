@@ -1,6 +1,12 @@
 var currentMonster;
 $('.ctr-summoners_wars').ready(function() {
 
+  $('.monster-selector').searchableFromSelect({
+    templateFromOption: function(option) {
+      return '<div>' + option.stars + '<i class="fa fa-star"></i>' + option.text + '</div>';
+    }
+  })
+
   $('input').on('change input keydown', function() {
     updateCalculations();
   })

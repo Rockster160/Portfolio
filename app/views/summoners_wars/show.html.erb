@@ -1,13 +1,14 @@
 <% content_for :head do %>
   <%= javascript_include_tag 'support/words_to_numbers.js' %>
   <%= javascript_include_tag 'support/parser.js' %>
+  <%= javascript_include_tag 'support/searchable.js' %>
 <% end %>
 
 <div class="text-center">
   <select class="monster-selector" name="monster-selector" data-monster-details="<%= summoners_war_monsters_path %>">
     <option value=""></option>
     <% @monsters.each do |monster| %>
-      <option value="<%= monster.id %>"><%= monster.name %></option>
+      <option value="<%= monster.id %>" data-stars="<%= monster.stars %>" data-element="<%= monster.element %>" data-archetype="<%= monster.archetype %>"><%= monster.name %></option>
     <% end %>
   </select>
 
