@@ -322,7 +322,8 @@ $('.selector').searchableFromSelect()
         name: "dropdown-searchable-field-" + dropdown_uniq_searchable_id,
         "data-uniq-searchable-id": dropdown_uniq_searchable_id,
         placeholder: placeholder,
-        class: "dropdown-searchable-generated-text-field dropdown-searchable-field-" + dropdown_uniq_searchable_id + ' ' + options["additional_classes"]
+        class: "dropdown-searchable-generated-text-field dropdown-searchable-field-" + dropdown_uniq_searchable_id + ' ' + options["additional_classes"],
+        width: $(this).outerWidth()
       })
       search_field.insertAfter(dropdown);
 
