@@ -18,6 +18,8 @@ class CreateSwMonsters < ActiveRecord::Migration[5.0]
       t.integer :accuracy # ACC
 
       t.datetime :last_updated
+
+      t.timestamps
     end
 
     create_table :monster_skills do |t|
@@ -25,6 +27,8 @@ class CreateSwMonsters < ActiveRecord::Migration[5.0]
       t.string :name
       t.text :description
       t.string :muliplier_formula
+      t.integer :sort_order
+      t.timestamps
     end
   end
 end

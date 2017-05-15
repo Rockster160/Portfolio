@@ -18,6 +18,8 @@
 #  resistance   :integer
 #  accuracy     :integer
 #  last_updated :datetime
+#  created_at   :datetime         not null
+#  updated_at   :datetime         not null
 #
 
 class Monster < ApplicationRecord

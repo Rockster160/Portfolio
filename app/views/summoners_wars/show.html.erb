@@ -8,7 +8,7 @@
   <select class="monster-selector" name="monster-selector" data-monster-details="<%= summoners_war_monsters_path %>">
     <option value=""></option>
     <% @monsters.each do |monster| %>
-      <option value="<%= monster.id %>" data-stars="<%= monster.stars %>" data-element="<%= monster.element %>" data-archetype="<%= monster.archetype %>"><%= monster.name %></option>
+      <option value="<%= monster.id %>" data-stars="<%= monster.stars %>" data-element="<%= monster.element %>" data-archetype="<%= monster.archetype %>" data-thumb="<%= monster.image_url %>"><%= monster.name %></option>
     <% end %>
   </select>
 

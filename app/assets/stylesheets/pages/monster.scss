@@ -3,12 +3,33 @@
     width: 250px;
     display: block;
   }
+  .monster-option {
+    * { margin-right: 5px; }
+    img {
+      height: 20px;
+      max-height: 20px;
+      max-width: 20px;
+      vertical-align: middle;
+      &.monster-thumb {
+        height: 30px;
+        max-height: 30px;
+        max-width: 30px;
+        border-radius: 4px;
+      }
+    }
+    .fa-star {
+      color: gold;
+      text-shadow: 0px 0px 1px #BBB;
+    }
+  }
   .crit {
     display: block;
     font-weight: bold;
   }
   // .js-searchable-menu
   // .searchable-loading-container
-  // .js-searchable-option-wrapper
+  .js-searchable-option-wrapper {
+    padding: 1px 10px;
+  }
   // &.searchable-toSelect
 }

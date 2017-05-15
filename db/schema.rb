@@ -63,10 +63,13 @@ ActiveRecord::Schema.define(version: 20170511003751) do
   end
 
   create_table "monster_skills", force: :cascade do |t|
-    t.integer "monster_id"
-    t.string  "name"
-    t.text    "description"
-    t.string  "muliplier_formula"
+    t.integer  "monster_id"
+    t.string   "name"
+    t.text     "description"
+    t.string   "muliplier_formula"
+    t.integer  "sort_order"
+    t.datetime "created_at",        null: false
+    t.datetime "updated_at",        null: false
     t.index ["monster_id"], name: "index_monster_skills_on_monster_id", using: :btree
   end
 
@@ -86,6 +89,8 @@ ActiveRecord::Schema.define(version: 20170511003751) do
     t.integer  "resistance"
     t.integer  "accuracy"
     t.datetime "last_updated"
+    t.datetime "created_at",   null: false
+    t.datetime "updated_at",   null: false
   end
 
   create_table "user_lists", force: :cascade do |t|

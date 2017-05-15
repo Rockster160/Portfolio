@@ -2,8 +2,13 @@ var currentMonster;
 $('.ctr-summoners_wars').ready(function() {
 
   $('.monster-selector').searchableFromSelect({
-    templateFromOption: function(option) {
-      return '<div>' + option.stars + '<i class="fa fa-star"></i>' + option.text + '</div>';
+    templateFromOption: function(monster) {
+      return '<div class="monster-option">' +
+        '<img class="monster-thumb" src="' + monster.thumb + '" alt="' + monster.name + '">' +
+        monster.stars + '<i class="fa fa-star"></i>' +
+        '<img src="https://swarfarm.com/static/herders/images/elements/' + monster.element + '.png" alt="' + monster.element + '">' +
+        monster.text + ' [' + monster.archetype + ']' +
+        '</div>';
     }
   })
 
