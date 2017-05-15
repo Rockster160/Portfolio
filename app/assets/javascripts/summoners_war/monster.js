@@ -105,19 +105,20 @@ $('.ctr-summoners_wars').ready(function() {
   }
 
   calculateSkill = function(skillJson, skillNameCol) {
-    var skill = skillJson.muliplier_formula,
+    var skill = skillJson.muliplier_formula || "",
         hitsCount = $(skill.match(/x\d+$/))[0],
         multipliers = [];
-
+    if (!skill) { return "N/A" }
     $(skill.match(/(HP|ATK|DEF|SPD|CRI_Rate|CRI_DMG|RES|ACC)/ig)).each(function() {
-      skill = skill.replace(this, getValueFromField($('tr[type=' + this + '] .computed-total')));
+      skill = skill.replace("\b" + this, getValueFromField($('tr[type=' + this + '] .computed-total')));
     })
 
-    var expr = Parser.parse(skill.replace(/ x\d+$/, ""));
+    var expr = Parser.parse(skill.replace(/ x\d+$/, "").replace(/(\w) (\w)/g, "$1_$2"));
     // toString twice because toString on the expression returns a number if the
     //   the evaluation completes
     var simplified = expr.simplify(monsterStats()).toString().toString();
     var formatted = formatStringOfNums(simplified);
+    if (hitsCount) { formatted = formatted + " " + hitsCount };
 
     return formatted;
   }

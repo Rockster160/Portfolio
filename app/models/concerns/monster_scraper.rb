@@ -2,11 +2,6 @@ require 'capybara/poltergeist'
 # MonsterScraper.scrape
 module MonsterScraper
   class << self
-    # http://summonerswar.wikia.com/wiki/Fire_Monsters
-    # http://summonerswar.wikia.com/wiki/Water_Monsters
-    # http://summonerswar.wikia.com/wiki/Wind_Monsters
-    # http://summonerswar.wikia.com/wiki/Dark_Monsters
-    # http://summonerswar.wikia.com/wiki/Light_Monsters
 
     def scrape(opts={})
       setup_capybara
@@ -18,7 +13,7 @@ module MonsterScraper
       last_page = page.all(".pager-btn").map(&:text).uniq.map(&:to_i).max
 
       @monster_urls += awakened_monster_urls
-      until page_num > last_page
+      until page_num >= last_page
         puts "Rows: #{@monster_urls.count} Page: #{page_num}/#{last_page}"
         page_num += 1
         page.evaluate_script("$('#id_page').val(#{page_num})")
@@ -29,8 +24,9 @@ module MonsterScraper
       puts "Rows: #{@monster_urls.count}"
       @monster_urls.uniq!
       @monster_urls.each do |monster_url|
-        Monster.find_or_create_by(url: monster_url).reload_data
+        Monster.find_or_create_by(url: monster_url)
       end
+      Monster.where(name: nil).each(&:reload_data)
     end
 
     def update_monster_data(monster)
@@ -40,19 +36,19 @@ module MonsterScraper
       page.visit(monster.url)
 
       monster_section = page.first('.tab-pane')
-      monster_name = text_without_children(monster_section.all('.bestiary-name')[1], 'h1')
+      monster_name = text_without_children(monster_section.all('.bestiary-name').last, 'h1')
       puts "Found #{monster_name}"
 
-      monster_content = monster_section.all('.clearfix + .row')[1]
+      monster_content = monster_section.all('.clearfix + .row').last
       info = monster_content.all('.col-lg-6')[0]
-      stats = monster_content.all('.col-lg-6')[1]
+      stats = monster_content.all('.col-lg-6').last
 
       monster_attrs = {
         name: monster_name,
-        image_url: monster_section.all('.monster-box')[1].find('.monster-box-thumb > img')['src'],
-        stars: monster_section.all('.monster-box')[1].all('.monster-box-thumb span > *').count,
-        element: monster_section.all('.bestiary-name h1 img')[1]['src'].split(/\/|\./).second_to_last,
-        archetype: monster_section.all('.bestiary-name h1 small')[1].text.squish.downcase,
+        image_url: monster_section.all('.monster-box').last.find('.monster-box-thumb > img')['src'],
+        stars: monster_section.all('.monster-box').last.all('.monster-box-thumb span > *').count,
+        element: monster_section.all('.bestiary-name h1 img').last['src'].split(/\/|\./).second_to_last,
+        archetype: monster_section.all('.bestiary-name h1 small').last.text.squish.downcase,
         health: value_from_tr(stats.all('tr')[1]).to_i,
         attack: value_from_tr(stats.all('tr')[2]).to_i,
         defense: value_from_tr(stats.all('tr')[3]).to_i,
@@ -65,14 +61,15 @@ module MonsterScraper
       }.reject { |mk,mv| mv.blank? }
       monster.update(monster_attrs)
 
-      skill_containers = info.first('.row').all('.col-lg-4 .panel')
+      skill_containers = info.all('.row').last.all('[class^=col] .panel')
       skill_containers.each do |skill_container|
-        multiplier = skill_container.all('.list-group .list-group-item p').last.text
+        next unless skill_container.all('.panel-heading').any?
+        multiplier = skill_container.all('.list-group .list-group-item p').last.try(:text).to_s
         multiplier = multiplier.gsub("(Fixed)", "").gsub(/max hp/i, "HP").squish
 
-        description = skill_container.all('.list-group .list-group-item p').first.text
+        description = skill_container.all('.list-group .list-group-item p').first.try(:text).to_s
         hit_count = NumbersInWords.in_numbers(description.match(/attacks the enemy \w+ times/i).to_s[18..-7]).to_i
-
+        binding.pry unless skill_container.all('.panel-heading .panel-title strong').any?
         skill_attrs = {
           name: skill_container.find('.panel-heading .panel-title strong').text,
           description: description,
@@ -119,6 +116,7 @@ module MonsterScraper
     end
 
     def text_without_children(parent, selector)
+      return unless parent && selector
       child_selectors = parent.all("#{selector} > *").map(&:text).join("|")
       parent.find(selector).text.gsub(/#{child_selectors}/i, "").squish
     end
