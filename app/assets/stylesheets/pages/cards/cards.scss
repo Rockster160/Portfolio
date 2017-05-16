@@ -1,6 +1,8 @@
-$card-height: 82px;
+$card-height: 150px;
+// $card-height: 82px;
 $card-width: $card-height * 0.714285714;
 $card-radius: $card-height / 28;
+$one-third: 100% / 3;
 
 .ctr-cards {
   font-size: 0;
@@ -85,26 +87,85 @@ $card-radius: $card-height / 28;
         padding: 5%;
         background: white;
         .card-background {
+          $bg-height: $card-height * 0.95;
           width: 100%;
           height: 100%;
           border-radius: $card-radius / 2;
           box-sizing: border-box;
 
-          background-color: #4F7CAC;
-          border: 1px solid #3066BE;
-          $back-circle-1: #BBDEF0; // 1 - Most Inner
-          $back-circle-2: #0047A5; // 2
-          $back-circle-3: #2176AE; // 3
-          $back-circle-4: #FFFFFF; // 4
-          $back-circle-5: #3D94F6; // 5
-          $back-circle-6: #0A2463; // 6
-          $back-circle-7: #07A0C3; // 7 - Most Outer
-          $one-third: 100% / 3;
-          background-image:
-            radial-gradient(closest-side, transparent 0%, transparent 75%, $back-circle-7 76%, $back-circle-7 85%, $back-circle-6 86%, $back-circle-6 94%, $back-circle-4 95%, $back-circle-4 103%, $back-circle-5 104%, $back-circle-5 112%, $back-circle-3 113%, $back-circle-3 121%, $back-circle-2 122%, $back-circle-2 130%, $back-circle-1 131%, $back-circle-1 140%),
-            radial-gradient(closest-side, transparent 0%, transparent 75%, $back-circle-7 76%, $back-circle-7 85%, $back-circle-6 86%, $back-circle-6 94%, $back-circle-4 95%, $back-circle-4 103%, $back-circle-5 104%, $back-circle-5 112%, $back-circle-3 113%, $back-circle-3 121%, $back-circle-2 122%, $back-circle-2 130%, $back-circle-1 131%, $back-circle-1 140%);
-          background-size: $one-third $one-third;
-          background-position: 25% 25%, 0 0;
+          &:not([back]),
+          &[back=""],
+          &[back="circle"] {
+            background-color: #4F7CAC;
+            border: 1px solid #3066BE;
+            $back-circle-1: #BBDEF0; // 1 - Most Inner
+            $back-circle-2: #0047A5; // 2
+            $back-circle-3: #2176AE; // 3
+            $back-circle-4: #FFFFFF; // 4
+            $back-circle-5: #3D94F6; // 5
+            $back-circle-6: #0A2463; // 6
+            $back-circle-7: #07A0C3; // 7 - Most Outer
+            background-image:
+              radial-gradient(closest-side, transparent 0%, transparent 75%, $back-circle-7 76%, $back-circle-7 85%, $back-circle-6 86%, $back-circle-6 94%, $back-circle-4 95%, $back-circle-4 103%, $back-circle-5 104%, $back-circle-5 112%, $back-circle-3 113%, $back-circle-3 121%, $back-circle-2 122%, $back-circle-2 130%, $back-circle-1 131%, $back-circle-1 140%),
+              radial-gradient(closest-side, transparent 0%, transparent 75%, $back-circle-7 76%, $back-circle-7 85%, $back-circle-6 86%, $back-circle-6 94%, $back-circle-4 95%, $back-circle-4 103%, $back-circle-5 104%, $back-circle-5 112%, $back-circle-3 113%, $back-circle-3 121%, $back-circle-2 122%, $back-circle-2 130%, $back-circle-1 131%, $back-circle-1 140%);
+            background-size: $one-third $one-third;
+            background-position: 25% 25%, 0 0;
+          }
+
+          &[back="semi-circle"] {
+            $bg-color-1: #0047A5;
+            $bg-color-2: #BBDEF0;
+            background-color: $bg-color-1;
+            background-image:
+              radial-gradient(circle at 100% 150%, $bg-color-1 24%, $bg-color-2 25%, $bg-color-2 28%, $bg-color-1 29%, $bg-color-1 36%, $bg-color-2 36%, $bg-color-2 40%, transparent 40%, transparent),
+              radial-gradient(circle at 0    150%, $bg-color-1 24%, $bg-color-2 25%, $bg-color-2 28%, $bg-color-1 29%, $bg-color-1 36%, $bg-color-2 36%, $bg-color-2 40%, transparent 40%, transparent),
+              radial-gradient(circle at 50%  100%, $bg-color-2 10%, $bg-color-1 11%, $bg-color-1 23%, $bg-color-2 24%, $bg-color-2 30%, $bg-color-1 31%, $bg-color-1 43%, $bg-color-2 44%, $bg-color-2 50%, $bg-color-1 51%, $bg-color-1 63%, $bg-color-2 64%, $bg-color-2 71%, transparent 71%, transparent),
+              radial-gradient(circle at 100% 50%, $bg-color-2 5%, $bg-color-1 6%, $bg-color-1 15%, $bg-color-2 16%, $bg-color-2 20%, $bg-color-1 21%, $bg-color-1 30%, $bg-color-2 31%, $bg-color-2 35%, $bg-color-1 36%, $bg-color-1 45%, $bg-color-2 46%, $bg-color-2 49%, transparent 50%, transparent),
+              radial-gradient(circle at 0    50%, $bg-color-2 5%, $bg-color-1 6%, $bg-color-1 15%, $bg-color-2 16%, $bg-color-2 20%, $bg-color-1 21%, $bg-color-1 30%, $bg-color-2 31%, $bg-color-2 35%, $bg-color-1 36%, $bg-color-1 45%, $bg-color-2 46%, $bg-color-2 49%, transparent 50%, transparent);
+            background-size: ($bg-height / 5) ($bg-height / 10);
+            border: 1px solid #3066BE;
+          }
+
+          &[back="checker45"] {
+            $bg-color-1: #0047A5;
+            $bg-color-2: #BBDEF0;
+            $square-size: ($bg-height / 18);
+            background-color: $bg-color-1;
+            background-image:
+              linear-gradient(45deg, $bg-color-2 25%, transparent 25%, transparent 75%, $bg-color-2 75%, $bg-color-2),
+              linear-gradient(-45deg, $bg-color-2 25%, transparent 25%, transparent 75%, $bg-color-2 75%, $bg-color-2);
+            background-size: $square-size $square-size;
+            background-position: $square-size / 2 10px;
+            border: 1px solid #3066BE;
+          }
+
+          &[back="carbon"] {
+            $bg-color-1: #0047A5;
+            $bg-color-2: #BBDEF0;
+            $base-px: $bg-height / 50;
+            background:
+              linear-gradient(27deg, #151515 $base-px, transparent $base-px) 0 $base-px,
+              linear-gradient(207deg, #151515 $base-px, transparent $base-px) (2 * $base-px) 0,
+              linear-gradient(27deg, #222 $base-px, transparent $base-px) 0 (2 * $base-px),
+              linear-gradient(207deg, #222 $base-px, transparent $base-px) (2 * $base-px) $base-px,
+              linear-gradient(90deg, #1b1b1b (2 * $base-px), transparent (2 * $base-px)),
+              linear-gradient(#1d1d1d 25%, #1a1a1a 25%, #1a1a1a 50%, transparent 50%, transparent 75%, #242424 75%, #242424);
+            background-color: #131313;
+            background-size: (4 * $base-px) (4 * $base-px);
+            border: 1px solid #3066BE;
+          }
+
+          &[back="weave"] {
+            $bg-color-1: #0047A5;
+            $bg-color-2: #BBDEF0;
+            $base-px: $bg-height / 15;
+            background:
+              linear-gradient(45deg, #dca 12%, transparent 0, transparent 88%, #dca 0),
+              linear-gradient(135deg, transparent 37%, #a85 0, #a85 63%, transparent 0),
+              linear-gradient(45deg, transparent 37%, #dca 0, #dca 63%, transparent 0) #753;
+            background-size: $base-px $base-px;
+          }
+
         }
       }
 
