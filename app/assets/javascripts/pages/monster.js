@@ -2,6 +2,7 @@ var currentMonster;
 $('.ctr-summoners_wars').ready(function() {
 
   $('.monster-selector').searchableFromSelect({
+    retainFieldValueAfterSelect: true,
     templateFromOption: function(monster) {
       return '<div class="monster-option">' +
         '<img class="monster-thumb" src="' + monster.thumb + '" alt="' + monster.name + '">' +

@@ -350,7 +350,9 @@ $('.selector').searchableFromSelect()
           var option = $(dropdown).find('option[value=' + selected_option.value + ']');
           $(option).prop('selected', true);
           $(option).parents('select').change();
-          search_field.val('');
+          if (!options.retainFieldValueAfterSelect) {
+            search_field.val('');
+          }
         }
       })
     })
