@@ -4,8 +4,10 @@
   <div class="btn-container">
     <% if @list.persisted? %>
       <a href="<%= list_path(@list) %>" class="btn">&larr; Back to List</a>
-      <%= link_to list_path(@list), method: :delete, class: "btn danger pull-right" do %>
-        Delete List
+      <% if @list.owned_by_user?(current_user) %>
+        <%= link_to list_path(@list), method: :delete, class: "btn danger pull-right", data: { confirm: "Are you sure? This is permanent and cannot be undone." } do %>
+          Delete List
+        <% end %>
       <% end %>
     <% else %>
       <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>

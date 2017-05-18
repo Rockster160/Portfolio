@@ -47,7 +47,7 @@ class ListsController < ApplicationController
   def destroy
     @list = current_user.lists.find(params[:id])
 
-    if @list.destroy
+    if @list.owned_by_user?(current_user) && @list.destroy
       redirect_to lists_path
     else
       redirect_to edit_list_path(@list)

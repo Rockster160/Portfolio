@@ -30,7 +30,7 @@ class List < ApplicationRecord
   end
 
   def owned_by_user?(user)
-    !!user_lists.where(user_id: user.try(:id)).try(:is_owner)
+    !!user_lists.where(user_id: user.try(:id)).first.try(:is_owner?)
   end
 
   def modify_from_message(msg)
