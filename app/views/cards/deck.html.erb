@@ -5,8 +5,11 @@
 
 <div class="card-game-container">
   <div class="playing-field">
-    <%= render partial: 'card', locals: { card: @deck.draw } %>
-    <%= render partial: 'card', locals: { card: @deck.draw } %>
+    <%= render partial: 'card', locals: { card: @deck.draw, back: "circle" } %>
+    <%= render partial: 'card', locals: { card: @deck.draw, back: "semi-circle" } %>
+    <%= render partial: 'card', locals: { card: @deck.draw, back: "checker45" } %>
+    <%= render partial: 'card', locals: { card: @deck.draw, back: "carbon" } %>
+    <%= render partial: 'card', locals: { card: @deck.draw, back: "weave" } %>
     <div class="deck">
       <% @deck.cards.count.times do %>
       <% end %>

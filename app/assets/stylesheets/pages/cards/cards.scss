@@ -140,30 +140,37 @@ $one-third: 100% / 3;
           }
 
           &[back="carbon"] {
-            $bg-color-1: #0047A5;
-            $bg-color-2: #BBDEF0;
+            $bg-color-1: #151515;
+            $bg-color-2: #222;
+            $bg-color-3: #1B1B1B;
+            $bg-color-4: #1D1D1D;
+            $bg-color-5: #1A1A1A;
+            $bg-color-7: #131313;
+            $bg-color-6: #242424;
             $base-px: $bg-height / 50;
             background:
-              linear-gradient(27deg, #151515 $base-px, transparent $base-px) 0 $base-px,
-              linear-gradient(207deg, #151515 $base-px, transparent $base-px) (2 * $base-px) 0,
-              linear-gradient(27deg, #222 $base-px, transparent $base-px) 0 (2 * $base-px),
-              linear-gradient(207deg, #222 $base-px, transparent $base-px) (2 * $base-px) $base-px,
-              linear-gradient(90deg, #1b1b1b (2 * $base-px), transparent (2 * $base-px)),
-              linear-gradient(#1d1d1d 25%, #1a1a1a 25%, #1a1a1a 50%, transparent 50%, transparent 75%, #242424 75%, #242424);
-            background-color: #131313;
+              linear-gradient(27deg, $bg-color-1 $base-px, transparent $base-px) 0 $base-px,
+              linear-gradient(207deg, $bg-color-1 $base-px, transparent $base-px) (2 * $base-px) 0,
+              linear-gradient(27deg, $bg-color-2 $base-px, transparent $base-px) 0 (2 * $base-px),
+              linear-gradient(207deg, $bg-color-2 $base-px, transparent $base-px) (2 * $base-px) $base-px,
+              linear-gradient(90deg, $bg-color-3 (2 * $base-px), transparent (2 * $base-px)),
+              linear-gradient($bg-color-4 25%, $bg-color-5 25%, $bg-color-5 50%, transparent 50%, transparent 75%, $bg-color-6 75%, $bg-color-6);
+            background-color: $bg-color-5;
             background-size: (4 * $base-px) (4 * $base-px);
-            border: 1px solid #3066BE;
+            border: 1px solid #000;
           }
 
           &[back="weave"] {
-            $bg-color-1: #0047A5;
-            $bg-color-2: #BBDEF0;
+            $bg-color-1: #DCA;
+            $bg-color-2: #A85;
+            $bg-color-3: #753;
             $base-px: $bg-height / 15;
             background:
-              linear-gradient(45deg, #dca 12%, transparent 0, transparent 88%, #dca 0),
-              linear-gradient(135deg, transparent 37%, #a85 0, #a85 63%, transparent 0),
-              linear-gradient(45deg, transparent 37%, #dca 0, #dca 63%, transparent 0) #753;
+              linear-gradient(45deg, $bg-color-1 12%, transparent 0, transparent 88%, $bg-color-1 0),
+              linear-gradient(135deg, transparent 37%, $bg-color-2 0, $bg-color-2 63%, transparent 0),
+              linear-gradient(45deg, transparent 37%, $bg-color-1 0, $bg-color-1 63%, transparent 0) $bg-color-3;
             background-size: $base-px $base-px;
+            border: 1px solid #5E4328;
           }
 
         }
