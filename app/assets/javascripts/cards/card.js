@@ -1,4 +1,5 @@
 var currentMouseCoord;
+var prevSelect;
 $('.ctr-cards').ready(function() {
 
   addDot = function(x, y) {
@@ -155,11 +156,16 @@ $('.ctr-cards').ready(function() {
   var allFlipped = false;
   $(window).keydown(function(evt) {
     if (evt.which == KEY_EVENT_SPACE) {
+      if ($('.ui-selected').length > 0) {
+        cards = $('.ui-selected');
+      } else {
+        cards = cardsInPlay();
+      }
       if (allFlipped) {
-        flipCard(cardsInPlay(), "up");
+        flipCard(cards, "up");
         allFlipped = false;
       } else {
-        flipCard(cardsInPlay(), "down");
+        flipCard(cards, "down");
         allFlipped = true;
       }
     } else {
@@ -181,8 +187,13 @@ $('.ctr-cards').ready(function() {
   })
 
   $('.card').mousedown(function(evt) {
+    $(".active").removeClass("active");
+    $(".dragging").removeClass("dragging");
+    if (evt.shiftKey || evt.ctrlKey || evt.metaKey) {
+      return $(this).toggleClass("ui-selected");
+    }
     if (!cardIsInDeck(this)) {
-      $(this).addClass("selected");
+      $(this).addClass("active");
     }
     $(this).one('mouseup', function() {
       $(this).off('mousemove.beforeDrag');
@@ -194,23 +205,52 @@ $('.ctr-cards').ready(function() {
       }
     });
   }).mouseup(function(evt) {
-    if (!$(this).hasClass("dragging") && $(this).hasClass("selected")) {
+    if (!$(this).hasClass("dragging") && $(this).hasClass("active")) {
       flipCard(this);
     }
-    $(this).removeClass("selected");
-    $(this).removeClass("dragging");
+    $(".active").removeClass("active");
+    $(".dragging").removeClass("dragging");
   })
 
   $('.card').draggable({
     containment: '.playing-field',
     start: function(evt) {
-      $(this).parent().css("z-index", cardsInPlay().length + 10);
+      $this = $(this);
+      if ($this.hasClass("ui-selected")) {
+        moveCardsToTopAndReorder(sortCardsByStackOrder($('.ui-selected')));
+      } else {
+        $this.parent().css("z-index", cardsInPlay().length + 10);
+      }
+      $('.card.ui-selected:not(.dragging)').each(function() {
+        var oldPos = $(this).position();
+        $(this).attr("save-pos-left", oldPos.left);
+        $(this).attr("save-pos-top", oldPos.top);
+      })
     },
-    drag: function(evt) {
+    drag: function(evt, ui) {
       $(this).addClass("dragging");
+      var $this = $(ui.helper), delta = {top: ui.originalPosition.top - ui.position.top, left: ui.originalPosition.left - ui.position.left};
+      if ($this.hasClass("ui-selected")) {
+        $('.card.ui-selected:not(.dragging)').each(function() {
+          var oldPos = {top: parseInt($(this).attr("save-pos-top")), left: parseInt($(this).attr("save-pos-left"))};
+          var newCoord = {top: oldPos.top - delta.top, left: oldPos.left - delta.left};
+          $(this).css(constrainCenteredCardCoordToField(newCoord));
+        })
+      }
     },
     stop: function(evt) {
+      $("[save-pos-left]").removeAttr("save-pos-left");
+      $("[save-pos-top]").removeAttr("save-pos-top");
       moveCardsToTopAndReorder();
+    }
+  });
+
+  $('.playing-field').selectable({
+    selecting: function(e, ui) {
+      var $this = $(ui.selecting);
+      if ($this.hasClass("deck") || $this.parents(".deck").length > 0) {
+        $this.removeClass('ui-selecting');
+      }
     }
   });
 

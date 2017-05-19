@@ -54,7 +54,16 @@ $one-third: 100% / 3;
         box-shadow: 1px 1px 2px rgba(50, 50, 50, 0.5);
         box-sizing: border-box;
         overflow: hidden;
+
+        .foreground {
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          opacity: 0.4;
+          z-index: 2;
+        }
       }
+      &.ui-selecting .foreground { background: yellow; }
+      &.ui-selected .foreground { background: blue; }
 
       .front {
         transform-style: preserve-3d;
