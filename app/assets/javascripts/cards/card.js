@@ -117,7 +117,7 @@ $('.ctr-cards').ready(function() {
   }
 
   cardsInPlay = function() {
-    return $(":not(.deck) > .card-container .card");
+    return sortCardsByStackOrder($(":not(.deck) > .card-container .card"));
   }
 
   moveCardsToTopAndReorder = function(cards) {
@@ -143,6 +143,7 @@ $('.ctr-cards').ready(function() {
 
   flipCard = function(card_selector, direction) {
     if (cardIsInDeck(this)) { return false }
+    moveCardsToTopAndReorder($(card_selector));
     if (direction == "up") {
       $(card_selector).removeClass("flipped");
     } else if (direction == "down") {
