@@ -2,6 +2,11 @@ var currentMouseCoord;
 var prevSelect;
 $('.ctr-cards').ready(function() {
 
+  $.fn.jump = function(x, y) {
+    this.css({"left": x + "px", "top": y + "px"});
+    return this;
+  }
+
   addDot = function(x, y) {
     var dot = $("<div>");
     dot.css({
@@ -60,12 +65,6 @@ $('.ctr-cards').ready(function() {
       top: [minY, maxY, coord.top].sort(function(a, b) { return a - b; })[1]
     }
     return constrainedCoord;
-  }
-
-  $.fn.jump = function(x, y) {
-    this.css({"left": x + "px", "top": y + "px"});
-    console.log("JUMP (" + x + ", " + y + ")");
-    return this;
   }
 
   drawCard = function() {
@@ -169,7 +168,6 @@ $('.ctr-cards').ready(function() {
         allFlipped = true;
       }
     } else {
-
       switch (String.fromCharCode(evt.which)) {
         case "d", "D":
           animateCardToCoords(drawCard(), optimizeCardCoordsForField(currentMouseCoord));
@@ -244,7 +242,7 @@ $('.ctr-cards').ready(function() {
       moveCardsToTopAndReorder();
     }
   });
-
+// When CMD clicking a card, should flip all selected cards?
   $('.playing-field').selectable({
     selecting: function(e, ui) {
       var $this = $(ui.selecting);
@@ -254,4 +252,5 @@ $('.ctr-cards').ready(function() {
     }
   });
 
+  moveCardsToTopAndReorder()
 })
