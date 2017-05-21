@@ -18,9 +18,12 @@ $('.ctr-lists.act-show').ready(function() {
   }, {
     connected: function() {
       var url = $(".list-items").attr("data-update-url");
-      $.post(url, {});
+      $.post(url, {}).success(function() { $(".list-error").addClass("hidden") });
     },
-    disconnected: function() {},
+    disconnected: function() {
+      console.log("Disconnected!");
+      $(".list-error").removeClass("hidden");
+    },
     received: function(data) {
       var updated_list = $(data.list_html);
       var updated_names = updated_list.map(function() { return $(this).find(".item-name").text(); });

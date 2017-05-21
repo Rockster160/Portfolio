@@ -1,10 +1,10 @@
 flashRemoverTimer = null;
 
-function resetFlashTimer() {
+function resetFlashTimer(delay) {
   clearTimeout(flashRemoverTimer);
   flashRemoverTimer = setTimeout(function() {
     dismissFlash()
-  }, 8000)
+  }, delay || 8000)
 }
 
 dismissFlash = function() {
@@ -17,7 +17,7 @@ $(document).on('click touchstart', '.dismiss-flash', function() {
 })
 $(window).scroll(function() { dismissFlash(true) })
 
-addFlash = function(message, type) {
+addFlash = function(message, type, delay) {
   $.get('/flash_message', {message: message, flash_type: type}, function(data) {
     dismissFlash();
     var flashMessageDiv = $(data);
@@ -27,15 +27,15 @@ addFlash = function(message, type) {
     flashMessageDiv.removeClass('hidden');
     flashMessageDiv.animate({'right': '20px'}, 400);
   })
-  resetFlashTimer();
+  resetFlashTimer(delay);
 }
 
-addFlashNotice = function(message) {
-  addFlash(message, 'notice');
+addFlashNotice = function(message, delay) {
+  addFlash(message, 'notice', delay);
 }
 
-addFlashAlert = function(message) {
-  addFlash(message, 'alert');
+addFlashAlert = function(message, delay) {
+  addFlash(message, 'alert', delay);
 }
 
 $(document).ready(function() {

@@ -119,7 +119,8 @@ select {
   border-radius: 4px;
   padding: 0 8px;
 
-  font-size: 14px;
+  line-height: 100%;
+
   color: darken($grey-blue, 10%);
   overflow: hidden;
   text-overflow: ellipsis;
