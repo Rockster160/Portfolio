@@ -2,6 +2,7 @@ $card-height: 150px;
 // $card-height: 82px;
 $card-width: $card-height * 0.714285714;
 $card-radius: $card-height / 28;
+$card-border-size: $card-height * 0.14;
 $one-third: 100% / 3;
 
 .ctr-cards {
@@ -38,9 +39,7 @@ $one-third: 100% / 3;
       border-radius: $card-radius;
       box-sizing: border-box;
 
-      &.flipped {
-        transform: rotateY(180deg);
-      }
+      &.flipped { transform: rotateY(180deg); }
 
       .face {
         transform-style: preserve-3d;
@@ -79,19 +78,51 @@ $one-third: 100% / 3;
         position: relative;
         box-sizing: border-box;
         .rank, .suit {
-          width: $card-height * 0.14;
+          width: $card-border-size;
           text-align: center;
         }
         .rank { font-size: $card-height * 0.16; }
-        .suit { font-size: $card-height * 0.14; }
-        .large-suit {
+        .suit { font-size: $card-border-size; }
+        .card-body {
           position: absolute;
-          top: 0; left: 0; right: 0; bottom: 0;
+          top: ($card-border-size / 2);
+          left: $card-border-size;
+          right: $card-border-size;
+          bottom: ($card-border-size / 2);
+
           text-align: center;
-          font-size: $card-height * 0.4;
-          line-height: $card-height;
           backface-visibility: hidden;
           z-index: 1;
+
+          .suit-wrapper {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+          }
+          .suit-char {
+            display: inline-block;
+            font-size: $card-border-size;
+            min-height: $card-border-size;
+          }
+          .suit-wrapper {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+          }
+          &[rank="A"] {
+            .suit-wrapper {
+              justify-content: space-around;
+            }
+            .suit-char {
+              font-size: $card-height * 0.4;
+            }
+          }
+          &[rank="J"],
+          &[rank="Q"],
+          &[rank="K"] {
+            .suit-char {
+              font-size: $card-height * 0.3;
+            }
+          }
         }
       }
 
@@ -206,4 +237,11 @@ $one-third: 100% / 3;
       width: $card-width / 100;
     }
   }
+}
+
+.vert-aligner {
+  display: inline-block;
+  vertical-align: middle;
+  height: 100%;
+  width: 0;
 }

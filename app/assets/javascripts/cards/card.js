@@ -18,7 +18,7 @@ $('.ctr-cards').ready(function() {
       zIndex: 9999,
       background: "red"
     })
-    $('.playing-field').append(dot)
+    $('.playing-field').append(dot);
   }
 
   optimizeCardCoordsForField = function(coord) {
@@ -83,10 +83,6 @@ $('.ctr-cards').ready(function() {
     return card;
   }
 
-  deckTopCard = function() {
-    return $('.deck .card-container:last-of-type .card');
-  }
-
   animateCardToCoords = function(card, destCoord, duration) {
     if (card.length == 0) { return };
     duration = duration || 200;
@@ -116,8 +112,16 @@ $('.ctr-cards').ready(function() {
     return $(card).parents(".deck").length > 0;
   }
 
+  cardsInDeck = function() {
+    return sortCardsByStackOrder($(".deck .card"));
+  }
+
   cardsInPlay = function() {
     return sortCardsByStackOrder($(":not(.deck) > .card-container .card"));
+  }
+
+  deckTopCard = function() {
+    return cardsInDeck().last();
   }
 
   moveCardsToTopAndReorder = function(cards) {
@@ -218,7 +222,8 @@ $('.ctr-cards').ready(function() {
       if ($this.hasClass("ui-selected")) {
         moveCardsToTopAndReorder(sortCardsByStackOrder($('.ui-selected')));
       } else {
-        $this.parent().css("z-index", cardsInPlay().length + 10);
+        moveCardsToTopAndReorder($this);
+        // $this.parent().css("z-index", $('.card').length + 10);
       }
       $('.card.ui-selected:not(.dragging)').each(function() {
         var oldPos = $(this).position();
@@ -253,5 +258,5 @@ $('.ctr-cards').ready(function() {
     }
   });
 
-  moveCardsToTopAndReorder()
+  moveCardsToTopAndReorder();
 })

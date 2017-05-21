@@ -4,7 +4,9 @@
   <% rank = pieces[suit_first ? 1 : 0] %>
   <% suit = pieces[suit_first ? 0 : 1] %>
 <% end %>
-
+<!-- 9821 J -->
+<!-- 9819 Q -->
+<!-- 9818 K -->
 <% return unless (suit && rank) %>
 <% suit_unicodes = { D: "&#9830;", H: "&#9829;", S: "&#9824;", C: "&#9827;" } %>
 <% suit = suit.upcase %>
@@ -18,7 +20,41 @@
       <div class="foreground"></div>
       <div class="rank"><%= rank %></div>
       <div class="suit"><%= suit_unicodes[suit.to_sym].html_safe %></div>
-      <div class="large-suit"><%= suit_unicodes[suit.to_sym].html_safe %></div>
+      <div class="card-body" rank="<%= rank %>">
+        <div class="suit-wrapper">
+          <% rank_num = rank.to_i %>
+          <% rank_num = 1 if rank_num == 0 %>
+          <% char = suit_unicodes[suit.to_sym].html_safe %>
+          <%
+            suit_rows = case rank_num
+            when 2 then [1, 1]
+            when 3 then [1, 1, 1]
+            when 4 then [2, 2]
+            when 5 then [2, 1, 2]
+            when 6 then [2, 2, 2]
+            when 7 then [2, 1, 2, 2]
+            when 8 then [2, 2, 2, 2]
+            when 9 then [2, 1, 2, 2, 2]
+            when 10 then [2, 2, 2, 2, 2]
+            else [1]
+            end
+          %>
+          <% suit_rows.each do |suit_row_count| %>
+            <% if rank == "J" %>
+              <div class="suit-char">&#9821;</div>
+            <% elsif rank == "Q" %>
+              <div class="suit-char">&#9819;</div>
+            <% elsif rank == "K" %>
+              <div class="suit-char">&#9818;</div>
+            <% end %>
+            <div class="suit-char">
+              <% suit_row_count.times.with_index do |sym, idx| %>
+                <%= char %>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      </div>
     </div>
     <div class="face back">
       <div class="card-background" back="<%= back %>"></div>
