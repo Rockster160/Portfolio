@@ -11,7 +11,7 @@
   <div class="lists">
     <% @lists.each do |list| %>
       <div class="list-item-container">
-        <a href="<%= list_path(list) %>" class="list-item"><%= list.name.titleize %></a>
+        <a href="<%= list_path(list) %>" class="list-item"><%= list.name.titleize %> (<%= list.list_items.count %>)</a>
        </div>
     <% end %>
   </div>
