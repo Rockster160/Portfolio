@@ -47,13 +47,11 @@ $('.selector').searchableFromSelect()
       var searchable_id = $menu.attr("data-searching-for");
       $searchableField = $('[data-uniq-searchable-id=' + searchable_id + ']');
 
-      var offset = $searchableField.offset();
+      var offset = $searchableField.position();
       var posY = offset.top + $searchableField.outerHeight(true);
       var posX = offset.left;
-      if (!isUsingMobileDevice()) {
-        posY -= $(window).scrollTop();
-        posX -= $(window).scrollLeft();
-      }
+      posY -= $(window).scrollTop();
+      posX -= $(window).scrollLeft();
       $menu.css({'top':  posY, 'left': posX, 'width': $searchableField.outerWidth(true)})
     }
   }
@@ -141,6 +139,10 @@ $('.selector').searchableFromSelect()
         populateDropdownFromInput();
       }).on('blur', function() {
         // When the dropdown loses focus, get rid of the dropdown.
+        if (current_searchable_request) {
+          current_searchable_request.abort();
+          current_searchable_request = undefined;
+        }
         hideDropdowns();
       }).on('selected-option', function(evt, optionVal) {
         var option_str = encodeObjToStr(optionVal);
