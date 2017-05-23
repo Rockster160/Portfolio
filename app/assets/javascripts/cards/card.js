@@ -126,7 +126,7 @@ $('.ctr-cards').ready(function() {
 
   moveCardsToTopAndReorder = function(cards) {
     $(cards).each(function(idx) {
-      $(this).parent().css('z-index', cardsInPlay().length + 2 + idx);
+      $(this).parent().css('z-index', $('.card').length + 2 + idx);
     })
     sortCardsByStackOrder(cardsInPlay()).each(function(idx) {
       $(this).parent().css('z-index', idx + 1);
@@ -222,8 +222,7 @@ $('.ctr-cards').ready(function() {
       if ($this.hasClass("ui-selected")) {
         moveCardsToTopAndReorder(sortCardsByStackOrder($('.ui-selected')));
       } else {
-        moveCardsToTopAndReorder($this);
-        // $this.parent().css("z-index", $('.card').length + 10);
+        moveCardsToTopAndReorder(this);
       }
       $('.card.ui-selected:not(.dragging)').each(function() {
         var oldPos = $(this).position();

@@ -33,6 +33,7 @@ $one-third: 100% / 3;
       position: absolute;
       transform-style: preserve-3d;
       transition: transform 0.6s;
+      perspective: 800px;
 
       height: $card-height;
       width: $card-width;
