@@ -50,12 +50,18 @@ $('.selector').searchableFromSelect()
       var offset = $searchableField.position();
       var posY = offset.top + $searchableField.outerHeight(true);
       var posX = offset.left;
-      posY -= $(window).scrollTop();
-      posX -= $(window).scrollLeft();
+      if (!isUsingiOSDevice() && $searchableField.is(":focus")) {
+        posY -= $(window).scrollTop();
+        posX -= $(window).scrollLeft();
+      }
       $menu.css({'top':  posY, 'left': posX, 'width': $searchableField.outerWidth(true)})
     }
   }
 
+  var isUsingiOSDevice = function() {
+    var user_agent = (navigator.userAgent||navigator.vendor||window.opera);
+    return user_agent.match(/(ip(hone|od|ad))/i)
+  }
   var isUsingMobileDevice = function() {
     var user_agent = (navigator.userAgent||navigator.vendor||window.opera);
     var mobile_user_agent_regexp = /(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino/i
@@ -155,6 +161,7 @@ $('.selector').searchableFromSelect()
       })
 
       var hideDropdowns = function() {
+        $('.fix-virtual-keyboard-position-offset').removeClass('.fix-virtual-keyboard-position-offset');
         $('.js-searchable-menu').remove();
       }
 
