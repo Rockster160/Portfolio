@@ -38,6 +38,9 @@ Rails.application.routes.draw do
 
   resources :colors, only: [ :index ]
 
+  resource :little_world, only: [ :show ] do
+  end
+
   resources :mazes, only: [ :index ] do
     collection do
       get 'random', action: 'random'

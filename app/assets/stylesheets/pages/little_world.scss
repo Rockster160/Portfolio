@@ -1,0 +1,31 @@
+.ctr-little_worlds {
+  .little-world-wrapper {
+    font-size: 0;
+    position: relative;
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  .block {
+    display: inline-block;
+    border: 1px solid red;
+    box-sizing: border-box;
+  }
+
+  .game {
+    position: relative;
+  }
+
+  .player {
+    width: 15px;
+    height: 15px;
+    margin: 3px;
+    background: blue;
+    border-radius: 100%;
+    position: absolute;
+  }
+
+  .output {
+    font-size: 24px;
+  }
+}
