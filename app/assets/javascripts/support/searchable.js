@@ -40,8 +40,8 @@ $('.selector').searchableFromSelect()
   var repositionSearchableMenu = function(dropdown) {
     if (dropdown == undefined) {
       $('.js-searchable-menu').each(function() {
-        repositionSearchableMenu(this)
-      })
+        repositionSearchableMenu(this);
+      });
     } else {
       $menu = $(dropdown);
       var searchable_id = $menu.attr("data-searching-for");

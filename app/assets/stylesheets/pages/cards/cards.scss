@@ -28,12 +28,13 @@ $one-third: 100% / 3;
     font-size: 0;
     position: absolute;
     display: inline-block;
+    // Without perspective set, z-index for cards get really broken. With a lower perspective, the cards stretch horizontally while flipping
+    perspective: 2000px;
 
     .card {
       position: absolute;
       transform-style: preserve-3d;
       transition: transform 0.6s;
-      perspective: 800px;
 
       height: $card-height;
       width: $card-width;
@@ -87,9 +88,10 @@ $one-third: 100% / 3;
         .card-body {
           position: absolute;
           top: ($card-border-size / 2);
-          left: $card-border-size;
-          right: $card-border-size;
+          left: $card-border-size * 1.1;
+          right: $card-border-size * 1.1;
           bottom: ($card-border-size / 2);
+          padding: 0 5px;
 
           text-align: center;
           backface-visibility: hidden;
@@ -100,6 +102,7 @@ $one-third: 100% / 3;
             top: 0; left: 0; right: 0; bottom: 0;
           }
           .suit-char {
+            font-size: $card-height * 0.05;
             display: inline-block;
             font-size: $card-border-size;
             min-height: $card-border-size;
@@ -110,19 +113,13 @@ $one-third: 100% / 3;
             justify-content: space-between;
           }
           &[rank="A"] {
-            .suit-wrapper {
-              justify-content: space-around;
-            }
-            .suit-char {
-              font-size: $card-height * 0.4;
-            }
+            .suit-wrapper { justify-content: space-around; }
+            .suit-char { font-size: $card-height * 0.4; }
           }
           &[rank="J"],
           &[rank="Q"],
           &[rank="K"] {
-            .suit-char {
-              font-size: $card-height * 0.3;
-            }
+            .suit-char { font-size: $card-height * 0.3; }
           }
         }
       }
@@ -236,6 +233,7 @@ $one-third: 100% / 3;
       position: relative;
       margin: 0;
       width: $card-width / 100;
+      z-index: 0;
     }
   }
 }

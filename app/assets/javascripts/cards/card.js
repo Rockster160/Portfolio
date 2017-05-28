@@ -74,6 +74,21 @@ $('.ctr-cards').ready(function() {
     return topCard;
   }
 
+  dealCard = function(opts) {
+    opts = opts || {}
+    count = opts.count || 1
+    startCoord = opts.startCoord || {top: 0, left: 0}
+    spacing = opts.spacing || {top: 0, left: 0}
+    var cards = [];
+    for (i=0;i<count;i++) {
+      var nextCoord = {top: startCoord.top + (spacing.top * i), left: startCoord.left + (spacing.left * i)}
+      var card = drawCard();
+      cards.push(card)
+      animateCardToCoords(card, nextCoord);
+    }
+    return cards;
+  }
+
   popCardOffDeck = function(card) {
     $('.playing-field').append($(card).parent());
     moveCardsToTopAndReorder(card);
@@ -124,9 +139,16 @@ $('.ctr-cards').ready(function() {
     return cardsInDeck().last();
   }
 
-  moveCardsToTopAndReorder = function(cards) {
-    $(cards).each(function(idx) {
-      $(this).parent().css('z-index', $('.card').length + 2 + idx);
+  displayValueOfCard = function(card) {
+    return $(card).attr("rank");
+  }
+
+  moveCardsToTopAndReorder = function(cards, opts) {
+    opts = opts || {}
+    var $cards = sortCardsByStackOrder(cards), card_count = $cards.length;
+    $cards.each(function(idx) {
+      var newIdx = opts.reverse ? $('.card').length + card_count - idx : $('.card').length + 2 + idx;
+      $(this).parent().css('z-index', newIdx);
     })
     sortCardsByStackOrder(cardsInPlay()).each(function(idx) {
       $(this).parent().css('z-index', idx + 1);
@@ -147,7 +169,7 @@ $('.ctr-cards').ready(function() {
 
   flipCard = function(card_selector, direction) {
     if (cardIsInDeck(this)) { return false }
-    moveCardsToTopAndReorder($(card_selector));
+    moveCardsToTopAndReorder($(card_selector), {reverse: true});
     if (direction == "up") {
       $(card_selector).removeClass("flipped");
     } else if (direction == "down") {
@@ -161,25 +183,32 @@ $('.ctr-cards').ready(function() {
   $(window).keydown(function(evt) {
     if (evt.which == KEY_EVENT_SPACE) {
       if ($('.ui-selected').length > 0) {
-        cards = $('.ui-selected');
+        cards = $('.ui-selected.card');
       } else {
         cards = cardsInPlay();
       }
-      if (allFlipped) {
-        flipCard(cards, "up");
-        allFlipped = false;
-      } else {
-        flipCard(cards, "down");
-        allFlipped = true;
-      }
+      flipCard(cards);
+      // if (allFlipped) {
+      //   flipCard(cards, "up");
+      //   allFlipped = false;
+      // } else {
+      //   flipCard(cards, "down");
+      //   allFlipped = true;
+      // }
+      // TODO: Should have separate controls to make all cards go down/up/toggle
     } else {
       switch (String.fromCharCode(evt.which)) {
         case "d", "D":
-          animateCardToCoords(drawCard(), optimizeCardCoordsForField(currentMouseCoord));
+          dealCard({startCoord: optimizeCardCoordsForField(currentMouseCoord)});
           break;
         case "T":
           addDot(currentMouseCoord.left, currentMouseCoord.top);
           break;
+        case "S":
+          var cards = dealCard({count: 3, spacing: {top: 0, left: -25}, startCoord: {top: 0, left: 50}})
+          setTimeout(function() {
+            flipCard(cards);
+          }, 200)
       }
     }
   });
@@ -220,8 +249,9 @@ $('.ctr-cards').ready(function() {
     start: function(evt) {
       $this = $(this);
       if ($this.hasClass("ui-selected")) {
-        moveCardsToTopAndReorder(sortCardsByStackOrder($('.ui-selected')));
+        moveCardsToTopAndReorder(sortCardsByStackOrder($('.ui-selected.card')));
       } else {
+        $('.ui-selected').removeClass('ui-selected');
         moveCardsToTopAndReorder(this);
       }
       $('.card.ui-selected:not(.dragging)').each(function() {
@@ -249,6 +279,7 @@ $('.ctr-cards').ready(function() {
   });
 // When CMD clicking a card, should flip all selected cards?
   $('.playing-field').selectable({
+    filter: ".card",
     selecting: function(e, ui) {
       var $this = $(ui.selecting);
       if ($this.hasClass("deck") || $this.parents(".deck").length > 0) {
