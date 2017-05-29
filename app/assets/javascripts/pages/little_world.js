@@ -3,7 +3,7 @@ $('.ctr-little_worlds').ready(function() {
   var playerPath = [];
   var playerMoving = false;
   // 0 - notMoving, 1 - North/Up/-Y, 2 - East/Right/+X, 3 - South/Down/+Y, 4 - West/Left/-X
-  var boardWidth = 51;
+  var boardWidth = 31;
   var boardHeight = boardWidth;
   var blockWidth = 20;
   var blockHeight = blockWidth;
