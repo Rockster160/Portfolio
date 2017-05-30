@@ -2,7 +2,7 @@
   padding-bottom: 50px;
   .portfolio-container {
     .playground-wrapper {
-      transition: border-color 0.3s, border-width 0.3s;
+      transition: border-color 0.3s, border-width 0.3s, margin 0.3s;
       display: block;
       margin: 10px 0;
       border: 1px solid black;
@@ -11,6 +11,7 @@
       text-decoration: none;
       box-sizing: padding-box;
       &:hover {
+        margin: 8px -2px;
         border-color: $blue-3;
         border-width: 3px;
       }
