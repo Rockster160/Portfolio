@@ -2,7 +2,7 @@ class ListsController < ApplicationController
   before_action :authorize_user
 
   def index
-    @lists = current_user.lists
+    @lists = current_user.lists.order(:created_at)
   end
 
   def edit
