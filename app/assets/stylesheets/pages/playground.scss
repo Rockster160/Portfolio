@@ -1,7 +1,7 @@
 .act-playground {
   padding-bottom: 50px;
-  .portfolio-container {
-    .playground-wrapper {
+  .playground-container {
+    .project-wrapper {
       transition: border-color 0.3s, border-width 0.3s, margin 0.3s;
       display: block;
       margin: 10px 0;
@@ -15,13 +15,13 @@
         border-color: $blue-3;
         border-width: 3px;
       }
-      .playground-title {
+      .project-title {
         text-align: center;
         font-size: 18px;
         text-shadow: 0 0 2px $blue-3;
         color: darken($grey-blue, 15%);
       }
-      .playground-description {
+      .project-description {
         padding: 5px 25px;
         font-family: "gunny_rewrittenregular", "claire_handregular", "Comic Sans MS", sans-serif;
       }
