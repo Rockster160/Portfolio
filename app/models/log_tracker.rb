@@ -18,6 +18,13 @@ class LogTracker < ApplicationRecord
 
   after_create_commit :broadcast_creation
 
+  scope :by_fuzzy_url, ->(url) { where("url ILIKE '%#{url}%'") }
+  scope :by_ip, ->(ip) { where(ip_address: ip) }
+
+  def self.uniq_ips
+    pluck(:ip_address).uniq
+  end
+
   def params_json
     JSON.parse(params.gsub("=>", ":"))
   end
@@ -28,5 +35,5 @@ class LogTracker < ApplicationRecord
     rendered_message = LogTrackersController.render partial: 'log_trackers/logger_row', locals: { logger: self }
     ActionCable.server.broadcast "logger_channel", message: rendered_message
   end
-  
+
 end
