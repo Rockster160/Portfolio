@@ -1,0 +1,17 @@
+<div class="text-center">
+  <%= paginate @loggers %>
+</div>
+
+<div class="log-tracker-table ttable wide striped bordered">
+  <div class="trow title-row">
+    <div class="tcell">Time</div>
+    <div class="tcell">User</div>
+    <div class="tcell">IP</div>
+    <div class="tcell">URL</div>
+  </div>
+  <div class="tbody">
+    <% @loggers.each do |logger| %>
+      <%= render partial: "logger_row", locals: { logger: logger } %>
+    <% end %>
+  </div>
+</div>

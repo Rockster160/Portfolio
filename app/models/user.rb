@@ -9,6 +9,7 @@
 #  updated_at       :datetime         not null
 #  phone            :string
 #  invitation_token :string
+#  role             :integer          default("standard")
 #
 
 class User < ApplicationRecord
@@ -23,6 +24,11 @@ class User < ApplicationRecord
   validate :proper_fields_present?
 
   scope :by_username, ->(username) { where("lower(username) = ?", username.to_s.downcase) }
+
+  enum role: {
+    standard: 0,
+    admin: 10
+  }
 
   def self.attempt_login(username, password)
     user = by_username(username).first
@@ -41,6 +47,10 @@ class User < ApplicationRecord
     user_scope = user_scope.where(phone: raw_params[:phone].gsub(/[^0-9]/, "").last(10)) if raw_params[:phone].present?
     user_scope = user_scope.where(raw_params.except(:username, :phone))
     user_scope.one? ? user_scope.first : User.new(raw_params)
+  end
+
+  def see!
+    # last logged in at NOW
   end
 
   def update_with_password(new_attrs)

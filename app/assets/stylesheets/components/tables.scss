@@ -24,3 +24,38 @@ table.monsters {
     }
   }
 }
+
+
+.ttable {
+  display: table;
+  &.wide { width: 100%; max-width: 100%; }
+  &.equal { table-layout: fixed; }
+  &.striped {
+    .trow:nth-child(even) {
+      background-color: $blue-2;
+    }
+    .trow:nth-child(odd) {
+      background-color: $blue-1;
+    }
+  }
+  &.bordered {
+    .tcell {
+      padding: 5px;
+      border: 1px solid white;
+      border-collapse: collapse;
+    }
+  }
+  .trow.title-row {
+    font-weight: bold;
+    font-size: 20px;
+  }
+  a.trow {
+    text-decoration: none;
+    &:hover {
+      background-color: $blue-3 !important;
+    }
+  }
+}
+.tbody { display: table-row-group; }
+.trow, .thead { display: table-row; }
+.tcell, .th { display: table-cell; }

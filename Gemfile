@@ -36,6 +36,7 @@ gem 'capybara'
 gem 'poltergeist'
 gem 'launchy'
 gem 'numbers_in_words'
+gem 'kaminari'
 
 group :development, :test do
   gem 'annotate'

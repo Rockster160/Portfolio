@@ -17,6 +17,8 @@ Rails.application.routes.draw do
 
   get 'cube' => 'cubes#show'
 
+  resources :log_trackers, only: [ :index, :show ]
+
   resource :summoners_war do
     resources :monsters
     resources :monster_skills
