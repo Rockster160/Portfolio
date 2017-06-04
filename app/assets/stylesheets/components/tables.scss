@@ -32,11 +32,14 @@ table.monsters {
   &.equal { table-layout: fixed; }
   &.striped {
     .trow:nth-child(even) {
-      background-color: $blue-2;
-    }
-    .trow:nth-child(odd) {
       background-color: $blue-1;
     }
+    .trow:nth-child(odd) {
+      background-color: $blue-2;
+    }
+  }
+  .title-row .tcell {
+    background-color: $blue-3;
   }
   &.bordered {
     .tcell {

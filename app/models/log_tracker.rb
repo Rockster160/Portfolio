@@ -20,6 +20,8 @@ class LogTracker < ApplicationRecord
 
   scope :by_fuzzy_url, ->(url) { where("url ILIKE '%#{url}%'") }
   scope :by_ip, ->(ip) { where(ip_address: ip) }
+  scope :not_me, -> { where.not(user_id: 1) }
+  scope :not_log_tracker, -> { where.not("url ILIKE 'log_tracker'") }
 
   def self.uniq_ips
     pluck(:ip_address).uniq
@@ -32,6 +34,7 @@ class LogTracker < ApplicationRecord
   private
 
   def broadcast_creation
+    return if user_id == 1 || url.include?("log_tracker")
     rendered_message = LogTrackersController.render partial: 'log_trackers/logger_row', locals: { logger: self }
     ActionCable.server.broadcast "logger_channel", message: rendered_message
   end
