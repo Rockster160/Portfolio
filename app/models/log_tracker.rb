@@ -11,11 +11,13 @@
 #  user_id     :integer
 #  created_at  :datetime         not null
 #  updated_at  :datetime         not null
+#  ip_count    :integer
 #
 
 class LogTracker < ApplicationRecord
   belongs_to :user, optional: true
 
+  after_initialize :set_additional_tracking
   after_create_commit :broadcast_creation
 
   scope :by_fuzzy_url, ->(url) { where("url ILIKE '%#{url}%'") }
@@ -33,8 +35,16 @@ class LogTracker < ApplicationRecord
 
   private
 
+  def set_additional_tracking
+    set_ip_count if ip_count.nil?
+  end
+
+  def set_ip_count
+    now = self.created_at || DateTime.current
+    self.ip_count = LogTracker.where.not(id: self.id).where("created_at < ?", now).where(ip_address: self.ip_address).count
+  end
+
   def broadcast_creation
-    return if user_id == 1 || url.include?("log_tracker")
     rendered_message = LogTrackersController.render partial: 'log_trackers/logger_row', locals: { logger: self }
     ActionCable.server.broadcast "logger_channel", message: rendered_message
   end
