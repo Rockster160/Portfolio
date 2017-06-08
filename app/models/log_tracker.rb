@@ -37,7 +37,7 @@ class LogTracker < ApplicationRecord
 
   def short_location
     return nil unless location.present?
-    [location.country_code, location.region_code, location.city].join(", ")
+    [location.country_code.presence, location.region_code.presence, location.city.presence].join(", ")
   end
 
   private
