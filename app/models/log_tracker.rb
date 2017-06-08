@@ -12,10 +12,12 @@
 #  created_at  :datetime         not null
 #  updated_at  :datetime         not null
 #  ip_count    :integer
+#  location_id :integer
 #
 
 class LogTracker < ApplicationRecord
   belongs_to :user, optional: true
+  belongs_to :location, optional: true
 
   after_initialize :set_additional_tracking
   after_create_commit :broadcast_creation
@@ -33,10 +35,21 @@ class LogTracker < ApplicationRecord
     JSON.parse(params.gsub("=>", ":"))
   end
 
+  def short_location
+    return nil unless location.present?
+    "#{location.country_code}, #{location.region_code}, #{location.city}"
+  end
+
   private
 
   def set_additional_tracking
     set_ip_count if ip_count.nil?
+    geolocate if location_id.nil?
+  end
+
+  def geolocate
+    new_location_id = LogTracker.where(ip_address: self.ip_address).where.not(location_id: nil).pluck(:location_id).uniq.first
+    self.location_id = new_location_id || Location.create(ip: self.ip_address).id
   end
 
   def set_ip_count

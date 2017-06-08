@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20170607024807) do
+ActiveRecord::Schema.define(version: 20170607150706) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -62,6 +62,20 @@ ActiveRecord::Schema.define(version: 20170607024807) do
     t.string   "message",    limit: 255
   end
 
+  create_table "locations", force: :cascade do |t|
+    t.string "ip"
+    t.string "country_code"
+    t.string "country_name"
+    t.string "region_code"
+    t.string "region_name"
+    t.string "city"
+    t.string "zip_code"
+    t.string "time_zone"
+    t.float  "latitude"
+    t.float  "longitude"
+    t.string "metro_code"
+  end
+
   create_table "log_trackers", force: :cascade do |t|
     t.string   "user_agent"
     t.string   "ip_address"
@@ -72,6 +86,8 @@ ActiveRecord::Schema.define(version: 20170607024807) do
     t.datetime "created_at",  null: false
     t.datetime "updated_at",  null: false
     t.integer  "ip_count"
+    t.integer  "location_id"
+    t.index ["location_id"], name: "index_log_trackers_on_location_id", using: :btree
     t.index ["user_id"], name: "index_log_trackers_on_user_id", using: :btree
   end
 

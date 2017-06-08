@@ -298,6 +298,7 @@ DEPENDENCIES
   rails_autolink
   rails_real_favicon
   redis
+  rest-client
   sass-rails
   sdoc (~> 0.4.0)
   sidekiq
