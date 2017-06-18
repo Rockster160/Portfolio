@@ -1,6 +1,6 @@
 <div class="skinny-container">
 
-  <%= form_tag anonicon_path(request.ip), id: "anonicon-form" do |f| %>
+  <%= form_tag anonicons_path, id: "anonicon-form" do |f| %>
     <div class="form-title">
       Anonicon
     </div>
@@ -24,7 +24,7 @@
     <p class="text-center">Your Anonicon:</p>
 
     <div class="anonicon-container text-center">
-      <%= render template: "anonicons/show", layout: false %>
+      <%= render partial: "show" %>
     </div>
   <% end %>
 
