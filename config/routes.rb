@@ -39,6 +39,7 @@ Rails.application.routes.draw do
   end
 
   resources :colors, only: [ :index ]
+  resources :anonicons, only: [ :index, :show ]
 
   resource :little_world, only: [ :show ] do
   end

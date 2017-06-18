@@ -38,6 +38,8 @@ gem 'launchy'
 gem 'numbers_in_words'
 gem 'kaminari'
 gem 'rest-client'
+gem 'oily_png'
+gem 'chroma'
 
 group :development, :test do
   gem 'annotate'

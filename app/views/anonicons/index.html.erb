@@ -1,0 +1,32 @@
+<div class="skinny-container">
+
+  <%= form_tag anonicon_path(request.ip), id: "anonicon-form" do |f| %>
+    <div class="form-title">
+      Anonicon
+    </div>
+
+    <%= render partial: 'layouts/error_container', locals: { resource: @user } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= label_tag :anon_str do %>
+          String to Anonify
+          <a href="#" class="btn pull-right random-anonicon">Random</a>
+        <% end %>
+        <%= text_field_tag :anon_str, params[:anon_str] || request.ip %>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= submit_tag "Anonify!" %>
+    </div>
+
+    <p class="text-center">Your Anonicon:</p>
+
+    <div class="anonicon-container text-center">
+      <%= render template: "anonicons/show", layout: false %>
+    </div>
+
+  <% end %>
+
+</div>
