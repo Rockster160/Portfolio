@@ -55,8 +55,8 @@ class AnoniconGenerator
     color_rotation = [1, -1][digest[21..24].to_i(16) % 2]
 
     @digest = digest
-    @full_size = 255
-    @chunk_size = @full_size / 3
+    @chunk_size = 70
+    @full_size = @chunk_size * 3
     @png = ChunkyPNG::Canvas.new(@full_size + 1, @full_size + 1, ChunkyPNG::Color::WHITE)
 
     chroma = "##{color}".paint
