@@ -9,6 +9,13 @@ $die-animation-duration: 1s;
 .ctr-little_worlds.act-character_builder {
   text-align: center;
 
+  .instructions {
+    width: 300px;
+    max-width: 100%;
+    margin: 0 auto;
+    li { text-align: left; }
+  }
+
   .character {
     display: inline-block;
     position: relative;
