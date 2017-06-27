@@ -38,3 +38,7 @@ const KEY_EVENT_ENTER = 13,
       KEY_EVENT_A = 65,
       KEY_EVENT_S = 83,
       KEY_EVENT_D = 68;
+      KEY_EVENT_F = 70;
+      KEY_EVENT_G = 71;
+      KEY_EVENT_H = 72;
+      KEY_EVENT_X = 88;

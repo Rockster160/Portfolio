@@ -42,6 +42,7 @@ Rails.application.routes.draw do
   resources :anonicons, only: [ :index, :show ]
 
   resource :little_world, only: [ :show ] do
+    get :character_builder
   end
 
   resources :mazes, only: [ :index ] do

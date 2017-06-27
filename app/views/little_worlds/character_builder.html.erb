@@ -1,0 +1,26 @@
+<% content_for :head do %>
+  <%= javascript_include_tag 'support/pathfinding.js' %>
+<% end %>
+
+<div class="character stand">
+  <div class="body" style="background-image: url(<%= image_path('rpg/body/male/light.png') %>)"></div>
+  <div class="hair" style="background-image: url(<%= image_path('rpg/hair/male/bangslong/blue.png') %>)"></div>
+  <div class="pants" style="background-image: url(<%= image_path('rpg/legs/pants/male/white_pants_male.png') %>)"></div>
+  <div class="torso" style="background-image: url(<%= image_path('rpg/torso/leather/chest_male.png') %>)"></div>
+  <div class="feet" style="background-image: url(<%= image_path('rpg/feet/shoes/male/black_shoes_male.png') %>)"></div>
+</div>
+
+<!--
+spell
+thrust
+walk
+slash
+shoot
+die
+-->
+
+<%# @male.each do |img_type, img_paths| %>
+  <%# img_paths.each do |img_path| %>
+    <!-- <p><%#= img_type %>: <%#= image_path img_path %></p> -->
+  <%# end %>
+<%# end %>
