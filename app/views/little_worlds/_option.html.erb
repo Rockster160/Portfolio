@@ -1,0 +1,11 @@
+<div class="options-container hidden" data-option-stack="<%= stack %>">
+  <% (options.try(:keys) || options).each do |option| %>
+    <div class="option" data-option-stack="<%= stack + [option.to_s.gsub('-', '_').to_sym] %>" data-bottom-stack="<%= options.is_a?(Hash) ? 'false' : 'true' %>"><%= option %></div>
+  <% end %>
+
+  <% if options.is_a?(Hash) %>
+    <% options.each do |option_key, option_values| %>
+      <%= render partial: "option", locals: { options: option_values, stack: stack + [option_key] } %>
+    <% end %>
+  <% end %>
+</div>

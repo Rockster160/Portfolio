@@ -43,6 +43,7 @@ Rails.application.routes.draw do
 
   resource :little_world, only: [ :show ] do
     get :character_builder
+    post :change_clothes
   end
 
   resources :mazes, only: [ :index ] do

@@ -5,6 +5,7 @@ $walk-animation-duration: 0.8s;
 $slash-animation-duration: 0.5s;
 $shoot-animation-duration: 1.2s;
 $die-animation-duration: 1s;
+$size-multiplier: 4;
 
 .ctr-little_worlds.act-character_builder {
   text-align: center;
@@ -19,77 +20,112 @@ $die-animation-duration: 1s;
   .character {
     display: inline-block;
     position: relative;
-    height: 64px;
-    width: 64px;
+    height: 64px * $size-multiplier;
+    width: 64px * $size-multiplier;
     overflow: hidden;
 
     div {
       position: absolute;
       top: 0;
       left: 0;
-      height: 64px;
-      width: 64px;
+      height: 64px * $size-multiplier;
+      width: 64px * $size-multiplier;
       background-repeat: no-repeat;
+      background-size: 832px * $size-multiplier;
     }
 
-    // TODO: Set z-indexes of stuff based on direction
-
-    &.stand        > * { background-position: 0 -128px; }
-    &.stand-up     > * { background-position: 0 -0px; }
-    &.stand-left   > * { background-position: 0 -64px; }
-    &.stand-down   > * { background-position: 0 -128px; }
-    &.stand-right  > * { background-position: 0 -192px; }
+    &.stand        > * { background-position: 0 -128px * $size-multiplier; }
+    &.stand-up     > * { background-position: 0 -0px * $size-multiplier; }
+    &.stand-left   > * { background-position: 0 -64px * $size-multiplier; }
+    &.stand-down   > * { background-position: 0 -128px * $size-multiplier; }
+    &.stand-right  > * { background-position: 0 -192px * $size-multiplier; }
     // 7
-    &.spell-up     > * { background-position: 0 0px; animation: spell-up $spell-animation-duration steps(7); }
-    &.spell-left   > * { background-position: 0 -64px; animation: spell-left $spell-animation-duration steps(7); }
-    &.spell-down   > * { background-position: 0 -128px; animation: spell-down $spell-animation-duration steps(7); }
-    &.spell-right  > * { background-position: 0 -192px; animation: spell-right $spell-animation-duration steps(7); }
+    &.spell-up     > * { background-position: 0 0px * $size-multiplier; animation: spell-up $spell-animation-duration steps(7); }
+    &.spell-left   > * { background-position: 0 -64px * $size-multiplier; animation: spell-left $spell-animation-duration steps(7); }
+    &.spell-down   > * { background-position: 0 -128px * $size-multiplier; animation: spell-down $spell-animation-duration steps(7); }
+    &.spell-right  > * { background-position: 0 -192px * $size-multiplier; animation: spell-right $spell-animation-duration steps(7); }
     // 8
-    &.thrust-up    > * { background-position: 0 -256px; animation: thrust-up $thrust-animation-duration steps(8); }
-    &.thrust-left  > * { background-position: 0 -320px; animation: thrust-left $thrust-animation-duration steps(8); }
-    &.thrust-down  > * { background-position: 0 -384px; animation: thrust-down $thrust-animation-duration steps(8); }
-    &.thrust-right > * { background-position: 0 -448px; animation: thrust-right $thrust-animation-duration steps(8); }
+    &.thrust-up    > * { background-position: 0 -256px * $size-multiplier; animation: thrust-up $thrust-animation-duration steps(8); }
+    &.thrust-left  > * { background-position: 0 -320px * $size-multiplier; animation: thrust-left $thrust-animation-duration steps(8); }
+    &.thrust-down  > * { background-position: 0 -384px * $size-multiplier; animation: thrust-down $thrust-animation-duration steps(8); }
+    &.thrust-right > * { background-position: 0 -448px * $size-multiplier; animation: thrust-right $thrust-animation-duration steps(8); }
     // 9
-    &.walk-up      > * { background-position: 0 -512px; animation: walk-up $walk-animation-duration steps(9) infinite; }
-    &.walk-left    > * { background-position: 0 -576px; animation: walk-left $walk-animation-duration steps(9) infinite; }
-    &.walk-down    > * { background-position: 0 -640px; animation: walk-down $walk-animation-duration steps(9) infinite; }
-    &.walk-right   > * { background-position: 0 -704px; animation: walk-right $walk-animation-duration steps(9) infinite; }
+    &.walk-up      > * { background-position: 0 -512px * $size-multiplier; animation: walk-up $walk-animation-duration steps(9) infinite; }
+    &.walk-left    > * { background-position: 0 -576px * $size-multiplier; animation: walk-left $walk-animation-duration steps(9) infinite; }
+    &.walk-down    > * { background-position: 0 -640px * $size-multiplier; animation: walk-down $walk-animation-duration steps(9) infinite; }
+    &.walk-right   > * { background-position: 0 -704px * $size-multiplier; animation: walk-right $walk-animation-duration steps(9) infinite; }
     // 6
-    &.slash-up     > * { background-position: 0 -768px; animation: slash-up $slash-animation-duration steps(6); }
-    &.slash-left   > * { background-position: 0 -832px; animation: slash-left $slash-animation-duration steps(6); }
-    &.slash-down   > * { background-position: 0 -896px; animation: slash-down $slash-animation-duration steps(6); }
-    &.slash-right  > * { background-position: 0 -960px; animation: slash-right $slash-animation-duration steps(6); }
+    &.slash-up     > * { background-position: 0 -768px * $size-multiplier; animation: slash-up $slash-animation-duration steps(6); }
+    &.slash-left   > * { background-position: 0 -832px * $size-multiplier; animation: slash-left $slash-animation-duration steps(6); }
+    &.slash-down   > * { background-position: 0 -896px * $size-multiplier; animation: slash-down $slash-animation-duration steps(6); }
+    &.slash-right  > * { background-position: 0 -960px * $size-multiplier; animation: slash-right $slash-animation-duration steps(6); }
     // 13
-    &.shoot-up     > * { background-position: 0 -1024px; animation: shoot-up $shoot-animation-duration steps(13); }
-    &.shoot-left   > * { background-position: 0 -1088px; animation: shoot-left $shoot-animation-duration steps(13); }
-    &.shoot-down   > * { background-position: 0 -1152px; animation: shoot-down $shoot-animation-duration steps(13); }
-    &.shoot-right  > * { background-position: 0 -1216px; animation: shoot-right $shoot-animation-duration steps(13); }
+    &.shoot-up     > * { background-position: 0 -1024px * $size-multiplier; animation: shoot-up $shoot-animation-duration steps(13); }
+    &.shoot-left   > * { background-position: 0 -1088px * $size-multiplier; animation: shoot-left $shoot-animation-duration steps(13); }
+    &.shoot-down   > * { background-position: 0 -1152px * $size-multiplier; animation: shoot-down $shoot-animation-duration steps(13); }
+    &.shoot-right  > * { background-position: 0 -1216px * $size-multiplier; animation: shoot-right $shoot-animation-duration steps(13); }
     // 6
-    &.die          > * { background-position: 0 -1280px; animation: die $die-animation-duration steps(6); }
-
-    .body {}
+    &.die          > * { background-position: 0 -1280px * $size-multiplier; animation: die $die-animation-duration steps(6); }
   }
 
-  @keyframes spell-up     { 100% { background-position: -448px -0px; } }
-  @keyframes spell-left   { 100% { background-position: -448px -64px; } }
-  @keyframes spell-down   { 100% { background-position: -448px -128px; } }
-  @keyframes spell-right  { 100% { background-position: -448px -192px; } }
-  @keyframes thrust-up    { 100% { background-position: -512px -256px; } }
-  @keyframes thrust-left  { 100% { background-position: -512px -320px; } }
-  @keyframes thrust-down  { 100% { background-position: -512px -384px; } }
-  @keyframes thrust-right { 100% { background-position: -512px -448px; } }
-  @keyframes walk-up      { 100% { background-position: -576px -512px; } }
-  @keyframes walk-left    { 100% { background-position: -576px -576px; } }
-  @keyframes walk-down    { 100% { background-position: -576px -640px; } }
-  @keyframes walk-right   { 100% { background-position: -576px -704px; } }
-  @keyframes slash-up     { 100% { background-position: -384px -768px; } }
-  @keyframes slash-left   { 100% { background-position: -384px -832px; } }
-  @keyframes slash-down   { 100% { background-position: -384px -896px; } }
-  @keyframes slash-right  { 100% { background-position: -384px -960px; } }
-  @keyframes shoot-up     { 100% { background-position: -832px -1024px; } }
-  @keyframes shoot-left   { 100% { background-position: -832px -1088px; } }
-  @keyframes shoot-down   { 100% { background-position: -832px -1152px; } }
-  @keyframes shoot-right  { 100% { background-position: -832px -1216px; } }
-  @keyframes die          { 100% { background-position: -384px -1280px; } }
+  .character.stand,
+  .character.stand-down, .character.spell-down, .character.thrust-down, .character.walk-down, .character.slash-down, .character.shoot-down,
+  .character.stand-left, .character.spell-left, .character.thrust-left, .character.walk-left, .character.slash-left, .character.shoot-left,
+  .character.stand-right, .character.spell-right, .character.thrust-right, .character.walk-right, .character.slash-right, .character.shoot-right {
+    .back    { z-index: 1; }
+    .nose    { z-index: 2; }
+    .body    { z-index: 3; }
+    .ears    { z-index: 4; }
+    .eyes    { z-index: 5; }
+    .beard   { z-index: 6; }
+    .hair    { z-index: 7; }
+    .neck    { z-index: 8; }
+    .feet    { z-index: 9; }
+    .hands   { z-index: 10; }
+    .legs    { z-index: 11; }
+    .torso   { z-index: 12; }
+    .head    { z-index: 13; }
+    .belt    { z-index: 14; }
+    .weapons { z-index: 15; }
+  }
+  .character.stand-up, .character.spell-up, .character.thrust-up, .character.walk-up, .character.slash-up, .character.shoot-up {
+    .ears    { z-index: 1; }
+    .nose    { z-index: 2; }
+    .eyes    { z-index: 3; }
+    .body    { z-index: 4; }
+    .beard   { z-index: 5; }
+    .hair    { z-index: 6; }
+    .belt    { z-index: 7; }
+    .feet    { z-index: 8; }
+    .legs    { z-index: 9; }
+    .hands   { z-index: 10; }
+    .torso   { z-index: 11; }
+    .neck    { z-index: 12; }
+    .head    { z-index: 13; }
+    .weapons { z-index: 14; }
+    .back    { z-index: 15; }
+  }
+
+  @keyframes spell-up     { 100% { background-position: -448px * $size-multiplier -0px * $size-multiplier; } }
+  @keyframes spell-left   { 100% { background-position: -448px * $size-multiplier -64px * $size-multiplier; } }
+  @keyframes spell-down   { 100% { background-position: -448px * $size-multiplier -128px * $size-multiplier; } }
+  @keyframes spell-right  { 100% { background-position: -448px * $size-multiplier -192px * $size-multiplier; } }
+  @keyframes thrust-up    { 100% { background-position: -512px * $size-multiplier -256px * $size-multiplier; } }
+  @keyframes thrust-left  { 100% { background-position: -512px * $size-multiplier -320px * $size-multiplier; } }
+  @keyframes thrust-down  { 100% { background-position: -512px * $size-multiplier -384px * $size-multiplier; } }
+  @keyframes thrust-right { 100% { background-position: -512px * $size-multiplier -448px * $size-multiplier; } }
+  @keyframes walk-up      { 100% { background-position: -576px * $size-multiplier -512px * $size-multiplier; } }
+  @keyframes walk-left    { 100% { background-position: -576px * $size-multiplier -576px * $size-multiplier; } }
+  @keyframes walk-down    { 100% { background-position: -576px * $size-multiplier -640px * $size-multiplier; } }
+  @keyframes walk-right   { 100% { background-position: -576px * $size-multiplier -704px * $size-multiplier; } }
+  @keyframes slash-up     { 100% { background-position: -384px * $size-multiplier -768px * $size-multiplier; } }
+  @keyframes slash-left   { 100% { background-position: -384px * $size-multiplier -832px * $size-multiplier; } }
+  @keyframes slash-down   { 100% { background-position: -384px * $size-multiplier -896px * $size-multiplier; } }
+  @keyframes slash-right  { 100% { background-position: -384px * $size-multiplier -960px * $size-multiplier; } }
+  @keyframes shoot-up     { 100% { background-position: -832px * $size-multiplier -1024px * $size-multiplier; } }
+  @keyframes shoot-left   { 100% { background-position: -832px * $size-multiplier -1088px * $size-multiplier; } }
+  @keyframes shoot-down   { 100% { background-position: -832px * $size-multiplier -1152px * $size-multiplier; } }
+  @keyframes shoot-right  { 100% { background-position: -832px * $size-multiplier -1216px * $size-multiplier; } }
+  @keyframes die          { 100% { background-position: -384px * $size-multiplier -1280px * $size-multiplier; } }
 
 }
