@@ -7,10 +7,9 @@ class LittleWorldsController < ApplicationController
   end
 
   def change_clothes
-    character = CharacterBuilder.build_character_from_clothing_params(params[:clothing])
-    character_html = CharacterBuilder.html_for_character_obj(character)
+    character = CharacterBuilder.new(params[:clothing])
 
-    respond_to { |format| format.html { render json: { json: character, html: character_html } } }
+    respond_to { |format| format.json { render json: { json: character.to_json, html: character.to_html } } }
   end
 
 end

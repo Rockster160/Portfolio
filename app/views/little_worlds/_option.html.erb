@@ -1,6 +1,6 @@
 <div class="options-container hidden" data-option-stack="<%= stack %>">
   <% (options.try(:keys) || options).each do |option| %>
-    <div class="option" data-option-stack="<%= stack + [option.to_s.gsub('-', '_').to_sym] %>" data-bottom-stack="<%= options.is_a?(Hash) ? 'false' : 'true' %>"><%= option %></div>
+    <div class="option" data-option-stack="<%= stack + [option.to_s.gsub('-', '_').to_sym] %>" data-bottom-stack="<%= !options.is_a?(Hash) %>" data-top-stack="<%= stack.empty? %>"><%= option %></div>
   <% end %>
 
   <% if options.is_a?(Hash) %>

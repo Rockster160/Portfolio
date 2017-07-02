@@ -14,20 +14,21 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
   }
 
   getCurrentClothing = function() {
+    var clothing = {}
     var clothing_stack = $('.option.selected[data-bottom-stack="true"]').map(function() { return $(this).attr("data-option-stack") })
-    return $([]) // FIXME
+    return clothing // FIXME
   }
 
-  setNewClothing = function() {
-    var url = $(".character-form").attr("data-change-url"), clothing = getCurrentClothing().toArray()
+  setNewClothing = function(new_clothes) {
+    var url = $(".character-form").attr("data-change-url"), clothing = new_clothes || getCurrentClothing()
 
     $.post(url, {clothing: clothing}).success(function(data) {
-      console.log("HTML", data.html);
-      console.log("JSON", data.json);
       $('.character').html(data.html)
+      $("code.json-placeholder p").html(JSON.stringify(data.json, undefined, 4))
       // Update `selected` boxes
     })
   }
+  setNewClothing()
 
   $('.option').click(function() {
     $(this).siblings().each(function() {
@@ -43,6 +44,12 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
       setNewClothing()
     }
     showStackForOption(this)
+  })
+
+  $(".random-clothes").click(function(evt) {
+    evt.preventDefault()
+    setNewClothing({})
+    return false
   })
 
 })
