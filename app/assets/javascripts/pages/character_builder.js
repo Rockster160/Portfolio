@@ -79,10 +79,14 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
     })
   }
 
-  $('.option[data-option-stack="male torso plate chest"]')
-
   setNewClothing = function(selected_option) {
-    var url = $(".character-form").attr("data-change-url"), character = characterWithOption(selected_option)
+    var character = characterWithOption(selected_option)
+
+    getNewCharacter(character)
+  }
+
+  getNewCharacter = function(character) {
+    var url = $(".character-form").attr("data-change-url")
 
     $.post(url, {character: character}).success(function(data) {
       $('.character').html(data.html)
@@ -91,7 +95,6 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
       updateSelectedOptions()
     })
   }
-  setNewClothing()
 
   selectOption = function(option) {
     if ($(option).attr("data-bottom-stack") == "true") {
@@ -125,8 +128,10 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
 
   $(".random-clothes").click(function(evt) {
     evt.preventDefault()
-    setNewClothing({})
+    getNewCharacter({})
     return false
   })
 
+
+  getNewCharacter()
 })

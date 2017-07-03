@@ -15,7 +15,7 @@
 
 <div class="skinny-container">
   <%= link_to "Random", "", class: "btn random-clothes" %>
-  <code class="json-placeholder"><p></p></code>
+  <code class="json-placeholder <%= 'hidden' unless Rails.env.development? %>"><p></p></code>
 
   <p>Body Type, Torso, and Legs are required.</p>
   <%= render partial: "character_form" %>

@@ -78,15 +78,16 @@ $size-multiplier: 4;
     .ears    { z-index: 4; }
     .eyes    { z-index: 5; }
     .beard   { z-index: 6; }
-    .hair    { z-index: 7; }
-    .neck    { z-index: 8; }
-    .feet    { z-index: 9; }
-    .hands   { z-index: 10; }
-    .legs    { z-index: 11; }
-    .torso   { z-index: 12; }
-    .head    { z-index: 13; }
-    .belt    { z-index: 14; }
-    .weapons { z-index: 15; }
+    .neck    { z-index: 7; }
+    .feet    { z-index: 8; }
+    .hands   { z-index: 9; }
+    .legs    { z-index: 10; }
+    .torso   { z-index: 11; }
+    .hair    { z-index: 12; }
+    .arms    { z-index: 13; }
+    .head    { z-index: 14; }
+    .belt    { z-index: 15; }
+    .weapons { z-index: 16; }
   }
   .character.stand-up, .character.spell-up, .character.thrust-up, .character.walk-up, .character.slash-up, .character.shoot-up {
     .ears    { z-index: 1; }
@@ -94,16 +95,17 @@ $size-multiplier: 4;
     .eyes    { z-index: 3; }
     .body    { z-index: 4; }
     .beard   { z-index: 5; }
-    .hair    { z-index: 6; }
-    .belt    { z-index: 7; }
-    .feet    { z-index: 8; }
-    .legs    { z-index: 9; }
-    .hands   { z-index: 10; }
-    .torso   { z-index: 11; }
-    .neck    { z-index: 12; }
-    .head    { z-index: 13; }
-    .weapons { z-index: 14; }
-    .back    { z-index: 15; }
+    .belt    { z-index: 6; }
+    .feet    { z-index: 7; }
+    .legs    { z-index: 8; }
+    .hands   { z-index: 9; }
+    .torso   { z-index: 10; }
+    .hair    { z-index: 11; }
+    .arms    { z-index: 12; }
+    .neck    { z-index: 13; }
+    .head    { z-index: 14; }
+    .weapons { z-index: 15; }
+    .back    { z-index: 16; }
   }
 
   @keyframes spell-up     { 100% { background-position: -448px * $size-multiplier -0px * $size-multiplier; } }

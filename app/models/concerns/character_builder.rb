@@ -1,15 +1,14 @@
 class CharacterBuilder
+  using CoreExtensions
   attr_accessor :gender, :body, :clothing, :character_json
 
-  def initialize(outfit={})
+  def initialize(outfit, options={})
     change_to_outfit(outfit)
   end
 
   def change_outfit(outfit)
-    puts "#{'~'*50}\n #{outfit}".colorize(:red)
     return unless outfit.is_a?(Hash)
     outfit.deep_symbolize_keys!
-    puts "#{'~'*50}\n #{outfit}".colorize(:red)
 
     @character_json.merge!(outfit.slice(:gender, :body, :clothing))
     @character_json[:clothing].merge!(outfit.except(:gender, :body, :clothing))
@@ -17,8 +16,6 @@ class CharacterBuilder
     set_required_attributes
     remove_invalid_attributes
     set_required_clothing
-
-    puts "#{'~'*50}\n #{@character_json}".colorize(:red)
 
     self
   end
@@ -59,9 +56,55 @@ class CharacterBuilder
     end
   end
 
-  def permitted_outfits
-    self.class.character_outfits
-    # TODO: Filter these to only show the permitted ones
+  def self.outfit_should_reject?(outfit, item)
+    return true if item == "*"
+
+    if outfit.is_a?(Hash)
+      item.keys.include?(item) || item.values.include?(item)
+    else
+      outfit.include?(item.to_s)
+    end
+  end
+
+  def self.default_outfits
+    @@default_outfits ||= begin
+      outfits = character_outfits.dup
+
+      blacklist = {
+        both: {
+          weapons: [ "*" ],
+          arms: [ "*" ],
+          body: [ :orc, :red_orc ],
+          torso: [ :plate, :chain, :gold ]
+        },
+        male: {
+          body: [ :skeleton ],
+          beard: [ :fiveoclock ],
+          eyes: {
+            colors: [ :casting_eyeglow_skeleton ]
+          }
+        },
+        female: {}
+      }
+
+      blacklist[:male].deep_merge!(blacklist[:both]) { |key, this_val, other_val| this_val + other_val }
+      blacklist[:female].deep_merge!(blacklist[:both]) { |key, this_val, other_val| this_val + other_val }
+      blacklist.except!(:both)
+
+      blacklist.all_paths.each do |*path, item|
+        if path.any?
+          outfits.dig(*path).reject! { |outfit| outfit_should_reject?(outfit, item) }
+        else
+          outfits.reject! { |outfit| outfit_should_reject?(outfit, item) }
+        end
+      end
+
+      outfits.clean!
+    end
+  end
+
+  def default_outfits
+    self.class.default_outfits
   end
 
   def genders
@@ -71,13 +114,13 @@ class CharacterBuilder
   def remove_invalid_attributes
     @character_json.slice!(:gender, :body, :clothing)
     @character_json[:gender] = nil unless genders.include?(@character_json[:gender])
-    @character_json[:body] = nil unless permitted_outfits[@gender][:body].include?(@character_json[:body])
+    @character_json[:body] = nil unless default_outfits[@gender][:body].include?(@character_json[:body])
 
     new_clothing = {}
     @character_json[:clothing].each do |placement_str, details|
-      placement = placement_str.to_s.to_sym rescue binding.pry
-      details.symbolize_keys! rescue binding.pry
-      if permitted_outfits.dig(@gender, placement, details[:type])&.include?(details[:color])
+      placement = placement_str.to_s.to_sym
+      details.symbolize_keys!
+      if default_outfits.dig(@gender, placement, details[:type])&.include?(details[:color])
         new_clothing[placement] = { type: details[:type], color: details[:color] }
       end
     end
@@ -86,20 +129,20 @@ class CharacterBuilder
 
   def set_required_attributes
     @gender = @character_json[:gender] ||= genders.sample
-    @body = @character_json[:body] ||= permitted_outfits[@gender][:body].sample rescue binding.pry
+    @body = @character_json[:body] ||= default_outfits[@gender][:body].sample
     @clothing = @character_json[:clothing] ||= {}
   end
 
   def set_required_clothing
     @character_json[:clothing][:torso] ||= begin
-      type = permitted_outfits[@gender][:torso].keys.sample
-      color = permitted_outfits[@gender][:torso][type].sample
+      type = default_outfits[@gender][:torso].keys.sample rescue binding.pry
+      color = default_outfits[@gender][:torso][type].sample
       { type: type, color: color }
     end
     # FIXME: Don't need pants if using a Robe or Dress
     @character_json[:clothing][:legs] ||= begin
-      type = permitted_outfits[@gender][:legs].keys.sample
-      color = permitted_outfits[@gender][:legs][type].sample
+      type = default_outfits[@gender][:legs].keys.sample
+      color = default_outfits[@gender][:legs][type].sample
       { type: type, color: color }
     end
     @clothing = @character_json[:clothing]
