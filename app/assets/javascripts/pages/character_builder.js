@@ -94,10 +94,10 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
   setNewClothing()
 
   selectOption = function(option) {
-    // FIXME if ($(option).parents("[data-required]").length != 0) { $(option).addClass("selected") }
     if ($(option).attr("data-bottom-stack") == "true") {
       $(option).siblings().removeClass("selected")
-      $(option).addClass("selected")
+      $(option).toggleClass("selected")
+      if ($(option).parents('[data-required="true"]').length != 0) { $(option).addClass("selected") }
     }
   }
 
@@ -111,6 +111,7 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
 
     if (!hadScope) { $(option).addClass("current-scope") }
     if ($(option).attr("data-bottom-stack") == "true") {
+      $(option).removeClass("current-scope")
       setNewClothing(option)
     }
 

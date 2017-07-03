@@ -1,13 +1,14 @@
-<div class="options-container hidden" data-option-stack="<%= stack %>">
+<% required ||= false %>
+<div class="options-container hidden" data-option-stack="<%= stack %>" data-required="<%= required %>">
   <% (options.try(:keys) || options).each do |option| %>
   <% new_stack = "#{stack} #{option.to_s}".squish %>
-    <div class="option" data-option-stack="<%= new_stack %>" data-bottom-stack="<%= !options.is_a?(Hash) %>" data-top-stack="<%= stack.blank? %>" data-required="<%= CharacterBuilder.required_placements.include?(option) %>"><%= option %></div>
+    <div class="option" data-option-stack="<%= new_stack %>" data-bottom-stack="<%= !options.is_a?(Hash) %>" data-top-stack="<%= stack.blank? %>"><%= option %></div>
   <% end %>
 
   <% if options.is_a?(Hash) %>
     <% options.each do |option_key, option_values| %>
       <% new_stack = "#{stack} #{option_key.to_s}".squish %>
-      <%= render partial: "option", locals: { options: option_values, stack: new_stack } %>
+      <%= render partial: "option", locals: { options: option_values, stack: new_stack, required: CharacterBuilder.required_placements.include?(option_key) } %>
     <% end %>
   <% end %>
 </div>
