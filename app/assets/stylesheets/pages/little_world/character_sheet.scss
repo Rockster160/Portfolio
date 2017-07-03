@@ -73,8 +73,8 @@ $size-multiplier: 4;
   .character.stand-left, .character.spell-left, .character.thrust-left, .character.walk-left, .character.slash-left, .character.shoot-left,
   .character.stand-right, .character.spell-right, .character.thrust-right, .character.walk-right, .character.slash-right, .character.shoot-right {
     .back    { z-index: 1; }
-    .nose    { z-index: 2; }
-    .body    { z-index: 3; }
+    .body    { z-index: 2; }
+    .nose    { z-index: 3; }
     .ears    { z-index: 4; }
     .eyes    { z-index: 5; }
     .beard   { z-index: 6; }
@@ -91,9 +91,9 @@ $size-multiplier: 4;
   }
   .character.stand-up, .character.spell-up, .character.thrust-up, .character.walk-up, .character.slash-up, .character.shoot-up {
     .ears    { z-index: 1; }
-    .nose    { z-index: 2; }
-    .eyes    { z-index: 3; }
-    .body    { z-index: 4; }
+    .eyes    { z-index: 2; }
+    .body    { z-index: 3; }
+    .nose    { z-index: 4; }
     .beard   { z-index: 5; }
     .belt    { z-index: 6; }
     .feet    { z-index: 7; }
