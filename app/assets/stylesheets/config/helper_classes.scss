@@ -2,5 +2,5 @@
 .text-right { text-align: right; }
 .text-center { text-align: center; }
 .normal { font-weight: normal; }
-.hidden { display: none; }
+.hidden { display: none !important; }
 .danger { color: red; }

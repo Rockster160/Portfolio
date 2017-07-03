@@ -75,7 +75,14 @@ class CharacterBuilder
           weapons: [ "*" ],
           arms: [ "*" ],
           body: [ :orc, :red_orc ],
-          torso: [ :plate, :chain, :gold ]
+          torso: [ :plate, :chain, :gold ],
+          feet: [ :armor ],
+          hands: [ :gloves ],
+          head: {
+            helms: "*",
+            hoods: [ :chain_hood ]
+          },
+          legs: [ :armor ]
         },
         male: {
           body: [ :skeleton ],
@@ -84,7 +91,9 @@ class CharacterBuilder
             colors: [ :casting_eyeglow_skeleton ]
           }
         },
-        female: {}
+        female: {
+          back: [ :wings ]
+        }
       }
 
       blacklist[:male].deep_merge!(blacklist[:both]) { |key, this_val, other_val| this_val + other_val }
