@@ -6,7 +6,10 @@ class CharacterBuilder
   end
 
   def change_outfit(outfit)
+    puts "#{'~'*50}\n #{outfit}".colorize(:red)
     return unless outfit.is_a?(Hash)
+    outfit.deep_symbolize_keys!
+    puts "#{'~'*50}\n #{outfit}".colorize(:red)
 
     @character_json.merge!(outfit.slice(:gender, :body, :clothing))
     @character_json[:clothing].merge!(outfit.except(:gender, :body, :clothing))
@@ -14,6 +17,8 @@ class CharacterBuilder
     set_required_attributes
     remove_invalid_attributes
     set_required_clothing
+
+    puts "#{'~'*50}\n #{@character_json}".colorize(:red)
 
     self
   end
@@ -44,9 +49,13 @@ class CharacterBuilder
 
   private
 
+  def self.required_placements
+    ["body", "torso", "legs"]
+  end
+
   def self.character_outfits
     @@character_outfits ||= begin
-      JSON.parse(File.read("lib/assets/valid_character_outfits.rb")).deep_symbolize_keys
+      HashWithIndifferentAccess.new(JSON.parse(File.read("lib/assets/valid_character_outfits.rb")))
     end
   end
 
@@ -56,7 +65,7 @@ class CharacterBuilder
   end
 
   def genders
-    [:male, :female]
+    ["male", "female"]
   end
 
   def remove_invalid_attributes
@@ -68,7 +77,7 @@ class CharacterBuilder
     @character_json[:clothing].each do |placement_str, details|
       placement = placement_str.to_s.to_sym rescue binding.pry
       details.symbolize_keys! rescue binding.pry
-      if permitted_outfits.dig(@gender, placement, details[:type], details[:color])
+      if permitted_outfits.dig(@gender, placement, details[:type])&.include?(details[:color])
         new_clothing[placement] = { type: details[:type], color: details[:color] }
       end
     end
@@ -77,7 +86,7 @@ class CharacterBuilder
 
   def set_required_attributes
     @gender = @character_json[:gender] ||= genders.sample
-    @body = @character_json[:body] ||= permitted_outfits[@gender][:body].sample
+    @body = @character_json[:body] ||= permitted_outfits[@gender][:body].sample rescue binding.pry
     @clothing = @character_json[:clothing] ||= {}
   end
 
@@ -87,6 +96,7 @@ class CharacterBuilder
       color = permitted_outfits[@gender][:torso][type].sample
       { type: type, color: color }
     end
+    # FIXME: Don't need pants if using a Robe or Dress
     @character_json[:clothing][:legs] ||= begin
       type = permitted_outfits[@gender][:legs].keys.sample
       color = permitted_outfits[@gender][:legs][type].sample

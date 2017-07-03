@@ -1,8 +1,13 @@
 .ctr-little_worlds.act-character_builder {
 
   code.json-placeholder {
-    text-align: left;
+    text-align: center;
+    display: block;
+    margin: 10px;
+
     p {
+      text-align: left;
+      display: inline-block;
       white-space: pre;
       line-height: 1;
       margin: 0;
@@ -24,6 +29,7 @@
         overflow: hidden;
         padding: 3px;
         box-sizing: border-box;
+        cursor: pointer;
 
         &.selected { border: 2px solid red; }
         &:hover { border: 2px solid orange; }

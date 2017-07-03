@@ -1,49 +1,125 @@
 $('.ctr-little_worlds.act-character_builder').ready(function() {
 
-  $('.character-form > .options-container').removeClass("hidden")
+  var currentCharacter = {}
 
-  showStackForOption = function(option) {
+  $(".character-form > .options-container").removeClass("hidden")
+
+  showCurrentScope = function() {
     $(".options-container").addClass("hidden")
-    $('.character-form > .options-container').removeClass("hidden")
-    if ($(option).hasClass("selected")) {
-      $('.options-container[data-option-stack="' + $(option).attr("data-option-stack") + '"]').removeClass("hidden")
-    }
-    $(option).parents().each(function() {
-      $(this).removeClass("hidden").addClass("current-scope")
+    $(".character-form > .options-container").removeClass("hidden")
+    $(".current-scope").removeClass("hidden")
+    $(".current-scope").each(function() {
+      $('.options-container[data-option-stack="' + $(this).attr("data-option-stack") + '"]').removeClass("hidden")
     })
   }
 
-  getCurrentClothing = function() {
-    var clothing = {}
-    var clothing_stack = $('.option.selected[data-bottom-stack="true"]').map(function() { return $(this).attr("data-option-stack") })
-    return clothing // FIXME
+  characterWithOption = function(option) {
+    var character = { gender: undefined, body: undefined, clothing: {} }
+
+    if ($(option).hasClass("selected")) {
+      var optionComponent = componentFromStackStr($(option).attr("data-option-stack"))
+      character = addComponentToCharacter(character, optionComponent, {override: true})
+    }
+
+    $('.option.selected[data-bottom-stack="true"]').each(function() {
+      var component = componentFromStackStr($(this).attr("data-option-stack"))
+      character = addComponentToCharacter(character, component)
+    })
+
+    return character
   }
 
-  setNewClothing = function(new_clothes) {
-    var url = $(".character-form").attr("data-change-url"), clothing = new_clothes || getCurrentClothing()
+  componentFromStackStr = function(stack_str) {
+    var pieces = stack_str.split(" ")
+    return { gender: pieces[0], placement: pieces[1], type: pieces[2], color: pieces[3] }
+  }
 
-    $.post(url, {clothing: clothing}).success(function(data) {
+  addComponentToCharacter = function(character, component, options) {
+    options = options || {}
+    override = options.override || false
+
+    if (override) {
+      character.gender = component.gender
+      if (component.placement == "body") {
+        character.body = component.type
+      } else {
+        character.clothing[component.placement] = { type: component.type, color: component.color }
+      }
+    } else {
+      character.gender = character.gender || component.gender
+      if (component.placement == "body") {
+        character.body = character.body || component.type
+      } else {
+        character.clothing[component.placement] = character.clothing[component.placement] || {}
+        character.clothing[component.placement].type = character.clothing[component.placement].type || component.type
+        character.clothing[component.placement].color = character.clothing[component.placement].color || component.color
+      }
+    }
+
+    return character
+  }
+
+  selectOptionAndParents = function(option) {
+    $(option).addClass("selected")
+    $(option).parents().andSelf().each(function() {
+      $(this).siblings('.option[data-option-stack="' + $(this).attr("data-option-stack") + '"]').addClass("selected")
+    })
+  }
+
+  updateSelectedOptions = function() {
+    var gender = currentCharacter.gender, body = currentCharacter.body, clothing = currentCharacter.clothing
+
+    $('.selected').removeClass("selected")
+    selectOptionAndParents($('.option[data-option-stack="' + gender + ' body ' + body + '"]'))
+
+    $(Object.keys(clothing)).each(function() {
+      var cloth = clothing[this], placement = this, type = cloth.type, color = cloth.color
+      var stack = (gender + ' ' + placement + ' ' + type + ' ' + color).trim().replace(/ +/, " ")
+      selectOptionAndParents($('.option[data-option-stack="' + stack + '"]'))
+    })
+  }
+
+  $('.option[data-option-stack="male torso plate chest"]')
+
+  setNewClothing = function(selected_option) {
+    var url = $(".character-form").attr("data-change-url"), character = characterWithOption(selected_option)
+
+    $.post(url, {character: character}).success(function(data) {
       $('.character').html(data.html)
       $("code.json-placeholder p").html(JSON.stringify(data.json, undefined, 4))
-      // Update `selected` boxes
+      currentCharacter = data.json
+      updateSelectedOptions()
     })
   }
   setNewClothing()
 
-  $('.option').click(function() {
-    $(this).siblings().each(function() {
-      $(this).removeClass("selected");
-      $(this).children().each(function() {
-        if ($(this).attr("data-bottom-stack") != "true") {
-          $(this).removeClass("selected");
-        }
-      })
-    })
-    $(this).toggleClass("selected")
-    if ($(this).attr("data-bottom-stack") == "true") {
-      setNewClothing()
+  selectOption = function(option) {
+    // FIXME if ($(option).parents("[data-required]").length != 0) { $(option).addClass("selected") }
+    if ($(option).attr("data-bottom-stack") == "true") {
+      $(option).siblings().removeClass("selected")
+      $(option).addClass("selected")
     }
-    showStackForOption(this)
+  }
+
+  updateScopeForOption = function(option) {
+    var hadScope = $(option).hasClass("current-scope")
+
+    $(".current-scope").removeClass("current-scope")
+    $(option).parentsUntil(".character-form").each(function() {
+      $('[data-option-stack="' + $(this).attr("data-option-stack") + '"]').addClass("current-scope")
+    })
+
+    if (!hadScope) { $(option).addClass("current-scope") }
+    if ($(option).attr("data-bottom-stack") == "true") {
+      setNewClothing(option)
+    }
+
+    showCurrentScope()
+  }
+
+  $('.option').click(function() {
+    selectOption(this)
+    updateScopeForOption(this)
   })
 
   $(".random-clothes").click(function(evt) {
