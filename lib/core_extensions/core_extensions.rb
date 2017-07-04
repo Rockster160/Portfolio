@@ -1,6 +1,16 @@
 module CoreExtensions
   refine Hash do
 
+    def deep_set(path, new_value)
+      return self unless path.any?
+      new_hash = new_value
+      path.reverse.each do |path_key|
+        new_hash = {path_key => new_hash}
+      end
+      self.deep_merge!(new_hash) { |key, this_val, other_val| this_val + other_val }
+      self
+    end
+
     def clean!
       delete_if do |k, v|
         if v.is_a?(Hash)

@@ -4,11 +4,12 @@ class CharacterBuilder
 
   def initialize(outfit, options={})
     change_to_outfit(outfit)
+    change_random if options[:random]
   end
 
   def change_outfit(outfit)
     return unless outfit.is_a?(Hash)
-    outfit.deep_symbolize_keys!
+    outfit = outfit.deep_symbolize_keys
 
     @character_json.merge!(outfit.slice(:gender, :body, :clothing))
     @character_json[:clothing].merge!(outfit.except(:gender, :body, :clothing))
@@ -24,6 +25,43 @@ class CharacterBuilder
     @character_json = empty_clothing_obj
 
     change_outfit(outfit || {})
+  end
+
+  # HASH: Keys represent the placement of clothing, values are the
+  #   chance to use it between 0 and 1 (0.5 is 50% chance)
+  # ARRAY 100% chance to randomize each placement passed in.
+  def change_random(*placements)
+    @gender = @character_json[:gender] ||= genders.sample
+    @body = @character_json[:body] ||= default_outfits[@gender][:body].sample
+    @clothing ||= {}
+
+    placements = default_outfits[@gender]
+    placements.each do |placement, styles|
+      next if placement.to_s == "body"
+      next if placement.to_s != "hair" && rand(5) != 0
+      style_key = styles.keys.sample
+      color = styles[style_key].sample
+      @clothing[placement] = { type: style_key, color: color }
+    end
+
+    @character_json[:clothing] = @clothing
+
+    set_required_attributes
+    remove_invalid_attributes
+    set_required_clothing
+    # FIXME - Remove all of the above, replace with something like below
+    # puts "#{'~'*500} RANDOFY #{'~'*500}".colorize(:red)
+    # placements.each do |placement|
+    #   if placement.is_a?(Hash)
+    #     placement.each do |path, chance|
+    #       if rand < chance
+    #         randomly_find_clothes_for_path(path)
+    #       end
+    #     end
+    #   elsif placement.is_a?(Array)
+    #   else
+    #   end
+    # end
   end
 
   def to_html
@@ -56,13 +94,44 @@ class CharacterBuilder
     end
   end
 
-  def self.outfit_should_reject?(outfit, item)
-    return true if item == "*"
+  def self.outfit_paths_from_list(outfits, list, include_found:)
+    binding.pry if include_found
+    (list[:male] ||= {}).deep_merge!(list[:both]) { |key, this_val, other_val| this_val + other_val }
+    (list[:female] ||= {}).deep_merge!(list[:both]) { |key, this_val, other_val| this_val + other_val }
+    list.except!(:both)
+
+    all_paths = list.all_paths
+
+    if include_found
+      found_outfits = {}
+      all_paths.each do |*path, item|
+        possible_outfits = path.any? ? outfits.dig(*path) : outfits
+        possible_outfits.each do |outfit|
+          if outfit_includes_item?(outfit, item)
+            found_outfits.deep_set(path, item)
+          end
+        end
+      end
+      found_outfits
+    else
+      all_paths.each do |*path, item|
+        if path.any?
+          outfits.dig(*path).reject! { |outfit| outfit_includes_item?(outfit, item) }
+        else
+          outfits.reject! { |outfit| outfit_includes_item?(outfit, item) }
+        end
+      end
+      outfits
+    end
+  end
+
+  def self.outfit_includes_item?(outfit, current_item)
+    return true if current_item == "*"
 
     if outfit.is_a?(Hash)
-      item.keys.include?(item) || item.values.include?(item)
+      current_item.keys.include?(current_item) || current_item.values.include?(current_item)
     else
-      outfit.include?(item.to_s)
+      outfit.include?(current_item.to_s)
     end
   end
 
@@ -96,19 +165,7 @@ class CharacterBuilder
         }
       }
 
-      blacklist[:male].deep_merge!(blacklist[:both]) { |key, this_val, other_val| this_val + other_val }
-      blacklist[:female].deep_merge!(blacklist[:both]) { |key, this_val, other_val| this_val + other_val }
-      blacklist.except!(:both)
-
-      blacklist.all_paths.each do |*path, item|
-        if path.any?
-          outfits.dig(*path).reject! { |outfit| outfit_should_reject?(outfit, item) }
-        else
-          outfits.reject! { |outfit| outfit_should_reject?(outfit, item) }
-        end
-      end
-
-      outfits.clean!
+      outfit_paths_from_list(outfits, blacklist, include_found: false).clean!
     end
   end
 
@@ -118,6 +175,12 @@ class CharacterBuilder
 
   def genders
     ["male", "female"]
+  end
+
+  def randomly_find_clothes_for_path(path)
+    o = self.class.outfit_paths_from_list(default_outfits, path, include_found: true)
+    binding.pry
+    o
   end
 
   def remove_invalid_attributes

@@ -12,13 +12,28 @@
   <li><strong>X</strong> - cancel all queued movements</li>
 </ul>
 
+<div class="split-container">
+  <div class="half-container character-form" data-change-url="<%= change_clothes_little_world_path %>">
+    <code class="json-placeholder <%= 'hidden' %> <%= 'hidden' unless Rails.env.development? %>"><p></p></code>
 
-<div class="skinny-container">
-  <%= link_to "Random", "", class: "btn random-clothes" %>
-  <code class="json-placeholder <%= 'hidden' unless Rails.env.development? %>"><p></p></code>
+    <div class="options-container" data-level="gender">
+      <label>Gender</label>
+      <div class="option" data-type="male"><i class="fa fa-mars"></i></div>
+      <div class="option" data-type="female"><i class="fa fa-venus"></i></div>
+    </div>
+    <div class="options-container" data-level="gender">
+      <label>Skin Tone</label>
+      <div class="option" data-type="male"><i class="fa fa-mars"></i></div>
+      <div class="option" data-type="female"><i class="fa fa-venus"></i></div>
+    </div>
 
-  <p>Body Type, Torso, and Legs are required.</p>
-  <%= render partial: "character_form" %>
+    <%= link_to "Randomize", "", class: "btn random-clothes" %>
+  </div>
+  <div class="half-container">
+    <div class="character stand" data-from-json="<%= JSON.generate(@character.to_json) %>">
+      <% if @character.present? %>
+        <%= @character.to_html %>
+      <% end %>
+    </div>
+  </div>
 </div>
-
-<div class="character stand"></div>

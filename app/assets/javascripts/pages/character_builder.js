@@ -79,16 +79,16 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
     })
   }
 
-  setNewClothing = function(selected_option) {
+  setNewCharacter = function(selected_option) {
     var character = characterWithOption(selected_option)
 
-    getNewCharacter(character)
+    getNewCharacter({character: character})
   }
 
-  getNewCharacter = function(character) {
+  getNewCharacter = function(params) {
     var url = $(".character-form").attr("data-change-url")
 
-    $.post(url, {character: character}).success(function(data) {
+    $.post(url, params || {}).success(function(data) {
       $('.character').html(data.html)
       $("code.json-placeholder p").html(JSON.stringify(data.json, undefined, 4))
       currentCharacter = data.json
@@ -115,7 +115,7 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
     if (!hadScope) { $(option).addClass("current-scope") }
     if ($(option).attr("data-bottom-stack") == "true") {
       $(option).removeClass("current-scope")
-      setNewClothing(option)
+      setNewCharacter(option)
     }
 
     showCurrentScope()
@@ -128,10 +128,15 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
 
   $(".random-clothes").click(function(evt) {
     evt.preventDefault()
-    getNewCharacter({})
+    getNewCharacter({random: true})
     return false
   })
 
+  if ($('.character').attr("data-from-json").length > 5) {
+    currentCharacter = JSON.parse($('.character').attr("data-from-json"))
+    updateSelectedOptions()
+  } else {
+    getNewCharacter({random: true})
+  }
 
-  getNewCharacter()
 })

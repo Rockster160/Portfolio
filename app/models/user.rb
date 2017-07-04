@@ -17,6 +17,7 @@ class User < ApplicationRecord
 
   has_many :user_lists, dependent: :destroy
   has_many :lists, through: :user_lists
+  has_one :avatar
 
   has_secure_password validations: false
 

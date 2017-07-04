@@ -16,24 +16,37 @@
 
   .character-form {
     .options-container {
-      margin-top: 30px;
-      border: 1px solid black;
+      margin-top: 20px;
       border-collapse: collapse;
       padding: 10px;
       padding-top: 0;
 
       .option {
-        margin-top: 10px;
         display: inline-block;
         border: 2px solid black;
-        overflow: hidden;
-        padding: 3px;
+        border-radius: 3px;
         box-sizing: border-box;
+        overflow: hidden;
         cursor: pointer;
+        height: 50px;
+        width: 50px;
+        line-height: 50px;
+        font-size: 30px;
+        font-weight: bold;
+        text-align: center;
 
-        &.selected { border: 2px solid red; }
-        &:hover { border: 2px solid orange; }
-        &.current-scope { border: 2px solid blue; }
+        &.selected {
+          border: 2px solid red;
+          color: red;
+        }
+        &:hover {
+          border: 2px solid orange;
+          color: orange;
+        }
+        &.current-scope {
+          border: 2px solid blue;
+          color: blue;
+        }
       }
     }
   }
