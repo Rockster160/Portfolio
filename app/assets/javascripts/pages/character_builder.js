@@ -79,6 +79,12 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
     })
   }
 
+  updateCharacter = function(charcter_json) {
+    $("code.json-placeholder p").html(JSON.stringify(charcter_json, undefined, 4))
+    currentCharacter = charcter_json
+    updateSelectedOptions()
+  }
+
   setNewCharacter = function(selected_option) {
     var character = characterWithOption(selected_option)
 
@@ -90,9 +96,7 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
 
     $.post(url, params || {}).success(function(data) {
       $('.character').html(data.html)
-      $("code.json-placeholder p").html(JSON.stringify(data.json, undefined, 4))
-      currentCharacter = data.json
-      updateSelectedOptions()
+      updateCharacter(data.json)
     })
   }
 
@@ -133,8 +137,7 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
   })
 
   if ($('.character').attr("data-from-json").length > 5) {
-    currentCharacter = JSON.parse($('.character').attr("data-from-json"))
-    updateSelectedOptions()
+    updateCharacter(JSON.parse($('.character').attr("data-from-json")))
   } else {
     getNewCharacter({random: true})
   }

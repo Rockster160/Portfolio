@@ -14,26 +14,106 @@
     }
   }
 
+  .split-container .half-container { height: auto; }
+
   .character-form {
+    margin-top: 20px;
+    padding: 10px;
+
+    input[type="radio"] {
+      display: none;
+
+      & + label {
+        display: inline-block;
+        border: 4px double black;
+        border-radius: 3px;
+        box-sizing: border-box;
+        cursor: pointer;
+        font-family: monospace;
+
+        .fa {
+          display: inline-block;
+          height: 50px;
+          width: 50px;
+          font-size: 30px;
+          font-weight: bold;
+          line-height: 50px;
+          text-align: center;
+        }
+        &:hover {
+          border-color: orange;
+        }
+      }
+    }
+    input[type="radio"]:checked + label {
+      color: $base-blue;
+      border-color: $base-blue;
+    }
+
+    .option-selector {
+      margin-top: 5px;
+
+      // select { display: none; }
+      .option-title, .arrow-prev, .arrow-next {
+        display: inline-block;
+        padding: 3px;
+        border: 4px double black;
+        border-radius: 3px;
+        line-height: 18px;
+        vertical-align: top;
+      }
+      .option-title {
+        width: 100px;
+      }
+      .arrow-prev, .arrow-next {
+        width: 15px;
+        font-size: 10px;
+
+        &:hover {
+          cursor: pointer;
+          border-color: orange;
+        }
+        &:active {
+          padding: 4px 2px 2px 4px;
+          border-color: red;
+        }
+      }
+    }
+
     .options-container {
-      margin-top: 20px;
       border-collapse: collapse;
-      padding: 10px;
       padding-top: 0;
 
       .option {
-        display: inline-block;
-        border: 2px solid black;
+        margin-top: 3px;
+        border: 2px double black;
         border-radius: 3px;
         box-sizing: border-box;
         overflow: hidden;
         cursor: pointer;
-        height: 50px;
-        width: 50px;
-        line-height: 50px;
-        font-size: 30px;
-        font-weight: bold;
-        text-align: center;
+        font-family: monospace;
+
+        &[data-top-stack="true"] {
+          display: inline-block;
+        }
+        &[data-top-stack="false"] {
+          width: 112px;
+          margin: 2px auto;
+        }
+        .fa {
+          display: inline-block;
+          height: 50px;
+          width: 50px;
+          font-size: 30px;
+          font-weight: bold;
+          line-height: 50px;
+          text-align: center;
+        }
+        span {
+          display: inline-block;
+          padding: 3px;
+          margin-top: 3px;
+        }
 
         &.selected {
           border: 2px solid red;

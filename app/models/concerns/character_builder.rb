@@ -88,6 +88,12 @@ class CharacterBuilder
     ["body", "torso", "legs"]
   end
 
+  def self.reset_outfits
+    @@character_outfits = nil
+    @@default_outfits = nil
+    default_outfits
+  end
+
   def self.character_outfits
     @@character_outfits ||= begin
       HashWithIndifferentAccess.new(JSON.parse(File.read("lib/assets/valid_character_outfits.rb")))
@@ -143,6 +149,7 @@ class CharacterBuilder
         both: {
           weapons: [ "*" ],
           arms: [ "*" ],
+          back: [ "*" ],
           body: [ :orc, :red_orc ],
           torso: [ :plate, :chain, :gold ],
           feet: [ :armor ],
@@ -178,9 +185,9 @@ class CharacterBuilder
   end
 
   def randomly_find_clothes_for_path(path)
-    o = self.class.outfit_paths_from_list(default_outfits, path, include_found: true)
-    binding.pry
-    o
+    # o = self.class.outfit_paths_from_list(default_outfits, path, include_found: true)
+    # binding.pry
+    # o
   end
 
   def remove_invalid_attributes

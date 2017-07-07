@@ -1,13 +1,16 @@
 class LittleWorldsController < ApplicationController
+  include CharacterBuilderHelper
 
   def show
   end
 
   def character_builder
-    # @outfits = CharacterBuilder.
+    @outfits = CharacterBuilder.default_outfits
     if session[:character_json].present?
       character_json = JSON.parse(session[:character_json])
       @character = CharacterBuilder.new(character_json)
+    else
+      @character = CharacterBuilder.new({}, {random: true})
     end
   end
 
