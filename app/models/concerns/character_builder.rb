@@ -8,8 +8,7 @@ class CharacterBuilder
   end
 
   def change_outfit(outfit)
-    return unless outfit.is_a?(Hash)
-    outfit = outfit.deep_symbolize_keys
+    outfit = outfit.is_a?(Hash) ? outfit.deep_symbolize_keys : convert_params_to_character_json(outfit)
 
     @character_json.merge!(outfit.slice(:gender, :body, :clothing))
     @character_json[:clothing].merge!(outfit.except(:gender, :body, :clothing))
@@ -188,6 +187,10 @@ class CharacterBuilder
     # o = self.class.outfit_paths_from_list(default_outfits, path, include_found: true)
     # binding.pry
     # o
+  end
+
+  def convert_params_to_character_json(params)
+    {}
   end
 
   def remove_invalid_attributes

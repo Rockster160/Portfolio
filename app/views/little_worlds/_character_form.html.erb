@@ -8,27 +8,28 @@
     <% same_gender = gender.to_s == @character.gender.to_s %>
     <div class="<%= gender %>-options <%= 'hidden' unless same_gender %>">
       <% options.each do |placement, colors| %>
-        <% next unless colors.present? %>
         <% placement = placement.to_s %>
 
-        <div class="option-selector">
+        <div class="option-selector <%= 'disabled' if colors.blank? %>">
           <div class="option-title"><%= placement.titleize %></div>
-          <div class="arrow-prev"><i class="fa fa-chevron-left"></i></div>
-          <div class="arrow-next"><i class="fa fa-chevron-right"></i></div>
-          <% if placement == "skin_tone" %>
-            <select name="skin_tone">
-              <% options = colors.each_with_object({}) { |color, option_list| option_list[color.titleize] = color } %>
-              <%= options_for_select options, @character.body %>
-            </select>
-          <% else %>
-            <select name="<%= placement %>">
-              <% placement_color = same_gender ? @character.clothing.dig(placement.to_sym, :color).to_s : "" %>
-              <% unless CharacterBuilder.required_placements.include?(placement) %>
-              <option value="">None</option>
-                <% end %>
-              <% options = colors.each_with_object({}) { |color, option_list| option_list[color.titleize] = color } %>
-              <%= options_for_select options, placement_color %>
-            </select>
+          <div class="arrow-prev no-zoom"><i class="fa fa-chevron-left"></i></div>
+          <div class="arrow-next no-zoom"><i class="fa fa-chevron-right"></i></div>
+          <% if colors.present? %>
+            <% if placement == "skin_tone" %>
+              <select name="skin_tone">
+                <% options = colors.each_with_object({}) { |color, option_list| option_list[color.titleize] = color } %>
+                <%= options_for_select options, @character.body %>
+              </select>
+            <% else %>
+              <select name="<%= placement %>">
+                <% placement_color = same_gender ? @character.clothing.dig(placement.to_sym, :color).to_s : "" %>
+                <% unless CharacterBuilder.required_placements.include?(placement) %>
+                <option value="">None</option>
+                  <% end %>
+                <% options = colors.each_with_object({}) { |color, option_list| option_list[color.titleize] = color } %>
+                <%= options_for_select options, placement_color %>
+              </select>
+            <% end %>
           <% end %>
         </div>
 

@@ -53,7 +53,7 @@
     .option-selector {
       margin-top: 5px;
 
-      // select { display: none; }
+      select { display: none; }
       .option-title, .arrow-prev, .arrow-next {
         display: inline-block;
         padding: 3px;
@@ -76,6 +76,13 @@
         &:active {
           padding: 4px 2px 2px 4px;
           border-color: red;
+        }
+      }
+      &.disabled {
+        * {
+          border-color: #DDD !important;
+          color: #DDD !important;
+          cursor: not-allowed !important;
         }
       }
     }
