@@ -113,9 +113,10 @@ $(".ctr-little_worlds.act-character_builder").ready(function() {
   //   updateScopeForOption(this)
   // })
   selectOnlyOption = function(option_selector) {
-    $(option_selector).parentsUntil("select").find("option").prop("selected", false).attr("selected", false).removeAttr("selected").each(function() { console.log($(this).val());})
-    // $(option_selector).prop("selected", true).change()
-    // $(option_selector).attr("selected", "selected").change()
+    if ($(option_selector).length == 0) { return }
+    $(option_selector).parents("select").find("option").prop("selected", false).attr("selected", false).removeAttr("selected")
+    $(option_selector).parents("select")[0].selectedIndex = -1
+    $(option_selector).attr("selected", "selected").prop("selected", true).change()
   }
 
   updateFormToMatchCharacter = function() {

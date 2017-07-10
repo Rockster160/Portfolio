@@ -51,9 +51,9 @@ module CharacterBuilderHelper
     gender = params_hash[:gender]
     gender_scope = outfits[gender]
     gender_hash = params_hash[gender]
-    other_gender_hash = params_hash[gender.to_sym == :male ? :female : :male]
-    other_gender_hash.merge!(gender_hash.reject { |k,v| v.blank? })
-    gender_hash = other_gender_hash
+    # other_gender_hash = params_hash[gender.to_sym == :male ? :female : :male]
+    # other_gender_hash.merge!(gender_hash.reject { |k,v| v.blank? })
+    # gender_hash = other_gender_hash
     body = gender_hash[:body]
 
     clothing = {}
