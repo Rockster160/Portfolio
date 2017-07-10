@@ -1,27 +1,27 @@
-<form class="character-form basic" action="<%= change_clothes_little_world_path %>" method="post">
-  <%= radio_button_tag "gender", "male", @character.gender == "male" %>
-  <label for="gender_male"><i class="fa fa-mars"></i></label>
-  <%= radio_button_tag "gender", "female", @character.gender == "female" %>
-  <label for="gender_female"><i class="fa fa-venus"></i></label>
+<form class="character-form basic" action="<%= change_clothes_little_world_path %>" method="post" data-initial-json="<%= JSON.generate(@character.to_json) %>">
+  <%= radio_button_tag "character[gender]", "male", @character.gender == "male", class: "gender-picker" %>
+  <label for="character_gender_male"><i class="fa fa-mars"></i></label>
+  <%= radio_button_tag "character[gender]", "female", @character.gender == "female", class: "gender-picker" %>
+  <label for="character_gender_female"><i class="fa fa-venus"></i></label>
 
   <% option_builder_json.each do |gender, options| %>
     <% same_gender = gender.to_s == @character.gender.to_s %>
-    <div class="<%= gender %>-options <%= 'hidden' unless same_gender %>">
+    <div class="gender-options <%= gender %>-options <%= 'hidden' unless same_gender %>">
       <% options.each do |placement, colors| %>
         <% placement = placement.to_s %>
 
-        <div class="option-selector <%= 'disabled' if colors.blank? %>">
+        <div class="option-selector<%= ' disabled' if colors.blank? %>">
           <div class="option-title"><%= placement.titleize %></div>
           <div class="arrow-prev no-zoom"><i class="fa fa-chevron-left"></i></div>
           <div class="arrow-next no-zoom"><i class="fa fa-chevron-right"></i></div>
           <% if colors.present? %>
             <% if placement == "skin_tone" %>
-              <select name="skin_tone">
+              <select name="character[<%= gender %>][body]">
                 <% options = colors.each_with_object({}) { |color, option_list| option_list[color.titleize] = color } %>
                 <%= options_for_select options, @character.body %>
               </select>
             <% else %>
-              <select name="<%= placement %>">
+              <select name="character[<%= gender %>][<%= placement %>]">
                 <% placement_color = same_gender ? @character.clothing.dig(placement.to_sym, :color).to_s : "" %>
                 <% unless CharacterBuilder.required_placements.include?(placement) %>
                 <option value="">None</option>

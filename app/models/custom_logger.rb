@@ -11,6 +11,7 @@ class CustomLogger
     end
 
     def log(message, user=nil, request=nil)
+      return if Rails.env.development?
       if request.nil?
         ip_address = "No IP"
       else

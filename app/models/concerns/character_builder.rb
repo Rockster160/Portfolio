@@ -8,8 +8,8 @@ class CharacterBuilder
   end
 
   def change_outfit(outfit)
-    outfit = outfit.is_a?(Hash) ? outfit.deep_symbolize_keys : convert_params_to_character_json(outfit)
-
+    outfit = outfit.is_a?(Hash) ? outfit : {}
+    outfit = outfit.deep_symbolize_keys
     @character_json.merge!(outfit.slice(:gender, :body, :clothing))
     @character_json[:clothing].merge!(outfit.except(:gender, :body, :clothing))
 
@@ -30,9 +30,9 @@ class CharacterBuilder
   #   chance to use it between 0 and 1 (0.5 is 50% chance)
   # ARRAY 100% chance to randomize each placement passed in.
   def change_random(*placements)
-    @gender = @character_json[:gender] ||= genders.sample
-    @body = @character_json[:body] ||= default_outfits[@gender][:body].sample
-    @clothing ||= {}
+    @gender = @character_json[:gender] = genders.sample
+    @body = @character_json[:body] = default_outfits[@gender][:body].sample
+    @clothing = {}
 
     placements = default_outfits[@gender]
     placements.each do |placement, styles|
@@ -84,7 +84,7 @@ class CharacterBuilder
   private
 
   def self.required_placements
-    ["body", "torso", "legs"]
+    ["body", "torso", "legs", "beard_color", "hair_color"]
   end
 
   def self.reset_outfits
@@ -100,7 +100,6 @@ class CharacterBuilder
   end
 
   def self.outfit_paths_from_list(outfits, list, include_found:)
-    binding.pry if include_found
     (list[:male] ||= {}).deep_merge!(list[:both]) { |key, this_val, other_val| this_val + other_val }
     (list[:female] ||= {}).deep_merge!(list[:both]) { |key, this_val, other_val| this_val + other_val }
     list.except!(:both)
@@ -189,10 +188,6 @@ class CharacterBuilder
     # o
   end
 
-  def convert_params_to_character_json(params)
-    {}
-  end
-
   def remove_invalid_attributes
     @character_json.slice!(:gender, :body, :clothing)
     @character_json[:gender] = nil unless genders.include?(@character_json[:gender])
@@ -200,6 +195,7 @@ class CharacterBuilder
 
     new_clothing = {}
     @character_json[:clothing].each do |placement_str, details|
+      next unless details.is_a?(Hash)
       placement = placement_str.to_s.to_sym
       details.symbolize_keys!
       if default_outfits.dig(@gender, placement, details[:type])&.include?(details[:color])
@@ -217,7 +213,7 @@ class CharacterBuilder
 
   def set_required_clothing
     @character_json[:clothing][:torso] ||= begin
-      type = default_outfits[@gender][:torso].keys.sample rescue binding.pry
+      type = default_outfits[@gender][:torso].keys.sample
       color = default_outfits[@gender][:torso][type].sample
       { type: type, color: color }
     end

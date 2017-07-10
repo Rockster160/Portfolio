@@ -1,6 +1,6 @@
-$('.ctr-little_worlds.act-character_builder').ready(function() {
+$(".ctr-little_worlds.act-character_builder").ready(function() {
 
-  var currentCharacter = {}
+  var currentCharacter = {}, shouldUpdateForm = true
 
   // $(".character-form > .options-container").removeClass("hidden")
   //
@@ -78,7 +78,7 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
   //   var url = $(".character-form").attr("data-change-url")
   //
   //   $.post(url, params || {}).success(function(data) {
-  //     $('.character').html(data.html)
+  //     $(".character").html(data.html)
   //     updateCharacter(data.json)
   //   })
   // }
@@ -108,28 +108,53 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
   //   showCurrentScope()
   // }
   //
-  // $('.option').click(function() {
+  // $(".option").click(function() {
   //   selectOption(this)
   //   updateScopeForOption(this)
   // })
+  selectOnlyOption = function(option_selector) {
+    $(option_selector).parentsUntil("select").find("option").prop("selected", false).attr("selected", false).removeAttr("selected").each(function() { console.log($(this).val());})
+    // $(option_selector).prop("selected", true).change()
+    // $(option_selector).attr("selected", "selected").change()
+  }
+
   updateFormToMatchCharacter = function() {
+    shouldUpdateForm = false
     var gender = currentCharacter.gender, body = currentCharacter.body, clothing = currentCharacter.clothing
-    // TODO This should properly update the form based on the json that was returned.
-    // Set Gender, toggle visibilty of gender html, etc.
+    $(".gender-picker").prop("checked", false)
+    $('.gender-picker[value="' + gender + '"]').prop("checked", true)
+    $(".gender-options").addClass("hidden")
+    $("." + gender + "-options").removeClass("hidden")
+
+    $(Object.keys(currentCharacter.clothing)).each(function() {
+      var type = this.toString(), article = currentCharacter.clothing[this]
+      var article_type = article.type, article_color = article.color
+      if (type == "hair" || type == "beard") {
+        selectOnlyOption("select[name='character[female][" + type + "]'] option[value='" + article_type + "']")
+        selectOnlyOption("select[name='character[male][" + type + "]'] option[value='" + article_type + "']")
+        selectOnlyOption("select[name='character[female][" + type + "_color]'] option[value='" + article_color + "']")
+        selectOnlyOption("select[name='character[male][" + type + "_color]'] option[value='" + article_color + "']")
+      } else {
+        selectOnlyOption("select[name='character[female][" + type + "]'] option[value='" + article_color + "']")
+        selectOnlyOption("select[name='character[male][" + type + "]'] option[value='" + article_color + "']")
+      }
+    })
+
+    shouldUpdateForm = true
   }
 
   updateCharacter = function(character_json, character_html) {
     $("code.json-placeholder p").html(JSON.stringify(character_json, undefined, 4))
     currentCharacter = character_json
     updateFormToMatchCharacter()
-    $('.character').html(character_html)
+    $(".character").html(character_html)
   }
 
-  $(".character-form").disableSelection();
-  $(".character-form").change(function(evt) {
-    $(this).submit()
-  })
-  $(".character-form").submit(function(evt) {
+  $(".character-form").disableSelection().change(function(evt) {
+    if (shouldUpdateForm) {
+      $(this).submit()
+    }
+  }).submit(function(evt) {
     evt.preventDefault()
     $.post($(this).attr("action"), $(this).serialize(), function(data) {
       updateCharacter(data.json, data.html)
@@ -141,10 +166,7 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
     evt.preventDefault()
     var $select = $(this).parent().find("select")
     var selected = $select.children("option:selected").first()
-    $select.children("option:selected").prop('selected', false)
-    var new_option = selected.next("option") || $select.children("option").first()
-    new_option.prop("selected", true)
-    $select.change()
+    selectOnlyOption(selected.next("option")[0] || $select.children("option").first())
     return false
   })
 
@@ -152,19 +174,20 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
     evt.preventDefault()
     var $select = $(this).parent().find("select")
     var selected = $select.children("option:selected").first()
-    $select.children("option:selected").prop('selected', false)
-    var new_option = selected.prev("option") || $select.children("option").last()
-    new_option.prop("selected", true)
-    $select.change()
+    selectOnlyOption(selected.prev("option")[0] || $select.children("option").last())
     return false
   })
 
   $(".random-clothes").click(function(evt) {
     evt.preventDefault()
-    $.post($('.character-form').attr("action"), {random: true}, function(data) {
+    $.post($(".character-form").attr("action"), {random: true}, function(data) {
       updateCharacter(data.json, data.html)
     })
     return false
   })
+
+  currentCharacter = JSON.parse($('.character-form').attr("data-initial-json"))
+  updateFormToMatchCharacter()
+  console.log(currentCharacter.clothing)
 
 })

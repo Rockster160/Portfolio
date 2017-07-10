@@ -25,8 +25,12 @@ class LittleWorldsController < ApplicationController
   private
 
   def get_character
-    return params.require(:character).permit!.to_h if params[:character].present?
+    return outfit_from_params if params[:character].present?
     current_user.try(:character_json) || session[:character_json] || {}
+  end
+
+  def outfit_from_params
+    convert_params_hash_to_outfit(params.require(:character).permit!.to_h)
   end
 
 end
