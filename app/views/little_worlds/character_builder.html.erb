@@ -1,22 +1,21 @@
-<div class="split-container">
-  <div class="half-container character-form-wrapper">
-    <%= render partial: "character_form" %>
-    <%= link_to "Randomize", "", class: "btn random-clothes" %>
-  </div>
+<div class="character-form-wrapper">
+  <%= render partial: "character_form" %>
+  <%= link_to "Randomize", "", class: "btn random-clothes" %>
+</div>
 
-  <div class="half-container">
-    <div class="character stand">
-      <%= @character.to_html %>
-    </div>
-    <ul class="instructions">
-      <li>Arrow keys to move/change direction</li>
-      <li><strong>A</strong> - Spell</li>
-      <li><strong>S</strong> - Jab</li>
-      <li><strong>D</strong> - Slash</li>
-      <li><strong>F</strong> - Shoot</li>
-      <li><strong>G</strong> - Die</li>
-      <li><strong>X</strong> - cancel all queued movements</li>
-    </ul>
-    <!-- <code class="json-placeholder"><p><%= JSON.generate(@character.to_json) %></p></code> -->
+
+<div class="character-container">
+  <div class="character stand">
+    <%= @character.to_html %>
   </div>
+  <ul class="instructions">
+    <li>Arrow keys to move/change direction</li>
+    <li><strong>A</strong> - Spell</li>
+    <li><strong>S</strong> - Jab</li>
+    <li><strong>D</strong> - Slash</li>
+    <li><strong>F</strong> - Shoot</li>
+    <li><strong>G</strong> - Die</li>
+    <li><strong>X</strong> - cancel all queued movements</li>
+  </ul>
+  <!-- <code class="json-placeholder"><p><%= JSON.generate(@character.to_json) %></p></code> -->
 </div>

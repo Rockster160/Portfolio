@@ -16,123 +16,137 @@
 
   .split-container .half-container { height: auto; }
 
-  .character-form {
-    margin-top: 20px;
-    padding: 10px;
+  .character-container {
+    padding-left: 230px;
+    min-width: 250px;
+  }
 
-    input[type="radio"] {
-      display: none;
+  .character-form-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 230px;
+    background: white;
+    overflow-y: scroll;
 
-      & + label {
-        display: inline-block;
-        border: 4px double black;
-        border-radius: 3px;
-        box-sizing: border-box;
-        cursor: pointer;
-        font-family: monospace;
+    .character-form {
+      padding: 10px;
 
-        .fa {
+      input[type="radio"] {
+        display: none;
+
+        & + label {
           display: inline-block;
-          height: 50px;
-          width: 50px;
-          font-size: 30px;
-          font-weight: bold;
-          line-height: 50px;
-          text-align: center;
-        }
-        &:hover {
-          border-color: orange;
-        }
-      }
-    }
-    input[type="radio"]:checked + label {
-      color: $base-blue;
-      border-color: $base-blue;
-    }
-
-    .option-selector {
-      margin-top: 5px;
-
-      select { display: none; }
-      .option-title, .arrow-prev, .arrow-next {
-        display: inline-block;
-        padding: 3px;
-        border: 4px double black;
-        border-radius: 3px;
-        line-height: 18px;
-        vertical-align: top;
-      }
-      .option-title {
-        width: 100px;
-      }
-      .arrow-prev, .arrow-next {
-        width: 15px;
-        font-size: 10px;
-
-        &:hover {
+          border: 4px double black;
+          border-radius: 3px;
+          box-sizing: border-box;
           cursor: pointer;
-          border-color: orange;
-        }
-        &:active {
-          padding: 4px 2px 2px 4px;
-          border-color: red;
+          font-family: monospace;
+
+          .fa {
+            display: inline-block;
+            height: 50px;
+            width: 50px;
+            font-size: 30px;
+            font-weight: bold;
+            line-height: 50px;
+            text-align: center;
+          }
+          &:hover {
+            border-color: orange;
+          }
         }
       }
-      &.disabled {
-        * {
-          border-color: #DDD !important;
-          color: #DDD !important;
-          cursor: not-allowed !important;
-        }
+      input[type="radio"]:checked + label {
+        color: $base-blue;
+        border-color: $base-blue;
       }
-    }
 
-    .options-container {
-      border-collapse: collapse;
-      padding-top: 0;
+      .option-selector {
+        margin-top: 5px;
 
-      .option {
-        margin-top: 3px;
-        border: 2px double black;
-        border-radius: 3px;
-        box-sizing: border-box;
-        overflow: hidden;
-        cursor: pointer;
-        font-family: monospace;
-
-        &[data-top-stack="true"] {
-          display: inline-block;
-        }
-        &[data-top-stack="false"] {
-          width: 112px;
-          margin: 2px auto;
-        }
-        .fa {
-          display: inline-block;
-          height: 50px;
-          width: 50px;
-          font-size: 30px;
-          font-weight: bold;
-          line-height: 50px;
-          text-align: center;
-        }
-        span {
+        select { display: none; }
+        .option-title, .arrow-prev, .arrow-next {
           display: inline-block;
           padding: 3px;
-          margin-top: 3px;
+          border: 4px double black;
+          border-radius: 3px;
+          line-height: 18px;
+          vertical-align: top;
         }
+        .option-title {
+          width: 100px;
+        }
+        .arrow-prev, .arrow-next {
+          width: 15px;
+          font-size: 10px;
 
-        &.selected {
-          border: 2px solid red;
-          color: red;
+          &:hover {
+            cursor: pointer;
+            border-color: orange;
+          }
+          &:active {
+            padding: 4px 2px 2px 4px;
+            border-color: red;
+          }
         }
-        &:hover {
-          border: 2px solid orange;
-          color: orange;
+        &.disabled {
+          * {
+            border-color: #DDD !important;
+            color: #DDD !important;
+            cursor: not-allowed !important;
+          }
         }
-        &.current-scope {
-          border: 2px solid blue;
-          color: blue;
+      }
+
+      .options-container {
+        border-collapse: collapse;
+        padding-top: 0;
+
+        .option {
+          margin-top: 3px;
+          border: 2px double black;
+          border-radius: 3px;
+          box-sizing: border-box;
+          overflow: hidden;
+          cursor: pointer;
+          font-family: monospace;
+
+          &[data-top-stack="true"] {
+            display: inline-block;
+          }
+          &[data-top-stack="false"] {
+            width: 112px;
+            margin: 2px auto;
+          }
+          .fa {
+            display: inline-block;
+            height: 50px;
+            width: 50px;
+            font-size: 30px;
+            font-weight: bold;
+            line-height: 50px;
+            text-align: center;
+          }
+          span {
+            display: inline-block;
+            padding: 3px;
+            margin-top: 3px;
+          }
+
+          &.selected {
+            border: 2px solid red;
+            color: red;
+          }
+          &:hover {
+            border: 2px solid orange;
+            color: orange;
+          }
+          &.current-scope {
+            border: 2px solid blue;
+            color: blue;
+          }
         }
       }
     }
