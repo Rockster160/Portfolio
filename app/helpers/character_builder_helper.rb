@@ -17,10 +17,10 @@ module CharacterBuilderHelper
         neck:        male[:neck].try(:values).try(:flatten).try(:uniq),
         torso:       male[:torso].try(:values).try(:flatten).try(:uniq),
         head:        male[:head].try(:values).try(:flatten).try(:uniq),
-        back:        male[:back].try(:values).try(:flatten).try(:uniq),
+        # back:        male[:back].try(:values).try(:flatten).try(:uniq),
         belt:        male[:belt].try(:values).try(:flatten).try(:uniq),
         arms:        male[:arms].try(:values).try(:flatten).try(:uniq),
-        hands:       male[:hands].try(:values).try(:flatten).try(:uniq),
+        # hands:       male[:hands].try(:values).try(:flatten).try(:uniq),
         legs:        male[:legs].try(:values).try(:flatten).try(:uniq),
         feet:        male[:feet].try(:values).try(:flatten).try(:uniq)
       },
@@ -36,10 +36,10 @@ module CharacterBuilderHelper
         neck:        female[:neck].try(:values).try(:flatten).try(:uniq),
         torso:       female[:torso].try(:values).try(:flatten).try(:uniq),
         head:        female[:head].try(:values).try(:flatten).try(:uniq),
-        back:        female[:back].try(:values).try(:flatten).try(:uniq),
+        # back:        female[:back].try(:values).try(:flatten).try(:uniq),
         belt:        female[:belt].try(:values).try(:flatten).try(:uniq),
         arms:        female[:arms].try(:values).try(:flatten).try(:uniq),
-        hands:       female[:hands].try(:values).try(:flatten).try(:uniq),
+        # hands:       female[:hands].try(:values).try(:flatten).try(:uniq),
         legs:        female[:legs].try(:values).try(:flatten).try(:uniq),
         feet:        female[:feet].try(:values).try(:flatten).try(:uniq)
       }

@@ -146,7 +146,7 @@ class CharacterBuilder
       blacklist = {
         both: {
           weapons: [ "*" ],
-          arms: [ "*" ],
+          arms: [ "gold", "plate" ],
           back: [ "*" ],
           body: [ :orc, :red_orc ],
           torso: [ :plate, :chain, :gold ],
