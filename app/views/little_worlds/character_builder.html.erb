@@ -1,8 +1,10 @@
 <div class="character-form-wrapper">
   <%= render partial: "character_form" %>
   <%= link_to "Randomize", "", class: "btn random-clothes" %>
+  <br>
+  <%= link_to "Save", "", class: "btn save-btn#{ ' disabled' unless user_signed_in? }" %>
+  <%= link_to "Load", "", class: "btn load-btn#{ ' disabled' unless user_signed_in? }" %>
 </div>
-
 
 <div class="character-container">
   <div class="character stand">

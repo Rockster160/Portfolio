@@ -15,26 +15,21 @@ ActiveRecord::Schema.define(version: 20170703230850) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
+  create_table "avatar_clothes", force: :cascade do |t|
+    t.integer  "avatar_id"
+    t.string   "gender"
+    t.string   "placement"
+    t.string   "garment"
+    t.string   "color"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["avatar_id"], name: "index_avatar_clothes_on_avatar_id", using: :btree
+  end
+
   create_table "avatars", force: :cascade do |t|
     t.integer  "user_id"
-    t.string   "ears_url"
-    t.string   "eyes_url"
-    t.string   "body_url"
-    t.string   "nose_url"
-    t.string   "beard_url"
-    t.string   "belt_url"
-    t.string   "feet_url"
-    t.string   "legs_url"
-    t.string   "hands_url"
-    t.string   "torso_url"
-    t.string   "hair_url"
-    t.string   "arms_url"
-    t.string   "neck_url"
-    t.string   "head_url"
-    t.string   "weapons_url"
-    t.string   "back_url"
-    t.datetime "created_at",  null: false
-    t.datetime "updated_at",  null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_avatars_on_user_id", using: :btree
   end
 

@@ -104,6 +104,13 @@ textarea {
       background-color: darken($danger, 15%);
     }
   }
+  &.disabled {
+    background: linear-gradient(to bottom, darken($grey-blue, 10%), $grey-blue 100%);
+    background-color: darken($grey-blue, 10%);
+    box-shadow: inset 0px 1px 0px 0px lighten($grey-blue, 10%);
+    border: 1px solid darken($grey-blue, 5%);
+    cursor: not-allowed;
+  }
 }
 
 

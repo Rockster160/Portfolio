@@ -40,7 +40,7 @@ class CharacterBuilder
       next if placement.to_s != "hair" && rand(5) != 0
       style_key = styles.keys.sample
       color = styles[style_key].sample
-      @clothing[placement] = { type: style_key, color: color }
+      @clothing[placement] = { garment: style_key, color: color }
     end
 
     @character_json[:clothing] = @clothing
@@ -63,18 +63,22 @@ class CharacterBuilder
     # end
   end
 
-  def to_html
-    body = html_for_component(gender: @gender, placement: "body", type: @body)
-    character_html = [body]
+  def to_components
+    components = []
+    components << { gender: @gender, placement: "body", garment: @body }
 
     @character_json[:clothing].each do |placement, details|
       # placement = Symbol (ears, head, shoes, etc)
-      # details = { type: String, color: String }
-      cloth = { gender: gender, placement: placement, type: details[:type], color: details[:color] }
-      character_html << html_for_component(cloth)
+      # details = { garment: String, color: String }
+      cloth = { gender: gender, placement: placement, garment: details[:garment], color: details[:color] }
+      components << cloth
     end
 
-    character_html.join("\n").html_safe
+    components
+  end
+
+  def to_html
+    to_components.map { |component| html_for_component(component) }.join("\n").html_safe
   end
 
   def to_json
@@ -198,8 +202,8 @@ class CharacterBuilder
       next unless details.is_a?(Hash)
       placement = placement_str.to_s.to_sym
       details.symbolize_keys!
-      if default_outfits.dig(@gender, placement, details[:type])&.include?(details[:color])
-        new_clothing[placement] = { type: details[:type], color: details[:color] }
+      if default_outfits.dig(@gender, placement, details[:garment])&.include?(details[:color])
+        new_clothing[placement] = { garment: details[:garment], color: details[:color] }
       end
     end
     @character_json[:clothing] = new_clothing
@@ -213,25 +217,31 @@ class CharacterBuilder
 
   def set_required_clothing
     @character_json[:clothing][:torso] ||= begin
-      type = default_outfits[@gender][:torso].keys.sample
-      color = default_outfits[@gender][:torso][type].sample
-      { type: type, color: color }
+      garment = default_outfits[@gender][:torso].keys.sample
+      color = default_outfits[@gender][:torso][garment].sample
+      { garment: garment, color: color }
     end
     # FIXME: Don't need pants if using a Robe or Dress
     @character_json[:clothing][:legs] ||= begin
-      type = default_outfits[@gender][:legs].keys.sample
-      color = default_outfits[@gender][:legs][type].sample
-      { type: type, color: color }
+      garment = default_outfits[@gender][:legs].keys.sample
+      color = default_outfits[@gender][:legs][garment].sample
+      { garment: garment, color: color }
     end
     @clothing = @character_json[:clothing]
   end
 
-  # component = { gender: Symbol, placement: Symbol, type: Symbol, color: Symbol }
-  def html_for_component(component)
-    gender, placement, type, color = component[:gender], component[:placement], component[:type], component[:color]
-    path = [gender, placement, type, color].compact.join("/")
+  def path_for_component(component)
+    gender, placement, garment, color = component[:gender], component[:placement], component[:garment], component[:color]
+    path = [gender, placement, garment, color].compact.join("/")
     return unless File.exists?("app/assets/images/rpg/#{path}.png")
-    url = ActionController::Base.helpers.asset_path("rpg/#{path}.png")
+    ActionController::Base.helpers.asset_path("rpg/#{path}.png")
+  end
+
+  # component = { gender: Symbol, placement: Symbol, garment: Symbol, color: Symbol }
+  def html_for_component(component)
+    gender, placement, garment, color = component[:gender], component[:placement], component[:garment], component[:color]
+    url = path_for_component(component)
+    return unless url.present?
 
     "<div class=\"#{placement}\" style=\"background-image: url('#{url}')\"></div>"
   end
@@ -241,8 +251,8 @@ class CharacterBuilder
       gender: nil,
       body: nil,
       clothing: {
-        # back: { type: "", color: "" },
-        # beard: { type: "", color: "" },
+        # back: { garment: "", color: "" },
+        # beard: { garment: "", color: "" },
       }
     }
   end

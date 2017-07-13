@@ -59,6 +59,10 @@ class User < ApplicationRecord
     update(new_attrs)
   end
 
+  def update_avatar(character)
+    (avatar || build_avatar).update_by_builder(character)
+  end
+
   def owns_list?(list)
     !!user_lists.where(list_id: list.try(:id)).try(:is_owner)
   end

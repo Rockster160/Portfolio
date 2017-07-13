@@ -18,16 +18,16 @@ $(".ctr-little_worlds.act-character_builder").ready(function() {
     $("." + gender + "-options").removeClass("hidden")
 
     $(Object.keys(currentCharacter.clothing)).each(function() {
-      var type = this.toString(), article = currentCharacter.clothing[this]
-      var article_type = article.type, article_color = article.color
-      if (type == "hair" || type == "beard") {
-        selectOnlyOption("select[name='character[female][" + type + "]'] option[value='" + article_type + "']")
-        selectOnlyOption("select[name='character[male][" + type + "]'] option[value='" + article_type + "']")
-        selectOnlyOption("select[name='character[female][" + type + "_color]'] option[value='" + article_color + "']")
-        selectOnlyOption("select[name='character[male][" + type + "_color]'] option[value='" + article_color + "']")
+      var garment = this.toString(), article = currentCharacter.clothing[this]
+      var article_garment = article.garment, article_color = article.color
+      if (garment == "hair" || garment == "beard") {
+        selectOnlyOption("select[name='character[female][" + garment + "]'] option[value='" + article_garment + "']")
+        selectOnlyOption("select[name='character[male][" + garment + "]'] option[value='" + article_garment + "']")
+        selectOnlyOption("select[name='character[female][" + garment + "_color]'] option[value='" + article_color + "']")
+        selectOnlyOption("select[name='character[male][" + garment + "_color]'] option[value='" + article_color + "']")
       } else {
-        selectOnlyOption("select[name='character[female][" + type + "]'] option[value='" + article_color + "']")
-        selectOnlyOption("select[name='character[male][" + type + "]'] option[value='" + article_color + "']")
+        selectOnlyOption("select[name='character[female][" + garment + "]'] option[value='" + article_color + "']")
+        selectOnlyOption("select[name='character[male][" + garment + "]'] option[value='" + article_color + "']")
       }
     })
 
@@ -77,7 +77,24 @@ $(".ctr-little_worlds.act-character_builder").ready(function() {
     return false
   })
 
+  $(".save-btn").click(function(evt) {
+    evt.preventDefault()
+    $.post($(".character-form").attr("action") + "?save=true", $(".character-form").serialize(), function(data) {
+      updateCharacter(data.json, data.html)
+    })
+    return false
+  })
+
+  $(".load-btn").click(function(evt) {
+    evt.preventDefault()
+    $.get($(".character-form").attr("action"), {load: true}, function(data) {
+      updateCharacter(data.json, data.html)
+    })
+    return false
+  })
+
   currentCharacter = JSON.parse($('.character-form').attr("data-initial-json"))
+  $('.character-form').removeAttr("data-initial-json")
   updateFormToMatchCharacter()
 
 })

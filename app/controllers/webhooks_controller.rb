@@ -6,6 +6,10 @@ class WebhooksController < ApplicationController
     head 200
   end
 
+  def post
+    head 200
+  end
+
   private
 
   def post_params

@@ -13,7 +13,8 @@ Rails.application.routes.draw do
   get 'logout' => 'users/sessions#destroy'
   delete 'logout' => 'users/sessions#destroy'
 
-  post 'webhooks/:action', as: :webhooks, controller: 'webhooks'
+  post 'webhooks/jenkins' => "webhooks#jenkins"
+  post 'webhooks/post' => "webhooks#post"
 
   get 'cube' => 'cubes#show'
 
@@ -44,6 +45,7 @@ Rails.application.routes.draw do
   resource :little_world, only: [ :show ] do
     get :character_builder
     post :change_clothes
+    get :change_clothes, action: :load_character
   end
 
   resources :mazes, only: [ :index ] do
