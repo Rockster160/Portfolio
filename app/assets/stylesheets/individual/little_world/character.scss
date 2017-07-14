@@ -83,10 +83,10 @@ $die-animation-duration: 1s;
     .legs    { z-index: 9; }
     .torso   { z-index: 10; }
     .neck    { z-index: 11; }
-    .hair    { z-index: 12; }
-    .arms    { z-index: 13; }
-    .head    { z-index: 14; }
-    .belt    { z-index: 15; }
+    .arms    { z-index: 12; }
+    .belt    { z-index: 13; }
+    .hair    { z-index: 14; }
+    .head    { z-index: 15; }
     .weapons { z-index: 16; }
   }
   .character.stand-up, .character.spell-up, .character.thrust-up, .character.walk-up, .character.slash-up, .character.shoot-up {

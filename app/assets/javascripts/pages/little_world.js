@@ -124,8 +124,10 @@ $('.ctr-little_worlds.act-show').ready(function() {
     playerMoving = true;
     $('.player').animate(newPosition, {
       duration: 400,
+      easing: "linear",
       complete: function() {
         clearMovementClasses()
+        if (playerPath.length == 0) { $(".highlight-coord").removeClass("highlight-coord") }
         playerMoving = false;
       }
     });
@@ -166,6 +168,6 @@ $('.ctr-little_worlds.act-show').ready(function() {
     }
   }
 
-  setInterval(tick, 5);
+  setInterval(tick, 1);
   walkPlayerTo([5, 5]);
 })
