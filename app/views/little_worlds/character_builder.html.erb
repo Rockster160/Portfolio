@@ -1,3 +1,9 @@
+<% content_for :head do %>
+  <%= stylesheet_link_tag 'individual/little_world/character', media: 'all' %>
+  <%= stylesheet_link_tag 'individual/little_world/character_builder', media: 'all' %>
+  <%= stylesheet_link_tag 'individual/little_world/character_sheet', media: 'all' %>
+<% end %>
+
 <div class="character-form-wrapper">
   <%= render partial: "character_form" %>
   <%= link_to "Randomize", "", class: "btn random-clothes" %>

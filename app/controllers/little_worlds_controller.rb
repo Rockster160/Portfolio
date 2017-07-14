@@ -3,6 +3,7 @@ class LittleWorldsController < ApplicationController
   helper CharacterBuilderHelper
 
   def show
+    @character = get_user_character
   end
 
   def character_builder

@@ -1,24 +1,22 @@
-// Must be kept in sync with JS values!
+// Usage:
+// ---------- HTML
+// <div class="character stand"></div>
+// ---------- CSS
+// @include character(4)
+//
+// This will automatically resize the image to fill the space given as much as
+//   possible and center it both vertically and horizontally, as well as
+//   setting it to an inline element for easy positioning.
+//
 $spell-animation-duration: 1s;
 $thrust-animation-duration: 1s;
-$walk-animation-duration: 0.8s;
+$walk-animation-duration: 0.5s;
 $slash-animation-duration: 0.5s;
 $shoot-animation-duration: 1.2s;
 $die-animation-duration: 1s;
-$size-multiplier: 4;
+// Must be kept in sync with JS values!
 
-.ctr-little_worlds.act-character_builder {
-  text-align: center;
-
-  .instructions {
-    width: 300px;
-    max-width: 100%;
-    margin: 0 auto;
-    margin-top: 60px;
-    
-    li { text-align: left; }
-  }
-
+@mixin character($size-multiplier) {
   .character {
     display: inline-block;
     position: relative;
@@ -131,5 +129,4 @@ $size-multiplier: 4;
   @keyframes shoot-down   { 100% { background-position: -832px * $size-multiplier -1152px * $size-multiplier; } }
   @keyframes shoot-right  { 100% { background-position: -832px * $size-multiplier -1216px * $size-multiplier; } }
   @keyframes die          { 100% { background-position: -384px * $size-multiplier -1280px * $size-multiplier; } }
-
 }

@@ -1,6 +1,10 @@
 <% content_for :head do %>
   <%= javascript_include_tag 'support/pathfinding.js' %>
+  <%= stylesheet_link_tag 'individual/little_world/character', media: 'all' %>
+  <%= stylesheet_link_tag 'individual/little_world/character_sheet', media: 'all' %>
+  <%= stylesheet_link_tag 'individual/little_world/map', media: 'all' %>
 <% end %>
 
+<div class="character stand"><%= @character.to_html %></div>
 <div class="little-world-wrapper"></div>
 <!-- <canvas id="gameCanvas" width=400 height=400 /> -->

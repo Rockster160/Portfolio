@@ -17,7 +17,6 @@ class Avatar < ApplicationRecord
     persisted? ? touch : save
     clothes.destroy_all
     character.to_components.each do |html_component|
-      puts "#{html_component}".colorize(:red)
       clothes.create(gender: html_component[:gender], placement: html_component[:placement], garment: html_component[:garment], color: html_component[:color])
     end
   end
