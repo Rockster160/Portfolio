@@ -1,3 +1,12 @@
+var seed = 3141;
+function random() {
+  var x = Math.sin(seed++) * 10000;
+  return x - Math.floor(x);
+}
+function randRange(start, end) {
+  return Math.round(start + (random() * (end - start)));
+}
+
 $('.ctr-little_worlds.act-show').ready(function() {
 
   var playerPath = [];
@@ -8,16 +17,56 @@ $('.ctr-little_worlds.act-show').ready(function() {
   var blockWidth = 32;
   var blockHeight = blockWidth;
 
-  $('.little-world-wrapper').css({width: (boardWidth * blockWidth) + "px", height: (boardHeight * blockHeight) + "px"})
-  $('.little-world-wrapper').append($('<div>', {class: 'output'}))
-  $('.little-world-wrapper').append($('<div>', {class: 'game'}))
-  $('.game').append($('<div>', {class: 'player'}).css({width: blockWidth - 6, height: blockHeight - 6}))
-  for (i=0;i<boardWidth*boardHeight;i++) {
-    $('.game').append($('<div>', {class: 'block walkable'}).css({width: blockWidth, height: blockHeight}))
-  }
-  $(".player").append($(".character"))
+  (function() {
+    getClassForBlock = function() {
+      var blockValue = randRange(0, 14)
+      if (blockValue <= 5) {
+        return "grass-1 walkable"
+      } else if (blockValue <= 9) {
+        return "grass-2 walkable"
+      } else if (blockValue <= 12) {
+        return "grass-3 walkable"
+      } else if (blockValue <= 14) {
+        return "grass-4 walkable"
+      }
+    }
 
-  $('.block').on('click tap touch', function(evt) {
+    $('.little-world-wrapper').css({width: (boardWidth * blockWidth) + "px", height: (boardHeight * blockHeight) + "px"})
+    $('.little-world-wrapper').append($('<div>', {class: 'output'}))
+    $('.little-world-wrapper').append($('<div>', {class: 'game'}))
+    $('.game').append($('<div>', {class: 'player'}).css({width: blockWidth - 6, height: blockHeight - 6}))
+    for (i=0;i<boardWidth*boardHeight;i++) {
+      var x = i % boardWidth, y = Math.floor(i / boardHeight)
+      var block = $('<div>', {class: "block"}).css({width: blockWidth, height: blockHeight})
+      if (x == 0 && y == 0) {
+        block.addClass("top-left-grass")
+      } else if (x == 0 && y == boardHeight - 1) {
+        block.addClass("bottom-left-grass")
+      } else if (x == boardWidth - 1 && y == 0) {
+        block.addClass("top-right-grass")
+      } else if (x == boardWidth - 1 && y == boardHeight - 1) {
+        block.addClass("bottom-right-grass")
+      } else if (x == 0) {
+        block.addClass("left-grass")
+      } else if (y == 0) {
+        block.addClass("top-grass")
+      } else if (x == boardWidth - 1) {
+        block.addClass("right-grass")
+      } else if (y == boardHeight - 1) {
+        block.addClass("bottom-grass")
+      } else {
+        block.addClass(getClassForBlock())
+        if (randRange(0, 15) == 0) {
+          block.removeClass("walkable")
+          block.append($('<div>', {class: "object stop-walk"}).css({width: blockWidth, height: blockHeight}))
+        }
+      }
+      $('.game').append(block)
+    }
+    $(".player").append($(".character"))
+  })()
+
+  $('.block.walkable').on('click tap touch', function(evt) {
     var blockIdx = $('.block').index($(this));
     var blockX = blockIdx % boardWidth;
     var blockY = Math.floor(blockIdx / boardHeight);
@@ -55,8 +104,10 @@ $('.ctr-little_worlds.act-show').ready(function() {
       clearInterval(timer);
       var currentCoord = playerCoord();
       var world = getArrayOfWalkablesForWorld();
-      highlightDestination(coord)
       playerPath = findPath(world, currentCoord, coord);
+      if (playerPath.length > 0) {
+        highlightDestination(coord)
+      }
     }, 1);
   }
   movePlayerRelative = function(relativeCoord) {
@@ -164,6 +215,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
     if (coordIsWalkable(nextCoord)) {
       walkPlayerTo(nextCoord);
     } else {
+      console.log("tick");
       setPlayerDestination(lastCoord);
     }
   }

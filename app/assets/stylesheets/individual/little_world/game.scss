@@ -10,7 +10,6 @@
 
   .block {
     display: inline-block;
-    border: 1px solid red;
     box-sizing: border-box;
     position: relative;
     z-index: 0;
@@ -23,7 +22,15 @@
       right: 2px;
       bottom: 2px;
       border-radius: 100%;
-      background-image: radial-gradient(white 20%, purple 50%, white 70%);
+      background-image: radial-gradient(transparent 20%, gold 50%, transparent 70%);
+    }
+
+    .object {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
     }
   }
 
@@ -36,7 +43,7 @@
     border-radius: 100%;
     position: absolute;
     z-index: 1;
-    background-image: radial-gradient(100% 40% at 50% 80%, #999 30%, transparent 50%);
+    background-image: radial-gradient(100% 40% at 50% 80%, rgba(0, 0, 50, 0.5) 30%, transparent 50%);
 
     @include character(1);
     .character {

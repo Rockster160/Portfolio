@@ -1,0 +1,33 @@
+// Map is 32x32 blocks - 1024x1024px
+@import "character";
+
+@mixin terrainSheet($x, $y) {
+  background-image: image-url("rpg/terrain/terrain_atlas.png");
+  @include spriteSheet($x, $y, 32px)
+}
+
+.little-world-wrapper {
+  .block {
+    @include terrainSheet(23, 5);
+    // @include terrainSheet(22, 5);
+    &.grass-1            { @include terrainSheet(22, 3); }
+    &.grass-2            { @include terrainSheet(23, 5); }
+    &.grass-3            { @include terrainSheet(22, 5); }
+    &.grass-4            { @include terrainSheet(21, 5); }
+
+    &.bottom-left-grass  { @include terrainSheet(21, 4); }
+    &.bottom-right-grass { @include terrainSheet(23, 4); }
+    &.top-left-grass     { @include terrainSheet(21, 2); }
+    &.top-right-grass    { @include terrainSheet(23, 2); }
+
+    &.right-grass        { @include terrainSheet(23, 3); }
+    &.left-grass         { @include terrainSheet(21, 3); }
+    &.top-grass          { @include terrainSheet(22, 2); }
+    &.bottom-grass       { @include terrainSheet(22, 4); }
+
+
+    .object {
+      &.stop-walk       { @include terrainSheet(9, 14); }
+    }
+  }
+}

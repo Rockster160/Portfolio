@@ -16,6 +16,13 @@ $shoot-animation-duration: 1.2s;
 $die-animation-duration: 1s;
 // Must be kept in sync with JS values!
 
+@mixin spriteSheet($x, $y, $px-to-block) {
+  background-position: ($x * $px-to-block * -1) ($y * $px-to-block * -1);
+}
+@mixin characterSheet($x, $y, $size-multiplier) {
+  @include spriteSheet($x, $y, 64px * $size-multiplier);
+}
+
 @mixin character($size-multiplier) {
   .character {
     display: inline-block;
@@ -34,38 +41,38 @@ $die-animation-duration: 1s;
       background-size: 832px * $size-multiplier;
     }
 
-    &.stand        > * { background-position: 0 -128px * $size-multiplier; }
-    &.stand-up     > * { background-position: 0 -0px * $size-multiplier; }
-    &.stand-left   > * { background-position: 0 -64px * $size-multiplier; }
-    &.stand-down   > * { background-position: 0 -128px * $size-multiplier; }
-    &.stand-right  > * { background-position: 0 -192px * $size-multiplier; }
+    &.stand        > * { @include characterSheet(0, 2, $size-multiplier); }
+    &.stand-up     > * { @include characterSheet(0, 0, $size-multiplier); }
+    &.stand-left   > * { @include characterSheet(0, 1, $size-multiplier); }
+    &.stand-down   > * { @include characterSheet(0, 2, $size-multiplier); }
+    &.stand-right  > * { @include characterSheet(0, 3, $size-multiplier); }
     // 7
-    &.spell-up     > * { background-position: 0 0px * $size-multiplier; animation: spell-up $spell-animation-duration steps(7); }
-    &.spell-left   > * { background-position: 0 -64px * $size-multiplier; animation: spell-left $spell-animation-duration steps(7); }
-    &.spell-down   > * { background-position: 0 -128px * $size-multiplier; animation: spell-down $spell-animation-duration steps(7); }
-    &.spell-right  > * { background-position: 0 -192px * $size-multiplier; animation: spell-right $spell-animation-duration steps(7); }
+    &.spell-up     > * { @include characterSheet(0, 0, $size-multiplier); animation: spell-up $spell-animation-duration steps(7); }
+    &.spell-left   > * { @include characterSheet(0, 1, $size-multiplier); animation: spell-left $spell-animation-duration steps(7); }
+    &.spell-down   > * { @include characterSheet(0, 2, $size-multiplier); animation: spell-down $spell-animation-duration steps(7); }
+    &.spell-right  > * { @include characterSheet(0, 3, $size-multiplier); animation: spell-right $spell-animation-duration steps(7); }
     // 8
-    &.thrust-up    > * { background-position: 0 -256px * $size-multiplier; animation: thrust-up $thrust-animation-duration steps(8); }
-    &.thrust-left  > * { background-position: 0 -320px * $size-multiplier; animation: thrust-left $thrust-animation-duration steps(8); }
-    &.thrust-down  > * { background-position: 0 -384px * $size-multiplier; animation: thrust-down $thrust-animation-duration steps(8); }
-    &.thrust-right > * { background-position: 0 -448px * $size-multiplier; animation: thrust-right $thrust-animation-duration steps(8); }
+    &.thrust-up    > * { @include characterSheet(0, 4, $size-multiplier); animation: thrust-up $thrust-animation-duration steps(8); }
+    &.thrust-left  > * { @include characterSheet(0, 5, $size-multiplier); animation: thrust-left $thrust-animation-duration steps(8); }
+    &.thrust-down  > * { @include characterSheet(0, 6, $size-multiplier); animation: thrust-down $thrust-animation-duration steps(8); }
+    &.thrust-right > * { @include characterSheet(0, 7, $size-multiplier); animation: thrust-right $thrust-animation-duration steps(8); }
     // 9
-    &.walk-up      > * { background-position: 0 -512px * $size-multiplier; animation: walk-up $walk-animation-duration steps(9) infinite; }
-    &.walk-left    > * { background-position: 0 -576px * $size-multiplier; animation: walk-left $walk-animation-duration steps(9) infinite; }
-    &.walk-down    > * { background-position: 0 -640px * $size-multiplier; animation: walk-down $walk-animation-duration steps(9) infinite; }
-    &.walk-right   > * { background-position: 0 -704px * $size-multiplier; animation: walk-right $walk-animation-duration steps(9) infinite; }
+    &.walk-up      > * { @include characterSheet(0, 8, $size-multiplier); animation: walk-up $walk-animation-duration steps(9) infinite; }
+    &.walk-left    > * { @include characterSheet(0, 9, $size-multiplier); animation: walk-left $walk-animation-duration steps(9) infinite; }
+    &.walk-down    > * { @include characterSheet(0, 10, $size-multiplier); animation: walk-down $walk-animation-duration steps(9) infinite; }
+    &.walk-right   > * { @include characterSheet(0, 11, $size-multiplier); animation: walk-right $walk-animation-duration steps(9) infinite; }
     // 6
-    &.slash-up     > * { background-position: 0 -768px * $size-multiplier; animation: slash-up $slash-animation-duration steps(6); }
-    &.slash-left   > * { background-position: 0 -832px * $size-multiplier; animation: slash-left $slash-animation-duration steps(6); }
-    &.slash-down   > * { background-position: 0 -896px * $size-multiplier; animation: slash-down $slash-animation-duration steps(6); }
-    &.slash-right  > * { background-position: 0 -960px * $size-multiplier; animation: slash-right $slash-animation-duration steps(6); }
+    &.slash-up     > * { @include characterSheet(0, 12, $size-multiplier); animation: slash-up $slash-animation-duration steps(6); }
+    &.slash-left   > * { @include characterSheet(0, 13, $size-multiplier); animation: slash-left $slash-animation-duration steps(6); }
+    &.slash-down   > * { @include characterSheet(0, 14, $size-multiplier); animation: slash-down $slash-animation-duration steps(6); }
+    &.slash-right  > * { @include characterSheet(0, 15, $size-multiplier); animation: slash-right $slash-animation-duration steps(6); }
     // 13
-    &.shoot-up     > * { background-position: 0 -1024px * $size-multiplier; animation: shoot-up $shoot-animation-duration steps(13); }
-    &.shoot-left   > * { background-position: 0 -1088px * $size-multiplier; animation: shoot-left $shoot-animation-duration steps(13); }
-    &.shoot-down   > * { background-position: 0 -1152px * $size-multiplier; animation: shoot-down $shoot-animation-duration steps(13); }
-    &.shoot-right  > * { background-position: 0 -1216px * $size-multiplier; animation: shoot-right $shoot-animation-duration steps(13); }
+    &.shoot-up     > * { @include characterSheet(0, 16, $size-multiplier); animation: shoot-up $shoot-animation-duration steps(13); }
+    &.shoot-left   > * { @include characterSheet(0, 17, $size-multiplier); animation: shoot-left $shoot-animation-duration steps(13); }
+    &.shoot-down   > * { @include characterSheet(0, 18, $size-multiplier); animation: shoot-down $shoot-animation-duration steps(13); }
+    &.shoot-right  > * { @include characterSheet(0, 19, $size-multiplier); animation: shoot-right $shoot-animation-duration steps(13); }
     // 6
-    &.die          > * { background-position: 0 -1280px * $size-multiplier; animation: die $die-animation-duration steps(6); }
+    &.die          > * { @include characterSheet(0, 20, $size-multiplier); animation: die $die-animation-duration steps(6); }
   }
 
   .character.stand,
@@ -108,25 +115,25 @@ $die-animation-duration: 1s;
     .back    { z-index: 16; }
   }
 
-  @keyframes spell-up     { 100% { background-position: -448px * $size-multiplier -0px * $size-multiplier; } }
-  @keyframes spell-left   { 100% { background-position: -448px * $size-multiplier -64px * $size-multiplier; } }
-  @keyframes spell-down   { 100% { background-position: -448px * $size-multiplier -128px * $size-multiplier; } }
-  @keyframes spell-right  { 100% { background-position: -448px * $size-multiplier -192px * $size-multiplier; } }
-  @keyframes thrust-up    { 100% { background-position: -512px * $size-multiplier -256px * $size-multiplier; } }
-  @keyframes thrust-left  { 100% { background-position: -512px * $size-multiplier -320px * $size-multiplier; } }
-  @keyframes thrust-down  { 100% { background-position: -512px * $size-multiplier -384px * $size-multiplier; } }
-  @keyframes thrust-right { 100% { background-position: -512px * $size-multiplier -448px * $size-multiplier; } }
-  @keyframes walk-up      { 100% { background-position: -576px * $size-multiplier -512px * $size-multiplier; } }
-  @keyframes walk-left    { 100% { background-position: -576px * $size-multiplier -576px * $size-multiplier; } }
-  @keyframes walk-down    { 100% { background-position: -576px * $size-multiplier -640px * $size-multiplier; } }
-  @keyframes walk-right   { 100% { background-position: -576px * $size-multiplier -704px * $size-multiplier; } }
-  @keyframes slash-up     { 100% { background-position: -384px * $size-multiplier -768px * $size-multiplier; } }
-  @keyframes slash-left   { 100% { background-position: -384px * $size-multiplier -832px * $size-multiplier; } }
-  @keyframes slash-down   { 100% { background-position: -384px * $size-multiplier -896px * $size-multiplier; } }
-  @keyframes slash-right  { 100% { background-position: -384px * $size-multiplier -960px * $size-multiplier; } }
-  @keyframes shoot-up     { 100% { background-position: -832px * $size-multiplier -1024px * $size-multiplier; } }
-  @keyframes shoot-left   { 100% { background-position: -832px * $size-multiplier -1088px * $size-multiplier; } }
-  @keyframes shoot-down   { 100% { background-position: -832px * $size-multiplier -1152px * $size-multiplier; } }
-  @keyframes shoot-right  { 100% { background-position: -832px * $size-multiplier -1216px * $size-multiplier; } }
-  @keyframes die          { 100% { background-position: -384px * $size-multiplier -1280px * $size-multiplier; } }
+  @keyframes spell-up     { 100% { @include characterSheet(7, 0, $size-multiplier); } }
+  @keyframes spell-left   { 100% { @include characterSheet(7, 1, $size-multiplier); } }
+  @keyframes spell-down   { 100% { @include characterSheet(7, 2, $size-multiplier); } }
+  @keyframes spell-right  { 100% { @include characterSheet(7, 3, $size-multiplier); } }
+  @keyframes thrust-up    { 100% { @include characterSheet(8, 4, $size-multiplier); } }
+  @keyframes thrust-left  { 100% { @include characterSheet(8, 5, $size-multiplier); } }
+  @keyframes thrust-down  { 100% { @include characterSheet(8, 6, $size-multiplier); } }
+  @keyframes thrust-right { 100% { @include characterSheet(8, 7, $size-multiplier); } }
+  @keyframes walk-up      { 100% { @include characterSheet(9, 8, $size-multiplier); } }
+  @keyframes walk-left    { 100% { @include characterSheet(9, 9, $size-multiplier); } }
+  @keyframes walk-down    { 100% { @include characterSheet(9, 10, $size-multiplier); } }
+  @keyframes walk-right   { 100% { @include characterSheet(9, 11, $size-multiplier); } }
+  @keyframes slash-up     { 100% { @include characterSheet(6, 12, $size-multiplier); } }
+  @keyframes slash-left   { 100% { @include characterSheet(6, 13, $size-multiplier); } }
+  @keyframes slash-down   { 100% { @include characterSheet(6, 14, $size-multiplier); } }
+  @keyframes slash-right  { 100% { @include characterSheet(6, 15, $size-multiplier); } }
+  @keyframes shoot-up     { 100% { @include characterSheet(13, 16, $size-multiplier); } }
+  @keyframes shoot-left   { 100% { @include characterSheet(13, 17, $size-multiplier); } }
+  @keyframes shoot-down   { 100% { @include characterSheet(13, 18, $size-multiplier); } }
+  @keyframes shoot-right  { 100% { @include characterSheet(13, 19, $size-multiplier); } }
+  @keyframes die          { 100% { @include characterSheet(6, 20, $size-multiplier); } }
 }
