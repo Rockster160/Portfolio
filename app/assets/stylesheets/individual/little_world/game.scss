@@ -45,10 +45,10 @@
     z-index: 1;
     background-image: radial-gradient(100% 40% at 50% 80%, rgba(0, 0, 50, 0.5) 30%, transparent 50%);
 
-    @include character(1);
+    @include character(2);
     .character {
-      margin-left: -19px;
-      margin-top: -40px;
+      margin-left: -35px;
+      margin-top: -75px;
     }
   }
 

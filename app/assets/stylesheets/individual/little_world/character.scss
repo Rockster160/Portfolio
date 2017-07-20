@@ -37,8 +37,8 @@ $die-animation-duration: 1s;
       left: 0;
       height: 64px * $size-multiplier;
       width: 64px * $size-multiplier;
-      background-repeat: no-repeat;
       background-size: 832px * $size-multiplier;
+      background-repeat: no-repeat;
     }
 
     &.stand        > * { @include characterSheet(0, 2, $size-multiplier); }

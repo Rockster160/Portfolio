@@ -12,9 +12,10 @@ $('.ctr-little_worlds.act-show').ready(function() {
   var playerPath = [];
   var playerMoving = false;
   // 0 - notMoving, 1 - North/Up/-Y, 2 - East/Right/+X, 3 - South/Down/+Y, 4 - West/Left/-X
-  var boardWidth = 32;
+  var blockSize = 64 // Keep up to date with CSS
+  var boardWidth = blockSize;
   var boardHeight = boardWidth;
-  var blockWidth = 32;
+  var blockWidth = blockSize;
   var blockHeight = blockWidth;
 
   (function() {
@@ -104,12 +105,6 @@ hasPosted = false
       clearInterval(timer);
       var currentCoord = playerCoord();
       var world = getArrayOfWalkablesForWorld();
-      if (!hasPosted) {
-        for (rowIdx=0;rowIdx<world.length;rowIdx++) {
-          console.log(world[rowIdx].join(""));
-        }
-      }
-      hasPosted = true
       playerPath = findPath(world, currentCoord, coord);
       if (playerPath.length > 0) {
         highlightDestination(coord)
