@@ -96,7 +96,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
         break;
     }
   })
-
+hasPosted = false
   setPlayerDestination = function(coord) {
     playerPath = [];
     var timer = setInterval(function() {
@@ -104,6 +104,12 @@ $('.ctr-little_worlds.act-show').ready(function() {
       clearInterval(timer);
       var currentCoord = playerCoord();
       var world = getArrayOfWalkablesForWorld();
+      if (!hasPosted) {
+        for (rowIdx=0;rowIdx<world.length;rowIdx++) {
+          console.log(world[rowIdx].join(""));
+        }
+      }
+      hasPosted = true
       playerPath = findPath(world, currentCoord, coord);
       if (playerPath.length > 0) {
         highlightDestination(coord)
@@ -203,9 +209,14 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   getArrayOfWalkablesForWorld = function() {
     var flatWorld = $('.block').map(function() { return blockisWalkable(this) ? 0 : 1; });
-    var worldPieces = []
-    while(flatWorld.length > 0) { worldPieces.push(flatWorld.splice(0, boardWidth)) };
-    return worldPieces;
+    var worldCols = []
+    while(flatWorld.length > 0) { worldCols.push(flatWorld.splice(0, boardWidth)) };
+    worldRows = worldCols[0].map(function(col, i) {
+      return worldCols.map(function(row) {
+        return row[i]
+      })
+    });
+    return worldRows;
   }
 
   tick = function() {
