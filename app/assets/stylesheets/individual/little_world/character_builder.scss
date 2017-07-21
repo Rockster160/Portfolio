@@ -1,6 +1,7 @@
 @import "config/variables";
 
 .ctr-little_worlds.act-character_builder {
+  font-family: 'Lato', sans-serif;
 
   code.json-placeholder {
     text-align: center;
@@ -21,16 +22,18 @@
   .character-container {
     padding-left: 230px;
     min-width: 250px;
+    overflow-y: hidden;
   }
 
   .character-form-wrapper {
-    position: fixed;
+    // position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
     width: 230px;
     background: white;
-    overflow-y: scroll;
+    overflow-y: auto;
+    box-shadow: 5px 0px 5px -2px rgba(0, 0, 0, 0.5);
 
     .character-form {
       padding: 10px;
@@ -44,13 +47,12 @@
           border-radius: 3px;
           box-sizing: border-box;
           cursor: pointer;
-          font-family: monospace;
 
           .fa {
             display: inline-block;
             height: 50px;
             width: 50px;
-            font-size: 30px;
+            font-size: 24px;
             font-weight: bold;
             line-height: 50px;
             text-align: center;
@@ -63,6 +65,10 @@
       input[type="radio"]:checked + label {
         color: $base-blue;
         border-color: $base-blue;
+
+        .fa {
+          font-size: 36px;
+        }
       }
 
       .option-selector {
@@ -95,63 +101,107 @@
         }
         &.disabled {
           * {
-            border-color: #DDD !important;
-            color: #DDD !important;
+            border-color: #BDC3C7 !important;
+            color: #BDC3C7 !important;
             cursor: not-allowed !important;
-          }
-        }
-      }
-
-      .options-container {
-        border-collapse: collapse;
-        padding-top: 0;
-
-        .option {
-          margin-top: 3px;
-          border: 2px double black;
-          border-radius: 3px;
-          box-sizing: border-box;
-          overflow: hidden;
-          cursor: pointer;
-          font-family: monospace;
-
-          &[data-top-stack="true"] {
-            display: inline-block;
-          }
-          &[data-top-stack="false"] {
-            width: 112px;
-            margin: 2px auto;
-          }
-          .fa {
-            display: inline-block;
-            height: 50px;
-            width: 50px;
-            font-size: 30px;
-            font-weight: bold;
-            line-height: 50px;
-            text-align: center;
-          }
-          span {
-            display: inline-block;
-            padding: 3px;
-            margin-top: 3px;
-          }
-
-          &.selected {
-            border: 2px solid red;
-            color: red;
-          }
-          &:hover {
-            border: 2px solid orange;
-            color: orange;
-          }
-          &.current-scope {
-            border: 2px solid blue;
-            color: blue;
           }
         }
       }
     }
   }
 
+
+  $asphalt:  #34495e;
+  $clouds: #ecf0f1;
+  $river: #3498db;
+  $silver: #bdc3c7;
+  @mixin animate{
+    transition: all 0.2s ease-in-out;
+  }
+  @mixin disabled{
+    border-color: $silver;
+    color: $silver;
+    cursor:not-allowed;
+  }
+
+  display: flex;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  overflow: auto;
+  body{
+    //remove padding: 50px;
+  }
+  .character-form-wrapper{
+    overflow-y: auto;
+    box-shadow: 5px 0px 5px -2px rgba(0,0,0,0.5);
+    //remove position: fixed;
+  }
+
+
+
+  // wrap the gender labels in a div with class"genders"
+  .genders{
+    display: flex;
+    justify-content: space-around;
+
+    label[for^="character_gender"]{
+      border: none;
+      @include animate;
+    }
+
+    input[type="radio"]:checked+label i {
+      transform: scale(1.2);
+    }
+
+    input[type="radio"]+label i {
+      transform: scale(0.8);
+    }
+  }
+
+
+
+  .option-selector{
+    display: flex;
+    align-items: center;
+
+    &.disabled * {
+        @include disabled;
+    }
+
+    .option-title{
+      flex-grow: 1;
+      border: none;
+    }
+
+    [class^="arrow"]{
+      border: none;
+      padding: 5px;
+      @include animate;
+      &:hover{
+        background: $asphalt;
+        color: $clouds;
+      }
+    }
+
+    *:not(:last-child){
+      margin-right: 5px;
+    }
+  }
+
+
+
+
+
+
+  .character-container{
+    display: flex;
+    flex-grow: 1;
+    flex-direction: column;
+    align-items: center;
+    background: $clouds;
+    .character{
+      background-image: radial-gradient(66% 16% at 50% 93%, rgba(0, 50, 13, 0.48) 15%, transparent 50%);
+    }
+  }
 }

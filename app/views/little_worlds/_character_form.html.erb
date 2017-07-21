@@ -1,8 +1,10 @@
 <form class="character-form basic" action="<%= change_clothes_little_world_path %>" method="post" data-initial-json="<%= JSON.generate(@character.to_json) %>">
-  <%= radio_button_tag "character[gender]", "male", @character.gender == "male", class: "gender-picker" %>
-  <label for="character_gender_male"><i class="fa fa-mars"></i></label>
-  <%= radio_button_tag "character[gender]", "female", @character.gender == "female", class: "gender-picker" %>
-  <label for="character_gender_female"><i class="fa fa-venus"></i></label>
+  <div class="genders">
+    <%= radio_button_tag "character[gender]", "male", @character.gender == "male", class: "gender-picker" %>
+    <label for="character_gender_male"><i class="fa fa-mars"></i></label>
+    <%= radio_button_tag "character[gender]", "female", @character.gender == "female", class: "gender-picker" %>
+    <label for="character_gender_female"><i class="fa fa-venus"></i></label>
+  </div>
 
   <% option_builder_json.each do |gender, options| %>
     <% same_gender = gender.to_s == @character.gender.to_s %>
