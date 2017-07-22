@@ -3,24 +3,17 @@ class LittleWorldsController < ApplicationController
   helper CharacterBuilderHelper
 
   def show
-    @character = get_user_character
+    @character = find_character(session_first: false)
   end
 
   def character_builder
     @outfits = CharacterBuilder.default_outfits
-    if session[:character_json].present?
-      character_json = JSON.parse(session[:character_json])
-      @character = CharacterBuilder.new(character_json)
-    elsif user_signed_in? && current_user.avatar.present? && current_user.avatar.clothes.any?
-      @character = current_user.avatar.character
-    else
-      @character = CharacterBuilder.new({}, {random: true})
-    end
+    @character = find_character(session_first: true)
   end
 
   def change_clothes
     should_random = params[:random].to_s == "true"
-    character = CharacterBuilder.new(find_character, {random: should_random})
+    character = find_character(session_first: true, options: { random: should_random })
     current_user.update_avatar(character) if user_signed_in? && params[:save] == "true"
     session[:character_json] = JSON.generate(character.to_json) unless should_random
 
@@ -28,7 +21,7 @@ class LittleWorldsController < ApplicationController
   end
 
   def load_character
-    character = get_user_character
+    character = find_character(session_first: false)
     session[:character_json] = JSON.generate(character.to_json)
 
     respond_to { |format| format.json { render json: { json: character.to_json, html: character.to_html } } }
@@ -36,17 +29,30 @@ class LittleWorldsController < ApplicationController
 
   private
 
-  def get_user_character
-    current_user.try(:avatar).try(:character) || CharacterBuilder.new({})
+  def find_character(session_first:, options:{})
+    return CharacterBuilder.new(outfit_from_params, options) if params[:character].present?
+    if session_first
+      return CharacterBuilder.new(session_character_json, options) if session_character_json
+      return current_user.avatar.character if current_user.try(:avatar).try(:clothes).try(:any?)
+    else
+      return current_user.avatar.character if current_user.try(:avatar).try(:clothes).try(:any?)
+      return CharacterBuilder.new(session_character_json, options) if session_character_json
+    end
+    CharacterBuilder.new(default_outfit, options)
   end
 
-  def find_character
-    return outfit_from_params if params[:character].present?
-    session[:character_json] || get_user_character || {}
+  def session_character_json
+    JSON.parse(session[:character_json]) if session[:character_json]
   end
 
   def outfit_from_params
     outfit_from_top_level_hash(params.require(:character).permit!.to_h)
+  end
+
+  def default_outfit
+    {
+
+    }
   end
 
 end

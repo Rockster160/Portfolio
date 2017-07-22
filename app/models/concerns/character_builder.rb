@@ -5,6 +5,7 @@ class CharacterBuilder
   def initialize(outfit, options={})
     change_to_outfit(outfit)
     change_random if options[:random]
+    self
   end
 
   def change_outfit(outfit)

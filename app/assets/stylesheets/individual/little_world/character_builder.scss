@@ -1,18 +1,16 @@
 @import "config/variables";
-$asphalt:  #34495e;
-$clouds: #ecf0f1;
-$river: #3498db;
-$silver: #bdc3c7;
+@import "character";
 
 .ctr-little_worlds.act-character_builder {
   font-family: 'Lato', sans-serif;
   height: 100%;
   width: 100%;
-  min-width: 550px;
+  min-width: 480px;
   margin: 0;
   padding: 0;
   overflow: auto;
-  background: $clouds;
+  background: $grey-light;
+  text-align: center;
 
   code.json-placeholder {
     text-align: center;
@@ -32,7 +30,19 @@ $silver: #bdc3c7;
 
   .character-container {
     padding-left: 150px;
-    // min-width: 250px;
+    min-width: 250px;
+
+    .instructions {
+      text-align: center;
+      width: 100%;
+      max-width: 250px;
+      margin: 0 auto;
+      margin-top: 60px;
+
+      li { text-align: left; }
+    }
+
+    @include character(4);
 
     .character-wrapper {
       background-image: radial-gradient(150px 16% at 50% 93%, rgba(0, 50, 40, 0.48) 15%, transparent 50%);
@@ -60,6 +70,7 @@ $silver: #bdc3c7;
           cursor: pointer;
 
           .fa {
+            transition: all 0.2s ease-in-out;
             display: inline-block;
             height: 50px;
             width: 50px;
@@ -69,17 +80,19 @@ $silver: #bdc3c7;
             text-align: center;
           }
           &:hover {
-            border-color: orange;
+            .fa {
+              transform: scale(1.2);
+            }
           }
         }
       }
-      input[type="radio"]:checked + label {
+      input[type="radio"]:not(:checked) + label:hover .fa {
+        color: darken($base-blue, 20%);
+        transform: scale(1.2);
+      }
+      input[type="radio"]:checked + label .fa {
         color: $base-blue;
-        border-color: $base-blue;
-
-        .fa {
-          font-size: 36px;
-        }
+        transform: scale(1.5);
       }
 
       .option-selector {
@@ -100,30 +113,29 @@ $silver: #bdc3c7;
           flex-grow: 1;
         }
         .arrow-prev, .arrow-next {
+          transition: all 0.2s ease-in-out;
           width: 15px;
           font-size: 10px;
           padding: 5px;
-
-          &:hover {
-            cursor: pointer;
-            background: $asphalt;
-            color: $clouds;
-          }
-          &:active { padding: 4px 2px 2px 4px; }
         }
+        &:not(.disabled) {
+          .arrow-prev, .arrow-next {
+            &:hover {
+              cursor: pointer;
+              background: $grey-dark;
+              color: $grey-light;
+            }
+          }
+        }
+
         &.disabled {
           * {
-            border-color: #BDC3C7 !important;
-            color: #BDC3C7 !important;
-            cursor: not-allowed !important;
+            border-color: $grey-disabled;
+            color: $grey-disabled;
+            cursor: not-allowed;
           }
         }
       }
-    }
-  }
-  @media(max-width: 600px) {
-    .character-form-wrapper {
-      position: absolute;
     }
   }
 }
