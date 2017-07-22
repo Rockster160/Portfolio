@@ -1,7 +1,18 @@
 @import "config/variables";
+$asphalt:  #34495e;
+$clouds: #ecf0f1;
+$river: #3498db;
+$silver: #bdc3c7;
 
 .ctr-little_worlds.act-character_builder {
   font-family: 'Lato', sans-serif;
+  height: 100%;
+  width: 100%;
+  min-width: 550px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  background: $clouds;
 
   code.json-placeholder {
     text-align: center;
@@ -20,17 +31,20 @@
   .split-container .half-container { height: auto; }
 
   .character-container {
-    padding-left: 230px;
-    min-width: 250px;
-    overflow-y: hidden;
+    padding-left: 150px;
+    // min-width: 250px;
+
+    .character-wrapper {
+      background-image: radial-gradient(150px 16% at 50% 93%, rgba(0, 50, 40, 0.48) 15%, transparent 50%);
+    }
   }
 
   .character-form-wrapper {
-    // position: fixed;
+    position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
-    width: 230px;
+    width: 190px;
     background: white;
     overflow-y: auto;
     box-shadow: 5px 0px 5px -2px rgba(0, 0, 0, 0.5);
@@ -43,9 +57,6 @@
 
         & + label {
           display: inline-block;
-          border: 4px double black;
-          border-radius: 3px;
-          box-sizing: border-box;
           cursor: pointer;
 
           .fa {
@@ -73,31 +84,32 @@
 
       .option-selector {
         margin-top: 5px;
+        margin-right: 5px;
+        display: flex;
+        align-items: center;
 
         select { display: none; }
         .option-title, .arrow-prev, .arrow-next {
           display: inline-block;
-          padding: 3px;
-          border: 4px double black;
           border-radius: 3px;
           line-height: 18px;
           vertical-align: top;
         }
         .option-title {
           width: 100px;
+          flex-grow: 1;
         }
         .arrow-prev, .arrow-next {
           width: 15px;
           font-size: 10px;
+          padding: 5px;
 
           &:hover {
             cursor: pointer;
-            border-color: orange;
+            background: $asphalt;
+            color: $clouds;
           }
-          &:active {
-            padding: 4px 2px 2px 4px;
-            border-color: red;
-          }
+          &:active { padding: 4px 2px 2px 4px; }
         }
         &.disabled {
           * {
@@ -109,99 +121,9 @@
       }
     }
   }
-
-
-  $asphalt:  #34495e;
-  $clouds: #ecf0f1;
-  $river: #3498db;
-  $silver: #bdc3c7;
-  @mixin animate{
-    transition: all 0.2s ease-in-out;
-  }
-  @mixin disabled{
-    border-color: $silver;
-    color: $silver;
-    cursor:not-allowed;
-  }
-
-  display: flex;
-  height: 100%;
-  width: 100%;
-  margin: 0;
-  overflow: auto;
-  body{
-    //remove padding: 50px;
-  }
-  .character-form-wrapper{
-    overflow-y: auto;
-    box-shadow: 5px 0px 5px -2px rgba(0,0,0,0.5);
-    //remove position: fixed;
-  }
-
-
-
-  // wrap the gender labels in a div with class"genders"
-  .genders{
-    display: flex;
-    justify-content: space-around;
-
-    label[for^="character_gender"]{
-      border: none;
-      @include animate;
-    }
-
-    input[type="radio"]:checked+label i {
-      transform: scale(1.2);
-    }
-
-    input[type="radio"]+label i {
-      transform: scale(0.8);
-    }
-  }
-
-
-
-  .option-selector{
-    display: flex;
-    align-items: center;
-
-    &.disabled * {
-        @include disabled;
-    }
-
-    .option-title{
-      flex-grow: 1;
-      border: none;
-    }
-
-    [class^="arrow"]{
-      border: none;
-      padding: 5px;
-      @include animate;
-      &:hover{
-        background: $asphalt;
-        color: $clouds;
-      }
-    }
-
-    *:not(:last-child){
-      margin-right: 5px;
-    }
-  }
-
-
-
-
-
-
-  .character-container{
-    display: flex;
-    flex-grow: 1;
-    flex-direction: column;
-    align-items: center;
-    background: $clouds;
-    .character{
-      background-image: radial-gradient(66% 16% at 50% 93%, rgba(0, 50, 13, 0.48) 15%, transparent 50%);
+  @media(max-width: 600px) {
+    .character-form-wrapper {
+      position: absolute;
     }
   }
 }
