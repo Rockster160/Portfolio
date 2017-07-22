@@ -219,7 +219,19 @@ $('.ctr-little_worlds.act-show').ready(function() {
     return worldRows;
   }
 
+  jumpToPlayer = function() {
+    var maxScrollSpeed = 20 // px per tick
+    var playerPos = $('.player').position()
+    var startLeft = $(window).scrollLeft(), newLeft = playerPos.left - ($(window).width() / 2)
+    var startTop = $(window).scrollTop(), newTop = playerPos.top - ($(window).height() / 2)
+    $(window).scrollLeft(startLeft + ((newLeft - startLeft) % maxScrollSpeed))
+    $(window).scrollTop(startTop + ((newTop - startTop) % maxScrollSpeed))
+  }
+
   tick = function() {
+    if (playerMoving) {
+      jumpToPlayer()
+    }
     if (playerMoving || playerPath.length == 0) { return }
     var nextCoord = playerPath.shift(), lastCoord = playerPath[playerPath.length - 1];
 
