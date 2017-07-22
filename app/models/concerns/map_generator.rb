@@ -16,7 +16,6 @@ class MapGenerator
 
     @grass_cells.each_with_index do |grass_row, y|
       grass_row.each_with_index do |grass_cell, x|
-        puts "#{grass_cell}".colorize(:red)
         klass_list = ["block", grass_class_by_char(grass_cell)]
         klass_list << "walkable" unless cell_at_coord(@collision_cells, x, y) == "1"
         inner_block = div("object stop-walk") if cell_at_coord(@spikes_cells, x, y) == "1"

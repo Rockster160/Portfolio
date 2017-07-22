@@ -172,7 +172,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
   jumpToPlayer = function() {
     var maxScrollSpeed = 20 // px per tick
     var playerPos = $('.player').position()
-    var startLeft = $(window).scrollLeft(), newLeft = playerPos.left - ($(window).width() / 2)
+    var startLeft = $(window).scrollLeft(), newLeft = playerPos.left - ($(window).width() / 2) + (blockWidth / 2)
     var startTop = $(window).scrollTop(), newTop = playerPos.top - ($(window).height() / 2)
     $(window).scrollLeft(startLeft + ((newLeft - startLeft) % maxScrollSpeed))
     $(window).scrollTop(startTop + ((newTop - startTop) % maxScrollSpeed))
