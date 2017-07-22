@@ -35,11 +35,11 @@ class Shape
 end
 
 class AnoniconGenerator
-  attr_reader :src
+  attr_reader :src, :raw
 
   def self.generate(str)
     identicon = new(Digest::MD5.hexdigest(str.to_s))
-    identicon.src
+    identicon
   end
 
   def initialize(digest)
@@ -80,6 +80,7 @@ class AnoniconGenerator
     draw_at(1, 2, @middle.rotate(3))
 
     @src = @png.to_data_url
+    @raw = @png
   end
 
   private
@@ -100,5 +101,9 @@ end
 module Anonicon
   def self.generate(str)
     AnoniconGenerator.generate(str)
+  end
+
+  def self.src
+    generate(src).src
   end
 end

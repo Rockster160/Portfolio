@@ -9,4 +9,11 @@ class AnoniconsController < ApplicationController
     end
   end
 
+  def show
+    anonicon_source = params[:id] || request.ip
+    @anonicon = Anonicon.generate(anonicon_source)
+
+    send_data @anonicon.raw.to_blob, type: "image/png", disposition: "inline", stream: true
+  end
+
 end
