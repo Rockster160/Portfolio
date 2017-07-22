@@ -10,6 +10,7 @@ function randRange(start, end) {
 $('.ctr-little_worlds.act-show').ready(function() {
 
   var playerPath = [];
+  var currentPlayerCoord;
   var playerMoving = false;
   // 0 - notMoving, 1 - North/Up/-Y, 2 - East/Right/+X, 3 - South/Down/+Y, 4 - West/Left/-X
   var blockSize = 64 // Keep up to date with CSS
@@ -97,13 +98,12 @@ $('.ctr-little_worlds.act-show').ready(function() {
         break;
     }
   })
-hasPosted = false
+
   setPlayerDestination = function(coord) {
     playerPath = [];
     var timer = setInterval(function() {
-      if (playerMoving) { return }
       clearInterval(timer);
-      var currentCoord = playerCoord();
+      var currentCoord = currentPlayerCoord;
       var world = getArrayOfWalkablesForWorld();
       playerPath = findPath(world, currentCoord, coord);
       if (playerPath.length > 0) {
@@ -113,9 +113,8 @@ hasPosted = false
   }
   movePlayerRelative = function(relativeCoord) {
     var timer = setInterval(function() {
-      if (playerMoving) { return }
       clearInterval(timer);
-      var currentCoord = playerCoord();
+      var currentCoord = currentPlayerCoord;
       var leftOnLeftBorder = relativeCoord[0] < 0 && currentCoord[0] % boardWidth == 0,
           rightOnRightBorder = relativeCoord[0] > 0 && currentCoord[0] % boardWidth == boardWidth - 1,
           topOnTopBorder = relativeCoord[1] < 0 && currentCoord[1] % boardHeight == 0,
@@ -150,6 +149,11 @@ hasPosted = false
     $('.character').addClass("walk-" + direction)
   }
 
+  jumpPlayerTo = function(coord) {
+    currentPlayerCoord = coord
+    $('.player').css({left: coord[0] * blockWidth, top: coord[1] * blockHeight})
+  }
+
   walkPlayerTo = function(coord) {
     var oldPosition = $('.player').position();
     var newPosition = {
@@ -174,6 +178,7 @@ hasPosted = false
     }
 
     playerMoving = true;
+    currentPlayerCoord = coord
     $('.player').animate(newPosition, {
       duration: 400,
       easing: "linear",
@@ -227,5 +232,5 @@ hasPosted = false
   }
 
   setInterval(tick, 1);
-  walkPlayerTo([5, 5]);
+  jumpPlayerTo([5, 5]);
 })
