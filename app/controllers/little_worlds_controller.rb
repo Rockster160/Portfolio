@@ -51,7 +51,13 @@ class LittleWorldsController < ApplicationController
 
   def default_outfit
     {
-
+      gender: "male",
+      body: "light",
+      clothing: {
+        torso: { garment: "leather", color: "chest"},
+        legs: { garment: "pants", color: "teal"},
+        feet: { garment: "shoes", color: "black"}
+      }
     }
   end
 
