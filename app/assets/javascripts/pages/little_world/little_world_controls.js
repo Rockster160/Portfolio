@@ -13,60 +13,10 @@ $('.ctr-little_worlds.act-show').ready(function() {
   var currentPlayerCoord;
   var playerMoving = false;
   // 0 - notMoving, 1 - North/Up/-Y, 2 - East/Right/+X, 3 - South/Down/+Y, 4 - West/Left/-X
-  var blockSize = 64 // Keep up to date with CSS
-  var boardWidth = blockSize;
-  var boardHeight = boardWidth;
-  var blockWidth = blockSize;
-  var blockHeight = blockWidth;
-
-  (function() {
-    getClassForBlock = function() {
-      var blockValue = randRange(0, 14)
-      if (blockValue <= 5) {
-        return "grass-1 walkable"
-      } else if (blockValue <= 9) {
-        return "grass-2 walkable"
-      } else if (blockValue <= 12) {
-        return "grass-3 walkable"
-      } else if (blockValue <= 14) {
-        return "grass-4 walkable"
-      }
-    }
-
-    $('.little-world-wrapper').css({width: (boardWidth * blockWidth) + "px", height: (boardHeight * blockHeight) + "px"})
-    $('.little-world-wrapper').append($('<div>', {class: 'output'}))
-    $('.little-world-wrapper').append($('<div>', {class: 'game'}))
-    $('.game').append($('<div>', {class: 'player'}).css({width: blockWidth - 6, height: blockHeight - 6}))
-    for (i=0;i<boardWidth*boardHeight;i++) {
-      var x = i % boardWidth, y = Math.floor(i / boardHeight)
-      var block = $('<div>', {class: "block"}).css({width: blockWidth, height: blockHeight})
-      if (x == 0 && y == 0) {
-        block.addClass("top-left-grass")
-      } else if (x == 0 && y == boardHeight - 1) {
-        block.addClass("bottom-left-grass")
-      } else if (x == boardWidth - 1 && y == 0) {
-        block.addClass("top-right-grass")
-      } else if (x == boardWidth - 1 && y == boardHeight - 1) {
-        block.addClass("bottom-right-grass")
-      } else if (x == 0) {
-        block.addClass("left-grass")
-      } else if (y == 0) {
-        block.addClass("top-grass")
-      } else if (x == boardWidth - 1) {
-        block.addClass("right-grass")
-      } else if (y == boardHeight - 1) {
-        block.addClass("bottom-grass")
-      } else {
-        block.addClass(getClassForBlock())
-        if (randRange(0, 15) == 0) {
-          block.removeClass("walkable")
-          block.append($('<div>', {class: "object stop-walk"}).css({width: blockWidth, height: blockHeight}))
-        }
-      }
-      $('.game').append(block)
-    }
-    $(".player").append($(".character"))
-  })()
+  var blockWidth = $(".block").width();
+  var blockHeight = $(".block").height();
+  var boardWidth = $(".little-world-wrapper").width() / blockWidth;
+  var boardHeight = $(".little-world-wrapper").height() / blockHeight;
 
   $('.block.walkable').on('click tap touch', function(evt) {
     var blockIdx = $('.block').index($(this));
@@ -180,7 +130,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
     playerMoving = true;
     currentPlayerCoord = coord
     $('.player').animate(newPosition, {
-      duration: 400,
+      duration: 400, // Keep in sync with CSS: $walk-animation-duration
       easing: "linear",
       complete: function() {
         clearMovementClasses()

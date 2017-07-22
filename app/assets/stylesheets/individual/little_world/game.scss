@@ -1,58 +1,68 @@
 @import "character";
 
-.ctr-little_worlds {
+.ctr-little_worlds.act-show {
+  $cellSize: 64px;
+  $cellWidth: $cellSize;
+  $cellHeight: $cellSize;
+  $boardWidthCells: 64;
+  $boardHeightCells: 64;
+  $boardWidthPx: $boardWidthCells * $cellWidth;
+  $boardHeightPx: $boardWidthCells * $cellHeight;
+
   .little-world-wrapper {
     font-size: 0;
     position: relative;
     margin: 0 auto;
     padding: 0;
-  }
+    width: $boardWidthPx;
+    height: $boardHeightPx;
 
-  .block {
-    display: inline-block;
-    box-sizing: border-box;
-    position: relative;
-    z-index: 0;
-
-    &.highlight-coord:after {
-      content: "";
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      right: 2px;
-      bottom: 2px;
+    .player {
+      margin: 3px;
       border-radius: 100%;
-      background-image: radial-gradient(transparent 20%, gold 50%, transparent 70%);
-    }
-
-    .object {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      z-index: 1;
+      background-image: radial-gradient(100% 40% at 50% 70%, rgba(0, 0, 50, 0.5) 30%, transparent 50%);
+      width: $cellWidth;
+      height: $cellHeight;
+
+      @include character(2);
+      .character {
+        margin-left: -32px;
+        margin-top: -75px;
+      }
     }
-  }
 
-  .game {
-    position: relative;
-  }
+    .game {
+      position: relative;
 
-  .player {
-    margin: 3px;
-    border-radius: 100%;
-    position: absolute;
-    z-index: 1;
-    background-image: radial-gradient(100% 40% at 50% 80%, rgba(0, 0, 50, 0.5) 30%, transparent 50%);
+      .block {
+        display: inline-block;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 0;
+        width: $cellWidth;
+        height: $cellHeight;
 
-    @include character(2);
-    .character {
-      margin-left: -35px;
-      margin-top: -75px;
+        &.highlight-coord:after {
+          content: "";
+          position: absolute;
+          top: 2px;
+          left: 2px;
+          right: 2px;
+          bottom: 2px;
+          border-radius: 100%;
+          background-image: radial-gradient(100% 40% at 50% 70%, rgba(100, 0, 100, 0.5) 30%, transparent 50%);
+        }
+
+        .object {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+        }
+      }
     }
-  }
-
-  .output {
-    font-size: 24px;
   }
 }

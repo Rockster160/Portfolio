@@ -4,6 +4,7 @@ class LittleWorldsController < ApplicationController
 
   def show
     @character = find_character(session_first: false)
+    @world = MapGenerator.generate
   end
 
   def character_builder
