@@ -20,7 +20,7 @@
   </div>
   <%= form_for [@list, @list.list_items.new], html: {class: "new-list-item-form"} do |f| %>
     <div class="list-field">
-      <%= f.text_field :name, class: "new-list-item" %>
+      <%= f.text_field :name, class: "new-list-item", autofocus: true %>
     </div>
   <% end %>
 </div>
