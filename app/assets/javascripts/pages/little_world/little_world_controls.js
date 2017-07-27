@@ -9,6 +9,8 @@ function randRange(start, end) {
 
 $('.ctr-little_worlds.act-show').ready(function() {
 
+  preventKeyEvents = true
+
   var playerPath = [];
   var currentPlayerCoord;
   var playerMoving = false;
@@ -24,38 +26,32 @@ $('.ctr-little_worlds.act-show').ready(function() {
     var blockY = Math.floor(blockIdx / boardHeight);
     setPlayerDestination([blockX, blockY]);
   })
-  $(window).keydown(function(evt) {
-    switch (evt.which) {
-      case KEY_EVENT_LEFT:
-      case KEY_EVENT_A:
-        movePlayerRelative([-1, 0]);
-        evt.preventDefault()
-        break;
-      case KEY_EVENT_UP:
-      case KEY_EVENT_W:
-        movePlayerRelative([0, -1]);
-        evt.preventDefault()
-        break;
-      case KEY_EVENT_DOWN:
-      case KEY_EVENT_S:
-        movePlayerRelative([0, 1]);
-        evt.preventDefault()
-        break;
-      case KEY_EVENT_RIGHT:
-      case KEY_EVENT_D:
-        movePlayerRelative([1, 0]);
-        evt.preventDefault()
-        break;
+
+  actOnKeysPressed = function() {
+    if (isKeyPressed(KEY_EVENT_SPACE)) {
+      scrollToPlayer()
     }
-  })
+    if (isKeyPressed(KEY_EVENT_LEFT) || isKeyPressed(KEY_EVENT_A)) {
+      movePlayerRelative([-1, 0])
+    }
+    if (isKeyPressed(KEY_EVENT_UP) || isKeyPressed(KEY_EVENT_W)) {
+      movePlayerRelative([0, -1])
+    }
+    if (isKeyPressed(KEY_EVENT_DOWN) || isKeyPressed(KEY_EVENT_S)) {
+      movePlayerRelative([0, 1])
+    }
+    if (isKeyPressed(KEY_EVENT_RIGHT) || isKeyPressed(KEY_EVENT_D)) {
+      movePlayerRelative([1, 0])
+    }
+  }
 
   setPlayerDestination = function(coord) {
-    playerPath = [];
     var timer = setInterval(function() {
       clearInterval(timer);
       var currentCoord = currentPlayerCoord;
       var world = getArrayOfWalkablesForWorld();
-      playerPath = findPath(world, currentCoord, coord);
+      var new_path = findPath(world, currentCoord, coord);
+      playerPath = new_path
       if (playerPath.length > 0) {
         highlightDestination(coord)
       }
@@ -169,30 +165,34 @@ $('.ctr-little_worlds.act-show').ready(function() {
     return worldRows;
   }
 
-  jumpToPlayer = function() {
+  scrollToPlayer = function() {
     var maxScrollSpeed = 20 // px per tick
     var playerPos = $('.player').position()
     var startLeft = $(window).scrollLeft(), newLeft = playerPos.left - ($(window).width() / 2) + (blockWidth / 2)
     var startTop = $(window).scrollTop(), newTop = playerPos.top - ($(window).height() / 2)
-    $(window).scrollLeft(startLeft + ((newLeft - startLeft) % maxScrollSpeed))
-    $(window).scrollTop(startTop + ((newTop - startTop) % maxScrollSpeed))
+    scrollLeftDiff = newLeft - startLeft
+    if (scrollLeftDiff > maxScrollSpeed) { scrollLeftDiff = maxScrollSpeed }
+    if (scrollLeftDiff < -maxScrollSpeed) { scrollLeftDiff = -maxScrollSpeed }
+    $(window).scrollLeft(startLeft + scrollLeftDiff)
+    scrollTopDiff = newTop - startTop
+    if (scrollTopDiff > maxScrollSpeed) { scrollTopDiff = maxScrollSpeed }
+    if (scrollTopDiff < -maxScrollSpeed) { scrollTopDiff = -maxScrollSpeed }
+    $(window).scrollTop(startTop + scrollTopDiff)
   }
 
   tick = function() {
-    if (playerMoving) {
-      jumpToPlayer()
-    }
     if (playerMoving || playerPath.length == 0) { return }
     var nextCoord = playerPath.shift(), lastCoord = playerPath[playerPath.length - 1];
 
     if (coordIsWalkable(nextCoord)) {
       walkPlayerTo(nextCoord);
     } else {
-      console.log("tick");
+      console.log("Path is blocked. Retrying...");
       setPlayerDestination(lastCoord);
     }
   }
 
   setInterval(tick, 1);
-  jumpPlayerTo([5, 5]);
+  setInterval(actOnKeysPressed, 5);
+  jumpPlayerTo([30, 30]);
 })

@@ -1,4 +1,3 @@
-keysPressed = [];
 const KEY_EVENT_LEFT = 37,
       KEY_EVENT_UP = 38,
       KEY_EVENT_DOWN = 40,
@@ -90,7 +89,6 @@ $(document).ready(function() {
   })
 
   $(document).keydown(function(evt) {
-    if (keysPressed.indexOf(evt.which) == -1) { keysPressed.push(evt.which) };
     var key = String.fromCharCode( evt.which )
     // console.log("Pressed: " + key);
     if ($('.hover-highlight').length > 0) {
@@ -121,7 +119,6 @@ $(document).ready(function() {
       break;
     }
   }).keyup(function(evt) {
-    keysPressed = keysPressed.filter(function(e) { return e != evt.which });
     if (evt.shiftKey) {
       switch (evt.which) {
         case KEY_EVENT_LEFT:
