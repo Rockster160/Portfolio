@@ -11,8 +11,6 @@
 
 .little-world-wrapper {
   .block {
-    @include terrainSheet(23, 5);
-    // @include terrainSheet(22, 5);
     &.grass-1            { @include terrainSheet(22, 3); }
     &.grass-2            { @include terrainSheet(23, 5); }
     &.grass-3            { @include terrainSheet(22, 5); }
@@ -29,7 +27,7 @@
     &.bottom-grass       { @include terrainSheet(22, 4); }
 
     .object {
-      &.stop-walk       { @include terrainSheet(9, 14); }
+      &.cactus           { @include terrainSheet(9, 14); }
     }
   }
 }

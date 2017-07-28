@@ -11,6 +11,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   preventKeyEvents = true
 
+  var ticksPerMovementFrame = 100
   var playerPath = [];
   var currentPlayerCoord;
   var playerMoving = false;
@@ -84,12 +85,14 @@ $('.ctr-little_worlds.act-show').ready(function() {
   }
 
   var switchDirection = function(newDirection) {
+    if ($('.character').hasClass("stand-" + newDirection)) { return }
     clearMovementClasses()
     $('.character').removeClass("stand-up stand-down stand-left stand-right")
     $('.character').addClass("stand-" + newDirection)
   }
 
   var move = function(direction) {
+    if ($('.character').hasClass("walk-" + direction)) { return }
     switchDirection(direction)
     void $('.character')[0].offsetWidth
     $('.character').addClass("walk-" + direction)
@@ -129,8 +132,10 @@ $('.ctr-little_worlds.act-show').ready(function() {
       duration: 400, // Keep in sync with CSS: $walk-animation-duration
       easing: "linear",
       complete: function() {
-        clearMovementClasses()
-        if (playerPath.length == 0) { $(".highlight-coord").removeClass("highlight-coord") }
+        if (playerPath.length == 0) {
+          $(".highlight-coord").removeClass("highlight-coord")
+          clearMovementClasses()
+        }
         playerMoving = false;
       }
     });
@@ -166,18 +171,23 @@ $('.ctr-little_worlds.act-show').ready(function() {
   }
 
   scrollToPlayer = function() {
-    var maxScrollSpeed = 20 // px per tick
+    var maxScrollSpeed = ticksPerMovementFrame // px per movement frame == px per 100 ticks
     var playerPos = $('.player').position()
     var startLeft = $(window).scrollLeft(), newLeft = playerPos.left - ($(window).width() / 2) + (blockWidth / 2)
     var startTop = $(window).scrollTop(), newTop = playerPos.top - ($(window).height() / 2)
+
     scrollLeftDiff = newLeft - startLeft
     if (scrollLeftDiff > maxScrollSpeed) { scrollLeftDiff = maxScrollSpeed }
     if (scrollLeftDiff < -maxScrollSpeed) { scrollLeftDiff = -maxScrollSpeed }
-    $(window).scrollLeft(startLeft + scrollLeftDiff)
+
     scrollTopDiff = newTop - startTop
     if (scrollTopDiff > maxScrollSpeed) { scrollTopDiff = maxScrollSpeed }
     if (scrollTopDiff < -maxScrollSpeed) { scrollTopDiff = -maxScrollSpeed }
-    $(window).scrollTop(startTop + scrollTopDiff)
+
+    $("body, html").animate({
+      scrollLeft: startLeft + scrollLeftDiff,
+      scrollTop: startTop + scrollTopDiff
+    }, 100)
   }
 
   tick = function() {
@@ -193,6 +203,6 @@ $('.ctr-little_worlds.act-show').ready(function() {
   }
 
   setInterval(tick, 1);
-  setInterval(actOnKeysPressed, 5);
+  setInterval(actOnKeysPressed, ticksPerMovementFrame);
   jumpPlayerTo([30, 30]);
 })

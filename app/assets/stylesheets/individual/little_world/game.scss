@@ -1,6 +1,9 @@
 @import "character";
+@import "config/variables";
 
 .ctr-little_worlds.act-show {
+  background: $grey-blue;
+
   $cellSize: 64px;
   $cellWidth: $cellSize;
   $cellHeight: $cellSize;
@@ -26,8 +29,6 @@
     position: relative;
     margin: 0 auto;
     padding: 0;
-    width: $boardWidthPx;
-    height: $boardHeightPx;
 
     .player {
       margin: 3px;
@@ -47,6 +48,7 @@
 
     .game {
       position: relative;
+      white-space: nowrap;
 
       .block {
         display: inline-block;

@@ -5,23 +5,33 @@ class MapGenerator
   end
 
   def initialize
-    world_str = File.read("lib/assets/little_world_map.map")
-    grass_layer, spikes_layer, collision_layer = world_str.split("\n")
-    grass_rows, spikes_rows, collision_rows = [grass_layer, spikes_layer, collision_layer].map { |layer| layer.split(",") }
-    @grass_cells, @spikes_cells, @collision_cells = [grass_rows, spikes_rows, collision_rows].map { |layer_rows| layer_rows.map { |row| row.split("") } }
+    grass_layer = File.read("lib/assets/little_world/map_layers/grass.map")
+    collision_layer = File.read("lib/assets/little_world/map_layers/collision.map")
+    @grass_cells = grass_layer.split("\n").map { |row| row.split("") }
+    @collision_cells = collision_layer.split("\n").map { |row| row.split("") }
+    @map_width = @grass_cells.map(&:length).max
+    @map_height = @grass_cells.length
   end
 
   def to_html
     world_html = ""
 
-    @grass_cells.each_with_index do |grass_row, y|
-      grass_row.each_with_index do |grass_cell, x|
+    @map_height.times do |y|
+      @map_width.times do |x|
+        grass_cell = cell_at_coord(@grass_cells, x, y)
+        collision_cell = cell_at_coord(@collision_cells, x, y)
+
         klass_list = ["block", grass_class_by_char(grass_cell)]
-        klass_list << "walkable" unless cell_at_coord(@collision_cells, x, y) == "1"
-        inner_block = div("object stop-walk") if cell_at_coord(@spikes_cells, x, y) == "1"
+        if collision_cell == "0"
+          klass_list << "walkable grass-2" # FIXME
+          inner_block = ""
+        else
+          inner_block = div(["object", object_class_by_char(collision_cell)])
+        end
 
         world_html << div(klass_list, inner_block)
       end
+      world_html << "<br>"
     end
 
     div("game", world_html).html_safe
@@ -44,12 +54,18 @@ class MapGenerator
     end
   end
 
+  def object_class_by_char(char)
+    case char
+    when "1" then "cactus"
+    end
+  end
+
   def cell_at_coord(cells, x, y)
     cells.dig(y, x)
   end
 
   def div(klasses, body=nil)
-    klass_list = [klasses].flatten.join(" ")
+    klass_list = [klasses].flatten.compact.join(" ")
     "<div class=\"#{klass_list}\">#{body}</div>"
   end
 
