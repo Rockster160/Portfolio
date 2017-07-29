@@ -47,20 +47,20 @@ $('.ctr-mazes.act-random').ready(function() {
 
   $(document).keydown(function(e) {
     switch(e.which) {
-      case keyCode("UP"):
-      case keyCode("W"):
+      case keyEvent("UP"):
+      case keyEvent("W"):
       movePlayer("up");
       break;
-      case keyCode("DOWN"):
-      case keyCode("A"):
+      case keyEvent("DOWN"):
+      case keyEvent("A"):
       movePlayer("down");
       break;
-      case keyCode("LEFT"):
-      case keyCode("S"):
+      case keyEvent("LEFT"):
+      case keyEvent("S"):
       movePlayer("left");
       break;
-      case keyCode("RIGHT"):
-      case keyCode("D"):
+      case keyEvent("RIGHT"):
+      case keyEvent("D"):
       movePlayer("right");
       break;
     }

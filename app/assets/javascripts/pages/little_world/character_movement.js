@@ -120,52 +120,52 @@ $('.ctr-little_worlds.act-character_builder').ready(function() {
 
   $(document).keydown(function(evt) {
     switch(evt.which) {
-      case keyCode("LEFT"):
+      case keyEvent("LEFT"):
       addToQueue("left")
       evt.preventDefault();
       return false;
       break;
-      case keyCode("RIGHT"):
+      case keyEvent("RIGHT"):
       addToQueue("right")
       evt.preventDefault();
       return false;
       break;
-      case keyCode("UP"):
+      case keyEvent("UP"):
       addToQueue("up")
       evt.preventDefault();
       return false;
       break;
-      case keyCode("DOWN"):
+      case keyEvent("DOWN"):
       addToQueue("down")
       evt.preventDefault();
       return false;
       break;
-      case keyCode("A"):
+      case keyEvent("A"):
       addToQueue("spell")
       evt.preventDefault();
       return false;
       break;
-      case keyCode("S"):
+      case keyEvent("S"):
       addToQueue("thrust")
       evt.preventDefault();
       return false;
       break;
-      case keyCode("D"):
+      case keyEvent("D"):
       addToQueue("slash")
       evt.preventDefault();
       return false;
       break;
-      case keyCode("F"):
+      case keyEvent("F"):
       addToQueue("shoot")
       evt.preventDefault();
       return false;
       break;
-      case keyCode("G"):
+      case keyEvent("G"):
       addToQueue("die")
       evt.preventDefault();
       return false;
       break;
-      case keyCode("X"):
+      case keyEvent("X"):
       clearQueue()
       evt.preventDefault();
       return false;

@@ -26,7 +26,7 @@
 //= stub cube_scripts/photon.js
 
 // http://keycode.info
-keyCode = function(char) {
+keyEvent = function(char) {
   var upChar = char.toUpperCase()
   switch(upChar) {
     case "ENTER":

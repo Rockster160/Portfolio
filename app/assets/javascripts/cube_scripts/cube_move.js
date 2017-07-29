@@ -1,9 +1,3 @@
-const keyCode("LEFT") = 37,
-      keyCode("UP") = 38,
-      keyCode("DOWN") = 40,
-      keyCode("RIGHT") = 39,
-      KET_EVENT_SHIFT = 16;
-
 $(document).ready(function() {
   var easeMotionTimer;
 
@@ -121,16 +115,16 @@ $(document).ready(function() {
   }).keyup(function(evt) {
     if (evt.shiftKey) {
       switch (evt.which) {
-        case keyCode("LEFT"):
+        case keyEvent("LEFT"):
           easeRelativeRotate(-90, 0, 0);
           break;
-        case keyCode("UP"):
+        case keyEvent("UP"):
           easeRelativeRotate(0, -90, 0);
           break;
-        case keyCode("DOWN"):
+        case keyEvent("DOWN"):
           easeRelativeRotate(0, 90, 0);
           break;
-        case keyCode("RIGHT"):
+        case keyEvent("RIGHT"):
           easeRelativeRotate(90, 0, 0);
           break;
       }
@@ -140,12 +134,12 @@ $(document).ready(function() {
 
   tick = setInterval(function() {
     if ($('.hover-highlight').length == 0) {
-      var shiftPressed = keysPressed.includes(KET_EVENT_SHIFT);
+      var shiftPressed = keysPressed.includes(keyEvent("SHIFT"));
       if (shiftPressed) { return }
-      if (keysPressed.includes(keyCode("LEFT"))) { rotateLeft() };
-      if (keysPressed.includes(keyCode("UP"))) { rotateUp() };
-      if (keysPressed.includes(keyCode("DOWN"))) { rotateDown() };
-      if (keysPressed.includes(keyCode("RIGHT"))) { rotateRight() };
+      if (keysPressed.includes(keyEvent("LEFT"))) { rotateLeft() };
+      if (keysPressed.includes(keyEvent("UP"))) { rotateUp() };
+      if (keysPressed.includes(keyEvent("DOWN"))) { rotateDown() };
+      if (keysPressed.includes(keyEvent("RIGHT"))) { rotateRight() };
     }
   }, 10)
 })

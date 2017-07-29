@@ -32,22 +32,22 @@ $('.ctr-little_worlds.act-show').ready(function() {
   }
 
   actOnKeysPressed = function() {
-    if (isKeyPressed(keyCode("SPACE"))) {
+    if (isKeyPressed(keyEvent("SPACE"))) {
       scrollToPlayer()
     }
-    if (isKeyPressed(keyCode("LEFT")) || isKeyPressed(keyCode("A"))) {
+    if (isKeyPressed(keyEvent("LEFT")) || isKeyPressed(keyEvent("A"))) {
       movePlayerRelative([-1, 0])
     }
-    if (isKeyPressed(keyCode("UP")) || isKeyPressed(keyCode("W"))) {
+    if (isKeyPressed(keyEvent("UP")) || isKeyPressed(keyEvent("W"))) {
       movePlayerRelative([0, -1])
     }
-    if (isKeyPressed(keyCode("DOWN")) || isKeyPressed(keyCode("S"))) {
+    if (isKeyPressed(keyEvent("DOWN")) || isKeyPressed(keyEvent("S"))) {
       movePlayerRelative([0, 1])
     }
-    if (isKeyPressed(keyCode("RIGHT")) || isKeyPressed(keyCode("D"))) {
+    if (isKeyPressed(keyEvent("RIGHT")) || isKeyPressed(keyEvent("D"))) {
       movePlayerRelative([1, 0])
     }
-    if (isKeyPressed(keyCode("J")) && lastBlockHoveredCoord.length == 2) {
+    if (isKeyPressed(keyEvent("J")) && lastBlockHoveredCoord.length == 2) {
       jumpPlayerTo(lastBlockHoveredCoord)
     }
   }
@@ -243,16 +243,16 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   triggerEvent = function(key, direction) {
     switch(key) {
-      case keyCode("SPACE"):
-      case keyCode("LEFT"):
-      case keyCode("A"):
-      case keyCode("UP"):
-      case keyCode("W"):
-      case keyCode("DOWN"):
-      case keyCode("S"):
-      case keyCode("RIGHT"):
-      case keyCode("D"):
-      case keyCode("J"):
+      case keyEvent("SPACE"):
+      case keyEvent("LEFT"):
+      case keyEvent("A"):
+      case keyEvent("UP"):
+      case keyEvent("W"):
+      case keyEvent("DOWN"):
+      case keyEvent("S"):
+      case keyEvent("RIGHT"):
+      case keyEvent("D"):
+      case keyEvent("J"):
         if (direction == "up") {
           multiKeyUp(key)
         } else if (direction == "down") {
