@@ -19,6 +19,10 @@ $('.ctr-little_worlds.act-show').ready(function() {
   var boardWidth = parseInt($(".little-world-wrapper").attr("data-world-width"));
   var boardHeight = parseInt($(".little-world-wrapper").attr("data-world-height"));
 
+  screenLog = function(msg) {
+    $(".screen-log").html(msg)
+  }
+
   actOnKeysPressed = function() {
     if (isKeyPressed(KEY_EVENT_SPACE)) {
       scrollToPlayer()
@@ -43,8 +47,8 @@ $('.ctr-little_worlds.act-show').ready(function() {
       var currentCoord = currentPlayerCoord;
       var world = getArrayOfWalkablesForWorld();
       var new_path = findPath(world, currentCoord, coord);
-      canCameraChange = true
       playerPath = new_path
+      canCameraChange = true
       if (playerPath.length > 0) {
         highlightDestination(coord)
       }
@@ -54,11 +58,6 @@ $('.ctr-little_worlds.act-show').ready(function() {
     var timer = setInterval(function() {
       clearInterval(timer);
       var currentCoord = currentPlayerCoord;
-      var leftOnLeftBorder = relativeCoord[0] < 0 && currentCoord[0] % boardWidth == 0,
-          rightOnRightBorder = relativeCoord[0] > 0 && currentCoord[0] % boardWidth == boardWidth - 1,
-          topOnTopBorder = relativeCoord[1] < 0 && currentCoord[1] % boardHeight == 0,
-          bottomOnBottomBorder = relativeCoord[1] > 0 && currentCoord[1] % boardHeight == boardHeight - 1
-      if (leftOnLeftBorder || rightOnRightBorder || topOnTopBorder || bottomOnBottomBorder) { return }
       setPlayerDestination([currentCoord[0] + relativeCoord[0], currentCoord[1] + relativeCoord[1]])
     }, 1);
   }
@@ -174,15 +173,14 @@ $('.ctr-little_worlds.act-show').ready(function() {
   }
 
   getArrayOfWalkablesForWorld = function() {
-    var flatWorld = $('.block').map(function() { return blockisWalkable(this) ? 0 : 1; });
-    var worldCols = []
-    while(flatWorld.length > 0) { worldCols.push(flatWorld.splice(0, boardWidth)) };
-    worldRows = worldCols[0].map(function(col, i) {
-      return worldCols.map(function(row) {
-        return row[i]
-      })
-    });
-    return worldRows;
+    var worldMap = []
+    $(".block[data-x][data-y]").each(function() {
+      var coord = getCoordForBlock(this)
+      var x = coord[0], y = coord[1]
+      worldMap[x] = worldMap[x] || []
+      worldMap[x][y] = blockisWalkable(this) ? 0 : 1
+    })
+    return worldMap
   }
 
   scrollToPlayer = function() {
@@ -215,17 +213,18 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   tick = function() {
     if (playerMoving || playerPath.length == 0) { return }
-    var lastCoord = playerPath[playerPath.length - 1], nextCoord;
+    var nextCoord
     do {
       nextCoord = playerPath.shift()
     } while(currentPlayerCoord == nextCoord)
 
-    console.log(keysPressed);
+    // console.log(keysPressed);
 
     if (coordIsWalkable(nextCoord)) {
       walkPlayerTo(nextCoord);
     } else {
       console.log("Path is blocked. Retrying...");
+      var lastCoord = playerPath[playerPath.length - 1];
       setPlayerDestination(lastCoord);
     }
   }
@@ -266,8 +265,12 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   $('.block.walkable').on('click tap touch', function(evt) {
     var newCoord = getCoordForBlock(this)
-    console.log(newCoord);
     setPlayerDestination(newCoord);
+  })
+
+  $(".block[data-x][data-y]").mouseover(function() {
+    var coord = getCoordForBlock(this)
+    screenLog(coord[0] + ", " + coord[1])
   })
 
   setInterval(tick, 1);

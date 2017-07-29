@@ -10,8 +10,8 @@ class MapGenerator
     collision_layer = File.read("lib/assets/little_world/map_layers/collision.map")
     @grass_cells = grass_layer.split("\n").map { |row| row.split("") }
     @collision_cells = collision_layer.split("\n").map { |row| row.split("") }
-    @width = @grass_cells.map(&:length).max
-    @height = @grass_cells.length
+    @width = @grass_cells.map(&:length).max + 1
+    @height = @grass_cells.length + 1
   end
 
   def to_html

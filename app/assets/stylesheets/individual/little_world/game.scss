@@ -12,6 +12,17 @@
   $boardWidthPx: $boardWidthCells * $cellWidth;
   $boardHeightPx: $boardWidthCells * $cellHeight;
 
+  .screen-log {
+    position: fixed;
+    pointer-events: none;
+    top: 10px;
+    left: 10px;
+    font-weight: 400;
+    font-size: 32px;
+    z-index: 5;
+    color: $grey-dark;
+  }
+
   .float-point {
     position: fixed;
     top: 50%;

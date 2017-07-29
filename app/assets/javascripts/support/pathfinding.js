@@ -15,6 +15,8 @@ function findPath(world, pathStart, pathEnd) {
   // just fill the array with dummy values to pad the empty space.
   var worldWidth = world[0].length;
   var worldHeight = world.length;
+  if (worldWidth < worldHeight) { worldWidth = worldHeight }
+  if (worldHeight < worldWidth) { worldHeight = worldWidth }
   var worldSize =	worldWidth * worldHeight;
 
   // Manhattan style heuristic
@@ -45,9 +47,8 @@ function findPath(world, pathStart, pathEnd) {
 
   // returns boolean value (world cell is available and open)
   function canWalkHere(x, y) {
-    return ((world[x] != null) &&
-      (world[x][y] != null) &&
-      (world[x][y] <= 0));
+    var withinBoundaries = x >= 0 && x < worldWidth && y >= 0 && y < worldHeight
+    return withinBoundaries && world[x][y] <= 0
   };
 
   // Node function, returns a new object with Node properties
