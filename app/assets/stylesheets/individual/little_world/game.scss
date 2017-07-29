@@ -4,6 +4,13 @@
 .ctr-little_worlds.act-show {
   background: $grey-blue;
 
+  ::-webkit-scrollbar, *::-webkit-scrollbar, &::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+    background: transparent;
+  }
+
   $cellSize: 64px;
   $cellWidth: $cellSize;
   $cellHeight: $cellSize;

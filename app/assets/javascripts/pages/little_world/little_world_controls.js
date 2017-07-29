@@ -286,6 +286,6 @@ $('.ctr-little_worlds.act-show').ready(function() {
   })
 
   setInterval(tick, 1);
-  setInterval(actOnKeysPressed, ticksPerMovementFrame);
+  setInterval(actOnKeysPressed, 5);
   jumpPlayerTo([30, 30]);
 })
