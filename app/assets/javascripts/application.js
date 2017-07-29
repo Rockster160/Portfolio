@@ -26,19 +26,26 @@
 //= stub cube_scripts/photon.js
 
 // http://keycode.info
-const KEY_EVENT_ENTER = 13,
-      KEY_EVENT_TAB = 9,
-      KEY_EVENT_SPACE = 32,
-      KEY_EVENT_ESC = 27,
-      KEY_EVENT_LEFT = 37,
-      KEY_EVENT_UP = 38,
-      KEY_EVENT_DOWN = 40,
-      KEY_EVENT_RIGHT = 39,
-      KEY_EVENT_W = 87,
-      KEY_EVENT_A = 65,
-      KEY_EVENT_S = 83,
-      KEY_EVENT_D = 68;
-      KEY_EVENT_F = 70;
-      KEY_EVENT_G = 71;
-      KEY_EVENT_H = 72;
-      KEY_EVENT_X = 88;
+keyCode = function(char) {
+  var upChar = char.toUpperCase()
+  switch(upChar) {
+    case "ENTER":
+      return 13;
+    case "TAB":
+      return 9;
+    case "SPACE":
+      return 32;
+    case "ESC":
+      return 27;
+    case "LEFT":
+      return 37;
+    case "UP":
+      return 38;
+    case "DOWN":
+      return 40;
+    case "RIGHT":
+      return 39;
+    default:
+      return char.charCodeAt(0)
+  }
+}

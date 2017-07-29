@@ -6,7 +6,11 @@
 <% end %>
 
 <div class="float-point"></div>
-<div class="screen-log"></div>
+<div class="screen-log">
+  <div>Player: <span class="player-coord"></span></div>
+  <div>Block: <span class="block-coord"></span></div>
+  <div class="message"></div>
+</div>
 
 <div class="little-world-wrapper" data-world-width="<%= @world.width %>" data-world-height="<%= @world.height %>">
   <div class="player">

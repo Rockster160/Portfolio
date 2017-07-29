@@ -181,7 +181,7 @@ $('.ctr-cards').ready(function() {
 
   var allFlipped = false;
   $(window).keydown(function(evt) {
-    if (evt.which == KEY_EVENT_SPACE) {
+    if (evt.which == keyCode("SPACE")) {
       if ($('.ui-selected').length > 0) {
         cards = $('.ui-selected.card');
       } else {

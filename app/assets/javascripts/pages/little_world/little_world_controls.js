@@ -12,6 +12,8 @@ $('.ctr-little_worlds.act-show').ready(function() {
   var ticksPerMovementFrame = 5
   var playerPath = [];
   var currentPlayerCoord;
+  var lastBlockHoveredCoord = [];
+  var screenMessage;
   var playerMoving = false;
   var canCameraChange = true;
   var blockWidth = $(".block").width();
@@ -19,25 +21,34 @@ $('.ctr-little_worlds.act-show').ready(function() {
   var boardWidth = parseInt($(".little-world-wrapper").attr("data-world-width"));
   var boardHeight = parseInt($(".little-world-wrapper").attr("data-world-height"));
 
-  screenLog = function(msg) {
-    $(".screen-log").html(msg)
+  screenLog = function() {
+    $(".screen-log .player-coord").html(currentPlayerCoord[0] + ", " + currentPlayerCoord[1])
+    if (lastBlockHoveredCoord.length == 2) {
+      $(".screen-log .block-coord").html(lastBlockHoveredCoord[0] + ", " + lastBlockHoveredCoord[1])
+    } else {
+      $(".screen-log .block-coord").html("N/A")
+    }
+    $(".screen-log .message").html(screenMessage)
   }
 
   actOnKeysPressed = function() {
-    if (isKeyPressed(KEY_EVENT_SPACE)) {
+    if (isKeyPressed(keyCode("SPACE"))) {
       scrollToPlayer()
     }
-    if (isKeyPressed(KEY_EVENT_LEFT) || isKeyPressed(KEY_EVENT_A)) {
+    if (isKeyPressed(keyCode("LEFT")) || isKeyPressed(keyCode("A"))) {
       movePlayerRelative([-1, 0])
     }
-    if (isKeyPressed(KEY_EVENT_UP) || isKeyPressed(KEY_EVENT_W)) {
+    if (isKeyPressed(keyCode("UP")) || isKeyPressed(keyCode("W"))) {
       movePlayerRelative([0, -1])
     }
-    if (isKeyPressed(KEY_EVENT_DOWN) || isKeyPressed(KEY_EVENT_S)) {
+    if (isKeyPressed(keyCode("DOWN")) || isKeyPressed(keyCode("S"))) {
       movePlayerRelative([0, 1])
     }
-    if (isKeyPressed(KEY_EVENT_RIGHT) || isKeyPressed(KEY_EVENT_D)) {
+    if (isKeyPressed(keyCode("RIGHT")) || isKeyPressed(keyCode("D"))) {
       movePlayerRelative([1, 0])
+    }
+    if (isKeyPressed(keyCode("J")) && lastBlockHoveredCoord.length == 2) {
+      jumpPlayerTo(lastBlockHoveredCoord)
     }
   }
 
@@ -212,6 +223,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
   }
 
   tick = function() {
+    screenLog()
     if (playerMoving || playerPath.length == 0) { return }
     var nextCoord
     do {
@@ -231,15 +243,16 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   triggerEvent = function(key, direction) {
     switch(key) {
-      case KEY_EVENT_SPACE:
-      case KEY_EVENT_LEFT:
-      case KEY_EVENT_A:
-      case KEY_EVENT_UP:
-      case KEY_EVENT_W:
-      case KEY_EVENT_DOWN:
-      case KEY_EVENT_S:
-      case KEY_EVENT_RIGHT:
-      case KEY_EVENT_D:
+      case keyCode("SPACE"):
+      case keyCode("LEFT"):
+      case keyCode("A"):
+      case keyCode("UP"):
+      case keyCode("W"):
+      case keyCode("DOWN"):
+      case keyCode("S"):
+      case keyCode("RIGHT"):
+      case keyCode("D"):
+      case keyCode("J"):
         if (direction == "up") {
           multiKeyUp(key)
         } else if (direction == "down") {
@@ -269,8 +282,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
   })
 
   $(".block[data-x][data-y]").mouseover(function() {
-    var coord = getCoordForBlock(this)
-    screenLog(coord[0] + ", " + coord[1])
+    lastBlockHoveredCoord = getCoordForBlock(this)
   })
 
   setInterval(tick, 1);
