@@ -9,24 +9,15 @@ function randRange(start, end) {
 
 $('.ctr-little_worlds.act-show').ready(function() {
 
-  preventKeyEvents = true
-
-  var ticksPerMovementFrame = 100
+  var ticksPerMovementFrame = 5
   var playerPath = [];
   var currentPlayerCoord;
   var playerMoving = false;
-  // 0 - notMoving, 1 - North/Up/-Y, 2 - East/Right/+X, 3 - South/Down/+Y, 4 - West/Left/-X
+  var canCameraChange = true;
   var blockWidth = $(".block").width();
   var blockHeight = $(".block").height();
-  var boardWidth = $(".little-world-wrapper").width() / blockWidth;
-  var boardHeight = $(".little-world-wrapper").height() / blockHeight;
-
-  $('.block.walkable').on('click tap touch', function(evt) {
-    var blockIdx = $('.block').index($(this));
-    var blockX = blockIdx % boardWidth;
-    var blockY = Math.floor(blockIdx / boardHeight);
-    setPlayerDestination([blockX, blockY]);
-  })
+  var boardWidth = parseInt($(".little-world-wrapper").attr("data-world-width"));
+  var boardHeight = parseInt($(".little-world-wrapper").attr("data-world-height"));
 
   actOnKeysPressed = function() {
     if (isKeyPressed(KEY_EVENT_SPACE)) {
@@ -52,6 +43,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
       var currentCoord = currentPlayerCoord;
       var world = getArrayOfWalkablesForWorld();
       var new_path = findPath(world, currentCoord, coord);
+      canCameraChange = true
       playerPath = new_path
       if (playerPath.length > 0) {
         highlightDestination(coord)
@@ -73,7 +65,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   highlightDestination = function(coord) {
     $(".highlight-coord").removeClass("highlight-coord")
-    $(getBlockAtCoord(coord)).addClass("highlight-coord")
+    getBlockAtCoord(coord).addClass("highlight-coord")
   }
 
   playerCoord = function() {
@@ -100,14 +92,20 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   jumpPlayerTo = function(coord) {
     currentPlayerCoord = coord
-    $('.player').css({left: coord[0] * blockWidth, top: coord[1] * blockHeight})
+    var blockPosition = getBlockAtCoord(coord).position()
+    var newPosition = {
+      left: blockPosition.left,
+      top: blockPosition.top
+    };
+    $('.player').css(newPosition)
   }
 
   walkPlayerTo = function(coord) {
-    var oldPosition = $('.player').position();
+    var oldPosition = $('.player').position()
+    var blockPosition = getBlockAtCoord(coord).position()
     var newPosition = {
-      left: coord[0] * blockWidth,
-      top: coord[1] * blockHeight
+      left: blockPosition.left,
+      top: blockPosition.top
     };
 
     if (oldPosition.left == newPosition.left && oldPosition.top == newPosition.top) { return }
@@ -142,9 +140,10 @@ $('.ctr-little_worlds.act-show').ready(function() {
   }
 
   getBlockAtCoord = function(coord) {
-    var xCoord = coord[0], yCoord = coord[1], index = xCoord + (yCoord * boardWidth);
-    if (xCoord < 0 || xCoord >= boardWidth || yCoord < 0 || yCoord >= boardHeight) { return }
-    return $('.block')[index];
+    return $('.block[data-x="' + coord[0] + '"][data-y="' + coord[1] + '"]')
+  }
+  getCoordForBlock = function(block) {
+    return [parseInt($(block).attr("data-x")), parseInt($(block).attr("data-y"))]
   }
 
   blockisWalkable = function(block) {
@@ -154,8 +153,24 @@ $('.ctr-little_worlds.act-show').ready(function() {
     return blockisWalkable(getBlockAtCoord(coord));
   }
 
+  getBlockAtPosition = function(position) {
+    return $(".block[data-x][data-y]").filter(function() {
+      var blockOffset = $(this).offset()
+      var pointGreaterThanBlockX = position.left > blockOffset.left
+      if (!pointGreaterThanBlockX) { return false }
+      var pointInsideBlockBoundingBoxX = position.left < blockOffset.left + blockWidth
+      if (!pointInsideBlockBoundingBoxX) { return false }
+      var pointGreaterThanBlockY = position.top > blockOffset.top
+      if (!pointGreaterThanBlockY) { return false }
+      var pointInsideBlockBoundingBoxY = position.top < blockOffset.top + blockHeight
+      if (!pointInsideBlockBoundingBoxY) { return false }
+      return true
+    });
+  }
+
   convertPositionToCoord = function(position) {
-    return [Math.floor(position.left / blockWidth), Math.floor(position.top / blockHeight)];
+    var block = getBlockAtPosition(position)
+    return getCoordForBlock(block)
   }
 
   getArrayOfWalkablesForWorld = function() {
@@ -171,7 +186,10 @@ $('.ctr-little_worlds.act-show').ready(function() {
   }
 
   scrollToPlayer = function() {
-    var maxScrollSpeed = ticksPerMovementFrame // px per movement frame == px per 100 ticks
+    if (!canCameraChange) { return }
+    canCameraChange = false
+
+    var maxScrollSpeed = 5 * ticksPerMovementFrame // px per movement frame == px per 100 ticks
     var playerPos = $('.player').position()
     var startLeft = $(window).scrollLeft(), newLeft = playerPos.left - ($(window).width() / 2) + (blockWidth / 2)
     var startTop = $(window).scrollTop(), newTop = playerPos.top - ($(window).height() / 2)
@@ -184,15 +202,25 @@ $('.ctr-little_worlds.act-show').ready(function() {
     if (scrollTopDiff > maxScrollSpeed) { scrollTopDiff = maxScrollSpeed }
     if (scrollTopDiff < -maxScrollSpeed) { scrollTopDiff = -maxScrollSpeed }
 
-    $("body, html").animate({
+    $("body, html").stop().animate({
       scrollLeft: startLeft + scrollLeftDiff,
       scrollTop: startTop + scrollTopDiff
-    }, 100)
+    }, {
+      duration: ticksPerMovementFrame,
+      complete: function() {
+        canCameraChange = true
+      }
+    })
   }
 
   tick = function() {
     if (playerMoving || playerPath.length == 0) { return }
-    var nextCoord = playerPath.shift(), lastCoord = playerPath[playerPath.length - 1];
+    var lastCoord = playerPath[playerPath.length - 1], nextCoord;
+    do {
+      nextCoord = playerPath.shift()
+    } while(currentPlayerCoord == nextCoord)
+
+    console.log(keysPressed);
 
     if (coordIsWalkable(nextCoord)) {
       walkPlayerTo(nextCoord);
@@ -201,6 +229,46 @@ $('.ctr-little_worlds.act-show').ready(function() {
       setPlayerDestination(lastCoord);
     }
   }
+
+  triggerEvent = function(key, direction) {
+    switch(key) {
+      case KEY_EVENT_SPACE:
+      case KEY_EVENT_LEFT:
+      case KEY_EVENT_A:
+      case KEY_EVENT_UP:
+      case KEY_EVENT_W:
+      case KEY_EVENT_DOWN:
+      case KEY_EVENT_S:
+      case KEY_EVENT_RIGHT:
+      case KEY_EVENT_D:
+        if (direction == "up") {
+          multiKeyUp(key)
+        } else if (direction == "down") {
+          multiKeyDown(key)
+        }
+        return true
+      break;
+    }
+    return false
+  }
+
+  $(document).keyup(function(evt) {
+    if (triggerEvent(evt.which, "up")) {
+      evt.preventDefault()
+      return false
+    }
+  }).keydown(function(evt) {
+    if (triggerEvent(evt.which, "down")) {
+      evt.preventDefault()
+      return false
+    }
+  })
+
+  $('.block.walkable').on('click tap touch', function(evt) {
+    var newCoord = getCoordForBlock(this)
+    console.log(newCoord);
+    setPlayerDestination(newCoord);
+  })
 
   setInterval(tick, 1);
   setInterval(actOnKeysPressed, ticksPerMovementFrame);

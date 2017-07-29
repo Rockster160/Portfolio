@@ -27,8 +27,6 @@
   .little-world-wrapper {
     font-size: 0;
     position: relative;
-    margin: 0 auto;
-    padding: 0;
 
     .player {
       margin: 3px;
@@ -38,6 +36,7 @@
       background-image: radial-gradient(100% 40% at 50% 70%, rgba(0, 0, 50, 0.5) 30%, transparent 50%);
       width: $cellWidth;
       height: $cellHeight;
+      pointer-events: none;
 
       @include character(2);
       .character {
@@ -49,6 +48,7 @@
     .game {
       position: relative;
       white-space: nowrap;
+      padding: 100px 30px 64px;
 
       .block {
         display: inline-block;

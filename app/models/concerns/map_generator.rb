@@ -1,7 +1,8 @@
 class MapGenerator
+  attr_accessor :width, :height
 
   def self.generate
-    new.to_html
+    new
   end
 
   def initialize
@@ -9,15 +10,15 @@ class MapGenerator
     collision_layer = File.read("lib/assets/little_world/map_layers/collision.map")
     @grass_cells = grass_layer.split("\n").map { |row| row.split("") }
     @collision_cells = collision_layer.split("\n").map { |row| row.split("") }
-    @map_width = @grass_cells.map(&:length).max
-    @map_height = @grass_cells.length
+    @width = @grass_cells.map(&:length).max
+    @height = @grass_cells.length
   end
 
   def to_html
     world_html = ""
 
-    @map_height.times do |y|
-      @map_width.times do |x|
+    @height.times do |y|
+      @width.times do |x|
         grass_cell = cell_at_coord(@grass_cells, x, y)
         collision_cell = cell_at_coord(@collision_cells, x, y)
 
@@ -29,7 +30,7 @@ class MapGenerator
           inner_block = div(["object", object_class_by_char(collision_cell)])
         end
 
-        world_html << div(klass_list, inner_block)
+        world_html << div(klass_list, inner_block, {"data-x" => x, "data-y" => y})
       end
       world_html << "<br>"
     end
@@ -64,9 +65,15 @@ class MapGenerator
     cells.dig(y, x)
   end
 
-  def div(klasses, body=nil)
+  def div(klasses, body=nil, attribute_hash={})
     klass_list = [klasses].flatten.compact.join(" ")
-    "<div class=\"#{klass_list}\">#{body}</div>"
+    attributes = attribute_hash.map do |attribute_key, attribute_val|
+      next if attribute_key.blank?
+      next attribute_key if attribute_val.blank?
+      "#{attribute_key}=\"#{attribute_val}\""
+    end
+    attribute_list = " #{attributes.compact.join(' ')}"
+    "<div class=\"#{klass_list}\"#{attribute_list.presence}>#{body}</div>"
   end
 
 end

@@ -5,12 +5,11 @@
   <%= stylesheet_link_tag 'individual/little_world/terrain', media: 'all' %>
 <% end %>
 
-<!-- <div class="float-point"></div> -->
+<div class="float-point"></div>
 
-<div class="little-world-wrapper">
+<div class="little-world-wrapper" data-world-width="<%= @world.width %>" data-world-height="<%= @world.height %>">
   <div class="player">
     <div class="character stand"><%= @character.to_html %></div>
   </div>
-  <%= @world %>
+  <%= @world.to_html %>
 </div>
-<!-- <canvas id="gameCanvas" width=400 height=400 /> -->
