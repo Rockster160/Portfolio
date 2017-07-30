@@ -11,23 +11,44 @@
 
 .little-world-wrapper {
   .block {
-    &.grass-1            { @include terrainSheet(22, 3); }
-    &.grass-2            { @include terrainSheet(23, 5); }
-    &.grass-3            { @include terrainSheet(22, 5); }
-    &.grass-4            { @include terrainSheet(21, 5); }
+    &.walkable::before {
+      content: "W";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      text-align: center;
+      margin-top: 16px;
+      font-size: 32px;
+      font-family: monospace;
+      color: red;
+    }
+    &.bad { @include terrainSheet(1, 1); }
+    &.check { @include terrainSheet(6, 1); }
 
-    &.bottom-left-grass  { @include terrainSheet(21, 4); }
-    &.bottom-right-grass { @include terrainSheet(23, 4); }
-    &.top-left-grass     { @include terrainSheet(21, 2); }
-    &.top-right-grass    { @include terrainSheet(23, 2); }
+    &.grass-length-1 { @include terrainSheet(22, 3); }
+    &.grass-length-2 { @include terrainSheet(23, 5); }
+    &.grass-length-3 { @include terrainSheet(22, 5); }
+    &.grass-length-4 { @include terrainSheet(21, 5); }
 
-    &.right-grass        { @include terrainSheet(23, 3); }
-    &.left-grass         { @include terrainSheet(21, 3); }
-    &.top-grass          { @include terrainSheet(22, 2); }
-    &.bottom-grass       { @include terrainSheet(22, 4); }
+    &.grass-right-edge { @include terrainSheet(23, 3); }
+    &.grass-left-edge  { @include terrainSheet(21, 3); }
+    &.grass-up-edge    { @include terrainSheet(22, 2); }
+    &.grass-down-edge  { @include terrainSheet(22, 4); }
+
+    &.grass-up-right-corner   { @include terrainSheet(21, 4); }
+    &.grass-up-left-corner    { @include terrainSheet(23, 4); }
+    &.grass-down-right-corner { @include terrainSheet(21, 2); }
+    &.grass-down-left-corner  { @include terrainSheet(23, 2); }
+
+    &.grass-up-right-inner-corner   { @include terrainSheet(22, 6); }
+    &.grass-up-left-inner-corner    { @include terrainSheet(21, 6); }
+    &.grass-down-right-inner-corner { @include terrainSheet(22, 7); }
+    &.grass-down-left-inner-corner  { @include terrainSheet(21, 7); }
 
     .object {
-      &.cactus           { @include terrainSheet(9, 14); }
+      &.cactus { @include terrainSheet(9, 14); }
     }
   }
 }

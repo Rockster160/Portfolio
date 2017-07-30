@@ -48,6 +48,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
       movePlayerRelative([1, 0])
     }
     if (isKeyPressed(keyEvent("J")) && lastBlockHoveredCoord.length == 2) {
+      playerPath = []
       jumpPlayerTo(lastBlockHoveredCoord)
     }
   }
