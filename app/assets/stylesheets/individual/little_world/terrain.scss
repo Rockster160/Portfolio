@@ -11,19 +11,19 @@
 
 .little-world-wrapper {
   .block {
-    &.walkable::before {
-      content: "W";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      text-align: center;
-      margin-top: 16px;
-      font-size: 32px;
-      font-family: monospace;
-      color: red;
-    }
+    // &.walkable::before {
+    //   content: "W";
+    //   position: absolute;
+    //   top: 0;
+    //   left: 0;
+    //   right: 0;
+    //   bottom: 0;
+    //   text-align: center;
+    //   margin-top: 16px;
+    //   font-size: 32px;
+    //   font-family: monospace;
+    //   color: red;
+    // }
     &.bad { @include terrainSheet(1, 1); }
     &.check { @include terrainSheet(6, 1); }
 
