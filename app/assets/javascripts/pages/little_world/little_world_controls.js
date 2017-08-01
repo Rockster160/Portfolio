@@ -32,18 +32,6 @@ $('.ctr-little_worlds.act-show').ready(function() {
     if (isKeyPressed(keyEvent("SPACE"))) {
       scrollToPlayer()
     }
-    // if (isKeyPressed(keyEvent("LEFT")) || isKeyPressed(keyEvent("A"))) {
-    //   currentPlayer.setRelativeDestination([-1, 0])
-    // }
-    // if (isKeyPressed(keyEvent("UP")) || isKeyPressed(keyEvent("W"))) {
-    //   currentPlayer.setRelativeDestination([0, -1])
-    // }
-    // if (isKeyPressed(keyEvent("DOWN")) || isKeyPressed(keyEvent("S"))) {
-    //   currentPlayer.setRelativeDestination([0, 1])
-    // }
-    // if (isKeyPressed(keyEvent("RIGHT")) || isKeyPressed(keyEvent("D"))) {
-    //   currentPlayer.setRelativeDestination([1, 0])
-    // }
     if (isKeyPressed(keyEvent("J")) && lastBlockHoveredCoord.length == 2) {
       currentPlayer.path = []
       currentPlayer.jumpTo(lastBlockHoveredCoord)
@@ -96,14 +84,6 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   triggerEvent = function(key, direction) {
     switch(key) {
-      // case keyEvent("LEFT"):
-      // case keyEvent("A"):
-      // case keyEvent("UP"):
-      // case keyEvent("W"):
-      // case keyEvent("DOWN"):
-      // case keyEvent("S"):
-      // case keyEvent("RIGHT"):
-      // case keyEvent("D"):
       case keyEvent("SPACE"):
       case keyEvent("J"):
         if (direction == "up") {

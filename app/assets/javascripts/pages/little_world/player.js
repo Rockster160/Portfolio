@@ -143,12 +143,6 @@ class Player {
     this.html.css(newPosition)
   }
 
-  // setRelativeDestination(coord) {
-  //   var playerCoord = this.currentCoord();
-  //   if (coord == playerCoord) { return }
-  //   this.setDestination([playerCoord[0] + coord[0], playerCoord[1] + coord[1]])
-  // }
-
   setDestination(coord) {
     var playerCoord = this.currentCoord();
     if (coord == playerCoord) { return }
