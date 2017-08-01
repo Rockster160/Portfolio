@@ -6,12 +6,20 @@
 #  user_id    :integer
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
+#  location_x :integer
+#  location_y :integer
+#  timestamp  :string
 #
 
 class Avatar < ApplicationRecord
   include CharacterBuilderHelper
   belongs_to :user
   has_many :clothes, class_name: "AvatarCloth"
+
+  def uuid
+    srand(3141)
+    rand(100000..999999)
+  end
 
   def update_by_builder(character)
     persisted? ? touch : save

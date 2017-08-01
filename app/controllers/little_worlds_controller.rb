@@ -3,8 +3,16 @@ class LittleWorldsController < ApplicationController
   helper CharacterBuilderHelper
 
   def show
+    @avatar = current_user.try(:avatar)
     @character = find_character(session_first: false)
     @world = MapGenerator.generate
+  end
+
+  def save_location
+    @avatar = current_user.try(:avatar)
+    @avatar.update(location_params) if @avatar.present? && location_params[:timestamp].to_i > @avatar.timestamp.to_i
+
+    head :ok
   end
 
   def character_builder
@@ -60,6 +68,10 @@ class LittleWorldsController < ApplicationController
         feet: { garment: "shoes", color: "black"}
       }
     }
+  end
+
+  def location_params
+    params.require(:avatar).permit(:location_x, :location_y, :timestamp)
   end
 
 end

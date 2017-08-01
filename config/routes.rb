@@ -43,6 +43,7 @@ Rails.application.routes.draw do
   resources :anonicons, only: [ :index, :show ]
 
   resource :little_world, only: [ :show ] do
+    post :save_location
     get :character_builder
     post :change_clothes
     get :change_clothes, action: :load_character
@@ -64,8 +65,6 @@ Rails.application.routes.draw do
 
   require 'sidekiq/web'
   mount Sidekiq::Web => '/sidekiq'
-
-  # Websockets
   mount ActionCable.server => '/cable'
 
 end
