@@ -107,11 +107,6 @@ Player.prototype.clearMovementClasses = function() {
   this.character.removeClass("spell-up spell-down spell-left spell-right thrust-up thrust-down thrust-left thrust-right walk-up walk-down walk-left walk-right slash-up slash-down slash-left slash-right shoot-up shoot-down shoot-left shoot-right die")
 }
 
-Player.prototype.setLocation = function() {
-  var newPosition = littleWorld.getBlockAtCoord([this.x, this.y]).position()
-  this.html.css(newPosition)
-}
-
 Player.prototype.switchDirection = function(newDirection) {
   if (this.character.hasClass("stand-" + newDirection)) { return }
   this.clearMovementClasses()
@@ -127,9 +122,11 @@ Player.prototype.walkDirection = function(direction) {
 }
 
 Player.prototype.jumpTo = function(coord) {
+  coord = coord || this.currentCoord()
   var x = coord[0], y = coord[1]
   this.x = x
   this.y = y
+  
   var blockPosition = littleWorld.getBlockAtCoord([x, y]).position()
   var newPosition = {
     left: blockPosition.left,

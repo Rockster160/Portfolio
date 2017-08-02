@@ -119,5 +119,8 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   setInterval(tick, 1);
   setInterval(actOnKeysPressed, 5);
-  currentPlayer.setLocation()
+  setTimeout(function() {
+    currentPlayer.jumpTo()
+    currentPlayer.html.removeClass("hidden")
+  }, 10)
 })
