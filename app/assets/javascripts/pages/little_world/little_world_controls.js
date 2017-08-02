@@ -12,7 +12,6 @@ $('.ctr-little_worlds.act-show').ready(function() {
   var ticksPerMovementFrame = 5
   var lastBlockHoveredCoord = [];
   var screenMessage;
-  var canCameraChange = true
   currentPlayer = new Player($(".player"))
   littleWorld = new LittleWorld()
   littleWorldPlayers.push(currentPlayer)
