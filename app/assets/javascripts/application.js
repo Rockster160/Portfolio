@@ -20,10 +20,7 @@
 //= stub support/particles.js
 //= stub support/particles_json.js
 //= stub support/touch_punch.js
-//= stub cube_scripts/cube_move.js
-//= stub cube_scripts/cuber.js
-//= stub cube_scripts/cuber.no3d.js
-//= stub cube_scripts/photon.js
+//= stub support/parser.js
 
 // http://keycode.info
 keyEvent = function(char) {
