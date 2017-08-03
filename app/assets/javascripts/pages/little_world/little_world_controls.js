@@ -44,7 +44,9 @@ $('.ctr-little_worlds.act-show').ready(function() {
   postDestination = function() {
     var coord = currentPlayer.destination
     var url = $("[data-save-location-url]").attr("data-save-location-url")
-    var params = { avatar: { location_x: coord[0], location_y: coord[1], timestamp: nowStamp() } }
+    var timestamp = nowStamp()
+    var params = { avatar: { location_x: coord[0], location_y: coord[1], timestamp: timestamp } }
+    currentPlayer.lastMoveTimestamp = timestamp
     $.post(url, params)
   }
 
@@ -119,8 +121,5 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   setInterval(tick, 1);
   setInterval(actOnKeysPressed, 5);
-  setTimeout(function() {
-    currentPlayer.jumpTo()
-    currentPlayer.html.removeClass("hidden")
-  }, 10)
+  currentPlayer.logIn()
 })

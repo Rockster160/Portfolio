@@ -1,4 +1,5 @@
 class LittleWorldsController < ApplicationController
+  skip_before_action :verify_authenticity_token
   include CharacterBuilderHelper
   helper CharacterBuilderHelper
 
@@ -13,6 +14,13 @@ class LittleWorldsController < ApplicationController
     @avatar.update(location_params) if @avatar.present? && location_params[:timestamp].to_i > @avatar.timestamp.to_i
 
     head :ok
+  end
+
+  def player_login
+    @avatar = Avatar.by_uuid(params[:uuid])
+    @character = @avatar.try(:character) || CharacterBuilder.new(default_outfit)
+
+    render partial: "player", layout: false
   end
 
   def character_builder

@@ -16,8 +16,15 @@ class Avatar < ApplicationRecord
   belongs_to :user
   has_many :clothes, class_name: "AvatarCloth"
 
+  after_update_commit :broadcast_movement
+ 
+  def self.by_uuid(uuid)
+    # FIXME: Add uuid as an attribute, then do a regular query
+    select { |avatar| avatar.uuid == uuid }.first
+  end
+
   def uuid
-    srand(3141)
+    srand(id)
     rand(100000..999999)
   end
 
@@ -58,6 +65,14 @@ class Avatar < ApplicationRecord
     character_outfit = outfit
     return unless character_outfit
     CharacterBuilder.new(character_outfit)
+  end
+
+  def player_details
+    { x: location_x, y: location_y, timestamp: timestamp, uuid: uuid }
+  end
+
+  def broadcast_movement
+    ActionCable.server.broadcast "little_world_channel", player_details
   end
 
 end

@@ -7,6 +7,18 @@ function LittleWorld() {
   this.boardHeight = parseInt($(".little-world-wrapper").attr("data-world-height"))
 }
 
+LittleWorld.prototype.loginPlayer = function(player_id) {
+  var url = $(".little-world-wrapper").attr("data-player-login-url")
+  $.get(url, { uuid: player_id }).success(function(data) {
+    var player = new Player($(data))
+    littleWorldPlayers.push(player)
+    debugger
+    $(".little-world-wrapper").append(player.html)
+    player.logIn()
+    console.log("Players Logged In: ", littleWorldPlayers.length);
+  })
+}
+
 LittleWorld.prototype.getBlockAtCoord = function(coord) {
   return $('.block[data-x="' + coord[0] + '"][data-y="' + coord[1] + '"]')
 }
@@ -59,13 +71,15 @@ LittleWorld.prototype.walkables = function() {
 
 littleWorldPlayers = []
 function Player(player_html) {
-  this.id = player_html.attr("data-id")
-  this.x = player_html.attr("data-location-x")
-  this.y = player_html.attr("data-location-y")
+  var default_coord = [30, 30]
+  this.id = player_html.attr("data-id") || 1234
+  this.x = player_html.attr("data-location-x") || default_coord[0]
+  this.y = player_html.attr("data-location-y") || default_coord[1]
   this.html = $(player_html)
   this.character = $(player_html).find(".character")
   this.path = []
   this.isMoving = false
+  this.lastMoveTimestamp = 0
   // this.destination
   // this.walkingTimer
 }
@@ -76,10 +90,10 @@ Player.tick = function() {
   })
 }
 
-Player.findPlayerBy = function(playerId) {
+Player.findPlayer = function(playerId) {
   var player;
   $(littleWorldPlayers).each(function() {
-    if (this.id == playerId) { return player }
+    if (this.id == playerId) { return player = this }
   })
   return player
 }
@@ -126,7 +140,7 @@ Player.prototype.jumpTo = function(coord) {
   var x = coord[0], y = coord[1]
   this.x = x
   this.y = y
-  
+
   var blockPosition = littleWorld.getBlockAtCoord([x, y]).position()
   var newPosition = {
     left: blockPosition.left,
@@ -156,6 +170,23 @@ Player.prototype.setDestination = function(coord) {
 Player.prototype.updateCoord = function(coord) {
   this.x = coord[0]
   this.y = coord[1]
+}
+
+Player.prototype.logIn = function() {
+  var player = this
+  setTimeout(function() {
+    player.jumpTo()
+    player.html.removeClass("hidden")
+  }, 10)
+}
+
+Player.prototype.logOut = function() {
+  var player = this
+  this.html.remove()
+  littleWorldPlayers = littleWorldPlayers.filter(function() {
+    return player.id != this.id
+  })
+  console.log("Players Logged In: ", littleWorldPlayers.length);
 }
 
 Player.prototype.walkTo = function(coord) {
