@@ -17,7 +17,6 @@ class Avatar < ApplicationRecord
   belongs_to :user
   has_many :clothes, class_name: "AvatarCloth"
 
-  after_update_commit :broadcast_movement
   after_initialize :set_uuid
 
   def update_by_builder(character)
@@ -64,8 +63,6 @@ class Avatar < ApplicationRecord
   end
 
   def broadcast_movement
-    return if new_record?
-    return unless location_x_changed? || location_y_changed? || timestamp_changed?
     ActionCable.server.broadcast "little_world_channel", player_details
   end
 

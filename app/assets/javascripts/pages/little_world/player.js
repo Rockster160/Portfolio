@@ -12,7 +12,7 @@ LittleWorld.prototype.loginPlayer = function(player_id) {
   $.get(url, { uuid: player_id }).success(function(data) {
     var player = new Player($(data))
     littleWorldPlayers.push(player)
-    debugger
+    // debugger
     $(".little-world-wrapper").append(player.html)
     player.logIn()
     console.log("Players Logged In: ", littleWorldPlayers.length);

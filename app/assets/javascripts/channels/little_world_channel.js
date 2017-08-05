@@ -1,4 +1,4 @@
-$('.ctr-little_worlds.act-show').ready(function() {
+ $('.ctr-little_worlds.act-show').ready(function() {
 
   App.little_world = App.cable.subscriptions.create({
     channel: "LittleWorldChannel"

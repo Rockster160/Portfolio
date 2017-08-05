@@ -11,7 +11,10 @@ class LittleWorldsController < ApplicationController
 
   def save_location
     @avatar = current_user.try(:avatar)
-    @avatar.update(location_params) if @avatar.present? && location_params[:timestamp].to_i > @avatar.timestamp.to_i
+    if @avatar.present? && location_params[:timestamp].to_i > @avatar.timestamp.to_i
+      @avatar.update(location_params)
+      @avatar.broadcast_movement
+    end
 
     head :ok
   end
@@ -59,9 +62,9 @@ class LittleWorldsController < ApplicationController
     return CharacterBuilder.new(outfit_from_params) if params[:character].present?
 
     if session_first
-      character = avatar_from_session.try(:character) || current_user.avatar.try(:character)
+      character = avatar_from_session.try(:character) || current_user.try(:avatar).try(:character)
     else
-      character = current_user.avatar.try(:character) || avatar_from_session.try(:character)
+      character = current_user.try(:avatar).try(:character) || avatar_from_session.try(:character)
     end
 
     character || CharacterBuilder.new(default_outfit)
