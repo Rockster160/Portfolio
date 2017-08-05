@@ -17,7 +17,7 @@ class LittleWorldsController < ApplicationController
   end
 
   def player_login
-    @avatar = Avatar.by_uuid(params[:uuid])
+    @avatar = Avatar.find_by(uuid: params[:uuid])
     @character = @avatar.try(:character) || CharacterBuilder.new(default_outfit)
 
     render partial: "player", layout: false
@@ -30,9 +30,18 @@ class LittleWorldsController < ApplicationController
 
   def change_clothes
     should_random = params[:random].to_s == "true"
-    character = find_character(session_first: true, options: { random: should_random })
-    current_user.update_avatar(character) if user_signed_in? && params[:save] == "true"
-    session[:character_json] = JSON.generate(character.to_json) unless should_random
+    if should_random
+      character = CharacterBuilder.new(outfit_from_params, { random: true })
+    else
+      character = find_character(session_first: true)
+      if user_signed_in?
+        current_user.update_avatar(character) if params[:save] == "true"
+      else
+        avatar = avatar_from_session
+        session[:avatar_id] = avatar.id
+        JSON.generate(character.to_json)
+      end
+    end
 
     respond_to { |format| format.json { render json: { json: character.to_json, html: character.to_html } } }
   end
@@ -46,16 +55,20 @@ class LittleWorldsController < ApplicationController
 
   private
 
-  def find_character(session_first:, options:{})
-    return CharacterBuilder.new(outfit_from_params, options) if params[:character].present?
+  def find_character(session_first:)
+    return CharacterBuilder.new(outfit_from_params) if params[:character].present?
+
     if session_first
-      return CharacterBuilder.new(session_character_json, options) if session_character_json
-      return current_user.avatar.character if current_user.try(:avatar).try(:clothes).try(:any?)
+      character = avatar_from_session.try(:character) || current_user.avatar.try(:character)
     else
-      return current_user.avatar.character if current_user.try(:avatar).try(:clothes).try(:any?)
-      return CharacterBuilder.new(session_character_json, options) if session_character_json
+      character = current_user.avatar.try(:character) || avatar_from_session.try(:character)
     end
-    CharacterBuilder.new(default_outfit, options)
+
+    character || CharacterBuilder.new(default_outfit)
+  end
+
+  def avatar_from_session
+    Avatar.find_by(id: session[:avatar_id]) || Avatar.create
   end
 
   def session_character_json

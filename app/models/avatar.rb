@@ -9,6 +9,7 @@
 #  location_x :integer
 #  location_y :integer
 #  timestamp  :string
+#  uuid       :integer          not null
 #
 
 class Avatar < ApplicationRecord
@@ -17,16 +18,7 @@ class Avatar < ApplicationRecord
   has_many :clothes, class_name: "AvatarCloth"
 
   after_update_commit :broadcast_movement
- 
-  def self.by_uuid(uuid)
-    # FIXME: Add uuid as an attribute, then do a regular query
-    select { |avatar| avatar.uuid == uuid }.first
-  end
-
-  def uuid
-    srand(id)
-    rand(100000..999999)
-  end
+  after_initialize :set_uuid
 
   def update_by_builder(character)
     persisted? ? touch : save
@@ -72,7 +64,19 @@ class Avatar < ApplicationRecord
   end
 
   def broadcast_movement
+    return if new_record?
+    return unless location_x_changed? || location_y_changed? || timestamp_changed?
     ActionCable.server.broadcast "little_world_channel", player_details
+  end
+
+  private
+
+  def set_uuid
+    return if uuid.present?
+    self.uuid = loop do
+      new_uuid = rand(100000..999999)
+      break new_uuid if Avatar.where(uuid: new_uuid).none?
+    end
   end
 
 end
