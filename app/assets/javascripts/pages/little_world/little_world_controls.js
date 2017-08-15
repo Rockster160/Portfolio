@@ -42,9 +42,10 @@ $('.ctr-little_worlds.act-show').ready(function() {
   }
 
   postDestination = function() {
+    var timestamp = nowStamp()
+    if (timestamp < currentPlayer.lastMoveTimestamp) { return }
     var coord = currentPlayer.destination
     var url = $("[data-save-location-url]").attr("data-save-location-url")
-    var timestamp = nowStamp()
     var params = { avatar: { location_x: coord[0], location_y: coord[1], timestamp: timestamp } }
     currentPlayer.lastMoveTimestamp = timestamp
     $.post(url, params)

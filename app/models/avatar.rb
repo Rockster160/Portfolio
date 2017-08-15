@@ -14,7 +14,7 @@
 
 class Avatar < ApplicationRecord
   include CharacterBuilderHelper
-  belongs_to :user
+  belongs_to :user, optional: true
   has_many :clothes, class_name: "AvatarCloth"
 
   after_initialize :set_uuid
@@ -52,10 +52,9 @@ class Avatar < ApplicationRecord
     building_outfit
   end
 
-  def character
-    character_outfit = outfit
-    return unless character_outfit
-    CharacterBuilder.new(character_outfit)
+  def character(random: false)
+    character_outfit = outfit || default_outfit
+    CharacterBuilder.new(character_outfit, { random: random })
   end
 
   def player_details
@@ -66,7 +65,23 @@ class Avatar < ApplicationRecord
     ActionCable.server.broadcast "little_world_channel", player_details
   end
 
+  def log_out
+    ActionCable.server.broadcast "little_world_channel", { uuid: uuid, log_out: true }
+  end
+
   private
+
+  def default_outfit
+    {
+      gender: "male",
+      body: "light",
+      clothing: {
+        torso: { garment: "leather", color: "chest"},
+        legs: { garment: "pants", color: "teal"},
+        feet: { garment: "shoes", color: "black"}
+      }
+    }
+  end
 
   def set_uuid
     return if uuid.present?

@@ -9,8 +9,10 @@ class LittleWorldChannel < ApplicationCable::Channel
   end
 
   def logged_in
+    Avatar.find_by(id: params[:uuid]).try(:broadcast_movement)
   end
 
   def logged_out
+    Avatar.find_by(id: params[:uuid]).try(:log_out)
   end
 end

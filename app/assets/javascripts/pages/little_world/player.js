@@ -9,10 +9,10 @@ function LittleWorld() {
 
 LittleWorld.prototype.loginPlayer = function(player_id) {
   var url = $(".little-world-wrapper").attr("data-player-login-url")
+  if (Player.findPlayer(player_id) != undefined) { return }
   $.get(url, { uuid: player_id }).success(function(data) {
     var player = new Player($(data))
     littleWorldPlayers.push(player)
-    // debugger
     $(".little-world-wrapper").append(player.html)
     player.logIn()
     console.log("Players Logged In: ", littleWorldPlayers.length);
@@ -51,6 +51,7 @@ LittleWorld.prototype.getBlockAtPosition = function(position) {
 LittleWorld.prototype.convertPositionToCoord = function(position) {
   var block = getBlockAtPosition(position)
   return this.getCoordForBlock(block)
+  // FIXME: Walking backwards because this rounds instead of floors?
 }
 
 LittleWorld.prototype.highlightDestination = function(coord) {
@@ -72,15 +73,15 @@ LittleWorld.prototype.walkables = function() {
 littleWorldPlayers = []
 function Player(player_html) {
   var default_coord = [30, 30]
-  this.id = player_html.attr("data-id") || 1234
-  this.x = player_html.attr("data-location-x") || default_coord[0]
-  this.y = player_html.attr("data-location-y") || default_coord[1]
+  this.id = parseInt(player_html.attr("data-id")) || 1234
+  this.x = parseInt(player_html.attr("data-location-x")) || default_coord[0]
+  this.y = parseInt(player_html.attr("data-location-y")) || default_coord[1]
   this.html = $(player_html)
   this.character = $(player_html).find(".character")
   this.path = []
   this.isMoving = false
   this.lastMoveTimestamp = 0
-  // this.destination
+  this.destination
   // this.walkingTimer
 }
 
@@ -91,7 +92,8 @@ Player.tick = function() {
 }
 
 Player.findPlayer = function(playerId) {
-  var player;
+  var player
+  playerId = parseInt(playerId)
   $(littleWorldPlayers).each(function() {
     if (this.id == playerId) { return player = this }
   })
@@ -142,6 +144,7 @@ Player.prototype.jumpTo = function(coord) {
   this.y = y
 
   var blockPosition = littleWorld.getBlockAtCoord([x, y]).position()
+  // FIXME walking backwards
   var newPosition = {
     left: blockPosition.left,
     top: blockPosition.top
@@ -150,18 +153,22 @@ Player.prototype.jumpTo = function(coord) {
 }
 
 Player.prototype.setDestination = function(coord) {
-  var playerCoord = this.currentCoord();
+  coord[0] = parseInt(coord[0])
+  coord[1] = parseInt(coord[1])
+  var player = this
+  if (player.destination != undefined && player.destination[0] == coord[0] && player.destination[1] == coord[1]) { return }
+  var playerCoord = player.currentCoord();
   if (coord == playerCoord) { return }
 
   var world = littleWorld.walkables();
   var new_path = findPath(world, playerCoord, coord);
-  this.path = new_path
+  player.path = new_path
   canCameraChange = true
 
-  if (this.path.length > 0) {
+  if (player.path.length > 0) {
     littleWorld.highlightDestination(coord)
-    if (this.destination != coord) {
-      this.destination = coord
+    if (player.destination != coord) {
+      player.destination = coord
       postDestination()
     }
   }

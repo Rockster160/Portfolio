@@ -20,7 +20,7 @@
       if (player == undefined) {
         $(".player[data-id=" + data.uuid + "]").remove()
         littleWorld.loginPlayer(data.uuid)
-      } else if (data.log_out) {
+      } else if (data.log_out == "true") {
         player.logOut()
       } else if (player.lastMoveTimestamp < parseInt(data.timestamp)) {
         player.setDestination([data.x, data.y])
