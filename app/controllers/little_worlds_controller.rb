@@ -22,30 +22,37 @@ class LittleWorldsController < ApplicationController
 
   def player_login
     @avatar = Avatar.find_by(uuid: params[:uuid])
-    @character = @avatar.try(:character) || CharacterBuilder.new(default_outfit)
+    @character = @avatar.try(:character)
 
     render partial: "player", layout: false
   end
 
   def character_builder
     @outfits = CharacterBuilder.default_outfits
-    @character = find_character(session_first: true)
+    @character = find_avatar(session_first: true).character
   end
 
   def change_clothes
     should_random = params[:random].to_s == "true"
     should_save = params[:save] == "true"
 
-    avatar = find_avatar(session_first: !should_save)
-    character = avatar.character(random: should_random)
-    avatar.update_by_builder(character) if should_save
+    session_avatar = find_avatar(session_first: true)
+    character = if should_random
+      session_avatar.character(random: should_random)
+    elsif params[:character].present?
+      CharacterBuilder.new(outfit_from_params)
+    else
+      Avatar.default_character
+    end
+
+    session_avatar.update_by_builder(character)
+    current_user.avatar.update_by_builder(character) if should_save
 
     respond_to { |format| format.json { render json: { json: character.to_json, html: character.to_html } } }
   end
 
   def load_character
     avatar = find_avatar(session_first: false)
-    session[:avatar_id] = avatar.id
     character = avatar.character
 
     respond_to { |format| format.json { render json: { json: character.to_json, html: character.to_html } } }
@@ -53,22 +60,16 @@ class LittleWorldsController < ApplicationController
 
   private
 
-  def find_character(session_first:)
-    return CharacterBuilder.new(outfit_from_params) if params[:character].present?
-
-    find_avatar(session_first: session_first).try(:character) || CharacterBuilder.new(default_outfit)
-  end
-
   def find_avatar(session_first:)
     if session_first
-      avatar = Avatar.find_by(id: session[:avatar_id]) || current_user.try(:avatar)
+      avatar = Avatar.from_session.find_by(id: session[:avatar_id]) || Avatar.create
+      avatar.update(from_session: true, user_id: nil) unless avatar.from_session
+      session[:avatar_id] = avatar.id
     else
-      avatar = current_user.try(:avatar) || Avatar.find_by(id: session[:avatar_id])
+      avatar = current_user.try(:avatar) || Avatar.create(user_id: current_user.id)
+      session_avatar = find_avatar(session_first: true)
     end
 
-    avatar ||= Avatar.create
-
-    session[:avatar_id] = avatar.id
     avatar
   end
 

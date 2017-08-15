@@ -144,6 +144,18 @@ class CharacterBuilder
     end
   end
 
+  def self.default_outfit
+    {
+      gender: "male",
+      body: "light",
+      clothing: {
+        torso: { garment: "leather", color: "chest"},
+        legs: { garment: "pants", color: "teal"},
+        feet: { garment: "shoes", color: "black"}
+      }
+    }
+  end
+
   def self.default_outfits
     @@default_outfits ||= begin
       outfits = character_outfits.dup

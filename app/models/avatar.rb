@@ -2,14 +2,15 @@
 #
 # Table name: avatars
 #
-#  id         :integer          not null, primary key
-#  user_id    :integer
-#  created_at :datetime         not null
-#  updated_at :datetime         not null
-#  location_x :integer
-#  location_y :integer
-#  timestamp  :string
-#  uuid       :integer          not null
+#  id           :integer          not null, primary key
+#  user_id      :integer
+#  created_at   :datetime         not null
+#  updated_at   :datetime         not null
+#  location_x   :integer
+#  location_y   :integer
+#  timestamp    :string
+#  uuid         :integer          not null
+#  from_session :boolean
 #
 
 class Avatar < ApplicationRecord
@@ -18,6 +19,13 @@ class Avatar < ApplicationRecord
   has_many :clothes, class_name: "AvatarCloth"
 
   after_initialize :set_uuid
+
+  scope :from_session, -> { where(from_session: true) }
+  scope :not_session, -> { where("from_session = false OR from_session IS NULL") }
+
+  def self.default_character
+    CharacterBuilder.new(CharacterBuilder.default_outfit)
+  end
 
   def update_by_builder(character)
     persisted? ? touch : save
@@ -53,7 +61,7 @@ class Avatar < ApplicationRecord
   end
 
   def character(random: false)
-    character_outfit = outfit || default_outfit
+    character_outfit = outfit || CharacterBuilder.default_outfit
     CharacterBuilder.new(character_outfit, { random: random })
   end
 
@@ -70,18 +78,6 @@ class Avatar < ApplicationRecord
   end
 
   private
-
-  def default_outfit
-    {
-      gender: "male",
-      body: "light",
-      clothing: {
-        torso: { garment: "leather", color: "chest"},
-        legs: { garment: "pants", color: "teal"},
-        feet: { garment: "shoes", color: "black"}
-      }
-    }
-  end
 
   def set_uuid
     return if uuid.present?
