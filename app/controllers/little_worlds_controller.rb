@@ -65,9 +65,11 @@ class LittleWorldsController < ApplicationController
       avatar = Avatar.from_session.find_by(id: session[:avatar_id]) || Avatar.create
       avatar.update(from_session: true, user_id: nil) unless avatar.from_session
       session[:avatar_id] = avatar.id
-    else
+    elsif user_signed_in?
       avatar = current_user.try(:avatar) || Avatar.create(user_id: current_user.id)
       session_avatar = find_avatar(session_first: true)
+    else
+      avatar = find_avatar(session_first: true)
     end
 
     avatar
