@@ -111,7 +111,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
     }
   })
 
-  $('.block.walkable').on('click tap touch', function(evt) {
+  $('.block.walkable').on('mousedown touchstart', function(evt) {
     var newCoord = littleWorld.getCoordForBlock(this)
     currentPlayer.setDestination(newCoord);
   })
