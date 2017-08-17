@@ -17,13 +17,10 @@
       console.log("received", data);
       var player = Player.findPlayer(data.uuid)
 
-      if (player == undefined) {
-        $(".player[data-id=" + data.uuid + "]").remove()
-        littleWorld.loginPlayer(data.uuid)
-      } else if (data.log_out == "true") {
-        player.logOut()
-      } else if (player.lastMoveTimestamp < parseInt(data.timestamp)) {
-        player.setDestination([data.x, data.y])
+      if (data.message && data.message.length > 0) {
+        addMessage(player, data)
+      } else {
+        playerMoved(player, data)
       }
     },
     logged_in: function() {
@@ -39,5 +36,21 @@
       });
     }
   });
+
+  function addMessage(player, data) {
+    // Get player HTML, change text to message
+    // Set Timeout to fade message away
+  }
+
+  function playerMoved(player, data) {
+    if (player == undefined) {
+      $(".player[data-id=" + data.uuid + "]").remove()
+      littleWorld.loginPlayer(data.uuid)
+    } else if (data.log_out == "true") {
+      player.logOut()
+    } else if (player.lastMoveTimestamp < parseInt(data.timestamp)) {
+      player.setDestination([data.x, data.y])
+    }
+  }
 
 })

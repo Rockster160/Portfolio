@@ -51,7 +51,6 @@ LittleWorld.prototype.getBlockAtPosition = function(position) {
 LittleWorld.prototype.convertPositionToCoord = function(position) {
   var block = getBlockAtPosition(position)
   return this.getCoordForBlock(block)
-  // FIXME: Walking backwards because this rounds instead of floors?
 }
 
 LittleWorld.prototype.highlightDestination = function(coord) {
