@@ -81,6 +81,7 @@ function Player(player_html) {
   this.isMoving = false
   this.lastMoveTimestamp = 0
   this.destination
+  this.messageTimer
   // this.walkingTimer
 }
 
@@ -120,6 +121,35 @@ Player.prototype.currentCoord = function() {
 
 Player.prototype.clearMovementClasses = function() {
   this.character.removeClass("spell-up spell-down spell-left spell-right thrust-up thrust-down thrust-left thrust-right walk-up walk-down walk-left walk-right slash-up slash-down slash-left slash-right shoot-up shoot-down shoot-left shoot-right die")
+}
+
+Player.prototype.say = function(message) {
+  var message_container = $(this.html).find(".message-container")
+  message_container.addClass("hidden")
+  message_container.css({
+    "opacity": 1,
+    "display": "block",
+  })
+  var message_html = message_container.find(".message")
+  message_html.html(message)
+  if (message.length <= 5) {
+    message_html.css("text-align", "center")
+  } else {
+    message_html.css("text-align", "left")
+  }
+
+  message_container.removeClass("hidden")
+  message_container.stop()
+  clearTimeout(this.messageTimer)
+  this.messageTimer = setTimeout(function() {
+    message_container.fadeOut(1000, function() {
+      message_container.addClass("hidden")
+      message_container.css({
+        "opacity": 1,
+        "display": "block",
+      })
+    })
+  }, 3000)
 }
 
 Player.prototype.switchDirection = function(newDirection) {
