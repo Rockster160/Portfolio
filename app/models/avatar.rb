@@ -65,8 +65,12 @@ class Avatar < ApplicationRecord
     CharacterBuilder.new(character_outfit, { random: random })
   end
 
+  def username
+    user.try(:username).presence || "Guest#{uuid}"
+  end
+
   def player_details
-    { x: location_x, y: location_y, timestamp: timestamp, uuid: uuid }
+    { x: location_x, y: location_y, timestamp: timestamp, uuid: uuid, username: username }
   end
 
   def broadcast_movement

@@ -43,6 +43,44 @@
     z-index: 5;
   }
 
+  .chat-box {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 600px;
+    height: 200px;
+    padding-bottom: 30px;
+    max-width: 100%;
+    opacity: 0.7;
+    background: black;
+    border-radius: 8px;
+    z-index: 1000;
+    display: table;
+
+    .messages-container {
+      display: table-cell;
+      vertical-align: bottom;
+      margin-bottom: 30px;
+
+      .message {
+        padding: 10px;
+        font-family: Tahoma, Verdana, Segoe, sans-serif;
+        color: white;
+
+        .author {
+          font-weight: bold;
+        }
+      }
+    }
+    input {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 30px;
+    }
+  }
+
   .little-world-wrapper {
     font-size: 0;
     position: relative;

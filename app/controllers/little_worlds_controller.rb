@@ -22,7 +22,7 @@ class LittleWorldsController < ApplicationController
 
   def player_login
     @avatar = Avatar.find_by(uuid: params[:uuid])
-    @character = @avatar.try(:character)
+    @character = @avatar.try(:character) || Avatar.default_character
 
     render partial: "player", layout: false
   end

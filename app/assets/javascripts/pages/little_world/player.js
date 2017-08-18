@@ -77,6 +77,7 @@ function Player(player_html) {
   this.y = parseInt(player_html.attr("data-location-y")) || default_coord[1]
   this.html = $(player_html)
   this.character = $(player_html).find(".character")
+  this.username = player_html.attr("data-username") || "Anonymous"
   this.path = []
   this.isMoving = false
   this.lastMoveTimestamp = 0
@@ -173,7 +174,6 @@ Player.prototype.jumpTo = function(coord) {
   this.y = y
 
   var blockPosition = littleWorld.getBlockAtCoord([x, y]).position()
-  // FIXME walking backwards
   var newPosition = {
     left: blockPosition.left,
     top: blockPosition.top

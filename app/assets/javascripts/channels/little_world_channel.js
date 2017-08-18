@@ -23,6 +23,12 @@
         playerMoved(player, data)
       }
     },
+    speak: function(msg) {
+      return this.perform("speak", {
+        uuid: currentPlayer.id,
+        message: msg
+      })
+    },
     logged_in: function() {
       console.log("logged_in");
       return this.perform('logged_in', {
@@ -38,8 +44,11 @@
   });
 
   function addMessage(player, data) {
-    // Get player HTML, change text to message
-    // Set Timeout to fade message away
+    var message_html = $("<div>", {class: "message"})
+    message_html.prepend($("<span>", {class: "author"}).html(player.username + ": "))
+    message_html.append(data.message)
+    $(".messages-container").append(message_html)
+    player.say(data.message)
   }
 
   function playerMoved(player, data) {

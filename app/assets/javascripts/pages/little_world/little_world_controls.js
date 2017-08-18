@@ -100,14 +100,24 @@ $('.ctr-little_worlds.act-show').ready(function() {
   }
 
   $(document).keyup(function(evt) {
-    if (triggerEvent(evt.which, "up")) {
-      evt.preventDefault()
-      return false
+    if ($(".chat-input").is(":focus")) {
+      if (evt.which == keyEvent("ENTER") && $(".chat-input").val().length > 0) {
+        App.little_world.speak($(".chat-input").val())
+        $(".chat-input").val("")
+      }
+    } else {
+      if (triggerEvent(evt.which, "up")) {
+        evt.preventDefault()
+        return false
+      }
     }
   }).keydown(function(evt) {
-    if (triggerEvent(evt.which, "down")) {
-      evt.preventDefault()
-      return false
+    if ($(".chat-input").is(":focus")) {
+    } else {
+      if (triggerEvent(evt.which, "down")) {
+        evt.preventDefault()
+        return false
+      }
     }
   })
 
