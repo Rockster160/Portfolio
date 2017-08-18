@@ -9,7 +9,7 @@ class LittleWorldChannel < ApplicationCable::Channel
   end
 
   def speak(data)
-    message = data["message"].to_s.squish.presence
+    message = data["message"].to_s.squish.first(256).presence
     return unless message.present?
 
     ActionCable.server.broadcast "little_world_channel", {uuid: data["uuid"], message: message}

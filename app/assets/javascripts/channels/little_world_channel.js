@@ -47,7 +47,15 @@
     var message_html = $("<div>", {class: "message"})
     message_html.prepend($("<span>", {class: "author"}).html(player.username + ": "))
     message_html.append(data.message)
+    var isScrolledToBottom = $(".messages-container")[0].scrollHeight - $(".messages-container").scrollTop() == $(".messages-container").outerHeight()
     $(".messages-container").append(message_html)
+    if (isScrolledToBottom) {
+      $(".messages-container").animate({
+        scrollTop: $(".messages-container")[0].scrollHeight
+      }, 300);
+    }
+    showChatBox()
+    hideChatBox()
     player.say(data.message)
   }
 

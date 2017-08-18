@@ -12,6 +12,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
   var ticksPerMovementFrame = 5
   var lastBlockHoveredCoord = [];
   var screenMessage;
+  var chatBoxTimer
   currentPlayer = new Player($(".player"))
   littleWorld = new LittleWorld()
   littleWorldPlayers.push(currentPlayer)
@@ -99,12 +100,30 @@ $('.ctr-little_worlds.act-show').ready(function() {
     return false
   }
 
+  showChatBox = function() {
+    $(".chat-box").stop()
+    $(".chat-box").css({opacity: 0.7})
+    clearTimeout(chatBoxTimer)
+  }
+  hideChatBox = function() {
+    clearTimeout(chatBoxTimer)
+    chatBoxTimer = setTimeout(function() {
+      $(".chat-box").animate({opacity: 0}, 1000)
+    }, 5000)
+  }
+
   $(document).keyup(function(evt) {
     if ($(".chat-input").is(":focus")) {
-      if (evt.which == keyEvent("ENTER") && $(".chat-input").val().length > 0) {
-        App.little_world.speak($(".chat-input").val())
+      if (evt.which == keyEvent("ENTER")) {
+        if ($(".chat-input").val().length > 0) {
+          App.little_world.speak($(".chat-input").val())
+        }
         $(".chat-input").val("")
+        $(".chat-input").blur()
       }
+    } else if (evt.which == keyEvent("ENTER")) {
+      showChatBox()
+      $(".chat-input").focus()
     } else {
       if (triggerEvent(evt.which, "up")) {
         evt.preventDefault()
@@ -113,6 +132,10 @@ $('.ctr-little_worlds.act-show').ready(function() {
     }
   }).keydown(function(evt) {
     if ($(".chat-input").is(":focus")) {
+      if ($(".chat-input").val().length >= 256) {
+        evt.preventDefault()
+        return false
+      }
     } else {
       if (triggerEvent(evt.which, "down")) {
         evt.preventDefault()
@@ -120,6 +143,9 @@ $('.ctr-little_worlds.act-show').ready(function() {
       }
     }
   })
+
+  $(".chat-input").blur(hideChatBox)
+  $(".chat-input").focus(showChatBox)
 
   $('.block.walkable').on('mousedown touchstart', function(evt) {
     var newCoord = littleWorld.getCoordForBlock(this)
