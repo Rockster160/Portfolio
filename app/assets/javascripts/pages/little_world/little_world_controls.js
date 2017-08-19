@@ -8,6 +8,7 @@ function randRange(start, end) {
 }
 
 $('.ctr-little_worlds.act-show').ready(function() {
+  $(".little-world-wrapper").disableSelection()
 
   var ticksPerMovementFrame = 5
   var lastBlockHoveredCoord = [];
@@ -103,13 +104,26 @@ $('.ctr-little_worlds.act-show').ready(function() {
   showChatBox = function() {
     $(".chat-box").stop()
     $(".chat-box").css({opacity: 0.7})
+    $(".chat-box").removeClass("hidden")
+    $(".open-chat-btn").addClass("hidden")
     clearTimeout(chatBoxTimer)
   }
-  hideChatBox = function() {
+  hideChatBox = function(delay, duration) {
+    delay = delay || 5000
+    duration = duration || 1000
+    $(".open-chat-btn").stop()
+    $(".chat-box").stop()
+    $(".open-chat-btn").css("opacity", 0).removeClass("hidden")
     clearTimeout(chatBoxTimer)
     chatBoxTimer = setTimeout(function() {
-      $(".chat-box").animate({opacity: 0}, 1000)
-    }, 5000)
+      $(".chat-box").animate({
+        opacity: 0
+      }, {
+        duration: duration,
+        complete: function() { $(".chat-box").addClass("hidden").css("opacity", 0.7) }
+      })
+      $(".open-chat-btn").animate({ opacity: 1 }, duration)
+    }, delay)
   }
 
   $(document).keyup(function(evt) {
@@ -144,10 +158,15 @@ $('.ctr-little_worlds.act-show').ready(function() {
     }
   })
 
+  $(".open-chat-btn").on("click tap touch", function() {
+    showChatBox()
+    $(".chat-input").focus()
+    $(".chat-input").click()
+  })
   $(".chat-input").blur(hideChatBox)
   $(".chat-input").focus(showChatBox)
 
-  $('.block.walkable').on('mousedown touchstart', function(evt) {
+  $('.block.walkable').on('mousedown tap touch', function(evt) {
     var newCoord = littleWorld.getCoordForBlock(this)
     currentPlayer.setDestination(newCoord);
   })

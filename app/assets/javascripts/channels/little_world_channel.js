@@ -17,6 +17,11 @@
       console.log("received", data);
       var player = Player.findPlayer(data.uuid)
 
+      if (player == undefined) {
+        $(".player[data-id=" + data.uuid + "]").remove()
+        return littleWorld.loginPlayer(data.uuid)
+      }
+
       if (data.message && data.message.length > 0) {
         addMessage(player, data)
       } else {
@@ -31,7 +36,7 @@
     },
     logged_in: function() {
       console.log("logged_in");
-      return this.perform('logged_in', {
+      return this.perform('logged_in', { 
         uuid: currentPlayer.id
       });
     },
@@ -60,10 +65,7 @@
   }
 
   function playerMoved(player, data) {
-    if (player == undefined) {
-      $(".player[data-id=" + data.uuid + "]").remove()
-      littleWorld.loginPlayer(data.uuid)
-    } else if (data.log_out == "true") {
+    if (data.log_out == "true") {
       player.logOut()
     } else if (player.lastMoveTimestamp < parseInt(data.timestamp)) {
       player.setDestination([data.x, data.y])
