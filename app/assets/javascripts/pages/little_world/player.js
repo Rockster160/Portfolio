@@ -150,7 +150,7 @@ Player.prototype.say = function(message) {
         "display": "block",
       })
     })
-  }, 3000)
+  }, 3000 + (message.length * 20))
 }
 
 Player.prototype.switchDirection = function(newDirection) {
