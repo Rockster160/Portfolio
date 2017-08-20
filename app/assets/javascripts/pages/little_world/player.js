@@ -103,7 +103,7 @@ function Player(player_html) {
   this.y = parseInt(player_html.attr("data-location-y")) || default_coord[1]
   this.html = $(player_html)
   this.character = $(player_html).find(".character")
-  this.username = player_html.attr("data-username") || "Anonymous"
+  this.username = player_html.find(".username").text()
   this.path = []
   this.isMoving = false
   this.lastMoveTimestamp = 0
@@ -145,7 +145,7 @@ Player.prototype.tick = function() {
 }
 
 Player.prototype.updateZIndex = function() {
-  this.html.css("z-index", this.y)
+  this.html.css("z-index", this.y + 10)
 }
 
 Player.prototype.currentCoord = function() {
