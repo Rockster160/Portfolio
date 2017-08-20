@@ -45,6 +45,7 @@ Rails.application.routes.draw do
   resource :little_world, only: [ :show ] do
     post :save_location
     get :player_login
+    get :player_list
     get :character_builder
     post :change_clothes
     get :change_clothes, action: :load_character

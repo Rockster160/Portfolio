@@ -7,13 +7,25 @@ function LittleWorld() {
   this.boardHeight = parseInt($(".little-world-wrapper").attr("data-world-height"))
 }
 
-LittleWorld.prototype.loginPlayer = function(player_id, data) {
+LittleWorld.prototype.loadOnlinePlayers = function() {
+  var url = $(".little-world-wrapper").attr("data-player-list-url")
+  $.get(url).success(function(data) {
+    $(data).each(function() {
+      var player_data = this
+      littleWorld.loginPlayer(player_data, true)
+    })
+  })
+}
+
+LittleWorld.prototype.loginPlayer = function(data, quiet_login) {
+  quiet_login = quiet_login || false
   var url = $(".little-world-wrapper").attr("data-player-login-url")
+  var player_id = data.uuid
   if (Player.findPlayer(player_id) != undefined) { return }
   $.get(url, { uuid: player_id }).success(function(data) {
     var player = new Player($(data))
     littleWorldPlayers.push(player)
-    // player.logIn()
+    player.logIn(quiet_login)
     console.log("Players Logged In: ", littleWorldPlayers.length);
     player.reactToData(data)
   })
@@ -233,7 +245,7 @@ Player.prototype.updateCoord = function(coord) {
 
 Player.prototype.reactToData = function(data) {
   var player = this
-  
+
   if ($(".player[data-id=" + player.id + "]").length == 0) { player.logIn() }
   if (data.message && data.message.length > 0) { player.say(data.message) }
   if (data.timestamp && data.x != undefined && data.y != undefined && player.lastMoveTimestamp < parseInt(data.timestamp)) {
@@ -243,13 +255,15 @@ Player.prototype.reactToData = function(data) {
   if (data.log_out) { player.logOut() }
 }
 
-Player.prototype.logIn = function() {
+Player.prototype.logIn = function(quiet_login) {
+  quiet_login = quiet_login || false
   var player = this
-  $(".little-world-wrapper").append(player.html)
+  var shouldLoadPlayer = $(".player[data-id=" + player.id + "]").length == 0
+  if (shouldLoadPlayer) { $(".little-world-wrapper").append(player.html) }
   setTimeout(function() {
     player.jumpTo()
     player.html.removeClass("hidden")
-    if (player.id != currentPlayer.id) {
+    if (player.id != currentPlayer.id && !quiet_login && shouldLoadPlayer) {
       littleWorld.addMessage(player.username + " has logged in.")
     }
   }, 10)

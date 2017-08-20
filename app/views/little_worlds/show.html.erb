@@ -21,7 +21,7 @@
   <input type="text" name="message" class="chat-input" autocomplete="off" autocorrect="off">
 </div>
 
-<div class="little-world-wrapper" data-world-width="<%= @world.width %>" data-world-height="<%= @world.height %>" data-save-location-url="<%= save_location_little_world_path %>" data-player-login-url="<%= player_login_little_world_path %>">
+<div class="little-world-wrapper" data-world-width="<%= @world.width %>" data-world-height="<%= @world.height %>" data-save-location-url="<%= save_location_little_world_path %>" data-player-login-url="<%= player_login_little_world_path %>" data-player-list-url="<%= player_list_little_world_path %>">
   <%= render partial: "player" %>
   <%= @world.to_html %>
 </div>

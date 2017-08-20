@@ -4,7 +4,9 @@
     channel: "LittleWorldChannel",
     avatar_uuid: currentPlayer.id
   }, {
-    connected: function() {},
+    connected: function() {
+      littleWorld.loadOnlinePlayers()
+    },
     disconnected: function() {},
     received: function(data) {
       console.log(data);
@@ -12,7 +14,7 @@
 
       if (player == undefined) {
         $(".player[data-id=" + data.uuid + "]").remove()
-        return littleWorld.loginPlayer(data.uuid, data)
+        return littleWorld.loginPlayer(data)
       }
 
       player.reactToData(data)

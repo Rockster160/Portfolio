@@ -2,10 +2,16 @@ class LittleWorldChannel < ApplicationCable::Channel
   def subscribed
     current_avatar.log_in
     stream_from "little_world_channel"
+    player_list = Rails.cache.read("player_list").to_a
+    player_list += [current_avatar.uuid]
+    Rails.cache.write("player_list", player_list.uniq)
   end
 
   def unsubscribed
     current_avatar.log_out
+    player_list = Rails.cache.read("player_list").to_a
+    player_list -= [current_avatar.uuid]
+    Rails.cache.write("player_list", player_list.uniq)
   end
 
   def speak(data)
