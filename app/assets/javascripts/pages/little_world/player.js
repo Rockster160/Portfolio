@@ -145,8 +145,7 @@ Player.prototype.tick = function() {
 }
 
 Player.prototype.updateZIndex = function() {
-  var player_html = this.html
-  player_html.css("z-index", player_html.position().top + player_html.height())
+  this.html.css("z-index", this.y)
 }
 
 Player.prototype.currentCoord = function() {
