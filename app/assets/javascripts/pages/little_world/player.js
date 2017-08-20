@@ -128,6 +128,7 @@ Player.findPlayer = function(playerId) {
 }
 
 Player.prototype.tick = function() {
+  if (this.isMoving) { this.updateZIndex() }
   if (this.isMoving || this.path.length == 0) { return }
   var nextCoord
   do {
@@ -142,6 +143,12 @@ Player.prototype.tick = function() {
     this.setDestination(lastCoord);
   }
 }
+
+Player.prototype.updateZIndex = function() {
+  var player_html = this.html
+  player_html.css("z-index", player_html.position().top + player_html.height())
+}
+
 Player.prototype.currentCoord = function() {
   return [this.x, this.y]
 }
@@ -210,6 +217,7 @@ Player.prototype.jumpTo = function(coord) {
     top: blockPosition.top
   };
   this.html.css(newPosition)
+  this.updateZIndex()
 }
 
 Player.prototype.setDestination = function(coord) {
