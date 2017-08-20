@@ -77,6 +77,10 @@ class Avatar < ApplicationRecord
     ActionCable.server.broadcast "little_world_channel", player_details
   end
 
+  def log_in
+    broadcast_movement
+  end
+
   def log_out
     ActionCable.server.broadcast "little_world_channel", { uuid: uuid, log_out: true }
   end

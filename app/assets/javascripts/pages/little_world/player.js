@@ -7,16 +7,30 @@ function LittleWorld() {
   this.boardHeight = parseInt($(".little-world-wrapper").attr("data-world-height"))
 }
 
-LittleWorld.prototype.loginPlayer = function(player_id) {
+LittleWorld.prototype.loginPlayer = function(player_id, data) {
   var url = $(".little-world-wrapper").attr("data-player-login-url")
   if (Player.findPlayer(player_id) != undefined) { return }
   $.get(url, { uuid: player_id }).success(function(data) {
     var player = new Player($(data))
     littleWorldPlayers.push(player)
-    $(".little-world-wrapper").append(player.html)
-    player.logIn()
+    // player.logIn()
     console.log("Players Logged In: ", littleWorldPlayers.length);
+    player.reactToData(data)
   })
+}
+
+LittleWorld.prototype.addMessage = function(message) {
+  var message_html = $("<div>", {class: "message", timestamp: (new Date()).getTime()})
+  message_html.append(message)
+  var isScrolledToBottom = $(".messages-container")[0].scrollHeight - $(".messages-container").scrollTop() == $(".messages-container").outerHeight()
+  $(".messages-container").append(message_html)
+  if (isScrolledToBottom) {
+    $(".messages-container").animate({
+      scrollTop: $(".messages-container")[0].scrollHeight
+    }, 300);
+  }
+  showChatBox()
+  hideChatBox()
 }
 
 LittleWorld.prototype.getBlockAtCoord = function(coord) {
@@ -125,7 +139,12 @@ Player.prototype.clearMovementClasses = function() {
 }
 
 Player.prototype.say = function(message) {
-  var message_container = $(this.html).find(".message-container")
+  var player = this
+  var username_label = $("<span>", {class: "author"}).html(player.username + ": ")
+
+  littleWorld.addMessage($("<div>").append(username_label).append(message))
+
+  var message_container = $(player.html).find(".message-container")
   message_container.addClass("hidden")
   message_container.css({
     "opacity": 1,
@@ -141,8 +160,8 @@ Player.prototype.say = function(message) {
 
   message_container.removeClass("hidden")
   message_container.stop()
-  clearTimeout(this.messageTimer)
-  this.messageTimer = setTimeout(function() {
+  clearTimeout(player.messageTimer)
+  player.messageTimer = setTimeout(function() {
     message_container.fadeOut(1000, function() {
       message_container.addClass("hidden")
       message_container.css({
@@ -182,8 +201,10 @@ Player.prototype.jumpTo = function(coord) {
 }
 
 Player.prototype.setDestination = function(coord) {
+  if (coord[0] == undefined || coord[1] == undefined) { return }
   coord[0] = parseInt(coord[0])
   coord[1] = parseInt(coord[1])
+
   var player = this
   if (player.destination != undefined && player.destination[0] == coord[0] && player.destination[1] == coord[1]) { return }
   var playerCoord = player.currentCoord();
@@ -195,9 +216,11 @@ Player.prototype.setDestination = function(coord) {
   canCameraChange = true
 
   if (player.path.length > 0) {
-    littleWorld.highlightDestination(coord)
     if (player.destination != coord) {
       player.destination = coord
+    }
+    if (player.id == currentPlayer.id) {
+      littleWorld.highlightDestination(coord)
       postDestination()
     }
   }
@@ -208,11 +231,27 @@ Player.prototype.updateCoord = function(coord) {
   this.y = coord[1]
 }
 
+Player.prototype.reactToData = function(data) {
+  var player = this
+  
+  if ($(".player[data-id=" + player.id + "]").length == 0) { player.logIn() }
+  if (data.message && data.message.length > 0) { player.say(data.message) }
+  if (data.timestamp && data.x != undefined && data.y != undefined && player.lastMoveTimestamp < parseInt(data.timestamp)) {
+    player.lastMoveTimestamp = data.timestamp
+    player.setDestination([data.x, data.y])
+  }
+  if (data.log_out) { player.logOut() }
+}
+
 Player.prototype.logIn = function() {
   var player = this
+  $(".little-world-wrapper").append(player.html)
   setTimeout(function() {
     player.jumpTo()
     player.html.removeClass("hidden")
+    if (player.id != currentPlayer.id) {
+      littleWorld.addMessage(player.username + " has logged in.")
+    }
   }, 10)
 }
 
@@ -222,6 +261,7 @@ Player.prototype.logOut = function() {
   littleWorldPlayers = littleWorldPlayers.filter(function() {
     return player.id != this.id
   })
+  littleWorld.addMessage(player.username + " has logged out.")
   console.log("Players Logged In: ", littleWorldPlayers.length);
 }
 

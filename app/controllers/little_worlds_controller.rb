@@ -7,6 +7,7 @@ class LittleWorldsController < ApplicationController
     @avatar = find_avatar(session_first: false)
     @character = @avatar.character
     @world = MapGenerator.generate
+    cookies.signed[:avatar_uuid] = @avatar.uuid
   end
 
   def save_location

@@ -18,6 +18,8 @@ $('.ctr-little_worlds.act-show').ready(function() {
   littleWorld = new LittleWorld()
   littleWorldPlayers.push(currentPlayer)
 
+  setupLittleWorldChannel()
+
   screenLog = function() {
     var playerCoord = currentPlayer.currentCoord()
     $(".screen-log .player-coord").html(playerCoord[0] + ", " + playerCoord[1])
@@ -47,6 +49,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
     var timestamp = nowStamp()
     if (timestamp < currentPlayer.lastMoveTimestamp) { return }
     var coord = currentPlayer.destination
+    try { coord[0] } catch(err) { debugger }
     var url = $("[data-save-location-url]").attr("data-save-location-url")
     var params = { avatar: { location_x: coord[0], location_y: coord[1], timestamp: timestamp } }
     currentPlayer.lastMoveTimestamp = timestamp
@@ -163,8 +166,8 @@ $('.ctr-little_worlds.act-show').ready(function() {
     $(".chat-input").focus()
     $(".chat-input").click()
   })
-  $(".chat-input").blur(hideChatBox)
-  $(".chat-input").focus(showChatBox)
+  $(".chat-input").on("blur mouseleave", hideChatBox)
+  $(".chat-input").on("focus mouseover mouseenter", showChatBox)
 
   $('.block.walkable').on('mousedown tap touch', function(evt) {
     var newCoord = littleWorld.getCoordForBlock(this)
