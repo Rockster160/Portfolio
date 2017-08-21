@@ -113,6 +113,9 @@ function Player(player_html) {
 }
 
 Player.tick = function() {
+  $(Player.sleepingPlayers()).each(function() {
+    this.sleeping()
+  })
   $(littleWorldPlayers).each(function() {
     this.tick()
   })
@@ -125,6 +128,16 @@ Player.findPlayer = function(playerId) {
     if (this.id == playerId) { return player = this }
   })
   return player
+}
+
+Player.sleepingPlayers = function() {
+  var sleeping = []
+  var sleepingTime = nowStamp() - 300000
+  $(littleWorldPlayers).each(function() {
+    var player = this
+    if (player.lastMoveTimestamp < sleepingTime) { sleeping.push(player) }
+  })
+  return sleeping
 }
 
 Player.prototype.tick = function() {
@@ -144,6 +157,26 @@ Player.prototype.tick = function() {
   }
 }
 
+Player.prototype.sleeping = function() {
+  var player = this
+  player.addMessage("Zzz")
+  player.html.addClass("sleeping")
+}
+
+Player.prototype.wake_up = function() {
+  var player = this
+  var message_container = $(player.html).find(".message-container")
+  player.html.removeClass("sleeping")
+
+  message_container.fadeOut(1000, function() {
+    message_container.addClass("hidden")
+    message_container.css({
+      "opacity": 1,
+      "display": "block",
+    })
+  })
+}
+
 Player.prototype.updateZIndex = function() {
   this.html.css("z-index", this.y + 10)
 }
@@ -156,12 +189,8 @@ Player.prototype.clearMovementClasses = function() {
   this.character.removeClass("spell-up spell-down spell-left spell-right thrust-up thrust-down thrust-left thrust-right walk-up walk-down walk-left walk-right slash-up slash-down slash-left slash-right shoot-up shoot-down shoot-left shoot-right die")
 }
 
-Player.prototype.say = function(message) {
+Player.prototype.addMessage = function(message) {
   var player = this
-  var username_label = $("<span>", {class: "author"}).html(player.username + ": ")
-
-  littleWorld.addMessage($("<div>").append(username_label).append(message))
-
   var message_container = $(player.html).find(".message-container")
   message_container.addClass("hidden")
   message_container.css({
@@ -175,9 +204,18 @@ Player.prototype.say = function(message) {
   } else {
     message_html.css("text-align", "left")
   }
-
   message_container.removeClass("hidden")
   message_container.stop()
+}
+
+Player.prototype.say = function(message) {
+  var player = this
+  var username_label = $("<span>", {class: "author"}).html(player.username + ": ")
+  var message_container = $(player.html).find(".message-container")
+
+  littleWorld.addMessage($("<div>").append(username_label).append(message))
+  player.addMessage(message)
+
   clearTimeout(player.messageTimer)
   player.messageTimer = setTimeout(function() {
     message_container.fadeOut(1000, function() {
@@ -225,6 +263,7 @@ Player.prototype.setDestination = function(coord) {
   coord[1] = parseInt(coord[1])
 
   var player = this
+  if (player.html.hasClass("sleeping")) { player.wake_up() }
   if (player.destination != undefined && player.destination[0] == coord[0] && player.destination[1] == coord[1]) { return }
   var playerCoord = player.currentCoord();
   if (coord == playerCoord) { return }
