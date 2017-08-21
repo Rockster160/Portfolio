@@ -161,10 +161,10 @@ $('.ctr-little_worlds.act-show').ready(function() {
     }
   })
 
-  // var currentScrollPosition = 0;
-  // $(document).scroll(function() {
-  //   currentScrollPosition = $(this).scrollTop();
-  // });
+  var currentScrollPosition = 0;
+  $(document).scroll(function() {
+    currentScrollPosition = $(".little-world-wrapper").scrollTop();
+  });
 
   $(".open-chat-btn").on("click tap touch", function() {
     showChatBox()
@@ -173,7 +173,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
   })
   $(".chat-input").on("blur mouseleave", hideChatBox)
   $(".chat-input").on("focus mouseover mouseenter", function() {
-    // $(document).scrollTop(currentScrollPosition);
+    $(".little-world-wrapper").scrollTop(currentScrollPosition);
     showChatBox()
   })
 
