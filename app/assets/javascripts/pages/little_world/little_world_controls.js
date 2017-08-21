@@ -161,13 +161,21 @@ $('.ctr-little_worlds.act-show').ready(function() {
     }
   })
 
+  var currentScrollPosition = 0;
+  $(document).scroll(function() {
+    currentScrollPosition = $(this).scrollTop();
+  });
+
   $(".open-chat-btn").on("click tap touch", function() {
     showChatBox()
     $(".chat-input").focus()
     $(".chat-input").click()
   })
   $(".chat-input").on("blur mouseleave", hideChatBox)
-  $(".chat-input").on("focus mouseover mouseenter", showChatBox)
+  $(".chat-input").on("focus mouseover mouseenter", function() {
+    $(document).scrollTop(currentScrollPosition);
+    showChatBox()
+  })
 
   $('.block.walkable').on('mousedown tap touch', function(evt) {
     var newCoord = littleWorld.getCoordForBlock(this)
