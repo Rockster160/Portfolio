@@ -311,10 +311,10 @@ Player.prototype.reactToData = function(data) {
 
   if ($(".player[data-id=" + player.id + "]").length == 0) { player.logIn() }
   if (data.message && data.message.length > 0) { player.say(data.message) }
-  if (data.timestamp) { player.lastMoveTimestamp = parseInt(data.timestamp) }
   if (data.x != undefined && data.y != undefined && player.lastMoveTimestamp < parseInt(data.timestamp)) {
     player.setDestination([data.x, data.y])
   }
+  if (data.timestamp) { player.lastMoveTimestamp = parseInt(data.timestamp) }
   if (data.log_out) { player.logOut() }
 }
 

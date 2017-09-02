@@ -10,7 +10,7 @@
 }
 
 .ctr-little_worlds {
-  *, *:hover, *:active { cursor: image-url("rpg/terrain/little_world_cursor.png"), nw-resize; }
+  *, *:hover, *:active { cursor: image-url("rpg/terrain/little_world_cursor.png"), nw-resize !important; }
 }
 
 .little-world-wrapper {
