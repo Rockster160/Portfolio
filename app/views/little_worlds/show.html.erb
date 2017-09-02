@@ -12,13 +12,15 @@
   <div class="message"></div>
 </div>
 
+<div class="connection-error-status"><p>Trouble connecting to server...</p></div>
+
 <div class="open-chat-btn">
   <i class="fa fa-commenting-o"></i>
 </div>
 <div class="chat-box hidden">
   <div class="messages-container"></div>
     <!-- <div class="message"><span class="author">Rockster160:</span> Hello, World</div> -->
-  <input type="text" name="message" class="chat-input" autocomplete="off" autocorrect="off">
+  <input type="text" name="message" class="chat-input">
 </div>
 
 <div class="little-world-wrapper" data-world-width="<%= @world.width %>" data-world-height="<%= @world.height %>" data-save-location-url="<%= save_location_little_world_path %>" data-player-login-url="<%= player_login_little_world_path %>" data-player-list-url="<%= player_list_little_world_path %>">

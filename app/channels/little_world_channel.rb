@@ -17,7 +17,8 @@ class LittleWorldChannel < ApplicationCable::Channel
   def speak(data)
     message = data["message"].to_s.squish.first(256).gsub("<", "&lt;").presence
     return unless message.present?
+    avatar = Avatar.find_by(uuid: data["uuid"])&.update(timestamp: data["timestamp"])
 
-    ActionCable.server.broadcast "little_world_channel", {uuid: data["uuid"], message: message}
+    ActionCable.server.broadcast "little_world_channel", {uuid: data["uuid"], message: message, timestamp: avatar.try(:timestamp)}
   end
 end

@@ -43,6 +43,16 @@
     z-index: 5;
   }
 
+  .connection-error-status {
+    position: fixed;
+    top: 50px;
+    text-align: center;
+
+    p {
+
+    }
+  }
+
   .open-chat-btn {
     position: fixed;
     bottom: 10px;

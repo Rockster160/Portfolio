@@ -1,13 +1,15 @@
  setupLittleWorldChannel = function() {
-
   App.little_world = App.cable.subscriptions.create({
     channel: "LittleWorldChannel",
     avatar_uuid: currentPlayer.id
   }, {
     connected: function() {
       littleWorld.loadOnlinePlayers()
+      // littleWorld.connected()
     },
-    disconnected: function() {},
+    disconnected: function() {
+      // littleWorld.disconnected()
+    },
     received: function(data) {
       console.log(data);
       var player = Player.findPlayer(data.uuid)
@@ -22,7 +24,8 @@
     speak: function(msg) {
       return this.perform("speak", {
         uuid: currentPlayer.id,
-        message: msg
+        message: msg,
+        timestamp: nowStamp()
       })
     }
   });

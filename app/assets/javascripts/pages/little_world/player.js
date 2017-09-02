@@ -7,6 +7,15 @@ function LittleWorld() {
   this.boardHeight = parseInt($(".little-world-wrapper").attr("data-world-height"))
 }
 
+// LittleWorld.prototype.connected = function() {
+//   this.loadOnlinePlayers()
+//   // $(".connection-error-status").addClass("hidden")
+// }
+// LittleWorld.prototype.disconnected = function() {
+//   $(".connection-error-status").html("Difficulty connecting to server...")
+//   $(".connection-error-status").removeClass("hidden")
+// }
+
 LittleWorld.prototype.loadOnlinePlayers = function() {
   var url = $(".little-world-wrapper").attr("data-player-list-url")
   $.get(url).success(function(data) {
@@ -106,7 +115,7 @@ function Player(player_html) {
   this.username = player_html.find(".username").text()
   this.path = []
   this.isMoving = false
-  this.lastMoveTimestamp = 0
+  this.lastMoveTimestamp = parseInt(player_html.attr("data-timestamp")) || 0
   this.destination
   this.messageTimer
   // this.walkingTimer
@@ -114,7 +123,7 @@ function Player(player_html) {
 
 Player.tick = function() {
   $(Player.sleepingPlayers()).each(function() {
-    this.sleeping()
+    this.goToSleep()
   })
   $(littleWorldPlayers).each(function() {
     this.tick()
@@ -132,7 +141,7 @@ Player.findPlayer = function(playerId) {
 
 Player.sleepingPlayers = function() {
   var sleeping = []
-  var sleepingTime = nowStamp() - 300000
+  var sleepingTime = nowStamp() - minutes(10)
   $(littleWorldPlayers).each(function() {
     var player = this
     if (player.lastMoveTimestamp < sleepingTime) { sleeping.push(player) }
@@ -157,14 +166,16 @@ Player.prototype.tick = function() {
   }
 }
 
-Player.prototype.sleeping = function() {
+Player.prototype.goToSleep = function() {
   var player = this
+  if (player.html.hasClass("sleeping")) { return }
   player.addMessage("Zzz")
   player.html.addClass("sleeping")
 }
 
-Player.prototype.wake_up = function() {
+Player.prototype.wakeUp = function() {
   var player = this
+  if (!player.html.hasClass("sleeping")) { return }
   var message_container = $(player.html).find(".message-container")
   player.html.removeClass("sleeping")
 
@@ -212,6 +223,7 @@ Player.prototype.say = function(message) {
   var player = this
   var username_label = $("<span>", {class: "author"}).html(player.username + ": ")
   var message_container = $(player.html).find(".message-container")
+  player.wakeUp()
 
   littleWorld.addMessage($("<div>").append(username_label).append(message))
   player.addMessage(message)
@@ -263,7 +275,7 @@ Player.prototype.setDestination = function(coord) {
   coord[1] = parseInt(coord[1])
 
   var player = this
-  if (player.html.hasClass("sleeping")) { player.wake_up() }
+  player.wakeUp()
   if (player.destination != undefined && player.destination[0] == coord[0] && player.destination[1] == coord[1]) { return }
   var playerCoord = player.currentCoord();
   if (coord == playerCoord) { return }
@@ -294,8 +306,8 @@ Player.prototype.reactToData = function(data) {
 
   if ($(".player[data-id=" + player.id + "]").length == 0) { player.logIn() }
   if (data.message && data.message.length > 0) { player.say(data.message) }
-  if (data.timestamp && data.x != undefined && data.y != undefined && player.lastMoveTimestamp < parseInt(data.timestamp)) {
-    player.lastMoveTimestamp = data.timestamp
+  if (data.timestamp) { player.lastMoveTimestamp = parseInt(data.timestamp) }
+  if (data.x != undefined && data.y != undefined && player.lastMoveTimestamp < parseInt(data.timestamp)) {
     player.setDestination([data.x, data.y])
   }
   if (data.log_out) { player.logOut() }

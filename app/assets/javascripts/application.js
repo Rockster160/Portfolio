@@ -46,3 +46,8 @@ keyEvent = function(char) {
       return char.charCodeAt(0)
   }
 }
+
+seconds = second = function(count) { return 1000 * count || 0 }
+minutes = minute = function(count) { return 60 * seconds(count) }
+hours = hour = function(count) { return 60 * minutes(count) }
+days = day = function(count) { return 24 * hours(count) }
