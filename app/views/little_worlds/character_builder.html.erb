@@ -10,6 +10,9 @@
   <br>
   <%= link_to "Save", "", class: "btn save-btn#{ ' disabled' unless user_signed_in? }" %>
   <%= link_to "Load", "", class: "btn load-btn#{ ' disabled' unless user_signed_in? }" %>
+  <% unless user_signed_in? %>
+    <p>Changes made are automatically saved within your session. Please <a href="<%= login_path %>">sign in</a> or <a href="<%= register_path %>">create an account</a> to save your Avatar for use across all of your devices.</p>
+  <% end %>
 </div>
 
 <div class="character-container">

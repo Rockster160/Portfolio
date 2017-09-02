@@ -36,6 +36,7 @@ class LittleWorldsController < ApplicationController
   def character_builder
     @outfits = CharacterBuilder.default_outfits
     @character = find_avatar(session_first: true).character
+    flash.now[:notice] = "Avatar from session loaded. Click 'Load' in order to load your saved Avatar." if user_signed_in?
   end
 
   def change_clothes

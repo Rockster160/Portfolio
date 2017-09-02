@@ -79,6 +79,7 @@ $(".ctr-little_worlds.act-character_builder").ready(function() {
 
   $(".save-btn").click(function(evt) {
     evt.preventDefault()
+    if ($(this).hasClass("disabled")) { return false }
     $.post($(".character-form").attr("action") + "?save=true", $(".character-form").serialize(), function(data) {
       updateCharacter(data.json, data.html)
     })
@@ -87,6 +88,7 @@ $(".ctr-little_worlds.act-character_builder").ready(function() {
 
   $(".load-btn").click(function(evt) {
     evt.preventDefault()
+    if ($(this).hasClass("disabled")) { return false }
     $.get($(".character-form").attr("action"), {load: true}, function(data) {
       updateCharacter(data.json, data.html)
     })
