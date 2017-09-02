@@ -67,28 +67,27 @@
     position: fixed;
     bottom: 10px;
     left: 10px;
-    width: 50px;
-    height: 50px;
+    width: 10vw;
+    max-width: 50px;
+    height: 10vw;
+    max-height: 50px;
     padding: 5px;
     background: $base-blue;
     color: white;
     border-radius: 100%;
     box-shadow: 1px 1px 10px $grey-blue;
     font-size: 30px;
-    line-height: 50px;
+    line-height: 10vw;
     text-align: center;
     z-index: 1001;
     cursor: pointer;
   }
   .chat-box {
     position: fixed;
-    bottom: 0;
+    bottom: 5px;
     left: 0;
     width: 600px;
-    padding-bottom: 40px;
     max-width: 100%;
-    opacity: 0;
-    background: black;
     border-radius: 8px;
     z-index: 1000;
 
@@ -96,7 +95,9 @@
       min-height: 40px;
       max-height: 200px;
       padding: 5px;
+      margin-bottom: 70px;
       overflow-y: scroll;
+      background: rgba(0, 0, 0, 0.5);
 
       .message {
         padding: 5px;
@@ -111,9 +112,18 @@
     input {
       position: absolute;
       bottom: 0;
-      left: 0;
-      right: 0;
+      left: 5px;
+      right: 5px;
       height: 30px;
+      padding: 3px 10px;
+      border: none;
+      color: white;
+      background: rgba(0, 0, 0, 0.5);
+
+      &:focus {
+        outline-width: 0;
+        outline: none;
+      }
     }
   }
 

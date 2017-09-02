@@ -104,31 +104,42 @@ $('.ctr-little_worlds.act-show').ready(function() {
     return false
   }
 
-  showChatBox = function() {
-    $(".chat-box").stop()
-    $(".chat-box").css({opacity: 0.7})
-    $(".chat-box").removeClass("hidden")
+  showInput = function() {
+    showChatBox()
     $(".open-chat-btn").addClass("hidden")
+    $(".chat-input").removeClass("hidden")
+    $(".chat-input").focus()
+    $(".chat-input").click()
+  }
+  hideInput = function() {
+    hideChatBox()
+    $(".open-chat-btn").removeClass("hidden")
+    $(".chat-input").addClass("hidden")
+  }
+
+  showChatBox = function() {
+    $(".messages-container").stop()
+    $(".messages-container").css({opacity: 1})
+    $(".messages-container").removeClass("hidden")
     clearTimeout(chatBoxTimer)
   }
   hideChatBox = function(delay, duration) {
     delay = delay || 5000
     duration = duration || 1000
-    $(".open-chat-btn").stop()
-    $(".chat-box").stop()
-    $(".open-chat-btn").css("opacity", 0).removeClass("hidden")
+    $(".messages-container").stop()
     clearTimeout(chatBoxTimer)
     chatBoxTimer = setTimeout(function() {
-      $(".chat-box").animate({
+      $(".messages-container").animate({
         opacity: 0
       }, {
-        duration: duration,
-        complete: function() { $(".chat-box").addClass("hidden").css("opacity", 0.7) }
+        duration: duration + 1,
+        complete: function() { $(".messages-container").addClass("hidden").css("opacity", 1) }
       })
-      $(".open-chat-btn").animate({ opacity: 1 }, duration)
-    }, delay)
+    }, delay + 1)
   }
 
+  $(".open-chat-btn").on("click tap touch", showInput)
+  $(".chat-input").on("blur", hideInput)
   $(document).keyup(function(evt) {
     if ($(".chat-input").is(":focus")) {
       if (evt.which == keyEvent("ENTER")) {
@@ -139,8 +150,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
         $(".chat-input").blur()
       }
     } else if (evt.which == keyEvent("ENTER")) {
-      showChatBox()
-      $(".chat-input").focus()
+      showInput()
     } else {
       if (triggerEvent(evt.which, "up")) {
         evt.preventDefault()
@@ -166,17 +176,6 @@ $('.ctr-little_worlds.act-show').ready(function() {
   //   currentScrollPosition = $(".little-world-wrapper").scrollTop();
   // });
 
-  $(".open-chat-btn").on("click tap touch", function() {
-    showChatBox()
-    $(".chat-input").focus()
-    $(".chat-input").click()
-  })
-  $(".chat-input").on("blur mouseleave", hideChatBox)
-  $(".chat-input").on("focus mouseover mouseenter", function() {
-    // $(".little-world-wrapper").scrollTop(currentScrollPosition);
-    showChatBox()
-  })
-
   $('.block.walkable').on('mousedown tap touch', function(evt) {
     var newCoord = littleWorld.getCoordForBlock(this)
     currentPlayer.setDestination(newCoord);
@@ -192,6 +191,8 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   setInterval(tick, 1);
   setInterval(actOnKeysPressed, 5);
+  showChatBox()
+  hideChatBox()
   currentPlayer.logIn(false, function() {
     var playerPos = currentPlayer.html.position(), newLeft = playerPos.left - ($(window).width() / 2) + (littleWorld.blockWidth / 2), newTop = playerPos.top - ($(window).height() / 2);
     setTimeout(function() {
