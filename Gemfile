@@ -51,3 +51,8 @@ group :development, :test do
   gem 'better_errors'
   gem 'simplecov', :require => false, :group => :test
 end
+
+group :development do
+  gem "guard-livereload", "~> 2.5", require: false
+  gem "rack-livereload"
+end
