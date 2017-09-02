@@ -7,14 +7,15 @@ function LittleWorld() {
   this.boardHeight = parseInt($(".little-world-wrapper").attr("data-world-height"))
 }
 
-// LittleWorld.prototype.connected = function() {
-//   this.loadOnlinePlayers()
-//   // $(".connection-error-status").addClass("hidden")
-// }
-// LittleWorld.prototype.disconnected = function() {
-//   $(".connection-error-status").html("Difficulty connecting to server...")
-//   $(".connection-error-status").removeClass("hidden")
-// }
+LittleWorld.prototype.connected = function() {
+  console.log("connected");
+  this.loadOnlinePlayers()
+  $(".connection-error-status").animate({"top": -50 - $(".connection-error-status").height()})
+}
+LittleWorld.prototype.disconnected = function() {
+  console.log("disconnected");
+  $(".connection-error-status").animate({"top": "30px"})
+}
 
 LittleWorld.prototype.loadOnlinePlayers = function() {
   var url = $(".little-world-wrapper").attr("data-player-list-url")

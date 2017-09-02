@@ -4,11 +4,10 @@
     avatar_uuid: currentPlayer.id
   }, {
     connected: function() {
-      littleWorld.loadOnlinePlayers()
-      // littleWorld.connected()
+      littleWorld.connected()
     },
     disconnected: function() {
-      // littleWorld.disconnected()
+      littleWorld.disconnected()
     },
     received: function(data) {
       console.log(data);
