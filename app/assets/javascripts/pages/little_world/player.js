@@ -27,7 +27,7 @@ LittleWorld.prototype.loadOnlinePlayers = function() {
   })
 }
 
-LittleWorld.prototype.loginPlayer = function(data, quiet_login) {
+LittleWorld.prototype.loginPlayer = function(data, quiet_login, callback) {
   quiet_login = quiet_login || false
   var url = $(".little-world-wrapper").attr("data-player-login-url")
   var player_id = data.uuid
@@ -38,6 +38,7 @@ LittleWorld.prototype.loginPlayer = function(data, quiet_login) {
     player.logIn(quiet_login)
     console.log("Players Logged In: ", littleWorldPlayers.length);
     player.reactToData(data)
+    if (callback != undefined) { callback() }
   })
 }
 
@@ -317,7 +318,7 @@ Player.prototype.reactToData = function(data) {
   if (data.log_out) { player.logOut() }
 }
 
-Player.prototype.logIn = function(quiet_login) {
+Player.prototype.logIn = function(quiet_login, callback) {
   quiet_login = quiet_login || false
   var player = this
   var shouldLoadPlayer = $(".player[data-id=" + player.id + "]").length == 0
@@ -328,6 +329,7 @@ Player.prototype.logIn = function(quiet_login) {
     if (player.id != currentPlayer.id && !quiet_login && shouldLoadPlayer) {
       littleWorld.addMessageText(player.username + " has logged in.")
     }
+    if (callback != undefined) { callback() }
   }, 10)
 }
 

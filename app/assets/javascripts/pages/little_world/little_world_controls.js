@@ -186,7 +186,16 @@ $('.ctr-little_worlds.act-show').ready(function() {
     lastBlockHoveredCoord = littleWorld.getCoordForBlock(this)
   })
 
+  $(window).on('beforeunload', function() {
+    $(window).scrollTop(0).scrollLeft(0);
+  });
+
   setInterval(tick, 1);
   setInterval(actOnKeysPressed, 5);
-  currentPlayer.logIn()
+  currentPlayer.logIn(false, function() {
+    var playerPos = currentPlayer.html.position(), newLeft = playerPos.left - ($(window).width() / 2) + (littleWorld.blockWidth / 2), newTop = playerPos.top - ($(window).height() / 2);
+    setTimeout(function() {
+      $("body, html").stop().scrollLeft(newLeft).scrollTop(newTop)
+    }, 200)
+  })
 })

@@ -9,6 +9,10 @@
   @include spriteSheet($x, $y, 32px * $size-multiplier)
 }
 
+.ctr-little_worlds {
+  *, *:hover, *:active { cursor: image-url("rpg/terrain/little_world_cursor.png"), nw-resize; }
+}
+
 .little-world-wrapper {
   .block {
     // &.walkable::before {
