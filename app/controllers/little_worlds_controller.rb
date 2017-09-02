@@ -4,6 +4,7 @@ class LittleWorldsController < ApplicationController
   helper CharacterBuilderHelper
 
   def show
+    @logged_in_users = Avatar.logged_in
     @avatar = find_avatar(session_first: false)
     @character = @avatar.character
     @world = MapGenerator.generate
@@ -29,7 +30,7 @@ class LittleWorldsController < ApplicationController
   end
 
   def player_list
-    avatars = Avatar.where(uuid: Rails.cache.read("player_list").to_a)
+    avatars = Avatar.logged_in
     respond_to { |format| format.json { render json: avatars.map(&:player_details) } }
   end
 

@@ -41,9 +41,12 @@ LittleWorld.prototype.loginPlayer = function(data, quiet_login) {
   })
 }
 
-LittleWorld.prototype.addMessage = function(message) {
+LittleWorld.prototype.addMessageText = function(message) {
   var message_html = $("<div>", {class: "message", timestamp: (new Date()).getTime()})
-  message_html.append(message)
+  this.addMessage(message_html.append(message))
+}
+
+LittleWorld.prototype.addMessage = function(message_html) {
   var isScrolledToBottom = $(".messages-container")[0].scrollHeight - $(".messages-container").scrollTop() == $(".messages-container").outerHeight()
   $(".messages-container").append(message_html)
   if (isScrolledToBottom) {
@@ -116,7 +119,7 @@ function Player(player_html) {
   this.username = player_html.find(".username").text()
   this.path = []
   this.isMoving = false
-  this.lastMoveTimestamp = parseInt(player_html.attr("data-timestamp")) || 0
+  this.lastMoveTimestamp = parseInt(player_html.attr("data-timestamp")) || (new Date()).getTime()
   this.destination
   this.messageTimer
   // this.walkingTimer
@@ -220,14 +223,14 @@ Player.prototype.addMessage = function(message) {
   message_container.stop()
 }
 
-Player.prototype.say = function(message) {
+Player.prototype.say = function(message_html) {
   var player = this
-  var username_label = $("<span>", {class: "author"}).html(player.username + ": ")
+  var message_text = $(message_html).find(".text")
   var message_container = $(player.html).find(".message-container")
-  player.wakeUp()
 
-  littleWorld.addMessage($("<div>").append(username_label).append(message))
-  player.addMessage(message)
+  player.wakeUp()
+  littleWorld.addMessage(message_html)
+  player.addMessage(message_text)
 
   clearTimeout(player.messageTimer)
   player.messageTimer = setTimeout(function() {
@@ -238,7 +241,7 @@ Player.prototype.say = function(message) {
         "display": "block",
       })
     })
-  }, 3000 + (message.length * 20))
+  }, 3000 + (message_text.length * 20))
 }
 
 Player.prototype.switchDirection = function(newDirection) {
@@ -323,7 +326,7 @@ Player.prototype.logIn = function(quiet_login) {
     player.jumpTo()
     player.html.removeClass("hidden")
     if (player.id != currentPlayer.id && !quiet_login && shouldLoadPlayer) {
-      littleWorld.addMessage(player.username + " has logged in.")
+      littleWorld.addMessageText(player.username + " has logged in.")
     }
   }, 10)
 }
@@ -334,7 +337,7 @@ Player.prototype.logOut = function() {
   littleWorldPlayers = littleWorldPlayers.filter(function() {
     return player.id != this.id
   })
-  littleWorld.addMessage(player.username + " has logged out.")
+  littleWorld.addMessageText(player.username + " has logged out.")
   console.log("Players Logged In: ", littleWorldPlayers.length);
 }
 

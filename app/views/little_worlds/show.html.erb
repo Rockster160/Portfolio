@@ -18,8 +18,13 @@
   <i class="fa fa-commenting-o"></i>
 </div>
 <div class="chat-box hidden">
-  <div class="messages-container"></div>
-    <!-- <div class="message"><span class="author">Rockster160:</span> Hello, World</div> -->
+  <div class="messages-container">
+    <%= render partial: "message", locals: {author: "Little World", message: "Currently logged in players (#{@logged_in_users.count}): #{@logged_in_users.map(&:username).join(', ')}", timestamp: 0} %>
+    <% if @avatar.nil? || @avatar.using_default_outfit? %>
+      <%= render partial: "message", locals: {author: "Little World", message: "Welcome to Little World!", timestamp: 0} %>
+      <%= render partial: "message", locals: {author: "Little World", message: "Please visit #{character_builder_little_world_url} in order to customize your avatar!", timestamp: 0} %>
+    <% end %>
+  </div>
   <input type="text" name="message" class="chat-input">
 </div>
 

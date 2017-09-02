@@ -15,10 +15,12 @@ class LittleWorldChannel < ApplicationCable::Channel
   end
 
   def speak(data)
-    message = data["message"].to_s.squish.first(256).gsub("<", "&lt;").presence
-    return unless message.present?
-    avatar = Avatar.find_by(uuid: data["uuid"])&.update(timestamp: data["timestamp"])
+    message_text = data["message"].to_s.squish.first(256).gsub("<", "&lt;").presence
+    return unless message_text.present?
 
+    avatar = Avatar.find_by(uuid: data["uuid"])
+    avatar.update(timestamp: data["timestamp"])
+    message = LittleWorldsController.render(partial: 'message', locals: { author: avatar.try(:username), message: message_text, timestamp: avatar.try(:timestamp) })
     ActionCable.server.broadcast "little_world_channel", {uuid: data["uuid"], message: message, timestamp: avatar.try(:timestamp)}
   end
 end
