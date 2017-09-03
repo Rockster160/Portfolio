@@ -7,7 +7,7 @@ $('.ctr-anonicons.act-index').ready(function() {
       var chosen = possible.charAt(Math.floor(Math.random() * possible.length));
       rand_str.push(chosen);
     }
-    $("#anon_str").val(rand_str.join(""));
+    $(".anon-identifier").val(rand_str.join(""));
     $("#anonicon-form").submit();
     return false;
   })

@@ -9,11 +9,11 @@
 
     <div class="form-fields">
       <div class="form-field">
-        <%= label_tag :anon_str do %>
+        <%= label_tag :id do %>
           String to Anonify
           <a href="#" class="btn pull-right random-anonicon">Random</a>
         <% end %>
-        <%= text_field_tag :anon_str, params[:anon_str] || request.ip %>
+        <%= text_field_tag :id, params[:id] || request.ip, class: "anon-identifier" %>
       </div>
     </div>
 

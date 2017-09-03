@@ -1,19 +1,25 @@
+Mime::Type.register "image/png", :png
 class AnoniconsController < ApplicationController
-  skip_before_filter :verify_authenticity_token
+  skip_before_action :verify_authenticity_token
+  before_action :set_anonicon
 
   def index
-    @anonicon = Anonicon.generate(params[:anon_str] || request.ip)
-
-    if request.xhr?
-      render partial: "show"
-    end
+    render partial: "show" if request.xhr?
   end
 
   def show
+    inline_response
+  end
+
+  private
+
+  def inline_response
+    send_data @anonicon.raw.to_blob, type: "image/png", disposition: "inline", stream: true
+  end
+
+  def set_anonicon
     anonicon_source = params[:id] || request.ip
     @anonicon = Anonicon.generate(anonicon_source)
-
-    send_data @anonicon.raw.to_blob, type: "image/png", disposition: "inline", stream: true
   end
 
 end
