@@ -8,12 +8,10 @@ function LittleWorld() {
 }
 
 LittleWorld.prototype.connected = function() {
-  console.log("connected");
   this.loadOnlinePlayers()
   $(".connection-error-status").animate({"top": -50 - $(".connection-error-status").height()})
 }
 LittleWorld.prototype.disconnected = function() {
-  console.log("disconnected");
   $(".connection-error-status").animate({"top": "30px"})
 }
 
@@ -48,13 +46,13 @@ LittleWorld.prototype.addMessageText = function(message) {
 }
 
 LittleWorld.prototype.addMessage = function(message_html) {
-  var isScrolledToBottom = $(".messages-container")[0].scrollHeight - $(".messages-container").scrollTop() == $(".messages-container").outerHeight()
+  // var isScrolledToBottom = $(".messages-container")[0].scrollHeight - $(".messages-container").scrollTop() == $(".messages-container").outerHeight()
   $(".messages-container").append(message_html)
-  if (isScrolledToBottom) {
+  // if (isScrolledToBottom) {
     $(".messages-container").animate({
       scrollTop: $(".messages-container")[0].scrollHeight
     }, 300);
-  }
+  // }
   showChatBox()
   hideChatBox()
 }
