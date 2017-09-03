@@ -9,9 +9,10 @@
       width: 10px;
       height: 10px;
       margin: -1px; padding: 0;
+
       &.cell-player { background: blue; }
-      &.cell-finish { background: red; }
-      &.cell-open { background: yellow; }
+      &.cell-finish { background: green; }
+      &.cell-open { background: lightgrey; }
       &.cell-wall { background: black; }
     }
   }

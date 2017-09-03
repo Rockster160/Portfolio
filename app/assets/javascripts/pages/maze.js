@@ -13,7 +13,7 @@ $('.ctr-mazes.act-random').ready(function() {
       var victory_html = $("<div>", {class: "maze-victory"}).html("Victory!");
       $("#maze").before(victory_html);
     } else {
-      new_cell.css({backgroundColor: "white"});
+      new_cell.css({backgroundColor: "red"});
       new_cell.animate({backgroundColor: "black"}, 500);
     }
   }

@@ -22,7 +22,7 @@ class MazesController < ApplicationController
     @maze = Maze.new(width, height, options)
 
     respond_to do |format|
-      format.text { render text: @maze.draw.join('\n') }
+      format.text { render plain: @maze.draw.join('\n') }
       format.html
     end
   end
