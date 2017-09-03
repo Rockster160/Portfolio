@@ -61,5 +61,16 @@ module ColorGenerator
       "##{new_hex}"
     end
 
+    def contrast_text_color_on_background(background_hex)
+      black, white = "#000", "#FFF"
+      return white unless background_hex.present?
+      color_hex = background_hex.gsub("#", "")
+      return white unless color_hex.length == 6 || color_hex.length == 3
+      r_255, g_255, b_255 = color_hex.chars.in_groups(3).map { |hex_val| (hex_val.many? ? hex_val : hex_val*2).join.to_i(16) }
+      r_lum, g_lum, b_lum = r_255 * 299, g_255 * 587, b_255 * 114
+      luminescence = ((r_lum + g_lum + b_lum) / 1000)
+      return luminescence > 150 ? black : white
+    end
+
   end
 end
