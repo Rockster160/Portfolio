@@ -4,6 +4,9 @@
   <%= stylesheet_link_tag 'individual/little_world/game', media: 'all' %>
   <%= stylesheet_link_tag 'individual/little_world/terrain', media: 'all' %>
 <% end %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<% end %>
 
 <!-- <div class="float-point"></div> -->
 <div class="screen-log">

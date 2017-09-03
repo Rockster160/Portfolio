@@ -11,6 +11,9 @@
   <meta name="google-site-verification" content="dA8F2chnGYw0DrE-uUDKK6j9UTtuCBcLhPgd3hOYqAk" />
   <%= stylesheet_link_tag    'application', media: 'all' %>
   <%= javascript_include_tag 'application' %>
+  <% if content_for? :meta %>
+    <%= yield :meta %>
+  <% end %>
   <% if content_for? :head %>
     <%= yield :head %>
   <% end %>
