@@ -1,0 +1,22 @@
+[
+  {
+    id: 1,
+    name: "Groceries",
+    description: "The family shared list of groceries for the household.",
+    list_items: [
+      "Milk",
+      "Bread",
+      "Sour Cream",
+      "Onions"
+    ]
+  },
+  {
+    id: 2,
+    name: "TODO",
+    description: "My personal list of things I need to do.",
+    list_items: [
+      "Update APIs for each page",
+      "Add API documentation"
+    ]
+  }
+]

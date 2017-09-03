@@ -3,20 +3,17 @@
 <head>
   <title><%= content_for(:title) || "Rocco Nicholls" %></title>
   <%= action_cable_meta_tag %>
+  <meta name="google-site-verification" content="dA8F2chnGYw0DrE-uUDKK6j9UTtuCBcLhPgd3hOYqAk" />
   <% if content_for? :viewport_tag %>
     <%= content_for :viewport_tag %>
   <% else %>
     <meta name="viewport" content="width=device-width, initial-scale=1">
   <% end %>
-  <meta name="google-site-verification" content="dA8F2chnGYw0DrE-uUDKK6j9UTtuCBcLhPgd3hOYqAk" />
+  <%= yield :meta %>
+  <%= yield :head_before_scripts %>
   <%= stylesheet_link_tag    'application', media: 'all' %>
   <%= javascript_include_tag 'application' %>
-  <% if content_for? :meta %>
-    <%= yield :meta %>
-  <% end %>
-  <% if content_for? :head %>
-    <%= yield :head %>
-  <% end %>
+  <%= yield :head %>
   <% if content_for? :favicon %>
     <%= yield :favicon %>
   <% else %>

@@ -1,0 +1,11 @@
+curl "http://rocconicholls.me/lists/:list_id/modify_from_message" \
+  -u "username:password" \
+  --data-urlencode "message=add potatoes, carrots, and onions"
+
+curl "http://rocconicholls.me/lists/:list_id/modify_from_message" \
+  -u "username:password" \
+  --data-urlencode "message=remove potatoes, carrots, and onions"
+
+curl "http://rocconicholls.me/lists/:list_id/modify_from_message" \
+  -u "username:password" \
+  --data-urlencode "message=clear"

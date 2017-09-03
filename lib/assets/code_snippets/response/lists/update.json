@@ -1,0 +1,13 @@
+{
+  id: 1,
+  name: "Groceries",
+  description: "The family shared list of groceries for the household.",
+  list_items: [
+    "Milk",
+    "Bread",
+    "Sour Cream",
+    "Onions",
+    "Potatoes",
+    "Carrots"
+  ]
+}

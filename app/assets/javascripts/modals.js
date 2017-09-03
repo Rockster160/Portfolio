@@ -4,10 +4,10 @@ $(document).ready(function() {
     var content = $(modal).find(".modal-content")
 
     $(modal).css("opacity", 0).removeClass("hidden")
-    modal.animate({ opacity: 1 }, 400)
+    modal.animate({ opacity: 1 }, 300)
 
     content.css({ top: -300 })
-    content.animate({ top: 0 }, 400)
+    content.animate({ top: 0 }, 300)
   }
   hideModal = function(modal_str) {
     var modal = $(modal_str)
@@ -15,14 +15,14 @@ $(document).ready(function() {
 
     $(modal).css("opacity", 1).removeClass("hidden")
     modal.animate({ opacity: 0 }, {
-      duration: 400,
+      duration: 300,
       complete: function() {
         $(modal).css("opacity", 0).addClass("hidden")
       }
     })
 
     content.css({ top: 0 })
-    content.animate({ top: -300 }, 400)
+    content.animate({ top: -300 }, 300)
   }
   $("[data-modal]").click(function(evt) {
     evt.preventDefault()
@@ -40,4 +40,6 @@ $(document).ready(function() {
       hideModal(".modal")
     }
   })
+
+  showModal(".modal")
 })

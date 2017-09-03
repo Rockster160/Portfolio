@@ -1,0 +1,2 @@
+curl "http://rocconicholls.me/lists/" \
+  -u "username:password"

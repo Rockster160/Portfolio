@@ -1,0 +1,22 @@
+code {
+  display: inline;
+  white-space: nowrap;
+  font-family: monospace;
+  background: #E0E0E5;
+  padding: 0 3px;
+}
+pre.prettyprint {
+  display: block;
+  overflow-x: scroll;
+  overflow-y: visible;
+  padding: 10px;
+
+  .str { color: #98C379; }
+  .com { font-style: italic; }
+}
+.color-highlight {
+  display: inline;
+  white-space: nowrap;
+  font-family: monospace;
+  padding: 0 3px;
+}

@@ -1,0 +1,1 @@
+curl -G "http://http://rocconicholls.me/colors" --data-urlencode "start_color=$1" --data-urlencode "end_color=$2" --data-urlencode "steps=$3" --data-urlencode "fade_back=$4"

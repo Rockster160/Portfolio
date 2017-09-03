@@ -14,7 +14,14 @@
     margin: 15% auto;
     width: 500px;
 
+    h3 {
+      color: $base-blue;
+      font-size: 24px;
+      text-align: center;
+    }
+
     .close-btn {
+      transition: color 0.4s;
       float: right;
       font-size: 20px;
       font-weight: bold;

@@ -19,6 +19,12 @@ class ListItem < ApplicationRecord
   after_commit :reorder_conflict_orders
   after_commit :broadcast_commit
 
+  scope :ordered, -> { order(:sort_order) }
+
+  def to_json
+    name
+  end
+
   private
 
   def format_words
