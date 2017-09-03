@@ -20,7 +20,7 @@ class Avatar < ApplicationRecord
 
   after_initialize :set_uuid
 
-  scope :logged_in, -> { where(uuid: Rails.cache.read("player_list").to_a) }
+  scope :logged_in, -> { return none;where(uuid: Rails.cache.read("player_list").to_a) }
   scope :from_session, -> { where(from_session: true) }
   scope :not_session, -> { where("from_session = false OR from_session IS NULL") }
 

@@ -29,11 +29,6 @@ class LittleWorldsController < ApplicationController
     render partial: "player", layout: false
   end
 
-  def player_list
-    avatars = Avatar.logged_in
-    respond_to { |format| format.json { render json: avatars.map(&:player_details) } }
-  end
-
   def character_builder
     @outfits = CharacterBuilder.default_outfits
     @character = find_avatar(session_first: true).character

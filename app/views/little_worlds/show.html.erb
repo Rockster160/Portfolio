@@ -22,27 +22,17 @@
 </div>
 <div class="chat-box">
   <div class="messages-container hidden">
-    <%= render partial: "message", locals: {author: "Little World", message: "Currently logged in players (#{@logged_in_users.count}): #{@logged_in_users.map(&:username).join(', ')}", timestamp: 0} %>
-    <%= render partial: "message", locals: {author: "Little World", message: Faker::Lorem.paragraph(rand(5)), timestamp: 0} %>
-    <%= render partial: "message", locals: {author: "Little World", message: Faker::Lorem.paragraph(rand(5)), timestamp: 0} %>
-    <%= render partial: "message", locals: {author: "Little World", message: Faker::Lorem.paragraph(rand(5)), timestamp: 0} %>
-    <%= render partial: "message", locals: {author: "Little World", message: Faker::Lorem.paragraph(rand(5)), timestamp: 0} %>
-    <%= render partial: "message", locals: {author: "Little World", message: Faker::Lorem.paragraph(rand(5)), timestamp: 0} %>
-    <%= render partial: "message", locals: {author: "Little World", message: Faker::Lorem.paragraph(rand(5)), timestamp: 0} %>
-    <%= render partial: "message", locals: {author: "Little World", message: Faker::Lorem.paragraph(rand(5)), timestamp: 0} %>
-    <%= render partial: "message", locals: {author: "Little World", message: Faker::Lorem.paragraph(rand(5)), timestamp: 0} %>
-    <%= render partial: "message", locals: {author: "Little World", message: Faker::Lorem.paragraph(rand(5)), timestamp: 0} %>
-    <%= render partial: "message", locals: {author: "Little World", message: Faker::Lorem.paragraph(rand(5)), timestamp: 0} %>
-    <%= render partial: "message", locals: {author: "Little World", message: Faker::Lorem.paragraph(rand(5)), timestamp: 0} %>
     <% if @avatar.nil? || @avatar.using_default_outfit? %>
-      <%= render partial: "message", locals: {author: "Little World", message: "Welcome to Little World!", timestamp: 0} %>
-      <%= render partial: "message", locals: {author: "Little World", message: "Please visit #{character_builder_little_world_url} in order to customize your avatar!", timestamp: 0} %>
+      <%= render partial: "message", locals: {author: "Little World", message: "Welcome!", timestamp: 0} %>
+      <%= render partial: "message", locals: {author: "Little World", message: "Visit #{character_builder_little_world_url} in order to customize your avatar!", timestamp: 0} %>
+    <% else %>
+      <%= render partial: "message", locals: {author: "Little World", message: "Welcome back!", timestamp: 0} %>
     <% end %>
   </div>
   <input type="text" name="message" class="chat-input hidden">
 </div>
 
-<div class="little-world-wrapper" data-world-width="<%= @world.width %>" data-world-height="<%= @world.height %>" data-save-location-url="<%= save_location_little_world_path %>" data-player-login-url="<%= player_login_little_world_path %>" data-player-list-url="<%= player_list_little_world_path %>">
+<div class="little-world-wrapper" data-world-width="<%= @world.width %>" data-world-height="<%= @world.height %>" data-save-location-url="<%= save_location_little_world_path %>" data-player-login-url="<%= player_login_little_world_path %>">
   <%= render partial: "player" %>
   <%= @world.to_html %>
 </div>

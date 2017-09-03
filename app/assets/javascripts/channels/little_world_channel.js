@@ -10,7 +10,7 @@
       littleWorld.disconnected()
     },
     received: function(data) {
-      console.log(data);
+      if (data.ping) { return App.little_world.pong() }
       var player = Player.findPlayer(data.uuid)
 
       if (player == undefined) {
@@ -25,6 +25,14 @@
         uuid: currentPlayer.id,
         message: msg,
         timestamp: nowStamp()
+      })
+    },
+    ping: function() {
+      return this.perform("ping")
+    },
+    pong: function() {
+      return this.perform("pong", {
+        uuid: currentPlayer.id
       })
     }
   });

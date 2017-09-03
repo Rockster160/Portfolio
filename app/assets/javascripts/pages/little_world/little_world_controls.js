@@ -212,7 +212,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
   setInterval(actOnKeysPressed, 5);
   showChatBox()
   hideChatBox()
-  currentPlayer.logIn(false, function() {
+  currentPlayer.logIn(function() {
     var playerPos = currentPlayer.html.position(), newLeft = playerPos.left - ($(window).width() / 2) + (littleWorld.blockWidth / 2), newTop = playerPos.top - ($(window).height() / 2);
     setTimeout(function() {
       $("body, html").stop().scrollLeft(newLeft).scrollTop(newTop)

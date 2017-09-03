@@ -16,24 +16,17 @@ LittleWorld.prototype.disconnected = function() {
 }
 
 LittleWorld.prototype.loadOnlinePlayers = function() {
-  var url = $(".little-world-wrapper").attr("data-player-list-url")
-  $.get(url).success(function(data) {
-    $(data).each(function() {
-      var player_data = this
-      littleWorld.loginPlayer(player_data, true)
-    })
-  })
+  App.little_world.ping()
 }
 
-LittleWorld.prototype.loginPlayer = function(data, quiet_login, callback) {
-  quiet_login = quiet_login || false
+LittleWorld.prototype.loginPlayer = function(data, callback) {
   var url = $(".little-world-wrapper").attr("data-player-login-url")
   var player_id = data.uuid
   if (Player.findPlayer(player_id) != undefined) { return }
   $.get(url, { uuid: player_id }).success(function(data) {
     var player = new Player($(data))
     littleWorldPlayers.push(player)
-    player.logIn(quiet_login)
+    player.logIn()
     console.log("Players Logged In: ", littleWorldPlayers.length);
     player.reactToData(data)
     if (callback != undefined) { callback() }
@@ -313,15 +306,14 @@ Player.prototype.reactToData = function(data) {
   if (data.log_out) { player.logOut() }
 }
 
-Player.prototype.logIn = function(quiet_login, callback) {
-  quiet_login = quiet_login || false
+Player.prototype.logIn = function(callback) {
   var player = this
   var shouldLoadPlayer = $(".player[data-id=" + player.id + "]").length == 0
   if (shouldLoadPlayer) { $(".little-world-wrapper").append(player.html) }
   setTimeout(function() {
     player.jumpTo()
     player.html.removeClass("hidden")
-    if (player.id != currentPlayer.id && !quiet_login && shouldLoadPlayer) {
+    if (player.id != currentPlayer.id && shouldLoadPlayer && player.lastMoveTimestamp > nowStamp() - seconds(5)) {
       littleWorld.addMessageText(player.username + " has logged in.")
     }
     if (callback != undefined) { callback() }

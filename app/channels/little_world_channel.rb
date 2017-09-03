@@ -2,16 +2,10 @@ class LittleWorldChannel < ApplicationCable::Channel
   def subscribed
     current_avatar.log_in
     stream_from "little_world_channel"
-    player_list = Rails.cache.read("player_list").to_a
-    player_list += [current_avatar.uuid]
-    Rails.cache.write("player_list", player_list.uniq)
   end
 
   def unsubscribed
     current_avatar.log_out
-    player_list = Rails.cache.read("player_list").to_a
-    player_list -= [current_avatar.uuid]
-    Rails.cache.write("player_list", player_list.uniq)
   end
 
   def speak(data)
@@ -22,5 +16,15 @@ class LittleWorldChannel < ApplicationCable::Channel
     avatar.update(timestamp: data["timestamp"])
     message = LittleWorldsController.render(partial: 'message', locals: { author: avatar.try(:username), message: message_text, timestamp: avatar.try(:timestamp) })
     ActionCable.server.broadcast "little_world_channel", {uuid: data["uuid"], message: message, timestamp: avatar.try(:timestamp)}
+  end
+
+  def ping
+    ActionCable.server.broadcast "little_world_channel", {ping: true}
+  end
+
+  def pong(data)
+    avatar = Avatar.find_by(uuid: data["uuid"])
+    return unless avatar.present?
+    avatar.broadcast_movement
   end
 end
