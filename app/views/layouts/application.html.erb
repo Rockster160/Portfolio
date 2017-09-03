@@ -26,6 +26,7 @@
 </head>
 <body class="ctr-<%= controller_name %> act-<%= action_name %> <%= content_for :body_classes %>">
   <%= render 'layouts/flashes' %>
+  <%= yield :modals %>
   <%= yield %>
 
   <% if content_for? :after_js %>

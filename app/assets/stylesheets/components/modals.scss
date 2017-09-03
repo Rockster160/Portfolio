@@ -1,0 +1,29 @@
+.modal-wrapper {
+  transition: 0.4s;
+  position: fixed;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.4);
+
+  .modal-content {
+    position: relative;
+    margin: 15% auto;
+    width: 500px;
+
+    .close-btn {
+      float: right;
+      font-size: 20px;
+      font-weight: bold;
+      color: white;
+
+      &:hover {
+        cursor: pointer;
+        color: $grey-blue;
+      }
+    }
+  }
+}

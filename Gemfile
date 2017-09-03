@@ -40,6 +40,7 @@ gem 'kaminari'
 gem 'rest-client'
 gem 'oily_png'
 gem 'chroma'
+gem 'rouge'
 
 group :development, :test do
   gem 'annotate'
