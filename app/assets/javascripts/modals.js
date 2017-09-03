@@ -3,7 +3,7 @@ $(document).ready(function() {
     var modal = $(modal_str)
     var content = $(modal).find(".modal-content")
 
-    $(modal).css("opacity", 0).removeClass("hidden")
+    $(modal).css("opacity", 0).removeClass("hidden").addClass("shown")
     modal.animate({ opacity: 1 }, 300)
 
     content.css({ top: -300 })
@@ -13,11 +13,11 @@ $(document).ready(function() {
     var modal = $(modal_str)
     var content = $(modal).find(".modal-content")
 
-    $(modal).css("opacity", 1).removeClass("hidden")
+    $(modal).css("opacity", 1).removeClass("hidden").addClass("shown")
     modal.animate({ opacity: 0 }, {
       duration: 300,
       complete: function() {
-        $(modal).css("opacity", 0).addClass("hidden")
+        $(modal).css("opacity", 0).addClass("hidden").removeClass("shown")
       }
     })
 
@@ -37,9 +37,9 @@ $(document).ready(function() {
 
   $(window).click(function(evt) {
     if ($(evt.target).hasClass("modal")) {
-      hideModal(".modal")
+      hideModal(".modal.shown")
     }
   })
 
-  showModal(".modal")
+  showModal("#code-example-colors")
 })

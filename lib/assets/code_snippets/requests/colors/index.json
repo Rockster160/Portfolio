@@ -1,1 +1,5 @@
-curl -G "http://http://rocconicholls.me/colors" --data-urlencode "start_color=$1" --data-urlencode "end_color=$2" --data-urlencode "steps=$3" --data-urlencode "fade_back=$4"
+curl -G "http://rocconicholls.me/colors" \
+  --data-urlencode "start_color=#FF0" \ # Required - the hex value of the start color
+  --data-urlencode "end_color=#0FF" \ # Required - the hex value of the end color
+  --data-urlencode "steps=10" \ # Optional - default: 10
+  --data-urlencode "fade_back=false" # Optional - default: false
