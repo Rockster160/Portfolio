@@ -46,14 +46,11 @@ LittleWorld.prototype.addMessageText = function(message) {
 }
 
 LittleWorld.prototype.addMessage = function(message_html) {
-  // var isScrolledToBottom = $(".messages-container")[0].scrollHeight - $(".messages-container").scrollTop() == $(".messages-container").outerHeight()
-  $(".messages-container").append(message_html)
-  // if (isScrolledToBottom) {
-    $(".messages-container").animate({
-      scrollTop: $(".messages-container")[0].scrollHeight
-    }, 300);
-  // }
   showChatBox()
+  $(".messages-container").append(message_html)
+  if (!$(".chat-input").is(":focus")) {
+    $(".messages-container").scrollTop($(".messages-container")[0].scrollHeight)
+  }
   hideChatBox()
 }
 
