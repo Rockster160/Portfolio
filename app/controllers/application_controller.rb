@@ -48,15 +48,10 @@ class ApplicationController < ActionController::Base
 
   def current_user
     @_current_user ||= begin
-      current_user_id = session[:current_user_id].presence || cookies.signed[:current_user_id].presence || cookies.permanent[:current_user_id].presence || session[:user_id].presence || cookies.signed[:user_id].presence
-
-      if current_user_id.present?
-        session[:current_user_id] = current_user_id
-        cookies.signed[:current_user_id] = current_user_id
-        cookies.permanent[:current_user_id] = current_user_id
-        user = User.find_by_id(current_user_id)
-        sign_out if user.nil?
-        user
+      if request.headers["HTTP_AUTHORIZATION"].present?
+        auth_from_headers
+      else
+        auth_from_session
       end
     end
   end
@@ -80,6 +75,24 @@ class ApplicationController < ActionController::Base
     session[:current_user_id] = user.id
     cookies.signed[:current_user_id] = user.id
     current_user
+  end
+
+  def auth_from_headers
+    basic_auth_string = Base64.decode64(request.headers["HTTP_AUTHORIZATION"][6..-1]) # Strip "Basic " from hash
+    User.auth_from_basic(basic_auth_string)
+  end
+
+  def auth_from_session
+    current_user_id = session[:current_user_id].presence || cookies.signed[:current_user_id].presence || cookies.permanent[:current_user_id].presence || session[:user_id].presence || cookies.signed[:user_id].presence
+
+    if current_user_id.present?
+      session[:current_user_id] = current_user_id
+      cookies.signed[:current_user_id] = current_user_id
+      cookies.permanent[:current_user_id] = current_user_id
+      user = User.find_by_id(current_user_id)
+      sign_out if user.nil?
+      user
+    end
   end
 
 end

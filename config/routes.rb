@@ -5,13 +5,15 @@ Rails.application.routes.draw do
   get 'map' => 'index#map'
   get 'playground' => 'index#playground'
 
-  get 'login' => 'users/sessions#new'
-  post 'login' => 'users/sessions#create'
-  get 'register' => 'users/registrations#new'
-  post 'register' => 'users/registrations#create'
-  patch 'register' => 'users/registrations#create'
-  get 'logout' => 'users/sessions#destroy'
-  delete 'logout' => 'users/sessions#destroy'
+  scope module: :users do
+    get :login,      controller: :sessions,      action: :new
+    post :login,     controller: :sessions,      action: :create
+    get :logout,     controller: :sessions,      action: :destroy
+    delete :logout,  controller: :sessions,      action: :destroy
+    get :register,   controller: :registrations, action: :new
+    post :register,  controller: :registrations, action: :create
+    patch :register, controller: :registrations, action: :create
+  end
 
   post 'webhooks/jenkins' => "webhooks#jenkins"
   post 'webhooks/post' => "webhooks#post"
@@ -28,8 +30,11 @@ Rails.application.routes.draw do
   get :account, controller: :users
   resources :users, only: [ :new, :create, :update ]
   resources :lists do
-    post :receive_update, on: :member
-    get :users, on: :member
+    member do
+      post :modify_from_message
+      post :receive_update
+      get :users
+    end
     resources :list_items, only: [ :create, :destroy ]
   end
 

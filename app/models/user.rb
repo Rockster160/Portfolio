@@ -31,6 +31,11 @@ class User < ApplicationRecord
     admin: 10
   }
 
+  def self.auth_from_basic(basic_auth)
+    username, password = basic_auth.split(":", 2)
+    attempt_login(username, password)
+  end
+
   def self.attempt_login(username, password)
     user = by_username(username).first
 

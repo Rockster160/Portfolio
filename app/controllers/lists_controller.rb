@@ -1,18 +1,26 @@
 class ListsController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user
+  before_action :set_list, only: [:edit, :update, :show, :destroy, :users, :modify_from_message]
 
   def index
     @lists = current_user.lists.order(:created_at)
+
+    respond_to do |format|
+      format.js { render json: @lists }
+      format.html
+    end
   end
 
-  def edit
-    @list = current_user.lists.find(params[:id])
+  def modify_from_message
+    response_message = @list.modify_from_message(params[:message])
+
+    respond_to do |format|
+      format.json { render text: response_message }
+    end
   end
 
   def update
-    @list = current_user.lists.find(params[:id])
-
     if @list.update(list_params)
       redirect_to list_path(@list)
     else
@@ -21,13 +29,12 @@ class ListsController < ApplicationController
   end
 
   def show
-    if params[:id].to_i.to_s == params[:id]
-      @list = current_user.lists.find(params[:id])
-    else
-      @list = current_user.lists.select { |l| l.name.parameterize == params[:id] }.first
-    end
-
     raise ActionController::RoutingError.new('Not Found') unless @list.present?
+
+    respond_to do |format|
+      format.js { render json: @list }
+      format.html
+    end
   end
 
   def new
@@ -46,17 +53,11 @@ class ListsController < ApplicationController
   end
 
   def destroy
-    @list = current_user.lists.find(params[:id])
-
     if @list.owned_by_user?(current_user) && @list.destroy
       redirect_to lists_path
     else
       redirect_to edit_list_path(@list)
     end
-  end
-
-  def users
-    @list = current_user.lists.find(params[:id])
   end
 
   def receive_update
@@ -72,6 +73,10 @@ class ListsController < ApplicationController
   end
 
   private
+
+  def set_list
+    @list = current_user.lists.find_by(id: params[:id]) || current_user.lists.select { |list| list.name.parameterize == params[:id] }.first
+  end
 
   def list_params
     params.require(:list).permit(:name, :description)

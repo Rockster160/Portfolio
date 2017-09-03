@@ -34,6 +34,7 @@ class List < ApplicationRecord
   end
 
   def modify_from_message(msg)
+    msg = msg.to_s
     response_messages = []
     action, item_names = split_action_and_items_from_msg(msg)
 
@@ -42,7 +43,7 @@ class List < ApplicationRecord
       items = item_names.map do |item_name|
         self.list_items.create(name: item_name.squish)
       end
-      return "Running list:\n#{self.list_items.map(&:name).join("\n")}" if items.any?
+      return "Running list:\n - #{self.list_items.map(&:name).join("\n - ")}" if items.any?
     when 'remove'
       not_destroyed = []
       destroyed_items = []
@@ -60,14 +61,14 @@ class List < ApplicationRecord
       if destroyed_items.any?
         sms_messages << "Removed #{destroyed_items.map(&:name).to_sentence} from #{self.name}."
       end
-      sms_messages << "Running list:\n#{self.list_items.map(&:name).join("\n")}"
+      sms_messages << "Running list:\n - #{self.list_items.map(&:name).join("\n - ")}"
       return sms_messages.join("\n") if sms_messages.any?
     when 'clear'
       items = self.list_items.destroy_all
-      return "Removed all items from #{self.name}: \n#{items.map(&:name).join("\n")}"
+      return "Removed all items from #{self.name}: \n - #{items.map(&:name).join("\n - ")}"
     else
       if (items = self.list_items).any?
-        return "#{self.name.titleize}: \n#{items.map(&:name).join("\n")}"
+        return "#{self.name.titleize}: \n - #{items.map(&:name).join("\n - ")}"
       else
         return "There are no items in #{self.name.capitalize}."
       end
