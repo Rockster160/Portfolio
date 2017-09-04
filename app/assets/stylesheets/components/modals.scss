@@ -8,11 +8,13 @@
   bottom: 0;
   overflow: auto;
   background: rgba(0, 0, 0, 0.4);
+  padding: 10px;
 
   .modal-content {
     position: relative;
     margin: 10% auto;
     width: 500px;
+    max-width: 100%;
 
     h3 {
       color: $base-blue;

@@ -40,6 +40,4 @@ $(document).ready(function() {
       hideModal(".modal.shown")
     }
   })
-
-  showModal("#code-example-maze")
 })
