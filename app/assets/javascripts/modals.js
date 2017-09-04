@@ -41,5 +41,5 @@ $(document).ready(function() {
     }
   })
 
-  showModal("#code-example-anonicon")
+  showModal("#code-example-maze")
 })

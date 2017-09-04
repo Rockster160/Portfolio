@@ -97,6 +97,9 @@
         <a href="<%= mazes_path %>" class="project-wrapper">
           <div class="json-btn" data-modal="#code-example-maze">API</div>
           <%= render_modal "code-example-maze", "Mazes" do %>
+            <p>Generates an ASCII maze.</p>
+            <%= raw pretty(:bash, "requests/mazes/random.json") %>
+            <%= raw pretty(:js, "response/mazes/random.json") %>
           <% end %>
           <div class="project-title">Maze</div>
           <div class="project-description">

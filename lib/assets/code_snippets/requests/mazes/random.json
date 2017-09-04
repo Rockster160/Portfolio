@@ -1,0 +1,8 @@
+curl -X GET "http://localhost:3141/mazes/:seed" \
+  -d "seed=12345" \  # Required - The seed for the maze. If the seed is "random", a random seed will be generated. (The seed is not available through the API, but is viewable on the page view)
+  -d "width=5" \     # Optional - Default: Random value between 10 and 30. Sets the internal width of the maze. Must be within range 3 to 30.
+  -d "height=5" \    # Optional - Default: Random value between 10 and 30. Sets the internal height of the maze. Must be within range 3 to 30.
+  -d "start_str=o" \ # Optional - Default: "o". Sets the character used for the start value for the maze.
+  -d "end_str=x" \   # Optional - Default: "x". Sets the character used for the end value for the maze.
+  -d "path= " \      # Optional - Default: " ". Sets the character used for the internal path.
+  -d "wall=#"        # Optional - Default: "#". Sets the character used for walls.

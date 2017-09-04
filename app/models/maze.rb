@@ -39,17 +39,18 @@ class Maze
     @height.times do |y|
       line = @width.times.inject("#{@wall} ") do |str, x|
         if @start_x == x && @start_y == y
-          str << (@vertical_walls[x][y] ? "#{@start_str} #{@wall} " : "#{@start_str}   ")
+          str << (@vertical_walls[x][y] ? "#{@start_str} #{@wall} " : "#{@start_str}  ")
         else
-          str << (@vertical_walls[x][y] ? "  #{@wall} " : '    ')
+          str << (@vertical_walls[x][y] ? "#{@path} #{@wall} " : "#{@path} #{@path} ")
         end
       end
       array << line.scan(/../)
 
-      array << @width.times.inject("#{@wall} ") {|str, x| str << (@horizontal_walls[x][y] ? "#{@wall} #{@wall} " : "  #{@wall} ")}.scan(/../)
+      array << @width.times.inject("#{@wall} ") {|str, x| str << (@horizontal_walls[x][y] ? "#{@wall} #{@wall} " : "#{@path} #{@wall} ")}.scan(/../)
     end
     @dead_ends = find_dead_ends(array)
     downstairs_x, downstairs_y = @dead_ends.sample.to_a.map(&:last)
+    binding.pry unless downstairs_x && downstairs_y
     array[downstairs_y][downstairs_x] = "#{@end_str} "
     array
   end
@@ -60,7 +61,7 @@ class Maze
     dead_ends = []
     grid.each_with_index do |row, y|
       row.each_with_index do |cell, x|
-        next unless cell == '  '
+        next unless cell == "#{@path} "
         count_of_sides = 0
         sides = DIRECTIONS.map do |rel_x, rel_y|
           new_x, new_y = rel_x + x, rel_y + y
