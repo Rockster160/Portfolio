@@ -45,7 +45,7 @@ Rails.application.routes.draw do
   end
 
   resources :colors, only: [ :index ]
-  resources :anonicons, only: [ :index, :show ]
+  resources :anonicons, only: [ :index, :show ], constraints: { id: /[0-9.a-zA-Z]+/ }
 
   resource :little_world, only: [ :show ] do
     post :save_location
