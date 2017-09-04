@@ -1,5 +1,5 @@
-curl -G "http://rocconicholls.me/colors" \
+curl -X GET "http://rocconicholls.me/colors" \
   --data-urlencode "start_color=#FF0" \ # Required - the hex value of the start color
   --data-urlencode "end_color=#0FF" \ # Required - the hex value of the end color
-  --data-urlencode "steps=10" \ # Optional - default: 10
-  --data-urlencode "fade_back=false" # Optional - default: false
+  --data-urlencode "steps=10" \ # Optional - default: 10, must be between 1 and 256. Specifies the number of equal steps to display between each color.
+  --data-urlencode "fade_back=false" # Optional - default: false, specifies whether to fade back to the original color afterward - this will have twice as many steps as specified

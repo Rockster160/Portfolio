@@ -41,5 +41,5 @@ $(document).ready(function() {
     }
   })
 
-  showModal("#code-example-colors")
+  showModal("#code-example-anonicon")
 })

@@ -20,13 +20,13 @@
             <p>`curl` will automatically encode your username and password when passed with the `-u` option.</p>
             <hr>
             <p>The List API currently allows for requesting all lists belonging to the authenticated user, or a specific list. Lists can also be modified using an English-like string.</p>
-            <h3>Index</h3>
+            <h3>GET Index</h3>
             <%= raw pretty(:bash, "requests/lists/index.json") %>
             <%= raw pretty(:js, "response/lists/index.json") %>
-            <h3>Show</h3>
+            <h3>GET Show</h3>
             <%= raw pretty(:bash, "requests/lists/show.json") %>
             <%= raw pretty(:js, "response/lists/show.json") %>
-            <h3>Update</h3>
+            <h3>POST Update</h3>
             <p>Multiple items can be included in the same request by splitting names with commas.</p>
             <p>`add &lt;list of item names&gt;` is used for adding items to the list - does not return an error if one or more items already exist on the list.</p>
             <p>`remove &lt;list of item names&gt;` is used for removing items from the list - does not return an error if one or more items are not found.</p>
@@ -57,24 +57,11 @@
         <a href="<%= anonicons_path %>" class="project-wrapper">
           <div class="json-btn" data-modal="#code-example-anonicon">API</div>
           <%= render_modal "code-example-anonicon", "Anonicons" do %>
-            <p class="italics">This is an authenticated resource, so all requests made must include basic authentication, using your `username:password`, base64 encoded and passed along in the Authentication Header.</p>
-            <p>`Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=`</p>
-            <p>`curl` will automatically encode your username and password when passed with the `-u` option.</p>
-            <hr>
-            <p>The List API currently allows for requesting all lists belonging to the authenticated user, or a specific list. Lists can also be modified using an English-like string.</p>
-            <h3>Index</h3>
-            <%= raw pretty(:bash, "requests/lists/index.json") %>
-            <%= raw pretty(:js, "response/lists/index.json") %>
-            <h3>Show</h3>
-            <%= raw pretty(:bash, "requests/lists/show.json") %>
-            <%= raw pretty(:js, "response/lists/show.json") %>
-            <h3>Update</h3>
-            <p>Multiple items can be included in the same request by splitting names with commas.</p>
-            <p>`add &lt;list of item names&gt;` is used for adding items to the list - does not return an error if one or more items already exist on the list.</p>
-            <p>`remove &lt;list of item names&gt;` is used for removing items from the list - does not return an error if one or more items are not found.</p>
-            <p>`clear` is used for removing all items from the list.</p>
-            <%= raw pretty(:bash, "requests/lists/update.json") %>
-            <%= raw pretty(:js, "response/lists/update.json") %>
+            <p>Pass any string to generate an Identicon. This is commonly an IP Address or an email, but can be any string or value.</p>
+            <p>The return is the binary for a PNG that is unique to the string passed.</p>
+            <p>This can be used as a default image for newly signed up users to a website.</p>
+            <%= raw pretty(:bash, "requests/anonicons/show.json") %>
+            <pre class="preformat text-center"><%= image_tag "/anonicons/#{request.ip}", width: 100 %></pre>
           <% end %>
           <div class="project-title">Anonicon Generator</div>
           <div class="project-description">
@@ -110,24 +97,6 @@
         <a href="<%= mazes_path %>" class="project-wrapper">
           <div class="json-btn" data-modal="#code-example-maze">API</div>
           <%= render_modal "code-example-maze", "Mazes" do %>
-            <p class="italics">This is an authenticated resource, so all requests made must include basic authentication, using your `username:password`, base64 encoded and passed along in the Authentication Header.</p>
-            <p>`Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=`</p>
-            <p>`curl` will automatically encode your username and password when passed with the `-u` option.</p>
-            <hr>
-            <p>The List API currently allows for requesting all lists belonging to the authenticated user, or a specific list. Lists can also be modified using an English-like string.</p>
-            <h3>Index</h3>
-            <%= raw pretty(:bash, "requests/lists/index.json") %>
-            <%= raw pretty(:js, "response/lists/index.json") %>
-            <h3>Show</h3>
-            <%= raw pretty(:bash, "requests/lists/show.json") %>
-            <%= raw pretty(:js, "response/lists/show.json") %>
-            <h3>Update</h3>
-            <p>Multiple items can be included in the same request by splitting names with commas.</p>
-            <p>`add &lt;list of item names&gt;` is used for adding items to the list - does not return an error if one or more items already exist on the list.</p>
-            <p>`remove &lt;list of item names&gt;` is used for removing items from the list - does not return an error if one or more items are not found.</p>
-            <p>`clear` is used for removing all items from the list.</p>
-            <%= raw pretty(:bash, "requests/lists/update.json") %>
-            <%= raw pretty(:js, "response/lists/update.json") %>
           <% end %>
           <div class="project-title">Maze</div>
           <div class="project-description">
