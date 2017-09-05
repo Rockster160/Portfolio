@@ -18,7 +18,7 @@ class List < ApplicationRecord
   validates_presence_of :name
 
   def self.find_and_modify(msg)
-    list = List.first
+    list = first
     List.all.each do |try_list|
       found_msg = msg =~ /#{[Regexp.quote(try_list.name), Regexp.quote(try_list.name.split(" ").join(""))].join("|")}/
       if found_msg.present? && found_msg >= 0
@@ -41,36 +41,39 @@ class List < ApplicationRecord
     case action
     when 'add'
       items = item_names.map do |item_name|
-        self.list_items.create(name: item_name.squish)
-      end
-      return "Running list:\n - #{self.list_items.map(&:name).join("\n - ")}" if items.any?
+        item = list_items.create(name: item_name.squish)
+        puts "#{item.name} - #{item.errors.full_messages}".colorize(:yellow)
+        item
+      end.select(&:persisted?)
+      return "No items added." if items.none?
+      return "Running list:\n - #{list_items.map(&:name).join("\n - ")}"
     when 'remove'
       not_destroyed = []
       destroyed_items = []
       item_names.map do |item_name|
-        if (item = self.list_items.where("name ILIKE ?", "%#{item_name.squish}%").first).try(:destroy)
+        if (item = list_items.match_by_string(item_name)).try(:destroy)
           destroyed_items << item
         else
-          not_destroyed << item_name
+          not_destroyed << item_name.squish
         end
-      end.compact
+      end
       sms_messages = []
       if not_destroyed.any?
-        sms_messages << "Could not remove #{not_destroyed.to_sentence} from #{self.name}."
+        sms_messages << "Could not remove #{not_destroyed.to_sentence} from #{name}."
       end
       if destroyed_items.any?
-        sms_messages << "Removed #{destroyed_items.map(&:name).to_sentence} from #{self.name}."
+        sms_messages << "Removed #{destroyed_items.map(&:name).to_sentence} from #{name}."
       end
-      sms_messages << "Running list:\n - #{self.list_items.map(&:name).join("\n - ")}"
+      sms_messages << "Running list:\n - #{list_items.map(&:name).join("\n - ")}"
       return sms_messages.join("\n") if sms_messages.any?
     when 'clear'
-      items = self.list_items.destroy_all
-      return "Removed all items from #{self.name}: \n - #{items.map(&:name).join("\n - ")}"
+      items = list_items.destroy_all
+      return "Removed all items from #{name}: \n - #{items.map(&:name).join("\n - ")}"
     else
-      if (items = self.list_items).any?
-        return "#{self.name.titleize}: \n - #{items.map(&:name).join("\n - ")}"
+      if (items = list_items).any?
+        return "#{name.titleize}: \n - #{items.map(&:name).join("\n - ")}"
       else
-        return "There are no items in #{self.name.capitalize}."
+        return "There are no items in #{name.capitalize}."
       end
     end
     "Something went wrong."
@@ -84,7 +87,7 @@ class List < ApplicationRecord
       action = try_action if check_string_contains_word?(msg, try_action)
     end
 
-    items = items_from_message_after_stripping_action(msg, [self.name])
+    items = items_from_message_after_stripping_action(msg, [name]).map(&:squish)
     puts "#{items}".colorize(:red)
 
     [action, items]

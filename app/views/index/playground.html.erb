@@ -15,7 +15,7 @@
         <a href="<%= lists_path %>" class="project-wrapper">
           <div class="json-btn" data-modal="#code-example-list">API</div>
           <%= render_modal "code-example-list", "Lists" do %>
-            <p class="italics">This is an authenticated resource, so all requests made must include basic authentication, using your `username:password`, base64 encoded and passed along in the Authentication Header.</p>
+            <p class="italics">This is an authenticated resource, so all requests made must include basic authentication, using your `username:password`, base64 encoded and passed along in the Authorization Header.</p>
             <p>`Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=`</p>
             <p>`curl` will automatically encode your username and password when passed with the `-u` option.</p>
             <hr>

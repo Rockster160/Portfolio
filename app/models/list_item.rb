@@ -19,7 +19,19 @@ class ListItem < ApplicationRecord
   after_commit :reorder_conflict_orders
   after_commit :broadcast_commit
 
+  validate :not_already_present_for_list
+
+  default_scope { ordered }
   scope :ordered, -> { order(:sort_order) }
+
+  def self.match_by_string(str)
+    formatted_str = str.squish.downcase
+    found_item = nil
+    all.find_each do |list_item|
+      break found_item = list_item if formatted_str == list_item.name.squish.downcase
+    end
+    found_item
+  end
 
   def to_json
     name
@@ -28,11 +40,11 @@ class ListItem < ApplicationRecord
   private
 
   def format_words
-    self.name = self.name.squish.split(' ').map(&:capitalize).join(' ')
+    self.name = self.name.squish.capitalize
   end
 
   def set_sort_order
-    self.sort_order ||= list.list_items.count
+    self.sort_order ||= list.list_items.count + 1
   end
 
   def broadcast_commit
@@ -50,6 +62,12 @@ class ListItem < ApplicationRecord
       end
     else
       do_not_broadcast = false
+    end
+  end
+
+  def not_already_present_for_list
+    if self.list.list_items.match_by_string(name).present?
+      errors.add(:list, "already has this item.")
     end
   end
 
