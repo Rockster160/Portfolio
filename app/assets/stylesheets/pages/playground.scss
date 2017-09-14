@@ -3,14 +3,14 @@
   .app-card-container {
     .project-wrapper {
       position: relative;
-      transition: border-color 0.3s, border-width 0.3s, margin 0.3s;
+      transition: border-color 0.3s, border-width 0.3s, margin 0.3s, padding 0.3s;
       display: block;
       margin: 10px 0;
       border: 1px solid black;
       border-radius: 2px;
       padding: 5px;
       text-decoration: none;
-      box-sizing: padding-box;
+      box-sizing: border-box;
 
       .json-btn {
         position: absolute;
@@ -30,7 +30,7 @@
         }
       }
       &:hover {
-        margin: 8px -2px;
+        padding: 3px;
         border-color: $blue-3;
         border-width: 3px;
       }
