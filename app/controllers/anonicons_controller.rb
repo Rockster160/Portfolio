@@ -19,6 +19,7 @@ class AnoniconsController < ApplicationController
 
   def set_anonicon
     anonicon_source = params[:id] || request.ip
+    anonicon_source.sub!(/\.(jpe?g|png|gif|bmp)$/i, "")
     @anonicon = Anonicon.generate(anonicon_source)
   end
 
