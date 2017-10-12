@@ -18,7 +18,7 @@ module ApplicationHelper
   end
 
   def meta_description(description)
-    content_for(:title) { description }
+    content_for(:description) { description }
   end
 
 end
