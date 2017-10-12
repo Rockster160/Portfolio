@@ -39,7 +39,7 @@ class Maze
     @height.times do |y|
       line = @width.times.inject("#{@wall} ") do |str, x|
         if @start_x == x && @start_y == y
-          str << (@vertical_walls[x][y] ? "#{@start_str} #{@wall} " : "#{@start_str}  ")
+          str << (@vertical_walls[x][y] ? "#{@start_str} #{@wall} " : "#{@start_str} #{@path} ")
         else
           str << (@vertical_walls[x][y] ? "#{@path} #{@wall} " : "#{@path} #{@path} ")
         end

@@ -1,5 +1,8 @@
+<% seed = @maze.seed.to_s.rjust(6, "0") %>
+<%= meta_title "Maze ##{seed}" %>
+<%= meta_description "Generate a random maze to explore and solve!" %>
 <h5>Use Arrow Keys or WASD to play!</h5>
-<p>Seed: <%= @maze.seed.to_s.rjust(6, "0") %></p>
+<p>Seed: <%= seed %></p>
 
 <div id="maze">
   <% @maze.draw.each do |line| %>

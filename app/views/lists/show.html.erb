@@ -1,4 +1,4 @@
-<%= content_for(:title) { @list.name.capitalize } %>
+<%= meta_title "#{@list.name.capitalize}", include_name: false %>
 <%= content_for(:favicon) { render "application/favicon" } %>
 <%= content_for(:body_classes) { "black" } %>
 <% content_for :head do %>

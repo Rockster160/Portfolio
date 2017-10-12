@@ -1,5 +1,13 @@
-<div class="skinny-container">
+<%= meta_title "Anonicon #{@anonicon_source}" %>
+<%= meta_description "Anonicon generated for #{@anonicon_source}" %>
+<% content_for(:meta) do %>
+  <% path = "#{anonicons_url}/#{@anonicon_source}.png" %>
+  <meta name="twitter:image" content="<%= path %>">
+  <meta name="og:image" content="<%= path %>">
+  <meta name="image" content="<%= path %>">
+<% end %>
 
+<div class="skinny-container">
   <%= form_tag anonicons_path, id: "anonicon-form" do |f| %>
     <div class="form-title">
       Anonicon
@@ -13,7 +21,7 @@
           String to Anonify
           <a href="#" class="btn pull-right random-anonicon">Random</a>
         <% end %>
-        <%= text_field_tag :id, params[:id] || request.ip, class: "anon-identifier" %>
+        <%= text_field_tag :id, @anonicon_source, class: "anon-identifier" %>
       </div>
     </div>
 
@@ -27,5 +35,4 @@
       <%= render partial: "show" %>
     </div>
   <% end %>
-
 </div>

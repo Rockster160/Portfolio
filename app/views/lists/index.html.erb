@@ -1,4 +1,4 @@
-<%= content_for(:title) { "#{current_user.username}'s Lists" } %>
+<%= meta_title "#{current_user.username}'s Lists", include_name: false %>
 <%= content_for(:favicon) { render 'application/favicon' } %>
 <%= content_for(:body_classes) { "black" } %>
 

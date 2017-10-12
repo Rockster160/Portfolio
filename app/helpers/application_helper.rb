@@ -12,4 +12,13 @@ module ApplicationHelper
     "<pre class=\"prettyprint lang-#{language} language-#{language}\">#{file_contents}</pre>"
   end
 
+  def meta_title(str, include_name: true)
+    str = "#{str} &bull; Rocco Nicholls" if include_name
+    content_for(:title) { str.html_safe }
+  end
+
+  def meta_description(description)
+    content_for(:title) { description }
+  end
+
 end
