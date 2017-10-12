@@ -1,1 +1,10 @@
+<%= meta_title "Anonicon #{@anonicon_source}" %>
+<%= meta_description "Anonicon generated for #{@anonicon_source}" %>
+<% content_for(:meta) do %>
+  <% path = "#{anonicons_url}/#{@anonicon_source}.png" %>
+  <meta name="twitter:image" content="<%= path %>">
+  <meta name="og:image" content="<%= path %>">
+  <meta name="image" content="<%= path %>">
+<% end %>
+
 <%= image_tag @anonicon.src, style: "max-width: 100%;" %>
