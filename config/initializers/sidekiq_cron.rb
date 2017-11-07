@@ -13,8 +13,8 @@ if Rails.env.production?
       cron:  daily_9pm
     },
     {
-      name:  "Checkup Mailer Scheduler",
-      class: "::Sonar::ScheduleCheckupNotificationsWorker",
+      name:  "Charge Brothers",
+      class: "ChargeBrothersWorker",
       cron:  monthly_5th_at_11am
     }
   ]
