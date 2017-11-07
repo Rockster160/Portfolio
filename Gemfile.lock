@@ -197,12 +197,13 @@ GEM
     rake (11.3.0)
     rdoc (4.3.0)
     redis (3.3.3)
+    redis-namespace (1.5.2)
+      redis (~> 3.0, >= 3.0.4)
     ref (2.0.0)
     rest-client (2.0.1)
       http-cookie (>= 1.0.2, < 2.0)
       mime-types (>= 1.16, < 4.0)
       netrc (~> 0.8)
-    rouge (2.2.1)
     rubyzip (1.2.1)
     rufus-scheduler (3.4.0)
       et-orbi (~> 1.0)
@@ -305,8 +306,8 @@ DEPENDENCIES
   rails_autolink
   rails_real_favicon
   redis
+  redis-namespace
   rest-client
-  rouge
   sass-rails
   sdoc (~> 0.4.0)
   sidekiq
@@ -323,4 +324,4 @@ DEPENDENCIES
   underscore-rails
 
 BUNDLED WITH
-   1.15.3
+   1.16.0.pre.1

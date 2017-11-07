@@ -14,6 +14,7 @@ gem 'spring',        group: :development
 
 gem 'puma'
 gem 'redis'
+gem 'redis-namespace'
 gem 'sidekiq'
 gem 'sidekiq-cron'
 gem 'autoprefixer-rails'
