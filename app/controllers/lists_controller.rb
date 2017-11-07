@@ -4,12 +4,20 @@ class ListsController < ApplicationController
   before_action :set_list, only: [:edit, :update, :show, :destroy, :users, :modify_from_message]
 
   def index
-    @lists = current_user.lists.order(:created_at)
+    @lists = current_user.ordered_lists
 
     respond_to do |format|
       format.js { render json: @lists.map(&:jsonify) }
       format.html
     end
+  end
+
+  def reorder
+    params[:list_ids].each_with_index do |list_id, idx|
+      current_user.user_lists.find_by(list_id: list_id).update(sort_order: idx)
+    end
+
+    redirect_to lists_path
   end
 
   def modify_from_message

@@ -30,6 +30,7 @@ Rails.application.routes.draw do
   get :account, controller: :users
   resources :users, only: [ :new, :create, :update ]
   resources :lists do
+    post :reorder, on: :collection
     member do
       post :modify_from_message
       post :receive_update

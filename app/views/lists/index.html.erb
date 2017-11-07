@@ -8,11 +8,12 @@
     <a href="<%= new_list_path %>" class="btn pull-right">New List +</a>
   </div>
   <div class="lists-title"><%= current_user.username %>'s Lists</div>
-  <div class="lists">
+  <div class="lists" data-reorder-url="<%= reorder_lists_path %>">
     <% @lists.each do |list| %>
-      <div class="list-item-container">
+      <div class="list-item-container" data-list-id="<%= list.id %>">
+        <div class="list-item-handle"><i class="fa fa-arrows"></i></div>
         <a href="<%= list_path(list) %>" class="list-item"><%= list.name.titleize %> (<%= list.list_items.count %>)</a>
-       </div>
+      </div>
     <% end %>
   </div>
 </div>

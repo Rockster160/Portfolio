@@ -83,6 +83,10 @@ class User < ApplicationRecord
     end
   end
 
+  def ordered_lists
+    lists.includes(:user_lists).where(user_lists: { user_id: id }).order("user_lists.sort_order")
+  end
+
   def invite!(list)
     user_lists.create(list_id: list.id)
     return unless Rails.env.production?
