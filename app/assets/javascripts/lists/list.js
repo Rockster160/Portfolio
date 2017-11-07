@@ -1,5 +1,15 @@
 $('.ctr-lists').ready(function() {
 
+
+  $(".lists").sortable({
+    handle: ".list-item-handle",
+    update: function(evt, ui) {
+      var list_order = $(this).children().map(function() { return $(this).attr("data-list-id") })
+      var url = $(this).attr("data-reorder-url")
+      var params = { list_ids: list_order.toArray() }
+      $.post(url, params)
+    }
+  })
   $(".list-items").sortable({
     handle: ".list-item-handle",
     update: function(evt, ui) {
@@ -9,16 +19,6 @@ $('.ctr-lists').ready(function() {
 
       var url = $(this).attr("data-update-url")
       var params = { list_item_order: list_item_order.toArray() }
-      $.post(url, params)
-    }
-  })
-
-  $(".lists").sortable({
-    handle: ".list-item-handle",
-    update: function(evt, ui) {
-      var list_order = $(this).children().map(function() { return $(this).attr("data-list-id") })
-      var url = $(this).attr("data-reorder-url")
-      var params = { list_ids: list_order.toArray() }
       $.post(url, params)
     }
   })

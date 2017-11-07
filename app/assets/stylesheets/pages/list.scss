@@ -15,10 +15,13 @@
     position: relative;
 
     .list-item-handle {
-      z-index: 1;
+      z-index: 2;
       position: absolute;
-      right: 5px;
-      top: 25px;
+      line-height: 70px;
+      width: 30px;
+      text-align: center;
+      right: 0;
+      top: 0;
     }
   }
 

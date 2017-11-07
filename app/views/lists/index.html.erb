@@ -1,6 +1,9 @@
 <%= meta_title "#{current_user.username}'s Lists", include_name: false %>
 <%= content_for(:favicon) { render 'application/favicon' } %>
 <%= content_for(:body_classes) { "black" } %>
+<% content_for :head do %>
+  <%= javascript_include_tag 'support/touch_punch.js' %>
+<% end %>
 
 <div class="skinny-container lists-index-container">
   <div class="btn-container">
