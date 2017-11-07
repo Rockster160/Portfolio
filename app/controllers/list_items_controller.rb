@@ -26,6 +26,7 @@ class ListItemsController < ApplicationController
   private
 
   def list_item_params
+    return {} unless params[:list_item].present?
     params.require(:list_item).permit(:name, :sort_order)
   end
 
