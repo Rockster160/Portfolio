@@ -127,8 +127,8 @@ class List < ApplicationRecord
     ActionCable.server.broadcast "list_#{self.id}_channel", list_html: rendered_message
   end
 
-  def to_json
-    attributes.symbolize_keys.slice(:id, :name, :description).merge(list_items: list_items.ordered.map(&:to_json))
+  def jsonify
+    attributes.symbolize_keys.slice(:id, :name, :description).merge(list_items: list_items.ordered.map(&:jsonify))
   end
 
 end

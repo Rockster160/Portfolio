@@ -2,58 +2,64 @@
 #
 # Table name: list_items
 #
-#  id         :integer          not null, primary key
-#  name       :string(255)
-#  list_id    :integer
-#  created_at :datetime
-#  updated_at :datetime
-#  sort_order :integer
+#  id             :integer          not null, primary key
+#  name           :string(255)
+#  list_id        :integer
+#  created_at     :datetime
+#  updated_at     :datetime
+#  sort_order     :integer
+#  formatted_name :string
+#  deleted_at     :datetime
 #
 
 class ListItem < ApplicationRecord
-  attr_accessor :do_not_broadcast
+  acts_as_paranoid
+  attr_accessor :do_not_broadcast, :do_not_bump_order
   belongs_to :list
 
-  before_save :format_words
-  before_save :set_sort_order
+  before_save :set_sort_order, :set_formatted_name
   after_commit :reorder_conflict_orders
   after_commit :broadcast_commit
 
-  validate :not_already_present_for_list
+  validates :name, presence: true
 
   default_scope { ordered }
   scope :ordered, -> { order(:sort_order) }
+  scope :by_formatted_name, ->(name) { where(formatted_name: name.to_s.downcase.gsub(/[^a-z0-9]/i, "")) }
 
-  def self.match_by_string(str)
-    formatted_str = str.squish.downcase
-    found_item = nil
-    all.find_each do |list_item|
-      break found_item = list_item if formatted_str == list_item.name.squish.downcase
+  def self.by_name_then_update(params)
+    old_item = with_deleted.by_formatted_name(params[:name]).first
+
+    if old_item.present?
+      old_item.update(params.merge(deleted_at: nil))
+      old_item
+    else
+      create(params)
     end
-    found_item
   end
 
-  def to_json
+  def jsonify
     name
   end
 
   private
 
-  def format_words
-    self.name = self.name.squish.capitalize
+  def set_sort_order
+    self.sort_order ||= list.list_items.max_by(&:sort_order).try(:sort_order).to_i + 1
   end
 
-  def set_sort_order
-    self.sort_order ||= list.list_items.count + 1
+  def set_formatted_name
+    self.formatted_name = name.downcase.gsub(/[^a-z0-9]/i, "")
   end
 
   def broadcast_commit
-    return if do_not_broadcast
+    return if do_not_broadcast || do_not_bump_order
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
     ActionCable.server.broadcast "list_#{self.list_id}_channel", list_html: rendered_message
   end
 
   def reorder_conflict_orders
+    return if do_not_bump_order
     conflicted_items = list.list_items.where.not(id: self.id).where(sort_order: self.sort_order)
     if conflicted_items.any?
       do_not_broadcast = true
@@ -62,12 +68,6 @@ class ListItem < ApplicationRecord
       end
     else
       do_not_broadcast = false
-    end
-  end
-
-  def not_already_present_for_list
-    if self.list.list_items.match_by_string(name).present?
-      errors.add(:list, "already has this item.")
     end
   end
 

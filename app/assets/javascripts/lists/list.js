@@ -15,6 +15,7 @@ $('.ctr-lists.act-show').ready(function() {
 
   $('.new-list-item-form').submit(function(e) {
     e.preventDefault();
+    $(window).animate({ scrollTop: window.scrollHeight }, 300)
     $.post(this.action, $(this).serialize());
     $('.new-list-item').val("");
     return false;
@@ -23,24 +24,10 @@ $('.ctr-lists.act-show').ready(function() {
   $(document).on('change', '.list-item-checkbox', function() {
     var checkbox = $(this);
     if (this.checked) {
-      $.ajax({
-        url: $(this).attr("data-destroy-url"),
-        type: "DELETE"
-      })
+      $.ajax({ type: "DELETE", url: $(this).attr("data-checked-url") })
     } else {
-      $.ajax({
-        url: $(this).attr("data-create-url"),
-        type: "POST",
-        data: {list_item: {name: this.value, sort_order: $(this).parents('.list-item-container').index()}, as_json: true},
-        success: function(data) {
-          new_name = "list_item[" + data.id + "]";
-          new_destroy_url = checkbox.attr("data-create-url") + "/" + data.id;
-          checkbox.attr("name", new_name);
-          checkbox.attr("data-destroy-url", new_destroy_url);
-        }
-      })
+      $.post($(this).attr("data-create-url"), {id: $(this).parents(".list-item-container").attr("data-item-id")})
     }
-
   })
 
 })

@@ -7,7 +7,7 @@ class ListsController < ApplicationController
     @lists = current_user.lists.order(:created_at)
 
     respond_to do |format|
-      format.js { render json: @lists.map(&:to_json) }
+      format.js { render json: @lists.map(&:jsonify) }
       format.html
     end
   end
@@ -16,7 +16,7 @@ class ListsController < ApplicationController
     response_message = @list.modify_from_message(params[:message])
 
     respond_to do |format|
-      format.json { render json: @list.to_json }
+      format.json { render json: @list.jsonify }
     end
   end
 
@@ -32,7 +32,7 @@ class ListsController < ApplicationController
     raise ActionController::RoutingError.new('Not Found') unless @list.present?
 
     respond_to do |format|
-      format.js { render json: @list.to_json }
+      format.js { render json: @list.jsonify }
       format.html
     end
   end

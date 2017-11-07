@@ -77,12 +77,14 @@
         background: lighten(black, 10%);
       }
     }
+    label { background: black; }
 
     input[type=checkbox]:checked + label {
       color: red;
       background: pink;
       border-color: red;
       text-decoration: line-through;
+
       &:after {
         content: "\2713 ";
         position: absolute;

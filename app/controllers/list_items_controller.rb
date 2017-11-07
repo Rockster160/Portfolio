@@ -4,8 +4,10 @@ class ListItemsController < ApplicationController
 
   def create
     @list = List.find(params[:list_id])
+    @existing_item = @list.list_items.find_by(id: params[:id])
+    item_params = {name: @existing_item.try(:name)}.merge(list_item_params.to_h.symbolize_keys)
 
-    new_item = @list.list_items.find_or_create_by(list_item_params)
+    new_item = @list.list_items.by_name_then_update(item_params)
 
     if params[:as_json]
       render json: new_item
@@ -16,8 +18,8 @@ class ListItemsController < ApplicationController
 
   def destroy
     @list_item = ListItem.find(params[:id])
-
     @list_item.destroy
+
     head :no_content
   end
 
