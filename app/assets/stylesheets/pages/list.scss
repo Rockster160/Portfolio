@@ -17,8 +17,8 @@
     .list-item-handle {
       z-index: 1;
       position: absolute;
-      left: 0px;
-      top: 10px;
+      right: 5px;
+      top: 25px;
     }
   }
 
@@ -68,7 +68,7 @@
       display: block;
       border: 1px solid black;
       border-bottom-color: white;
-      padding: 20px 5px 20px 40px;
+      padding: 20px 40px 20px 10px;
 
       .checkbox-wrapper {}
       .item-name {}
