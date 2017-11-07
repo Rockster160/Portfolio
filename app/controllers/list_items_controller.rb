@@ -4,7 +4,7 @@ class ListItemsController < ApplicationController
 
   def create
     @list = List.find(params[:list_id])
-    @existing_item = @list.list_items.find_by(id: params[:id])
+    @existing_item = @list.list_items.with_deleted.find_by(id: params[:id])
     item_params = {name: @existing_item.try(:name)}.merge(list_item_params.to_h.symbolize_keys)
 
     new_item = @list.list_items.by_name_then_update(item_params)
