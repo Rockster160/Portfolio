@@ -20,7 +20,7 @@ class UserList < ApplicationRecord
   private
 
   def set_sort_order
-    self.sort_order ||= user.user_lists.max_by(&:sort_order).try(:sort_order).to_i + 1
+    self.sort_order ||= user.user_lists.where.not(id: [nil, id]).max_by(&:sort_order).try(:sort_order).to_i + 1
   end
 
   def reorder_conflict_orders
