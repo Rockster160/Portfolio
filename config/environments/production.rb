@@ -14,12 +14,12 @@ Rails.application.configure do
   config.consider_all_requests_local       = false
   config.action_controller.perform_caching = true
 
-  config.action_cable.url = 'ws://rocconicholls.me/cable'
-  config.action_cable.allowed_request_origins = ['http://rocconicholls.me']
-  config.web_socket_server_url = "ws://rocconicholls.me/cable"
+  config.action_cable.url = 'wss://rocconicholls.me/cable'
+  config.action_cable.allowed_request_origins = ['https://rocconicholls.me']
+  config.web_socket_server_url = "wss://rocconicholls.me/cable"
   config.action_cable.disable_request_forgery_protection = true
 
-  routes.default_url_options = { protocol: "http://", host: "rocconicholls.me", port: nil }
+  routes.default_url_options = { protocol: "https://", host: "rocconicholls.me", port: nil }
 
   # Enable Rack::Cache to put a simple HTTP cache in front of your application
   # Add `rack-cache` to your Gemfile before enabling this.
