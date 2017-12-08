@@ -25,7 +25,7 @@ class LogTracker < ApplicationRecord
   scope :by_fuzzy_url, ->(url) { where("url ILIKE '%#{url}%'") }
   scope :by_ip, ->(ip) { where(ip_address: ip) }
   scope :not_me, -> { where.not(user_id: 1) }
-  scope :not_log_tracker, -> { where.not("url ILIKE 'log_tracker'") }
+  scope :not_log_tracker, -> { where.not("url ILIKE '%log_tracker%'") }
 
   def self.uniq_ips
     pluck(:ip_address).uniq
