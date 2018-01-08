@@ -1,3 +1,5 @@
+var heldListItem, heldListItemTimer
+
 $(".ctr-lists").ready(function() {
 
   $(".lists").sortable({
@@ -47,13 +49,67 @@ $(".ctr-lists").ready(function() {
     }
   })
 
-  $(document).on("change", ".list-item-checkbox", function() {
+  $(document).on("change", ".list-item-checkbox", function(evt) {
+    var $itemField = $(this).closest(".list-item-container").find(".list-item-field")
+    if (!$itemField.hasClass("hidden")) {
+      $(this).prop("checked", false)
+      evt.preventDefault()
+      return false
+    }
     var checkbox = $(this)
     if (this.checked) {
       $.ajax({ type: "DELETE", url: $(this).attr("data-checked-url") })
     } else {
       $.post($(this).attr("data-create-url"), {id: $(this).parents(".list-item-container").attr("data-item-id")})
     }
+  })
+
+  $(document).on("blur", ".list-item-field", function() {
+    var $container = $(this).closest(".list-item-container")
+    var submitUrl = $container.attr("data-item-url")
+    var updatedName = $(this).val()
+
+    $.ajax({
+      url: submitUrl,
+      type: "PUT",
+      data: {
+        list_item: {
+          name: updatedName
+        }
+      },
+      success: function() {
+        var $itemName = $container.find(".item-name")
+        var $itemField = $container.find(".list-item-field")
+
+        $itemName.val(updatedName)
+        $itemName.removeClass("hidden")
+        $itemField.addClass("hidden")
+      }
+    })
+  })
+
+  $(document).on("mousedown touchstart", ".list-item-container", function(evt) {
+    var evtContainer = $(evt.target).closest(".list-item-container")
+    if (evtContainer) {
+      heldListItem = evtContainer
+      heldListItemTimer = setTimeout(function() {
+        var $itemName = heldListItem.find(".item-name")
+        var $itemField = heldListItem.find(".list-item-field")
+        $itemName.addClass("hidden")
+        $itemField.val($itemName.text())
+        $itemField.removeClass("hidden")
+        $itemField.focus()
+      }, 1000)
+    }
+  }).on("mousemove", function(evt) {
+    if (!heldListItem) { return }
+    if (heldListItem.attr("data-item-id") != $(evt.target).closest(".list-item-container").attr("data-item-id")) {
+      heldListItem = null
+      clearTimeout(heldListItemTimer)
+    }
+  }).on("mouseup touchend", function(evt) {
+    heldListItem = null
+    clearTimeout(heldListItemTimer)
   })
 
 })

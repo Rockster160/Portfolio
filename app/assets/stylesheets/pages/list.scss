@@ -12,6 +12,7 @@
   }
 
   .list-item-container {
+    user-select: none;
     position: relative;
 
     .list-item-handle {

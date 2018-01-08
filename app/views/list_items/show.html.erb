@@ -1,9 +1,10 @@
 <% list ||= @list || item.list %>
-<div class="list-item-container" data-sort-order="<%= item.sort_order.to_i %>" data-item-id="<%= item.id %>">
+<div class="list-item-container" data-sort-order="<%= item.sort_order.to_i %>" data-item-id="<%= item.id %>" data-item-url="<%= list_list_item_path(list, item) %>">
   <div class="list-item-handle"><i class="fa fa-arrows"></i></div>
   <input type="checkbox" id="list_item[<%= item.id %>]" class="list-item-checkbox" name="list_item[<%= item.id %>]" value="<%= item.id %>" data-checked-url="<%= list_list_item_path(list, item) %>" data-create-url="<%= list_list_items_path(list) %>">
   <label for="list_item[<%= item.id %>]" class="list-item">
     <div class="checkbox-wrapper"></div>
     <div class="item-name"><%= item.name %></div>
+    <input type="text" name="" value="" class="hidden list-item-field">
   </label>
 </div>

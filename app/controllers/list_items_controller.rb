@@ -16,6 +16,14 @@ class ListItemsController < ApplicationController
     end
   end
 
+  def update
+    @list = List.find(params[:list_id])
+    @existing_item = @list.list_items.with_deleted.find_by(id: params[:id])
+    @existing_item.update(list_item_params)
+
+    render json: @existing_item
+  end
+
   def destroy
     @list_item = ListItem.find(params[:id])
     @list_item.destroy
