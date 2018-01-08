@@ -64,7 +64,9 @@ $(".ctr-lists").ready(function() {
     }
   })
 
-  $(document).on("blur", ".list-item-field", function() {
+  $(document).on("keyup", ".list-item-field", function(evt) {
+    if (evt.which == keyEvent("ENTER")) { $(this).blur() }
+  }).on("blur", ".list-item-field", function() {
     var $container = $(this).closest(".list-item-container")
     var submitUrl = $container.attr("data-item-url")
     var updatedName = $(this).val()
