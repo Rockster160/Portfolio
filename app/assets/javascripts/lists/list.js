@@ -1,5 +1,4 @@
-$('.ctr-lists').ready(function() {
-
+$(".ctr-lists").ready(function() {
 
   $(".lists").sortable({
     handle: ".list-item-handle",
@@ -23,15 +22,32 @@ $('.ctr-lists').ready(function() {
     }
   })
 
-  $('.new-list-item-form').submit(function(e) {
+  $(".new-list-item-form").submit(function(e) {
     e.preventDefault()
     $(window).animate({ scrollTop: window.scrollHeight }, 300)
     $.post(this.action, $(this).serialize())
-    $('.new-list-item').val("")
+    $(".new-list-item").val("")
     return false
   })
 
-  $(document).on('change', '.list-item-checkbox', function() {
+  $(document).on("keyup", "input.new-list-item", function() {
+    var currentText = $(this).val().toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
+
+    if (currentText.length == 0) {
+      $(".list-item-container").removeClass("hidden")
+    } else {
+      $(".list-item-container").each(function() {
+        var optionText = $(this).find(".item-name").text().toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
+        if (optionText.indexOf(currentText) >= 0) {
+          $(this).removeClass("hidden")
+        } else {
+          $(this).addClass("hidden")
+        }
+      })
+    }
+  })
+
+  $(document).on("change", ".list-item-checkbox", function() {
     var checkbox = $(this)
     if (this.checked) {
       $.ajax({ type: "DELETE", url: $(this).attr("data-checked-url") })
