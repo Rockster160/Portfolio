@@ -28,7 +28,7 @@ class User < ApplicationRecord
 
   enum role: {
     standard: 0,
-    admin: 10
+    admin:    10
   }
 
   def self.auth_from_basic(basic_auth)
@@ -49,10 +49,10 @@ class User < ApplicationRecord
   def self.find_or_create_by_filtered_params(raw_params)
     return User.new if raw_params.blank?
     user_scope = User.all
-    user_scope = user_scope.where("lower(username) = ?", raw_params[:username]) if raw_params[:username].present?
+    user_scope = user_scope.where("lower(username) = ?", raw_params[:username].to_s.downcase.squish) if raw_params[:username].present?
     user_scope = user_scope.where(phone: raw_params[:phone].gsub(/[^0-9]/, "").last(10)) if raw_params[:phone].present?
     user_scope = user_scope.where(raw_params.except(:username, :phone))
-    user_scope.one? ? user_scope.first : User.new(raw_params)
+    user_scope.first || User.new(raw_params)
   end
 
   def see!
@@ -123,7 +123,7 @@ class User < ApplicationRecord
       valid_presence?(:username)
       confirmation_matches_password
       username_constraints
-      formatted_phone
+      format_phone
       correct_current_password
     end
   end
@@ -135,7 +135,7 @@ class User < ApplicationRecord
     end
   end
 
-  def formatted_phone
+  def format_phone
     return unless phone.present?
     stripped_phone = phone.gsub(/[^0-9]/, "").last(10)
 

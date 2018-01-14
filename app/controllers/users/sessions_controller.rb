@@ -1,5 +1,5 @@
 class Users::SessionsController < ApplicationController
-  before_action :unauthorize_user, except: [ :destroy ]
+  before_action :unauthorize_user, :set_invitation_token, except: [ :destroy ]
   before_action :authorize_user, only: [ :destroy ]
 
   def new
@@ -27,8 +27,12 @@ class Users::SessionsController < ApplicationController
 
   private
 
+  def set_invitation_token
+    @invitation_token ||= params.dig(:user, :invitation_token) || params[:invitation_token]
+    @invitation_hash = @invitation_token.present? ? {invitation_token: @invitation_token} : nil
+  end
+
   def move_user_lists_to_user
-    @invitation_token = params.dig(:user, :invitation_token)
     if @invitation_token.present?
       temp_user = User.where.not(invitation_token: nil).find_by_invitation_token(@invitation_token)
       temp_user.user_lists.each do |user_list|

@@ -1,6 +1,7 @@
 <div class="skinny-container">
 
   <%= form_for @user, url: login_path do |f| %>
+    <%= f.hidden_field :invitation_token, value: @user.invitation_token || @invitation_token %>
     <div class="form-title">
       Login
     </div>
@@ -23,7 +24,7 @@
     </div>
 
     <div class="helpful-links">
-      <a href="<%= register_path(params.permit(:invitation_token)) %>">Don't have an account?</a>
+      <a href="<%= register_path(@invitation_hash) %>">Don't have an account?</a>
     </div>
   <% end %>
 

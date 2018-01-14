@@ -12,7 +12,7 @@
       <% user = list_user.user %>
       <div class="list-item-container">
         <a href="<%=  %>" class="list-item"><%= user.username || user.phone || user.invitation_token %> <%= "(Pending #{user.invitation_token})" if user.invited? %></a>
-       </div>
+      </div>
     <% end %>
   </div>
 </div>

@@ -1,5 +1,5 @@
 class Users::RegistrationsController < ApplicationController
-  before_action :unauthorize_user
+  before_action :unauthorize_user, :set_invitation_token
 
   def new
     @user = User.new
@@ -26,6 +26,11 @@ class Users::RegistrationsController < ApplicationController
   end
 
   private
+
+  def set_invitation_token
+    @invitation_token = params.dig(:user, :invitation_token) || params[:invitation_token]
+    @invitation_hash = @invitation_token.present? ? {invitation_token: @invitation_token} : nil
+  end
 
   def user_params
     params.require(:user).permit(:username, :password, :password_confirmation)
