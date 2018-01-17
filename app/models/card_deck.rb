@@ -27,4 +27,8 @@ class CardDeck
     @cards.pop
   end
 
+  def size
+    @cards.size
+  end
+
 end

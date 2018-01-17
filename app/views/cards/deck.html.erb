@@ -9,7 +9,7 @@
   <div class="playing-field">
     <div class="deck">
       <%# circle, semi-circle, carbon, checker45, weave %>
-      <% @deck.cards.count.times do %>
+      <% while @deck.size > 0 do %>
         <%= render partial: 'card', locals: { card: @deck.draw, back: "semi-circle" } %>
       <% end %>
     </div>
@@ -17,6 +17,7 @@
   <% if true || dealer? %>
     <div class="dealer-controls">
       <a href="#" class="btn add-zone" data-type="no-flip">New Zone</a>
+      <%= link_to "Solitaire", {game: :solitaire}, class: "btn" %>
     </div>
   <% end %>
 </div>
