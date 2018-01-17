@@ -1,6 +1,8 @@
 <%= meta_title "Cards" %>
 <%= meta_description "Generic deck of cards that can be used to play games." %>
-<% content_for(:viewport_tag) { "" } %>
+<% content_for(:viewport_tag) do %>
+  <meta name="viewport" content="">
+<% end %>
 <% content_for :head do %>
   <%= javascript_include_tag 'support/touch_punch.js' %>
 <% end %>
@@ -17,6 +19,7 @@
   <% if true || dealer? %>
     <div class="dealer-controls">
       <a href="#" class="btn add-zone" data-type="no-flip">New Zone</a>
+      <br>
       <%= link_to "Solitaire", {game: :solitaire}, class: "btn" %>
     </div>
   <% end %>
