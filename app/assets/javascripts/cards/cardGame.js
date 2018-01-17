@@ -4,10 +4,18 @@ $('.ctr-cards').ready(function() {
   setTimeout(function() {
     if (params.game == "solitaire") {
       var cardWidth = 100
-      var $playingField = $('.playing-field'), zoneCoord;
-      var topRight = { top: $playingField.offset().top + 25, left: $playingField.offset().left + $playingField.outerWidth() - 25 - cardWidth }
-      zoneCoord = $.extend({}, topRight)
-      addZone({color: "blue", size: { width: cardWidth, height: 130 }, coord: zoneCoord, draggable: false, resizable: false})
+      var $playingField = $('.playing-field'), fieldPadding = parseInt($playingField.css("padding")), fieldBB = {}
+      fieldBB.top    = $playingField.offset().top,
+      fieldBB.left   = $playingField.offset().left,
+      fieldBB.right  = fieldBB.left + $playingField.innerWidth() - (fieldPadding * 2)
+      fieldBB.bottom = fieldBB.top + $playingField.innerHeight() - (fieldPadding * 2)
+      addDot(fieldBB.left, fieldBB.top)
+      addDot(fieldBB.left, fieldBB.bottom)
+      addDot(fieldBB.right, fieldBB.top)
+      addDot(fieldBB.right, fieldBB.bottom)
+      var topRight = { top: fieldBB.top + fieldPadding, left: fieldBB.right - cardWidth + fieldPadding }
+      var zoneCoord = $.extend({}, topRight)
+      addZone({color: "blue", size: { width: cardWidth, height: 130 }, coord: zoneCoord, draggable: true, resizable: false})
       zoneCoord.left -= 120
       addZone({color: "blue", size: { width: cardWidth, height: 130 }, coord: zoneCoord, draggable: false, resizable: false})
       zoneCoord.left -= 120
@@ -16,13 +24,14 @@ $('.ctr-cards').ready(function() {
       addZone({color: "blue", size: { width: cardWidth, height: 130 }, coord: zoneCoord, draggable: false, resizable: false})
 
       var moveDownPerLayer = 15
-      var moveLeftPerLayer = cardWidth + 20
+      var distanceBetweenCards = 20
+      var moveLeftPerLayer = cardWidth + distanceBetweenCards
       var cardCoord = $.extend({}, topRight)
-      var cardStartLeft = topRight.left - (moveLeftPerLayer * 7) + 17
+      var cardStartLeft = fieldBB.right - ((cardWidth + distanceBetweenCards) * 7)
       var timeBetweenEachDeal = 300
 
       setTimeout(function() {
-        cardCoord.top += 70
+        cardCoord.top += 100
         cardCoord.left = cardStartLeft
         dealCard({startCoord: cardCoord, duration: 100, flipOnLand: true})
       }, 5)
