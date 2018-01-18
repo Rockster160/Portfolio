@@ -1,0 +1,18 @@
+<svg width="49" height="49" viewbox="0 0 49 49" xmlns="http://www.w3.org/2000/svg">
+  <g>
+    <title>Spade</title>
+    <!-- <path id="border" stroke-width="1" fill="none" stroke="green" d="M0,0 L49,0 L49,49 L0,49z"/> -->
+    <path id="heart" fill="black" stroke="none"  d="
+      M25,2
+      C25,10 46,18 47,35
+      C46,47 32,47 29,35
+
+      C27,27 23,43 30,48
+      L20,48
+      C27,43 23,27 21,35
+
+      C18,47 3,47 3,35
+      C3,18 25,10 25,2
+    "/>
+  </g>
+</svg>

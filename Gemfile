@@ -42,6 +42,7 @@ gem 'rest-client'
 gem 'oily_png'
 gem 'chroma'
 gem 'acts_as_paranoid', '~> 0.5.0'
+gem "inline_svg"
 
 group :development, :test do
   gem 'annotate'

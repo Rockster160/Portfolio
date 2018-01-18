@@ -1,0 +1,6 @@
+<svg width="50" height="50" viewbox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+  <g>
+    <title>Diamond</title>
+    <path id="diamond" fill="red" d="M25,5 L40,25 L25,45 L10,25z"/>
+  </g>
+</svg>

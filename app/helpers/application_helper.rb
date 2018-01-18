@@ -21,4 +21,21 @@ module ApplicationHelper
     content_for(:description) { description }
   end
 
+  def svg(svg_path, options={})
+    Rails.cache.fetch(svg_path) do
+      options[:nocomment] = true if options[:nocomment].nil?
+      options[:title] ||= svg_path.split("/").last
+      svg_html = inline_svg(svg_path, options)
+      if svg_html.include?("<!-- SVG file not found:")
+        # Instead of rendering an empty SVG, this will attempt to lookup
+        #   the image as a regular image, which will not only show a broken
+        #   image on-screen, but it will add a js-console error as well, so
+        #   we can see the attempted path for better debugging.
+        image_tag svg_path, options
+      else
+        svg_html
+      end
+    end
+  end
+
 end

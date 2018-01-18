@@ -77,12 +77,19 @@ $one-third: 100% / 3;
         font-family: 'Card';
         position: relative;
         box-sizing: border-box;
+
         .rank, .suit {
           width: $card-border-size;
           text-align: center;
         }
         .rank { font-size: $card-height * 0.16; }
-        .suit { font-size: $card-border-size; }
+        .suit {
+          font-size: $card-border-size;
+          svg {
+            width: $card-border-size;
+            height: $card-border-size;
+          }
+        }
         .card-body {
           position: absolute;
           top: ($card-border-size / 2);
@@ -100,10 +107,17 @@ $one-third: 100% / 3;
             top: 0; left: 0; right: 0; bottom: 0;
           }
           .suit-char {
-            font-size: $card-height * 0.05;
             display: inline-block;
             font-size: $card-border-size;
             min-height: $card-border-size;
+            white-space: nowrap;
+
+            font-size: $card-height * 0.05;
+            svg {
+              width: $card-border-size;
+              height: $card-border-size;
+              overflow: visible;
+            }
           }
           .suit-wrapper {
             display: flex;
@@ -112,12 +126,24 @@ $one-third: 100% / 3;
           }
           &[rank="A"] {
             .suit-wrapper { justify-content: space-around; }
-            .suit-char { font-size: $card-height * 0.4; }
+            .suit-char {
+              font-size: $card-height * 0.4;
+              svg {
+                width: $card-height * 0.4;
+                height: $card-height * 0.4;
+              }
+            }
           }
           &[rank="J"],
           &[rank="Q"],
           &[rank="K"] {
-            .suit-char { font-size: $card-height * 0.3; }
+            .suit-char {
+              font-size: $card-height * 0.3;
+              svg {
+                width: $card-height * 0.3;
+                height: $card-height * 0.3;
+              }
+            }
           }
         }
       }
@@ -224,8 +250,8 @@ $one-third: 100% / 3;
 
   .deck {
     position: absolute;
-    top: 10px;
-    left: 10px;
+    top: 20px;
+    left: 20px;
     font-size: 0px;
 
     .card-container {

@@ -6,6 +6,7 @@
 <% end %>
 <% return unless (suit && rank) %>
 <% suit_unicodes = { D: "&#9830;", H: "&#9829;", S: "&#9824;", C: "&#9827;" } %>
+<% suit_filenames = { D: "diamond", H: "heart", S: "spade", C: "club" } %>
 <% suit = suit.upcase %>
 <% rank = rank.upcase %>
 <% rank = 10 if rank == "T" %>
@@ -16,12 +17,11 @@
     <div class="face front">
       <div class="foreground"></div>
       <div class="rank"><%= rank %></div>
-      <div class="suit"><%= suit_unicodes[suit.to_sym].html_safe %></div>
+      <div class="suit"><%= svg "card/#{suit_filenames[suit.to_sym]}" %></div>
       <div class="card-body" rank="<%= rank %>">
         <div class="suit-wrapper">
           <% rank_num = rank.to_i %>
           <% rank_num = 1 if rank_num == 0 %>
-          <% char = suit_unicodes[suit.to_sym].html_safe %>
           <%
             suit_rows = case rank_num
             when 2 then [1, 1]
@@ -46,7 +46,7 @@
             <% end %>
             <div class="suit-char">
               <% suit_row_count.times.with_index do |sym, idx| %>
-                <%= char %>
+                <%= svg "card/#{suit_filenames[suit.to_sym]}" %>
               <% end %>
             </div>
           <% end %>

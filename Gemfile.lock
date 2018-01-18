@@ -101,6 +101,9 @@ GEM
     httparty (0.14.0)
       multi_xml (>= 0.5.2)
     i18n (0.8.1)
+    inline_svg (1.2.1)
+      activesupport (>= 3.0)
+      nokogiri (>= 1.6)
     jbuilder (2.6.3)
       activesupport (>= 3.0.0, < 5.2)
       multi_json (~> 1.2)
@@ -293,6 +296,7 @@ DEPENDENCIES
   font-awesome-rails
   gmaps4rails
   httparty
+  inline_svg
   jbuilder (~> 2.0)
   jquery-rails
   jquery-ui-rails
@@ -328,4 +332,4 @@ DEPENDENCIES
   underscore-rails
 
 BUNDLED WITH
-   1.16.0.pre.1
+   1.16.1
