@@ -10,6 +10,7 @@
 <div class="card-game-container">
   <div class="playing-field">
     <div class="zone green" data-zone-type="deck">
+      <h1>Deck</h1>
       <%# circle, semi-circle, carbon, checker45, weave %>
       <% while @deck.size > 0 do %>
         <%= render partial: 'card', locals: { card: @deck.draw, back: "semi-circle" } %>
