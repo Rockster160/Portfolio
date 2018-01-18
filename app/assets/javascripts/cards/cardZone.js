@@ -16,7 +16,13 @@ $('.ctr-cards').ready(function() {
         newZone.draggable({ containment: ".playing-field" })
       }
       if (resizable) {
-        newZone.resizable({ containment: ".playing-field" })
+        newZone.resizable({
+          containment: ".playing-field",
+          handles: "all",
+          classes: {
+            "ui-resizable-se": ""
+          }
+        })
       }
     }
 

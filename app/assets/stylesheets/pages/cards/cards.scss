@@ -248,18 +248,13 @@ $one-third: 100% / 3;
     }
   }
 
-  .deck {
+  [data-zone-type="deck"] {
     position: absolute;
     top: 20px;
     left: 20px;
+    width: 100px;
+    height: 130px;
     font-size: 0px;
-
-    .card-container {
-      position: relative;
-      margin: 0;
-      width: $card-width / 100;
-      z-index: 0;
-    }
   }
 }
 

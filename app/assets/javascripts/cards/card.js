@@ -21,6 +21,31 @@ $(".ctr-cards").ready(function() {
       $(".playing-field").append(dot);
     }
 
+    deck = function() {
+      return $("[data-zone-type='deck']")
+    }
+
+    organizeDeck = function() {
+      var $deck = deck(),
+        deckCoord = offsetCenterOfCard(deck().offset()),
+        startCoord = {top: deckCoord.top - ($deck.height() / 2), left: deckCoord.left - ($deck.width() / 2)}
+      var $cards = cardsInDeck()
+
+      sortCardsByStackOrder($deck).each(function(idx) {
+        $(this).closest(".card-container").css("z-index", idx + 1);
+      })
+
+      $cards.each(function(t) {
+        $card = $(this)
+        $card.jump(deckCoord.left + 20 - (t * 0.3), deckCoord.top + 25)
+      })
+      moveCardsToTopAndReorder()
+    }
+
+    shuffleDeck = function() {
+      console.log("NotYetImplemented");
+    }
+
     optimizeCardCoordsForField = function(coord) {
       return constrainCenteredCardCoordToField(offsetCenterOfCard(calibrateCoordForFieldPadding(coord)));
     }
@@ -93,12 +118,28 @@ $(".ctr-cards").ready(function() {
       return cards;
     }
 
+    addCardToDeck = function(card) {
+      var $cardContainer = $(card).closest(".card-container"), $card = $cardContainer.find(".card")
+      deck().append($cardContainer.css("z-index", 0))
+      $(card)
+        .removeClass("flipped")
+        .removeClass("active")
+        .removeClass("dragging")
+        .removeClass("ui-selected")
+        .removeClass("ui-selecting")
+      var deckCoords = deck().position(),
+        cardCoords = calibrateCoordForFieldPadding(deckCoords);
+      $(card).jump(cardCoords.left, cardCoords.top);
+      organizeDeck()
+      return card;
+    }
+
     popCardOffDeck = function(card) {
-      $(".playing-field").append($(card).parent());
+      $(".playing-field").append($(card).closest(".card-container"));
       moveCardsToTopAndReorder(card);
-      var deckCoords = $(".deck").position(),
-      cardCoords = calibrateCoordForFieldPadding(deckCoords);
-      $(card).jump(cardCoords.left + $(".deck").outerWidth(), cardCoords.top);
+      var deckCoords = deck().position()
+        // cardCoords = calibrateCoordForFieldPadding(deckCoords)
+      $(card).jump(deckCoords.left, deckCoords.top);
       return card;
     }
 
@@ -129,15 +170,15 @@ $(".ctr-cards").ready(function() {
     }
 
     cardIsInDeck = function(card) {
-      return $(card).parents(".deck").length > 0;
+      return $(card).parents("[data-zone-type='deck']").length > 0;
     }
 
     cardsInDeck = function() {
-      return sortCardsByStackOrder($(".deck .card"));
+      return sortCardsByStackOrder($("[data-zone-type='deck'] .card"));
     }
 
     cardsInPlay = function() {
-      return sortCardsByStackOrder($(":not(.deck) > .card-container .card"));
+      return sortCardsByStackOrder($(":not([data-zone-type='deck']) > .card-container .card"));
     }
 
     deckTopCard = function() {
@@ -153,15 +194,16 @@ $(".ctr-cards").ready(function() {
       var $cards = sortCardsByStackOrder(cards), card_count = $cards.length;
       $cards.each(function(idx) {
         var newIdx = opts.reverse ? $(".card").length + card_count - idx : $(".card").length + 2 + idx;
-        $(this).parent().css("z-index", newIdx);
+        $(this).closest(".card-container").css("z-index", newIdx);
       })
+      var deckCount = cardsInDeck().length
       sortCardsByStackOrder(cardsInPlay()).each(function(idx) {
-        $(this).parent().css("z-index", idx + 1);
+        $(this).closest(".card-container").css("z-index", deckCount + idx);
       })
     }
 
     stackPositionForCard = function(card) {
-      return parseInt($(card).parent().css("z-index")) || 0;
+      return parseInt($(card).closest(".card-container").css("z-index")) || 0;
     }
 
     sortCardsByStackOrder = function(cards) {
@@ -184,36 +226,22 @@ $(".ctr-cards").ready(function() {
       }
     }
 
-    var allFlipped = false;
     $(window).keydown(function(evt) {
       if (evt.which == keyEvent("SPACE")) {
+        evt.preventDefault()
         if ($(".ui-selected").length > 0) {
           cards = $(".ui-selected.card");
-        } else {
-          cards = cardsInPlay();
+          flipCard(cards)
         }
-        flipCard(cards);
-        // if (allFlipped) {
-        //   flipCard(cards, "up");
-        //   allFlipped = false;
-        // } else {
-        //   flipCard(cards, "down");
-        //   allFlipped = true;
-        // }
-        // TODO: Should have separate controls to make all cards go down/up/toggle
+        return false
       } else {
         switch (String.fromCharCode(evt.which)) {
           case "D":
             dealCard({startCoord: optimizeCardCoordsForField(currentMouseCoord), flipOnLand: evt.shiftKey});
           break;
-          // case "T":
-          //   addDot(currentMouseCoord.left, currentMouseCoord.top);
-          // break;
-          // case "S":
-          //   setTimeout(function() { dealCard({startCoord: {top: 0, left: 25}, flipOnLand: true}) }, 0)
-          //   setTimeout(function() { dealCard({startCoord: {top: 0, left: 50}, flipOnLand: true}) }, 200)
-          //   setTimeout(function() { dealCard({startCoord: {top: 0, left: 75}, flipOnLand: true}) }, 400)
-          // break;
+          case "T":
+            addDot(currentMouseCoord.left, currentMouseCoord.top);
+          break;
         }
       }
     });
@@ -280,19 +308,52 @@ $(".ctr-cards").ready(function() {
         $("[save-pos-left]").removeAttr("save-pos-left");
         $("[save-pos-top]").removeAttr("save-pos-top");
         moveCardsToTopAndReorder();
+
+        var $deck = deck()
+        var deckPos = $deck.position()
+        var deckBB = {
+          left: deckPos.left,
+          top: deckPos.top,
+          right: deckPos.left + $deck.outerWidth(),
+          bottom: deckPos.top + $deck.outerHeight()
+        }
+        // If dropped cards into the deck
+        if (currentMouseCoord.left > deckBB.left && currentMouseCoord.left < deckBB.right) {
+          // Horz coords match
+          if (currentMouseCoord.top > deckBB.top && currentMouseCoord.top < deckBB.bottom) {
+            // Vert coords match
+            $(".ui-selected, .ui-draggable-dragging").each(function() {
+              addCardToDeck(this)
+            })
+          }
+        }
       }
     });
-    // When CMD clicking a card, should flip all selected cards?
+    var selectingFlipped = undefined
     $(".playing-field").selectable({
       filter: ".card",
+      start: function(e, ui) {
+        if ($(".ui-selected").length == 0) { selectingFlipped = undefined }
+      },
       selecting: function(e, ui) {
         var $this = $(ui.selecting);
-        if ($this.hasClass("deck") || $this.parents(".deck").length > 0) {
-          $this.removeClass("ui-selecting");
+
+        // Prevent cards in the deck from being selected
+        if ($this.hasClass("deck") || $this.parents("[data-zone-type='deck']").length > 0) {
+          return $this.removeClass("ui-selecting");
+        }
+
+        // Can only select cards facing the same direction
+        if (selectingFlipped == undefined) {
+          selectingFlipped = $this.hasClass("flipped")
+        } else if (selectingFlipped) {
+          if (!$this.hasClass("flipped")) { $this.removeClass("ui-selecting") }
+        } else {
+          if ($this.hasClass("flipped")) { $this.removeClass("ui-selecting") }
         }
       }
     });
 
-    moveCardsToTopAndReorder();
+    organizeDeck()
   }, 0)
 })
