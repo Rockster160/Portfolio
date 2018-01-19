@@ -113,6 +113,7 @@ $(".ctr-cards").ready(function() {
         cards.push(card)
         animateCardToCoords(card, nextCoord, duration, function(card) {
           if (flipOnLand) { flipCard(card) }
+          if (opts.callback && typeof(opts.callback) === "function") { opts.callback(card) }
         });
       }
       return cards;

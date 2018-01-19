@@ -1,6 +1,4 @@
 $('.ctr-cards').ready(function() {
-  // FIXME: The timings in this file are VERY sensitive
-  // Somehow we're losing the scope of the card when dealing/flipping
   setTimeout(function() {
     if (params.game == "solitaire") {
       var cardWidth = 100
@@ -24,144 +22,135 @@ $('.ctr-cards').ready(function() {
       var moveLeftPerLayer = cardWidth + distanceBetweenCards
       var cardCoord = $.extend({}, topRight)
       var cardStartLeft = fieldBB.right - ((cardWidth + distanceBetweenCards) * 7)
-      var timeBetweenEachDeal = 300
+      cardCoord.top += 100
 
-      setTimeout(function() {
-        cardCoord.top += 100
+      var q = new Queue()
+      // Next Row
+      q.add(function(queue) {
         cardCoord.left = cardStartLeft
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: true})
-      }, 5)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: true, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 1)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 2)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 3)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 4)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 5)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 6)
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
 
-      setTimeout(function() {
+      // Next Row
+      q.add(function(queue) {
         cardCoord.top += moveDownPerLayer
         cardCoord.left = cardStartLeft
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: true})
-      }, timeBetweenEachDeal * 7)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: true, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 8)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 9)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 10)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 11)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 12)
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
 
-      setTimeout(function() {
-        cardCoord.top += moveDownPerLayer
-        cardCoord.left = cardStartLeft
-        cardCoord.left += moveLeftPerLayer
-        cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: true})
-      }, timeBetweenEachDeal * 13)
-      setTimeout(function() {
-        cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 14)
-      setTimeout(function() {
-        cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 15)
-      setTimeout(function() {
-        cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 16)
-      setTimeout(function() {
-        cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 17)
-
-      setTimeout(function() {
+      // Next Row
+      q.add(function(queue) {
         cardCoord.top += moveDownPerLayer
         cardCoord.left = cardStartLeft
         cardCoord.left += moveLeftPerLayer
         cardCoord.left += moveLeftPerLayer
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: true, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: true})
-      }, timeBetweenEachDeal * 18)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 19)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 20)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 21)
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
 
-      setTimeout(function() {
+      // Next Row
+      q.add(function(queue) {
         cardCoord.top += moveDownPerLayer
         cardCoord.left = cardStartLeft
         cardCoord.left += moveLeftPerLayer
         cardCoord.left += moveLeftPerLayer
         cardCoord.left += moveLeftPerLayer
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: true, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: true})
-      }, timeBetweenEachDeal * 22)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 23)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 24)
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
 
-      setTimeout(function() {
+      // Next Row
+      q.add(function(queue) {
         cardCoord.top += moveDownPerLayer
         cardCoord.left = cardStartLeft
         cardCoord.left += moveLeftPerLayer
         cardCoord.left += moveLeftPerLayer
         cardCoord.left += moveLeftPerLayer
         cardCoord.left += moveLeftPerLayer
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: true, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: true})
-      }, timeBetweenEachDeal * 25)
-      setTimeout(function() {
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: false})
-      }, timeBetweenEachDeal * 26)
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
 
-      setTimeout(function() {
+      // Next Row
+      q.add(function(queue) {
         cardCoord.top += moveDownPerLayer
         cardCoord.left = cardStartLeft
         cardCoord.left += moveLeftPerLayer
@@ -169,9 +158,27 @@ $('.ctr-cards').ready(function() {
         cardCoord.left += moveLeftPerLayer
         cardCoord.left += moveLeftPerLayer
         cardCoord.left += moveLeftPerLayer
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: true, callback: Queue.finish(queue)})
+      })
+      q.add(function(queue) {
         cardCoord.left += moveLeftPerLayer
-        dealCard({startCoord: cardCoord, duration: 100, flipOnLand: true})
-      }, timeBetweenEachDeal * 27)
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: false, callback: Queue.finish(queue)})
+      })
+
+      // Next Row
+      q.add(function(queue) {
+        cardCoord.top += moveDownPerLayer
+        cardCoord.left = cardStartLeft
+        cardCoord.left += moveLeftPerLayer
+        cardCoord.left += moveLeftPerLayer
+        cardCoord.left += moveLeftPerLayer
+        cardCoord.left += moveLeftPerLayer
+        cardCoord.left += moveLeftPerLayer
+        cardCoord.left += moveLeftPerLayer
+        dealCard({startCoord: cardCoord, duration: 50, flipOnLand: true, callback: Queue.finish(queue)})
+      })
+
+      q.process()
     } // game: solitaire
-  }, 1000)
+  }, 5)
 })
