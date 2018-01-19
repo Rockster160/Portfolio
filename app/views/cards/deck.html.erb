@@ -21,7 +21,12 @@
     <div class="dealer-controls">
       <a href="#" class="btn add-zone" data-type="no-flip">New Zone</a>
       <br>
-      <%= link_to "Solitaire", {game: :solitaire}, class: "btn" %>
+      <% if params[:game].present? %>
+        <%= link_to "Default", {}, class: "btn" %>
+      <% end %>
+      <% if params[:game] != "solitaire" %>
+        <%= link_to "Solitaire", {game: :solitaire}, class: "btn" %>
+      <% end %>
     </div>
   <% end %>
 </div>

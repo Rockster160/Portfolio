@@ -29,16 +29,14 @@ $(".ctr-cards").ready(function() {
       var $deck = deck(),
         deckCoord = offsetCenterOfCard(deck().offset()),
         startCoord = {top: deckCoord.top - ($deck.height() / 2), left: deckCoord.left - ($deck.width() / 2)}
-      var $cards = cardsInDeck()
-
-      sortCardsByStackOrder($deck).each(function(idx) {
-        $(this).closest(".card-container").css("z-index", idx + 1);
-      })
+      var $cards = cardsInDeck(), cardCount = $cards.length
 
       $cards.each(function(t) {
-        $card = $(this)
-        $card.jump(deckCoord.left + 20 - (t * 0.3), deckCoord.top + 25)
+        var $card = $(this)
+        $card.closest(".card-container").css("z-index", t + 1);
+        $card.jump(deckCoord.left + (t * 0.2), deckCoord.top + 25)
       })
+
       moveCardsToTopAndReorder()
     }
 
