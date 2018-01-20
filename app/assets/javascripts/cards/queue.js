@@ -32,6 +32,10 @@ Queue.prototype.delay = function(ms) {
   this.add(Queue.delay(this, ms))
 }
 
+Queue.prototype.finish = function(ms) {
+  this.eventCurrentlyRunning = false
+}
+
 Queue.prototype.process = function() {
   var q = this
   this.runningQueue = setInterval(function() { q.run() }, 1)
