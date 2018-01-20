@@ -86,7 +86,18 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   tick = function() {
     screenLog()
+    chunkTick()
+    jumpToPlayer()
     Player.tick()
+  }
+
+  jumpToPlayer = function() {
+    if (!currentPlayer) { return }
+    var playerPos = currentPlayer.html.position(),
+      newLeft = playerPos.left - ($(window).width() / 2) + (littleWorld.blockWidth / 2),
+      newTop = playerPos.top - ($(window).height() / 2)
+
+    $("body, html").stop().scrollLeft(newLeft).scrollTop(newTop)
   }
 
   triggerEvent = function(key, direction) {
@@ -151,6 +162,45 @@ $('.ctr-little_worlds.act-show').ready(function() {
     }, delay + 1)
   }
 
+  chunkTick = function() {
+    var chunksDidChange = false
+
+    // TODO: Load Chunks from endpoint, toss them in
+    // Determine if any extra chunks need to be rendered
+    // -- There should always be 1 more chunk after the last visible chunk
+    // Determine if any chunks need to be removed
+    // -- There should ONLY be 1 more chunk after the last visible chunk
+
+    if (chunksDidChange) { updateChunks() }
+  }
+
+  updateChunks = function() {
+    // Get the count of chunk vert/horz
+    // Position chunks relatively to each other to fit
+    var minX, minY, maxX, maxY
+    $(".chunk").each(function() {
+      var chunkX = parseInt($(this).attr("data-chunk-x")), chunkY = parseInt($(this).attr("data-chunk-y"))
+      minX = minX || chunkX; if (chunkX < minX) { minX = chunkX }
+      minY = minY || chunkY; if (chunkY < minY) { minY = chunkY }
+      maxX = maxX || chunkX; if (chunkX > maxX) { maxX = chunkX }
+      maxY = maxY || chunkY; if (chunkY > maxY) { maxY = chunkY }
+    })
+    var gameWidth = $(".game").width()
+    var gameHeight = $(".game").height()
+    var chunkWidth = $(".chunk").width()
+    var chunkHeight = $(".chunk").height()
+    var renderedWidth = chunkWidth * (maxX - minX + 1)
+    var renderedHeight = chunkHeight * (maxY - minY + 1)
+    var startX = (gameWidth / 2) - (renderedWidth / 2)
+    var startY = (gameHeight / 2) - (renderedHeight / 2)
+    $(".game").attr("data-offset-x", startX).attr("data-offset-y", startY)
+    $(".chunk").each(function() {
+      var chunkX = parseInt($(this).attr("data-chunk-x")), chunkY = parseInt($(this).attr("data-chunk-y"))
+
+      $(this).css({top: (startY + ((maxY - minY + chunkY) * chunkWidth)) + "px", left: (startX + ((maxX - minX + chunkX) * chunkWidth)) + "px"})
+    })
+  }
+
   $(".open-chat-btn").on("click tap touch", showInput)
   $(".chat-input").on("blur", hideInput)
   $(document).keyup(function(evt) {
@@ -193,29 +243,19 @@ $('.ctr-little_worlds.act-show').ready(function() {
     lastBlockHoveredCoord = littleWorld.getCoordForBlock(this)
   })
 
-  $(window).on('beforeunload', function() {
-    $(window).scrollTop(0).scrollLeft(0);
-  });
-
-  $(function () {
-    // Disable disabled zooming on iPhone (They removed the ability to prevent zooming)
-    if (!(/iPad|iPhone|iPod/.test(navigator.userAgent))) return
-    $(document.head).append('<style>*{cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,0)}</style>')
-    $(window).on('gesturestart touchmove', function (evt) {
-      if (evt.originalEvent.scale !== 1) {
-        evt.originalEvent.preventDefault()
-      }
-    })
+  $(document).on("mousewheel wheel", function(evt) {
+    // Disable all user scrolling, as we control scrolling by location of character
+    evt.preventDefault()
+    return false
   })
 
+  // TODO
+  // Control zoom amount- should not be able to zoom more/less than supposed to
+
+  updateChunks()
+  currentPlayer.logIn()
   setInterval(tick, 1);
   setInterval(actOnKeysPressed, 5);
   showChatBox()
   hideChatBox()
-  currentPlayer.logIn(function() {
-    var playerPos = currentPlayer.html.position(), newLeft = playerPos.left - ($(window).width() / 2) + (littleWorld.blockWidth / 2), newTop = playerPos.top - ($(window).height() / 2);
-    setTimeout(function() {
-      $("body, html").stop().scrollLeft(newLeft).scrollTop(newTop)
-    }, 200)
-  })
 })

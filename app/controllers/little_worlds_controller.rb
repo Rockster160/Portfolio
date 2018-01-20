@@ -7,7 +7,7 @@ class LittleWorldsController < ApplicationController
     @logged_in_users = Avatar.logged_in
     @avatar = find_avatar(session_first: false)
     @character = @avatar.character
-    @world = MapGenerator.generate
+    @chunk = MapGenerator.render_chunk_from_position(@avatar.location_x, @avatar.location_y)
     cookies.signed[:avatar_uuid] = @avatar.uuid
   end
 

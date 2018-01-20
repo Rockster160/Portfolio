@@ -255,8 +255,8 @@ Player.prototype.jumpTo = function(coord) {
 
   var blockPosition = littleWorld.getBlockAtCoord([x, y]).position()
   var newPosition = {
-    left: blockPosition.left,
-    top: blockPosition.top
+    left: parseInt($(".game").attr("data-offset-x") || 0) + blockPosition.left,
+    top: parseInt($(".game").attr("data-offset-y") || 0) + blockPosition.top
   };
   this.html.css(newPosition)
   this.updateZIndex()
@@ -335,8 +335,8 @@ Player.prototype.walkTo = function(coord) {
   var oldPosition = player.html.position()
   var blockPosition = littleWorld.getBlockAtCoord(coord).position()
   var newPosition = {
-    left: blockPosition.left,
-    top: blockPosition.top
+    left: parseInt($(".game").attr("data-offset-x") || 0) + blockPosition.left,
+    top: parseInt($(".game").attr("data-offset-y") || 0) + blockPosition.top
   };
 
   if (oldPosition.left == newPosition.left && oldPosition.top == newPosition.top) { return }
