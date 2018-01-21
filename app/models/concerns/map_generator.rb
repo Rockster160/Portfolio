@@ -5,7 +5,7 @@ class MapGenerator
     Chunk.from_position(x, y).to_html.html_safe
   end
 
-  def render_chunk_by_coord(x, y)
+  def self.render_chunk_by_coord(x, y)
     Chunk.new(x, y).to_html.html_safe
   end
 
@@ -139,6 +139,7 @@ class Chunk
     @width, @height = CHUNK_SIZE, CHUNK_SIZE
     @ne_x, @ne_y = chunk_x * CHUNK_SIZE, chunk_y * CHUNK_SIZE
 
+    puts "Building chunk for #{@x}, #{@y}".colorize(:red)
     generate_cell_data
     generate_cells
   end
@@ -150,19 +151,19 @@ class Chunk
     noise_step_scale = 0.05 # This controls the "size" of the areas
     sensible_multiplier = 50 # This gives us a range from 0-50 instead of 0-1
 
-    @cell_data = @height.times.map do |y|
-      @width.times.map do |x|
-        noise_x = noise_step_scale * (@ne_x + x)
-        noise_y = noise_step_scale * (@ne_y + y)
+    @cell_data = @height.times.map do |cell_y|
+      @width.times.map do |cell_x|
+        noise_x = noise_step_scale * (@ne_x + cell_x)
+        noise_y = noise_step_scale * (@ne_y + cell_y)
         noise[noise_x, noise_y] * sensible_multiplier
       end
     end
   end
 
   def generate_cells
-    @cells = @cell_data.map.with_index do |col, y|
-      col.map.with_index do |cell_data, x|
-        Cell.new(cell_data, x, y, @x, @y)
+    @cells = @cell_data.map.with_index do |col, cell_y|
+      col.map.with_index do |cell_data, cell_x|
+        Cell.new(cell_data, cell_x, cell_y, @x, @y)
       end
     end
   end
@@ -182,6 +183,7 @@ end
 
 class Cell
   attr_accessor :cell_data,
+    :world_x, :world_y,
     :chunk_x, :chunk_y,
     :x, :y,
     :style_classes,
@@ -193,6 +195,8 @@ class Cell
     @y         = y
     @chunk_x   = chunk_x
     @chunk_y   = chunk_y
+    @world_x   = @x + (@chunk_x * Chunk::CHUNK_SIZE)
+    @world_y   = @y + (@chunk_y * Chunk::CHUNK_SIZE)
 
     set_style_classes
   end
@@ -225,6 +229,6 @@ class Cell
   end
 
   def to_html
-    MapGenerator.div(@style_classes, @content, {"data-x" => @x, "data-y" => @y, "data-chunk-x" => @chunk_x, "data-chunk-y" => @chunk_y})
+    MapGenerator.div(@style_classes, @content, {"data-x" => @world_x, "data-y" => @world_y, "data-rel-x" => @x, "data-rel-y" => @y, "data-chunk-x" => @chunk_x, "data-chunk-y" => @chunk_y})
   end
 end

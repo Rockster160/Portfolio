@@ -3,8 +3,6 @@ function LittleWorld() {
   this.players = []
   this.blockWidth = $(".block").width()
   this.blockHeight = $(".block").height()
-  this.boardWidth = parseInt($(".little-world-wrapper").attr("data-world-width"))
-  this.boardHeight = parseInt($(".little-world-wrapper").attr("data-world-height"))
 }
 
 LittleWorld.prototype.connected = function() {
@@ -255,8 +253,8 @@ Player.prototype.jumpTo = function(coord) {
 
   var blockPosition = littleWorld.getBlockAtCoord([x, y]).position()
   var newPosition = {
-    left: parseInt($(".game").attr("data-offset-x") || 0) + blockPosition.left,
-    top: parseInt($(".game").attr("data-offset-y") || 0) + blockPosition.top
+    left: $(".game").offset().left + blockPosition.left,
+    top: $(".game").offset().top + blockPosition.top
   };
   this.html.css(newPosition)
   this.updateZIndex()
@@ -335,8 +333,8 @@ Player.prototype.walkTo = function(coord) {
   var oldPosition = player.html.position()
   var blockPosition = littleWorld.getBlockAtCoord(coord).position()
   var newPosition = {
-    left: parseInt($(".game").attr("data-offset-x") || 0) + blockPosition.left,
-    top: parseInt($(".game").attr("data-offset-y") || 0) + blockPosition.top
+    left: $(".game").offset().left + blockPosition.left,
+    top: $(".game").offset().top + blockPosition.top
   };
 
   if (oldPosition.left == newPosition.left && oldPosition.top == newPosition.top) { return }

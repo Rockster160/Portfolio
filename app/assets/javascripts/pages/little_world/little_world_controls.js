@@ -7,13 +7,13 @@ function randRange(start, end) {
   return Math.round(start + (random() * (end - start)));
 }
 
+chunksLoading = []
 $('.ctr-little_worlds.act-show').ready(function() {
   $(".little-world-wrapper").disableSelection()
 
-  var ticksPerMovementFrame = 5
-  var lastBlockHoveredCoord = [];
-  var screenMessage;
-  var chatBoxTimer
+  var ticksPerMovementFrame = 5,
+    lastBlockHoveredCoord = [],
+    screenMessage, chatBoxTimer
   currentPlayer = new Player($(".player"))
   littleWorld = new LittleWorld()
   littleWorldPlayers.push(currentPlayer)
@@ -86,8 +86,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
 
   tick = function() {
     screenLog()
-    chunkTick()
-    jumpToPlayer()
+    // jumpToPlayer()
     Player.tick()
   }
 
@@ -162,42 +161,120 @@ $('.ctr-little_worlds.act-show').ready(function() {
     }, delay + 1)
   }
 
+  coordInBB = function(coord, bb) {
+    if (coord.left < bb.left)   { return false }
+    if (coord.left > bb.right)  { return false }
+    if (coord.top  < bb.top)    { return false }
+    if (coord.top  > bb.bottom) { return false }
+    return true
+  }
+
+  boundingBoxesIntersect = function(bb1, bb2) {
+    if (bb1.bottom < bb2.top)     { return false }
+    if (bb1.top    > bb2.bottom)  { return false }
+    if (bb1.left   > bb2.right)   { return false }
+    if (bb1.right  < bb2.left)    { return false }
+    return true
+  }
+
+  loadChunks = function() {
+    if (currentPlayer.isMoving) { chunkTick() }
+  }
+
   chunkTick = function() {
-    var chunksDidChange = false
+    var currentlyLoadedChunkCoords = $(".chunk").get().map(function(chunk) { return [parseInt($(chunk).attr("data-chunk-x")), parseInt($(chunk).attr("data-chunk-y"))] })
+    var playerChunkCoord = [Math.floor(currentPlayer.x / 16), Math.floor(currentPlayer.y / 16)]
 
-    // TODO: Load Chunks from endpoint, toss them in
-    // Determine if any extra chunks need to be rendered
-    // -- There should always be 1 more chunk after the last visible chunk
-    // Determine if any chunks need to be removed
-    // -- There should ONLY be 1 more chunk after the last visible chunk
+    var horzChunksOnScreen = Math.ceil($(window).outerWidth() / $(".chunk").outerWidth()) + 1
+    if (horzChunksOnScreen % 2 == 0) { horzChunksOnScreen += 1 }
+    var vertChunksOnScreen = Math.ceil($(window).outerHeight() / $(".chunk").outerHeight()) + 1
+    if (vertChunksOnScreen % 2 == 0) { vertChunksOnScreen += 1 }
 
-    if (chunksDidChange) { updateChunks() }
+    var neededChunkCoords = [playerChunkCoord]
+    for(var relativeHorzChunkIdx=0;relativeHorzChunkIdx<horzChunksOnScreen;relativeHorzChunkIdx++) {
+      var horzChunk = Math.round(horzChunksOnScreen / 2) - relativeHorzChunkIdx
+      for(var relativeVertChunkIdx=0;relativeVertChunkIdx<vertChunksOnScreen;relativeVertChunkIdx++) {
+        var vertChunk = Math.round(vertChunksOnScreen / 2) - relativeVertChunkIdx
+        neededChunkCoords.push([playerChunkCoord[0] + horzChunk, playerChunkCoord[1] + vertChunk])
+      }
+    }
+
+    var chunkCoordsToRemove = currentlyLoadedChunkCoords.filter(function(chunkCoord) {
+      return !includeArray(neededChunkCoords, chunkCoord)
+    })
+    var chunkCoordsToLoad = neededChunkCoords.filter(function(chunkCoord) {
+      return !includeArray(currentlyLoadedChunkCoords, chunkCoord)
+    })
+
+    chunkCoordsToLoad.sort(function(a, b) {
+      var aDiff = Math.abs(playerChunkCoord[0] - a[0]) + Math.abs(playerChunkCoord[1] - a[1])
+      var bDiff = Math.abs(playerChunkCoord[0] - b[0]) + Math.abs(playerChunkCoord[1] - b[1])
+      return aDiff - bDiff
+    })
+    chunkCoordsToLoad.forEach(function(chunkToLoad) {
+      if (includeArray(currentlyLoadedChunkCoords, chunkToLoad)) { return }
+      if (includeArray(chunksLoading, chunkToLoad)) { return }
+      chunksLoading.push(chunkToLoad)
+      console.log("Loading chunk", chunkToLoad);
+      q = new Queue()
+      q.add(function(queue) {
+        $.get($(".little-world-wrapper").attr("data-chunk-url"), {x: chunkToLoad[0], y: chunkToLoad[1]}).success(function(data) {
+          if ($(data).hasClass("chunk")) {
+            $(".game").append(data)
+            updateChunks()
+          }
+        }).done(function() {
+          queue.finish()
+          chunksLoading.filter(function(chunk) {
+            return chunk != chunkToLoad
+          })
+        }).error(function() {
+          console.log("Failed to load", chunkToLoad);
+        })
+      })
+      q.process()
+    })
+    chunkCoordsToRemove.forEach(function(chunkCoord) {
+      console.log("Removing chunk", chunkCoord);
+      $(".chunk[data-chunk-x=" + chunkCoord[0] + "][data-chunk-y=" + chunkCoord[1] + "]").remove()
+    })
+    updateChunks()
   }
 
   updateChunks = function() {
-    // Get the count of chunk vert/horz
-    // Position chunks relatively to each other to fit
     var minX, minY, maxX, maxY
     $(".chunk").each(function() {
       var chunkX = parseInt($(this).attr("data-chunk-x")), chunkY = parseInt($(this).attr("data-chunk-y"))
-      minX = minX || chunkX; if (chunkX < minX) { minX = chunkX }
-      minY = minY || chunkY; if (chunkY < minY) { minY = chunkY }
-      maxX = maxX || chunkX; if (chunkX > maxX) { maxX = chunkX }
-      maxY = maxY || chunkY; if (chunkY > maxY) { maxY = chunkY }
+      console.log("chunkX", chunkX);
+      if (minX == undefined) { minX = chunkX }; if (chunkX < minX) { minX = chunkX }
+      if (minY == undefined) { minY = chunkY }; if (chunkY < minY) { minY = chunkY }
+      if (maxX == undefined) { maxX = chunkX }; if (chunkX > maxX) { maxX = chunkX }
+      if (maxY == undefined) { maxY = chunkY }; if (chunkY > maxY) { maxY = chunkY }
     })
+    console.log("minX", minX);
+    console.log("maxX", maxX);
     var gameWidth = $(".game").width()
+    console.log("gameWidth", gameWidth);
     var gameHeight = $(".game").height()
+    // console.log("gameHeight", gameHeight);
     var chunkWidth = $(".chunk").width()
+    console.log("chunkWidth", chunkWidth);
     var chunkHeight = $(".chunk").height()
-    var renderedWidth = chunkWidth * (maxX - minX + 1)
-    var renderedHeight = chunkHeight * (maxY - minY + 1)
-    var startX = (gameWidth / 2) - (renderedWidth / 2)
-    var startY = (gameHeight / 2) - (renderedHeight / 2)
-    $(".game").attr("data-offset-x", startX).attr("data-offset-y", startY)
+    // console.log("chunkHeight", chunkHeight);
+    var renderedWidth = chunkWidth * ((maxX - minX) + 1)
+    console.log("renderedWidth", renderedWidth);
+    var renderedHeight = chunkHeight * ((maxY - minY) + 1)
+    // console.log("renderedHeight", renderedHeight);
+    $(".game").css({"width": renderedWidth, "height": renderedHeight})
     $(".chunk").each(function() {
       var chunkX = parseInt($(this).attr("data-chunk-x")), chunkY = parseInt($(this).attr("data-chunk-y"))
+      var chunkXCoord = (maxX - chunkX) * chunkWidth
+      var chunkYCoord = (maxY - chunkY) * chunkWidth
+      console.log("chunkX", chunkX);
+      console.log("chunkXCoord", chunkXCoord);
+      // console.log("chunkYCoord", chunkYCoord);
 
-      $(this).css({top: (startY + ((maxY - minY + chunkY) * chunkWidth)) + "px", left: (startX + ((maxX - minX + chunkX) * chunkWidth)) + "px"})
+      $(this).css({top: chunkYCoord + "px", left: chunkXCoord + "px"})
     })
   }
 
@@ -232,21 +309,15 @@ $('.ctr-little_worlds.act-show').ready(function() {
         return false
       }
     }
-  })
-
-  $('.block.walkable').on('mousedown tap touch', function(evt) {
+  }).on("mousedown tap touch", ".block.walkable", function(evt) {
     var newCoord = littleWorld.getCoordForBlock(this)
     currentPlayer.setDestination(newCoord);
-  })
-
-  $(".block[data-x][data-y]").mouseover(function() {
+  }).on("mouseover", ".block[data-x][data-y]", function() {
     lastBlockHoveredCoord = littleWorld.getCoordForBlock(this)
-  })
-
-  $(document).on("mousewheel wheel", function(evt) {
+  }).on("mousewheel wheel", function(evt) {
     // Disable all user scrolling, as we control scrolling by location of character
-    evt.preventDefault()
-    return false
+    // evt.preventDefault()
+    // return false
   })
 
   // TODO
@@ -256,6 +327,8 @@ $('.ctr-little_worlds.act-show').ready(function() {
   currentPlayer.logIn()
   setInterval(tick, 1);
   setInterval(actOnKeysPressed, 5);
+  setInterval(loadChunks, 1000);
+  setTimeout(chunkTick, 1000)
   showChatBox()
   hideChatBox()
 })

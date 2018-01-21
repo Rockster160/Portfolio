@@ -2,7 +2,7 @@
 @import "config/variables";
 
 .ctr-little_worlds.act-show {
-  background: $grey-blue;
+  background-image: linear-gradient(45deg, lightblue, $grey-blue);
 
   ::-webkit-scrollbar, *::-webkit-scrollbar, &::-webkit-scrollbar {
     display: none;
@@ -130,6 +130,7 @@
   .little-world-wrapper {
     font-size: 0;
     position: relative;
+    padding: 100vh 100vw;
 
     .player {
       margin: 3px;
@@ -211,8 +212,6 @@
 
     .game {
       position: relative;
-      width: 200vw;
-      height: 200vh;
 
       .chunk {
         width: $cellWidth * $chunkSize;

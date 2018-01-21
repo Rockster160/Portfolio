@@ -47,6 +47,8 @@ function findPath(world, pathStart, pathEnd) {
 
   // returns boolean value (world cell is available and open)
   function canWalkHere(x, y) {
+    x = x || 0
+    y = y || 0
     var withinBoundaries = x >= 0 && x < worldWidth && y >= 0 && y < worldHeight
     return withinBoundaries && world[x][y] <= 0
   };

@@ -11,6 +11,11 @@ class LittleWorldsController < ApplicationController
     cookies.signed[:avatar_uuid] = @avatar.uuid
   end
 
+  def chunk
+    puts "Rendering Chunk: #{params[:x]}, #{params[:y]}".colorize(:yellow)
+    render plain: MapGenerator.render_chunk_by_coord(params[:x].to_i, params[:y].to_i)
+  end
+
   def save_location
     @avatar = find_avatar(session_first: false)
 

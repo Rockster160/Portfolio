@@ -37,6 +37,7 @@ Queue.prototype.finish = function(ms) {
 }
 
 Queue.prototype.process = function() {
+  if (this.eventCurrentlyRunning) { return false }
   var q = this
   this.runningQueue = setInterval(function() { q.run() }, 1)
 }
