@@ -2,7 +2,7 @@
 @import "config/variables";
 
 .ctr-little_worlds.act-show {
-  background-image: linear-gradient(45deg, lightblue, $grey-blue);
+  background: $grey-blue;
 
   ::-webkit-scrollbar, *::-webkit-scrollbar, &::-webkit-scrollbar {
     display: none;
@@ -214,11 +214,15 @@
       position: relative;
 
       .chunk {
+        border-top: 2px solid red;
+        border-left: 2px solid red;
         width: $cellWidth * $chunkSize;
         height: $cellWidth * $chunkSize;
         position: absolute;
 
         .block {
+          border-top: 1px solid white;
+          border-left: 1px solid white;
           display: inline-block;
           box-sizing: border-box;
           position: relative;

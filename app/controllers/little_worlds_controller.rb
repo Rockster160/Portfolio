@@ -12,8 +12,11 @@ class LittleWorldsController < ApplicationController
   end
 
   def chunk
-    puts "Rendering Chunk: #{params[:x]}, #{params[:y]}".colorize(:yellow)
-    render plain: MapGenerator.render_chunk_by_coord(params[:x].to_i, params[:y].to_i)
+    # puts "Rendering Chunk: #{params[:x]}, #{params[:y]}".colorize(:yellow)
+    chunks = params[:coords].values.uniq.map do |(x, y)|
+      MapGenerator.render_chunk_by_coord(x.to_i, y.to_i)
+    end
+    render json: chunks
   end
 
   def save_location

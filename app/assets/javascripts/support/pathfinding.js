@@ -13,7 +13,8 @@ function findPath(world, pathStart, pathEnd) {
   // keep track of the world dimensions
   // it must have equal height and width. If your game world is rectangular,
   // just fill the array with dummy values to pad the empty space.
-  var worldWidth = world[0].length;
+  function first(p) { for(var i in p) return p[i] }
+  var worldWidth = first(world).length;
   var worldHeight = world.length;
   if (worldWidth < worldHeight) { worldWidth = worldHeight }
   if (worldHeight < worldWidth) { worldHeight = worldWidth }

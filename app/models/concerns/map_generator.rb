@@ -88,10 +88,10 @@ class MapGenerator
   # def rand_grass(x, y)
   #   rand_block = @cells.dig(y, x)
   #   return "check" if rand_block <= 15
-  #   return "grass-length-1" if rand_block <= 20
-  #   return "grass-length-2" if rand_block <= 25
-  #   return "grass-length-3" if rand_block <= 30
-  #   return "grass-length-4" if rand_block <= 35
+  #   return "grass" if rand_block <= 20
+  #   return "grass-2" if rand_block <= 25
+  #   return "grass-3" if rand_block <= 30
+  #   return "grass-4" if rand_block <= 35
   #   "bad"
   # end
   #
@@ -139,23 +139,24 @@ class Chunk
     @width, @height = CHUNK_SIZE, CHUNK_SIZE
     @ne_x, @ne_y = chunk_x * CHUNK_SIZE, chunk_y * CHUNK_SIZE
 
-    puts "Building chunk for #{@x}, #{@y}".colorize(:red)
+    puts "Building chunk for (#{@x}, #{@y})".colorize(:red)
     generate_cell_data
     generate_cells
   end
 
   def generate_cell_data
-    noise = ::Perlin::Noise.new(2, seed: 3141)
+    # noise = ::Perlin::Noise.new(2, seed: 3141)
+    noise = ::Perlin::Generator.new(3141, 1.0, 1)
     # These numbers range from 0..1 with about 16 decimal points
     # The numbers tend to stay close to, but above 0.5
-    noise_step_scale = 0.05 # This controls the "size" of the areas
-    sensible_multiplier = 50 # This gives us a range from 0-50 instead of 0-1
+    noise_step_scale = 0.02 # This controls the "size" of the areas
+    sensible_multiplier = 50 # This gives us a range from 0..100 instead of -1..1
 
     @cell_data = @height.times.map do |cell_y|
       @width.times.map do |cell_x|
         noise_x = noise_step_scale * (@ne_x + cell_x)
         noise_y = noise_step_scale * (@ne_y + cell_y)
-        noise[noise_x, noise_y] * sensible_multiplier
+        (noise[noise_x, noise_y] * sensible_multiplier) + sensible_multiplier
       end
     end
   end
@@ -172,6 +173,12 @@ class Chunk
     @cells.map do |row|
       row.map(&:to_html).join("")
     end.join("")
+  end
+
+  def to_s
+    @cells.map do |row|
+      row.map(&:to_s).join("")
+    end.join("\n")
   end
 
   def to_html
@@ -203,7 +210,7 @@ class Cell
 
   def walkable?
     @walkable ||= begin
-      cell_data > 15
+      !(@cell_data <= 10 || @cell_data > 95)
     end
   end
 
@@ -212,7 +219,10 @@ class Cell
       klass_map = []
       klass_map << :block
       klass_map << :walkable if walkable?
-      klass_map << cell_type
+      mod_cell = cell_type
+      mod_num = @cell_data.to_s.split(".").last.first.to_i % 4
+      mod_cell += "-#{mod_num}" if mod_num != 0 && mod_cell != "bad"
+      klass_map << mod_cell
 
       klass_map.join(" ")
     end
@@ -220,12 +230,32 @@ class Cell
 
   def cell_type
     # generate_grass_for_cell(x, y)
-    return "water"          if @cell_data <= 15
-    return "grass-length-1" if @cell_data <= 25
-    return "grass-length-2" if @cell_data <= 35
-    return "grass-length-3" if @cell_data <= 45
-    return "grass-length-4" if @cell_data <= 50
+    return "water"       if @cell_data <= 10
+    return "sand"        if @cell_data <= 20
+    return "grass"       if @cell_data <= 45
+    return "grass-dark"  if @cell_data <= 65
+    return "stone"       if @cell_data <= 85
+    return "stone-med"   if @cell_data <= 90
+    return "stone-dark"  if @cell_data <= 95
+    return "stone-black" if @cell_data <= 96
+    return "lava"        if @cell_data <= 100
     "bad"
+  end
+
+  def to_s
+    cell_data_num = "#{@cell_data.round.to_s.rjust(4, ' ')}"
+    case cell_type
+    when "water"       then cell_data_num.colorize(color: :black, background: :blue)
+    when "sand"        then cell_data_num.colorize(color: :black, background: :yellow)
+    when "grass"       then cell_data_num.colorize(color: :black, background: :light_green)
+    when "grass-dark"  then cell_data_num.colorize(color: :black, background: :green)
+    when "stone"       then cell_data_num.colorize(color: :black, background: :light_red)
+    when "stone-med"   then cell_data_num.colorize(color: :black, background: :light_magenta)
+    when "stone-dark"  then cell_data_num.colorize(color: :black, background: :magenta)
+    when "stone-black" then cell_data_num.colorize(color: :black, background: :magenta)
+    when "lava"        then cell_data_num.colorize(color: :black, background: :red)
+    else cell_data_num.colorize(color: :white, background: :black)
+    end
   end
 
   def to_html

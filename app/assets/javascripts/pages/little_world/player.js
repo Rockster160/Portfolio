@@ -251,10 +251,12 @@ Player.prototype.jumpTo = function(coord) {
   this.x = x
   this.y = y
 
-  var blockPosition = littleWorld.getBlockAtCoord([x, y]).position()
+  var block = littleWorld.getBlockAtCoord([x, y])
+  var chunkPosition = block.parent().position()
+  var blockPosition = block.position()
   var newPosition = {
-    left: $(".game").offset().left + blockPosition.left,
-    top: $(".game").offset().top + blockPosition.top
+    left: $(".game").offset().left + chunkPosition.left + blockPosition.left,
+    top:  $(".game").offset().top +  chunkPosition.top +  blockPosition.top
   };
   this.html.css(newPosition)
   this.updateZIndex()
@@ -331,10 +333,12 @@ Player.prototype.logOut = function() {
 Player.prototype.walkTo = function(coord) {
   var player = this
   var oldPosition = player.html.position()
-  var blockPosition = littleWorld.getBlockAtCoord(coord).position()
+  var block = littleWorld.getBlockAtCoord(coord)
+  var chunkPosition = block.parent().position()
+  var blockPosition = block.position()
   var newPosition = {
-    left: $(".game").offset().left + blockPosition.left,
-    top: $(".game").offset().top + blockPosition.top
+    left: $(".game").offset().left + chunkPosition.left + blockPosition.left,
+    top:  $(".game").offset().top +  chunkPosition.top +  blockPosition.top
   };
 
   if (oldPosition.left == newPosition.left && oldPosition.top == newPosition.top) { return }
