@@ -1,0 +1,15 @@
+<%= meta_title "SVG" %>
+<%= meta_description "Create and edit SVGs with this path editor." %>
+
+<div class="skinny-container">
+  <div class="form">
+    <div class="form-title">SVG</div>
+
+    <%= render partial: 'layouts/error_container', locals: { resource: @user } %>
+
+    <div class="form-content">
+      <div class="svg-container"><div id="svg-box"></div></div>
+      <div id="svg-raw" class="textarea" contenteditable></div>
+    </div>
+  </div>
+</div>

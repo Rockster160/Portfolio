@@ -1,0 +1,39 @@
+.ctr-svg_editors {
+  .form-content {
+    margin: 50px 30px;
+
+    .svg-btn {
+      font-family: 'CodenameCoder-Bold', monospace;
+      font-size: 14px;
+      font-weight: bold;
+      padding: 8px 10px;
+    }
+
+    #svg-raw {
+      width: 100%;
+      height: 400px;
+      padding: 5px;
+      resize: none;
+      font-family: 'CodenameCoder-Bold', monospace;
+      overflow: scroll;
+      white-space: pre;
+    }
+
+    .svg-container {
+      margin: 10px auto;
+      position: relative;
+
+      #svg-box {
+        border: 1px solid grey;
+        width: 100%;
+        height: 500px;
+        overflow: hidden;
+
+        svg {
+          width: 100%;
+          height: 100%;
+        }
+      }
+    }
+  }
+}
