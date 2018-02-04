@@ -1,6 +1,9 @@
 <% if (error ||= nil).present? %>
   <div class="color-error"><%= error %></div>
 <% end %>
-<% colors.each do |color| %>
-  <color style="color: <%= ColorGenerator.contrast_text_color_on_background(color) %>"><%= color %></color>
+<% colors.each_with_index do |color, idx| %>
+  <color style="color: <%= ColorGenerator.contrast_text_color_on_background(color) %>">
+    <span><%= idx + 1 %></span>
+    <%= color %>
+  </color>
 <% end %>

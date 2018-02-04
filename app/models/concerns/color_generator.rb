@@ -6,8 +6,8 @@ module ColorGenerator
       steps ||= 10
       steps = steps.to_i
       raise ColorGenerationError.new("Cannot fade more than 256 steps!") if steps > 256
-      start_hex = validHex(from_hex)
-      end_hex = validHex(to_hex)
+      start_hex = conform_hex(from_hex)
+      end_hex = conform_hex(to_hex)
       fade_back = (fade_back || fade_back == 'true')
       return [] if steps <= 0
       return [start_hex] if steps == 1
@@ -36,12 +36,33 @@ module ColorGenerator
       return colors.compact
     end
 
+    def lighten_pure_hex(hex, percent)
+      raise ColorGenerationError.new("Cannot lighten non-hex!") unless hex.length.in?(1..2)
+      valid_hex = hex.length == 1 ? "#{hex}#{hex}" : hex
+      rgb = valid_hex.to_i(16)
+      fade_from_white = (255 - rgb) * (percent/100.to_f)
+      lightened_rgb = [0, fade_from_white, 255].sort[1]
+      lightened_hex = lightened_rgb.round.to_s(16)
+      fixed_hex = lightened_hex.length == 1 ? "0#{lightened_hex}" : lightened_hex
+    end
+
+    def lighten(full_hex, percent)
+      hex_without_hash = full_hex.gsub("#", '')
+      raise ColorGenerationError.new("Cannot lighten non-hex!") unless hex_without_hash.length.in?([3, 6])
+      rhex, ghex, bhex = hex_without_hash.length == 6 ? hex_without_hash.scan(/../) : hex_without_hash.scan(/./)
+      "##{lighten_pure_hex(rhex, percent)}#{lighten_pure_hex(ghex, percent)}#{lighten_pure_hex(bhex, percent)}"
+    end
+
+    def darken(full_hex, percent)
+      lighten(full_hex, -percent)
+    end
+
     def hex_to_rgb(hex)
-      color_without_hash = hex.gsub("#", '')
-      if color_without_hash.length == 6
-        return color_without_hash.scan(/.{2}/).map { |rgb| rgb.to_i(16) }
-      elsif color_without_hash.length == 3
-        return color_without_hash.split('').map { |rgb| "#{rgb}#{rgb}".to_i(16) }
+      hex_without_hash = hex.gsub("#", '')
+      if hex_without_hash.length == 6
+        return hex_without_hash.scan(/.{2}/).map { |rgb| rgb.to_i(16) }
+      elsif hex_without_hash.length == 3
+        return hex_without_hash.split('').map { |rgb| "#{rgb}#{rgb}".to_i(16) }
       else
         return nil
       end
@@ -52,7 +73,7 @@ module ColorGenerator
       "##{r}#{g}#{b}".upcase
     end
 
-    def validHex(hex_try)
+    def conform_hex(hex_try)
       new_hex = hex_try.to_s.squish.upcase
       new_hex = new_hex.gsub("#", '')
       raise ColorGenerationError.new("Hex values can only be characters A-F and numbers 0-9") if new_hex =~ /[^a-f0-9]/i
