@@ -4,6 +4,9 @@ $(".ctr-lists").ready(function() {
 
   $(".lists").sortable({
     handle: ".list-item-handle",
+    start: function() {
+      $(".list-item-container .list-item-field").blur()
+    },
     update: function(evt, ui) {
       var list_order = $(this).children().map(function() { return $(this).attr("data-list-id") })
       var url = $(this).attr("data-reorder-url")
@@ -13,6 +16,9 @@ $(".ctr-lists").ready(function() {
   })
   $(".list-items").sortable({
     handle: ".list-item-handle",
+    start: function() {
+      $(".list-item-container .list-item-field").blur()
+    },
     update: function(evt, ui) {
       var list_item_order = $(this).children().filter(function() {
         return !$(this).children("input").prop("checked")
@@ -95,6 +101,7 @@ $(".ctr-lists").ready(function() {
     if (evtContainer) {
       heldListItem = evtContainer
       heldListItemTimer = setTimeout(function() {
+        if (evtContainer.hasClass("ui-sortable-helper")) { return }
         var $itemName = heldListItem.find(".item-name")
         var $itemField = heldListItem.find(".list-item-field")
         $itemName.addClass("hidden")

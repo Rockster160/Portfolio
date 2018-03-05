@@ -22,16 +22,15 @@ $(".ctr-svg_editors").ready(function() {
   // TODO: try/catch parsing errors, and instead display an error on screen
   // TODO: Toggle text wrap
   // TODO: Prettify input
+  window.onbeforeunload = function() {
+    $("#svg-box").html($("#svg-box").html().replace(/\<div\>/g, "").replace(/\<\/div\>/g, "\n"))
+    var inputElement = document.getElementById("svg-raw")
+    var enteredText = (inputElement.textContent || inputElement.innerText)
+    if (enteredText !== null && enteredText.length > 0) { localStorage.setItem("svg", enteredText) }
+  }
+  window.onload = function() {
+    var enteredText = localStorage.getItem("svg")
+    if (enteredText !== null) { document.getElementById("svg-raw").textContent = enteredText }
+    $("#svg-raw").change()
+  }
 })
-
-window.onbeforeunload = function() {
-  $("#svg-box").html($("#svg-box").html().replace(/\<div\>/g, "").replace(/\<\/div\>/g, "\n"))
-  var inputElement = document.getElementById("svg-raw")
-  var enteredText = (inputElement.textContent || inputElement.innerText)
-  if (enteredText !== null && enteredText.length > 0) { localStorage.setItem("svg", enteredText) }
-}
-window.onload = function() {
-  var enteredText = localStorage.getItem("svg")
-  if (enteredText !== null) { document.getElementById("svg-raw").textContent = enteredText }
-  $("#svg-raw").change()
-}
