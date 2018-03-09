@@ -1,3 +1,3 @@
 <% list.list_items.order(:sort_order).each do |item| %>
-  <%= render template: "list_items/show", layout: false, locals: { list: list, item: item } %>
+  <%= render partial: "list_items/show", locals: { list: list, item: item } %>
 <% end %>

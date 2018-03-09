@@ -7,6 +7,7 @@
 #  created_at  :datetime
 #  updated_at  :datetime
 #  description :text
+#  important   :boolean          default(FALSE)
 #
 
 class List < ApplicationRecord

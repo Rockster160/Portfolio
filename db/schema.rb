@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20171107024350) do
+ActiveRecord::Schema.define(version: 20180309015726) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -69,6 +69,10 @@ ActiveRecord::Schema.define(version: 20171107024350) do
     t.integer  "sort_order"
     t.string   "formatted_name"
     t.datetime "deleted_at"
+    t.boolean  "important",                  default: false
+    t.boolean  "permanent",                  default: false
+    t.string   "schedule"
+    t.string   "category"
     t.index ["deleted_at"], name: "index_list_items_on_deleted_at", using: :btree
     t.index ["list_id"], name: "index_list_items_on_list_id", using: :btree
   end
@@ -78,6 +82,7 @@ ActiveRecord::Schema.define(version: 20171107024350) do
     t.datetime "created_at"
     t.datetime "updated_at"
     t.text     "description"
+    t.boolean  "important",               default: false
   end
 
   create_table "litter_text_reminders", force: :cascade do |t|

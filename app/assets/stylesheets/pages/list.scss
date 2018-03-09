@@ -11,18 +11,34 @@
     padding: 0 3px;
   }
 
-  .list-item-container {
+  .list-item-container, .list-item-options {
     user-select: none;
     position: relative;
 
     .list-item-handle {
       z-index: 2;
       position: absolute;
-      line-height: 70px;
+      line-height: 50px;
       width: 30px;
       text-align: center;
-      right: 0;
       top: 0;
+      right: 0;
+    }
+
+    .settings-btn {
+      z-index: 2;
+      position: absolute;
+      line-height: 20px;
+      font-size: 12px;
+      width: 30px;
+      text-align: center;
+      top: 45px;
+      right: 0;
+    }
+
+    .item-name big {
+      font-size: 26px;
+      display: block;
     }
   }
 
@@ -82,7 +98,7 @@
       color: red;
       background: pink;
       border-color: red;
-      text-decoration: line-through;
+      // text-decoration: line-through;
 
       &:after {
         content: "\2713 ";

@@ -10,6 +10,10 @@
 #  sort_order     :integer
 #  formatted_name :string
 #  deleted_at     :datetime
+#  important      :boolean          default(FALSE)
+#  permanent      :boolean          default(FALSE)
+#  schedule       :string
+#  category       :string
 #
 
 class ListItem < ApplicationRecord
@@ -17,7 +21,7 @@ class ListItem < ApplicationRecord
   attr_accessor :do_not_broadcast, :do_not_bump_order
   belongs_to :list
 
-  before_save :set_sort_order, :set_formatted_name
+  before_save :set_sort_order, :normalize_values
   after_commit :reorder_conflict_orders
   after_commit :broadcast_commit
 
@@ -42,14 +46,22 @@ class ListItem < ApplicationRecord
     name
   end
 
+  def options
+    {
+      important: "When set, this item will automatically appear at the top of the list regardless of the sort order.",
+      permanent: "When set, this item will not be removed from list when checking it. Instead, it will appear toggled/selected on your page, but when reloading the page the item will still be present. This also prevents the item from being removed on other user's pages that are sharing the list. (Does not work if a schedule is set.)"
+    }
+  end
+
   private
 
   def set_sort_order
     self.sort_order ||= list.list_items.max_by(&:sort_order).try(:sort_order).to_i + 1
   end
 
-  def set_formatted_name
+  def normalize_values
     self.formatted_name = name.downcase.gsub(/[^a-z0-9]/i, "")
+    self.permanent = false if self.schedule.present?
   end
 
   def broadcast_commit

@@ -36,7 +36,7 @@ Rails.application.routes.draw do
       post :receive_update
       get :users
     end
-    resources :list_items, only: [ :create, :update, :destroy ]
+    resources :list_items, only: [ :create, :update, :destroy, :show ]
   end
 
   resources :cards, only: [] do

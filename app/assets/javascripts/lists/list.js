@@ -1,6 +1,6 @@
 var heldListItem, heldListItemTimer
 
-$(".ctr-lists").ready(function() {
+$(".ctr-lists, .ctr-list_items").ready(function() {
 
   $(".lists").sortable({
     handle: ".list-item-handle",
@@ -55,7 +55,7 @@ $(".ctr-lists").ready(function() {
     }
   })
 
-  $(document).on("change", ".list-item-checkbox", function(evt) {
+  $(document).on("change", ".list-item-container .list-item-checkbox", function(evt) {
     var $itemField = $(this).closest(".list-item-container").find(".list-item-field")
     if (!$itemField.hasClass("hidden")) {
       $(this).prop("checked", false)
@@ -64,18 +64,34 @@ $(".ctr-lists").ready(function() {
     }
     var checkbox = $(this)
     if (this.checked) {
-      $.ajax({ type: "DELETE", url: $(this).attr("data-checked-url") })
+      $.ajax({type: "DELETE", url: $(this).attr("data-checked-url")})
     } else {
       $.post($(this).attr("data-create-url"), {id: $(this).parents(".list-item-container").attr("data-item-id")})
     }
+  }).on("change", ".list-item-options .list-item-checkbox", function(evt) {
+    var params = {}
+    params.id = $(this).parents(".list-item-options").attr("data-item-id")
+    params[$(this).attr("name")] = this.checked
+
+    $.ajax({
+      url: $(this).attr("data-submit-url"),
+      type: "PATCH",
+      data: params
+    })
   })
 
   $(document).on("keyup", ".list-item-field", function(evt) {
     if (evt.which == keyEvent("ENTER")) { $(this).blur() }
   }).on("blur", ".list-item-field", function() {
-    var $container = $(this).closest(".list-item-container")
-    var submitUrl = $container.attr("data-item-url")
-    var updatedName = $(this).val()
+    var $container = $(this).closest(".list-item-container"),
+      submitUrl = $container.attr("data-item-url"),
+      updatedName = $(this).val(),
+      $itemName = $container.find(".item-name"),
+      $itemField = $container.find(".list-item-field")
+
+    $itemName.val(updatedName)
+    $itemName.removeClass("hidden")
+    $itemField.addClass("hidden")
 
     $.ajax({
       url: submitUrl,
@@ -84,14 +100,6 @@ $(".ctr-lists").ready(function() {
         list_item: {
           name: updatedName
         }
-      },
-      success: function() {
-        var $itemName = $container.find(".item-name")
-        var $itemField = $container.find(".list-item-field")
-
-        $itemName.val(updatedName)
-        $itemName.removeClass("hidden")
-        $itemField.addClass("hidden")
       }
     })
   })
