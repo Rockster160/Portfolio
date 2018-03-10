@@ -84,7 +84,7 @@ class User < ApplicationRecord
   end
 
   def ordered_lists
-    lists.includes(:user_lists).where(user_lists: { user_id: id }).order("user_lists.sort_order")
+    lists.includes(user_lists: :list).where(user_lists: { user_id: id }).order("user_lists.sort_order")
   end
 
   def invite!(list)

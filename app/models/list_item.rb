@@ -27,18 +27,30 @@ class ListItem < ApplicationRecord
 
   validates :name, presence: true
 
-  default_scope { ordered }
-  scope :ordered, -> { order(:sort_order) }
-  scope :by_formatted_name, ->(name) { where(formatted_name: name.to_s.downcase.gsub(/[^a-z0-9]/i, "")) }
+  scope :ordered, -> { order("list_items.important DESC, list_items.sort_order DESC") }
+  scope :important, -> { where(important: true) }
+  scope :unimportant, -> { where.not(important: true) }
+
+  def self.by_formatted_name(name)
+    find_by(formatted_name: name.to_s.downcase.gsub(/[^a-z0-9]/i, ""))
+  end
 
   def self.by_name_then_update(params)
-    old_item = with_deleted.by_formatted_name(params[:name]).first
+    old_item = with_deleted.find_by(id: params[:id]) || with_deleted.by_formatted_name(params[:name])
 
     if old_item.present?
       old_item.update(params.merge(deleted_at: nil))
       old_item
     else
       create(params)
+    end
+  end
+
+  def checked=(new_val)
+    if new_val.to_s == "true"
+      update(deleted_at: DateTime.current)
+    else
+      update(deleted_at: nil)
     end
   end
 
@@ -49,7 +61,7 @@ class ListItem < ApplicationRecord
   def options
     {
       important: "When set, this item will automatically appear at the top of the list regardless of the sort order.",
-      permanent: "When set, this item will not be removed from list when checking it. Instead, it will appear toggled/selected on your page, but when reloading the page the item will still be present. This also prevents the item from being removed on other user's pages that are sharing the list. (Does not work if a schedule is set.)"
+      permanent: "When set, this item will not be removed from list when checking it. Instead, it will appear toggled/selected on your page, but when reloading the page the item will still be present. This also prevents the item from being removed on other user's pages that are sharing the list."
     }
   end
 
@@ -61,6 +73,7 @@ class ListItem < ApplicationRecord
 
   def normalize_values
     self.formatted_name = name.downcase.gsub(/[^a-z0-9]/i, "")
+    self.category = self.category.squish.titleize.presence if self.category
     self.permanent = false if self.schedule.present?
   end
 

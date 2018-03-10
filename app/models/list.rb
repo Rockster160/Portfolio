@@ -18,6 +18,9 @@ class List < ApplicationRecord
 
   validates_presence_of :name
 
+  scope :important, -> { where(important: true) }
+  scope :unimportant, -> { where.not(important: true) }
+
   def self.find_and_modify(msg)
     list = first
     List.all.each do |try_list|
@@ -28,6 +31,10 @@ class List < ApplicationRecord
     end
 
     list.modify_from_message(msg) if list.present?
+  end
+
+  def ordered_items
+    list_items.order("list_items.sort_order")
   end
 
   def owned_by_user?(user)
@@ -47,7 +54,7 @@ class List < ApplicationRecord
         item
       end.select(&:persisted?)
       return "No items added." if items.none?
-      return "Running list:\n - #{list_items.map(&:name).join("\n - ")}"
+      return "Running list:\n - #{ordered_items.map(&:name).join("\n - ")}"
     when 'remove'
       not_destroyed = []
       destroyed_items = []
@@ -65,7 +72,7 @@ class List < ApplicationRecord
       if destroyed_items.any?
         sms_messages << "Removed #{destroyed_items.map(&:name).to_sentence} from #{name}."
       end
-      sms_messages << "Running list:\n - #{list_items.map(&:name).join("\n - ")}"
+      sms_messages << "Running list:\n - #{ordered_items.map(&:name).join("\n - ")}"
       return sms_messages.join("\n") if sms_messages.any?
     when 'clear'
       items = list_items.destroy_all
@@ -129,7 +136,7 @@ class List < ApplicationRecord
   end
 
   def jsonify
-    attributes.symbolize_keys.slice(:id, :name, :description).merge(list_items: list_items.ordered.map(&:jsonify))
+    attributes.symbolize_keys.slice(:id, :name, :description).merge(list_items: ordered_items.map(&:jsonify))
   end
 
 end

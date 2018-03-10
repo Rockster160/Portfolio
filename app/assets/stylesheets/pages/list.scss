@@ -11,7 +11,7 @@
     padding: 0 3px;
   }
 
-  .list-item-container, .list-item-options {
+  .important-container, .list-item-container, .list-item-options {
     user-select: none;
     position: relative;
 
@@ -75,7 +75,13 @@
     }
   }
 
-  .list-items, .lists {
+  .important-list-items {
+    border-bottom: 1px solid white;
+    padding-bottom: 10px;
+
+    .list-item-handle { display: none; }
+  }
+  .important-list-items, .list-items, .lists {
     input[type=checkbox] { display: none; }
     .list-item {
       text-decoration: none;
@@ -98,7 +104,6 @@
       color: red;
       background: pink;
       border-color: red;
-      // text-decoration: line-through;
 
       &:after {
         content: "\2713 ";
@@ -106,7 +111,7 @@
         line-height: 1;
         font-size: 35px;
         top: 10px;
-        right: 10px;
+        right: 17px;
       }
     }
   }

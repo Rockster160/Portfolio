@@ -2,7 +2,7 @@ class ListItemsController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user
 
-  def show
+  def edit
     @list = current_user.lists.find(params[:list_id])
     @list_item = @list.list_items.find(params[:id])
   end
@@ -14,7 +14,7 @@ class ListItemsController < ApplicationController
     if params[:as_json]
       render json: new_item
     else
-      render partial: "list_items/show", locals: { item: new_item }
+      render template: "list_items/show", locals: { item: new_item }, layout: false
     end
   end
 
@@ -27,7 +27,7 @@ class ListItemsController < ApplicationController
   end
 
   def destroy
-    @list_item = ListItem.find(params[:id])
+    @list_item = ListItem.with_deleted.find(params[:id])
     @list_item.destroy
 
     head :no_content
@@ -37,7 +37,7 @@ class ListItemsController < ApplicationController
 
   def list_item_params
     return {} unless params[:list_item].present?
-    params.require(:list_item).permit(:name, :sort_order, :important, :permanent, :schedule, :category)
+    params.require(:list_item).permit(:name, :checked, :sort_order, :important, :permanent, :schedule, :category)
   end
 
 end

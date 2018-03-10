@@ -2,10 +2,15 @@ var heldListItem, heldListItemTimer
 
 $(".ctr-lists, .ctr-list_items").ready(function() {
 
+  setImportantItems = function() {
+    $(".important-list-items").html("")
+    $("[data-badge]").each(function() { return $(".important-list-items").append($(this).clone()) })
+  }
+
   $(".lists").sortable({
     handle: ".list-item-handle",
     start: function() {
-      $(".list-item-container .list-item-field").blur()
+      $(".list-item-container .list-item-field:not(.hidden)").blur()
     },
     update: function(evt, ui) {
       var list_order = $(this).children().map(function() { return $(this).attr("data-list-id") })
@@ -17,7 +22,7 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
   $(".list-items").sortable({
     handle: ".list-item-handle",
     start: function() {
-      $(".list-item-container .list-item-field").blur()
+      $(".list-item-container .list-item-field:not(.hidden)").blur()
     },
     update: function(evt, ui) {
       var list_item_order = $(this).children().filter(function() {
@@ -62,12 +67,16 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
       evt.preventDefault()
       return false
     }
-    var checkbox = $(this)
-    if (this.checked) {
-      $.ajax({type: "DELETE", url: $(this).attr("data-checked-url")})
-    } else {
-      $.post($(this).attr("data-create-url"), {id: $(this).parents(".list-item-container").attr("data-item-id")})
-    }
+    // var item_id = $(this).closest("[data-item-id]").attr("data-item-id")
+    // $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]")
+    $.ajax({
+      type: "PATCH",
+      url: $(this).attr("data-checked-url"),
+      data: {
+        id: $(this).parents(".list-item-container").attr("data-item-id"),
+        list_item: { checked: this.checked }
+      }
+    })
   }).on("change", ".list-item-options .list-item-checkbox", function(evt) {
     var params = {}
     params.id = $(this).parents(".list-item-options").attr("data-item-id")
@@ -129,4 +138,5 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
     clearTimeout(heldListItemTimer)
   })
 
+  setImportantItems()
 })

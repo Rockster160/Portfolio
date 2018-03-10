@@ -1,0 +1,37 @@
+<%= meta_title "#{@list_item.name.capitalize}", include_name: false %>
+<%= content_for(:favicon) { render "application/favicon" } %>
+<%= content_for(:body_classes) { "black" } %>
+
+<div class="skinny-container list-container" data-list-id="<%= @list.id %>">
+  <div class="btn-container">
+    <a href="<%= list_path(@list) %>" class="btn">&larr; Back to List</a>
+  </div>
+  <div class="list-title"><%= @list_item.name %></div>
+  <div class="list-description">Set options by toggling below.</div>
+  <div class="list-error hidden">Disconnected from server. Changes made now will not be saved. Will attempt to reconnect automatically...</div>
+  <div class="list-items">
+    <% @list_item.options.each_with_index do |(option_key, description), idx| %>
+      <div class="list-item-options" data-sort-order="<%= idx %>" data-item-id="<%= @list_item.id %>">
+        <%=
+          content_tag :input, "", {
+            type: "checkbox",
+            id: "list_item[#{option_key}]",
+            name: "list_item[#{option_key}]",
+            class: "list-item-checkbox",
+            checked: @list_item.send(option_key),
+            data: {
+              "submit-url": list_list_item_path(@list, @list_item)
+            }
+          }
+        %>
+        <label for="list_item[<%= option_key %>]" class="list-item">
+          <div class="checkbox-wrapper"></div>
+          <div class="item-name">
+            <big>&bull; <%= option_key.to_s.titleize %></big>
+            <small><%= description %></small>
+          </div>
+        </label>
+      </div>
+    <% end %>
+  </div>
+</div>

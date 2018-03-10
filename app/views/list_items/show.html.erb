@@ -1,65 +1,17 @@
-<%= meta_title "#{@list_item.name.capitalize}", include_name: false %>
-<%= content_for(:favicon) { render "application/favicon" } %>
-<%= content_for(:body_classes) { "black" } %>
-
-<div class="skinny-container list-container" data-list-id="<%= @list.id %>">
-  <div class="btn-container">
-    <a href="<%= list_path(@list) %>" class="btn">&larr; Back to List</a>
-  </div>
-  <div class="list-title"><%= @list_item.name %></div>
-  <div class="list-description">Set options by toggling below.</div>
-  <div class="list-error hidden">Disconnected from server. Changes made now will not be saved. Will attempt to reconnect automatically...</div>
-  <div class="list-items">
-    <% @list_item.options.each_with_index do |(option_key, description), idx| %>
-      <div class="list-item-options" data-sort-order="<%= idx %>" data-item-id="<%= @list_item.id %>">
-        <%=
-          content_tag :input, "", {
-            type: "checkbox",
-            id: "list_item[#{option_key}]",
-            name: "list_item[#{option_key}]",
-            class: "list-item-checkbox",
-            checked: @list_item.send(option_key),
-            data: {
-              "submit-url": list_list_item_path(@list, @list_item)
-            }
-          }
-        %>
-        <label for="list_item[<%= option_key %>]" class="list-item">
-          <div class="checkbox-wrapper"></div>
-          <div class="item-name">
-            <big>&bull; <%= option_key.to_s.titleize %></big>
-            <small><%= description %></small>
-          </div>
-        </label>
-      </div>
-    <% end %>
-    <%= render_modal("list-item-schedule", "Schedule") do %>
-      Sup
-    <% end %>
-    <div class="list-item-options" data-sort-order="<%= @list_item.options.length %>" data-item-id="<%= @list_item.id %>">
-      <%=
-        content_tag :input, "", {
-          type: "text",
-          id: "list_item[schedule]",
-          name: "list_item[schedule]",
-          class: "hidden",
-          value: @list_item.schedule,
-          data: {
-            "submit-url": list_list_item_path(@list, @list_item)
-          }
-        }
-      %>
-      <label for="list_item[schedule]" class="list-item">
-        <div class="item-name" data-modal="#list-item-schedule">
-          <big>&bull; Schedule</big>
-          <% if @list_item.schedule %>
-            <p class="portfolio-color"><%= @list_item.schedule %></p>
-          <% else %>
-            <p class="portfolio-color">No schedule set - This item is not recurring.</p>
-          <% end %>
-          <small>Click here to configure the schedule. When setting a schedule, after the next date, the item will refresh- adding itself back to your list.</small>
-        </div>
-      </label>
-    </div>
-  </div>
-</div>
+<% list ||= @list || item.list %>
+<% list_data = {
+  "sort-order": item.sort_order,
+  "item-id": item.id,
+  "item-url": list_list_item_path(list, item)
+} %>
+<% list_data.merge!(badge: "") if item.important? %>
+<%= content_tag :div, class: "list-item-container", data: list_data do %>
+  <div class="list-item-handle"><i class="fa fa-arrows"></i></div>
+  <a href="<%= edit_list_list_item_path(list, item) %>" class="settings-btn"><i class="fa fa-cog"></i></a>
+  <input type="checkbox" id="list_item[<%= item.id %>]" class="list-item-checkbox" name="list_item[<%= item.id %>]" value="<%= item.id %>" data-checked-url="<%= list_list_item_path(list, item) %>" data-create-url="<%= list_list_items_path(list) %>">
+  <label for="list_item[<%= item.id %>]" class="list-item">
+    <div class="checkbox-wrapper"></div>
+    <div class="item-name"><%= item.name %></div>
+    <input type="text" name="" value="<%= item.name %>" class="hidden list-item-field">
+  </label>
+<% end %>
