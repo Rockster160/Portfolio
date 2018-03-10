@@ -55,7 +55,8 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
       $(".list-item-container").removeClass("hidden")
     } else {
       $(".list-item-container").each(function() {
-        var optionText = $(this).find(".item-name").text().toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
+        var option_with_category = $(this).find(".list-item-config .category").text() + " " + $(this).find(".item-name").text()
+        var optionText = option_with_category.toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
         if (optionText.indexOf(currentText) >= 0) {
           $(this).removeClass("hidden")
         } else {
