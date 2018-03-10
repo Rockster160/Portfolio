@@ -142,6 +142,7 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
       clearTimeout(heldListItemTimer)
     }
   }).on("mouseup touchend", function(evt) {
+    $(".list-item-field:not(.hidden)").focus()
     heldListItem = null
     clearTimeout(heldListItemTimer)
   })
