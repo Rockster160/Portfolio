@@ -143,6 +143,46 @@ select {
   }
 }
 
+.checkbox-wrapper {
+  input[type=checkbox] { display: none; }
+  input[type=checkbox] + label {
+    .checkbox-placeholder {
+      position: relative;
+      display: inline-block;
+      vertical-align: middle;
+      width: 25px;
+      height: 25px;
+      margin: 2px;
+
+      &:before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        border: 2px solid $base-blue;
+        border-radius: 4px;
+      }
+      &:after {
+        position: absolute;
+        top: -8px;
+        left: 0;
+        font-family: "FontAwesome";
+        font-size: 35px;
+      }
+    }
+  }
+  input[type=checkbox]:not(:checked) + label:hover .checkbox-placeholder:after {
+    content: "\f00c";
+    color: rgba($base-blue, 0.7);
+  }
+  input[type=checkbox]:checked + label .checkbox-placeholder:after {
+    content: "\f00c";
+    color: $base-blue;
+  }
+}
+
 // checkbox
 // radio
 

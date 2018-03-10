@@ -36,6 +36,16 @@
         <%= f.label :description %>
         <%= f.text_area :description %>
       </div>
+      <div class="form-field">
+        <div class="checkbox-wrapper">
+          <%= f.check_box :important %>
+          <%= f.label :important do %>
+            <div class="checkbox-placeholder"></div>
+            <big>&bull; Important?</big> <br>
+            When toggled ON, if there are any available items in this list, it will show up above the other lists regardless of order temporarily.
+          <% end %>
+        </div>
+      </div>
     </div>
 
     <div class="form-submission">
