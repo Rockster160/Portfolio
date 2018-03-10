@@ -4,7 +4,9 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
 
   setImportantItems = function() {
     $(".important-list-items").html("")
-    $("[data-badge]").each(function() { return $(".important-list-items").append($(this).clone()) })
+    $(".list-item-config .important").closest(".list-item-container").each(function() {
+      return $(".important-list-items").append($(this).clone())
+    })
   }
 
   $(".lists").sortable({
@@ -26,7 +28,10 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
     },
     update: function(evt, ui) {
       var list_item_order = $(this).children().filter(function() {
-        return !$(this).children("input").prop("checked")
+        var checked = $(this).children("input").prop("checked")
+        var permanent = $(this).find(".list-item-config .locked").length > 0
+        var removed = checked && !permanent
+        return !removed
       }).map(function() { return $(this).attr("data-item-id") })
 
       var url = $(this).attr("data-update-url")

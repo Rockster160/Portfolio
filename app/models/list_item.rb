@@ -48,7 +48,7 @@ class ListItem < ApplicationRecord
 
   def checked=(new_val)
     if new_val.to_s == "true"
-      update(deleted_at: DateTime.current)
+      update(deleted_at: DateTime.current) unless permanent?
     else
       update(deleted_at: nil)
     end

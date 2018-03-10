@@ -1,11 +1,11 @@
 <% list ||= @list || item.list %>
-<% list_data = {
-  "sort-order": item.sort_order,
-  "item-id": item.id,
-  "item-url": list_list_item_path(list, item)
-} %>
-<% list_data.merge!(badge: "") if item.important? %>
-<%= content_tag :div, class: "list-item-container", data: list_data do %>
+
+<div class="list-item-container" data-sort-order="<%= item.sort_order %>" data-item-id="<%= item.id %>" data-item-url="<%= list_list_item_path(list, item) %>">
+  <div class="list-item-config">
+    <%= content_tag :div, nil, class: "important" if item.important? %>
+    <%= content_tag :div, nil, class: "locked" if item.permanent? %>
+    <%= content_tag :div, item.category if item.category? %>
+  </div>
   <div class="list-item-handle"><i class="fa fa-arrows"></i></div>
   <a href="<%= edit_list_list_item_path(list, item) %>" class="settings-btn"><i class="fa fa-cog"></i></a>
   <input type="checkbox" id="list_item[<%= item.id %>]" class="list-item-checkbox" name="list_item[<%= item.id %>]" value="<%= item.id %>" data-checked-url="<%= list_list_item_path(list, item) %>" data-create-url="<%= list_list_items_path(list) %>">
@@ -14,4 +14,4 @@
     <div class="item-name"><%= item.name %></div>
     <input type="text" name="" value="<%= item.name %>" class="hidden list-item-field">
   </label>
-<% end %>
+</div>

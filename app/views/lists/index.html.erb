@@ -14,12 +14,13 @@
   <div class="lists" data-reorder-url="<%= reorder_lists_path %>">
     <div class="important-list-items"></div>
     <% @lists.each do |list| %>
-      <% list_data = {"list-id": list.id} %>
-      <% list_data.merge!(badge: "") if list.important? %>
-      <%= content_tag :div, class: "list-item-container", data: list_data do %>
+      <div class="list-item-container" data-list-id="<%= list.id %>">
+        <div class="list-item-config">
+          <%= content_tag :div, nil, class: "important" if list.important? %>
+        </div>
         <div class="list-item-handle"><i class="fa fa-arrows"></i></div>
         <a href="<%= list_path(list) %>" class="list-item"><%= list.name.titleize %> (<%= list.list_items.count %>)</a>
-      <% end %>
+      </div>
     <% end %>
   </div>
 </div>

@@ -31,12 +31,16 @@ $('.ctr-lists.act-show').ready(function() {
         if (item_id == undefined || item_id.length == 0) { return false }
 
         var matching_items = $('.list-items .list-item-container[data-item-id=' + item_id + ']')
-        if ($(this).attr("data-badge") !== undefined) {
-          matching_items.attr("data-badge", "")
+        if ($(this).find(".list-item-config .important").length > 0) {
+          if (matching_items.find(".list-item-config .important").length == 0) { matching_items.find(".list-item-config").append($("<div>", {class: "important"})) }
         } else {
-          matching_items.removeAttr("data-badge")
+          matching_items.find(".list-item-config .important").remove()
         }
-        matching_items.attr("data-badge") // Update sort order of already found item
+        if ($(this).find(".list-item-config .locked").length > 0) {
+          if (matching_items.find(".list-item-config .locked").length == 0) { matching_items.find(".list-item-config").append($("<div>", {class: "locked"})) }
+        } else {
+          matching_items.find(".list-item-config .locked").remove()
+        }
         matching_items.attr("data-sort-order", $(this).attr("data-sort-order")) // Update sort order of already found item
         matching_items.find(".item-name").html($(this).find(".item-name").text())
         return matching_items.length == 0
@@ -46,6 +50,7 @@ $('.ctr-lists.act-show').ready(function() {
       $(".list-items .list-item-container").each(function() {
         var current_item = $(this)
         var item_id = current_item.attr("data-item-id")
+        if ($(this).find(".list-item-config .locked").length > 0) { return }
         if (updated_list_ids.toArray().includes(item_id)) {
           // Item exists, uncheck to show it's not deleted
           $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]").prop("checked", false)
@@ -55,9 +60,7 @@ $('.ctr-lists.act-show').ready(function() {
         }
       })
 
-      $(".important-list-items").html("")
-      $("[data-badge]").each(function() { return $(".important-list-items").append($(this).clone()) })
-
+      setImportantItems()
       reorderList()
     }
   })
