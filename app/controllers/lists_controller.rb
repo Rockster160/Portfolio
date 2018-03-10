@@ -29,6 +29,11 @@ class ListsController < ApplicationController
   end
 
   def update
+    if params[:sort]
+      @list.sort_items!(params[:sort], params[:order])
+      return head :ok
+    end
+
     if @list.update(list_params)
       redirect_to list_path(@list)
     else
@@ -87,6 +92,7 @@ class ListsController < ApplicationController
   end
 
   def list_params
+    return {} unless params[:list].present?
     params.require(:list).permit(:name, :description, :important)
   end
 

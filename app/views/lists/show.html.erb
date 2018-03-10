@@ -5,6 +5,17 @@
   <%= javascript_include_tag 'support/touch_punch.js' %>
 <% end %>
 
+<%= render_modal "sort-list", "Sort" do %>
+  <div class="text-center">
+    <p>Selecting the buttons below will organize the current items on your list by the item name, the category name (Items without a category are last), or you may choose to shuffle the items randomly.</p>
+    <a href="<%= list_path(@list, sort: :name, order: :asc) %>" data-method="PATCH" data-remote="true" class="btn">Name A-Z</a>
+    <a href="<%= list_path(@list, sort: :name, order: :desc) %>" data-method="PATCH" data-remote="true" class="btn">Name Z-A</a> <br>
+    <a href="<%= list_path(@list, sort: :category, order: :asc) %>" data-method="PATCH" data-remote="true" class="btn">Category A-Z</a>
+    <a href="<%= list_path(@list, sort: :category, order: :desc) %>" data-method="PATCH" data-remote="true" class="btn">Category Z-A</a> <br>
+    <a href="<%= list_path(@list, sort: :shuffle) %>" data-method="PATCH" data-remote="true" class="btn">Shuffle (Random)</a>
+  </div>
+<% end %>
+
 <div class="skinny-container list-container" data-list-id="<%= @list.id %>">
   <div class="btn-container">
     <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
@@ -12,6 +23,7 @@
   </div>
   <div class="list-title"><%= @list.name.titleize %></div>
   <div class="list-description"><%= auto_link @list.description %></div>
+  <a data-modal="#sort-list" class="btn pull-right">Sort</a>
   <%= form_for [@list, @list.list_items.new], html: {class: "basic new-list-item-form"} do |f| %>
     <div class="list-field">
       <%= f.text_field :name, class: "new-list-item", placeholder: "Add new item", autofocus: true %>

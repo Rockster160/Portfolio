@@ -19,8 +19,8 @@ $(".ctr-list_items.act-edit").ready(function() {
       $(".list-title").text(item.name)
       $(".list-item-checkbox[name='list_item[important]']").prop("checked", item.important)
       $(".list-item-checkbox[name='list_item[permanent]']").prop("checked", item.permanent)
-      $(".list-item-container .item-name").text(item.category)
-      $(".list-item-container .list-item-field[name='category']").val(item.category)
+      $(".list-item-container .item-name").text(item.category || "")
+      $(".list-item-container .list-item-field[name='category']").val(item.category || "")
     }
   })
 

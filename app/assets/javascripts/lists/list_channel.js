@@ -41,7 +41,7 @@ $(".ctr-lists.act-show").ready(function() {
         } else {
           matching_items.find(".list-item-config .locked").remove()
         }
-        var new_category = $(this).find(".list-item-config .category").text()
+        var new_category = $(this).find(".list-item-config .category").text() || ""
         matching_items.find(".list-item-config .category").text(new_category) // Update Category of existing item
         matching_items.attr("data-sort-order", $(this).attr("data-sort-order")) // Update sort order of already found item
         matching_items.find(".item-name").html($(this).find(".item-name").text())

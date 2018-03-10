@@ -41,6 +41,25 @@ class List < ApplicationRecord
     !!user_lists.where(user_id: user.try(:id)).first.try(:is_owner?)
   end
 
+  def sort_items!(sort=nil, order=:asc)
+    return unless sort.present?
+    order = order.to_s.downcase.to_sym
+    order = :asc unless order == :desc
+    items = case sort.to_s.downcase.to_sym
+    when :name
+      list_items.order("list_items.name #{order}")
+    when :category
+      list_items.order("list_items.category #{order} NULLS LAST")
+    when :shuffle
+      list_items.order("RANDOM()")
+    end
+
+    items&.each_with_index do |list_item, idx|
+      list_item.update(sort_order: idx, do_not_bump_order: true)
+    end
+    broadcast!
+  end
+
   def modify_from_message(msg)
     msg = msg.to_s
     response_messages = []
