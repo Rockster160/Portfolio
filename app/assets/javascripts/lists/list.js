@@ -72,8 +72,9 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
       evt.preventDefault()
       return false
     }
-    // var item_id = $(this).closest("[data-item-id]").attr("data-item-id")
-    // $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]")
+    var item_id = $(this).closest("[data-item-id]").attr("data-item-id")
+    $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]").prop("checked", this.checked)
+    
     $.ajax({
       type: "PATCH",
       url: $(this).attr("data-checked-url"),
