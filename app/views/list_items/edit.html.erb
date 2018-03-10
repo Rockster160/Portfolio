@@ -2,14 +2,22 @@
 <%= content_for(:favicon) { render "application/favicon" } %>
 <%= content_for(:body_classes) { "black" } %>
 
-<div class="skinny-container list-container" data-list-id="<%= @list.id %>">
+<div class="skinny-container list-container" data-list-id="<%= @list.id %>" data-list-item-id="<%= @list_item.id %>">
   <div class="btn-container">
     <a href="<%= list_path(@list) %>" class="btn">&larr; Back to List</a>
   </div>
   <div class="list-title"><%= @list_item.name %></div>
-  <div class="list-description">Set options by toggling below.</div>
   <div class="list-error hidden">Disconnected from server. Changes made now will not be saved. Will attempt to reconnect automatically...</div>
-  <div class="list-items">
+  <div class="list-items" data-update-url="<%= list_list_item_path(@list, @list_item) %>">
+    <div class="list-item-container" data-editable data-item-url="<%= list_list_item_path(@list, @list_item) %>">
+      <div class="list-item-config">
+        <div>Category (Click/tap and hold to edit)</div>
+      </div>
+      <div class="list-item">
+        <div class="item-name"><%= @list_item.category %></div>
+        <input type="text" name="category" value="<%= @list_item.category %>" class="hidden list-item-field">
+      </div>
+    </div>
     <% @list_item.options.each_with_index do |(option_key, description), idx| %>
       <div class="list-item-options" data-sort-order="<%= idx %>" data-item-id="<%= @list_item.id %>">
         <%=

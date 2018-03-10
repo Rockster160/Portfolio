@@ -2,6 +2,13 @@ class ListItemsController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user
 
+  def show
+    @list = current_user.lists.find(params[:list_id])
+    @list_item = @list.list_items.find(params[:id])
+
+    render json: @list_item
+  end
+
   def edit
     @list = current_user.lists.find(params[:list_id])
     @list_item = @list.list_items.find(params[:id])

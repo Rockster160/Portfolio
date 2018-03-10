@@ -39,7 +39,7 @@ class ListItem < ApplicationRecord
     old_item = with_deleted.find_by(id: params[:id]) || with_deleted.by_formatted_name(params[:name])
 
     if old_item.present?
-      old_item.update(params.merge(deleted_at: nil))
+      old_item.update(params.merge(deleted_at: nil, sort_order: nil))
       old_item
     else
       create(params)
@@ -81,6 +81,7 @@ class ListItem < ApplicationRecord
     return if do_not_broadcast || do_not_bump_order
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
     ActionCable.server.broadcast "list_#{self.list_id}_channel", list_html: rendered_message
+    ActionCable.server.broadcast "list_item_#{self.id}_channel", list_item: self.attributes.symbolize_keys.slice(:important, :permanent, :category, :name)
   end
 
   def reorder_conflict_orders

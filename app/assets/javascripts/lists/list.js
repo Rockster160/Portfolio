@@ -74,7 +74,7 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
     }
     var item_id = $(this).closest("[data-item-id]").attr("data-item-id")
     $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]").prop("checked", this.checked)
-    
+
     $.ajax({
       type: "PATCH",
       url: $(this).attr("data-checked-url"),
@@ -102,24 +102,25 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
       submitUrl = $container.attr("data-item-url"),
       updatedName = $(this).val(),
       $itemName = $container.find(".item-name"),
-      $itemField = $container.find(".list-item-field")
+      $itemField = $container.find(".list-item-field"),
+      params = {}
 
     $itemName.val(updatedName)
     $itemName.removeClass("hidden")
     $itemField.addClass("hidden")
 
+    var fieldName = $(this).attr("name")
+    params.list_item = {}
+    params.list_item[fieldName] = updatedName
+
     $.ajax({
       url: submitUrl,
       type: "PUT",
-      data: {
-        list_item: {
-          name: updatedName
-        }
-      }
+      data: params
     })
   })
 
-  $(document).on("mousedown touchstart", ".list-item-container", function(evt) {
+  $(document).on("mousedown touchstart", ".list-item-container[data-editable]", function(evt) {
     var evtContainer = $(evt.target).closest(".list-item-container")
     if (evtContainer) {
       heldListItem = evtContainer

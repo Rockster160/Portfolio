@@ -1,4 +1,4 @@
-$('.ctr-lists.act-show').ready(function() {
+$(".ctr-lists.act-show").ready(function() {
 
   var list_id = $(".list-container").attr("data-list-id")
 
@@ -11,7 +11,7 @@ $('.ctr-lists.act-show').ready(function() {
     $(".list-items").html(ordered_list)
   }
 
-  App.messages = App.cable.subscriptions.create({
+  App.lists = App.cable.subscriptions.create({
     channel: "ListChannel",
     channel_id: "list_" + list_id
   }, {
@@ -41,6 +41,8 @@ $('.ctr-lists.act-show').ready(function() {
         } else {
           matching_items.find(".list-item-config .locked").remove()
         }
+        var new_category = $(this).find(".list-item-config .category").text()
+        matching_items.find(".list-item-config .category").text(new_category) // Update Category of existing item
         matching_items.attr("data-sort-order", $(this).attr("data-sort-order")) // Update sort order of already found item
         matching_items.find(".item-name").html($(this).find(".item-name").text())
         return matching_items.length == 0
