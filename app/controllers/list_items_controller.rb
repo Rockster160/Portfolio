@@ -51,6 +51,7 @@ class ListItemsController < ApplicationController
       :important,
       :permanent,
       :category,
+      :schedule,
       schedule: [
         :interval,
         :hour,

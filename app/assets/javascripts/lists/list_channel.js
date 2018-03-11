@@ -41,6 +41,11 @@ $(".ctr-lists.act-show").ready(function() {
         } else {
           matching_items.find(".list-item-config .locked").remove()
         }
+        if ($(this).find(".list-item-config .recurring").length > 0) {
+          if (matching_items.find(".list-item-config .recurring").length == 0) { matching_items.find(".list-item-config").append($("<div>", {class: "recurring"})) }
+        } else {
+          matching_items.find(".list-item-config .recurring").remove()
+        }
         var new_category = $(this).find(".list-item-config .category").text() || ""
         matching_items.find(".list-item-config .category").text(new_category) // Update Category of existing item
         matching_items.attr("data-sort-order", $(this).attr("data-sort-order")) // Update sort order of already found item

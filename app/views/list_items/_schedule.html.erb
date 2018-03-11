@@ -75,6 +75,7 @@
     </div>
 
     <div class="text-center">
+      <%= link_to "Clear", list_list_item_path(@list, @list_item, list_item: {schedule: ""}), data: { method: :patch }, remote: true, class: "btn danger" %>
       <%= submit_tag "Set Schedule" %>
     </div>
   <% end %>
