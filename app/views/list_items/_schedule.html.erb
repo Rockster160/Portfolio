@@ -30,17 +30,17 @@
 
     <div data-watches-selector="#<%= clean_base %>_type" data-watches-value="monthly">
       <div class="radio-wrapper">
-        <%= radio_button_tag "#{base_params}[monthly][type]", :weekly, options[:days_of_month].none? %>
-        <%= label_tag "#{base_params}[monthly][type][weekly]" do %>
-          <div class="radio-placeholder"></div>
-          Days of Week
-        <% end %>
-      </div>
-      <div class="radio-wrapper">
-        <%= radio_button_tag "#{base_params}[monthly][type]", :daily, options[:days_of_month].any? %>
+        <%= radio_button_tag "#{base_params}[monthly][type]", :daily, options[:days_of_week].none? %>
         <%= label_tag "#{base_params}[monthly][type][daily]" do %>
           <div class="radio-placeholder"></div>
           Days of Month
+        <% end %>
+      </div>
+      <div class="radio-wrapper">
+        <%= radio_button_tag "#{base_params}[monthly][type]", :weekly, options[:days_of_week].any? %>
+        <%= label_tag "#{base_params}[monthly][type][weekly]" do %>
+          <div class="radio-placeholder"></div>
+          Days of Week
         <% end %>
       </div>
 

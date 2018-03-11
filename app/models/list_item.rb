@@ -76,12 +76,12 @@ class ListItem < ApplicationRecord
         rule.day(*interval_details[:day].to_a.map(&:to_i))
       when :monthly
         if interval_details[:type] == "daily"
-          rule.day_of_month(*interval_details[:day].map(&:to_i))
+          rule.day_of_month(*interval_details[:day].map(&:to_i)) if interval_details.key?(:day)
         elsif interval_details[:type] == "weekly"
-          deep_numerify_keys = interval_details[:week].each_with_object({}) do |(day_of_week, idxs_of_week), deep_numerify|
+          deep_numerify_keys = interval_details[:week]&.each_with_object({}) do |(day_of_week, idxs_of_week), deep_numerify|
             deep_numerify[day_of_week.to_i] = idxs_of_week.map(&:to_i)
           end
-          rule.day_of_week(deep_numerify_keys)
+          rule.day_of_week(deep_numerify_keys) if interval_details.key?(:week)
         end
       end
     end
@@ -127,7 +127,7 @@ class ListItem < ApplicationRecord
       if start_time
         options[:hour] = start_time.hour > 12 ? start_time.hour - 12 : start_time.hour
         options[:minute] = start_time.min.to_s.rjust(2, "0")
-        options[:meridian] = start_time.hour > 12 ? "PM" : "AM"
+        options[:meridian] = start_time.hour >= 12 ? "PM" : "AM"
       end
 
       options.reject { |k,v| v.blank? }.reverse_merge(default_schedule_options)
@@ -174,7 +174,7 @@ class ListItem < ApplicationRecord
     return if do_not_broadcast || do_not_bump_order
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
     ActionCable.server.broadcast "list_#{self.list_id}_channel", list_html: rendered_message
-    ActionCable.server.broadcast "list_item_#{self.id}_channel", list_item: self.attributes.symbolize_keys.slice(:important, :permanent, :category, :name).merge(schedule: self.schedule_in_words)
+    ActionCable.server.broadcast "list_item_#{self.id}_channel", list_item: self.attributes.symbolize_keys.slice(:important, :permanent, :category, :name).merge(schedule: self.schedule_in_words, countdown: (self.schedule_next.to_f * 1000).round)
   end
 
   def reorder_conflict_orders

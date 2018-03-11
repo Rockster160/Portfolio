@@ -47,6 +47,7 @@
         <div class="item-name" data-modal="#list-item-schedule">
           <big>&bull; Schedule</big>
           <p class="portfolio-color schedule"><%= @list_item.schedule_in_words %></p>
+          <p class="portfolio-color countdown" data-next-occurrence="<%= (@list_item.schedule_next.to_f * 1000).round %>"></p>
           <small>Click here to configure the schedule. When setting a schedule, after the next date, the item will refresh- adding itself back to your list.</small>
         </div>
       </label>
