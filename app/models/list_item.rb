@@ -14,6 +14,7 @@
 #  permanent      :boolean          default(FALSE)
 #  schedule       :string
 #  category       :string
+#  schedule_next  :datetime
 #
 
 class ListItem < ApplicationRecord
@@ -54,6 +55,64 @@ class ListItem < ApplicationRecord
     end
   end
 
+  def schedule=(schedule_params)
+    return if schedule_params.blank?
+    interval = schedule_params["repeat-interval"].to_i
+    interval = 1 if interval <= 0
+    hour = schedule_params["repeat-hour"].to_i
+    minute = schedule_params["repeat-minute"].to_i
+    meridian = schedule_params["meridian"] || "AM"
+    repeat_type = schedule_params["repeat-type"].to_sym if schedule_params["repeat-type"].in?(["daily", "weekly", "monthly"])
+
+    schedule_start = Time.zone.parse("#{hour}:#{minute} #{meridian}")
+    new_schedule = IceCube::Schedule.new(schedule_start)
+    rule = IceCube::Rule.send(repeat_type, interval)
+
+    interval_details = schedule_params[repeat_type]
+    if interval_details.present?
+      case repeat_type
+      when :weekly
+        rule.day(*interval_details[:day]&.keys.to_a.map(&:to_i))
+      when :monthly
+        if interval_details[:type] == "daily"
+          rule.day_of_month(*interval_details[:day].keys.map(&:to_i))
+        elsif interval_details[:type] == "weekly"
+          day_of_week_hash = {}
+          interval_details[:week].each do |day_of_week, day_hash|
+            days = day_hash[:day].keys
+            days.each do |day|
+              day_of_week_hash[day] ||= []
+              day_of_week_hash[day] << day_of_week
+            end
+          end
+          rule.day_of_week(day_of_week_hash)
+        end
+      end
+    end
+
+    new_schedule.add_recurrence_rule(rule)
+
+    @schedule = nil
+    super(new_schedule.to_ical)
+    set_next_occurrence
+  end
+
+  def schedule
+    @schedule ||= IceCube::Schedule.from_ical(super) rescue nil
+    # to_s => Every 2 days...
+  end
+
+  def schedule_in_words
+    words = schedule.to_s
+    # Remove redundant text here, if it gets annoying.
+    "#{words} at #{schedule.start_time.strftime("%-l:%M %p")}"
+  end
+
+  def set_next_occurrence
+    return unless schedule
+    self.schedule_next = schedule.next_occurrence
+  end
+
   def jsonify
     name
   end
@@ -75,13 +134,14 @@ class ListItem < ApplicationRecord
     self.formatted_name = name.downcase.gsub(/[^a-z0-9]/i, "")
     self.category = self.category.squish.titleize.presence if self.category
     self.permanent = false if self.schedule.present?
+    true
   end
 
   def broadcast_commit
     return if do_not_broadcast || do_not_bump_order
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
     ActionCable.server.broadcast "list_#{self.list_id}_channel", list_html: rendered_message
-    ActionCable.server.broadcast "list_item_#{self.id}_channel", list_item: self.attributes.symbolize_keys.slice(:important, :permanent, :category, :name)
+    ActionCable.server.broadcast "list_item_#{self.id}_channel", list_item: self.attributes.symbolize_keys.slice(:important, :permanent, :category, :name).merge(schedule: self.schedule_in_words)
   end
 
   def reorder_conflict_orders

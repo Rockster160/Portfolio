@@ -27,7 +27,7 @@
     background-size: 10px 10px;
     padding: 0 15px 0 3px;
   }
-  input[type=checkbox][name=meridian] {
+  input[type=checkbox]#meridian {
     display: none;
 
     & + label {

@@ -4,14 +4,14 @@ class ListItemsController < ApplicationController
 
   def show
     @list = current_user.lists.find(params[:list_id])
-    @list_item = @list.list_items.find(params[:id])
+    @list_item = @list.list_items.with_deleted.find(params[:id])
 
     render json: @list_item
   end
 
   def edit
     @list = current_user.lists.find(params[:list_id])
-    @list_item = @list.list_items.find(params[:id])
+    @list_item = @list.list_items.with_deleted.find(params[:id])
   end
 
   def create
@@ -23,12 +23,6 @@ class ListItemsController < ApplicationController
     else
       render template: "list_items/show", locals: { item: new_item }, layout: false
     end
-  end
-
-  def set_schedule
-    binding.pry
-
-    render json: @existing_item
   end
 
   def update
@@ -50,7 +44,17 @@ class ListItemsController < ApplicationController
 
   def list_item_params
     return {} unless params[:list_item].present?
-    params.require(:list_item).permit(:name, :checked, :sort_order, :important, :permanent, :schedule, :category)
+    temp_params = params.require(:list_item).permit(
+      :name,
+      :checked,
+      :sort_order,
+      :important,
+      :permanent,
+      :category
+    )
+    temp_params.merge!(schedule: params.dig(:list_item, :schedule).permit!) if params.dig(:list_item, :schedule)
+    # We validate the ensted attributes of the schedule in the model, so this is safe.
+    temp_params
   end
 
 end

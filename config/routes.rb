@@ -36,10 +36,7 @@ Rails.application.routes.draw do
       post :receive_update
       get :users
     end
-    resources :list_items do
-      patch :set_schedule
-      put :set_schedule
-    end
+    resources :list_items
   end
 
   resources :cards, only: [] do

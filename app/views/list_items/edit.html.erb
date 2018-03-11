@@ -2,76 +2,6 @@
 <%= content_for(:favicon) { render "application/favicon" } %>
 <%= content_for(:body_classes) { "black" } %>
 
-<%= render_modal("list-item-schedule", "Repeat") do %>
-  <%= form_tag list_list_item_set_schedule_path(@list, @list_item), class: "basic text-center", method: :patch do %>
-    Reoccur every
-    <input id="repeat-interval" type="text" name="repeat" value="1" class="">
-    <select id="repeat-type" name="repeat-type">
-      <option value="day">Day(s)</option>
-      <option value="week">Week(s)</option>
-      <option value="month" selected>Month(s)</option>
-    </select>
-    at
-    <input id="repeat-interval" type="text" name="repeat" value="<%= hr = Time.zone.now.hour; hr > 12 ? hr - 12 : hr %>" class="right">:<input id="repeat-interval" type="text" name="repeat" value="00" class="left">
-    <%= content_tag :input, "", type: :checkbox, name: :meridian, id: :meridian, value: "PM", checked: hr > 12 %>
-    <label for="meridian"></label>
-
-    <div data-watches-selector="#repeat-type" data-watches-value="week">
-      <div class="calendar">
-        <% DateTime::DAYNAMES.each_with_index do |dayname, idx| %>
-          <%= content_tag :input, "", type: :checkbox, name: "weekly[day][#{idx}]", id: "weekly_days_#{idx}", value: "true" %>
-          <label for="weekly_days_<%= idx %>"><%= dayname.first %></label>
-        <% end %>
-      </div>
-    </div>
-
-    <div data-watches-selector="#repeat-type" data-watches-value="month">
-      <div class="radio-wrapper">
-        <%= content_tag :input, "", type: :radio, name: "monthly[type]", id: "weekly_type_weekly", value: "weekly", checked: true %>
-        <label for="weekly_type_weekly"><div class="radio-placeholder"></div> Days of Week</label>
-      </div>
-      <div class="radio-wrapper">
-        <%= content_tag :input, "", type: :radio, name: "monthly[type]", id: "weekly_type_daily", value: "daily" %>
-        <label for="weekly_type_daily"><div class="radio-placeholder"></div> Days of Month</label>
-      </div>
-
-      <div data-watches-selector="[name='monthly[type]']" data-watches-radio="weekly">
-        <div class="calendar">
-          <% 5.times do |t| %>
-            <% last_week = t == 4 %>
-            <strong><%= last_week ? "Last" : (t + 1).ordinalize %></strong>
-            <% DateTime::DAYNAMES.each_with_index do |dayname, idx| %>
-              <%= content_tag :input, "", type: :checkbox, name: "monthly[week][#{t}][day][#{idx}]", id: "monthly_week_#{t}_day_#{idx}", value: "true" %>
-              <label for="monthly_week_<%= t %>_day_<%= idx %>"><%= dayname.first %></label>
-            <% end %>
-            <br>
-          <% end %>
-        </div>
-      </div>
-
-      <div data-watches-selector="[name='monthly[type]']" data-watches-radio="daily">
-        <div class="calendar">
-          <% 31.times do |i| %>
-            <% t = i + 1 %>
-            <%= content_tag :input, "", type: :checkbox, name: "monthly[day][#{t}]", id: "monthly_day_#{t}", value: "true" %>
-            <label for="monthly_day_<%= t %>"><%= t %></label>
-            <% if t % 7 == 0 %><br><% end %>
-          <% end %>
-          <%= content_tag :input, "", type: :checkbox, name: "monthly[day][last]", id: "monthly_day_last", value: "true" %>
-          <label for="monthly_day_last" class="span-4">Last Day</label>
-        </div>
-      </div>
-    </div>
-
-    <div class="text-center">
-      <%= submit_tag "Set Schedule" %>
-    </div>
-  <% end %>
-<% end %>
-<script type="text/javascript">
-  $(document).ready(function() { showModal("#list-item-schedule") })
-</script>
-
 <div class="skinny-container list-container" data-list-id="<%= @list.id %>" data-list-item-id="<%= @list_item.id %>">
   <div class="btn-container">
     <a href="<%= list_path(@list) %>" class="btn">&larr; Back to List</a>
@@ -112,25 +42,13 @@
       </div>
     <% end %>
     <div class="list-item-options" data-sort-order="<%= @list_item.options.length %>" data-item-id="<%= @list_item.id %>">
-      <%#=
-        content_tag :input, "", {
-          type: "text",
-          id: "list_item[schedule]",
-          name: "list_item[schedule]",
-          class: "hidden",
-          value: @list_item.schedule,
-          data: {
-            "submit-url": list_list_item_path(@list, @list_item)
-          }
-        }
-      %>
       <label for="list_item[schedule]" class="list-item">
         <div class="item-name" data-modal="#list-item-schedule">
           <big>&bull; Schedule</big>
-          <% if @list_item.schedule %>
-            <p class="portfolio-color"><%= @list_item.schedule %></p>
+          <% if @list_item.schedule.present? %>
+            <p class="portfolio-color schedule"><%= @list_item.schedule_in_words %></p>
           <% else %>
-            <p class="portfolio-color">No schedule set - This item is not recurring.</p>
+            <p class="portfolio-color schedule">No schedule set - This item is not recurring.</p>
           <% end %>
           <small>Click here to configure the schedule. When setting a schedule, after the next date, the item will refresh- adding itself back to your list.</small>
         </div>
@@ -138,3 +56,71 @@
     </div>
   </div>
 </div>
+
+<%= render_modal("list-item-schedule", "Repeat") do %>
+  <%= form_tag list_list_item_path(@list, @list_item), class: "basic text-center", method: :patch, remote: true do %>
+    Reoccur every
+    <input id="repeat-interval" type="text" name="list_item[schedule][repeat-interval]" value="1" class="">
+    <select id="repeat-type" name="list_item[schedule][repeat-type]">
+      <option value="daily">Day(s)</option>
+      <option value="weekly">Week(s)</option>
+      <option value="monthly">Month(s)</option>
+    </select>
+    at
+    <input id="repeat-hour" type="text" name="list_item[schedule][repeat-hour]" value="<%= hr = Time.zone.now.hour; hr > 12 ? hr - 12 : hr %>" class="right">:<input id="repeat-minute" type="text" name="list_item[schedule][repeat-minute]" value="00" class="left">
+    <%= content_tag :input, "", type: :checkbox, name: "list_item[schedule][meridian]", id: :meridian, value: "PM", checked: hr > 12 %>
+    <label for="meridian"></label>
+
+    <div data-watches-selector="#repeat-type" data-watches-value="weekly">
+      <div class="calendar">
+        <% DateTime::DAYNAMES.each_with_index do |dayname, idx| %>
+          <%= content_tag :input, "", type: :checkbox, name: "list_item[schedule][weekly][day][#{idx}]", id: "weekly_days_#{idx}", value: "true" %>
+          <label for="weekly_days_<%= idx %>"><%= dayname.first %></label>
+        <% end %>
+      </div>
+    </div>
+
+    <div data-watches-selector="#repeat-type" data-watches-value="monthly">
+      <div class="radio-wrapper">
+        <%= content_tag :input, "", type: :radio, name: "list_item[schedule][monthly][type]", id: "weekly_type_weekly", value: "weekly", checked: true %>
+        <label for="weekly_type_weekly"><div class="radio-placeholder"></div> Days of Week</label>
+      </div>
+      <div class="radio-wrapper">
+        <%= content_tag :input, "", type: :radio, name: "list_item[schedule][monthly][type]", id: "weekly_type_daily", value: "daily" %>
+        <label for="weekly_type_daily"><div class="radio-placeholder"></div> Days of Month</label>
+      </div>
+
+      <div data-watches-selector="[name='list_item[schedule][monthly][type]']" data-watches-radio="weekly">
+        <div class="calendar">
+          <% 5.times do |i| %>
+            <% t = i + 1 %>
+            <% last_week = t == 5 %>
+            <strong><%= last_week ? "Last" : (t + 1).ordinalize %></strong>
+            <% DateTime::DAYNAMES.each_with_index do |dayname, idx| %>
+              <%= content_tag :input, "", type: :checkbox, name: "list_item[schedule][monthly][week][#{last_week ? -1 : t}][day][#{idx}]", id: "monthly_week_#{t}_day_#{idx}", value: "true" %>
+              <label for="monthly_week_<%= t %>_day_<%= idx %>"><%= dayname.first %></label>
+            <% end %>
+            <br>
+          <% end %>
+        </div>
+      </div>
+
+      <div data-watches-selector="[name='list_item[schedule][monthly][type]']" data-watches-radio="daily">
+        <div class="calendar">
+          <% 31.times do |i| %>
+            <% t = i + 1 %>
+            <%= content_tag :input, "", type: :checkbox, name: "list_item[schedule][monthly][day][#{t}]", id: "monthly_day_#{t}", value: "true" %>
+            <label for="monthly_day_<%= t %>"><%= t %></label>
+            <% if t % 7 == 0 %><br><% end %>
+          <% end %>
+          <%= content_tag :input, "", type: :checkbox, name: "list_item[schedule][monthly][day][-1]", id: "monthly_day_last", value: "true" %>
+          <label for="monthly_day_last" class="span-4">Last Day</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center">
+      <%= submit_tag "Set Schedule" %>
+    </div>
+  <% end %>
+<% end %>
