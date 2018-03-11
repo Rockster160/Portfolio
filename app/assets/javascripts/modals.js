@@ -10,6 +10,7 @@ $(document).ready(function() {
     content.animate({ top: 0 }, 300)
   }
   hideModal = function(modal_str) {
+    if (!modal_str) { hideModal(".modal.shown") }
     var modal = $(modal_str)
     var content = $(modal).find(".modal-content")
 

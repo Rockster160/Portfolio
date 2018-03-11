@@ -58,15 +58,17 @@
 </div>
 
 <%= render_modal("list-item-schedule", "Repeat") do %>
-  <%= form_tag list_list_item_path(@list, @list_item), class: "basic text-center", method: :patch, remote: true do %>
+  <%= form_tag list_list_item_path(@list, @list_item), class: "basic text-center", id: "schedule-form", method: :patch, remote: true do %>
     Reoccur every
     <input id="repeat-interval" type="text" name="list_item[schedule][repeat-interval]" value="1" class="">
     <select id="repeat-type" name="list_item[schedule][repeat-type]">
-      <option value="daily">Day(s)</option>
+      <option value="minutely">Minute(s)</option>
+      <option value="hourly">Hour(s)</option>
+      <option value="daily" selected>Day(s)</option>
       <option value="weekly">Week(s)</option>
       <option value="monthly">Month(s)</option>
     </select>
-    at
+    starting at
     <input id="repeat-hour" type="text" name="list_item[schedule][repeat-hour]" value="<%= hr = Time.zone.now.hour; hr > 12 ? hr - 12 : hr %>" class="right">:<input id="repeat-minute" type="text" name="list_item[schedule][repeat-minute]" value="00" class="left">
     <%= content_tag :input, "", type: :checkbox, name: "list_item[schedule][meridian]", id: :meridian, value: "PM", checked: hr > 12 %>
     <label for="meridian"></label>

@@ -62,7 +62,8 @@ class ListItem < ApplicationRecord
     hour = schedule_params["repeat-hour"].to_i
     minute = schedule_params["repeat-minute"].to_i
     meridian = schedule_params["meridian"] || "AM"
-    repeat_type = schedule_params["repeat-type"].to_sym if schedule_params["repeat-type"].in?(["daily", "weekly", "monthly"])
+    repeat_type = schedule_params["repeat-type"].to_sym if schedule_params["repeat-type"].in?(["minutely", "hourly", "daily", "weekly", "monthly"])
+    return if repeat_type.nil?
 
     schedule_start = Time.zone.parse("#{hour}:#{minute} #{meridian}")
     new_schedule = IceCube::Schedule.new(schedule_start)
