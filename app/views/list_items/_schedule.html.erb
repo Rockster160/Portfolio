@@ -1,0 +1,81 @@
+<%= render_modal("list-item-schedule", "Repeat") do %>
+  <%= form_tag list_list_item_path(@list, @list_item), class: "basic text-center", id: "schedule-form", method: :patch, remote: true do |f| %>
+    <% options = @list_item.schedule_options %>
+    <% base_params = "list_item[schedule]" %>
+    <% clean_base = base_params.gsub('[', '_').delete(']') %>
+
+    Reoccur every
+    <%= text_field_tag "#{base_params}[interval]", options[:interval] %>
+    <% select_options = [
+      ["Minute(s)", :minutely],
+      ["Hour(s)",   :hourly],
+      ["Day(s)",    :daily],
+      ["Week(s)",   :weekly],
+      ["Month(s)",  :monthly]
+    ] %>
+    <%= select_tag "#{base_params}[type]", options_for_select(select_options, selected: options[:type]) %>
+    starting at
+    <%= text_field_tag "#{base_params}[hour]", options[:hour] %>:<%= text_field_tag "#{base_params}[minute]", options[:minute] %>
+    <%= check_box_tag "#{base_params}[meridian]", "PM", options[:meridian] == "PM", id: :meridian %>
+    <%= label_tag :meridian, "" %>
+
+    <div data-watches-selector="#<%= clean_base %>_type" data-watches-value="weekly">
+      <div class="calendar">
+        <% DateTime::DAYNAMES.each_with_index do |dayname, idx| %>
+          <%= check_box_tag "#{base_params}[weekly][day][]", idx, options[:week_days].include?(idx), id: "#{clean_base}_weekly_day_#{idx}" %>
+          <%= label_tag "#{clean_base}_weekly_day_#{idx}", dayname.first %>
+        <% end %>
+      </div>
+    </div>
+
+    <div data-watches-selector="#<%= clean_base %>_type" data-watches-value="monthly">
+      <div class="radio-wrapper">
+        <%= radio_button_tag "#{base_params}[monthly][type]", :weekly, options[:days_of_month].none? %>
+        <%= label_tag "#{base_params}[monthly][type][weekly]" do %>
+          <div class="radio-placeholder"></div>
+          Days of Week
+        <% end %>
+      </div>
+      <div class="radio-wrapper">
+        <%= radio_button_tag "#{base_params}[monthly][type]", :daily, options[:days_of_month].any? %>
+        <%= label_tag "#{base_params}[monthly][type][daily]" do %>
+          <div class="radio-placeholder"></div>
+          Days of Month
+        <% end %>
+      </div>
+
+      <div data-watches-selector="[name='<%= base_params %>[monthly][type]']" data-watches-radio="weekly">
+        <div class="calendar">
+          <% 5.times do |i| %>
+            <% t = i + 1 %>
+            <% last_week = t == 5 %>
+            <% week_idx = last_week ? -1 : t %>
+            <strong><%= last_week ? "Last" : t.ordinalize %></strong>
+            <% DateTime::DAYNAMES.each_with_index do |dayname, day_idx| %>
+              <%= check_box_tag "#{base_params}[monthly][week][#{day_idx}][]", week_idx, options.dig(:days_of_week, day_idx)&.include?(week_idx), id: "#{clean_base}_monthly_week_#{day_idx}_#{week_idx}" %>
+              <%= label_tag "#{clean_base}_monthly_week_#{day_idx}_#{week_idx}", dayname.first %>
+            <% end %>
+            <br>
+          <% end %>
+        </div>
+      </div>
+
+      <div data-watches-selector="[name='<%= base_params %>[monthly][type]']" data-watches-radio="daily">
+        <div class="calendar">
+          <% 31.times do |i| %>
+            <% t = i + 1 %>
+            <%= check_box_tag "#{base_params}[monthly][day][]", t, options[:days_of_month].include?(t), id: "#{clean_base}_monthly_day_#{t}" %>
+            <%= label_tag "#{clean_base}_monthly_day_#{t}", t %>
+            <% if t % 7 == 0 %><br><% end %>
+          <% end %>
+          <%= check_box_tag "#{base_params}[monthly][day][]", -1, options[:days_of_month].include?(-1) %>
+          <%= label_tag "#{base_params}[monthly][day][]", "Last Day", class: "span-4" %>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center">
+      <%= submit_tag "Set Schedule" %>
+    </div>
+  <% end %>
+<% end %>

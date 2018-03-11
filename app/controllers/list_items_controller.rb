@@ -44,17 +44,29 @@ class ListItemsController < ApplicationController
 
   def list_item_params
     return {} unless params[:list_item].present?
-    temp_params = params.require(:list_item).permit(
+    params.require(:list_item).permit(
       :name,
       :checked,
       :sort_order,
       :important,
       :permanent,
-      :category
+      :category,
+      schedule: [
+        :interval,
+        :hour,
+        :minute,
+        :type,
+        :meridian,
+        weekly: [
+          day: []
+        ],
+        monthly: [
+          :type,
+          week: (-1..31).map { |t| {t.to_s => []} },
+          day: []
+        ]
+      ]
     )
-    temp_params.merge!(schedule: params.dig(:list_item, :schedule).permit!) if params.dig(:list_item, :schedule)
-    # We validate the ensted attributes of the schedule in the model, so this is safe.
-    temp_params
   end
 
 end

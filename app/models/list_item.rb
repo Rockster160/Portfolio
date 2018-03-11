@@ -56,13 +56,13 @@ class ListItem < ApplicationRecord
   end
 
   def schedule=(schedule_params)
-    return if schedule_params.blank?
-    interval = schedule_params["repeat-interval"].to_i
+    return super(nil) if schedule_params.blank?
+    interval = schedule_params["interval"].to_i
     interval = 1 if interval <= 0
-    hour = schedule_params["repeat-hour"].to_i
-    minute = schedule_params["repeat-minute"].to_i
+    hour = schedule_params["hour"].to_i
+    minute = schedule_params["minute"].to_i
     meridian = schedule_params["meridian"] || "AM"
-    repeat_type = schedule_params["repeat-type"].to_sym if schedule_params["repeat-type"].in?(["minutely", "hourly", "daily", "weekly", "monthly"])
+    repeat_type = schedule_params["type"].to_sym if schedule_params["type"].in?(["minutely", "hourly", "daily", "weekly", "monthly"])
     return if repeat_type.nil?
 
     schedule_start = Time.zone.parse("#{hour}:#{minute} #{meridian}")
@@ -73,20 +73,15 @@ class ListItem < ApplicationRecord
     if interval_details.present?
       case repeat_type
       when :weekly
-        rule.day(*interval_details[:day]&.keys.to_a.map(&:to_i))
+        rule.day(*interval_details[:day].to_a.map(&:to_i))
       when :monthly
         if interval_details[:type] == "daily"
-          rule.day_of_month(*interval_details[:day].keys.map(&:to_i))
+          rule.day_of_month(*interval_details[:day].map(&:to_i))
         elsif interval_details[:type] == "weekly"
-          day_of_week_hash = {}
-          interval_details[:week].each do |day_of_week, day_hash|
-            days = day_hash[:day].keys
-            days.each do |day|
-              day_of_week_hash[day] ||= []
-              day_of_week_hash[day] << day_of_week
-            end
+          deep_numerify_keys = interval_details[:week].each_with_object({}) do |(day_of_week, idxs_of_week), deep_numerify|
+            deep_numerify[day_of_week.to_i] = idxs_of_week.map(&:to_i)
           end
-          rule.day_of_week(day_of_week_hash)
+          rule.day_of_week(deep_numerify_keys)
         end
       end
     end
@@ -94,16 +89,53 @@ class ListItem < ApplicationRecord
     new_schedule.add_recurrence_rule(rule)
 
     @schedule = nil
+    @schedule_options = nil
     super(new_schedule.to_ical)
     set_next_occurrence
   end
 
   def schedule
+    return if super.nil?
     @schedule ||= IceCube::Schedule.from_ical(super) rescue nil
-    # to_s => Every 2 days...
+  end
+
+  def default_schedule_options
+    now = Time.zone.now
+    {
+      interval: 1,
+      type: :daily,
+      hour: now.strftime("%-l"),
+      minute: "00",
+      meridian: now.hour > 12 ? "PM" : "AM",
+      week_days: [],
+      days_of_week: [],
+      days_of_month: []
+    }
+  end
+
+  def schedule_options
+    @schedule_options ||= begin
+      options = {}
+      rule = schedule.try(:rrules).try(:first).try(:to_hash) || {}
+      options[:interval] = rule[:interval]
+      options[:days_of_week] = rule.dig(:validations, :day_of_week)
+      options[:days_of_month] = rule.dig(:validations, :day_of_month)
+      options[:week_days] = rule.dig(:validations, :day)
+      options[:type] = rule[:rule_type].to_s.gsub(/IceCube::|Rule/, "").downcase
+
+      start_time = schedule&.instance_variable_get("@start_time") rescue nil
+      if start_time
+        options[:hour] = start_time.hour > 12 ? start_time.hour - 12 : start_time.hour
+        options[:minute] = start_time.min.to_s.rjust(2, "0")
+        options[:meridian] = start_time.hour > 12 ? "PM" : "AM"
+      end
+
+      options.reject { |k,v| v.blank? }.reverse_merge(default_schedule_options)
+    end
   end
 
   def schedule_in_words
+    return "No schedule set - This item is not recurring." if schedule.nil?
     words = schedule.to_s
     # Remove redundant text here, if it gets annoying.
     "#{words} at #{schedule.start_time.strftime("%-l:%M %p")}"
