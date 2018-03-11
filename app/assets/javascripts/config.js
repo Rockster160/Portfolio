@@ -1,6 +1,6 @@
 $(document).ready(function() {
 
-  $('.no-zoom').bind('touchend', function(evt) {
+  $(".no-zoom").bind("touchend", function(evt) {
     evt.preventDefault();
     // This is a hack that prevents default browsers from zooming in when
     //   double-clicking elements when preventing the default behavior of a click,
@@ -8,6 +8,23 @@ $(document).ready(function() {
     //   events or click actions.
     $(this).click();
     return false;
+  })
+
+  $("[data-watches-selector]").each(function() {
+    var watcher = $(this), watching = $(watcher.attr("data-watches-selector"))
+
+    var reactToChange = function() {
+      if (watching.val() == watcher.attr("data-watches-value")) {
+        watcher.removeClass("hidden")
+      } else if (watcher.attr("data-watches-radio") !== undefined && $(watcher.attr("data-watches-selector") + ":checked").val() == watcher.attr("data-watches-radio")) {
+        watcher.removeClass("hidden")
+      } else {
+        watcher.addClass("hidden")
+      }
+    }
+
+    reactToChange()
+    watching.on("change", reactToChange)
   })
 
 })

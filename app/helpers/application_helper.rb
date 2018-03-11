@@ -13,8 +13,8 @@ module ApplicationHelper
   end
 
   def meta_title(str, include_name: true)
-    str = "#{str} &bull; Rocco Nicholls" if include_name
-    content_for(:title) { CGI.escapeHTML(str.html_safe) }
+    str = "#{str} • Rocco Nicholls" if include_name
+    content_for(:title) { CGI.escapeHTML(str).html_safe }
   end
 
   def meta_description(description)

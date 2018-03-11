@@ -61,7 +61,7 @@ class ListItem < ApplicationRecord
   def options
     {
       important: "When set, this item will automatically appear at the top of the list regardless of the sort order.",
-      permanent: "When set, this item will not be removed from list when checking it. Instead, it will appear toggled/selected on your page, but when reloading the page the item will still be present. This also prevents the item from being removed on other user's pages that are sharing the list."
+      permanent: "When set, this item will not be removed from list when checking it. Instead, it will appear toggled/selected on your page, but when reloading the page the item will still be present. This also prevents the item from being removed on other user's pages that are sharing the list.  (Does not work if a schedule is set.)"
     }
   end
 

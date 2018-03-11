@@ -25,6 +25,12 @@ class ListItemsController < ApplicationController
     end
   end
 
+  def set_schedule
+    binding.pry
+
+    render json: @existing_item
+  end
+
   def update
     @list = List.find(params[:list_id])
     @existing_item = @list.list_items.with_deleted.find_by(id: params[:id])
