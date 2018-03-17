@@ -1,0 +1,40 @@
+<svg width="512" height="512" viewbox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <g>
+    <title>Circuit</title>
+    <g id="background" fill="#3D94F6">
+      <rect width="512" height="512" x="0" y="0" rx="20" ry="20"></rect>
+    </g>
+    <g id="wire" stroke-width="10" stroke="#FFFFFF">
+      <g id="connectors" fill="none">
+        <polyline points="177,183 120,183 120,60 284,60 407,183 512,183"/>
+        <polyline points="256,256 256,329 325,329"/>
+        <polyline points="177,329 218,329 218,220 0,220"/>
+        <polyline points="177,110 323,256 512,256"/>
+        <polyline points="256,110 325,183"/>
+        <polyline points="325,402 256,402 256,452 80,452 80,329 0,329"/>
+        <polyline points="177,256 120,256 120,402 177,402"/>
+
+        <polyline points="376,370 441,440"/>
+        <polyline points="376,440 325,440, 325,512"/>
+        <polyline points="441,370 441,256"/>
+      </g>
+      <g id="nodes" fill="#3D94F6">
+        <ellipse ry="15" rx="15" cx="177" cy="402"/>
+        <ellipse ry="15" rx="15" cx="177" cy="329"/>
+        <ellipse ry="15" rx="15" cx="177" cy="256"/>
+        <ellipse ry="15" rx="15" cx="177" cy="183"/>
+        <ellipse ry="15" rx="15" cx="177" cy="110"/>
+        <ellipse ry="15" rx="15" cx="256" cy="110"/>
+        <ellipse ry="15" rx="15" cx="256" cy="256"/>
+        <ellipse ry="15" rx="15" cx="325" cy="183"/>
+        <ellipse ry="15" rx="15" cx="325" cy="329"/>
+        <ellipse ry="15" rx="15" cx="325" cy="402"/>
+
+        <ellipse ry="15" rx="15" cx="376" cy="440"/>
+        <ellipse ry="15" rx="15" cx="376" cy="370"/>
+        <ellipse ry="15" rx="15" cx="441" cy="440"/>
+        <ellipse ry="15" rx="15" cx="441" cy="370"/>
+      </g>
+    </g>
+  </g>
+</svg>

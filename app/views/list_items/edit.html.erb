@@ -1,5 +1,5 @@
 <%= meta_title "#{@list_item.name.capitalize}", include_name: false %>
-<%= content_for(:favicon) { render "application/favicon" } %>
+<%= content_for(:favicon) { render "lists/favicon" } %>
 <%= content_for(:body_classes) { "black" } %>
 <%= render partial: "schedule" %>
 
