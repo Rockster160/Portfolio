@@ -1,9 +1,12 @@
 $("#list-item-schedule").ready(function() {
+  var hold_val
+
   $("#list-item-schedule input").on("focus", function() {
-    this.select()
-  }).on("mouseup", function(evt) {
-    // Some browsers move the cursor and unselect on mouseup. Cancel that to retain the selection of the field
-    evt.preventDefault()
+    hold_val = $(this).val()
+    $(this).val("")
+  }).blur(function() {
+    if ($(this).val().replace(/\s/g, '').length == 0) { $(this).val(hold_val) }
+    hold_val = undefined
   })
 
   $("#repeat-interval").on("blur", function() {

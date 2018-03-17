@@ -142,8 +142,7 @@ class ListItem < ApplicationRecord
   end
 
   def set_next_occurrence
-    return unless schedule
-    self.schedule_next = schedule.next_occurrence
+    self.schedule_next = schedule.try(:next_occurrence)
   end
 
   def jsonify
@@ -174,7 +173,10 @@ class ListItem < ApplicationRecord
     return if do_not_broadcast || do_not_bump_order
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
     ActionCable.server.broadcast "list_#{self.list_id}_channel", list_html: rendered_message
-    ActionCable.server.broadcast "list_item_#{self.id}_channel", list_item: self.attributes.symbolize_keys.slice(:important, :permanent, :category, :name).merge(schedule: self.schedule_in_words, countdown: (self.schedule_next.to_f * 1000).round)
+    list_item_attrs = self.attributes.symbolize_keys.slice(:important, :permanent, :category, :name)
+    list_item_attrs.merge!(schedule: self.schedule_in_words)
+    list_item_attrs.merge!(countdown: (self.schedule_next.to_f * 1000).round) unless self.schedule.nil?
+    ActionCable.server.broadcast "list_item_#{self.id}_channel", list_item: list_item_attrs
   end
 
   def reorder_conflict_orders
