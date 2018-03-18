@@ -110,6 +110,14 @@
     word-break: break-word;
   }
 
+  .collaborators {
+    p {
+      font-size: 14px;
+      line-height: 1;
+      margin: 0;
+    }
+  }
+
   .new-list-item-form {
     .list-field {
       input.new-list-item {

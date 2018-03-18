@@ -23,6 +23,12 @@
   </div>
   <div class="list-title"><%= @list.name.titleize %></div>
   <div class="list-description"><%= auto_link @list.description %></div>
+  <% if @list.collaborators.any? %>
+    <div class="collaborators pull-left text-left">
+      <p>Owned by: <%= @list.owner == current_user ? "You" : @list.owner.username %></p>
+      <p>Collaborators: <%= @list.collaborator_names %></p>
+    </div>
+  <% end %>
   <a data-modal="#sort-list" class="btn pull-right">Sort</a>
   <%= form_for [@list, @list.list_items.new], html: {class: "basic new-list-item-form"} do |f| %>
     <div class="list-field">

@@ -37,8 +37,20 @@ class List < ApplicationRecord
     list_items.order("list_items.sort_order")
   end
 
+  def owner
+    user_lists.find_by(is_owner: true).try(:user)
+  end
+
   def owned_by_user?(user)
     !!user_lists.where(user_id: user.try(:id)).first.try(:is_owner?)
+  end
+
+  def collaborators
+    users.where(user_lists: { is_owner: false })
+  end
+
+  def collaborator_names
+    collaborators.pluck(:username).join(", ")
   end
 
   def sort_items!(sort=nil, order=:asc)
