@@ -83,6 +83,10 @@ class User < ApplicationRecord
     end
   end
 
+  def display_name
+    username.presence || phone.gsub(/[^\d]/, '').presence || "<User:#{id}>"
+  end
+
   def ordered_lists
     lists.includes(user_lists: :list).where(user_lists: { user_id: id }).order("user_lists.sort_order")
   end

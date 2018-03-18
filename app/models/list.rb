@@ -46,11 +46,7 @@ class List < ApplicationRecord
   end
 
   def collaborators
-    users.where(user_lists: { is_owner: false })
-  end
-
-  def collaborator_names
-    collaborators.pluck(:username).join(", ")
+    users.where(user_lists: { is_owner: [nil, false] })
   end
 
   def sort_items!(sort=nil, order=:asc)

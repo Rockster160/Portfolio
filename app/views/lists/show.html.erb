@@ -26,7 +26,7 @@
   <% if @list.collaborators.any? %>
     <div class="collaborators pull-left text-left">
       <p>Owned by: <%= @list.owner == current_user ? "You" : @list.owner.username %></p>
-      <p>Collaborators: <%= @list.collaborator_names %></p>
+      <p>Collaborators: <%= @list.collaborators.map(&:display_name).join(", ") %></p>
     </div>
   <% end %>
   <a data-modal="#sort-list" class="btn pull-right">Sort</a>
