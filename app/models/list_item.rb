@@ -56,7 +56,7 @@ class ListItem < ApplicationRecord
   end
 
   def schedule=(schedule_params)
-    self.next_occurrence = nil
+    self.schedule_next = nil
     return super(nil) if schedule_params.blank?
     interval = schedule_params["interval"].to_i
     interval = 1 if interval <= 0
