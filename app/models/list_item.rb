@@ -60,13 +60,14 @@ class ListItem < ApplicationRecord
     return super(nil) if schedule_params.blank?
     interval = schedule_params["interval"].to_i
     interval = 1 if interval <= 0
+    timezone = schedule_params["time_zone"].to_i
     hour = schedule_params["hour"].to_i
     minute = schedule_params["minute"].to_i
     meridian = schedule_params["meridian"] || "AM"
     repeat_type = schedule_params["type"].to_sym if schedule_params["type"].in?(["minutely", "hourly", "daily", "weekly", "monthly"])
     return if repeat_type.nil?
 
-    schedule_start = Time.zone.parse("#{hour}:#{minute} #{meridian}")
+    schedule_start = Time.zone.parse("#{hour}:#{minute} #{meridian} #{timezone}")
     new_schedule = IceCube::Schedule.new(schedule_start)
     rule = IceCube::Rule.send(repeat_type, interval)
 

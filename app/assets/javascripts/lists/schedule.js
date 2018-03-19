@@ -18,4 +18,6 @@ $("#list-item-schedule").ready(function() {
   $("#schedule-form").submit(function() {
     hideModal()
   })
+
+  $("#time_zone").val((new Date()).getTimezoneOffset() / 60)
 })

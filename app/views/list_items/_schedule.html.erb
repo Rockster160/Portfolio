@@ -18,6 +18,7 @@
     <%= text_field_tag "#{base_params}[hour]", options[:hour] %>:<%= text_field_tag "#{base_params}[minute]", options[:minute] %>
     <%= check_box_tag "#{base_params}[meridian]", "PM", options[:meridian] == "PM", id: :meridian %>
     <%= label_tag :meridian, "" %>
+    <%= hidden_field_tag :time_zone %>
 
     <div data-watches-selector="#<%= clean_base %>_type" data-watches-value="weekly">
       <div class="calendar">
