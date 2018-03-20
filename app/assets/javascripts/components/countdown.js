@@ -9,8 +9,6 @@ time_ms.year = 12 * time_ms.month;
 
 $("[data-next-occurrence]").ready(function() {
   var occurrence_object = $(this)
-  var endTime = parseInt($(this).attr("data-next-occurrence"))
-  if (!(endTime > 0)) { return occurrence_object.text("") }
 
   var configureTime = function() {
     var endTime = parseInt(occurrence_object.attr("data-next-occurrence"))
