@@ -15,6 +15,7 @@
 #  schedule       :string
 #  category       :string
 #  schedule_next  :datetime
+#  timezone       :integer
 #
 
 class ListItem < ApplicationRecord
@@ -60,14 +61,20 @@ class ListItem < ApplicationRecord
     return super(nil) if schedule_params.blank?
     interval = schedule_params["interval"].to_i
     interval = 1 if interval <= 0
-    timezone = schedule_params["time_zone"].to_i
-    hour = schedule_params["hour"].to_i
-    minute = schedule_params["minute"].to_i
+    timezone = schedule_params["timezone"].to_i
+    self.timezone = timezone
     meridian = schedule_params["meridian"] || "AM"
+    hour = schedule_params["hour"].to_i
+    hour -= 12 if hour > 12
+    hour += 12 if meridian == "PM"
+    minute = schedule_params["minute"].to_i
     repeat_type = schedule_params["type"].to_sym if schedule_params["type"].in?(["minutely", "hourly", "daily", "weekly", "monthly"])
     return if repeat_type.nil?
 
-    schedule_start = Time.zone.parse("#{hour}:#{minute} #{meridian} #{timezone}")
+    schedule_start = 1.day.ago.in_time_zone(timezone)
+    schedule_start = schedule_start.change(hour: hour, min: minute)
+    puts "#{schedule_params}".colorize(:red)
+    puts "#{schedule_start}".colorize(:red)
     new_schedule = IceCube::Schedule.new(schedule_start)
     rule = IceCube::Rule.send(repeat_type, interval)
 
@@ -102,13 +109,10 @@ class ListItem < ApplicationRecord
   end
 
   def default_schedule_options
-    now = Time.zone.now
     {
       interval: 1,
       type: :daily,
-      hour: now.strftime("%-l"),
       minute: "00",
-      meridian: now.hour > 12 ? "PM" : "AM",
       week_days: [],
       days_of_week: [],
       days_of_month: []
@@ -125,11 +129,12 @@ class ListItem < ApplicationRecord
       options[:week_days] = rule.dig(:validations, :day)
       options[:type] = rule[:rule_type].to_s.gsub(/IceCube::|Rule/, "").downcase
 
-      start_time = schedule&.instance_variable_get("@start_time") rescue nil
+      start_time = schedule.start_time rescue nil
       if start_time
         options[:hour] = start_time.hour > 12 ? start_time.hour - 12 : start_time.hour
         options[:minute] = start_time.min.to_s.rjust(2, "0")
         options[:meridian] = start_time.hour >= 12 ? "PM" : "AM"
+        options[:timezone] = timezone
       end
 
       options.reject { |k,v| v.blank? }.reverse_merge(default_schedule_options)

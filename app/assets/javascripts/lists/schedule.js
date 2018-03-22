@@ -29,5 +29,17 @@ $("#list-item-schedule").ready(function() {
     hideModal()
   })
 
-  $("#time_zone").val((new Date()).getTimezoneOffset() / 60)
+  if ($("#hour").val() == "") {
+    var hour = (new Date()).getHours()
+    var meridian = "AM"
+    var timezone
+    if (hour > 12) {
+      hour -= 12
+      meridian = "PM"
+    }
+    $("#hour").val(hour)
+    $("#meridian").prop("checked", meridian == "PM")
+  }
+  $("#timezone").val((new Date()).getTimezoneOffset() / 60)
+
 })

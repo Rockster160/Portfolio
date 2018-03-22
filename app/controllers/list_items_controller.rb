@@ -58,6 +58,7 @@ class ListItemsController < ApplicationController
         :minute,
         :type,
         :meridian,
+        :timezone,
         weekly: [
           day: []
         ],
