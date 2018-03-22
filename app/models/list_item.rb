@@ -74,7 +74,7 @@ class ListItem < ApplicationRecord
     Time.use_zone(timezone) do
       Rails.logger.warn("#{hour}".colorize(:red))
       Rails.logger.warn("#{minute}".colorize(:red))
-      schedule_start = 1.day.ago.in_time_zone(timezone).to_time
+      schedule_start = Time.zone.now - 1.day
       schedule_start = schedule_start.change(hour: hour, min: minute)
       Rails.logger.warn("#{timezone}".colorize(:red))
       Rails.logger.warn("#{schedule_start}".colorize(:red))
