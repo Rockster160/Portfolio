@@ -1,6 +1,6 @@
-# Up to date with Local Time
+# Based on UTC time
 every_minute = "* * * * *"
-daily_9pm = "0 21 * * *"
+daily_9pm = "0 3 * * *"
 monthly_5th_at_11am = "0 17 5 * *"
 
 cron_jobs = [

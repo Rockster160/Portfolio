@@ -104,6 +104,7 @@ class ListItem < ApplicationRecord
     @schedule_options = nil
     super(new_schedule.to_ical)
     set_next_occurrence
+    Rails.logger.warn("#{schedule_next}".colorize(:red))
   end
 
   def schedule
