@@ -71,38 +71,40 @@ class ListItem < ApplicationRecord
     repeat_type = schedule_params["type"].to_sym if schedule_params["type"].in?(["minutely", "hourly", "daily", "weekly", "monthly"])
     return if repeat_type.nil?
 
-    Rails.logger.warn("#{minute}".colorize(:red))
-    Rails.logger.warn("#{hour}".colorize(:red))
-    schedule_start = 1.day.ago.in_time_zone(timezone).to_time
-    schedule_start = schedule_start.change(hour: hour, min: minute)
-    Rails.logger.warn("#{timezone}".colorize(:red))
-    Rails.logger.warn("#{schedule_start}".colorize(:red))
-    new_schedule = IceCube::Schedule.new(schedule_start)
-    rule = IceCube::Rule.send(repeat_type, interval)
+    Time.use_zone(timezone) do
+      Rails.logger.warn("#{hour}".colorize(:red))
+      Rails.logger.warn("#{minute}".colorize(:red))
+      schedule_start = 1.day.ago.in_time_zone(timezone).to_time
+      schedule_start = schedule_start.change(hour: hour, min: minute)
+      Rails.logger.warn("#{timezone}".colorize(:red))
+      Rails.logger.warn("#{schedule_start}".colorize(:red))
+      new_schedule = IceCube::Schedule.new(schedule_start)
+      rule = IceCube::Rule.send(repeat_type, interval)
 
-    interval_details = schedule_params[repeat_type]
-    if interval_details.present?
-      case repeat_type
-      when :weekly
-        rule.day(*interval_details[:day].to_a.map(&:to_i))
-      when :monthly
-        if interval_details[:type] == "daily"
-          rule.day_of_month(*interval_details[:day].map(&:to_i)) if interval_details.key?(:day)
-        elsif interval_details[:type] == "weekly"
-          deep_numerify_keys = interval_details[:week]&.each_with_object({}) do |(day_of_week, idxs_of_week), deep_numerify|
-            deep_numerify[day_of_week.to_i] = idxs_of_week.map(&:to_i)
+      interval_details = schedule_params[repeat_type]
+      if interval_details.present?
+        case repeat_type
+        when :weekly
+          rule.day(*interval_details[:day].to_a.map(&:to_i))
+        when :monthly
+          if interval_details[:type] == "daily"
+            rule.day_of_month(*interval_details[:day].map(&:to_i)) if interval_details.key?(:day)
+          elsif interval_details[:type] == "weekly"
+            deep_numerify_keys = interval_details[:week]&.each_with_object({}) do |(day_of_week, idxs_of_week), deep_numerify|
+              deep_numerify[day_of_week.to_i] = idxs_of_week.map(&:to_i)
+            end
+            rule.day_of_week(deep_numerify_keys) if interval_details.key?(:week)
           end
-          rule.day_of_week(deep_numerify_keys) if interval_details.key?(:week)
         end
       end
+
+      new_schedule.add_recurrence_rule(rule)
+
+      @schedule = nil
+      @schedule_options = nil
+      super(new_schedule.to_ical)
+      set_next_occurrence
     end
-
-    new_schedule.add_recurrence_rule(rule)
-
-    @schedule = nil
-    @schedule_options = nil
-    super(new_schedule.to_ical)
-    set_next_occurrence
   end
 
   def schedule
