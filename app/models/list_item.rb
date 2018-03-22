@@ -71,8 +71,12 @@ class ListItem < ApplicationRecord
     repeat_type = schedule_params["type"].to_sym if schedule_params["type"].in?(["minutely", "hourly", "daily", "weekly", "monthly"])
     return if repeat_type.nil?
 
+    puts "#{minute}".colorize(:red)
+    puts "#{hour}".colorize(:red)
     schedule_start = 1.day.ago.in_time_zone(timezone).to_time
     schedule_start = schedule_start.change(hour: hour, min: minute)
+    puts "#{timezone}".colorize(:red)
+    puts "#{schedule_start}".colorize(:red)
     new_schedule = IceCube::Schedule.new(schedule_start)
     rule = IceCube::Rule.send(repeat_type, interval)
 
