@@ -76,7 +76,8 @@ class ListItem < ApplicationRecord
     # schedule_start = Time.zone.now.utc - 24.hours
     # schedule_start = schedule_start.change(hour: hour, min: minute, sec: 0)
     # schedule_start += timezone
-    schedule_start = Time.parse("#{hour}:#{minute} #{meridian} #{'+' if timezone.positive?}#{timezone}")
+    full_timezone = "#{timezone.positive? ? '+' : '-'}#{timezone.abs.to_s.rjust(4, '0')}"
+    schedule_start = Time.parse("#{hour}:#{minute} #{meridian} #{full_timezone}")
     Rails.logger.warn("#{timezone}".colorize(:red))
     Rails.logger.warn("#{schedule_start}".colorize(:red))
     new_schedule = IceCube::Schedule.new(schedule_start)
@@ -150,7 +151,7 @@ class ListItem < ApplicationRecord
     return "No schedule set - This item is not recurring." if schedule.nil?
     words = schedule.to_s
     # Remove redundant text here, if it gets annoying.
-    "#{words} at #{schedule.start_time.strftime("%-l:%M %p")}"
+    "#{words} at #{schedule.start_time.strftime("%-l:%M %p %Z")}"
   end
 
   def set_next_occurrence

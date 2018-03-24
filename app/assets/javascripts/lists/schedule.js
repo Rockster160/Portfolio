@@ -40,6 +40,6 @@ $("#list-item-schedule").ready(function() {
     $("#hour").val(hour)
     $("#meridian").prop("checked", meridian == "PM")
   }
-  $("#timezone").val((new Date()).getTimezoneOffset() / 60)
+  $("#timezone").val((new Date()).getTimezoneOffset() / 0.6) // 0.6 gets us the "600" rather than +6
 
 })
