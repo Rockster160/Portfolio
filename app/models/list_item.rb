@@ -65,11 +65,20 @@ class ListItem < ApplicationRecord
     self.timezone = timezone
     meridian = schedule_params["meridian"] || "AM"
     hour = schedule_params["hour"].to_i
+    # hour -= 12 if hour > 12
+    # hour += 12 if meridian == "PM"
     minute = schedule_params["minute"].to_i
     repeat_type = schedule_params["type"].to_sym if schedule_params["type"].in?(["minutely", "hourly", "daily", "weekly", "monthly"])
     return if repeat_type.nil?
 
+    Rails.logger.warn("#{hour}".colorize(:red))
+    Rails.logger.warn("#{minute}".colorize(:red))
+    # schedule_start = Time.zone.now.utc - 24.hours
+    # schedule_start = schedule_start.change(hour: hour, min: minute, sec: 0)
+    # schedule_start += timezone
     schedule_start = Time.parse("#{hour}:#{minute} #{meridian} #{'+' if timezone.positive?}#{timezone}")
+    Rails.logger.warn("#{timezone}".colorize(:red))
+    Rails.logger.warn("#{schedule_start}".colorize(:red))
     new_schedule = IceCube::Schedule.new(schedule_start)
     rule = IceCube::Rule.send(repeat_type, interval)
 
@@ -96,6 +105,7 @@ class ListItem < ApplicationRecord
     @schedule_options = nil
     super(new_schedule.to_ical)
     set_next_occurrence
+    Rails.logger.warn("#{schedule_next}".colorize(:red))
   end
 
   def schedule
