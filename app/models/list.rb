@@ -2,16 +2,16 @@
 #
 # Table name: lists
 #
-#  id          :integer          not null, primary key
-#  name        :string(255)
-#  created_at  :datetime
-#  updated_at  :datetime
-#  description :text
-#  important   :boolean          default(FALSE)
+#  id           :integer          not null, primary key
+#  name         :string(255)
+#  created_at   :datetime
+#  updated_at   :datetime
+#  description  :text
+#  important    :boolean          default(FALSE)
+#  show_deleted :boolean
 #
 
 class List < ApplicationRecord
-
   has_many :list_items, dependent: :destroy
   has_many :user_lists, dependent: :destroy
   has_many :users, through: :user_lists
@@ -34,7 +34,9 @@ class List < ApplicationRecord
   end
 
   def ordered_items
-    list_items.order("list_items.sort_order")
+    items = list_items.order("list_items.sort_order")
+    items = items.with_deleted if show_deleted?
+    items
   end
 
   def owner
@@ -55,11 +57,11 @@ class List < ApplicationRecord
     order = :asc unless order == :desc
     items = case sort.to_s.downcase.to_sym
     when :name
-      list_items.order("list_items.name #{order}")
+      list_items.with_deleted.order("list_items.name #{order}")
     when :category
-      list_items.order("list_items.category #{order} NULLS LAST")
+      list_items.with_deleted.order("list_items.category #{order} NULLS LAST")
     when :shuffle
-      list_items.order("RANDOM()")
+      list_items.with_deleted.order("RANDOM()")
     end
 
     items&.each_with_index do |list_item, idx|
@@ -152,7 +154,7 @@ class List < ApplicationRecord
   end
 
   def fix_list_items_order
-    list_items.order(:sort_order).each_with_index do |list_item, idx|
+    list_items.with_deleted.order(:sort_order).each_with_index do |list_item, idx|
       list_item.update(sort_order: idx, do_not_bump_order: true)
     end
   end
@@ -160,10 +162,6 @@ class List < ApplicationRecord
   def broadcast!
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self }, layout: false
     ActionCable.server.broadcast "list_#{self.id}_channel", list_html: rendered_message
-  end
-
-  def jsonify
-    attributes.symbolize_keys.slice(:id, :name, :description).merge(list_items: ordered_items.map(&:jsonify))
   end
 
 end

@@ -46,6 +46,16 @@
           <% end %>
         </div>
       </div>
+      <div class="form-field">
+        <div class="checkbox-wrapper">
+          <%= f.check_box :show_deleted %>
+          <%= f.label :show_deleted do %>
+            <div class="checkbox-placeholder"></div>
+            <big>&bull; Show previously deleted?</big> <br>
+            When toggled on, items that have been removed previously will still appear in the list.
+          <% end %>
+        </div>
+      </div>
     </div>
 
     <div class="form-submission">

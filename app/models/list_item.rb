@@ -29,7 +29,7 @@ class ListItem < ApplicationRecord
 
   validates :name, presence: true
 
-  scope :ordered, -> { order("list_items.important DESC, list_items.sort_order DESC") }
+  scope :ordered, -> { order("list_items.sort_order DESC") }
   scope :important, -> { where(important: true) }
   scope :unimportant, -> { where.not(important: true) }
 
@@ -148,10 +148,6 @@ class ListItem < ApplicationRecord
     self.schedule_next = schedule.try(:next_occurrence)
   end
 
-  def jsonify
-    name
-  end
-
   def options
     {
       important: "When set, this item will automatically appear at the top of the list regardless of the sort order.",
@@ -162,7 +158,7 @@ class ListItem < ApplicationRecord
   private
 
   def set_sort_order
-    self.sort_order ||= list.list_items.max_by(&:sort_order).try(:sort_order).to_i + 1
+    self.sort_order ||= list.list_items.with_deleted.max_by(&:sort_order).try(:sort_order).to_i + 1
   end
 
   def normalize_values
@@ -184,7 +180,7 @@ class ListItem < ApplicationRecord
 
   def reorder_conflict_orders
     return if do_not_bump_order
-    conflicted_items = list.list_items.where.not(id: self.id).where(sort_order: self.sort_order)
+    conflicted_items = list.list_items.with_deleted.where.not(id: self.id).where(sort_order: self.sort_order)
     if conflicted_items.any?
       do_not_broadcast = true
       conflicted_items.each do |conflicted_item|

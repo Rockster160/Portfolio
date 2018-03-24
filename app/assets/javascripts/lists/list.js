@@ -27,12 +27,7 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
       $(".list-item-container .list-item-field:not(.hidden)").blur()
     },
     update: function(evt, ui) {
-      var list_item_order = $(this).children().filter(function() {
-        var checked = $(this).children("input").prop("checked")
-        var permanent = $(this).find(".list-item-config .locked").length > 0
-        var removed = checked && !permanent
-        return !removed
-      }).map(function() { return $(this).attr("data-item-id") })
+      var list_item_order = $(this).children().map(function() { return $(this).attr("data-item-id") })
 
       var url = $(this).attr("data-update-url")
       var params = { list_item_order: list_item_order.toArray() }

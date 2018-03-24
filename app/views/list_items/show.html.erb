@@ -9,7 +9,18 @@
   </div>
   <div class="list-item-handle"><i class="fa fa-arrows"></i></div>
   <a href="<%= edit_list_list_item_path(list, item) %>" class="settings-btn"><i class="fa fa-cog"></i></a>
-  <input type="checkbox" id="list_item[<%= item.id %>]" class="list-item-checkbox" name="list_item[<%= item.id %>]" value="<%= item.id %>" data-checked-url="<%= list_list_item_path(list, item) %>" data-create-url="<%= list_list_items_path(list) %>">
+  <%= content_tag :input, "",
+    type: :checkbox,
+    id: "list_item[#{item.id}]",
+    class: "list-item-checkbox",
+    name: "list_item[#{item.id}]",
+    value: "#{item.id}",
+    checked: item.deleted?,
+    data: {
+      "checked-url": "#{list_list_item_path(list, item)}",
+      "create-url": "#{list_list_items_path(list)}"
+    }
+  %>
   <label for="list_item[<%= item.id %>]" class="list-item">
     <div class="checkbox-wrapper"></div>
     <div class="item-name"><%= item.name %></div>

@@ -6,6 +6,7 @@
 <div class="skinny-container list-container" data-list-id="<%= @list.id %>" data-list-item-id="<%= @list_item.id %>">
   <div class="btn-container">
     <a href="<%= list_path(@list) %>" class="btn">&larr; Back to List</a>
+    <%= link_to "Destroy", list_list_item_path(@list, @list_item, really_destroy: true), method: :delete, class: "btn danger pull-right", data: { confirm: "This will remove all trace of this item regardless of schedules set or permanence. This cannot be undone. Are you sure you would like to continue?" } %>
   </div>
   <div class="list-title"><%= @list_item.name %></div>
   <div class="list-error hidden">Disconnected from server. Changes made now will not be saved. Will attempt to reconnect automatically...</div>

@@ -35,9 +35,14 @@ class ListItemsController < ApplicationController
 
   def destroy
     @list_item = ListItem.with_deleted.find(params[:id])
-    @list_item.destroy unless @list_item.permanent?
-
-    head :no_content
+    
+    if params[:really_destroy]
+      @list_item.destroy_fully!
+      redirect_to list_path(@list_item.list)
+    else
+      @list_item.destroy unless @list_item.permanent?
+      head :no_content
+    end
   end
 
   private

@@ -7,7 +7,7 @@ class ListsController < ApplicationController
     @lists = current_user.ordered_lists
 
     respond_to do |format|
-      format.js { render json: @lists.map(&:jsonify) }
+      format.js { render json: @lists.to_json(include: :list_items) }
       format.html
     end
   end
@@ -24,7 +24,7 @@ class ListsController < ApplicationController
     response_message = @list.modify_from_message(params[:message])
 
     respond_to do |format|
-      format.json { render json: @list.jsonify }
+      format.json { render json: @list.to_json(include: :list_items) }
     end
   end
 
@@ -45,7 +45,7 @@ class ListsController < ApplicationController
     raise ActionController::RoutingError.new('Not Found') unless @list.present?
 
     respond_to do |format|
-      format.js { render json: @list.jsonify }
+      format.js { render json: @list.to_json(include: :list_items) }
       format.html
     end
   end
@@ -78,7 +78,7 @@ class ListsController < ApplicationController
 
     new_order = params[:list_item_order] || []
     new_order.each_with_index do |list_item_id, idx|
-      list_item = @list.list_items.find_by(id: list_item_id)
+      list_item = @list.list_items.with_deleted.find_by(id: list_item_id)
       next unless list_item.present?
       list_item.update(sort_order: idx, do_not_broadcast: true)
     end
@@ -93,7 +93,7 @@ class ListsController < ApplicationController
 
   def list_params
     return {} unless params[:list].present?
-    params.require(:list).permit(:name, :description, :important)
+    params.require(:list).permit(:name, :description, :important, :show_deleted)
   end
 
 end
