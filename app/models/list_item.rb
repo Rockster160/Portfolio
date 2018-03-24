@@ -76,10 +76,11 @@ class ListItem < ApplicationRecord
     # schedule_start += timezone
     full_timezone = "#{timezone.positive? ? '+' : '-'}#{timezone.abs.to_s.rjust(4, '0')}"
     time_str = "#{hour}:#{minute} #{meridian} #{full_timezone}"
-    Rails.logger.warn(time_str.colorize(:red))
+    Rails.logger.warn("time_str #{time_str}".colorize(:red))
     schedule_start = Time.parse(time_str)
-    Rails.logger.warn("#{schedule_start}".colorize(:red))
+    Rails.logger.warn("schedule_start #{schedule_start}".colorize(:red))
     new_schedule = IceCube::Schedule.new(schedule_start)
+    Rails.logger.warn("new_schedule.start_time #{new_schedule.start_time}".colorize(:red))
     rule = IceCube::Rule.send(repeat_type, interval)
 
     interval_details = schedule_params[repeat_type]
@@ -105,7 +106,7 @@ class ListItem < ApplicationRecord
     @schedule_options = nil
     super(new_schedule.to_ical)
     set_next_occurrence
-    Rails.logger.warn("#{schedule_next}".colorize(:red))
+    Rails.logger.warn("schedule_next #{schedule_next}".colorize(:red))
   end
 
   def schedule
@@ -154,8 +155,8 @@ class ListItem < ApplicationRecord
   end
 
   def set_next_occurrence
-    Rails.logger.warn("#{schedule.start_time}".colorize(:red))
-    Rails.logger.warn("#{schedule.next_occurrence}".colorize(:red))
+    Rails.logger.warn("schedule.start_time #{schedule.start_time}".colorize(:red))
+    Rails.logger.warn("schedule.next_occurrence #{schedule.next_occurrence}".colorize(:red))
     self.schedule_next = schedule.try(:next_occurrence)
   end
 
