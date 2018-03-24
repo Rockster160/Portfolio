@@ -104,14 +104,14 @@ class ListItem < ApplicationRecord
 
     @schedule = nil
     @schedule_options = nil
-    super(new_schedule.to_ical)
+    super(new_schedule.to_yaml)
     set_next_occurrence
     Rails.logger.warn("schedule_next #{schedule_next}".colorize(:red))
   end
 
   def schedule
     return if super.nil?
-    @schedule ||= IceCube::Schedule.from_ical(super) rescue nil
+    @schedule ||= IceCube::Schedule.from_yaml(super) rescue nil
   end
 
   def default_schedule_options
@@ -157,6 +157,7 @@ class ListItem < ApplicationRecord
   def set_next_occurrence
     Rails.logger.warn("schedule.start_time #{schedule.start_time}".colorize(:red))
     Rails.logger.warn("schedule.next_occurrence #{schedule.next_occurrence}".colorize(:red))
+    # self.schedule_next = schedule.start_time > Time.zone.now ? schedule.start_time : schedule.try(:next_occurrence)
     self.schedule_next = schedule.try(:next_occurrence)
   end
 
