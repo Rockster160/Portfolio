@@ -71,14 +71,13 @@ class ListItem < ApplicationRecord
     repeat_type = schedule_params["type"].to_sym if schedule_params["type"].in?(["minutely", "hourly", "daily", "weekly", "monthly"])
     return if repeat_type.nil?
 
-    Rails.logger.warn("#{hour}".colorize(:red))
-    Rails.logger.warn("#{minute}".colorize(:red))
     # schedule_start = Time.zone.now.utc - 24.hours
     # schedule_start = schedule_start.change(hour: hour, min: minute, sec: 0)
     # schedule_start += timezone
     full_timezone = "#{timezone.positive? ? '+' : '-'}#{timezone.abs.to_s.rjust(4, '0')}"
-    schedule_start = Time.parse("#{hour}:#{minute} #{meridian} #{full_timezone}")
-    Rails.logger.warn("#{timezone}".colorize(:red))
+    time_str = "#{hour}:#{minute} #{meridian} #{full_timezone}"
+    Rails.logger.warn(time_str.colorize(:red))
+    schedule_start = Time.parse(time_str)
     Rails.logger.warn("#{schedule_start}".colorize(:red))
     new_schedule = IceCube::Schedule.new(schedule_start)
     rule = IceCube::Rule.send(repeat_type, interval)
@@ -155,6 +154,8 @@ class ListItem < ApplicationRecord
   end
 
   def set_next_occurrence
+    Rails.logger.warn("#{schedule.start_time}".colorize(:red))
+    Rails.logger.warn("#{schedule.next_occurrence}".colorize(:red))
     self.schedule_next = schedule.try(:next_occurrence)
   end
 
