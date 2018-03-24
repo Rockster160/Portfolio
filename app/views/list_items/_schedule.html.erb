@@ -5,7 +5,7 @@
     <% clean_base = base_params.gsub('[', '_').delete(']') %>
 
     Reoccur every
-    <%= text_field_tag "#{base_params}[interval]", options[:interval] %>
+    <%= text_field_tag "#{base_params}[interval]", options[:interval], pattern: "[0-9]*", inputmode: "numeric" %>
     <% select_options = [
       ["Minute(s)", :minutely],
       ["Hour(s)",   :hourly],
@@ -15,7 +15,7 @@
     ] %>
     <%= select_tag "#{base_params}[type]", options_for_select(select_options, selected: options[:type]) %>
     starting at
-    <%= text_field_tag "#{base_params}[hour]", options[:hour], id: :hour %>:<%= text_field_tag "#{base_params}[minute]", options[:minute] %>
+    <%= text_field_tag "#{base_params}[hour]", options[:hour], id: :hour, pattern: "[0-9]*", inputmode: "numeric" %>:<%= text_field_tag "#{base_params}[minute]", options[:minute], pattern: "[0-9]*", inputmode: "numeric" %>
     <%= check_box_tag "#{base_params}[meridian]", "PM", options[:meridian] == "PM", id: :meridian %>
     <%= label_tag :meridian, "" %>
     <%= hidden_field_tag "#{base_params}[timezone]", options[:timezone], id: :timezone %>
