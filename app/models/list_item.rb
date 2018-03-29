@@ -184,7 +184,7 @@ class ListItem < ApplicationRecord
     if conflicted_items.any?
       do_not_broadcast = true
       conflicted_items.each do |conflicted_item|
-        conflicted_items.update(sort_order: conflicted_item.sort_order + 1, do_not_broadcast: true)
+        conflicted_item.update(sort_order: conflicted_item.sort_order + 1, do_not_broadcast: true)
       end
     else
       do_not_broadcast = false
