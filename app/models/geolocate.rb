@@ -1,4 +1,4 @@
-class Geolocate < Struct.new(:ip, :country_code, :country_name, :region_code, :region_name, :city, :zip_code, :time_zone, :latitude, :longitude, :metro_code)
+class Geolocate < Struct.new(:ip, :country_code, :country_name, :region_code, :region_name, :city, :zip_code, :time_zone, :latitude, :longitude, :metro_code, :__deprecation_message__)
 
   def self.lookup(ip)
     return unless ip.present?

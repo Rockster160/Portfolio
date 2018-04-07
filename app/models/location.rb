@@ -22,7 +22,7 @@ class Location < ApplicationRecord
   after_create :geolocate
 
   def geolocate
-    located = Geolocate.lookup(ip)
+    located = Geolocate.lookup(ip) rescue nil
     return unless located
     self.ip = located.ip
     self.country_code = located.country_code
