@@ -130,7 +130,7 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
         $itemField.focus()
       }, 1000)
     }
-  }).on("mousemove", function(evt) {
+  }).on("mousemove scroll", function(evt) {
     if (!heldListItem) { return }
     if (heldListItem.attr("data-item-id") != $(evt.target).closest(".list-item-container").attr("data-item-id")) {
       heldListItem = null
