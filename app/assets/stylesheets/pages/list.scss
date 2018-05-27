@@ -195,3 +195,40 @@
   75%  { transform: scale(1.1); }
   100% { transform: scale(1);   }
 }
+
+.white {
+  background: white;
+
+  .list-container, .lists-index-container {
+    color: black;
+
+    .important-list-items, .list-items, .lists {
+      border-color: white;
+
+      .list-item {
+        border: 1px solid black;
+
+        &:hover {
+          background: darken(white, 10%);
+        }
+      }
+      label { background: white; }
+      input[type=checkbox]:checked + label {
+        background: pink;
+      }
+      .list-item-options {
+        input[type=checkbox]:checked + label {
+          border-color: $base-blue;
+          background: lighten($base-blue, 30%);
+        }
+      }
+    }
+    .new-list-item-form {
+      .list-field {
+        input.new-list-item {
+          border-color: gg;
+        }
+      }
+    }
+  }
+}

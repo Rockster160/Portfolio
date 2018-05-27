@@ -1,6 +1,6 @@
 class ListsController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user
+  before_action :authorize_user, :color_scheme
   before_action :set_list, only: [:edit, :update, :show, :destroy, :users, :modify_from_message]
 
   def index
@@ -89,6 +89,10 @@ class ListsController < ApplicationController
 
   def set_list
     @list = current_user.lists.find_by(id: params[:id]) || current_user.lists.select { |list| list.name.parameterize == params[:id] }.first
+  end
+
+  def color_scheme
+    session[:color_scheme] = params[:style] if params[:style].present?
   end
 
   def list_params
