@@ -9,7 +9,24 @@
 
     <div class="form-content">
       <div class="svg-container"><div id="svg-box"></div></div>
-      <pre id="svg-raw" contenteditable class="textarea"></pre>
+      <div class="controls">
+        <button value='<svg width="|" height=""></svg>'>&lt;SVG&gt;</button>
+        <button value='<text x="|" y="" fill="" stroke="" stroke-width="" stroke-dasharray=""></text>'>&lt;text&gt;</button>
+        <button value='<rect x="|" y="" width="" height="" fill="" stroke="" stroke-width="" stroke-dasharray=""></rect>'>&lt;rect&gt;</button>
+        <button value='<circle cx="|" cy="" r="" fill="" stroke="" stroke-width="" stroke-dasharray=""></circle>'>&lt;circle&gt;</button>
+        <button value='<line x1="|" y1="" x2="" y2="" stroke="" stroke-width="" stroke-dasharray=""></line>'>&lt;line&gt;</button>
+        <button value='<ellipse cx="|" cy="" rx="" ry="" fill="" stroke="" stroke-width="" stroke-dasharray=""></ellipse>'>&lt;ellipse&gt;</button>
+        <button value='<path d="|" fill="" stroke="" stroke-width="" stroke-dasharray=""></path>'>&lt;path&gt;</button>
+        <button value='<polyline points="|" fill="" stroke="" stroke-width="" stroke-dasharray=""></polyline>'>&lt;polyline&gt;</button>
+        <button value='<polygon points="|" fill="" stroke="" stroke-width="" stroke-dasharray=""></polygon>'>&lt;polygon&gt;</button>
+        <button value='<animate attributeName="" attributeType="" begin="0" end="" from="" to="" dur="" repeatCount="" fill=""/>'>&lt;animate/&gt;</button>
+        <button value='fill=""'>fill=""</button>
+        <button value='id=""'>id=""</button>
+        <button value='stroke=""'>stroke=""</button>
+        <button value='d=""'>d=""</button>
+      </div>
+      <textarea id="svg-raw" spellcheck="false" autocapitalize="none" autocomplete="off" class="textarea"></textarea>
+      <!-- <pre id="svg-raw" contenteditable class="textarea"></pre> -->
     </div>
   </div>
 </div>

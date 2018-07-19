@@ -1,4 +1,8 @@
-<svg width="49" height="49" viewbox="0 0 49 49" xmlns="http://www.w3.org/2000/svg">
+<svg
+  width="49"
+  height="49"
+  viewbox="0 0 49 49"
+  xmlns="http://www.w3.org/2000/svg">
   <g>
     <title>Spade</title>
     <!-- <path id="border" stroke-width="1" fill="none" stroke="green" d="M0,0 L49,0 L49,49 L0,49z"/> -->

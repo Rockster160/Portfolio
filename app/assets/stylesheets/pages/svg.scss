@@ -16,7 +16,7 @@
       resize: none;
       font-family: 'CodenameCoder-Bold', monospace;
       overflow: scroll;
-      white-space: nowrap;
+      // white-space: nowrap;
     }
 
     .svg-container {
@@ -33,6 +33,19 @@
           width: 100%;
           height: 100%;
         }
+      }
+    }
+    .controls {
+      button {
+        display: inline;
+        border-radius: 0;
+        border: 1px solid grey;
+        background: lightgrey;
+        font-size: 10px;
+        color: black !important;
+        box-shadow: none;
+        text-shadow: none;
+        padding: 3px 10px;
       }
     }
   }
