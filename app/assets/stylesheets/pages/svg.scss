@@ -2,6 +2,21 @@
   .form-content {
     margin: 50px 30px;
 
+    .split-container {
+      .half-container {
+        border: none;
+      }
+
+      @include small-down {
+        flex-direction: column;
+
+        .half-container {
+          margin: 0 auto;
+          margin-bottom: 50px;
+        }
+      }
+    }
+
     .svg-btn {
       font-family: 'CodenameCoder-Bold', monospace;
       font-size: 14px;
