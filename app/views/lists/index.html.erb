@@ -12,6 +12,9 @@
   </div>
   <div class="lists-title"><%= current_user.username %>'s Lists</div>
   <div class="lists" data-reorder-url="<%= reorder_lists_path %>">
+    <div class="list-field">
+      <%= text_field_tag "list[name]", "", class: "filterable", placeholder: "Search lists" %>
+    </div>
     <div class="important-list-items"></div>
     <% @lists.each do |list| %>
       <div class="list-item-container" data-list-id="<%= list.id %>">
@@ -20,7 +23,9 @@
         </div>
         <div class="list-item-handle"><i class="fa fa-arrows"></i></div>
         <a href="<%= edit_list_path(list) %>" class="settings-btn"><i class="fa fa-cog"></i></a>
-        <a href="<%= list_path(list) %>" class="list-item"><%= list.name.titleize %> (<%= list.list_items.count %>)</a>
+        <a href="<%= list_path(list) %>" class="list-item">
+          <span class="item-name"><%= list.name.titleize %></span> (<%= list.list_items.count %>)
+        </a>
       </div>
     <% end %>
   </div>

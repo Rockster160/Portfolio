@@ -32,7 +32,7 @@
   <a data-modal="#sort-list" class="btn pull-right">Sort</a>
   <%= form_for [@list, @list.list_items.new], html: {class: "basic new-list-item-form"} do |f| %>
     <div class="list-field">
-      <%= f.text_field :name, class: "new-list-item", placeholder: "Add new item", autofocus: true %>
+      <%= f.text_field :name, class: "new-list-item filterable", placeholder: "Add new item", autofocus: true %>
     </div>
   <% end %>
   <div class="list-error hidden">Disconnected from server. Changes made now will not be saved. Will attempt to reconnect automatically...</div>
