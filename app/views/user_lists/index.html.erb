@@ -4,7 +4,9 @@
 <div class="skinny-container lists-index-container">
   <div class="btn-container">
     <a href="<%= edit_list_path(@list) %>" class="btn">&larr; Back to List info</a>
-    <a href="<%= new_user_path(list_id: @list.id) %>" class="btn pull-right">Invite <i class="fa fa-plus"></i></a>
+    <% if @current_list_user.is_owner? %>
+      <a href="<%= new_user_path(list_id: @list.id) %>" class="btn pull-right">Invite <i class="fa fa-plus"></i></a>
+    <% end %>
   </div>
   <div class="lists-title"><%= @list.name %>'s Users</div>
   <div class="lists">

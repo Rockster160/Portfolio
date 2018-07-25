@@ -34,8 +34,8 @@ Rails.application.routes.draw do
     member do
       post :modify_from_message
       post :receive_update
-      get :users
     end
+    resources :user_lists, only: [:index, :create, :destroy], path: :users
     resources :list_items
   end
 

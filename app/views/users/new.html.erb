@@ -3,7 +3,7 @@
 <div class="skinny-container">
   <div class="btn-container">
     <% if params[:list_id].present? %>
-      <a href="<%= users_list_path(params[:list_id]) %>" class="btn">&larr; Back to List</a>
+      <a href="<%= list_user_lists_path(params[:list_id]) %>" class="btn">&larr; Back to List</a>
     <% else %>
       <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
     <% end %>
