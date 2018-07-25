@@ -37,6 +37,7 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
 
   $(".new-list-item-form").submit(function(e) {
     e.preventDefault()
+    if ($(".new-list-item").val() == "") { return false }
     $(window).animate({ scrollTop: window.scrollHeight }, 300)
     $.post(this.action, $(this).serialize())
     $(".new-list-item").val("")

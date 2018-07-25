@@ -17,6 +17,7 @@ class ListItemsController < ApplicationController
   def create
     @list = List.find(params[:list_id])
     new_item = @list.list_items.by_name_then_update(list_item_params)
+    return render json: {errors: "Cannot create item without a name."} unless new_item.persisted?
 
     if params[:as_json]
       render json: new_item
@@ -35,7 +36,7 @@ class ListItemsController < ApplicationController
 
   def destroy
     @list_item = ListItem.with_deleted.find(params[:id])
-    
+
     if params[:really_destroy]
       @list_item.destroy_fully!
       redirect_to list_path(@list_item.list)
