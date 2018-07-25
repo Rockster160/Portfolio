@@ -20,11 +20,10 @@
 
 class ListItem < ApplicationRecord
   acts_as_paranoid
-  attr_accessor :do_not_broadcast, :do_not_bump_order
+  attr_accessor :do_not_broadcast
   belongs_to :list
 
   before_save :set_sort_order, :normalize_values
-  after_commit :reorder_conflict_orders
   after_commit :broadcast_commit
 
   validates :name, presence: true
@@ -169,26 +168,13 @@ class ListItem < ApplicationRecord
   end
 
   def broadcast_commit
-    return if do_not_broadcast || do_not_bump_order
+    return if do_not_broadcast
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
     ActionCable.server.broadcast "list_#{self.list_id}_channel", list_html: rendered_message
     list_item_attrs = self.attributes.symbolize_keys.slice(:important, :permanent, :category, :name)
     list_item_attrs.merge!(schedule: self.schedule_in_words)
     list_item_attrs.merge!(countdown: (self.schedule_next.to_f * 1000).round) unless self.schedule.nil?
     ActionCable.server.broadcast "list_item_#{self.id}_channel", list_item: list_item_attrs
-  end
-
-  def reorder_conflict_orders
-    return if do_not_bump_order
-    conflicted_items = list.list_items.with_deleted.where.not(id: self.id).where(sort_order: self.sort_order)
-    if conflicted_items.any?
-      do_not_broadcast = true
-      conflicted_items.each do |conflicted_item|
-        conflicted_item.update(sort_order: conflicted_item.sort_order + 1, do_not_broadcast: true)
-      end
-    else
-      do_not_broadcast = false
-    end
   end
 
 end

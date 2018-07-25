@@ -14,7 +14,7 @@ class ListsController < ApplicationController
 
   def reorder
     params[:list_ids].each_with_index do |list_id, idx|
-      current_user.user_lists.find_by(list_id: list_id).update(sort_order: idx)
+      current_user.user_lists.find_by(list_id: list_id).update(sort_order: idx, do_not_broadcast: true)
     end
 
     redirect_to lists_path

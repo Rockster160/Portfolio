@@ -12,6 +12,7 @@
 #
 
 class List < ApplicationRecord
+  attr_accessor :do_not_broadcast
   has_many :list_items, dependent: :destroy
   has_many :user_lists, dependent: :destroy
   has_many :users, through: :user_lists
@@ -160,6 +161,7 @@ class List < ApplicationRecord
   end
 
   def broadcast!
+    return if do_not_broadcast
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self }, layout: false
     ActionCable.server.broadcast "list_#{self.id}_channel", list_html: rendered_message
   end
