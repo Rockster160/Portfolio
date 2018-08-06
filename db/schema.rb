@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20180324024433) do
+ActiveRecord::Schema.define(version: 20180806042443) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -62,19 +62,20 @@ ActiveRecord::Schema.define(version: 20180324024433) do
   end
 
   create_table "list_items", force: :cascade do |t|
-    t.string   "name",           limit: 255
+    t.text     "name"
     t.integer  "list_id"
     t.datetime "created_at"
     t.datetime "updated_at"
     t.integer  "sort_order"
     t.string   "formatted_name"
     t.datetime "deleted_at"
-    t.boolean  "important",                  default: false
-    t.boolean  "permanent",                  default: false
+    t.boolean  "important",      default: false
+    t.boolean  "permanent",      default: false
     t.string   "schedule"
     t.string   "category"
     t.datetime "schedule_next"
     t.integer  "timezone"
+    t.integer  "amount"
     t.index ["deleted_at"], name: "index_list_items_on_deleted_at", using: :btree
     t.index ["list_id"], name: "index_list_items_on_list_id", using: :btree
   end
