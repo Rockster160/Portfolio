@@ -3,7 +3,7 @@
 # Table name: list_items
 #
 #  id             :integer          not null, primary key
-#  name           :string(255)
+#  name           :text
 #  list_id        :integer
 #  created_at     :datetime
 #  updated_at     :datetime
@@ -16,6 +16,7 @@
 #  category       :string
 #  schedule_next  :datetime
 #  timezone       :integer
+#  amount         :integer
 #
 
 class ListItem < ApplicationRecord
