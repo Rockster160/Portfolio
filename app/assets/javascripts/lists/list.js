@@ -52,7 +52,6 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
     } else {
       $(".list-item-container").each(function() {
         var option_with_category = $(this).find(".list-item-config .category").text() + " " + $(this).find(".item-name").text()
-        console.log(option_with_category);
         var optionText = option_with_category.toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
         if (optionText.indexOf(currentText) >= 0) {
           $(this).removeClass("hidden")

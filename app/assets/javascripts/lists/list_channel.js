@@ -5,7 +5,9 @@ $(".ctr-lists.act-show").ready(function() {
   reorderList = function() {
     var ordered_list = $(".list-items .list-item-container").sort(function (a, b) {
       var contentA = parseInt($(a).attr("data-sort-order"))
+      if ($(a).find(".list-item-checkbox").prop("checked")) { contentA -= 0.1 }
       var contentB = parseInt($(b).attr("data-sort-order"))
+      if ($(b).find(".list-item-checkbox").prop("checked")) { contentB -= 0.1 }
       return (contentA < contentB) ? -1 : ((contentA > contentB) ? 1 : 0)
     })
     $(".list-items").html(ordered_list)
@@ -53,7 +55,7 @@ $(".ctr-lists.act-show").ready(function() {
         // Update sort order of already found item
         matching_items.attr("data-sort-order", $(this).attr("data-sort-order"))
         // Update name correctly
-        matching_items.find(".item-name").html($(this).find(".item-name").text())
+        matching_items.find(".item-name").html($(this).find(".item-name").text().replace("<", "&lt;"))
 
         // Define whether it's checked or not - Only update if not locked
         if ($(this).find(".list-item-config .locked").length == 0) {
