@@ -8,7 +8,7 @@
 #  created_at     :datetime
 #  updated_at     :datetime
 #  sort_order     :integer
-#  formatted_name :string
+#  formatted_name :text
 #  deleted_at     :datetime
 #  important      :boolean          default(FALSE)
 #  permanent      :boolean          default(FALSE)
