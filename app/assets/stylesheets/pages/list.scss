@@ -61,6 +61,20 @@
         animation: 1s ease-out pulse infinite;
       }
 
+      .details {
+        width: 14px;
+        position: relative;
+
+        &:after {
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          text-align: center;
+          content: "\f0c9";
+          font-family: "FontAwesome";
+        }
+      }
+
       .locked {
         width: 14px;
         position: relative;
