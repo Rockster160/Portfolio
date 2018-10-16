@@ -21,11 +21,11 @@ class FlashCard < ApplicationRecord
   after_create :createLines
 
   def next
-    self.class.where("id > ?", id).first || self.class.first
+    self.class.find_by("id > ?", id) || self.class.first
   end
 
   def previous
-    self.class.where("id < ?", id).last || self.class.last
+    self.class.find_by("id < ?", id) || self.class.last
   end
 
   def createLines
