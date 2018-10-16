@@ -15,11 +15,6 @@ cron_jobs = [
 if Rails.env.production?
   cron_jobs += [
     {
-      name:  "Reminder Messages",
-      class: "LitterReminderWorker",
-      cron:  daily_9pm
-    },
-    {
       name:  "Charge Car",
       class: "ChargeCarWorker",
       cron:  monthly_15th_at_2pm
