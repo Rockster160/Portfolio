@@ -28,6 +28,8 @@ class CustomLogger
           http_method: request.env["REQUEST_METHOD"],
           url: request.env["REQUEST_PATH"],
           params: filtered_params,
+          headers: request&.headers&.env&.reject { |key| key.to_s.include?('.') },
+          body: request.try(:raw_post).to_s.presence || request.try(:body).to_s.presence,
           user_id: user.try(:id),
           created_at: formatted_time
         })

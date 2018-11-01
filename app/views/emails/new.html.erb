@@ -1,0 +1,33 @@
+<%= content_for :head do %>
+  <%= javascript_include_tag "support/pell.js" %>
+<% end %>
+
+<div class="skinny-container">
+  <a href="<%= emails_path %>" class="btn">Back to Emails</a>
+</div>
+<% if @email.errors.any? %>
+  <div style="background: pink;">
+    <%= @email.errors.full_messages %>
+  </div>
+<% end %>
+<div class="email-form-wrapper">
+  <%= form_for @email, html: { class: "basic" } do |f| %>
+    <%= f.hidden_field :html_body, class: "html-output" %>
+    <div class="from">
+      <%= f.text_field :from_user, placeholder: "From" %>
+      <span>@</span>
+      <%= f.select :from_domain, Email.registered_domains %>
+    </div>
+    <%= f.hidden_field :to, id: "csv-emails" %>
+    <div class="entered-emails">
+      <span class="label">To:</span>
+      <% @email.to.to_s.split(",").map(&:squish).each do |email| %>
+        <span class="email"><%= email.to_s.downcase %><span class="remove-tag">X</span></span>
+      <% end %>
+    </div>
+    <input type="text" id="temp-emails">
+    <%= f.text_field :subject, placeholder: "Subject" %>
+    <div id="pell" data-prefilled-mail="<%= @email.html_body %>"></div>
+    <%= f.submit "Send", style: "float: right" %>
+  <% end %>
+</div>

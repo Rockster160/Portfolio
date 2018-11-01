@@ -32,7 +32,15 @@
   </div>
   <div style="margin-top: 20px;">
     <h4>Params</h4>
-    <pre><%= JSON.pretty_generate @logger.params_json %></pre>
+    <pre><%= JSON.pretty_generate @logger.params_json rescue @logger.params_json %></pre>
+  </div>
+  <div style="margin-top: 20px;">
+    <h4>Headers</h4>
+    <pre><%= JSON.pretty_generate @logger.headers_json rescue @logger.headers_json %></pre>
+  </div>
+  <div style="margin-top: 20px;">
+    <h4>Body</h4>
+    <pre><%= JSON.pretty_generate @logger.body_json rescue @logger.body_json %></pre>
   </div>
 
 </div>

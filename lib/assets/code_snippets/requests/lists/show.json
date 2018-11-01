@@ -1,2 +1,2 @@
-curl "http://rocconicholls.me/lists/:list_id" \
+curl "http://ardesian.com/lists/:list_id" \
   -u "username:password"

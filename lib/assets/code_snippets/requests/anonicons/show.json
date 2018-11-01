@@ -1,1 +1,1 @@
-curl -X GET "http://rocconicholls.me/anonicons/:identifier"
+curl -X GET "http://ardesian.com/anonicons/:identifier"

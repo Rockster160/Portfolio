@@ -10,6 +10,11 @@ class WebhooksController < ApplicationController
     head 200
   end
 
+  def email
+    Email.receive(request)
+    head :no_content
+  end
+
   private
 
   def post_params

@@ -1,0 +1,49 @@
+<div class="skinny-container">
+  <a href="<%= emails_path %>" class="btn">Back to Emails</a>
+</div>
+<div class="email-details">
+  <table>
+    <tr class="timestamp">
+      <td>Timestamp</td>
+      <td><%= @email.created_at.in_time_zone("America/Denver") %></td>
+    </tr>
+    <tr class="from">
+      <td>From</td>
+      <td><%= @email.from %></td>
+    </tr>
+    <tr class="to">
+      <td>To</td>
+      <td><%= @email.to %></td>
+    </tr>
+    <tr class="subject">
+      <td>Subject</td>
+      <td><%= @email.subject.presence || "<No Subject>" %></td>
+    </tr>
+  </table>
+</div>
+<div class="skinny-container">
+  <%
+    reply_details = {
+      email: {
+        from_user: @email.our_email,
+        to: @email.not_our_email,
+        subject: "RE: #{@email.subject}"
+      }
+    }
+    forward_details = {
+      email: {
+        from_user: @email.our_email,
+        subject: "FWD: #{@email.subject}",
+        html_body: @email.html_body
+      }
+    }
+  %>
+  <a href="<%= new_email_path(reply_details) %>" class="btn">Reply</a>
+  <a href="<%= new_email_path(forward_details) %>" class="btn">Forward</a>
+  <% if @email.archived? %>
+    <%= link_to "Unarchive", email_path(@email, email: {archived: false}), method: :patch, class: "btn" %>
+  <% else %>
+    <%= link_to "Archive", email_path(@email, email: {archived: true}), method: :patch, class: "btn" %>
+  <% end %>
+</div>
+<div class="display-email-container"><%= @email.html_body.try(:html_safe).presence || @email.text_body.try(:html_safe).presence || @email.blob.presence || "No Content" %></div>

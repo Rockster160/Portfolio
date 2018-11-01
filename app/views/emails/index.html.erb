@@ -1,0 +1,51 @@
+<div class="skinny-container">
+  <a href="<%= new_email_path %>" class="btn">New Email</a>
+</div>
+<div class="emails-container">
+  <h3>Emails Received</h3>
+  <% @emails_received.each do |email| %>
+    <a href="<%= email_path(email) %>" class="email-container <%= 'unread' unless email.read? %>">
+      <div class="timestamp"><%= email.created_at.in_time_zone("America/Denver") %></div>
+      <div class="from"><%= email.from %></div>
+      <div class="to"><%= email.to %></div>
+      <div class="subject"><%= email.subject.presence || "<No Subject>" %></div>
+      <div class="body"><%= email.text_body.presence || "<No Content>" %></div>
+    </a>
+    <div class="controls">
+      <%= link_to email_path(email, email: {archived: true}), method: :patch do %><i class="fa fa-trash"></i><% end %>
+      <%= link_to email_path(email, email: {read: true}), method: :patch do %><i class="fa fa-check"></i><% end %>
+    </div>
+  <% end %>
+  <%= paginate @emails_received, param_name: :emails_received_page, params: params %>
+  <h3>Emails Sent</h3>
+  <% @emails_sent.each do |email| %>
+    <a href="<%= email_path(email) %>" class="email-container <%= 'unread' unless email.read? %>">
+      <div class="timestamp"><%= email.created_at.in_time_zone("America/Denver") %></div>
+      <%# From/To are swapped for for consistency %>
+      <div class="from"><%= email.to %></div>
+      <div class="to"><%= email.from %></div>
+      <div class="subject"><%= email.subject.presence || "<No Subject>" %></div>
+      <div class="body"><%= email.text_body.presence || "<No Content>" %></div>
+    </a>
+    <div class="controls">
+      <%= link_to email_path(email, email: {archived: true}), method: :patch do %><i class="fa fa-trash"></i><% end %>
+      <%= link_to email_path(email, email: {read: true}), method: :patch do %><i class="fa fa-check"></i><% end %>
+    </div>
+  <% end %>
+  <%= paginate @emails_sent, param_name: :emails_sent_page, params: params %>
+  <h3>Failed to parse</h3>
+  <% @failed_to_parse.each do |email| %>
+    <a href="<%= email_path(email) %>" class="email-container <%= 'unread' unless email.read? %>">
+      <div class="timestamp"><%= email.created_at.in_time_zone("America/Denver") %></div>
+      <div class="to"><%= email.to.presence || "<No To>" %></div>
+      <div class="from"><%= email.from.presence || "<No From>" %></div>
+      <div class="subject"><%= email.subject.presence || "<No Subject>" %></div>
+      <div class="body"><%= email.text_body.presence || "<No Content>" %></div>
+    </a>
+    <div class="controls">
+      <%= link_to email_path(email, email: {archived: true}), method: :patch do %><i class="fa fa-trash"></i><% end %>
+      <%= link_to email_path(email, email: {read: true}), method: :patch do %><i class="fa fa-check"></i><% end %>
+    </div>
+  <% end %>
+  <%= paginate @failed_to_parse, param_name: :failed_emails_page, params: params %>
+</div>

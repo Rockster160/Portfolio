@@ -13,6 +13,7 @@
 #  updated_at  :datetime         not null
 #  ip_count    :integer
 #  location_id :integer
+#  headers     :text
 #
 
 class LogTracker < ApplicationRecord
@@ -32,7 +33,15 @@ class LogTracker < ApplicationRecord
   end
 
   def params_json
-    JSON.parse(params.gsub("=>", ":"))
+    JSON.parse(params.gsub("=>", ":")) rescue params.to_s
+  end
+
+  def headers_json
+    JSON.parse(headers.gsub("=>", ":")) rescue headers.to_s
+  end
+
+  def body_json
+    JSON.parse(body.gsub("=>", ":")) rescue body.to_s
   end
 
   def short_location

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20180818215250) do
+ActiveRecord::Schema.define(version: 20181026151203) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -42,6 +42,21 @@ ActiveRecord::Schema.define(version: 20180818215250) do
     t.string   "text",       limit: 255
     t.datetime "created_at"
     t.datetime "updated_at"
+  end
+
+  create_table "emails", force: :cascade do |t|
+    t.integer  "sent_by_id"
+    t.string   "from"
+    t.string   "to"
+    t.string   "subject"
+    t.text     "blob"
+    t.text     "text_body"
+    t.text     "html_body"
+    t.datetime "read_at"
+    t.datetime "deleted_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["sent_by_id"], name: "index_emails_on_sent_by_id", using: :btree
   end
 
   create_table "flash_cards", force: :cascade do |t|
@@ -122,6 +137,7 @@ ActiveRecord::Schema.define(version: 20180818215250) do
     t.datetime "updated_at",  null: false
     t.integer  "ip_count"
     t.integer  "location_id"
+    t.text     "headers"
     t.index ["location_id"], name: "index_log_trackers_on_location_id", using: :btree
     t.index ["user_id"], name: "index_log_trackers_on_user_id", using: :btree
   end

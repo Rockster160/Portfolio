@@ -17,6 +17,7 @@
 //= require gmaps/google
 //= require_tree .
 //= stub support/colorpicker.js
+//= stub support/pell.js
 //= stub support/particles.js
 //= stub support/particles_json.js
 //= stub support/touch_punch.js
@@ -45,6 +46,10 @@ keyEvent = function(char) {
     default:
       return char.charCodeAt(0)
   }
+}
+
+keyIsPressed = function(evt, key) {
+  return evt.which == keyEvent(key)
 }
 
 seconds = second = function(count) { return 1000 * count || 1 }

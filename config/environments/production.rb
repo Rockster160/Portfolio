@@ -14,12 +14,25 @@ Rails.application.configure do
   config.consider_all_requests_local       = false
   config.action_controller.perform_caching = true
 
-  config.action_cable.url = 'wss://rocconicholls.me/cable'
-  config.action_cable.allowed_request_origins = ['https://rocconicholls.me']
-  config.web_socket_server_url = "wss://rocconicholls.me/cable"
+  config.action_cable.url = 'wss://ardesian.com/cable'
+  config.action_cable.allowed_request_origins = ['https://ardesian.com']
+  config.web_socket_server_url = "wss://ardesian.com/cable"
   config.action_cable.disable_request_forgery_protection = true
 
-  routes.default_url_options = { protocol: "https://", host: "rocconicholls.me", port: nil }
+  routes.default_url_options = { protocol: "https://", host: "ardesian.com", port: nil }
+
+  config.action_mailer.default_url_options = { host: 'ardesian.com' }
+  config.action_mailer.raise_delivery_errors = true
+  config.action_mailer.perform_deliveries = true
+  ActionMailer::Base.delivery_method = :smtp
+  ActionMailer::Base.smtp_settings = {
+    address:              "email-smtp.us-east-1.amazonaws.com",
+    port:                 587,
+    user_name:            ENV["PORTFOLIO_SMTP_USERNAME"],
+    password:             ENV["PORTFOLIO_SMTP_PASSWORD"],
+    authentication:       :plain,
+    enable_starttls_auto: true
+  }
 
   # Enable Rack::Cache to put a simple HTTP cache in front of your application
   # Add `rack-cache` to your Gemfile before enabling this.

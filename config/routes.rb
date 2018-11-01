@@ -17,9 +17,11 @@ Rails.application.routes.draw do
 
   post 'webhooks/jenkins' => "webhooks#jenkins"
   post 'webhooks/post' => "webhooks#post"
+  post 'webhooks/email' => "webhooks#email"
 
   get 'cube' => 'cubes#show'
 
+  resources :emails, except: [:destroy, :edit]
   resources :log_trackers, only: [ :index, :show ]
 
   resource :summoners_war do
