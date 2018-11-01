@@ -46,4 +46,4 @@
     <%= link_to "Archive", email_path(@email, email: {archived: true}), method: :patch, class: "btn" %>
   <% end %>
 </div>
-<div class="display-email-container"><%= @email.html_body.try(:html_safe).presence || @email.text_body.try(:html_safe).presence || @email.blob.presence || "No Content" %></div>
+<div class="display-email-container no-color"><%= @email.html_body.try(:html_safe).presence || @email.text_body.try(:html_safe).presence || @email.blob.presence || "No Content" %></div>
