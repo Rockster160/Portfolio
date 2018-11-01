@@ -1,4 +1,6 @@
 $(document).ready(function() {
+  if ($(".no-markdown").length > 0) { return }
+
   contrastForColor = function(bg_color_hex) {
     var black = "#000", white = "#FFF"
     if (!bg_color_hex) { return white }
@@ -24,7 +26,6 @@ $(document).ready(function() {
   }
 
   $("body, body *:not(script):not(noscript):not(style)").each(function() {
-    if ($(this).closest(".no-color").length > 0) { return }
     $(this).html($(this).html().replace(/([^\\])\`(.*?[^\\])\`/g, "$1<code>$2</code>"))
     $(this).html($(this).html().replace(/\\`/g, "`"))
     $(this).html($(this).html().replace(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})([^\w])/g, function(match, group1, group2) {
