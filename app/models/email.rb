@@ -92,8 +92,8 @@ class Email < ApplicationRecord
   def from_mail(mail)
     text_body = mail.try(:text_part).try(:body).try(:raw_source)
     text_body = text_body.gsub(/\=(3D)+/, "=").gsub(/\=\r?\n/, "") if text_body.present?
-    html_body = mail.try(:html_part).try(:body).try(:raw_source)
-    html_body = html_body.gsub(/\=(3D)+/, "=").gsub(/\=\r?\n/, "") if html_body.present?
+    html_body = mail.try(:html_part).try(:body).try(:raw_source) || mail.try(:body).try(:raw_source)
+    html_body = html_body.gsub(/\=(3D)+/, "=").gsub(/\=\r?\n/, "").gsub(/\r?\n\r?/, "<br>") if html_body.present?
     assign_attributes(
       from:      [mail.from].flatten.compact.join(","),
       to:        [mail.to].flatten.compact.join(","),
