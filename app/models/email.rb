@@ -77,7 +77,7 @@ class Email < ApplicationRecord
   end
 
   def self.registered_domains
-    ["ardesian.com", "rocconicholls.me"]
+    ["ardesian.com", "rocconicholls.me", "rdjn.me"]
   end
 
   def to_mail
