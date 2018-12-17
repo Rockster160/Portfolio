@@ -360,7 +360,7 @@ $(document).on("submit", "#random-generation-form", function(evt) {
   return false
 }).on("click", ".graph", function(evt) {
   evt.preventDefault()
-  graphTrend(10000)
+  graphTrend(1000)
   return false
 }).on("click", ".submit", function(evt) {
   evt.preventDefault()
