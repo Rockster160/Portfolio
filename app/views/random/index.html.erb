@@ -46,6 +46,12 @@
       </div>
     </div>
 
+    <div class="form-container results-wrapper">
+      <h3>Results</h3>
+      <hr>
+      <div class="result"></div>
+    </div>
+
     <div class="form-fields">
       <div class="form-field">
         <%= label_tag :random_number do %>
@@ -61,9 +67,8 @@
     </div>
 
     <div class="form-container results-wrapper">
-      <h3>Results</h3>
+      <h3>Details</h3>
       <hr>
-      <div class="result"></div>
       <code class="description"></code>
     </div>
 
@@ -81,6 +86,9 @@
 <%= render_modal("set-howto", "Custom Set") do %>
   <p>Select an object from a set by typing (or pasting) a list of objects to select from.</p>
   <p>Objects are split using precedence of a new line (Enter key), `|`, and `,`</p>
+  <p>Example: <br>
+  `Heads | Tails` will "flip a coin" and randomly select one of the options provided.
+  </p>
 <% end %>
 
 <%= render_modal("dnd-howto", "What is Dice Notation?") do %>
