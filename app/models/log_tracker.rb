@@ -14,6 +14,7 @@
 #  ip_count    :integer
 #  location_id :integer
 #  headers     :text
+#  body        :text
 #
 
 class LogTracker < ApplicationRecord

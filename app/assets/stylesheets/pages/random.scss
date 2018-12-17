@@ -1,0 +1,23 @@
+.results-wrapper {
+  .result {
+    font-size: 48px;
+    text-align: center;
+  }
+  code {
+    display: block;
+    width: 100%;
+  }
+}
+.history {
+  table {
+    width: 100%;
+    table-layout: fixed;
+  }
+}
+
+.instruction-table {
+  tr td:first-of-type {
+    font-weight: bold;
+    white-space: nowrap;
+  }
+}

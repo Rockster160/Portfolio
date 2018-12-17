@@ -47,6 +47,7 @@ Rails.application.routes.draw do
     end
   end
 
+  get :random, controller: :random, action: :index
   resources :colors, only: [ :index ]
   resources :anonicons, only: [ :index, :show ], constraints: { id: /[0-9.a-zA-Z]+/ }
   get :"svg-editor", controller: :svg_editors, action: :show

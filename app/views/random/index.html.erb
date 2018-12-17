@@ -1,0 +1,138 @@
+<%= meta_title "Random Generation" %>
+<%= meta_description "Generate random numbers" %>
+<% content_for :head do %>
+  <%= javascript_include_tag 'pages/random/dnd.js' %>
+<% end %>
+
+<div class="skinny-container">
+
+  <%= form_tag "", id: "random-generation-form" do |f| %>
+    <div class="form-title">
+      Random
+    </div>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= label_tag :dice_notation do %>
+          Dice Notation
+          <a href="" data-modal="#dnd-howto">?</a>
+        <% end %>
+        <%= text_field_tag :dice_notation, "", autocomplete: :off %>
+      </div>
+      <div class="form-field">
+        <%= label_tag :set do %>
+          Set
+          <a href="" data-modal="#set-howto">?</a>
+        <% end %>
+        <%= text_area_tag :set, "", autocomplete: :off %>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <a href="" class="btn submit">Generate!</a>
+    </div>
+
+    <div class="form-container results-wrapper">
+      Results
+
+      <div class="result"></div>
+      <code class="description"></code>
+    </div>
+
+    <div class="form-container history-wrapper">
+      History
+
+      <div class="history">
+        <table></table>
+      </div>
+    </div>
+  <% end %>
+
+</div>
+
+<%= render_modal("set-howto", "Custom Set") do %>
+  <p>Select an object from a set by typing (or pasting) a list of objects to select from.</p>
+  <p>Objects are split using precedence of a new line (Enter key), `|`, and `,`</p>
+<% end %>
+
+<%= render_modal("dnd-howto", "What is Dice Notation?") do %>
+  <p>In the examples below, `#` is replaced by any number.</p>
+  <p>Notation is not case sensitive.</p>
+  <p>Multiple dice can be rolled at once, and additional arithmetic can be applied.</p>
+  <table class="instruction-table">
+    <tr>
+      <td>`d`</td>
+      <td>used to simulate the roll of virtual dice.</td>
+    </tr>
+    <tr>
+      <td>`#d`</td>
+      <td>Roll the dice "n" times. (Default 1)</td>
+    </tr>
+    <tr>
+      <td>`d#`</td>
+      <td>Roll a dice with "n" sides. (Default 6)</td>
+    </tr>
+    <tr>
+      <td>`d%`</td>
+      <td>Roll a dice with 100 sides. (Shortcut for `d100`)</td>
+    </tr>
+    <tr>
+      <td>`d!`</td>
+      <td>Roll an additional time if the highest value is rolled (6 for a 6 sided die)</td>
+    </tr>
+    <tr>
+      <td>`d!#`</td>
+      <td>Roll an additional time if "n" is rolled (Default 1)</td>
+    </tr>
+    <tr>
+      <td>`d+!#`</td>
+      <td>Roll an additional time if the roll is equal or greater than "n"</td>
+    </tr>
+    <tr>
+      <td>`d-!#`</td>
+      <td>Roll an additional time if the roll is equal or less than "n"</td>
+    </tr>
+    <tr>
+      <td>`dL`</td>
+      <td>Drop the lowest result. (Used when rolling one die multiple times)</td>
+    </tr>
+    <tr>
+      <td>`dL#`</td>
+      <td>Drop the lowest result "n" times.</td>
+    </tr>
+    <tr>
+      <td>`dH`</td>
+      <td>Drop the highest result. (Used when rolling one die multiple times)</td>
+    </tr>
+    <tr>
+      <td>`dH#`</td>
+      <td>Drop the highest result "n" times.</td>
+    </tr>
+    <tr>
+      <td>`dK`</td>
+      <td>Drop the highest result. (Used when rolling one die multiple times)</td>
+    </tr>
+    <tr>
+      <td>`dK#`</td>
+      <td>Drop the highest result "n" times.</td>
+    </tr>
+    <tr>
+      <td>`d-L`</td>
+      <td>Drop all results equal to the lowest dice value (1)</td>
+    </tr>
+    <tr>
+      <td>`d-L#`</td>
+      <td>Drop all results equal to or less than "n"</td>
+    </tr>
+    <tr>
+      <td>`d-H`</td>
+      <td>Drop all results equal to the highest dice value (6 for a 6 sided die)</td>
+    </tr>
+    <tr>
+      <td>`d-H#`</td>
+      <td>Drop all results equal to or greater than "n"</td>
+    </tr>
+  </table>
+  <p>Example: <br>
+  `4d6 + 10` => Roll a 6 sided dice 4 times, add them all together and add 10 to the final result.</p>
+<% end %>

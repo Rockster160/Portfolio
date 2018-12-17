@@ -14,6 +14,7 @@
         <div class="clock-wrapper" style="height: 150px; text-align: center;">
           <canvas id="clocks" class="no-zoom" width="235" height="120"></canvas>
         </div>
+
         <a href="<%= lists_path %>" class="project-wrapper">
           <div class="json-btn" data-modal="#code-example-list">API</div>
           <%= render_modal "code-example-list", "Lists" do %>
@@ -44,6 +45,7 @@
             <p>In order to save lists, you must first create an account so that you are able to view lists on multiple devices and keep your lists attached to you.</p>
           </div>
         </a>
+
         <a href="<%= colors_path %>" class="project-wrapper">
           <div class="json-btn" data-modal="#code-example-colors">API</div>
           <%= render_modal "code-example-colors", "Colors" do %>
@@ -56,6 +58,14 @@
             <p>Select 2 colors and fade between them to get a smooth transition or mid-way colors.</p>
           </div>
         </a>
+
+        <a href="<%= random_path %>" class="project-wrapper">
+          <div class="project-title">Random Number Generators</div>
+          <div class="project-description">
+            <p>Use dice notation, sets of data, or a preset to generate random numbers.</p>
+          </div>
+        </a>
+
         <a href="<%= anonicons_path %>" class="project-wrapper">
           <div class="json-btn" data-modal="#code-example-anonicon">API</div>
           <%= render_modal "code-example-anonicon", "Anonicons" do %>
@@ -70,6 +80,7 @@
             <p>Generate random user icons based on IP addresses, strings, or anything else!</p>
           </div>
         </a>
+
         <a href="<%= character_builder_little_world_path %>" class="project-wrapper">
           <div class="project-title">Character Builder</div>
           <div class="project-description">
@@ -77,18 +88,21 @@
             <p>Character persists in your browser, but can also be saved to your account for use across devices.</p>
           </div>
         </a>
+
         <a href="<%= little_world_path %>" class="project-wrapper">
           <div class="project-title">Little World (Incomplete)</div>
           <div class="project-description">
             <p>Explore a small world with others. Slay monsters, collect coins, and chat with others that are playing!</p>
           </div>
         </a>
+
         <a href="<%= deck_cards_path %>" class="project-wrapper">
           <div class="project-title">Cards (Incomplete)</div>
           <div class="project-description">
             <p>Play around with a deck of cards. Deal, flip, and set rules for cards to follow to create any card game!</p>
           </div>
         </a>
+
         <!-- <a href="<%= cube_path %>" class="project-wrapper">
           <div class="project-title">Rubik's Cube (Incomplete)</div>
           <div class="project-description">
@@ -96,6 +110,7 @@
             <p>In the future, there are plans to create a solver where you may enter your own cube and have the solver fix it for you!</p>
           </div>
         </a> -->
+
         <a href="<%= mazes_path %>" class="project-wrapper">
           <div class="json-btn" data-modal="#code-example-maze">API</div>
           <%= render_modal "code-example-maze", "Mazes" do %>
@@ -108,6 +123,7 @@
             Random maze generation for all of your maze-like needs!
           </div>
         </a>
+
         <a href="<%= summoners_war_path %>" class="project-wrapper">
           <div class="project-title">Summoner's War Calculator</div>
           <div class="project-description">
