@@ -124,8 +124,8 @@ Dice.prototype.parseDetails = function(raw_str) {
   if (die_regex.test(raw_str || "")) {
     var matchGroup = die_regex.exec(raw_str)
     this.raw = matchGroup[0]
-    this.roll_count = matchGroup[1] == "%" ? 100 : parseInt(matchGroup[1] || 1)
-    this.face_count = parseInt(matchGroup[2] || 6)
+    this.roll_count = parseInt(matchGroup[1] || 1)
+    this.face_count = matchGroup[2] == "%" ? 100 : parseInt(matchGroup[2] || 6)
 
     this.parseOptions(matchGroup[3])
   }
@@ -238,7 +238,7 @@ Dice.prototype.throw = function() {
 
 // DOM interaction
 var addToHistory = function(detail, value) {
-  if (value == undefined || value.length == 0 || isNaN(value)) { return }
+  if (value == undefined || value.length == 0) { return }
   var row = $("<tr>")
   row.append($("<td>").text(detail))
   row.append($("<td>").text(value))
@@ -253,7 +253,7 @@ var selectFromRandomSet = function(value_set) {
     return val.trim()
   })
   var rand_val = stripped_set[Math.floor(Math.random() * stripped_set.length)]
-  addToHistory(value_set, rand_val)
+  addToHistory(stripped_set.join(", "), rand_val)
   $(".result").text(rand_val)
   $(".description").text("")
   return rand_val
@@ -297,4 +297,8 @@ $(document).on("submit", "#random-generation-form", function(evt) {
   evt.preventDefault()
   $(this).closest("form").submit()
   return false
+}).on("click", ".preset", function(evt) {
+  $("#dice_notation").val($(this).attr("data-fill-notation"))
+  $("#set").val($(this).attr("data-fill-set"))
+  $("#random-generation-form").submit()
 })

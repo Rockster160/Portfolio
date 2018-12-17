@@ -8,10 +8,45 @@
     width: 100%;
   }
 }
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+
+  .preset {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    cursor: pointer;
+    margin: 10px;
+    border: 4px inset gold;
+    border-radius: 10px;
+    background: #834;
+    padding: 10px;
+    width: 100px;
+    min-width: 100px;
+    height: 100px;
+    color: white;
+    text-align: center;
+  }
+  &.small .preset {
+    width: 50px;
+    min-width: 50px;
+    height: 50px;
+  }
+}
+
 .history {
   table {
     width: 100%;
     table-layout: fixed;
+
+    tr td:first-of-type {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 }
 

@@ -16,6 +16,10 @@ form:not(.basic), .app-card-container, .form {
     box-sizing: border-box;
     padding: 20px;
     width: 100%;
+
+    h3 {
+      margin-bottom: 0;
+    }
   }
   .form-fields, .app-card-body {
     margin: 20px auto;
