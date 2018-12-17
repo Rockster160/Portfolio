@@ -196,7 +196,6 @@ Dice.prototype.throw = function() {
   var possible_rolls = Array.range(1, this.face_count)
   if (possible_rolls.subtract(this.options.drop_values).length == 0) { this.options.drop_values = [] }
   if (possible_rolls.subtract(this.options.explode_values).length == 0) { this.options.explode_values = [] }
-  console.log(this.options);
 
   for(var i=0; i<this.roll_count; i++) {
     var single_roll = this.rand(1, this.face_count)
@@ -237,6 +236,63 @@ Dice.prototype.throw = function() {
 }
 
 // DOM interaction
+var percentToDecimal = function(ratio, decimal_places) {
+  decimal_places = decimal_places || 2
+  return (Math.round(ratio * 10000) / 100) + "%"
+}
+
+var graphTrend = function(iteration_count) {
+  var use_set = $("#set").val().trim().length > 0, rand_str = ""
+
+  if (use_set) {
+    rand_str = $("#set").val()
+  } else {
+    rand_str = $("#dice_notation").val()
+  }
+
+  var counter = {
+    // This should predefine labels of each possible outcome
+    // For dice- sort the keys at the end?
+    // For sets- use the given order?
+  }
+  for(var i=0; i<iteration_count; i++) {
+    var rand
+    if (use_set) {
+      rand = selectFromRandomSet(rand_str)
+    } else {
+      rand = rollDiceNotation(rand_str)
+    }
+
+    counter[rand] = counter[rand] || 0
+    counter[rand] += 1
+  }
+
+  var max_count = 0, max_key = null
+  Object.keys(counter).forEach(function(counter_key, idx) {
+    var count = counter[counter_key]
+    if (count > max_count) {
+      max_key = counter_key
+      max_count = count
+    }
+  })
+
+  $(".description").text("")
+  var table = $("<table>")
+  Object.keys(counter).forEach(function(counter_key, idx) {
+    var count = counter[counter_key]
+
+    var row = $("<tr>")
+    row.append($("<td>").text(counter_key))
+    row.append($("<td>", {style: "width: 100%;"}).html($("<span>", { class: "results-bar" }).css("width", percentToDecimal(count / max_count))))
+    row.append($("<td>").text(percentToDecimal(count / iteration_count)))
+    table.append(row)
+  })
+  $(".description").append(table)
+  var result_str = max_key + " (" + percentToDecimal(max_count / iteration_count) + ")"
+  $(".result").text(result_str)
+  addToHistory(iteration_count + "x " + rand_str, result_str)
+}
+
 var addToHistory = function(detail, value) {
   if (value == undefined || value.length == 0) { return }
   var row = $("<tr>")
@@ -244,7 +300,8 @@ var addToHistory = function(detail, value) {
   row.append($("<td>").text(value))
   $(".history table").prepend(row)
 }
-var selectFromRandomSet = function(value_set) {
+
+var selectFromRandomSet = function(value_set, display) {
   value_set = value_set.toString()
   var splitter = "\n"
   if (value_set.indexOf(splitter) == -1) { splitter = "|" }
@@ -253,17 +310,22 @@ var selectFromRandomSet = function(value_set) {
     return val.trim()
   })
   var rand_val = stripped_set[Math.floor(Math.random() * stripped_set.length)]
+
+  if (!display) { return rand_val }
+
   addToHistory(stripped_set.join(", "), rand_val)
   $(".result").text(rand_val)
   $(".description").text("")
-  return rand_val
 }
-var rollDiceNotation = function(dice_notation_val) {
+
+var rollDiceNotation = function(dice_notation_val, display) {
   var roll = new Roll(dice_notation_val)
   roll.calculate()
   lastRoll = roll
+
+  if (!display) { return roll.val }
+
   if (isNaN(roll.val)) {
-    console.log(roll.val);
     $(".result").text("Invalid syntax")
     return
   } else {
@@ -288,10 +350,14 @@ var rollDiceNotation = function(dice_notation_val) {
 $(document).on("submit", "#random-generation-form", function(evt) {
   evt.preventDefault()
   if ($("#set").val().trim().length > 0) {
-    selectFromRandomSet($("#set").val())
+    selectFromRandomSet($("#set").val(), true)
   } else {
-    rollDiceNotation($("#dice_notation").val())
+    rollDiceNotation($("#dice_notation").val(), true)
   }
+  return false
+}).on("click", ".graph", function(evt) {
+  evt.preventDefault()
+  graphTrend(10000)
   return false
 }).on("click", ".submit", function(evt) {
   evt.preventDefault()
