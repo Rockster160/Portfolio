@@ -12,35 +12,35 @@
     </div>
 
     <div class="presets">
-      <div class="preset" data-fill-set="" data-fill-notation="d6">
+      <div class="preset" data-fill-random-preset="d6">
         Roll a Dice
       </div>
-      <div class="preset" data-fill-set="Heads|Tails" data-fill-notation="">
+      <div class="preset" data-fill-random-preset="Heads|Tails">
         Flip a Coin
       </div>
-      <div class="preset" data-fill-set="2♦|2♥|2♠|2♣|3♦|3♥|3♠|3♣|4♦|4♥|4♠|4♣|5♦|5♥|5♠|5♣|6♦|6♥|6♠|6♣|7♦|7♥|7♠|7♣|8♦|8♥|8♠|8♣|9♦|9♥|9♠|9♣|T♦|T♥|T♠|T♣|J♦|J♥|J♠|J♣|Q♦|Q♥|Q♠|Q♣|K♦|K♥|K♠|K♣|A♦|A♥|A♠|A♣" data-fill-notation="">
+      <div class="preset" data-fill-random-preset="2♦|2♥|2♠|2♣|3♦|3♥|3♠|3♣|4♦|4♥|4♠|4♣|5♦|5♥|5♠|5♣|6♦|6♥|6♠|6♣|7♦|7♥|7♠|7♣|8♦|8♥|8♠|8♣|9♦|9♥|9♠|9♣|T♦|T♥|T♠|T♣|J♦|J♥|J♠|J♣|Q♦|Q♥|Q♠|Q♣|K♦|K♥|K♠|K♣|A♦|A♥|A♠|A♣">
         Draw a Card
       </div>
-      <div class="preset" data-fill-set="It is certain.|It is decidedly so.|Without a doubt.|Yes - definitely.|You may rely on it.|As I see it, yes.|Most likely.|Outlook good.|Yes.|Signs point to yes.|Reply hazy, try again.|Ask again later.|Better not tell you now.|Cannot predict now.|Concentrate and ask again.|Don't count on it.|My reply is no.|My sources say no.|Outlook not so good.|Very doubtful." data-fill-notation="">
+      <div class="preset" data-fill-random-preset="It is certain.|It is decidedly so.|Without a doubt.|Yes - definitely.|You may rely on it.|As I see it, yes.|Most likely.|Outlook good.|Yes.|Signs point to yes.|Reply hazy, try again.|Ask again later.|Better not tell you now.|Cannot predict now.|Concentrate and ask again.|Don't count on it.|My reply is no.|My sources say no.|Outlook not so good.|Very doubtful.">
         Magic 8-Ball
       </div>
       <div class="presets small">
-        <div class="preset" data-fill-set="" data-fill-notation="d4">
+        <div class="preset" data-fill-random-preset="d4">
           4 Sided Die
         </div>
-        <div class="preset" data-fill-set="" data-fill-notation="d8">
+        <div class="preset" data-fill-random-preset="d8">
           8 Sided Die
         </div>
-        <div class="preset" data-fill-set="" data-fill-notation="d10">
+        <div class="preset" data-fill-random-preset="d10">
           10 Sided Die
         </div>
-        <div class="preset" data-fill-set="" data-fill-notation="d12">
+        <div class="preset" data-fill-random-preset="d12">
           12 Sided Die
         </div>
-        <div class="preset" data-fill-set="" data-fill-notation="d20">
+        <div class="preset" data-fill-random-preset="d20">
           20 Sided Die
         </div>
-        <div class="preset" data-fill-set="" data-fill-notation="d%">
+        <div class="preset" data-fill-random-preset="d%">
           100 Sided Die
         </div>
       </div>
@@ -48,18 +48,10 @@
 
     <div class="form-fields">
       <div class="form-field">
-        <%= label_tag :dice_notation do %>
-          Dice Notation
-          <a href="" data-modal="#dnd-howto">?</a>
+        <%= label_tag :random_number do %>
+          Enter <a href="" data-modal="#dnd-howto">Dice Notation</a> or paste in a <a href="" data-modal="#set-howto">set of data</a> to select from
         <% end %>
-        <%= text_field_tag :dice_notation, "d", autocomplete: :off %>
-      </div>
-      <div class="form-field">
-        <%= label_tag :set do %>
-          Set
-          <a href="" data-modal="#set-howto">?</a>
-        <% end %>
-        <%= text_area_tag :set, "", autocomplete: :off %>
+        <%= text_area_tag :random_number, "d", autocomplete: :off %>
       </div>
     </div>
 

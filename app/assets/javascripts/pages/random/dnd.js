@@ -242,12 +242,14 @@ var percentToDecimal = function(ratio, decimal_places) {
 }
 
 var graphTrend = function(iteration_count) {
-  var use_set = $("#set").val().trim().length > 0, rand_str = ""
-
-  if (use_set) {
-    rand_str = $("#set").val()
+  var rand_str = $("#random_number").val().toString()
+  var splitter = "\n"
+  if (rand_str.indexOf(splitter) == -1) { splitter = "|" }
+  if (rand_str.indexOf(splitter) == -1) { splitter = "," }
+  if (rand_str.indexOf(splitter) == -1) {
+    use_set = false
   } else {
-    rand_str = $("#dice_notation").val()
+    use_set = true
   }
 
   var counter = {
@@ -258,9 +260,9 @@ var graphTrend = function(iteration_count) {
   for(var i=0; i<iteration_count; i++) {
     var rand
     if (use_set) {
-      rand = selectFromRandomSet(rand_str)
+      rand = selectFromRandomSet(rand_str, splitter, false)
     } else {
-      rand = rollDiceNotation(rand_str)
+      rand = rollDiceNotation(rand_str, false)
     }
 
     counter[rand] = counter[rand] || 0
@@ -301,11 +303,16 @@ var addToHistory = function(detail, value) {
   $(".history table").prepend(row)
 }
 
-var selectFromRandomSet = function(value_set, display) {
-  value_set = value_set.toString()
+var generateRandomNumber = function(str, display) {
+  str = str.toString()
   var splitter = "\n"
-  if (value_set.indexOf(splitter) == -1) { splitter = "|" }
-  if (value_set.indexOf(splitter) == -1) { splitter = "," }
+  if (str.indexOf(splitter) == -1) { splitter = "|" }
+  if (str.indexOf(splitter) == -1) { splitter = "," }
+  if (str.indexOf(splitter) == -1) { return rollDiceNotation(str, display) }
+  return selectFromRandomSet(str, splitter, display)
+}
+
+var selectFromRandomSet = function(value_set, splitter, display) {
   var stripped_set = value_set.split(splitter).map(function(val) {
     return val.trim()
   })
@@ -349,11 +356,7 @@ var rollDiceNotation = function(dice_notation_val, display) {
 
 $(document).on("submit", "#random-generation-form", function(evt) {
   evt.preventDefault()
-  if ($("#set").val().trim().length > 0) {
-    selectFromRandomSet($("#set").val(), true)
-  } else {
-    rollDiceNotation($("#dice_notation").val(), true)
-  }
+  generateRandomNumber($("#random_number").val(), true)
   return false
 }).on("click", ".graph", function(evt) {
   evt.preventDefault()
@@ -364,7 +367,6 @@ $(document).on("submit", "#random-generation-form", function(evt) {
   $(this).closest("form").submit()
   return false
 }).on("click", ".preset", function(evt) {
-  $("#dice_notation").val($(this).attr("data-fill-notation"))
-  $("#set").val($(this).attr("data-fill-set"))
+  $("#random_number").val($(this).attr("data-fill-random-preset"))
   $("#random-generation-form").submit()
 })
