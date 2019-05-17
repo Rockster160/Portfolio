@@ -1,52 +1,50 @@
-.black { background: black; }
-
 .list-container, .lists-index-container {
   padding-bottom: 40px;
+  color: $blue-5;
   font-family: "gunny_rewrittenregular", "claire_handregular", "Comic Sans MS", sans-serif;
-  font-weight: bold;
   font-size: 20px;
-  color: white;
+  font-weight: bold;
 
   .btn-container {
     padding: 0 3px;
   }
 
   .important-container, .list-item-container, .list-item-options {
-    user-select: none;
     position: relative;
+    user-select: none;
 
     .list-item-handle {
-      z-index: 2;
       position: absolute;
-      line-height: 50px;
-      width: 30px;
-      text-align: center;
       top: 0;
       right: 0;
+      z-index: 2;
+      width: 30px;
+      line-height: 50px;
+      text-align: center;
     }
 
     .settings-btn {
-      z-index: 2;
       position: absolute;
-      line-height: 20px;
-      font-size: 12px;
-      width: 30px;
-      text-align: center;
       top: 45px;
       right: 0;
+      z-index: 2;
+      width: 30px;
+      font-size: 12px;
+      line-height: 20px;
+      text-align: center;
     }
 
     .item-name big {
-      font-size: 26px;
       display: block;
+      font-size: 26px;
     }
 
     .list-item-config {
       position: absolute;
       top: 5px;
       left: 5px;
-      font-size: 12px;
       z-index: 2;
+      font-size: 12px;
 
       & > * {
         display: inline-block;
@@ -54,69 +52,69 @@
       }
 
       .important {
-        width: 14px;
-        height: 14px;
+        animation: 1s ease-out pulse infinite;
         border-radius: 100%;
         background: radial-gradient(circle at 5px 8px, lighten($flash-alert-bg, 40%), $flash-alert-bg);
-        animation: 1s ease-out pulse infinite;
+        width: 14px;
+        height: 14px;
       }
 
       .details {
-        width: 14px;
         position: relative;
+        width: 14px;
 
         &:after {
           position: absolute;
           top: 3px;
           left: 3px;
+          font-family: "FontAwesome";
           text-align: center;
           content: "\f0c9";
-          font-family: "FontAwesome";
         }
       }
 
       .locked {
-        width: 14px;
         position: relative;
+        width: 14px;
 
         &:after {
           position: absolute;
           top: 3px;
           left: 3px;
+          font-family: "FontAwesome";
           text-align: center;
           content: "\f023";
-          font-family: "FontAwesome";
         }
       }
 
       .recurring {
-        width: 14px;
         position: relative;
+        width: 14px;
 
         &:after {
           position: absolute;
           top: 3px;
           left: 3px;
+          font-family: "FontAwesome";
           text-align: center;
           content: "\f021";
-          font-family: "FontAwesome";
         }
       }
     }
   }
 
   .list-error {
-    background-color: pink;
     border: 2px solid red;
     border-radius: 8px;
-    color: black;
+    background-color: pink;
     padding: 20px;
+    color: $blue-5;
   }
 
   .list-title, .lists-title {
-    text-align: center;
     padding: 10px 0;
     font-size: 24px;
+    text-align: center;
   }
 
   .list-description {
@@ -126,28 +124,28 @@
 
   .collaborators {
     p {
+      margin: 0;
       font-size: 14px;
       line-height: 1;
-      margin: 0;
     }
   }
 
   .new-list-item-form {
     .list-field {
       input.new-list-item {
-        width: 100%;
-        height: auto;
-        max-width: 600px;
-        font-size: 24px;
+        border-radius: 4px;
+        border-color: $blue-5;
         padding: 5px 10px;
-        border-radius: 2px;
-        border-color: black;
+        width: 100%;
+        max-width: 600px;
+        height: auto;
+        font-size: 24px;
       }
     }
   }
 
   .important-list-items {
-    border-bottom: 1px solid white;
+    border-bottom: 1px solid $blue-5;
     padding-bottom: 10px;
 
     .list-item-handle { display: none; }
@@ -155,43 +153,43 @@
   .important-list-items, .list-items, .lists {
     input[type=checkbox] { display: none; }
     .list-item {
-      text-decoration: none;
-      position: relative;
       display: block;
-      border: 1px solid black;
-      border-bottom-color: white;
+      position: relative;
+      border: 1px solid $blue-5;
+      border-bottom-color: $blue-5;
       padding: 20px 40px 20px 10px;
+      text-decoration: none;
 
       .checkbox-wrapper {}
       .item-name {}
       &:hover {
+        background: darken($blue-1, 10%);
         text-decoration: none;
-        background: lighten(black, 10%);
       }
     }
-    label { background: black; }
+    label { background: $blue-1; }
 
     input[type=checkbox]:checked + label {
-      color: red;
-      background: pink;
       border-color: red;
+      background: pink;
+      color: red;
       text-decoration: line-through;
 
       &:after {
-        content: "\f00c";
-        font-family: "FontAwesome";
         position: absolute;
-        line-height: 1;
-        font-size: 35px;
         top: 0px;
         right: 20px;
+        font-family: "FontAwesome";
+        font-size: 35px;
+        line-height: 1;
+        content: "\f00c";
       }
     }
     .list-item-options {
       input[type=checkbox]:checked + label {
-        color: $base-blue;
         border-color: $base-blue;
         background: lighten($base-blue, 30%);
+        color: $base-blue;
         text-decoration: none;
 
         &:after {
@@ -210,23 +208,24 @@
   100% { transform: scale(1);   }
 }
 
+.black { background: $blue-5; }
 .white {
-  background: white;
+  background: $blue-5;
 
   .list-container, .lists-index-container {
-    color: black;
+    color: $blue-5;
 
     .important-list-items, .list-items, .lists {
-      border-color: white;
+      border-color: $blue-5;
 
       .list-item {
-        border: 1px solid black;
+        border: 1px solid $blue-5;
 
         &:hover {
           background: darken(white, 10%);
         }
       }
-      label { background: white; }
+      label { background: $blue-1; }
       input[type=checkbox]:checked + label {
         background: pink;
       }
@@ -240,7 +239,7 @@
     .new-list-item-form {
       .list-field {
         input.new-list-item {
-          border-color: gg;
+          // border-color: gg;
         }
       }
     }

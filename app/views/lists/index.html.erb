@@ -1,6 +1,5 @@
 <%= meta_title "#{current_user.username}'s Lists", include_name: false %>
 <%= content_for(:favicon) { render 'lists/favicon' } %>
-<%= content_for(:body_classes) { session[:color_scheme] || "black" } %>
 <% content_for :head do %>
   <%= javascript_include_tag 'support/touch_punch.js' %>
 <% end %>

@@ -1,15 +1,15 @@
 #list-item-schedule {
   input[type=text] {
-    height: 23px;
-    width: 26px;
     display: inline-block;
     vertical-align: middle;
+    border-width: 1px;
+    padding: 1px;
+    width: 26px;
+    height: 23px;
+    font-size: 16px;
+    line-height: 23px;
 
     text-align: center;
-    line-height: 23px;
-    font-size: 16px;
-    padding: 1px;
-    border-width: 1px;
 
     &.right { text-align: right; }
     &.left { text-align: left; }
@@ -18,84 +18,84 @@
   select {
     display: inline-block;
     vertical-align: middle;
-    width: auto;
-    height: 23px;
-    font-size: 16px;
-    line-height: 20px;
     border-width: 1px;
     background: white url('https://image.freepik.com/free-icon/caret-arrowhead-facing-down_318-34455.png') no-repeat calc(100% - 2px) 55%;
     background-size: 10px 10px;
     padding: 0 15px 0 3px;
+    width: auto;
+    height: 23px;
+    font-size: 16px;
+    line-height: 20px;
   }
   input[type=checkbox]#meridian {
     display: none;
 
     & + label {
-      position: relative;
-      height: 23px;
-      width: 28px;
       display: inline-block;
+      position: relative;
       vertical-align: middle;
-      text-align: center;
-      line-height: 20px;
+      box-sizing: border-box;
+      margin: 4px auto;
 
       border: 1px solid darken($grey-blue, 10%);
       border-radius: 4px;
-      margin: 4px auto;
+      padding: 1px;
+      width: 28px;
+      height: 23px;
 
       color: darken($grey-blue, 10%);
-      box-sizing: border-box;
       font-size: 14px;
-      padding: 1px;
+      line-height: 20px;
       user-select: none;
+      text-align: center;
 
       &:after {
-        content: "AM";
         position: absolute;
         top: 0;
-        left: 0;
         right: 0;
         bottom: 0;
+        left: 0;
         text-align: center;
+        content: "AM";
       }
     }
     &:checked + label:after { content: "PM"; }
   }
 
   .calendar {
-    font-size: 0;
     margin-top: 10px;
+    font-size: 0;
 
     strong {
       display: inline-block;
       vertical-align: middle;
-      width: 30px;
-      line-height: 22px;
-      font-size: 14px;
-      text-align: left;
       margin-right: 5px;
+      width: 30px;
+      font-size: 14px;
+      line-height: 22px;
+      text-align: left;
     }
     input[type=checkbox] {
       display: none;
 
       & + label {
-        position: relative;
-        height: 24px;
-        width: 24px;
-        margin: -1px;
-        padding: 0;
         display: inline-block;
-        box-sizing: border-box;
+        position: relative;
         vertical-align: top;
+        box-sizing: border-box;
+        margin: -1px;
 
         border: 2px solid darken($grey-blue, 10%);
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        color: darken($grey-blue, 10%);
+        font-size: 14px;
+        font-weight: bold;
+        line-height: 23px;
+        user-select: none;
 
         text-align: center;
-        line-height: 23px;
-        font-size: 14px;
-        color: darken($grey-blue, 10%);
-        font-weight: bold;
-        user-select: none;
 
         &.span-4 {
           width: 90px;

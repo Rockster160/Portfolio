@@ -1,6 +1,5 @@
 <%= meta_title "#{@list_item.name.capitalize}", include_name: false %>
 <%= content_for(:favicon) { render "lists/favicon" } %>
-<%= content_for(:body_classes) { session[:color_scheme] || "black" } %>
 <%= render partial: "schedule" %>
 
 <div class="skinny-container list-container" data-list-id="<%= @list.id %>" data-list-item-id="<%= @list_item.id %>">
