@@ -1,0 +1,54 @@
+<%= meta_title @recipe.title, include_name: false %>
+
+<div class="skinny-container">
+  <div class="btn-container">
+    <% if user_signed_in? %>
+      <a href="<%= recipe_cards_path %>" class="btn">Back to Recipes</a>
+      <a href="<%= edit_recipe_card_path(@recipe) %>" class="btn pull-right">Edit</a>
+    <% else %>
+      <a href="<%= recipe_cards_path %>" class="btn">Back to Recipes</a>
+      <a href="<%= login_path %>" class="btn pull-right">Sign In</a>
+    <% end %>
+  </div>
+  <div class="app-card-container">
+    <div class="app-card-title">
+      <%= @recipe.title %>
+      <% if @recipe.kitchen_of.present? %>
+        <div class="subtitle"><i>From the kitchen of:</i> <%= @recipe.kitchen_of %></div>
+      <% end %>
+    </div>
+
+    <div class="app-card-body">
+      <div class="app-card-inner">
+
+        <ul class="ingredients-list">
+          <% @recipe.ingredients_list.each do |ingredient| %>
+            <li><%= ingredient %></li>
+          <% end %>
+        </ul>
+
+        <% if user_signed_in? && current_user.lists.any? %>
+          <% if @recipe.ingredients_list.any? %>
+            <div class="text-center">
+              <div data-modal="#export-to-list" class="btn">Export to list</div>
+            </div>
+          <% end %>
+          <%= render_modal "export-to-list", "Export to List" do %>
+            <p>Select list to export to:</p>
+            <%= form_tag export_to_list_recipe_card_path(@recipe), class: "basic" do %>
+              <div class="form-field">
+                <%= select_tag :list_id, options_from_collection_for_select(current_user.ordered_lists, :id, :name) %>
+              </div>
+              <div class="form-field text-center">
+                <%= submit_tag "Add to list", class: :btn %>
+              </div>
+            <% end %>
+          <% end %>
+        <% end %>
+
+        <p class="instructions"><%= @recipe.instructions %></p>
+
+      </div>
+    </div>
+  </div>
+</div>

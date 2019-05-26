@@ -52,6 +52,14 @@ class List < ApplicationRecord
     users.where(user_lists: { is_owner: [nil, false] })
   end
 
+  def add_items(*item_names)
+    [item_names].flatten.map do |item_hash|
+      next unless item_hash&.dig(:name).present?
+      
+      list_items.by_name_then_update(item_hash)
+    end
+  end
+
   def sort_items!(sort=nil, order=:asc)
     return unless sort.present?
     order = order.to_s.downcase.to_sym

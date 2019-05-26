@@ -11,6 +11,10 @@ form:not(.basic), .app-card-container, .form {
     padding: 20px;
     color: white;
     font-size: 32px;
+
+    .subtitle {
+      font-size: 14px;
+    }
   }
   .form-container {
     box-sizing: border-box;

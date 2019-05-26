@@ -1,0 +1,43 @@
+<div class="skinny-container">
+  <div class="btn-container">
+    <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
+    <a href="<%= logout_path %>" class="btn pull-right">Logout</a>
+  </div>
+  <%= form_for @recipe do |f| %>
+    <div class="form-title">Account</div>
+
+    <%= render partial: 'layouts/error_container', locals: { resource: @recipe } %>
+
+    <div class="form-fields">
+
+      <div class="form-field">
+        <%= f.label :title %>
+        <%= f.text_field :title %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :kitchen_of %>
+        <%= f.text_field :kitchen_of %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :ingredients %>
+        <%= f.text_area :ingredients %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :instructions %>
+        <%= f.text_area :instructions %>
+      </div>
+
+      <!-- <div class="form-field">
+        <%= f.label :public %>
+        <%= f.text_field :public %>
+      </div> -->
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit "Update" %>
+    </div>
+  <% end %>
+</div>
