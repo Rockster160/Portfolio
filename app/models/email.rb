@@ -95,7 +95,7 @@ class Email < ApplicationRecord
     mime_text = mime_text.gsub(/\=\r?\n\r?/, "")
     mime_text = mime_text.gsub(/\=\r?\n\r?/, "")
     mime_text = mime_text.gsub(/(\=[a-f0-9]{2})+/i) do |found|
-      found.split("=").map { |byte| byte.presence.try(:hex).try(:chr) }.compact.join("")
+      found.split("=").map { |byte| byte.presence.try(:hex).try(:chr) }.compact.join("") rescue found
     end
     mime_text
   end
@@ -118,6 +118,7 @@ class Email < ApplicationRecord
   end
 
   def failure(*issues)
+    return if force_reparse
     SlackNotifier.notify("Failed to parse: \n* #{issues.join("\n* ")}\n<#{Rails.application.routes.url_helpers.email_url(id: id)}|Click here to view.>", channel: '#portfolio', username: 'Mail-Bot', icon_emoji: ':mailbox:') if issues.any?
   end
 
