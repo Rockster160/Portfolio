@@ -97,7 +97,7 @@ class Email < ApplicationRecord
     mime_text = mime_text.gsub(/(\=[a-f0-9]{2})+/i) do |found|
       found.split("=").map { |byte| byte.presence.try(:hex).try(:chr) }.compact.join("") rescue found
     end
-    mime_text
+    mime_text.encode('UTF-32', invalid: :replace, undef: :replace, replace: '').encode('UTF-8')
   end
 
   def from_mail(mail)
