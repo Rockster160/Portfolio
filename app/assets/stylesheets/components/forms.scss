@@ -27,22 +27,21 @@ form:not(.basic), .app-card-container, .form {
   }
   .form-fields, .app-card-body {
     margin: 20px auto;
-
-    .form-field, .app-card-inner {
-      padding: 0 15px;
-      label { color: darken($grey-blue, 15%); }
-      &:not(:last-of-type) {
-        margin-bottom: 15px;
-      }
+  }
+  .form-field, .app-card-inner {
+    padding: 0 15px;
+    label { color: darken($grey-blue, 15%); }
+    &:not(:last-of-type) {
+      margin-bottom: 15px;
     }
-    .split-fields {
-      font-size: 0;
-      .form-field {
-        display: inline-block;
-        box-sizing: border-box;
-        width: 50%;
-        font-size: 16px;
-      }
+  }
+  .split-fields {
+    font-size: 0;
+    .form-field {
+      display: inline-block;
+      box-sizing: border-box;
+      width: 50%;
+      font-size: 16px;
     }
   }
   .form-submission {
@@ -65,11 +64,10 @@ input[type=week], textarea, .textarea {
   box-sizing: border-box;
   margin: 4px auto;
 
-  border: 2px solid darken($grey-blue, 10%);
+  border: 2px solid rgba($grey-blue, 0.5);
   border-radius: 4px;
-  padding: 0 8px;
+  padding: 8px;
   width: 100%;
-  height: 28px;
   color: darken($grey-blue, 10%);
 
   font-size: 18px;
@@ -81,6 +79,7 @@ textarea {
 
 // Button-ish
 .btn, button, input[type=button], input[type=reset], input[type=submit] {
+  box-sizing: border-box;
   margin-top: 2px;
   margin-bottom: 2px;
 
@@ -106,6 +105,10 @@ textarea {
   &:active {
     position: relative;
     top: 1px;
+  }
+  &.wide {
+    padding: 8px 24px;
+    width: 100%;
   }
   &.danger {
     box-shadow: inset 0px 1px 0px 0px lighten($danger, 15%);

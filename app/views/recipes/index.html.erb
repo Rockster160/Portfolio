@@ -9,12 +9,11 @@
       <a href="<%= login_path %>" class="btn">Sign In</a>
     <% end %>
   </div>
-  <div class="lists-title">recipes</div>
+  <div class="lists-title">Recipes</div>
   <div class="lists">
     <div class="list-field">
       <%= text_field_tag "recipe[name]", "", class: "filterable", placeholder: "Search Recipes" %>
     </div>
-    <div class="important-list-items"></div>
     <% @recipes.each do |recipe| %>
       <div class="list-item-container" data-list-id="<%= recipe.id %>">
         <a href="<%= recipe_path(recipe) %>" class="list-item">
