@@ -1,6 +1,13 @@
 html, body {
-  background: $blue-1;
+  background: $blue-l20;
   padding-bottom: 50px;
+  color: $text-color;
+}
+
+html.dark-mode {
+  &, body {
+    background: darken($blue-d5, 5%);
+  }
 }
 
 p {

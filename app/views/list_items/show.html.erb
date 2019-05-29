@@ -7,8 +7,10 @@
     <%= content_tag :div, nil,           class: "locked"    if item.permanent? %>
     <%= content_tag :div, nil,           class: "recurring" if item.schedule? %>
   </div>
-  <div class="list-item-handle"><i class="fa fa-arrows"></i></div>
-  <a href="<%= edit_list_list_item_path(list, item) %>" class="settings-btn"><i class="fa fa-cog"></i></a>
+  <div class="list-item-access">
+    <div class="list-item-handle"><i class="fa fa-arrows"></i></div>
+    <a href="<%= edit_list_list_item_path(list, item) %>" class="settings-btn"><i class="fa fa-cog"></i></a>
+  </div>
   <%= content_tag :input, "",
     type: :checkbox,
     id: "list_item[#{item.id}]",

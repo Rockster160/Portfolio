@@ -2,12 +2,12 @@ form:not(.basic), .app-card-container, .form {
   margin-top: 30px;
   box-shadow: 3px 3px 10px $grey-blue;
   border-radius: 10px;
-  background: $blue-1;
+  background: $blue-l5;
   overflow: hidden;
   font-family: Arial;
 
   .form-title, .app-card-title {
-    background: $blue-3;
+    background: $base-blue;
     padding: 20px;
     color: white;
     font-size: 32px;
@@ -68,7 +68,7 @@ input[type=week], textarea, .textarea {
   border-radius: 4px;
   padding: 8px;
   width: 100%;
-  color: darken($grey-blue, 10%);
+  color: $text-color;
 
   font-size: 18px;
 }
@@ -83,11 +83,11 @@ textarea {
   margin-top: 2px;
   margin-bottom: 2px;
 
-  box-shadow: inset 0px 1px 0px 0px lighten($blue-3, 15%);
-  border: 1px solid darken($blue-3, 5%);
+  box-shadow: inset 0px 1px 0px 0px lighten($base-blue, 15%);
+  border: 1px solid darken($base-blue, 5%);
   border-radius: 6px;
-  background: linear-gradient(to bottom, $blue-3 5%, darken($blue-3, 15%) 100%);
-  background-color: $blue-3;
+  background: linear-gradient(to bottom, $base-blue 5%, darken($base-blue, 15%) 100%);
+  background-color: $base-blue;
 
   padding: 6px 24px;
 
@@ -99,8 +99,8 @@ textarea {
   text-shadow: 0px 1px 0px #1570CD;
 
   &:hover {
-    background: linear-gradient(to bottom, darken($blue-3, 15%) 5%, $blue-3 100%);
-    background-color: darken($blue-3, 15%);
+    background: linear-gradient(to bottom, darken($base-blue, 15%) 5%, $base-blue 100%);
+    background-color: darken($base-blue, 15%);
   }
   &:active {
     position: relative;
@@ -124,8 +124,8 @@ textarea {
     cursor: not-allowed;
     box-shadow: inset 0px 1px 0px 0px lighten($grey-blue, 10%);
     border: 1px solid darken($grey-blue, 5%);
-    background: linear-gradient(to bottom, darken($grey-blue, 10%), $grey-blue 100%);
-    background-color: darken($grey-blue, 10%);
+    background: linear-gradient(to bottom, $text-color, $grey-blue 100%);
+    background-color: $text-color;
   }
 }
 
@@ -136,7 +136,7 @@ select {
   margin: 4px auto;
   box-shadow: none;
 
-  border: 2px solid darken($grey-blue, 10%);
+  border: 2px solid $text-color;
   border-radius: 4px;
 
   background: white url('https://image.freepik.com/free-icon/caret-arrowhead-facing-down_318-34455.png') no-repeat calc(100% - 15px) 55%;
@@ -147,7 +147,7 @@ select {
   height: 28px;
   overflow: hidden;
 
-  color: darken($grey-blue, 10%);
+  color: $text-color;
   font-weight: normal;
 
   line-height: 100%;

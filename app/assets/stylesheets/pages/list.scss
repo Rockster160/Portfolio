@@ -1,6 +1,6 @@
 .list-container, .lists-index-container {
   padding-bottom: 40px;
-  color: $blue-5;
+  color: $blue-d5;
   font-family: "gunny_rewrittenregular", "claire_handregular", "Comic Sans MS", sans-serif;
   font-size: 20px;
   font-weight: bold;
@@ -110,7 +110,7 @@
     border-radius: 8px;
     background-color: pink;
     padding: 20px;
-    color: $blue-5;
+    color: $blue-d5;
   }
 
   .list-title, .lists-title {
@@ -136,7 +136,7 @@
     .list-field {
       input.new-list-item {
         border-radius: 4px;
-        border-color: $blue-5;
+        border-color: $blue-d5;
         padding: 5px 10px;
         width: 100%;
         max-width: 600px;
@@ -147,7 +147,7 @@
   }
 
   .important-list-items {
-    border-bottom: 1px solid $blue-5;
+    border-bottom: 1px solid $blue-d5;
     padding-bottom: 10px;
 
     .list-item-handle { display: none; }
@@ -158,19 +158,21 @@
       display: block;
       position: relative;
       margin: 10px 0;
-      box-shadow: 2px 2px 5px $blue-5;
+      box-shadow: 2px 2px 5px $blue-d5;
       border-radius: 8px;
+      background: $blue-l20;
       padding: 20px 40px 20px 10px;
+      color: $text-color;
       text-decoration: none;
 
       .checkbox-wrapper {}
       .item-name {}
       &:hover {
-        background: darken($blue-1, 10%);
+        background: darken($blue-l5, 10%);
         text-decoration: none;
       }
     }
-    label { background: $blue-1; }
+    label { background: $blue-l5; }
 
     input[type=checkbox]:checked + label {
       border-color: red;
@@ -211,38 +213,33 @@
   100% { transform: scale(1);   }
 }
 
-.black { background: $blue-5; }
-.white {
-  background: $blue-5;
-
+.dark-mode {
   .list-container, .lists-index-container {
-    color: $blue-5;
+    color: $blue-l5;
 
     .important-list-items, .list-items, .lists {
-      border-color: $blue-5;
+      border-color: $blue-l5;
 
       .list-item {
-        border: 1px solid $blue-5;
+        border: 1px solid $blue-l5;
+        background: $blue-d5;
+        color: $blue-l5;
 
         &:hover {
-          background: darken(white, 10%);
+          background: $blue-d3;
         }
       }
-      label { background: $blue-1; }
       input[type=checkbox]:checked + label {
         background: pink;
+
+        .list-item-access {
+          color: red;
+        }
       }
       .list-item-options {
         input[type=checkbox]:checked + label {
           border-color: $base-blue;
           background: lighten($base-blue, 30%);
-        }
-      }
-    }
-    .new-list-item-form {
-      .list-field {
-        input.new-list-item {
-          // border-color: gg;
         }
       }
     }
