@@ -17,7 +17,7 @@
 #
 
 class Email < ApplicationRecord
-  attr_accessor :skip_validations, :from_user, :from_domain
+  attr_accessor :skip_validations, :from_user, :from_domain, :force_reparse
   belongs_to :sent_by, class_name: "User", optional: true
 
   scope :not_archived, -> { where(deleted_at: nil) }
@@ -89,11 +89,22 @@ class Email < ApplicationRecord
     )
   end
 
+  def clean_raw_mime(mime_text)
+    return "" if mime_text.blank?
+    mime_text = mime_text.gsub(/\=(3D|20)+/, "=")
+    mime_text = mime_text.gsub(/\=\r?\n\r?/, "")
+    mime_text = mime_text.gsub(/\=\r?\n\r?/, "")
+    mime_text = mime_text.gsub(/(\=[a-f0-9]{2})+/i) do |found|
+      found.split("=").map { |byte| byte.presence.try(:hex).try(:chr) }.compact.join("")
+    end
+    mime_text
+  end
+
   def from_mail(mail)
     text_body = mail.try(:text_part).try(:body).try(:raw_source)
-    text_body = text_body.gsub(/\=(3D)+/, "=").gsub(/\=\r?\n/, "") if text_body.present?
+    text_body = clean_raw_mime(text_body)
     html_body = mail.try(:html_part).try(:body).try(:raw_source) || mail.try(:body).try(:raw_source)
-    html_body = html_body.gsub(/\=(3D)+/, "=").gsub(/\=\r?\n/, "").gsub(/\r?\n\r?/, "<br>") if html_body.present?
+    html_body = clean_raw_mime(html_body).gsub(/\r?\n\r?/, "")
     assign_attributes(
       from:      [mail.from].flatten.compact.join(","),
       to:        [mail.to].flatten.compact.join(","),
@@ -101,7 +112,7 @@ class Email < ApplicationRecord
       text_body: text_body,
       html_body: html_body
     )
-    notify_slack if save
+    notify_slack if save && !force_reparse
     failure(*errors.full_messages) if errors.any?
     reload
   end
@@ -144,8 +155,14 @@ class Email < ApplicationRecord
     errors.add(:text_body, "must exist") unless text_body.present?
   end
 
+  def reparse!
+    @force_reparse = true
+    parse_blob
+  end
+
   def parse_blob
-    return if text_body.present? || blob.blank?
+    return if force_reparse || text_body.present?
+    return if blob.blank?
     json = JSON.parse(blob) rescue nil
     message = JSON.parse(json&.dig("Message")) rescue nil
     return failure("No message") unless message&.is_a?(Hash)
