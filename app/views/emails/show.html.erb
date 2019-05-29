@@ -46,4 +46,15 @@
     <%= link_to "Archive", email_path(@email, email: {archived: true}), method: :patch, class: "btn" %>
   <% end %>
 </div>
-<div class="display-email-container no-markdown"><%= @email.html_body.try(:html_safe).presence || @email.text_body.try(:html_safe).presence || @email.blob.presence || "No Content" %></div>
+
+<% if @email.html_body.try(:html_safe).present? %>
+  <div class="display-email-container no-markdown"><%= @email.html_body.try(:html_safe) %></div>
+<% elsif @email.text_body.try(:html_safe).present? %>
+  <h3 class="text-center">Text:</h3>
+  <div class="display-email-container no-markdown"><%= @email.text_body.try(:html_safe) %></div>
+<% elsif @email.blob.present? %>
+  <h3 class="text-center">Blob:</h3>
+  <div class="display-email-container no-markdown"><code><%= @email.blob %></code></div>
+<% else %>
+  <h3 class="text-center">No Content</h3>
+<% end %>
