@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20190529011609) do
+ActiveRecord::Schema.define(version: 20190529024546) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -203,6 +203,8 @@ ActiveRecord::Schema.define(version: 20190529011609) do
     t.string   "phone"
     t.string   "invitation_token"
     t.integer  "role",             default: 0
+    t.boolean  "dark_mode"
+    t.string   "email"
   end
 
   create_table "venmos", force: :cascade do |t|

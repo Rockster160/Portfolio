@@ -10,6 +10,8 @@
 #  phone            :string
 #  invitation_token :string
 #  role             :integer          default("standard")
+#  dark_mode        :boolean
+#  email            :string
 #
 
 class User < ApplicationRecord

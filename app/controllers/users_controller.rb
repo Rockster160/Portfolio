@@ -41,7 +41,7 @@ class UsersController < ApplicationController
   private
 
   def user_params
-    params.require(:user).permit(:phone, :username, :password, :password_confirmation, :current_password).reject { |_, v| v.blank? }
+    params.require(:user).permit(:phone, :email, :username, :dark_mode, :password, :password_confirmation, :current_password).reject { |_, v| v.blank? }
   end
 
   def user_params_without_password

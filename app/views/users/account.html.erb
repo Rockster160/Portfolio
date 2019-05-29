@@ -29,8 +29,22 @@
         <%= f.text_field :username %>
       </div>
       <div class="form-field">
+        <%= f.label :email %>
+        <%= f.text_field :email %>
+      </div>
+      <div class="form-field">
         <%= f.label :phone %>
         <%= f.telephone_field :phone %>
+      </div>
+
+      <div class="form-field text-center">
+        <div class="checkbox-wrapper">
+          <%= f.check_box :dark_mode %>
+          <%= f.label :dark_mode do %>
+            <div class="checkbox-placeholder"></div>
+            Use dark mode?
+          <% end %>
+        </div>
       </div>
 
       <div class="change-password-fields" style="margin-top: 20px;">
@@ -62,14 +76,7 @@
       <div class="app-card-inner">
         <div class="list-container no-padding">
 
-          <div class="list-items">
-            <%= link_to lists_path, class: "list-item" do  %>
-              <span class="item-name">Lists</span>
-            <% end %>
-            <%= link_to recipes_path, class: "list-item" do  %>
-              <span class="item-name">Recipes</span>
-            <% end %>
-          </div>
+
 
         </div>
       </div>

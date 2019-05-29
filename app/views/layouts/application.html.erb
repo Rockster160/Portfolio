@@ -24,7 +24,9 @@
   <% end %>
   <%= csrf_meta_tags %>
 </head>
+<%= content_for(:body_classes, "dark-mode") if current_user.try(:dark_mode?) %>
 <body class="ctr-<%= controller_name %> act-<%= action_name %> <%= content_for :body_classes %>">
+
   <%= render 'layouts/flashes' %>
   <%= yield :modals %>
   <%= yield %>
