@@ -161,7 +161,7 @@ class Email < ApplicationRecord
   end
 
   def parse_blob
-    return if force_reparse || text_body.present?
+    return if text_body.present? && !force_reparse
     return if blob.blank?
     json = JSON.parse(blob) rescue nil
     message = JSON.parse(json&.dig("Message")) rescue nil
