@@ -1,6 +1,6 @@
 # == Schema Information
 #
-# Table name: recipe_cards
+# Table name: recipes
 #
 #  id           :integer          not null, primary key
 #  user_id      :integer
@@ -13,11 +13,11 @@
 #  updated_at   :datetime         not null
 #
 
-class RecipeCard < ApplicationRecord
+class Recipe < ApplicationRecord
   belongs_to :user, optional: true
 
   def ingredients_list
-    ingredients.to_s.split("\n").map { |ingredient| ingredient.squish.presence }
+    ingredients.to_s.split("\n").map { |ingredient| ingredient.squish.presence }.compact
   end
 
   def export_to_list(list)

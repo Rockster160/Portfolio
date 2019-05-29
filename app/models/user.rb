@@ -16,7 +16,7 @@ class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 
   has_many :user_lists, dependent: :destroy
-  has_many :recipe_cards, dependent: :nullify
+  has_many :recipes, dependent: :nullify
   has_many :lists, through: :user_lists
   has_many :sent_emails, class_name: "Email", foreign_key: :sent_by_id, dependent: :destroy
   has_one :avatar

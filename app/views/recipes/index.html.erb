@@ -1,23 +1,23 @@
-<%= meta_title "Recipe Cards", include_name: false %>
+<%= meta_title "Recipes", include_name: false %>
 
 <div class="skinny-container lists-index-container">
   <div class="btn-container">
     <% if user_signed_in? %>
       <a href="<%= account_path %>" class="btn">Account</a>
-      <a href="<%= new_recipe_card_path %>" class="btn pull-right">New Recipe +</a>
+      <a href="<%= new_recipe_path %>" class="btn pull-right">New Recipe +</a>
     <% else %>
       <a href="<%= login_path %>" class="btn">Sign In</a>
     <% end %>
   </div>
-  <div class="lists-title">Recipe Cards</div>
+  <div class="lists-title">recipes</div>
   <div class="lists">
     <div class="list-field">
-      <%= text_field_tag "recipe_card[name]", "", class: "filterable", placeholder: "Search Recipes" %>
+      <%= text_field_tag "recipe[name]", "", class: "filterable", placeholder: "Search Recipes" %>
     </div>
     <div class="important-list-items"></div>
     <% @recipes.each do |recipe| %>
       <div class="list-item-container" data-list-id="<%= recipe.id %>">
-        <a href="<%= recipe_card_path(recipe) %>" class="list-item">
+        <a href="<%= recipe_path(recipe) %>" class="list-item">
           <span class="item-name"><%= recipe.title %></span>
         </a>
       </div>

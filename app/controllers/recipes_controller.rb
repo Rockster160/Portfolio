@@ -1,20 +1,20 @@
-class RecipeCardsController < ApplicationController
+class RecipesController < ApplicationController
   before_action :set_recipe
   def index
-    @recipes = RecipeCard.order(:created_at)
+    @recipes = Recipe.order(:created_at)
   end
 
   def show
   end
 
   def new
-    @recipe = current_user.recipe_cards.new
+    @recipe = current_user.recipes.new
 
     render :form
   end
 
   def create
-    @recipe = current_user.recipe_cards.new(recipe_params)
+    @recipe = current_user.recipes.new(recipe_params)
 
     if @recipe.save
       redirect_to @recipe
@@ -37,7 +37,7 @@ class RecipeCardsController < ApplicationController
 
   def destroy
     if @recipe.destroy
-      redirect_to recipe_cards_path
+      redirect_to recipes_path
     else
       redirect_to @recipe, alert: "Failed to delete recipe: #{@recipe.errors.full_messages.join("\n")}"
     end
@@ -56,11 +56,11 @@ class RecipeCardsController < ApplicationController
   private
 
   def set_recipe
-    @recipe = RecipeCard.find(params[:id]) if params[:id].present?
+    @recipe = Recipe.find(params[:id]) if params[:id].present?
   end
 
   def recipe_params
-    params.require(:recipe_card).permit(
+    params.require(:recipe).permit(
       :title,
       :kitchen_of,
       :ingredients,

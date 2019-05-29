@@ -60,7 +60,7 @@ Rails.application.routes.draw do
     get :change_clothes, action: :load_character
   end
 
-  resources :recipe_cards do
+  resources :recipes do
     post :export_to_list, on: :member
   end
 

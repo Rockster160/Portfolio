@@ -3,10 +3,10 @@
 <div class="skinny-container">
   <div class="btn-container">
     <% if user_signed_in? %>
-      <a href="<%= recipe_cards_path %>" class="btn">Back to Recipes</a>
-      <a href="<%= edit_recipe_card_path(@recipe) %>" class="btn pull-right">Edit</a>
+      <a href="<%= recipes_path %>" class="btn">Back to Recipes</a>
+      <a href="<%= edit_recipe_path(@recipe) %>" class="btn pull-right">Edit</a>
     <% else %>
-      <a href="<%= recipe_cards_path %>" class="btn">Back to Recipes</a>
+      <a href="<%= recipes_path %>" class="btn">Back to Recipes</a>
       <a href="<%= login_path %>" class="btn pull-right">Sign In</a>
     <% end %>
   </div>
@@ -35,7 +35,7 @@
           <% end %>
           <%= render_modal "export-to-list", "Export to List" do %>
             <p>Select list to export to:</p>
-            <%= form_tag export_to_list_recipe_card_path(@recipe), class: "basic" do %>
+            <%= form_tag export_to_list_recipe_path(@recipe), class: "basic" do %>
               <div class="form-field">
                 <%= select_tag :list_id, options_from_collection_for_select(current_user.ordered_lists, :id, :name) %>
               </div>

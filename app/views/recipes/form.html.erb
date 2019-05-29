@@ -4,7 +4,7 @@
     <a href="<%= logout_path %>" class="btn pull-right">Logout</a>
   </div>
   <%= form_for @recipe do |f| %>
-    <div class="form-title">Account</div>
+    <div class="form-title">New Recipe</div>
 
     <%= render partial: 'layouts/error_container', locals: { resource: @recipe } %>
 
@@ -37,7 +37,7 @@
     </div>
 
     <div class="form-submission">
-      <%= f.submit "Update" %>
+      <%= f.submit %>
     </div>
   <% end %>
 </div>
