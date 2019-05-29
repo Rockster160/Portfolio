@@ -61,11 +61,11 @@ class Email < ApplicationRecord
   end
 
   def not_our_email
-    from_us? ? from : to
+    from_us? ? to : from
   end
 
   def our_email
-    from_us? ? to : from
+    from_us? ? from : to
   end
 
   def from_user
