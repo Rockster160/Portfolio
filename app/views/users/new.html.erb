@@ -3,7 +3,7 @@
     <% if params[:list_id].present? %>
       <a href="<%= list_user_lists_path(params[:list_id]) %>" class="btn">&larr; Back to List</a>
     <% else %>
-      <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
+      <a href="<%= lists_path %>" class="btn">&larr; All Lists</a>
     <% end %>
   </div>
   <%= form_for @user do |f| %>

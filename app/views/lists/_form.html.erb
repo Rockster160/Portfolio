@@ -8,7 +8,7 @@
         <%= link_to "Leave List", list_user_list_path(@list, current_user), method: :delete, class: "btn danger pull-right", data: { confirm: "Are you sure? This is permanent and cannot be undone." } %>
       <% end %>
     <% else %>
-      <a href="<%= lists_path %>" class="btn">&larr; Back to Lists</a>
+      <a href="<%= lists_path %>" class="btn">&larr; All Lists</a>
     <% end %>
   </div>
 

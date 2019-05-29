@@ -3,10 +3,10 @@
 <div class="skinny-container">
   <div class="btn-container">
     <% if user_signed_in? %>
-      <a href="<%= recipes_path %>" class="btn">Back to Recipes</a>
+      <a href="<%= recipes_path %>" class="btn">All Recipes</a>
       <a href="<%= edit_recipe_path(@recipe) %>" class="btn pull-right">Edit</a>
     <% else %>
-      <a href="<%= recipes_path %>" class="btn">Back to Recipes</a>
+      <a href="<%= recipes_path %>" class="btn">All Recipes</a>
       <a href="<%= login_path %>" class="btn pull-right">Sign In</a>
     <% end %>
   </div>
