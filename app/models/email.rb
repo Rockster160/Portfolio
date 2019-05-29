@@ -17,7 +17,7 @@
 #
 
 class Email < ApplicationRecord
-  attr_accessor :skip_validations, :from_user, :from_domain, :force_reparse
+  attr_accessor :skip_validations, :from_user, :from_domain, :skip_notify
   belongs_to :sent_by, class_name: "User", optional: true
 
   scope :not_archived, -> { where(deleted_at: nil) }
@@ -112,13 +112,13 @@ class Email < ApplicationRecord
       text_body: text_body,
       html_body: html_body
     )
-    notify_slack if save && !force_reparse
+    notify_slack if save && !skip_notify
     failure(*errors.full_messages) if errors.any?
     reload
   end
 
   def failure(*issues)
-    return if force_reparse
+    return if skip_notify
     SlackNotifier.notify("Failed to parse: \n* #{issues.join("\n* ")}\n<#{Rails.application.routes.url_helpers.email_url(id: id)}|Click here to view.>", channel: '#portfolio', username: 'Mail-Bot', icon_emoji: ':mailbox:') if issues.any?
   end
 
@@ -157,12 +157,12 @@ class Email < ApplicationRecord
   end
 
   def reparse!
-    @force_reparse = true
+    update(text_body: nil, html_body: nil, skip_notify: true)
     parse_blob
   end
 
   def parse_blob
-    return if text_body.present? && !force_reparse
+    return if text_body.present?
     return if blob.blank?
     json = JSON.parse(blob) rescue nil
     message = JSON.parse(json&.dig("Message")) rescue nil
