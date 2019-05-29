@@ -93,7 +93,7 @@ class Email < ApplicationRecord
     return "" if mime_text.blank?
     mime_text = mime_text.gsub(/\=(3D|20)+/, "=")
     mime_text = mime_text.gsub(/\=\r?\n\r?/, "")
-    mime_text = mime_text.gsub(/\=\r?\n\r?/, "")
+    mime_text = mime_text.gsub(/\r?\n\r?/, "\n")
     mime_text = mime_text.gsub(/(\=[a-f0-9]{2})+/i) do |found|
       found.split("=").map { |byte| byte.presence.try(:hex).try(:chr) }.compact.join("") rescue found
     end
@@ -104,7 +104,7 @@ class Email < ApplicationRecord
     text_body = mail.try(:text_part).try(:body).try(:raw_source)
     text_body = clean_raw_mime(text_body)
     html_body = mail.try(:html_part).try(:body).try(:raw_source) || mail.try(:body).try(:raw_source)
-    html_body = clean_raw_mime(html_body).gsub(/\r?\n\r?/, "")
+    html_body = clean_raw_mime(html_body)
     assign_attributes(
       from:      [mail.from].flatten.compact.join(","),
       to:        [mail.to].flatten.compact.join(","),
@@ -157,6 +157,7 @@ class Email < ApplicationRecord
   end
 
   def reparse!
+    return if blob.blank?
     update(text_body: nil, html_body: nil, skip_notify: true)
     parse_blob
   end
