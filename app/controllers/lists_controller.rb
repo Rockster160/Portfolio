@@ -89,6 +89,8 @@ class ListsController < ApplicationController
 
   def set_list
     @list = current_user.lists.find_by(id: params[:id]) || current_user.lists.select { |list| list.name.parameterize == params[:id] }.first
+    return if @list.present?
+    redirect_to lists_path, alert: "You do not have permission to view this list."
   end
 
   def color_scheme

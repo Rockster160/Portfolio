@@ -12,7 +12,7 @@
     <% @list.user_lists.each do |list_user| %>
       <% user = list_user.user %>
       <div class="list-item-container">
-        <a href="<%=  %>" class="list-item"><%= user.username || user.phone || user.invitation_token %> <%= "(Pending #{user.invitation_token})" if user.invited? %></a>
+        <%= link_to "#{user.username || user.phone || user.invitation_token}#{" (Pending #{user.invitation_token})" if user.invited?} #{" (Owner)" if list_user.is_owner?}", list_user_list_path(@list, user), method: :delete, class: "list-item" %>
       </div>
     <% end %>
   </div>

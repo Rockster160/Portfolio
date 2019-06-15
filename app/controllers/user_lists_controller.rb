@@ -14,10 +14,10 @@ class UserListsController < ApplicationController
     @user = User.find(params[:id]) # Using id here for easier lookup
     @user_list = @user.user_lists.find_by(list_id: @list.id)
 
-    return redirect_to @list, alert: "List must have an owner." if @user_list.is_owner?
-    @user_list.destroy if @current_list_user.is_owner? || @user_list == @current_list_user
+    return redirect_to list_user_lists_path(@list), alert: "List must have an owner." if @user_list.is_owner?
 
-    if @current_list_user == @user_list
+    @user_list.destroy if @current_list_user.is_owner? || @user_list == @current_list_user
+    if @current_list_user == @user_list && @user_list.destroyed?
       redirect_to lists_path
     else
       redirect_to @list
