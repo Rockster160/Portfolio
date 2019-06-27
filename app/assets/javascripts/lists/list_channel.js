@@ -20,6 +20,7 @@ $(".ctr-lists.act-show").ready(function() {
     connected: function() {
       var url = $(".list-items").attr("data-update-url")
       $.post(url, {}).success(function() { $(".list-error").addClass("hidden") })
+      $.rails.refreshCSRFTokens()
     },
     disconnected: function() {
       $(".list-error").removeClass("hidden")
