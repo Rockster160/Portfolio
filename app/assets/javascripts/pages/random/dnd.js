@@ -303,16 +303,16 @@ var addToHistory = function(detail, value) {
   $(".history table").prepend(row)
 }
 
-var generateRandomNumber = function(str, display) {
+var generateRandomNumber = function(str, display, track) {
   str = str.toString()
   var splitter = "\n"
   if (str.indexOf(splitter) == -1) { splitter = "|" }
   if (str.indexOf(splitter) == -1) { splitter = "," }
-  if (str.indexOf(splitter) == -1) { return rollDiceNotation(str, display) }
-  return selectFromRandomSet(str, splitter, display)
+  if (str.indexOf(splitter) == -1) { return rollDiceNotation(str, display, track) }
+  return selectFromRandomSet(str, splitter, display, track)
 }
 
-var selectFromRandomSet = function(value_set, splitter, display) {
+var selectFromRandomSet = function(value_set, splitter, display, track) {
   var stripped_set = value_set.split(splitter).map(function(val) {
     return val.trim()
   })
@@ -320,12 +320,13 @@ var selectFromRandomSet = function(value_set, splitter, display) {
 
   if (!display) { return rand_val }
 
-  addToHistory(stripped_set.join(", "), rand_val)
   $(".result").text(rand_val)
   $(".description").text("")
+
+  if (track) { addToHistory(stripped_set.join(", "), rand_val) }
 }
 
-var rollDiceNotation = function(dice_notation_val, display) {
+var rollDiceNotation = function(dice_notation_val, display, track) {
   var roll = new Roll(dice_notation_val)
   roll.calculate()
   lastRoll = roll
@@ -338,7 +339,7 @@ var rollDiceNotation = function(dice_notation_val, display) {
   } else {
     $(".result").text(roll.val)
   }
-  addToHistory(roll.raw, roll.val)
+  if (track) { addToHistory(roll.raw, roll.val) }
   $(".description").text("")
   var table = $("<table>")
   for(var i=0; i<roll.iterations.length; i++) {
@@ -354,9 +355,19 @@ var rollDiceNotation = function(dice_notation_val, display) {
   $(".description").append(table)
 }
 
+var rollResults = function(str, count) {
+  var j = 0
+  for(var i=0;i<count;i++) {
+    setTimeout(function() {
+      generateRandomNumber(str, true, (j += 1) == count)
+    }, i * 50)
+  }
+}
+
 $(document).on("submit", "#random-generation-form", function(evt) {
   evt.preventDefault()
-  generateRandomNumber($("#random_number").val(), true)
+
+  rollResults($("#random_number").val(), 10)
   return false
 }).on("click", ".graph", function(evt) {
   evt.preventDefault()
