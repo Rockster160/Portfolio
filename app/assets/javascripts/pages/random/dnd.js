@@ -355,12 +355,33 @@ var rollDiceNotation = function(dice_notation_val, display, track) {
   $(".description").append(table)
 }
 
-var rollResults = function(str, count) {
-  var j = 0
-  for(var i=0;i<count;i++) {
-    setTimeout(function() {
-      generateRandomNumber(str, true, (j += 1) == count)
-    }, i * 50)
+var cubicBezierFunction = function(axis, distance) {
+  var bezierPoints = [
+    { "x": 0,   "y": 0 },
+    { "x": 0.20,  "y": 1 },
+    { "x": 0.50,  "y": 0 },
+    { "x": 1, "y": 0 }
+  ]
+  var X = function(i) { return bezierPoints[i]["x"] }
+  var Y = function(i) { return bezierPoints[i]["y"] }
+  var A = axis == "y" ? Y : X
+  var t = distance
+
+  // X(t) = (1-t)^3 * X0 + 3*(1-t)^2 * t * X1 + 3*(1-t) * t^2 * X2 + t^3 * X3
+  return (Math.pow(1-t, 3) * A(0)) + (3*Math.pow(1-t, 2) * t * A(1) + 3*(1-t) * Math.pow(t, 2) * A(2)) + (Math.pow(t, 3) * A(3))
+  // return (1 - t) * (1 - t) * A(0) + 2 * (1 - t) * t * A(1) + t * t * A(2)
+}
+
+var rollResults = function(str, steps) {
+  var step = 1 / steps, ms_multiplier = 200
+
+  var delay = 0
+  for(var i=0;i<steps;i++) {
+    var next = Math.round(cubicBezierFunction("x", i * step) * ms_multiplier)
+    delay += next
+    setTimeout(function(t) {
+      generateRandomNumber(str, true, t == (steps - 1))
+    }, delay, i)
   }
 }
 
