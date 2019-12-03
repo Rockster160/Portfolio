@@ -1,8 +1,8 @@
 .skinny-container {
   position: relative;
+  margin: 0 auto;
   width: 600px;
   max-width: 100%;
-  margin: 0 auto;
 }
 
 .split-container {
@@ -10,8 +10,8 @@
   justify-content: space-around;
 
   .half-container {
+    border: 1px solid black;
     width: 500px;
     height: 500px;
-    border: 1px solid black;
   }
 }
