@@ -21,6 +21,8 @@ Rails.application.routes.draw do
 
   get 'cube' => 'cubes#show'
 
+  resource :nfc, only: [:show]
+
   resources :emails, except: [:destroy, :edit]
   resources :log_trackers, only: [ :index, :show ]
 
