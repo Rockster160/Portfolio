@@ -20,13 +20,13 @@ class ListsController < ApplicationController
     redirect_to lists_path
   end
 
-  def modify_from_message
-    response_message = @list.modify_from_message(params[:message])
-
-    respond_to do |format|
-      format.json { render json: @list.to_json(include: :list_items) }
-    end
-  end
+  # def modify_from_message
+  #   response_message = @list.modify_from_message(params[:message])
+  #
+  #   respond_to do |format|
+  #     format.json { render json: @list.to_json(include: :list_items) }
+  #   end
+  # end
 
   def update
     if params[:sort]
@@ -35,9 +35,15 @@ class ListsController < ApplicationController
     end
 
     if @list.update(list_params)
-      redirect_to list_path(@list)
+      respond_to do |format|
+        format.html { redirect_to list_path(@list) }
+        format.json { render json: @list.to_json(include: :list_items) }
+      end
     else
-      render :edit
+      respond_to do |format|
+        format.html { render :edit }
+        format.json { render :forbidden }
+      end
     end
   end
 
@@ -98,8 +104,9 @@ class ListsController < ApplicationController
   end
 
   def list_params
-    return {} unless params[:list].present?
-    params.require(:list).permit(:name, :description, :important, :show_deleted)
+    params.permit(:list).permit(:name, :description, :important, :show_deleted, :message).tap do |whitelist|
+      whitelist[:message] ||= params[:message]
+    end
   end
 
 end

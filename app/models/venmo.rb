@@ -11,6 +11,8 @@
 #  updated_at    :datetime
 #
 
+# To create a new Venmo, visit `/venmo/auth`
+# Call Venmo.charge(to, amount, note)
 class Venmo < ApplicationRecord
   class << self
     def charge(to, amount, note)

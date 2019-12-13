@@ -55,7 +55,7 @@ class List < ApplicationRecord
   def add_items(*item_names)
     [item_names].flatten.map do |item_hash|
       next unless item_hash&.dig(:name).present?
-      
+
       list_items.by_name_then_update(item_hash)
     end
   end
@@ -79,40 +79,43 @@ class List < ApplicationRecord
     broadcast!
   end
 
+  def message=(str)
+    modify_from_message(str)
+  end
+
   def modify_from_message(msg)
     msg = msg.to_s
     response_messages = []
     action, item_names = split_action_and_items_from_msg(msg)
 
     case action
-    when 'add'
+    when :add
       items = item_names.map do |item_name|
-        item = list_items.create(name: item_name.squish)
+        item = list_items.by_name_then_update(name: item_name)
         puts "#{item.name} - #{item.errors.full_messages}".colorize(:yellow)
         item
       end.select(&:persisted?)
       return "No items added." if items.none?
       return "Running list:\n - #{ordered_items.map(&:name).join("\n - ")}"
-    when 'remove'
+    when :remove
       not_destroyed = []
       destroyed_items = []
-      item_names.map do |item_name|
-        if (item = list_items.match_by_string(item_name)).try(:destroy)
+      item_names.each do |item_name|
+        item = list_items.match_by_string(item_name)
+        next unless item.present?
+        if item.destroy
           destroyed_items << item
         else
           not_destroyed << item_name.squish
         end
       end
-      sms_messages = []
-      if not_destroyed.any?
-        sms_messages << "Could not remove #{not_destroyed.to_sentence} from #{name}."
-      end
-      if destroyed_items.any?
-        sms_messages << "Removed #{destroyed_items.map(&:name).to_sentence} from #{name}."
-      end
-      sms_messages << "Running list:\n - #{ordered_items.map(&:name).join("\n - ")}"
-      return sms_messages.join("\n") if sms_messages.any?
-    when 'clear'
+      response = []
+
+      response << "Could not remove #{not_destroyed.to_sentence} from #{name}." if not_destroyed.any?
+      response << "Removed #{destroyed_items.map(&:name).to_sentence} from #{name}." if destroyed_items.any?
+      response << "Running list:\n - #{ordered_items.map(&:name).join("\n - ")}"
+      return response.join("\n") if response.any?
+    when :clear
       items = list_items.destroy_all
       return "Removed all items from #{name}: \n - #{items.map(&:name).join("\n - ")}"
     else
@@ -126,40 +129,41 @@ class List < ApplicationRecord
   end
 
   def split_action_and_items_from_msg(msg)
-    action = ''
+    action = ""
     items = []
 
-    ['clear', 'remove', 'add'].each do |try_action|
-      action = try_action if check_string_contains_word?(msg, try_action)
+    [:clear, :remove, :add].each do |try_action|
+      action = try_action if check_string_starts_word?(msg, try_action)
     end
+    return if action == :clear
+    msg = msg.sub(/#{action}/i, "")
 
-    items = items_from_message_after_stripping_action(msg, [name]).map(&:squish)
+    items = items_from_message(msg).map(&:squish)
     puts "#{items}".colorize(:red)
 
     [action, items]
   end
 
   def check_string_contains_word?(sentence, word)
-    did_match = (sentence =~ regex_for_individual_word(word))
-    return false if did_match.nil?
-    did_match >= 0
+    (sentence =~ regex_for_individual_word(word)).try(:positive?)
+  end
+
+  def check_string_starts_word?(sentence, word)
+    sentence.gsub(/[^a-zA-Z]/, "").downcase.starts_with?(word.to_s.downcase)
   end
 
   def regex_for_individual_word(word)
     /(\W|^)#{word}(\W|$)/i
   end
 
-  def items_from_message_after_stripping_action(msg, words_to_clean)
+  def items_from_message(msg)
     new_text = msg.dup
-    new_text.gsub!(regex_for_individual_word('add'), ' ')
-    new_text.gsub!(regex_for_individual_word('remove'), ' ')
-    new_text.gsub!(regex_for_individual_word('to'), ' ')
-    new_text.gsub!(regex_for_individual_word('from'), ' ')
-    new_text.gsub!(regex_for_individual_word('the'), ' ')
-    words_to_clean.each do |word|
-      new_text.gsub!(regex_for_individual_word(word), ' ')
-    end
-    new_text.split(/, and\W|,\W?/)
+    new_text.gsub!(regex_for_individual_word(:add), " ")
+    new_text.gsub!(regex_for_individual_word(:remove), " ")
+    new_text.gsub!(regex_for_individual_word(:to), " ")
+    new_text.gsub!(regex_for_individual_word(:from), " ")
+    new_text.gsub!(regex_for_individual_word(:the), " ")
+    new_text.split(/(, *(and)?|and)/).delete_if { |s| s == "and" }
   end
 
   def fix_list_items_order
