@@ -1,9 +1,9 @@
 Rails.application.routes.draw do
 
-  root 'index#home'
-  post '/talk' => 'index#talk'
-  get 'map' => 'index#map'
-  get 'playground' => 'index#playground'
+  root "index#home"
+  post "/talk" => "index#talk"
+  get "map" => "index#map"
+  get "playground" => "index#playground"
 
   scope module: :users do
     get :login,      controller: :sessions,      action: :new
@@ -15,11 +15,12 @@ Rails.application.routes.draw do
     patch :register, controller: :registrations, action: :create
   end
 
-  post 'webhooks/jenkins' => "webhooks#jenkins"
-  post 'webhooks/post' => "webhooks#post"
-  post 'webhooks/email' => "webhooks#email"
+  post "webhooks/jenkins" => "webhooks#jenkins"
+  post "webhooks/post" => "webhooks#post"
+  post "webhooks/email" => "webhooks#email"
+  post "webhooks/command" => "webhooks#command"
 
-  get 'cube' => 'cubes#show'
+  get "cube" => "cubes#show"
 
   resource :nfc, only: [:show]
 
@@ -68,20 +69,20 @@ Rails.application.routes.draw do
 
   resources :mazes, only: [ :index ] do
     collection do
-      get 'random', action: 'random'
-      get ':seed', action: 'random'
-      get 'random.txt', action: 'random'
+      get "random", action: "random"
+      get ":seed", action: "random"
+      get "random.txt", action: "random"
     end
   end
 
-  resources :venmos, path: 'venmo' do
+  resources :venmos, path: "venmo" do
     collection do
-      get 'auth'
+      get "auth"
     end
   end
 
-  require 'sidekiq/web'
-  mount Sidekiq::Web => '/sidekiq'
-  mount ActionCable.server => '/cable'
+  require "sidekiq/web"
+  mount Sidekiq::Web => "/sidekiq"
+  mount ActionCable.server => "/cable"
 
 end

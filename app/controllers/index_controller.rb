@@ -10,7 +10,7 @@ class IndexController < ApplicationController
     text_action = body.to_s.squish.split(" ").first
 
     reminder_received = case text_action
-    when "add", "remove" then current_user.lists.find_and_modify(body)
+    when "add", "remove" then List.find_and_modify(current_user, body)
     when "recipe" then send_to_portfolio(body)
     else
       LitterTextReminder.all.any? do |rem|

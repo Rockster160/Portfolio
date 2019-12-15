@@ -22,16 +22,26 @@ class List < ApplicationRecord
   scope :important, -> { where(important: true) }
   scope :unimportant, -> { where.not(important: true) }
 
-  def self.find_and_modify(msg)
-    list = first
-    List.all.each do |try_list|
-      found_msg = msg =~ /#{[Regexp.quote(try_list.name), Regexp.quote(try_list.name.split(" ").join(""))].join("|")}/
-      if found_msg.present? && found_msg >= 0
-        list = try_list
-      end
-    end
+  def self.find_and_modify(user, msg)
+    return if msg.blank? || user.blank?
 
-    list.modify_from_message(msg) if list.present?
+    list = user.default_list
+    intro_regexp = /\b(to|for|on|in|into)\b/
+    list_intro = msg =~ intro_regexp
+
+    if list_intro.zero? || list_intro.positive?
+      found_list = user.ordered_lists.find do |try_list|
+        found_msg = msg =~ /#{intro_regexp} (?:the )?#{Regexp.quote(try_list.name)}/i
+
+        found_msg.present? && found_msg >= 0
+      end
+      list = found_list if found_list.present?
+    end
+    return unless list.present?
+
+    msg = msg.gsub(/#{intro_regexp} (?:the )?#{Regexp.quote(list.name)}/i, "")
+
+    list.modify_from_message(msg)
   end
 
   def ordered_items
@@ -92,7 +102,6 @@ class List < ApplicationRecord
     when :add
       items = item_names.map do |item_name|
         item = list_items.by_name_then_update(name: item_name)
-        puts "#{item.name} - #{item.errors.full_messages}".colorize(:yellow)
         item
       end.select(&:persisted?)
       return "No items added." if items.none?
@@ -139,7 +148,6 @@ class List < ApplicationRecord
     msg = msg.sub(/#{action}/i, "")
 
     items = items_from_message(msg).map(&:squish)
-    puts "#{items}".colorize(:red)
 
     [action, items]
   end

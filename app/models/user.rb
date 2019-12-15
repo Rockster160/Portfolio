@@ -91,8 +91,12 @@ class User < ApplicationRecord
     username.presence || phone.gsub(/[^\d]/, '').presence || "<User:#{id}>"
   end
 
+  def default_list
+    (user_lists.find_by(default: true) || user_lists.order(created_at: :asc).first).try(:list)
+  end
+
   def ordered_lists
-    lists.includes(user_lists: :list).where(user_lists: { user_id: id }).order("user_lists.sort_order")
+    lists.includes(:user_lists).where(user_lists: { user_id: id }).order("user_lists.sort_order")
   end
 
   def invite!(list)

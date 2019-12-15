@@ -1,11 +1,11 @@
-curl "http://ardesian.com/lists/:list_id/modify_from_message" \
+curl -X PUT "http://ardesian.com/lists/:list_id" \
   -u "username:password" \
   --data-urlencode "message=add potatoes, carrots, and onions"
 
-curl "http://ardesian.com/lists/:list_id/modify_from_message" \
+curl -X PUT "http://ardesian.com/lists/:list_id" \
   -u "username:password" \
   --data-urlencode "message=remove potatoes, carrots, and onions"
 
-curl "http://ardesian.com/lists/:list_id/modify_from_message" \
+curl -X PUT "http://ardesian.com/lists/:list_id" \
   -u "username:password" \
   --data-urlencode "message=clear"

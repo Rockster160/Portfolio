@@ -20,14 +20,6 @@ class ListsController < ApplicationController
     redirect_to lists_path
   end
 
-  # def modify_from_message
-  #   response_message = @list.modify_from_message(params[:message])
-  #
-  #   respond_to do |format|
-  #     format.json { render json: @list.to_json(include: :list_items) }
-  #   end
-  # end
-
   def update
     if params[:sort]
       @list.sort_items!(params[:sort], params[:order])

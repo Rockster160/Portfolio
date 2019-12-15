@@ -7,6 +7,7 @@
 #  list_id    :integer
 #  is_owner   :boolean
 #  sort_order :integer
+#  default    :boolean          default(FALSE)
 #
 
 class UserList < ApplicationRecord

@@ -15,6 +15,12 @@ class WebhooksController < ApplicationController
     head :no_content
   end
 
+  def command
+    return head :no_content unless user_signed_in?
+
+    List.find_and_modify(current_user, params[:command])
+  end
+
   private
 
   def post_params

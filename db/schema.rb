@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20190529024546) do
+ActiveRecord::Schema.define(version: 20191215013857) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -191,6 +191,7 @@ ActiveRecord::Schema.define(version: 20190529024546) do
     t.integer "list_id"
     t.boolean "is_owner"
     t.integer "sort_order"
+    t.boolean "default",    default: false
     t.index ["list_id"], name: "index_user_lists_on_list_id", using: :btree
     t.index ["user_id"], name: "index_user_lists_on_user_id", using: :btree
   end
