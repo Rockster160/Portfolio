@@ -33,7 +33,7 @@ class List < ApplicationRecord
     Rails.logger.warn("MSG##{msg}".colorize(:red)) if list.present?
     Rails.logger.warn("Default list##{list.id}:#{list.name}".colorize(:red)) if list.present?
 
-    if list_intro.zero? || list_intro.positive?
+    if list_intro.try(:zero?) || list_intro.try(:positive?)
       Rails.logger.warn("Message found".colorize(:red))
       found_list = user.ordered_lists.find do |try_list|
         found_msg = msg =~ /#{intro_regexp} (?:the )?#{Regexp.quote(try_list.name)}/i
