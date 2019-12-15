@@ -16,6 +16,8 @@ class WebhooksController < ApplicationController
   end
 
   def command
+    Rails.logger.warn("ROCCO:#Signed in!".colorize(:red)) unless user_signed_in?
+    Rails.logger.warn("Command:##{params[:command]}".colorize(:red)) unless user_signed_in?
     return head :no_content unless user_signed_in?
 
     List.find_and_modify(current_user, params[:command])

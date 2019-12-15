@@ -24,22 +24,35 @@ class List < ApplicationRecord
 
   def self.find_and_modify(user, msg)
     return if msg.blank? || user.blank?
+    Rails.logger.warn("ROCCO#Find and modify".colorize(:red))
 
     list = user.default_list
     intro_regexp = /\b(to|for|on|in|into)\b/
     list_intro = msg =~ intro_regexp
 
+    Rails.logger.warn("MSG##{msg}".colorize(:red)) if list.present?
+    Rails.logger.warn("Default list##{list.id}:#{list.name}".colorize(:red)) if list.present?
+
     if list_intro.zero? || list_intro.positive?
+      Rails.logger.warn("Message found".colorize(:red))
       found_list = user.ordered_lists.find do |try_list|
         found_msg = msg =~ /#{intro_regexp} (?:the )?#{Regexp.quote(try_list.name)}/i
 
+        if found_msg.present? && found_msg >= 0
+          Rails.logger.warn("Match##{try_list.id}:#{try_list.name}".colorize(:red))
+        else
+          Rails.logger.warn("NO match##{try_list.id}:#{try_list.name}".colorize(:red))
+        end
         found_msg.present? && found_msg >= 0
       end
       list = found_list if found_list.present?
     end
+    Rails.logger.warn("No list - command failed".colorize(:red)) unless list.present?
     return unless list.present?
+    Rails.logger.warn("Selected list##{list.id}:#{list.name}".colorize(:red)) if list.present?
 
     msg = msg.gsub(/#{intro_regexp} (?:the )?#{Regexp.quote(list.name)}/i, "")
+    Rails.logger.warn("Modify MSG##{msg}".colorize(:red)) if list.present?
 
     list.modify_from_message(msg)
   end
