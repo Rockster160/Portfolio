@@ -40,7 +40,7 @@
   </div>
   <div style="margin-top: 20px;">
     <h4>Body</h4>
-    <pre><%= JSON.pretty_generate @logger.body_json rescue @logger.body_json %></pre>
+    <pre><%= JSON.pretty_generate @logger.body_json.inspect rescue @logger.body_json.inspect %></pre>
   </div>
 
 </div>

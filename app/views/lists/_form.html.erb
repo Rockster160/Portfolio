@@ -54,6 +54,17 @@
           <% end %>
         </div>
       </div>
+      <div class="form-field">
+        <div class="checkbox-wrapper">
+          <%= hidden_field_tag :default, false, id: "false-default" %>
+          <%= check_box_tag :default, true, @user_list.default? %>
+          <%= label_tag :default do %>
+            <div class="checkbox-placeholder"></div>
+            <big>&bull; Default?</big> <br>
+            When toggled on, this will be the default list when adding items through the API.
+          <% end %>
+        </div>
+      </div>
     </div>
 
     <div class="form-submission">

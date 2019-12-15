@@ -17,8 +17,19 @@ class UserList < ApplicationRecord
   belongs_to :list
 
   before_save :set_sort_order
+  before_save :set_defaults
 
   private
+
+  def set_defaults
+    other_user_lists = user.user_lists.where.not(id: id)
+
+    if default?
+      other_user_lists.where(default: true).update_all(default: false)
+    else
+      self.default = true if other_user_lists.where(default: true).none?
+    end
+  end
 
   def set_sort_order
     self.sort_order ||= user.user_lists.where.not(id: [nil, id]).max_by(&:sort_order).try(:sort_order).to_i + 1

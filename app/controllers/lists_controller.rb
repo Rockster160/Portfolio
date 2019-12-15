@@ -27,6 +27,7 @@ class ListsController < ApplicationController
     end
 
     if @list.update(list_params)
+      @user_list&.update(default: params[:default] == "true") if params[:default].present?
       respond_to do |format|
         format.html { redirect_to list_path(@list) }
         format.json { render json: @list.to_json(include: :list_items) }
@@ -87,6 +88,8 @@ class ListsController < ApplicationController
 
   def set_list
     @list = current_user.lists.find_by(id: params[:id]) || current_user.lists.select { |list| list.name.parameterize == params[:id] }.first
+    @user_list = current_user.user_lists.find_by(list: @list)
+
     return if @list.present?
     redirect_to lists_path, alert: "You do not have permission to view this list."
   end
@@ -96,7 +99,7 @@ class ListsController < ApplicationController
   end
 
   def list_params
-    params.permit(:list).permit(:name, :description, :important, :show_deleted, :message).tap do |whitelist|
+    params.permit(:list).permit(:name, :description, :important, :show_deleted, :default, :message).tap do |whitelist|
       whitelist[:message] ||= params[:message]
     end
   end
