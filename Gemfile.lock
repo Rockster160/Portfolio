@@ -96,6 +96,7 @@ GEM
     globalid (0.4.0)
       activesupport (>= 4.2.0)
     gmaps4rails (2.1.2)
+    honeybadger (4.5.4)
     http-cookie (1.0.3)
       domain_name (~> 0.5)
     httparty (0.14.0)
@@ -296,6 +297,7 @@ DEPENDENCIES
   faker
   font-awesome-rails
   gmaps4rails
+  honeybadger (~> 4.0)
   httparty
   ice_cube
   inline_svg

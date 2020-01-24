@@ -45,6 +45,8 @@ gem 'acts_as_paranoid', '~> 0.5.0'
 gem "inline_svg"
 gem "ice_cube"
 
+gem "honeybadger", "~> 4.0"
+
 group :development, :test do
   gem 'annotate'
   gem 'rails_real_favicon'

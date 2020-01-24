@@ -28,6 +28,7 @@ Rails.application.routes.draw do
   resources :log_trackers, only: [ :index, :show ]
 
   resource :summoners_war do
+    get :runes
     resources :monsters
     resources :monster_skills
   end
