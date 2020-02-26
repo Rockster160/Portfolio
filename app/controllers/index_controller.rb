@@ -4,15 +4,14 @@ class IndexController < ApplicationController
   def talk
     from = params["From"]
     body = params["Body"]
+    from_user = current_user || User.find_by(phone_number: params["From"].gsub(/[^0-9]/, "").last(10))
 
-    CustomLogger.log(from.present? && body.present? ? "7711223 - Yes" : "7711223 - No")
-    CustomLogger.log(from.present? && body.present? ? "7711223 - Yes" : "7711223 - No")
     return head :ok unless from.present? && body.present?
 
     text_action = body.to_s.squish.split(" ").first
 
     reminder_received = case text_action.downcase
-    when "add", "remove" then List.find_and_modify(current_user, body)
+    when "add", "remove" then List.find_and_modify(from_user, body)
     when "recipe" then send_to_portfolio(body)
     else
       LitterTextReminder.all.any? do |rem|
@@ -21,7 +20,6 @@ class IndexController < ApplicationController
         end
       end
     end
-    CustomLogger.log("7711223 - #{reminder_received}")
 
     if reminder_received && reminder_received != true
       SmsWorker.perform_async(params["From"], reminder_received) if reminder_received.present?
