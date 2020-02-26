@@ -5,6 +5,8 @@ class IndexController < ApplicationController
     from = params["From"]
     body = params["Body"]
 
+    CustomLogger.log(from.present? && body.present? ? "7711223 - Yes" : "7711223 - No")
+    CustomLogger.log(from.present? && body.present? ? "7711223 - Yes" : "7711223 - No")
     return head :ok unless from.present? && body.present?
 
     text_action = body.to_s.squish.split(" ").first
@@ -19,6 +21,7 @@ class IndexController < ApplicationController
         end
       end
     end
+    CustomLogger.log("7711223 - #{reminder_received}")
 
     if reminder_received && reminder_received != true
       SmsWorker.perform_async(params["From"], reminder_received) if reminder_received.present?
