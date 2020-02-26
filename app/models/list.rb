@@ -98,6 +98,7 @@ class List < ApplicationRecord
   end
 
   def modify_from_message(msg)
+    return unless persisted?
     msg = msg.to_s
     response_messages = []
     action, item_names = split_action_and_items_from_msg(msg)

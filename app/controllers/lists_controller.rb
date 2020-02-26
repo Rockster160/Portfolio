@@ -100,7 +100,7 @@ class ListsController < ApplicationController
 
   def list_params
     params.permit(:list).permit(:name, :description, :important, :show_deleted, :default, :message).tap do |whitelist|
-      whitelist[:message] ||= params[:message]
+      whitelist[:message] ||= params[:message] if params[:message].present?
     end
   end
 
