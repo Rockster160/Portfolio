@@ -58,6 +58,10 @@ class List < ApplicationRecord
     !!user_lists.where(user_id: user.try(:id)).first.try(:is_owner?)
   end
 
+  def default_for_user?(user)
+    !!user_lists.find_by(user_id: user.try(:id)).try(:default?)
+  end
+
   def collaborators
     users.where(user_lists: { is_owner: [nil, false] })
   end
