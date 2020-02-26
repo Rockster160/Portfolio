@@ -57,9 +57,10 @@ class ListsController < ApplicationController
     @list = List.create(list_params)
 
     if @list.persisted?
-      current_user.user_lists.create(list_id: @list.id, is_owner: true)
+      current_user.user_lists.create(list_id: @list.id, is_owner: true, default: params[:default] == "true")
       redirect_to @list
     else
+      binding.pry
       render :new
     end
   end
@@ -99,7 +100,9 @@ class ListsController < ApplicationController
   end
 
   def list_params
-    params.permit(:list).permit(:name, :description, :important, :show_deleted, :default, :message).tap do |whitelist|
+    return {} unless params[:list].present?
+    
+    params.require(:list).permit(:name, :description, :important, :show_deleted, :default, :message).tap do |whitelist|
       whitelist[:message] ||= params[:message] if params[:message].present?
     end
   end
