@@ -4,7 +4,7 @@ class IndexController < ApplicationController
   def talk
     from = params["From"]
     body = params["Body"]
-    from_user = current_user || User.find_by(phone_number: params["From"].gsub(/[^0-9]/, "").last(10))
+    from_user = current_user || User.find_by(phone: params["From"].gsub(/[^0-9]/, "").last(10))
 
     return head :ok unless from.present? && body.present?
 
