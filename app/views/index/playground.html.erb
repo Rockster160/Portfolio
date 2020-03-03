@@ -11,10 +11,6 @@
     </div>
     <div class="app-card-body">
       <div class="app-card-inner">
-        <div class="clock-wrapper" style="height: 150px; text-align: center;">
-          <canvas id="clocks" class="no-zoom" width="235" height="120"></canvas>
-        </div>
-
         <a href="<%= lists_path %>" class="project-wrapper">
           <div class="json-btn" data-modal="#code-example-list">API</div>
           <%= render_modal "code-example-list", "Lists" do %>
@@ -37,7 +33,7 @@
             <%= raw pretty(:bash, "requests/lists/update.json") %>
             <%= raw pretty(:js, "response/lists/update.json") %>
           <% end %>
-          <div class="project-title">List</div>
+          <div class="project-title">Lists</div>
           <div class="project-description">
             <p>Create lists as a To-Do, grocery tracking, or any other reason.</p>
             <p>Share these lists with others for live-collaboration.</p>
