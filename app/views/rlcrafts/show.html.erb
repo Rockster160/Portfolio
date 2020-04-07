@@ -24,15 +24,19 @@
   <input type="text" name="location[y_coord]" placeholder="Z" class="rlc-input-coord">
   <input type="text" name="location[title]" placeholder="Title" class="rlc-input-title">
   <select class="rlc-select" name="location[location_type]">
-    <option value="Waystone">Waystone</option>
-    <option value="Black Dragon">Black Dragon</option>
-    <option value="Red Dragon">Red Dragon</option>
-    <option value="Green Dragon">Green Dragon</option>
-    <option value="White Dragon">White Dragon</option>
-    <option value="Blue Dragon">Blue Dragon</option>
-    <option value="Book">Book</option>
-    <option value="Other">Other</option>
+    <% @location_types.each do |location_type| %>
+      <option value="<%= location_type %>"><%= location_type %></option>
+    <% end %>
   </select>
   <button type="submit" name="button">Save</button>
   <textarea name="location[description]" rows="8" cols="80" class="rlc-input-area" placeholder="Enter a description of the location (optional)"></textarea>
+
+  <% @location_types.each do |location_type| %>
+    <input type="checkbox" id="show-<%= location_type.parameterize %>" name="show" data-rlc-show="<%= location_type %>" checked="checked">
+    <label for="show-<%= location_type.parameterize %>"><%= location_type %></label>
+    <svg>
+      <circle rlc-color="<%= location_type %>"></circle>
+    </svg>
+    <br>
+  <% end %>
 </form>

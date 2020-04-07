@@ -19,6 +19,20 @@ class RlcraftMapLocation < ApplicationRecord
     end
   end
 
+  def self.location_types
+    [
+      "Waystone",
+      "Black Dragon",
+      "Red Dragon",
+      "Green Dragon",
+      "White Dragon",
+      "Blue Dragon",
+      "Book",
+      "Player Base",
+      "Other"
+    ]
+  end
+
   def to_graphable_data
     {
       id: id,

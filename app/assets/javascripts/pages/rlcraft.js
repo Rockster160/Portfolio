@@ -5,6 +5,16 @@ $(document).ready(function() {
     clearRlcForm()
   })
 
+  $("[data-rlc-show]").change(function() {
+    var type = $(this).attr("data-rlc-show")
+
+    if (this.checked) {
+      $("circle[type=" + type + "]").removeClass("hidden")
+    } else {
+      $("circle[type=" + type + "]").addClass("hidden")
+    }
+  })
+
   $(".rlc-form").submit(function(evt) {
     evt.preventDefault()
 

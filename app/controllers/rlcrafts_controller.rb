@@ -3,6 +3,7 @@ class RlcraftsController < ApplicationController
 
   def show
     @locations = RlcraftMapLocation.all
+    @location_types = RlcraftMapLocation.location_types
   end
 
   def update

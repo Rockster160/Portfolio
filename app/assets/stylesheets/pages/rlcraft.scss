@@ -9,6 +9,7 @@
     max-width: 200px;
     height: auto;
     pointer-events: none;
+    font-family: Arial;
     font-size: 12px;
     text-align: center;
 
@@ -19,6 +20,42 @@
       margin: 0;
     }
   }
+}
+
+[rlc-color="Waystone"] {
+  fill: #FFA500;
+}
+
+[rlc-color="Black Dragon"] {
+  fill: #000;
+}
+
+[rlc-color="Red Dragon"] {
+  fill: #F00;
+}
+
+[rlc-color="Green Dragon"] {
+  fill: #3C3;
+}
+
+[rlc-color="White Dragon"] {
+  fill: #CCC;
+}
+
+[rlc-color="Blue Dragon"] {
+  fill: #03C;
+}
+
+[rlc-color="Book"] {
+  fill: #930;
+}
+
+[rlc-color="Player Base"] {
+  fill: #A569BD;
+}
+
+[rlc-color="Other"] {
+  fill: #F7DC6F;
 }
 
 .rlc-form {
@@ -42,6 +79,17 @@
 
   input[type=checkbox] {
     width: auto;
+  }
+
+  svg {
+    width: 10px;
+    height: 10px;
+
+    circle {
+      r: 5;
+      cx: 5;
+      cy: 5;
+    }
   }
 
   .rlc-input-coord {

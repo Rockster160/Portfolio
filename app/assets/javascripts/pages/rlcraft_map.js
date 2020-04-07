@@ -51,20 +51,6 @@ function RLCraftSVG() {
     return str
   }
 
-  svgObj.pointTooltipColor = function(point) {
-    var color = "#FF0"
-    if (point.type == "Waystone") { color = "#FFA500" }
-    if (point.type == "Black Dragon") { color = "#000" }
-    if (point.type == "Red Dragon") { color = "#F00" }
-    if (point.type == "Green Dragon") { color = "#3C3" }
-    if (point.type == "White Dragon") { color = "#CCC" }
-    if (point.type == "Blue Dragon") { color = "#03C" }
-    if (point.type == "Book") { color = "#930" }
-    if (point.type == "Other") { color = "#FF0" }
-
-    return color
-  }
-
   svgObj.remove_points = function(points) {
     points.forEach(function(point) {
       $("[map_id=" + point.id + "]").remove()
@@ -81,7 +67,7 @@ function RLCraftSVG() {
       .attr("cx", function (d) { return svgObj.x(d.x) } )
       .attr("cy", function (d) { return svgObj.y(d.y) } )
       .attr("map_id", function (d) { return d.id } )
-      .style("fill", function (d) { return svgObj.pointTooltipColor(d) } )
+      .attr("rlc-color", function (d) { return d.type } )
       .on("mouseover", function(d) {
          svgObj.tooltip.transition()
            .duration(200)
