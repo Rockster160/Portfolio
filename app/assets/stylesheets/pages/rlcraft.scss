@@ -1,0 +1,22 @@
+.rlcraft-container {
+  .rlcraft-tooltip {
+    position: absolute;
+    border: 0;
+    border-radius: 6px;
+    background: lightsteelblue;
+    padding: 4px;
+    width: auto;
+    max-width: 200px;
+    height: auto;
+    pointer-events: none;
+    font: 12px sans-serif;
+    text-align: center;
+
+    h4,
+    i,
+    small {
+      display: block;
+      margin: 0;
+    }
+  }
+}
