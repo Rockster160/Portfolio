@@ -1,0 +1,45 @@
+<% content_for :head do %>
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <script type="text/javascript">
+    $(document).ready(function() {
+      var rlc_map = new RLCraftSVG()
+
+      rlc_map.add_points(<%= @locations.graphable_data.to_json.html_safe %>)
+
+      $(".rlc-form").submit(function(evt) {
+        evt.preventDefault()
+
+        $.ajax({
+          type: "PATCH",
+          url: $(this).attr("href"),
+          data: $(this).serialize()
+        }).done(function(data) {
+          rlc_map.add_points([data])
+
+          $(".rlc-form input, .rlc-form textarea").val("")
+        })
+      })
+    })
+  </script>
+<% end %>
+
+<div class="rlc-container text-center">
+  <div id="rlc-svg"></div>
+</div>
+
+<form class="rlc-form basic" action="/" method="post">
+  <input type="text" name="location[x_coord]" placeholder="X" class="rlc-input-coord">
+  <input type="text" name="location[y_coord]" placeholder="Z" class="rlc-input-coord">
+  <input type="text" name="location[title]" placeholder="Title" class="rlc-input-title">
+  <select class="rlc-select" name="location[location_type]">
+    <option value="Waystone">Waystone</option>
+    <option value="Black Dragon">Black Dragon</option>
+    <option value="Red Dragon">Red Dragon</option>
+    <option value="Green Dragon">Green Dragon</option>
+    <option value="White Dragon">White Dragon</option>
+    <option value="Blue Dragon">Blue Dragon</option>
+    <option value="Other">Other</option>
+  </select>
+  <button type="submit" name="button">Save</button>
+  <textarea name="location[description]" rows="8" cols="80" class="rlc-input-area" placeholder="Enter a description of the location (optional)"></textarea>
+</form>

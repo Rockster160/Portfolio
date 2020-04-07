@@ -190,10 +190,10 @@ ActiveRecord::Schema.define(version: 20200407184942) do
     t.integer  "x_coord"
     t.integer  "y_coord"
     t.string   "title"
-    t.string   "type"
+    t.string   "location_type"
     t.string   "description"
-    t.datetime "created_at",  null: false
-    t.datetime "updated_at",  null: false
+    t.datetime "created_at",    null: false
+    t.datetime "updated_at",    null: false
   end
 
   create_table "user_lists", force: :cascade do |t|

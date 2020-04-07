@@ -1,5 +1,5 @@
-.rlcraft-container {
-  .rlcraft-tooltip {
+.rlc-container {
+  .rlc-tooltip {
     position: absolute;
     border: 0;
     border-radius: 6px;
@@ -18,5 +18,29 @@
       display: block;
       margin: 0;
     }
+  }
+}
+
+.rlc-form {
+  margin: 0 auto;
+  width: 600px;
+  max-width: 100%;
+  text-align: center;
+
+  input,
+  select {
+    padding: 3px 2px;
+    width: 200px;
+    height: auto;
+    font-size: 16px;
+    text-align: center;
+  }
+
+  .rlc-input-coord {
+    width: 60px;
+  }
+
+  .rlc-input-title {
+    width: 100px;
   }
 }

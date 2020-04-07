@@ -1,22 +1,15 @@
-$(document).ready(function() {
-  rlCraftMap = new RLCraftSVG()
-
-  rlCraftMap.add_points([{x: 5000, y: 3000, type: "waystone", title: "The End", description: "Custom waystone next to the end"}, {x: 2444, y: -6983}])
-  rlCraftMap.add_points([{x: 1123, y: 42, type: "waystone", title: "Mordor", description: "Wil's house."}])
-})
-
 function RLCraftSVG() {
   var svgObj = this
 
   svgObj.init = function() {
     // Create a tooltip object to display info
-    svgObj.tooltip = d3.select("#rlcraft-svg")
+    svgObj.tooltip = d3.select("#rlc-svg")
       .append("div")
-      .attr("class", "rlcraft-tooltip")
+      .attr("class", "rlc-tooltip")
       .style("opacity", 0)
 
     // append the svg object to the body of the page
-    svgObj.map = d3.select("#rlcraft-svg")
+    svgObj.map = d3.select("#rlc-svg")
       .append("svg")
         .attr("width", svgObj.width + svgObj.margin.left + svgObj.margin.right)
         .attr("height", svgObj.height + svgObj.margin.top + svgObj.margin.bottom)
@@ -56,8 +49,14 @@ function RLCraftSVG() {
   }
 
   svgObj.pointTooltipColor = function(point) {
-    var color = "#000"
-    if (point.type == "waystone") { color = "#CCC" }
+    var color = "#FF0"
+    if (point.type == "Waystone") { color = "#FFA500" }
+    if (point.type == "Black Dragon") { color = "#000" }
+    if (point.type == "Red Dragon") { color = "#F00" }
+    if (point.type == "Green Dragon") { color = "#3C3" }
+    if (point.type == "White Dragon") { color = "#CCC" }
+    if (point.type == "Blue Dragon") { color = "#03C" }
+    if (point.type == "Other") { color = "#FF0" }
 
     return color
   }
