@@ -1,7 +1,10 @@
+var RLCraftMap;
 function RLCraftSVG() {
   var svgObj = this
 
   svgObj.init = function() {
+    RLCraftMap = svgObj
+
     // Create a tooltip object to display info
     svgObj.tooltip = d3.select("#rlc-svg")
       .append("div")
@@ -14,17 +17,17 @@ function RLCraftSVG() {
         .attr("width", svgObj.width + svgObj.margin.left + svgObj.margin.right)
         .attr("height", svgObj.height + svgObj.margin.top + svgObj.margin.bottom)
       .append("g")
-        .attr("transform", "translate(" + svgObj.margin.left + "," + svgObj.margin.top + ")");
+        .attr("transform", "translate(" + svgObj.margin.left + "," + svgObj.margin.top + ")")
 
     // Add X axis
     svgObj.map.append("g")
       .attr("transform", "translate(" + 0 + "," + svgObj.height / 2 + ")")
-      .call(d3.axisBottom(svgObj.x));
+      .call(d3.axisBottom(svgObj.x))
 
     // Add Y axis
     svgObj.map.append("g")
       .attr("transform", "translate(" + svgObj.width / 2 + "," + 0 + ")")
-      .call(d3.axisLeft(svgObj.y));
+      .call(d3.axisLeft(svgObj.y))
   }
 
   svgObj.margin = { top: 10, right: 30, bottom: 30, left: 60 }
@@ -34,11 +37,11 @@ function RLCraftSVG() {
 
   svgObj.x = d3.scaleLinear()
     .domain([-10000, 10000])
-    .range([ 0, svgObj.width ]);
+    .range([ 0, svgObj.width ])
 
   svgObj.y = d3.scaleLinear()
     .domain([-10000, 10000])
-    .range([ svgObj.height, 0]);
+    .range([ svgObj.height, 0])
 
   svgObj.pointTooltipHTML = function(point) {
     var str = ""
@@ -62,6 +65,12 @@ function RLCraftSVG() {
     return color
   }
 
+  svgObj.remove_points = function(points) {
+    points.forEach(function(point) {
+      $("[map_id=" + point.id + "]").remove()
+    })
+  }
+
   svgObj.add_points = function(points) {
     var point =  svgObj.map.append("g")
       .selectAll("dot")
@@ -69,28 +78,41 @@ function RLCraftSVG() {
       .enter()
     point.append("circle")
       .attr("r", 5)
-      .attr("cx", function (d) { return svgObj.x(d.x); } )
-      .attr("cy", function (d) { return svgObj.y(d.y); } )
-      .style("fill", function (d) { return svgObj.pointTooltipColor(d); } )
+      .attr("cx", function (d) { return svgObj.x(d.x) } )
+      .attr("cy", function (d) { return svgObj.y(d.y) } )
+      .attr("map_id", function (d) { return d.id } )
+      .style("fill", function (d) { return svgObj.pointTooltipColor(d) } )
       .on("mouseover", function(d) {
          svgObj.tooltip.transition()
            .duration(200)
-           .style("opacity", .9);
+           .style("opacity", 0.9)
          svgObj.tooltip.html(svgObj.pointTooltipHTML(d))
            .style("left", (d3.event.pageX) + "px")
-           .style("top", (d3.event.pageY - 28) + "px");
+           .style("top", (d3.event.pageY - 28) + "px")
        })
        .on("mouseout", function(d) {
          svgObj.tooltip.transition()
            .duration(500)
-           .style("opacity", 0);
-       });
+           .style("opacity", 0)
+       })
+       .on("click", function(d) {
+         $(".edit-form").removeClass("hidden")
 
-     svgObj.points.push(point)
+         $('input[name="id"]').val(d.id)
+         $('input[name="location[x_coord]"]').val(d.x)
+         $('input[name="location[y_coord]"]').val(d.y)
+         $('input[name="location[title]"]').val(d.title)
+         $('select[name="location[location_type]"]').val(d.type)
+         $('textarea[name="location[description]"]').val(d.description)
+       })
 
     // TODO: Connect waypoint to nearby waypoints
   }
 
   // Initialize
   svgObj.init()
+}
+
+RLCraftSVG.getMap = function() {
+  return RLCraftMap || new RLCraftSVG()
 }
