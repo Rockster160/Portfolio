@@ -1,6 +1,8 @@
 $(document).ready(function() {
   var clearRlcForm = function() {
     $(".rlc-form input, .rlc-form textarea").val("")
+    $(".rlc-form input[type=checkbox]").prop("checked", false)
+    $(".edit-form").addClass("hidden")
   }
 
   $(".clear-btn").click(function() {

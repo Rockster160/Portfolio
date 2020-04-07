@@ -6,17 +6,25 @@ class RlcraftsController < ApplicationController
   end
 
   def update
-    new_location = RlcraftMapLocation.create(location_params)
+    if params[:id].present?
+      location = RlcraftMapLocation.find(params[:id])
 
-    render json: new_location.to_graphable_data
+      if params[:_destroy] == "true"
+        location.destroy
+      else
+        location.update(location_params)
+      end
+    else
+      location = RlcraftMapLocation.create(location_params)
+    end
+
+    render json: location.to_graphable_data
   end
 
   private
 
   def location_params
     params.require(:location).permit(
-      :id,
-      :_destroy,
       :x_coord,
       :y_coord,
       :title,

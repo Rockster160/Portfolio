@@ -9,7 +9,7 @@
     max-width: 200px;
     height: auto;
     pointer-events: none;
-    font: 12px Arial;
+    font-size: 12px;
     text-align: center;
 
     h4,
@@ -27,6 +27,10 @@
   max-width: 100%;
   text-align: center;
 
+  * {
+    font-family: Arial;
+  }
+
   input,
   select {
     padding: 3px 2px;
@@ -34,6 +38,10 @@
     height: auto;
     font-size: 16px;
     text-align: center;
+  }
+
+  input[type=checkbox] {
+    width: auto;
   }
 
   .rlc-input-coord {
@@ -51,6 +59,5 @@
     border-radius: 4px;
     background: lightgrey;
     padding: 2px;
-    font-family: Arial;
   }
 }

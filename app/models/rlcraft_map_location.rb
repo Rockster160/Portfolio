@@ -26,7 +26,8 @@ class RlcraftMapLocation < ApplicationRecord
       y: y_coord,
       type: location_type.presence,
       title: title.presence,
-      description: description.presence
+      description: description.presence,
+      removed: destroyed?
     }
   end
 end
