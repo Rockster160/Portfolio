@@ -9,7 +9,7 @@
     max-width: 200px;
     height: auto;
     pointer-events: none;
-    font: 12px sans-serif;
+    font: 12px Arial;
     text-align: center;
 
     h4,
@@ -42,5 +42,15 @@
 
   .rlc-input-title {
     width: 100px;
+  }
+
+  .clear-btn {
+    display: inline-block;
+    cursor: pointer;
+    border: 1px solid black;
+    border-radius: 4px;
+    background: lightgrey;
+    padding: 2px;
+    font-family: Arial;
   }
 }

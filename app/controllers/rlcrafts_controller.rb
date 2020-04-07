@@ -15,6 +15,8 @@ class RlcraftsController < ApplicationController
 
   def location_params
     params.require(:location).permit(
+      :id,
+      :_destroy,
       :x_coord,
       :y_coord,
       :title,

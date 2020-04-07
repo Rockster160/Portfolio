@@ -21,6 +21,7 @@ class RlcraftMapLocation < ApplicationRecord
 
   def to_graphable_data
     {
+      id: id,
       x: x_coord,
       y: y_coord,
       type: location_type.presence,
