@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20191215013857) do
+ActiveRecord::Schema.define(version: 20200407184942) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -184,6 +184,16 @@ ActiveRecord::Schema.define(version: 20191215013857) do
     t.datetime "created_at",   null: false
     t.datetime "updated_at",   null: false
     t.index ["user_id"], name: "index_recipes_on_user_id", using: :btree
+  end
+
+  create_table "rlcraft_map_locations", force: :cascade do |t|
+    t.integer  "x_coord"
+    t.integer  "y_coord"
+    t.string   "title"
+    t.string   "type"
+    t.string   "description"
+    t.datetime "created_at",  null: false
+    t.datetime "updated_at",  null: false
   end
 
   create_table "user_lists", force: :cascade do |t|

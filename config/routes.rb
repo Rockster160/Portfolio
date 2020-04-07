@@ -56,6 +56,12 @@ Rails.application.routes.draw do
   resources :anonicons, only: [ :index, :show ], constraints: { id: /[0-9.a-zA-Z]+/ }
   get :"svg-editor", controller: :svg_editors, action: :show
 
+  resources :graphs, only: [] do
+    collection do
+      get :rlcraft
+    end
+  end
+
   resource :little_world, only: [ :show ] do
     post :save_location
     get :player_login
