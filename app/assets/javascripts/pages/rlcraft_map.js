@@ -16,7 +16,7 @@ function RLCraftSVG() {
       .append("svg")
         .attr("width", svgObj.width + svgObj.margin.left + svgObj.margin.right)
         .attr("height", svgObj.height + svgObj.margin.top + svgObj.margin.bottom)
-        .call(d3.zoom().on("zoom", function () {
+        .call(d3.zoom().on("zoom", function() {
           svgObj.map.attr("transform", d3.event.transform)
         }))
         .append("g")
@@ -46,6 +46,10 @@ function RLCraftSVG() {
     .domain([-10000, 10000])
     .range([ svgObj.height, 0])
 
+  svgObj.r = d3.scaleLinear()
+    .domain([-10000, 10000])
+    .range([ -svgObj.width, svgObj.width ])
+
   svgObj.pointTooltipHTML = function(point) {
     var str = ""
     if (point.title) { str = str + "<h4>" + point.title + "</h4>" }
@@ -61,16 +65,18 @@ function RLCraftSVG() {
   }
 
   svgObj.add_points = function(points) {
-    var point =  svgObj.map.append("g")
+    var point = svgObj.map.append("g")
       .selectAll("dot")
       .data(points)
       .enter()
     point.append("circle")
       .attr("r", 5)
-      .attr("cx", function (d) { return svgObj.x(d.x) } )
-      .attr("cy", function (d) { return svgObj.y(d.y) } )
-      .attr("map_id", function (d) { return d.id } )
-      .attr("rlc-color", function (d) { return d.type } )
+      .attr("cx", function(d) { return svgObj.x(d.x) })
+      .attr("cy", function(d) { return svgObj.y(d.y) })
+      .attr("map_id", function(d) { return d.id })
+      .attr("map_x", function(d) { return d.x })
+      .attr("map_y", function(d) { return d.y })
+      .attr("rlc-color", function(d) { return d.type })
       .on("mouseover", function(d) {
          svgObj.tooltip.transition()
            .duration(200)
@@ -84,20 +90,55 @@ function RLCraftSVG() {
            .duration(500)
            .style("opacity", 0)
        })
-       .on("click", function(d) {
-         $(".edit-form").removeClass("hidden")
-         $("circle.selected").removeClass("selected")
-         $(this).addClass("selected")
-
-         $('input[name="id"]').val(d.id)
-         $('input[name="location[x_coord]"]').val(d.x)
-         $('input[name="location[y_coord]"]').val(d.y)
-         $('input[name="location[title]"]').val(d.title)
-         $('select[name="location[location_type]"]').val(d.type)
-         $('textarea[name="location[description]"]').val(d.description)
-       })
+       .on("click", svgObj.selectPoint)
 
     // TODO: Connect waypoint to nearby waypoints
+  }
+
+  svgObj.selectPoint = function(point) {
+    var circle = this
+    $(".edit-form").removeClass("hidden")
+    $("circle.selected").removeClass("selected")
+    $(circle).addClass("selected")
+
+    $('input[name="id"]').val(point.id)
+    $('input[name="location[x_coord]"]').val(point.x)
+    $('input[name="location[y_coord]"]').val(point.y)
+    $('input[name="location[title]"]').val(point.title)
+    $('select[name="location[location_type]"]').val(point.type)
+    $('textarea[name="location[description]"]').val(point.description)
+
+    console.log("Origin: ", point.x, point.y);
+
+    $("circle.distance-circle").remove()
+    svgObj.map.insert("circle", ":first-child")
+      .attr("class", "distance-circle")
+      .attr("r", function() { return svgObj.r(1000) })
+      .attr("cx", function() { return svgObj.x(point.x) })
+      .attr("cy", function() { return svgObj.y(point.y) })
+      .attr("stroke", function() { return "green" })
+      .attr("fill", "transparent")
+    svgObj.map.insert("circle", ":first-child")
+      .attr("class", "distance-circle")
+      .attr("r", function() { return svgObj.r(2000) })
+      .attr("cx", function() { return svgObj.x(point.x) })
+      .attr("cy", function() { return svgObj.y(point.y) })
+      .attr("stroke", function() { return "yellow" })
+      .attr("fill", "transparent")
+    svgObj.map.insert("circle", ":first-child")
+      .attr("class", "distance-circle")
+      .attr("r", function() { return svgObj.r(3000) })
+      .attr("cx", function() { return svgObj.x(point.x) })
+      .attr("cy", function() { return svgObj.y(point.y) })
+      .attr("stroke", function() { return "orange" })
+      .attr("fill", "transparent")
+    svgObj.map.insert("circle", ":first-child")
+      .attr("class", "distance-circle")
+      .attr("r", function() { return svgObj.r(4000) })
+      .attr("cx", function() { return svgObj.x(point.x) })
+      .attr("cy", function() { return svgObj.y(point.y) })
+      .attr("stroke", function() { return "red" })
+      .attr("fill", "transparent")
   }
 
   // Initialize
