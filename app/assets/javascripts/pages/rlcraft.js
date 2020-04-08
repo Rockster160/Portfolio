@@ -9,9 +9,9 @@ $(document).ready(function() {
     var type = $(this).attr("data-rlc-show")
 
     if (this.checked) {
-      $("circle[type=" + type + "]").removeClass("hidden")
+      $("circle[rlc-color=" + type + "]").removeClass("hidden")
     } else {
-      $("circle[type=" + type + "]").addClass("hidden")
+      $("circle[rlc-color=" + type + "]").addClass("hidden")
     }
   })
 
