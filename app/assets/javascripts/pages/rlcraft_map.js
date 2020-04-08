@@ -95,6 +95,17 @@ function RLCraftSVG() {
     // TODO: Connect waypoint to nearby waypoints
   }
 
+  svgObj.drawCircle = function(center, rad, color) {
+    svgObj.map.insert("circle", ":first-child")
+      .attr("class", "distance-circle")
+      .attr("r", function() { return svgObj.r(rad) })
+      .attr("cx", function() { return svgObj.x(center.x) })
+      .attr("cy", function() { return svgObj.y(center.y) })
+      .attr("stroke", color)
+      .attr("fill", color)
+      .style("opacity", 0.1)
+  }
+
   svgObj.selectPoint = function(point) {
     var circle = this
     $(".edit-form").removeClass("hidden")
@@ -111,34 +122,10 @@ function RLCraftSVG() {
     console.log("Origin: ", point.x, point.y);
 
     $("circle.distance-circle").remove()
-    svgObj.map.insert("circle", ":first-child")
-      .attr("class", "distance-circle")
-      .attr("r", function() { return svgObj.r(1000) })
-      .attr("cx", function() { return svgObj.x(point.x) })
-      .attr("cy", function() { return svgObj.y(point.y) })
-      .attr("stroke", function() { return "green" })
-      .attr("fill", "transparent")
-    svgObj.map.insert("circle", ":first-child")
-      .attr("class", "distance-circle")
-      .attr("r", function() { return svgObj.r(2000) })
-      .attr("cx", function() { return svgObj.x(point.x) })
-      .attr("cy", function() { return svgObj.y(point.y) })
-      .attr("stroke", function() { return "yellow" })
-      .attr("fill", "transparent")
-    svgObj.map.insert("circle", ":first-child")
-      .attr("class", "distance-circle")
-      .attr("r", function() { return svgObj.r(3000) })
-      .attr("cx", function() { return svgObj.x(point.x) })
-      .attr("cy", function() { return svgObj.y(point.y) })
-      .attr("stroke", function() { return "orange" })
-      .attr("fill", "transparent")
-    svgObj.map.insert("circle", ":first-child")
-      .attr("class", "distance-circle")
-      .attr("r", function() { return svgObj.r(4000) })
-      .attr("cx", function() { return svgObj.x(point.x) })
-      .attr("cy", function() { return svgObj.y(point.y) })
-      .attr("stroke", function() { return "red" })
-      .attr("fill", "transparent")
+    svgObj.drawCircle({x: point.x, y: point.y}, 1000, "green")
+    svgObj.drawCircle({x: point.x, y: point.y}, 2000, "yellow")
+    svgObj.drawCircle({x: point.x, y: point.y}, 3000, "orange")
+    svgObj.drawCircle({x: point.x, y: point.y}, 4000, "red")
   }
 
   // Initialize
