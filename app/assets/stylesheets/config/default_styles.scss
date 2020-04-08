@@ -1,11 +1,19 @@
-html, body {
+body,
+html {
+  box-sizing: border-box;
   background: $blue-l20;
   padding-bottom: 50px;
   color: $text-color;
+  font-family: Arial;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 html.dark-mode {
-  &, body {
+  &,
+  body {
     background: darken($blue-d5, 5%);
   }
 }

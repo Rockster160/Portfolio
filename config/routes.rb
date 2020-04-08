@@ -70,11 +70,11 @@ Rails.application.routes.draw do
     post :export_to_list, on: :member
   end
 
-  resources :mazes, only: [ :index ] do
+  resource :maze, only: [ :show ] do
     collection do
-      get "random", action: "random"
-      get ":seed", action: "random"
-      get "random.txt", action: "random"
+      get ".txt", action: "show"
+      get ":seed", action: "show"
+      get ":seed.txt", action: "show"
     end
   end
 

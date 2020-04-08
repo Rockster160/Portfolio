@@ -1,8 +1,14 @@
-<% seed = @maze.seed.to_s.rjust(6, "0") %>
-<%= meta_title "Maze ##{seed}" %>
+<% @seed = @maze.seed.to_s.rjust(6, "0") %>
+<%= meta_title "Maze ##{@seed}" %>
 <%= meta_description "Generate a random maze to explore and solve!" %>
 <h5>Use Arrow Keys or WASD to play!</h5>
-<p>Seed: <%= seed %></p>
+<p>Seed: <%= @seed %></p>
+
+<% if params[:seed].present? %>
+  Using a set seed. Click <%= link_to "here", maze_path %> to generate from a random seed.
+<% else %>
+  Using a random seed. Click <%= link_to "here", maze_path(seed: @seed) %> to reload the same maze.
+<% end %>
 
 <div id="maze">
   <% @maze.draw.each do |line| %>

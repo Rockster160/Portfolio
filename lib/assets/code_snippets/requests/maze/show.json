@@ -1,4 +1,4 @@
-curl -X GET "http://ardesian.com/mazes/:seed" \
+curl -X GET "https://ardesian.com/maze/:seed(optional)" \
   -d "seed=12345" \  # Required - The seed for the maze. If the seed is "random", a random seed will be generated. (The seed is not available through the API, but is viewable on the page view)
   -d "width=5" \     # Optional - Default: Random value between 10 and 30. Sets the internal width of the maze. Must be within range 3 to 30.
   -d "height=5" \    # Optional - Default: Random value between 10 and 30. Sets the internal height of the maze. Must be within range 3 to 30.

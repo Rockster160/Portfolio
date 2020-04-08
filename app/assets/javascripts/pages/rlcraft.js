@@ -1,4 +1,4 @@
-$(document).ready(function() {
+rlcraftSetup = function() {
   var rlc_map = RLCraftSVG.getMap()
 
   $(".clear-btn").click(function() {
@@ -39,4 +39,4 @@ $(document).ready(function() {
     $(".edit-form").addClass("hidden")
     $("circle.selected").removeClass("selected")
   }
-})
+}

@@ -1,4 +1,4 @@
-curl -X GET "http://ardesian.com/colors" \
+curl -X GET "https://ardesian.com/colors" \
   --data-urlencode "start_color=#FF0" \ # Required - the hex value of the start color
   --data-urlencode "end_color=#0FF" \ # Required - the hex value of the end color
   --data-urlencode "steps=10" \ # Optional - default: 10, must be between 1 and 256. Specifies the number of equal steps to display between each color.
