@@ -1,4 +1,12 @@
 .rlc-container {
+  #rlc-svg svg {
+    box-shadow: 0 0 4px grey;
+
+    circle.selected {
+      stroke: green;
+    }
+  }
+
   .rlc-tooltip {
     position: absolute;
     border: 0;
@@ -20,92 +28,94 @@
       margin: 0;
     }
   }
-}
 
-[rlc-color="Waystone"] {
-  fill: #FFA500;
-}
-
-[rlc-color="Black Dragon"] {
-  fill: #000;
-}
-
-[rlc-color="Red Dragon"] {
-  fill: #F00;
-}
-
-[rlc-color="Green Dragon"] {
-  fill: #3C3;
-}
-
-[rlc-color="White Dragon"] {
-  fill: #CCC;
-}
-
-[rlc-color="Blue Dragon"] {
-  fill: #03C;
-}
-
-[rlc-color="Book"] {
-  fill: #930;
-}
-
-[rlc-color="Player Base"] {
-  fill: #A569BD;
-}
-
-[rlc-color="Other"] {
-  fill: #F7DC6F;
-}
-
-.rlc-form {
-  margin: 0 auto;
-  width: 600px;
-  max-width: 100%;
-  text-align: center;
-
-  * {
-    font-family: Arial;
+  [rlc-color="Waystone"] {
+    fill: #FFA500;
   }
 
-  input,
-  select {
-    padding: 3px 2px;
-    width: 200px;
-    height: auto;
-    font-size: 16px;
+  [rlc-color="Black Dragon"] {
+    fill: #000;
+  }
+
+  [rlc-color="Red Dragon"] {
+    fill: #F00;
+  }
+
+  [rlc-color="Green Dragon"] {
+    fill: #3C3;
+  }
+
+  [rlc-color="White Dragon"] {
+    fill: #CCC;
+  }
+
+  [rlc-color="Blue Dragon"] {
+    fill: #03C;
+  }
+
+  [rlc-color="Book"] {
+    fill: #930;
+  }
+
+  [rlc-color="Player Base"] {
+    fill: #A569BD;
+  }
+
+  [rlc-color="Other"] {
+    fill: #F7DC6F;
+  }
+
+  .rlc-form {
+    margin: 0 auto;
+    width: 600px;
+    max-width: 100%;
     text-align: center;
-  }
 
-  input[type=checkbox] {
-    width: auto;
-  }
+    * {
+      font-family: Arial;
+    }
 
-  svg {
-    width: 10px;
-    height: 10px;
+    input,
+    select {
+      padding: 3px 2px;
+      width: 200px;
+      height: auto;
+      font-size: 16px;
+      text-align: center;
+    }
 
-    circle {
-      r: 5;
-      cx: 5;
-      cy: 5;
+    input[type=checkbox] {
+      width: auto;
+    }
+
+    .rlc-input-coord {
+      width: 60px;
+    }
+
+    .rlc-input-title {
+      width: 100px;
+    }
+
+    .clear-btn {
+      display: inline-block;
+      cursor: pointer;
+      border: 1px solid black;
+      border-radius: 4px;
+      background: lightgrey;
+      padding: 2px;
     }
   }
 
-  .rlc-input-coord {
-    width: 60px;
-  }
+  .rlc-legend {
+    svg {
+      width: 10px;
+      height: 10px;
 
-  .rlc-input-title {
-    width: 100px;
-  }
-
-  .clear-btn {
-    display: inline-block;
-    cursor: pointer;
-    border: 1px solid black;
-    border-radius: 4px;
-    background: lightgrey;
-    padding: 2px;
+      circle {
+        r: 5;
+        cx: 5;
+        cy: 5;
+      }
+    }
   }
 }

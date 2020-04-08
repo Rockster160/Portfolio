@@ -9,9 +9,9 @@ $(document).ready(function() {
     var type = $(this).attr("data-rlc-show")
 
     if (this.checked) {
-      $("circle[rlc-color=" + type + "]").removeClass("hidden")
+      $("circle[rlc-color=\"" + type + "\"]").removeClass("hidden")
     } else {
-      $("circle[rlc-color=" + type + "]").addClass("hidden")
+      $("circle[rlc-color=\"" + type + "\"]").addClass("hidden")
     }
   })
 
@@ -37,5 +37,6 @@ $(document).ready(function() {
     $(".rlc-form input, .rlc-form textarea").val("")
     $(".rlc-form input[type=checkbox]").prop("checked", false)
     $(".edit-form").addClass("hidden")
+    $("circle.selected").removeClass("selected")
   }
 })

@@ -16,7 +16,10 @@ function RLCraftSVG() {
       .append("svg")
         .attr("width", svgObj.width + svgObj.margin.left + svgObj.margin.right)
         .attr("height", svgObj.height + svgObj.margin.top + svgObj.margin.bottom)
-      .append("g")
+        .call(d3.zoom().on("zoom", function () {
+          svgObj.map.attr("transform", d3.event.transform)
+        }))
+        .append("g")
         .attr("transform", "translate(" + svgObj.margin.left + "," + svgObj.margin.top + ")")
 
     // Add X axis
@@ -83,6 +86,8 @@ function RLCraftSVG() {
        })
        .on("click", function(d) {
          $(".edit-form").removeClass("hidden")
+         $("circle.selected").removeClass("selected")
+         $(this).addClass("selected")
 
          $('input[name="id"]').val(d.id)
          $('input[name="location[x_coord]"]').val(d.x)

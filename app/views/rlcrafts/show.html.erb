@@ -9,34 +9,37 @@
   </script>
 <% end %>
 
+
 <div class="rlc-container text-center">
   <div id="rlc-svg"></div>
-</div>
 
-<form class="rlc-form basic" action="/" method="post">
-  <div class="edit-form hidden">
-    <input type="text" name="id" value="" placeholder="id" readonly class="rlc-input-coord">
-    <input type="checkbox" id="destroy" name="_destroy" value="true">
-    <label for="destroy">Remove?</label>
-  </div>
-  <div class="clear-btn">Clear</div>
-  <input type="text" name="location[x_coord]" placeholder="X" class="rlc-input-coord">
-  <input type="text" name="location[y_coord]" placeholder="Z" class="rlc-input-coord">
-  <input type="text" name="location[title]" placeholder="Title" class="rlc-input-title">
-  <select class="rlc-select" name="location[location_type]">
+  <form class="rlc-form basic" action="/" method="post">
+    <div class="edit-form hidden">
+      <input type="text" name="id" value="" placeholder="id" readonly class="rlc-input-coord">
+      <input type="checkbox" id="destroy" name="_destroy" value="true">
+      <label for="destroy">Remove?</label>
+    </div>
+    <div class="clear-btn">Clear</div>
+    <input type="text" name="location[x_coord]" placeholder="X" class="rlc-input-coord">
+    <input type="text" name="location[y_coord]" placeholder="Z" class="rlc-input-coord">
+    <input type="text" name="location[title]" placeholder="Title" class="rlc-input-title">
+    <select class="rlc-select" name="location[location_type]">
+      <% @location_types.each do |location_type| %>
+        <option value="<%= location_type %>"><%= location_type %></option>
+      <% end %>
+    </select>
+    <button type="submit" name="button">Save</button>
+    <textarea name="location[description]" rows="8" cols="80" class="rlc-input-area" placeholder="Enter a description of the location (optional)"></textarea>
+  </form>
+
+  <div class="skinny-container text-center rlc-legend">
     <% @location_types.each do |location_type| %>
-      <option value="<%= location_type %>"><%= location_type %></option>
+      <input type="checkbox" id="show-<%= location_type.parameterize %>" name="show" data-rlc-show="<%= location_type %>" checked="checked">
+      <label for="show-<%= location_type.parameterize %>"><%= location_type %></label>
+      <svg>
+        <circle rlc-color="<%= location_type %>"></circle>
+      </svg>
+      <br>
     <% end %>
-  </select>
-  <button type="submit" name="button">Save</button>
-  <textarea name="location[description]" rows="8" cols="80" class="rlc-input-area" placeholder="Enter a description of the location (optional)"></textarea>
-
-  <% @location_types.each do |location_type| %>
-    <input type="checkbox" id="show-<%= location_type.parameterize %>" name="show" data-rlc-show="<%= location_type %>" checked="checked">
-    <label for="show-<%= location_type.parameterize %>"><%= location_type %></label>
-    <svg>
-      <circle rlc-color="<%= location_type %>"></circle>
-    </svg>
-    <br>
-  <% end %>
-</form>
+  </div>
+</div>
