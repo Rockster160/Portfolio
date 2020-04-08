@@ -3,6 +3,7 @@
     font-size: 48px;
     text-align: center;
   }
+
   code {
     display: block;
     width: 100%;
@@ -35,6 +36,7 @@
     flex-direction: column;
     justify-content: center;
     cursor: pointer;
+    box-sizing: content-box;
     margin: 10px;
     border: 4px inset gold;
     border-radius: 10px;
@@ -46,6 +48,7 @@
     color: white;
     text-align: center;
   }
+
   &.small .preset {
     width: 50px;
     min-width: 50px;

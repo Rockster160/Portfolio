@@ -243,14 +243,10 @@ var percentToDecimal = function(ratio, decimal_places) {
 
 var graphTrend = function(iteration_count) {
   var rand_str = $("#random_number").val().toString()
-  var splitter = "\n"
-  if (rand_str.indexOf(splitter) == -1) { splitter = "|" }
-  if (rand_str.indexOf(splitter) == -1) { splitter = "," }
-  if (rand_str.indexOf(splitter) == -1) {
-    use_set = false
-  } else {
-    use_set = true
-  }
+  var delimiter = "\n"
+  if (rand_str.indexOf(delimiter) == -1) { delimiter = "|" }
+  if (rand_str.indexOf(delimiter) == -1) { delimiter = "," }
+  var use_set = rand_str.indexOf(delimiter) != -1
 
   var counter = {
     // This should predefine labels of each possible outcome
@@ -260,7 +256,7 @@ var graphTrend = function(iteration_count) {
   for(var i=0; i<iteration_count; i++) {
     var rand
     if (use_set) {
-      rand = selectFromRandomSet(rand_str, splitter, false)
+      rand = selectFromRandomSet(rand_str, delimiter, false)
     } else {
       rand = rollDiceNotation(rand_str, false)
     }
@@ -305,15 +301,16 @@ var addToHistory = function(detail, value) {
 
 var generateRandomNumber = function(str, display, track) {
   str = str.toString()
-  var splitter = "\n"
-  if (str.indexOf(splitter) == -1) { splitter = "|" }
-  if (str.indexOf(splitter) == -1) { splitter = "," }
-  if (str.indexOf(splitter) == -1) { return rollDiceNotation(str, display, track) }
-  return selectFromRandomSet(str, splitter, display, track)
+  var delimiter = "\n"
+  if (str.indexOf(delimiter) == -1) { delimiter = "|" }
+  if (str.indexOf(delimiter) == -1) { delimiter = "," }
+  if (str.indexOf(delimiter) == -1) { return rollDiceNotation(str, display, track) }
+
+  return selectFromRandomSet(str, delimiter, display, track)
 }
 
-var selectFromRandomSet = function(value_set, splitter, display, track) {
-  var stripped_set = value_set.split(splitter).map(function(val) {
+var selectFromRandomSet = function(value_set, delimiter, display, track) {
+  var stripped_set = value_set.split(delimiter).map(function(val) {
     return val.trim()
   })
   var rand_val = stripped_set[Math.floor(Math.random() * stripped_set.length)]
@@ -324,6 +321,21 @@ var selectFromRandomSet = function(value_set, splitter, display, track) {
   $(".description").text("")
 
   if (track) { addToHistory(stripped_set.join(", "), rand_val) }
+}
+
+var removeFromSet = function(val_to_remove) {
+  var current_set = $("#random_number").val()
+  var delimiter = "\n"
+  if (current_set.indexOf(delimiter) == -1) { delimiter = "|" }
+  if (current_set.indexOf(delimiter) == -1) { delimiter = "," }
+  if (current_set.indexOf(delimiter) == -1) { return $("#random_number").val("") }
+
+  var regex_val = val_to_remove.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  var regex_delim = delimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  var set_query = new RegExp("(" + regex_val + "\\s*" + regex_delim + "|" + regex_delim + "\\s*" + regex_val + ")")
+  var new_set = current_set.replace(set_query, "")
+
+  $("#random_number").val(new_set)
 }
 
 var rollDiceNotation = function(dice_notation_val, display, track) {
@@ -372,7 +384,7 @@ var cubicBezierFunction = function(axis, distance) {
   // return (1 - t) * (1 - t) * A(0) + 2 * (1 - t) * t * A(1) + t * t * A(2)
 }
 
-var rollResults = function(str, steps) {
+var rollResults = function(str, steps, callback) {
   var step = 1 / steps, ms_multiplier = 200
 
   var delay = 0
@@ -381,14 +393,18 @@ var rollResults = function(str, steps) {
     delay += next
     setTimeout(function(t) {
       generateRandomNumber(str, true, t == (steps - 1))
+      if (t == (steps - 1) && typeof callback === "function") { callback() }
     }, delay, i)
   }
 }
 
 $(document).on("submit", "#random-generation-form", function(evt) {
   evt.preventDefault()
-
   rollResults($("#random_number").val(), 10)
+  return false
+}).on("click", ".draw", function(evt) {
+  evt.preventDefault()
+  rollResults($("#random_number").val(), 10, function() { removeFromSet($(".result").text()) })
   return false
 }).on("click", ".graph", function(evt) {
   evt.preventDefault()
