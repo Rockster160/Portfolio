@@ -34,9 +34,41 @@ $(document).ready(function() {
         svgObj.map.append("g")
           .attr("transform", "translate(" + svgObj.width / 2 + "," + 0 + ")")
           .call(d3.axisLeft(svgObj.y))
+
+        // North label
+        svgObj.map.append("text")
+          .attr("dx", svgObj.x(-400))
+          .attr("dy", svgObj.y(-10300))
+          .style("font-size", 48)
+          .style("fill", "red")
+          .text("N")
+
+        // South label
+        svgObj.map.append("text")
+          .attr("dx", svgObj.x(-250))
+          .attr("dy", svgObj.y(10700))
+          .style("font-size", 32)
+          .style("fill", "blue")
+          .text("S")
+
+        // East label
+        svgObj.map.append("text")
+          .attr("dx", svgObj.x(10400))
+          .attr("dy", svgObj.y(250))
+          .style("font-size", 32)
+          .style("fill", "orange")
+          .text("E")
+
+        // West label
+        svgObj.map.append("text")
+          .attr("dx", svgObj.x(-11000))
+          .attr("dy", svgObj.y(250))
+          .style("font-size", 32)
+          .style("fill", "green")
+          .text("W")
       }
 
-      svgObj.margin = { top: 10, right: 30, bottom: 30, left: 60 }
+      svgObj.margin = { top: 50, right: 50, bottom: 50, left: 50 }
       svgObj.width = 1000 - svgObj.margin.left - svgObj.margin.right
       svgObj.height = 1000 - svgObj.margin.top - svgObj.margin.bottom
       svgObj.points = []
@@ -46,7 +78,7 @@ $(document).ready(function() {
         .range([ 0, svgObj.width ])
 
       svgObj.y = d3.scaleLinear()
-        .domain([-10000, 10000])
+        .domain([10000, -10000])
         .range([ svgObj.height, 0])
 
       svgObj.r = d3.scaleLinear()
