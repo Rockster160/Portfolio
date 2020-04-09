@@ -199,12 +199,14 @@ Dice.prototype.parseOptions = function(raw_opts) {
   }
 }
 Dice.prototype.rand = function(min, max) {
-  min = parseFloat(min || 1)
-  max = parseFloat(max || 6)
+  min = min || 1
+  max = max || 6
   var min_decimals = min.toString().split(".")[1] || ""
   var max_decimals = max.toString().split(".")[1] || ""
   var dec_points = min_decimals.length
   if (max_decimals.length > min_decimals.length) { dec_points = max_decimals.length }
+  min = parseFloat(min)
+  max = parseFloat(max)
 
   var sig_fig_multiplier = "1"
   for(var i=0; i<dec_points; i++) { sig_fig_multiplier += "0" }
