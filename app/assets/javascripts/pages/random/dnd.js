@@ -34,7 +34,8 @@ Roll.prototype.calculate = function() {
   this.iterate("Initial")
   this.evaluateDice()
   this.evaluateMath()
-  this.val = parseInt(this.current)
+  this.val = parseFloat(this.current)
+
   return this.val
 }
 Roll.prototype.evaluateDice = function() {
@@ -44,7 +45,11 @@ Roll.prototype.evaluateDice = function() {
     if (dice.isValid()) {
       dice.throw()
       this.dice.push(dice)
-      this.current = this.current.replace(dice.raw, dice.val)
+      if (this.current.indexOf("..") > 0) {
+        this.current = dice.val.toString()
+      } else {
+        this.current = this.current.replace(dice.raw, dice.val)
+      }
       this.iterate("Dice(" + dice.raw + ")", dice)
     } else {
       break
@@ -52,7 +57,7 @@ Roll.prototype.evaluateDice = function() {
   }
 }
 Roll.prototype.evaluateMath = function() {
-  this.current = this.current.replace(/(\d+)(\()/g, "$1*$2")
+  this.current = this.current.replace(/(\d+(?:\.\d+)?)(\()/g, "$1*$2")
 
   this.evaluateParens()
 
@@ -78,13 +83,13 @@ Roll.prototype.evaluateParens = function() {
     inside = this.performMath(inside, "+", "Inner Addition")
     inside = this.performMath(inside, "-", "Inner Subtraction")
 
-    this.current = this.current.repeatReplace(/\((\d+)\)/, "$1")
+    this.current = this.current.repeatReplace(/\((\d+(?:\.\d+)?)\)/, "$1")
     this.iterate("Parens")
   }
 }
 Roll.prototype.performMath = function(mathScope, operator, description) {
   if (mathScope.indexOf(operator) >= 0) {
-    var mathApplied = mathScope.repeatReplace(new RegExp("\\d+\\" + operator + "\\d+"), function(found) {
+    var mathApplied = mathScope.repeatReplace(new RegExp("\\d+(?:\.\d+)?\\" + operator + "\\d+(?:\.\d+)?"), function(found) {
       try {
         return eval(found)
       } catch(err) {
@@ -108,6 +113,7 @@ function Dice(str) {
   this.val = undefined
   this.face_count = undefined
   this.roll_count = undefined
+  this.dice_min = 1
   this.options = {
     explode_values:  [],
     drop_values:     [],
@@ -119,21 +125,30 @@ function Dice(str) {
 }
 Dice.prototype.isValid = function() { return !!this.raw }
 Dice.prototype.parseDetails = function(raw_str) {
-  var die_regex = /(\d*)d(\d*%?)((?:[\-\+]?[!HKL]\d*)*)/i
+  if (raw_str.indexOf("..") > -1) {
+    var range = raw_str.split("..")
 
-  if (die_regex.test(raw_str || "")) {
-    var matchGroup = die_regex.exec(raw_str)
-    this.raw = matchGroup[0]
-    this.roll_count = parseInt(matchGroup[1] || 1)
-    this.face_count = matchGroup[2] == "%" ? 100 : parseInt(matchGroup[2] || 6)
+    this.raw = range[0]
+    this.roll_count = 1
+    this.dice_min = range[0]
+    this.face_count = range[1]
+  } else {
+    var die_regex = /(\d*(?:\.\d+)?)d(\d*(?:\.\d+)?%?)((?:[\-\+]?[!HKL]\d*(?:\.\d+)?)*)/i
 
-    this.parseOptions(matchGroup[3])
+    if (die_regex.test(raw_str || "")) {
+      var matchGroup = die_regex.exec(raw_str)
+      this.raw = matchGroup[0]
+      this.roll_count = parseInt(matchGroup[1] || 1)
+      this.face_count = matchGroup[2] == "%" ? 100 : parseInt(matchGroup[2] || 6)
+
+      this.parseOptions(matchGroup[3])
+    }
   }
 }
 Dice.prototype.parseOptions = function(raw_opts) {
-  var exploderRegex = /([\-\+]?)\!(\d*)/i,
-  highGroupRegex = /(\-)?[HK](\d*)/i
-  lowGroupRegex = /(\-)?[L](\d*)/i
+  var exploderRegex = /([\-\+]?)\!(\d*(?:\.\d+)?)/i,
+  highGroupRegex = /(\-)?[HK](\d*(?:\.\d+)?)/i
+  lowGroupRegex = /(\-)?[L](\d*(?:\.\d+)?)/i
 
   if (exploderRegex.test(raw_opts || "")) {
     var explodeGroup = exploderRegex.exec(raw_opts)
@@ -184,9 +199,27 @@ Dice.prototype.parseOptions = function(raw_opts) {
   }
 }
 Dice.prototype.rand = function(min, max) {
-  min = min || 1
-  max = max || 6
-  return Math.floor(Math.random() * max) + min
+  min = parseFloat(min || 1)
+  max = parseFloat(max || 6)
+  var min_decimals = min.toString().split(".")[1] || ""
+  var max_decimals = max.toString().split(".")[1] || ""
+  var dec_points = min_decimals.length
+  if (max_decimals.length > min_decimals.length) { dec_points = max_decimals.length }
+
+  var sig_fig_multiplier = "1"
+  for(var i=0; i<dec_points; i++) { sig_fig_multiplier += "0" }
+  sig_fig_multiplier = parseInt(sig_fig_multiplier)
+
+  if (dec_points == 0) {
+    max += 1
+  } else {
+    var max_offset = "0."
+    for(var i=0; i<dec_points - 1; i++) { max_offset += "0" }
+    max += parseFloat(max_offset + "1")
+  }
+
+  var rand = (Math.random() * (max - min)) + min
+  return Math.floor((rand + Number.EPSILON) * sig_fig_multiplier) / sig_fig_multiplier
 }
 Dice.prototype.throw = function() {
   if (!this.raw) { return }
@@ -198,14 +231,14 @@ Dice.prototype.throw = function() {
   if (possible_rolls.subtract(this.options.explode_values).length == 0) { this.options.explode_values = [] }
 
   for(var i=0; i<this.roll_count; i++) {
-    var single_roll = this.rand(1, this.face_count)
+    var single_roll = this.rand(this.dice_min, this.face_count)
     roll_value += single_roll
     this.rolls.push(single_roll.toString())
     actual_rolls.push(single_roll)
 
     var previous_roll = single_roll
     while (this.options.explode_values.includes(previous_roll)) {
-      var previous_roll = this.rand(1, this.face_count)
+      var previous_roll = this.rand(this.dice_min, this.face_count)
       roll_value += previous_roll
       this.rolls.push("+" + previous_roll.toString())
       actual_rolls.push(previous_roll)
@@ -254,11 +287,10 @@ var graphTrend = function(iteration_count) {
     // For sets- use the given order?
   }
   for(var i=0; i<iteration_count; i++) {
-    var rand
     if (use_set) {
-      rand = selectFromRandomSet(rand_str, delimiter, false)
+      var rand = selectFromRandomSet(rand_str, delimiter, false)
     } else {
-      rand = rollDiceNotation(rand_str, false)
+      var rand = rollDiceNotation(rand_str, false)
     }
 
     counter[rand] = counter[rand] || 0
@@ -275,7 +307,7 @@ var graphTrend = function(iteration_count) {
   })
 
   $(".description").text("")
-  var table = $("<table>")
+  var temp_rows = []
   Object.keys(counter).forEach(function(counter_key, idx) {
     var count = counter[counter_key]
 
@@ -283,8 +315,19 @@ var graphTrend = function(iteration_count) {
     row.append($("<td>").text(counter_key))
     row.append($("<td>", {style: "width: 100%;"}).html($("<span>", { class: "results-bar" }).css("width", percentToDecimal(count / max_count))))
     row.append($("<td>").text(percentToDecimal(count / iteration_count)))
+    temp_rows.push(row)
+  })
+  var table = $("<table>")
+  var sorted_rows = temp_rows.sort(function(a, b) {
+    var valA = parseFloat($(a).find("td:first-of-type").text())
+    var valB = parseFloat($(b).find("td:first-of-type").text())
+
+    return valA - valB
+  })
+  sorted_rows.forEach(function(row) {
     table.append(row)
   })
+
   $(".description").append(table)
   var result_str = max_key + " (" + percentToDecimal(max_count / iteration_count) + ")"
   $(".result").text(result_str)
