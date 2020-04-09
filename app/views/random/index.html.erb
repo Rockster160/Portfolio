@@ -18,9 +18,9 @@
       <div class="preset" data-fill-random-preset="Heads|Tails">
         Flip a Coin
       </div>
-      <div class="preset" data-fill-random-preset="Rock|Paper|Scissors">
+      <!-- <div class="preset" data-fill-random-preset="Rock|Paper|Scissors">
         Rock, Paper, Scissors
-      </div>
+      </div> -->
       <div class="preset" data-fill-random-preset="2♦|2♥|2♠|2♣|3♦|3♥|3♠|3♣|4♦|4♥|4♠|4♣|5♦|5♥|5♠|5♣|6♦|6♥|6♠|6♣|7♦|7♥|7♠|7♣|8♦|8♥|8♠|8♣|9♦|9♥|9♠|9♣|T♦|T♥|T♠|T♣|J♦|J♥|J♠|J♣|Q♦|Q♥|Q♠|Q♣|K♦|K♥|K♠|K♣|A♦|A♥|A♠|A♣">
         Draw a Card
       </div>
@@ -62,7 +62,7 @@
     <div class="form-fields">
       <div class="form-field">
         <%= label_tag :random_number do %>
-          Enter <a href="" data-modal="#dnd-howto">Dice Notation</a> or paste in a <a href="" data-modal="#set-howto">set of data</a> to select from
+          Enter <a href="" data-modal="#dnd-howto">Dice Notation</a>, select a <a href="" data-modal="#range-howto">range</a>, or paste in a <a href="" data-modal="#set-howto">set of data</a> to select from.
         <% end %>
         <%= text_area_tag :random_number, "d", autocomplete: :off %>
       </div>
@@ -96,6 +96,19 @@
   <p>Objects are split using precedence of a new line (Enter key), `|`, and `,`</p>
   <p>Example: <br>
   `Heads | Tails` will "flip a coin" and randomly select one of the options provided.
+  </p>
+<% end %>
+
+<%= render_modal("range-howto", "Specific Range") do %>
+  <p>Generate a random number inside of a set using the range operator `..`</p>
+  <p>This will generate a number between the two numbers you've provided inclusively.</p>
+  <p>This will work for negative number and decimals.</p>
+  <p>Random decimals will use the highest number of decimal places you provide.</p>
+  <p>Example: <br>
+  `5..10` => `7` <br>
+  `1..1.4` => `1.2` <br>
+  `0.0026..0.03` => `0.0115` <br>
+  `-5..5` => `-3` <br>
   </p>
 <% end %>
 
