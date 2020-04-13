@@ -20,8 +20,8 @@
       <label for="destroy">Remove?</label>
     </div>
     <div class="clear-btn">Clear</div>
-    <input type="text" name="location[x_coord]" placeholder="X" class="rlc-input-coord">
-    <input type="text" name="location[y_coord]" placeholder="Z" class="rlc-input-coord">
+    <input type="text" name="location[x_coord]" placeholder="X" class="rlc-input-coord" required="required">
+    <input type="text" name="location[y_coord]" placeholder="Z" class="rlc-input-coord" required="required">
     <input type="text" name="location[title]" placeholder="Title" class="rlc-input-title">
     <select class="rlc-select" name="location[location_type]">
       <% @location_types.each do |location_type| %>

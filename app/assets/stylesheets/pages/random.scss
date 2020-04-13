@@ -32,21 +32,27 @@
   justify-content: space-around;
 
   .preset {
+    @extend .btn;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    transition: 0.1s;
     cursor: pointer;
     box-sizing: content-box;
     margin: 10px;
-    border: 4px inset gold;
+    box-shadow: 2px 2px 4px $grey-blue;
     border-radius: 10px;
-    background: #834;
+    background: $base-blue;
     padding: 10px;
     width: 100px;
     min-width: 100px;
     height: 100px;
     color: white;
     text-align: center;
+
+    &:hover {
+      background-color: darken($base-blue, 15%);
+    }
   }
 
   &.small .preset {
