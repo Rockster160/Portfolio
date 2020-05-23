@@ -31,6 +31,7 @@ class User < ApplicationRecord
   scope :by_username, ->(username) { where("lower(username) = ?", username.to_s.downcase) }
 
   enum role: {
+    guest:    5,
     standard: 0,
     admin:    10
   }
