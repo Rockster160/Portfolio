@@ -5,6 +5,12 @@ class Users::RegistrationsController < ApplicationController
     @user = User.new
   end
 
+  def guest_signup
+    create_guest_user
+
+    redirect_to previous_url(lists_path), notice: "Welcome! We've created you a guest account. We'll save your changes on your browser. If you want access from another devise, please visit the account page to finish setting your account up."
+  end
+
   def create
     @invitation_token = params.dig(:user, :invitation_token)
     if @invitation_token.present?
@@ -26,6 +32,12 @@ class Users::RegistrationsController < ApplicationController
   end
 
   private
+
+  def create_guest_user
+    @user = User.create(role: :guest)
+
+    sign_in @user
+  end
 
   def set_invitation_token
     @invitation_token = params.dig(:user, :invitation_token) || params[:invitation_token]

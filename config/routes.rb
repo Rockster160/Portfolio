@@ -6,13 +6,14 @@ Rails.application.routes.draw do
   get "playground" => "index#playground"
 
   scope module: :users do
-    get :login,      controller: :sessions,      action: :new
-    post :login,     controller: :sessions,      action: :create
-    get :logout,     controller: :sessions,      action: :destroy
-    delete :logout,  controller: :sessions,      action: :destroy
-    get :register,   controller: :registrations, action: :new
-    post :register,  controller: :registrations, action: :create
-    patch :register, controller: :registrations, action: :create
+    get :login,         controller: :sessions,      action: :new
+    post :login,        controller: :sessions,      action: :create
+    get :logout,        controller: :sessions,      action: :destroy
+    delete :logout,     controller: :sessions,      action: :destroy
+    get :register,      controller: :registrations, action: :new
+    post :register,     controller: :registrations, action: :create
+    patch :register,    controller: :registrations, action: :create
+    post :guest_signup, controller: :registrations, action: :guest_signup
   end
 
   post "webhooks/jenkins" => "webhooks#jenkins"

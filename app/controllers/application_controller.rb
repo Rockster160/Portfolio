@@ -32,6 +32,10 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  def previous_url(fallback=nil)
+    session[:forwarding_url] || fallback || lists_path
+  end
+
   def authorize_user
     unless current_user.present?
       session[:forwarding_url] = request.original_url if request.get?

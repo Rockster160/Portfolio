@@ -27,12 +27,13 @@
       <%= f.submit "Register" %>
     </div>
 
+    <div class="text-center">
+      <%= link_to "Continue as Guest", guest_signup_path, class: :btn, method: :post %>
+    </div>
+    <br>
+
     <div class="helpful-links">
       <a href="<%= login_path(@invitation_hash) %>">Already have an account?</a>
-    </div>
-
-    <div class="text-center">
-      <a href="<%=  %>" class="btn">Continue as Guest</a>
     </div>
   <% end %>
 

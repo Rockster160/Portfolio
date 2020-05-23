@@ -23,9 +23,17 @@
 
     <%= render partial: 'layouts/error_container', locals: { resource: @user } %>
 
+    <% if @user.guest? %>
+      <p class="text-center">Please add a username and password in order to save your account.</p>
+    <% end %>
+
     <div class="form-fields">
       <div class="form-field">
-        <%= f.label :username %>
+        <% if @user.guest? %>
+          <%= f.label "Username *" %>
+        <% else %>
+          <%= f.label :username %>
+        <% end %>
         <%= f.text_field :username %>
       </div>
       <div class="form-field">
@@ -49,16 +57,26 @@
 
       <div class="change-password-fields" style="margin-top: 20px;">
         <p class="text-center">Use the fields below to change your password.</p>
+        <% unless @user.guest? %>
+          <div class="form-field">
+            <%= f.label :current_password, "Current password *" %>
+            <%= f.password_field :current_password %>
+          </div>
+        <% end %>
         <div class="form-field">
-          <%= f.label :current_password, "Current password *" %>
-          <%= f.password_field :current_password %>
-        </div>
-        <div class="form-field">
-          <%= f.label :password %>
+          <% if @user.guest? %>
+            <%= f.label "Password *" %>
+          <% else %>
+            <%= f.label :password %>
+          <% end %>
           <%= f.password_field :password %>
         </div>
         <div class="form-field">
-          <%= f.label :password_confirmation %>
+          <% if @user.guest? %>
+            <%= f.label "Password confirmation *" %>
+          <% else %>
+            <%= f.label :password_confirmation %>
+          <% end %>
           <%= f.password_field :password_confirmation %>
         </div>
       </div>

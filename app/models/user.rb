@@ -25,6 +25,7 @@ class User < ApplicationRecord
 
   has_secure_password validations: false
 
+  before_validation :confirm_guest
   validates_uniqueness_of :phone, allow_nil: true
   validate :proper_fields_present?
 
@@ -65,7 +66,7 @@ class User < ApplicationRecord
   end
 
   def update_with_password(new_attrs)
-    should_require_current_password = true
+    should_require_current_password = !guest?
     update(new_attrs)
   end
 
@@ -120,7 +121,15 @@ class User < ApplicationRecord
 
   private
 
+  def confirm_guest
+    return unless guest?
+
+    self.role = :standard if self.username.present?
+  end
+
   def proper_fields_present?
+    return if guest?
+
     if invited?
       if phone.blank? && username.blank?
         errors.add(:base, "User must have a Username or Phone Number")
