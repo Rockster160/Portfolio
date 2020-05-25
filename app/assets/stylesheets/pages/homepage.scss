@@ -6,7 +6,7 @@
   overflow: hidden;
   color: $blue-d5;
 
-  font-family: 'CodenameCoder-Bold', monospace;
+  font-family: "CodenameCoder-Bold", monospace;
 
   .portfolio-wrapper {
     display: flex;
@@ -29,10 +29,12 @@
 
         text-transform: uppercase;
       }
+
       p:last-of-type {
         margin-bottom: 0;
         overflow: hidden;
       }
+
       .portfolio-btns {
         padding-top: 10px;
 
@@ -54,10 +56,14 @@
 
           span {
             position: absolute;
-            top: -1px; right: -1px; bottom: -1px; left: -1px;
+            top: -1px;
+            right: -1px;
+            bottom: -1px;
+            left: -1px;
 
             overflow: hidden;
           }
+
           span:before {
             display: inline-block;
             position: absolute;
@@ -75,9 +81,23 @@
             text-align: center;
             content: "";
           }
-          &.flask span:before { top: 1px; content: "\f0c3"; }
-          &.github span:before { top: 2px; content: "\f09b"; }
-          &.facebook span:before { top: 2px; left: -0.5px; content: "\f09a"; }
+
+          &.flask span:before {
+            top: 1px;
+            content: "\f0c3";
+          }
+
+          &.github span:before {
+            top: 2px;
+            content: "\f09b";
+          }
+
+          &.facebook span:before {
+            top: 2px;
+            left: -0.5px;
+            content: "\f09a";
+          }
+
           span:after {
             position: absolute;
             transition: all 0.17s ease-in;
@@ -87,14 +107,41 @@
             height: 40px;
             content: "";
           }
-          &.flask span:after { top: 1px; left: -45px; }
-          &.github span:after { top: 45px; right: 1px; left: 1px; }
-          &.facebook span:after { top: 1px; left: 45px; }
+
+          &.flask span:after {
+            top: 1px;
+            left: -45px;
+          }
+
+          &.github span:after {
+            top: 45px;
+            right: 1px;
+            left: 1px;
+          }
+
+          &.facebook span:after {
+            top: 1px;
+            left: 45px;
+          }
+
           &:hover {
-            span:after { top: 1px; right: 1px; left: 1px; }
-            &.flask span:before { color: $dpl-purple; }
-            &.github span:before { color: $github-black; }
-            &.facebook span:before { color: $facebook-blue; }
+            span:after {
+              top: 1px;
+              right: 1px;
+              left: 1px;
+            }
+
+            &.flask span:before {
+              color: $dpl-purple;
+            }
+
+            &.github span:before {
+              color: $github-black;
+            }
+
+            &.facebook span:before {
+              color: $facebook-blue;
+            }
           }
         }
       }
