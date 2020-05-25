@@ -19,7 +19,10 @@
     justify-content: center;
 
     .portfolio-container {
+      -ms-overflow-style: none;
+      -ms-overflow-style: -ms-autohiding-scrollbar;
       margin-bottom: 100px;
+      overflow: hidden;
       text-align: center;
 
       h1 {
