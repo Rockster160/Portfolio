@@ -1,5 +1,5 @@
 class Users::SessionsController < ApplicationController
-  before_action :unauthorize_user, :set_invitation_token, except: [ :destroy ]
+  before_action :unauthorize_user, :set_invitation_token, except: [ :destroy ], unless: :guest_account?
   before_action :authorize_user, only: [ :destroy ]
 
   def new
@@ -10,6 +10,7 @@ class Users::SessionsController < ApplicationController
     @user = User.attempt_login(user_params[:username], user_params[:password])
 
     if @user.present?
+      merge_user_accounts
       sign_in @user
       move_user_lists_to_user
       redirect_to session[:forwarding_url] || lists_path
@@ -30,6 +31,12 @@ class Users::SessionsController < ApplicationController
   def set_invitation_token
     @invitation_token ||= params.dig(:user, :invitation_token) || params[:invitation_token]
     @invitation_hash = @invitation_token.present? ? {invitation_token: @invitation_token} : nil
+  end
+
+  def merge_user_accounts
+    return unless current_user&.guest?
+
+    @user.merge_account(current_user)
   end
 
   def move_user_lists_to_user

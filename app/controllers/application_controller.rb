@@ -2,7 +2,7 @@ class ApplicationController < ActionController::Base
   # Prevent CSRF attacks by raising an exception.
   # For APIs, you may want to use :null_session instead.
   protect_from_forgery with: :exception
-  helper_method :current_user, :user_signed_in?
+  helper_method :current_user, :user_signed_in?, :guest_account?
   before_action :see_current_user, :logit
 
   def flash_message
@@ -12,7 +12,7 @@ class ApplicationController < ActionController::Base
 
   private
 
-  def current_guest?
+  def guest_account?
     current_user&.guest?
   end
 
@@ -49,7 +49,7 @@ class ApplicationController < ActionController::Base
     unless current_user.present?
       create_guest_user
 
-      flash.now[:notice] = "We've signed you up with a guest account! If you already have an account, please <sign in>. Otherwise, visit the <account> page to finalize your account so you can come back to it later!"
+      flash.now[:notice] = "We've signed you up with a guest account!"
     end
   end
 

@@ -61,6 +61,25 @@ class User < ApplicationRecord
     user_scope.first || User.new(raw_params)
   end
 
+  def account_has_data?
+    self.class.reflections.values.find do |reflection|
+      next unless reflection.is_a?(ActiveRecord::Reflection::HasManyReflection)
+
+      send(reflection.name).any?
+    end.present?
+  end
+
+  def merge_account(guest_account)
+    self.class.reflections.values.each do |reflection|
+      next unless reflection.is_a?(ActiveRecord::Reflection::HasManyReflection)
+
+      fk = reflection.options[:foreign_key] || :user_id
+      guest_account.send(reflection.name).update_all(fk => self.id)
+    end
+
+    guest_account.destroy
+  end
+
   def see!
     # last logged in at NOW
   end
