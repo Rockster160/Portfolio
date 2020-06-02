@@ -12,6 +12,14 @@ class ApplicationController < ActionController::Base
 
   private
 
+  def current_guest?
+    current_user&.guest?
+  end
+
+  def show_guest_banner
+    @show_guest_banner = true
+  end
+
   def see_current_user
     Rails.logger.silence do
       if user_signed_in?
@@ -23,6 +31,7 @@ class ApplicationController < ActionController::Base
 
   def logit
     return CustomLogger.log_blip! if params[:checker]
+
     CustomLogger.log_request(request, current_user)
   end
 
@@ -38,8 +47,9 @@ class ApplicationController < ActionController::Base
 
   def authorize_user
     unless current_user.present?
-      session[:forwarding_url] = request.original_url if request.get?
-      redirect_to login_path
+      create_guest_user
+
+      flash.now[:notice] = "We've signed you up with a guest account! If you already have an account, please <sign in>. Otherwise, visit the <account> page to finalize your account so you can come back to it later!"
     end
   end
 
@@ -58,6 +68,12 @@ class ApplicationController < ActionController::Base
         auth_from_session
       end
     end
+  end
+
+  def create_guest_user
+    @user = User.create(role: :guest)
+
+    sign_in @user
   end
 
   def user_signed_in?

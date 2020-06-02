@@ -25,7 +25,7 @@ class User < ApplicationRecord
 
   has_secure_password validations: false
 
-  before_validation :confirm_guest
+  after_save :confirm_guest
   validates_uniqueness_of :phone, allow_nil: true
   validate :proper_fields_present?
 
@@ -124,7 +124,9 @@ class User < ApplicationRecord
   def confirm_guest
     return unless guest?
 
-    self.role = :standard if self.username.present?
+    if self.username.present?
+      update(role: :standard)
+    end
   end
 
   def proper_fields_present?
