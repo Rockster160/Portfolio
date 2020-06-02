@@ -44,6 +44,21 @@ class List < ApplicationRecord
     list.modify_from_message(msg)
   end
 
+  def self.serialize
+    all.map(&:serialize)
+  end
+
+  def serialize
+    {
+      id: id,
+      name: name,
+      description: description,
+      important: important,
+      show_deleted: show_deleted,
+      list_items: list_items.ordered.pluck(:name)
+    }
+  end
+
   def ordered_items
     items = list_items.order("list_items.sort_order")
     items = items.with_deleted if show_deleted?
@@ -149,10 +164,9 @@ class List < ApplicationRecord
     [:clear, :remove, :add].each do |try_action|
       action = try_action if check_string_starts_word?(msg, try_action)
     end
-    return if action == :clear
-    msg = msg.sub(/#{action}/i, "")
 
-    items = items_from_message(msg).map(&:squish)
+    msg = msg.sub(/#{action}/i, "")
+    items = items_from_message(msg)
 
     [action, items]
   end
@@ -166,7 +180,7 @@ class List < ApplicationRecord
   end
 
   def regex_for_individual_word(word)
-    /(\W|^)#{word}(\W|$)/i
+    /\b#{word}\b/
   end
 
   def items_from_message(msg)
@@ -176,7 +190,7 @@ class List < ApplicationRecord
     new_text.gsub!(regex_for_individual_word(:to), " ")
     new_text.gsub!(regex_for_individual_word(:from), " ")
     new_text.gsub!(regex_for_individual_word(:the), " ")
-    new_text.split(/(, *(and)?|and)/).delete_if { |s| s == "and" }
+    new_text.split(/,|and/).map { |w| w.squish.presence }.compact
   end
 
   def fix_list_items_order
