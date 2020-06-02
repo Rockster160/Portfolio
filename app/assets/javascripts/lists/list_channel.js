@@ -3,14 +3,19 @@ $(".ctr-lists.act-show").ready(function() {
   var list_id = $(".list-container").attr("data-list-id")
 
   reorderList = function() {
-    var ordered_list = $(".list-items .list-item-container").sort(function (a, b) {
+    var original_order = $(".list-items .list-item-container").map(function() { return $(this).attr("data-item-id") })
+    var ordered_list = $(".list-items .list-item-container").sort(function(a, b) {
       var contentA = parseInt($(a).attr("data-sort-order"))
       if ($(a).find(".list-item-checkbox").prop("checked")) { contentA -= 0.1 }
       var contentB = parseInt($(b).attr("data-sort-order"))
       if ($(b).find(".list-item-checkbox").prop("checked")) { contentB -= 0.1 }
       return (contentA < contentB) ? -1 : ((contentA > contentB) ? 1 : 0)
     })
-    $(".list-items").html(ordered_list)
+    var new_order = ordered_list.map(function() { return $(this).attr("data-item-id") })
+
+    if (!original_order.toArray().eq(new_order.toArray())) {
+      $(".list-items").html(ordered_list)
+    }
   }
 
   App.lists = App.cable.subscriptions.create({
