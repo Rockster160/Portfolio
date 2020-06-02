@@ -129,7 +129,7 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
         $itemField.val($itemName.text())
         $itemField.removeClass("hidden")
         $itemField.focus()
-      }, 1000)
+      }, 700)
     }
   }).on("mousemove scroll", function(evt) {
     if (!heldListItem) { return }
