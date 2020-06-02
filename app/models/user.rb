@@ -25,12 +25,14 @@ class User < ApplicationRecord
 
   has_secure_password validations: false
 
+  after_save :confirm_guest
   validates_uniqueness_of :phone, allow_nil: true
   validate :proper_fields_present?
 
   scope :by_username, ->(username) { where("lower(username) = ?", username.to_s.downcase) }
 
   enum role: {
+    guest:    5,
     standard: 0,
     admin:    10
   }
@@ -59,12 +61,31 @@ class User < ApplicationRecord
     user_scope.first || User.new(raw_params)
   end
 
+  def account_has_data?
+    self.class.reflections.values.find do |reflection|
+      next unless reflection.is_a?(ActiveRecord::Reflection::HasManyReflection)
+
+      send(reflection.name).any?
+    end.present?
+  end
+
+  def merge_account(guest_account)
+    self.class.reflections.values.each do |reflection|
+      next unless reflection.is_a?(ActiveRecord::Reflection::HasManyReflection)
+
+      fk = reflection.options[:foreign_key] || :user_id
+      guest_account.send(reflection.name).update_all(fk => self.id)
+    end
+
+    guest_account.destroy
+  end
+
   def see!
     # last logged in at NOW
   end
 
   def update_with_password(new_attrs)
-    should_require_current_password = true
+    should_require_current_password = !guest?
     update(new_attrs)
   end
 
@@ -119,7 +140,17 @@ class User < ApplicationRecord
 
   private
 
+  def confirm_guest
+    return unless guest?
+
+    if self.username.present?
+      update(role: :standard)
+    end
+  end
+
   def proper_fields_present?
+    return if guest?
+
     if invited?
       if phone.blank? && username.blank?
         errors.add(:base, "User must have a Username or Phone Number")

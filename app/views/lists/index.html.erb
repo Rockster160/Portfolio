@@ -1,4 +1,4 @@
-<%= meta_title "#{current_user.username}'s Lists", include_name: false %>
+<%= meta_title "My Lists", include_name: false %>
 <%= content_for(:favicon) { render 'lists/favicon' } %>
 <% content_for :head do %>
   <%= javascript_include_tag 'support/touch_punch.js' %>
@@ -9,7 +9,7 @@
     <a href="<%= account_path %>" class="btn">Account</a>
     <a href="<%= new_list_path %>" class="btn pull-right">New List +</a>
   </div>
-  <div class="lists-title"><%= current_user.username %>'s Lists</div>
+  <div class="lists-title">My Lists</div>
   <div class="lists" data-reorder-url="<%= reorder_lists_path %>">
     <div class="list-field">
       <%= text_field_tag "list[name]", "", class: "filterable", placeholder: "Search lists" %>

@@ -2,6 +2,7 @@ class ListsController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user, :color_scheme
   before_action :set_list, only: [:edit, :update, :show, :destroy, :users, :modify_from_message]
+  before_action :show_guest_banner, if: :guest_account?
 
   def index
     @lists = current_user.ordered_lists
@@ -60,7 +61,6 @@ class ListsController < ApplicationController
       current_user.user_lists.create(list_id: @list.id, is_owner: true, default: params[:default] == "true")
       redirect_to @list
     else
-      binding.pry
       render :new
     end
   end
@@ -101,7 +101,7 @@ class ListsController < ApplicationController
 
   def list_params
     return {} unless params[:list].present?
-    
+
     params.require(:list).permit(:name, :description, :important, :show_deleted, :default, :message).tap do |whitelist|
       whitelist[:message] ||= params[:message] if params[:message].present?
     end
