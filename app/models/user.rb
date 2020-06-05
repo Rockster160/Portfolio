@@ -45,11 +45,9 @@ class User < ApplicationRecord
   def self.attempt_login(username, password)
     user = by_username(username).first
 
-    if user.present? && user.authenticate(password)
-      user
-    else
-      false
-    end
+    return unless user.present? && user.authenticate(password)
+
+    user
   end
 
   def self.find_or_create_by_filtered_params(raw_params)
