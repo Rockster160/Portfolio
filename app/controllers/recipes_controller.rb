@@ -1,5 +1,6 @@
 class RecipesController < ApplicationController
-  before_action :set_recipe
+  before_action :authorize_user, :set_recipe
+
   def index
     @recipes = Recipe.order(:created_at)
   end
