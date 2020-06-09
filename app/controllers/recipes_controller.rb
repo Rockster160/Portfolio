@@ -57,7 +57,10 @@ class RecipesController < ApplicationController
   private
 
   def set_recipe
-    @recipe = Recipe.find_by!(friendly_url: params[:id]) if params[:id].present?
+    if params[:friendly_id].present?
+      @recipe = Recipe.find_by(friendly_url: params[:friendly_id])
+      @recipe ||= Recipe.find(id: params[:friendly_id]) 
+    end
   end
 
   def recipe_params

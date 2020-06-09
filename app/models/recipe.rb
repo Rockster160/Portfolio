@@ -46,7 +46,7 @@ class Recipe < ApplicationRecord
   end
 
   def to_param
-    friendly_url
+    friendly_url || id
   end
 
   private
