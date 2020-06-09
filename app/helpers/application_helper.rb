@@ -14,11 +14,11 @@ module ApplicationHelper
 
   def meta_title(str, include_name: true)
     str = "#{str} • Rocco Nicholls" if include_name
-    content_for(:title) { CGI.escapeHTML(str).html_safe }
+    content_for(:title) { CGI.escapeHTML(str.to_s).html_safe }
   end
 
   def meta_description(description)
-    content_for(:description) { CGI.escapeHTML(description) }
+    content_for(:description) { CGI.escapeHTML(description.to_s) }
   end
 
   def svg(svg_path, options={})

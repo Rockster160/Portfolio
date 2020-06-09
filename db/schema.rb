@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20200407184942) do
+ActiveRecord::Schema.define(version: 20200609213525) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -44,6 +44,18 @@ ActiveRecord::Schema.define(version: 20200407184942) do
     t.datetime "updated_at"
   end
 
+  create_table "companies", force: :cascade do |t|
+    t.integer  "user_id"
+    t.string   "name"
+    t.string   "recruiter"
+    t.string   "url"
+    t.integer  "status"
+    t.text     "notes"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_companies_on_user_id", using: :btree
+  end
+
   create_table "emails", force: :cascade do |t|
     t.integer  "sent_by_id"
     t.string   "from"
@@ -66,6 +78,16 @@ ActiveRecord::Schema.define(version: 20200407184942) do
     t.integer  "pin"
     t.datetime "created_at"
     t.datetime "updated_at"
+  end
+
+  create_table "interviews", force: :cascade do |t|
+    t.integer  "company_id"
+    t.datetime "start_time"
+    t.text     "participants"
+    t.text     "notes"
+    t.datetime "created_at",   null: false
+    t.datetime "updated_at",   null: false
+    t.index ["company_id"], name: "index_interviews_on_company_id", using: :btree
   end
 
   create_table "lines", force: :cascade do |t|
@@ -174,6 +196,24 @@ ActiveRecord::Schema.define(version: 20200407184942) do
     t.datetime "updated_at",   null: false
   end
 
+  create_table "recipe_favorites", force: :cascade do |t|
+    t.integer  "recipe_id"
+    t.integer  "favorited_by_id"
+    t.datetime "created_at",      null: false
+    t.datetime "updated_at",      null: false
+    t.index ["favorited_by_id"], name: "index_recipe_favorites_on_favorited_by_id", using: :btree
+    t.index ["recipe_id"], name: "index_recipe_favorites_on_recipe_id", using: :btree
+  end
+
+  create_table "recipe_shares", force: :cascade do |t|
+    t.integer  "recipe_id"
+    t.integer  "shared_to_id"
+    t.datetime "created_at",   null: false
+    t.datetime "updated_at",   null: false
+    t.index ["recipe_id"], name: "index_recipe_shares_on_recipe_id", using: :btree
+    t.index ["shared_to_id"], name: "index_recipe_shares_on_shared_to_id", using: :btree
+  end
+
   create_table "recipes", force: :cascade do |t|
     t.integer  "user_id"
     t.string   "title"
@@ -183,6 +223,8 @@ ActiveRecord::Schema.define(version: 20200407184942) do
     t.boolean  "public"
     t.datetime "created_at",   null: false
     t.datetime "updated_at",   null: false
+    t.text     "description"
+    t.string   "friendly_url"
     t.index ["user_id"], name: "index_recipes_on_user_id", using: :btree
   end
 

@@ -2,7 +2,7 @@ class RecipesController < ApplicationController
   before_action :authorize_user, :set_recipe
 
   def index
-    @recipes = Recipe.order(:created_at)
+    @recipes = Recipe.viewable(current_user).order(:created_at)
   end
 
   def show
@@ -57,12 +57,13 @@ class RecipesController < ApplicationController
   private
 
   def set_recipe
-    @recipe = Recipe.find(params[:id]) if params[:id].present?
+    @recipe = Recipe.find_by!(friendly_url: params[:friendly_id]) if params[:friendly_id].present?
   end
 
   def recipe_params
     params.require(:recipe).permit(
       :title,
+      :description,
       :kitchen_of,
       :ingredients,
       :instructions,
