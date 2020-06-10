@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20200609213525) do
+ActiveRecord::Schema.define(version: 20200610002001) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -194,6 +194,30 @@ ActiveRecord::Schema.define(version: 20200609213525) do
     t.datetime "last_updated"
     t.datetime "created_at",   null: false
     t.datetime "updated_at",   null: false
+  end
+
+  create_table "payment_charges", force: :cascade do |t|
+    t.integer  "user_id"
+    t.text     "raw"
+    t.string   "cost_in_pennies"
+    t.datetime "occurred_at"
+    t.datetime "created_at",      null: false
+    t.datetime "updated_at",      null: false
+    t.index ["user_id"], name: "index_payment_charges_on_user_id", using: :btree
+  end
+
+  create_table "payment_schedules", force: :cascade do |t|
+    t.integer  "user_id"
+    t.string   "name"
+    t.string   "description"
+    t.integer  "cost_in_pennies"
+    t.datetime "recurrence_start"
+    t.integer  "recurrence_date"
+    t.integer  "recurrence_wday"
+    t.integer  "recurrence_type"
+    t.datetime "created_at",       null: false
+    t.datetime "updated_at",       null: false
+    t.index ["user_id"], name: "index_payment_schedules_on_user_id", using: :btree
   end
 
   create_table "recipe_favorites", force: :cascade do |t|
