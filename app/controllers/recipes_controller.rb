@@ -1,5 +1,6 @@
 class RecipesController < ApplicationController
   before_action :authorize_user, :set_recipe
+  before_action :show_guest_banner, if: :guest_account?
 
   def index
     @recipes = Recipe.viewable(current_user).order(:created_at)
