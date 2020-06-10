@@ -4,7 +4,7 @@ class CreatePaymentCalendar < ActiveRecord::Migration[5.0]
       t.belongs_to :user
       t.string :name
       t.string :description
-      t.integer :cost_in_pennies
+      t.integer :amount_in_pennies
 
       t.datetime :recurrence_start
       t.integer :recurrence_date
@@ -14,11 +14,21 @@ class CreatePaymentCalendar < ActiveRecord::Migration[5.0]
       t.timestamps
     end
 
+    create_table :payment_categories do |t|
+      t.belongs_to :user
+      t.string :name
+    end
+
+    create_table :payment_groups do |t|
+    end
+
     create_table :payment_charges do |t|
       t.belongs_to :user
+      t.belongs_to :payment_category # optional
+      t.belongs_to :payment_group
 
       t.text :raw
-      t.string :cost_in_pennies
+      t.string :amount_in_pennies
       t.datetime :occurred_at
 
       t.timestamps

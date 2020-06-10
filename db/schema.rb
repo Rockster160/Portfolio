@@ -196,27 +196,40 @@ ActiveRecord::Schema.define(version: 20200610002001) do
     t.datetime "updated_at",   null: false
   end
 
+  create_table "payment_categories", force: :cascade do |t|
+    t.integer "user_id"
+    t.string  "name"
+    t.index ["user_id"], name: "index_payment_categories_on_user_id", using: :btree
+  end
+
   create_table "payment_charges", force: :cascade do |t|
     t.integer  "user_id"
+    t.integer  "payment_category_id"
+    t.integer  "payment_group_id"
     t.text     "raw"
-    t.string   "cost_in_pennies"
+    t.string   "amount_in_pennies"
     t.datetime "occurred_at"
-    t.datetime "created_at",      null: false
-    t.datetime "updated_at",      null: false
+    t.datetime "created_at",          null: false
+    t.datetime "updated_at",          null: false
+    t.index ["payment_category_id"], name: "index_payment_charges_on_payment_category_id", using: :btree
+    t.index ["payment_group_id"], name: "index_payment_charges_on_payment_group_id", using: :btree
     t.index ["user_id"], name: "index_payment_charges_on_user_id", using: :btree
+  end
+
+  create_table "payment_groups", force: :cascade do |t|
   end
 
   create_table "payment_schedules", force: :cascade do |t|
     t.integer  "user_id"
     t.string   "name"
     t.string   "description"
-    t.integer  "cost_in_pennies"
+    t.integer  "amount_in_pennies"
     t.datetime "recurrence_start"
     t.integer  "recurrence_date"
     t.integer  "recurrence_wday"
     t.integer  "recurrence_type"
-    t.datetime "created_at",       null: false
-    t.datetime "updated_at",       null: false
+    t.datetime "created_at",        null: false
+    t.datetime "updated_at",        null: false
     t.index ["user_id"], name: "index_payment_schedules_on_user_id", using: :btree
   end
 
