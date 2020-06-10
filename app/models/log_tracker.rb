@@ -28,9 +28,14 @@ class LogTracker < ApplicationRecord
   scope :by_ip, ->(ip) { where(ip_address: ip) }
   scope :not_me, -> { where.not(user_id: 1) }
   scope :not_log_tracker, -> { where.not("url ILIKE '%log_tracker%'") }
+  scope :not_uptime, -> { where.not("user_agent ILIKE '%UptimeRobot%'") }
 
   def self.uniq_ips
     pluck(:ip_address).uniq
+  end
+
+  def displayable?
+    url.exclude?("log_tracker") && user_agent.exclude?("UptimeRobot")
   end
 
   def params_json
@@ -68,6 +73,7 @@ class LogTracker < ApplicationRecord
   end
 
   def broadcast_creation
+    return unless displayable?
     rendered_message = LogTrackersController.render partial: 'log_trackers/logger_row', locals: { logger: self }
     ActionCable.server.broadcast "logger_channel", message: rendered_message
   end
