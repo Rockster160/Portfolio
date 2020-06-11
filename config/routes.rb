@@ -63,12 +63,16 @@ Rails.application.routes.draw do
     post :save_location
     get :player_login
     get :character_builder
-    post :change_clothes
     get :change_clothes, action: :load_character
+    post :change_clothes
   end
 
   resources :recipes, param: :friendly_id do
     post :export_to_list, on: :member
+  end
+
+  resource :payment_calendar, only: :show do
+    resources :payment_schedules, only: [:create, :update, :destroy]
   end
 
   resource :maze, only: [ :show ] do
