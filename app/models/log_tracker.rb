@@ -38,16 +38,20 @@ class LogTracker < ApplicationRecord
     url.to_s.exclude?("log_tracker") && user_agent.to_s.exclude?("UptimeRobot")
   end
 
+  def readable_json(json)
+    JSON.parse(json.gsub("=>", ":")) rescue json.try(:read) || json.try(:inspect) || json.to_s
+  end
+
   def params_json
-    JSON.parse(params.gsub("=>", ":")) rescue params.to_s
+    readable_json(params)
   end
 
   def headers_json
-    JSON.parse(headers.gsub("=>", ":")) rescue headers.to_s
+    readable_json(headers)
   end
 
   def body_json
-    JSON.parse(body.gsub("=>", ":")) rescue body.to_s
+    readable_json(body)
   end
 
   def short_location
