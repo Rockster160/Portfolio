@@ -80,7 +80,12 @@ $(document).ready(function() {
         // Add X axis
         svgObj.svg.append("g")
           .attr("transform", "translate(" + 0 + "," + (svgObj.height + svgObj.margin.bottom) + ")")
-          .call(d3.axisBottom(svgObj.xScale))
+          .call(d3.axisBottom(svgObj.xScale).tickSize(-svgObj.height))
+
+        // Add Y axis
+        svgObj.svg.append("g")
+          .attr("transform", "translate(" + svgObj.margin.left + "," + 0 + ")")
+          .call(d3.axisLeft(svgObj.yScale).tickSize(-svgObj.width))
 
         // Add 0 marker
         svgObj.svg.append("line")
@@ -99,11 +104,6 @@ $(document).ready(function() {
           .attr("y2", svgObj.height + svgObj.margin.top)
           .style("stroke", "green")
           .style("stroke-width", 1)
-
-        // Add Y axis
-        svgObj.svg.append("g")
-          .attr("transform", "translate(" + svgObj.margin.left + "," + 0 + ")")
-          .call(d3.axisLeft(svgObj.yScale))
 
         svgObj.addDataset = function(dataset) {
           svgObj.svg.selectAll("data-line").remove()

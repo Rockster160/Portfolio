@@ -11,6 +11,11 @@
 
     svg {
       background: white;
+
+      g.tick line {
+        stroke: #EEEEEE;
+        stroke-dasharray: 2.2;
+      }
     }
 
     .calendar-tooltip {
