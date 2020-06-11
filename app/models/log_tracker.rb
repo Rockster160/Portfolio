@@ -35,7 +35,7 @@ class LogTracker < ApplicationRecord
   end
 
   def displayable?
-    url.exclude?("log_tracker") && user_agent.exclude?("UptimeRobot")
+    url.to_s.exclude?("log_tracker") && user_agent.to_s.exclude?("UptimeRobot")
   end
 
   def params_json
