@@ -2,8 +2,6 @@ $(document).ready(function() {
   if (window.hasOwnProperty("d3")) {
     PaymentCalendar = null
     var containerSelector = "#calendar-svg-wrapper"
-    var start_value = 2628.41
-    var start_day = 10
 
     Array.range = function(start, end) {
       var arr = []
@@ -23,12 +21,13 @@ $(document).ready(function() {
       if (val < 0) { return "red" }
     }
 
-    PC_SVG = function() {
+    PC_SVG = function(start_value, dataset) {
       var svgObj = this
 
-      svgObj.init = function(dataset) {
+      svgObj.init = function() {
         var today = new Date()
         var date = today.getDate()
+        var start_day = date
         function getDaysInMonth(m, y) {
           return (m === 2) ? (!((y % 4) || (!(y % 100) && (y % 400))) ? 29 : 28) : 30 + ((m + (m >> 3)) & 1)
         }
@@ -188,128 +187,6 @@ $(document).ready(function() {
           return 0
         })
       }
-
-
-      // Initialize
-
-      var dataset = [
-        { name: "Payroll",          x: 10, y: 2540.66  },
-        { name: "Payroll",          x: 25, y: 2540.66  },
-
-        { name: "Digital Ocean",    x: 1,  y: -20.30   },
-        { name: "Quip",             x: 3,  y: -10.00   },
-        { name: "Power",            x: 4,  y: -60.00   },
-        { name: "Vivint (Service)", x: 8,  y: -41.47   },
-        { name: "Gas",              x: 10, y: -90.00   },
-        { name: "Trash",            x: 14, y: -51.00   },
-        { name: "T-Mobile",         x: 16, y: -65.86   },
-        { name: "CrunchyRoll",      x: 17, y: -7.99    },
-        { name: "Comcast",          x: 19, y: -84.99   },
-        { name: "Progressive",      x: 19, y: -87.85   },
-        { name: "Primerica",        x: 20, y: -24.59   },
-        { name: "Sewage",           x: 27, y: -25.00   },
-        { name: "Water",            x: 28, y: -41.50   },
-        { name: "John Hancock",     x: 28, y: -46.36   },
-        { name: "Intermountain",    x: 28, y: -93.74   },
-
-        { name: "Apple",            x: 7,  y: -400.00  },
-        { name: "IKEA",             x: 2,  y: -250.00  },
-        { name: "iPhone (R)",       x: 3,  y: -0.00    },
-        { name: "iPhone (K)",       x: 3,  y: -0.00    },
-        { name: "Vivint",           x: 8,  y: -14.49   },
-        { name: "RC Willey",        x: 11, y: -0.00    },
-        { name: "Aqua Finance",     x: 15, y: -0.00    },
-        { name: "Home Depot",       x: 16, y: -200.00  },
-        { name: "Lowe’s-Basement",  x: 20, y: -0.00    },
-        { name: "Lowe’s",           x: 23, y: -39.00   },
-        { name: "Amazon CC",        x: 24, y: -150.00  },
-
-        { name: "Voldemort",        x: 1,  y: -1000.00 },
-        { name: "Bike",             x: 16, y: -101.12  },
-        { name: "Hyundai",          x: 17, y: -385.84  },
-        { name: "Fiesta",           x: 20, y: -0.00    },
-        { name: "Trailer",          x: 24, y: -107.59  },
-        { name: "Truck",            x: 25, y: -239.98  },
-
-        { name: "House",            x: 7,  y: -2344.96 }
-      ]
-
-      PaymentCalendar = svgObj.init(dataset)
-      // PaymentCalendar.addDataset(dataset)
     }
-
-    //
-    //   svgObj.remove_points = function(points) {
-    //     points.forEach(function(point) {
-    //       $("[map_id=" + point.id + "]").remove()
-    //     })
-    //   }
-    //
-    //   svgObj.add_points = function(points) {
-    //     var point = svgObj.map.append("g")
-    //       .selectAll("dot")
-    //       .data(points)
-    //       .enter()
-    //     point.append("circle")
-    //       .attr("r", 5)
-    //       .attr("cx", function(d) { return svgObj.x(d.x) })
-    //       .attr("cy", function(d) { return svgObj.y(d.y) })
-    //       .attr("map_id", function(d) { return d.id })
-    //       .attr("map_x", function(d) { return d.x })
-    //       .attr("map_y", function(d) { return d.y })
-    //       .attr("pc-color", function(d) { return d.type })
-    //       .on("mouseover", function(d) {
-    //          svgObj.tooltip.transition()
-    //            .duration(200)
-    //            .style("opacity", 0.9)
-    //          svgObj.tooltip.html(svgObj.pointTooltipHTML(d))
-    //            .style("left", (d3.event.pageX) + "px")
-    //            .style("top", (d3.event.pageY - 28) + "px")
-    //        })
-    //        .on("mouseout", function(d) {
-    //          svgObj.tooltip.transition()
-    //            .duration(500)
-    //            .style("opacity", 0)
-    //        })
-    //        .on("click", svgObj.selectPoint)
-    //
-    //     // TODO: Connect waypoint to nearby waypoints
-    //   }
-    //
-    //   svgObj.drawCircle = function(center, rad, color) {
-    //     svgObj.map.insert("circle", ":first-child")
-    //       .attr("class", "distance-circle")
-    //       .attr("r", function() { return svgObj.r(rad) })
-    //       .attr("cx", function() { return svgObj.x(center.x) })
-    //       .attr("cy", function() { return svgObj.y(center.y) })
-    //       .attr("stroke", color)
-    //       .attr("fill", color)
-    //       .style("opacity", 0.1)
-    //   }
-    //
-    //   svgObj.selectPoint = function(point) {
-    //     var circle = this
-    //     $(".edit-form").removeClass("hidden")
-    //     $("circle.selected").removeClass("selected")
-    //     $(circle).addClass("selected")
-    //
-    //     $('input[name="id"]').val(point.id)
-    //     $('input[name="location[x_coord]"]').val(point.x)
-    //     $('input[name="location[y_coord]"]').val(point.y)
-    //     $('input[name="location[title]"]').val(point.title)
-    //     $('select[name="location[location_type]"]').val(point.type)
-    //     $('textarea[name="location[description]"]').val(point.description)
-    //
-    //     console.log("Origin: ", point.x, point.y)
-    //
-    //     $("circle.distance-circle").remove()
-    //     svgObj.drawCircle({x: point.x, y: point.y}, 1000, "green")
-    //     svgObj.drawCircle({x: point.x, y: point.y}, 2000, "yellow")
-    //     svgObj.drawCircle({x: point.x, y: point.y}, 3000, "orange")
-    //     svgObj.drawCircle({x: point.x, y: point.y}, 4000, "red")
-    //   }
-    //
-
-    paymentCalendarSetup()
   }
 })

@@ -17,7 +17,9 @@ class PlaidItem < ApplicationRecord
   def balance
     return unless plaid_item_access_token
 
-    @balance ||= PlaidApi.balance(plaid_item_access_token)
+    @balance ||= Rails.cache.fetch("MACU_quick_balance", expires_in: 12.hours) do
+      PlaidApi.balance(plaid_item_access_token)
+    end
   end
 
   def quick_balance

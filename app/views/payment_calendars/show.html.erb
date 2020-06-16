@@ -2,12 +2,52 @@
   <script src="https://d3js.org/d3.v4.min.js"></script>
   <script type="text/javascript">
     $(document).ready(function() {
-    //   var rlc_map = RLCraftSVG.getMap()
-    //
-    //   rlc_map.add_points()
+      var start_value = <%= PlaidItem.first.quick_balance || 0 %>
+      var dataset = [
+        { name: "Payroll",          x: 10, y: 2540.66  },
+        { name: "Payroll",          x: 25, y: 2540.66  },
+
+        { name: "Digital Ocean",    x: 1,  y: -20.30   },
+        { name: "Quip",             x: 3,  y: -10.00   },
+        { name: "Power",            x: 4,  y: -60.00   },
+        { name: "Vivint (Service)", x: 8,  y: -41.47   },
+        { name: "Gas",              x: 10, y: -90.00   },
+        { name: "Trash",            x: 14, y: -51.00   },
+        { name: "T-Mobile",         x: 16, y: -65.86   },
+        { name: "CrunchyRoll",      x: 17, y: -7.99    },
+        { name: "Comcast",          x: 19, y: -84.99   },
+        { name: "Progressive",      x: 19, y: -87.85   },
+        { name: "Primerica",        x: 20, y: -24.59   },
+        { name: "Sewage",           x: 27, y: -25.00   },
+        { name: "Water",            x: 28, y: -41.50   },
+        { name: "John Hancock",     x: 28, y: -46.36   },
+        { name: "Intermountain",    x: 28, y: -93.74   },
+
+        { name: "Apple",            x: 7,  y: -400.00  },
+        { name: "IKEA",             x: 2,  y: -250.00  },
+        { name: "iPhone (R)",       x: 3,  y: -0.00    },
+        { name: "iPhone (K)",       x: 3,  y: -0.00    },
+        { name: "Vivint",           x: 8,  y: -14.49   },
+        { name: "RC Willey",        x: 11, y: -0.00    },
+        { name: "Aqua Finance",     x: 15, y: -0.00    },
+        { name: "Home Depot",       x: 16, y: -200.00  },
+        { name: "Lowe’s-Basement",  x: 20, y: -0.00    },
+        { name: "Lowe’s",           x: 23, y: -39.00   },
+        { name: "Amazon CC",        x: 24, y: -150.00  },
+
+        { name: "Voldemort",        x: 1,  y: -1000.00 },
+        { name: "Bike",             x: 16, y: -101.12  },
+        { name: "Hyundai",          x: 17, y: -385.84  },
+        { name: "Fiesta",           x: 20, y: -0.00    },
+        { name: "Trailer",          x: 24, y: -107.59  },
+        { name: "Truck",            x: 25, y: -239.98  },
+
+        { name: "House",            x: 7,  y: -2344.96 }
+      ]
+
+      PaymentCalendar = (new PC_SVG(start_value, dataset)).init()
     })
   </script>
 <% end %>
 
-<div id="calendar-svg-wrapper">
-</div>
+<div id="calendar-svg-wrapper"></div>
