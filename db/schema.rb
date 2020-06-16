@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20200610002001) do
+ActiveRecord::Schema.define(version: 20200616201052) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -231,6 +231,16 @@ ActiveRecord::Schema.define(version: 20200610002001) do
     t.datetime "created_at",        null: false
     t.datetime "updated_at",        null: false
     t.index ["user_id"], name: "index_payment_schedules_on_user_id", using: :btree
+  end
+
+  create_table "plaid_items", force: :cascade do |t|
+    t.integer  "user_id"
+    t.string   "bank_name"
+    t.text     "plaid_item_id"
+    t.text     "plaid_item_access_token"
+    t.datetime "created_at",              null: false
+    t.datetime "updated_at",              null: false
+    t.index ["user_id"], name: "index_plaid_items_on_user_id", using: :btree
   end
 
   create_table "recipe_favorites", force: :cascade do |t|

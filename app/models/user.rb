@@ -20,6 +20,7 @@ class User < ApplicationRecord
   has_many :payment_schedules, dependent: :destroy
   has_many :payment_categories, dependent: :destroy
   has_many :payment_charges, dependent: :destroy
+  has_many :plaid_items, dependent: :destroy
   has_many :user_lists, dependent: :destroy
   has_many :recipes, dependent: :destroy
   has_many :recipe_favorites, class_name: "RecipeFavorite", foreign_key: :favorited_by
