@@ -19,7 +19,7 @@ class User < ApplicationRecord
 
   has_many :user_lists, dependent: :destroy
   has_many :recipes, dependent: :destroy
-  has_many :recipe_favorites, class_name: "RecipeFavorite", foreign_key: :favorited_by
+  has_many :recipe_favorites, class_name: "RecipeFavorite", foreign_key: :favorited_by_id
   has_many :favorited_recipes, through: :recipe_favorites, source: :favorited_by
   has_many :recipe_shares, class_name: "RecipeShare", foreign_key: :shared_to
   has_many :shared_recipes, through: :recipe_shares, source: :shared_to
