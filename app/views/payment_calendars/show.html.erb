@@ -4,8 +4,8 @@
     $(document).ready(function() {
       var start_value = <%= PlaidItem.first.quick_balance || 0 %>
       var dataset = [
-        { name: "Payroll",          x: 10, y: 2540.66  },
-        { name: "Payroll",          x: 25, y: 2540.66  },
+        { name: "Payroll",          x: 10, y: 3190.66  },
+        { name: "Payroll",          x: 25, y: 3190.66  },
 
         { name: "Digital Ocean",    x: 1,  y: -20.30   },
         { name: "Quip",             x: 3,  y: -10.00   },
@@ -30,10 +30,10 @@
         { name: "Vivint",           x: 8,  y: -14.49   },
         { name: "RC Willey",        x: 11, y: -0.00    },
         { name: "Aqua Finance",     x: 15, y: -0.00    },
-        { name: "Home Depot",       x: 16, y: -36.00  },
+        { name: "Home Depot",       x: 16, y: -36.00   },
         { name: "Lowe’s-Basement",  x: 20, y: -0.00    },
         { name: "Lowe’s",           x: 23, y: -39.00   },
-        { name: "Amazon CC",        x: 24, y: -68.00  },
+        { name: "Amazon CC",        x: 24, y: -68.00   },
 
         { name: "Voldemort",        x: 1,  y: -1000.00 },
         { name: "Bike",             x: 16, y: -101.12  },
@@ -42,7 +42,7 @@
         { name: "Trailer",          x: 24, y: -107.59  },
         { name: "Truck",            x: 25, y: -175.00  },
 
-        { name: "House",            x: 7,  y: -2344.96 }
+        { name: "House",            x: 12,  y: -2344.96 }
       ]
 
       PaymentCalendar = (new PC_SVG(start_value, dataset)).init()
