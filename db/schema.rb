@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20200609213525) do
+ActiveRecord::Schema.define(version: 20200808024822) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -196,6 +196,53 @@ ActiveRecord::Schema.define(version: 20200609213525) do
     t.datetime "updated_at",   null: false
   end
 
+  create_table "payment_categories", force: :cascade do |t|
+    t.integer "user_id"
+    t.string  "name"
+    t.index ["user_id"], name: "index_payment_categories_on_user_id", using: :btree
+  end
+
+  create_table "payment_charges", force: :cascade do |t|
+    t.integer  "user_id"
+    t.integer  "payment_category_id"
+    t.integer  "payment_group_id"
+    t.text     "raw"
+    t.string   "amount_in_pennies"
+    t.datetime "occurred_at"
+    t.datetime "created_at",          null: false
+    t.datetime "updated_at",          null: false
+    t.index ["payment_category_id"], name: "index_payment_charges_on_payment_category_id", using: :btree
+    t.index ["payment_group_id"], name: "index_payment_charges_on_payment_group_id", using: :btree
+    t.index ["user_id"], name: "index_payment_charges_on_user_id", using: :btree
+  end
+
+  create_table "payment_groups", force: :cascade do |t|
+  end
+
+  create_table "payment_schedules", force: :cascade do |t|
+    t.integer  "user_id"
+    t.string   "name"
+    t.string   "description"
+    t.integer  "amount_in_pennies"
+    t.datetime "recurrence_start"
+    t.integer  "recurrence_date"
+    t.integer  "recurrence_wday"
+    t.integer  "recurrence_type"
+    t.datetime "created_at",        null: false
+    t.datetime "updated_at",        null: false
+    t.index ["user_id"], name: "index_payment_schedules_on_user_id", using: :btree
+  end
+
+  create_table "plaid_items", force: :cascade do |t|
+    t.integer  "user_id"
+    t.string   "bank_name"
+    t.text     "plaid_item_id"
+    t.text     "plaid_item_access_token"
+    t.datetime "created_at",              null: false
+    t.datetime "updated_at",              null: false
+    t.index ["user_id"], name: "index_plaid_items_on_user_id", using: :btree
+  end
+
   create_table "recipe_favorites", force: :cascade do |t|
     t.integer  "recipe_id"
     t.integer  "favorited_by_id"
@@ -246,6 +293,17 @@ ActiveRecord::Schema.define(version: 20200609213525) do
     t.boolean "default",    default: false
     t.index ["list_id"], name: "index_user_lists_on_list_id", using: :btree
     t.index ["user_id"], name: "index_user_lists_on_user_id", using: :btree
+  end
+
+  create_table "user_push_subscriptions", force: :cascade do |t|
+    t.integer  "user_id"
+    t.string   "sub_auth"
+    t.string   "endpoint"
+    t.string   "p256dh"
+    t.string   "auth"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_user_push_subscriptions_on_user_id", using: :btree
   end
 
   create_table "users", force: :cascade do |t|

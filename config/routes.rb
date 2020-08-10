@@ -20,6 +20,7 @@ Rails.application.routes.draw do
   post "webhooks/post" => "webhooks#post"
   post "webhooks/email" => "webhooks#email"
   post "webhooks/command" => "webhooks#command"
+  post "push_notification_subscribe" => "webhooks#push_notification_subscribe"
 
   get "cube" => "cubes#show"
 

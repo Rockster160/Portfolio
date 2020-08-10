@@ -26,6 +26,7 @@ class User < ApplicationRecord
   has_many :lists, through: :user_lists
   has_many :sent_emails, class_name: "Email", foreign_key: :sent_by_id, dependent: :destroy
   has_one :avatar
+  has_one :push_sub, class_name: "UserPushSubscription"
 
   has_secure_password validations: false
 
@@ -40,6 +41,8 @@ class User < ApplicationRecord
     standard: 0,
     admin:    10
   }
+
+  delegate :sub_auth, to: :push_sub
 
   def self.auth_from_basic(basic_auth)
     username, password = basic_auth.split(":", 2)
@@ -116,6 +119,10 @@ class User < ApplicationRecord
 
   def default_list
     (user_lists.find_by(default: true) || user_lists.order(created_at: :asc).first).try(:list)
+  end
+
+  def push_sub
+    super || create_push_sub
   end
 
   def ordered_lists
