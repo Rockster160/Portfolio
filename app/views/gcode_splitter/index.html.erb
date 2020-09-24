@@ -15,11 +15,11 @@
         <p>Designed specifically for use with Cura-generated Gcode files.</p>
         <ul>
           <li>Create 2 different STL files: 1 for your entire object, and 1 for just the bottom portion of your object- the portion of the object you will use as the first color.</li>
+          <li>Generate .gcode files by importing those STLs to Cura and exporting them with the same settings.</li>
           <div class="img-wrapper text-center">
             <%= image_tag "gcode/full.png" %>
             <%= image_tag "gcode/base.png" %>
           </div>
-          <li>Generate .gcode files by importing those STLs to Cura and exporting them with the same settings.</li>
           <li>Drag and drop each of those 2 files into the fields below.</li>
           <li>Click "Generate" and the new gcode will be shown in the box below. You may copy and paste from that field or click "Download" to download the file immediately.</li>
           <li>Print your file as normal. Once your printer finishes printing the base, it will pause and initiate the change filament routine. You can change your color and resume printing as desired.</li>
