@@ -1,0 +1,66 @@
+<%= meta_title "Gcode Splitter" %>
+<%= meta_description "Generate a Gcode file from two previous files to add a command that allows you to swap out the filament." %>
+<% content_for :head do %>
+  <%= javascript_include_tag "support/gcode_splitter.js" %>
+<% end %>
+
+<div class="skinny-container">
+  <div class="form">
+    <div class="form-title">
+      Gcode Splitter
+    </div>
+
+    <div class="form-fields">
+      <%= render_modal "gcode-help-modal", "Help" do %>
+        <p>Designed specifically for use with Cura-generated Gcode files.</p>
+        <ul>
+          <li>Create 2 different STL files: 1 for your entire object, and 1 for just the bottom portion of your object- the portion of the object you will use as the first color.</li>
+          <div class="img-wrapper text-center">
+            <%= image_tag "gcode/full.png" %>
+            <%= image_tag "gcode/base.png" %>
+          </div>
+          <li>Generate .gcode files by importing those STLs to Cura and exporting them with the same settings.</li>
+          <li>Drag and drop each of those 2 files into the fields below.</li>
+          <li>Click "Generate" and the new gcode will be shown in the box below. You may copy and paste from that field or click "Download" to download the file immediately.</li>
+          <li>Print your file as normal. Once your printer finishes printing the base, it will pause and initiate the change filament routine. You can change your color and resume printing as desired.</li>
+          <div class="img-wrapper text-center">
+            <%= image_tag "gcode/printed.png" %>
+          </div>
+        </ul>
+        <small>Nothing is sent or stored on any server. All calculations are done locally.</small>
+      <% end %>
+
+      <div class="form-field text-center">
+        <div class="btn" data-modal="#gcode-help-modal">Help</div>
+      </div>
+
+      <div class="split-fields">
+        <div class="form-field">
+          <%= label_tag :full_file do %>
+            Full File
+            <textarea readonly id="full_file" class="drop-zone" name="full_file">Drop in the .gcode file of your full thing here. This is the entire object you are printing.</textarea>
+          <% end %>
+        </div>
+
+        <div class="form-field">
+          <%= label_tag :base_file do %>
+            Base File
+            <textarea readonly id="base_file" class="drop-zone" name="base_file">Drop in the .gcode file of your base thing here. This is the bottom of your object BEFORE you want to change colors.</textarea>
+          <% end %>
+        </div>
+
+        <div class="form-submission">
+          <button type="button" name="compare">Generate</button>
+        </div>
+      </div>
+
+      <div class="form-field">
+        <textarea readonly class="output" name="output"></textarea>
+      </div>
+
+      <div class="form-submission">
+        <button type="button" name="download" disabled>Download</button>
+      </div>
+    </div>
+  </div>
+</div>
