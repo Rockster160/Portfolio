@@ -48,11 +48,11 @@ $(document).ready(function() {
 
     var baseFinalZ = base.finalZLine()
     var zVal = parseFloat(baseFinalZ.match(/(?:Z)(\d.*?$)/)[1])
-    console.log("Base: ", baseFinalZ);
+    console.log("Base: ", baseFinalZ)
     if (isNaN(zVal)) { return error = "No Z-line found in base." }
 
     var splitLine = full.nextZLine(zVal)
-    console.log("Full: ", splitLine);
+    console.log("Full: ", splitLine)
     if (!splitLine) { return error = "No Z-line found beyond base." }
 
     var fullText = full.text
@@ -81,16 +81,16 @@ $(document).ready(function() {
   }
 
   function download(filename, text) {
-    var element = document.createElement("a");
-    element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(text));
-    element.setAttribute("download", filename);
+    var element = document.createElement("a")
+    element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(text))
+    element.setAttribute("download", filename)
 
-    element.style.display = "none";
-    document.body.appendChild(element);
+    element.style.display = "none"
+    document.body.appendChild(element)
 
-    element.click();
+    element.click()
 
-    document.body.removeChild(element);
+    document.body.removeChild(element)
   }
 
   $(document).on("drop", ".drop-zone", function(evt) {
