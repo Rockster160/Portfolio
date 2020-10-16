@@ -101,6 +101,7 @@ GEM
       activesupport (>= 4.2.0)
     gmaps4rails (2.1.2)
     hashie (4.1.0)
+    hkdf (0.3.0)
     honeybadger (4.5.4)
     http-cookie (1.0.3)
       domain_name (~> 0.5)
@@ -283,6 +284,9 @@ GEM
     unf (0.1.4)
       unf_ext
     unf_ext (0.0.7.4)
+    webpush (0.3.2)
+      hkdf (~> 0.2)
+      jwt
     websocket-driver (0.6.5)
       websocket-extensions (>= 0.1.0)
     websocket-extensions (0.1.2)
@@ -345,6 +349,7 @@ DEPENDENCIES
   twilio-ruby (~> 4.11.1)
   uglifier (>= 1.3.0)
   underscore-rails
+  webpush
 
 BUNDLED WITH
    1.17.3

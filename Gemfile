@@ -45,6 +45,7 @@ gem 'acts_as_paranoid', '~> 0.5.0'
 gem "inline_svg"
 gem "ice_cube"
 gem "plaid"
+gem "webpush"
 
 gem "honeybadger", "~> 4.0"
 

@@ -1,0 +1,26 @@
+.ctr-gcode_splitter {
+  textarea {
+    height: 200px;
+    resize: none;
+    font-size: 10px;
+  }
+
+  textarea.drop-zone {
+    height: 50px;
+    resize: none;
+    font-size: 10px;
+  }
+
+  .output {
+    white-space: pre-wrap;
+  }
+
+  img {
+    width: 100px;
+  }
+
+  .output.error {
+    background: $danger;
+    color: white;
+  }
+}

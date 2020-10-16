@@ -24,7 +24,7 @@
   <% end %>
   <%= csrf_meta_tags %>
 </head>
-<body class="ctr-<%= controller_name %> act-<%= action_name %> <%= content_for :body_classes %>">
+<body class="ctr-<%= controller_name %> act-<%= action_name %> <%= content_for :body_classes %>" data-sub-auth="<%= current_user&.sub_auth %>">
 
   <%= render 'layouts/flashes' %>
   <%= yield :modals %>

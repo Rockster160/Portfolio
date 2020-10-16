@@ -22,6 +22,7 @@
 //= stub support/particles_json.js
 //= stub support/touch_punch.js
 //= stub support/parser.js
+//= stub support/gcode_splitter.js
 //= stub pages/random/dnd.js
 
 // http://keycode.info

@@ -20,6 +20,7 @@ Rails.application.routes.draw do
   post "webhooks/post" => "webhooks#post"
   post "webhooks/email" => "webhooks#email"
   post "webhooks/command" => "webhooks#command"
+  post "push_notification_subscribe" => "webhooks#push_notification_subscribe"
 
   get "cube" => "cubes#show"
 
@@ -53,6 +54,7 @@ Rails.application.routes.draw do
   end
 
   get :random, controller: :random, action: :index
+  resources :gcode_splitter, only: [ :index ]
   resources :colors, only: [ :index ]
   resources :anonicons, only: [ :index, :show ], constraints: { id: /[0-9.a-zA-Z]+/ }
   get :"svg-editor", controller: :svg_editors, action: :show
