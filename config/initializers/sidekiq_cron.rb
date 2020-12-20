@@ -19,11 +19,11 @@ if Rails.env.production?
       class: "ChargeCarWorker",
       cron:  monthly_15th_at_2pm
     },
-    {
-      name:  "Charge Brothers",
-      class: "ChargeBrothersWorker",
-      cron:  monthly_5th_at_11am
-    }
+    # {
+    #   name:  "Charge Brothers",
+    #   class: "ChargeBrothersWorker",
+    #   cron:  monthly_5th_at_11am
+    # }
   ]
 end
 

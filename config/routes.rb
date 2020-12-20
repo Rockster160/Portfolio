@@ -1,6 +1,6 @@
 Rails.application.routes.draw do
 
-  constraints subdomain: :home do
+  constraints subdomain: :sub do
     root "index#sub"
   end
 
