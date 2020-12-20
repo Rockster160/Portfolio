@@ -25,11 +25,7 @@ class UsersController < ApplicationController
   def update
     @user = current_user
 
-    if user_params[:password].blank?
-      success = @user.update_with_password(user_params_without_password)
-    else
-      success = @user.update_with_password(user_params)
-    end
+    success = @user.update_with_password(user_params)
 
     if success
       redirect_to account_path
@@ -41,11 +37,14 @@ class UsersController < ApplicationController
   private
 
   def user_params
-    params.require(:user).permit(:phone, :email, :username, :dark_mode, :password, :password_confirmation, :current_password).reject { |_, v| v.blank? }
+    params.require(:user).permit(
+      :phone,
+      :email,
+      :username,
+      :dark_mode,
+      :password,
+      :password_confirmation,
+      :current_password
+    ).reject { |_, v| v.blank? }
   end
-
-  def user_params_without_password
-    user_params.except(:password, :password_confirmation)
-  end
-
 end

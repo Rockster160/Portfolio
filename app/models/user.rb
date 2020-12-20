@@ -18,22 +18,31 @@ class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 
   has_many :user_lists, dependent: :destroy
-  has_many :recipes, dependent: :nullify
+  has_many :recipes, dependent: :destroy
+  has_many :recipe_favorites, class_name: "RecipeFavorite", foreign_key: :favorited_by_id
+  has_many :favorited_recipes, through: :recipe_favorites, source: :favorited_by
+  has_many :recipe_shares, class_name: "RecipeShare", foreign_key: :shared_to_id
+  has_many :shared_recipes, through: :recipe_shares, source: :shared_to
   has_many :lists, through: :user_lists
   has_many :sent_emails, class_name: "Email", foreign_key: :sent_by_id, dependent: :destroy
   has_one :avatar
+  has_one :push_sub, class_name: "UserPushSubscription"
 
   has_secure_password validations: false
 
+  after_save :confirm_guest
   validates_uniqueness_of :phone, allow_nil: true
   validate :proper_fields_present?
 
   scope :by_username, ->(username) { where("lower(username) = ?", username.to_s.downcase) }
 
   enum role: {
+    guest:    5,
     standard: 0,
     admin:    10
   }
+
+  delegate :sub_auth, to: :push_sub
 
   def self.auth_from_basic(basic_auth)
     username, password = basic_auth.split(":", 2)
@@ -43,11 +52,9 @@ class User < ApplicationRecord
   def self.attempt_login(username, password)
     user = by_username(username).first
 
-    if user.present? && user.authenticate(password)
-      user
-    else
-      false
-    end
+    return unless user.present? && user.authenticate(password)
+
+    user
   end
 
   def self.find_or_create_by_filtered_params(raw_params)
@@ -59,12 +66,31 @@ class User < ApplicationRecord
     user_scope.first || User.new(raw_params)
   end
 
+  def account_has_data?
+    self.class.reflections.values.find do |reflection|
+      next unless reflection.is_a?(ActiveRecord::Reflection::HasManyReflection)
+
+      send(reflection.name).any?
+    end.present?
+  end
+
+  def merge_account(guest_account)
+    self.class.reflections.values.each do |reflection|
+      next unless reflection.is_a?(ActiveRecord::Reflection::HasManyReflection)
+
+      fk = reflection.options[:foreign_key] || :user_id
+      guest_account.send(reflection.name).update_all(fk => self.id)
+    end
+
+    guest_account.destroy
+  end
+
   def see!
     # last logged in at NOW
   end
 
   def update_with_password(new_attrs)
-    should_require_current_password = true
+    should_require_current_password = !guest?
     update(new_attrs)
   end
 
@@ -95,6 +121,10 @@ class User < ApplicationRecord
     (user_lists.find_by(default: true) || user_lists.order(created_at: :asc).first).try(:list)
   end
 
+  def push_sub
+    super || create_push_sub
+  end
+
   def ordered_lists
     lists.includes(:user_lists).where(user_lists: { user_id: id }).order("user_lists.sort_order")
   end
@@ -119,7 +149,17 @@ class User < ApplicationRecord
 
   private
 
+  def confirm_guest
+    return unless guest?
+
+    if self.username.present?
+      update(role: :standard)
+    end
+  end
+
   def proper_fields_present?
+    return if guest?
+
     if invited?
       if phone.blank? && username.blank?
         errors.add(:base, "User must have a Username or Phone Number")

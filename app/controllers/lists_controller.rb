@@ -2,12 +2,13 @@ class ListsController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user, :color_scheme
   before_action :set_list, only: [:edit, :update, :show, :destroy, :users, :modify_from_message]
+  before_action :show_guest_banner, if: :guest_account?
 
   def index
     @lists = current_user.ordered_lists
 
     respond_to do |format|
-      format.js { render json: @lists.to_json(include: :list_items) }
+      format.js { render json: @lists.serialize }
       format.html
     end
   end
@@ -29,13 +30,13 @@ class ListsController < ApplicationController
     if @list.update(list_params)
       @user_list&.update(default: params[:default] == "true") if params[:default].present?
       respond_to do |format|
+        format.js { render json: @list.serialize }
         format.html { redirect_to list_path(@list) }
-        format.json { render json: @list.to_json(include: :list_items) }
       end
     else
       respond_to do |format|
+        format.js { render json: { errors: @list.errors.full_messages }, status: :forbidden }
         format.html { render :edit }
-        format.json { render :forbidden }
       end
     end
   end
@@ -44,7 +45,7 @@ class ListsController < ApplicationController
     raise ActionController::RoutingError.new('Not Found') unless @list.present?
 
     respond_to do |format|
-      format.js { render json: @list.to_json(include: :list_items) }
+      format.js { render json: @list.serialize }
       format.html
     end
   end
@@ -60,7 +61,6 @@ class ListsController < ApplicationController
       current_user.user_lists.create(list_id: @list.id, is_owner: true, default: params[:default] == "true")
       redirect_to @list
     else
-      binding.pry
       render :new
     end
   end
@@ -100,10 +100,12 @@ class ListsController < ApplicationController
   end
 
   def list_params
-    return {} unless params[:list].present?
-    
-    params.require(:list).permit(:name, :description, :important, :show_deleted, :default, :message).tap do |whitelist|
-      whitelist[:message] ||= params[:message] if params[:message].present?
+    if params[:list].present?
+      params.require(:list).permit(:name, :description, :important, :show_deleted, :default, :message).tap do |whitelist|
+        whitelist[:message] ||= params[:message] if params[:message].present?
+      end
+    else
+      params[:message].present? ? { message: params[:message] } : {}
     end
   end
 

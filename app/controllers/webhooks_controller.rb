@@ -21,6 +21,17 @@ class WebhooksController < ApplicationController
     List.find_and_modify(current_user, params[:command])
   end
 
+  def push_notification_subscribe
+    return render(json: { data: :failure }, status: :ok) if params[:sub_auth].blank?
+
+    push_sub = UserPushSubscription.find_by(sub_auth: params[:sub_auth])
+
+    push_data = { endpoint: params[:endpoint] }.merge(params.permit(keys: [:auth, :p256dh])[:keys])
+    push_sub&.update(push_data)
+
+    render json: { data: push_sub.as_json.except(:created_at, :updated_at) }, status: :ok
+  end
+
   private
 
   def post_params

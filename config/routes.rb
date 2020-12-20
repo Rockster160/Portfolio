@@ -10,19 +10,21 @@ Rails.application.routes.draw do
   get "playground" => "index#playground"
 
   scope module: :users do
-    get :login,      controller: :sessions,      action: :new
-    post :login,     controller: :sessions,      action: :create
-    get :logout,     controller: :sessions,      action: :destroy
-    delete :logout,  controller: :sessions,      action: :destroy
-    get :register,   controller: :registrations, action: :new
-    post :register,  controller: :registrations, action: :create
-    patch :register, controller: :registrations, action: :create
+    get :login,         controller: :sessions,      action: :new
+    post :login,        controller: :sessions,      action: :create
+    get :logout,        controller: :sessions,      action: :destroy
+    delete :logout,     controller: :sessions,      action: :destroy
+    get :register,      controller: :registrations, action: :new
+    post :register,     controller: :registrations, action: :create
+    patch :register,    controller: :registrations, action: :create
+    post :guest_signup, controller: :registrations, action: :guest_signup
   end
 
   post "webhooks/jenkins" => "webhooks#jenkins"
   post "webhooks/post" => "webhooks#post"
   post "webhooks/email" => "webhooks#email"
   post "webhooks/command" => "webhooks#command"
+  post "push_notification_subscribe" => "webhooks#push_notification_subscribe"
 
   get "cube" => "cubes#show"
 
@@ -56,6 +58,7 @@ Rails.application.routes.draw do
   end
 
   get :random, controller: :random, action: :index
+  resources :gcode_splitter, only: [ :index ]
   resources :colors, only: [ :index ]
   resources :anonicons, only: [ :index, :show ], constraints: { id: /[0-9.a-zA-Z]+/ }
   get :"svg-editor", controller: :svg_editors, action: :show
@@ -70,7 +73,7 @@ Rails.application.routes.draw do
     get :change_clothes, action: :load_character
   end
 
-  resources :recipes do
+  resources :recipes, param: :friendly_id do
     post :export_to_list, on: :member
   end
 

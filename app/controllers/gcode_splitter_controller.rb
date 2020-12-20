@@ -1,0 +1,2 @@
+class GcodeSplitterController < ApplicationController
+end
