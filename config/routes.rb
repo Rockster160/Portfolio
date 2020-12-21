@@ -1,9 +1,4 @@
 Rails.application.routes.draw do
-
-  constraints subdomain: :sub do
-    root "index#sub"
-  end
-
   root "index#home"
   post "/talk" => "index#talk"
   get "map" => "index#map"
@@ -95,4 +90,7 @@ Rails.application.routes.draw do
   mount Sidekiq::Web => "/sidekiq"
   mount ActionCable.server => "/cable"
 
+  constraints subdomain: :sub do
+    root "index#sub"
+  end
 end
