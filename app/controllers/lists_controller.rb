@@ -23,7 +23,7 @@ class ListsController < ApplicationController
 
   def update
     if params[:sort]
-      @list.sort_items!(params[:sort].reverse, params[:order])
+      @list.sort_items!(params[:sort], params[:order])
       return head :ok
     end
 
@@ -76,7 +76,7 @@ class ListsController < ApplicationController
   def receive_update
     @list = List.find(params[:id])
 
-    new_order = params[:list_item_order] || []
+    new_order = params[:list_item_order].reverse || []
     new_order.each_with_index do |list_item_id, idx|
       list_item = @list.list_items.with_deleted.find_by(id: list_item_id)
       next unless list_item.present?
