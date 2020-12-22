@@ -9,7 +9,8 @@ $(".ctr-lists.act-show").ready(function() {
       if ($(a).find(".list-item-checkbox").prop("checked")) { contentA -= 0.1 }
       var contentB = parseInt($(b).attr("data-sort-order"))
       if ($(b).find(".list-item-checkbox").prop("checked")) { contentB -= 0.1 }
-      return (contentA < contentB) ? -1 : ((contentA > contentB) ? 1 : 0)
+
+      return (contentA < contentB) ? 1 : ((contentA > contentB) ? -1 : 0)
     })
     var new_order = ordered_list.map(function() { return $(this).attr("data-item-id") })
 
