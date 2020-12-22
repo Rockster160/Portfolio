@@ -97,7 +97,7 @@ class List < ApplicationRecord
     when :name
       list_items.with_deleted.order("list_items.name #{order}")
     when :reverse
-      list_items.with_deleted.order("list_items.sort_order ASC")
+      list_items.with_deleted.order("list_items.sort_order DESC")
     when :category
       list_items.with_deleted.order("list_items.category #{order} NULLS LAST")
     when :shuffle
