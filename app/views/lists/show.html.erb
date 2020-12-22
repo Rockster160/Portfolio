@@ -11,6 +11,7 @@
     <a href="<%= list_path(@list, sort: :name, order: :desc) %>" data-method="PATCH" data-remote="true" class="btn">Name Z-A</a> <br>
     <a href="<%= list_path(@list, sort: :category, order: :asc) %>" data-method="PATCH" data-remote="true" class="btn">Category A-Z</a>
     <a href="<%= list_path(@list, sort: :category, order: :desc) %>" data-method="PATCH" data-remote="true" class="btn">Category Z-A</a> <br>
+    <a href="<%= list_path(@list, sort: :reverse) %>" data-method="PATCH" data-remote="true" class="btn">Reverse</a>
     <a href="<%= list_path(@list, sort: :shuffle) %>" data-method="PATCH" data-remote="true" class="btn">Shuffle (Random)</a>
   </div>
 <% end %>
