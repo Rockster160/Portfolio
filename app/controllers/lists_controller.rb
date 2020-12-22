@@ -23,7 +23,7 @@ class ListsController < ApplicationController
 
   def update
     if params[:sort]
-      @list.sort_items!(params[:sort], params[:order])
+      @list.sort_items!(params[:sort].reverse, params[:order])
       return head :ok
     end
 
