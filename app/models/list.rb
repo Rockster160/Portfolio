@@ -105,7 +105,7 @@ class List < ApplicationRecord
     end
 
     items&.each_with_index do |list_item, idx|
-      list_item.update(sort_order: idx, do_not_bump_order: true)
+      list_item.update(sort_order: idx)
     end
     broadcast!
   end
@@ -197,7 +197,7 @@ class List < ApplicationRecord
 
   def fix_list_items_order
     list_items.with_deleted.ordered.each_with_index do |list_item, idx|
-      list_item.update(sort_order: idx, do_not_bump_order: true)
+      list_item.update(sort_order: idx)
     end
   end
 
