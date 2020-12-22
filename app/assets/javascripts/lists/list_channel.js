@@ -6,9 +6,9 @@ $(".ctr-lists.act-show").ready(function() {
     var original_order = $(".list-items .list-item-container").map(function() { return $(this).attr("data-item-id") })
     var ordered_list = $(".list-items .list-item-container").sort(function(a, b) {
       var contentA = parseInt($(a).attr("data-sort-order"))
-      if ($(a).find(".list-item-checkbox").prop("checked")) { contentA -= 0.1 }
+      if ($(a).find(".list-item-checkbox").prop("checked")) { contentA += 0.1 }
       var contentB = parseInt($(b).attr("data-sort-order"))
-      if ($(b).find(".list-item-checkbox").prop("checked")) { contentB -= 0.1 }
+      if ($(b).find(".list-item-checkbox").prop("checked")) { contentB += 0.1 }
 
       return (contentA < contentB) ? 1 : ((contentA > contentB) ? -1 : 0)
     })

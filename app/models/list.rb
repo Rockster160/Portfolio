@@ -55,12 +55,12 @@ class List < ApplicationRecord
       description: description,
       important: important,
       show_deleted: show_deleted,
-      list_items: list_items.ordered.pluck(:name)
+      list_items: ordered_items.pluck(:name)
     }
   end
 
   def ordered_items
-    items = list_items.order("list_items.sort_order")
+    items = list_items.ordered
     items = items.with_deleted if show_deleted?
     items
   end
@@ -105,7 +105,7 @@ class List < ApplicationRecord
     end
 
     items&.each_with_index do |list_item, idx|
-      list_item.update(sort_order: idx)
+      list_item.update(sort_order: idx, do_not_broadcast: true)
     end
     broadcast!
   end
@@ -197,7 +197,7 @@ class List < ApplicationRecord
 
   def fix_list_items_order
     list_items.with_deleted.ordered.each_with_index do |list_item, idx|
-      list_item.update(sort_order: idx)
+      list_item.update(sort_order: idx, do_not_broadcast: true)
     end
   end
 
