@@ -35,7 +35,7 @@ class WebhooksController < ApplicationController
   private
 
   def post_params
-    Rails.logger.warn "#{params}"
+    Rails.logger.warn "#{params.permit!.to_h}"
   end
 
 end
