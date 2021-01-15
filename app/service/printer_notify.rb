@@ -49,9 +49,9 @@ module PrinterNotify
 
   def print_name
     full = @params.dig(:extra, :name)
-    time = full[/-(\d+D)?(\d+H)?(\d+M)?.gcode/].to_s
+    ext = full[/-?(\d+D)?(\d+H)?(\d+M)?.gcode/].to_s
 
-    full[0..-time.length - 1]
+    full[0..-ext.length - 1]
   end
 
   def actual_complete_time
@@ -68,7 +68,7 @@ module PrinterNotify
 
   def cura_est_time
     str = @params.dig(:extra, :name)
-    time = str[/-(\d+D)?(\d+H)?(\d+M)?.gcode/].to_s[1..-7]
+    time = str[/-?(\d+D)?(\d+H)?(\d+M)?.gcode/].to_s[1..-7]
 
     str_to_dur(time)
   end
@@ -78,6 +78,8 @@ module PrinterNotify
   end
 
   def str_to_dur(str)
+    return "??" if str.blank?
+
     hours = str[/\d+D/].to_i * 24
     hours += str[/\d+H/].to_i
     minutes = str[/\d+M/].to_i
