@@ -15,6 +15,12 @@ class WebhooksController < ApplicationController
     head :no_content
   end
 
+  def notify
+    return head :no_content if printer_secret?
+
+    PrinterNotify.notify(params)
+  end
+
   def command
     return head :no_content unless user_signed_in?
 
@@ -33,6 +39,10 @@ class WebhooksController < ApplicationController
   end
 
   private
+
+  def printer_secret?
+    params[:apiSecret] == ENV["PORTFOLIO_PRINTER_SECRET"]
+  end
 
   def post_params
     Rails.logger.warn "#{params.permit!.to_h}"
