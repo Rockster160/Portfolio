@@ -16,7 +16,7 @@ class WebhooksController < ApplicationController
   end
 
   def notify
-    return head :no_content if printer_secret?
+    return head :no_content unless printer_authed?
 
     PrinterNotify.notify(params)
   end
@@ -40,7 +40,7 @@ class WebhooksController < ApplicationController
 
   private
 
-  def printer_secret?
+  def printer_authed?
     params[:apiSecret] == ENV["PORTFOLIO_PRINTER_SECRET"]
   end
 
