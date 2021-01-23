@@ -12,14 +12,14 @@
         <a href="<%= edit_function_path(@function) %>" class="btn">Edit</a>
       </div>
 
-      <% @function.split_args.each do |arg, default| %>
-        <div class="form-field">
-          <div class="split-field">
+      <div class="flex-container">
+        <% @function.split_args.each do |arg, default| %>
+          <div class="flex-field flex-3">
             <label for="arg[<%= arg %>]"><%= arg %></label>
             <input type="text" name="arg[<%= arg %>]" value="<%= default %>">
           </div>
-        </div>
-      <% end %>
+        <% end %>
+      </div>
 
       <div class="form-field">
         <textarea readonly name="proposed_code" class="command"><%= @function.proposed_code %></textarea>
