@@ -1,0 +1,39 @@
+<%= meta_title "Functions" %>
+<%= meta_description "Input args, get results" %>
+
+<div class="skinny-container">
+  <div class="form">
+    <div class="form-title">
+      Functions
+    </div>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <a href="<%= edit_function_path(@function) %>" class="btn">Edit</a>
+      </div>
+
+      <% @function.split_args.each do |arg| %>
+        <div class="form-field">
+          <div class="split-field">
+            <label for="name[<%= arg %>]"><%= arg %></label>
+            <input type="text" name="arg[<%= arg %>]" value="">
+          </div>
+        </div>
+      <% end %>
+
+      <div class="form-field">
+        <textarea readonly name="proposed_code" class="command"><%= @function.proposed_code %></textarea>
+      </div>
+
+      <div class="form-submission">
+        <%= submit_tag "Run!" %>
+      </div>
+
+      <div class="form-field">
+        <h3>Results</h3>
+        <hr>
+        <textarea readonly name="results"  class="command" rows="10"></textarea>
+      </div>
+    </div>
+  </div>
+</div>

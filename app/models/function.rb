@@ -15,4 +15,9 @@
 #
 
 class Function < ApplicationRecord
+  def split_args
+    return [] if arguments.blank?
+
+    arguments.split(",").map(&:squish)
+  end
 end
