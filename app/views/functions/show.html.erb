@@ -2,7 +2,7 @@
 <%= meta_description "Input args, get results" %>
 
 <div class="skinny-container">
-  <div class="form">
+  <%= form_tag function_run_path(@function), class: "command-form" do %>
     <div class="form-title">
       Functions
     </div>
@@ -15,7 +15,7 @@
       <% @function.split_args.each do |arg| %>
         <div class="form-field">
           <div class="split-field">
-            <label for="name[<%= arg %>]"><%= arg %></label>
+            <label for="arg[<%= arg %>]"><%= arg %></label>
             <input type="text" name="arg[<%= arg %>]" value="">
           </div>
         </div>
@@ -35,5 +35,5 @@
         <textarea readonly name="results"  class="command" rows="10"></textarea>
       </div>
     </div>
-  </div>
+  <% end %>
 </div>

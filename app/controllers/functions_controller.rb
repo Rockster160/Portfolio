@@ -9,6 +9,12 @@ class FunctionsController < ApplicationController
     @function = Function.find(params[:id])
   end
 
+  def run
+    res = RunFunction.run(params[:function_id], params[:arg])
+
+    render json: res
+  end
+
   def new
     @function = Function.new
 

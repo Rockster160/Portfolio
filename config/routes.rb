@@ -19,7 +19,9 @@ Rails.application.routes.draw do
     post :guest_signup, controller: :registrations, action: :guest_signup
   end
 
-  resources :functions
+  resources :functions do
+    post :run
+  end
 
   post "webhooks/jenkins" => "webhooks#jenkins"
   post "webhooks/post" => "webhooks#post"
