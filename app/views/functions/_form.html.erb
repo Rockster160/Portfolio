@@ -1,0 +1,30 @@
+<%= meta_title "Functions" %>
+<%= meta_description "Input args, get results" %>
+
+<div class="skinny-container">
+  <%= form_for(@function) do |f| %>
+    <div class="form-title">
+      Functions
+    </div>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= f.label :arguments do %>
+          Arg names (comma separated)
+          <%= f.text_area :arguments, class: :command %>
+        <% end %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :proposed_code do %>
+          Function
+          <%= f.text_area :proposed_code, class: :command, rows: 10, placeholder: "puts arg[:x] + arg[:y]" %>
+        <% end %>
+      </div>
+
+      <div class="form-submission">
+        <%= f.submit %>
+      </div>
+    </div>
+  <% end %>
+</div>

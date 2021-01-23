@@ -1,26 +1,48 @@
 code {
   display: inline;
-  white-space: nowrap;
-  font-family: monospace;
   background: #E0E0E5;
   padding: 0 3px;
+  font-family: monospace;
+  white-space: nowrap;
 }
+
 pre.prettyprint {
   display: block;
+  padding: 30px 20px;
   overflow-x: scroll;
   overflow-y: visible;
-  padding: 30px 20px;
 
-  .str { color: #98C379; }
-  .com { font-style: italic; }
+  .str {
+    color: #98C379;
+  }
+
+  .com {
+    font-style: italic;
+  }
 }
+
 pre.preformat {
-  padding: 10px;
   background: #333;
+  padding: 10px;
 }
+
 .color-highlight {
   display: inline;
-  white-space: nowrap;
-  font-family: monospace;
   padding: 0 3px;
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.command {
+  display: block;
+  position: relative;
+  background: black;
+  padding: 10px 20px;
+  overflow-x: scroll;
+  overflow-y: visible;
+  color: lime;
+  font-family: monospace;
+  text-align: left;
+  white-space: nowrap;
+  white-space: pre;
 }

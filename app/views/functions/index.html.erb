@@ -1,0 +1,23 @@
+<%= meta_title "Functions", include_name: false %>
+
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <a href="<%= account_path %>" class="btn">Account</a>
+    <a href="<%= new_list_path %>" class="btn pull-right">New List +</a>
+  </div>
+  <div class="lists-title">My Lists</div>
+  <div class="lists" data-reorder-url="<%= reorder_lists_path %>">
+    <div class="list-field">
+      <%= text_field_tag "list[name]", "", class: "filterable", placeholder: "Search Functions" %>
+    </div>
+    <div class="important-list-items"></div>
+    <% @functions.each do |function| %>
+      <div class="list-item-container">
+        <a href="<%= edit_function_path(function) %>" class="settings-btn"><i class="fa fa-cog"></i></a>
+        <a href="<%= function_path(function) %>" class="list-item">
+          <span class="item-name"><%= function.title %></span>
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>
