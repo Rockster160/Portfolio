@@ -82,6 +82,7 @@ class RunFunction
   def finish_command(res)
     @function.update_columns(deploy_finish_at: Time.current)
 
+    puts "\e[32m#{output_text(res)}\e[0m"
     output_text(res)
   rescue Exception => e # rubocop:disable Lint/RescueException - Yes, rescue full Exception so that we can catch typos in evals as well
     Rails.logger.fatal("[#{e.class}](fn:#{@function.id}) #{e.try(:message) || e}")
