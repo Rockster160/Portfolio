@@ -3,10 +3,10 @@
 <div class="skinny-container lists-index-container">
   <div class="btn-container">
     <a href="<%= account_path %>" class="btn">Account</a>
-    <a href="<%= new_list_path %>" class="btn pull-right">New List +</a>
+    <a href="<%= new_function_path %>" class="btn pull-right">New Function +</a>
   </div>
-  <div class="lists-title">My Lists</div>
-  <div class="lists" data-reorder-url="<%= reorder_lists_path %>">
+  <div class="lists-title">My Functions</div>
+  <div class="lists">
     <div class="list-field">
       <%= text_field_tag "list[name]", "", class: "filterable", placeholder: "Search Functions" %>
     </div>
