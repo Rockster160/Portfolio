@@ -10,7 +10,7 @@ class FunctionsController < ApplicationController
   end
 
   def run
-    res = RunFunction.run(params[:function_id], params[:arg])
+    res = RunFunction.run(params[:function_id], params[:arg].as_json)
 
     render json: res
   end
