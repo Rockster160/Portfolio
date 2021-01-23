@@ -2,7 +2,7 @@ source 'https://rubygems.org'
 
 gem 'rails', '5.0.2'
 gem 'pg'
-gem 'therubyracer'
+# gem 'therubyracer'
 gem 'coffee-rails'
 gem 'sass-rails'
 gem 'uglifier', '>= 1.3.0'
