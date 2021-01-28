@@ -64,7 +64,7 @@ class FunctionsController < ApplicationController
     params.require(:function).permit(
       :arguments,
       :description,
-      :name,
+      :title,
       :proposed_code,
       :results,
       :status,
