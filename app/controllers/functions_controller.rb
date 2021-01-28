@@ -1,5 +1,6 @@
 class FunctionsController < ApplicationController
   before_action :authorize_admin
+  skip_before_action :verify_authenticity_token
 
   def index
     @functions = Function.order(id: :desc)

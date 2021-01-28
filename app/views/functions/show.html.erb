@@ -16,7 +16,7 @@
         <% @function.split_args.each do |arg, default| %>
           <div class="flex-field flex-3">
             <label for="arg[<%= arg %>]"><%= arg %></label>
-            <input type="text" name="arg[<%= arg %>]" value="<%= default %>">
+            <input type="text" name="arg[<%= arg %>]" value="<%= params[arg] || default %>">
           </div>
         <% end %>
       </div>
