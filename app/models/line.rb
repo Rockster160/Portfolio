@@ -3,11 +3,11 @@
 # Table name: lines
 #
 #  id            :integer          not null, primary key
-#  flash_card_id :integer
-#  text          :string(255)
 #  center        :boolean
+#  text          :string(255)
 #  created_at    :datetime
 #  updated_at    :datetime
+#  flash_card_id :integer
 #
 
 class Line < ApplicationRecord

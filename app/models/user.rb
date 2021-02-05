@@ -3,15 +3,15 @@
 # Table name: users
 #
 #  id               :integer          not null, primary key
-#  username         :string
-#  password_digest  :string
-#  created_at       :datetime         not null
-#  updated_at       :datetime         not null
-#  phone            :string
-#  invitation_token :string
-#  role             :integer          default("standard")
 #  dark_mode        :boolean
 #  email            :string
+#  invitation_token :string
+#  password_digest  :string
+#  phone            :string
+#  role             :integer          default("standard")
+#  username         :string
+#  created_at       :datetime         not null
+#  updated_at       :datetime         not null
 #
 
 class User < ApplicationRecord

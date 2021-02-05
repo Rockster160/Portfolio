@@ -3,12 +3,12 @@
 # Table name: lists
 #
 #  id           :integer          not null, primary key
-#  name         :string(255)
-#  created_at   :datetime
-#  updated_at   :datetime
 #  description  :text
 #  important    :boolean          default(FALSE)
+#  name         :string(255)
 #  show_deleted :boolean
+#  created_at   :datetime
+#  updated_at   :datetime
 #
 
 class List < ApplicationRecord

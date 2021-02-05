@@ -3,11 +3,11 @@
 # Table name: litter_text_reminders
 #
 #  id         :integer          not null, primary key
+#  message    :string(255)
+#  regex      :string(255)
 #  turn       :integer          default("3852599640")
 #  created_at :datetime
 #  updated_at :datetime
-#  regex      :string(255)
-#  message    :string(255)
 #
 
 class LitterTextReminder < ApplicationRecord

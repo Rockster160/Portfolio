@@ -3,20 +3,20 @@
 # Table name: list_items
 #
 #  id             :integer          not null, primary key
-#  name           :text
-#  list_id        :integer
-#  created_at     :datetime
-#  updated_at     :datetime
-#  sort_order     :integer
-#  formatted_name :text
+#  amount         :integer
+#  category       :string
 #  deleted_at     :datetime
+#  formatted_name :text
 #  important      :boolean          default(FALSE)
+#  name           :text
 #  permanent      :boolean          default(FALSE)
 #  schedule       :string
-#  category       :string
 #  schedule_next  :datetime
+#  sort_order     :integer
 #  timezone       :integer
-#  amount         :integer
+#  created_at     :datetime
+#  updated_at     :datetime
+#  list_id        :integer
 #
 
 class ListItem < ApplicationRecord

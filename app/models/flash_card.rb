@@ -3,12 +3,12 @@
 # Table name: flash_cards
 #
 #  id         :integer          not null, primary key
-#  batch_id   :integer
-#  title      :string(255)
 #  body       :text
 #  pin        :integer
+#  title      :string(255)
 #  created_at :datetime
 #  updated_at :datetime
+#  batch_id   :integer
 #
 
 class FlashCard < ApplicationRecord
