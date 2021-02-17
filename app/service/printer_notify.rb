@@ -32,7 +32,7 @@ module PrinterNotify
         title: @params[:topic],
         fields: [
           { title: "Name", value: print_name, short: true },
-          { title: "Progress", value: @params.dig(:progress, :completion), short: true },
+          { title: "Progress", value: @params.dig(:progress, :completion) || "", short: true },
         ]
       }
     ]
@@ -48,26 +48,26 @@ module PrinterNotify
   end
 
   def print_name
-    full = @params.dig(:extra, :name)
+    full = @params.dig(:extra, :name) || ""
     ext = full[/-?(\d+D)?(\d+H)?(\d+M)?.gcode/].to_s
 
     full[0..-ext.length - 1]
   end
 
   def actual_complete_time
-    time = @params.dig(:extra, :time)
+    time = @params.dig(:extra, :time) || ""
 
     sec_to_dur(time)
   end
 
   def octo_est_time
-    time = @params.dig(:webhook, :job, :estimatedPrintTime)
+    time = @params.dig(:webhook, :job, :estimatedPrintTime) || ""
 
     sec_to_dur(time)
   end
 
   def cura_est_time
-    str = @params.dig(:extra, :name)
+    str = @params.dig(:extra, :name) || ""
     time = str[/-?(\d+D)?(\d+H)?(\d+M)?.gcode/].to_s[1..-7]
 
     str_to_dur(time)
