@@ -53,8 +53,6 @@ GEM
       coderay (>= 1.0.0)
       erubis (>= 2.6.6)
       rack (>= 0.9.0)
-    binding_of_caller (0.7.2)
-      debug_inspector (>= 0.0.1)
     builder (3.2.3)
     byebug (9.0.6)
     capybara (2.10.1)
@@ -78,7 +76,6 @@ GEM
     colorize (0.8.1)
     concurrent-ruby (1.0.5)
     connection_pool (2.2.1)
-    debug_inspector (0.0.2)
     docile (1.1.5)
     domain_name (0.5.20170404)
       unf (>= 0.0.5, < 1.0.0)
@@ -287,7 +284,6 @@ DEPENDENCIES
   autoprefixer-rails
   bcrypt
   better_errors
-  binding_of_caller
   capybara
   chroma
   coffee-rails

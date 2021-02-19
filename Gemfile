@@ -45,13 +45,13 @@ gem 'acts_as_paranoid', '~> 0.5.0'
 gem "inline_svg"
 gem "ice_cube"
 gem "webpush"
+gem "chronic"
 
 gem "honeybadger", "~> 4.0"
 
 group :development, :test do
   gem 'annotate'
   gem 'rails_real_favicon'
-  gem 'binding_of_caller'
   gem 'pry-rails'
   gem 'pry-byebug'
   gem 'spring-commands-rspec'

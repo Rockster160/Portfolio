@@ -1,9 +1,9 @@
 class RunFunction
-  def self.run(function_id, args)
+  def self.run(function_id, args={})
     new.run(function_id, args)
   end
 
-  def run(function_id, args)
+  def run(function_id, args={})
     @function = Function.find(function_id)
     @args = args
     @failure = false

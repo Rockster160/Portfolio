@@ -15,6 +15,14 @@
 #
 
 class Function < ApplicationRecord
+  def lookup(identifier)
+    if identifier.to_i.to_s == identifier
+      find(identifier)
+    else
+      find_by!(title: identifier)
+    end
+  end
+
   def split_args
     return [] if arguments.blank?
 
