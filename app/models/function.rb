@@ -15,7 +15,7 @@
 #
 
 class Function < ApplicationRecord
-  def lookup(identifier)
+  def self.lookup(identifier)
     if identifier.to_i.to_s == identifier
       find(identifier)
     else
