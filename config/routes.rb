@@ -96,6 +96,9 @@ Rails.application.routes.draw do
   end
 
   require "sidekiq/web"
-  mount Sidekiq::Web => "/sidekiq"
+  # constraints ->(req) { binding.pry } do
+  constraints RoleConstraint.new(:admin) do
+    mount Sidekiq::Web => "/sidekiq"
+  end
   mount ActionCable.server => "/cable"
 end
