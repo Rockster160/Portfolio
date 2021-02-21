@@ -4,10 +4,18 @@
 <div class="skinny-container">
   <%= form_for(@function) do |f| %>
     <div class="form-title">
-      Functions
+      <%= @function.title || "Functions" %>
     </div>
 
     <div class="form-fields">
+      <div class="form-field">
+        <% if @function.persisted? %>
+          <a href="<%= function_path(@function) %>" class="btn">&larr; Back</a>
+        <% else %>
+          <a href="<%= functions_path %>" class="btn">&larr; Functions</a>
+        <% end %>
+      </div>
+
       <div class="form-field">
         <%= f.label :title %>
         <%= f.text_field :title %>

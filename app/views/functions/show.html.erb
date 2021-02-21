@@ -4,12 +4,13 @@
 <div class="skinny-container">
   <%= form_tag function_run_path(@function), class: "command-form" do %>
     <div class="form-title">
-      Functions
+      <%= @function.title %>
     </div>
 
     <div class="form-fields">
       <div class="form-field">
-        <a href="<%= edit_function_path(@function) %>" class="btn">Edit</a>
+        <a href="<%= functions_path %>" class="btn">&larr; Functions</a>
+        <a href="<%= edit_function_path(@function) %>" class="btn pull-right">Edit</a>
       </div>
 
       <div class="flex-container">
