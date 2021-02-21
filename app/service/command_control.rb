@@ -30,6 +30,8 @@ class CommandControl
       args = args_from_msg
       time = time_from_msg
 
+      return "Sorry, I can't figure out what time that is." if time.nil?
+
       FunctionWorker.perform_at(time, function.id, args)
       "Sure, I'll run #{function.title} in #{distance_of_time_in_words(Time.current, time)} from now."
     else
