@@ -18,9 +18,9 @@ class RunFunction
   def run_code(code)
     @function.update(deploy_begin_at: Time.current)
     puts "Command(#{@function.id}) running." if Rails.env.development?
-    puts "\e[31marg = HashWithIndifferentAccess.new(#{@args.to_json})\e[0m" if Rails.env.development?
+    puts "\e[31marg = HashWithIndifferentAccess.new(#{@args.try(:to_json)})\e[0m" if Rails.env.development?
 
-    code = "arg = HashWithIndifferentAccess.new(#{@args.to_json})\n\n#{code}"
+    code = "arg = HashWithIndifferentAccess.new(#{@args.try(:to_json)})\n\n#{code}"
 
     begin
       $stdout = StringIO.new
