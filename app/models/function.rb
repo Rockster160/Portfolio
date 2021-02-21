@@ -24,7 +24,7 @@ class Function < ApplicationRecord
   end
 
   def split_args
-    return [] if arguments.blank?
+    return {} if arguments.blank?
 
     arguments.split(",").each_with_object({}) do |arg, h|
       arg, default = arg.split("=").map(&:squish)
