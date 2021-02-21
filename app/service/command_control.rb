@@ -64,6 +64,8 @@ class CommandControl
   end
 
   def time_from_msg
+    Time.zone = "MST"
+    Chronic.time_class = Time.zone
     Chronic.parse(@msg.gsub("at", "").squish)
   end
 end
