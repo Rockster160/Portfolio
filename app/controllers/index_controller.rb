@@ -2,30 +2,15 @@ class IndexController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def talk
-    from = params["From"]
     body = params["Body"]
     from_user = current_user || User.find_by(phone: params["From"].gsub(/[^0-9]/, "").last(10))
 
-    return head :ok unless from.present? && body.present?
+    if from_user.present?
+      res = CommandControl.parse(params[:message])
 
-    text_action = body.to_s.squish.split(" ").first
-
-    reminder_received = case text_action.downcase
-    when "add", "remove" then List.find_and_modify(from_user, body)
-    when "recipe" then send_to_portfolio(body)
+      SmsWorker.perform_async(params["From"], res)
     else
-      LitterTextReminder.all.any? do |rem|
-        if body.gsub(/[^a-z0-9,\s]/i, '') =~ /#{rem.regex}/i
-          true if rem.done_by(from, body)
-        end
-      end
+      SmsWorker.perform_async(params["From"], "Sorry- I'm not sure who you are. Please log in and add your phone number before using SMS.")
     end
-
-    if reminder_received && reminder_received != true
-      SmsWorker.perform_async(params["From"], reminder_received) if reminder_received.present?
-    end
-
-    head :ok
   end
-
 end
