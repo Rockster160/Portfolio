@@ -9,7 +9,7 @@ code {
 pre.prettyprint {
   display: block;
   padding: 30px 20px;
-  overflow-x: scroll;
+  overflow-x: auto;
   overflow-y: visible;
 
   .str {
@@ -38,7 +38,7 @@ pre.preformat {
   position: relative;
   background: black;
   padding: 10px 20px;
-  overflow-x: scroll;
+  overflow-x: auto;
   overflow-y: visible;
   color: lime;
   font-family: monospace;

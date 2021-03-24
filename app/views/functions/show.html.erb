@@ -23,7 +23,7 @@
       </div>
 
       <div class="form-field">
-        <textarea readonly name="proposed_code" class="command"><%= @function.proposed_code %></textarea>
+        <p><%= @function.description %></p>
       </div>
 
       <div class="form-submission">
@@ -34,6 +34,10 @@
         <h3>Results</h3>
         <hr>
         <textarea readonly name="results"  class="command" rows="10"></textarea>
+      </div>
+
+      <div class="form-field">
+        <textarea readonly name="proposed_code" class="command" rows="<%= @function.proposed_code.count("\n") + 1 %>"><%= @function.proposed_code %></textarea>
       </div>
     </div>
   <% end %>
