@@ -36,7 +36,7 @@
       <div class="form-field">
         <%= f.label :proposed_code do %>
           Function
-          <%= f.text_area :proposed_code, class: :command, rows: 10, placeholder: "puts arg[:x] + arg[:y]" %>
+          <%= f.text_area :proposed_code, class: :command, rows: [@function.proposed_code.count("\n") + 1, 10].max, placeholder: "puts arg[:x] + arg[:y]" %>
         <% end %>
       </div>
 

@@ -21,9 +21,11 @@ class CommandControl
     function = Function.find_by("? ILIKE CONCAT(title, '%')", @msg)
     return "No function found." if function.nil?
 
-    @msg.gsub!(/^#{function.title} ?/i, "")
+    @msg.sub!(/#{function.title}/i, "")
 
-    if @msg.starts_with?(/at /i)
+    msg, time = @msg.split(" at ").map(&:squish)
+
+    if time.present?
       schedule = Function.find_by(title: "Schedule Function")
       return "No 'Schedule Function' found." if schedule.blank?
 
