@@ -76,10 +76,7 @@ $(".ctr-lists.act-show").ready(function() {
         var current_item = $(this)
         var item_id = current_item.attr("data-item-id")
         if ($(this).find(".list-item-config .locked").length > 0) { return }
-        if (updated_list_ids.toArray().includes(item_id)) {
-          // Item exists, uncheck to show it's not deleted
-          $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]").prop("checked", false)
-        } else {
+        if (!updated_list_ids.toArray().includes(item_id)) {
           // Item does not exist, check to show it's deleted.
           $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]").prop("checked", true)
         }

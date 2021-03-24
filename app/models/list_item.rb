@@ -29,7 +29,7 @@ class ListItem < ApplicationRecord
 
   validates :name, presence: true
 
-  scope :ordered, -> { order("list_items.sort_order DESC") }
+  scope :ordered, -> { order("list_items.sort_order DESC NULLS LAST") }
   scope :important, -> { where(important: true) }
   scope :unimportant, -> { where.not(important: true) }
 

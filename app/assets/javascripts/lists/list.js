@@ -27,7 +27,11 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
       $(".list-item-container .list-item-field:not(.hidden)").blur()
     },
     update: function(evt, ui) {
-      var list_item_order = $(this).children().map(function() { return $(this).attr("data-item-id") })
+      var max_num = $(this).children().count
+      var list_item_order = $(this).children().map(function() {
+        $(this).attr("data-sort-order", max_num -= 1)
+        return $(this).attr("data-item-id")
+      })
 
       var url = $(this).attr("data-update-url")
       var params = { list_item_order: list_item_order.toArray() }

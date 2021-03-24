@@ -25,6 +25,7 @@ $(".ctr-list_items.act-edit").ready(function() {
       } else {
         $(".list-item-options .countdown").removeAttr("data-next-occurrence")
       }
+      // Should always show text field here - Update on blur
       $(".list-item-container .item-name").text(item.category || "")
       $(".list-item-container .list-item-field[name='category']").val(item.category || "")
     }
