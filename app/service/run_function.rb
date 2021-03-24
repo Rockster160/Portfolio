@@ -5,7 +5,7 @@ class RunFunction
 
   def run(function_id, args={})
     @function = Function.find(function_id)
-    @args = @function.split_args.merge(args)
+    @args = @function.split_args.merge(args || {})
     @failure = false
 
     res = run_code(@function.proposed_code)
@@ -18,9 +18,9 @@ class RunFunction
   def run_code(code)
     @function.update(deploy_begin_at: Time.current)
     puts "Command(#{@function.id}) running." if Rails.env.development?
-    puts "\e[31marg = HashWithIndifferentAccess.new(#{@args.try(:to_json)})\e[0m" if Rails.env.development?
 
-    code = "arg = HashWithIndifferentAccess.new(#{@args.try(:to_json)})\n\n#{code}"
+    code = "#{bring_function}\narg = HashWithIndifferentAccess.new(#{@args.try(:to_json)})\n\n#{code}"
+    puts "\e[31m#{code}\e[0m" if Rails.env.development?
 
     begin
       $stdout = StringIO.new
@@ -36,6 +36,10 @@ class RunFunction
     end
 
     [output, result].map(&:presence).compact.join("\n")
+  end
+
+  def bring_function
+    "def bring(*func_names); func_names.map { |f| Function.lookup(f).proposed_code }.join(\"\n\"); end"
   end
 
   def results_from_exception(exc)
