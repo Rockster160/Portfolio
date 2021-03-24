@@ -97,14 +97,14 @@ class List < ApplicationRecord
     when :name
       list_items.with_deleted.order("list_items.name #{order}")
     when :reverse
-      list_items.with_deleted.order("list_items.sort_order DESC")
+      list_items.with_deleted.order("list_items.sort_order ASC") # Order is backwards
     when :category
       list_items.with_deleted.order("list_items.category #{order} NULLS LAST")
     when :shuffle
       list_items.with_deleted.order("RANDOM()")
     end
 
-    items&.each_with_index do |list_item, idx|
+    items&.reverse&.each_with_index do |list_item, idx|
       list_item.update(sort_order: idx, do_not_broadcast: true)
     end
     broadcast!

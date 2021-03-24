@@ -8,7 +8,7 @@
     <%= link_to "Destroy", list_list_item_path(@list, @list_item, really_destroy: true), method: :delete, class: "btn danger pull-right", data: { confirm: "This will remove all trace of this item regardless of schedules set or permanence. This cannot be undone. Are you sure you would like to continue?" } %>
   </div>
   <div class="list-title"><%= @list_item.name %></div>
-  <div class="list-error hidden">Disconnected from server. Changes made now will not be saved. Will attempt to reconnect automatically...</div>
+  <div class="list-error hidden">Disconnected...</div>
   <div class="list-items" data-update-url="<%= list_list_item_path(@list, @list_item) %>">
     <div class="list-item-container" data-editable data-item-url="<%= list_list_item_path(@list, @list_item) %>">
       <div class="list-item-config">

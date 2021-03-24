@@ -106,10 +106,16 @@
   }
 
   .list-error {
+    z-index: 999;
+    position: fixed;
+    top: 5px;
+    left: 50%;
+    transform: translate(-50%, 0);
     border: 2px solid red;
     border-radius: 8px;
     background-color: pink;
-    padding: 20px;
+    opacity: 0.6;
+    padding: 10px;
     color: $blue-d5;
   }
 
