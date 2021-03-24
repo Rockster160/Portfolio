@@ -158,7 +158,7 @@ class ListItem < ApplicationRecord
   private
 
   def set_sort_order
-    self.sort_order ||= list.list_items.with_deleted.max_by(&:sort_order).try(:sort_order).to_i + 1
+    self.sort_order ||= list.list_items.with_deleted.maximum(:sort_order).to_i + 1
   end
 
   def normalize_values

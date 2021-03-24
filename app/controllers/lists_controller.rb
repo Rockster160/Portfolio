@@ -14,6 +14,7 @@ class ListsController < ApplicationController
   end
 
   def reorder
+    binding.pry
     params[:list_ids].each_with_index do |list_id, idx|
       current_user.user_lists.find_by(list_id: list_id).update(sort_order: idx, do_not_broadcast: true)
     end
@@ -76,17 +77,23 @@ class ListsController < ApplicationController
   def receive_update
     @list = List.find(params[:id])
 
-    new_order = params[:list_item_order] || []
+    reorder_list
+    @list.broadcast!
+  end
+
+  private
+
+  def reorder_list
+    return if params[:list_item_order].blank?
+
+    new_order = params[:list_item_order]
     @list.list_items.with_deleted.update_all(sort_order: nil)
     new_order.reverse.each_with_index do |list_item_id, idx|
       list_item = @list.list_items.with_deleted.find_by(id: list_item_id)
       next unless list_item.present?
       list_item.update(sort_order: idx, do_not_broadcast: true)
     end
-    @list.broadcast!
   end
-
-  private
 
   def set_list
     @list = current_user.lists.find_by(id: params[:id]) || current_user.lists.select { |list| list.name.parameterize == params[:id] }.first
