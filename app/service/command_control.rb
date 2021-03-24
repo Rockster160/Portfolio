@@ -22,8 +22,9 @@ class CommandControl
     return "No function found." if function.nil?
 
     @msg.sub!(/#{function.title}/i, "")
+    @msg.sub!(/send text/i, "")
 
-    msg, time = @msg.split(" at ").map(&:squish)
+    @msg, time = @msg.split(" at ").map(&:squish)
 
     if time.present?
       schedule = Function.find_by(title: "Schedule Function")
