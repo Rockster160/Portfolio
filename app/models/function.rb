@@ -32,4 +32,10 @@ class Function < ApplicationRecord
       h[arg] = default.to_s
     end
   end
+
+  def line_count
+    return 0 if proposed_code.blank?
+
+    proposed_code.count("\n")
+  end
 end

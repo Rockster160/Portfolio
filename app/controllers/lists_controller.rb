@@ -14,7 +14,6 @@ class ListsController < ApplicationController
   end
 
   def reorder
-    binding.pry
     params[:list_ids].each_with_index do |list_id, idx|
       current_user.user_lists.find_by(list_id: list_id).update(sort_order: idx, do_not_broadcast: true)
     end

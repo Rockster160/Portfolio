@@ -37,7 +37,7 @@
       </div>
 
       <div class="form-field">
-        <textarea readonly name="proposed_code" class="command" rows="<%= @function.proposed_code.count("\n") + 1 %>"><%= @function.proposed_code %></textarea>
+        <textarea readonly name="proposed_code" class="command" rows="<%= [@function.line_count + 1, 10].max %>"><%= @function.proposed_code %></textarea>
       </div>
     </div>
   <% end %>
