@@ -4,7 +4,7 @@ class RunFunction
   end
 
   def run(function_id, args={})
-    @function = Function.find(function_id)
+    @function = Function.lookup(function_id)
     @args = @function.split_args.merge(args || {})
     @failure = false
 

@@ -7,7 +7,7 @@ class FunctionsController < ApplicationController
   end
 
   def show
-    @function = Function.find(params[:id])
+    @function = Function.lookup(params[:id])
   end
 
   def run
@@ -33,13 +33,13 @@ class FunctionsController < ApplicationController
   end
 
   def edit
-    @function = Function.find(params[:id])
+    @function = Function.lookup(params[:id])
 
     render "_form"
   end
 
   def update
-    @function = Function.find(params[:id])
+    @function = Function.lookup(params[:id])
 
     if @function.update(function_params)
       redirect_to @function
@@ -49,7 +49,7 @@ class FunctionsController < ApplicationController
   end
 
   def destroy
-    @function = Function.find(params[:id])
+    @function = Function.lookup(params[:id])
 
     if @function.destroy
       redirect_to functions_path
