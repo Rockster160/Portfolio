@@ -96,14 +96,27 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
     })
   })
 
-  $(document).on("keyup", ".list-item-field", function(evt) {
+  $(document).on("keyup", ".list-item-field, .list-item-category-field", function(evt) {
     if (evt.which == keyEvent("ENTER")) { $(this).blur() }
-  }).on("blur", ".list-item-field", function() {
+  }).on("click", ".category-btn", function(evt) {
+    var evtContainer = $(evt.target).closest(".list-item-container")
+    if (evtContainer) {
+      evt.stopPropagation()
+      if (evtContainer.hasClass("ui-sortable-helper")) { return }
+      var $itemName = evtContainer.find(".item-name")
+      var $itemCategory = evtContainer.find(".list-item-config .category")
+      var $itemField = evtContainer.find(".list-item-category-field")
+      $itemName.addClass("hidden")
+      $itemField.val($itemCategory.text())
+      $itemField.removeClass("hidden")
+      $itemField.focus()
+    }
+  }).on("blur", ".list-item-field, .list-item-category-field", function() {
     var $container = $(this).closest(".list-item-container"),
       submitUrl = $container.attr("data-item-url"),
       updatedName = $(this).val(),
       $itemName = $container.find(".item-name"),
-      $itemField = $container.find(".list-item-field"),
+      $itemField = $(this),
       params = {}
 
     $itemName.val(updatedName)

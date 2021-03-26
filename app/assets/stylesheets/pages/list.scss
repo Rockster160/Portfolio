@@ -17,7 +17,7 @@
 
     .list-item-handle {
       position: absolute;
-      top: 0;
+      top: 7px;
       right: 0;
       z-index: 2;
       width: 30px;
@@ -34,6 +34,18 @@
       font-size: 12px;
       line-height: 20px;
       text-align: center;
+    }
+
+    .category-btn {
+      position: absolute;
+      top: 1px;
+      right: 0;
+      z-index: 2;
+      width: 30px;
+      font-size: 12px;
+      line-height: 20px;
+      text-align: center;
+      cursor: pointer;
     }
 
     .item-name big {
