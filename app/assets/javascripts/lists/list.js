@@ -109,7 +109,7 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
       $itemName.addClass("hidden")
       $itemField.val($itemCategory.text())
       $itemField.removeClass("hidden")
-      $itemField.focus()
+      setTimeout(function() { $itemField.focus() }, 0)
     }
   }).on("blur", ".list-item-field, .list-item-category-field", function() {
     var $container = $(this).closest(".list-item-container"),
