@@ -3,6 +3,7 @@ class FunctionsController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def index
+       # .Add
     @functions = Function.order(id: :desc)
   end
 
