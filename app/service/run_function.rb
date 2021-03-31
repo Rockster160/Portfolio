@@ -19,7 +19,7 @@ class RunFunction
     @function.update(deploy_begin_at: Time.current)
     puts "Command(#{@function.id}) running." if Rails.env.development?
 
-    code = "#{bring_function}\narg = HashWithIndifferentAccess.new(#{@args.try(:to_json)})\n\n#{code}"
+    code = "#{bring_function}; arg = HashWithIndifferentAccess.new(#{@args.try(:to_json)});#{code}"
     puts "\e[31m#{code}\e[0m" if Rails.env.development?
 
     begin
@@ -55,13 +55,13 @@ class RunFunction
       eval_row_number = row[/\(eval\)\:\d+/].to_s[7..-1]
       next if eval_row_number.blank?
 
-      error_line = @function.proposed_code.split("\n")[eval_row_number.to_i - 1]
+      error_line = @function.proposed_code.split("\n")[eval_row_number.to_i - 2] # Offset the added lines
       "#{eval_row_number}: #{error_line}" if error_line.present?
     end.compact
     error_info += [">> Eval Trace"] + eval_trace + ["\n"] if eval_trace.any?
 
-    app_trace = backtrace.select { |row| row.include?("/app/") }.presence || []
-    error_info += [">> App Trace"] + app_trace + ["\n"] if app_trace.any?
+    # app_trace = backtrace.select { |row| row.include?("/app/") }.presence || []
+    # error_info += [">> App Trace"] + app_trace + ["\n"] if app_trace.any?
 
     error_info.join("\n")
   end
