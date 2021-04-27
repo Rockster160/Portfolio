@@ -14,15 +14,14 @@
 
   .screen-wrapper {
     position: relative;
-    background: black;
     color: lime;
     font-family: monospace;
     text-align: right;
     white-space: nowrap;
+    background: black;
 
     *, * * {
       display: inline-block;
-      background: black;
       overflow: hidden;
       color: lime;
       font-family: monospace;
@@ -56,6 +55,7 @@
 
     .screen {
       display: inline-block;
+      background: black;
       padding: 10px 20px;
       height: 100px;
       font-size: 34px;
@@ -85,6 +85,12 @@
       &.incomplete {
         background: grey;
       }
+
+      // &.num { background: grey; }
+      &.op { background: $base-complementary; }
+      &.clr { background: $danger; }
+      &.fn { background: $grey-dark; }
+      &.opt { background: $grey-blue; }
     }
   }
 }
