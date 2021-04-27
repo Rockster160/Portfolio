@@ -1,0 +1,90 @@
+.ctr-calcs.act-show {
+  margin: 0 auto;
+  width: 100%;
+  max-width: 1200px;
+  height: 100%;
+}
+
+.calc-container {
+  display: flex;
+  flex-direction: column;
+  background: blue;
+  width: 100%;
+  height: 100%;
+
+  .screen-wrapper {
+    position: relative;
+    background: black;
+    color: lime;
+    font-family: monospace;
+    text-align: right;
+    white-space: nowrap;
+
+    *, * * {
+      display: inline-block;
+      background: black;
+      overflow: hidden;
+      color: lime;
+      font-family: monospace;
+      text-align: right;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .prev {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+    }
+
+    .clipboard {
+      display: inline-block;
+      position: absolute;
+      bottom: 5px;
+      left: 5px;
+
+      svg {
+        width: 10px;
+      }
+
+      span {
+        overflow: auto;
+        display: inline-block;
+        width: auto;
+      }
+    }
+
+    .screen {
+      display: inline-block;
+      padding: 10px 20px;
+      height: 100px;
+      font-size: 34px;
+    }
+  }
+
+  .controls {
+    row-gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    column-gap: 10px;
+    padding: 10px;
+    width: 100%;
+    height: 100%;
+
+    .row {
+      grid-column: span 5;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      vertical-align: middle;
+      text-align: center;
+
+      &.incomplete {
+        background: grey;
+      }
+    }
+  }
+}

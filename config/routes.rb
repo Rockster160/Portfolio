@@ -37,6 +37,8 @@ Rails.application.routes.draw do
   resources :emails, except: [:destroy, :edit]
   resources :log_trackers, only: [ :index, :show ]
 
+  resource :calc, only: [:show]
+
   resource :summoners_war do
     get :runes
     resources :monsters
