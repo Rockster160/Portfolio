@@ -70,7 +70,7 @@ $(".ctr-calcs.act-show").ready(function() {
     } else {
       var calc = Screen.num()
 
-      switch (Prev.op()) {
+      switch(Prev.op()) {
         case "+":
         calc = Calc.add()
         break;
@@ -78,9 +78,11 @@ $(".ctr-calcs.act-show").ready(function() {
         calc = Calc.subt()
         break;
         case "×":
+        case "*":
         calc = Calc.mult()
         break;
         case "÷":
+        case "/":
         calc = Calc.div()
         break;
         case "^":
@@ -115,6 +117,13 @@ $(".ctr-calcs.act-show").ready(function() {
   Calc.sqrt = function() {
     return Math.sqrt(Calc.interpret(Prev.num()), Calc.interpret(Screen.num()))
   }
+  Calc.clear = function() {
+    if (Screen.num() == "") {
+      Prev.clear()
+    } else {
+      Screen.clear()
+    }
+  }
   Calc.copy = function() {
     if (Screen.num().length > 0) {
       copy = Screen.num()
@@ -139,11 +148,7 @@ $(".ctr-calcs.act-show").ready(function() {
   }).on("click", "[data-replace]", function() {
     Screen.num(this.dataset.replace)
   }).on("click", "[data-clear]", function() {
-    if (Screen.num() == "") {
-      Prev.clear()
-    } else {
-      Screen.clear()
-    }
+    Calc.clear()
   }).on("click", "[data-del]", function() {
     Screen.del()
   }).on("click", "[data-op]", function() {
@@ -163,6 +168,28 @@ $(".ctr-calcs.act-show").ready(function() {
       Screen.num(Screen.num().slice(1, -1))
     } else {
       Screen.num("-" + Screen.num())
+    }
+  })
+
+  $(document).on("keydown", ".screen", function(evt) {
+    switch(evt.key) {
+      case "+":
+      case "-":
+      case "/":
+      case "*":
+        Calc.op(evt.key)
+        evt.preventDefault();
+        break;
+      case "=":
+      case "Enter":
+        Calc.equal()
+        evt.preventDefault();
+        break;
+      case "Escape":
+      case "Clear":
+        Calc.clear()
+        evt.preventDefault();
+        break;
     }
   })
 })
