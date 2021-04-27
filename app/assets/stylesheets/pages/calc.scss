@@ -86,6 +86,8 @@
       justify-content: center;
       vertical-align: middle;
       text-align: center;
+      padding: 0;
+      white-space: nowrap;
 
       &.op { background: $base-complementary; }
       &.clr { background: $danger; }
