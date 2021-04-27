@@ -49,7 +49,7 @@ $(".ctr-calcs.act-show").ready(function() {
 
   function Calc() {}
   Calc.interpret = function(num) {
-    // Read something like 4'11" 1/16 and convert to a number
+    // TODO: Read something like 4'11" 1/16 and convert to a number
     var int = parseFloat(num)
     if (isNaN(int)) {
       return 0
@@ -59,7 +59,7 @@ $(".ctr-calcs.act-show").ready(function() {
   }
   Calc.format = function(num) {
     return num
-    // Split out something like 4'11" 1/16
+    // TODO: Split out something like 4'11" 1/16
   }
   Calc.op = function(op) {
     if (Screen.num() == "") {
@@ -133,7 +133,6 @@ $(".ctr-calcs.act-show").ready(function() {
   Calc.equal = function() {
     Calc.op("")
   }
-
 
   $(document).on("click", "[data-enter]", function() {
     Screen.append(this.dataset.enter)
