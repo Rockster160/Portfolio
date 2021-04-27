@@ -32,7 +32,7 @@ gem 'bcrypt'
 gem 'rails_autolink'
 gem 'exception_notification'
 gem 'slack-notifier'
-gem 'nokogiri', "~> 1.10.4"
+gem 'nokogiri', "~> 1.11.0"
 gem 'capybara'
 gem 'poltergeist'
 gem 'launchy'
