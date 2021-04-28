@@ -36,12 +36,6 @@ $(".ctr-calcs.act-show").ready(function() {
       return $prev.find(".op").text(txt)
     }
   }
-  Prev.store = function(op) {
-    Prev.num(Screen.num())
-    Prev.op(op)
-
-    Screen.clear()
-  }
   Prev.clear = function(op) {
     Prev.num("")
     Prev.op("")
@@ -57,58 +51,122 @@ $(".ctr-calcs.act-show").ready(function() {
       return num
     }
   }
-  Calc.compress = function() {
-    
+  Calc.compress = function(vals) {
+    console.log("TODO: Fractions");
+    console.log(vals);
+    var num = vals.unitless
+
+    var ins = 0
+    ins += vals.miles * 63360
+    ins += vals.feet * 12
+    ins += vals.inches
+
+    var mms = 0
+    mms += vals.millimeters
+    mms += vals.meters * 1000
+    mms += vals.centimeters * 10
+    mms += vals.kilometers * 1000000
+
+    if (ins == 0 && mms == 0) {
+      unit = null
+      num += ins + (mms * 25.4)
+    } else if (ins >= mms) {
+      if (vals.feet > 0) {
+        unit = "ft in"
+      } else {
+        unit = "in"
+      }
+
+      num += ins + (mms * 25.4)
+    } else if (mms > ins) {
+      if (vals.feet > 0) {
+        unit = "m mm"
+      } else {
+        unit = "mm"
+      }
+
+      num += mms + (ins / 25.4)
+    }
+
+    console.log(num);
+    return num
   }
   Calc.interpret = function(num) {
-    // TODO: Read something like 4'11" 1/16 and convert to a number
+    // Bug: Because we interpret the new and old number, unit from the old num is lost if new num is unitless
+    // TODO: Fractions!
+    if (typeof num == "number") { return num }
     var vals = {}
 
-    var feet_match = num.match(/(\d+)(?:\s*)(?:\bft\b|\'|\bf(?:ee|oo)t\b)/i)
-    vals.feet = Calc.safeFloat(feet[1])
-    num.replace(feet[0], "")
+    var feet_match = num.match(/(\d+)(?:\s*)(?:\bft\b|\'|\bf(?:ee|oo)t\b)/i) || {}
+    vals.feet = Calc.safeFloat(feet_match[1]) || 0
+    num = num.replace(feet_match[0], "")
 
-    var inches_match = num.match(/(\d+)(?:\s*)(?:\bin\b|\"|\binch(?:es)?\b)/i)
-    vals.inches = Calc.safeFloat(inches[1])
-    num.replace(feet[0], "")
+    var inches_match = num.match(/(\d+)(?:\s*)(?:\bin\b|\"|\binch(?:es)?\b)/i) || {}
+    vals.inches = Calc.safeFloat(inches_match[1]) || 0
+    num = num.replace(inches_match[0], "")
 
-    var miles_match = num.match(/(\d+)(?:\s*)(?:\bmi\b|\"|\bmiles?\b)/i)
-    vals.miles = Calc.safeFloat(miles[1])
-    num.replace(feet[0], "")
+    var miles_match = num.match(/(\d+)(?:\s*)(?:\bmi\b|\"|\bmiles?\b)/i) || {}
+    vals.miles = Calc.safeFloat(miles_match[1]) || 0
+    num = num.replace(miles_match[0], "")
 
-    var millimeters_match = num.match(/(\d+)(?:\s*)(?:\bmm\b|\bmillimeters?\b)/i)
-    vals.millimeters = Calc.safeFloat(millimeters[1])
-    num.replace(feet[0], "")
+    var millimeters_match = num.match(/(\d+)(?:\s*)(?:\bmm\b|\bmillimeters?\b)/i) || {}
+    vals.millimeters = Calc.safeFloat(millimeters_match[1]) || 0
+    num = num.replace(millimeters_match[0], "")
 
-    var meters_match = num.match(/(\d+)(?:\s*)(?:\bm\b|\bmeters?\b)/i)
-    vals.meters = Calc.safeFloat(meters[1])
-    num.replace(feet[0], "")
+    var meters_match = num.match(/(\d+)(?:\s*)(?:\bm\b|\bmeters?\b)/i) || {}
+    vals.meters = Calc.safeFloat(meters_match[1]) || 0
+    num = num.replace(meters_match[0], "")
 
-    var centimeters_match = num.match(/(\d+)(?:\s*)(?:\bcm\b|\bcentimeters?\b)/i)
-    vals.centimeters = Calc.safeFloat(centimeters[1])
-    num.replace(feet[0], "")
+    var centimeters_match = num.match(/(\d+)(?:\s*)(?:\bcm\b|\bcentimeters?\b)/i) || {}
+    vals.centimeters = Calc.safeFloat(centimeters_match[1]) || 0
+    num = num.replace(centimeters_match[0], "")
 
-    var kilometers_match = num.match(/(\d+)(?:\s*)(?:\bkm\b|\bkilometers?\b)/i)
-    vals.kilometers = Calc.safeFloat(kilometers[1])
-    num.replace(feet[0], "")
+    var kilometers_match = num.match(/(\d+)(?:\s*)(?:\bkm\b|\bkilometers?\b)/i) || {}
+    vals.kilometers = Calc.safeFloat(kilometers_match[1]) || 0
+    num = num.replace(kilometers_match[0], "")
 
-    vals.unitless = Calc.safeFloat(num)
+    vals.unitless = Calc.safeFloat(num) || 0
 
-    if (isNaN(int)) {
-      return 0
-    } else {
-      return int
-    }
+    return Calc.compress(vals)
   }
   Calc.format = function(num) {
-    return num
+    if (typeof num == "string") { num = Calc.interpret(num) }
     // TODO: Split out something like 4'11" 1/16
+    var pieces = []
+    switch(unit) {
+      case null:
+        return num
+        break
+      case "ft in":
+        var ft = Math.floor(num / 12)
+        num -= ft * 12
+        if (ft > 0) { pieces.push(ft.toString() + "\'") }
+        if (num > 0) { pieces.push(num.toString() + "\"") }
+        return pieces.join(" ")
+        break
+      case "in":
+        return num.toString() + "\""
+        break
+      case "m mm":
+        var m = Math.floor(num / 1000)
+        num -= m * 1000
+        if (m > 0) { pieces.push(m.toString() + "m") }
+        if (num > 0) { pieces.push(num.toString() + "mm") }
+        return pieces.join(" ")
+        break
+      case "mm":
+        return num.toString() + "mm"
+        break
+    }
+
+    console.log("Unit not found: ", unit);
+    return num
   }
   Calc.op = function(op) {
     if (Screen.num() == "") {
       // No op
     } else if (Prev.num() == "") {
-      Prev.num(Calc.interpret(Screen.num()))
+      Prev.num(Calc.format(Screen.num()))
       Screen.clear()
     } else {
       var calc = Screen.num()
@@ -136,7 +194,7 @@ $(".ctr-calcs.act-show").ready(function() {
         break;
       }
 
-      Prev.num(calc)
+      Prev.num(Calc.format(calc))
       Screen.clear()
     }
 
