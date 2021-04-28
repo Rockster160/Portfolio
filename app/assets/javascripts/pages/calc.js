@@ -1,5 +1,5 @@
 $(".ctr-calcs.act-show").ready(function() {
-  var $screen = $(".screen"), $prev = $(".prev"), copy = "0"
+  var $screen = $(".screen"), $prev = $(".prev"), copy = "0", unit = null
 
   function Screen() {}
   Screen.num = function(txt) {
@@ -48,9 +48,52 @@ $(".ctr-calcs.act-show").ready(function() {
   }
 
   function Calc() {}
+  Calc.safeFloat = function(str) {
+    var num = parseFloat(str)
+
+    if (isNaN(num)) {
+      return null
+    } else {
+      return num
+    }
+  }
+  Calc.compress = function() {
+    
+  }
   Calc.interpret = function(num) {
     // TODO: Read something like 4'11" 1/16 and convert to a number
-    var int = parseFloat(num)
+    var vals = {}
+
+    var feet_match = num.match(/(\d+)(?:\s*)(?:\bft\b|\'|\bf(?:ee|oo)t\b)/i)
+    vals.feet = Calc.safeFloat(feet[1])
+    num.replace(feet[0], "")
+
+    var inches_match = num.match(/(\d+)(?:\s*)(?:\bin\b|\"|\binch(?:es)?\b)/i)
+    vals.inches = Calc.safeFloat(inches[1])
+    num.replace(feet[0], "")
+
+    var miles_match = num.match(/(\d+)(?:\s*)(?:\bmi\b|\"|\bmiles?\b)/i)
+    vals.miles = Calc.safeFloat(miles[1])
+    num.replace(feet[0], "")
+
+    var millimeters_match = num.match(/(\d+)(?:\s*)(?:\bmm\b|\bmillimeters?\b)/i)
+    vals.millimeters = Calc.safeFloat(millimeters[1])
+    num.replace(feet[0], "")
+
+    var meters_match = num.match(/(\d+)(?:\s*)(?:\bm\b|\bmeters?\b)/i)
+    vals.meters = Calc.safeFloat(meters[1])
+    num.replace(feet[0], "")
+
+    var centimeters_match = num.match(/(\d+)(?:\s*)(?:\bcm\b|\bcentimeters?\b)/i)
+    vals.centimeters = Calc.safeFloat(centimeters[1])
+    num.replace(feet[0], "")
+
+    var kilometers_match = num.match(/(\d+)(?:\s*)(?:\bkm\b|\bkilometers?\b)/i)
+    vals.kilometers = Calc.safeFloat(kilometers[1])
+    num.replace(feet[0], "")
+
+    vals.unitless = Calc.safeFloat(num)
+
     if (isNaN(int)) {
       return 0
     } else {
