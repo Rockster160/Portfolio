@@ -89,11 +89,11 @@
       padding: 0;
       white-space: nowrap;
 
-      &.op { background: $base-complementary; }
-      &.clr { background: $danger; }
-      &.fn { background: $grey-dark; }
-      &.opt { background: $grey-blue; }
-      &.unit { background: $grey-disabled; }
+      &.op { @include btn-color($base-complementary); }
+      &.clr { @include btn-color($danger); }
+      &.fn { @include btn-color($grey-dark); }
+      &.opt { @include btn-color($grey-blue); }
+      &.unit { @include btn-color($grey-disabled); }
 
       &.incomplete {
         color: red;

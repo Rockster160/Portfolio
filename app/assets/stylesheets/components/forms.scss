@@ -108,21 +108,36 @@ textarea {
   resize: vertical;
 }
 
+@mixin btn-color($btn-color) {
+  background-color: $btn-color;
+  box-shadow: 0 1px 0 0 lighten($btn-color, 15%);
+  text-shadow: 0 1px 0 darken($btn-color, 15%);
+
+  &:hover {
+    background-color: darken($btn-color, 15%);
+    box-shadow: 0 1px 0 0 $btn-color;
+  }
+
+  &:active {
+    background-color: darken($btn-color, 20%);
+    box-shadow: 0 1px 0 0 darken($btn-color, 5%);
+  }
+}
 // Button-ish
 .btn,
 button,
 input[type=button],
 input[type=reset],
 input[type=submit] {
+  @include btn-color($base-blue);
   transition: 0.1s;
   box-sizing: border-box;
   margin-top: 2px;
   margin-bottom: 2px;
 
-  box-shadow: 0 1px 0 0 lighten($base-blue, 15%);
-  // border: 1px solid darken($base-blue, 5%);
+  // box-shadow: 0 1px 0 0 lighten($base-blue, 15%);
   border-radius: 6px;
-  background-color: $base-blue;
+  // background-color: $base-blue;
 
   padding: 6px 24px;
 
@@ -131,10 +146,10 @@ input[type=submit] {
   font-size: 15px;
   font-weight: bold;
   text-decoration: none;
-  text-shadow: 0 1px 0 #1570CD;
+  // text-shadow: 0 1px 0 darken($base-blue, 15%);
 
   &:hover {
-    background-color: darken($base-blue, 15%);
+    // background-color: darken($base-blue, 15%);
   }
 
   &:active {
