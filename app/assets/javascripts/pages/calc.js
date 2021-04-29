@@ -1,5 +1,5 @@
 $(".ctr-calcs.act-show").ready(function() {
-  var $screen = $(".screen"), $prev = $(".prev"), copy = "0", unit = null
+  var $screen = $(".screen"), $prev = $(".prev"), copy = "0"
 
   function UnitNum(raw_num) {
     this.raw = raw_num
@@ -33,15 +33,15 @@ $(".ctr-calcs.act-show").ready(function() {
     var num = this.raw
     if (typeof num == "number") { return this.unitless = num }
 
-    var feet_match = num.match(/(\d+)(?:\s*)(?:ft\b|\'|\’|f(?:ee|oo)t\b)/i) || {}
+    var feet_match = num.match(/(\d+)(?:\s*)(?:ft\b|\'|\’|\‘|f(?:ee|oo)t\b)/i) || {}
     this.feet = UnitNum.safeFloat(feet_match[1]) || 0
     num = num.replace(feet_match[0], "")
 
-    var inches_match = num.match(/(\d+)(?:\s*)(?:in\b|\"|\“|inch(?:es)?\b)/i) || {}
+    var inches_match = num.match(/(\d+)(?:\s*)(?:in\b|\"|\“|\”|inch(?:es)?\b)/i) || {}
     this.inches = UnitNum.safeFloat(inches_match[1]) || 0
     num = num.replace(inches_match[0], "")
 
-    var miles_match = num.match(/(\d+)(?:\s*)(?:mi\b|\"|miles?\b)/i) || {}
+    var miles_match = num.match(/(\d+)(?:\s*)(?:mi\b|miles?\b)/i) || {}
     this.miles = UnitNum.safeFloat(miles_match[1]) || 0
     num = num.replace(miles_match[0], "")
 
