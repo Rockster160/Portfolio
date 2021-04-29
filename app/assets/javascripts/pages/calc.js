@@ -1,6 +1,85 @@
 $(".ctr-calcs.act-show").ready(function() {
   var $screen = $(".screen"), $prev = $(".prev"), copy = "0"
 
+  function Fraction(str) {
+    this.raw = str
+
+    var frac = str.split("/").filter(Boolean) // Removes blanks
+    var mix = frac[0].split(" ").filter(Boolean)
+
+    if (mix.length > 1) {
+      this.whole = parseFloat(mix[0])
+      this.numerator = parseFloat(mix[1])
+    } else {
+      this.whole = 0
+      this.numerator = parseFloat(mix[0])
+    }
+
+    this.denominator = parseFloat(frac[1] || 1)
+
+    this.simplify()
+  }
+  Fraction.prototype.simplify = function() {
+    var num = this.numerator, den = this.denominator
+    var overflow = Math.floor(num / den)
+
+    num = num - (overflow * den)
+
+    var gcd = Fraction.gcd(num, den)
+
+    this.whole = this.whole + overflow
+    this.denominator = den / gcd
+    this.numerator = num / gcd
+  }
+  Fraction.gcd = function(n1, n2) {
+    if (n2 == 0) { return n1 }
+
+    return Fraction.gcd(n2, n1 % n2);
+  }
+  Fraction.prototype.decimal = function() {
+    return this.whole_numerator() / this.denominator
+  }
+  Fraction.prototype.whole_numerator = function() {
+    return this.numerator + (this.whole * this.denominator)
+  }
+  Fraction.add = function(frac1, frac2) {
+    var new_numerator = (frac1.whole_numerator() * frac2.denominator) + (frac2.whole_numerator() * frac1.denominator)
+    var new_denominator = frac1.denominator * frac2.denominator
+
+    return new Fraction(new_numerator + "/" + new_denominator)
+  }
+  Fraction.subtract = function(frac1, frac2) {
+    var new_numerator = (frac1.whole_numerator() * frac2.denominator) - (frac2.whole_numerator() * frac1.denominator)
+    var new_denominator = frac1.denominator * frac2.denominator
+
+    return new Fraction(new_numerator + "/" + new_denominator)
+  }
+  Fraction.multiply = function(frac1, frac2) {
+    var new_numerator = frac1.whole_numerator() * frac2.whole_numerator()
+    var new_denominator = frac1.denominator * frac2.denominator
+
+    return new Fraction(new_numerator + "/" + new_denominator)
+  }
+  Fraction.divide = function(frac1, frac2) {
+    var new_numerator = frac1.whole_numerator() * frac2.denominator
+    var new_denominator = frac1.denominator * frac2.whole_numerator()
+
+    return new Fraction(new_numerator + "/" + new_denominator)
+  }
+  Fraction.exponent = function(frac1, frac2) {
+    return new Fraction((frac1.decimal() ** frac2.decimal()).toString())
+    // var new_numerator = frac1.whole_numerator() * frac2.denominator
+    // var new_denominator = frac1.denominator * frac2.whole_numerator()
+    //
+    // return new Fraction(new_numerator + "/" + new_denominator)
+  }
+  // Fraction.rt = function(frac1, frac2) {
+    // var new_numerator = frac1.whole_numerator() * frac2.denominator
+    // var new_denominator = frac1.denominator * frac2.whole_numerator()
+    //
+    // return new Fraction(new_numerator + "/" + new_denominator)
+  // }
+
   function UnitNum(raw_num) {
     this.raw = raw_num
     this.unit = null
@@ -106,6 +185,7 @@ $(".ctr-calcs.act-show").ready(function() {
   }
   UnitNum.prototype.format = function() {
     // TODO: Split out something like 4'11" 1/16
+    // 4' 11 1÷16"
     var num = this.value
     if (!this.unit) { return num }
 
@@ -207,9 +287,9 @@ $(".ctr-calcs.act-show").ready(function() {
         case "^":
           calc = Calc.exp(valA.value, valB.value)
           break;
-        case "√":
-          calc = Calc.sqrt(valA.value, valB.value)
-          break;
+        // case "√":
+        //   calc = Calc.sqrt(valA.value, valB.value)
+        //   break;
       }
       var newVal = new UnitNum(calc)
       if (Prev.op() == "") {
@@ -217,7 +297,6 @@ $(".ctr-calcs.act-show").ready(function() {
       } else {
         newVal.unit = valA.unit || valB.unit
       }
-      // TODO: Determine new unit by checking existing ones
 
       Prev.num(newVal.format())
       Screen.clear()
@@ -240,9 +319,9 @@ $(".ctr-calcs.act-show").ready(function() {
   Calc.exp = function(valA, valB) {
     return Math.pow(valA, valB)
   }
-  Calc.sqrt = function(valA, valB) {
-    return Math.sqrt(valA, valB)
-  }
+  // Calc.sqrt = function(valA, valB) {
+  //   return Math.pow(valA, 1/valB)
+  // }
   Calc.clear = function() {
     if (Screen.num() == "") {
       Prev.clear()
