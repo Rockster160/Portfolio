@@ -33,11 +33,11 @@ $(".ctr-calcs.act-show").ready(function() {
     var num = this.raw
     if (typeof num == "number") { return this.unitless = num }
 
-    var feet_match = num.match(/(\d+)(?:\s*)(?:ft\b|\'|f(?:ee|oo)t\b)/i) || {}
+    var feet_match = num.match(/(\d+)(?:\s*)(?:ft\b|\'|\’|f(?:ee|oo)t\b)/i) || {}
     this.feet = UnitNum.safeFloat(feet_match[1]) || 0
     num = num.replace(feet_match[0], "")
 
-    var inches_match = num.match(/(\d+)(?:\s*)(?:in\b|\"|inch(?:es)?\b)/i) || {}
+    var inches_match = num.match(/(\d+)(?:\s*)(?:in\b|\"|\“|inch(?:es)?\b)/i) || {}
     this.inches = UnitNum.safeFloat(inches_match[1]) || 0
     num = num.replace(inches_match[0], "")
 
