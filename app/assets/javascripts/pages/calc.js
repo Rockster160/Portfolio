@@ -112,31 +112,31 @@ $(".ctr-calcs.act-show").ready(function() {
     var num = this.raw
     if (typeof num == "number") { return this.unitless = num }
 
-    var feet_match = num.match(/(\d+)(?:\s*)(?:ft\b|\'|\’|\‘|f(?:ee|oo)t\b)/i) || {}
+    var feet_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:ft\b|\'|\’|\‘|f(?:ee|oo)t\b)/i) || {}
     this.feet = UnitNum.safeFloat(feet_match[1]) || 0
     num = num.replace(feet_match[0], "")
 
-    var inches_match = num.match(/(\d+)(?:\s*)(?:in\b|\"|\“|\”|inch(?:es)?\b)/i) || {}
+    var inches_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:in\b|\"|\“|\”|inch(?:es)?\b)/i) || {}
     this.inches = UnitNum.safeFloat(inches_match[1]) || 0
     num = num.replace(inches_match[0], "")
 
-    var miles_match = num.match(/(\d+)(?:\s*)(?:mi\b|miles?\b)/i) || {}
+    var miles_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:mi\b|miles?\b)/i) || {}
     this.miles = UnitNum.safeFloat(miles_match[1]) || 0
     num = num.replace(miles_match[0], "")
 
-    var millimeters_match = num.match(/(\d+)(?:\s*)(?:mm\b|millimeters?\b)/i) || {}
+    var millimeters_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:mm\b|millimeters?\b)/i) || {}
     this.millimeters = UnitNum.safeFloat(millimeters_match[1]) || 0
     num = num.replace(millimeters_match[0], "")
 
-    var meters_match = num.match(/(\d+)(?:\s*)(?:m\b|meters?\b)/i) || {}
+    var meters_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:m\b|meters?\b)/i) || {}
     this.meters = UnitNum.safeFloat(meters_match[1]) || 0
     num = num.replace(meters_match[0], "")
 
-    var centimeters_match = num.match(/(\d+)(?:\s*)(?:cm\b|centimeters?\b)/i) || {}
+    var centimeters_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:cm\b|centimeters?\b)/i) || {}
     this.centimeters = UnitNum.safeFloat(centimeters_match[1]) || 0
     num = num.replace(centimeters_match[0], "")
 
-    var kilometers_match = num.match(/(\d+)(?:\s*)(?:km\b|kilometers?\b)/i) || {}
+    var kilometers_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:km\b|kilometers?\b)/i) || {}
     this.kilometers = UnitNum.safeFloat(kilometers_match[1]) || 0
     num = num.replace(kilometers_match[0], "")
 
