@@ -3,7 +3,7 @@ $(".ctr-calcs.act-show").ready(function() {
 
   function UnitNum(raw_num) {
     this.raw = raw_num
-    this.units = null
+    this.unit = null
 
     this.inches = 0
     this.feet = 0
@@ -33,31 +33,31 @@ $(".ctr-calcs.act-show").ready(function() {
     var num = this.raw
     if (typeof num == "number") { return this.unitless = num }
 
-    var feet_match = num.match(/(\d+)(?:\s*)(?:\bft\b|\'|\bf(?:ee|oo)t\b)/i) || {}
+    var feet_match = num.match(/(\d+)(?:\s*)(?:ft\b|\'|f(?:ee|oo)t\b)/i) || {}
     this.feet = UnitNum.safeFloat(feet_match[1]) || 0
     num = num.replace(feet_match[0], "")
 
-    var inches_match = num.match(/(\d+)(?:\s*)(?:\bin\b|\"|\binch(?:es)?\b)/i) || {}
+    var inches_match = num.match(/(\d+)(?:\s*)(?:in\b|\"|inch(?:es)?\b)/i) || {}
     this.inches = UnitNum.safeFloat(inches_match[1]) || 0
     num = num.replace(inches_match[0], "")
 
-    var miles_match = num.match(/(\d+)(?:\s*)(?:\bmi\b|\"|\bmiles?\b)/i) || {}
+    var miles_match = num.match(/(\d+)(?:\s*)(?:mi\b|\"|miles?\b)/i) || {}
     this.miles = UnitNum.safeFloat(miles_match[1]) || 0
     num = num.replace(miles_match[0], "")
 
-    var millimeters_match = num.match(/(\d+)(?:\s*)(?:\bmm\b|\bmillimeters?\b)/i) || {}
+    var millimeters_match = num.match(/(\d+)(?:\s*)(?:mm\b|millimeters?\b)/i) || {}
     this.millimeters = UnitNum.safeFloat(millimeters_match[1]) || 0
     num = num.replace(millimeters_match[0], "")
 
-    var meters_match = num.match(/(\d+)(?:\s*)(?:\bm\b|\bmeters?\b)/i) || {}
+    var meters_match = num.match(/(\d+)(?:\s*)(?:m\b|meters?\b)/i) || {}
     this.meters = UnitNum.safeFloat(meters_match[1]) || 0
     num = num.replace(meters_match[0], "")
 
-    var centimeters_match = num.match(/(\d+)(?:\s*)(?:\bcm\b|\bcentimeters?\b)/i) || {}
+    var centimeters_match = num.match(/(\d+)(?:\s*)(?:cm\b|centimeters?\b)/i) || {}
     this.centimeters = UnitNum.safeFloat(centimeters_match[1]) || 0
     num = num.replace(centimeters_match[0], "")
 
-    var kilometers_match = num.match(/(\d+)(?:\s*)(?:\bkm\b|\bkilometers?\b)/i) || {}
+    var kilometers_match = num.match(/(\d+)(?:\s*)(?:km\b|kilometers?\b)/i) || {}
     this.kilometers = UnitNum.safeFloat(kilometers_match[1]) || 0
     num = num.replace(kilometers_match[0], "")
 
@@ -107,11 +107,10 @@ $(".ctr-calcs.act-show").ready(function() {
   UnitNum.prototype.format = function() {
     // TODO: Split out something like 4'11" 1/16
     var num = this.value
+    if (!this.unit) { return num }
+
     var pieces = []
     switch(this.unit) {
-      case null:
-        return num
-        break
       case "ft in":
         var ft = Math.floor(num / 12)
         num -= ft * 12
@@ -183,63 +182,66 @@ $(".ctr-calcs.act-show").ready(function() {
     if (Screen.num() == "") {
       // No op
     } else if (Prev.num() == "") {
-      Prev.num((new UnitNum(Screen.num()).value))
+      Prev.num((new UnitNum(Screen.num()).format()))
       Screen.clear()
     } else {
       var calc = Screen.num()
+      var valA = (new UnitNum(Prev.num()))
+      var valB = (new UnitNum(Screen.num()))
 
       switch(Prev.op()) {
         case "+":
-        calc = Calc.add()
-        break;
+          calc = Calc.add(valA.value, valB.value)
+          break;
         case "-":
-        calc = Calc.subt()
-        break;
+          calc = Calc.subt(valA.value, valB.value)
+          break;
         case "×":
         case "*":
-        calc = Calc.mult()
-        break;
+          calc = Calc.mult(valA.value, valB.value)
+          break;
         case "÷":
         case "/":
-        calc = Calc.div()
-        break;
+          calc = Calc.div(valA.value, valB.value)
+          break;
         case "^":
-        calc = Calc.exp()
-        break;
+          calc = Calc.exp(valA.value, valB.value)
+          break;
         case "√":
-        calc = Calc.sqrt()
-        break;
+          calc = Calc.sqrt(valA.value, valB.value)
+          break;
       }
+      var newVal = new UnitNum(calc)
+      if (Prev.op() == "") {
+        newVal.unit = valB.unit
+      } else {
+        newVal.unit = valA.unit || valB.unit
+      }
+      // TODO: Determine new unit by checking existing ones
 
-      Prev.num((new UnitNum(calc)).value)
+      Prev.num(newVal.format())
       Screen.clear()
     }
 
     Prev.op(op)
   }
-  Calc.add = function() {
-    // TODO: Determine new unit by checking existing ones
-    return (new UnitNum(Prev.num())).value + (new UnitNum(Screen.num())).value
+  Calc.add = function(valA, valB) {
+    return valA + valB
   }
-  Calc.subt = function() {
-    // TODO: Determine new unit by checking existing ones
-    return (new UnitNum(Prev.num())).value - (new UnitNum(Screen.num())).value
+  Calc.subt = function(valA, valB) {
+    return valA - valB
   }
-  Calc.mult = function() {
-    // TODO: Determine new unit by checking existing ones
-    return (new UnitNum(Prev.num())).value * (new UnitNum(Screen.num())).value
+  Calc.mult = function(valA, valB) {
+    return valA * valB
   }
-  Calc.div = function() {
-    // TODO: Determine new unit by checking existing ones
-    return (new UnitNum(Prev.num())).value / (new UnitNum(Screen.num())).value
+  Calc.div = function(valA, valB) {
+    return valA / valB
   }
-  Calc.exp = function() {
-    // TODO: Determine new unit by checking existing ones
-    return Math.pow((new UnitNum(Prev.num())).value, (new UnitNum(Screen.num())).value)
+  Calc.exp = function(valA, valB) {
+    return Math.pow(valA, valB)
   }
-  Calc.sqrt = function() {
-    // TODO: Determine new unit by checking existing ones
-    return Math.sqrt((new UnitNum(Prev.num())).value, (new UnitNum(Screen.num())).value)
+  Calc.sqrt = function(valA, valB) {
+    return Math.sqrt(valA, valB)
   }
   Calc.clear = function() {
     if (Screen.num() == "") {
