@@ -2,9 +2,22 @@ $(".ctr-calcs.act-show").ready(function() {
   var $screen = $(".screen"), $prev = $(".prev"), copy = "0"
 
   function Fraction(str) {
+    if (typeof str == "number") {
+      str = str.toString()
+      if (str == "NaN") { str = 0 }
+    } else if (typeof str == "string") {
+      // No op
+    } else if (typeof str == "object" && str.constructor.name == "Fraction") {
+      return str.simplify()
+    } else if (isNaN(str)) {
+      str = "0"
+    } else {
+      console.log("Invalid Fraction: ", typeof str, str);
+    }
+
     this.raw = str
 
-    var frac = str.split("/").filter(Boolean) // Removes blanks
+    var frac = str.split(/[÷%]/).filter(Boolean) // Removes blanks
     var mix = frac[0].split(" ").filter(Boolean)
 
     if (mix.length > 1) {
@@ -19,6 +32,9 @@ $(".ctr-calcs.act-show").ready(function() {
 
     this.simplify()
   }
+  Fraction.isA = function(str) {
+    return (typeof str == "object" && str.constructor.name == "Fraction")
+  }
   Fraction.prototype.simplify = function() {
     var num = this.numerator, den = this.denominator
     var overflow = Math.floor(num / den)
@@ -30,54 +46,85 @@ $(".ctr-calcs.act-show").ready(function() {
     this.whole = this.whole + overflow
     this.denominator = den / gcd
     this.numerator = num / gcd
+
+    return this
   }
   Fraction.gcd = function(n1, n2) {
     if (n2 == 0) { return n1 }
 
     return Fraction.gcd(n2, n1 % n2);
   }
-  Fraction.prototype.decimal = function() {
-    return this.whole_numerator() / this.denominator
+  Fraction.toFrac = function(num) {
+    return new Fraction(num)
   }
-  Fraction.prototype.whole_numerator = function() {
+  Fraction.prototype.toString = function() {
+    var frac
+    if (this.denominator == 0 || this.numerator == 0) {
+      frac = ""
+    } else {
+      frac = this.numerator + "÷" + this.denominator
+    }
+
+    return [this.whole, frac].filter(Boolean).join(" ").trim()
+  }
+  Fraction.prototype.decimal = function() {
+    return this.wholeNumerator() / this.denominator
+  }
+  Fraction.prototype.wholeNumerator = function() {
     return this.numerator + (this.whole * this.denominator)
   }
   Fraction.add = function(frac1, frac2) {
-    var new_numerator = (frac1.whole_numerator() * frac2.denominator) + (frac2.whole_numerator() * frac1.denominator)
+    frac1 = Fraction.toFrac(frac1)
+    frac2 = Fraction.toFrac(frac2)
+
+    var new_numerator = (frac1.wholeNumerator() * frac2.denominator) + (frac2.wholeNumerator() * frac1.denominator)
     var new_denominator = frac1.denominator * frac2.denominator
 
-    return new Fraction(new_numerator + "/" + new_denominator)
+    return (new Fraction(new_numerator + "÷" + new_denominator)).simplify()
   }
   Fraction.subtract = function(frac1, frac2) {
-    var new_numerator = (frac1.whole_numerator() * frac2.denominator) - (frac2.whole_numerator() * frac1.denominator)
+    frac1 = Fraction.toFrac(frac1)
+    frac2 = Fraction.toFrac(frac2)
+
+    var new_numerator = (frac1.wholeNumerator() * frac2.denominator) - (frac2.wholeNumerator() * frac1.denominator)
     var new_denominator = frac1.denominator * frac2.denominator
 
-    return new Fraction(new_numerator + "/" + new_denominator)
+    return (new Fraction(new_numerator + "÷" + new_denominator)).simplify()
   }
   Fraction.multiply = function(frac1, frac2) {
-    var new_numerator = frac1.whole_numerator() * frac2.whole_numerator()
+    frac1 = Fraction.toFrac(frac1)
+    frac2 = Fraction.toFrac(frac2)
+
+    var new_numerator = frac1.wholeNumerator() * frac2.wholeNumerator()
     var new_denominator = frac1.denominator * frac2.denominator
 
-    return new Fraction(new_numerator + "/" + new_denominator)
+    return (new Fraction(new_numerator + "÷" + new_denominator)).simplify()
   }
   Fraction.divide = function(frac1, frac2) {
-    var new_numerator = frac1.whole_numerator() * frac2.denominator
-    var new_denominator = frac1.denominator * frac2.whole_numerator()
+    frac1 = Fraction.toFrac(frac1)
+    frac2 = Fraction.toFrac(frac2)
+    if (frac1.wholeNumerator() == 0) { return frac1 }
 
-    return new Fraction(new_numerator + "/" + new_denominator)
+    var new_numerator = frac1.wholeNumerator() * frac2.denominator
+    var new_denominator = frac1.denominator * frac2.wholeNumerator()
+
+    return (new Fraction(new_numerator + "÷" + new_denominator)).simplify()
   }
   Fraction.exponent = function(frac1, frac2) {
-    return new Fraction((frac1.decimal() ** frac2.decimal()).toString())
-    // var new_numerator = frac1.whole_numerator() * frac2.denominator
-    // var new_denominator = frac1.denominator * frac2.whole_numerator()
+    frac1 = Fraction.toFrac(frac1)
+    frac2 = Fraction.toFrac(frac2)
+
+    return (new Fraction((frac1.decimal() ** frac2.decimal()).toString())).simplify()
+    // var new_numerator = frac1.wholeNumerator() * frac2.denominator
+    // var new_denominator = frac1.denominator * frac2.wholeNumerator()
     //
-    // return new Fraction(new_numerator + "/" + new_denominator)
+    // return new Fraction(new_numerator + "÷" + new_denominator)
   }
   // Fraction.rt = function(frac1, frac2) {
-    // var new_numerator = frac1.whole_numerator() * frac2.denominator
-    // var new_denominator = frac1.denominator * frac2.whole_numerator()
+    // var new_numerator = frac1.wholeNumerator() * frac2.denominator
+    // var new_denominator = frac1.denominator * frac2.wholeNumerator()
     //
-    // return new Fraction(new_numerator + "/" + new_denominator)
+    // return new Fraction(new_numerator + "÷" + new_denominator)
   // }
 
   function UnitNum(raw_num) {
@@ -99,48 +146,42 @@ $(".ctr-calcs.act-show").ready(function() {
 
     this.interpret()
   }
-  UnitNum.safeFloat = function(str) {
-    var num = parseFloat(str)
-
-    if (isNaN(num)) {
-      return null
-    } else {
-      return num
-    }
-  }
   UnitNum.prototype.parse = function() {
     var num = this.raw
-    if (typeof num == "number") { return this.unitless = num }
+    if (Fraction.isA(num)) { num = num.raw }
 
-    var feet_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:ft\b|\'|\’|\‘|f(?:ee|oo)t\b)/i) || {}
-    this.feet = UnitNum.safeFloat(feet_match[1]) || 0
+    if (typeof num == "number") { return this.unitless = num }
+    var num_with_frac = new RegExp(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)/)
+
+    var feet_match = num.match(num_with_frac.source + /(?:ft\b|\'|\’|\‘|f(?:ee|oo)t\b)/i) || {}
+    this.feet = new Fraction(feet_match[1] || 0)
     num = num.replace(feet_match[0], "")
 
-    var inches_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:in\b|\"|\“|\”|inch(?:es)?\b)/i) || {}
-    this.inches = UnitNum.safeFloat(inches_match[1]) || 0
+    var inches_match = num.match(num_with_frac.source + /(?:in\b|\"|\“|\”|inch(?:es)?\b)/i) || {}
+    this.inches = new Fraction(inches_match[1] || 0)
     num = num.replace(inches_match[0], "")
 
-    var miles_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:mi\b|miles?\b)/i) || {}
-    this.miles = UnitNum.safeFloat(miles_match[1]) || 0
+    var miles_match = num.match(num_with_frac.source + /(?:mi\b|miles?\b)/i) || {}
+    this.miles = new Fraction(miles_match[1] || 0)
     num = num.replace(miles_match[0], "")
 
-    var millimeters_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:mm\b|millimeters?\b)/i) || {}
-    this.millimeters = UnitNum.safeFloat(millimeters_match[1]) || 0
+    var millimeters_match = num.match(num_with_frac.source + /(?:mm\b|millimeters?\b)/i) || {}
+    this.millimeters = new Fraction(millimeters_match[1] || 0)
     num = num.replace(millimeters_match[0], "")
 
-    var meters_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:m\b|meters?\b)/i) || {}
-    this.meters = UnitNum.safeFloat(meters_match[1]) || 0
+    var meters_match = num.match(num_with_frac.source + /(?:m\b|meters?\b)/i) || {}
+    this.meters = new Fraction(meters_match[1] || 0)
     num = num.replace(meters_match[0], "")
 
-    var centimeters_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:cm\b|centimeters?\b)/i) || {}
-    this.centimeters = UnitNum.safeFloat(centimeters_match[1]) || 0
+    var centimeters_match = num.match(num_with_frac.source + /(?:cm\b|centimeters?\b)/i) || {}
+    this.centimeters = new Fraction(centimeters_match[1] || 0)
     num = num.replace(centimeters_match[0], "")
 
-    var kilometers_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:km\b|kilometers?\b)/i) || {}
-    this.kilometers = UnitNum.safeFloat(kilometers_match[1]) || 0
+    var kilometers_match = num.match(num_with_frac.source + /(?:km\b|kilometers?\b)/i) || {}
+    this.kilometers = new Fraction(kilometers_match[1] || 0)
     num = num.replace(kilometers_match[0], "")
 
-    this.unitless = UnitNum.safeFloat(num) || 0
+    this.unitless = new Fraction(num || 0)
   }
   UnitNum.prototype.interpret = function() {
     this.parse()
@@ -148,20 +189,20 @@ $(".ctr-calcs.act-show").ready(function() {
     var new_unit = ""
     var num = this.unitless
 
-    var ins = 0
-    ins += this.miles * 63360
-    ins += this.feet * 12
-    ins += this.inches
+    var ins = new Fraction(0)
+    ins = Fraction.add(ins, Fraction.multiply(this.miles, 63360))
+    ins = Fraction.add(ins, Fraction.multiply(this.feet, 12))
+    ins = Fraction.add(ins, this.inches)
 
-    var mms = 0
-    mms += this.millimeters
-    mms += this.meters * 1000
-    mms += this.centimeters * 10
-    mms += this.kilometers * 1000000
+    var mms = new Fraction(0)
+    mms = Fraction.add(mms, this.millimeters)
+    mms = Fraction.add(mms, Fraction.multiply(this.meters, 1000))
+    mms = Fraction.add(mms, Fraction.multiply(this.centimeters, 10))
+    mms = Fraction.add(mms, Fraction.multiply(this.kilometers, 1000000))
 
     if (ins == 0 && mms == 0) {
       new_unit = null
-      num += ins + (mms * 25.4)
+      num = Fraction.add(num, Fraction.add(ins, Fraction.multiply(mms, 25.4)))
     } else if (ins >= mms) {
       if (this.feet > 0) {
         new_unit = "ft in"
@@ -169,15 +210,15 @@ $(".ctr-calcs.act-show").ready(function() {
         new_unit = "in"
       }
 
-      num += ins + (mms * 25.4)
+      num = Fraction.add(num, Fraction.add(ins, Fraction.multiply(mms, 25.4)))
     } else if (mms > ins) {
-      if (this.feet > 0) {
+      if (this.meters > 0) {
         new_unit = "m mm"
       } else {
         new_unit = "mm"
       }
 
-      num += mms + (ins / 25.4)
+      num = Fraction.add(num, Fraction.add(mms, Fraction.divide(ins, 25.4)))
     }
 
     this.unit = new_unit
@@ -271,21 +312,21 @@ $(".ctr-calcs.act-show").ready(function() {
 
       switch(Prev.op()) {
         case "+":
-          calc = Calc.add(valA.value, valB.value)
+          calc = Fraction.add(valA.value, valB.value)
           break;
         case "-":
-          calc = Calc.subt(valA.value, valB.value)
+          calc = Fraction.add(valA.value, valB.value)
           break;
         case "×":
         case "*":
-          calc = Calc.mult(valA.value, valB.value)
+          calc = Fraction.multiply(valA.value, valB.value)
           break;
         case "÷":
         case "/":
-          calc = Calc.div(valA.value, valB.value)
+          calc = Fraction.divide(valA.value, valB.value)
           break;
         case "^":
-          calc = Calc.exp(valA.value, valB.value)
+          calc = Fraction.exponent(valA.value, valB.value)
           break;
         // case "√":
         //   calc = Calc.sqrt(valA.value, valB.value)
@@ -304,24 +345,6 @@ $(".ctr-calcs.act-show").ready(function() {
 
     Prev.op(op)
   }
-  Calc.add = function(valA, valB) {
-    return valA + valB
-  }
-  Calc.subt = function(valA, valB) {
-    return valA - valB
-  }
-  Calc.mult = function(valA, valB) {
-    return valA * valB
-  }
-  Calc.div = function(valA, valB) {
-    return valA / valB
-  }
-  Calc.exp = function(valA, valB) {
-    return Math.pow(valA, valB)
-  }
-  // Calc.sqrt = function(valA, valB) {
-  //   return Math.pow(valA, 1/valB)
-  // }
   Calc.clear = function() {
     if (Screen.num() == "") {
       Prev.clear()
