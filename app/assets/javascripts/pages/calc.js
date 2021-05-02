@@ -7,7 +7,7 @@ $(".ctr-calcs.act-show").ready(function() {
       if (str == "NaN") { str = "0" }
     } else if (typeof str == "string") {
       // No op
-    } else if (typeof str == "object" && str.hasOwnProperty("isFraction")) {
+    } else if (Fraction.isA(str)) {
       return str.simplify()
     } else if (isNaN(str)) {
       str = "0"
@@ -35,8 +35,7 @@ $(".ctr-calcs.act-show").ready(function() {
     this.simplify()
   }
   Fraction.isA = function(str) {
-    str.hasOwnProperty("className")
-    return (typeof str == "object" && str.constructor.name == "Fraction")
+    return (typeof str == "object" && str.hasOwnProperty("isFraction"))
   }
   Fraction.prototype.simplify = function() {
     var num = this.numerator, den = this.denominator
