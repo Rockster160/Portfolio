@@ -7,7 +7,7 @@ $(".ctr-calcs.act-show").ready(function() {
       if (str == "NaN") { str = "0" }
     } else if (typeof str == "string") {
       // No op
-    } else if (typeof str == "object" && str.constructor.name == "Fraction") {
+    } else if (typeof str == "object" && str.hasOwnProperty("isFraction")) {
       return str.simplify()
     } else if (isNaN(str)) {
       str = "0"
@@ -15,9 +15,10 @@ $(".ctr-calcs.act-show").ready(function() {
       console.log("Invalid Fraction: ", typeof str, str);
     }
 
+    this.isFraction = true
+
     this.raw = str
-    console.log(typeof str);
-debugger
+
     var frac = str.split(/[÷%]/).filter(Boolean) // Removes blanks
     var mix = frac[0].split(" ").filter(Boolean)
 
@@ -34,6 +35,7 @@ debugger
     this.simplify()
   }
   Fraction.isA = function(str) {
+    str.hasOwnProperty("className")
     return (typeof str == "object" && str.constructor.name == "Fraction")
   }
   Fraction.prototype.simplify = function() {
