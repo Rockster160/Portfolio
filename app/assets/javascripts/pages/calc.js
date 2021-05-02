@@ -279,6 +279,25 @@ $(".ctr-calcs.act-show").ready(function() {
   Screen.clear = function() {
     Screen.num("")
   }
+  Screen.inputFrac = function() {
+    var scr = Screen.num()
+    var just_num = /^\d+$/
+    var num_with_space = /\d+.*?\s+$/
+    var num_space_num = /\d+.*?\s+.*?\d+/
+    var num_space_num_op = /\d+.*?[÷%]/
+
+    if (scr.trim() == "") {
+      return // Nothing
+    } else if (scr.match(num_space_num_op)) {
+      return // Nothing
+    } else if (scr.match(just_num)) {
+      return Screen.append(" ")
+    } else if (scr.match(num_with_space)) {
+      return // Nothing
+    } else if (scr.match(num_space_num)) {
+      return Screen.append("÷")
+    }
+  }
 
   function Prev() {}
   Prev.num = function(txt) {
@@ -389,6 +408,10 @@ $(".ctr-calcs.act-show").ready(function() {
     Screen.num(copy)
   }).on("click", "[data-eq]", function() {
     Calc.equal()
+  }).on("click", "[data-unit]", function() {
+    //
+  }).on("click", "[data-frac]", function() {
+    Screen.inputFrac()
   }).on("click", "[data-square]", function() {
     Calc.op("^")
     Screen.num(2)
