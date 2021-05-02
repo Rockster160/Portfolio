@@ -16,6 +16,7 @@ $(".ctr-calcs.act-show").ready(function() {
     }
 
     this.raw = str
+    console.log(typeof str);
 debugger
     var frac = str.split(/[÷%]/).filter(Boolean) // Removes blanks
     var mix = frac[0].split(" ").filter(Boolean)
