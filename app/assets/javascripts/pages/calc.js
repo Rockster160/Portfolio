@@ -4,7 +4,7 @@ $(".ctr-calcs.act-show").ready(function() {
   function Fraction(str) {
     if (typeof str == "number") {
       str = str.toString()
-      if (str == "NaN") { str = 0 }
+      if (str == "NaN") { str = "0" }
     } else if (typeof str == "string") {
       // No op
     } else if (typeof str == "object" && str.constructor.name == "Fraction") {
