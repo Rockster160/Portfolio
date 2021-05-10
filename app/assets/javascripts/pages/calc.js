@@ -1,3 +1,14 @@
+// TODO:
+// History
+// Session based history, clipboard, prev
+// Decimal handling
+// Unit buttons should convert prev
+// Have some sort of max denominator?
+// Dividing/multiplying fractions has odd behavior:
+// - Multiplying ft by inches does not convert units
+// - Dividing into fractions of inches loses the "prev", resulting in an empty/err result
+// Add some sort of "err"? - Divide by zero, or other problems.
+
 $(".ctr-calcs.act-show").ready(function() {
   var $screen = $(".screen"), $prev = $(".prev"), copy = "0"
 
@@ -347,7 +358,7 @@ $(".ctr-calcs.act-show").ready(function() {
           calc = Fraction.add(valA.value, valB.value)
           break;
         case "-":
-          calc = Fraction.add(valA.value, valB.value)
+          calc = Fraction.subtract(valA.value, valB.value)
           break;
         case "×":
         case "*":
