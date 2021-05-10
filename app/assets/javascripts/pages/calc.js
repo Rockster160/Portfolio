@@ -4,7 +4,6 @@ $(".ctr-calcs.act-show").ready(function() {
   function Fraction(str) {
     if (typeof str == "number") {
       str = str.toString()
-      if (str == "NaN") { str = "0" }
     } else if (typeof str == "string") {
       // No op
     } else if (Fraction.isA(str)) {
@@ -14,6 +13,8 @@ $(".ctr-calcs.act-show").ready(function() {
     } else {
       console.log("Invalid Fraction: ", typeof str, str);
     }
+    if (str.includes("NaN")) { str = "0" }
+    if (str.split(" ").filter(Boolean).length == 0) { str = "0" }
 
     this.isFraction = true
 
@@ -52,6 +53,7 @@ $(".ctr-calcs.act-show").ready(function() {
     return this
   }
   Fraction.gcd = function(n1, n2) {
+    if (isNaN(n2)) { return n1 }
     if (n2 == 0) { return n1 }
 
     return Fraction.gcd(n2, n1 % n2);
@@ -129,7 +131,7 @@ $(".ctr-calcs.act-show").ready(function() {
     // return new Fraction(new_numerator + "÷" + new_denominator)
   // }
 
-  function UnitNum(raw_num) {
+  function UnitFrac(raw_num) {
     this.raw = raw_num
     this.unit = null
 
@@ -148,44 +150,44 @@ $(".ctr-calcs.act-show").ready(function() {
 
     this.interpret()
   }
-  UnitNum.prototype.parse = function() {
+  UnitFrac.prototype.parse = function() {
     var num = this.raw
     if (Fraction.isA(num)) { num = num.raw }
 
     if (typeof num == "number") { return this.unitless = num }
     var num_with_frac = new RegExp(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)/)
 
-    var feet_match = num.match(num_with_frac.source + /(?:ft\b|\'|\’|\‘|f(?:ee|oo)t\b)/i) || {}
+    var feet_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:ft\b|\'|\’|\‘|f(?:ee|oo)t\b)/i) || {}
     this.feet = new Fraction(feet_match[1] || 0)
     num = num.replace(feet_match[0], "")
 
-    var inches_match = num.match(num_with_frac.source + /(?:in\b|\"|\“|\”|inch(?:es)?\b)/i) || {}
+    var inches_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:in\b|\"|\“|\”|inch(?:es)?\b)/i) || {}
     this.inches = new Fraction(inches_match[1] || 0)
     num = num.replace(inches_match[0], "")
 
-    var miles_match = num.match(num_with_frac.source + /(?:mi\b|miles?\b)/i) || {}
+    var miles_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:mi\b|miles?\b)/i) || {}
     this.miles = new Fraction(miles_match[1] || 0)
     num = num.replace(miles_match[0], "")
 
-    var millimeters_match = num.match(num_with_frac.source + /(?:mm\b|millimeters?\b)/i) || {}
+    var millimeters_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:mm\b|millimeters?\b)/i) || {}
     this.millimeters = new Fraction(millimeters_match[1] || 0)
     num = num.replace(millimeters_match[0], "")
 
-    var meters_match = num.match(num_with_frac.source + /(?:m\b|meters?\b)/i) || {}
+    var meters_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:m\b|meters?\b)/i) || {}
     this.meters = new Fraction(meters_match[1] || 0)
     num = num.replace(meters_match[0], "")
 
-    var centimeters_match = num.match(num_with_frac.source + /(?:cm\b|centimeters?\b)/i) || {}
+    var centimeters_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:cm\b|centimeters?\b)/i) || {}
     this.centimeters = new Fraction(centimeters_match[1] || 0)
     num = num.replace(centimeters_match[0], "")
 
-    var kilometers_match = num.match(num_with_frac.source + /(?:km\b|kilometers?\b)/i) || {}
+    var kilometers_match = num.match(/(\d+(?:\s*\d*\s*[÷%]\s*\d+)?)(?:\s*)(?:km\b|kilometers?\b)/i) || {}
     this.kilometers = new Fraction(kilometers_match[1] || 0)
     num = num.replace(kilometers_match[0], "")
 
     this.unitless = new Fraction(num || 0)
   }
-  UnitNum.prototype.interpret = function() {
+  UnitFrac.prototype.interpret = function() {
     this.parse()
 
     var new_unit = ""
@@ -226,7 +228,7 @@ $(".ctr-calcs.act-show").ready(function() {
     this.unit = new_unit
     this.value = num
   }
-  UnitNum.prototype.format = function() {
+  UnitFrac.prototype.format = function() {
     // TODO: Split out something like 4'11" 1/16
     // 4' 11 1÷16"
     var num = this.value
@@ -281,7 +283,7 @@ $(".ctr-calcs.act-show").ready(function() {
   }
   Screen.inputFrac = function() {
     var scr = Screen.num()
-    var just_num = /^\d+$/
+    var not_end_space = /\S$/
     var num_with_space = /\d+.*?\s+$/
     var num_space_num = /\d+.*?\s+.*?\d+/
     var num_space_num_op = /\d+.*?[÷%]/
@@ -290,12 +292,21 @@ $(".ctr-calcs.act-show").ready(function() {
       return // Nothing
     } else if (scr.match(num_space_num_op)) {
       return // Nothing
-    } else if (scr.match(just_num)) {
-      return Screen.append(" ")
     } else if (scr.match(num_with_space)) {
       return // Nothing
     } else if (scr.match(num_space_num)) {
       return Screen.append("÷")
+    } else if (scr.match(not_end_space)) {
+      return Screen.append(" ")
+    }
+  }
+  Screen.inputUnit = function(unit) {
+    if (Screen.num() == "") {
+      // TODO: Convert Prev to new unit
+    }
+
+    if (Screen.num().indexOf(unit) == -1) {
+      Screen.append(unit)
     }
   }
 
@@ -324,12 +335,12 @@ $(".ctr-calcs.act-show").ready(function() {
     if (Screen.num() == "") {
       // No op
     } else if (Prev.num() == "") {
-      Prev.num((new UnitNum(Screen.num()).format()))
+      Prev.num((new UnitFrac(Screen.num()).format()))
       Screen.clear()
     } else {
       var calc = Screen.num()
-      var valA = (new UnitNum(Prev.num()))
-      var valB = (new UnitNum(Screen.num()))
+      var valA = (new UnitFrac(Prev.num()))
+      var valB = (new UnitFrac(Screen.num()))
 
       switch(Prev.op()) {
         case "+":
@@ -353,7 +364,7 @@ $(".ctr-calcs.act-show").ready(function() {
         //   calc = Calc.sqrt(valA.value, valB.value)
         //   break;
       }
-      var newVal = new UnitNum(calc)
+      var newVal = new UnitFrac(calc)
       if (Prev.op() == "") {
         newVal.unit = valB.unit
       } else {
@@ -409,7 +420,7 @@ $(".ctr-calcs.act-show").ready(function() {
   }).on("click", "[data-eq]", function() {
     Calc.equal()
   }).on("click", "[data-unit]", function() {
-    //
+    Screen.inputUnit(this.dataset.unit)
   }).on("click", "[data-frac]", function() {
     Screen.inputFrac()
   }).on("click", "[data-square]", function() {
