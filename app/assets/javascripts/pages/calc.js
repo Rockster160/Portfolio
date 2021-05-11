@@ -1,4 +1,5 @@
 // TODO:
+// Key entry even when not focused
 // History
 // Session based history, clipboard, prev
 // Decimal handling
@@ -6,11 +7,17 @@
 // Have some sort of max denominator?
 // Dividing/multiplying fractions has odd behavior:
 // - Multiplying ft by inches does not convert units
-// - Dividing into fractions of inches loses the "prev", resulting in an empty/err result
 // Add some sort of "err"? - Divide by zero, or other problems.
 
 $(".ctr-calcs.act-show").ready(function() {
   var $screen = $(".screen"), $prev = $(".prev"), copy = "0"
+
+  Array.prototype.compact = function() {
+    return this.filter(Boolean)
+  }
+  Array.prototype.condenseJoin = function(str) {
+    return this.compact().join(str).trim()
+  }
 
   function Fraction(str) {
     if (typeof str == "number") {
@@ -25,14 +32,14 @@ $(".ctr-calcs.act-show").ready(function() {
       console.log("Invalid Fraction: ", typeof str, str);
     }
     if (str.includes("NaN")) { str = "0" }
-    if (str.split(" ").filter(Boolean).length == 0) { str = "0" }
+    if (str.split(" ").compact().length == 0) { str = "0" }
 
     this.isFraction = true
 
     this.raw = str
 
-    var frac = str.split(/[÷%]/).filter(Boolean) // Removes blanks
-    var mix = frac[0].split(" ").filter(Boolean)
+    var frac = str.split(/[÷%]/).compact() // Removes blanks
+    var mix = frac[0].split(" ").compact()
 
     if (mix.length > 1) {
       this.whole = parseFloat(mix[0])
@@ -72,15 +79,15 @@ $(".ctr-calcs.act-show").ready(function() {
   Fraction.toFrac = function(num) {
     return new Fraction(num)
   }
-  Fraction.prototype.toString = function() {
-    var frac
+  Fraction.prototype.fraction = function() {
     if (this.denominator == 0 || this.numerator == 0) {
-      frac = ""
+      return ""
     } else {
-      frac = this.numerator + "÷" + this.denominator
+      return this.numerator + "÷" + this.denominator
     }
-
-    return [this.whole, frac].filter(Boolean).join(" ").trim()
+  }
+  Fraction.prototype.toString = function() {
+    return [this.whole, this.fraction()].condenseJoin(" ")
   }
   Fraction.prototype.decimal = function() {
     return this.wholeNumerator() / this.denominator
@@ -242,35 +249,46 @@ $(".ctr-calcs.act-show").ready(function() {
   UnitFrac.prototype.format = function() {
     // TODO: Split out something like 4'11" 1/16
     // 4' 11 1÷16"
-    var num = this.value
-    if (!this.unit) { return num }
+    var frac = this.value
+    var whole = frac.whole
+    if (!this.unit) { return frac }
 
     var pieces = []
     switch(this.unit) {
       case "ft in":
-        var ft = Math.floor(num / 12)
-        num -= ft * 12
+        var ft = Math.floor(whole / 12)
+        var in_pieces = []
+        whole -= ft * 12
+
         if (ft > 0) { pieces.push(ft.toString() + "\'") }
-        if (num > 0) { pieces.push(num.toString() + "\"") }
-        return pieces.join(" ")
+        if (whole > 0) { in_pieces.push(whole.toString()) }
+        if (frac.numerator > 0) { in_pieces.push(frac.fraction()) }
+        if (whole > 0 || frac.numerator > 0) { pieces.push(in_pieces.condenseJoin(" ") + "\"") }
+
+        return pieces.condenseJoin(" ")
         break
       case "in":
-        return num.toString() + "\""
+        return frac.toString() + "\""
         break
       case "m mm":
-        var m = Math.floor(num / 1000)
-        num -= m * 1000
+        var m = Math.floor(whole / 1000)
+        var mm_pieces = []
+        whole -= m * 1000
+
         if (m > 0) { pieces.push(m.toString() + "m") }
-        if (num > 0) { pieces.push(num.toString() + "mm") }
-        return pieces.join(" ")
+        if (whole > 0) { mm_pieces.push(whole.toString()) }
+        if (frac.numerator > 0) { mm_pieces.push(frac.fraction()) }
+        if (whole > 0 || frac.numerator > 0) { pieces.push(mm_pieces.condenseJoin(" ") + "mm") }
+
+        return pieces.condenseJoin(" ")
         break
       case "mm":
-        return num.toString() + "mm"
+        return frac.toString() + "mm"
         break
     }
 
     console.log("Unit not found: ", unit);
-    return num
+    return frac
   }
 
   function Screen() {}
@@ -446,7 +464,8 @@ $(".ctr-calcs.act-show").ready(function() {
     }
   })
 
-  $(document).on("keydown", ".screen", function(evt) {
+  $(document).on("keyup", function(evt) {
+    console.log(evt);
     switch(evt.key) {
       case "+":
       case "-":
@@ -465,6 +484,35 @@ $(".ctr-calcs.act-show").ready(function() {
         Calc.clear()
         evt.preventDefault();
         break;
+      case "Backspace":
+        Screen.del()
+        evt.preventDefault();
+        break;
+      case "0":
+      case "1":
+      case "2":
+      case "3":
+      case "4":
+      case "5":
+      case "6":
+      case "7":
+      case "8":
+      case "9":
+      case "-":
+      case " ":
+      case "÷":
+      case "%":
+      case ".":
+        Screen.append(evt.key)
+        evt.preventDefault();
+        break;
+    }
+
+    var inp = String.fromCharCode(evt.keyCode)
+    console.log(inp);
+    if (/[0-9- ]/.test(inp)) {
+      // Screen.append(inp)
+      evt.preventDefault();
     }
   })
 })
