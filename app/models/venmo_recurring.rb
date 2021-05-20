@@ -15,6 +15,7 @@
 #
 
 class VenmoRecurring < ApplicationRecord
+  scope :active, -> { where(active: true) }
   scope :now, -> {
     current = Time.current.in_time_zone("Mountain Time (US & Canada)")
 
@@ -22,7 +23,8 @@ class VenmoRecurring < ApplicationRecord
   }
 
   def title
-    "Charge (#{to}) $#{amount_dollars} every #{day_of_month} at #{hour_of_day}:00"
+    # If able to pay, change this wording
+    "Charge (#{from}) $#{amount_dollars} every #{day_of_month} at #{hour_of_day}:00"
   end
 
   def amount_dollars
@@ -30,6 +32,7 @@ class VenmoRecurring < ApplicationRecord
   end
 
   def charge
+    # Not able to pay yet
     return false unless to == "3852599640"
 
     Venmo.charge(from, amount_dollars, note)
