@@ -28,7 +28,9 @@ class VenmoRecurring < ApplicationRecord
   end
 
   def amount_dollars
-    (amount_cents/100.to_f).round(2)
+    multiplier = to == "3852599640" ? -1 : 1
+
+    (amount_cents/100.to_f).round(2) * multiplier
   end
 
   def charge
