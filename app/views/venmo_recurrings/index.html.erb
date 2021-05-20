@@ -1,0 +1,25 @@
+<%= meta_title "Venmo" %>
+
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <% if user_signed_in? %>
+      <a href="<%= account_path %>" class="btn">Account</a>
+      <a href="<%= new_venmo_recurring_path %>" class="btn pull-right">New Venmo +</a>
+    <% else %>
+      <a href="<%= login_path %>" class="btn">Sign In</a>
+    <% end %>
+  </div>
+  <div class="lists-title">Venmo</div>
+  <div class="lists">
+    <div class="list-field">
+      <%= text_field_tag "venmo[name]", "", class: "filterable", placeholder: "Search Venmo" %>
+    </div>
+    <% @venmos.each do |venmo| %>
+      <div class="list-item-container" data-list-id="<%= venmo.id %>">
+        <a href="<%= edit_venmo_recurring_path(venmo) %>" class="list-item">
+          <span class="item-name"><%= venmo.title %></span>
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>

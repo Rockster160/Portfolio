@@ -5,5 +5,4 @@ class ChargeCarWorker
   def perform
     Venmo.charge('8013497798', -185, "🚙")
   end
-
 end

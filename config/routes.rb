@@ -91,11 +91,13 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :venmos, path: "venmo" do
+  resources :venmos, only: [:index], path: "venmo" do
     collection do
       get "auth"
     end
   end
+
+  resources :venmo_recurrings, path: :venmo_charges
 
   require "sidekiq/web"
   # constraints ->(req) { binding.pry } do

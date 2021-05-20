@@ -4,6 +4,7 @@ class VenmosController < ApplicationController
     if params[:code].present?
       Venmo.create(access_code: params[:code])
     end
+
     redirect_to root_path
   end
 
