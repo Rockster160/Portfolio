@@ -331,15 +331,15 @@ ActiveRecord::Schema.define(version: 20210519234606) do
   end
 
   create_table "venmo_recurrings", force: :cascade do |t|
-    t.string   "to"
+    t.string   "to",           default: "3852599640"
     t.string   "from"
     t.integer  "amount_cents"
     t.string   "note"
     t.integer  "day_of_month"
     t.integer  "hour_of_day"
     t.boolean  "active",       default: true
-    t.datetime "created_at",                  null: false
-    t.datetime "updated_at",                  null: false
+    t.datetime "created_at",                          null: false
+    t.datetime "updated_at",                          null: false
   end
 
   create_table "venmos", force: :cascade do |t|

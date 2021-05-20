@@ -12,20 +12,20 @@
 #
 
 # To create a new Venmo, visit `/venmo/auth`
-# Call Venmo.charge(to, amount, note)
+# Call Venmo.charge(from, amount, note)
 class Venmo < ApplicationRecord
   class << self
-    def charge(to, amount, note)
-      Venmo.first.charge(to, amount, note)
+    def charge(from, amount, note)
+      Venmo.first.charge(from, amount, note)
     end
   end
 
-  def charge(to, amount, note)
-    SmsWorker.perform_async('3852599640', "Charging #{to}")
+  def charge(from, amount, note)
+    SmsWorker.perform_async('3852599640', "Charging #{from}")
     refresh_access_token if expired?
     response = HTTParty.post("https://api.venmo.com/v1/payments", body: {
       "access_token" => access_token,
-      "phone" => to,
+      "phone" => from,
       "note" => note,
       "amount" => amount
     })

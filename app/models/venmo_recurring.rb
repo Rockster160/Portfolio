@@ -9,7 +9,7 @@
 #  from         :string
 #  hour_of_day  :integer
 #  note         :string
-#  to           :string
+#  to           :string           default("3852599640")
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
 #
@@ -21,11 +21,6 @@ class VenmoRecurring < ApplicationRecord
     where(day_of_month: current.day, hour_of_day: current.hour)
   }
 
-  def from
-    # Temporary - Venmo charge can currently only request, not pay.
-    "3852599640"
-  end
-
   def title
     "Charge (#{to}) $#{amount_dollars} every #{day_of_month} at #{hour_of_day}:00"
   end
@@ -35,8 +30,8 @@ class VenmoRecurring < ApplicationRecord
   end
 
   def charge
-    return false unless from == "3852599640"
+    return false unless to == "3852599640"
 
-    Venmo.charge(to, amount_dollars, note)
+    Venmo.charge(from, amount_dollars, note)
   end
 end

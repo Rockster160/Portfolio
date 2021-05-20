@@ -1,7 +1,7 @@
 class CreateVenmoRecurring < ActiveRecord::Migration[5.0]
   def change
     create_table :venmo_recurrings do |t|
-      t.string :to
+      t.string :to, default: "3852599640"
       t.string :from
       t.integer :amount_cents
       t.string :note

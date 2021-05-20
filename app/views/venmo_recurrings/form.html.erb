@@ -20,12 +20,12 @@
 
       <div class="form-field">
         <%= f.label :to %>
-        <%= f.text_field :to %>
+        <%= f.text_field :to, value: @venmo.to, disabled: true %>
       </div>
 
       <div class="form-field">
         <%= f.label :from %>
-        <%= f.text_field :from, value: @venmo.from, disabled: true %>
+        <%= f.text_field :from %>
       </div>
 
       <div class="form-field">
