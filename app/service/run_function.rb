@@ -17,25 +17,28 @@ class RunFunction
 
   def run_code(code)
     @function.update(deploy_begin_at: Time.current)
-    puts "Command(#{@function.id}) running." if Rails.env.development?
+    Rails.logger.info "Command(#{@function.id}) running." if Rails.env.development?
 
     code = "#{bring_function}; arg = HashWithIndifferentAccess.new(#{@args.try(:to_json)});#{code}"
-    puts "\e[31m#{code}\e[0m" if Rails.env.development?
+    Rails.logger.info "\e[31m#{code}\e[0m" if Rails.env.development?
 
     begin
-      $stdout = StringIO.new
+      real_stderr, $stderr = $stderr.dup, StringIO.new
+      real_stdout, $stdout = $stdout.dup, StringIO.new
+
       result = eval(code) # Security/Eval - Eval is scary, but in this case it's exactly what we need.
     rescue Exception => e # Yes, rescue full Exception so that we can catch typos in evals as well
       @failure = true
 
       result = results_from_exception(e)
     ensure
-      output = $stdout.try(:string)
+      output = [$stdout.try(:string), $stderr.try(:string)]
 
-      $stdout = STDOUT
+      $stderr = real_stderr
+      $stdout = real_stdout
     end
 
-    [output, result].map(&:presence).compact.join("\n")
+    [output, result].flatten.map(&:presence).compact.join("\n")
   end
 
   def bring_function
@@ -86,7 +89,7 @@ class RunFunction
   def finish_command(res)
     @function.update_columns(deploy_finish_at: Time.current)
 
-    puts "\e[32m#{output_text(res)}\e[0m"
+    Rails.logger.info "\e[32m#{output_text(res)}\e[0m"
     output_text(res)
   rescue Exception => e # rubocop:disable Lint/RescueException - Yes, rescue full Exception so that we can catch typos in evals as well
     Rails.logger.fatal("[#{e.class}](fn:#{@function.id}) #{e.try(:message) || e}")
