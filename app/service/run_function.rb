@@ -39,7 +39,7 @@ class RunFunction
   end
 
   def bring_function
-    "def bring(*func_names); func_names.map { |f| Function.lookup(f).proposed_code }.join(\"\n\"); end"
+    "def bring(*func_names); func_names.each { |f| RunFunction.run(f) }; end"
   end
 
   def results_from_exception(exc)

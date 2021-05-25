@@ -23,6 +23,10 @@ class Function < ApplicationRecord
     end
   end
 
+  def run
+    RunFunction.run(self.id)
+  end
+
   def split_args
     return {} if arguments.blank?
 
