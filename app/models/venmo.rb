@@ -20,6 +20,20 @@ class Venmo < ApplicationRecord
     end
   end
 
+  def pay(to, amount, note)
+    SmsWorker.perform_async('3852599640', "Paying #{from} $#{amount}")
+    refresh_access_token if expired?
+    response = HTTParty.post("https://api.venmo.com/v1/payments", body: {
+      "access_token" => access_token,
+      "phone" => from,
+      "note" => note,
+      "amount" => -amount
+    })
+    if response['error'].present?
+      SmsWorker.perform_async('3852599640', "Venmo Error: #{response['error']['message']}")
+    end
+  end
+
   def charge(from, amount, note)
     SmsWorker.perform_async('3852599640', "Charging #{from}")
     refresh_access_token if expired?

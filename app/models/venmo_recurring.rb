@@ -22,21 +22,29 @@ class VenmoRecurring < ApplicationRecord
     where(day_of_month: current.day, hour_of_day: current.hour)
   }
 
+  def requesting?
+    to == "3852599640"
+  end
+
+  def sending?
+    !requesting?
+  end
+
   def title
-    # If able to pay, change this wording
-    "Charge (#{from}) $#{amount_dollars} every #{day_of_month} at #{hour_of_day}:00"
+    "#{requesting? ? 'Charge' : 'Pay'} (#{from}) $#{amount_dollars.abs} every #{day_of_month} at #{hour_of_day}:00"
   end
 
   def amount_dollars
-    multiplier = to == "3852599640" ? -1 : 1
+    multiplier = requesting? ? -1 : 1
 
     (amount_cents/100.to_f).round(2) * multiplier
   end
 
   def charge
-    # Not able to pay yet
-    return false unless to == "3852599640"
-
-    Venmo.charge(from, amount_dollars, note)
+    if requesting?
+      Venmo.charge(from, amount_dollars, note)
+    else
+      Venmo.pay(to, amount_dollars, note)
+    end
   end
 end

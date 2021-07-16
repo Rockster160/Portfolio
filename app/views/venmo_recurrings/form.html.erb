@@ -1,7 +1,6 @@
 <div class="skinny-container">
   <div class="btn-container">
     <a href="<%= venmo_recurrings_path %>" class="btn">&larr; All Venmo</a>
-    <a href="<%= logout_path %>" class="btn pull-right">Logout</a>
   </div>
   <%= form_for @venmo do |f| %>
     <div class="form-title">New Venmo</div>
@@ -20,7 +19,7 @@
 
       <div class="form-field">
         <%= f.label :to %>
-        <%= f.text_field :to, value: @venmo.to, disabled: true %>
+        <%= f.text_field :to, value: @venmo.to %>
       </div>
 
       <div class="form-field">
