@@ -81,6 +81,10 @@ GEM
     docile (1.1.5)
     domain_name (0.5.20170404)
       unf (>= 0.0.5, < 1.0.0)
+    dotenv (2.7.6)
+    dotenv-rails (2.7.6)
+      dotenv (= 2.7.6)
+      railties (>= 3.2)
     erubis (2.7.0)
     et-orbi (1.0.3)
       tzinfo
@@ -297,6 +301,7 @@ DEPENDENCIES
   chronic
   coffee-rails
   colorize
+  dotenv-rails
   exception_notification
   faker
   font-awesome-rails
