@@ -10,10 +10,18 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20210519234606) do
+ActiveRecord::Schema.define(version: 20210801030843) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
+
+  create_table "action_events", force: :cascade do |t|
+    t.text     "event_name"
+    t.integer  "user_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_action_events_on_user_id", using: :btree
+  end
 
   create_table "avatar_clothes", force: :cascade do |t|
     t.integer  "avatar_id"
@@ -42,6 +50,45 @@ ActiveRecord::Schema.define(version: 20210519234606) do
     t.string   "text",       limit: 255
     t.datetime "created_at"
     t.datetime "updated_at"
+  end
+
+  create_table "command_proposal_comments", force: :cascade do |t|
+    t.integer  "iteration_id"
+    t.integer  "line_number"
+    t.integer  "author_id"
+    t.text     "body"
+    t.datetime "created_at",   null: false
+    t.datetime "updated_at",   null: false
+    t.index ["author_id"], name: "index_command_proposal_comments_on_author_id", using: :btree
+    t.index ["iteration_id"], name: "index_command_proposal_comments_on_iteration_id", using: :btree
+  end
+
+  create_table "command_proposal_iterations", force: :cascade do |t|
+    t.integer  "task_id"
+    t.text     "args"
+    t.text     "code"
+    t.text     "result"
+    t.integer  "status",       default: 0
+    t.integer  "requester_id"
+    t.integer  "approver_id"
+    t.datetime "approved_at"
+    t.datetime "started_at"
+    t.datetime "completed_at"
+    t.datetime "stopped_at"
+    t.datetime "created_at",               null: false
+    t.datetime "updated_at",               null: false
+    t.index ["approver_id"], name: "index_command_proposal_iterations_on_approver_id", using: :btree
+    t.index ["requester_id"], name: "index_command_proposal_iterations_on_requester_id", using: :btree
+    t.index ["task_id"], name: "index_command_proposal_iterations_on_task_id", using: :btree
+  end
+
+  create_table "command_proposal_tasks", force: :cascade do |t|
+    t.text     "name"
+    t.text     "description"
+    t.integer  "session_type",     default: 0
+    t.datetime "last_executed_at"
+    t.datetime "created_at",                   null: false
+    t.datetime "updated_at",                   null: false
   end
 
   create_table "companies", force: :cascade do |t|
