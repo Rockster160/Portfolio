@@ -39,6 +39,8 @@ Rails.application.routes.draw do
 
   resource :calc, only: [:show]
 
+  resources :action_events, only: [:create]
+
   resource :summoners_war do
     get :runes
     resources :monsters
