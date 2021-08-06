@@ -54,8 +54,9 @@
     }
 
     .list-item-config {
+      color: $text-color;
       position: absolute;
-      top: 5px;
+      top: 2px;
       left: 5px;
       z-index: 2;
       font-size: 12px;
@@ -79,8 +80,8 @@
 
         &:after {
           position: absolute;
-          top: 3px;
-          left: 3px;
+          top: 0;
+          left: 0;
           font-family: "FontAwesome";
           text-align: center;
           content: "\f0c9";
@@ -93,8 +94,8 @@
 
         &:after {
           position: absolute;
-          top: 3px;
-          left: 3px;
+          top: 0;
+          left: 0;
           font-family: "FontAwesome";
           text-align: center;
           content: "\f023";
@@ -107,8 +108,8 @@
 
         &:after {
           position: absolute;
-          top: 3px;
-          left: 3px;
+          top: 0;
+          left: 0;
           font-family: "FontAwesome";
           text-align: center;
           content: "\f021";
