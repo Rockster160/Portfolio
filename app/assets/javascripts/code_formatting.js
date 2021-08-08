@@ -25,7 +25,7 @@ $(document).ready(function() {
     return luminescence > 150 ? black : white
   }
 
-  $("body, body *:not(script):not(noscript):not(style)").each(function() {
+  $("body, body *:not(script):not(noscript):not(style):not(iframe)").each(function() {
     $(this).html($(this).html().replace(/([^\\])\`(.*?[^\\])\`/g, "$1<code>$2</code>"))
     $(this).html($(this).html().replace(/\\`/g, "`"))
     $(this).html($(this).html().replace(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})([^\w])/g, function(match, group1, group2) {
