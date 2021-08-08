@@ -3,14 +3,19 @@ class ActionEventsController < ApplicationController
   before_action :authorize_user
 
   def create
-    ActionEvent.create(action_event_params.merge(user: current_user))
+    event = ActionEvent.create(action_event_params.merge(user: current_user))
 
-    head :ok
+    if event.persisted?
+      head :ok
+    else
+      SlackNotifier.notify(event.errors.full_messages.join("\n"))
+      head :unprocessable_entity
+    end
   end
 
   private
 
   def action_event_params
-    params.to_unsafe_h.slice(:event, :timestamp, :notes)
+    params.to_unsafe_h.slice(:event_name, :timestamp, :notes)
   end
 end
