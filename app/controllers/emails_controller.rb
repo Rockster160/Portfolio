@@ -41,7 +41,8 @@ class EmailsController < ApplicationController
   def update_params
     params.require(:email).permit(
       :archived,
-      :read
+      :read,
+      :html_body,
     )
   end
 

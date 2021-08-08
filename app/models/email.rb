@@ -89,22 +89,10 @@ class Email < ApplicationRecord
     )
   end
 
-  def clean_raw_mime(mime_text)
-    return "" if mime_text.blank?
-    mime_text = mime_text.gsub(/\=(3D|20)+/, "=")
-    mime_text = mime_text.gsub(/\=\r?\n\r?/, "")
-    mime_text = mime_text.gsub(/\r?\n\r?/, "\n")
-    mime_text = mime_text.gsub(/(\=[a-f0-9]{2})+/i) do |found|
-      found.split("=").map { |byte| byte.presence.try(:hex).try(:chr) }.compact.join("") rescue found
-    end
-    mime_text.encode('UTF-32', invalid: :replace, undef: :replace, replace: '').encode('UTF-8')
-  end
-
   def from_mail(mail)
-    text_body = mail.try(:text_part).try(:body).try(:raw_source)
-    text_body = clean_raw_mime(text_body)
-    html_body = mail.try(:html_part).try(:body).try(:raw_source) || mail.try(:body).try(:raw_source)
-    html_body = clean_raw_mime(html_body)
+    text_body = mail.text_part&.body&.decoded.presence || mail.body&.decoded.presence
+    html_body = mail.html_part&.body&.decoded.presence || mail.body&.decoded.presence
+
     assign_attributes(
       from:      [mail.from].flatten.compact.join(","),
       to:        [mail.to].flatten.compact.join(","),

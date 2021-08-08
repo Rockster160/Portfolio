@@ -1,3 +1,13 @@
+<%= content_for(:head) do %>
+  <script type="text/javascript">
+    resizeIframe = function(evt) {
+      var iframe = $(".display-email-container").get(0)
+
+      iframe.style.height = iframe.contentWindow.document.body.scrollHeight + 50 + "px"
+    }
+  </script>
+<% end %>
+
 <div class="skinny-container">
   <a href="<%= emails_path %>" class="btn">All Emails</a>
 </div>
@@ -47,14 +57,21 @@
   <% end %>
 </div>
 
-<% if @email.html_body.try(:html_safe).present? %>
-  <div class="display-email-container no-markdown"><%= @email.html_body.try(:html_safe) %></div>
-<% elsif @email.text_body.try(:html_safe).present? %>
-  <h3 class="text-center">Text:</h3>
-  <div class="display-email-container no-markdown"><%= @email.text_body.try(:html_safe) %></div>
-<% elsif @email.blob.present? %>
-  <h3 class="text-center">Blob:</h3>
-  <div class="display-email-container no-markdown"><code><%= @email.blob %></code></div>
-<% else %>
-  <h3 class="text-center">No Content</h3>
+<div class="skinny-container">
+  <% if @email.html_body.present? %>
+    <%= render_iframe(@email.html_body) %>
+  <% elsif @email.text_body.present? %>
+    <h3 class="text-center">Text:</h3>
+    <%= render_iframe(@email.text_body) %>
+  <% elsif @email.blob.present? %>
+    <h3 class="text-center">Blob:</h3>
+    <%= render_iframe(@email.blob) %>
+  <% else %>
+    <h3 class="text-center">No Content</h3>
+  <% end %>
+</div>
+
+<%= form_for @email do |f| %>
+  <%= f.submit %>
+  <%= f.text_area :html_body, rows: 200 %>
 <% end %>
