@@ -3,8 +3,14 @@ class ActionEventsController < ApplicationController
   before_action :authorize_user
 
   def create
-    ActionEvent.create(user: current_user, event_name: params[:event])
+    ActionEvent.create(action_event_params.merge(user: current_user))
 
     head :ok
+  end
+
+  private
+
+  def action_event_params
+    params.slice(:event, :timestamp, :notes)
   end
 end

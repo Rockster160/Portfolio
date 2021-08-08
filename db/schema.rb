@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20210801030843) do
+ActiveRecord::Schema.define(version: 20210808013343) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -20,6 +20,8 @@ ActiveRecord::Schema.define(version: 20210801030843) do
     t.integer  "user_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "timestamp"
+    t.text     "notes"
     t.index ["user_id"], name: "index_action_events_on_user_id", using: :btree
   end
 
@@ -84,6 +86,7 @@ ActiveRecord::Schema.define(version: 20210801030843) do
 
   create_table "command_proposal_tasks", force: :cascade do |t|
     t.text     "name"
+    t.text     "friendly_id"
     t.text     "description"
     t.integer  "session_type",     default: 0
     t.datetime "last_executed_at"
