@@ -73,5 +73,5 @@
 
 <%= form_for @email do |f| %>
   <%= f.submit %>
-  <%= f.text_area :html_body, rows: 200 %>
+  <%= f.text_area :html_body, rows: @email.html_body.count("\n") + 5, style: "white-space: nowrap;", class: "no-markdown" %>
 <% end %>
