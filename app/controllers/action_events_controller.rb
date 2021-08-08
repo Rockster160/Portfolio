@@ -11,6 +11,6 @@ class ActionEventsController < ApplicationController
   private
 
   def action_event_params
-    params.slice(:event, :timestamp, :notes)
+    params.to_unsafe_h.slice(:event, :timestamp, :notes)
   end
 end
