@@ -35,14 +35,14 @@
   <%
     reply_details = {
       email: {
-        from_user: @email.our_email,
-        to: @email.not_our_email,
+        from_user: @email.inbound_address,
+        to: @email.outbound_address,
         subject: "RE: #{@email.subject}"
       }
     }
     forward_details = {
       email: {
-        from_user: @email.our_email,
+        from_user: @email.inbound_address,
         subject: "FWD: #{@email.subject}",
         html_body: @email.html_body
       }
@@ -73,5 +73,5 @@
 
 <%= form_for @email do |f| %>
   <%= f.submit %>
-  <%= f.text_area :html_body, rows: @email.html_body.count("\n") + 5, style: "white-space: nowrap;", class: "no-markdown" %>
+  <%= f.text_area :html_body, rows: @email.html_body&.count("\n").to_i + 5, style: "white-space: nowrap;", class: "no-markdown" %>
 <% end %>

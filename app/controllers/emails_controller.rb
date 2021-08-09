@@ -3,8 +3,8 @@ class EmailsController < ApplicationController
 
   def index
     # FIXME: Filter this by user unless admin?
-    @emails_received = Email.not_archived.not_from_us.order_chrono.page(params[:emails_received_page]).per(params[:emails_received_per] || 10)
-    @emails_sent = Email.not_archived.from_us.order_chrono.page(params[:emails_sent_page]).per(params[:emails_sent_per] || 10)
+    @emails_received = Email.not_archived.inbound.order_chrono.page(params[:emails_received_page]).per(params[:emails_received_per] || 10)
+    @emails_sent = Email.not_archived.outbound.order_chrono.page(params[:emails_sent_page]).per(params[:emails_sent_per] || 10)
     @failed_to_parse = Email.not_archived.failed.order_chrono.page(params[:emails_failed_page]).per(params[:emails_failed_per] || 10)
   end
 

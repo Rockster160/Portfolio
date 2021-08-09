@@ -21,11 +21,11 @@ class Email < ApplicationRecord
   belongs_to :sent_by, class_name: "User", optional: true
 
   scope :not_archived, -> { where(deleted_at: nil) }
-  scope :from_us,     -> { where(registered_domains.map { |domain| "emails.from ILIKE '%#{domain}'" }.join(" OR ")) }
-  scope :not_from_us, -> { where.not(registered_domains.map { |domain| "emails.from ILIKE '%#{domain}'" }.join(" OR ")) }
-  scope :unread,      -> { where(read_at: nil) }
-  scope :read,        -> { where.not(read_at: nil) }
-  scope :failed,      -> { where.not(blob: nil).where(from: nil, to: nil) }
+  scope :outbound,     -> { where(registered_domains.map { |domain| "emails.from ILIKE '%#{domain}'" }.join(" OR ")) }
+  scope :inbound,      -> { where.not(registered_domains.map { |domain| "emails.from ILIKE '%#{domain}'" }.join(" OR ")) }
+  scope :unread,       -> { where(read_at: nil) }
+  scope :read,         -> { where.not(read_at: nil) }
+  scope :failed,       -> { where.not(blob: nil).where(from: nil, to: nil) }
 
   scope :order_chrono, -> { order(created_at: :desc) }
 
@@ -52,20 +52,20 @@ class Email < ApplicationRecord
     SlackNotifier.notify(message_parts.join("\n"), channel: "#portfolio", username: "Mail-Bot", icon_emoji: ":mailbox:")
   end
 
-  def from_us?
+  def outbound?
     (Email.domains_from_addresses(from) & Email.registered_domains).any?
   end
 
-  def not_from_us?
+  def inbound?
     (Email.domains_from_addresses(to) & Email.registered_domains).any?
   end
 
-  def not_our_email
-    from_us? ? to : from
+  def outbound_address
+    outbound? ? to : from
   end
 
-  def our_email
-    from_us? ? from : to
+  def inbound_address
+    outbound? ? from : to
   end
 
   def from_user
