@@ -49,7 +49,7 @@ class Email < ApplicationRecord
     message_parts << "_#{subject}_"
     message_parts << "<#{Rails.application.routes.url_helpers.email_url(id: id)}|Click here to view.>"
     message_parts << ">>> #{text_body}"
-    SlackNotifier.notify(message_parts.join("\n"), channel: '#portfolio', username: 'Mail-Bot', icon_emoji: ':mailbox:')
+    SlackNotifier.notify(message_parts.join("\n"), channel: "#portfolio", username: "Mail-Bot", icon_emoji: ":mailbox:")
   end
 
   def from_us?
@@ -89,9 +89,20 @@ class Email < ApplicationRecord
     )
   end
 
+  def clean_content(raw_html, parse_text: false)
+    html = raw_html.encode("UTF-8", invalid: :replace, undef: :replace, replace: "", universal_newline: true).gsub(/\P{ASCII}/, "")
+    return html unless parse_text
+
+    parser = Nokogiri::HTML(html, nil, Encoding::UTF_8.to_s)
+    parser.xpath("//script")&.remove
+    parser.xpath("//style")&.remove
+    parser.xpath("//text()").map(&:text).join(" ").squish
+  end
+
   def from_mail(mail)
-    text_body = mail.text_part&.body&.decoded.presence || mail.body&.decoded.presence
-    html_body = mail.html_part&.body&.decoded.presence || mail.body&.decoded.presence
+    content = mail.body&.decoded.presence
+    html_body = mail.html_part&.body&.decoded.presence || clean_content(content)
+    text_body = mail.text_part&.body&.decoded.presence || clean_content(content, parse_text: true)
 
     assign_attributes(
       from:      [mail.from].flatten.compact.join(","),
