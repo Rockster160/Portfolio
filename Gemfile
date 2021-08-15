@@ -1,5 +1,7 @@
 source 'https://rubygems.org'
 
+gem "command_proposal", path: "../command_proposal"
+
 gem 'rails', '5.0.2'
 gem 'pg'
 # gem 'therubyracer'
@@ -29,6 +31,8 @@ gem 'gmaps4rails'
 gem 'underscore-rails'
 gem 'httparty'
 gem 'touchpunch-rails'
+
+
 
 gem 'bcrypt'
 gem 'rails_autolink'

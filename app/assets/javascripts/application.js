@@ -14,6 +14,7 @@
 //= require jquery_ujs
 //= require jquery-ui
 //= require underscore
+//= require command_proposal
 //= require gmaps/google
 //= require_tree .
 //= stub support/colorpicker.js

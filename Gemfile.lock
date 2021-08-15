@@ -1,3 +1,10 @@
+PATH
+  remote: ../command_proposal
+  specs:
+    command_proposal (0.1.0)
+      font-awesome-rails
+      rails (>= 5.0)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -301,6 +308,7 @@ DEPENDENCIES
   chronic
   coffee-rails
   colorize
+  command_proposal!
   dotenv-rails
   exception_notification
   faker
