@@ -78,7 +78,7 @@ class MoneyBucketJson
 
   def withdraw(withdraw_str)
     money_str = withdraw_str.match(/\$? ?(?:\d|\,)+\.?\d*/)
-    cleaned_str = money_str && withdraw_str.gsub(money_str[0], "")
+    cleaned_str = money_str && withdraw_str.gsub(money_str[0], "").gsub(/\+|\-/, "")
 
     if cleaned_str.to_s.match?(/[a-z]/i)
       bucket = buckets.find { |searched_bucket|
@@ -104,7 +104,7 @@ class MoneyBucketJson
 
   def deposit(deposit_str)
     money_str = deposit_str.match(/\$? ?(?:\d|\,)+\.?\d*/)
-    cleaned_str = money_str && deposit_str.gsub(money_str[0], "")
+    cleaned_str = money_str && deposit_str.gsub(money_str[0], "").gsub(/\+|\-/, "")
 
     if cleaned_str.to_s.match?(/[a-z]/i)
       bucket = buckets.find { |searched_bucket|
