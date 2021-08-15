@@ -184,7 +184,7 @@ class MoneyBucketJson
             "Added the remaining #{pennies_to_currency(amount)} instead.")
         end
         amount -= [deduct, amount].min
-        bucket.amount += deduct
+        bucket.amount += [deduct, amount].min
       end
     end
 
