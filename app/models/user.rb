@@ -27,6 +27,7 @@ class User < ApplicationRecord
   has_many :sent_emails, class_name: "Email", foreign_key: :sent_by_id, dependent: :destroy
   has_one :avatar
   has_one :push_sub, class_name: "UserPushSubscription"
+  has_one :money_bucket
 
   has_secure_password validations: false
 

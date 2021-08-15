@@ -23,6 +23,8 @@ Rails.application.routes.draw do
     post :run
   end
 
+  resource :money_buckets, path: "/bucket"
+
   post "webhooks/jenkins" => "webhooks#jenkins"
   post "webhooks/post" => "webhooks#post"
   post "webhooks/email" => "webhooks#email"

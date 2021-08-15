@@ -1,0 +1,56 @@
+<%= meta_title "Buckets" %>
+<%= meta_description "Track money in and out" %>
+
+<div class="skinny-container">
+  <%= form_for @money_bucket, url: money_buckets_path(@money_bucket) do |f| %>
+    <div class="form-title">
+      Buckets
+    </div>
+
+    <% if @money_bucket.deposit_errors.present? %>
+      <div class="error-container">
+        <ul>
+          <% @money_bucket.deposit_errors.each do |error| %>
+            <li><%= error %></li>
+          <% end %>
+        </ul>
+      </div>
+    <% end %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <p>Bucket balance: <%= number_to_currency(@money_bucket.balance_dollars) %></p>
+      </div>
+
+      <div class="split-fields">
+        <div class="form-field">
+          <%= f.label :deposit %>
+          <%= f.text_field :deposit %>
+        </div>
+
+        <div class="form-field">
+          <%= f.label :withdraw %>
+          <%= f.text_field :withdraw %>
+        </div>
+
+        <div class="form-submission">
+          <%= submit_tag "Save" %>
+        </div>
+
+        <div class="buckets">
+          <% @money_bucket.buckets.each do |bucket| %>
+            <%= render partial: "bucket", locals: { f: f, bucket: bucket } %>
+          <% end %>
+        </div>
+
+        <div class="form-field">
+          <span class="btn add-bucket-btn">+ Add new bucket</span>
+        </div>
+
+        <template id="bucket-form">
+          <%= render partial: "bucket", locals: { f: f, bucket: nil } %>
+        </template>
+      </div>
+    </div>
+  <% end %>
+</div>

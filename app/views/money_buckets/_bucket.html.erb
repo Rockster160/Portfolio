@@ -1,0 +1,24 @@
+<% bucket ||= MoneyBucketJson::BucketData.new %>
+<% def nested_field(name); "money_bucket[bucket_data][][#{name}]"; end %>
+
+<div class="bucket">
+  <div class="bucket-handle"><i class="fa fa-arrows"></i></div>
+  <%= label_tag nested_field(:name), "Name", id: nil %>
+  <%= text_field_tag nested_field(:name), bucket.name, id: nil %>
+  <%= label_tag nested_field(:rule), id: nil, title: "45 -> Specifies a fixed amount of $45 per deposit\n20% -> Specifies to input 20% of the full deposit\n%20r -> Specifies to use 20% of whatever is left when balance reaches this bucket" do %>
+    Rule<sup>?</sup>
+  <% end %>
+  <%= text_field_tag nested_field(:rule), bucket.rule, id: nil %>
+  <%= label_tag nested_field(:withdraw), "Adjust balance (Use - for subtracting)", id: nil %>
+  <%= text_field_tag nested_field(:withdraw_dollars), nil, id: nil %>
+  <%= label_tag nested_field(:amount), "Current Balance", id: nil %>
+  <%= text_field_tag nested_field(:amount_dollars), number_to_currency(bucket.amount_dollars), id: nil %>
+
+  <div class="checkbox-wrapper white">
+    <%= check_box_tag nested_field(:default_withdraw), 1, bucket.default_withdraw, id: nil %>
+    <%= label_tag nested_field(:default_withdraw), id: nil, class: "bucket-default-checkbox" do %>
+      <div class="checkbox-placeholder"></div>
+      Set this bucket to be the default bucket to withdraw from?
+    <% end %>
+  </div>
+</div>

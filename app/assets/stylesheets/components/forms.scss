@@ -255,6 +255,22 @@ select {
     color: $base-blue;
     content: "\f00c";
   }
+
+  &.white {
+    input[type=checkbox] + label {
+      .checkbox-placeholder {
+        &:before {
+          border: 2px solid white;
+        }
+      }
+    }
+    input[type=checkbox]:not(:checked) + label:hover .checkbox-placeholder:after {
+      color: $grey-light;
+    }
+    input[type=checkbox]:checked + label .checkbox-placeholder:after {
+      color: white;
+    }
+  }
 }
 
 .radio-wrapper {
