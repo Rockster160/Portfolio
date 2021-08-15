@@ -2,6 +2,7 @@
 <% def nested_field(name); "money_bucket[bucket_data][][#{name}]"; end %>
 
 <div class="bucket">
+  <div class="bucket-remove"><i class="fa fa-times"></i></div>
   <div class="bucket-handle"><i class="fa fa-arrows"></i></div>
   <%= label_tag nested_field(:name), "Name", id: nil %>
   <%= text_field_tag nested_field(:name), bucket.name, id: nil %>
