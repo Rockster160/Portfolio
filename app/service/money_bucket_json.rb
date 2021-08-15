@@ -177,14 +177,15 @@ class MoneyBucketJson
         amount -= deduct
         bucket.amount += deduct
       else
-        deduct = extract_pennies(bucket.rule)
+        rule = extract_pennies(bucket.rule)
+        deduct = [rule, amount].min
 
-        if deduct > amount
+        if rule > amount
           error("Deposit not large enough to add #{bucket.rule} to #{bucket.name}. "\
             "Added the remaining #{pennies_to_currency(amount)} instead.")
         end
-        amount -= [deduct, amount].min
-        bucket.amount += [deduct, amount].min
+        amount -= deduct
+        bucket.amount += deduct
       end
     end
 
