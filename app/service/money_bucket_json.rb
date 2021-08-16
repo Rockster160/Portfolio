@@ -17,9 +17,11 @@ class MoneyBucketJson
 
     def adjust(adjust_str, default: :withdraw)
       adjust_str.split("\n").each do |adjust_line|
-        if adjust_line.match?(/\+\s*\$?\s*\d/)
+        deposit_words = /deposit|payroll|pay/
+        withdraw_words = /withdraw|pull|paid|spend/
+        if adjust_line.downcase.match?(deposit_words) || adjust_line.match?(/\+\s*\$?\s*\d/)
           deposit(adjust_str)
-        elsif adjust_line.match?(/\-\s*\$?\s*\d/)
+        elsif adjust_line.match?(withdraw_words) || adjust_line.match?(/\-\s*\$?\s*\d/)
           withdraw(adjust_str)
         else
           raise "Must be either :withdraw or :deposit" unless default.in?([:deposit, :withdraw])
@@ -55,19 +57,25 @@ class MoneyBucketJson
   end
 
   def to_words(include: [:default])
+    words = ""
     if @bucket.deposit_errors.present?
-      errors = @bucket.deposit_errors.join("\n") + "\n"
+      words = @bucket.deposit_errors.join("\n") + "\n\n"
     end
 
-    default_bucket = buckets.find { |searched_bucket| searched_bucket.default_withdraw }
-    "#{errors || nil}#{default_bucket.name} balance: #{pennies_to_currency(default_bucket.amount)}"
+    buckets.each do |bucket|
+      words += "#{bucket.name}: #{pennies_to_currency(bucket.amount)}\n"
+    end
+
+    words
   end
 
   def adjust(adjust_str, default: :withdraw)
     adjust_str.split("\n").each do |adjust_line|
-      if adjust_line.match?(/\+\s*\$?\s*\d/)
+      deposit_words = /deposit|payroll|pay/
+      withdraw_words = /withdraw|pull|paid|spend/
+      if adjust_line.downcase.match?(deposit_words) || adjust_line.match?(/\+\s*\$?\s*\d/)
         deposit(adjust_str)
-      elsif adjust_line.match?(/\-\s*\$?\s*\d/)
+      elsif adjust_line.downcase.match?(withdraw_words) || adjust_line.match?(/\-\s*\$?\s*\d/)
         withdraw(adjust_str)
       else
         raise "Must be either :withdraw or :deposit" unless default.in?([:deposit, :withdraw])
@@ -78,7 +86,9 @@ class MoneyBucketJson
 
   def withdraw(withdraw_str)
     money_str = withdraw_str.match(/\$? ?(?:\d|\,)+\.?\d*/)
-    cleaned_str = money_str && withdraw_str.gsub(money_str[0], "").gsub(/\+|\-/, "")
+    cleaned_str = money_str.presence && withdraw_str.gsub(money_str[0], "").gsub(/\+|\-/, "")
+    exchange_words = /deposit|payroll|pay|withdraw|pull|paid|spend/
+    cleaned_str = cleaned_str.to_s.gsub(exchange_words, "")
 
     if cleaned_str.to_s.match?(/[a-z]/i)
       bucket = buckets.find { |searched_bucket|
@@ -104,7 +114,9 @@ class MoneyBucketJson
 
   def deposit(deposit_str)
     money_str = deposit_str.match(/\$? ?(?:\d|\,)+\.?\d*/)
-    cleaned_str = money_str && deposit_str.gsub(money_str[0], "").gsub(/\+|\-/, "")
+    cleaned_str = money_str.presence && deposit_str.gsub(money_str[0], "").gsub(/\+|\-/, "")
+    exchange_words = /deposit|payroll|pay|withdraw|pull|paid|spend/
+    cleaned_str = cleaned_str.to_s.gsub(exchange_words, "")
 
     if cleaned_str.to_s.match?(/[a-z]/i)
       bucket = buckets.find { |searched_bucket|
@@ -116,7 +128,7 @@ class MoneyBucketJson
       if bucket.present?
         bucket.deposit(money_str)
       else
-        error("Bucket not found '#{cleaned_str}'")
+        error("Bucket not found '#{cleaned_str}' - nothing changed!")
       end
     else
       money_pennies = extract_pennies(deposit_str)
