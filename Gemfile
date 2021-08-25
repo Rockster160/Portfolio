@@ -1,7 +1,5 @@
 source 'https://rubygems.org'
 
-gem "command_proposal", path: "../command_proposal"
-
 gem 'rails', '5.0.2'
 gem 'pg'
 # gem 'therubyracer'
@@ -32,8 +30,6 @@ gem 'underscore-rails'
 gem 'httparty'
 gem 'touchpunch-rails'
 
-
-
 gem 'bcrypt'
 gem 'rails_autolink'
 gem 'exception_notification'
@@ -54,6 +50,8 @@ gem "webpush"
 gem "chronic"
 
 gem "honeybadger", "~> 4.0"
+
+gem "command_proposal"
 
 group :development, :test do
   gem 'annotate'
