@@ -1,4 +1,6 @@
 Rails.application.routes.draw do
+  mount ::CommandProposal::Engine => "/commands"
+
   constraints subdomain: "sub" do
     get "/sub" => "index#sub"
   end

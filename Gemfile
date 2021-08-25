@@ -51,6 +51,8 @@ gem "chronic"
 
 gem "honeybadger", "~> 4.0"
 
+gem "command_proposal"
+
 group :development, :test do
   gem 'annotate'
   gem 'rails_real_favicon'
