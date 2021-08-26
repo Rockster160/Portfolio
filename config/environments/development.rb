@@ -19,7 +19,7 @@ Rails.application.configure do
   config.action_cable.url = "ws://localhost:3141/cable"
 
   routes.default_url_options = { protocol: "http://", host: "localhost", port: "3141" }
-
+  config.action_mailer.default_url_options = routes.default_url_options
 
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log

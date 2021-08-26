@@ -51,7 +51,7 @@ gem "chronic"
 
 gem "honeybadger", "~> 4.0"
 
-gem "command_proposal"
+gem "command_proposal"#, path: "../command_proposal"
 
 group :development, :test do
   gem 'annotate'
