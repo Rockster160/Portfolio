@@ -1,4 +1,5 @@
 ::CommandProposal.configure do |config|
+  config.approval_required = false
   # Change if your base user class has a different model name
   config.user_class_name = "User"
   config.controller_var = :current_user
