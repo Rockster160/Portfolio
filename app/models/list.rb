@@ -192,7 +192,7 @@ class List < ApplicationRecord
     new_text.gsub!(regex_for_individual_word(:to), " ")
     new_text.gsub!(regex_for_individual_word(:from), " ")
     new_text.gsub!(regex_for_individual_word(:the), " ")
-    new_text.split(/,|and/).map { |w| w.squish.presence }.compact
+    new_text.split(/,| and /).map { |w| w.squish.presence }.compact
   end
 
   def fix_list_items_order
