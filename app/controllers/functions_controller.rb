@@ -12,7 +12,7 @@ class FunctionsController < ApplicationController
 
   def run
     iteration = ::CommandProposal::Services::CommandInterpreter.command(
-      ::CommandProposal::Task.find_by!(friendly_id: params[:function_id]),
+      ::CommandProposal::Task.find_by!(friendly_id: params[:function_id])&.primary_iteration,
       :run,
       current_user,
       params.except(:action, :controller)
