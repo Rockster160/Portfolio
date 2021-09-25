@@ -53,7 +53,7 @@ gem "honeybadger", "~> 4.0"
 
 # gem "command_proposal", path: "../command_proposal"
 # gem "command_proposal", git: "https://github.com/Rockster160/command_proposal.git"
-gem "command_proposal", "1.0.9"
+gem "command_proposal", "1.0.11"
 
 group :development, :test do
   gem 'annotate'
