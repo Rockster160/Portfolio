@@ -11,9 +11,14 @@ class FunctionsController < ApplicationController
   end
 
   def run
-    res = RunFunction.run(params[:function_id], params[:arg].as_json)
+    iteration = ::CommandProposal::Services::CommandInterpreter.command(
+      ::CommandProposal::Task.find_by!(friendly_id: params[:function_id]),
+      :run,
+      current_user,
+      params.except(:action, :controller)
+    )
 
-    render json: res
+    render json: iteration.result
   end
 
   def new
