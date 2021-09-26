@@ -90,6 +90,8 @@ class Email < ApplicationRecord
   end
 
   def clean_content(raw_html, parse_text: false)
+    return unless raw_html.present?
+
     html = raw_html.encode("UTF-8", invalid: :replace, undef: :replace, replace: "", universal_newline: true).gsub(/\P{ASCII}/, "")
     return html unless parse_text
 
@@ -101,8 +103,8 @@ class Email < ApplicationRecord
 
   def from_mail(mail)
     content = mail.body&.decoded.presence
-    html_body = mail.html_part&.body&.decoded.presence || clean_content(content)
-    text_body = mail.text_part&.body&.decoded.presence || clean_content(content, parse_text: true)
+    html_body = clean_content(mail.html_part&.body&.decoded.presence) || clean_content(content)
+    text_body = clean_content(mail.text_part&.body&.decoded.presence) || clean_content(content, parse_text: true)
 
     assign_attributes(
       from:      [mail.from].flatten.compact.join(","),
