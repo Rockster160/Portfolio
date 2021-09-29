@@ -1,0 +1,24 @@
+<%= form_for ActionEvent.new do |f| %>
+  <%= f.text_field :event_name, placeholder: :event_name %>
+  <%= f.text_field :notes, placeholder: :notes %>
+  <%= f.text_field :timestamp, placeholder: :timestamp %>
+  <%= f.submit %>
+<% end %>
+
+<table>
+  <thead>
+    <th></th>
+    <th>Name</th>
+    <th>Notes</th>
+    <th>Timestamp</th>
+  </thead>
+
+  <% @events.each do |event| %>
+    <tr>
+      <td><%= link_to "X", action_event_path(event), method: :delete %></td>
+      <td><%= event.event_name %></td>
+      <td><%= event.notes %></td>
+      <td><%= event.timestamp %></td>
+    </tr>
+  <% end %>
+</table>
