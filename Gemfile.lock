@@ -75,7 +75,7 @@ GEM
       execjs
     coffee-script-source (1.12.2)
     colorize (0.8.1)
-    command_proposal (1.0.11)
+    command_proposal (1.0.12)
       font-awesome-rails
       rails (>= 5.0.0)
     concurrent-ruby (1.1.9)
@@ -149,7 +149,7 @@ GEM
     mime-types (3.3.1)
       mime-types-data (~> 3.2015)
     mime-types-data (3.2021.0704)
-    mini_mime (1.1.1)
+    mini_mime (1.1.2)
     mini_portile2 (2.4.0)
     minitest (5.14.4)
     multi_json (1.12.1)
@@ -305,7 +305,7 @@ DEPENDENCIES
   chronic
   coffee-rails
   colorize
-  command_proposal (= 1.0.11)
+  command_proposal (= 1.0.12)
   dotenv-rails
   exception_notification
   faker
