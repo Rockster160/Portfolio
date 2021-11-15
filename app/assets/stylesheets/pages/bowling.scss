@@ -1,0 +1,46 @@
+.bowling-table {
+  display: grid;
+  grid-template-columns: auto repeat(11, 80px);
+
+  .bowling-cell {
+    border-collapse: collapse;
+    border: 1px solid black;
+    text-align: center;
+  }
+
+  .frame {
+    height: 60px;
+    position: relative;
+    display: flex;
+    justify-content: flex-end;
+
+    .throw {
+      width: 25px;
+      height: 25px;
+      line-height: 25px;
+      margin-right: -1px;
+      margin-top: -1px;
+      border-collapse: collapse;
+      border: 1px solid black;
+      box-sizing: border-box;
+      z-index: 0;
+
+      &.current {
+        z-index: 1;
+        border: 2px solid red;
+      }
+    }
+  }
+}
+
+.bowling-input {
+  border-collapse: collapse;
+  border-radius: 8px;
+
+  td {
+    border: 1px solid black;
+    text-align: center;
+    font-size: 30px;
+    padding: 10px;
+  }
+}
