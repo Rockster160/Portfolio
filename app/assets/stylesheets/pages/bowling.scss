@@ -30,6 +30,14 @@
         border: 2px solid red;
       }
     }
+    .score {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      text-align: center;
+      padding-bottom: 5px;
+    }
   }
 }
 

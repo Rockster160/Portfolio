@@ -7,6 +7,61 @@ $(".ctr-bowlings.act-show").ready(function() {
     addScore($(this).text())
   })
 
+  function collectThrows(player) {
+    return $(player).children(".bowling-cell.frame").map(function() {
+      return [$(this).children(".throw").text().split("")]
+    })
+  }
+
+  function sumScores(arr) {
+    return arr.reduce(function(a, b) {
+      return textToScore(a) + textToScore(b)
+    }, 0)
+  }
+
+  function calcScores() {
+    $(".bowling-table").each(function() {
+      var player = $(this)
+      var throws = collectThrows(player)
+      var frames = player.children(".bowling-cell.frame")
+      var running_total = 0
+      var still_calc = true
+      var max_score = 0
+      var current_frame = currentFrame()
+
+      throws.each(function(idx) {
+        var frame_total = 0
+        var tosses = this
+        var first = tosses[0]
+        var second = tosses[1]
+
+        if (!first) { return still_calc = false }
+        if (current_frame == 10 && idx == 9) {
+          frame_total = sumScores(tosses)
+        } else if (first == "X") {
+          var next_tosses = throws[idx + 1] || []
+          if (next_tosses[0] == "X") {
+            var more_tosses = throws[idx + 2] || []
+            next_tosses = next_tosses.concat(more_tosses)
+          }
+          if (next_tosses.length < 2) { return still_calc = false }
+          frame_total = 10 + sumScores(next_tosses.slice(0, 2))
+        } else if (second == "/") {
+          var next_tosses = throws[idx + 1] || []
+          if (next_tosses.length < 1) { return still_calc = false }
+          frame_total = 10 + sumScores(next_tosses.slice(0, 1))
+        } else {
+          frame_total = sumScores(tosses)
+        }
+
+        running_total += frame_total
+        var score_holder = $(frames[idx]).children(".score")
+        score_holder.attr("data-frame-score", frame_total)
+        score_holder.text(running_total)
+      })
+    })
+  }
+
   function addScore(text) {
     if (currentFrame() == 10) { return addTenthFrameScore(text) }
 
@@ -91,6 +146,7 @@ $(".ctr-bowlings.act-show").ready(function() {
   }
 
   function moveToNextThrow() {
+    calcScores()
     var next_throw = $(".throw.current").next(".throw")
 
     if (next_throw.length > 0) {
@@ -113,10 +169,12 @@ $(".ctr-bowlings.act-show").ready(function() {
   }
 
   function gotoNextPlayer() {
+    calcScores()
     $(".throw.current").removeClass("current")
   }
 
   function moveToNextFrame() {
+    calcScores()
     // If there are more players, should go to next player
     if ($(".throw.current").parent().attr("data-frame") == "10") {
       var frame_throws = $(".throw.current").parent(".frame").children(".throw")
