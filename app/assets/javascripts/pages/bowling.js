@@ -292,10 +292,7 @@ $(".ctr-bowlings.act-show").ready(function() {
       if (shotScore(frame_shots[0]) + shotScore(frame_shots[1]) >= 10) {
         if (currentThrowNum() < 3) { return moveToNextThrow() }
       }
-
-      gotoNextPlayer()
-    } else {
-      gotoNextFrame()
     }
+    gotoNextFrame()
   }
 })
