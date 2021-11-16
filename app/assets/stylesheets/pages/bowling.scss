@@ -3,27 +3,27 @@
   grid-template-columns: auto repeat(11, 80px);
 
   .bowling-cell {
-    border-collapse: collapse;
     border: 1px solid black;
+    border-collapse: collapse;
     text-align: center;
   }
 
   .frame {
-    height: 60px;
-    position: relative;
     display: flex;
+    position: relative;
     justify-content: flex-end;
+    height: 60px;
 
     .shot {
+      z-index: 0;
+      box-sizing: border-box;
+      margin-top: -1px;
+      margin-right: -1px;
+      border: 1px solid black;
+      border-collapse: collapse;
       width: 25px;
       height: 25px;
       line-height: 25px;
-      margin-right: -1px;
-      margin-top: -1px;
-      border-collapse: collapse;
-      border: 1px solid black;
-      box-sizing: border-box;
-      z-index: 0;
 
       &.current {
         z-index: 1;
@@ -32,23 +32,41 @@
     }
     .score {
       position: absolute;
-      left: 0;
       right: 0;
       bottom: 0;
-      text-align: center;
+      left: 0;
       padding-bottom: 5px;
+      text-align: center;
     }
   }
 }
 
 .bowling-input {
-  border-collapse: collapse;
-  border-radius: 8px;
+  margin: 10px auto;
+  text-align: center;
 
-  td {
-    border: 1px solid black;
-    text-align: center;
-    font-size: 30px;
-    padding: 10px;
+  .bowling-keypad-entry {
+    grid-gap: 5px;
+    display: grid;
+    grid-template-columns: repeat(3, 100px);
+    justify-content: center;
+    width: auto;
+
+    .numpad-key {
+      position: relative;
+      top: 0;
+      transition: top ease-in-out 0.07s, background ease-in-out 0.1s;
+      border: 1px solid black;
+      border-radius: 8px;
+      background: white;
+      padding: 15px;
+      font-size: 30px;
+      text-align: center;
+
+      &:active {
+        top: 1px;
+        background: $blue-l20;
+      }
+    }
   }
 }

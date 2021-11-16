@@ -8,7 +8,7 @@ $(".ctr-bowlings.act-show").ready(function() {
     moveToThrow($(this))
   })
 
-  $(".bowling-input td").click(function() {
+  $(".bowling-input .numpad-key").click(function() {
     addScore($(this).text())
   })
 

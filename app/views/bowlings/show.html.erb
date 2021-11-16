@@ -12,6 +12,7 @@
   <div class="bowling-cell">10</div>
   <div class="bowling-cell">Total</div>
 </div>
+
 <% 4.times do |t| %>
   <div class="bowling-table bowler" data-bowler="<%= t + 1 %>" data-current-frame="1">
     <div class="bowling-cell name"></div>
@@ -69,25 +70,20 @@
     <div class="bowling-cell total"></div>
   </div>
 <% end %>
-<table class="bowling-input">
-  <tr>
-    <td>7</td>
-    <td>8</td>
-    <td>9</td>
-  </tr>
-  <tr>
-    <td>4</td>
-    <td>5</td>
-    <td>6</td>
-  </tr>
-  <tr>
-    <td>1</td>
-    <td>2</td>
-    <td>3</td>
-  </tr>
-  <tr>
-    <td>X</td>
-    <td>0</td>
-    <td>/</td>
-  </tr>
-</table>
+
+<div class="bowling-input">
+  <div class="bowling-keypad-entry">
+    <div class="numpad-key">7</div>
+    <div class="numpad-key">8</div>
+    <div class="numpad-key">9</div>
+    <div class="numpad-key">4</div>
+    <div class="numpad-key">5</div>
+    <div class="numpad-key">6</div>
+    <div class="numpad-key">1</div>
+    <div class="numpad-key">2</div>
+    <div class="numpad-key">3</div>
+    <div class="numpad-key">X</div>
+    <div class="numpad-key">0</div>
+    <div class="numpad-key">/</div>
+  </div>
+</div>
