@@ -51,7 +51,7 @@ $(".ctr-bowlings.act-show").ready(function() {
         var first = tosses[0]
         var second = tosses[1]
 
-        if (!first) { return still_calc = false }
+        if (first == null) { return still_calc = false }
         if (idx == 9) { // Tenth frame
           frame_total = sumScores(tosses)
         } else if (first == 10) {
