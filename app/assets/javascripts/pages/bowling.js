@@ -1,12 +1,22 @@
 // 65 unique combinations of shots per frame
 // 4300 possible games (65*65 + 10th frame weirdness)
 $(".ctr-bowlings.act-show").ready(function() {
+
+  $(".shot").first().addClass("current")
+
   $(".shot").click(function() {
     moveToThrow($(this))
   })
 
   $(".bowling-input td").click(function() {
     addScore($(this).text())
+  })
+
+  $(document).keyup(function(evt) {
+    if (/[0-9\/\+]/i.test(evt.key)) {
+      var num = evt.key == "+" ? "X" : evt.key
+      addScore(num)
+    }
   })
 
   function collectThrows(bowler) {
@@ -233,10 +243,34 @@ $(".ctr-bowlings.act-show").ready(function() {
     }
   }
 
-  function gotoNextFrame() {
-    var next_frame = $(".shot.current").parent().next(".frame")
+  function findNextFrame(bowler) {
+    return bowler.find(".shot:first-of-type:empty").first().parent()
+  }
 
-    moveToThrow(next_frame.children(".shot").first())
+  function gotoNextFrame() {
+    $(".bowling-table.bowler").each(function() {
+      var bowler = $(this)
+      var current_frame = findNextFrame(bowler)
+
+      bowler.attr("data-current-frame", current_frame.attr("data-frame") || 11)
+    })
+
+    var next_bowler = $(".bowling-table.bowler").sort(function(a, b) {
+      a = $(a)
+      b = $(b)
+      var a_frame = parseInt(a.attr("data-current-frame"))
+      var b_frame = parseInt(b.attr("data-current-frame"))
+
+      if (a_frame == b_frame) {
+        var a_bowler = parseInt(a.attr("data-bowler"))
+        var b_bowler = parseInt(b.attr("data-bowler"))
+        return a_bowler - b_bowler
+      }
+
+      return a_frame - b_frame
+    }).first()
+
+    moveToThrow(findNextFrame(next_bowler).children(".shot").first())
   }
 
   function shotScore(toss) {
