@@ -39,6 +39,24 @@
       text-align: center;
     }
   }
+  .total {
+    position: relative;
+
+    .score {
+      padding-top: 10px;
+      font-size: 20px;
+    }
+    .hdcp {}
+    .max {
+      font-size: 10px;
+      position: absolute;
+      bottom: 3px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      display: block;
+    }
+  }
 }
 
 
