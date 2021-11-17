@@ -85,7 +85,7 @@ Rails.application.routes.draw do
     get :change_clothes, action: :load_character
   end
 
-  resource :bowling, only: [:show]
+  resource :bowling_games, only: [:show, :update, :create], path: :bowling
 
   resources :recipes, param: :friendly_id do
     post :export_to_list, on: :member

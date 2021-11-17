@@ -21,3 +21,11 @@ ignore-*
 # Ignore all logfiles and tempfiles.
 /log/*
 /tmp
+
+# Ignore deploy scripts on the server side
+console_portfolio
+deploy_portfolio
+kill_portfolio
+sidekiq_tail_portfolio
+tail_portfolio
+public/assets/*

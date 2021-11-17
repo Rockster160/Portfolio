@@ -2,10 +2,29 @@
   display: grid;
   grid-template-columns: minmax(100px, 1fr) repeat(11, 80px);
 
+  &.bowling-header .bowling-cell {
+    font-size: 12px;
+  }
+
   .bowling-cell {
     border: 1px solid black;
     border-collapse: collapse;
     text-align: center;
+  }
+
+  .bowler-name {
+    display: grid;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+  }
+
+  .card-point {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    font-size: 14px;
+    color: $base-blue;
   }
 
   .frame {

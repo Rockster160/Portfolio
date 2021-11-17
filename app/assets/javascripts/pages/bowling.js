@@ -1,6 +1,6 @@
 // 65 unique combinations of shots per frame
 // 4300 possible games (65*65 + 10th frame weirdness)
-$(".ctr-bowlings.act-show").ready(function() {
+$(".ctr-bowling_games.act-show").ready(function() {
 
   $(".shot:empty").first().addClass("current")
 
@@ -10,6 +10,12 @@ $(".ctr-bowlings.act-show").ready(function() {
 
   $(".bowling-input .numpad-key").click(function() {
     addScore($(this).text())
+  })
+
+  $(".bowler-name").click(function() {
+    $(".card-point").remove()
+    var card = $("<div>").addClass("card-point").text("+1")
+    $(this).append(card)
   })
 
   $(document).keyup(function(evt) {
