@@ -1,6 +1,6 @@
 .bowling-table {
   display: grid;
-  grid-template-columns: auto repeat(11, 80px);
+  grid-template-columns: minmax(100px, 1fr) repeat(11, 80px);
 
   .bowling-cell {
     border: 1px solid black;
@@ -41,9 +41,15 @@
   }
 }
 
+
+.bowling-input-spacer { height: 350px; }
 .bowling-input {
   margin: 10px auto;
   text-align: center;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 30px;
 
   .bowling-keypad-entry {
     grid-gap: 5px;
