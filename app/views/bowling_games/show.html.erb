@@ -34,8 +34,9 @@
   </div>
 <% end %>
 
-<%= form_for @game, url: url_for(@game) do |f| %>
+<%= form_for @game, html: { class: "basic" } do |f| %>
   <%= f.hidden_field :game_data %>
+  <%#= f.submit "Save game", class: "pull-right" %>
 <% end %>
 
 <div class="bowling-input-spacer"></div>

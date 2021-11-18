@@ -9,6 +9,7 @@
 #
 
 class BowlingGame < ApplicationRecord
+  # DEFAULT_BOWLERS = ["Zoro"]
   DEFAULT_BOWLERS = ["Luffy", "Zoro", "Deku", "Law"]
 
   def game_data
@@ -20,6 +21,7 @@ class BowlingGame < ApplicationRecord
       DEFAULT_BOWLERS.each do |bowler_name|
         data[bowler_name] = {
           rolls: Array.new(10) { [] },
+          # rolls: Array.new(9) { ["X"] } + [[]],
           card: false,
         }
       end

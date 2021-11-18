@@ -27,6 +27,10 @@
     color: $base-blue;
   }
 
+  #bowling_game_game_data {
+    z-index: 2;
+  }
+
   .frame {
     display: flex;
     position: relative;
@@ -84,6 +88,7 @@
   margin: 10px auto;
   text-align: center;
   position: fixed;
+  z-index: 1;
   left: 0;
   right: 0;
   bottom: 30px;
