@@ -18,7 +18,7 @@
       <td><%= link_to "X", action_event_path(event), method: :delete %></td>
       <td><%= event.event_name %></td>
       <td><%= event.notes %></td>
-      <td><%= event.timestamp %></td>
+      <td><%= event.timestamp.in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:time_with_simple12) %></td>
     </tr>
   <% end %>
 </table>
