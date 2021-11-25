@@ -1,0 +1,68 @@
+<div class="bowling-table bowling-header">
+  <div class="bowling-cell"></div>
+  <div class="bowling-cell">1</div>
+  <div class="bowling-cell">2</div>
+  <div class="bowling-cell">3</div>
+  <div class="bowling-cell">4</div>
+  <div class="bowling-cell">5</div>
+  <div class="bowling-cell">6</div>
+  <div class="bowling-cell">7</div>
+  <div class="bowling-cell">8</div>
+  <div class="bowling-cell">9</div>
+  <div class="bowling-cell">10</div>
+  <div class="bowling-cell">Total</div>
+</div>
+
+<%= form_for @set, html: { class: "basic" } do |f| %>
+  <%= f.hidden_field :league_id, value: @set.league_id || params[:league] %>
+  <% @games.each_with_index do |game, idx| %>
+    <% set_params = "bowling_set[games_attributes][]" %>
+
+    <% bowler = game.bowler || Bowler.new %>
+    <div class="bowling-table bowler" data-bowler="<%= idx + 1 %>" data-current-frame="1">
+      <%= hidden_field_tag "#{set_params}id", game.id %>
+      <%= hidden_field_tag "#{set_params}bowler_id", bowler.id %>
+      <%= hidden_field_tag "#{set_params}card_point", game.card_point, class: "card-point-field" %>
+      <%= hidden_field_tag "#{set_params}game_num", game.game_num %>
+      <%= hidden_field_tag "#{set_params}position", game.position || idx %>
+
+      <div class="bowling-cell bowler-name"><%= bowler.name %></div>
+      <% 10.times do |roll_idx| %>
+        <% roll = game.frames[roll_idx] %>
+        <div class="bowling-cell frame" data-frame="<%= roll_idx + 1 %>">
+          <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[0] %>" class="basic shot" readonly="true" tabindex="-1">
+          <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[1] %>" class="basic shot" readonly="true" tabindex="-1">
+          <% if roll_idx == 9 %>
+            <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[2] %>" class="basic shot" readonly="true" tabindex="-1">
+          <% end %>
+          <div class="score"></div>
+        </div>
+      <% end %>
+      <div class="bowling-cell total">
+        <input type="text" name="<%= set_params %>score" value="<%= game.score %>" class="basic score" readonly="true" tabindex="-1">
+        <div class="hdcp" data-full="<%= bowler.handicap %>"><%= bowler.handicap %></div>
+        <div class="max"></div>
+      </div>
+    </div>
+  <% end %>
+
+  <%= f.submit "Save game", class: "pull-right" %>
+<% end %>
+
+<div class="bowling-input-spacer"></div>
+<div class="bowling-input">
+  <div class="bowling-keypad-entry">
+    <div class="numpad-key">7</div>
+    <div class="numpad-key">8</div>
+    <div class="numpad-key">9</div>
+    <div class="numpad-key">4</div>
+    <div class="numpad-key">5</div>
+    <div class="numpad-key">6</div>
+    <div class="numpad-key">1</div>
+    <div class="numpad-key">2</div>
+    <div class="numpad-key">3</div>
+    <div class="numpad-key">X</div>
+    <div class="numpad-key">0</div>
+    <div class="numpad-key">/</div>
+  </div>
+</div>

@@ -1,0 +1,48 @@
+<div class="skinny-container">
+  <div class="btn-container">
+    <a href="<%= bowling_games_path %>" class="btn">&larr; Back</a>
+  </div>
+  <%= form_for @league do |f| %>
+    <div class="form-title"><%= @league.name || "New League" %></div>
+
+    <%= render partial: "layouts/error_container", locals: { resource: @league } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= f.label :name %>
+        <%= f.text_field :name %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :team_name %>
+        <%= f.text_field :team_name %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :handicap_calculation %>
+        <%= f.text_field :handicap_calculation %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :games_per_series %>
+        <%= f.text_field :games_per_series %>
+      </div>
+
+      <% 4.times do |t| %>
+        <% bowler = @league.bowlers[t] %>
+        <div class="split-fields">
+          <div class="form-field">
+            <%= hidden_field_tag "bowling_league[bowlers_attributes][]id", bowler&.id %>
+            <%= hidden_field_tag "bowling_league[bowlers_attributes][]position", t %>
+            <%= label_tag "Bowler #{t+1}" %>
+            <%= text_field_tag "bowling_league[bowlers_attributes][]name", bowler&.name %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit %>
+    </div>
+  <% end %>
+</div>

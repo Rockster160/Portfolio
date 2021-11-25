@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20211117053248) do
+ActiveRecord::Schema.define(version: 20211118063000) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -54,10 +54,47 @@ ActiveRecord::Schema.define(version: 20211117053248) do
     t.datetime "updated_at"
   end
 
+  create_table "bowlers", force: :cascade do |t|
+    t.integer  "league_id"
+    t.integer  "position"
+    t.text     "name"
+    t.integer  "total_points"
+    t.integer  "total_games"
+    t.datetime "created_at",   null: false
+    t.datetime "updated_at",   null: false
+    t.index ["league_id"], name: "index_bowlers_on_league_id", using: :btree
+  end
+
   create_table "bowling_games", force: :cascade do |t|
-    t.text     "game_data"
+    t.integer  "bowler_id"
+    t.integer  "set_id"
+    t.integer  "position"
+    t.integer  "game_num"
+    t.integer  "score"
+    t.text     "frames"
+    t.boolean  "card_point", default: false
+    t.datetime "created_at",                 null: false
+    t.datetime "updated_at",                 null: false
+    t.index ["bowler_id"], name: "index_bowling_games_on_bowler_id", using: :btree
+    t.index ["set_id"], name: "index_bowling_games_on_set_id", using: :btree
+  end
+
+  create_table "bowling_leagues", force: :cascade do |t|
+    t.integer  "user_id"
+    t.text     "name"
+    t.text     "team_name"
+    t.text     "handicap_calculation", default: "0"
+    t.integer  "games_per_series",     default: 3
+    t.datetime "created_at",                         null: false
+    t.datetime "updated_at",                         null: false
+    t.index ["user_id"], name: "index_bowling_leagues_on_user_id", using: :btree
+  end
+
+  create_table "bowling_sets", force: :cascade do |t|
+    t.integer  "league_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["league_id"], name: "index_bowling_sets_on_league_id", using: :btree
   end
 
   create_table "command_proposal_comments", force: :cascade do |t|

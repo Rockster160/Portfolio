@@ -1,9 +1,10 @@
 // 65 unique combinations of shots per frame
 // 4300 possible games (65*65 + 10th frame weirdness)
-$(".ctr-bowling_games.act-show").ready(function() {
+$(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   $(".shot").click(function() {
     moveToThrow($(this))
+    $(this).blur()
   })
 
   $(".bowling-input .numpad-key").click(function() {
@@ -11,9 +12,11 @@ $(".ctr-bowling_games.act-show").ready(function() {
   })
 
   $(".bowler-name").click(function() {
+    $(".card-point-field").val(false)
     $(".card-point").remove()
     var card = $("<div>").addClass("card-point").text("+1")
     $(this).append(card)
+    $(this).parent().children(".card-point-field").val(true)
   })
 
   $(document).keyup(function(evt) {
@@ -22,35 +25,11 @@ $(".ctr-bowling_games.act-show").ready(function() {
       addScore(num)
     } else if (evt.key == "Backspace" || evt.key == "Delete") {
       var toss = $(".shot.current")
-      toss.text("")
+      toss.val("")
       recalculateFrame(toss)
       calcScores()
     }
   })
-
-  $("form").submit(function() {
-    generateFormData()
-  })
-
-  generateFormData = function() {
-    var data = {}
-
-    $(".bowling-table.bowler").each(function() {
-      var bowler = $(this)
-      var score_array = bowler.children(".bowling-cell.frame").map(function() {
-        return [$(this).children(".shot").map(function() {
-          return $(this).text()
-        }).toArray()]
-      }).toArray()
-
-      data[bowler.find(".bowling-cell.bowler-name").text()] = {
-        rolls: score_array,
-        card: bowler.find(".card-point").length > 0,
-      }
-    })
-
-    $("#bowling_game_game_data").val(JSON.stringify(data))
-  }
 
   throwScore = function(text) {
     var score = text
@@ -69,7 +48,7 @@ $(".ctr-bowling_games.act-show").ready(function() {
           if (shot_idx > 0) {
             var prev_throw = $(frame.children(".shot")[shot_idx - 1])
 
-            if (prev_throw.text() != "/" && prev_throw.text() != "X") {
+            if (prev_throw.val() != "/" && prev_throw.val() != "X") {
               var prev_score = throwScore(prev_throw.attr("data-score"))
               score = 10 - prev_score
             } else if (frame.attr("data-frame") == "10") {
@@ -131,7 +110,7 @@ $(".ctr-bowling_games.act-show").ready(function() {
       var frames = bowler.find(".bowling-cell.frame")
       frames.each(function() {
         var toss = $(this).children(".shot").first()
-        if (toss.text() != "") {
+        if (toss.val() != "") {
           recalculateFrame(toss)
         }
       })
@@ -157,7 +136,7 @@ $(".ctr-bowling_games.act-show").ready(function() {
       })
 
       bowler.children(".total").children(".max").text("(max: " + max_final_score + ")")
-      bowler.children(".total").children(".score").text(current_final_score)
+      bowler.children(".total").children(".score").val(current_final_score)
     })
   }
 
@@ -168,21 +147,21 @@ $(".ctr-bowling_games.act-show").ready(function() {
     var toss_score = shotScore(toss)
 
     var prev_shot = $(shots[shot_idx - 1])
-    var prev_text = prev_shot.length > 0 ? prev_shot.text() : null
+    var prev_text = prev_shot.length > 0 ? prev_shot.val() : null
     var prev_val = shotScore(prev_shot)
 
     var next_shot = $(shots[shot_idx + 1])
-    var next_text = next_shot.length > 0 ? next_shot.text() : null
+    var next_text = next_shot.length > 0 ? next_shot.val() : null
 
-    var actual_val = scoreToVal(toss.text(), !prev_shot ? 0 : prev_val)
+    var actual_val = scoreToVal(toss.val(), !prev_shot ? 0 : prev_val)
 
     toss.attr("data-score", actual_val)
 
-    if (toss.text() == "X") {
-      toss.parent(".frame").children(".shot").text("").attr("data-score", "")
-      toss.text("X").attr("data-score", 10)
+    if (toss.val() == "X") {
+      toss.parent(".frame").children(".shot").val("").attr("data-score", "")
+      toss.val("X").attr("data-score", 10)
     } else if (next_text == "/") {
-      next_shot.text("/").attr("data-score", 10 - shotScore(toss))
+      next_shot.val("/").attr("data-score", 10 - shotScore(toss))
     }
   }
 
@@ -199,29 +178,29 @@ $(".ctr-bowling_games.act-show").ready(function() {
 
     if (shot_num == 1) {
       if (score >= 10) {
-        toss.parent(".frame").children(".shot").text("") // Clear second shot
-        toss.text("X")
+        toss.parent(".frame").children(".shot").val("") // Clear second shot
+        toss.val("X")
         recalculateFrame(toss)
         moveToNextFrame()
       } else {
-        toss.text(score == "0" ? "-" : score)
+        toss.val(score == "0" ? "-" : score)
         recalculateFrame(toss)
         moveToNextThrow()
       }
     } else if (shot_num == 2) {
-      if (prev_shot.text() == "X") {
+      if (prev_shot.val() == "X") {
         moveToNextFrame()
       }
       // If first shot is blank, add score to first frame instead
-      if (prev_shot.text() == "") {
+      if (prev_shot.val() == "") {
         moveToThrow(prev_shot)
         return addScore(score)
       }
 
       if (score + shotScore(prev_shot) >= 10) {
-        toss.text("/")
+        toss.val("/")
       } else {
-        toss.text(score == "0" ? "-" : score)
+        toss.val(score == "0" ? "-" : score)
       }
 
       recalculateFrame(toss)
@@ -261,7 +240,7 @@ $(".ctr-bowling_games.act-show").ready(function() {
     var prev_score = shotScore(prev_shot)
     var actual_val = 0
 
-    if (prev_shot.text() == "X" || prev_shot.text() == "/") {
+    if (prev_shot.val() == "X" || prev_shot.val() == "/") {
       actual_val = scoreToVal(score, 0) // After a close in the 10th, acts as a new frame
     } else {
       actual_val = scoreToVal(score, prev_score)
@@ -269,13 +248,13 @@ $(".ctr-bowling_games.act-show").ready(function() {
     toss.attr("data-score", actual_val)
 
     if (prev_shot.length > 0 && prev_score < 10 && prev_score + toss_score >= 10) {
-      toss.text("/")
+      toss.val("/")
       moveToNextThrow()
     } else if (toss_score >= 10) {
-      toss.text("X")
+      toss.val("X")
       moveToNextThrow()
     } else {
-      toss.text(score == "0" ? "-" : score)
+      toss.val(score == "0" ? "-" : score)
 
       if (shot_num == 1 || prev_score >= 10) { return moveToNextThrow() }
       moveToNextFrame()
@@ -314,7 +293,9 @@ $(".ctr-bowling_games.act-show").ready(function() {
   }
 
   findNextFrame = function(bowler) {
-    return bowler.find(".shot:first-of-type:empty").first().parent()
+    return bowler.find(".shot:first-of-type").filter(function() {
+      return !this.value
+    }).first().parent()
   }
 
   gotoNextFrame = function() {
@@ -344,7 +325,7 @@ $(".ctr-bowling_games.act-show").ready(function() {
   }
 
   shotScore = function(toss) {
-    var score = $(toss).text()
+    var score = $(toss).val()
 
     return textToScore(score)
   }
@@ -366,6 +347,8 @@ $(".ctr-bowling_games.act-show").ready(function() {
     gotoNextFrame()
   }
 
-  $(".shot:empty").first().addClass("current")
+  $(".shot").filter(function() {
+    return !this.value
+  }).first().addClass("current")
   recalcScores()
 })

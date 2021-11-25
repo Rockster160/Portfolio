@@ -91,16 +91,18 @@ input[type=time],
 input[type=url],
 input[type=week],
 textarea {
-  box-sizing: border-box;
-  margin: 4px auto;
+  &:not(.basic) {
+    box-sizing: border-box;
+    margin: 4px auto;
 
-  border: 2px solid rgba($grey-blue, 0.5);
-  border-radius: 4px;
-  padding: 8px;
-  width: 100%;
-  color: $text-color;
+    border: 2px solid rgba($grey-blue, 0.5);
+    border-radius: 4px;
+    padding: 8px;
+    width: 100%;
+    color: $text-color;
 
-  font-size: 18px;
+    font-size: 18px;
+  }
 }
 
 textarea {

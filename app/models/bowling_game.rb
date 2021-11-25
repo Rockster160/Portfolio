@@ -3,28 +3,36 @@
 # Table name: bowling_games
 #
 #  id         :integer          not null, primary key
-#  game_data  :text
+#  card_point :boolean          default(FALSE)
+#  frames     :text
+#  game_num   :integer
+#  position   :integer
+#  score      :integer
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
+#  bowler_id  :integer
+#  set_id     :integer
 #
 
 class BowlingGame < ApplicationRecord
-  # DEFAULT_BOWLERS = ["Zoro"]
-  DEFAULT_BOWLERS = ["Luffy", "Zoro", "Deku", "Law"]
+  belongs_to :set, class_name: "BowlingSet", inverse_of: :games
+  belongs_to :bowler
 
-  def game_data
-    super || default_game_data
+  before_validation { self.bowler ||= Bowler.create(league_id: set.league_id) }
+
+  def frames
+    @frames ||= (super.to_s.split("|").presence || Array.new(10)).map { |roll| roll.to_s.split("") }
   end
 
-  def default_game_data
-    {}.tap do |data|
-      DEFAULT_BOWLERS.each do |bowler_name|
-        data[bowler_name] = {
-          rolls: Array.new(10) { [] },
-          # rolls: Array.new(9) { ["X"] } + [[]],
-          card: false,
-        }
-      end
+  def frames=(frames_arr)
+    if frames_arr.is_a?(Hash)
+      scores = frames_arr.map do |_idx, tosses|
+        tosses.join("")
+      end.join("|")
+
+      super(scores)
+    else
+      super(frames_arr)
     end
   end
 end

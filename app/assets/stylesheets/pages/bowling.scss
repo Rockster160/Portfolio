@@ -48,6 +48,13 @@
       height: 25px;
       line-height: 25px;
 
+      text-align: center;
+      background: transparent;
+
+      &.active {
+        outline: none;
+      }
+
       &.current {
         z-index: 1;
         border: 2px solid red;
@@ -68,6 +75,11 @@
     .score {
       padding-top: 10px;
       font-size: 20px;
+
+      text-align: center;
+      background: transparent;
+      border: none;
+      width: 100%;
     }
     .hdcp {}
     .max {

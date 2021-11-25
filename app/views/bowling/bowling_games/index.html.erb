@@ -1,0 +1,23 @@
+<%= link_to "New League", new_bowling_league_path, class: "btn" %>
+<%= link_to "New Series", new_bowling_game_path, class: "btn" %>
+
+<% @leagues.each do |league| %>
+  <div class="league-row">
+    <div class="league-name"><%= league.name %> - <%= league.team_name %></div>
+    <div class="league-actions">
+      <%= link_to "View Summary/Stats", "", class: "btn" %>
+      <%= link_to "New Series", new_bowling_game_path(league: league), class: "btn" %>
+    </div>
+
+    <div class="league-data">
+      <% league.bowlers.each do |bowler| %>
+        <div class="league-bowler">
+          <%= bowler.name %> <%= bowler.average %>
+          <% if league.handicap_calculation != "0" %>
+            hdcp: <%= bowler.handicap %>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+<% end %>

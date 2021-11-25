@@ -1,0 +1,32 @@
+<%= link_to "New Series", new_bowling_game_path(league: @league), class: "btn" %>
+
+<table>
+  <tr>
+    <td>Name</td>
+    <td>AVG</td>
+    <td>HDCP</td>
+    <td>Games</td>
+    <td>Points</td>
+  </tr>
+  <% @league.bowlers.each do |bowler| %>
+    <tr class="league-bowler">
+      <td><%= bowler.name %></td>
+      <td><%= bowler.average %></td>
+      <td><%= bowler.handicap %></td>
+      <td><%= bowler.total_games %></td>
+      <td><%= bowler.total_points %></td>
+    </tr>
+  <% end %>
+</table>
+
+<% @league.sets.each do |set| %>
+  <div class="league-set">
+    <% set.games.each do |game| %>
+      <%= link_to "Edit", bowling_games_path(game) %>
+      <div class="league-game">
+        <%= game.bowler.name %>
+        <%= game.score %>
+      </div>
+    <% end %>
+  </div>
+<% end %>
