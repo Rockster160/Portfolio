@@ -14,20 +14,20 @@
 
   .bowler-name {
     display: grid;
-    justify-content: center;
-    align-items: center;
     position: relative;
+    align-items: center;
+    justify-content: center;
   }
 
   .card-point {
     position: absolute;
     top: 2px;
     left: 2px;
-    font-size: 14px;
     color: $base-blue;
+    font-size: 14px;
   }
 
-  #bowling_game_game_data {
+  .bowling-form-btn {
     z-index: 2;
   }
 
@@ -44,12 +44,12 @@
       margin-right: -1px;
       border: 1px solid black;
       border-collapse: collapse;
+      background: transparent;
       width: 25px;
       height: 25px;
       line-height: 25px;
 
       text-align: center;
-      background: transparent;
 
       &.active {
         outline: none;
@@ -73,37 +73,92 @@
     position: relative;
 
     .score {
+      border: none;
+      background: transparent;
       padding-top: 10px;
+      width: 100%;
       font-size: 20px;
 
       text-align: center;
-      background: transparent;
-      border: none;
-      width: 100%;
     }
-    .hdcp {}
-    .max {
+    .hdcp {
       font-size: 10px;
+    }
+    .max {
+      display: block;
       position: absolute;
+      right: 0;
       bottom: 3px;
       left: 0;
-      right: 0;
+      font-size: 10px;
       text-align: center;
-      display: block;
     }
   }
 }
 
+.bowling-winner {
+  font-weight: bold;
+  color: green;
+}
+
+tr.line-bot td {
+  border-bottom: 1px solid black;
+}
+
+.bowling-set-summary {
+  tr:last-of-type td {
+    border-top: 1px solid black;
+  }
+  tr:first-of-type td {
+    border-bottom: 1px solid black;
+  }
+  td {
+    padding: 0 5px;
+  }
+}
+.league-set {
+}
+.league-game {
+  margin-bottom: 10px;
+}
+
+.small-bowling-table {
+  display: grid;
+  grid-template-columns: 80px repeat(9, 60px) 85px repeat(2, 40px);
+  margin-bottom: 5px;
+  width: auto;
+
+  .bowling-cell {
+    display: flex;
+    position: relative;
+    justify-content: flex-end;
+    margin-left: 5px;
+
+    .bowling-toss {
+      z-index: 0;
+      box-sizing: border-box;
+      margin-top: -1px;
+      margin-right: -1px;
+      border: 1px solid black;
+      border: 1px solid black;
+      border-collapse: collapse;
+      width: 25px;
+      height: 25px;
+      line-height: 25px;
+      text-align: center;
+    }
+  }
+}
 
 .bowling-input-spacer { height: 350px; }
 .bowling-input {
-  margin: 10px auto;
-  text-align: center;
   position: fixed;
-  z-index: 1;
-  left: 0;
   right: 0;
   bottom: 30px;
+  left: 0;
+  z-index: 1;
+  margin: 10px auto;
+  text-align: center;
 
   .bowling-keypad-entry {
     grid-gap: 5px;

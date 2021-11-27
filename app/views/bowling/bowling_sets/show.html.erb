@@ -1,1 +1,11 @@
-Should show stats and such of the series
+<%= link_to "← League", bowling_league_path(@set.league), class: :btn %>
+
+<%= render partial: "bowling/bowling_sets/show", locals: { set: @set } %>
+
+<div class="league-set">
+  <% @set.games_complete.times do |t| %>
+    <div class="league-game">
+      <%= render partial: "bowling/bowling_games/small_show", locals: { games: @set.games_for_display(t + 1) } %>
+    </div>
+  <% end %>
+</div>

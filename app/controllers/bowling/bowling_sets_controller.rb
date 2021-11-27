@@ -8,6 +8,7 @@ module Bowling
 
       if @set.update(bowling_params)
         if @set.complete?
+          @set.save_scores # Don't save until the set is complete since handicap changes after the series
           redirect_to bowling_set_path(@set)
         else
           redirect_to new_bowling_game_path(series: @set, game: @set.games_complete + 1)
@@ -22,6 +23,7 @@ module Bowling
 
       if @set.update(bowling_params)
         if @set.complete?
+          @set.save_scores # Don't save until the set is complete since handicap changes after the series
           redirect_to bowling_set_path(@set)
         else
           redirect_to new_bowling_game_path(series: @set, game: @set.games_complete + 1)
@@ -57,9 +59,8 @@ module Bowling
       )
     end
 
-
     def find_or_create_league_id
-      bowling_params[:league_id].presence || BowlingLeague.create_default(current_user).id
+      params.dig(:bowling_set, :league_id).presence || BowlingLeague.create_default(current_user).id
     end
   end
 end

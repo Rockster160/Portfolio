@@ -51,7 +51,8 @@ module Bowling
         :games_per_series,
         bowlers_attributes: [
           :id,
-          :name
+          :name,
+          :position,
         ]
       )
     end

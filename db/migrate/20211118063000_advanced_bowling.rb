@@ -18,14 +18,16 @@ class AdvancedBowling < ActiveRecord::Migration[5.0]
       t.integer :position
 
       t.text :name
-      t.integer :total_points
+      t.integer :total_pins
       t.integer :total_games
+      t.integer :total_points
 
       t.timestamps
     end
 
     create_table :bowling_sets do |t|
       t.belongs_to :league
+      t.text :winner
       # has_many games
 
       t.timestamps
@@ -39,8 +41,10 @@ class AdvancedBowling < ActiveRecord::Migration[5.0]
       t.integer :game_num
 
       t.integer :score
+      t.integer :handicap
       t.text :frames
       t.boolean :card_point, default: false
+      t.boolean :game_point, default: false
 
       t.timestamps
     end

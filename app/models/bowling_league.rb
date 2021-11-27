@@ -15,8 +15,8 @@
 class BowlingLeague < ApplicationRecord
   belongs_to :user
 
-  has_many :bowlers, foreign_key: :league_id, dependent: :destroy
-  has_many :sets, class_name: "BowlingSet", foreign_key: :league_id, dependent: :destroy
+  has_many :bowlers, foreign_key: :league_id, dependent: :destroy, inverse_of: :league
+  has_many :sets, class_name: "BowlingSet", foreign_key: :league_id, dependent: :destroy, inverse_of: :league
   has_many :games, through: :sets
 
   accepts_nested_attributes_for :bowlers
@@ -29,9 +29,9 @@ class BowlingLeague < ApplicationRecord
 
   def handicap_from_average(average)
     return if average.blank?
-    # ROUND((210 - AVG) * 0.95)
+    # (210 - AVG) * 0.95
     # Make sure this is safe to run through eval?
     # Just make sure it's only nums and special chars
-    eval(handicap_calculation.gsub("AVG", average)).round
+    eval(handicap_calculation.gsub("AVG", average.to_s)).round
   end
 end

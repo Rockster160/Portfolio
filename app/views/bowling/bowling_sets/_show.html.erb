@@ -1,0 +1,39 @@
+<h3><%= set.created_at.to_formatted_s(:short_day_month) %></h3>
+<% if show_links ||= false %>
+  <%= link_to "View Series", bowling_set_path(set) %> <br>
+<% end %>
+<table class="bowling-set-summary">
+  <tr>
+    <td>Name</td>
+    <% set.league.games_per_series.times do |t| %>
+      <td></td>
+    <% end %>
+    <td>Scratch</td>
+    <td>Total</td>
+    <td>Points</td>
+  </tr>
+
+  <% set.bowlers.order(:position).distinct.each do |bowler| %>
+    <% games = set.games.where(bowler: bowler).order(:game_num) %>
+    <tr>
+      <td><%= bowler.name %></td>
+      <% games.each do |game| %>
+        <td class="text-right <%= "bowling-winner" if game.game_point? %>">
+          <%= "*" if game.card_point? %><%= game.score %>
+        </td>
+      <% end %>
+      <td class="text-right"><%= games.sum(:score) %></td>
+      <td class="text-right <%= "bowling-winner" if set.winner?(bowler) %>"><%= games.total_scores %></td>
+      <td class="text-right"><%= games.points + (set.winner?(bowler) ? 1 : 0) %></td>
+    </tr>
+  <% end %>
+
+  <tr>
+    <td></td>
+    <% set.league.games_per_series.times do |t| %>
+      <td class="text-right"><%= set.games.where(game_num: t+1).sum(:score) %></td>
+    <% end %>
+    <td class="text-right"><%= set.games.sum(:score) %></td>
+    <td class="text-right"><%= set.games.total_scores %></td>
+  </tr>
+</table>

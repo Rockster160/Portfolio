@@ -6,6 +6,7 @@
 #  name         :text
 #  position     :integer
 #  total_games  :integer
+#  total_pins   :integer
 #  total_points :integer
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
@@ -16,20 +17,22 @@ class Bowler < ApplicationRecord
   belongs_to :league, class_name: "BowlingLeague", foreign_key: :league_id
   has_many :games, class_name: "BowlingGame", dependent: :destroy
 
-  def total_games
-    # Should be storing this somewhere
-    games.count
+  def recalculate_scores
+    update(
+      total_games: games.count,
+      total_pins: games.sum(:score),
+      total_points: games.points + winning_sets.count,
+    )
   end
 
-  def total_points
-    # Should be storing this somewhere
-    games.sum(:score)
+  def winning_sets
+    BowlingSet.where("bowling_sets.winner LIKE '%,?,%'", id)
   end
 
   def average
     return unless total_games&.positive?
 
-    (total_points.to_i / total_games.to_f).round
+    (total_pins.to_i / total_games.to_f).round
   end
 
   def handicap

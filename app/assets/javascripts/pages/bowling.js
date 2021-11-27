@@ -2,9 +2,24 @@
 // 4300 possible games (65*65 + 10th frame weirdness)
 $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
+  fillRandomScores = function() {
+    while($(".shot.current").length > 0) {
+      addScore(Math.floor(Math.random() * 11))
+    }
+  }
+
   $(".shot").click(function() {
     moveToThrow($(this))
     $(this).blur()
+  })
+
+  $("form").submit(function(evt) {
+    if ($(".card-point").length == 0) {
+      if (!confirm("You did not enter a winner for cards. Are you sure you want to continue?")) {
+        evt.preventDefault()
+        return false
+      }
+    }
   })
 
   $(".bowling-input .numpad-key").click(function() {

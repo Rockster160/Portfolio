@@ -58,8 +58,9 @@ ActiveRecord::Schema.define(version: 20211118063000) do
     t.integer  "league_id"
     t.integer  "position"
     t.text     "name"
-    t.integer  "total_points"
+    t.integer  "total_pins"
     t.integer  "total_games"
+    t.integer  "total_points"
     t.datetime "created_at",   null: false
     t.datetime "updated_at",   null: false
     t.index ["league_id"], name: "index_bowlers_on_league_id", using: :btree
@@ -71,8 +72,10 @@ ActiveRecord::Schema.define(version: 20211118063000) do
     t.integer  "position"
     t.integer  "game_num"
     t.integer  "score"
+    t.integer  "handicap"
     t.text     "frames"
     t.boolean  "card_point", default: false
+    t.boolean  "game_point", default: false
     t.datetime "created_at",                 null: false
     t.datetime "updated_at",                 null: false
     t.index ["bowler_id"], name: "index_bowling_games_on_bowler_id", using: :btree
@@ -92,6 +95,7 @@ ActiveRecord::Schema.define(version: 20211118063000) do
 
   create_table "bowling_sets", force: :cascade do |t|
     t.integer  "league_id"
+    t.text     "winner"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["league_id"], name: "index_bowling_sets_on_league_id", using: :btree

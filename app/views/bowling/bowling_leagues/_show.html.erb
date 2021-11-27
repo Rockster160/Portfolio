@@ -1,0 +1,20 @@
+<table>
+  <tr class="line-bot">
+    <td>Name</td>
+    <td>Ave</td>
+    <td>HDCP</td>
+    <td>Gms</td>
+    <td>Pins</td>
+    <td>Points</td>
+  </tr>
+  <% league.bowlers.order(:position).each do |bowler| %>
+    <tr class="league-bowler">
+      <td><%= bowler.name %></td>
+      <td class="text-right"><%= bowler.average %></td>
+      <td class="text-right"><%= bowler.handicap %></td>
+      <td class="text-right"><%= bowler.total_games %></td>
+      <td class="text-right"><%= bowler.total_pins %></td>
+      <td class="text-right"><%= bowler.total_points %></td>
+    </tr>
+  <% end %>
+</table>
