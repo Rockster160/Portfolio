@@ -1,11 +1,17 @@
 <div class="small-bowling-table">
-  <% games.order(:position).each do |game| %>
+  <% game_count = games.count %>
+  <% games.order(:position).each_with_index do |game, row_idx| %>
     <div class="bowling-cell">
       <%= "*" if game.card_point? %><%= game.bowler&.name %>
     </div>
     <% 10.times do |t| %>
       <% frame = game.frames[t] %>
-      <div class="bowling-cell">
+      <%
+        corner_side = t == 0 ? "l" : (t == 9 ? "r" : nil)
+        corner_top = row_idx == 0 ? "t" : (row_idx == game_count - 1 ? "b" : nil)
+        corner = (corner_side.present? && corner_top.present? ? "#{corner_top}#{corner_side}" : nil)
+      %>
+      <div class="bowling-cell <%= "corner-#{corner}" if corner.present? %>">
         <div class="bowling-toss"><%= frame[0] %></div>
         <div class="bowling-toss"><%= frame[1] %></div>
         <% if t == 9 # 10th %>

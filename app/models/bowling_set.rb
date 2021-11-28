@@ -10,7 +10,7 @@
 #
 
 class BowlingSet < ApplicationRecord
-  belongs_to :league, class_name: "BowlingLeague"
+  belongs_to :league, class_name: "BowlingLeague", touch: true
 
   has_many :games, class_name: "BowlingGame", foreign_key: :set_id, inverse_of: :set, dependent: :destroy
   has_many :bowlers, through: :games

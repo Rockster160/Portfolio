@@ -51,6 +51,7 @@ module Bowling
           :set_id,
           :bowler_id,
           :game_num,
+          :handicap,
           :position,
           :card_point,
           :score,

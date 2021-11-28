@@ -26,6 +26,10 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     addScore($(this).text())
   })
 
+  $(".bowling-cell.total .remove").click(function() {
+    $(this).parents(".bowling-table").remove()
+  })
+
   $(".bowler-name").click(function() {
     $(".card-point-field").val(false)
     $(".card-point").remove()

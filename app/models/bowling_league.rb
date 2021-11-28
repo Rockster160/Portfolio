@@ -32,6 +32,6 @@ class BowlingLeague < ApplicationRecord
     # (210 - AVG) * 0.95
     # Make sure this is safe to run through eval?
     # Just make sure it's only nums and special chars
-    eval(handicap_calculation.gsub("AVG", average.to_s)).round
+    eval(handicap_calculation.gsub("AVG", average.to_s)).floor
   end
 end

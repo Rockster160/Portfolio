@@ -1,0 +1,42 @@
+<% game ||= BowlingGame.new(game_num: params[:game] || 1) %>
+<% idx ||= 0 %>
+<% bowler = game.bowler || Bowler.new %>
+
+<% set_params = "bowling_set[games_attributes][]" %>
+
+<div class="bowling-table bowler" data-bowler="<%= idx + 1 %>" data-current-frame="1">
+  <%= hidden_field_tag "#{set_params}id", game.id %>
+  <%= hidden_field_tag "#{set_params}bowler_id", bowler.id %>
+  <%= hidden_field_tag "#{set_params}card_point", game.card_point, class: "card-point-field" %>
+  <%= hidden_field_tag "#{set_params}game_num", game.game_num %>
+  <%= hidden_field_tag "#{set_params}handicap", game.handicap %>
+  <%= hidden_field_tag "#{set_params}position", game.position || idx %>
+
+  <div class="bowling-cell bowler-name">
+    <%= bowler.name %>
+    <div class="prev-scores">
+      <% (game.game_num - 1).times do |t| %>
+        <% prev_game = @set.games.find_by(bowler: bowler, game_num: t + 1) %>
+        <% next if prev_game.nil? %>
+        <span class="prev-score"><%= prev_game.score %><%= "|#{prev_game.total_score}" if prev_game.handicap&.positive? %></span>
+      <% end %>
+    </div>
+  </div>
+  <% 10.times do |roll_idx| %>
+    <% roll = game.frames[roll_idx] %>
+    <div class="bowling-cell frame" data-frame="<%= roll_idx + 1 %>">
+      <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[0] %>" class="basic shot" readonly="true" tabindex="-1">
+      <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[1] %>" class="basic shot" readonly="true" tabindex="-1">
+      <% if roll_idx == 9 %>
+        <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[2] %>" class="basic shot" readonly="true" tabindex="-1">
+      <% end %>
+      <div class="score"></div>
+    </div>
+  <% end %>
+  <div class="bowling-cell total">
+    <span class="remove">X</span>
+    <input type="text" name="<%= set_params %>score" value="<%= game.score %>" class="basic score" readonly="true" tabindex="-1">
+    <div class="hdcp" data-full="<%= game.handicap %>"><%= game.handicap %></div>
+    <div class="max"></div>
+  </div>
+</div>

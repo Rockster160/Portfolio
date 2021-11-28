@@ -1,186 +1,225 @@
-.bowling-table {
-  display: grid;
-  grid-template-columns: minmax(100px, 1fr) repeat(11, 80px);
-
-  &.bowling-header .bowling-cell {
-    font-size: 12px;
-  }
-
-  .bowling-cell {
-    border: 1px solid black;
-    border-collapse: collapse;
-    text-align: center;
-  }
-
-  .bowler-name {
-    display: grid;
-    position: relative;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .card-point {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    color: $base-blue;
-    font-size: 14px;
-  }
-
-  .bowling-form-btn {
-    z-index: 2;
-  }
-
-  .frame {
-    display: flex;
-    position: relative;
-    justify-content: flex-end;
-    height: 60px;
-
-    .shot {
-      z-index: 0;
-      box-sizing: border-box;
-      margin-top: -1px;
-      margin-right: -1px;
-      border: 1px solid black;
-      border-collapse: collapse;
-      background: transparent;
-      width: 25px;
-      height: 25px;
-      line-height: 25px;
-
-      text-align: center;
-
-      &.active {
-        outline: none;
-      }
-
-      &.current {
-        z-index: 1;
-        border: 2px solid red;
-      }
-    }
-    .score {
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      left: 0;
-      padding-bottom: 5px;
-      text-align: center;
-    }
-  }
-  .total {
-    position: relative;
-
-    .score {
-      border: none;
-      background: transparent;
-      padding-top: 10px;
-      width: 100%;
-      font-size: 20px;
-
-      text-align: center;
-    }
-    .hdcp {
-      font-size: 10px;
-    }
-    .max {
-      display: block;
-      position: absolute;
-      right: 0;
-      bottom: 3px;
-      left: 0;
-      font-size: 10px;
-      text-align: center;
-    }
-  }
-}
-
-.bowling-winner {
-  font-weight: bold;
-  color: green;
-}
-
-tr.line-bot td {
-  border-bottom: 1px solid black;
-}
-
-.bowling-set-summary {
-  tr:last-of-type td {
-    border-top: 1px solid black;
-  }
-  tr:first-of-type td {
-    border-bottom: 1px solid black;
-  }
+.ctr-bowling_leagues, .ctr-bowling_sets, .ctr-bowling_games {
   td {
-    padding: 0 5px;
+    padding: 3px 5px;
   }
-}
-.league-set {
-}
-.league-game {
-  margin-bottom: 10px;
-}
+  .bowling-table {
+    display: grid;
+    grid-template-columns: minmax(100px, 1fr) repeat(11, 80px);
 
-.small-bowling-table {
-  display: grid;
-  grid-template-columns: 80px repeat(9, 60px) 85px repeat(2, 40px);
-  margin-bottom: 5px;
-  width: auto;
+    &.bowling-header .bowling-cell {
+      font-size: 12px;
+    }
 
-  .bowling-cell {
-    display: flex;
-    position: relative;
-    justify-content: flex-end;
-    margin-left: 5px;
-
-    .bowling-toss {
-      z-index: 0;
-      box-sizing: border-box;
-      margin-top: -1px;
-      margin-right: -1px;
-      border: 1px solid black;
-      border: 1px solid black;
+    .bowling-cell {
+      border: 1px solid $grey-blue;
       border-collapse: collapse;
-      width: 25px;
-      height: 25px;
-      line-height: 25px;
       text-align: center;
     }
+
+    .bowler-name {
+      display: grid;
+      position: relative;
+      align-items: center;
+      justify-content: center;
+
+      .prev-scores {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        font-size: 10px;
+        display: flex;
+        justify-content: space-around;
+      }
+    }
+
+    .remove {
+      color: red;
+      position: absolute;
+      top: 0;
+      right: 1px;
+      font-size: 10px;
+    }
+
+    .card-point {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      color: $base-blue;
+      font-size: 14px;
+    }
+
+    .bowling-form-btn {
+      z-index: 2;
+    }
+
+    .frame {
+      display: flex;
+      position: relative;
+      justify-content: flex-end;
+      height: 60px;
+
+      .shot {
+        z-index: 0;
+        box-sizing: border-box;
+        margin-top: -1px;
+        margin-right: -1px;
+        border: 1px solid $grey-blue;
+        border-collapse: collapse;
+        background: transparent;
+        width: 25px;
+        height: 25px;
+        line-height: 25px;
+
+        text-align: center;
+
+        &.active {
+          outline: none;
+        }
+
+        &.current {
+          z-index: 1;
+          border: 2px solid red;
+        }
+      }
+      .score {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        padding-bottom: 5px;
+        text-align: center;
+      }
+    }
+    .total {
+      position: relative;
+
+      .score {
+        border: none;
+        background: transparent;
+        padding-top: 10px;
+        width: 100%;
+        font-size: 20px;
+
+        text-align: center;
+      }
+      .hdcp {
+        font-size: 10px;
+      }
+      .max {
+        display: block;
+        position: absolute;
+        right: 0;
+        bottom: 3px;
+        left: 0;
+        font-size: 10px;
+        text-align: center;
+      }
+    }
   }
-}
 
-.bowling-input-spacer { height: 350px; }
-.bowling-input {
-  position: fixed;
-  right: 0;
-  bottom: 30px;
-  left: 0;
-  z-index: 1;
-  margin: 10px auto;
-  text-align: center;
+  .bowling-winner {
+    font-weight: bold;
+    background: rgba($blue-l4, 0.7);
+  }
 
-  .bowling-keypad-entry {
-    grid-gap: 5px;
+  tr.line-bot td {
+    border-bottom: 1px solid $grey-blue;
+  }
+
+  .bowling-set-summary {
+    margin-bottom: 20px;
+
+    tr:last-of-type td {
+      border-top: 1px solid $grey-blue;
+    }
+    tr:first-of-type td {
+      border-bottom: 1px solid $grey-blue;
+    }
+    td {
+      padding: 2px 5px 1px;
+      vertical-align: middle;
+    }
+  }
+  .league-set {
+  }
+  .league-game {
+    margin-bottom: 10px;
+  }
+
+  .small-bowling-table {
     display: grid;
-    grid-template-columns: repeat(3, 100px);
-    justify-content: center;
+    grid-template-columns: 80px repeat(9, 60px) 85px repeat(2, 40px);
+    margin-bottom: 15px;
     width: auto;
 
-    .numpad-key {
+    .bowling-cell {
+      display: flex;
       position: relative;
-      top: 0;
-      transition: top ease-in-out 0.07s, background ease-in-out 0.1s;
-      border: 1px solid black;
-      border-radius: 8px;
-      background: white;
-      padding: 15px;
-      font-size: 30px;
-      text-align: center;
+      justify-content: flex-end;
+      margin-left: 5px;
+      align-items: center;
+      padding-right: 2px;
 
-      &:active {
-        top: 1px;
-        background: $blue-l20;
+      .bowling-toss {
+        z-index: 0;
+        box-sizing: border-box;
+        margin-top: -1px;
+        margin-right: -1px;
+        border: 1px solid $grey-blue;
+        border-collapse: collapse;
+        width: 30px;
+        height: 30px;
+        line-height: 30px;
+        text-align: center;
+      }
+      &.corner-tl .bowling-toss:first-of-type {
+        border-top-left-radius: 5px;
+      }
+      &.corner-tr .bowling-toss:last-of-type {
+        border-top-right-radius: 5px;
+      }
+      &.corner-bl .bowling-toss:first-of-type {
+        border-bottom-left-radius: 5px;
+      }
+      &.corner-br .bowling-toss:last-of-type {
+        border-bottom-right-radius: 5px;
+      }
+    }
+  }
+
+  .bowling-input-spacer { height: 350px; }
+  .bowling-input {
+    position: fixed;
+    right: 0;
+    bottom: 30px;
+    left: 0;
+    z-index: 1;
+    margin: 10px auto;
+    text-align: center;
+
+    .bowling-keypad-entry {
+      grid-gap: 5px;
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      justify-content: center;
+      width: auto;
+
+      .numpad-key {
+        position: relative;
+        top: 0;
+        transition: top ease-in-out 0.07s, background ease-in-out 0.1s;
+        border: 1px solid $grey-blue;
+        border-radius: 8px;
+        background: white;
+        padding: 15px;
+        font-size: 30px;
+        text-align: center;
+
+        &:active {
+          top: 1px;
+          background: $blue-l20;
+        }
       }
     }
   }

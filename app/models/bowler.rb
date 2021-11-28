@@ -32,7 +32,7 @@ class Bowler < ApplicationRecord
   def average
     return unless total_games&.positive?
 
-    (total_pins.to_i / total_games.to_f).round
+    (total_pins.to_i / total_games.to_f).floor
   end
 
   def handicap
