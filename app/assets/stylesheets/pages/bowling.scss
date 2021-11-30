@@ -6,14 +6,16 @@
     display: grid;
     grid-template-columns: minmax(100px, 1fr) repeat(11, 80px);
 
-    &.bowling-header .bowling-cell {
-      font-size: 12px;
-    }
-
     .bowling-cell {
       border: 1px solid $grey-blue;
       border-collapse: collapse;
       text-align: center;
+      height: 60px;
+    }
+
+    &.bowling-header .bowling-cell {
+      font-size: 12px;
+      height: auto;
     }
 
     .bowler-name {
@@ -64,6 +66,7 @@
         box-sizing: border-box;
         margin-top: -1px;
         margin-right: -1px;
+        border-radius: 0;
         border: 1px solid $grey-blue;
         border-collapse: collapse;
         background: transparent;
@@ -93,6 +96,9 @@
     }
     .total {
       position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
 
       .score {
         border: none;
@@ -108,10 +114,6 @@
       }
       .max {
         display: block;
-        position: absolute;
-        right: 0;
-        bottom: 3px;
-        left: 0;
         font-size: 10px;
         text-align: center;
       }

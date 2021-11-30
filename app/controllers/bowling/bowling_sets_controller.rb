@@ -50,6 +50,7 @@ module Bowling
           :id,
           :set_id,
           :bowler_id,
+          :bowler_name,
           :game_num,
           :handicap,
           :position,

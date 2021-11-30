@@ -27,8 +27,10 @@
   <% @games.each_with_index do |game, idx| %>
     <%= render partial: "bowling_game_form", locals: { game: game, idx: idx } %>
   <% end %>
+  <span class="hidden bowler-placeholder"></span>
 
-  <%= f.submit "Save game", class: "pull-right bowling-form-btn" %>
+  <%= link_to "Add Bowler +", "", class: "btn add-bowler", data: { edit: :show } %>
+  <%= f.submit "Save game", class: "pull-right bowling-form-btn", data: { edit: :hide } %>
 <% end %>
 
 <div class="bowling-input-spacer"></div>

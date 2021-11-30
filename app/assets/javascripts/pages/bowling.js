@@ -2,6 +2,46 @@
 // 4300 possible games (65*65 + 10th frame weirdness)
 $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
+  var editing = false
+  $(".bowling-edit").click(function(evt) {
+    editing = !editing
+    resetEdits()
+
+    $(this).text(editing ? "Done" : "Edit")
+
+    evt.preventDefault()
+    return false
+  })
+
+  function resetEdits() {
+    if (editing) {
+      $("[data-edit]").removeClass("hidden")
+      $("[data-edit=hide]").addClass("hidden")
+    } else {
+      $("[data-edit]").addClass("hidden")
+      $("[data-edit=hide]").removeClass("hidden")
+    }
+  }
+  resetEdits()
+
+  $(".add-bowler").click(function(evt) {
+    var template = $("template#bowling-game").clone().html()
+    var name = prompt("Enter Name for new bowler")
+    var new_bowler = $(template).insertBefore(".bowler-placeholder")
+    var max = Math.max.apply(null, $("[data-bowler]").map(function() {
+      return parseInt($(this).attr("data-bowler"))
+    }))
+    new_bowler.attr("data-bowler", max + 1)
+    new_bowler.find(".game-position").val(max)
+    new_bowler.find(".bowler-name .name").text(name)
+    new_bowler.find(".bowler-name-field").val(name)
+
+    resetEdits()
+
+    evt.preventDefault()
+    return false
+  })
+
   fillRandomScores = function() {
     while($(".shot.current").length > 0) {
       addScore(Math.floor(Math.random() * 11))

@@ -17,6 +17,13 @@ class BowlingSet < ApplicationRecord
 
   accepts_nested_attributes_for :games
 
+  def bowler_id=(new_bowler_id)
+    binding.pry
+    return super(new_bowler_id) if new_bowler_id.present?
+
+    super(Bowler.create(league_id: league_id))
+  end
+
   def save_scores
     # Reset handicap scores
     bowlers.each(&:recalculate_scores)

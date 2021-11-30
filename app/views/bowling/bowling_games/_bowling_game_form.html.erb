@@ -6,14 +6,18 @@
 
 <div class="bowling-table bowler" data-bowler="<%= idx + 1 %>" data-current-frame="1">
   <%= hidden_field_tag "#{set_params}id", game.id %>
+  <%= hidden_field_tag "#{set_params}bowler_name", nil, class: "bowler-name-field" %>
   <%= hidden_field_tag "#{set_params}bowler_id", bowler.id %>
   <%= hidden_field_tag "#{set_params}card_point", game.card_point, class: "card-point-field" %>
   <%= hidden_field_tag "#{set_params}game_num", game.game_num %>
   <%= hidden_field_tag "#{set_params}handicap", game.handicap %>
-  <%= hidden_field_tag "#{set_params}position", game.position || idx %>
+  <%= hidden_field_tag "#{set_params}position", game.position || idx, class: "game-position" %>
 
   <div class="bowling-cell bowler-name">
-    <%= bowler.name %>
+    <div class="drag hidden" data-edit>
+      <i class="fa fa-arrows"></i>
+    </div>
+    <span class="name"><%= bowler.name %></span>
     <div class="prev-scores">
       <% (game.game_num - 1).times do |t| %>
         <% prev_game = @set.games.find_by(bowler: bowler, game_num: t + 1) %>
@@ -34,7 +38,7 @@
     </div>
   <% end %>
   <div class="bowling-cell total">
-    <span class="remove">X</span>
+    <span class="remove hidden" data-edit>X</span>
     <input type="text" name="<%= set_params %>score" value="<%= game.score %>" class="basic score" readonly="true" tabindex="-1">
     <div class="hdcp" data-full="<%= game.handicap %>"><%= game.handicap %></div>
     <div class="max"></div>

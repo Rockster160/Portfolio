@@ -17,8 +17,12 @@
 #
 
 class BowlingGame < ApplicationRecord
+  attr_accessor :bowler_name
+
   belongs_to :set, class_name: "BowlingSet", inverse_of: :games
-  belongs_to :bowler
+  belongs_to :bowler, inverse_of: :games
+
+  after_save { bowler.update(name: bowler_name) if bowler_name.present? }
 
   before_validation { self.bowler_id ||= Bowler.create(league_id: set.league_id) }
 

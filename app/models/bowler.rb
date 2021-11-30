@@ -14,8 +14,8 @@
 #
 
 class Bowler < ApplicationRecord
-  belongs_to :league, class_name: "BowlingLeague", foreign_key: :league_id
-  has_many :games, class_name: "BowlingGame", dependent: :destroy
+  belongs_to :league, class_name: "BowlingLeague", foreign_key: :league_id, inverse_of: :bowlers
+  has_many :games, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
 
   def recalculate_scores
     update(
