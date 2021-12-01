@@ -18,7 +18,7 @@ class BowlingSet < ApplicationRecord
   accepts_nested_attributes_for :games
 
   def bowler_id=(new_bowler_id)
-    binding.pry
+    # binding.pry 
     return super(new_bowler_id) if new_bowler_id.present?
 
     super(Bowler.create(league_id: league_id))
@@ -73,7 +73,7 @@ class BowlingSet < ApplicationRecord
     return games_by_num unless games_by_num.none?
     return [BowlingGame.new(game_num: game_num)] if league.nil?
 
-    league.bowlers.order(:position).map.with_index { |bowler, idx|
+    (bowlers || league.bowlers).order(:position).map.with_index { |bowler, idx|
       bowler.games.new(set_id: id, position: idx, game_num: game_num, handicap: bowler.handicap)
     }
   end

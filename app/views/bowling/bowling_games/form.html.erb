@@ -30,7 +30,7 @@
   <span class="hidden bowler-placeholder"></span>
 
   <%= link_to "Add Bowler +", "", class: "btn add-bowler", data: { edit: :show } %>
-  <%= f.submit "Save game", class: "pull-right bowling-form-btn", data: { edit: :hide } %>
+  <%= f.submit "Save game", class: "pull-right bowling-form-btn", data: { edit: :hide, disable_with: false } %>
 <% end %>
 
 <div class="bowling-input-spacer"></div>
