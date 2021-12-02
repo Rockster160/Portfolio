@@ -12,24 +12,21 @@
 class BowlingSet < ApplicationRecord
   belongs_to :league, class_name: "BowlingLeague", touch: true
 
-  has_many :games, class_name: "BowlingGame", foreign_key: :set_id, inverse_of: :set, dependent: :destroy
+  has_many :games,
+    class_name: "BowlingGame",
+    foreign_key: :set_id,
+    inverse_of: :set,
+    dependent: :destroy
   has_many :bowlers, through: :games
 
   accepts_nested_attributes_for :games
 
-  def bowler_id=(new_bowler_id)
-    # binding.pry 
-    return super(new_bowler_id) if new_bowler_id.present?
-
-    super(Bowler.create(league_id: league_id))
-  end
-
   def save_scores
     # Reset handicap scores
-    bowlers.each(&:recalculate_scores)
+    bowlers.distinct.each(&:recalculate_scores)
     # After the series is complete, backfill the new handicap value
     games.group_by(&:bowler_id).each do |bid, grouped_games|
-      grouped_games.each { |game| game.update(handicap: grouped_games.first.bowler.handicap) }
+      grouped_games.each { |game| game.update(handicap: grouped_games.first.bowler.reload.handicap) }
     end
     # This can be removed once testing is done.
     games.update_all(game_point: false)
@@ -49,7 +46,7 @@ class BowlingSet < ApplicationRecord
     found_winner_ids = totals.select { |id_score| id_score.last == high_total }
     update(winner: ",#{found_winner_ids.map(&:first).join(",")},")
 
-    bowlers.each(&:recalculate_scores)
+    bowlers.distinct.each(&:recalculate_scores)
   end
 
   def winner?(bowler)
@@ -73,7 +70,7 @@ class BowlingSet < ApplicationRecord
     return games_by_num unless games_by_num.none?
     return [BowlingGame.new(game_num: game_num)] if league.nil?
 
-    (bowlers || league.bowlers).order(:position).map.with_index { |bowler, idx|
+    (bowlers.presence || league.bowlers).order(:position).distinct.map.with_index { |bowler, idx|
       bowler.games.new(set_id: id, position: idx, game_num: game_num, handicap: bowler.handicap)
     }
   end

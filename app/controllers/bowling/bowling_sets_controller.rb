@@ -4,7 +4,8 @@ module Bowling
     before_action :authorize_user, :set_set
 
     def create
-      @set.league_id ||= find_or_create_league_id
+      @league = find_or_create_league
+      @set.league_id ||= @league.id
 
       if @set.update(bowling_params)
         if @set.complete?
@@ -19,7 +20,8 @@ module Bowling
     end
 
     def update
-      @set.league_id ||= find_or_create_league_id
+      @league = find_or_create_league
+      @set.league_id ||= @league.id
 
       if @set.update(bowling_params)
         if @set.complete?
@@ -58,11 +60,22 @@ module Bowling
           :score,
           frames: 10.times.map { |idx| { idx.to_s.to_sym => [] } },
         ]
-      )
+      ).tap do |whitelist|
+        whitelist[:games_attributes] = whitelist[:games_attributes].map do |game_attributes|
+          game_attributes.tap do |game_whitelist|
+            game_attributes[:bowler_id] = game_attributes[:bowler_id].presence || @league.bowlers.create(name: game_attributes[:bowler_name]).id
+          end
+        end
+      end
     end
 
-    def find_or_create_league_id
-      params.dig(:bowling_set, :league_id).presence || BowlingLeague.create_default(current_user).id
+    def find_or_create_league
+      @league ||= begin
+        league_id = params.dig(:bowling_set, :league_id)
+        return BowlingLeague.find(league_id) if league_id.present?
+
+        BowlingLeague.create_default(current_user)
+      end
     end
   end
 end

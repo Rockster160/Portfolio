@@ -17,12 +17,12 @@
 #
 
 class BowlingGame < ApplicationRecord
-  attr_accessor :bowler_name
+  attr_accessor :bowler_name, :league_id
 
   belongs_to :set, class_name: "BowlingSet", inverse_of: :games
   belongs_to :bowler, inverse_of: :games
 
-  after_save { bowler.update(name: bowler_name) if bowler_name.present? }
+  after_save { bowler.update(name: bowler_name) if bowler_name.present? && bowler&.name != bowler_name }
 
   before_validation { self.bowler_id ||= Bowler.create(league_id: set.league_id) }
 
@@ -33,6 +33,17 @@ class BowlingGame < ApplicationRecord
   def self.total_scores
     sum(:score) + sum(:handicap)
   end
+
+  def league_id
+    @new_attributes&.dig(:league_id) || set&.league_id || bowler&.league_id
+  end
+
+  # def bowler_id=(new_bowler_id)
+  #   return super(new_bowler_id) if new_bowler_id.present?
+  #   binding.pry
+  #
+  #   super(Bowler.create(league_id: league_id, name: bowler_name))
+  # end
 
   def total_score
     score.to_i + handicap.to_i
