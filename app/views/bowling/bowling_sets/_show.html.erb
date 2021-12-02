@@ -1,4 +1,4 @@
-<h3><%= set.created_at.to_formatted_s(:short_day_month) %></h3>
+<h3><%= set.created_at.to_formatted_s(:month_day) %></h3>
 <% if show_links ||= false %>
   <%= link_to "View Series", bowling_set_path(set) %> <br>
 <% end %>
@@ -7,7 +7,7 @@
     <td>Name</td>
     <td>HDCP</td>
     <% set.league.games_per_series.times do |t| %>
-      <td></td>
+      <td class="text-center"><%= t + 1 %></td>
     <% end %>
     <td>Scratch</td>
     <td>Total</td>
