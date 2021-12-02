@@ -195,6 +195,9 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       })
 
       bowler.children(".total").children(".max").text("(max: " + max_final_score + ")")
+      bowler.children(".total").children(".hdcp").text(function() {
+        return parseInt($(this).attr("data-base")) + (current_final_score || 0)
+      })
       bowler.children(".total").children(".score").val(current_final_score)
     })
   }
