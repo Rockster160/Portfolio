@@ -31,7 +31,7 @@ class WebhooksController < ApplicationController
   def speak
     return head :no_content unless user_signed_in?
 
-    SmsWorker.perform("3852599640", params[:text])
+    SmsWorker.perform_async("3852599640", params[:text])
   end
 
   def push_notification_subscribe
