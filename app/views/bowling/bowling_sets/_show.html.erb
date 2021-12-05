@@ -9,6 +9,7 @@
     <% set.league.games_per_series.times do |t| %>
       <td class="text-center"><%= t + 1 %></td>
     <% end %>
+    <td>Avg</td>
     <td>Scratch</td>
     <td>Total</td>
     <td>Points</td>
@@ -24,6 +25,7 @@
           <%= "*" if game.card_point? %><%= game.score %>
         </td>
       <% end %>
+      <td class="text-right"><%= games.average(:score).floor %>/<%= bowler.average %></td>
       <td class="text-right"><%= games.sum(:score) %></td>
       <td class="text-right <%= "bowling-winner" if set.winner?(bowler) %>"><%= games.total_scores %></td>
       <td class="text-right"><%= games.points + (set.winner?(bowler) ? 1 : 0) %></td>
@@ -36,6 +38,7 @@
     <% set.league.games_per_series.times do |t| %>
       <td class="text-right"><%= number_with_delimiter(set.games.where(game_num: t+1).sum(:score)) %></td>
     <% end %>
+    <td>Today/All</td>
     <td class="text-right"><%= number_with_delimiter(set.games.sum(:score)) %></td>
     <td class="text-right"><%= number_with_delimiter(set.games.total_scores) %></td>
     <td></td>

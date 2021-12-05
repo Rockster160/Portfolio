@@ -71,11 +71,16 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   })
 
   $(".bowler-name").click(function() {
-    $(".card-point-field").val(false)
-    $(".card-point").remove()
-    var card = $("<div>").addClass("card-point").text("+1")
-    $(this).append(card)
-    $(this).parent().children(".card-point-field").val(true)
+    if ($(this).find(".card-point").length > 0) {
+      $(".card-point-field").val(false)
+      $(".card-point").remove()
+    } else {
+      $(".card-point-field").val(false)
+      $(".card-point").remove()
+      var card = $("<div>").addClass("card-point").text("+1")
+      $(this).append(card)
+      $(this).parent().children(".card-point-field").val(true)
+    }
   })
 
   $(document).keyup(function(evt) {
@@ -187,7 +192,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       var max_game = calcFrameScores(collectThrows(bowler, true))
 
       var squished_game = current_game.filter(function(score) { return score !== undefined })
-      var current_final_score = squished_game[squished_game.length - 1]
+      var current_final_score = squished_game[squished_game.length - 1] || 0
       var max_final_score = max_game[max_game.length - 1]
 
       current_game.forEach(function(frame_score, idx) {
@@ -196,7 +201,9 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
       bowler.children(".total").children(".max").text("(max: " + max_final_score + ")")
       bowler.children(".total").children(".hdcp").text(function() {
-        return parseInt($(this).attr("data-base")) + (current_final_score || 0)
+        if ($(this).attr("data-base")) {
+          return (parseInt($(this).attr("data-base")) || 0) + current_final_score
+        }
       })
       bowler.children(".total").children(".score").val(current_final_score)
     })

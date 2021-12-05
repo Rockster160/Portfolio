@@ -30,6 +30,7 @@ Rails.application.routes.draw do
   post "webhooks/jenkins" => "webhooks#jenkins"
   post "webhooks/post" => "webhooks#post"
   post "webhooks/email" => "webhooks#email"
+  post "webhooks/speak" => "webhooks#speak"
   post "webhooks/notify" => "webhooks#notify"
   post "webhooks/command" => "webhooks#command"
   post "push_notification_subscribe" => "webhooks#push_notification_subscribe"

@@ -38,13 +38,6 @@ class BowlingGame < ApplicationRecord
     @new_attributes&.dig(:league_id) || set&.league_id || bowler&.league_id
   end
 
-  # def bowler_id=(new_bowler_id)
-  #   return super(new_bowler_id) if new_bowler_id.present?
-  #   binding.pry
-  #
-  #   super(Bowler.create(league_id: league_id, name: bowler_name))
-  # end
-
   def total_score
     score.to_i + handicap.to_i
   end

@@ -28,6 +28,12 @@ class WebhooksController < ApplicationController
     List.find_and_modify(current_user, params[:command])
   end
 
+  def speak
+    return head :no_content unless user_signed_in?
+
+    SmsWorker.perform("3852599640", params[:text])
+  end
+
   def push_notification_subscribe
     return render(json: { data: :failure }, status: :ok) if params[:sub_auth].blank?
 

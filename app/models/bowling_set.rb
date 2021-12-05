@@ -50,7 +50,7 @@ class BowlingSet < ApplicationRecord
   end
 
   def winner?(bowler)
-    winner.include?(",#{bowler.id},")
+    winner&.include?(",#{bowler.id},")
   end
 
   def complete?
