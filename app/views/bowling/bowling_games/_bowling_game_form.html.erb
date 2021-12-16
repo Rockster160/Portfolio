@@ -17,12 +17,20 @@
     <div class="drag hidden" data-edit>
       <i class="fa fa-arrows"></i>
     </div>
+    <span class="avg">
+      <% if bowler.average %>
+      <span class="avg-label">AVG:</span> <%= bowler.average %>
+      <% end %>
+      <% if bowler.handicap %>
+        <span class="avg-label">HDCP:</span> <%= bowler.handicap %>
+      <% end %>
+    </span>
     <span class="name"><%= bowler.name %></span>
     <div class="prev-scores">
       <% (game.game_num - 1).times do |t| %>
         <% prev_game = @set.games.find_by(bowler: bowler, game_num: t + 1) %>
         <% next if prev_game.nil? %>
-        <span class="prev-score"><%= prev_game.score %><%= "|#{prev_game.total_score}" if prev_game.handicap&.positive? %></span>
+        <span class="prev-score <%= "bowling-winner" if prev_game.game_point? %>"><%= "*" if prev_game.card_point? %><%= prev_game.score %><%= "|#{prev_game.total_score}" if prev_game.handicap&.positive? %></span>
       <% end %>
     </div>
   </div>

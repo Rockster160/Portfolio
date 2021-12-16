@@ -29,6 +29,17 @@ class Bowler < ApplicationRecord
     BowlingSet.where("bowling_sets.winner LIKE '%,?,%'", id)
   end
 
+  def high_game
+    # TODO: Store this in a column?
+    games.maximum(:score)
+  end
+
+  def high_series
+    # TODO: Store this in a column!
+    # Also do this in SQL!
+    games.group_by(&:set_id).map { |setid, games| games.sum(&:score) }.max
+  end
+
   def average
     return unless total_games&.positive?
 

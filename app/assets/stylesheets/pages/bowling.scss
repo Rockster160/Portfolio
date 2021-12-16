@@ -7,10 +7,15 @@
     grid-template-columns: minmax(100px, 1fr) repeat(11, 80px);
 
     .bowling-cell {
+      position: relative;
       border: 1px solid $grey-blue;
       border-collapse: collapse;
       text-align: center;
       height: 60px;
+
+      &.invisi-frame {
+        border: none;
+      }
     }
 
     &.bowling-header .bowling-cell {
@@ -18,20 +23,35 @@
       height: auto;
     }
 
+    .prev-scores {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 2px;
+      font-size: 10px;
+      display: flex;
+      justify-content: space-around;
+    }
+    .team-total {
+      padding: 3px;
+    }
     .bowler-name {
       display: grid;
-      position: relative;
       align-items: center;
       justify-content: center;
 
-      .prev-scores {
+      .avg {
         position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
+        top: 0;
+        right: 2px;
         font-size: 10px;
-        display: flex;
-        justify-content: space-around;
+
+        .avg-label {
+          font-size: 7px;
+          letter-spacing: -0.5px;
+          vertical-align: bottom;
+        }
       }
     }
 

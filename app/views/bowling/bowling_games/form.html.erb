@@ -5,16 +5,9 @@
 
 <div class="bowling-table bowling-header">
   <div class="bowling-cell"></div>
-  <div class="bowling-cell">1</div>
-  <div class="bowling-cell">2</div>
-  <div class="bowling-cell">3</div>
-  <div class="bowling-cell">4</div>
-  <div class="bowling-cell">5</div>
-  <div class="bowling-cell">6</div>
-  <div class="bowling-cell">7</div>
-  <div class="bowling-cell">8</div>
-  <div class="bowling-cell">9</div>
-  <div class="bowling-cell">10</div>
+  <% 10.times do |t| %>
+    <div class="bowling-cell"><%= t + 1 %></div>
+  <% end %>
   <div class="bowling-cell">Total</div>
 </div>
 
@@ -28,6 +21,23 @@
     <%= render partial: "bowling_game_form", locals: { game: game, idx: idx } %>
   <% end %>
   <span class="hidden bowler-placeholder"></span>
+
+  <div class="bowling-table bowling-header">
+    <div class="bowling-cell">
+      <div class="prev-scores">
+        <% game_num = (params[:game].presence || 1).to_i %>
+        <% (game_num - 1).times do |t| %>
+          <% prev_games = @set.games.where(game_num: t + 1) %>
+          <% next if prev_games.none? %>
+          <span class="prev-score"><%= prev_games.sum(:score) %><%= "|#{prev_games.total_scores}" if prev_games.sum(:handicap)&.positive? %></span>
+        <% end %>
+      </div>
+    </div>
+    <% 10.times do %>
+      <div class="bowling-cell invisi-frame"></div>
+    <% end %>
+    <div class="bowling-cell team-total"></div>
+  </div>
 
   <%= link_to "Add Bowler +", "", class: "btn add-bowler", data: { edit: :show } %>
   <%= f.submit "Save game", class: "pull-right bowling-form-btn", data: { edit: :hide, disable_with: false } %>

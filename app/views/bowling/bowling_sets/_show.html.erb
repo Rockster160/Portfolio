@@ -20,9 +20,10 @@
     <tr>
       <td><%= bowler.name %></td>
       <td class="text-right"><%= games.last.handicap %></td>
-      <% games.each do |game| %>
-        <td class="text-right <%= "bowling-winner" if game.game_point? %>">
-          <%= "*" if game.card_point? %><%= game.score %>
+      <% set.league.games_per_series.times do |t| %>
+        <% game = games[t] %>
+        <td class="text-right <%= "bowling-winner" if game&.game_point? %>">
+          <%= "*" if game&.card_point? %><%= game&.score %>
         </td>
       <% end %>
       <td class="text-right"><%= games.average(:score).floor %>/<%= bowler.average %></td>

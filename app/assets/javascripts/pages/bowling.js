@@ -184,6 +184,8 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   }
 
   calcScores = function() {
+    var team_total = 0
+    var team_hdcp = 0
     $(".bowling-table.bowler").each(function() {
       var bowler = $(this)
       var frames = bowler.children(".bowling-cell.frame")
@@ -200,13 +202,20 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       })
 
       bowler.children(".total").children(".max").text("(max: " + max_final_score + ")")
+      team_hdcp += parseInt(bowler.children(".total").children(".hdcp").attr("data-base") || 0)
       bowler.children(".total").children(".hdcp").text(function() {
         if ($(this).attr("data-base")) {
           return (parseInt($(this).attr("data-base")) || 0) + current_final_score
         }
       })
       bowler.children(".total").children(".score").val(current_final_score)
+      team_total += current_final_score
     })
+    var total_text = team_total
+    if (team_hdcp > 0) {
+      total_text = total_text + "|" + (team_total + team_hdcp)
+    }
+    $(".team-total").text(total_text)
   }
 
   recalculateFrame = function(toss) {

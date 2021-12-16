@@ -6,6 +6,8 @@
     <td>Gms</td>
     <td>Pins</td>
     <td>Points</td>
+    <td>High Game</td>
+    <td>High Series</td>
   </tr>
   <% league.bowlers.order(:position).each do |bowler| %>
     <tr class="league-bowler">
@@ -15,6 +17,8 @@
       <td class="text-right"><%= number_with_delimiter(bowler.total_games) || "-" %></td>
       <td class="text-right"><%= number_with_delimiter(bowler.total_pins) || "-" %></td>
       <td class="text-right"><%= number_with_delimiter(bowler.total_points) || "-" %></td>
+      <td class="text-right"><%= number_with_delimiter(bowler.high_game) || "-" %></td>
+      <td class="text-right"><%= number_with_delimiter(bowler.high_series) || "-" %></td>
     </tr>
   <% end %>
 </table>
