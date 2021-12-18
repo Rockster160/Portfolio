@@ -1,6 +1,5 @@
 class UserListsController < ApplicationController
   before_action :authorize_user, :color_scheme
-  before_action :show_guest_banner, if: :guest_account?
   before_action :set_list, :set_current_list_user
 
   def create

@@ -4,6 +4,7 @@ class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception
   helper_method :current_user, :user_signed_in?, :guest_account?
   before_action :see_current_user, :logit
+  before_action :show_guest_banner, if: :guest_account?
 
   def flash_message
     flash.now[params[:flash_type].to_sym] = params[:message]
@@ -22,6 +23,7 @@ class ApplicationController < ActionController::Base
 
   def see_current_user
     Rails.logger.silence do
+      session[:forwarding_url] = request.original_url if request.get? && self.class.parent != Users
       if user_signed_in?
         current_user.see!
         request.env['exception_notifier.exception_data'] = { current_user: current_user }
@@ -55,7 +57,6 @@ class ApplicationController < ActionController::Base
 
   def authorize_admin
     unless current_user.try(:admin?)
-      session[:forwarding_url] = request.original_url if request.get?
       redirect_to login_path
     end
   end
@@ -81,7 +82,6 @@ class ApplicationController < ActionController::Base
   end
 
   def sign_out
-    session[:forwarding_url] = nil
     session[:user_id] = nil
     cookies.signed[:user_id] = nil
     session[:current_user_id] = nil

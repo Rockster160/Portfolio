@@ -5,7 +5,7 @@
       <%= "*" if game.card_point? %><%= game.bowler&.name %>
     </div>
     <% 10.times do |t| %>
-      <% frame = game.frames[t] %>
+      <% frame = game.frames[t] || [] %>
       <%
         corner_side = t == 0 ? "l" : (t == 9 ? "r" : nil)
         corner_top = row_idx == 0 ? "t" : (row_idx == game_count - 1 ? "b" : nil)

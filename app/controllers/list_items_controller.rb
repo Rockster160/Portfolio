@@ -1,7 +1,6 @@
 class ListItemsController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user
-  before_action :show_guest_banner, if: :guest_account?
 
   def show
     @list = current_user.lists.find(params[:list_id])

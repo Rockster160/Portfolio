@@ -26,7 +26,7 @@ class Users::RegistrationsController < ApplicationController
 
     if @user.save
       sign_in @user
-      redirect_to lists_path
+      redirect_to previous_url
     else
       @user.invitation_token = @invitation_token
       render :new

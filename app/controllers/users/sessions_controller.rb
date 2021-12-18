@@ -13,7 +13,7 @@ class Users::SessionsController < ApplicationController
       merge_user_accounts
       sign_in @user
       move_user_lists_to_user
-      redirect_to session[:forwarding_url] || lists_path
+      redirect_to previous_url
     else
       @user = User.new(username: user_params[:username])
       @user.errors.add(:base, "Username and password combination not found.")
