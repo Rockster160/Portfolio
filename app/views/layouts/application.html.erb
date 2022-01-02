@@ -29,7 +29,6 @@
   <%= render 'layouts/flashes' %>
   <%= yield :modals %>
   <%= render partial: "layouts/guest_banner" if @show_guest_banner %>
-  <p>Session <%= session[:forwarding_url] %></p>
   <%= yield %>
 
   <% if content_for? :after_js %>

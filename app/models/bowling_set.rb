@@ -22,14 +22,14 @@ class BowlingSet < ApplicationRecord
   accepts_nested_attributes_for :games
 
   def save_scores
-    # Reset handicap scores
-    bowlers.distinct.each(&:recalculate_scores)
-    # After the series is complete, backfill the new handicap value
-    games.group_by(&:bowler_id).each do |bid, grouped_games|
-      grouped_games.each { |game| game.update(handicap: grouped_games.first.bowler.reload.handicap) }
+    # Establish average for new bowlers
+    bowlers.where(total_games: 0).find_each do |bowler|
+      bowler.recalculate_scores
+
+      bowler.games.find_each do |game|
+        game.update(handicap: bowler.handicap)
+      end
     end
-    # This can be removed once testing is done.
-    games.update_all(game_point: false)
 
     # Now, with updated handicaps, find the high bowler for each game.
     games.group_by(&:game_num).each do |pos, grouped_games|

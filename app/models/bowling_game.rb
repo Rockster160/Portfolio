@@ -42,6 +42,23 @@ class BowlingGame < ApplicationRecord
     score.to_i + handicap.to_i
   end
 
+  def frame_details
+    [
+      {
+        frame: ["9", "/"],
+        # pins: ["", ""],
+      },
+      {
+        frame: ["X", "9", "/"],
+        pins: [
+          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          [1, 2, 3, 4, 5, 6, 7, 8, 9],
+          [10]
+        ],
+      },
+    ]
+  end
+
   def frames
     @frames ||= (super.to_s.split("|").presence || Array.new(10)).map { |roll| roll.to_s.split("") }
   end

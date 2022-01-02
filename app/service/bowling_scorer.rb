@@ -1,6 +1,22 @@
 module BowlingScorer
   module_function
 
+  def split?(pins)
+    return false if pins.include?(1)
+
+    columns = [
+      [7],
+      [4],
+      [2, 8],
+      [1, 5],
+      [3, 9],
+      [6],
+      [10],
+    ]
+
+    columns.map { |col| (col & pins).any? ? "1" : "0" }.join("").match?(/10+1/)
+  end
+
   def score(frames)
     # Expects either an array of scores like "6/" or a long string of the same delimited with |
     frames = frames.split("|") if frames.is_a?(String)

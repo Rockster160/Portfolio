@@ -61,6 +61,7 @@ group :development, :test do
   gem 'pry-rails'
   gem 'pry-byebug'
   gem 'spring-commands-rspec'
+  gem 'rspec-rails'
   gem 'better_errors'
   gem 'simplecov', :require => false, :group => :test
 end
