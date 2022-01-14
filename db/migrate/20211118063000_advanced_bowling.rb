@@ -7,7 +7,7 @@ class AdvancedBowling < ActiveRecord::Migration[5.0]
       t.text :name
       t.text :team_name
       t.text :handicap_calculation, default: 0
-      # ROUND((210 - AVG) * 0.95)
+      # (210 - AVG) * 0.95
       t.integer :games_per_series, default: 3
 
       t.timestamps

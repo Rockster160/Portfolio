@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20211118063000) do
+ActiveRecord::Schema.define(version: 20220114002530) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -61,8 +61,12 @@ ActiveRecord::Schema.define(version: 20211118063000) do
     t.integer  "total_pins"
     t.integer  "total_games"
     t.integer  "total_points"
-    t.datetime "created_at",   null: false
-    t.datetime "updated_at",   null: false
+    t.datetime "created_at",         null: false
+    t.datetime "updated_at",         null: false
+    t.integer  "high_game"
+    t.integer  "high_series"
+    t.integer  "total_pins_offset"
+    t.integer  "total_games_offset"
     t.index ["league_id"], name: "index_bowlers_on_league_id", using: :btree
   end
 
@@ -74,10 +78,11 @@ ActiveRecord::Schema.define(version: 20211118063000) do
     t.integer  "score"
     t.integer  "handicap"
     t.text     "frames"
-    t.boolean  "card_point", default: false
-    t.boolean  "game_point", default: false
-    t.datetime "created_at",                 null: false
-    t.datetime "updated_at",                 null: false
+    t.boolean  "card_point",    default: false
+    t.boolean  "game_point",    default: false
+    t.datetime "created_at",                    null: false
+    t.datetime "updated_at",                    null: false
+    t.jsonb    "frame_details"
     t.index ["bowler_id"], name: "index_bowling_games_on_bowler_id", using: :btree
     t.index ["set_id"], name: "index_bowling_games_on_set_id", using: :btree
   end
@@ -86,10 +91,11 @@ ActiveRecord::Schema.define(version: 20211118063000) do
     t.integer  "user_id"
     t.text     "name"
     t.text     "team_name"
-    t.text     "handicap_calculation", default: "0"
+    t.text     "handicap_calculation", default: "(210 - AVG) * 0.95"
     t.integer  "games_per_series",     default: 3
-    t.datetime "created_at",                         null: false
-    t.datetime "updated_at",                         null: false
+    t.datetime "created_at",                                          null: false
+    t.datetime "updated_at",                                          null: false
+    t.text     "absent_calculation",   default: "AVG - 10"
     t.index ["user_id"], name: "index_bowling_leagues_on_user_id", using: :btree
   end
 

@@ -2,18 +2,19 @@
 #
 # Table name: bowling_games
 #
-#  id         :integer          not null, primary key
-#  card_point :boolean          default(FALSE)
-#  frames     :text
-#  game_num   :integer
-#  game_point :boolean          default(FALSE)
-#  handicap   :integer
-#  position   :integer
-#  score      :integer
-#  created_at :datetime         not null
-#  updated_at :datetime         not null
-#  bowler_id  :integer
-#  set_id     :integer
+#  id            :integer          not null, primary key
+#  card_point    :boolean          default(FALSE)
+#  frame_details :jsonb
+#  frames        :text
+#  game_num      :integer
+#  game_point    :boolean          default(FALSE)
+#  handicap      :integer
+#  position      :integer
+#  score         :integer
+#  created_at    :datetime         not null
+#  updated_at    :datetime         not null
+#  bowler_id     :integer
+#  set_id        :integer
 #
 
 class BowlingGame < ApplicationRecord
@@ -45,8 +46,9 @@ class BowlingGame < ApplicationRecord
   def frame_details
     [
       {
+        split: false,
         frame: ["9", "/"],
-        # pins: ["", ""],
+        # pins: ["", ""], - Optional
       },
       {
         frame: ["X", "9", "/"],

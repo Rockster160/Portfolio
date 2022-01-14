@@ -2,15 +2,19 @@
 #
 # Table name: bowlers
 #
-#  id           :integer          not null, primary key
-#  name         :text
-#  position     :integer
-#  total_games  :integer
-#  total_pins   :integer
-#  total_points :integer
-#  created_at   :datetime         not null
-#  updated_at   :datetime         not null
-#  league_id    :integer
+#  id                 :integer          not null, primary key
+#  high_game          :integer
+#  high_series        :integer
+#  name               :text
+#  position           :integer
+#  total_games        :integer
+#  total_games_offset :integer
+#  total_pins         :integer
+#  total_pins_offset  :integer
+#  total_points       :integer
+#  created_at         :datetime         not null
+#  updated_at         :datetime         not null
+#  league_id          :integer
 #
 
 class Bowler < ApplicationRecord
@@ -19,25 +23,16 @@ class Bowler < ApplicationRecord
 
   def recalculate_scores
     update(
-      total_games: games.count,
-      total_pins: games.sum(:score),
+      total_games: total_games_offset.to_i + games.count,
+      total_pins: total_pins_offset.to_i + games.sum(:score),
       total_points: games.points + winning_sets.count,
+      high_game: games.maximum(:score),
+      high_series: games.group_by(&:set_id).map { |setid, games| games.sum(&:score) }.max,
     )
   end
 
   def winning_sets
     BowlingSet.where("bowling_sets.winner LIKE '%,?,%'", id)
-  end
-
-  def high_game
-    # TODO: Store this in a column?
-    games.maximum(:score)
-  end
-
-  def high_series
-    # TODO: Store this in a column!
-    # Also do this in SQL!
-    games.group_by(&:set_id).map { |setid, games| games.sum(&:score) }.max
   end
 
   def average

@@ -3,8 +3,9 @@
 # Table name: bowling_leagues
 #
 #  id                   :integer          not null, primary key
+#  absent_calculation   :text             default("AVG - 10")
 #  games_per_series     :integer          default(3)
-#  handicap_calculation :text             default("0")
+#  handicap_calculation :text             default("(210 - AVG) * 0.95")
 #  name                 :text
 #  team_name            :text
 #  created_at           :datetime         not null
