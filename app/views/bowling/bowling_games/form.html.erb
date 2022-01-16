@@ -1,3 +1,18 @@
+<%= render_modal "card-hands", "Hands" do %>
+  <ul>
+    <li>5kind</li>
+    <li>Straight Flush</li>
+    <li>4kind</li>
+    <li>FullHouse</li>
+    <li>Flush</li>
+    <li>Straight</li>
+    <li>3kind</li>
+    <li>2Pair</li>
+    <li>Pair</li>
+    <li>High Card</li>
+  </ul>
+<% end %>
+
 <div class="text-right">
   <%= link_to "Edit", "", class: "bowling-edit" %>
 </div>
@@ -42,6 +57,8 @@
   <%= link_to "Add Bowler +", "", class: "btn add-bowler", data: { edit: :show } %>
   <%= f.submit "Save game", class: "pull-right bowling-form-btn", data: { edit: :hide, disable_with: false } %>
 <% end %>
+
+<div class="little-card-icon" data-modal="#card-hands">&#9824;</div>
 
 <div class="bowling-input-spacer"></div>
 <div class="bowling-input">

@@ -241,8 +241,10 @@
       grid-template-columns: repeat(3, 100px);
       justify-content: center;
       width: auto;
+      pointer-events: none;
 
       .numpad-key {
+        pointer-events: all;
         position: relative;
         top: 0;
         transition: top ease-in-out 0.07s, background ease-in-out 0.1s;

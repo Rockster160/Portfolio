@@ -5,6 +5,18 @@ $card-radius: $card-height / 28;
 $card-border-size: $card-height * 0.14;
 $one-third: 100% / 3;
 
+.little-card-icon {
+  cursor: pointer;
+  border: 1px solid $text-color;
+  border-radius: 3px;
+  display: inline-block;
+  padding: 2px;
+
+  &:hover {
+    background: white;
+  }
+}
+
 .ctr-cards {
   font-size: 0;
 
