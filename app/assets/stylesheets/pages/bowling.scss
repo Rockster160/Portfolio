@@ -120,8 +120,10 @@
         text-align: center;
       }
     }
-    &.absent .frame .shot {
-      background: $grey-light;
+    &.absent, &.skip {
+      .frame .shot {
+        background: $grey-light;
+      }
     }
     .total {
       position: relative;

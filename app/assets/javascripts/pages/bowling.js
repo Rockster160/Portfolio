@@ -57,6 +57,19 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     calcScores()
   })
 
+  $(".skip-checkbox").change(function() {
+    var skip = $(this).prop("checked")
+    var bowler = $(this).parents(".bowler")
+
+    if (skip) {
+      bowler.addClass("skip")
+      bowler.find(".skip-bowler").removeClass("hidden")
+    } else {
+      bowler.removeClass("skip")
+      bowler.find(".skip-bowler").addClass("hidden")
+    }
+  })
+
   fillRandomScores = function() {
     while($(".shot.current").length > 0) {
       addScore(Math.floor(Math.random() * 11))
@@ -185,7 +198,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   recalcScores = function() {
     var low_frame = 10
-    $(".bowling-table.bowler:not(.absent)").each(function() {
+    $(".bowling-table.bowler:not(.absent, .skip)").each(function() {
       var bowler = $(this)
       var frames = bowler.find(".bowling-cell.frame")
       frames.each(function() {
@@ -417,20 +430,20 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   }
 
   findCurrentFrame = function() {
-    return Math.min.apply(Math, $(".bowler:not(.absent)").map(function() {
+    return Math.min.apply(Math, $(".bowler:not(.absent, .skip)").map(function() {
       return parseInt($(this).attr("data-current-frame")) || 0
     }))
   }
 
   gotoNextFrame = function() {
-    $(".bowling-table.bowler:not(.absent)").each(function() {
+    $(".bowling-table.bowler:not(.absent, .skip)").each(function() {
       var bowler = $(this)
       var current_frame = findNextFrame(bowler)
 
       bowler.attr("data-current-frame", current_frame.attr("data-frame") || 11)
     })
 
-    var next_bowler = $(".bowling-table.bowler:not(.absent)").sort(function(a, b) {
+    var next_bowler = $(".bowling-table.bowler:not(.absent, .skip)").sort(function(a, b) {
       a = $(a)
       b = $(b)
       var a_frame = parseInt(a.attr("data-current-frame"))

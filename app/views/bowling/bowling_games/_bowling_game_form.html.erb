@@ -16,7 +16,9 @@
   <div class="bowling-cell bowler-name">
     <div class="drag hidden bowler-options" data-edit>
       <%= check_box_tag "#{set_params}absent", true, game.absent?, id: "absent-#{idx}", class: "absent-checkbox" %>
-      <%= label_tag "#{set_params}absent", "Absent?", for: "absent-#{idx}" %>
+      <%= label_tag "#{set_params}absent", "Absent?", for: "absent-#{idx}" %> <br>
+      <%= check_box_tag "#{set_params}skip", true, false, id: "skip-#{idx}", class: "skip-checkbox" %>
+      <%= label_tag "#{set_params}skip", "Skip?", for: "skip-#{idx}" %>
       <!-- <i class="fa fa-arrows"></i> -->
     </div>
     <span class="avg">
