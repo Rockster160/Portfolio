@@ -82,6 +82,7 @@ ActiveRecord::Schema.define(version: 20220114002530) do
     t.boolean  "game_point",    default: false
     t.datetime "created_at",                    null: false
     t.datetime "updated_at",                    null: false
+    t.boolean  "absent"
     t.jsonb    "frame_details"
     t.index ["bowler_id"], name: "index_bowling_games_on_bowler_id", using: :btree
     t.index ["set_id"], name: "index_bowling_games_on_set_id", using: :btree

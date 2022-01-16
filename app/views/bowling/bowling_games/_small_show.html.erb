@@ -20,6 +20,6 @@
       </div>
     <% end %>
     <div class="bowling-cell"><%= game.score %></div>
-    <div class="bowling-cell <%= "bowling-winner" if game.game_point? %>"><%= game.total_score %></div>
+    <div class="bowling-cell <%= "bowling-winner" if game.game_point? %> <%= 'absent-game' if game.absent? %>"><%= game.total_score %></div>
   <% end %>
 </div>

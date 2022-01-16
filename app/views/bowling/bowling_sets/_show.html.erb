@@ -22,7 +22,7 @@
       <td class="text-right"><%= games.last.handicap %></td>
       <% set.league.games_per_series.times do |t| %>
         <% game = games[t] %>
-        <td class="text-right <%= "bowling-winner" if game&.game_point? %>">
+        <td class="text-right <%= "bowling-winner" if game&.game_point? %> <%= 'absent-game' if game&.absent? %>">
           <%= "*" if game&.card_point? %><%= game&.score %>
         </td>
       <% end %>

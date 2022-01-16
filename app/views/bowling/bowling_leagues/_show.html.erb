@@ -9,7 +9,7 @@
     <td>High Game</td>
     <td>High Series</td>
   </tr>
-  <% league.bowlers.order(:position).each do |bowler| %>
+  <% league.bowlers.order("position ASC NULLS LAST").each do |bowler| %>
     <tr class="league-bowler">
       <td><%= bowler.name %></td>
       <td class="text-right"><%= bowler.average || "-" %></td>

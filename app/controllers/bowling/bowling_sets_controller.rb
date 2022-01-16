@@ -51,6 +51,7 @@ module Bowling
         games_attributes: [
           :id,
           :set_id,
+          :absent,
           :bowler_id,
           :bowler_name,
           :game_num,
@@ -63,7 +64,7 @@ module Bowling
       ).tap do |whitelist|
         whitelist[:games_attributes] = whitelist[:games_attributes].map do |game_attributes|
           game_attributes.tap do |game_whitelist|
-            game_attributes[:bowler_id] = game_attributes[:bowler_id].presence || @league.bowlers.create(name: game_attributes[:bowler_name]).id
+            game_whitelist[:bowler_id] = game_whitelist[:bowler_id].presence || @league.bowlers.create(name: game_whitelist[:bowler_name]).id
           end
         end
       end

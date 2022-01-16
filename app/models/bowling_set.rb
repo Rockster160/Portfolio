@@ -66,12 +66,20 @@ class BowlingSet < ApplicationRecord
   def games_for_display(game_num=nil)
     game_num ||= games.maximum(:game_num) || 1
     games_by_num = games.where(game_num: game_num)
+    previous_games = games.where(game_num: game_num.to_i - 1)
 
     return games_by_num unless games_by_num.none?
     return [BowlingGame.new(game_num: game_num)] if league.nil?
 
-    (bowlers.presence || league.bowlers).order(:position).distinct.map.with_index { |bowler, idx|
-      bowler.games.new(set_id: id, position: idx, game_num: game_num, handicap: bowler.handicap)
+    (bowlers.presence || league.bowlers).active.distinct.map.with_index { |bowler, idx|
+      bowler.games.new(
+        set_id:       id,
+        position:     idx,
+        game_num:     game_num,
+        handicap:     bowler.handicap,
+        absent:       !!previous_games.find_by(bowler_id: bowler.id)&.absent,
+        absent_score: bowler.absent_score,
+      )
     }
   end
 end

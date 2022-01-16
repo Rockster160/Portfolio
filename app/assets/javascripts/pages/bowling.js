@@ -1,5 +1,3 @@
-// 65 unique combinations of shots per frame
-// 4300 possible games (65*65 + 10th frame weirdness)
 $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   var editing = false
@@ -40,6 +38,23 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
     evt.preventDefault()
     return false
+  })
+
+  $(".absent-checkbox").change(function() {
+    var absent = $(this).prop("checked")
+    var bowler = $(this).parents(".bowler")
+
+    if (absent) {
+      bowler.addClass("absent")
+      bowler.find(".absent-bowler").removeClass("hidden")
+      bowler.find(".shot").val("").attr("data-score", "")
+    } else {
+      bowler.removeClass("absent")
+      bowler.find(".absent-bowler").addClass("hidden")
+      // Remove absent frame scores
+      bowler.find(".score").text("")
+    }
+    calcScores()
   })
 
   fillRandomScores = function() {
@@ -169,16 +184,20 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   }
 
   recalcScores = function() {
-    $(".bowling-table.bowler").each(function() {
+    var low_frame = 10
+    $(".bowling-table.bowler:not(.absent)").each(function() {
       var bowler = $(this)
       var frames = bowler.find(".bowling-cell.frame")
       frames.each(function() {
         var toss = $(this).children(".shot").first()
         if (toss.val() != "") {
           recalculateFrame(toss)
+          var frame_pos = parseInt(toss.attr("data-frame"))
+          if (low_frame < frame_pos) { low_frame = frame_pos }
         }
       })
     })
+
     calcScores()
     moveToNextFrame()
   }
@@ -186,20 +205,41 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   calcScores = function() {
     var team_total = 0
     var team_hdcp = 0
-    $(".bowling-table.bowler").each(function() {
+    var frame_num = findCurrentFrame()
+
+    $(".bowling-table.bowler").each(function(bowler_idx) {
       var bowler = $(this)
+      var absent = bowler.hasClass("absent")
       var frames = bowler.children(".bowling-cell.frame")
 
-      var current_game = calcFrameScores(collectThrows(bowler))
-      var max_game = calcFrameScores(collectThrows(bowler, true))
+      if (absent) {
+        var absent_score = parseInt(bowler.attr("data-absent-score"))
+        var absent_frame_score = Math.floor(absent_score / 10)
+        var current_final_score = absent_frame_score * frame_num
+        if (frame_num == 10) { current_final_score = absent_score }
+        var max_final_score = absent_score
 
-      var squished_game = current_game.filter(function(score) { return score !== undefined })
-      var current_final_score = squished_game[squished_game.length - 1] || 0
-      var max_final_score = max_game[max_game.length - 1]
+        frames.toArray().forEach(function(frame, idx) {
+          if (idx + 1 > frame_num) {
+            $(frame).children(".score").text("")
+          } else if (idx == 9) { // Tenth frame
+            $(frame).children(".score").text(max_final_score)
+          } else {
+            $(frame).children(".score").text(absent_frame_score * (idx + 1))
+          }
+        })
+      } else {
+        var current_game = calcFrameScores(collectThrows(bowler))
+        var max_game = calcFrameScores(collectThrows(bowler, true))
 
-      current_game.forEach(function(frame_score, idx) {
-        $(frames[idx]).children(".score").text(frame_score)
-      })
+        var squished_game = current_game.filter(function(score) { return score !== undefined })
+        var current_final_score = squished_game[squished_game.length - 1] || 0
+        var max_final_score = max_game[max_game.length - 1]
+
+        current_game.forEach(function(frame_score, idx) {
+          $(frames[idx]).children(".score").text(frame_score)
+        })
+      }
 
       bowler.children(".total").children(".max").text("(max: " + max_final_score + ")")
       team_hdcp += parseInt(bowler.children(".total").children(".hdcp").attr("data-base") || 0)
@@ -376,15 +416,21 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }).first().parent()
   }
 
+  findCurrentFrame = function() {
+    return Math.min.apply(Math, $(".bowler:not(.absent)").map(function() {
+      return parseInt($(this).attr("data-current-frame")) || 0
+    }))
+  }
+
   gotoNextFrame = function() {
-    $(".bowling-table.bowler").each(function() {
+    $(".bowling-table.bowler:not(.absent)").each(function() {
       var bowler = $(this)
       var current_frame = findNextFrame(bowler)
 
       bowler.attr("data-current-frame", current_frame.attr("data-frame") || 11)
     })
 
-    var next_bowler = $(".bowling-table.bowler").sort(function(a, b) {
+    var next_bowler = $(".bowling-table.bowler:not(.absent)").sort(function(a, b) {
       a = $(a)
       b = $(b)
       var a_frame = parseInt(a.attr("data-current-frame"))

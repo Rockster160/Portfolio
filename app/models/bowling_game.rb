@@ -3,6 +3,7 @@
 # Table name: bowling_games
 #
 #  id            :integer          not null, primary key
+#  absent        :boolean
 #  card_point    :boolean          default(FALSE)
 #  frame_details :jsonb
 #  frames        :text
@@ -18,7 +19,7 @@
 #
 
 class BowlingGame < ApplicationRecord
-  attr_accessor :bowler_name, :league_id
+  attr_accessor :bowler_name, :league_id, :absent_score
 
   belongs_to :set, class_name: "BowlingSet", inverse_of: :games
   belongs_to :bowler, inverse_of: :games
@@ -26,6 +27,8 @@ class BowlingGame < ApplicationRecord
   after_save { bowler.update(name: bowler_name) if bowler_name.present? && bowler&.name != bowler_name }
 
   before_validation { self.bowler_id ||= Bowler.create(league_id: set.league_id) }
+
+  scope :attended, -> { where(absent: [nil, false]) }
 
   def self.points
     where(game_point: true).count + where(card_point: true).count

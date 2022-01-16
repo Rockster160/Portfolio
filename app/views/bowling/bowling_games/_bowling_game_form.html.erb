@@ -4,7 +4,7 @@
 
 <% set_params = "bowling_set[games_attributes][]" %>
 
-<div class="bowling-table bowler" data-bowler="<%= idx + 1 %>" data-current-frame="1">
+<div class="bowling-table bowler <%= 'absent' if game.absent? %>" data-absent-score="<%= bowler.absent_score %>" data-bowler="<%= idx + 1 %>" data-current-frame="1">
   <%= hidden_field_tag "#{set_params}id", game.id %>
   <%= hidden_field_tag "#{set_params}bowler_name", nil, class: "bowler-name-field" %>
   <%= hidden_field_tag "#{set_params}bowler_id", bowler.id %>
@@ -14,18 +14,20 @@
   <%= hidden_field_tag "#{set_params}position", game.position || idx, class: "game-position" %>
 
   <div class="bowling-cell bowler-name">
-    <div class="drag hidden" data-edit>
-      <i class="fa fa-arrows"></i>
+    <div class="drag hidden bowler-options" data-edit>
+      <%= check_box_tag "#{set_params}absent", true, game.absent?, id: "absent-#{idx}", class: "absent-checkbox" %>
+      <%= label_tag "#{set_params}absent", "Absent?", for: "absent-#{idx}" %>
+      <!-- <i class="fa fa-arrows"></i> -->
     </div>
     <span class="avg">
-      <% if bowler.average %>
-      <span class="avg-label">AVG:</span> <%= bowler.average %>
+      <% if bowler.average&.positive? %>
+        <span class="avg-label">AVG:</span> <%= bowler.average %>
       <% end %>
-      <% if bowler.handicap %>
+      <% if bowler.handicap&.positive? %>
         <span class="avg-label">HDCP:</span> <%= bowler.handicap %>
       <% end %>
     </span>
-    <span class="name"><%= bowler.name %></span>
+    <span class="name"><%= bowler.name %> <span class="absent-bowler <%= 'hidden' unless game.absent? %>">[A]</span></span>
     <div class="prev-scores">
       <% (game.game_num - 1).times do |t| %>
         <% prev_game = @set.games.find_by(bowler: bowler, game_num: t + 1) %>

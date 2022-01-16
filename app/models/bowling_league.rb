@@ -30,9 +30,15 @@ class BowlingLeague < ApplicationRecord
 
   def handicap_from_average(average)
     return if average.blank?
+    return if handicap_calculation.gsub("AVG", "").match?(/[a-z]/i)
     # (210 - AVG) * 0.95
-    # Make sure this is safe to run through eval?
-    # Just make sure it's only nums and special chars
     eval(handicap_calculation.gsub("AVG", average.to_s)).floor
+  end
+
+  def absent_score(average)
+    return if average.blank?
+    return if absent_calculation.gsub("AVG", "").match?(/[a-z]/i)
+    # AVG - 10
+    eval(absent_calculation.gsub("AVG", average.to_s)).floor
   end
 end

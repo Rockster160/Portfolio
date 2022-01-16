@@ -20,14 +20,17 @@
 class Bowler < ApplicationRecord
   belongs_to :league, class_name: "BowlingLeague", foreign_key: :league_id, inverse_of: :bowlers
   has_many :games, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
+  has_many :games_present, -> { attended }, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
+
+  scope :active, -> { order(:position).where.not(position: nil) }
 
   def recalculate_scores
     update(
-      total_games: total_games_offset.to_i + games.count,
-      total_pins: total_pins_offset.to_i + games.sum(:score),
+      total_games:  total_games_offset.to_i + games_present.count,
+      total_pins:   total_pins_offset.to_i + games_present.sum(:score),
       total_points: games.points + winning_sets.count,
-      high_game: games.maximum(:score),
-      high_series: games.group_by(&:set_id).map { |setid, games| games.sum(&:score) }.max,
+      high_game:    games_present.maximum(:score),
+      high_series:  games_present.group_by(&:set_id).map { |setid, set_games| set_games.sum(&:score) }.max,
     )
   end
 
@@ -43,5 +46,9 @@ class Bowler < ApplicationRecord
 
   def handicap
     league&.handicap_from_average(average)
+  end
+
+  def absent_score
+    league&.absent_score(average)
   end
 end
