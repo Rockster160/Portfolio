@@ -1,5 +1,6 @@
 <%= link_to "← All Leagues", bowling_games_path, class: :btn %>
 <%= link_to "New Series", new_bowling_game_path(league: @league), class: "btn" %>
+<%= link_to "Edit League", edit_bowling_league_path(@league), class: "btn pull-right" %>
 
 <h3><%= @league.team_name %></h3>
 

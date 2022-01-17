@@ -1,0 +1,23 @@
+<% bowler ||= Bowler.new %>
+<% bowler_params = "bowling_league[bowlers_attributes][]" %>
+
+<div class="bowler-form">
+  <hr>
+  <%= hidden_field_tag "#{bowler_params}id", bowler.id %>
+  <%= hidden_field_tag "#{bowler_params}position", bowler.position %>
+  <div class="split-fields">
+    <div class="form-field">
+      <%= label_tag "#{bowler_params}name", "Bowler" %>
+      <%= text_field_tag "#{bowler_params}name", bowler.name %>
+    </div>
+    <br>
+    <div class="form-field">
+      <%= label_tag "#{bowler_params}total_games_offset", "Games Offset" %>
+      <%= text_field_tag "#{bowler_params}total_games_offset", bowler.total_games_offset %>
+    </div>
+    <div class="form-field">
+      <%= label_tag "#{bowler_params}total_pins_offset", "Pins Offset" %>
+      <%= text_field_tag "#{bowler_params}total_pins_offset", bowler.total_pins_offset %>
+    </div>
+  </div>
+</div>

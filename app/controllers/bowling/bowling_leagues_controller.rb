@@ -48,7 +48,10 @@ module Bowling
         :name,
         :team_name,
         :handicap_calculation,
+        :absent_calculation,
         :games_per_series,
+        :total_games_offset,
+        :total_pins_offset,
         bowlers_attributes: [
           :id,
           :name,

@@ -24,20 +24,17 @@
       </div>
 
       <div class="form-field">
+        <%= f.label :absent_calculation %>
+        <%= f.text_field :absent_calculation %>
+      </div>
+
+      <div class="form-field">
         <%= f.label :games_per_series %>
         <%= f.text_field :games_per_series %>
       </div>
 
-      <% 4.times do |t| %>
-        <% bowler = @league.bowlers[t] %>
-        <div class="split-fields">
-          <div class="form-field">
-            <%= hidden_field_tag "bowling_league[bowlers_attributes][]id", bowler&.id %>
-            <%= hidden_field_tag "bowling_league[bowlers_attributes][]position", t %>
-            <%= label_tag "Bowler #{t+1}" %>
-            <%= text_field_tag "bowling_league[bowlers_attributes][]name", bowler&.name %>
-          </div>
-        </div>
+      <% @league.bowlers.ordered.each do |bowler| %>
+        <%= render partial: "bowling/bowlers/form", locals: { bowler: bowler } %>
       <% end %>
     </div>
 
