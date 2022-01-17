@@ -1,4 +1,13 @@
 .ctr-bowling_leagues, .ctr-bowling_sets, .ctr-bowling_games {
+  .backspace {
+    display: inline-block;
+    cursor: pointer;
+    border: 1px solid $grey-blue;
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 14px;
+    text-align: center;
+  }
   td {
     padding: 3px 5px;
   }
@@ -241,10 +250,8 @@
       grid-template-columns: repeat(3, 100px);
       justify-content: center;
       width: auto;
-      pointer-events: none;
 
       .numpad-key {
-        pointer-events: all;
         position: relative;
         top: 0;
         transition: top ease-in-out 0.07s, background ease-in-out 0.1s;

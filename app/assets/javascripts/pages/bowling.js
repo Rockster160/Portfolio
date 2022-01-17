@@ -82,7 +82,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   })
 
   $("form").submit(function(evt) {
-    if ($(".card-point").length == 0) {
+    if ($(".card-point").length == 0 && $(".bowler").length > 1) {
       if (!confirm("You did not enter a winner for cards. Are you sure you want to continue?")) {
         evt.preventDefault()
         return false
@@ -96,6 +96,10 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   $(".bowling-cell.total .remove").click(function() {
     $(this).parents(".bowling-table").remove()
+  })
+
+  $(".backspace").click(function() {
+    backspace()
   })
 
   $(".bowler-name").click(function() {
@@ -116,10 +120,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       var num = evt.key == "+" ? "X" : evt.key
       addScore(num)
     } else if (evt.key == "Backspace" || evt.key == "Delete") {
-      var toss = $(".shot.current")
-      toss.val("")
-      recalculateFrame(toss)
-      calcScores()
+      backspace()
     }
   })
 
@@ -277,6 +278,8 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     var shot_idx = shots.index(toss)
     var toss_score = shotScore(toss)
 
+    if (toss.val() == "") { return toss.removeAttr("data-score") }
+
     var prev_shot = $(shots[shot_idx - 1])
     var prev_text = prev_shot.length > 0 ? prev_shot.val() : null
     var prev_val = shotScore(prev_shot)
@@ -294,6 +297,22 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     } else if (next_text == "/") {
       next_shot.val("/").attr("data-score", 10 - shotScore(toss))
     }
+  }
+
+  backspace = function() {
+    var toss = $(".shot.current")
+    var frame = toss.parent(".frame")
+    var shots = frame.children(".shot")
+    var shot_idx = shots.index(toss)
+
+    if (shot_idx == 0) {
+      shots.val("").removeAttr("data-score")
+      frame.find(".score").text("")
+    } else {
+      toss.val("").removeAttr("data-score")
+    }
+
+    calcScores()
   }
 
   addScore = function(text) {
@@ -324,6 +343,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       }
       // If first shot is blank, add score to first frame instead
       if (prev_shot.val() == "") {
+        toss.removeAttr("data-score")
         moveToThrow(prev_shot)
         return addScore(score)
       }
