@@ -2,15 +2,17 @@
 <% bowler_params = "bowling_league[bowlers_attributes][]" %>
 
 <div class="bowler-form">
-  <%= hidden_field_tag "#{bowler_params}id", bowler.id %>
+  <i class="fa fa-times remove-bowler"></i>
+  <%= hidden_field_tag "#{bowler_params}id", bowler.id, class: "bowler-id" %>
   <%= hidden_field_tag "#{bowler_params}position", bowler.position, class: "position" %>
+  <%= hidden_field_tag "#{bowler_params}_destroy", false, class: "should-destroy" %>
 
   <div class="flex-fields">
     <div class="form-field flex-center bowler-handle">
       <i class="fa fa-arrows"></i>
     </div>
     <div class="form-field" style="width: 100%;">
-      <%= label_tag "#{bowler_params}name", "Bowler" %>
+      <%= label_tag "#{bowler_params}name", "Name" %>
       <%= text_field_tag "#{bowler_params}name", bowler.name %>
     </div>
     <div class="form-field">
@@ -21,5 +23,12 @@
       <%= label_tag "#{bowler_params}total_pins_offset", "Pins Offset" %>
       <%= text_field_tag "#{bowler_params}total_pins_offset", bowler.total_pins_offset %>
     </div>
+  </div>
+  <div class="flex-fields">
+    <small>High Game: <%= bowler.high_game || 0 %></small>
+    <small>High Series: <%= bowler.high_series || 0 %></small>
+    <small>Total Games: <%= bowler.total_games || 0 %></small>
+    <small>Total Pins: <%= bowler.total_pins || 0 %></small>
+    <small>Points: <%= bowler.total_points || 0 %></small>
   </div>
 </div>

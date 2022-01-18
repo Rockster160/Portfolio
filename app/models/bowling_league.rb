@@ -8,6 +8,7 @@
 #  handicap_calculation :text             default("(210 - AVG) * 0.95")
 #  name                 :text
 #  team_name            :text
+#  team_size            :integer          default(4)
 #  created_at           :datetime         not null
 #  updated_at           :datetime         not null
 #  user_id              :integer
@@ -20,12 +21,16 @@ class BowlingLeague < ApplicationRecord
   has_many :sets, class_name: "BowlingSet", foreign_key: :league_id, dependent: :destroy, inverse_of: :league
   has_many :games, through: :sets
 
-  accepts_nested_attributes_for :bowlers
+  accepts_nested_attributes_for :bowlers, allow_destroy: true
 
   def self.create_default(user)
     formatted_date = Time.current.to_formatted_s(:short_day_month)
 
     create(name: formatted_date, user: user)
+  end
+
+  def roster
+    bowlers.ordered.limit([team_size.to_i, 1].max)
   end
 
   def handicap_from_average(average)

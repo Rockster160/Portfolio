@@ -2,13 +2,53 @@ $(".ctr-bowling_leagues.act-edit").ready(function() {
   $(".league-roster").sortable({
     handle: ".bowler-handle",
     update: function(evt, ui) {
-      var roster = $(this)
-      roster.children(".bowler-form").each(function(idx) {
-        $(this).children(".position").val(idx + 1)
-      })
+      updateRoster()
     }
   })
+
+  $("#bowling_league_team_size").change(function() { updateRoster() })
+
+  updateRoster = function() {
+    var roster = $(".league-roster")
+    roster.children(".bowler-form:not(.hidden)").each(function(idx) {
+      $(this).children(".position").val(idx + 1)
+    })
+
+    var team_size = parseInt($("#bowling_league_team_size").val()) || 1
+    $(".in-roster").remove()
+    $(".bowler-form:not(.hidden)").each(function(idx) {
+      if (idx + 1 > team_size) { return }
+
+      var star = $("<i>", { class: "fa fa-star in-roster" })
+      $(this).append(star)
+    })
+  }
+  updateRoster()
+
+  var template = document.querySelector("#bowler-template")
+
+  $(document).on("click", ".remove-bowler", function(evt) {
+    var bowler = $(this).parents(".bowler-form")
+
+    if (bowler.children(".bowler-id").val() == "") {
+      bowler.remove()
+    } else {
+      bowler.children(".should-destroy").val(true)
+      bowler.addClass("hidden")
+    }
+
+    updateRoster()
+  })
+
+  $(".add-bowler").click(function() {
+    var clone = template.content.cloneNode(true)
+
+    $(".league-roster").append(clone)
+    updateRoster()
+  })
 })
+
+
 $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   var editing = false

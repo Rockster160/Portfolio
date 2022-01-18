@@ -33,12 +33,26 @@
         <%= f.text_field :games_per_series %>
       </div>
 
+      <div class="form-field">
+        <%= f.label :team_size %>
+        <%= f.text_field :team_size %>
+      </div>
+
       <div class="league-roster">
         <% @league.bowlers.ordered.each do |bowler| %>
           <%= render partial: "bowling/bowlers/form", locals: { bowler: bowler } %>
         <% end %>
       </div>
+
+      <div class="form-field text-right">
+        <div class="btn add-bowler">Add Bowler +</div>
+      </div>
     </div>
+
+
+    <template id="bowler-template">
+      <%= render partial: "bowling/bowlers/form" %>
+    </template>
 
     <div class="form-submission">
       <%= f.submit %>

@@ -1,11 +1,27 @@
 .ctr-bowling_leagues, .ctr-bowling_sets, .ctr-bowling_games {
   .bowler-form {
-    border: 1px solid $grey-dark;
+    position: relative;
+    border: 1px solid $grey-blue;
     border-radius: 6px;
-    box-shadow: 2px 2px 2px $grey-dark;
+    box-shadow: 2px 2px 2px $grey-blue;
     margin: 10px;
     padding: 10px;
     background: $blue-l5;
+  }
+
+  .in-roster {
+    position: absolute;
+    color: gold;
+    top: 5px;
+    left: 5px;
+  }
+
+  .remove-bowler {
+    cursor: pointer;
+    position: absolute;
+    color: red;
+    top: 5px;
+    right: 5px;
   }
 
   .backspace {

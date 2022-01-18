@@ -22,7 +22,6 @@ class Bowler < ApplicationRecord
   has_many :games, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
   has_many :games_present, -> { attended }, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
 
-  scope :active, -> { ordered.where.not(position: nil) }
   scope :ordered, -> { order("bowlers.position ASC NULLS LAST") }
 
   def recalculate_scores

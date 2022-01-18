@@ -50,7 +50,9 @@ module Bowling
         :handicap_calculation,
         :absent_calculation,
         :games_per_series,
+        :team_size,
         bowlers_attributes: [
+          :_destroy,
           :id,
           :name,
           :position,

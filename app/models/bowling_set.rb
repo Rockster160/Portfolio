@@ -71,7 +71,7 @@ class BowlingSet < ApplicationRecord
     return games_by_num unless games_by_num.none?
     return [BowlingGame.new(game_num: game_num)] if league.nil?
 
-    (bowlers.presence || league.bowlers).active.distinct.map.with_index { |bowler, idx|
+    (bowlers.presence || league.roster).distinct.map.with_index { |bowler, idx|
       bowler.games.new(
         set_id:       id,
         position:     idx,
