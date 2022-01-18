@@ -1,3 +1,14 @@
+$(".ctr-bowling_leagues.act-edit").ready(function() {
+  $(".league-roster").sortable({
+    handle: ".bowler-handle",
+    update: function(evt, ui) {
+      var roster = $(this)
+      roster.children(".bowler-form").each(function(idx) {
+        $(this).children(".position").val(idx + 1)
+      })
+    }
+  })
+})
 $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   var editing = false

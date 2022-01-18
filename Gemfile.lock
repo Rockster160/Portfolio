@@ -75,7 +75,7 @@ GEM
       execjs
     coffee-script-source (1.12.2)
     colorize (0.8.1)
-    command_proposal (1.0.13)
+    command_proposal (1.0.14)
       font-awesome-rails
       rails (>= 5.0.0)
     concurrent-ruby (1.1.9)
@@ -323,7 +323,7 @@ DEPENDENCIES
   chronic
   coffee-rails
   colorize
-  command_proposal (= 1.0.13)
+  command_proposal (= 1.0.14)
   dotenv-rails
   exception_notification
   faker

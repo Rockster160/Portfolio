@@ -59,6 +59,17 @@ form:not(.basic) {
     }
   }
 
+  .flex-fields {
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .flex-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
   .form-submission {
     margin-bottom: 15px;
     text-align: center;

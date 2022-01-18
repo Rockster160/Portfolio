@@ -33,9 +33,11 @@
         <%= f.text_field :games_per_series %>
       </div>
 
-      <% @league.bowlers.ordered.each do |bowler| %>
-        <%= render partial: "bowling/bowlers/form", locals: { bowler: bowler } %>
-      <% end %>
+      <div class="league-roster">
+        <% @league.bowlers.ordered.each do |bowler| %>
+          <%= render partial: "bowling/bowlers/form", locals: { bowler: bowler } %>
+        <% end %>
+      </div>
     </div>
 
     <div class="form-submission">
