@@ -70,28 +70,40 @@
     .team-total {
       padding: 3px;
     }
+
+    .bowler-options {
+      width: 100%;
+      text-align: left;
+      font-size: 12px;
+
+      display: flex;
+      justify-content: space-between;
+      padding: 3px;
+
+      .actions {
+        text-align: right;
+
+        .btn {
+          padding: 3px 12px;
+          font-size: 10px;
+        }
+      }
+    }
     .bowler-name {
       display: grid;
       align-items: center;
       justify-content: center;
+    }
+    .avg {
+      position: absolute;
+      top: 0;
+      right: 2px;
+      font-size: 10px;
 
-      .bowler-options {
-        width: 100%;
-        text-align: left;
-        font-size: 12px;
-      }
-
-      .avg {
-        position: absolute;
-        top: 0;
-        right: 2px;
-        font-size: 10px;
-
-        .avg-label {
-          font-size: 7px;
-          letter-spacing: -0.5px;
-          vertical-align: bottom;
-        }
+      .avg-label {
+        font-size: 7px;
+        letter-spacing: -0.5px;
+        vertical-align: bottom;
       }
     }
 

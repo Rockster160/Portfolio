@@ -1,9 +1,7 @@
 $(".ctr-bowling_leagues.act-edit").ready(function() {
   $(".league-roster").sortable({
     handle: ".bowler-handle",
-    update: function(evt, ui) {
-      updateRoster()
-    }
+    update: function(evt, ui) { updateRoster() }
   })
 
   $("#bowling_league_team_size").change(function() { updateRoster() })
