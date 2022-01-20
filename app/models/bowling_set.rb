@@ -21,6 +21,10 @@ class BowlingSet < ApplicationRecord
 
   accepts_nested_attributes_for :games
 
+  def ordered_bowlers
+    Bowler.joins(:games).order("bowling_games.position ASC").where(bowling_games: { set_id: id })
+  end
+
   def save_scores
     # Establish average for new bowlers
     bowlers.where(total_games: 0).find_each do |bowler|
@@ -71,7 +75,7 @@ class BowlingSet < ApplicationRecord
     return games_by_num unless games_by_num.none?
     return [BowlingGame.new(game_num: game_num)] if league.nil?
 
-    (bowlers.presence || league.roster).distinct.map.with_index { |bowler, idx|
+    (ordered_bowlers.presence || league.roster).map.with_index { |bowler, idx|
       bowler.games.new(
         set_id:       id,
         position:     idx,
