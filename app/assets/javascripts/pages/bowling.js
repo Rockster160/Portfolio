@@ -110,6 +110,10 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     hideModal("#bowler-sub-list")
     swap(in_bowler, out_bowler)
     resetEdits()
+    $(".bowler").each(function(idx) {
+      $(this).attr("data-bowler", idx + 1)
+      $(this).find(".game-position").val(idx + 1)
+    })
     calcScores()
   })
 
