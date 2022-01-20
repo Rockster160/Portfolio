@@ -230,6 +230,15 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
           if (shot_idx > 0) {
             var prev_throw = $(frame.children(".shot")[shot_idx - 1])
 
+            if (shot_idx == 2) { // Tenth frame, 3rd throw
+              var first_throw = $(frame.children(".shot")[0])
+              var first_open = first_throw.val() && first_throw.val() != "/" && first_throw.val() != "X"
+              var second_open = prev_throw.val() && prev_throw.val() != "/" && prev_throw.val() != "X"
+              if (first_open && second_open) {
+                score = null
+                return
+              }
+            }
             if (prev_throw.val() != "/" && prev_throw.val() != "X") {
               var prev_score = throwScore(prev_throw.attr("data-score"))
               score = 10 - prev_score
