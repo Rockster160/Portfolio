@@ -39,16 +39,22 @@ class Bowler < ApplicationRecord
   end
 
   def average
-    return unless total_games&.positive?
+    @average ||= begin
+      return unless total_games&.positive?
 
-    (total_pins.to_i / total_games.to_f).floor
+      (total_pins.to_i / total_games.to_f).floor
+    end
   end
 
   def handicap
-    league&.handicap_from_average(average)
+    @handicap ||= begin
+      league&.handicap_from_average(average)
+    end
   end
 
   def absent_score
-    league&.absent_score(average)
+    @absent_score ||= begin
+      league&.absent_score(average)
+    end
   end
 end

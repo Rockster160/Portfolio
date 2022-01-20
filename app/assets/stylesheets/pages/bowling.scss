@@ -7,6 +7,12 @@
     margin: 10px;
     padding: 10px;
     background: $blue-l5;
+
+    &.bowler-select:hover {
+      transition: background 0.3s;
+      background: $blue-l4;
+      cursor: pointer;
+    }
   }
 
   .in-roster {

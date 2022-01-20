@@ -4,7 +4,7 @@
 
 <% set_params = "bowling_set[games_attributes][]" %>
 
-<div class="bowling-table bowler <%= 'absent' if game.absent? %>" data-absent-score="<%= bowler.absent_score %>" data-bowler="<%= idx + 1 %>" data-current-frame="1">
+<div class="bowling-table bowler <%= 'absent' if game.absent? %>" data-absent-score="<%= bowler.absent_score %>" data-bowler="<%= idx + 1 %>" data-current-frame="1" data-bowler-id="<%= bowler.id %>">
   <%= hidden_field_tag "#{set_params}id", game.id %>
   <%= hidden_field_tag "#{set_params}bowler_name", nil, class: "bowler-name-field" %>
   <%= hidden_field_tag "#{set_params}bowler_id", bowler.id %>
@@ -27,11 +27,12 @@
         <%= label_tag "#{set_params}absent", "Absent?", for: "absent-#{idx}" %> <br>
         <%= check_box_tag "#{set_params}skip", true, false, id: "skip-#{idx}", class: "skip-checkbox" %>
         <%= label_tag "#{set_params}skip", "Skip?", for: "skip-#{idx}" %>
-        <!-- <i class="fa fa-arrows"></i> -->
       </div>
     </span>
     <div class="actions">
-      <!-- <div class="btn">Sub</div> -->
+      <div class="btn bowler-sub-btn" data-bowler-name="<%= bowler.name %>" data-bowler-id="<%= bowler.id %>">Sub</div>
+      <!-- Hide currently active bowlers, store the selected sub id -->
+      <!-- <i class="fa fa-arrows"></i> -->
     </div>
   </div>
   <div class="bowling-cell bowler-name" data-edit=hide>

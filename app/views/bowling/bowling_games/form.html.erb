@@ -1,3 +1,4 @@
+<% game_num = (params[:game].presence || 1).to_i %>
 <%= render_modal "card-hands", "Hands" do %>
   <ul>
     <li>5kind</li>
@@ -12,6 +13,33 @@
     <li>High Card</li>
   </ul>
 <% end %>
+<%= render_modal "bowler-sub-list", "Substitute Bowlers" do %>
+  <p>Sub in for <strong class="sub-out-name"></strong></p>
+  <% @league.bowlers.ordered.each do |bowler| %>
+    <div class="bowler-select bowler-form" data-bowler-id="<%= bowler.id %>">
+      <b><%= bowler.name %></b><br>
+      <% if bowler.average&.positive? %>
+        <small>AVG:</small> <%= bowler.average %>
+      <% end %>
+      <% if bowler.handicap&.positive? %>
+        <small>HDCP:</small> <%= bowler.handicap %>
+      <% end %>
+    </div>
+  <% end %>
+<% end %>
+
+<template id="game-sub-list">
+  <% @league.bowlers.ordered.offset(@league.team_size).each do |bowler| %>
+    <% game = bowler.games.new(
+      set_id:       @set.id,
+      position:     bowler.position,
+      game_num:     game_num,
+      handicap:     bowler.handicap,
+      absent_score: bowler.absent_score,
+    ) %>
+    <%= render partial: "bowling_game_form", locals: { game: game, idx: bowler.position } %>
+  <% end %>
+</template>
 
 <div class="text-right">
   <%= link_to "Edit", "", class: "bowling-edit" %>
@@ -26,7 +54,7 @@
   <div class="bowling-cell">Total</div>
 </div>
 
-<template id="bowling-game">
+<template id="bowling-game-template">
   <%= render partial: "bowling_game_form" %>
 </template>
 
@@ -40,7 +68,6 @@
   <div class="bowling-table bowling-header">
     <div class="bowling-cell">
       <div class="prev-scores">
-        <% game_num = (params[:game].presence || 1).to_i %>
         <% (game_num - 1).times do |t| %>
           <% prev_games = @set.games.where(game_num: t + 1) %>
           <% next if prev_games.none? %>

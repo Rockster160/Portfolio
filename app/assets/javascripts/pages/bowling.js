@@ -1,3 +1,6 @@
+// \$\("(.*?)"\)\.(\w+)\(
+// $(document).on("$2", "$1",
+
 $(".ctr-bowling_leagues.act-edit").ready(function() {
   $(".league-roster").sortable({
     handle: ".bowler-handle",
@@ -72,7 +75,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   resetEdits()
 
   $(".add-bowler").click(function(evt) {
-    var template = $("template#bowling-game").clone().html()
+    var template = $("template#bowling-game-template").clone().html()
     var name = prompt("Enter Name for new bowler")
     var new_bowler = $(template).insertBefore(".bowler-placeholder")
     var max = Math.max.apply(null, $("[data-bowler]").map(function() {
@@ -89,7 +92,40 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     return false
   })
 
-  $(".absent-checkbox").change(function() {
+  swap = function($ele1, $ele2) {
+    var temp = $("<div>")
+
+    $ele1.before(temp)
+    $ele2.before($ele1)
+    temp.before($ele2).remove()
+  }
+
+  $(document).on("click", ".bowler-select", function(evt) {
+    var out_bowler_id = $(".sub-out-name").attr("data-bowler-id")
+    var in_bowler_id = $(this).attr("data-bowler-id")
+
+    var in_bowler = $($("#game-sub-list").get(0).content).find(".bowler[data-bowler-id=" + in_bowler_id + "]")
+    var out_bowler = $(".bowler[data-bowler-id=" + out_bowler_id + "]")
+
+    hideModal("#bowler-sub-list")
+    swap(in_bowler, out_bowler)
+    resetEdits()
+    calcScores()
+  })
+
+  $(document).on("click", ".bowler-sub-btn", function(evt) {
+    var name = $(this).attr("data-bowler-name")
+    $(".sub-out-name").text(name).attr("data-bowler-id", $(this).attr("data-bowler-id"))
+
+    $(".bowler-select").removeClass("hidden")
+    $(".bowler").each(function() {
+      $(".bowler-select[data-bowler-id=" + $(this).attr("data-bowler-id") + "]").addClass("hidden")
+    })
+
+    showModal("#bowler-sub-list")
+  })
+
+  $(document).on("change", ".absent-checkbox", function() {
     var absent = $(this).prop("checked")
     var bowler = $(this).parents(".bowler")
 
@@ -106,7 +142,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     calcScores()
   })
 
-  $(".skip-checkbox").change(function() {
+  $(document).on("change", ".skip-checkbox", function() {
     var skip = $(this).prop("checked")
     var bowler = $(this).parents(".bowler")
 
@@ -125,7 +161,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
   }
 
-  $(".shot").click(function() {
+  $(document).on("click", ".shot", function() {
     moveToThrow($(this))
     $(this).blur()
   })
@@ -151,7 +187,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     backspace()
   })
 
-  $(".bowler-name").click(function() {
+  $(document).on("click", ".bowler-name", function() {
     if ($(this).find(".card-point").length > 0) {
       $(".card-point-field").val(false)
       $(".card-point").remove()

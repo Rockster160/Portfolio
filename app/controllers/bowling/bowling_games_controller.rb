@@ -28,6 +28,7 @@ module Bowling
       else
         @set = BowlingSet.new
       end
+      @league = @set.league
 
       if params[:game].present?
         @games = @set.games_for_display(params[:game])
