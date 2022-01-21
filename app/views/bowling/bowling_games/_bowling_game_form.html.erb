@@ -35,6 +35,9 @@
     </div>
   </div>
   <div class="bowling-cell bowler-name" data-edit=hide>
+    <% if game.card_point? %>
+      <div class="card-point">+1</div>
+    <% end %>
     <span class="avg">
       <% if bowler.average&.positive? %>
         <span class="avg-label">AVG:</span> <%= bowler.average %>

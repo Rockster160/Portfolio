@@ -35,6 +35,16 @@ module Bowling
       end
     end
 
+    def destroy
+      if @set.destroy
+        @set.league.bowlers.each(&:recalculate_scores)
+
+        redirect_to bowling_league_path(@set.league)
+      else
+        redirect_to bowling_set_path(@set), alert: "Failed to destroy set: #{@set.errors.full_messages.join("\n")}"
+      end
+    end
+
     private
 
     def set_set
