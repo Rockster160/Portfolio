@@ -1,7 +1,8 @@
 module Bowling
   class BowlingGamesController < ApplicationController
     skip_before_action :verify_authenticity_token
-    before_action :authorize_user, :set_ivars
+    before_action :authorize_user
+    before_action :set_ivars, except: [:index]
 
     def index
       @leagues = current_user.bowling_leagues
@@ -17,17 +18,21 @@ module Bowling
 
     private
 
+    def user_sets
+      BowlingSet.joins(:league).where(bowling_leagues: { user_id: current_user.id })
+    end
+
     def set_ivars
       if params[:id].present?
-        @set = BowlingSet.find(params[:id])
+        @set = user_sets.find(params[:id])
       elsif params[:series].present?
-        @set = BowlingSet.find(params[:series])
+        @set = user_sets.find(params[:series])
       elsif params[:league]
-        @set = BowlingSet.new(league_id: params[:league])
+        @set = user_sets.new(league_id: params[:league])
       else
-        @set = BowlingSet.new
+        @set = user_sets.new
       end
-      @league = @set.league
+      @league = @set.league || BowlingLeague.create_default(current_user)
 
       if params[:game].present?
         @games = @set.games_for_display(params[:game])

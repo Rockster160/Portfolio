@@ -33,11 +33,19 @@ module Bowling
       end
     end
 
+    def destroy
+      if @league.destroy
+        redirect_to bowling_games_path
+      else
+        render :form
+      end
+    end
+
     private
 
     def set_league
       if params[:id].present?
-        @league = BowlingLeague.find(params[:id])
+        @league = current_user.bowling_leagues.find(params[:id])
       else
         @league = BowlingLeague.new
       end

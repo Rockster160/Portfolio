@@ -47,11 +47,15 @@ module Bowling
 
     private
 
+    def user_sets
+      BowlingSet.joins(:league).where(bowling_leagues: { user_id: current_user.id })
+    end
+
     def set_set
       if params[:id].present?
-        @set = BowlingSet.find(params[:id])
+        @set = user_sets.find(params[:id])
       else
-        @set = BowlingSet.new(league_id: params[:league])
+        @set = user_sets.new(league_id: params[:league])
       end
     end
 
@@ -83,7 +87,7 @@ module Bowling
     def find_or_create_league
       @league ||= begin
         league_id = params.dig(:bowling_set, :league_id)
-        return BowlingLeague.find(league_id) if league_id.present?
+        return user_sets.find(league_id) if league_id.present?
 
         BowlingLeague.create_default(current_user)
       end
