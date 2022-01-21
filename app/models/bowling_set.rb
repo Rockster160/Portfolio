@@ -22,7 +22,11 @@ class BowlingSet < ApplicationRecord
   accepts_nested_attributes_for :games
 
   def ordered_bowlers
-    Bowler.joins(:games).order("bowling_games.position ASC").where(bowling_games: { set_id: id })
+    Bowler.joins(:games)
+      .select("bowlers.*, MAX(bowling_games.position) as game_pos")
+      .where(bowling_games: { set_id: id })
+      .order("game_pos ASC")
+      .group("bowlers.id")
   end
 
   def save_scores
@@ -69,7 +73,7 @@ class BowlingSet < ApplicationRecord
 
   def games_for_display(game_num=nil)
     game_num ||= games.maximum(:game_num) || 1
-    games_by_num = games.where(game_num: game_num)
+    games_by_num = games.where(game_num: game_num).order(:position)
     previous_games = games.where(game_num: game_num.to_i - 1)
 
     return games_by_num unless games_by_num.none?

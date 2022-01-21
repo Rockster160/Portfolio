@@ -231,6 +231,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
             var prev_throw = $(frame.children(".shot")[shot_idx - 1])
 
             if (shot_idx == 2) { // Tenth frame, 3rd throw
+              console.log("Tick");
               var first_throw = $(frame.children(".shot")[0])
               var first_open = first_throw.val() && first_throw.val() != "/" && first_throw.val() != "X"
               var second_open = prev_throw.val() && prev_throw.val() != "/" && prev_throw.val() != "X"
@@ -373,27 +374,37 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   recalculateFrame = function(toss) {
     var frame = toss.parent(".frame")
     var shots = frame.children(".shot")
-    var shot_idx = shots.index(toss)
-    var toss_score = shotScore(toss)
 
-    if (toss.val() == "") { return toss.removeAttr("data-score") }
+    var first_shot = $(shots[0])
+    var sec_shot = $(shots[1])
 
-    var prev_shot = $(shots[shot_idx - 1])
-    var prev_text = prev_shot.length > 0 ? prev_shot.val() : null
-    var prev_val = shotScore(prev_shot)
-
-    var next_shot = $(shots[shot_idx + 1])
-    var next_text = next_shot.length > 0 ? next_shot.val() : null
-
-    var actual_val = scoreToVal(toss.val(), !prev_shot ? 0 : prev_val)
-
-    toss.attr("data-score", actual_val)
-
-    if (toss.val() == "X") {
-      toss.parent(".frame").children(".shot").val("").attr("data-score", "")
-      toss.val("X").attr("data-score", 10)
-    } else if (next_text == "/") {
-      next_shot.val("/").attr("data-score", 10 - shotScore(toss))
+    if (frame.attr("data-frame") == 10) {
+      shots.each(function(idx) {
+        if ($(this).val() == "") {
+          $(this).removeAttr("data-score")
+        } else if ($(this).val() == "/") {
+          $(this).attr("data-score", 10 - shotScore(shots[idx - 1]))
+        } else {
+          $(this).attr("data-score", shotScore(this))
+        }
+      })
+    } else {
+      if (first_shot.val() == "X") {
+        shots.val("").removeAttr("data-score")
+        first_shot.val("X").attr("data-score", 10)
+      } else if (sec_shot.val() == "/") {
+        var first_score = shotScore(first_shot)
+        first_shot.val(first_score).attr("data-score", first_score)
+        sec_shot.val("/").attr("data-score", 10 - first_score)
+      } else {
+        shots.each(function() {
+          if ($(this).val() == "") {
+            $(this).removeAttr("data-score")
+          } else {
+            $(this).attr("data-score", shotScore(this))
+          }
+        })
+      }
     }
   }
 
@@ -413,7 +424,22 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     calcScores()
   }
 
+  shotIndex = function(shot) {
+    var shot_idx = shot.attr("data-shot-idx")
+
+    return parseInt(shot_idx)
+  }
+
   addScore = function(text) {
+    var toss = $(".shot.current")
+    var earliest_empty_shot = toss.parent(".frame").children(".shot").filter(function() {
+      return !this.value
+    }).first()
+    if (shotIndex(earliest_empty_shot) < shotIndex(toss)) {
+      $(".shot.current").removeClass("current")
+      toss = earliest_empty_shot.addClass("current")
+    }
+
     if (currentFrame() == 10) { return addTenthFrameScore(text) }
 
     var score = textToScore(text)

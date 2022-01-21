@@ -31,7 +31,6 @@
     </span>
     <div class="actions">
       <div class="btn bowler-sub-btn" data-bowler-name="<%= bowler.name %>" data-bowler-id="<%= bowler.id %>">Sub</div>
-      <!-- Hide currently active bowlers, store the selected sub id -->
       <!-- <i class="fa fa-arrows"></i> -->
     </div>
   </div>
@@ -56,10 +55,10 @@
   <% 10.times do |roll_idx| %>
     <% roll = game.frames[roll_idx] %>
     <div class="bowling-cell frame" data-frame="<%= roll_idx + 1 %>">
-      <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[0] %>" class="basic shot" readonly="true" tabindex="-1">
-      <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[1] %>" class="basic shot" readonly="true" tabindex="-1">
+      <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[0] %>" class="basic shot" data-shot-idx="0" readonly="true" tabindex="-1">
+      <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[1] %>" class="basic shot" data-shot-idx="1" readonly="true" tabindex="-1">
       <% if roll_idx == 9 %>
-        <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[2] %>" class="basic shot" readonly="true" tabindex="-1">
+        <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[2] %>" class="basic shot" data-shot-idx="2" readonly="true" tabindex="-1">
       <% end %>
       <div class="score"></div>
     </div>

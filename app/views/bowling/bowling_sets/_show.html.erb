@@ -15,7 +15,7 @@
     <td>Points</td>
   </tr>
 
-  <% set.bowlers.order(:position).distinct.each do |bowler| %>
+  <% set.ordered_bowlers.each do |bowler| %>
     <% games = set.games.where(bowler: bowler).order(:game_num) %>
     <tr>
       <td><%= bowler.name %></td>

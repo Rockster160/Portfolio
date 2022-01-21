@@ -19,8 +19,9 @@ module Bowling
 
     def set_ivars
       if params[:id].present?
-        @game = BowlingGame.find(params[:id])
-        @set = @game.set
+        # @game = BowlingGame.find(params[:id])
+        # @set = @game.set
+        @set = BowlingSet.find(params[:id])
       elsif params[:series].present?
         @set = BowlingSet.find(params[:series])
       elsif params[:league]
