@@ -57,7 +57,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     editing = !editing
     resetEdits()
 
-    $(this).text(editing ? "Done" : "Edit")
+    // $(this).text(editing ? "Done" : "Edit")
 
     evt.preventDefault()
     return false
@@ -213,7 +213,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
   })
 
-  $(".bowling-input .numpad-key").click(function() {
+  $(".bowling-input .numpad-key.entry").click(function() {
     addScore($(this).text())
   })
 

@@ -42,11 +42,6 @@
   <% end %>
 </template>
 
-<div class="text-right">
-  <%= link_to "Edit", "", class: "bowling-edit" %>
-</div>
-<%# After clicking this, allow bowlers to be added, removed, and moved %>
-
 <div class="bowling-table bowling-header">
   <div class="bowling-cell"></div>
   <% 10.times do |t| %>
@@ -82,26 +77,35 @@
     <div class="bowling-cell team-total"></div>
   </div>
 
-  <%= f.submit "Save game", class: "pull-right bowling-form-btn", data: { edit: :hide, disable_with: false } %>
-<% end %>
+  <div class="bowling-input-spacer"></div>
+  <div class="bowling-input">
 
-<div class="little-card-icon" data-modal="#card-hands">&#9824;</div>
-<div class="backspace"><i class="fa fa-trash-o"></i></div>
+    <div class="bowling-keypad-entry">
+      <div class="numpad-key backspace"><i class="fa fa-trash-o"></i></div>
+      <div class="numpad-key card" data-modal="#card-hands">&#9824;</div>
+    </div>
 
-<div class="bowling-input-spacer"></div>
-<div class="bowling-input">
-  <div class="bowling-keypad-entry">
-    <div class="numpad-key">7</div>
-    <div class="numpad-key">8</div>
-    <div class="numpad-key">9</div>
-    <div class="numpad-key">4</div>
-    <div class="numpad-key">5</div>
-    <div class="numpad-key">6</div>
-    <div class="numpad-key">1</div>
-    <div class="numpad-key">2</div>
-    <div class="numpad-key">3</div>
-    <div class="numpad-key">X</div>
-    <div class="numpad-key">0</div>
-    <div class="numpad-key">/</div>
+    <div class="bowling-keypad-entry">
+      <div class="numpad-key entry">7</div>
+      <div class="numpad-key entry">8</div>
+      <div class="numpad-key entry">9</div>
+      <div class="numpad-key entry">4</div>
+      <div class="numpad-key entry">5</div>
+      <div class="numpad-key entry">6</div>
+      <div class="numpad-key entry">1</div>
+      <div class="numpad-key entry">2</div>
+      <div class="numpad-key entry">3</div>
+      <div class="numpad-key entry">X</div>
+      <div class="numpad-key entry">0</div>
+      <div class="numpad-key entry">/</div>
+    </div>
+
+    <div class="bowling-keypad-entry">
+      <%= link_to "", class: "bowling-edit numpad-key" do %>
+        <i class="fa fa-pencil" data-edit=hide></i>
+        <i class="fa fa-check" data-edit></i>
+      <% end %>
+      <%= f.submit "Save", class: "bowling-form-btn", data: { edit: :hide, disable_with: false } %>
+    </div>
   </div>
-</div>
+<% end %>

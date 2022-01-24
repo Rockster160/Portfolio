@@ -21,6 +21,7 @@ class Bowler < ApplicationRecord
   belongs_to :league, class_name: "BowlingLeague", foreign_key: :league_id, inverse_of: :bowlers
   has_many :games, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
   has_many :games_present, -> { attended }, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
+  has_many :frames, through: :games
 
   scope :ordered, -> { order("bowlers.position ASC NULLS LAST") }
 

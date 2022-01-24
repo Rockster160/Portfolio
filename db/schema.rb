@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20220118005713) do
+ActiveRecord::Schema.define(version: 20220124033311) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -68,6 +68,23 @@ ActiveRecord::Schema.define(version: 20220118005713) do
     t.integer  "total_pins_offset"
     t.integer  "total_games_offset"
     t.index ["league_id"], name: "index_bowlers_on_league_id", using: :btree
+  end
+
+  create_table "bowling_frames", force: :cascade do |t|
+    t.integer  "bowling_game_id"
+    t.integer  "frame_num"
+    t.integer  "throw1"
+    t.integer  "throw2"
+    t.integer  "throw3"
+    t.string   "throw1_remaining"
+    t.string   "throw2_remaining"
+    t.string   "throw3_remaining"
+    t.boolean  "spare",            default: false
+    t.boolean  "strike",           default: false
+    t.boolean  "split",            default: false
+    t.datetime "created_at",                       null: false
+    t.datetime "updated_at",                       null: false
+    t.index ["bowling_game_id"], name: "index_bowling_frames_on_bowling_game_id", using: :btree
   end
 
   create_table "bowling_games", force: :cascade do |t|

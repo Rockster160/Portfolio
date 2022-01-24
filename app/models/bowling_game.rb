@@ -23,6 +23,7 @@ class BowlingGame < ApplicationRecord
 
   belongs_to :set, class_name: "BowlingSet", inverse_of: :games
   belongs_to :bowler, inverse_of: :games
+  has_many :new_frames, class_name: "BowlingFrame"
 
   after_save { bowler.update(name: bowler_name) if bowler_name.present? && bowler&.name != bowler_name }
 
@@ -44,24 +45,6 @@ class BowlingGame < ApplicationRecord
 
   def total_score
     score.to_i + handicap.to_i
-  end
-
-  def frame_details
-    [
-      {
-        split: false,
-        frame: ["9", "/"],
-        # pins: ["", ""], - Optional
-      },
-      {
-        frame: ["X", "9", "/"],
-        pins: [
-          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-          [1, 2, 3, 4, 5, 6, 7, 8, 9],
-          [10]
-        ],
-      },
-    ]
   end
 
   def frames

@@ -65,6 +65,9 @@
       <% if roll_idx == 9 %>
         <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[2] %>" class="basic shot" data-shot-idx="2" readonly="true" tabindex="-1">
       <% end %>
+      <input type="hidden" name="<%= set_params %>throw1_remaining[]" value="" data-shot-idx="1">
+      <input type="hidden" name="<%= set_params %>throw2_remaining[]" value="" data-shot-idx="2">
+      <input type="hidden" name="<%= set_params %>throw3_remaining[]" value="" data-shot-idx="3">
       <div class="score"></div>
     </div>
   <% end %>

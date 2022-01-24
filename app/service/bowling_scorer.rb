@@ -1,6 +1,36 @@
 module BowlingScorer
   module_function
 
+  def convert_game_string_to_db_frames(game)
+    game.frames.each_with_index do |frame, idx|
+      db_frame = game.new_frames.find_or_initialize_by(frame_num: idx + 1)
+
+      db_frame.update!(tosses_to_attributes(idx + 1, frame).merge(game: game))
+    end
+  end
+
+  def tosses_to_attributes(num, tosses)
+    spare = false
+    strike = false
+
+    spare = tosses.include?("/")
+    strike = tosses.include?("X")
+    tosses = tosses.map { |toss| toss.gsub("-", "0").gsub("X", "10") }
+    if tosses.include?("/")
+      spare_idx = tosses.index("/")
+      tosses[spare_idx] = 10 - tosses[spare_idx - 1].to_i
+    end
+
+    {
+      spare: spare, 
+      strike: strike,
+      throw1: tosses[0],
+      throw2: tosses[1],
+      throw3: tosses[2],
+      frame_num: num,
+    }
+  end
+
   def split?(pins)
     return false if pins.include?(1)
 
