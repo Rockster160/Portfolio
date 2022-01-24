@@ -44,6 +44,7 @@
   }
   .bowling-table {
     display: grid;
+    position: relative;
     grid-template-columns: minmax(100px, 1fr) repeat(11, 80px);
 
     .bowling-cell {
@@ -78,7 +79,15 @@
     }
 
     .bowler-options {
-      width: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      border: 1px solid $grey-blue;
+      background: $blue-l5;
+      z-index: 2;
+      min-width: 300px;
+
       text-align: left;
       font-size: 12px;
 

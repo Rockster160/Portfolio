@@ -15,7 +15,7 @@
   <%= hidden_field_tag "#{set_params}handicap", game.handicap %>
   <%= hidden_field_tag "#{set_params}position", game.position || idx, class: "game-position" %>
 
-  <div class="bowling-cell bowler-options hidden" data-edit>
+  <div class="bowler-options hidden" data-edit>
     <span class="details">
       <b><%= bowler.name %></b>
       <% if bowler.average&.positive? %>
@@ -36,7 +36,7 @@
       <!-- <i class="fa fa-arrows"></i> -->
     </div>
   </div>
-  <div class="bowling-cell bowler-name" data-edit=hide>
+  <div class="bowling-cell bowler-name">
     <% if game.card_point? %>
       <div class="card-point">+1</div>
     <% end %>
