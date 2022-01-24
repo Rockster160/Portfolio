@@ -1,0 +1,27 @@
+<% bowler ||= Bowler.new %>
+
+<%= form_for bowler, html: { class: "basic add-new-bowler" } do |f| %>
+  <%= f.hidden_field :league_id, value: @league.id %>
+  <%= f.hidden_field :game_num, value: game_num %>
+
+  <div class="bowler-form">
+    <div class="flex-fields">
+      <div class="form-field" style="width: 100%;">
+        <%= f.label :name, "Name" %>
+        <%= f.text_field :name %>
+      </div>
+      <div class="form-field">
+        <%= f.label :total_games_offset, "Prior Games" %>
+        <%= f.text_field :total_games_offset %>
+      </div>
+      <div class="form-field">
+        <%= f.label :total_pins_offset, "Prior Pins" %>
+        <%= f.text_field :total_pins_offset %>
+      </div>
+    </div>
+
+    <div class="text-right">
+      <%= f.submit "Add", class: :btn %>
+    </div>
+  </div>
+<% end %>

@@ -87,6 +87,7 @@ Rails.application.routes.draw do
   end
 
   namespace :bowling, as: nil do
+    resources :bowlers, only: [:create]
     resources :bowling_leagues, path: :leagues
     resources :bowling_sets, path: :series
     resources :bowling_games, path: "/"

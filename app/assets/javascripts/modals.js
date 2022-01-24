@@ -8,6 +8,7 @@ $(document).ready(function() {
 
     content.css({ top: -300 })
     content.animate({ top: 0 }, 300)
+    modal.trigger("modal.shown")
   }
   hideModal = function(modal_str) {
     if (!modal_str) { hideModal(".modal.shown") }
@@ -24,6 +25,7 @@ $(document).ready(function() {
 
     content.css({ top: 0 })
     content.animate({ top: -300 }, 300)
+    modal.trigger("modal.hidden")
   }
   $("[data-modal]").click(function(evt) {
     evt.preventDefault()

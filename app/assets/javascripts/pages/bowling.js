@@ -100,6 +100,43 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     temp.before($ele2).remove()
   }
 
+  resetBowlerOrder = function() {
+    $(".bowler").each(function(idx) {
+      $(this).attr("data-bowler", idx + 1)
+      $(this).find(".game-position").val(idx + 1)
+    })
+  }
+
+  $(document).on("modal.shown", function() {
+    $(".shot.current").removeClass("current")
+  }).on("modal.hidden", function() {
+    gotoNextFrame()
+  })
+
+  $(document).on("submit", ".add-new-bowler", function(evt) {
+    evt.preventDefault()
+
+    var form = $(this)
+    var url = form.attr("action")
+
+    $.post(url, form.serialize()).done(function(data, status, xhr) {
+      var in_bowler = $(data.html)
+      var out_bowler_id = $(".sub-out-name").attr("data-bowler-id")
+      var out_bowler = $(".bowler[data-bowler-id=" + out_bowler_id + "]")
+
+      $("#bowler_name").val("")
+      $("#bowler_total_games_offset").val("")
+      $("#bowler_total_pins_offset").val("")
+
+      $($("#game-sub-list").get(0).content).append(in_bowler)
+      hideModal("#bowler-sub-list")
+      swap(in_bowler, out_bowler)
+      resetEdits()
+      resetBowlerOrder()
+      calcScores()
+    })
+  })
+
   $(document).on("click", ".bowler-select", function(evt) {
     var out_bowler_id = $(".sub-out-name").attr("data-bowler-id")
     var in_bowler_id = $(this).attr("data-bowler-id")
@@ -110,10 +147,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     hideModal("#bowler-sub-list")
     swap(in_bowler, out_bowler)
     resetEdits()
-    $(".bowler").each(function(idx) {
-      $(this).attr("data-bowler", idx + 1)
-      $(this).find(".game-position").val(idx + 1)
-    })
+    resetBowlerOrder()
     calcScores()
   })
 
@@ -170,7 +204,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     $(this).blur()
   })
 
-  $("form").submit(function(evt) {
+  $("form.bowling-game-form").submit(function(evt) {
     if ($(".card-point").length == 0 && $(".bowler").length > 1) {
       if (!confirm("You did not enter a winner for cards. Are you sure you want to continue?")) {
         evt.preventDefault()
@@ -231,7 +265,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
             var prev_throw = $(frame.children(".shot")[shot_idx - 1])
 
             if (shot_idx == 2) { // Tenth frame, 3rd throw
-              console.log("Tick");
               var first_throw = $(frame.children(".shot")[0])
               var first_open = first_throw.val() && first_throw.val() != "/" && first_throw.val() != "X"
               var second_open = prev_throw.val() && prev_throw.val() != "/" && prev_throw.val() != "X"

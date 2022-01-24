@@ -26,6 +26,7 @@
       <% end %>
     </div>
   <% end %>
+  <%= render partial: "bowling/bowlers/sub_form", locals: { game_num: game_num } %>
 <% end %>
 
 <template id="game-sub-list">
@@ -58,7 +59,7 @@
   <%= render partial: "bowling_game_form" %>
 </template>
 
-<%= form_for @set, html: { class: "basic" } do |f| %>
+<%= form_for @set, html: { class: "basic bowling-game-form" } do |f| %>
   <%= f.hidden_field :league_id, value: @set.league_id || params[:league] %>
   <% @games.each_with_index do |game, idx| %>
     <%= render partial: "bowling_game_form", locals: { game: game, idx: idx } %>
