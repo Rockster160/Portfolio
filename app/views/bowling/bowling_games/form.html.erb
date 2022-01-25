@@ -85,7 +85,7 @@
       <div class="numpad-key card" data-modal="#card-hands">&#9824;</div>
     </div>
 
-    <div class="bowling-keypad-entry">
+    <div class="bowling-keypad-entry" data-pins-show=show>
       <div class="numpad-key entry">7</div>
       <div class="numpad-key entry">8</div>
       <div class="numpad-key entry">9</div>
@@ -99,8 +99,21 @@
       <div class="numpad-key entry">0</div>
       <div class="numpad-key entry">/</div>
     </div>
+    <div class="bowling-keypad-entry" data-pins-show=hide>
+      <% 10.times do |t| %>
+        <div class="pin-container" data-pin-num="<%= t + 1 %>">
+          <div class="pin-wrapper">
+            <span class="pin-num"><%= t + 1 %></span>
+            <%= svg "bowling/pin", class: "pin" %>
+          </div>
+        </div>
+      <% end %>
+    </div>
 
     <div class="bowling-keypad-entry">
+      <div class="pin-mode-toggle numpad-key">
+        <%= svg "bowling/pin" %>
+      </div>
       <%= link_to "", class: "bowling-edit numpad-key" do %>
         <i class="fa fa-pencil" data-edit=hide></i>
         <i class="fa fa-check" data-edit></i>

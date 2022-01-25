@@ -1,33 +1,89 @@
 .ctr-bowling_leagues, .ctr-bowling_sets, .ctr-bowling_games {
   .bowler-form {
     position: relative;
+    margin: 10px;
+    box-shadow: 2px 2px 2px $grey-blue;
     border: 1px solid $grey-blue;
     border-radius: 6px;
-    box-shadow: 2px 2px 2px $grey-blue;
-    margin: 10px;
-    padding: 10px;
     background: $blue-l5;
+    padding: 10px;
 
     &.bowler-select:hover {
       transition: background 0.3s;
-      background: $blue-l4;
       cursor: pointer;
+      background: $blue-l4;
     }
+  }
+
+  .pin-mode-toggle {
+    svg { height: 26px; }
   }
 
   .in-roster {
     position: absolute;
-    color: gold;
     top: 5px;
     left: 5px;
+    color: gold;
   }
 
   .remove-bowler {
-    cursor: pointer;
     position: absolute;
-    color: red;
     top: 5px;
     right: 5px;
+    cursor: pointer;
+    color: red;
+  }
+
+  .pin-container {
+    $pin_height: 100px;
+    $space_height: 279px;
+    $horz_dist: 70px;
+    $pin_width_ratio: 0.4;
+    $pin_width: $pin_height * $pin_width_ratio;
+    $vert_dist: ($space_height - $pin_height)/3;
+
+    position: absolute;
+    bottom: 0;
+    left: calc(50% - #{$pin_width / 2});
+
+    .pin-wrapper {
+      position: relative;
+
+      .pin {
+        height: $pin_height;
+        width: $pin_width;
+        position: absolute;
+      }
+
+      .pin-num {
+        position: absolute;
+        width: $pin_width;
+        padding-bottom: 12px;
+        font-size: 20px;
+        font-weight: bold;
+        user-select: none;
+      }
+
+      &.fallen * {
+        fill: rgba(0, 0, 0, 0.5);
+        color: rgba(0, 0, 0, 0.5);
+      }
+      &.fallen-before * {
+        fill: rgba(0, 0, 0, 0.1);
+        color: rgba(0, 0, 0, 0.1);
+      }
+    }
+
+    &[data-pin-num="1"] .pin-wrapper > * { bottom: 0; left: 50%; }
+    &[data-pin-num="2"] .pin-wrapper > * { bottom: $vert_dist; left: calc(#{50%} - #{$horz_dist/2}); }
+    &[data-pin-num="3"] .pin-wrapper > * { bottom: $vert_dist; left: calc(#{50%} + #{$horz_dist/2}); }
+    &[data-pin-num="4"] .pin-wrapper > * { bottom: #{$vert_dist * 2}; left: calc(#{50%} - #{($horz_dist/2) * 2}); }
+    &[data-pin-num="5"] .pin-wrapper > * { bottom: #{$vert_dist * 2}; left: 50%; }
+    &[data-pin-num="6"] .pin-wrapper > * { bottom: #{$vert_dist * 2}; left: calc(#{50%} + #{($horz_dist/2) * 2}); }
+    &[data-pin-num="7"] .pin-wrapper > * { bottom: #{$vert_dist * 3}; left: calc(#{50%} - #{($horz_dist/2) * 3}); }
+    &[data-pin-num="8"] .pin-wrapper > * { bottom: #{$vert_dist * 3}; left: calc(#{50%} - #{($horz_dist/2) * 1}); }
+    &[data-pin-num="9"] .pin-wrapper > * { bottom: #{$vert_dist * 3}; left: calc(#{50%} + #{($horz_dist/2) * 1}); }
+    &[data-pin-num="10"] .pin-wrapper > * { bottom: #{$vert_dist * 3}; left: calc(#{50%} + #{($horz_dist/2) * 3}); }
   }
 
   .backspace {
@@ -51,8 +107,8 @@
       position: relative;
       border: 1px solid $grey-blue;
       border-collapse: collapse;
-      text-align: center;
       height: 60px;
+      text-align: center;
 
       &.invisi-frame {
         border: none;
@@ -60,40 +116,40 @@
     }
 
     &.bowling-header .bowling-cell {
-      font-size: 12px;
       height: auto;
+      font-size: 12px;
     }
 
     .prev-scores {
+      display: flex;
       position: absolute;
+      right: 0;
       bottom: 0;
       left: 0;
-      right: 0;
+      justify-content: space-around;
       padding: 2px;
       font-size: 10px;
-      display: flex;
-      justify-content: space-around;
     }
     .team-total {
       padding: 3px;
     }
 
     .bowler-options {
-      position: absolute;
-      top: 0;
-      left: 0;
-      bottom: 0;
-      border: 1px solid $grey-blue;
-      background: $blue-l5;
-      z-index: 2;
-      min-width: 300px;
-
-      text-align: left;
-      font-size: 12px;
 
       display: flex;
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
       justify-content: space-between;
+      z-index: 2;
+      border: 1px solid $grey-blue;
+      background: $blue-l5;
       padding: 3px;
+      min-width: 300px;
+      font-size: 12px;
+
+      text-align: left;
 
       .actions {
         text-align: right;
@@ -116,17 +172,17 @@
       font-size: 10px;
 
       .avg-label {
+        vertical-align: bottom;
         font-size: 7px;
         letter-spacing: -0.5px;
-        vertical-align: bottom;
       }
     }
 
     .remove {
-      color: red;
       position: absolute;
       top: 0;
       right: 1px;
+      color: red;
       font-size: 10px;
     }
 
@@ -149,8 +205,8 @@
         box-sizing: border-box;
         margin-top: -1px;
         margin-right: -1px;
-        border-radius: 0;
         border: 1px solid $grey-blue;
+        border-radius: 0;
         border-collapse: collapse;
         background: transparent;
         width: 25px;
@@ -183,8 +239,8 @@
       }
     }
     .total {
-      position: relative;
       display: flex;
+      position: relative;
       flex-direction: column;
       justify-content: flex-end;
 
@@ -213,8 +269,8 @@
   }
 
   .bowling-winner {
-    font-weight: bold;
     background: rgba($blue-l4, 0.7);
+    font-weight: bold;
   }
 
   tr.line-bot td {
@@ -231,8 +287,8 @@
       border-bottom: 1px solid $grey-blue;
     }
     td {
-      padding: 2px 5px 1px;
       vertical-align: middle;
+      padding: 2px 5px 1px;
     }
   }
   .league-set {
@@ -250,9 +306,9 @@
     .bowling-cell {
       display: flex;
       position: relative;
+      align-items: center;
       justify-content: flex-end;
       margin-left: 5px;
-      align-items: center;
       padding-right: 2px;
 
       .bowling-toss {
@@ -284,17 +340,18 @@
 
   .bowling-input-spacer { height: 350px; }
   .bowling-input {
+    display: grid;
     position: fixed;
     right: 0;
     bottom: 30px;
     left: 0;
+    grid-template-columns: 1fr 1fr 1fr;
     z-index: 1;
     margin: 10px auto;
     text-align: center;
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
 
     .bowling-keypad-entry {
+      position: relative;
       grid-gap: 5px;
       display: grid;
       grid-template-columns: repeat(3, 100px);
@@ -331,8 +388,8 @@
     }
     .bowling-form-btn {
       grid-area: 4 / 3;
-      padding: 0;
       margin: 0;
+      padding: 0;
     }
   }
 }

@@ -53,11 +53,18 @@ $(".ctr-bowling_leagues.act-edit").ready(function() {
 $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   var editing = false
+  var pin_mode_show = false
   $(".bowling-edit").click(function(evt) {
     editing = !editing
     resetEdits()
 
-    // $(this).text(editing ? "Done" : "Edit")
+    evt.preventDefault()
+    return false
+  })
+  $(".pin-mode-toggle").click(function(evt) {
+    console.log("toggle");
+    pin_mode_show = !pin_mode_show
+    resetPinMode()
 
     evt.preventDefault()
     return false
@@ -73,6 +80,31 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
   }
   resetEdits()
+
+  function resetPinMode() {
+    if (pin_mode_show) {
+      console.log("show");
+      $("[data-pins-show=show]").removeClass("hidden")
+      $("[data-pins-show=hide]").addClass("hidden")
+    } else {
+      console.log("hide");
+      $("[data-pins-show=show]").addClass("hidden")
+      $("[data-pins-show=hide]").removeClass("hidden")
+    }
+  }
+  resetPinMode()
+
+  $(".pin").on("click", function(evt) {
+    $(this).parents(".pin-wrapper").toggleClass("fallen")
+  })
+  $(document).mousemove(function(evt) {
+    if (evt.which != 1) { return }
+
+    if ($(".pin:hover").length > 0) {
+      evt.preventDefault()
+      $(".pin:hover").parents(".pin-wrapper").addClass("fallen")
+    }
+  })
 
   $(".add-bowler").click(function(evt) {
     var template = $("template#bowling-game-template").clone().html()
