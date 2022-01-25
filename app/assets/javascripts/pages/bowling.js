@@ -97,13 +97,22 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   $(".pin").on("click", function(evt) {
     $(this).parents(".pin-wrapper").toggleClass("fallen")
   })
-  $(document).on("mousemove touchmove", function(evt) {
+  $(document).on("mousemove", function(evt) {
     if (evt.which != 1) { return }
 
     if ($(".pin:hover").length > 0) {
       evt.preventDefault()
       $(".pin:hover").parents(".pin-wrapper").addClass("fallen")
     }
+  })
+  $(".bowling-keypad-entry").on("touchmove", function(evt) {
+    var xPos = evt.originalEvent.touches[0].pageX
+    var yPos = evt.originalEvent.touches[0].pageY
+
+    var $target = $(document.elementFromPoint(xPos, yPos))
+    if (!$target.hasClass("pin")) { return }
+
+    $target.parents(".pin-wrapper").addClass("fallen")
   })
 
   $(".add-bowler").click(function(evt) {
