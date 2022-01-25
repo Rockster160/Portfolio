@@ -106,6 +106,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
   })
   $(".bowling-keypad-entry").on("touchmove", function(evt) {
+    evt.preventDefault()
     var xPos = evt.originalEvent.touches[0].pageX
     var yPos = evt.originalEvent.touches[0].pageY
 
