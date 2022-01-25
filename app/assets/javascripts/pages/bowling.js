@@ -97,7 +97,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   $(".pin").on("click", function(evt) {
     $(this).parents(".pin-wrapper").toggleClass("fallen")
   })
-  $(document).mousemove(function(evt) {
+  $(document).on("mousemove touchmove", function(evt) {
     if (evt.which != 1) { return }
 
     if ($(".pin:hover").length > 0) {

@@ -135,7 +135,6 @@
     }
 
     .bowler-options {
-
       display: flex;
       position: absolute;
       top: 0;
@@ -370,6 +369,7 @@
       padding: 15px;
       font-size: 30px;
       text-align: center;
+      user-select: none;
 
       &:active {
         top: 1px;
