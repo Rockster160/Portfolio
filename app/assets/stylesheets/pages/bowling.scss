@@ -27,8 +27,8 @@
     background: white;
     padding: 15px;
     font-size: 30px;
-    text-align: center;
     user-select: none;
+    text-align: center;
 
     &:active {
       top: 1px;
@@ -67,15 +67,15 @@
       position: relative;
 
       .pin {
-        height: $pin_height;
-        width: $pin_width;
         position: absolute;
+        width: $pin_width;
+        height: $pin_height;
       }
 
       .pin-num {
         position: absolute;
-        width: $pin_width;
         padding-bottom: 12px;
+        width: $pin_width;
         font-size: 20px;
         font-weight: bold;
         user-select: none;
@@ -116,8 +116,8 @@
   }
   .frame-actions {
     position: absolute;
-    bottom: 0;
     right: 0;
+    bottom: 0;
 
     .pin-btn {
       @extend .bowling-btn;
@@ -240,6 +240,7 @@
       height: 60px;
 
       .shot {
+        position: relative;
         z-index: 0;
         box-sizing: border-box;
         margin-top: -1px;
@@ -261,6 +262,20 @@
         &.current {
           z-index: 1;
           border: 2px solid red;
+        }
+      }
+      .split {
+        position: relative;
+
+        &.split-holder:after {
+          position: absolute;
+          top: 0;
+          left: 0;
+          border: 2px solid red;
+          border-radius: 100%;
+          width: 20px;
+          height: 20px;
+          content: "";
         }
       }
       .score {
@@ -390,9 +405,9 @@
     text-align: center;
 
     .bowling-keypad-entry {
-      position: relative;
       grid-gap: 5px;
       display: grid;
+      position: relative;
       grid-template-columns: repeat(3, 100px);
       grid-template-rows: repeat(4, 1fr);
       justify-content: center;

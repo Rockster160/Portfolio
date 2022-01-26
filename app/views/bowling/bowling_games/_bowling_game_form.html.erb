@@ -60,10 +60,10 @@
     <% rolls = frame_detail.rolls %>
     <% frame_params = "#{set_params}frames_details[#{roll_idx}]" %>
     <div class="bowling-cell frame" data-frame="<%= roll_idx + 1 %>">
-      <input type="text" name="<%= frame_params %>throw1" value="<%= frame_detail.rolls[0] %>" class="basic shot" data-shot-idx="0" readonly="true" tabindex="-1">
-      <input type="text" name="<%= frame_params %>throw2" value="<%= frame_detail.rolls[1] %>" class="basic shot" data-shot-idx="1" readonly="true" tabindex="-1">
+      <span class="split-holder <%= "split" if frame_detail.split? && frame_detail.rolls[0] != "X" %>"><input type="text" name="<%= frame_params %>throw1" value="<%= frame_detail.rolls[0] %>" class="basic shot" data-shot-idx="0" readonly="true" tabindex="-1"></span>
+      <span class="split-holder <%= "split" if frame_detail.split? && frame_detail.rolls[0] == "X" %>"><input type="text" name="<%= frame_params %>throw2" value="<%= frame_detail.rolls[1] %>" class="basic shot" data-shot-idx="1" readonly="true" tabindex="-1"></span>
       <% if roll_idx == 9 %>
-        <input type="text" name="<%= frame_params %>throw3" value="<%= frame_detail.rolls[2] %>" class="basic shot" data-shot-idx="2" readonly="true" tabindex="-1">
+      <span class="split-holder"><input type="text" name="<%= frame_params %>throw3" value="<%= frame_detail.rolls[2] %>" class="basic shot" data-shot-idx="2" readonly="true" tabindex="-1"></span>
         <input type="hidden" name="<%= frame_params %>throw3_remaining" value="<%= frame_detail.throw3_remaining %>" data-shot-idx="2" class="fallen-pins">
       <% end %>
       <input type="hidden" name="<%= frame_params %>frame_num" value="<%= roll_idx + 1 %>">
