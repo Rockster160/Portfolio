@@ -22,4 +22,14 @@ class BowlingFrame < ApplicationRecord
   belongs_to :game, class_name: "BowlingGame", inverse_of: :new_frames, foreign_key: :bowling_game_id
   # throwN == COUNT of how many pins were knocked down (For the shot itself- a spare will never be 10)
   # throwN_remaining == string list/array of the pins that are left AFTER the designated roll
+
+  def rolls
+    roll1, roll2, roll3 = [throw1, throw2, throw3].map { |roll|
+      roll.to_s.gsub("10", "X").gsub("0", "-").presence
+    }
+    roll2 = "/" if throw1.to_i < 10 && throw1.to_i + throw2.to_i == 10
+    roll3 = "/" if roll1 == "X" && throw2.to_i < 10 && throw2.to_i + throw3.to_i == 10
+
+    [roll1, roll2, roll3]
+  end
 end

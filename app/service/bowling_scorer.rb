@@ -5,7 +5,7 @@ module BowlingScorer
     game.frames.each_with_index do |frame, idx|
       db_frame = game.new_frames.find_or_initialize_by(frame_num: idx + 1)
 
-      db_frame.update!(tosses_to_attributes(idx + 1, frame).merge(game: game))
+      db_frame.update!(tosses_to_attributes(idx + 1, frame))
     end
   end
 
@@ -22,16 +22,77 @@ module BowlingScorer
     end
 
     {
-      spare: spare, 
+      frame_num: num,
+      spare: spare,
       strike: strike,
       throw1: tosses[0],
       throw2: tosses[1],
       throw3: tosses[2],
-      frame_num: num,
+    }
+  end
+
+  def params_to_attributes(frame_params)
+    frame = frame_params[:frame_num].to_i
+    spare = false
+    strike = false
+
+    toss1, toss2, toss3 = 3.times.map { |t|
+      throw_remaining = JSON.parse(frame_params["throw#{t+1}_remaining".to_sym]) rescue nil
+      toss = frame_params["throw#{t+1}".to_sym].to_s
+      score = toss.gsub("-", "0").gsub("X", "10")
+      spare = toss == "/"
+      strike = toss == "X"
+      if score == "/"
+        prev_score = frame_params["throw#{t}".to_sym].to_s.gsub("-", "0").to_i
+        score = 10 - prev_score
+      end
+
+      {
+        na: throw_remaining.nil?,
+        closed: spare || strike || throw_remaining == [],
+        count: throw_remaining&.count || 10, # 10 so that `nil` becomes 10 remaining
+        pins: throw_remaining,
+        score: score.presence&.to_i
+      }
+    }
+
+    toss1[:score] ||= 10 - toss1[:count]
+    toss2[:score] ||= if toss2[:na]
+      nil
+    elsif frame == 10 && toss1[:closed]
+      10 - toss2[:count]
+    else
+      10 - toss1[:score] - toss2[:count]
+    end
+    toss3[:score] ||= if frame < 10 || toss3[:na]
+      nil
+    elsif toss2[:closed]
+      10 - toss3[:count]
+    else
+      10 - toss2[:score] - toss3[:count]
+    end
+
+    strike = toss1[:closed] || (toss2[:closed] && toss3[:closed])
+    spare = toss2[:closed] || (!strike && toss3[:closed])
+    split = split?(toss1[:pins])
+    split ||= frame_params[:frame_num] == 10 && toss1[:closed] && split?(toss2[:pins])
+
+    {
+      frame_num: frame_params[:frame_num],
+      spare: spare,
+      strike: strike,
+      split: split,
+      throw1: toss1[:score],
+      throw2: toss2[:score],
+      throw3: toss3[:score],
+      throw1_remaining: toss1[:pins],
+      throw2_remaining: toss2[:pins],
+      throw3_remaining: toss3[:pins]
     }
   end
 
   def split?(pins)
+    return false if pins.nil?
     return false if pins.include?(1)
 
     columns = [

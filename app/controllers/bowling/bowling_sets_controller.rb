@@ -74,6 +74,15 @@ module Bowling
           :card_point,
           :score,
           frames: 10.times.map { |idx| { idx.to_s.to_sym => [] } },
+          frames_details: [
+            :frame_num,
+            :throw1,
+            :throw2,
+            :throw3,
+            :throw1_remaining,
+            :throw2_remaining,
+            :throw3_remaining,
+          ]
         ]
       ).tap do |whitelist|
         whitelist[:games_attributes] = whitelist[:games_attributes].map do |game_attributes|
@@ -87,7 +96,7 @@ module Bowling
     def find_or_create_league
       @league ||= begin
         league_id = params.dig(:bowling_set, :league_id)
-        return user_sets.find(league_id) if league_id.present?
+        return current_user.bowling_leagues.find(league_id) if league_id.present?
 
         BowlingLeague.create_default(current_user)
       end

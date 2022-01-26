@@ -94,15 +94,28 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   }
   resetPinMode()
 
+  $(".stand-all").on("click", function(evt) {
+    $(".pin-wrapper:not(.fallen-before)").removeClass("fallen").trigger("pin:change")
+  })
+  $(".fall-all").on("click", function(evt) {
+    $(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
+  })
+  $(".next-frame").on("click", function(evt) {
+    recountPins()
+    moveToNextThrow()
+  })
   $(".pin").on("click", function(evt) {
-    $(this).parents(".pin-wrapper").toggleClass("fallen")
+    $(this).parents(".pin-wrapper:not(.fallen-before)").toggleClass("fallen").trigger("pin:change")
+  })
+  $(".pin-wrapper").on("pin:change", function() {
+    recountPins()
   })
   $(document).on("mousemove", function(evt) {
     if (evt.which != 1) { return }
 
     if ($(".pin:hover").length > 0) {
       evt.preventDefault()
-      $(".pin:hover").parents(".pin-wrapper").addClass("fallen")
+      $(".pin:hover").parents(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
     }
   })
   $(".bowling-keypad-entry").on("touchmove", function(evt) {
@@ -113,7 +126,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     var $target = $(document.elementFromPoint(xPos, yPos))
     if (!$target.hasClass("pin")) { return }
 
-    $target.parents(".pin-wrapper").addClass("fallen")
+    $target.parents(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
   })
 
   $(".add-bowler").click(function(evt) {
@@ -234,6 +247,61 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       bowler.find(".skip-bowler").addClass("hidden")
     }
   })
+
+  pinsKnocked = function(pins) {
+    var all_pins = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+
+    return all_pins.filter(function(pin) { return !pins.includes(pin) })
+  }
+
+  updateFallenPins = function() {
+    var toss = $(".shot.current")
+
+    $(".pin-wrapper").removeClass("fallen").removeClass("fallen-before")
+
+    var prevPins = toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + (parseInt(toss.attr("data-shot-idx")) - 1) + "]").val()
+    if (prevPins) {
+      var pins = prevPins.slice(1, -1).split(",")
+      var knocked = pinsKnocked(pins)
+      knocked.forEach(function(pin) {
+        $(".pin-wrapper[data-pin-num=" + pin + "]").addClass("fallen-before")
+      })
+    }
+
+    var pinStr = toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + toss.attr("data-shot-idx") + "]").val()
+    if (pinStr) {
+      var pins = pinStr.slice(1, -1).split(",")
+      var knocked = pinsKnocked(pins)
+      knocked.forEach(function(pin) {
+        $(".pin-wrapper:not(.fallen-before)[data-pin-num=" + pin + "]").addClass("fallen")
+      })
+    }
+    // Find the pins that were knocked over on this frame, and update the editable pins to reflect this.
+  }
+
+  recountPins = function() {
+    var toss = $(".shot.current")
+    var earliest_empty_shot = toss.parent(".frame").children(".fallen-pins").filter(function() {
+      return !this.value
+    }).first()
+
+    if (shotIndex(earliest_empty_shot) < shotIndex(toss)) {
+      $(".shot.current").removeClass("current")
+      toss = earliest_empty_shot.parents(".frame").find(".shot").addClass("current").val("")
+    }
+
+    var pinStr = $(".pin-wrapper:not(.fallen, .fallen-before)").map(function() {
+      return $(this).attr("data-pin-num")
+    }).toArray().join()
+
+    toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + toss.attr("data-shot-idx") + "]").val("[" + pinStr + "]")
+    // TODO: Update mini graphic
+
+    addScore($(".pin-wrapper.fallen").length, true)
+    // $(".pin-wrapper.fallen").addClass("fallen-before").removeClass("fallen")
+    calcScores()
+    // TODO: Show a SPLIT
+  }
 
   fillRandomScores = function() {
     while($(".shot.current").length > 0) {
@@ -505,17 +573,24 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     return parseInt(shot_idx)
   }
 
-  addScore = function(text) {
+  moveToEarliestThrow = function() {
     var toss = $(".shot.current")
     var earliest_empty_shot = toss.parent(".frame").children(".shot").filter(function() {
       return !this.value
     }).first()
+
     if (shotIndex(earliest_empty_shot) < shotIndex(toss)) {
       $(".shot.current").removeClass("current")
       toss = earliest_empty_shot.addClass("current")
     }
+  }
 
-    if (currentFrame() == 10) { return addTenthFrameScore(text) }
+  addScore = function(text, stay) {
+    stay = stay || false
+
+    moveToEarliestThrow()
+
+    if (currentFrame() == 10) { return addTenthFrameScore(text, stay) }
 
     var score = textToScore(text)
     var toss = $(".shot.current")
@@ -530,15 +605,15 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
         toss.parent(".frame").children(".shot").val("") // Clear second shot
         toss.val("X")
         recalculateFrame(toss)
-        moveToNextFrame()
+        if (!stay) { moveToNextFrame() }
       } else {
         toss.val(score == "0" ? "-" : score)
         recalculateFrame(toss)
-        moveToNextThrow()
+        if (!stay) { moveToNextThrow() }
       }
     } else if (shot_num == 2) {
       if (prev_shot.val() == "X") {
-        moveToNextFrame()
+        if (!stay) { moveToNextFrame() }
       }
       // If first shot is blank, add score to first frame instead
       if (prev_shot.val() == "") {
@@ -554,7 +629,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       }
 
       recalculateFrame(toss)
-      moveToNextFrame()
+      if (!stay) { moveToNextFrame() }
     }
   }
 
@@ -581,7 +656,8 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     return text == "" || isNaN(text) ? 0 : parseInt(text)
   }
 
-  addTenthFrameScore = function(score) {
+  addTenthFrameScore = function(score, stay) {
+    stay = stay || false
     var shot_num = currentThrowNum()
     var toss = $(".shot.current")
     var toss_score = textToScore(score)
@@ -599,15 +675,17 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
     if (prev_shot.length > 0 && prev_score < 10 && prev_score + toss_score >= 10) {
       toss.val("/")
-      moveToNextThrow()
+      if (!stay) { moveToNextThrow() }
     } else if (toss_score >= 10) {
       toss.val("X")
-      moveToNextThrow()
+      if (!stay) { moveToNextThrow() }
     } else {
       toss.val(score == "0" ? "-" : score)
 
-      if (shot_num == 1 || prev_score >= 10) { return moveToNextThrow() }
-      moveToNextFrame()
+      if (!stay) {
+        if (shot_num == 1 || prev_score >= 10) { return moveToNextThrow() }
+        moveToNextFrame()
+      }
     }
   }
 
@@ -629,6 +707,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   moveToThrow = function(toss) {
     $(".shot.current").removeClass("current")
     toss.addClass("current")
+    updateFallenPins()
   }
 
   moveToNextThrow = function() {

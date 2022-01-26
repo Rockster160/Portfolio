@@ -100,18 +100,28 @@
       <div class="numpad-key entry">/</div>
     </div>
     <div class="bowling-keypad-entry" data-pins-show=hide>
-      <% 10.times do |t| %>
-        <div class="pin-container" data-pin-num="<%= t + 1 %>">
-          <div class="pin-wrapper">
-            <span class="pin-num"><%= t + 1 %></span>
-            <%= svg "bowling/pin", class: "pin" %>
+      <div class="pins">
+        <% 10.times do |t| %>
+          <div class="pin-container" data-pin-num="<%= t + 1 %>">
+            <div class="pin-wrapper" data-pin-num="<%= t + 1 %>">
+              <span class="pin-num"><%= t + 1 %></span>
+              <%= svg "bowling/pin", class: "pin" %>
+            </div>
           </div>
-        </div>
-      <% end %>
+        <% end %>
+      </div>
+
+      <div class="pin-actions">
+        <div class="stand-all pin-btn pin-svg-wrapper"><%= svg "bowling/pin" %></div>
+        <div class="fall-all pin-btn pin-svg-wrapper"><%= svg "bowling/pin" %></div>
+      </div>
+      <div class="frame-actions">
+        <div class="next-frame pin-btn"><i class="fa fa-chevron-right"></i></div>
+      </div>
     </div>
 
     <div class="bowling-keypad-entry">
-      <div class="pin-mode-toggle numpad-key">
+      <div class="pin-mode-toggle pin-svg-wrapper numpad-key">
         <%= svg "bowling/pin" %>
       </div>
       <%= link_to "", class: "bowling-edit numpad-key" do %>

@@ -7,8 +7,6 @@
 <div class="bowling-table bowler <%= 'absent' if game.absent? %>" data-absent-score="<%= bowler.absent_score %>" data-bowler="<%= idx + 1 %>" data-current-frame="1" data-bowler-id="<%= bowler.id %>">
   <%= hidden_field_tag "#{set_params}id", game.id %>
   <%= hidden_field_tag "#{set_params}bowler_name", nil, class: "bowler-name-field" %>
-  <%= hidden_field_tag "#{set_params}bowler_games", nil, class: "bowler-games-field" %>
-  <%= hidden_field_tag "#{set_params}bowler_pins", nil, class: "bowler-pins-field" %>
   <%= hidden_field_tag "#{set_params}bowler_id", bowler.id %>
   <%= hidden_field_tag "#{set_params}card_point", game.card_point, class: "card-point-field" %>
   <%= hidden_field_tag "#{set_params}game_num", game.game_num %>
@@ -58,16 +56,19 @@
     </div>
   </div>
   <% 10.times do |roll_idx| %>
-    <% roll = game.frames[roll_idx] %>
+    <% frame_detail = game.frame_details[roll_idx] %>
+    <% rolls = frame_detail.rolls %>
+    <% frame_params = "#{set_params}frames_details[#{roll_idx}]" %>
     <div class="bowling-cell frame" data-frame="<%= roll_idx + 1 %>">
-      <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[0] %>" class="basic shot" data-shot-idx="0" readonly="true" tabindex="-1">
-      <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[1] %>" class="basic shot" data-shot-idx="1" readonly="true" tabindex="-1">
+      <input type="text" name="<%= frame_params %>throw1" value="<%= frame_detail.rolls[0] %>" class="basic shot" data-shot-idx="0" readonly="true" tabindex="-1">
+      <input type="text" name="<%= frame_params %>throw2" value="<%= frame_detail.rolls[1] %>" class="basic shot" data-shot-idx="1" readonly="true" tabindex="-1">
       <% if roll_idx == 9 %>
-        <input type="text" name="<%= set_params %>frames[<%= roll_idx %>][]" value="<%= roll[2] %>" class="basic shot" data-shot-idx="2" readonly="true" tabindex="-1">
+        <input type="text" name="<%= frame_params %>throw3" value="<%= frame_detail.rolls[2] %>" class="basic shot" data-shot-idx="2" readonly="true" tabindex="-1">
+        <input type="hidden" name="<%= frame_params %>throw3_remaining" value="<%= frame_detail.throw3_remaining %>" data-shot-idx="2" class="fallen-pins">
       <% end %>
-      <input type="hidden" name="<%= set_params %>throw1_remaining[]" value="" data-shot-idx="1">
-      <input type="hidden" name="<%= set_params %>throw2_remaining[]" value="" data-shot-idx="2">
-      <input type="hidden" name="<%= set_params %>throw3_remaining[]" value="" data-shot-idx="3">
+      <input type="hidden" name="<%= frame_params %>frame_num" value="<%= roll_idx + 1 %>">
+      <input type="hidden" name="<%= frame_params %>throw1_remaining" value="<%= frame_detail.throw1_remaining %>" data-shot-idx="0" class="fallen-pins">
+      <input type="hidden" name="<%= frame_params %>throw2_remaining" value="<%= frame_detail.throw2_remaining %>" data-shot-idx="1" class="fallen-pins">
       <div class="score"></div>
     </div>
   <% end %>

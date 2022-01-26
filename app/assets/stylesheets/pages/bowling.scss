@@ -15,8 +15,25 @@
     }
   }
 
-  .pin-mode-toggle {
-    svg { height: 26px; }
+  .pin-svg-wrapper svg { height: 26px; }
+
+  .bowling-btn {
+    display: inline-block;
+    position: relative;
+    top: 0;
+    transition: top ease-in-out 0.07s, background ease-in-out 0.1s;
+    border: 1px solid $grey-blue;
+    border-radius: 8px;
+    background: white;
+    padding: 15px;
+    font-size: 30px;
+    text-align: center;
+    user-select: none;
+
+    &:active {
+      top: 1px;
+      background: $blue-l20;
+    }
   }
 
   .in-roster {
@@ -84,6 +101,29 @@
     &[data-pin-num="8"] .pin-wrapper > * { bottom: #{$vert_dist * 3}; left: calc(#{50%} - #{($horz_dist/2) * 1}); }
     &[data-pin-num="9"] .pin-wrapper > * { bottom: #{$vert_dist * 3}; left: calc(#{50%} + #{($horz_dist/2) * 1}); }
     &[data-pin-num="10"] .pin-wrapper > * { bottom: #{$vert_dist * 3}; left: calc(#{50%} + #{($horz_dist/2) * 3}); }
+  }
+
+  .pin-actions {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+
+    .pin-btn {
+      @extend .bowling-btn;
+
+      &.fall-all svg { transform: rotate(90deg) translate(5px); }
+    }
+  }
+  .frame-actions {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+
+    .pin-btn {
+      @extend .bowling-btn;
+
+      font-size: 16px;
+    }
   }
 
   .backspace {
@@ -359,17 +399,7 @@
       width: auto;
     }
     .numpad-key {
-      display: inline-block;
-      position: relative;
-      top: 0;
-      transition: top ease-in-out 0.07s, background ease-in-out 0.1s;
-      border: 1px solid $grey-blue;
-      border-radius: 8px;
-      background: white;
-      padding: 15px;
-      font-size: 30px;
-      text-align: center;
-      user-select: none;
+      @extend .bowling-btn;
 
       &:active {
         top: 1px;

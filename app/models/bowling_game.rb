@@ -62,4 +62,24 @@ class BowlingGame < ApplicationRecord
       super(frames_arr)
     end
   end
+
+  def frames_details=(params)
+    params.each do |_idx, frame_params|
+      frame_attrs = BowlingScorer.params_to_attributes(frame_params)
+
+      db_frame = new_frames.find_or_initialize_by(frame_num: frame_attrs[:frame_num])
+
+      db_frame.update!(frame_attrs)
+    end
+  end
+
+  def frame_details
+    details = new_frames.order(:frame_num)
+
+    if details.length < 10
+      details.to_a + (10 - details.length).times.map { BowlingFrame.new }
+    else
+      details
+    end
+  end
 end
