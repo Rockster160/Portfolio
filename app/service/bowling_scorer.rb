@@ -105,7 +105,9 @@ module BowlingScorer
       [10],
     ]
 
-    columns.map { |col| (col & pins).any? ? "1" : "0" }.join("").match?(/10+1/)
+    columns.map { |col| 
+      (col & pins).any? ? "1" : "0"
+    }.join("").match?(/10+1/)
   end
 
   def score(frames)

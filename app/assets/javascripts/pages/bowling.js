@@ -248,6 +248,27 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
   })
 
+  isSplit = function(pins) {
+    if (!pins) { return false }
+    if (pins.includes(1)) { return false }
+
+    var columns = [
+      [7],
+      [4],
+      [2, 8],
+      [1, 5],
+      [3, 9],
+      [6],
+      [10],
+    ]
+
+    return !!columns.map(function(col_pins) {
+      return col_pins.filter(function(col) {
+        return pins.includes(col)
+      }).length > 0 ? "1" : "0"
+    }).join("").match(/10+1/)
+  }
+
   pinsKnocked = function(pins) {
     var all_pins = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
@@ -276,7 +297,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
         $(".pin-wrapper:not(.fallen-before)[data-pin-num=" + pin + "]").addClass("fallen")
       })
     }
-    // Find the pins that were knocked over on this frame, and update the editable pins to reflect this.
   }
 
   recountPins = function() {
@@ -290,11 +310,19 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       toss = earliest_empty_shot.parents(".frame").find(".shot").addClass("current").val("")
     }
 
-    var pinStr = $(".pin-wrapper:not(.fallen, .fallen-before)").map(function() {
-      return $(this).attr("data-pin-num")
-    }).toArray().join()
+    var pins = $(".pin-wrapper:not(.fallen, .fallen-before)").map(function() {
+      return parseInt($(this).attr("data-pin-num"))
+    }).toArray()
+    if (isSplit(pins)) {
+      toss.parents(".split-holder").addClass("split")
+    } else {
+      toss.parents(".split-holder").removeClass("split")
+    }
+    // var prevPins = toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + (parseInt(toss.attr("data-shot-idx")) - 1) + "]").val()
+    // if (prevPins) {
+    //   var pins = JSON.parse(prevPins)
 
-    toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + toss.attr("data-shot-idx") + "]").val("[" + pinStr + "]")
+    toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + toss.attr("data-shot-idx") + "]").val("[" + pins.join() + "]")
     // TODO: Update mini graphic
 
     addScore($(".pin-wrapper.fallen").length, true)
