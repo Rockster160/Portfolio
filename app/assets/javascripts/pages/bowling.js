@@ -249,7 +249,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   })
 
   pinsKnocked = function(pins) {
-    var all_pins = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+    var all_pins = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     return all_pins.filter(function(pin) { return !pins.includes(pin) })
   }
@@ -261,7 +261,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
     var prevPins = toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + (parseInt(toss.attr("data-shot-idx")) - 1) + "]").val()
     if (prevPins) {
-      var pins = prevPins.slice(1, -1).split(",")
+      var pins = JSON.parse(prevPins)
       var knocked = pinsKnocked(pins)
       knocked.forEach(function(pin) {
         $(".pin-wrapper[data-pin-num=" + pin + "]").addClass("fallen-before")
@@ -270,7 +270,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
     var pinStr = toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + toss.attr("data-shot-idx") + "]").val()
     if (pinStr) {
-      var pins = pinStr.slice(1, -1).split(",")
+      var pins = JSON.parse(pinStr)
       var knocked = pinsKnocked(pins)
       knocked.forEach(function(pin) {
         $(".pin-wrapper:not(.fallen-before)[data-pin-num=" + pin + "]").addClass("fallen")
