@@ -5,17 +5,18 @@
       <%= "*" if game.card_point? %><%= game.bowler&.name %>
     </div>
     <% 10.times do |t| %>
-      <% frame = game.frames[t] || [] %>
+      <% frame_detail = game.frame_details[t] %>
+      <% rolls = frame_detail.rolls %>
       <%
         corner_side = t == 0 ? "l" : (t == 9 ? "r" : nil)
         corner_top = row_idx == 0 ? "t" : (row_idx == game_count - 1 ? "b" : nil)
         corner = (corner_side.present? && corner_top.present? ? "#{corner_top}#{corner_side}" : nil)
       %>
       <div class="bowling-cell <%= "corner-#{corner}" if corner.present? %>">
-        <div class="bowling-toss"><%= frame[0] %></div>
-        <div class="bowling-toss"><%= frame[1] %></div>
+        <div class="bowling-toss <%= "split" if frame_detail.split? && frame_detail.rolls[0] != "X" %>"><%= frame_detail.rolls[0] %></div>
+        <div class="bowling-toss <%= "split" if frame_detail.split? && frame_detail.rolls[0] == "X" %>"><%= frame_detail.rolls[1] %></div>
         <% if t == 9 # 10th %>
-          <div class="bowling-toss"><%= frame[2] %></div>
+          <div class="bowling-toss"><%= frame_detail.rolls[2] %></div>
         <% end %>
       </div>
     <% end %>

@@ -19,13 +19,16 @@
 #
 
 class BowlingGame < ApplicationRecord
-  attr_accessor :bowler_name, :league_id, :absent_score
+  attr_accessor :bowler_name, :league_id, :absent_score, :cached_frame_details
 
   belongs_to :set, class_name: "BowlingSet", inverse_of: :games
   belongs_to :bowler, inverse_of: :games
   has_many :new_frames, class_name: "BowlingFrame"
 
-  after_save { bowler.update(name: bowler_name) if bowler_name.present? && bowler&.name != bowler_name }
+  after_save {
+    bowler.update(name: bowler_name) if bowler_name.present? && bowler&.name != bowler_name
+    save_cached_details
+  }
 
   before_validation { self.bowler_id ||= Bowler.create(league_id: set.league_id) }
 
@@ -64,13 +67,7 @@ class BowlingGame < ApplicationRecord
   end
 
   def frames_details=(params)
-    params.each do |_idx, frame_params|
-      frame_attrs = BowlingScorer.params_to_attributes(frame_params)
-
-      db_frame = new_frames.find_or_initialize_by(frame_num: frame_attrs[:frame_num])
-
-      db_frame.update!(frame_attrs)
-    end
+    @cached_frame_details = params
   end
 
   def frame_details
@@ -80,6 +77,18 @@ class BowlingGame < ApplicationRecord
       details.to_a + (10 - details.length).times.map { BowlingFrame.new }
     else
       details
+    end
+  end
+
+  private
+
+  def save_cached_details
+    (@cached_frame_details || {}).each do |_idx, frame_params|
+      frame_attrs = BowlingScorer.params_to_attributes(frame_params)
+
+      db_frame = new_frames.find_or_initialize_by(frame_num: frame_attrs[:frame_num])
+
+      db_frame.update!(frame_attrs)
     end
   end
 end

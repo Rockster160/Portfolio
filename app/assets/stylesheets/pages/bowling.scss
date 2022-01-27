@@ -261,7 +261,7 @@
 
         &.current {
           z-index: 2;
-          border: 2px solid red;
+          border: 2px solid $flash-alert-bg;
         }
       }
       .split {
@@ -272,7 +272,7 @@
           top: 0;
           left: 0;
           z-index: 0;
-          border: 2px solid red;
+          border: 2px solid $flash-alert-bg;
           border-radius: 100%;
           width: 20px;
           height: 20px;
@@ -377,6 +377,18 @@
         height: 30px;
         line-height: 30px;
         text-align: center;
+        position: relative;
+
+        &.split::after {
+          content: "";
+          position: absolute;
+          top: 1px;
+          left: 0;
+          right: 0;
+          bottom: 1px;
+          border-radius: 100%;
+          border: 2px solid $flash-alert-bg;
+        }
       }
       &.corner-tl .bowling-toss:first-of-type {
         border-top-left-radius: 5px;
