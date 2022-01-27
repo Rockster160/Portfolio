@@ -102,15 +102,29 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   })
   $(".next-frame").on("click", function(evt) {
     recountPins()
-    var shot_idx = parseInt($(".shot.current").attr("data-shot-idx"))
-    var nextShot = $(".shot.current").parents(".frame").find(".shot").filter(function() {
+    var toss = $(".shot.current")
+    var shot_idx = parseInt(toss.attr("data-shot-idx"))
+    var nextShot = toss.parents(".frame").find(".shot").filter(function() {
       return parseInt($(this).attr("data-shot-idx")) > shot_idx
     })
 
-    if (nextShot.length > 0) {
+    recalculateFrame(toss)
+
+    if (toss.parents(".frame").attr("data-frame") == "10") {
+      if (shot_idx == 0) {
+        moveToThrow(nextShot.first())
+      } else if (shot_idx == 1) {
+        if (currentTossAtIdx(0).val() == "X") {
+          moveToThrow(nextShot.first())
+        } else {
+          moveToNextFrame()
+        }
+      } else if (shot_idx == 2) {
+        moveToNextFrame()
+      }
+    } else if (nextShot.length > 0 && toss.val() != "X") {
       moveToThrow(nextShot.first())
     } else {
-      // moveToNextThrow
       moveToNextFrame()
     }
   })
@@ -308,32 +322,50 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     return all_pins.filter(function(pin) { return !pins.includes(pin) })
   }
 
-  updateFallenPins = function() {
+  updateTenthFallenPins = function() {
     var toss = $(".shot.current")
+    var shot_idx = shotIndex(toss)
 
-    $(".pin-wrapper").removeClass("fallen").removeClass("fallen-before")
+    // Always knock the current pins down
+    knockPinsForShot(toss, "fallen")
 
-    var prevPins = toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + (parseInt(toss.attr("data-shot-idx")) - 1) + "]").val()
-    if (prevPins) {
-      var pins = JSON.parse(prevPins)
-      var knocked = pinsKnocked(pins)
-      knocked.forEach(function(pin) {
-        $(".pin-wrapper[data-pin-num=" + pin + "]").addClass("fallen-before")
-      })
+    if (shot_idx == 1) {
+      if (currentTossAtIdx(0).val() != "X") {
+        knockPinsForShot(currentTossAtIdx(0), "fallen-before")
+      }
+    } else if (shot_idx == 2) {
+      if (currentTossAtIdx(1).val() != "X" && currentTossAtIdx(1).val() != "/") {
+        knockPinsForShot(currentTossAtIdx(1), "fallen-before")
+      }
     }
+  }
 
-    var pinStr = toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + toss.attr("data-shot-idx") + "]").val()
-    if (pinStr) {
-      var pins = JSON.parse(pinStr)
+  knockPinsForShot = function(shot, klass) {
+    var pins_kept = fallenPinsForShot(shot).val()
+
+    if (pins_kept) {
+      var pins = JSON.parse(pins_kept)
       var knocked = pinsKnocked(pins)
       knocked.forEach(function(pin) {
-        $(".pin-wrapper:not(.fallen-before)[data-pin-num=" + pin + "]").addClass("fallen")
+        $(".pin-wrapper[data-pin-num=" + pin + "]").addClass(klass)
       })
     }
   }
 
+  updateFallenPins = function() {
+    var toss = $(".shot.current")
+    $(".pin-wrapper").removeClass("fallen").removeClass("fallen-before")
+
+    if (toss.parents(".frame").attr("data-frame") == "10") { return updateTenthFallenPins() }
+
+    var prev_shot = toss.parents(".frame").find(".shot[data-shot-idx=" + (parseInt(toss.attr("data-shot-idx")) - 1) + "]")
+
+    knockPinsForShot(prev_shot, "fallen-before")
+    knockPinsForShot(toss, "fallen")
+  }
+
   currentTossAtIdx = function(idx) {
-    return $(".shot.current").parents(".frame").find(".shot[data-attr-idx=" + idx + "]")
+    return $(".shot.current").parents(".frame").find(".shot[data-shot-idx=" + idx + "]")
   }
 
   recountPins = function() {
@@ -352,12 +384,17 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     // TODO: Update mini graphic
 
     addScore($(".pin-wrapper.fallen").length, true)
+    recalculateFrame(toss)
     calcScores()
+  }
+
+  fillRandomScore = function() {
+    addScore(Math.floor(Math.random() * 11))
   }
 
   fillRandomScores = function() {
     while($(".shot.current").length > 0) {
-      addScore(Math.floor(Math.random() * 11))
+      fillRandomScore()
     }
   }
 
@@ -573,7 +610,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     var first_shot = $(shots[0])
     var sec_shot = $(shots[1])
 
-    // TODO - should recalc splits here?
     if (frame.attr("data-frame") == 10) {
       shots.each(function(idx) {
         if ($(this).val() == "") {
@@ -616,6 +652,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       clearShot(toss)
     }
 
+    updateFallenPins()
     calcScores()
   }
 
@@ -764,7 +801,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   moveToNextThrow = function() {
     calcScores()
-    var next_shot = $(".shot.current").next(".shot")
+    var next_shot = currentTossAtIdx(parseInt($(".shot.current").attr("data-shot-idx")) + 1)
 
     if (next_shot.length > 0) {
       moveToThrow(next_shot)
@@ -774,8 +811,8 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   }
 
   findNextFrame = function(bowler) {
-    return bowler.find(".shot:first-of-type").filter(function() {
-      return !this.value
+    return bowler.find('.shot[data-shot-idx="0"]').filter(function() {
+      return !$(this).val()
     }).first().parents(".frame")
   }
 
@@ -785,13 +822,17 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }))
   }
 
-  gotoNextFrame = function() {
+  setFrames = function() {
     $(".bowling-table.bowler:not(.absent, .skip)").each(function() {
       var bowler = $(this)
       var current_frame = findNextFrame(bowler)
 
       bowler.attr("data-current-frame", current_frame.attr("data-frame") || 11)
     })
+  }
+
+  gotoNextFrame = function() {
+    setFrames()
 
     var next_bowler = $(".bowling-table.bowler:not(.absent, .skip)").sort(function(a, b) {
       a = $(a)
@@ -837,5 +878,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   $(".shot").filter(function() {
     return !this.value
   }).first().addClass("current")
+  setFrames() // Need this to set absent bowlers
   recalcScores()
 })
