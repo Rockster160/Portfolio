@@ -110,8 +110,9 @@
 
     .pin-btn {
       @extend .bowling-btn;
+      padding: 25px 40px;
 
-      &.fall-all svg { transform: rotate(90deg) translate(5px); }
+      &.fall svg { transform: rotate(90deg) translate(5px); }
     }
   }
   .frame-actions {
@@ -121,6 +122,7 @@
 
     .pin-btn {
       @extend .bowling-btn;
+      padding: 25px 40px;
 
       font-size: 16px;
     }

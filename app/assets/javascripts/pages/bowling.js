@@ -52,6 +52,9 @@ $(".ctr-bowling_leagues.act-edit").ready(function() {
 
 $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
+  var inProgress = false
+  var pin_knock = undefined
+
   var editing = false
   var pin_mode_show = false
   $(".bowling-edit").click(function(evt) {
@@ -62,7 +65,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     return false
   })
   $(".pin-mode-toggle").click(function(evt) {
-    console.log("toggle");
     pin_mode_show = !pin_mode_show
     resetPinMode()
 
@@ -83,22 +85,22 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   function resetPinMode() {
     if (pin_mode_show) {
-      console.log("show");
       $("[data-pins-show=show]").removeClass("hidden")
       $("[data-pins-show=hide]").addClass("hidden")
     } else {
-      console.log("hide");
       $("[data-pins-show=show]").addClass("hidden")
       $("[data-pins-show=hide]").removeClass("hidden")
     }
   }
   resetPinMode()
 
-  $(".stand-all").on("click", function(evt) {
-    $(".pin-wrapper:not(.fallen-before)").removeClass("fallen").trigger("pin:change")
-  })
-  $(".fall-all").on("click", function(evt) {
-    $(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
+  $(".pin-all-toggle").on("click", function(evt) {
+    if ($(this).hasClass("fall")) {
+      $(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
+    } else {
+      $(".pin-wrapper:not(.fallen-before)").removeClass("fallen").trigger("pin:change")
+    }
+    $(this).toggleClass("fall")
   })
   $(".next-frame").on("click", function(evt) {
     recountPins()
@@ -128,9 +130,9 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       moveToNextFrame()
     }
   })
-  $(".pin").on("click", function(evt) {
-    $(this).parents(".pin-wrapper:not(.fallen-before)").toggleClass("fallen").trigger("pin:change")
-  })
+  // $(".pin").on("click", function(evt) {
+  //   $(this).parents(".pin-wrapper:not(.fallen-before)").toggleClass("fallen").trigger("pin:change")
+  // })
   $(".pin-wrapper").on("pin:change", function() {
     var shot_idx = parseInt($(".shot.current").attr("data-shot-idx"))
     $(".shot.current").parents(".frame").find(".shot").filter(function() {
@@ -144,15 +146,26 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
     recountPins()
   })
-  $(document).on("mousemove", function(evt) {
+  $(document).on("click", function(evt) {
+    pin_knock = undefined
+  }).on("touchstart", function(evt) {
+    pin_knock = undefined
+  }).on("mousemove", function(evt) {
     if (evt.which != 1) { return }
 
     if ($(".pin:hover").length > 0) {
       evt.preventDefault()
-      $(".pin:hover").parents(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
+
+      if (pin_knock == undefined) {
+        pin_knock = !$(".pin:hover").parents(".pin-wrapper:not(.fallen-before)").hasClass("fallen")
+      } else if (pin_knock) {
+        $(".pin:hover").parents(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
+      } else {
+        $(".pin:hover").parents(".pin-wrapper:not(.fallen-before)").removeClass("fallen").trigger("pin:change")
+      }
     }
   })
-  $(".bowling-keypad-entry").on("touchmove", function(evt) {
+  $(".bowling-keypad-entry").on("mousemove, touchmove", function(evt) {
     evt.preventDefault()
     var xPos = evt.originalEvent.touches[0].pageX
     var yPos = evt.originalEvent.touches[0].pageY
@@ -160,7 +173,14 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     var $target = $(document.elementFromPoint(xPos, yPos))
     if (!$target.hasClass("pin")) { return }
 
-    $target.parents(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
+    if (pin_knock == undefined) {
+      pin_knock = !$target.parents(".pin-wrapper:not(.fallen-before)").hasClass("fallen")
+    } else if (pin_knock) {
+      $target.parents(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
+    } else {
+      $target.parents(".pin-wrapper:not(.fallen-before)").removeClass("fallen").trigger("pin:change")
+    }
+
   })
 
   $(".add-bowler").click(function(evt) {
@@ -207,6 +227,14 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       $(this).attr("data-bowler", idx + 1)
       $(this).find(".game-position").val(idx + 1)
     })
+  }
+
+  window.onbeforeunload = function(evt) {
+    if (!inProgress) {
+      return undefined
+    }
+
+    return "onbeforeunload"
   }
 
   $(document).on("modal.shown", function() {
@@ -404,6 +432,12 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   })
 
   $("form.bowling-game-form").submit(function(evt) {
+    if (inProgress) {
+      if (!confirm("The game is not complete. Are you sure you want to continue?")) {
+        evt.preventDefault()
+        return false
+      }
+    }
     if ($(".card-point").length == 0 && $(".bowler").length > 1) {
       if (!confirm("You did not enter a winner for cards. Are you sure you want to continue?")) {
         evt.preventDefault()
@@ -601,6 +635,8 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       total_text = total_text + "|" + (team_total + team_hdcp)
     }
     $(".team-total").text(total_text)
+
+    inProgress = findCurrentFrame() < 11
   }
 
   recalculateFrame = function(toss) {
@@ -817,6 +853,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   }
 
   findCurrentFrame = function() {
+    setFrames()
     return Math.min.apply(Math, $(".bowler:not(.absent, .skip)").map(function() {
       return parseInt($(this).attr("data-current-frame")) || 0
     }))
