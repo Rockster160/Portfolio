@@ -102,6 +102,10 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
     $(this).toggleClass("fall")
   })
+  $(".close-frame").on("click", function() {
+    $(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
+    addScore("X")
+  })
   $(".next-frame").on("click", function(evt) {
     recountPins()
     var toss = $(".shot.current")
@@ -130,9 +134,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       moveToNextFrame()
     }
   })
-  // $(".pin").on("click", function(evt) {
-  //   $(this).parents(".pin-wrapper:not(.fallen-before)").toggleClass("fallen").trigger("pin:change")
-  // })
   $(".pin-wrapper").on("pin:change", function() {
     var shot_idx = parseInt($(".shot.current").attr("data-shot-idx"))
     $(".shot.current").parents(".frame").find(".shot").filter(function() {
@@ -180,7 +181,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     } else {
       $target.parents(".pin-wrapper:not(.fallen-before)").removeClass("fallen").trigger("pin:change")
     }
-
   })
 
   $(".add-bowler").click(function(evt) {
