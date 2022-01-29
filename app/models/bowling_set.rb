@@ -60,7 +60,7 @@ class BowlingSet < ApplicationRecord
 
     bowlers.distinct.each do |bowler|
       bowler.recalculate_scores
-      bowler_sets.create(bowler: bowler).recalc
+      bowler_sets.find_or_create_by(bowler: bowler).recalc
     end
   end
 

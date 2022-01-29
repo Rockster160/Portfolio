@@ -16,7 +16,7 @@ class AddTrackingToSets < ActiveRecord::Migration[5.0]
       migration.up do
         BowlingSet.find_each do |set|
           set.bowlers.each do |bowler|
-            set.bowler_sets.create(bowler: bowler).recalc
+            set.bowler_sets.find_or_create_by(bowler: bowler).recalc
           end
         end
       end
