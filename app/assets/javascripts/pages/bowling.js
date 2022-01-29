@@ -416,13 +416,9 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     calcScores()
   }
 
-  fillRandomScore = function() {
-    addScore(Math.floor(Math.random() * 11))
-  }
-
   fillRandomScores = function() {
     while($(".shot.current").length > 0) {
-      fillRandomScore()
+      addScore(Math.floor(Math.random() * 11))
     }
   }
 
@@ -662,7 +658,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
         first_shot.val("X").attr("data-score", 10)
       } else if (sec_shot.val() == "/") {
         var first_score = shotScore(first_shot)
-        first_shot.val(first_score).attr("data-score", first_score)
+        first_shot.val(first_score || "-").attr("data-score", first_score)
         sec_shot.val("/").attr("data-score", 10 - first_score)
       } else {
         shots.each(function() {

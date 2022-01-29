@@ -103,31 +103,8 @@
     &[data-pin-num="10"] .pin-wrapper > * { bottom: #{$vert_dist * 3}; left: calc(#{50%} + #{($horz_dist/2) * 3}); }
   }
 
-  .pin-actions {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-
-    .pin-btn {
-      @extend .bowling-btn;
-      padding: 25px 40px;
-
-      &.fall svg { transform: rotate(90deg) translate(5px); }
-    }
-  }
-  .frame-actions {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    flex-direction: column;
-
-    .pin-btn {
-      @extend .bowling-btn;
-      padding: 25px 40px;
-
-      font-size: 16px;
-    }
+  .pin-all-toggle.fall svg {
+    transform: rotate(90deg) translate(5px);
   }
 
   .backspace {
@@ -442,6 +419,15 @@
       grid-area: 1 / 1;
     }
     .card {
+      grid-area: 4 / 1;
+    }
+    .pin-all-toggle {
+      grid-area: 4 / 3;
+    }
+    .close-frame {
+      grid-area: 3 / 1;
+    }
+    .next-frame {
       grid-area: 4 / 1;
     }
     .bowling-edit {

@@ -83,6 +83,7 @@
     <div class="bowling-keypad-entry">
       <div class="numpad-key backspace"><i class="fa fa-trash-o"></i></div>
       <div class="numpad-key card" data-modal="#card-hands">&#9824;</div>
+      <div class="numpad-key pin-all-toggle fall pin-svg-wrapper" data-pins-show=show><%= svg "bowling/pin" %></div>
     </div>
 
     <div class="bowling-keypad-entry" data-pins-show=hide>
@@ -111,16 +112,11 @@
         <% end %>
       </div>
 
-      <div class="pin-actions">
-        <div class="pin-all-toggle fall pin-btn pin-svg-wrapper"><%= svg "bowling/pin" %></div>
-      </div>
-      <div class="frame-actions">
-        <div class="close-frame pin-btn">X/</div>
-        <div class="next-frame pin-btn"><i class="fa fa-chevron-right"></i></div>
-      </div>
     </div>
 
     <div class="bowling-keypad-entry">
+      <div class="numpad-key close-frame" data-pins-show=show>X/</div>
+      <div class="numpad-key next-frame" data-pins-show=show><i class="fa fa-chevron-right"></i></div>
       <div class="pin-mode-toggle pin-svg-wrapper numpad-key">
         <%= svg "bowling/pin" %>
       </div>
