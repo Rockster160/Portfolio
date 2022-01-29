@@ -131,6 +131,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       moveToNextFrame()
     }
   })
+  var pinTimer = undefined
   $(".pin-wrapper").on("pin:change", function() {
     var shot_idx = parseInt($(".shot.current").attr("data-shot-idx"))
     $(".shot.current").parents(".frame").find(".shot").filter(function() {
@@ -143,6 +144,10 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     })
 
     recountPins()
+    clearTimeout(pinTimer)
+    pinTimer = setTimeout(function() {
+      $(".next-frame").click()
+    }, 3000)
   })
   $(document).on("click", function(evt) {
     pin_knock = undefined
