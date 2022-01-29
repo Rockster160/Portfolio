@@ -22,6 +22,7 @@ ignore-*
 # Ignore all logfiles and tempfiles.
 /log/*
 /tmp
+backup*
 
 # Ignore deploy scripts on the server side
 console_portfolio

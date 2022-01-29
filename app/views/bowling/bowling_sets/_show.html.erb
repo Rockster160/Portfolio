@@ -29,7 +29,7 @@
         </td>
       <% end %>
       <td class="text-right"><%= bowler_set&.this_avg %>/<%= bowler_set&.starting_avg %>/<%= bowler_set&.ending_avg %></td>
-      <td class="text-right"><%= bowler_set&.avg_diff %></td>
+      <td class="text-right"><%= posi_checker(bowler_set&.avg_diff) %></td>
       <td class="text-right"><%= games.sum(:score) %></td>
       <td class="text-right <%= "bowling-winner" if set.winner?(bowler) %>"><%= games.total_scores %></td>
       <td class="text-right"><%= games.points + (set.winner?(bowler) ? 1 : 0) %></td>

@@ -6,6 +6,16 @@ module ApplicationHelper
     end
   end
 
+  def posi_checker(str)
+    if str.starts_with?("+")
+      "<span class=\"posi positive\">#{str}</span>".html_safe
+    elsif str.starts_with?("-")
+      "<span class=\"posi negative\">#{str}</span>".html_safe
+    else
+      "<span class=\"posi neutral\">#{str}</span>".html_safe
+    end
+  end
+
   def pretty(language, file_path)
     file_contents = File.read("lib/assets/code_snippets/#{file_path}")
     file_contents.gsub!('`', '\\\\`')

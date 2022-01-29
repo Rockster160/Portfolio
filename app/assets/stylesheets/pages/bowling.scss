@@ -17,6 +17,16 @@
 
   .pin-svg-wrapper svg { height: 26px; }
 
+  .posi {
+    &.positive {
+      color: green;
+    }
+    &.negative {
+      color: red;
+    }
+    &.neutral {}
+  }
+
   .bowling-btn {
     display: inline-block;
     position: relative;
