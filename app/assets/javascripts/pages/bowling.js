@@ -1,6 +1,3 @@
-// \$\("(.*?)"\)\.(\w+)\(
-// $(document).on("$2", "$1",
-
 $(".ctr-bowling_leagues.act-edit").ready(function() {
   $(".league-roster").sortable({
     handle: ".bowler-handle",

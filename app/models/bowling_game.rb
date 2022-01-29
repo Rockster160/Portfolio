@@ -23,6 +23,7 @@ class BowlingGame < ApplicationRecord
 
   belongs_to :set, class_name: "BowlingSet", inverse_of: :games
   belongs_to :bowler, inverse_of: :games
+  belongs_to :bowler_set, inverse_of: :games, foreign_key: :set_id
   has_many :new_frames, class_name: "BowlingFrame"
 
   after_save {

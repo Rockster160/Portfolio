@@ -10,6 +10,7 @@
       <td class="text-center"><%= t + 1 %></td>
     <% end %>
     <td>Avg</td>
+    <td>Change</td>
     <td>Scratch</td>
     <td>Total</td>
     <td>Points</td>
@@ -17,16 +18,18 @@
 
   <% set.ordered_bowlers.each do |bowler| %>
     <% games = set.games.where(bowler: bowler).order(:game_num) %>
+    <% bowler_set = set.bowler_sets.find_by(bowler: bowler) %>
     <tr>
       <td><%= bowler.name %></td>
-      <td class="text-right"><%= games.last.handicap %></td>
+      <td class="text-right"><%= bowler_set.handicap %></td>
       <% set.league.games_per_series.times do |t| %>
         <% game = games[t] %>
         <td class="text-right <%= "bowling-winner" if game&.game_point? %> <%= 'absent-game' if game&.absent? %>">
           <%= "*" if game&.card_point? %><%= game&.score %>
         </td>
       <% end %>
-      <td class="text-right"><%= games.average(:score).floor %>/<%= bowler.average %></td>
+      <td class="text-right"><%= bowler_set.this_avg %>/<%= bowler_set.starting_avg %>/<%= bowler_set.ending_avg %></td>
+      <td class="text-right"><%= bowler_set.avg_diff %></td>
       <td class="text-right"><%= games.sum(:score) %></td>
       <td class="text-right <%= "bowling-winner" if set.winner?(bowler) %>"><%= games.total_scores %></td>
       <td class="text-right"><%= games.points + (set.winner?(bowler) ? 1 : 0) %></td>
@@ -39,7 +42,8 @@
     <% set.league.games_per_series.times do |t| %>
       <td class="text-right"><%= number_with_delimiter(set.games.where(game_num: t+1).sum(:score)) %></td>
     <% end %>
-    <td>Today/All</td>
+    <td>Today/All/New</td>
+    <td class="text-right"></td>
     <td class="text-right"><%= number_with_delimiter(set.games.sum(:score)) %></td>
     <td class="text-right"><%= number_with_delimiter(set.games.total_scores) %></td>
     <td></td>

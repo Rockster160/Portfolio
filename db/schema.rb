@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20220124033311) do
+ActiveRecord::Schema.define(version: 20220129010852) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -52,6 +52,20 @@ ActiveRecord::Schema.define(version: 20220124033311) do
     t.string   "text",       limit: 255
     t.datetime "created_at"
     t.datetime "updated_at"
+  end
+
+  create_table "bowler_sets", force: :cascade do |t|
+    t.integer  "bowler_id"
+    t.integer  "set_id"
+    t.integer  "handicap"
+    t.integer  "absent_score"
+    t.integer  "starting_avg"
+    t.integer  "ending_avg"
+    t.integer  "this_avg"
+    t.datetime "created_at",   null: false
+    t.datetime "updated_at",   null: false
+    t.index ["bowler_id"], name: "index_bowler_sets_on_bowler_id", using: :btree
+    t.index ["set_id"], name: "index_bowler_sets_on_set_id", using: :btree
   end
 
   create_table "bowlers", force: :cascade do |t|

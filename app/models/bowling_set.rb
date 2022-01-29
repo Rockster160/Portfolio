@@ -12,6 +12,10 @@
 class BowlingSet < ApplicationRecord
   belongs_to :league, class_name: "BowlingLeague", touch: true
 
+  has_many :bowler_sets,
+    foreign_key: :set_id,
+    inverse_of: :set,
+    dependent: :destroy
   has_many :games,
     class_name: "BowlingGame",
     foreign_key: :set_id,
@@ -54,7 +58,10 @@ class BowlingSet < ApplicationRecord
     found_winner_ids = totals.select { |id_score| id_score.last == high_total }
     update(winner: ",#{found_winner_ids.map(&:first).join(",")},")
 
-    bowlers.distinct.each(&:recalculate_scores)
+    bowlers.distinct.each do |bowler|
+      bowler.recalculate_scores
+      bowler_sets.create(bowler: bowler).recalc
+    end
   end
 
   def winner?(bowler)

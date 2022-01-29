@@ -19,6 +19,7 @@
 
 class Bowler < ApplicationRecord
   belongs_to :league, class_name: "BowlingLeague", foreign_key: :league_id, inverse_of: :bowlers
+  has_many :bowler_sets, dependent: :destroy
   has_many :games, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
   has_many :games_present, -> { attended }, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
   has_many :frames, through: :games
@@ -27,12 +28,20 @@ class Bowler < ApplicationRecord
 
   def recalculate_scores
     update(
-      total_games:  total_games_offset.to_i + games_present.count,
-      total_pins:   total_pins_offset.to_i + games_present.sum(:score),
+      total_games:  games_at_time,
+      total_pins:   pins_at_time,
       total_points: games.points + winning_sets.count,
       high_game:    games_present.maximum(:score),
       high_series:  games_present.group_by(&:set_id).map { |setid, set_games| set_games.sum(&:score) }.max,
     )
+  end
+
+  def games_at_time(time=Time.current)
+    total_games_offset.to_i + games_present.where("bowling_games.created_at <= ?", time).count
+  end
+
+  def pins_at_time(time=Time.current)
+    total_pins_offset.to_i + games_present.where("bowling_games.created_at <= ?", time).sum(:score)
   end
 
   def winning_sets
