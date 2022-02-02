@@ -1,7 +1,9 @@
 <div class="skinny-container">
   <div class="btn-container">
     <a href="<%= bowling_games_path %>" class="btn">&larr; Back</a>
-    <%= link_to "Delete League", bowling_league_path(@league), class: "btn pull-right danger", method: :delete, data: { confirm: "Are you sure you want to delete this league? This will permanently delete all games, bowlers, and scores under this league." } %>
+    <% if @league.persisted? %>
+      <%= link_to "Delete League", bowling_league_path(@league), class: "btn pull-right danger", method: :delete, data: { confirm: "Are you sure you want to delete this league? This will permanently delete all games, bowlers, and scores under this league." } %>
+    <% end %>
   </div>
   <%= form_for @league do |f| %>
     <div class="form-title"><%= @league.name || "New League" %></div>

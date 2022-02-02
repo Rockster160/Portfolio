@@ -1,4 +1,4 @@
-$(".ctr-bowling_leagues.act-edit").ready(function() {
+$(".ctr-bowling_leagues.act-edit, .ctr-bowling_leagues.act-new").ready(function() {
   $(".league-roster").sortable({
     handle: ".bowler-handle",
     update: function(evt, ui) { updateRoster() }
@@ -23,8 +23,6 @@ $(".ctr-bowling_leagues.act-edit").ready(function() {
   }
   updateRoster()
 
-  var template = document.querySelector("#bowler-template")
-
   $(document).on("click", ".remove-bowler", function(evt) {
     var bowler = $(this).parents(".bowler-form")
 
@@ -38,6 +36,7 @@ $(".ctr-bowling_leagues.act-edit").ready(function() {
     updateRoster()
   })
 
+  var template = document.querySelector("#bowler-template")
   $(".add-bowler").click(function() {
     var clone = template.content.cloneNode(true)
 
@@ -51,6 +50,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   var inProgress = false
   var pin_knock = undefined
+  var pinTimer = undefined
 
   var editing = false
   var pin_mode_show = false
@@ -131,7 +131,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       moveToNextFrame()
     }
   })
-  var pinTimer = undefined
   $(".pin-wrapper").on("pin:change", function() {
     var shot_idx = parseInt($(".shot.current").attr("data-shot-idx"))
     $(".shot.current").parents(".frame").find(".shot").filter(function() {
@@ -144,7 +143,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     })
 
     recountPins()
-    clearTimeout(pinTimer)
     pinTimer = setTimeout(function() {
       $(".next-frame").click()
     }, 3000)
@@ -185,23 +183,23 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
   })
 
-  $(".add-bowler").click(function(evt) {
-    var template = $("template#bowling-game-template").clone().html()
-    var name = prompt("Enter Name for new bowler")
-    var new_bowler = $(template).insertBefore(".bowler-placeholder")
-    var max = Math.max.apply(null, $("[data-bowler]").map(function() {
-      return parseInt($(this).attr("data-bowler"))
-    }))
-    new_bowler.attr("data-bowler", max + 1)
-    new_bowler.find(".game-position").val(max)
-    new_bowler.find(".bowler-name .name").text(name)
-    new_bowler.find(".bowler-name-field").val(name)
-
-    resetEdits()
-
-    evt.preventDefault()
-    return false
-  })
+  // $(".add-bowler").click(function(evt) {
+  //   var template = $("template#bowling-game-template").clone().html()
+  //   var name = prompt("Enter Name for new bowler")
+  //   var new_bowler = $(template).insertBefore(".bowler-placeholder")
+  //   var max = Math.max.apply(null, $("[data-bowler]").map(function() {
+  //     return parseInt($(this).attr("data-bowler"))
+  //   }))
+  //   new_bowler.attr("data-bowler", max + 1)
+  //   new_bowler.find(".game-position").val(max)
+  //   new_bowler.find(".bowler-name .name").text(name)
+  //   new_bowler.find(".bowler-name-field").val(name)
+  //
+  //   resetEdits()
+  //
+  //   evt.preventDefault()
+  //   return false
+  // })
 
   swap = function($ele1, $ele2) {
     var temp = $("<div>")
@@ -262,7 +260,11 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
       $($("#game-sub-list").get(0).content).append(in_bowler)
       hideModal("#bowler-sub-list")
-      swap(in_bowler, out_bowler)
+      if (out_bowler.length > 0) {
+        swap(in_bowler, out_bowler)
+      } else {
+        $(in_bowler).insertBefore(".bowler-placeholder")
+      }
       resetEdits()
       resetBowlerOrder()
       calcScores()
@@ -277,7 +279,11 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     var out_bowler = $(".bowler[data-bowler-id=" + out_bowler_id + "]")
 
     hideModal("#bowler-sub-list")
-    swap(in_bowler, out_bowler)
+    if (out_bowler.length > 0) {
+      swap(in_bowler, out_bowler)
+    } else {
+      $(in_bowler).insertBefore(".bowler-placeholder")
+    }
     resetEdits()
     resetBowlerOrder()
     calcScores()
@@ -286,9 +292,19 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   $(document).on("click", ".bowler-sub-btn", function(evt) {
     var name = $(this).attr("data-bowler-name")
     $(".sub-out-name").text(name).attr("data-bowler-id", $(this).attr("data-bowler-id"))
+    $(".sub-message").removeClass("hidden")
 
     $(".bowler-select").removeClass("hidden")
     $(".bowler").each(function() {
+      $(".bowler-select[data-bowler-id=" + $(this).attr("data-bowler-id") + "]").addClass("hidden")
+    })
+
+    showModal("#bowler-sub-list")
+  }).on("click", ".new-bowler", function(evt) {
+    $(".sub-message").addClass("hidden")
+    $(".bowler-select").removeClass("hidden")
+    $(".bowler").each(function() {
+      if (!$(this).attr("data-bowler-id")) { return }
       $(".bowler-select[data-bowler-id=" + $(this).attr("data-bowler-id") + "]").addClass("hidden")
     })
 
@@ -399,6 +415,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   }
 
   recountPins = function() {
+    clearTimeout(pinTimer)
     var toss = $(".shot.current")
     var pins = $(".pin-wrapper:not(.fallen, .fallen-before)").map(function() {
       return parseInt($(this).attr("data-pin-num"))

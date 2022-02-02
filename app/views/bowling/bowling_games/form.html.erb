@@ -14,7 +14,9 @@
   </ul>
 <% end %>
 <%= render_modal "bowler-sub-list", "Substitute Bowlers" do %>
-  <p>Sub in for <strong class="sub-out-name"></strong></p>
+  <span class="sub-message">
+    <p>Sub in for <strong class="sub-out-name"></strong></p>
+  </span>
   <% @league.bowlers.ordered.each do |bowler| %>
     <div class="bowler-select bowler-form" data-bowler-id="<%= bowler.id %>">
       <b><%= bowler.name %></b><br>
@@ -111,12 +113,12 @@
           </div>
         <% end %>
       </div>
-
     </div>
 
     <div class="bowling-keypad-entry">
       <div class="numpad-key close-frame" data-pins-show=show>X/</div>
       <div class="numpad-key next-frame" data-pins-show=show><i class="fa fa-chevron-right"></i></div>
+      <div class="numpad-key new-bowler" data-edit>New Bowler</div>
       <div class="pin-mode-toggle pin-svg-wrapper numpad-key">
         <%= svg "bowling/pin" %>
       </div>
