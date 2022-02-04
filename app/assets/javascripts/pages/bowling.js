@@ -92,6 +92,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   resetPinMode()
 
   $(".pin-all-toggle").on("click", function(evt) {
+    clearTimeout(pinTimer)
     if ($(this).hasClass("fall")) {
       $(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
     } else {
@@ -482,6 +483,10 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
   })
 
+  resetPinFall = function() {
+    $(".pin-all-toggle").addClass("fall")
+  }
+
   throwScore = function(text) {
     var score = text
     score = score == "" ? null : parseInt(score)
@@ -835,6 +840,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     $(".shot.current").removeClass("current")
     toss.addClass("current")
     clearTimeout(pinTimer)
+    resetPinFall()
     updateFallenPins()
   }
 
