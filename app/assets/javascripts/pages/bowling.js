@@ -465,6 +465,8 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   })
 
   $(".bowling-input .numpad-key.entry").click(function() {
+    $(".pin-wrapper").removeClass("fallen").removeClass("fallen-before")
+    $(".shot.current").parents(".frame").find(".fallen-pins").val("")
     addScore($(this).text())
   })
 
