@@ -149,8 +149,12 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   })
   $(document).on("click", function(evt) {
     pin_knock = undefined
-  }).on("touchstart", function(evt) {
-    pin_knock = undefined
+
+    var target = $(evt.target)
+    if (target.hasClass("pin")) {
+      pin_knock = !target.parents(".pin-wrapper:not(.fallen-before)").hasClass("fallen")
+      target.parents(".pin-wrapper:not(.fallen-before)").toggleClass("fallen").trigger("pin:change")
+    }
   }).on("mousemove", function(evt) {
     if (evt.which != 1) { return }
 
@@ -182,24 +186,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       $target.parents(".pin-wrapper:not(.fallen-before)").removeClass("fallen").trigger("pin:change")
     }
   })
-
-  // $(".add-bowler").click(function(evt) {
-  //   var template = $("template#bowling-game-template").clone().html()
-  //   var name = prompt("Enter Name for new bowler")
-  //   var new_bowler = $(template).insertBefore(".bowler-placeholder")
-  //   var max = Math.max.apply(null, $("[data-bowler]").map(function() {
-  //     return parseInt($(this).attr("data-bowler"))
-  //   }))
-  //   new_bowler.attr("data-bowler", max + 1)
-  //   new_bowler.find(".game-position").val(max)
-  //   new_bowler.find(".bowler-name .name").text(name)
-  //   new_bowler.find(".bowler-name-field").val(name)
-  //
-  //   resetEdits()
-  //
-  //   evt.preventDefault()
-  //   return false
-  // })
 
   swap = function($ele1, $ele2) {
     var temp = $("<div>")
@@ -408,6 +394,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
     knockPinsForShot(prev_shot, "fallen-before")
     knockPinsForShot(toss, "fallen")
+    if ($(".fallen").length == 0) { clearTimeout(pinTimer) }
   }
 
   currentTossAtIdx = function(idx) {
@@ -847,6 +834,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   moveToThrow = function(toss) {
     $(".shot.current").removeClass("current")
     toss.addClass("current")
+    clearTimeout(pinTimer)
     updateFallenPins()
   }
 
