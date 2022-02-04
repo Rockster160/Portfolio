@@ -51,6 +51,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   var inProgress = false
   var pin_knock = undefined
   var pinTimer = undefined
+  var enable_pin_timer = false
 
   var editing = false
   var pin_mode_show = false
@@ -145,7 +146,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
     recountPins()
     pinTimer = setTimeout(function() {
-      $(".next-frame").click()
+      if (enable_pin_timer) { $(".next-frame").click() }
     }, 3000)
   })
   $(document).on("click", function(evt) {
@@ -408,17 +409,31 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     var pins = $(".pin-wrapper:not(.fallen, .fallen-before)").map(function() {
       return parseInt($(this).attr("data-pin-num"))
     }).toArray()
+    var first_throw = (shotIndex(toss) == 0 || (shotIndex(toss) == 1 && currentTossAtIdx(0).attr("data-score") == 10))
 
-    if ((shotIndex(toss) == 0 || (shotIndex(toss) == 1 && currentTossAtIdx(0).attr("data-score") == 10)) && isSplit(pins)) {
+    if (first_throw && isSplit(pins)) {
       toss.parents(".split-holder").addClass("split")
     } else {
       toss.parents(".split-holder").removeClass("split")
     }
 
+    // Store the pins that are still standing in the current throw
     toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + toss.attr("data-shot-idx") + "]").val("[" + pins.join() + "]")
-    // TODO: Update mini graphic
+    addScore($(".pin-wrapper.fallen:not(.fallen-before)").length, true)
+    // If pins have changed, knock down the ones for the next throw as well
+    if (first_throw) {
+      var next_fallen = toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + (shotIndex(toss) + 1) + "]")
+      if (next_fallen.val().length > 0) {
+        var next_pins = JSON.parse(next_fallen.val()).filter(function(pin) {
+          return pins.includes(pin)
+        })
 
-    addScore($(".pin-wrapper.fallen").length, true)
+        next_fallen.val("[" + next_pins.join() + "]")
+        var next_shot = toss.parents(".frame").find(".shot[data-shot-idx=" + (shotIndex(toss) + 1) + "]")
+        addScore(pins.length - next_pins.length, true, next_shot)
+      }
+    }
+
     recalculateFrame(toss)
     calcScores()
   }
@@ -717,20 +732,20 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
   }
 
-  addScore = function(text, stay) {
+  addScore = function(text, stay, toss) {
     stay = stay || false
+    toss = toss || $(".shot.current")
 
     moveToEarliestThrow()
 
-    if (currentFrame() == 10) { return addTenthFrameScore(text, stay) }
+    if (currentFrame() == 10) { return addTenthFrameScore(text, stay, toss) }
 
     var score = textToScore(text)
-    var toss = $(".shot.current")
     var prev_shot = $(toss.parents(".frame").find(".shot")[0])
     var actual_val = scoreToVal(score, shotScore(prev_shot))
     toss.attr("data-score", actual_val)
 
-    var shot_num = currentThrowNum()
+    var shot_num = shotIndex(toss) + 1
 
     if (shot_num == 1) {
       if (score >= 10) {
@@ -788,10 +803,10 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     return text == "" || isNaN(text) ? 0 : parseInt(text)
   }
 
-  addTenthFrameScore = function(score, stay) {
+  addTenthFrameScore = function(score, stay, toss) {
     stay = stay || false
-    var shot_num = currentThrowNum()
-    var toss = $(".shot.current")
+    toss = toss || $(".shot.current")
+    var shot_num = shotIndex(toss) + 1
     var toss_score = textToScore(score)
     var shots = toss.parents(".frame").find(".shot")
     var prev_shot = $(shots[shot_num - 2])
