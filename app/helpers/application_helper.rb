@@ -7,9 +7,9 @@ module ApplicationHelper
   end
 
   def posi_checker(str)
-    if str.starts_with?("+")
+    if str&.starts_with?("+")
       "<span class=\"posi positive\">#{str}</span>".html_safe
-    elsif str.starts_with?("-")
+    elsif str&.starts_with?("-")
       "<span class=\"posi negative\">#{str}</span>".html_safe
     else
       "<span class=\"posi neutral\">#{str}</span>".html_safe
