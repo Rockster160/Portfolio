@@ -659,6 +659,9 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     $(".team-total").text(total_text)
 
     inProgress = findCurrentFrame() < 11
+    if (findCurrentFrame() > 1 && !inProgress) {
+      $(".bowling-form-btn").removeClass("hidden")
+    }
   }
 
   recalculateFrame = function(toss) {
