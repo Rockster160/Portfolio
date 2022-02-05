@@ -4,14 +4,28 @@
 
 <%= render partial: "show", locals: { league: @league } %>
 
-<% @stats.each do |k, data| %>
-  <%= k.to_s.titleize %>
+<% @stats.each do |stat, data| %>
+  <h3><%= stat %></h3>
   <table>
-    <% data.each do |bowler, val| %>
+    <% data.each do |name, val| %>
       <tr>
-        <td><%= bowler.name %></td>
+        <td><%= name %></td>
         <td><%= val %></td>
       </tr>
     <% end %>
   </table>
 <% end %>
+<!--
+<table>
+  <tr>
+    <td>Zoro</td>
+    <td>50%</td>
+    <td>3/6</td>
+    <td>
+      <%= link_to "See it", "" %> <br>
+      <%= link_to "See it", "" %> <br>
+      <%= link_to "See it", "" %> <br>
+      <%= link_to "See it", "" %> <br>
+    </td>
+  </tr>
+</table> -->
