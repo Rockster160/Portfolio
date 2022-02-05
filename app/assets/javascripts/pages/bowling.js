@@ -51,7 +51,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   var inProgress = false
   var pin_knock = undefined
   var pinTimer = undefined
-  var enable_pin_timer = false
+  var enable_pin_timer = true
 
   var editing = false
   var pin_mode_show = false
