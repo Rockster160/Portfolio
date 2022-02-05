@@ -54,7 +54,8 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   var enable_pin_timer = true
 
   var editing = false
-  var pin_mode_show = false
+  var pin_mode_show = true
+
   $(".bowling-edit").click(function(evt) {
     editing = !editing
     resetEdits()
@@ -874,7 +875,35 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     toss.addClass("current")
     clearTimeout(pinTimer)
     resetPinFall()
+    checkStats()
     updateFallenPins()
+  }
+
+  checkStats = function() {
+    var stats = $(".stats-holder")
+    stats.html("")
+
+    var toss = $(".shot.current")
+    var second_throw = shotIndex(toss) == 1 && currentTossAtIdx(0).attr("data-score") < 10
+    second_throw = second_throw || (shotIndex(toss) == 2 && currentTossAtIdx(1).attr("data-score") < 10)
+
+    if (!second_throw) { return }
+    if (!pin_mode_show) { return }
+
+    var url = stats.attr("data-stats-url")
+    var bowler_id = toss.parents(".bowler").attr("data-bowler-id")
+    var pins = fallenPinsForShot(currentTossAtIdx(shotIndex(toss) - 1)).val()
+
+    stats.html("<i class=\"fa fa-spinner fa-spin\"></i>")
+
+    $.get(url, { bowler_id: bowler_id, pins: pins }).done(function(data) {
+      stats.html("")
+      if (!data.stats.total) { return }
+      var nums = data.stats.spare + " / " + data.stats.total
+      var ratio = Math.round((data.stats.spare / data.stats.total) * 100)
+
+      $(".stats-holder").html(ratio + "%" + "</br>" + nums)
+    })
   }
 
   moveToNextThrow = function() {

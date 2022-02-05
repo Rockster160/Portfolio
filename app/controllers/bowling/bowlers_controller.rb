@@ -1,7 +1,7 @@
 module Bowling
   class BowlersController < ApplicationController
     skip_before_action :verify_authenticity_token
-    before_action :set_league
+    before_action :set_league, only: [:create]
     # before_action :authorize_user, :set_league
 
     def create
@@ -21,6 +21,15 @@ module Bowling
       end
     end
 
+    def throw_stats
+      @league = current_user.bowling_leagues.find(params[:league_id])
+      @bowler = Bowler.find(params[:bowler_id])
+
+      stats = BowlingStats.pickup(@bowler, params[:pins])
+
+      render json: { status: :ok, stats: { spare: stats[0], total: stats[1] } }
+    end
+
     private
 
     def bowler_params
@@ -36,8 +45,8 @@ module Bowling
       @league ||= begin
         league_id = params.dig(:bowler, :league_id)
 
-        BowlingLeague.find(league_id)
-        # current_user.bowling_leagues.find(league_id)
+        # BowlingLeague.find(league_id)
+        current_user.bowling_leagues.find(league_id)
       end
     end
   end

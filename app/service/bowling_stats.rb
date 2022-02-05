@@ -1,14 +1,19 @@
 module BowlingStats
   module_function
 
-  def pickup_ratio(bowler, pins)
-    str_pins = "[#{pins.sort.join(",")}]"
+  def percent(num, total, round: 0)
+    return "N/A" unless total&.positive?
+
+    "#{((num / total.to_f)*100).round(round)}%"
+  end
+
+  def pickup(bowler, str_pins)
+    str_pins = "[#{str_pins.sort.join(",")}]" unless str_pins.is_a?(String)
 
     left = bowler.frames.where(throw1_remaining: str_pins)
     # tleft = bowler.frames.where(throw1_remaining: "[]", throw2_remaining: str_pins)
 
-    return "N/A" if left.none?
-    "#{((left.where(spare: true).count / left.count.to_f) * 100).round}%"
+    [left.where(spare: true).count, left.count]
   end
 
   def split_conversions(bowler)
@@ -27,7 +32,7 @@ module BowlingStats
       obj[pins] ||= [0, 0]
       obj[pins][0] += count if spare
       obj[pins][1] += count
-    end
+    end.sort_by { |pins, (picked, total)| pins.length }
 
     counts.map { |pins, (picked, total)| "#{pins}: #{picked}/#{total} (#{((picked/total.to_f)*100).round}%)" }
   end

@@ -47,7 +47,10 @@ module Bowling
 
       @stats = {
         "Team Drink Frames": [["Kaizoku", BowlingStats.strike_count_frames(4).length]],
-        "Ten Pins": bowlers.map { |bowler| [bowler.name, BowlingStats.pickup_ratio(bowler, [10])] },
+        "Ten Pins": bowlers.map { |bowler|
+          pickup = BowlingStats.pickup(bowler, [10])
+          [bowler.name, "#{pickup[0]}/#{pickup[1]}", BowlingStats.percent(*pickup)] 
+        },
         "Missed Drink Frames": bowlers.map { |bowler| [bowler.name, missed_drinks[bowler.id]] },
         "Splits Converted": bowlers.map { |bowler| [bowler.name, *BowlingStats.split_data(bowler)] },
       }

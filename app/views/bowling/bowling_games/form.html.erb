@@ -86,6 +86,7 @@
       <div class="numpad-key backspace"><i class="fa fa-trash-o"></i></div>
       <div class="numpad-key card" data-modal="#card-hands">&#9824;</div>
       <div class="numpad-key pin-all-toggle fall pin-svg-wrapper" data-pins-show=show><%= svg "bowling/pin" %></div>
+      <div class="stats-holder" data-pins-show=show data-stats-url="<%= throw_stats_bowlers_path(league_id: @league.id) %>"></div>
     </div>
 
     <div class="bowling-keypad-entry" data-pins-show=hide>
