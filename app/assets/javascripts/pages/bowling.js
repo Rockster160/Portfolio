@@ -450,18 +450,31 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   })
 
   $("form.bowling-game-form").submit(function(evt) {
+    evt.preventDefault()
+
     if (inProgress) {
       if (!confirm("The game is not complete. Are you sure you want to continue?")) {
-        evt.preventDefault()
         return false
       }
     }
     if ($(".card-point").length == 0 && $(".bowler").length > 1) {
       if (!confirm("You did not enter a winner for cards. Are you sure you want to continue?")) {
-        evt.preventDefault()
         return false
       }
     }
+
+    $(".bowling-form-btn").val("Saving...")
+
+    var form = $(this)
+    $.ajax({
+      type: form.attr("method"),
+      url: form.attr("action"),
+      data: form.serialize()
+    }).done(function(data) {
+      window.location.href = data.redirect
+    }).fail(function() {
+      $(".bowling-form-btn").html("Try Again")
+    })
   })
 
   $(".bowling-input .numpad-key.entry").click(function() {

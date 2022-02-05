@@ -10,9 +10,9 @@ module Bowling
       if @set.update(bowling_params)
         if @set.complete?
           @set.save_scores # Don't save until the set is complete since handicap changes after the series
-          redirect_to bowling_set_path(@set)
+          render status: :created, json: { redirect: bowling_set_path(@set) }
         else
-          redirect_to new_bowling_game_path(series: @set, game: @set.games_complete + 1)
+          render status: :created, json: { redirect: new_bowling_game_path(series: @set, game: @set.games_complete + 1) }
         end
       else
         puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
@@ -26,9 +26,9 @@ module Bowling
       if @set.update(bowling_params)
         if @set.complete?
           @set.save_scores # Don't save until the set is complete since handicap changes after the series
-          redirect_to bowling_set_path(@set)
+          render status: :created, json: { redirect: bowling_set_path(@set) }
         else
-          redirect_to new_bowling_game_path(series: @set, game: @set.games_complete + 1)
+          render status: :created, json: { redirect: new_bowling_game_path(series: @set, game: @set.games_complete + 1) }
         end
       else
         puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
