@@ -41,6 +41,17 @@ module Bowling
       end
     end
 
+    def tms
+      bowlers = @league.bowlers.ordered
+      missed_drinks = BowlingStats.missed_drink_frames
+
+      @stats = {
+        tens: bowlers.each_with_object({}) { |bowler, obj| obj[bowler] = BowlingStats.pickup_ratio(bowler, [10]) },
+        missed_drinks: bowlers.each_with_object({}) { |bowler, obj| obj[bowler] = missed_drinks[bowler.id] },
+        split_conversions: bowlers.each_with_object({}) { |bowler, obj| obj[bowler] = BowlingStats.split_conversions(bowler) },
+      }
+    end
+
     private
 
     def set_league

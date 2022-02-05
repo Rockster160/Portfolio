@@ -1,0 +1,17 @@
+<%= link_to "← Back to League", bowling_league_path(@league), class: :btn %>
+
+<h3><%= @league.team_name %></h3>
+
+<%= render partial: "show", locals: { league: @league } %>
+
+<% @stats.each do |k, data| %>
+  <%= k.to_s.titleize %>
+  <table>
+    <% data.each do |bowler, val| %>
+      <tr>
+        <td><%= bowler.name %></td>
+        <td><%= val %></td>
+      </tr>
+    <% end %>
+  </table>
+<% end %>

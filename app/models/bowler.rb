@@ -22,7 +22,7 @@ class Bowler < ApplicationRecord
   has_many :bowler_sets, dependent: :destroy
   has_many :games, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
   has_many :games_present, -> { attended }, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
-  has_many :frames, through: :games
+  has_many :frames, through: :games, source: :new_frames
 
   scope :ordered, -> { order("bowlers.position ASC NULLS LAST") }
 

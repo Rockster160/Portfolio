@@ -6,6 +6,8 @@
 
 <%= render partial: "show", locals: { league: @league } %>
 
+<%= link_to "Too many stats", tms_bowling_league_path(@league), class: :btn %>
+
 <% @league.sets.order(created_at: :desc).each do |set| %>
   <%= render partial: "bowling/bowling_sets/show", locals: { set: set, show_links: true } %>
 <% end %>
