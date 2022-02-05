@@ -19,6 +19,19 @@ module BowlingStats
     "#{((splits.where(spare: true).count / splits.count.to_f) * 100).round}%"
   end
 
+  def split_data(bowler)
+    splits = bowler.frames.where(split: true)
+    grouped = splits.group(:throw1_remaining, :spare).count(:throw1_remaining)
+
+    counts = grouped.each_with_object({}) do |((pins, spare), count), obj|
+      obj[pins] ||= [0, 0]
+      obj[pins][0] += count if spare
+      obj[pins][1] += count
+    end
+
+    counts.map { |pins, (picked, total)| "#{pins}: #{picked}/#{total} (#{((picked/total.to_f)*100).round}%)" }
+  end
+
   def strike_count_frames(count=4)
     # Should filter by league
     # count should default to num of league bowlers

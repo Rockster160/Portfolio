@@ -7,10 +7,11 @@
 <% @stats.each do |stat, data| %>
   <h3><%= stat %></h3>
   <table>
-    <% data.each do |name, val| %>
+    <% data.each do |row| %>
       <tr>
-        <td><%= name %></td>
-        <td><%= val %></td>
+        <% row.each do |item| %>
+          <td><%= item %></td>
+        <% end %>
       </tr>
     <% end %>
   </table>

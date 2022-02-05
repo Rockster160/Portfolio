@@ -46,10 +46,10 @@ module Bowling
       missed_drinks = BowlingStats.missed_drink_frames
 
       @stats = {
-        "Team Drink Frames": { "Kaizoku": BowlingStats.strike_count_frames(4).length },
-        "Ten Pins": bowlers.each_with_object({}) { |bowler, obj| obj[bowler.name] = BowlingStats.pickup_ratio(bowler, [10]) },
-        "Missed Drink Frames": bowlers.each_with_object({}) { |bowler, obj| obj[bowler.name] = missed_drinks[bowler.id] },
-        "Splits Converted": bowlers.each_with_object({}) { |bowler, obj| obj[bowler.name] = BowlingStats.split_conversions(bowler) },
+        "Team Drink Frames": [["Kaizoku", BowlingStats.strike_count_frames(4).length]],
+        "Ten Pins": bowlers.map { |bowler| [bowler.name, BowlingStats.pickup_ratio(bowler, [10])] },
+        "Missed Drink Frames": bowlers.map { |bowler| [bowler.name, missed_drinks[bowler.id]] },
+        "Splits Converted": bowlers.map { |bowler| [bowler.name, *BowlingStats.split_data(bowler)] },
       }
     end
 
