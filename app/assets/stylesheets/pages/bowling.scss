@@ -459,4 +459,43 @@
       padding: 0;
     }
   }
+  .bowling-navigation {
+    display: none;
+
+    .nav-buttons {
+      @extend .bowling-btn;
+
+      padding: 6px 30px;
+      font-size: 14px;
+      margin: 0 10px;
+    }
+  }
+
+  @include small-down {
+    .bowling-input {
+      right: auto;
+      left: calc((50vw - 50%) * -1);
+      transform: translate(calc(50vw - 50%));
+
+      &.left {
+        left: 20px;
+        right: auto;
+        transform: none;
+      }
+
+      &.right {
+        right: 20px;
+        left: auto;
+        transform: none;
+      }
+    }
+    .bowling-navigation {
+      display: flex;
+      position: fixed;
+      left: 0;
+      right: 0;
+      justify-content: space-between;
+      bottom: 350px;
+    }
+  }
 }

@@ -448,6 +448,29 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   $(document).on("click", ".shot", function() {
     moveToThrow($(this))
     $(this).blur()
+  }).on("click", ".bowling-navigation .nav-buttons", function(evt) {
+    var btn = $(this)
+    var input = $(".bowling-input")
+    var left = input.hasClass("left")
+    var right = input.hasClass("right")
+
+    if (btn.hasClass("left")) {
+      if (left) {
+        input.removeClass("left").addClass("right")
+      } else if (right) {
+        input.removeClass("right")
+      } else {
+        input.addClass("left")
+      }
+    } else if (btn.hasClass("right")) {
+      if (right) {
+        input.removeClass("right").addClass("left")
+      } else if (left) {
+        input.removeClass("left")
+      } else {
+        input.addClass("right")
+      }
+    }
   })
 
   $("form.bowling-game-form").submit(function(evt) {
@@ -483,6 +506,8 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     $(".shot.current").parents(".frame").find(".fallen-pins").val("")
     addScore($(this).text())
   })
+
+
 
   $(".bowling-cell.total .remove").click(function() {
     $(this).parents(".bowling-table").remove()
