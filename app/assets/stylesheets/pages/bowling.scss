@@ -432,6 +432,14 @@
       font-size: 15px;
       grid-area: 2 / 3;
     }
+    .pin-mode-toggle {
+      font-size: 24px;
+      grid-area: 4 / 3;
+    }
+    .pin-mode-toggle {
+      font-size: 24px;
+      grid-area: 4 / 3;
+    }
     .backspace {
       grid-area: 1 / 1;
     }
@@ -444,7 +452,7 @@
       overflow: hidden;
     }
     .pin-all-toggle {
-      grid-area: 4 / 3;
+      grid-area: 1 / 1;
     }
     .close-frame {
       grid-area: 3 / 1;
@@ -469,7 +477,7 @@
       text-decoration: none;
     }
     .bowling-form-btn {
-      grid-area: 2 / 3;
+      grid-area: 1 / 3;
       margin: 0;
       padding: 0;
     }
