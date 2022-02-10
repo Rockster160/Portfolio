@@ -93,6 +93,28 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   }
   resetPinMode()
 
+  resetStrikePoint = function() {
+    $(".pocket-toggle, .brooklyn-toggle").removeClass("active")
+    var shot = $(".shot.current")
+    var strike_point = shot.parents(".frame").find(".strike-point").val()
+
+    strikePoint(strike_point)
+  }
+
+  strikePoint = function(direction) {
+    $(".pocket-toggle, .brooklyn-toggle").removeClass("active")
+
+    if (direction == "pocket") {
+      $(".shot.current").parents(".frame").find(".strike-point").val("pocket")
+      $(".pocket-toggle").addClass("active")
+    } else if (direction == "brooklyn") {
+      $(".shot.current").parents(".frame").find(".strike-point").val("brooklyn")
+      $(".brooklyn-toggle").addClass("active")
+    } else {
+      $(".shot.current").parents(".frame").find(".strike-point").val("")
+    }
+  }
+
   $(".pin-all-toggle").on("click", function(evt) {
     clearTimeout(pinTimer)
     if ($(this).hasClass("fall")) {
@@ -102,8 +124,19 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
     $(this).toggleClass("fall")
   })
-  $(".close-frame").on("click", function() {
+  $(".pocket-toggle").click(function() {
+    var prev_val = $(".shot.current").parents(".frame").find(".strike-point").val()
+    strikePoint(prev_val == "pocket" ? null : "pocket")
+  })
+  $(".brooklyn-toggle").click(function() {
+    var prev_val = $(".shot.current").parents(".frame").find(".strike-point").val()
+    strikePoint(prev_val == "brooklyn" ? null : "brooklyn")
+  })
+  $(".close-frame, .pocket-close, .brooklyn-close").on("click", function() {
     $(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
+    if ($(this).hasClass("pocket-close")) { strikePoint("pocket") }
+    if ($(this).hasClass("brooklyn-close")) { strikePoint("brooklyn") }
+
     addScore("X")
   })
   $(".next-frame").on("click", function(evt) {
@@ -749,6 +782,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     var shot_idx = shots.index(toss)
 
     if (shot_idx == 0) {
+      strikePoint(null)
       shots.each(function() { clearShot(this) })
     } else {
       clearShot(toss)
@@ -900,6 +934,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     toss.addClass("current")
     clearTimeout(pinTimer)
     resetPinFall()
+    resetStrikePoint()
     checkStats()
     updateFallenPins()
   }

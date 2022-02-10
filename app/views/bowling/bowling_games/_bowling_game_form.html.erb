@@ -30,7 +30,7 @@
         <%= label_tag "#{set_params}skip", "Skip?", for: "skip-#{idx}" %>
       </div>
     </span>
-    <div class="actions"> 
+    <div class="actions">
       <% if bowler.persisted? %>
         <div class="btn bowler-sub-btn" data-bowler-name="<%= bowler.name %>" data-bowler-id="<%= bowler.id %>">Sub</div>
       <% end %>
@@ -72,6 +72,7 @@
       <input type="hidden" name="<%= frame_params %>frame_num" value="<%= roll_idx + 1 %>">
       <input type="hidden" name="<%= frame_params %>throw1_remaining" value="<%= frame_detail.throw1_remaining %>" data-shot-idx="0" class="fallen-pins">
       <input type="hidden" name="<%= frame_params %>throw2_remaining" value="<%= frame_detail.throw2_remaining %>" data-shot-idx="1" class="fallen-pins">
+      <input type="hidden" name="<%= frame_params %>strike_point" value="<%= frame_detail.strike_point %>" class="strike-point">
       <div class="score"></div>
     </div>
   <% end %>

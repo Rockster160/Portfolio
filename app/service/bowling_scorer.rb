@@ -87,7 +87,8 @@ module BowlingScorer
       throw3: toss3[:score],
       throw1_remaining: toss1[:pins],
       throw2_remaining: toss2[:pins],
-      throw3_remaining: toss3[:pins]
+      throw3_remaining: toss3[:pins],
+      strike_point: frame_params[:strike_point]
     }
   end
 
@@ -105,7 +106,7 @@ module BowlingScorer
       [10],
     ]
 
-    columns.map { |col| 
+    columns.map { |col|
       (col & pins).any? ? "1" : "0"
     }.join("").match?(/10+1/)
   end

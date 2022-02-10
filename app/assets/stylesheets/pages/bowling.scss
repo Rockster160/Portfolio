@@ -44,6 +44,9 @@
       top: 1px;
       background: $blue-l20;
     }
+    &.active {
+      background: $blue-l5;
+    }
   }
 
   .in-roster {
@@ -446,6 +449,18 @@
     .close-frame {
       grid-area: 3 / 1;
     }
+    .pocket-close {
+      grid-area: 3 / 2;
+    }
+    .brooklyn-close {
+      grid-area: 3 / 3;
+    }
+    .pocket-toggle {
+      grid-area: 4 / 2;
+    }
+    .brooklyn-toggle {
+      grid-area: 4 / 3;
+    }
     .next-frame {
       grid-area: 4 / 1;
     }
@@ -454,7 +469,7 @@
       text-decoration: none;
     }
     .bowling-form-btn {
-      grid-area: 4 / 3;
+      grid-area: 2 / 3;
       margin: 0;
       padding: 0;
     }

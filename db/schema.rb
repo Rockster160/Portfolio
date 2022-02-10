@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20220129010852) do
+ActiveRecord::Schema.define(version: 20220209234526) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -98,6 +98,7 @@ ActiveRecord::Schema.define(version: 20220129010852) do
     t.boolean  "split",            default: false
     t.datetime "created_at",                       null: false
     t.datetime "updated_at",                       null: false
+    t.integer  "strike_point"
     t.index ["bowling_game_id"], name: "index_bowling_frames_on_bowling_game_id", using: :btree
   end
 
@@ -180,18 +181,6 @@ ActiveRecord::Schema.define(version: 20220129010852) do
     t.datetime "updated_at",                   null: false
   end
 
-  create_table "companies", force: :cascade do |t|
-    t.integer  "user_id"
-    t.string   "name"
-    t.string   "recruiter"
-    t.string   "url"
-    t.integer  "status"
-    t.text     "notes"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_companies_on_user_id", using: :btree
-  end
-
   create_table "emails", force: :cascade do |t|
     t.integer  "sent_by_id"
     t.string   "from"
@@ -226,16 +215,6 @@ ActiveRecord::Schema.define(version: 20220129010852) do
     t.text     "results"
     t.datetime "created_at",       null: false
     t.datetime "updated_at",       null: false
-  end
-
-  create_table "interviews", force: :cascade do |t|
-    t.integer  "company_id"
-    t.datetime "start_time"
-    t.text     "participants"
-    t.text     "notes"
-    t.datetime "created_at",   null: false
-    t.datetime "updated_at",   null: false
-    t.index ["company_id"], name: "index_interviews_on_company_id", using: :btree
   end
 
   create_table "lines", force: :cascade do |t|
@@ -348,53 +327,6 @@ ActiveRecord::Schema.define(version: 20220129010852) do
     t.datetime "last_updated"
     t.datetime "created_at",   null: false
     t.datetime "updated_at",   null: false
-  end
-
-  create_table "payment_categories", force: :cascade do |t|
-    t.integer "user_id"
-    t.string  "name"
-    t.index ["user_id"], name: "index_payment_categories_on_user_id", using: :btree
-  end
-
-  create_table "payment_charges", force: :cascade do |t|
-    t.integer  "user_id"
-    t.integer  "payment_category_id"
-    t.integer  "payment_group_id"
-    t.text     "raw"
-    t.string   "amount_in_pennies"
-    t.datetime "occurred_at"
-    t.datetime "created_at",          null: false
-    t.datetime "updated_at",          null: false
-    t.index ["payment_category_id"], name: "index_payment_charges_on_payment_category_id", using: :btree
-    t.index ["payment_group_id"], name: "index_payment_charges_on_payment_group_id", using: :btree
-    t.index ["user_id"], name: "index_payment_charges_on_user_id", using: :btree
-  end
-
-  create_table "payment_groups", force: :cascade do |t|
-  end
-
-  create_table "payment_schedules", force: :cascade do |t|
-    t.integer  "user_id"
-    t.string   "name"
-    t.string   "description"
-    t.integer  "amount_in_pennies"
-    t.datetime "recurrence_start"
-    t.integer  "recurrence_date"
-    t.integer  "recurrence_wday"
-    t.integer  "recurrence_type"
-    t.datetime "created_at",        null: false
-    t.datetime "updated_at",        null: false
-    t.index ["user_id"], name: "index_payment_schedules_on_user_id", using: :btree
-  end
-
-  create_table "plaid_items", force: :cascade do |t|
-    t.integer  "user_id"
-    t.string   "bank_name"
-    t.text     "plaid_item_id"
-    t.text     "plaid_item_access_token"
-    t.datetime "created_at",              null: false
-    t.datetime "updated_at",              null: false
-    t.index ["user_id"], name: "index_plaid_items_on_user_id", using: :btree
   end
 
   create_table "recipe_favorites", force: :cascade do |t|

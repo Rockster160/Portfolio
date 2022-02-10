@@ -82,6 +82,7 @@ module Bowling
             :throw1_remaining,
             :throw2_remaining,
             :throw3_remaining,
+            :strike_point,
           ]
         ]
       ).tap do |whitelist|
