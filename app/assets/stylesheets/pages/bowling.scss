@@ -78,6 +78,7 @@
     position: absolute;
     bottom: 0;
     left: calc(50% - #{$pin_width / 2});
+    &, * { touch-action: manipulation; }
 
     .pin-wrapper {
       position: relative;
