@@ -34,22 +34,33 @@ module BowlingStats
       obj[pins][1] += count
     end.sort_by { |pins, (picked, total)| pins.length }
 
-    counts.map { |pins, (picked, total)| "#{pins}: #{picked}/#{total} (#{((picked/total.to_f)*100).round}%)" }
+    counts.map { |pins, (picked, total)| "[#{JSON.parse(pins).join("-")}] #{picked}/#{total} (#{((picked/total.to_f)*100).round}%)" }
   end
 
-  def strike_count_frames(count=4)
-    # Should filter by league
-    # count should default to num of league bowlers
-    BowlingFrame
-      .where(throw1: 10)
-      .joins(:game)
-      .group(:set_id, :game_num, :frame_num)
-      .count(:id)
-      .select { |set_game_frame, num| num == count }
+  def set_strike_frames(set, missed=0, min=2)
+    set.frames.
+      where(throw1: 10).
+      joins(:game).
+      group("bowling_games.set_id", "bowling_games.game_num", "bowling_frames.frame_num").
+      count(:id).
+      select { |set_game_frame, num|
+        next if num < min
+        num == (set.games.attended.where(game_num: set_game_frame[1]).count - missed)
+      }
   end
 
-  def missed_drink_frames
-    set_game_frames = strike_count_frames(3).keys
+  def strike_count_frames(league, missed=0)
+    {}.tap do |set_game_frames|
+      league.sets.order(:created_at).joins(:games).distinct.each do |set|
+        set_game_frames.merge!(set_strike_frames(set, missed))
+      end
+    end
+  end
+
+  def missed_drink_frames(league)
+    # ActiveRecord::Base.logger.level = 1
+    # ActiveRecord::Base.logger.level = 0
+    set_game_frames = strike_count_frames(league, 1).keys
 
     set_game_frames.each_with_object({}) do |(set_id, game_num, frame_num), obj|
       blamed_bowler_id = BowlingFrame.joins(:game).where(

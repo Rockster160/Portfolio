@@ -22,6 +22,7 @@ class BowlingSet < ApplicationRecord
     inverse_of: :set,
     dependent: :destroy
   has_many :bowlers, through: :games
+  has_many :frames, through: :games, source: :new_frames
 
   accepts_nested_attributes_for :games
 

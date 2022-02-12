@@ -7,6 +7,10 @@ module Bowling
       @leagues = current_user.bowling_leagues.order(updated_at: :desc)
     end
 
+    def export
+      BowlingExporter.export(@league)
+    end
+
     def new
       render :form
     end
@@ -43,13 +47,13 @@ module Bowling
 
     def tms
       bowlers = @league.bowlers.ordered
-      missed_drinks = BowlingStats.missed_drink_frames
+      missed_drinks = BowlingStats.missed_drink_frames(@league)
 
       @stats = {
-        "Team Drink Frames": [["Kaizoku", BowlingStats.strike_count_frames(4).length]],
+        "Team Drink Frames": [[@league.team_name, BowlingStats.strike_count_frames(@league).length]],
         "Ten Pins": bowlers.map { |bowler|
           pickup = BowlingStats.pickup(bowler, [10])
-          [bowler.name, "#{pickup[0]}/#{pickup[1]}", BowlingStats.percent(*pickup)] 
+          [bowler.name, "#{pickup[0]}/#{pickup[1]}", BowlingStats.percent(*pickup)]
         },
         "Missed Drink Frames": bowlers.map { |bowler| [bowler.name, missed_drinks[bowler.id]] },
         "Splits Converted": bowlers.map { |bowler| [bowler.name, *BowlingStats.split_data(bowler)] },

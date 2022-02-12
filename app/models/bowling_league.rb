@@ -20,6 +20,7 @@ class BowlingLeague < ApplicationRecord
   has_many :bowlers, foreign_key: :league_id, dependent: :destroy, inverse_of: :league
   has_many :sets, class_name: "BowlingSet", foreign_key: :league_id, dependent: :destroy, inverse_of: :league
   has_many :games, through: :sets
+  has_many :frames, through: :games, source: :new_frames
 
   accepts_nested_attributes_for :bowlers, allow_destroy: true
 
