@@ -1,3 +1,7 @@
+<% content_for(:viewport_tag) do %>
+  <meta name="viewport" content="width=device-width, initial-scale=0.7, maximum-scale=0.7, user-scalable=no">
+<% end %>
+
 <% game_num = (params[:game].presence || 1).to_i %>
 <%= render_modal "card-hands", "Hands" do %>
   <ul>
