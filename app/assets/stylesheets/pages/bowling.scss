@@ -412,6 +412,7 @@
     z-index: 1;
     margin: 10px auto;
     text-align: center;
+    touch-action: manipulation;
 
     .bowling-keypad-entry {
       grid-gap: 5px;
