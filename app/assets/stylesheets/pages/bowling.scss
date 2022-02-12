@@ -1,5 +1,6 @@
 .ctr-bowling_leagues, .ctr-bowling_sets, .ctr-bowling_games {
   overscroll-behavior: contain;
+  * { touch-action: manipulation; }
 
   .bowler-form {
     position: relative;

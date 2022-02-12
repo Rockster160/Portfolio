@@ -940,6 +940,8 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   }
 
   checkStats = function() {
+    if (!pin_mode_show) { return }
+
     var stats = $(".stats-holder")
     stats.html("")
 
@@ -948,7 +950,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     second_throw = second_throw || (shotIndex(toss) == 2 && currentTossAtIdx(1).attr("data-score") < 10)
 
     if (!second_throw) { return }
-    if (!pin_mode_show) { return }
 
     var url = stats.attr("data-stats-url")
     var bowler_id = toss.parents(".bowler").attr("data-bowler-id")
