@@ -183,7 +183,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       if (enable_pin_timer) { $(".next-frame").click() }
     }, 3000)
   })
-  $(document).on("click", function(evt) {
+  $(document).on("click touchstart", function(evt) {
     evt.preventDefault()
     pin_knock = undefined
 
@@ -193,6 +193,8 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       target.parents(".pin-wrapper:not(.fallen-before)").toggleClass("fallen").trigger("pin:change")
     }
     return false
+  }).on("touchend", function(evt) {
+    evt.preventDefault()
   }).on("mousemove", function(evt) {
     if (evt.which != 1) { return }
 
