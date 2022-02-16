@@ -194,7 +194,11 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
     return false
   }).on("touchend", function(evt) {
-    evt.preventDefault()
+    var target = $(evt.target)
+
+    if (target.hasClass("pin")) {
+      evt.preventDefault()
+    }
   }).on("mousemove", function(evt) {
     if (evt.which != 1) { return }
 
