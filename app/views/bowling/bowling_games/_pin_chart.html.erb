@@ -1,0 +1,15 @@
+<% standing ||= [] %>
+<% down ||= [] %>
+<% prev ||= [] %>
+<% fallen = down.presence || ((1..10).to_a - standing) %>
+
+<div class="pins">
+  <% 10.times do |t| %>
+    <div class="pin-container" data-pin-num="<%= t + 1 %>">
+      <div class="pin-wrapper <%= 'fallen' if fallen.include?(t + 1) %> <%= 'fallen-before' if prev.include?(t + 1) %>" data-pin-num="<%= t + 1 %>">
+        <span class="pin-num"><%= t + 1 %></span>
+        <%= svg "bowling/pin", class: "pin" %>
+      </div>
+    </div>
+  <% end %>
+</div>

@@ -34,7 +34,14 @@ module BowlingStats
       obj[pins][1] += count
     end.sort_by { |pins, (picked, total)| pins.length }
 
-    counts.map { |pins, (picked, total)| "[#{JSON.parse(pins).join("-")}] #{picked}/#{total} (#{((picked/total.to_f)*100).round}%)" }
+    counts.map { |pins, (picked, total)|
+      {
+        pins: JSON.parse(pins),
+        picked: picked,
+        total: total,
+        ratio: "#{((picked/total.to_f)*100).round}%",
+      }
+    }
   end
 
   def set_strike_frames(set, missed=0, min=2)

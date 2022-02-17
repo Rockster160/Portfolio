@@ -184,6 +184,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }, 3000)
   })
   $(document).on("click touchstart", function(evt) {
+    if (evt.target.name == "commit") { return }
     evt.preventDefault()
     pin_knock = undefined
 

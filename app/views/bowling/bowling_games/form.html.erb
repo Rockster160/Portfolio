@@ -113,16 +113,7 @@
       <div class="numpad-key entry">/</div>
     </div>
     <div class="bowling-keypad-entry" data-pins-show=show>
-      <div class="pins">
-        <% 10.times do |t| %>
-          <div class="pin-container" data-pin-num="<%= t + 1 %>">
-            <div class="pin-wrapper" data-pin-num="<%= t + 1 %>">
-              <span class="pin-num"><%= t + 1 %></span>
-              <%= svg "bowling/pin", class: "pin" %>
-            </div>
-          </div>
-        <% end %>
-      </div>
+      <%= render partial: "pin_chart" %>
     </div>
 
     <div class="bowling-keypad-entry">
