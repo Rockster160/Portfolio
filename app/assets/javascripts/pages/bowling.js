@@ -185,7 +185,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }, 3000)
   })
   $(document).on("click touchstart", function(evt) {
-    if (evt.target.name == "commit") { return }
+    if (evt.target.name == "commit" || $(evt.target).hasClass("numpad-key")) { return }
     evt.preventDefault()
     pin_knock = undefined
 
@@ -438,8 +438,6 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   updateFallenPins = function() {
     var toss = $(".shot.current")
 
-    // $(".pin-wrapper").removeClass("fallen").removeClass("fallen-before")
-
     if (toss.parents(".frame").attr("data-frame") == "10") { return updateTenthFallenPins() }
 
     var prev_shot = toss.parents(".frame").find(".shot[data-shot-idx=" + (parseInt(toss.attr("data-shot-idx")) - 1) + "]")
@@ -590,9 +588,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   })
 
   resetPinFall = function() {
-    // $(".pin-all-toggle").addClass("fall")
-    if ($(".pin-all-toggle").hasClass("fall")) {
-    } else {
+    if (!$(".pin-all-toggle").hasClass("fall")) {
       $(".pin-wrapper").addClass("fallen")
     }
   }
