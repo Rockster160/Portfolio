@@ -52,6 +52,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   var pin_knock = undefined
   var pinTimer = undefined
   var enable_pin_timer = true
+  var should_check_stats = true
 
   var editing = false
   var pin_mode_show = true
@@ -482,9 +483,12 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   }
 
   fillRandomScores = function() {
+    var hold = should_check_stats
+    should_check_stats = false
     while($(".shot.current").length > 0) {
       addScore(Math.floor(Math.random() * 11))
     }
+    should_check_stats = hold
   }
 
   $(document).on("click", ".shot", function() {
@@ -950,17 +954,26 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     var stats = $(".stats-holder")
     stats.html("")
 
-    if (!pin_mode_show) { return }
+    if (!pin_mode_show || !should_check_stats) { return }
 
     var toss = $(".shot.current")
-    var second_throw = shotIndex(toss) == 1 && currentTossAtIdx(0).attr("data-score") < 10
-    second_throw = second_throw || (shotIndex(toss) == 2 && currentTossAtIdx(0).attr("data-score") == 10 && currentTossAtIdx(1).attr("data-score") < 10)
+    if (toss.length == 0) { return }
 
-    if (!second_throw) { return }
+    var shotIdx = shotIndex(toss)
+    var first_throw = shotIdx == 0
+    if (currentFrame() == 10) {
+      first_throw = first_throw || (shotIdx == 1 && currentTossAtIdx(0).attr("data-score") == 10)
+      first_throw = first_throw || (shotIdx == 2 && currentTossAtIdx(1).attr("data-score") == 10 || currentTossAtIdx(1).val() == "/")
+    }
 
     var url = stats.attr("data-stats-url")
     var bowler_id = toss.parents(".bowler").attr("data-bowler-id")
-    var pins = fallenPinsForShot(currentTossAtIdx(shotIndex(toss) - 1)).val()
+    var pins
+    if (first_throw) {
+      pins = undefined
+    } else {
+      pins = fallenPinsForShot(currentTossAtIdx(shotIndex(toss) - 1)).val()
+    }
 
     stats.html("<i class=\"fa fa-spinner fa-spin\"></i>")
 

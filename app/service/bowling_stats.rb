@@ -8,12 +8,16 @@ module BowlingStats
   end
 
   def pickup(bowler, str_pins)
-    str_pins = "[#{str_pins.sort.join(",")}]" unless str_pins.is_a?(String)
+    if str_pins.nil?
+      [bowler.frames.where(strike: true).count, bowler.frames.count]
+    else
+      str_pins = "[#{str_pins.sort.join(",")}]" unless str_pins.is_a?(String)
 
-    left = bowler.frames.where(throw1_remaining: str_pins)
-    # tleft = bowler.frames.where(throw1_remaining: "[]", throw2_remaining: str_pins)
+      left = bowler.frames.where(throw1_remaining: str_pins)
+      # tleft = bowler.frames.where(throw1_remaining: "[]", throw2_remaining: str_pins)
 
-    [left.where(spare: true).count, left.count]
+      [left.where(spare: true).count, left.count]
+    end
   end
 
   def split_conversions(bowler)
