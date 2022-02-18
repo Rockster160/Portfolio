@@ -420,6 +420,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   knockPinsForShot = function(shot, klass) {
     var pins_kept = fallenPinsForShot(shot).val()
+    $(".pin-wrapper").removeClass(klass)
 
     if (pins_kept) {
       var pins = JSON.parse(pins_kept)
@@ -427,12 +428,17 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
       knocked.forEach(function(pin) {
         $(".pin-wrapper[data-pin-num=" + pin + "]").addClass(klass)
       })
+    } else {
+      if (!$(".pin-all-toggle").hasClass("fall")) {
+        $(".pin-wrapper").addClass("fallen")
+      }
     }
   }
 
   updateFallenPins = function() {
     var toss = $(".shot.current")
-    $(".pin-wrapper").removeClass("fallen").removeClass("fallen-before")
+
+    // $(".pin-wrapper").removeClass("fallen").removeClass("fallen-before")
 
     if (toss.parents(".frame").attr("data-frame") == "10") { return updateTenthFallenPins() }
 
@@ -584,7 +590,11 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   })
 
   resetPinFall = function() {
-    $(".pin-all-toggle").addClass("fall")
+    // $(".pin-all-toggle").addClass("fall")
+    if ($(".pin-all-toggle").hasClass("fall")) {
+    } else {
+      $(".pin-wrapper").addClass("fallen")
+    }
   }
 
   throwScore = function(text) {
