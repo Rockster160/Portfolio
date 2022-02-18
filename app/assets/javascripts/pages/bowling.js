@@ -947,14 +947,14 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   }
 
   checkStats = function() {
-    if (!pin_mode_show) { return }
-
     var stats = $(".stats-holder")
     stats.html("")
 
+    if (!pin_mode_show) { return }
+
     var toss = $(".shot.current")
     var second_throw = shotIndex(toss) == 1 && currentTossAtIdx(0).attr("data-score") < 10
-    second_throw = second_throw || (shotIndex(toss) == 2 && currentTossAtIdx(1).attr("data-score") < 10)
+    second_throw = second_throw || (shotIndex(toss) == 2 && currentTossAtIdx(0).attr("data-score") == 10 && currentTossAtIdx(1).attr("data-score") < 10)
 
     if (!second_throw) { return }
 
