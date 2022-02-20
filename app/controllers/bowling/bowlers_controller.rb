@@ -22,8 +22,10 @@ module Bowling
     end
 
     def throw_stats
-      @league = current_user.bowling_leagues.find(params[:league_id])
-      @bowler = Bowler.find(params[:bowler_id])
+      @league = current_user.bowling_leagues.find_by(id: params[:league_id])
+      @bowler = @league&.bowlers&.find_by(id: params[:bowler_id])
+
+      return render json: { status: :ok, stats: {} }
 
       stats = BowlingStats.pickup(@bowler, params[:pins])
 

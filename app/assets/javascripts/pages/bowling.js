@@ -965,6 +965,9 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     var toss = $(".shot.current")
     if (toss.length == 0) { return }
 
+    var bowler_id = toss.parents(".bowler").attr("data-bowler-id")
+    if (bowler_id.length == 0) { return }
+
     var shotIdx = shotIndex(toss)
     var first_throw = shotIdx == 0
     if (currentFrame() == 10) {
@@ -973,7 +976,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }
 
     var url = stats.attr("data-stats-url")
-    var bowler_id = toss.parents(".bowler").attr("data-bowler-id")
+
     var pins
     if (first_throw) {
       pins = undefined
