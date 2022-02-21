@@ -133,6 +133,10 @@
     @include pin_chart(100px, 279px);
   }
 
+  .pin-input {
+    touch-action: none;
+  }
+
   .pin-stat-wrapper {
     display: inline-block;
     text-align: center;

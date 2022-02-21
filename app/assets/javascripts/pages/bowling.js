@@ -231,6 +231,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     } else {
       $target.parents(".pin-wrapper:not(.fallen-before)").removeClass("fallen").trigger("pin:change")
     }
+    return false
   })
 
   swap = function($ele1, $ele2) {
