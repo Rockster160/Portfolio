@@ -442,6 +442,10 @@
     margin: 10px auto;
     text-align: center;
 
+    .pin-input {
+      grid-area: 1 / 2;
+    }
+
     .bowling-keypad-entry {
       grid-gap: 5px;
       display: grid;
@@ -527,29 +531,39 @@
 
   @include small-down {
     .bowling-input {
-      right: auto;
-      left: calc((50vw - 50%) * -1);
-      transform: translate(calc(50vw - 50%));
+      display: block;
 
-      &.left {
-        right: auto;
-        left: 20px;
-        transform: none;
+      .bowling-keypad-entry:not(.pin-input) {
+        display: block;
+        bottom: 250px;
+
+        .numpad-key, .bowling-form-btn {
+          height: 30px;
+          font-size: 16px;
+          line-height: 30px;
+          padding: 0 5px;
+          min-width: 80px;
+          margin: 5px;
+        }
+        .numpad-key.next-frame {
+          position: fixed;
+          top: auto;
+          bottom: 40px;
+          left: calc(50% + 50px);
+        }
+        .stats-holder {
+          position: fixed;
+          top: auto;
+          bottom: 40px;
+          left: calc(50% - 130px);
+        }
+
+        .pin-svg-wrapper svg { height: 16px; }
       }
 
-      &.right {
-        right: 20px;
-        left: auto;
-        transform: none;
+      .bowling-keypad-entry {
+        @include pin_chart(80px, 225px);
       }
-    }
-    .bowling-navigation {
-      display: flex;
-      position: fixed;
-      right: 0;
-      bottom: 350px;
-      left: 0;
-      justify-content: space-between;
     }
   }
 }

@@ -1,3 +1,7 @@
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=0.7, maximum-scale=0.7, user-scalable=no" />
+<% end %>
+
 <% game ||= BowlingGame.new(game_num: params[:game] || 1) %>
 <% idx ||= 0 %>
 <% bowler ||= game.bowler || Bowler.new %>
