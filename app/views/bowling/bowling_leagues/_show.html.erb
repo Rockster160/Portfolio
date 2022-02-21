@@ -2,10 +2,14 @@
   <tr class="line-bot">
     <td>Name</td>
     <td>Ave</td>
-    <td>HDCP</td>
+    <% if league.handicap_calculation.present? %>
+      <td>HDCP</td>
+    <% end %>
     <td>Gms</td>
     <td>Pins</td>
-    <td>Points</td>
+    <% if league.bowlers.many? %>
+      <td>Points</td>
+    <% end %>
     <td>High Game</td>
     <td>High Series</td>
   </tr>
@@ -13,10 +17,14 @@
     <tr class="league-bowler">
       <td><%= bowler.name %></td>
       <td class="text-right"><%= bowler.average || "-" %></td>
-      <td class="text-right"><%= bowler.handicap || "-" %></td>
+      <% if league.handicap_calculation.present? %>
+        <td class="text-right"><%= bowler.handicap || "-" %></td>
+      <% end %>
       <td class="text-right"><%= number_with_delimiter(bowler.total_games) || "-" %></td>
       <td class="text-right"><%= number_with_delimiter(bowler.total_pins) || "-" %></td>
-      <td class="text-right"><%= number_with_delimiter(bowler.total_points) || "-" %></td>
+      <% if league.bowlers.many? %>
+        <td class="text-right"><%= number_with_delimiter(bowler.total_points) || "-" %></td>
+      <% end %>
       <td class="text-right"><%= number_with_delimiter(bowler.high_game) || "-" %></td>
       <td class="text-right"><%= number_with_delimiter(bowler.high_series) || "-" %></td>
     </tr>

@@ -11,7 +11,8 @@ module BowlingStats
     if str_pins.nil?
       [bowler.frames.where(strike: true).count, bowler.frames.count]
     else
-      str_pins = "[#{str_pins.sort.join(",")}]" unless str_pins.is_a?(String)
+      str_pins = JSON.parse(str_pins) rescue str_pins
+      str_pins = "[#{str_pins.sort.join(", ")}]" unless str_pins.is_a?(String)
 
       left = bowler.frames.where(throw1_remaining: str_pins)
       # tleft = bowler.frames.where(throw1_remaining: "[]", throw2_remaining: str_pins)

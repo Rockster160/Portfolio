@@ -5,7 +5,9 @@
 <table class="bowling-set-summary">
   <tr>
     <td>Name</td>
-    <td>HDCP</td>
+    <% if set.league.handicap_calculation.present? %>
+      <td>HDCP</td>
+    <% end %>
     <% set.league.games_per_series.times do |t| %>
       <td class="text-center"><%= t + 1 %></td>
     <% end %>
@@ -13,7 +15,9 @@
     <td>Change</td>
     <td>Scratch</td>
     <td>Total</td>
-    <td>Points</td>
+    <% if set.bowlers.distinct.many? %>
+      <td>Points</td>
+    <% end %>
   </tr>
 
   <% set.ordered_bowlers.each do |bowler| %>
@@ -21,7 +25,9 @@
     <% bowler_set = set.bowler_sets.find_by(bowler: bowler) %>
     <tr>
       <td><%= bowler.name %></td>
-      <td class="text-right"><%= bowler_set&.handicap %></td>
+      <% if set.league.handicap_calculation.present? %>
+        <td class="text-right"><%= bowler_set&.handicap %></td>
+      <% end %>
       <% set.league.games_per_series.times do |t| %>
         <% game = games[t] %>
         <td class="text-right <%= "bowling-winner" if game&.game_point? %> <%= 'absent-game' if game&.absent? %>">
@@ -32,13 +38,17 @@
       <td class="text-right"><%= posi_checker(bowler_set&.avg_diff) %></td>
       <td class="text-right"><%= games.sum(:score) %></td>
       <td class="text-right <%= "bowling-winner" if set.winner?(bowler) %>"><%= games.total_scores %></td>
-      <td class="text-right"><%= games.points + (set.winner?(bowler) ? 1 : 0) %></td>
+      <% if set.bowlers.distinct.many? %>
+        <td class="text-right"><%= games.points + (set.winner?(bowler) ? 1 : 0) %></td>
+      <% end %>
     </tr>
   <% end %>
 
   <tr>
     <td></td>
-    <td></td>
+    <% if set.league.handicap_calculation.present? %>
+      <td></td>
+    <% end %>
     <% set.league.games_per_series.times do |t| %>
       <td class="text-right"><%= number_with_delimiter(set.games.where(game_num: t+1).sum(:score)) %></td>
     <% end %>
@@ -46,6 +56,8 @@
     <td class="text-right"></td>
     <td class="text-right"><%= number_with_delimiter(set.games.sum(:score)) %></td>
     <td class="text-right"><%= number_with_delimiter(set.games.total_scores) %></td>
-    <td></td>
+    <% if set.bowlers.distinct.many? %>
+      <td></td>
+    <% end %>
   </tr>
 </table>

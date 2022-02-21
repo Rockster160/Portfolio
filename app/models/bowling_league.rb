@@ -27,7 +27,7 @@ class BowlingLeague < ApplicationRecord
   def self.create_default(user)
     formatted_date = Time.current.to_formatted_s(:short_day_month)
 
-    create(name: formatted_date, user: user)
+    create(name: formatted_date, user: user, handicap_calculation: "")
   end
 
   def roster
