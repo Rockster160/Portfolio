@@ -341,6 +341,18 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     })
 
     showModal("#bowler-sub-list")
+  }).on("click", ".edit-bowler-name", function(evt) {
+    evt.preventDefault()
+    evt.stopPropagation()
+    var name = prompt("Enter bowler name")
+    if (name.length < 1) { return }
+
+    var bowler = $(this).parents(".bowler")
+
+    bowler.find(".name").html(name)
+    bowler.find(".bowler-options-name").html(name)
+    bowler.find(".bowler-name-field").val(name)
+    bowler.find(".bowler-sub-btn").attr("data-bowler-name", name)
   })
 
   $(document).on("change", ".absent-checkbox", function() {

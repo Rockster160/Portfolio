@@ -16,7 +16,7 @@
 
   <div class="bowler-options hidden" data-edit>
     <span class="details">
-      <b><%= bowler.name %></b>
+      <b class="bowler-options-name"><%= bowler.name %></b>
       <% if (avg = bowler_set&.starting_avg || bowler.average)&.positive? %>
         <small>AVG:</small> <%= avg %>
       <% end %>
@@ -49,7 +49,16 @@
         <span class="avg-label">HDCP:</span> <%= hdcp %>
       <% end %>
     </span>
-    <span class="name"><%= bowler.name %> <span class="absent-bowler <%= 'hidden' unless game.absent? %>">[A]</span></span>
+    <span class="name">
+      <% if bowler.name.present? %>
+        <%= bowler.name %> <span class="absent-bowler <%= 'hidden' unless game.absent? %>">[A]</span>
+      <% else %>
+        <span class="edit-bowler-name btn">
+          <i class="fa fa-pencil"></i>
+          Name
+        </span>
+      <% end %>
+    </span>
     <div class="prev-scores">
       <% (game.game_num - 1).times do |t| %>
         <% prev_game = @set&.games&.find_by(bowler: bowler, game_num: t + 1) %>
