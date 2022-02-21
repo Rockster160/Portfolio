@@ -44,8 +44,8 @@ class BowlingSet < ApplicationRecord
       end
     end
 
-    # Now, with updated handicaps, find the high bowler for each game.
-    if bowlers.many?
+    if bowlers.distinct.many?
+      # Now, with updated handicaps, find the high bowler for each game.
       games.group_by(&:game_num).each do |pos, grouped_games|
         high_score = grouped_games.map { |game| game.total_score }.max
         # Ties count as a point for each

@@ -601,7 +601,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   resetPinFall = function() {
     if (!$(".pin-all-toggle").hasClass("fall")) {
-      $(".pin-wrapper").addClass("fallen")
+      $(".pin-wrapper").addClass("fallen").removeClass("fallen-before")
     }
   }
 
