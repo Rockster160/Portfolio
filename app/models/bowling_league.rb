@@ -35,14 +35,14 @@ class BowlingLeague < ApplicationRecord
   end
 
   def handicap_from_average(average)
-    return if average.blank?
+    return if average.blank? || handicap_calculation.blank?
     return if handicap_calculation.gsub("AVG", "").match?(/[a-z]/i)
     # (210 - AVG) * 0.95
     eval(handicap_calculation.gsub("AVG", average.to_s)).floor
   end
 
   def absent_score(average)
-    return if average.blank?
+    return if average.blank? || absent_calculation.blank?
     return if absent_calculation.gsub("AVG", "").match?(/[a-z]/i)
     # AVG - 10
     eval(absent_calculation.gsub("AVG", average.to_s)).floor
