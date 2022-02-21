@@ -8,11 +8,13 @@
       <% frame_detail = game.frame_details[t] %>
       <% rolls = frame_detail.rolls %>
       <%
-        corner_side = t == 0 ? "l" : (t == 9 ? "r" : nil)
-        corner_top = row_idx == 0 ? "t" : (row_idx == game_count - 1 ? "b" : nil)
-        corner = (corner_side.present? && corner_top.present? ? "#{corner_top}#{corner_side}" : nil)
+        corner_classes = []
+        corner_classes << "l" if t == 0
+        corner_classes << "r" if t == 9
+        corner_classes << "t" if row_idx == 0
+        corner_classes << "b" if row_idx == game_count - 1
       %>
-      <div class="bowling-cell <%= "corner-#{corner}" if corner.present? %>">
+      <div class="bowling-cell <%= corner_classes.map { |klass| "edge-#{klass}" }.join(" ") %>">
         <div class="bowling-toss <%= "split" if frame_detail.split? && frame_detail.rolls[0] != "X" %>"><%= frame_detail.rolls[0] %></div>
         <div class="bowling-toss <%= "split" if frame_detail.split? && frame_detail.rolls[0] == "X" %>"><%= frame_detail.rolls[1] %></div>
         <% if t == 9 # 10th %>

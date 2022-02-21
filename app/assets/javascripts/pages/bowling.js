@@ -119,9 +119,9 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
   $(".pin-all-toggle").on("click", function(evt) {
     clearTimeout(pinTimer)
     if ($(this).hasClass("fall")) {
-      $(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
+      $(".pin-wrapper:not(.fallen-before)").addClass("fallen")
     } else {
-      $(".pin-wrapper:not(.fallen-before)").removeClass("fallen").trigger("pin:change")
+      $(".pin-wrapper:not(.fallen-before)").removeClass("fallen")
     }
     $(this).toggleClass("fall")
   })

@@ -415,16 +415,16 @@
           content: "";
         }
       }
-      &.corner-tl .bowling-toss:first-of-type {
+      &.edge-t.edge-l .bowling-toss:first-of-type {
         border-top-left-radius: 5px;
       }
-      &.corner-tr .bowling-toss:last-of-type {
+      &.edge-t.edge-r .bowling-toss:last-of-type {
         border-top-right-radius: 5px;
       }
-      &.corner-bl .bowling-toss:first-of-type {
+      &.edge-b.edge-l .bowling-toss:first-of-type {
         border-bottom-left-radius: 5px;
       }
-      &.corner-br .bowling-toss:last-of-type {
+      &.edge-b.edge-r .bowling-toss:last-of-type {
         border-bottom-right-radius: 5px;
       }
     }

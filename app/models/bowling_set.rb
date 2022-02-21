@@ -45,19 +45,21 @@ class BowlingSet < ApplicationRecord
     end
 
     # Now, with updated handicaps, find the high bowler for each game.
-    games.group_by(&:game_num).each do |pos, grouped_games|
-      high_score = grouped_games.map { |game| game.total_score }.max
-      # Ties count as a point for each
-      grouped_games.each { |game| game.update(game_point: true) if game.total_score == high_score }
-    end
+    if bowlers.many?
+      games.group_by(&:game_num).each do |pos, grouped_games|
+        high_score = grouped_games.map { |game| game.total_score }.max
+        # Ties count as a point for each
+        grouped_games.each { |game| game.update(game_point: true) if game.total_score == high_score }
+      end
 
-    # Find the bowler who won the total pins
-    totals = games.group_by(&:bowler_id).map do |bowler_id, grouped_games|
-      [bowler_id, grouped_games.sum(&:total_score)]
+      # Find the bowler who won the total pins
+      totals = games.group_by(&:bowler_id).map do |bowler_id, grouped_games|
+        [bowler_id, grouped_games.sum(&:total_score)]
+      end
+      high_total = totals.map(&:last).max
+      found_winner_ids = totals.select { |id_score| id_score.last == high_total }
+      update(winner: ",#{found_winner_ids.map(&:first).join(",")},")
     end
-    high_total = totals.map(&:last).max
-    found_winner_ids = totals.select { |id_score| id_score.last == high_total }
-    update(winner: ",#{found_winner_ids.map(&:first).join(",")},")
 
     bowlers.distinct.each do |bowler|
       bowler.recalculate_scores
