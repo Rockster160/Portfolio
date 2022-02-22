@@ -1,0 +1,38 @@
+<div class="detail-bowling-table">
+  <div class="bowling-cell center-text">Name</div>
+  <% 10.times do |t| %>
+    <div class="bowling-cell text-center"><%= t + 1 %></div>
+  <% end %>
+  <div class="bowling-cell"></div>
+  <div class="bowling-cell"></div>
+
+  <% games.order(:position).each_with_index do |game, row_idx| %>
+    <div class="bowling-cell center-text">
+      <%= "&#9824; ".html_safe if game.card_point? %><%= game.bowler.name %>
+    </div>
+    <% game.frame_details.each do |frame| %>
+      <div class="bowling-cell">
+        <div class="pin-detail">
+          <% frame.pin_fall_details.each do |frame_details| %>
+            <div class="dot-pin-chart">
+              <%= render partial: "bowling/bowling_games/pin_chart", locals: {
+                prev: frame_details[0],
+                down: frame_details[1],
+                dot: true,
+              } %>
+            </div>
+          <% end %>
+        </div>
+        <div class="toss-wrapper">
+          <div class="bowling-toss <%= "split" if frame.split? && frame.rolls[0] != "X" %>"><%= frame.rolls[0] %></div>
+          <div class="bowling-toss <%= "split" if frame.split? && frame.rolls[0] == "X" %>"><%= frame.rolls[1] %></div>
+          <% if frame.tenth? %>
+            <div class="bowling-toss"><%= frame.rolls[2] %></div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+    <div class="bowling-cell center-text"><%= game.score %></div>
+    <div class="bowling-cell center-text <%= "bowling-winner" if game.game_point? %> <%= 'absent-game' if game.absent? %>"><%= game.total_score %></div>
+  <% end %>
+</div>

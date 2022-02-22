@@ -1,12 +1,17 @@
 <% down ||= [] %>
 <% prev ||= [] %>
+<% dot ||= false %>
 
 <div class="pins">
   <% 10.times do |t| %>
     <div class="pin-container" data-pin-num="<%= t + 1 %>">
       <div class="pin-wrapper <%= 'fallen' if down.include?(t + 1) %> <%= 'fallen-before' if prev.include?(t + 1) %>" data-pin-num="<%= t + 1 %>">
-        <span class="pin-num"><%= t + 1 %></span>
-        <%= svg "bowling/pin", class: "pin" %>
+        <% if dot %>
+          <span class="pin-dot">•</span>
+        <% else %>
+          <span class="pin-num"><%= t + 1 %></span>
+          <%= svg "bowling/pin", class: "pin" %>
+        <% end %>
       </div>
     </div>
   <% end %>

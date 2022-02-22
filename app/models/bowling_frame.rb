@@ -38,4 +38,54 @@ class BowlingFrame < ApplicationRecord
 
     [roll1, roll2, roll3]
   end
+
+  def tenth?
+    frame_num == 10
+  end
+
+  def pin_fall_details
+    return [] if throw1_remaining.nil?
+    return [[throw1_fallen, throw2_fallen]] if throw3_remaining.nil?
+
+    [].tap do |fall|
+      if throw1_remaining == "[]" # Strike
+        fall << [throw1_fallen]
+
+        if throw2_remaining == "[]" # Strike
+          fall << [throw2_fallen]
+          fall << [throw3_fallen]
+        else
+          fall << [throw2_fallen, throw3_fallen]
+        end
+      else
+        fall << [throw1_fallen, throw2_fallen]
+        fall << [throw3_fallen]
+      end
+    end
+  end
+
+  def fallen(remaining)
+    remaining = JSON.parse(remaining) rescue nil if remaining.is_a?(String)
+    return unless remaining.is_a?(Array)
+
+    (1..10).to_a - remaining
+  end
+
+  def throw1_fallen
+    return @throw1_fallen if defined?(@throw1_fallen)
+
+    @throw1_fallen = fallen(throw1_remaining)
+  end
+
+  def throw2_fallen
+    return @throw2_fallen if defined?(@throw2_fallen)
+
+    @throw2_fallen = fallen(throw2_remaining)
+  end
+
+  def throw3_fallen
+    return @throw3_fallen if defined?(@throw3_fallen)
+
+    @throw3_fallen = fallen(throw3_remaining)
+  end
 end

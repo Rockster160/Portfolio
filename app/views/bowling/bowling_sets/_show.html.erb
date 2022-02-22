@@ -31,7 +31,7 @@
       <% set.league.games_per_series.times do |t| %>
         <% game = games[t] %>
         <td class="text-right <%= "bowling-winner" if game&.game_point? %> <%= 'absent-game' if game&.absent? %>">
-          <%= "*" if game&.card_point? %><%= game&.score %>
+          <%= "&#9824; ".html_safe if game&.card_point? %><%= game&.score %>
         </td>
       <% end %>
       <td class="text-right"><%= bowler_set&.this_avg %>/<%= bowler_set&.starting_avg %>/<%= bowler_set&.ending_avg %></td>

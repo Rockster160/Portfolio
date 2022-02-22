@@ -2,7 +2,7 @@
   <% game_count = games.count %>
   <% games.order(:position).each_with_index do |game, row_idx| %>
     <div class="bowling-cell">
-      <%= "*" if game.card_point? %><%= game.bowler&.name %>
+      <%= "&#9824; ".html_safe if game.card_point? %><%= game.bowler&.name %>
     </div>
     <% 10.times do |t| %>
       <% frame_detail = game.frame_details[t] %>
@@ -15,11 +15,13 @@
         corner_classes << "b" if row_idx == game_count - 1
       %>
       <div class="bowling-cell <%= corner_classes.map { |klass| "edge-#{klass}" }.join(" ") %>">
-        <div class="bowling-toss <%= "split" if frame_detail.split? && frame_detail.rolls[0] != "X" %>"><%= frame_detail.rolls[0] %></div>
-        <div class="bowling-toss <%= "split" if frame_detail.split? && frame_detail.rolls[0] == "X" %>"><%= frame_detail.rolls[1] %></div>
-        <% if t == 9 # 10th %>
-          <div class="bowling-toss"><%= frame_detail.rolls[2] %></div>
-        <% end %>
+        <div class="toss-wrapper">
+          <div class="bowling-toss <%= "split" if frame_detail.split? && frame_detail.rolls[0] != "X" %>"><%= frame_detail.rolls[0] %></div>
+          <div class="bowling-toss <%= "split" if frame_detail.split? && frame_detail.rolls[0] == "X" %>"><%= frame_detail.rolls[1] %></div>
+          <% if t == 9 # 10th %>
+            <div class="bowling-toss"><%= frame_detail.rolls[2] %></div>
+          <% end %>
+        </div>
       </div>
     <% end %>
     <div class="bowling-cell"><%= game.score %></div>

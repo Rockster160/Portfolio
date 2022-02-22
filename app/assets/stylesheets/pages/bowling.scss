@@ -23,14 +23,19 @@
         height: $pin_height;
       }
 
-      .pin-num {
+      .pin-num, .pin-dot {
         position: absolute;
         padding-bottom: $text_offset;
         width: $pin_width;
-        font-size: $text_size;
+        font-size: 14px;
         font-weight: bold;
         user-select: none;
         text-align: center;
+      }
+      .pin-dot {
+        // Alignment for dots is slightly different than text
+        padding-bottom: 0;
+        margin-bottom: -3px;
       }
 
       &.fallen * {
@@ -149,6 +154,15 @@
 
       @include pin_chart(18px, 50px);
     }
+  }
+
+  .dot-pin-chart {
+    display: inline-block;
+    position: relative;
+    height: 30px;
+    width: 30px;
+
+    @include pin_chart(10px, 30px);
   }
 
   .pin-all-toggle.fall svg {
@@ -376,49 +390,52 @@
     }
   }
   .league-set {
-  }
-  .league-game {
-    margin-bottom: 10px;
+    .league-game {
+      margin-bottom: 10px;
+    }
   }
 
-  .small-bowling-table {
+  .small-bowling-table, .detail-bowling-table {
     display: grid;
     grid-template-columns: 80px repeat(9, 60px) 85px repeat(2, 40px);
     margin-bottom: 15px;
     width: auto;
 
     .bowling-cell {
-      display: flex;
-      position: relative;
-      align-items: center;
-      justify-content: flex-end;
-      margin-left: 5px;
-      padding-right: 2px;
-
-      .bowling-toss {
+      .toss-wrapper {
+        display: flex;
         position: relative;
-        z-index: 0;
-        box-sizing: border-box;
-        margin-top: -1px;
-        margin-right: -1px;
-        border: 1px solid $grey-blue;
-        border-collapse: collapse;
-        width: 30px;
-        height: 30px;
-        line-height: 30px;
-        text-align: center;
+        align-items: center;
+        justify-content: center;
+        margin-left: 5px;
+        padding-right: 2px;
 
-        &.split::after {
-          position: absolute;
-          top: 1px;
-          right: 0;
-          bottom: 1px;
-          left: 0;
-          border: 2px solid $flash-alert-bg;
-          border-radius: 100%;
-          content: "";
+        .bowling-toss {
+          position: relative;
+          z-index: 0;
+          box-sizing: border-box;
+          margin-top: -1px;
+          margin-right: -1px;
+          border: 1px solid $grey-blue;
+          border-collapse: collapse;
+          width: 30px;
+          height: 30px;
+          line-height: 30px;
+          text-align: center;
+
+          &.split::after {
+            position: absolute;
+            top: 1px;
+            right: 0;
+            bottom: 1px;
+            left: 0;
+            border: 2px solid $flash-alert-bg;
+            border-radius: 100%;
+            content: "";
+          }
         }
       }
+
       &.edge-t.edge-l .bowling-toss:first-of-type {
         border-top-left-radius: 5px;
       }
@@ -430,6 +447,36 @@
       }
       &.edge-b.edge-r .bowling-toss:last-of-type {
         border-bottom-right-radius: 5px;
+      }
+      &.center-text {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
+  }
+  .detail-bowling-table {
+    font-size: 14px;
+    grid-template-columns: 80px repeat(9, 60px) 100px repeat(2, 40px);
+
+    .bowling-cell {
+      margin: 5px 0;
+
+      .toss-wrapper {
+        .bowling-toss {
+          width: 20px;
+          height: 20px;
+          line-height: 20px;
+
+          &.split::after {
+            top: 0;
+            bottom: 0;
+          }
+        }
+      }
+      .pin-detail {
+        height: 30px;
+        text-align: center;
       }
     }
   }
