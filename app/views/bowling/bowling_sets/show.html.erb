@@ -3,7 +3,7 @@
 
 <%= render partial: "bowling/bowling_sets/show", locals: { set: @set } %>
 
-<% if false || true # This should check if the games have pins entered vs nums %>
+<% if @set.frames.where.not(throw1_remaining: nil).any? %>
   <div class="league-set-pins">
     <% @set.games_complete.times do |t| %>
       <div class="league-game-pins">
@@ -26,3 +26,5 @@
     <% end %>
   </div>
 <% end %>
+***ER
+TH
