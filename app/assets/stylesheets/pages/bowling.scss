@@ -369,6 +369,7 @@
   .bowling-winner {
     background: rgba($blue-l4, 0.7);
     font-weight: bold;
+    border-radius: 2px;
   }
 
   tr.line-bot td {
@@ -448,25 +449,31 @@
       &.edge-b.edge-r .bowling-toss:last-of-type {
         border-bottom-right-radius: 5px;
       }
-      &.center-text {
+      &.box-align-text {
         display: flex;
         align-items: center;
         justify-content: center;
+        padding-bottom: 3px;
+
+        &.bowling-name {
+          justify-content: flex-end;
+          padding-right: 5px;
+        }
       }
     }
   }
   .detail-bowling-table {
-    font-size: 14px;
-    grid-template-columns: 80px repeat(9, 60px) 100px repeat(2, 40px);
+    font-size: 16px;
+    grid-template-columns: 80px repeat(9, 55px) 100px repeat(2, 40px);
 
     .bowling-cell {
-      margin: 5px 0;
+      padding: 10px 0;
 
       .toss-wrapper {
         .bowling-toss {
-          width: 20px;
-          height: 20px;
-          line-height: 20px;
+          width: 24px;
+          height: 24px;
+          line-height: 24px;
 
           &.split::after {
             top: 0;
@@ -477,6 +484,15 @@
       .pin-detail {
         height: 30px;
         text-align: center;
+      }
+      $col_count: 13;
+      @for $i from 1 through $col_count {
+        &:nth-child(#{$col_count*2}n + #{$i + $col_count}) {
+          background: rgba($blue-l4, 0.3);
+        }
+      }
+      &.bowling-winner {
+        background: $blue-l4;
       }
     }
   }

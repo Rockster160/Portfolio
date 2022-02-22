@@ -1,5 +1,5 @@
 <div class="detail-bowling-table">
-  <div class="bowling-cell center-text">Name</div>
+  <div class="bowling-cell box-align-text"></div>
   <% 10.times do |t| %>
     <div class="bowling-cell text-center"><%= t + 1 %></div>
   <% end %>
@@ -7,7 +7,7 @@
   <div class="bowling-cell"></div>
 
   <% games.order(:position).each_with_index do |game, row_idx| %>
-    <div class="bowling-cell center-text">
+    <div class="bowling-cell box-align-text bowling-name">
       <%= "&#9824; ".html_safe if game.card_point? %><%= game.bowler.name %>
     </div>
     <% game.frame_details.each do |frame| %>
@@ -32,7 +32,9 @@
         </div>
       </div>
     <% end %>
-    <div class="bowling-cell center-text"><%= game.score %></div>
-    <div class="bowling-cell center-text <%= "bowling-winner" if game.game_point? %> <%= 'absent-game' if game.absent? %>"><%= game.total_score %></div>
+    <div class="bowling-cell box-align-text"><%= game.score %></div>
+    <div class="bowling-cell box-align-text <%= "bowling-winner" if game.game_point? %> <%= 'absent-game' if game.absent? %>">
+      <%= game.total_score %>
+    </div>
   <% end %>
 </div>
