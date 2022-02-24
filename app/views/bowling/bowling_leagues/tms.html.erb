@@ -1,3 +1,5 @@
+<%= content_for(:title) { "Too Many Stats - #{@league.name}" } %>
+
 <%= link_to "← Back to League", bowling_league_path(@league), class: :btn %>
 
 <h3><%= @league.team_name %></h3>

@@ -1,3 +1,7 @@
+<%= content_for(:title) do %>
+  Summary of <%= Time.current.to_formatted_s(:short_month_day) %> - <%= @set.league.name %>
+<% end %>
+
 <%= link_to "← League", bowling_league_path(@set.league), class: :btn %>
 <%= link_to "Delete Series", bowling_set_path(@set), class: "btn pull-right danger", method: :delete, data: { confirm: "Are you sure you want to delete this series? This cannot be undone." } %>
 

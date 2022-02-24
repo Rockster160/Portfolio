@@ -1,3 +1,11 @@
+<%= content_for(:title) do %>
+  <% if @league.persisted? %>
+    Edit <%= @league.name %>
+  <% else %>
+    New League
+  <% end %>
+<% end %>
+
 <div class="skinny-container">
   <div class="btn-container">
     <a href="<%= bowling_games_path %>" class="btn">&larr; Back</a>
