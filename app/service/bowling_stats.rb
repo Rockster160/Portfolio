@@ -21,6 +21,10 @@ module BowlingStats
     end
   end
 
+  def spare_data(bowler)
+    [bowler.frames.where(spare: true).count, bowler.frames.where(strike: false).count]
+  end
+
   def split_conversions(bowler)
     splits = bowler.frames.where(split: true)
 
