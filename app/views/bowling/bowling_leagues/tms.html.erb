@@ -29,7 +29,7 @@
         <% bowler_data[1..].each do |split_data| %>
           <div class="pin-stat-wrapper">
             <div class="mini-pin-chart">
-              <%= render partial: "bowling/bowling_games/pin_chart", locals: { prev: (1..10).to_a - split_data[:pins] } %>
+              <%= render partial: "bowling/bowling_games/pin_chart", locals: { dot: true, prev: (1..10).to_a - split_data[:pins] } %>
             </div>
             <span><%= split_data[:picked] %> / <%= split_data[:total] %></span> <br>
             <span><%= split_data[:ratio] %></span>

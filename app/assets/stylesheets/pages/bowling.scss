@@ -6,7 +6,7 @@
     $pin_width_ratio: 0.4;
     $pin_width: $pin_height * $pin_width_ratio;
     $vert_dist: ($container_height - $pin_height)/3;
-    $text_size: $pin_height / 5;
+    $text_size: $pin_height / 6;
     $text_offset: $pin_height / 8;
 
     position: absolute;
@@ -27,13 +27,14 @@
         position: absolute;
         padding-bottom: $text_offset;
         width: $pin_width;
-        font-size: 14px;
+        font-size: $text_size;
         font-weight: bold;
         user-select: none;
         text-align: center;
       }
       .pin-dot {
         // Alignment for dots is slightly different than text
+        font-size: 14px;
         padding-bottom: 0;
         margin-bottom: -3px;
       }
