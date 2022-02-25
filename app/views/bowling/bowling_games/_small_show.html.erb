@@ -2,7 +2,7 @@
   <% game_count = games.count %>
   <% games.order(:position).each_with_index do |game, row_idx| %>
     <div class="bowling-cell">
-      <%= "&#9824; ".html_safe if game.card_point? %><%= game.bowler&.name %>
+      <span class="nowrap"><%= "&#9824; ".html_safe if game.card_point? %><%= game.bowler&.name %></span>
     </div>
     <% 10.times do |t| %>
       <% frame_detail = game.frame_details[t] %>

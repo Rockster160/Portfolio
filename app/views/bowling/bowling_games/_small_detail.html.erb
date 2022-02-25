@@ -8,7 +8,7 @@
 
   <% games.order(:position).each_with_index do |game, row_idx| %>
     <div class="bowling-cell box-align-text bowling-name">
-      <%= "&#9824; ".html_safe if game.card_point? %><%= game.bowler.name %>
+      <span class="nowrap"><%= "&#9824; ".html_safe if game.card_point? %><%= game.bowler.name %></span>
     </div>
     <% game.frame_details.each do |frame| %>
       <div class="bowling-cell">
