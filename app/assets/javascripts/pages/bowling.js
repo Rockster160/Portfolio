@@ -185,7 +185,8 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     }, 3000)
   })
   $(document).on("click touchstart", function(evt) {
-    if (evt.target.name == "commit" || $(evt.target).hasClass("numpad-key")) { return }
+    var is_input = evt.target.tagName == "INPUT" || evt.target.tagName == "LABEL"
+    if (is_input || $(evt.target).hasClass("numpad-key")) { return }
     evt.preventDefault()
     pin_knock = undefined
 
