@@ -41,7 +41,7 @@ module BowlingStats
       obj[pins] ||= [0, 0]
       obj[pins][0] += count if spare
       obj[pins][1] += count
-    end.sort_by { |pins, (picked, total)| pins.length }
+    end.sort_by { |pins, (picked, total)| pins.length }.sort_by { |pins, (picked, total)| -total }
 
     counts.map { |pins, (picked, total)|
       {
