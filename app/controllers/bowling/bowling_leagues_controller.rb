@@ -48,7 +48,7 @@ module Bowling
     def tms
       bowlers = @league.bowlers.ordered
       missed_drinks = BowlingStats.missed_drink_frames(@league)
-# Test change
+# Test change 2
       @stats = {
         "Team Drink Frames": [[@league.team_name, BowlingStats.strike_count_frames(@league).length]],
         "Missed Drink Frames": bowlers.map { |bowler| [bowler.name, missed_drinks[bowler.id]] },
