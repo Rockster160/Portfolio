@@ -65,8 +65,8 @@ class BowlerSet < ApplicationRecord
 
   def ending_average
     @ending_average ||= begin
-      ending_games = bowler.games_at_time(set.games.maximum(:updated_at))
-      ending_pins = bowler.pins_at_time(set.games.maximum(:updated_at))
+      ending_games = bowler.games_at_time(set.games.maximum(:created_at))
+      ending_pins = bowler.pins_at_time(set.games.maximum(:created_at))
       return unless ending_games&.positive?
 
       (ending_pins.to_i / ending_games.to_f).floor

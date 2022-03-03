@@ -25,7 +25,7 @@ module Bowling
 
       if @set.update(bowling_params)
         if @set.complete?
-          @set.save_scores # Don't save until the set is complete since handicap changes after the series
+          @set.future_save # Special method to update future stats in case an old game changed
           render status: :created, json: { redirect: bowling_set_path(@set) }
         else
           render status: :created, json: { redirect: new_bowling_game_path(series: @set, game: @set.games_complete + 1) }

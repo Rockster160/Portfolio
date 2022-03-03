@@ -34,6 +34,11 @@ class BowlingSet < ApplicationRecord
       .group("bowlers.id")
   end
 
+  def future_save
+    league.bowler_sets.where("bowler_sets.created_at >= ?", created_at).find_each(&:recalc)
+    league.sets.where("bowling_sets.created_at >= ?", created_at).find_each(&:save_scores)
+  end
+
   def save_scores
     # Establish average for new bowlers
     bowlers.where(total_games: 0).find_each do |bowler|
