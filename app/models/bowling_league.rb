@@ -19,6 +19,7 @@ class BowlingLeague < ApplicationRecord
 
   has_many :bowlers, foreign_key: :league_id, dependent: :destroy, inverse_of: :league
   has_many :sets, class_name: "BowlingSet", foreign_key: :league_id, dependent: :destroy, inverse_of: :league
+  has_many :bowler_sets, through: :bowlers
   has_many :games, through: :sets
   has_many :frames, through: :games, source: :new_frames
 
@@ -46,5 +47,10 @@ class BowlingLeague < ApplicationRecord
     return if absent_calculation.gsub("AVG", "").match?(/[a-z]/i)
     # AVG - 10
     eval(absent_calculation.gsub("AVG", average.to_s)).floor
+  end
+
+  def reset_all_scores
+    bowler_sets.find_each(&:recalc)
+    sets.find_each(&:save_scores)
   end
 end

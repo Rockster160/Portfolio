@@ -32,6 +32,8 @@ class BowlerSet < ApplicationRecord
       ending_avg:   ending_average,
       this_avg:     games.average(:score)&.floor,
     )
+
+    games.update_all(handicap: calc_handicap)
   end
 
   def avg_diff
