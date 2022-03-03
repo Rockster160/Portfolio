@@ -25,6 +25,25 @@ module BowlingStats
     [bowler.frames.where(spare: true).count, bowler.frames.where(strike: false).count]
   end
 
+  def closed_games(bowler)
+    closed_frame_count_sql = "
+      COUNT(bowling_frames.id) FILTER(
+        WHERE(
+          bowling_frames.strike IS true OR bowling_frames.spare IS true
+        )
+      )
+    "
+
+    closed_games = bowler.games.left_joins(:new_frames).attended.
+      select("bowling_games.id, #{closed_frame_count_sql} AS closed_frame_count").
+      having("#{closed_frame_count_sql} = 10").
+      group("bowling_games.id")
+      # map { |game_id, closed_count| game = BowlingGame.find(game_id); "https://ardesian.com/bowling/#{game.set_id}/edit?game=#{game.game_num}&bowler_id=#{game.bowler_id}" }
+      # .map { |c| [c.id, c.closed_frame_count] }
+
+    [closed_games.length, bowler.games.attended.count]
+  end
+
   def split_conversions(bowler)
     splits = bowler.frames.where(split: true)
 
