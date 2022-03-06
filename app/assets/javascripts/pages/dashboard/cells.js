@@ -98,21 +98,9 @@ $(".ctr-dashboard").ready(function() {
             }, 2000)
 
             return cell.text("!! Failed to retrieve !!")
+          } else {
+            cell.text(data)
           }
-          var json = JSON.parse(data)
-          var line_width = 27
-          var lines = [
-            Text.center("💪 " + json.pullups_today + " / " + json.pullups_today_goal + "  "),
-            "",
-            "   " + json.workouts.map(function(day) { return day[0] }).join(" "),
-            "🤸 " + json.workouts.map(function(day) { return day[1] }).join(" "),
-            "🥤 " + json.soda.map(function(day) { return day[1] }).join(" "),
-            "🦷 " + json.teeth.map(function(day) { return day[1] }).join(" "),
-            "🚿 " + json.shower.map(function(day) { return day[1] }).join(" "),
-            "💊 " + json.vitamins.map(function(day) { return day[1] }).join(" "),
-            // When adding text(), parse through and find all emojis and wrap them in a span
-          ]
-          cell.text(lines.join("\n"))
         },
         fail: function(data) {
           cell.text("!! Failed to retrieve: " + data)

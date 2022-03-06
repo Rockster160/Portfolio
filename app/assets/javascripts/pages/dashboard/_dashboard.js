@@ -138,12 +138,11 @@ $(".ctr-dashboard").ready(function() {
     })
   }
 
-  $(".dashboard").on("click", ".dash-cell", function() {
+  $(document).on("click", ".dash-cell", function() {
     var cell = Cell.from_ele(this)
 
     if (cell) { cell.active() }
-  })
-  $(document).on("keydown", function(evt) {
+  }).on("keydown", function(evt) {
     if (!evt.metaKey) {
       $(".dashboard-omnibar input").focus()
     }
