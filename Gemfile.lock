@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/Rockster160/command_proposal.git
-  revision: e455257a8e87d9e5f41da98d58ebeb8a238ad946
+  revision: 4d94f7702a71e5aca822d9e679577e712c3b4594
   specs:
     command_proposal (1.0.15)
       font-awesome-rails
@@ -104,9 +104,9 @@ GEM
     faker (1.7.3)
       i18n (~> 0.5)
     ffi (1.15.0)
-    font-awesome-rails (4.7.0.7)
-      railties (>= 3.2, < 7)
-    globalid (0.5.2)
+    font-awesome-rails (4.7.0.8)
+      railties (>= 3.2, < 8.0)
+    globalid (1.0.0)
       activesupport (>= 5.0)
     gmaps4rails (2.1.2)
     hkdf (0.3.0)
@@ -146,7 +146,7 @@ GEM
     kaminari-core (1.0.1)
     launchy (2.4.3)
       addressable (~> 2.3)
-    loofah (2.12.0)
+    loofah (2.14.0)
       crass (~> 1.0.2)
       nokogiri (>= 1.5.9)
     mail (2.7.1)
@@ -157,7 +157,7 @@ GEM
     mime-types-data (3.2021.0704)
     mini_mime (1.1.2)
     mini_portile2 (2.4.0)
-    minitest (5.14.4)
+    minitest (5.15.0)
     multi_json (1.12.1)
     multi_xml (0.6.0)
     netrc (0.11.0)
@@ -288,7 +288,7 @@ GEM
       actionpack (>= 4.0)
       activesupport (>= 4.0)
       sprockets (>= 3.0.0)
-    thor (1.1.0)
+    thor (1.2.1)
     thread_safe (0.3.6)
     tilt (2.0.10)
     touchpunch-rails (1.0.3)

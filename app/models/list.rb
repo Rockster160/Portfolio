@@ -12,7 +12,7 @@
 #
 
 class List < ApplicationRecord
-  attr_accessor :do_not_broadcast
+  attr_accessor :do_not_broadcast, :response
   has_many :list_items, dependent: :destroy
   has_many :user_lists, dependent: :destroy
   has_many :users, through: :user_lists
@@ -55,7 +55,8 @@ class List < ApplicationRecord
       description: description,
       important: important,
       show_deleted: show_deleted,
-      list_items: ordered_items.pluck(:name)
+      list_items: ordered_items.pluck(:name),
+      response: @response
     }
   end
 
@@ -111,7 +112,7 @@ class List < ApplicationRecord
   end
 
   def message=(str)
-    modify_from_message(str)
+    @response = modify_from_message(str)
   end
 
   def modify_from_message(msg)
@@ -163,6 +164,7 @@ class List < ApplicationRecord
     action = ""
     items = []
 
+    msg = msg.gsub("+", " add ").gsub("-", " remove ")
     [:clear, :remove, :add].each do |try_action|
       action = try_action if check_string_starts_word?(msg, try_action)
     end
