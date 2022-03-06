@@ -90,8 +90,15 @@ $(".ctr-dashboard").ready(function() {
         type: "POST",
         dataType: "text",
         success: function(data) {
-          if (!data) { return cell.text("!! Failed to retrieve !!") }
-          console.log("json", data);
+          if (!data) {
+            // Sometimes this will timeout due to other scripts all running at once
+            // Retry after a short delay
+            setTimeout(function() {
+              cell.reload()
+            }, 2000)
+
+            return cell.text("!! Failed to retrieve !!")
+          }
           var json = JSON.parse(data)
           var line_width = 27
           var lines = [
@@ -140,10 +147,35 @@ $(".ctr-dashboard").ready(function() {
 
   var notes = Cell.init({
     title: "Notes",
-    reloader: function() {},
-    interval: 10 * second,
+    x: 3,
+    reloader: function(cell) {
+      cell.text(localStorage.getItem("notes"))
+    },
     command: function(text, cell) {
-      cell.text([cell.text(), text].filter(function(words) { return words.length > 0 }).join("\n"))
+      if (text == ">clear") {
+        localStorage.setItem("notes", "")
+        return cell.text("")
+      }
+
+      if (/^-\d+$/.test(text)) {
+        var num = parseInt(text.match(/\d+/)[0])
+        var lines = cell.text().split("\n")
+        lines.splice(num-1, 1)
+      } else {
+        var lines = (cell.text() || "").split("\n")
+        lines.push(text)
+        // A ticket to 大阪 costs ¥2000 👌. Repeated emojis: 😁😁. Crying cat: 😿. Repeated emoji with skin tones: ✊🏿✊🏿✊🏿✊✊✊🏿. Flags: 🇱🇹🏴󠁧󠁢󠁷󠁬󠁳󠁿. Scales ⚖️⚖️⚖️.
+        // var lines = [cell.text(), text].filter(function(words) { return words && words.length > 0 }).join("")
+        // new_note = new_note.split("\n").map(function(line) { return /^ - /.test(line) ? line : " - " + line }).join("\n")
+      }
+
+      var note = lines.map(function(line, idx) {
+        console.log("line", idx, line);
+        return (idx+1) + ". " + line.replace(/^\d+\. /, "")
+      }).join("\n")
+
+      localStorage.setItem("notes", note)
+      cell.text(note)
     }
   })
 })

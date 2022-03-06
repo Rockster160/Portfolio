@@ -1,5 +1,5 @@
 $(".ctr-dashboard").ready(function() {
-  var single_width = 26
+  var single_width = 32
 
   Text = function() {}
   Text.new = function(data) {
@@ -36,6 +36,24 @@ $(".ctr-dashboard").ready(function() {
     var spaces = (width - text_length) / (args.length - 1)
 
     return args.map(function(text) { return text + " ".repeat(spaces) }).join("").replace(/\s+$/, "")
+  }
+  Text.escapeEmoji = function(text) {
+    var token = undefined
+    do { token = Math.random().toString(36).substr(2) } while(text.includes(token))
+    var hold = {}
+    var i = 0; token.replace(/<e>.*?<\/e>/ig, function(found, found_idx, full_str) {
+      var replace = token + "(" + (i+=1) + ")"
+      hold[replace] = found
+      return replace
+    })
+    console.log(hold);
+
+    var emoRegex = new RegExp(emojiPattern, "g")
+    var escaped = text.replaceAll(emoRegex, function(found) {
+      return "<e>" + found + "</e>"
+    })
+    // Iterate through hold and put them all back
+    return escaped
   }
 
 

@@ -1,32 +1,38 @@
 $code-background: #112435;
+$dash-font-size: 0.75rem;
+$dash-font-width: $dash-font-size * 0.6;
 
 .html-ctr-dashboard {
   background: $code-background;
   width: 100%;
   height: 100%;
+  &, * { box-sizing: border-box; }
 
   .ctr-dashboard {
+    margin: 0;
     background: $code-background;
     padding: 10px;
     width: 100%;
     height: 100%;
+    overflow: hidden;
     color: white;
     font-family: monospace;
+    font-size: $dash-font-size;
     text-align: center;
   }
 }
 
 .dashboard-omnibar {
   position: fixed;
-  left: 0;
   right: 0;
   bottom: 0;
+  left: 0;
   padding: 10px;
 
   input[type=text] {
-    font-family: monospace;
     background: $code-background;
     color: white;
+    font-family: monospace;
 
     &:focus {
       outline: none;
@@ -48,11 +54,11 @@ $code-background: #112435;
 .dashboard {
   row-gap: 15px;
   display: inline-grid;
-  grid-template-columns: repeat(5, 215px);
-  grid-template-rows: repeat(5, 145px);
+  grid-template-columns: repeat(4, 242px);
+  grid-template-rows: repeat(5, 140px);
   column-gap: 5px;
-  text-align: left;
   transition: border-color 1s;
+  text-align: left;
 
   .dash-cell {
     position: relative;
@@ -81,7 +87,6 @@ $code-background: #112435;
       span {
         background: $code-background;
         padding: 0 5px;
-        font-size: 14px;
         line-height: 16px;
       }
     }
@@ -89,6 +94,14 @@ $code-background: #112435;
     .dash-content {
       overflow: hidden;
       white-space: pre-wrap;
+      max-height: 100%;
+
+      e {
+        display: inline-block;
+        width: $dash-font-width*2;
+        height: $dash-font-size;
+        line-height: $dash-font-size;
+      }
     }
   }
 

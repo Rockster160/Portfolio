@@ -4,19 +4,19 @@ $(".ctr-dashboard").ready(function() {
   Cell.init = function(data) {
     var cell = new Cell()
     var dash_cell = $("<div>", { class: "dash-cell" })
-    dash_cell.append($("<div>", { class: "dash-title" }).append("<span>" + data.title + "</span>"))
-    dash_cell.append($("<div>", { class: "dash-content" }).text(data.text))
+    dash_cell.append($("<div>", { class: "dash-title" }).append("<span></span>"))
+    dash_cell.append($("<div>", { class: "dash-content" }))
     cell.ele = dash_cell
 
     cell.name = data.title.replace(/^\s*|\s*$/ig, "").replace(/\s+/ig, "-").replace(/[^a-z\-]/ig, "").toLowerCase()
-    cell.my_title = data.title || ""
-    cell.my_text = data.text || ""
+    cell.title(data.title)
+    cell.text(data.text)
     cell.x(data.x)
     cell.y(data.y)
     cell.w(data.w)
     cell.h(data.h)
-    cell.command(data.command)
     cell.interval = data.interval
+    cell.command(data.command)
     cell.reloader(data.reloader, cell.interval)
 
     $(".dashboard").append(dash_cell)
@@ -35,8 +35,10 @@ $(".ctr-dashboard").ready(function() {
     if (new_text == undefined) {
       return this.my_text
     } else {
+      // Should escape raw HTML as well
+      new_text = Text.escapeEmoji(new_text)
       this.my_text = new_text
-      this.ele.children(".dash-content").text(new_text)
+      this.ele.children(".dash-content").html(new_text)
       return this
     }
   }
@@ -137,14 +139,16 @@ $(".ctr-dashboard").ready(function() {
     })
   }
 
-  $(".dashboard").click(function() {
-    $(".dashboard-omnibar input").focus()
-  }).on("click", ".dash-cell", function() {
+  $(".dashboard").on("click", ".dash-cell", function() {
     var cell = Cell.from_ele(this)
 
     if (cell) { cell.active() }
   })
-  $(document).on("keypress", ".dashboard-omnibar input", function(evt) {
+  $(document).on("keydown", function(evt) {
+    if (!evt.metaKey) {
+      $(".dashboard-omnibar input").focus()
+    }
+  }).on("keypress", ".dashboard-omnibar input", function(evt) {
     if (evt.which == keyEvent("ENTER")) {
       var raw = $(".dashboard-omnibar input").val()
       var selector = raw.match(/\:(\w|\-)+ /i)
