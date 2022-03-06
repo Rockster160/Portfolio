@@ -99,7 +99,9 @@ $(".ctr-dashboard").ready(function() {
 
             return cell.text("!! Failed to retrieve !!")
           } else {
-            cell.text(data)
+            var lines = data.split("\n")
+            lines[0] = Text.center(lines[0])
+            cell.text(lines.join("\n"))
           }
         },
         fail: function(data) {
