@@ -35,6 +35,7 @@ Rails.application.routes.draw do
   post "webhooks/command" => "webhooks#command"
   post "push_notification_subscribe" => "webhooks#push_notification_subscribe"
 
+  get "dashboard" => "dashboard#show"
   get "cube" => "cubes#show"
 
   resource :nfc, only: [:show]

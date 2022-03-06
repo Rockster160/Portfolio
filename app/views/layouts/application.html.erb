@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html style="height: 100%;" class="<%= 'dark-mode' if current_user.try(:dark_mode?) %>">
+<html style="height: 100%;" class="html-ctr-<%= controller_name %> html-act-<%= action_name %> <%= 'dark-mode' if current_user.try(:dark_mode?) %>">
 <head>
   <title><%= content_for(:title) || "Rocco Nicholls" %></title>
   <%= action_cable_meta_tag %>
