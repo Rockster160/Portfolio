@@ -3,16 +3,22 @@ $(".ctr-dashboard").ready(function() {
 
   Text = function() {}
   Text.new = function(data) {
+    var text = new Text()
     if (typeof data == "string") {
-      this.text = data
-      this.width = single_width
+      text.text = data
+      text.width = single_width
     } else if (typeof data == "number") {
-      this.width = data
-      this.text = ""
+      text.width = data
+      text.text = ""
     } else if (typeof data == "object") {
-      this.width = data.width
-      this.text = data.text || ""
+      text.width = data.width
+      text.text = data.text || ""
     }
+
+    return text
+  }
+  Text.length = function(data) {
+    return Text.new(data)
   }
 
 
@@ -23,9 +29,8 @@ $(".ctr-dashboard").ready(function() {
     return " ".repeat(spaces) + text + " ".repeat(spaces)
   }
   Text.justify = function(...args) {
-    // var args = [].concat.call(arguments)
     var width = single_width
-    if (typeof args[0] == "number") { width = args.shift }
+    if (typeof args[0] == "number") { width = args.shift() }
 
     var text_length = args.reduce(function(a, b) { return (a.length || 0) + b.length })
     var spaces = (width - text_length) / (args.length - 1)
@@ -35,30 +40,9 @@ $(".ctr-dashboard").ready(function() {
 
 
   Text.prototype.center = function(opt_text) {
-    Text.center(this.text || opt_text, this.width)
+    return Text.center(this.text || opt_text, this.width)
   }
-  Text.prototype.justify = function() {
-    // var args = [].concat.call(arguments)
-    // this.width, arguments
-    // Text.justify.apply(null, this.width, arguments)
+  Text.prototype.justify = function(...args) {
+    return Text.justify(...[this.width].concat(args))
   }
-
-  puts = function(...things) {
-    things.forEach(function(arg, idx) {
-      console.log("out", idx, arg);
-    })
-  }
-
-  // puts = function() {
-  //   var args = [].concat.call(arguments)
-  //   args.forEach(function(arg, idx) {
-  //     console.log("out", idx, arg);
-  //   })
-  // }
-  // st = function() {
-  //   var thing = "thing"
-  //   var arr = ["a", "b", "c"]
-  //
-  //   puts.apply(null, thing, arr)
-  // }
 })

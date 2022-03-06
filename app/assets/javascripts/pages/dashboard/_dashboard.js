@@ -21,7 +21,6 @@ $(".ctr-dashboard").ready(function() {
 
     $(".dashboard").append(dash_cell)
     cells.push(cell)
-    cell.reload()
   }
   Cell.prototype.title = function(new_title) {
     if (new_title == undefined) {
