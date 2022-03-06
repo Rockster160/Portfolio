@@ -42,12 +42,12 @@ $dash-font-width: $dash-font-size * 0.6;
 
 @keyframes flashdash {
   0%   { border-color: $blue-d3; }
-  1%  { border-color: $blue-l1; }
+  10%  { border-color: $blue-d1; }
   100% { border-color: $blue-d3; }
 }
 @keyframes flashdashactive {
   0%   { border-color: $blue-d1; }
-  1%  { border-color: $blue-l1; }
+  10%  { border-color: $blue-l1; }
   100% { border-color: $blue-d1; }
 }
 

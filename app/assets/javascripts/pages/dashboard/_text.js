@@ -40,19 +40,23 @@ $(".ctr-dashboard").ready(function() {
   Text.escapeEmoji = function(text) {
     var token = undefined
     do { token = Math.random().toString(36).substr(2) } while(text.includes(token))
-    var hold = {}
-    var i = 0; token.replace(/<e>.*?<\/e>/ig, function(found, found_idx, full_str) {
+
+    var hold = {}, i = 0
+    var subbed_text = text.replace(/<e>.*?<\/e>/ig, function(found, found_idx, full_str) {
       var replace = token + "(" + (i+=1) + ")"
       hold[replace] = found
       return replace
     })
-    console.log(hold);
 
     var emoRegex = new RegExp(emojiPattern, "g")
-    var escaped = text.replaceAll(emoRegex, function(found) {
+    var escaped = subbed_text.replaceAll(emoRegex, function(found) {
       return "<e>" + found + "</e>"
     })
-    // Iterate through hold and put them all back
+
+
+    for (const [token, emoji] of Object.entries(hold)) {
+      escaped = escaped.replace(token, emoji)
+    }
     return escaped
   }
 

@@ -114,7 +114,6 @@ $(".ctr-dashboard").ready(function() {
   }
   Cell.prototype.execute = function(text) {
     if (this.my_command && typeof(this.my_command) === "function") { this.my_command(text, this) }
-    console.log(this.name + " [" + text + "]");
 
     return this
   }
