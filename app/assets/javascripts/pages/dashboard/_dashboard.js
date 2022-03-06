@@ -100,11 +100,11 @@ $(".ctr-dashboard").ready(function() {
     var cell = this
     cell.my_reloader = callback
 
-    clearInterval(cell.interval)
+    clearInterval(cell.timer)
     cell.reload()
 
     if (interval != undefined) {
-      cell.interval = setInterval(function() {
+      cell.timer = setInterval(function() {
         cell.reload()
       }, interval)
     }

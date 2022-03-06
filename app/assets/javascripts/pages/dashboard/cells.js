@@ -93,13 +93,15 @@ $(".ctr-dashboard").ready(function() {
           console.log("json", data);
           var json = JSON.parse(data)
           var lines = [
-            "     " + json.pullups_today + " / " + json.pullups_today_goal,
+            "          " + json.pullups_today + " / " + json.pullups_today_goal,
             "",
             "   " + json.workouts.map(function(day) { return day[0] }).join(" "),
             "W: " + json.workouts.map(function(day) { return day[1] }).join(" "),
             "D: " + json.soda.map(function(day) { return day[1] }).join(" "),
             "T: " + json.teeth.map(function(day) { return day[1] }).join(" "),
             "S: " + json.shower.map(function(day) { return day[1] }).join(" "),
+            "V: " + json.vitamins.map(function(day) { return day[1] }).join(" "),
+            // When adding text(), parse through and find all emojis and wrap them in a span
           ]
           cell.text(lines.join("\n"))
         },
