@@ -70,7 +70,8 @@ $(".ctr-dashboard").ready(function() {
         cell.text(
           data.monitors.map(function(monitor) {
             var ratios = monitor.custom_uptime_ratio.split("-").map(function(num) { return num.split(".")[0] + "%" })
-            return monitor.friendly_name + " (" + ratios.join("|") + ")"
+
+            return Text.justify(monitor.friendly_name, "(" + ratios.join("|") + ")")
           }).join("\n")
         )
       }).fail(function(data) {
@@ -92,8 +93,9 @@ $(".ctr-dashboard").ready(function() {
           if (!data) { return cell.text("!! Failed to retrieve !!") }
           console.log("json", data);
           var json = JSON.parse(data)
+          var line_width = 27
           var lines = [
-            "          " + json.pullups_today + " / " + json.pullups_today_goal,
+            Text.center(json.pullups_today + " / " + json.pullups_today_goal),
             "",
             "   " + json.workouts.map(function(day) { return day[0] }).join(" "),
             "W: " + json.workouts.map(function(day) { return day[1] }).join(" "),
