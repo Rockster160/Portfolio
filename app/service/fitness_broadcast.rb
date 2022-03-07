@@ -7,6 +7,7 @@ class FitnessBroadcast
       :Teeth,
       :Shower,
       :Vitamins,
+      :Water,
     ]
 
     return unless event.event_name.to_sym.in?(broadcast_events)

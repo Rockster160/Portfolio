@@ -223,6 +223,45 @@ $(".ctr-dashboard").ready(function() {
     },
   })
 
+  var recent_events = Cell.init({
+    title: "Recent",
+    text: "Load once event comes in...",
+    x: 3,
+    y: 1,
+    socket: {
+      url: ws_protocol + "://" + location.host + "/cable",
+      subscription: {
+        channel: "RecentEventsChannel",
+      },
+      receive: function(cell, msg) {
+        if (!msg.recent_events) { return }
+
+        cell.text(msg.recent_events.join("\n"))
+      }
+    },
+    reloader: function(cell) {
+      // $.getJSON("/lists/todo", function(data) {
+      //   cell.text(data.list_items.join("\n"))
+      // }).fail(function(data) {
+      //   cell.text("Failed to retrieve: " + data)
+      // })
+    },
+    command: function(text, cell) {
+      var [name, ...notes] = text.split(" ")
+      name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
+      notes = notes.join(" ")
+      $.ajax({
+        url: "/action_events",
+        data: { event_name: name, notes: notes }, // event_name, notes, timestamp
+        type: "POST",
+        dataType: "text",
+        success: function(data) {
+          cell.reload()
+        }
+      })
+    },
+  })
+
   var notes = Cell.init({
     title: "Notes",
     h: 2,

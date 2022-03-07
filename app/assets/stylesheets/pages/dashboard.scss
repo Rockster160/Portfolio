@@ -55,7 +55,7 @@ $dash-font-width: $dash-font-size * 0.6;
   row-gap: 15px;
   display: inline-grid;
   grid-template-columns: repeat(4, 242px);
-  grid-template-rows: repeat(5, 140px);
+  grid-template-rows: repeat(5, 124px);
   column-gap: 5px;
   transition: border-color 1s;
   text-align: left;
@@ -87,7 +87,8 @@ $dash-font-width: $dash-font-size * 0.6;
       span {
         background: $code-background;
         padding: 0 5px;
-        line-height: 16px;
+        line-height: $dash-font-size;
+        height: $dash-font-size;
       }
     }
 
@@ -95,7 +96,12 @@ $dash-font-width: $dash-font-size * 0.6;
       overflow: hidden;
       white-space: pre-wrap;
       max-height: 100%;
+      line-height: $dash-font-size;
 
+      * {
+        line-height: $dash-font-size;
+        display: inline-block;
+      }
       e {
         display: inline-block;
         width: $dash-font-width*2;
