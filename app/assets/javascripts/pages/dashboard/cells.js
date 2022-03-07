@@ -113,6 +113,8 @@ $(".ctr-dashboard").ready(function() {
   var todo = Cell.init({
     title: "TODO",
     text: "Loading...",
+    x: 4,
+    y: 1,
     socket: {
       url: ws_protocol + "://" + location.host + "/cable",
       subscription: {
