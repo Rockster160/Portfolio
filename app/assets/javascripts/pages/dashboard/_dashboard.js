@@ -66,14 +66,20 @@ $(".ctr-dashboard").ready(function() {
 
     this.ele.css({ gridArea: pieces.join(" / ") })
   }
-  Cell.prototype.reload = function() {
-    if (this.my_reloader && typeof(this.my_reloader) === "function") { this.my_reloader(this) }
-
+  Cell.prototype.flash = function() {
     var cell = this
+
     cell.ele.addClass("flash")
     setTimeout(function() {
       cell.ele.removeClass("flash")
     }, 1000)
+
+    return this
+  }
+  Cell.prototype.reload = function() {
+    if (this.my_reloader && typeof(this.my_reloader) === "function") { this.my_reloader(this) }
+
+    this.flash()
 
     return this
   }
@@ -140,6 +146,7 @@ $(".ctr-dashboard").ready(function() {
         var msg_data = JSON.parse(msg.data)
         if (msg_data.type == "ping" || !msg_data.message) { return }
 
+        cell_ws.cell.flash()
         data.receive(cell_ws.cell, msg_data.message)
       }
     }
