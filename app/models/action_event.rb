@@ -23,4 +23,12 @@ class ActionEvent < ApplicationRecord
 
     super(str_stamp.in_time_zone("Mountain Time (US & Canada)"))
   end
+
+  def self.serialize
+    all.as_json(only: [:event_name, :notes, :timestamp])
+  end
+
+  def serialize
+    as_json(only: [:event_name, :notes, :timestamp])
+  end
 end

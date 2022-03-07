@@ -1,9 +1,17 @@
+<%= form_tag nil, method: :get, enforce_utf8: false, authenticity_token: false do |f| %>
+  <input type="text" name="filter" value="" placeholder="Filter">
+<% end %>
+
 <%= form_for ActionEvent.new do |f| %>
   <%= f.text_field :event_name, placeholder: :event_name %>
   <%= f.text_field :notes, placeholder: :notes %>
   <%= f.text_field :timestamp, placeholder: :timestamp %>
   <%= f.submit %>
 <% end %>
+
+<div class="text-center">
+  <%= paginate @events %>
+</div>
 
 <table>
   <thead>
@@ -22,3 +30,7 @@
     </tr>
   <% end %>
 </table>
+
+<div class="text-center">
+  <%= paginate @events %>
+</div>

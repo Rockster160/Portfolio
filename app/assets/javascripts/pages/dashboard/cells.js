@@ -92,9 +92,6 @@ $(".ctr-dashboard").ready(function() {
           data: { count: text },
           type: "POST",
           dataType: "text",
-          success: function(data) {
-            cell.reload()
-          }
         })
       } else {
         var name = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()
@@ -103,9 +100,6 @@ $(".ctr-dashboard").ready(function() {
           data: { event_name: name }, // event_name, notes, timestamp
           type: "POST",
           dataType: "text",
-          success: function(data) {
-            cell.reload()
-          }
         })
       }
     },
@@ -141,8 +135,6 @@ $(".ctr-dashboard").ready(function() {
         type: "PATCH",
         dataType: "text",
         data: { message: text },
-      }).done(function(data) {
-        cell.reload()
       }).fail(function(data) {
         console.log("Failed to change TODO: ", data);
       })
@@ -179,8 +171,6 @@ $(".ctr-dashboard").ready(function() {
         type: "PATCH",
         dataType: "text",
         data: { message: text },
-      }).done(function(data) {
-        cell.reload()
       }).fail(function(data) {
         console.log("Failed to change Grocery: ", data);
       })
@@ -225,7 +215,7 @@ $(".ctr-dashboard").ready(function() {
 
   var recent_events = Cell.init({
     title: "Recent",
-    text: "Load once event comes in...",
+    text: "Loading...",
     x: 3,
     y: 1,
     socket: {
@@ -236,15 +226,19 @@ $(".ctr-dashboard").ready(function() {
       receive: function(cell, msg) {
         if (!msg.recent_events) { return }
 
-        cell.text(msg.recent_events.join("\n"))
+        cell.text(msg.recent_events.map(function(item) {
+          return Text.justify(item.event_name, item.notes || "")
+        }).join("\n"))
       }
     },
     reloader: function(cell) {
-      // $.getJSON("/lists/todo", function(data) {
-      //   cell.text(data.list_items.join("\n"))
-      // }).fail(function(data) {
-      //   cell.text("Failed to retrieve: " + data)
-      // })
+      $.getJSON("/action_events", function(data) {
+        cell.text(data.map(function(item) {
+          return Text.justify(item.event_name, item.notes || "")
+        }).join("\n"))
+      }).fail(function(data) {
+        cell.text("Failed to retrieve: " + data)
+      })
     },
     command: function(text, cell) {
       var [name, ...notes] = text.split(" ")
@@ -254,10 +248,7 @@ $(".ctr-dashboard").ready(function() {
         url: "/action_events",
         data: { event_name: name, notes: notes }, // event_name, notes, timestamp
         type: "POST",
-        dataType: "text",
-        success: function(data) {
-          cell.reload()
-        }
+        dataType: "text"
       })
     },
   })

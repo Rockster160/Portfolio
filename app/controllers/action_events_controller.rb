@@ -3,12 +3,18 @@ class ActionEventsController < ApplicationController
   before_action :authorize_user
 
   def index
-    @events = current_user.action_events.order(timestamp: :desc)
+    @events = current_user.action_events.order(timestamp: :desc).page(params[:page]).per(50)
+    @events = @events.where("event_name ILIKE ?", params[:filter]) if params[:filter].present?
+
+    respond_to do |format|
+      format.html
+      format.json { render json: @events.per(10).serialize }
+    end
   end
 
   def create
     event = ActionEvent.create(action_event_params.merge(user: current_user))
-    ActionEventBroadcastWorker.call(event)
+    ActionEventBroadcastWorker.perform_async(event.id)
 
     respond_to do |format|
       format.json do
