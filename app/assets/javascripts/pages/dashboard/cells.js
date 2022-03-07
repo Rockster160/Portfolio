@@ -55,8 +55,9 @@ $(".ctr-dashboard").ready(function() {
         channel: "FitnessChannel",
       },
       receive: function(cell, msg) {
-        console.log(msg);
-        cell.text(msg.fitness_data)
+        var lines = msg.fitness_data.split("\n")
+        lines[0] = Text.center(lines[0])
+        cell.text(lines.join("\n"))
       }
     },
     reloader: function(cell) {

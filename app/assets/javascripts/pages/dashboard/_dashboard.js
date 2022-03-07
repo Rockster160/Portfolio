@@ -132,6 +132,8 @@ $(".ctr-dashboard").ready(function() {
 
     cell_ws.socket.onopen = function() {
       cell_ws.open = true
+      cell_ws.send(data.subscription, "subscribe")
+
       if (data.onopen && typeof(data.onopen) === "function") { data.onopen() }
     }
 
@@ -141,7 +143,6 @@ $(".ctr-dashboard").ready(function() {
     }
 
     cell_ws.socket.onmessage = function(msg) {
-
       if (data.receive && typeof(data.receive) === "function") {
         var msg_data = JSON.parse(msg.data)
         if (msg_data.type == "ping" || !msg_data.message) { return }
@@ -150,8 +151,6 @@ $(".ctr-dashboard").ready(function() {
         data.receive(cell_ws.cell, msg_data.message)
       }
     }
-
-    cell_ws.send(data.subscription, "subscribe")
   }
   CellWS.prototype.send = function(data, command) {
     var cell_ws = this
