@@ -69,9 +69,24 @@ $(".ctr-dashboard").ready(function() {
       $.post(url, { api_key: api_key, custom_uptime_ratios: "7-30" }, function(data) {
         cell.text(
           data.monitors.map(function(monitor) {
-            var ratios = monitor.custom_uptime_ratio.split("-").map(function(num) { return num.split(".")[0] + "%" })
+            var color_map = {
+              2: "green",
+              8: "orange",
+              9: "red"
+            }
+            var color = color_map[monitor.status] || "yellow"
+            var colored_name = Text.color(color, "• " + monitor.friendly_name)
 
-            return Text.justify(monitor.friendly_name, "(" + ratios.join("|") + ")")
+            var ratios = monitor.custom_uptime_ratio.split("-").map(function(num) {
+              var percent = parseInt(num.split(".")[0])
+              var color = "yellow"
+              if (percent >= 99) { color = "green" }
+              if (percent < 90) { color = "red" }
+
+              return Text.color(color, percent + "%") }
+            )
+
+            return Text.justify(colored_name, "(" + ratios.join("|") + ")")
           }).join("\n")
         )
       }).fail(function(data) {
@@ -152,15 +167,13 @@ $(".ctr-dashboard").ready(function() {
         var lines = cell.text().split("\n")
         lines.splice(num-1, 1)
       } else {
-        var lines = (cell.text() || "").split("\n")
+        var lines = cell.text() ? cell.text().split("\n") : []
         lines.push(text)
         // A ticket to 大阪 costs ¥2000 👌. Repeated emojis: 😁😁. Crying cat: 😿. Repeated emoji with skin tones: ✊🏿✊🏿✊🏿✊✊✊🏿. Flags: 🇱🇹🏴󠁧󠁢󠁷󠁬󠁳󠁿. Scales ⚖️⚖️⚖️.
-        // var lines = [cell.text(), text].filter(function(words) { return words && words.length > 0 }).join("")
-        // new_note = new_note.split("\n").map(function(line) { return /^ - /.test(line) ? line : " - " + line }).join("\n")
+        // <div class="sup" style="color: red;"><color style="color: red;"><span>Hello!</span></color><e>✊🏿</e></div>
       }
 
       var note = lines.map(function(line, idx) {
-        console.log("line", idx, line);
         return (idx+1) + ". " + line.replace(/^\d+\. /, "")
       }).join("\n")
 

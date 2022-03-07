@@ -36,7 +36,7 @@ $(".ctr-dashboard").ready(function() {
       return this.my_text
     } else {
       // Should escape raw HTML as well
-      new_text = Text.escapeEmoji(new_text)
+      new_text = Text.escape(new_text)
       this.my_text = new_text
       this.ele.children(".dash-content").html(new_text)
       return this

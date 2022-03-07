@@ -24,7 +24,7 @@ $(".ctr-dashboard").ready(function() {
 
   Text.center = function(text, width) {
     width = width || single_width
-    var spaces = (width - text.length) / 2
+    var spaces = (width - Text.clean(text).length) / 2
 
     return " ".repeat(spaces) + text + " ".repeat(spaces)
   }
@@ -32,10 +32,33 @@ $(".ctr-dashboard").ready(function() {
     var width = single_width
     if (typeof args[0] == "number") { width = args.shift() }
 
-    var text_length = args.reduce(function(a, b) { return (a.length || 0) + b.length })
+    var text_length = Text.clean(args.join("")).length
     var spaces = (width - text_length) / (args.length - 1)
 
     return args.map(function(text) { return text + " ".repeat(spaces) }).join("").replace(/\s+$/, "")
+  }
+  Text.clean = function(text) {
+    return text.replaceAll(/<.*?>/gi, "")
+  }
+  Text.escape = function(text) {
+    text = Text.escapeEmoji(text)
+    text = Text.escapeHtml(text)
+
+    return text
+  }
+  Text.color = function(color, text) {
+    return "<color style=\"color: " + color + ";\">" + text + "</color>"
+  }
+  Text.escapeHtml = function(text) {
+    var allowed_tags = [
+      "e",
+      "color"
+    ]
+    var joined_tags = allowed_tags.map(function(tag) { return tag + "\\b|\\/" + tag + "\\b"  }).join("|")
+    var html_regex = new RegExp("\\<\\/?([^(" + joined_tags + ")])", "gi");
+    text = text.replaceAll(html_regex, "&lt;$1")
+
+    return text
   }
   Text.escapeEmoji = function(text) {
     var token = undefined
