@@ -1,39 +1,3 @@
-// doit = function() {
-//
-//
-//
-//     //Subscribe to the channel
-//     var params = {
-//       channel: "ListChannel",
-//       channel_id: "list_5"
-//     }
-//     var msg = {
-//       command: "subscribe",
-//       identifier: JSON.stringify(params)
-//     }
-//     portfolio_ws.send(JSON.stringify(msg))
-//
-//     // const msg = {
-//     //   command: 'message',
-//     //   identifier: JSON.stringify({
-//     //     channel: 'SomeChannel',
-//     //   }),
-//     //   data: JSON.stringify({
-//     //     action: 'join',
-//     //     code: 'NCC1701D',
-//     //   }),
-//     // };
-//     // socket.send(JSON.stringify(msg));
-//   }
-//
-//   portfolio_ws.onmessage = function(msg) {
-//     var json = JSON.parse(msg.data)
-//     // if (json.type == "ping") { return }
-//
-//     console.log(json);
-//   }
-// }
-
 $(".ctr-dashboard").ready(function() {
   var second = 1000, minute = second * 60, hour = minute * 60, day = hour * 24
   var ws_protocol = location.protocol == "https:" ? "wss" : "ws", ws_open = false
@@ -119,17 +83,26 @@ $(".ctr-dashboard").ready(function() {
       receive: function(cell, msg) {
         if (!msg.list_data) { return }
 
-        cell.text(msg.list_data.list_items.join("\n"))
+        var lines = Text.numberedList(msg.list_data.list_items)
+        cell.text(lines.join("\n"))
       }
     },
     reloader: function(cell) {
       $.getJSON("/lists/todo", function(data) {
-        cell.text(data.list_items.join("\n"))
+        var lines = Text.numberedList(data.list_items)
+        cell.text(lines.join("\n"))
       }).fail(function(data) {
         cell.text("Failed to retrieve: " + data)
       })
     },
     command: function(text, cell) {
+      if (/^-\d+$/.test(text)) {
+        var num = parseInt(text.match(/\d+/)[0])
+        var lines = cell.text().split("\n")
+        var item = lines[num-1]
+        text = "remove " + item.replace(/^\d+\. /, "")
+      }
+
       $.ajax({
         url: "/lists/todo",
         type: "PATCH",
@@ -143,9 +116,9 @@ $(".ctr-dashboard").ready(function() {
 
   var grocery = Cell.init({
     title: "Grocery",
+    text: "Loading...",
     x: 4,
     y: 2,
-    text: "Loading...",
     socket: {
       url: ws_protocol + "://" + location.host + "/cable",
       subscription: {
@@ -155,17 +128,26 @@ $(".ctr-dashboard").ready(function() {
       receive: function(cell, msg) {
         if (!msg.list_data) { return }
 
-        cell.text(msg.list_data.list_items.join("\n"))
+        var lines = Text.numberedList(msg.list_data.list_items)
+        cell.text(lines.join("\n"))
       }
     },
     reloader: function(cell) {
       $.getJSON("/lists/grocery", function(data) {
-        cell.text(data.list_items.join("\n"))
+        var lines = Text.numberedList(data.list_items)
+        cell.text(lines.join("\n"))
       }).fail(function(data) {
         cell.text("Failed to retrieve: " + data)
       })
     },
     command: function(text, cell) {
+      if (/^-\d+$/.test(text)) {
+        var num = parseInt(text.match(/\d+/)[0])
+        var lines = cell.text().split("\n")
+        var item = lines[num-1]
+        text = "remove " + item.replace(/^\d+\. /, "")
+      }
+
       $.ajax({
         url: "/lists/grocery",
         type: "PATCH",
@@ -278,9 +260,7 @@ $(".ctr-dashboard").ready(function() {
         // <div class="sup" style="color: red;"><color style="color: red;"><span>Hello!</span></color><e>✊🏿</e></div>
       }
 
-      var note = lines.map(function(line, idx) {
-        return (idx+1) + ". " + line.replace(/^\d+\. /, "")
-      }).join("\n")
+      var note = Text.numberedList(lines).join("\n")
 
       localStorage.setItem("notes", note)
       cell.text(note)

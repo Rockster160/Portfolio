@@ -46,6 +46,14 @@ $(".ctr-dashboard").ready(function() {
 
     return text
   }
+  Text.numberedList = function(list) {
+    if (typeof list == "string") { list = list.split("\n") }
+
+    // Remove previoous numbers, if present
+    return list.map(function(line, idx) {
+      return (idx+1) + ". " + line.replace(/^\d+\. /, "")
+    })
+  }
   Text.color = function(color, text) {
     return "<color style=\"color: " + color + ";\">" + text + "</color>"
   }
