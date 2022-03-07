@@ -36,7 +36,7 @@
 
 $(".ctr-dashboard").ready(function() {
   var second = 1000, minute = second * 60, hour = minute * 60, day = hour * 24
-  var ws_protocol = location.protocol == "https" ? "wss" : "ws", ws_open = false
+  var ws_protocol = location.protocol == "https:" ? "wss" : "ws", ws_open = false
 
   // var cell = Cell.init({
   //   title: "",
