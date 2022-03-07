@@ -1,5 +1,42 @@
+// doit = function() {
+//
+//
+//
+//     //Subscribe to the channel
+//     var params = {
+//       channel: "ListChannel",
+//       channel_id: "list_5"
+//     }
+//     var msg = {
+//       command: "subscribe",
+//       identifier: JSON.stringify(params)
+//     }
+//     portfolio_ws.send(JSON.stringify(msg))
+//
+//     // const msg = {
+//     //   command: 'message',
+//     //   identifier: JSON.stringify({
+//     //     channel: 'SomeChannel',
+//     //   }),
+//     //   data: JSON.stringify({
+//     //     action: 'join',
+//     //     code: 'NCC1701D',
+//     //   }),
+//     // };
+//     // socket.send(JSON.stringify(msg));
+//   }
+//
+//   portfolio_ws.onmessage = function(msg) {
+//     var json = JSON.parse(msg.data)
+//     // if (json.type == "ping") { return }
+//
+//     console.log(json);
+//   }
+// }
+
 $(".ctr-dashboard").ready(function() {
   var second = 1000, minute = second * 60, hour = minute * 60, day = hour * 24
+  var ws_protocol = location.protocol == "https" ? "wss" : "ws", ws_open = false
 
   // var cell = Cell.init({
   //   title: "",
@@ -9,10 +46,85 @@ $(".ctr-dashboard").ready(function() {
   //   command: function(text, cell) {},
   // })
 
+  var fitness = Cell.init({
+    title: "Fitness",
+    text: "Loading...",
+    socket: {
+      url: ws_protocol + "://" + location.host + "/cable",
+      subscription: {
+        channel: "FitnessChannel",
+      },
+      receive: function(cell, msg) {
+        console.log(msg);
+        cell.text(msg.fitness_data)
+      }
+    },
+    reloader: function(cell) {
+      $.ajax({
+        url: "/functions/fitness_data/run",
+        type: "POST",
+        dataType: "text",
+        success: function(data) {
+          if (!data) {
+            // Sometimes this will timeout due to other scripts all running at once
+            // Retry after a short delay
+            setTimeout(function() {
+              cell.reload()
+            }, 2000)
+
+            return cell.text("!! Failed to retrieve !!")
+          } else {
+            var lines = data.split("\n")
+            lines[0] = Text.center(lines[0])
+            cell.text(lines.join("\n"))
+          }
+        },
+        fail: function(data) {
+          cell.text("!! Failed to retrieve: " + data)
+        }
+      })
+    },
+    command: function(text, cell) {
+      if (/\d+/.test(text)) {
+        $.ajax({
+          url: "/functions/pullups_counter/run",
+          data: { count: text },
+          type: "POST",
+          dataType: "text",
+          success: function(data) {
+            cell.reload()
+          }
+        })
+      } else {
+        var name = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()
+        $.ajax({
+          url: "/action_events",
+          data: { event_name: name }, // event_name, notes, timestamp
+          type: "POST",
+          dataType: "text",
+          success: function(data) {
+            cell.reload()
+          }
+        })
+      }
+    },
+  })
+
   var todo = Cell.init({
     title: "TODO",
     text: "Loading...",
-    interval: minute,
+    socket: {
+      url: ws_protocol + "://" + location.host + "/cable",
+      subscription: {
+        channel: "ListChannel",
+        channel_id: "list_5",
+      },
+      receive: function(cell, msg) {
+        if (!msg.list_data) { return }
+
+        cell.text(msg.list_data.list_items.join("\n"))
+      }
+    },
     reloader: function(cell) {
       $.getJSON("/lists/todo", function(data) {
         cell.text(data.list_items.join("\n"))
@@ -36,8 +148,21 @@ $(".ctr-dashboard").ready(function() {
 
   var grocery = Cell.init({
     title: "Grocery",
+    x: 4,
+    y: 2,
     text: "Loading...",
-    interval: minute,
+    socket: {
+      url: ws_protocol + "://" + location.host + "/cable",
+      subscription: {
+        channel: "ListChannel",
+        channel_id: "list_1",
+      },
+      receive: function(cell, msg) {
+        if (!msg.list_data) { return }
+
+        cell.text(msg.list_data.list_items.join("\n"))
+      }
+    },
     reloader: function(cell) {
       $.getJSON("/lists/grocery", function(data) {
         cell.text(data.list_items.join("\n"))
@@ -95,64 +220,11 @@ $(".ctr-dashboard").ready(function() {
     },
   })
 
-  var fitness = Cell.init({
-    title: "Fitness",
-    text: "Loading...",
-    interval: 1 * hour,
-    reloader: function(cell) {
-      $.ajax({
-        url: "/functions/fitness_data/run",
-        type: "POST",
-        dataType: "text",
-        success: function(data) {
-          if (!data) {
-            // Sometimes this will timeout due to other scripts all running at once
-            // Retry after a short delay
-            setTimeout(function() {
-              cell.reload()
-            }, 2000)
-
-            return cell.text("!! Failed to retrieve !!")
-          } else {
-            var lines = data.split("\n")
-            lines[0] = Text.center(lines[0])
-            cell.text(lines.join("\n"))
-          }
-        },
-        fail: function(data) {
-          cell.text("!! Failed to retrieve: " + data)
-        }
-      })
-    },
-    command: function(text, cell) {
-      if (/\d+/.test(text)) {
-        $.ajax({
-          url: "/functions/pullups_counter/run",
-          data: { count: text },
-          type: "POST",
-          dataType: "text",
-          success: function(data) {
-            cell.reload()
-          }
-        })
-      } else {
-        var name = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()
-        $.ajax({
-          url: "/action_events",
-          data: { event_name: name }, // event_name, notes, timestamp
-          type: "POST",
-          dataType: "text",
-          success: function(data) {
-            cell.reload()
-          }
-        })
-      }
-    },
-  })
-
   var notes = Cell.init({
     title: "Notes",
-    x: 3,
+    h: 2,
+    w: 2,
+    y: 2,
     reloader: function(cell) {
       cell.text(localStorage.getItem("notes"))
     },

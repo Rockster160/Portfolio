@@ -8,6 +8,7 @@ class ActionEventsController < ApplicationController
 
   def create
     event = ActionEvent.create(action_event_params.merge(user: current_user))
+    FitnessBroadcast.call(event)
 
     respond_to do |format|
       format.json do

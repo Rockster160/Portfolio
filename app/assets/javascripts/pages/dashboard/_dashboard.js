@@ -11,13 +11,17 @@ $(".ctr-dashboard").ready(function() {
     cell.name = data.title.replace(/^\s*|\s*$/ig, "").replace(/\s+/ig, "-").replace(/[^a-z\-]/ig, "").toLowerCase()
     cell.title(data.title)
     cell.text(data.text)
-    cell.x(data.x)
-    cell.y(data.y)
-    cell.w(data.w)
-    cell.h(data.h)
+    cell.x = data.x
+    cell.y = data.y
+    cell.w = data.w
+    cell.h = data.h
     cell.interval = data.interval
     cell.command(data.command)
     cell.reloader(data.reloader, cell.interval)
+    cell.setGridArea()
+    if (data.socket) {
+      data.ws = new CellWS(cell, data.socket)
+    }
 
     $(".dashboard").append(dash_cell)
     cells.push(cell)
@@ -50,41 +54,17 @@ $(".ctr-dashboard").ready(function() {
       return this
     }
   }
-  Cell.prototype.x = function(new_x) {
-    if (new_x == undefined) {
-      return this.my_x
-    } else {
-      this.my_x = new_x
-      this.ele.css({ gridColumnStart: "" + new_x })
-      return this
+  Cell.prototype.setGridArea = function() {
+    var area = {
+      rowStart: this.y || "auto",
+      colStart: this.x || "auto",
+      rowEnd: this.h ? "span " + this.h : "auto",
+      colEnd: this.w ? "span " + this.w : "auto",
     }
-  }
-  Cell.prototype.y = function(new_y) {
-    if (new_y == undefined) {
-      return this.my_y
-    } else {
-      this.my_y = new_y
-      this.ele.css({ gridRowStart: "" + new_y })
-      return this
-    }
-  }
-  Cell.prototype.w = function(new_w) {
-    if (new_w == undefined) {
-      return this.my_w
-    } else {
-      this.my_w = new_w
-      this.ele.css({ gridColumn: "span " + new_w })
-      return this
-    }
-  }
-  Cell.prototype.h = function(new_h) {
-    if (new_h == undefined) {
-      return this.my_h
-    } else {
-      this.my_h = new_h
-      this.ele.css({ gridRow: "span " + new_h })
-      return this
-    }
+
+    var pieces = [area.rowStart, area.colStart, area.rowEnd, area.colEnd]
+
+    this.ele.css({ gridArea: pieces.join(" / ") })
   }
   Cell.prototype.reload = function() {
     if (this.my_reloader && typeof(this.my_reloader) === "function") { this.my_reloader(this) }
@@ -136,6 +116,50 @@ $(".ctr-dashboard").ready(function() {
     return cells.find(function(cell) {
       return cell.ele.get(0) == $ele.get(0)
     })
+  }
+
+  CellWS = function(cell, data) {
+    var cell_ws = this
+    cell_ws.cell = cell
+    cell_ws.open = false
+    cell_ws.socket = new ReconnectingWebSocket(data.url)
+
+    cell_ws.socket.onopen = function() {
+      cell_ws.open = true
+      if (data.onopen && typeof(data.onopen) === "function") { data.onopen() }
+    }
+
+    cell_ws.socket.onclose = function() {
+      cell_ws.open = false
+      if (data.onclose && typeof(data.onclose) === "function") { data.onclose() }
+    }
+
+    cell_ws.socket.onmessage = function(msg) {
+
+      if (data.receive && typeof(data.receive) === "function") {
+        var msg_data = JSON.parse(msg.data)
+        if (msg_data.type == "ping" || !msg_data.message) { return }
+
+        data.receive(cell_ws.cell, msg_data.message)
+      }
+    }
+
+    cell_ws.send(data.subscription, "subscribe")
+  }
+  CellWS.prototype.send = function(data, command) {
+    var cell_ws = this
+    if (cell_ws.open) {
+      var msg = {
+        command: command || "message",
+        identifier: JSON.stringify(data)
+      }
+
+      cell_ws.socket.send(JSON.stringify(msg))
+    } else {
+      setTimeout(function() {
+        cell_ws.send(data, command)
+      }, 500)
+    }
   }
 
   $(document).on("click", ".dash-cell", function() {

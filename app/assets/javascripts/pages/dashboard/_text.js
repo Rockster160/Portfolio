@@ -61,6 +61,8 @@ $(".ctr-dashboard").ready(function() {
     return text
   }
   Text.escapeEmoji = function(text) {
+    if (!text || text.length == 0) { return text }
+
     var token = undefined
     do { token = Math.random().toString(36).substr(2) } while(text.includes(token))
 
