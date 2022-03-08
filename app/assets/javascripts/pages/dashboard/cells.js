@@ -2,6 +2,19 @@ $(".ctr-dashboard").ready(function() {
   var second = 1000, minute = second * 60, hour = minute * 60, day = hour * 24
   var ws_protocol = location.protocol == "https:" ? "wss" : "ws", ws_open = false
 
+  Server = function() {}
+  Server.request = function(url, type, data) {
+    return $.ajax({
+      url: url,
+      data: data || {},
+      dataType: "text",
+      type: type || "GET",
+    })
+  }
+  Server.post  = function(url, data) { return Server.request(url, "POST",  data) }
+  Server.patch = function(url, data) { return Server.request(url, "PATCH", data) }
+  Server.get   = function(url, data) { return Server.request(url, "GET",   data) }
+
   // var cell = Cell.init({
   //   title: "",
   //   text: "",
@@ -25,46 +38,30 @@ $(".ctr-dashboard").ready(function() {
       }
     },
     reloader: function(cell) {
-      $.ajax({
-        url: "/functions/fitness_data/run",
-        type: "POST",
-        dataType: "text",
-        success: function(data) {
-          if (!data) {
-            // Sometimes this will timeout due to other scripts all running at once
-            // Retry after a short delay
-            setTimeout(function() {
-              cell.reload()
-            }, 2000)
+      Server.post("/functions/fitness_data/run").success(function(data) {
+        if (!data) {
+          // Sometimes this will timeout due to other scripts all running at once
+          // Retry after a short delay
+          setTimeout(function() {
+            cell.reload()
+          }, 2000)
 
-            return cell.text("!! Failed to retrieve !!")
-          } else {
-            var lines = data.split("\n")
-            lines[0] = Text.center(lines[0])
-            cell.text(lines.join("\n"))
-          }
-        },
-        fail: function(data) {
-          cell.text("!! Failed to retrieve: " + data)
+          return cell.text("!! Failed to retrieve !!")
+        } else {
+          var lines = data.split("\n")
+          lines[0] = Text.center(lines[0])
+          cell.text(lines.join("\n"))
         }
+      }).fail(function(data) {
+        cell.text("!! Failed to retrieve: " + data)
       })
     },
     command: function(text, cell) {
       if (/\d+/.test(text)) {
-        $.ajax({
-          url: "/functions/pullups_counter/run",
-          data: { count: text },
-          type: "POST",
-          dataType: "text",
-        })
+        Server.post("/functions/pullups_counter/run", { count: text })
       } else {
         var name = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()
-        $.ajax({
-          url: "/action_events",
-          data: { event_name: name }, // event_name, notes, timestamp
-          type: "POST",
-          dataType: "text",
-        })
+        Server.post("/action_events", { event_name: name })
       }
     },
   })
@@ -103,14 +100,10 @@ $(".ctr-dashboard").ready(function() {
         text = "remove " + item.replace(/^\d+\. /, "")
       }
 
-      $.ajax({
-        url: "/lists/todo",
-        type: "PATCH",
-        dataType: "text",
-        data: { message: text },
-      }).fail(function(data) {
-        console.log("Failed to change TODO: ", data);
-      })
+      Server.patch("/lists/todo", { message: text })
+        .fail(function(data) {
+          console.log("Failed to change TODO: ", data);
+        })
     },
   })
 
@@ -148,14 +141,10 @@ $(".ctr-dashboard").ready(function() {
         text = "remove " + item.replace(/^\d+\. /, "")
       }
 
-      $.ajax({
-        url: "/lists/grocery",
-        type: "PATCH",
-        dataType: "text",
-        data: { message: text },
-      }).fail(function(data) {
-        console.log("Failed to change Grocery: ", data);
-      })
+      Server.patch("/lists/grocery", { message: text })
+        .fail(function(data) {
+          console.log("Failed to change Grocery: ", data);
+        })
     },
   })
 

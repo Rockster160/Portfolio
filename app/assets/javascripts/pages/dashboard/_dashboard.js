@@ -128,6 +128,7 @@ $(".ctr-dashboard").ready(function() {
     var cell_ws = this
     cell_ws.cell = cell
     cell_ws.open = false
+    cell_ws.reload = false
     cell_ws.socket = new ReconnectingWebSocket(data.url)
 
     cell_ws.socket.onopen = function() {
@@ -135,10 +136,17 @@ $(".ctr-dashboard").ready(function() {
       cell_ws.send(data.subscription, "subscribe")
 
       if (data.onopen && typeof(data.onopen) === "function") { data.onopen() }
+      if (cell_ws.reload) {
+        cells.forEach(function(cell) {
+          cell.reload()
+        })
+        cell_ws.reload = false
+      }
     }
 
     cell_ws.socket.onclose = function() {
       cell_ws.open = false
+      cell_ws.reload = true
       if (data.onclose && typeof(data.onclose) === "function") { data.onclose() }
     }
 
