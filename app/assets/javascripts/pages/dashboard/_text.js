@@ -41,9 +41,9 @@ $(".ctr-dashboard").ready(function() {
     return text.replaceAll(/<.*?>/gi, "")
   }
   Text.escape = function(text) {
+    text = Text.escapeHtml(text)
     text = Text.escapeEmoji(text)
     text = Text.escapeSpecial(text)
-    text = Text.escapeHtml(text)
 
     return text
   }
@@ -95,20 +95,28 @@ $(".ctr-dashboard").ready(function() {
   }
   Text.escapeSpecial = function(text) {
     if (!text || text.length == 0) { return text }
-    var special = ["°", "✓", "𐄂"]
+    var allowed_tags = [
+      "e",
+      "es",
+      "color"
+    ]
+    var joined_tags = allowed_tags.map(function(tag) { return "<" + tag + "\\b.*?>.*?</" + tag + ">" }).join("|")
 
     var token = undefined
     do { token = Math.random().toString(36).substr(2) } while(text.includes(token))
 
     var hold = {}, i = 0
-    var subbed_text = text.replace(/<es>.*?<\/es>/ig, function(found, found_idx, full_str) {
+    var joined_regex = new RegExp("(" + joined_tags + ")", "gi")
+    var subbed_text = text.replaceAll(joined_regex, function(found, found_idx, full_str) {
       var replace = token + "(" + (i+=1) + ")"
       hold[replace] = found
       return replace
     })
 
-    var special_regex = new RegExp(special.join("|"), "g")
+    var special_regex = /[^\d\w\s\!\@\#\$\%\^\&\*\(\)\+\=\-\[\]\\\'\;\,\.\/\{\}\|\\\"\:\<\>\?\~]+/gi
     var escaped = subbed_text.replaceAll(special_regex, function(found) {
+      if (found.charCodeAt(0) == 65039) { return "" }
+
       return "<es>" + found + "</es>"
     })
 

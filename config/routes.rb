@@ -36,6 +36,11 @@ Rails.application.routes.draw do
   post "push_notification_subscribe" => "webhooks#push_notification_subscribe"
 
   get "dashboard" => "dashboard#show"
+  resource :dashboard, controller: :dashboard, only: [:show] do
+    collection do
+      get :octoprint_session
+    end
+  end
   get "cube" => "cubes#show"
 
   resource :nfc, only: [:show]
