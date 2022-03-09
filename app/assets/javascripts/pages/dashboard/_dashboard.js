@@ -20,7 +20,7 @@ $(".ctr-dashboard").ready(function() {
     cell.reloader(data.reloader, cell.interval)
     cell.setGridArea()
     if (data.socket) {
-      data.ws = new CellWS(cell, data.socket)
+      cell.ws = new CellWS(cell, data.socket)
     }
 
     $(".dashboard").append(dash_cell)
@@ -76,25 +76,29 @@ $(".ctr-dashboard").ready(function() {
 
     return this
   }
-  Cell.prototype.reload = function() {
-    if (this.my_reloader && typeof(this.my_reloader) === "function") { this.my_reloader(this) }
+  Cell.prototype.reload = async function() {
+    var cell = this
+    if (cell.my_reloader && typeof(cell.my_reloader) === "function") {
+      cell.my_reloader(cell)
+    }
 
-    this.flash()
+    if (cell.interval != undefined) {
+      cell.timer = setTimeout(function() {
+        cell.reload()
+      }, cell.interval)
+    }
 
-    return this
+    cell.flash()
+
+    return cell
   }
   Cell.prototype.reloader = function(callback, interval) {
     var cell = this
+
+    clearTimeout(cell.timer)
     cell.my_reloader = callback
 
-    clearInterval(cell.timer)
     cell.reload()
-
-    if (interval != undefined) {
-      cell.timer = setInterval(function() {
-        cell.reload()
-      }, interval)
-    }
 
     return cell
   }
@@ -129,11 +133,17 @@ $(".ctr-dashboard").ready(function() {
     cell_ws.cell = cell
     cell_ws.open = false
     cell_ws.reload = false
+    // cell_ws.socket = new WebSocket(data.url)
     cell_ws.socket = new ReconnectingWebSocket(data.url)
 
+    if (data.authentication && typeof(data.authentication) === "function") {
+      data.authentication(cell_ws)
+    }
+
     cell_ws.socket.onopen = function() {
+      // console.log("onopen");
       cell_ws.open = true
-      cell_ws.send(data.subscription, "subscribe")
+      cell_ws.send("subscribe", data.subscription)
 
       if (data.onopen && typeof(data.onopen) === "function") { data.onopen() }
       if (cell_ws.reload) {
@@ -145,12 +155,18 @@ $(".ctr-dashboard").ready(function() {
     }
 
     cell_ws.socket.onclose = function() {
+      // console.log("onclose");
       cell_ws.open = false
       cell_ws.reload = true
       if (data.onclose && typeof(data.onclose) === "function") { data.onclose() }
     }
 
+    cell_ws.socket.onerror = function(msg, a, b, c) {
+      // console.log("onerror", msg, a, b, c);
+    }
+
     cell_ws.socket.onmessage = function(msg) {
+      // console.log("onmessage", msg);
       if (data.receive && typeof(data.receive) === "function") {
         var msg_data = JSON.parse(msg.data)
         if (msg_data.type == "ping" || !msg_data.message) { return }
@@ -160,18 +176,22 @@ $(".ctr-dashboard").ready(function() {
       }
     }
   }
-  CellWS.prototype.send = function(data, command) {
+  CellWS.prototype.send = function(command, data) {
+    if (!data) {
+      data = command
+      command = "message"
+    }
     var cell_ws = this
     if (cell_ws.open) {
       var msg = {
-        command: command || "message",
+        command: command,
         identifier: JSON.stringify(data)
       }
 
       cell_ws.socket.send(JSON.stringify(msg))
     } else {
       setTimeout(function() {
-        cell_ws.send(data, command)
+        cell_ws.send(command, data)
       }, 500)
     }
   }

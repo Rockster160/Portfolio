@@ -1,5 +1,4 @@
 $(".ctr-dashboard").ready(function() {
-  var second = 1000, minute = second * 60, hour = minute * 60, day = hour * 24
   var ws_protocol = location.protocol == "https:" ? "wss" : "ws", ws_open = false
 
   Server = function() {}
@@ -18,9 +17,17 @@ $(".ctr-dashboard").ready(function() {
   // var cell = Cell.init({
   //   title: "",
   //   text: "",
-  //   interval: minute,
+  //   interval: Time.minute(), // 1000 * 60 * 60
   //   reloader: function(cell) {},
   //   command: function(text, cell) {},
+  //   socket: {
+  //     url: "",
+  //     subscription: {
+  //       channel: "",
+  //       channel_id: "",
+  //     },
+  //     receive: function(cell, msg) {}
+  //   },
   // })
 
   var fitness = Cell.init({
@@ -37,7 +44,10 @@ $(".ctr-dashboard").ready(function() {
         cell.text(lines.join("\n"))
       }
     },
+    interval: Time.msUntilNextDay() + Time.seconds(5),
     reloader: function(cell) {
+      cell.interval = Time.msUntilNextDay() + Time.seconds(5)
+
       Server.post("/functions/fitness_data/run").success(function(data) {
         if (!data) {
           // Sometimes this will timeout due to other scripts all running at once
@@ -151,7 +161,7 @@ $(".ctr-dashboard").ready(function() {
   var uptime = Cell.init({
     title: "Uptime",
     text: "Loading...",
-    interval: 5 * minute,
+    interval: Time.hour(),
     reloader: function(cell) {
       var api_key = authdata.uptime
       var url = "https://api.uptimerobot.com/v2/getMonitors"
@@ -198,14 +208,22 @@ $(".ctr-dashboard").ready(function() {
         if (!msg.recent_events) { return }
 
         cell.text(msg.recent_events.map(function(item) {
-          return Text.justify(item.event_name, item.notes || "")
+          var timestamp = Time.at(Date.parse(item.timestamp))
+          var h = timestamp.getHours()
+          var time = (h > 12 ? h - 12 : h) + ":" + String(timestamp.getSeconds()).padStart(2, "0")
+          var notes = item.notes ? " (" + item.notes + ")" : ""
+          return Text.justify(item.event_name + notes, time || "")
         }).join("\n"))
       }
     },
     reloader: function(cell) {
       $.getJSON("/action_events", function(data) {
         cell.text(data.map(function(item) {
-          return Text.justify(item.event_name, item.notes || "")
+          var timestamp = Time.at(Date.parse(item.timestamp))
+          var h = timestamp.getHours()
+          var time = (h > 12 ? h - 12 : h) + ":" + String(timestamp.getSeconds()).padStart(2, "0")
+          var notes = item.notes ? " (" + item.notes + ")" : ""
+          return Text.justify(item.event_name + notes, time || "")
         }).join("\n"))
       }).fail(function(data) {
         cell.text("Failed to retrieve: " + data)
@@ -229,6 +247,7 @@ $(".ctr-dashboard").ready(function() {
     h: 2,
     w: 2,
     y: 2,
+    interval: Time.seconds(30),
     reloader: function(cell) {
       cell.text(localStorage.getItem("notes"))
     },

@@ -102,10 +102,15 @@ $dash-font-width: $dash-font-size * 0.6;
         line-height: $dash-font-size;
         display: inline-block;
       }
-      e {
-        // font-size: $dash-font-size*0.8;
+      e { // Double width
         display: inline-block;
         width: $dash-font-width*2;
+        height: $dash-font-size;
+        line-height: $dash-font-size;
+      }
+      es { // Single width
+        display: inline-block;
+        width: $dash-font-width;
         height: $dash-font-size;
         line-height: $dash-font-size;
       }
