@@ -98,7 +98,6 @@ $(".ctr-dashboard").ready(function() {
     var allowed_tags = [
       "e",
       "es",
-      "color"
     ]
     var joined_tags = allowed_tags.map(function(tag) { return "<" + tag + "\\b.*?>.*?</" + tag + ">" }).join("|")
 

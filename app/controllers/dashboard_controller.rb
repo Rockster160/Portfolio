@@ -8,7 +8,7 @@ class DashboardController < ApplicationController
     response = RestClient.post(
       "http://zoro-pi-1.local/api/login",
       { passive: true },
-      { "X-Api-Key": "1B95FD2FECB24AB4A03C8D8C56915C28"}
+      { "X-Api-Key": ""}
     )
     json = JSON.parse(response, symbolize_names: true)
 

@@ -19,15 +19,15 @@ Time.msUntilNextSec = function(now) {
 Time.msUntilNextMinute = function(now) {
   now = now || Time.now()
 
-  return (60 - now.getSeconds() - 1) * 1000 + Time.msUntilNextSec(now)
+  return (60 - now.getSeconds() - 1) * Time.second() + Time.msUntilNextSec(now)
 }
 Time.msUntilNextHour = function(now) {
   now = now || Time.now()
 
-  return (60 - now.getMinutes() - 1) * 1000 + Time.msUntilNextMinute(now)
+  return (60 - now.getMinutes() - 1) * Time.minute() + Time.msUntilNextMinute(now)
 }
 Time.msUntilNextDay = function(now) {
   now = now || Time.now()
 
-  return (24 - now.getHours() - 1) * 1000 + Time.msUntilNextHour(now)
+  return (24 - now.getHours() - 1) * Time.hour() + Time.msUntilNextHour(now)
 }
