@@ -67,41 +67,4 @@ $(".ctr-dashboard").ready(function() {
 
   function tempColorScale(temp) {
   }
-
-  function getWeatherEmoji(code, isNight) {
-    if (code >= 200 && code < 300 || code == 960 || code == 961) {
-      return "⛈"
-    } else if ((code >= 300 && code < 600) || code == 701) {
-      return "🌧"
-    } else if (code >= 600 && code < 700) {
-      return "❄️"
-    } else if (code == 711) {
-      return "🔥"
-    } else if (code == 800) {
-      return isNight ? "🌕" : "☀️"
-    } else if (code == 801) {
-      return isNight ? "☁️" : "🌤"
-    } else if (code == 802) {
-      return isNight ? "☁️" : "⛅️"
-    } else if (code == 803) {
-      return isNight ? "☁️" : "🌥"
-    } else if (code == 804) {
-      return "☁️"
-    } else if (code == 900 || code == 962 || code == 781) {
-      return "🌪"
-    } else if (code >= 700 && code < 800) {
-      return "🌫"
-    } else if (code == 903) {
-      return "🥶"
-    } else if (code == 904) {
-      return "🥵"
-    } else if (code == 905 || code == 957) {
-      return "💨"
-    } else if (code == 906 || code == 958 || code == 959) {
-      return "🧊"
-    } else {
-      console.log("Unknown code", code);
-      return "❓"
-    }
-  }
 })
