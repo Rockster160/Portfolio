@@ -76,7 +76,7 @@ $(".ctr-dashboard").ready(function() {
 
     return this
   }
-  Cell.prototype.reload = async function() {
+  Cell.prototype.reload = function() {
     var cell = this
     if (cell.my_reloader && typeof(cell.my_reloader) === "function") {
       cell.my_reloader(cell)
