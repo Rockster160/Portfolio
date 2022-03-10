@@ -214,7 +214,7 @@ $(".ctr-dashboard").ready(function() {
         cell.text(msg.recent_events.map(function(item) {
           var timestamp = Time.at(Date.parse(item.timestamp))
           var h = timestamp.getHours()
-          var time = (h > 12 ? h - 12 : h) + ":" + String(timestamp.getSeconds()).padStart(2, "0")
+          var time = (h > 12 ? h - 12 : h) + ":" + String(timestamp.getMinutes()).padStart(2, "0")
           var notes = item.notes ? " (" + item.notes + ")" : ""
           return Text.justify(item.event_name + notes, time || "")
         }).join("\n"))
@@ -225,7 +225,7 @@ $(".ctr-dashboard").ready(function() {
         cell.text(data.map(function(item) {
           var timestamp = Time.at(Date.parse(item.timestamp))
           var h = timestamp.getHours()
-          var time = (h > 12 ? h - 12 : h) + ":" + String(timestamp.getSeconds()).padStart(2, "0")
+          var time = (h > 12 ? h - 12 : h) + ":" + String(timestamp.getMinutes()).padStart(2, "0")
           var notes = item.notes ? " (" + item.notes + ")" : ""
           return Text.justify(item.event_name + notes, time || "")
         }).join("\n"))

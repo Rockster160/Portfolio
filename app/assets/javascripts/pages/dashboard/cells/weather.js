@@ -27,6 +27,7 @@ $(".ctr-dashboard").ready(function() {
           // This day/night check might be weird overnight
           var hour = time.getHours()
           if (hour > 12) { hour -= 12 }
+          if (hour == 0) { hour = 12 }
           var is_night_hour = time >= current.sunset || time <= current.sunrise
           var icon = getWeatherEmoji(hr_data.weather[0].id, is_night_hour)
 

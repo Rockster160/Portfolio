@@ -24,6 +24,10 @@ Rails.application.configure do
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log
 
+  # Run ActiveJobs inline- this is mostly a fix for the CommandProposal to work properly
+  #   since it uses multiple threads which jams up the single process in development
+  config.active_job.queue_adapter = :inline
+
 
   # Raise an error on page load if there are pending migrations.
   config.active_record.migration_error = :page_load
