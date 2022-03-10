@@ -58,11 +58,15 @@ $(".ctr-dashboard").ready(function() {
   Text.color = function(color, text) {
     return "<color style=\"color: " + color + ";\">" + text + "</color>"
   }
+  Text.animate = function(text) {
+    return "<textanimate steps=\"" + text + "\">" + text.slice(0, 1) + "</textanimate>"
+  }
   Text.escapeHtml = function(text) {
     var allowed_tags = [
       "e",
       "es",
-      "color"
+      "color",
+      "textanimate",
     ]
     var joined_tags = allowed_tags.map(function(tag) { return tag + "\\b|\\/" + tag + "\\b"  }).join("|")
     var html_regex = new RegExp("\\<\\/?([^(" + joined_tags + ")])", "gi");
@@ -132,4 +136,16 @@ $(".ctr-dashboard").ready(function() {
   Text.prototype.justify = function(...args) {
     return Text.justify(...[this.width].concat(args))
   }
+
+  setInterval(function() {
+    $("textanimate").each(function() {
+      var ele = $(this)
+      var steps = ele.attr("steps").split("")
+      var current_step = parseInt(ele.attr("step") || 0)
+      var next_step = current_step + 1
+      if (next_step > steps.length - 1) { next_step = 0 }
+
+      ele.text(steps[next_step]).attr("step", next_step)
+    })
+  }, 100)
 })

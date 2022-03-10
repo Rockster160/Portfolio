@@ -33,6 +33,8 @@ $(".ctr-dashboard").ready(function() {
   var fitness = Cell.init({
     title: "Fitness",
     text: "Loading...",
+    x: 1,
+    y: 1,
     socket: {
       url: ws_protocol + "://" + location.host + "/cable",
       subscription: {
@@ -161,6 +163,8 @@ $(".ctr-dashboard").ready(function() {
   var uptime = Cell.init({
     title: "Uptime",
     text: "Loading...",
+    x: 4,
+    y: 4,
     interval: Time.hour(),
     reloader: function(cell) {
       var api_key = authdata.uptime
@@ -247,7 +251,6 @@ $(".ctr-dashboard").ready(function() {
     h: 2,
     w: 2,
     y: 2,
-    interval: Time.seconds(30),
     reloader: function(cell) {
       cell.text(localStorage.getItem("notes"))
     },
