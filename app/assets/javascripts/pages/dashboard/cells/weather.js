@@ -2,7 +2,7 @@ $(".ctr-dashboard").ready(function() {
   var weather = Cell.init({
     title: "Weather",
     text: "Loading...",
-    x: 4,
+    x: 3,
     y: 3,
     interval: Time.msUntilNextHour() + Time.seconds(5),
     reloader: function(cell) {

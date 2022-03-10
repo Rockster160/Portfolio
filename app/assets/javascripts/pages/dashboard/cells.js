@@ -81,7 +81,7 @@ $(".ctr-dashboard").ready(function() {
   var todo = Cell.init({
     title: "TODO",
     text: "Loading...",
-    x: 4,
+    x: 3,
     y: 1,
     socket: {
       url: ws_protocol + "://" + location.host + "/cable",
@@ -122,7 +122,7 @@ $(".ctr-dashboard").ready(function() {
   var grocery = Cell.init({
     title: "Grocery",
     text: "Loading...",
-    x: 4,
+    x: 3,
     y: 2,
     socket: {
       url: ws_protocol + "://" + location.host + "/cable",
@@ -163,7 +163,7 @@ $(".ctr-dashboard").ready(function() {
   var uptime = Cell.init({
     title: "Uptime",
     text: "Loading...",
-    x: 4,
+    x: 3,
     y: 4,
     interval: Time.hour(),
     reloader: function(cell) {
@@ -201,7 +201,7 @@ $(".ctr-dashboard").ready(function() {
   var recent_events = Cell.init({
     title: "Recent",
     text: "Loading...",
-    x: 3,
+    x: 2,
     y: 1,
     socket: {
       url: ws_protocol + "://" + location.host + "/cable",
