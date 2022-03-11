@@ -78,6 +78,9 @@ $dash-font-width: $dash-font-size * 0.6;
         animation: 1s ease-out flashdashactive;
       }
     }
+    &.hide {
+      display: none;
+    }
     .dash-title {
       position: absolute;
       top: -10px;

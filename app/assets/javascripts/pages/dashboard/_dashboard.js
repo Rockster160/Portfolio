@@ -1,26 +1,29 @@
 $(".ctr-dashboard").ready(function() {
   cells = []
   Cell = function() {}
-  Cell.init = function(data) {
+  Cell.init = function(init_data) {
     var cell = new Cell()
     var dash_cell = $("<div>", { class: "dash-cell" })
     dash_cell.append($("<div>", { class: "dash-title" }).append("<span></span>"))
     dash_cell.append($("<div>", { class: "dash-content" }))
     cell.ele = dash_cell
 
-    cell.name = data.title.replace(/^\s*|\s*$/ig, "").replace(/\s+/ig, "-").replace(/[^a-z\-]/ig, "").toLowerCase()
-    cell.title(data.title)
-    cell.text(data.text)
-    cell.x = data.x
-    cell.y = data.y
-    cell.w = data.w
-    cell.h = data.h
-    cell.interval = data.interval
-    cell.command(data.command)
-    cell.reloader(data.reloader, cell.interval)
+    cell.name = (init_data.name || init_data.title).replace(/^\s*|\s*$/ig, "").replace(/\s+/ig, "-").replace(/[^a-z\-]/ig, "").toLowerCase()
+    cell.title(init_data.title)
+    cell.text(init_data.text)
+    cell.x = init_data.x
+    cell.y = init_data.y
+    cell.w = init_data.w
+    cell.h = init_data.h
+    cell.init_data = init_data
+    cell.data = init_data.data || {}
+    cell.commands = init_data.commands || {}
+    cell.interval = init_data.interval
+    cell.command(init_data.command)
+    cell.reloader(init_data.reloader, cell.interval)
     cell.setGridArea()
-    if (data.socket) {
-      cell.ws = new CellWS(cell, data.socket)
+    if (init_data.socket) {
+      cell.ws = new CellWS(cell, init_data.socket)
     }
 
     $(".dashboard").append(dash_cell)
@@ -112,6 +115,28 @@ $(".ctr-dashboard").ready(function() {
 
     return this
   }
+  Cell.prototype.stop = function() {
+    console.log("stop");
+    var cell = this
+    clearTimeout(cell.timer)
+    if (cell.ws) { cell.ws.close() }
+  }
+  Cell.prototype.start = function() {
+    console.log("start");
+    var cell = this
+    if (cell.ws) { cell.ws.reopen() }
+    cell.reload()
+  }
+  Cell.prototype.hide = function(a, b, c, d) {
+    console.log("hide");
+    var cell = this
+    cell.ele.addClass("hide")
+  }
+  Cell.prototype.show = function() {
+    console.log("show");
+    var cell = this
+    cell.ele.removeClass("hide")
+  }
   Cell.prototype.active = function(reset_omnibar) {
     $(".dash-cell").removeClass("active")
     this.ele.addClass("active")
@@ -137,70 +162,75 @@ $(".ctr-dashboard").ready(function() {
     })
   }
 
-  CellWS = function(cell, data) {
+  CellWS = function(cell, init_data) {
     var cell_ws = this
     cell_ws.cell = cell
     cell_ws.open = false
     cell_ws.reload = false
-    // cell_ws.socket = new WebSocket(data.url)
-    cell_ws.socket = new ReconnectingWebSocket(data.url)
+    // cell_ws.socket = new WebSocket(init_data.url)
+    cell_ws.socket = new ReconnectingWebSocket(init_data.url)
 
-    if (data.authentication && typeof(data.authentication) === "function") {
-      data.authentication(cell_ws)
+    if (init_data.authentication && typeof(init_data.authentication) === "function") {
+      init_data.authentication(cell_ws)
     }
 
     cell_ws.socket.onopen = function() {
-      // console.log("onopen");
       cell_ws.open = true
-      cell_ws.send("subscribe", data.subscription)
+      cell_ws.send("subscribe", init_data.subscription)
 
-      if (data.onopen && typeof(data.onopen) === "function") { data.onopen() }
+      if (init_data.onopen && typeof(init_data.onopen) === "function") { init_data.onopen() }
       if (cell_ws.reload) {
-        cells.forEach(function(cell) {
-          cell.reload()
-        })
+        cell_ws.cell.reload()
         cell_ws.reload = false
       }
     }
 
     cell_ws.socket.onclose = function() {
-      // console.log("onclose");
       cell_ws.open = false
       cell_ws.reload = true
-      if (data.onclose && typeof(data.onclose) === "function") { data.onclose() }
+      if (init_data.onclose && typeof(init_data.onclose) === "function") { init_data.onclose() }
     }
 
     cell_ws.socket.onerror = function(msg, a, b, c) {
-      // console.log("onerror", msg, a, b, c);
     }
 
     cell_ws.socket.onmessage = function(msg) {
-      // console.log("onmessage", msg);
-      if (data.receive && typeof(data.receive) === "function") {
+      if (init_data.receive && typeof(init_data.receive) === "function") {
         var msg_data = JSON.parse(msg.data)
         if (msg_data.type == "ping" || !msg_data.message) { return }
 
         cell_ws.cell.flash()
-        data.receive(cell_ws.cell, msg_data.message)
+        init_data.receive(cell_ws.cell, msg_data.message)
       }
     }
   }
-  CellWS.prototype.send = function(command, data) {
-    if (!data) {
-      data = command
+  CellWS.prototype.reopen = function() {
+    var cell_ws = this
+    cell_ws.cell.ws = new CellWS(cell_ws.cell, cell_ws.cell.init_data.socket)
+  }
+  CellWS.prototype.close = function() {
+    var cell_ws = this
+    cell_ws.open = false
+    cell_ws.socket.close()
+  }
+  // Packet data should be another function on WS that can be defined for pre-formatting ws messages
+  CellWS.prototype.send = function(command, packet) {
+    if (!packet) {
+      packet = command
       command = "message"
     }
     var cell_ws = this
     if (cell_ws.open) {
+      // This part is what would be defined by the packet data function rather than making opinionated decisions
       var msg = {
         command: command,
-        identifier: JSON.stringify(data)
+        identifier: JSON.stringify(packet)
       }
 
       cell_ws.socket.send(JSON.stringify(msg))
     } else {
       setTimeout(function() {
-        cell_ws.send(command, data)
+        cell_ws.send(command, packet)
       }, 500)
     }
   }
@@ -242,9 +272,21 @@ $(".ctr-dashboard").ready(function() {
       var cell = Cell.from_ele($(".dash-cell.active"))
       if (!cell) { return console.log("No cell selected") }
 
-      // if (/^\./.test(cmd)) {}
-      if (cmd == ".reload") {
-        cell.reload()
+      var func_regex = /^ *\.\w+ */
+      if (func_regex.test(cmd)) {
+        var raw_func = cmd.match(func_regex)[0].slice(1).trim()
+        var cmd = cmd.replace(func_regex, "")
+        var func = cell.commands[raw_func]
+        if (func && typeof(func) == "function") {
+          func.call(cell, cmd)
+        } else {
+          func = cell[raw_func]
+          if (func && typeof(func) == "function") {
+            func.call(cell, cmd)
+          } else {
+            cell.execute("." + raw_func + " " + cmd)
+          }
+        }
       } else {
         cell.execute(cmd)
       }

@@ -17,6 +17,7 @@ $(".ctr-dashboard").ready(function() {
   // var cell = Cell.init({
   //   title: "",
   //   text: "",
+  //   commands: {},
   //   interval: Time.minute(), // 1000 * 60 * 60
   //   reloader: function(cell) {},
   //   command: function(text, cell) {},
