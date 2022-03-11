@@ -52,7 +52,7 @@ $(".ctr-dashboard").ready(function() {
         var lines = [
           Text.center(now.description + " " + now.icon + " " + now.temp + "° (" + now.feelsLike + ")"),
           hourly_hours.join(""),
-          " " + hourly_icons.join(""),
+          hourly_icons.join(""),
           " " + hourly_temps.join(""),
           "",
           "  " + daily_days.join(""),

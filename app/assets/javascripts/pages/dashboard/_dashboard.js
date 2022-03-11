@@ -112,13 +112,22 @@ $(".ctr-dashboard").ready(function() {
 
     return this
   }
-  Cell.prototype.active = function() {
+  Cell.prototype.active = function(reset_omnibar) {
     $(".dash-cell").removeClass("active")
     this.ele.addClass("active")
+    if (!reset_omnibar) { return }
 
     var prev = $(".dashboard-omnibar input").val()
-    prev = prev.replace(/\:(\w|\-)+ /i, "")
+    prev = prev.replace(/\:(\w|\-)+ ?/i, "")
     $(".dashboard-omnibar input").val(":" + this.name + " " + prev)
+  }
+  Cell.inactive = function() {
+    $(".dash-cell").removeClass("active")
+  }
+  Cell.from_selector = function(selector) {
+    return cells.find(function(cell) {
+      return cell.my_title.toLowerCase() == selector.toLowerCase()
+    })
   }
   Cell.from_ele = function(ele) {
     var $ele = $(ele)
@@ -199,7 +208,18 @@ $(".ctr-dashboard").ready(function() {
   $(document).on("click", ".dash-cell", function() {
     var cell = Cell.from_ele(this)
 
-    if (cell) { cell.active() }
+    if (cell) { cell.active(true) }
+  }).on("keyup", function(evt) {
+    var raw = $(".dashboard-omnibar input").val()
+    var selector = raw.match(/(?:\:)(\w|\-)+/i)
+    selector = selector ? selector[0].slice(1) : ""
+
+    var cell = Cell.from_selector(selector)
+    if (cell) {
+      cell.active()
+    } else {
+      Cell.inactive()
+    }
   }).on("keydown", function(evt) {
     if (!evt.metaKey) {
       $(".dashboard-omnibar input").focus()
