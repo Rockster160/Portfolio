@@ -31,3 +31,6 @@ kill_portfolio
 sidekiq_tail_portfolio
 tail_portfolio
 public/assets/*
+
+# Temp files that might have access keys
+tesla_control.rb

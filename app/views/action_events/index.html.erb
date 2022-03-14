@@ -5,7 +5,10 @@
 <%= form_for ActionEvent.new do |f| %>
   <%= f.text_field :event_name, placeholder: :event_name %>
   <%= f.text_field :notes, placeholder: :notes %>
-  <%= f.text_field :timestamp, placeholder: :timestamp %>
+  <% Time.use_zone("Mountain Time (US & Canada)") do %>
+    <% f.object.timestamp ||= Time.current %>
+    <%= f.datetime_local_field :timestamp %>
+  <% end %>
   <%= f.submit %>
 <% end %>
 
