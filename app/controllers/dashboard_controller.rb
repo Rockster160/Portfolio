@@ -5,13 +5,6 @@ class DashboardController < ApplicationController
   end
 
   def octoprint_session
-    response = RestClient.post(
-      "http://zoro-pi-1.local/api/login",
-      { passive: true },
-      { "X-Api-Key": ""}
-    )
-    json = JSON.parse(response, symbolize_names: true)
-
-    render text: json[:session]
+    # render text: json[:session]
   end
 end

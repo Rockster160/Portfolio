@@ -57,7 +57,7 @@ $(".ctr-dashboard").ready(function() {
           // Retry after a short delay
           setTimeout(function() {
             cell.reload()
-          }, 2000)
+          }, Time.seconds(10))
 
           return cell.text("!! Failed to retrieve !!")
         } else {
