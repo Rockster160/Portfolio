@@ -59,7 +59,33 @@ $(".ctr-dashboard").ready(function() {
     return "<color style=\"color: " + color + ";\">" + text + "</color>"
   }
   Text.animate = function(text) {
+    if (text.length <= 1) { return text }
     return "<textanimate steps=\"" + text + "\">" + text.slice(0, 1) + "</textanimate>"
+  }
+  Text.progressBar = function(percent, opts) {
+    opts = opts || {}
+    opts.width = (opts.width || single_width) - 3 // Markers
+    opts.open_char     = Text.animate(opts.open_char     || "[")
+    opts.progress_char = Text.animate(opts.progress_char || "=")
+    opts.current_char  = Text.animate(opts.current_char  || ">")
+    opts.empty_char    = Text.animate(opts.empty_char    || " ")
+    opts.close_char    = Text.animate(opts.close_char    || "]")
+
+    var per_px = (100 / opts.width)
+    var progress = Math.round(percent / per_px)
+    progress = progress > 0 ? progress : 0
+    var remaining = opts.width - progress
+    remaining = remaining > 0 ? remaining : 0
+    if (percent <= 1) { opts.current_char = opts.empty_char }
+    if (percent >= 99) { opts.current_char = opts.progress_char }
+
+    return [
+      opts.open_char,
+      opts.progress_char.repeat(progress),
+      opts.current_char,
+      opts.empty_char.repeat(remaining),
+      opts.close_char,
+    ].join("")
   }
   Text.escapeHtml = function(text) {
     var allowed_tags = [
@@ -102,6 +128,7 @@ $(".ctr-dashboard").ready(function() {
     var allowed_tags = [
       "e",
       "es",
+      "textanimate",
     ]
     var joined_tags = allowed_tags.map(function(tag) { return "<" + tag + "\\b.*?>.*?</" + tag + ">" }).join("|")
 
