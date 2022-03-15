@@ -28,6 +28,7 @@ $(".ctr-dashboard").ready(function() {
 
     $(".dashboard").append(dash_cell)
     cells.push(cell)
+    return cell
   }
   Cell.prototype.title = function(new_title) {
     if (new_title == undefined) {
@@ -42,10 +43,27 @@ $(".ctr-dashboard").ready(function() {
     if (new_text == undefined) {
       return this.my_text
     } else {
-      // Should escape raw HTML as well
       new_text = Text.escape(new_text)
       this.my_text = new_text
       this.ele.children(".dash-content").html(new_text)
+      return this
+    }
+  }
+  Cell.prototype.lines = function(new_lines) {
+    if (new_lines == undefined) {
+      return this.text().split("\n")
+    } else {
+      this.text(new_lines.join("\n"))
+      return this
+    }
+  }
+  Cell.prototype.line = function(idx, new_line) {
+    if (new_line == undefined) {
+      return this.text().split("\n")[idx]
+    } else {
+      var lines = this.text().split("\n")
+      lines[idx] = new_line
+      this.lines(lines)
       return this
     }
   }
