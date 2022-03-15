@@ -11,6 +11,7 @@ $(".ctr-dashboard").ready(function() {
     cell.name = (init_data.name || init_data.title).replace(/^\s*|\s*$/ig, "").replace(/\s+/ig, "-").replace(/[^a-z\-]/ig, "").toLowerCase()
     cell.title(init_data.title)
     cell.text(init_data.text)
+    cell.should_flash = init_data.flash == false ? false : true
     cell.x = init_data.x
     cell.y = init_data.y
     cell.w = init_data.w
@@ -97,19 +98,27 @@ $(".ctr-dashboard").ready(function() {
 
     return this
   }
+  Cell.prototype.resetTimer = function(new_interval) {
+    var cell = this
+    clearTimeout(cell.timer)
+    cell.timer = undefined
+    cell.interval = new_interval
+
+    if (new_interval != undefined) {
+      cell.timer = setTimeout(function() {
+        cell.reload()
+      }, cell.interval)
+    }
+  }
   Cell.prototype.reload = function() {
     var cell = this
     if (cell.my_reloader && typeof(cell.my_reloader) === "function") {
       cell.my_reloader(cell)
     }
 
-    if (cell.interval != undefined) {
-      cell.timer = setTimeout(function() {
-        cell.reload()
-      }, cell.interval)
-    }
+    cell.resetTimer(cell.interval)
 
-    cell.flash()
+    if (cell.should_flash) { cell.flash() }
 
     return cell
   }
@@ -133,25 +142,25 @@ $(".ctr-dashboard").ready(function() {
 
     return this
   }
+  Cell.prototype.debug = function() {
+    var cell = this
+    console.log(cell)
+  }
   Cell.prototype.stop = function() {
-    console.log("stop");
     var cell = this
     clearTimeout(cell.timer)
     if (cell.ws) { cell.ws.close() }
   }
   Cell.prototype.start = function() {
-    console.log("start");
     var cell = this
     if (cell.ws) { cell.ws.reopen() }
     cell.reload()
   }
   Cell.prototype.hide = function(a, b, c, d) {
-    console.log("hide");
     var cell = this
     cell.ele.addClass("hide")
   }
   Cell.prototype.show = function() {
-    console.log("show");
     var cell = this
     cell.ele.removeClass("hide")
   }
@@ -217,7 +226,7 @@ $(".ctr-dashboard").ready(function() {
         var msg_data = JSON.parse(msg.data)
         if (msg_data.type == "ping" || !msg_data.message) { return }
 
-        cell_ws.cell.flash()
+        if (cell_ws.should_flash) { cell_ws.cell.flash() }
         init_data.receive(cell_ws.cell, msg_data.message)
       }
     }
@@ -296,11 +305,11 @@ $(".ctr-dashboard").ready(function() {
         var cmd = cmd.replace(func_regex, "")
         var func = cell.commands[raw_func]
         if (func && typeof(func) == "function") {
-          func.call(cell, cmd)
+          func.call(cell, cell, cmd)
         } else {
           func = cell[raw_func]
           if (func && typeof(func) == "function") {
-            func.call(cell, cmd)
+            func.call(cell, cell, cmd)
           } else {
             cell.execute("." + raw_func + " " + cmd)
           }

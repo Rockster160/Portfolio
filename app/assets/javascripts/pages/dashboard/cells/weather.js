@@ -1,5 +1,6 @@
 $(".ctr-dashboard").ready(function() {
-  var weather = Cell.init({
+  if (demo) { return }
+  Cell.init({
     title: "Weather",
     text: "Loading...",
     x: 3,

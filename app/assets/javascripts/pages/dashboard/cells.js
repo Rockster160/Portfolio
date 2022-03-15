@@ -1,3 +1,5 @@
+var demo = false
+
 $(".ctr-dashboard").ready(function() {
   var ws_protocol = location.protocol == "https:" ? "wss" : "ws", ws_open = false
 
@@ -18,7 +20,7 @@ $(".ctr-dashboard").ready(function() {
   //   title: "",
   //   text: "",
   //   commands: {},
-  //   interval: Time.minute(), // 1000 * 60 * 60
+  //   interval: Time.minute(),
   //   reloader: function(cell) {},
   //   command: function(text, cell) {},
   //   socket: {
@@ -31,7 +33,9 @@ $(".ctr-dashboard").ready(function() {
   //   },
   // })
 
-  var fitness = Cell.init({
+  if (demo) { return }
+
+  Cell.init({
     title: "Fitness",
     text: "Loading...",
     x: 1,
@@ -52,12 +56,13 @@ $(".ctr-dashboard").ready(function() {
       cell.interval = Time.msUntilNextDay() + Time.seconds(5)
 
       Server.post("/functions/fitness_data/run").success(function(data) {
+        clearTimeout(cell.data.retry_timer)
         if (!data) {
           // Sometimes this will timeout due to other scripts all running at once
           // Retry after a short delay
-          setTimeout(function() {
+          cell.data.retry_timer = setTimeout(function() {
             cell.reload()
-          }, Time.seconds(10))
+          }, Time.seconds(30))
 
           return cell.text("!! Failed to retrieve !!")
         } else {
@@ -79,7 +84,7 @@ $(".ctr-dashboard").ready(function() {
     },
   })
 
-  var todo = Cell.init({
+  Cell.init({
     title: "TODO",
     text: "Loading...",
     x: 3,
@@ -120,7 +125,7 @@ $(".ctr-dashboard").ready(function() {
     },
   })
 
-  var grocery = Cell.init({
+  Cell.init({
     title: "Grocery",
     text: "Loading...",
     x: 3,
@@ -161,7 +166,7 @@ $(".ctr-dashboard").ready(function() {
     },
   })
 
-  var uptime = Cell.init({
+  Cell.init({
     title: "Uptime",
     text: "Loading...",
     x: 3,
@@ -199,7 +204,7 @@ $(".ctr-dashboard").ready(function() {
     },
   })
 
-  var recent_events = Cell.init({
+  Cell.init({
     title: "Recent",
     text: "Loading...",
     x: 2,
@@ -247,7 +252,7 @@ $(".ctr-dashboard").ready(function() {
     },
   })
 
-  var notes = Cell.init({
+  Cell.init({
     title: "Notes",
     h: 2,
     w: 2,
