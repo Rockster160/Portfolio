@@ -20,12 +20,12 @@ $(".ctr-dashboard").ready(function() {
     cell.data = init_data.data || {}
     cell.commands = init_data.commands || {}
     cell.interval = init_data.interval
-    cell.command(init_data.command)
-    cell.reloader(init_data.reloader, cell.interval)
-    cell.setGridArea()
     if (init_data.socket) {
       cell.ws = new CellWS(cell, init_data.socket)
     }
+    cell.command(init_data.command)
+    cell.reloader(init_data.reloader, cell.interval)
+    cell.setGridArea()
 
     $(".dashboard").append(dash_cell)
     cells.push(cell)

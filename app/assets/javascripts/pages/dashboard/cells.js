@@ -1,4 +1,4 @@
-var demo = true
+var demo = !true
 
 $(".ctr-dashboard").ready(function() {
   Server = function() {}
@@ -29,7 +29,8 @@ $(".ctr-dashboard").ready(function() {
         if (typeof packet != "object" || !packet.subscribe) {
           packet = {
             command: "message",
-            identifier: JSON.stringify(packet)
+            identifier: JSON.stringify(subscription),
+            data: JSON.stringify(packet)
           }
         } else {
           packet = {
@@ -82,24 +83,7 @@ $(".ctr-dashboard").ready(function() {
     reloader: function(cell) {
       cell.interval = Time.msUntilNextDay() + Time.seconds(5)
 
-      Server.post("/functions/fitness_data/run").success(function(data) {
-        clearTimeout(cell.data.retry_timer)
-        if (!data) {
-          // Sometimes this will timeout due to other scripts all running at once
-          // Retry after a short delay
-          cell.data.retry_timer = setTimeout(function() {
-            cell.reload()
-          }, Time.seconds(30))
-
-          return cell.text("!! Failed to retrieve !!")
-        } else {
-          var lines = data.split("\n")
-          lines[0] = Text.center(lines[0])
-          cell.text(lines.join("\n"))
-        }
-      }).fail(function(data) {
-        cell.text("!! Failed to retrieve: " + JSON.stringify(data))
-      })
+      cell.ws.send({ action: "request" })
     },
     command: function(text, cell) {
       if (/\d+/.test(text)) {

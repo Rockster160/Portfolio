@@ -1,5 +1,7 @@
 class FitnessBroadcast
-  def self.call(event)
+  def self.call(event=nil)
+    return broadcast if event.nil?
+
     broadcast_events = [
       :Pullups,
       :Workout,

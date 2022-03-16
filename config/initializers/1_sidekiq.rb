@@ -6,6 +6,11 @@ config = {
   namespace: "#{Rails.application.class.parent_name}_#{Rails.env}:sidekiq"
 }
 
+if Rails.env.development?
+  require 'sidekiq/testing'
+  Sidekiq::Testing.inline!
+end
+
 Sidekiq.configure_server do |c|
   c.redis = config
   c.error_handlers << Proc.new do |exception, context_hash|

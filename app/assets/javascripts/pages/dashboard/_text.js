@@ -25,6 +25,7 @@ $(".ctr-dashboard").ready(function() {
   Text.center = function(text, width) {
     width = width || single_width
     var spaces = (width - Text.clean(text).length) / 2
+    spaces = spaces < 0 ? 0 : spaces
 
     return " ".repeat(spaces) + text + " ".repeat(spaces)
   }
@@ -34,6 +35,7 @@ $(".ctr-dashboard").ready(function() {
 
     var text_length = Text.clean(args.join("")).length
     var spaces = (width - text_length) / (args.length - 1)
+    spaces = spaces < 0 ? 0 : spaces
 
     return args.map(function(text) { return text + " ".repeat(spaces) }).join("").replace(/\s+$/, "")
   }
@@ -71,7 +73,7 @@ $(".ctr-dashboard").ready(function() {
     opts.close_char    = Text.animate(opts.hasOwnProperty("close_char") ? opts.close_char : "]")
     opts.post_text     = opts.post_text || ""
     opts.width = (opts.width || single_width)
-    
+
     if (percent <= 1) { opts.current_char = opts.empty_char }
     if (percent >= 99) { opts.current_char = opts.progress_char }
     if (opts.open_char) { opts.width -= 1 }

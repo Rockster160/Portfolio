@@ -124,9 +124,10 @@ $text-color: darken($grey-blue, 20%);
         height: $dash-font-height;
         line-height: $dash-font-height;
       }
-      e {
+      e { // Double width
         width: $dash-font-width*2;
-        font-family: emoji; // Double width
+        font-family: emoji;
+        // font-size: $dash-font-height*0.75;
       }
     }
   }
