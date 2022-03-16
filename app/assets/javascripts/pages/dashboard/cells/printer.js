@@ -5,7 +5,7 @@ $(".ctr-dashboard").ready(function() {
     var url = url
     var data = data
     return $.ajax({
-      url: "http://zoro-pi-1.local/api/printer" + (url || ""),
+      url: "http://zoro-pi-1.local/api" + (url || ""),
       data: JSON.stringify(data || {}),
       type: type || "GET",
       headers: {
@@ -22,6 +22,8 @@ $(".ctr-dashboard").ready(function() {
       cell.lines(lines)
     })
   }
+  Printer.post = function(cell, url, data) { return Printer.request(cell, url, "POST", data) }
+  Printer.get =  function(cell, url, data) { return Printer.request(cell, url, "GET",  data) }
 
   var printer = Cell.init({
     title: "Printer",
@@ -32,39 +34,39 @@ $(".ctr-dashboard").ready(function() {
     }),
     commands: {
       gcode: function(cell, cmd) {
-        return Printer.request(cell, "/command", "POST", { commands: cmd.split(", ") })
+        return Printer.post(cell, "/printer/command", { commands: cmd.split(", ") })
       },
       on: function(cell) {
-        return Printer.request(cell, "/command", "POST", { command: "M80" })
+        return Printer.post(cell, "/printer/command", { command: "M80" })
       },
       off: function(cell) {
         cell.data.prepping = false
-        return Printer.request(cell, "/command", "POST", { command: "M81" })
+        return Printer.post(cell, "/printer/command", { command: "M81" })
       },
       extrude: function(cell, amount) {
-        return Printer.request(cell, "/tool", "POST", { command: "extrude", amount: amount })
+        return Printer.post(cell, "/printer/tool", { command: "extrude", amount: amount })
       },
       retract: function(cell, amount) {
-        return Printer.request(cell, "/tool", "POST", { command: "extrude", amount: "-" + amount })
+        return Printer.post(cell, "/printer/tool", { command: "extrude", amount: "-" + amount })
       },
       home: function(cell) {
-        return Printer.request(cell, "/printhead", "POST", { command: "home", axes: ["x", "y", "z"] })
+        return Printer.post(cell, "/printer/printhead", { command: "home", axes: ["x", "y", "z"] })
       },
       move: function(cell, amounts) {
         var [x, y, z] = amounts.trim().split(" ").map(function(c) { return parseInt(c) })
-        return Printer.request(cell, "/printhead", "POST", { command: "jog", x: x || 0, y: y || 0, z: z || 0 })
+        return Printer.post(cell, "/printer/printhead", { command: "jog", x: x || 0, y: y || 0, z: z || 0 })
       },
       cool: function(cell, amounts) {
-        Printer.request(cell, "/tool", "POST", { command: "target", targets: { tool0: 0 } })
-        Printer.request(cell, "/bed", "POST", { command: "target", target: 0 }).done(function() {
+        Printer.post(cell, "/printer/tool", { command: "target", targets: { tool0: 0 } })
+        Printer.post(cell, "/printer/bed", { command: "target", target: 0 }).done(function() {
           cell.data.prepping = true
           cell.reload()
         })
       },
       pre: function(cell) {
         cell.commands.on(cell).success(function() {
-          Printer.request(cell, "/tool", "POST", { command: "target", targets: { tool0: 200 } })
-          Printer.request(cell, "/bed", "POST", { command: "target", target: 40 }).done(function() {
+          Printer.post(cell, "/printer/tool", { command: "target", targets: { tool0: 200 } })
+          Printer.post(cell, "/printer/bed", { command: "target", target: 40 }).done(function() {
             cell.data.prepping = true
             cell.reload()
           })
@@ -85,7 +87,7 @@ $(".ctr-dashboard").ready(function() {
     },
     reloader: function(cell) {
       var cell = cell
-      Printer.request(cell).success(function(data) {
+      Printer.get(cell, "/printer").success(function(data) {
         var data = data
         cell.data.printing = data.state.flags.printing
         if (cell.data.printing) {
@@ -115,16 +117,9 @@ $(".ctr-dashboard").ready(function() {
         }
         cell.line(0, Text.center([tool, bed].join(" | ")))
 
-        $.ajax({
-          url: "http://zoro-pi-1.local/api/job",
-          type: "GET",
-          headers: {
-            "X-Api-Key": authdata.printer,
-            "Content-Type": "application/json"
-          }
-        }).success(function(data) {
+        Printer.get(cell, "/job").success(function(data) {
           if (!data.job.user) {
-            return cell.line(2, Text.center("~Cannot read from printer~"))
+            return cell.line(2, Text.center("~Previous job unavailable~"))
           }
 
           cell.data.now = Time.msSinceEpoch()

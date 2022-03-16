@@ -1,4 +1,4 @@
-var demo = !true
+var demo = true
 
 $(".ctr-dashboard").ready(function() {
   Server = function() {}
