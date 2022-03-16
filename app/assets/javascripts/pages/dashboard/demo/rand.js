@@ -28,6 +28,8 @@ $(".ctr-dashboard").ready(function() {
   }
 
   Cell.init({
+    x: 4,
+    y: 2,
     title: "Random",
     text: Text.color("yellow", ".8ball .die .coin .draw .shuffle"),
     commands: {

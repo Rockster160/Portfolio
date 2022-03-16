@@ -1,4 +1,4 @@
-var demo = true
+var demo = !true
 
 $(".ctr-dashboard").ready(function() {
   Server = function() {}
@@ -98,8 +98,8 @@ $(".ctr-dashboard").ready(function() {
   Cell.init({
     title: "TODO",
     text: "Loading...",
-    x: 3,
-    y: 1,
+    x: 1,
+    y: 4,
     socket: Server.socket({
       channel: "ListChannel",
       channel_id: "list_5",
@@ -135,8 +135,8 @@ $(".ctr-dashboard").ready(function() {
   Cell.init({
     title: "Grocery",
     text: "Loading...",
-    x: 3,
-    y: 2,
+    x: 2,
+    y: 4,
     socket: Server.socket({
       channel: "ListChannel",
       channel_id: "list_1",
@@ -172,8 +172,8 @@ $(".ctr-dashboard").ready(function() {
   Cell.init({
     title: "Uptime",
     text: "Loading...",
-    x: 3,
-    y: 4,
+    x: 4,
+    y: 1,
     interval: Time.hour(),
     reloader: function(cell) {
       var api_key = authdata.uptime
@@ -253,6 +253,8 @@ $(".ctr-dashboard").ready(function() {
     title: "Notes",
     h: 2,
     w: 2,
+    x: 1,
+    y: 2,
     reloader: function(cell) {
       cell.text(localStorage.getItem("notes"))
     },

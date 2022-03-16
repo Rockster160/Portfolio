@@ -274,7 +274,7 @@ $(".ctr-dashboard").ready(function() {
       $(".dashboard-omnibar input").focus()
     }
   }).on("keypress", ".dashboard-omnibar input", function(evt) {
-    if (evt.which == keyEvent("ENTER")) {
+    if (evt.which == 13) {
       var raw = $(".dashboard-omnibar input").val()
       var selector = raw.match(/\:(\w|\-)+ /i)
       selector = selector ? selector[0] : ""

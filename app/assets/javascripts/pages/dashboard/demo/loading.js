@@ -1,5 +1,6 @@
 $(".ctr-dashboard").ready(function() {
   Cell.init({
+    x: 3,
     title: "Loading",
     flash: false,
     interval: 100,

@@ -12,6 +12,8 @@ $(".ctr-dashboard").ready(function() {
   }
 
   Cell.init({
+    x: 4,
+    y: 3,
     title: "Rock-Paper-Scissors",
     reloader: function(cell) {
       // Ran immediately when cell loads, and also any time .reload is called

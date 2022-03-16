@@ -4,7 +4,7 @@ $(".ctr-dashboard").ready(function() {
     title: "Weather",
     text: "Loading...",
     x: 3,
-    y: 3,
+    y: 1,
     interval: Time.msUntilNextHour() + Time.seconds(5),
     reloader: function(cell) {
       cell.interval = Time.msUntilNextHour() + Time.seconds(5)

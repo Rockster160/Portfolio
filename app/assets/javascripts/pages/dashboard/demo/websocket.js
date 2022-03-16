@@ -8,6 +8,8 @@ $(".ctr-dashboard").ready(function() {
   }
 
   Cell.init({
+    y: 3,
+    x: 3,
     title: "Websockets",
     text: "Connecting...",
     socket: {
