@@ -5,7 +5,9 @@ module PrinterNotify
     @params = params
     @fields = []
 
-    if @params[:topic] == "Print Done"
+    if @params[:topic] == "Print Started"
+      return # no-op
+    elsif @params[:topic] == "Print Done"
       push_to_slack(complete_attachment)
     else
       push_to_slack(fail_attachment)

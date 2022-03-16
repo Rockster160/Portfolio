@@ -1,8 +1,6 @@
 var demo = !true
 
 $(".ctr-dashboard").ready(function() {
-  var ws_protocol = location.protocol == "https:" ? "wss" : "ws", ws_open = false
-
   Server = function() {}
   Server.request = function(url, type, data) {
     return $.ajax({
@@ -12,9 +10,20 @@ $(".ctr-dashboard").ready(function() {
       type: type || "GET",
     })
   }
-  Server.post  = function(url, data) { return Server.request(url, "POST",  data) }
-  Server.patch = function(url, data) { return Server.request(url, "PATCH", data) }
-  Server.get   = function(url, data) { return Server.request(url, "GET",   data) }
+  Server.post   = function(url, data) { return Server.request(url, "POST",  data) }
+  Server.patch  = function(url, data) { return Server.request(url, "PATCH", data) }
+  Server.get    = function(url, data) { return Server.request(url, "GET",   data) }
+  Server.socket = function(subscription, receive) {
+    var ws_protocol = location.protocol == "https:" ? "wss" : "ws", ws_open = false
+    if (typeof subscription != "object") {
+      subscription = { channel: subscription }
+    }
+    return {
+      url: ws_protocol + "://" + location.host + "/cable",
+      subscription: subscription,
+      receive: receive
+    }
+  }
 
   // var cell = Cell.init({
   //   title: "",
@@ -40,17 +49,11 @@ $(".ctr-dashboard").ready(function() {
     text: "Loading...",
     x: 1,
     y: 1,
-    socket: {
-      url: ws_protocol + "://" + location.host + "/cable",
-      subscription: {
-        channel: "FitnessChannel",
-      },
-      receive: function(cell, msg) {
-        var lines = msg.fitness_data.split("\n")
-        lines[0] = Text.center(lines[0])
-        cell.text(lines.join("\n"))
-      }
-    },
+    socket: Server.socket("FitnessChannel", function(cell, msg) {
+      var lines = msg.fitness_data.split("\n")
+      lines[0] = Text.center(lines[0])
+      cell.text(lines.join("\n"))
+    }),
     interval: Time.msUntilNextDay() + Time.seconds(5),
     reloader: function(cell) {
       cell.interval = Time.msUntilNextDay() + Time.seconds(5)
@@ -89,19 +92,15 @@ $(".ctr-dashboard").ready(function() {
     text: "Loading...",
     x: 3,
     y: 1,
-    socket: {
-      url: ws_protocol + "://" + location.host + "/cable",
-      subscription: {
-        channel: "ListChannel",
-        channel_id: "list_5",
-      },
-      receive: function(cell, msg) {
-        if (!msg.list_data) { return }
+    socket: Server.socket({
+      channel: "ListChannel",
+      channel_id: "list_5",
+    }, function(cell, msg) {
+      if (!msg.list_data) { return }
 
-        var lines = Text.numberedList(msg.list_data.list_items)
-        cell.text(lines.join("\n"))
-      }
-    },
+      var lines = Text.numberedList(msg.list_data.list_items)
+      cell.text(lines.join("\n"))
+    }),
     reloader: function(cell) {
       $.getJSON("/lists/todo", function(data) {
         var lines = Text.numberedList(data.list_items)
@@ -130,19 +129,15 @@ $(".ctr-dashboard").ready(function() {
     text: "Loading...",
     x: 3,
     y: 2,
-    socket: {
-      url: ws_protocol + "://" + location.host + "/cable",
-      subscription: {
-        channel: "ListChannel",
-        channel_id: "list_1",
-      },
-      receive: function(cell, msg) {
-        if (!msg.list_data) { return }
+    socket: Server.socket({
+      channel: "ListChannel",
+      channel_id: "list_1",
+    }, function(cell, msg) {
+      if (!msg.list_data) { return }
 
-        var lines = Text.numberedList(msg.list_data.list_items)
-        cell.text(lines.join("\n"))
-      }
-    },
+      var lines = Text.numberedList(msg.list_data.list_items)
+      cell.text(lines.join("\n"))
+    }),
     reloader: function(cell) {
       $.getJSON("/lists/grocery", function(data) {
         var lines = Text.numberedList(data.list_items)
@@ -209,23 +204,17 @@ $(".ctr-dashboard").ready(function() {
     text: "Loading...",
     x: 2,
     y: 1,
-    socket: {
-      url: ws_protocol + "://" + location.host + "/cable",
-      subscription: {
-        channel: "RecentEventsChannel",
-      },
-      receive: function(cell, msg) {
-        if (!msg.recent_events) { return }
+    socket: Server.socket("RecentEventsChannel", function(cell, msg) {
+      if (!msg.recent_events) { return }
 
-        cell.text(msg.recent_events.map(function(item) {
-          var timestamp = Time.at(Date.parse(item.timestamp))
-          var h = timestamp.getHours()
-          var time = (h > 12 ? h - 12 : h) + ":" + String(timestamp.getMinutes()).padStart(2, "0")
-          var notes = item.notes ? " (" + item.notes + ")" : ""
-          return Text.justify(item.event_name + notes, time || "")
-        }).join("\n"))
-      }
-    },
+      cell.text(msg.recent_events.map(function(item) {
+        var timestamp = Time.at(Date.parse(item.timestamp))
+        var h = timestamp.getHours()
+        var time = (h > 12 ? h - 12 : h) + ":" + String(timestamp.getMinutes()).padStart(2, "0")
+        var notes = item.notes ? " (" + item.notes + ")" : ""
+        return Text.justify(item.event_name + notes, time || "")
+      }).join("\n"))
+    }),
     reloader: function(cell) {
       $.getJSON("/action_events", function(data) {
         cell.text(data.map(function(item) {

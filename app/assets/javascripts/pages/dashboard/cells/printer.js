@@ -25,6 +25,9 @@ $(".ctr-dashboard").ready(function() {
   var printer = Cell.init({
     title: "Printer",
     text: "Loading...",
+    socket: Server.socket("PrinterCallbackChannel", function(cell, msg) {
+      cell.reload()
+    }),
     commands: {
       gcode: function(cell, cmd) {
         return Printer.request(cell, "/command", "POST", { commands: cmd.split(", ") })
@@ -133,7 +136,6 @@ $(".ctr-dashboard").ready(function() {
         })
       })
     },
-    // Socket: when receive incoming, reload
   })
 })
 
