@@ -40,9 +40,10 @@ $(".ctr-dashboard").ready(function() {
     return args.map(function(text) { return text + " ".repeat(spaces) }).join("").replace(/\s+$/, "")
   }
   Text.clean = function(text) {
-    return text.replaceAll(/<.*?>/gi, "")
+    return String(text).replaceAll(/<.*?>/gi, "")
   }
   Text.escape = function(text) {
+    text = String(text)
     text = Text.escapeHtml(text)
     text = Text.escapeEmoji(text)
     text = Text.escapeSpecial(text)

@@ -793,6 +793,7 @@ const Emoji = {
   "factory": "🏭",
   "fountain": "⛲",
   "rice_scene": "🎑",
+  "rock": "🪨",
   "mountain": "⛰",
   "mountain_snow": "🏔",
   "mount_fuji": "🗻",
