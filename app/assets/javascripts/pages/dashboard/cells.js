@@ -71,7 +71,7 @@ $(".ctr-dashboard").ready(function() {
           cell.text(lines.join("\n"))
         }
       }).fail(function(data) {
-        cell.text("!! Failed to retrieve: " + data)
+        cell.text("!! Failed to retrieve: " + JSON.stringify(data))
       })
     },
     command: function(text, cell) {
@@ -107,7 +107,7 @@ $(".ctr-dashboard").ready(function() {
         var lines = Text.numberedList(data.list_items)
         cell.text(lines.join("\n"))
       }).fail(function(data) {
-        cell.text("Failed to retrieve: " + data)
+        cell.text("Failed to retrieve: " + JSON.stringify(data))
       })
     },
     command: function(text, cell) {

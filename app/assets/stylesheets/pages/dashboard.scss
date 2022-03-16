@@ -1,6 +1,13 @@
+// https://jsonformatter.org/scss-to-css
+
 $code-background: #112435;
-$dash-font-size: 0.75rem;
-$dash-font-width: $dash-font-size * 0.6;
+$dash-font-height: 0.9rem;
+$dash-font-width: $dash-font-height * 0.6;
+$active-bright: #5DA6F8;
+$active: #337BCD;
+$passive: #1F4A7B;
+$grey-blue: #6481A1;
+$text-color: darken($grey-blue, 20%);
 
 .html-ctr-dashboard {
   background: $code-background;
@@ -16,8 +23,8 @@ $dash-font-width: $dash-font-size * 0.6;
     height: 100%;
     overflow: hidden;
     color: lightgrey;
-    font-family: monospace;
-    font-size: $dash-font-size;
+    font-family: "terminess", monospace;
+    font-size: $dash-font-height;
     text-align: center;
   }
 }
@@ -30,9 +37,15 @@ $dash-font-width: $dash-font-size * 0.6;
   padding: 10px;
 
   input[type=text] {
+    margin: 4px auto;
+    border: 2px solid rgba($grey-blue, 0.5);
+    border-radius: 4px;
     background: $code-background;
+    padding: 8px;
+    width: 100%;
     color: lightgrey;
     font-family: monospace;
+    font-size: 18px;
 
     &:focus {
       outline: none;
@@ -41,28 +54,28 @@ $dash-font-width: $dash-font-size * 0.6;
 }
 
 @keyframes flashdash {
-  0%   { border-color: $blue-d3; }
-  10%  { border-color: $blue-d1; }
-  100% { border-color: $blue-d3; }
+  0%   { border-color: $passive; }
+  10%  { border-color: $active; }
+  100% { border-color: $passive; }
 }
 @keyframes flashdashactive {
-  0%   { border-color: $blue-d1; }
-  10%  { border-color: $blue-l1; }
-  100% { border-color: $blue-d1; }
+  0%   { border-color: $active; }
+  10%  { border-color: $active-bright; }
+  100% { border-color: $active; }
 }
 
 .dashboard {
   row-gap: 15px;
   display: inline-grid;
-  grid-template-columns: repeat(4, 242px);
-  grid-template-rows: repeat(5, 124px);
+  grid-template-columns: repeat(4, 241px);
+  grid-template-rows: repeat(5, 122px);
   column-gap: 5px;
   transition: border-color 1s;
   text-align: left;
 
   .dash-cell {
     position: relative;
-    border: 2px solid $blue-d3;
+    border: 2px solid $passive;
     border-radius: 4px;
     padding: 5px 3px;
     width: 100%;
@@ -72,7 +85,7 @@ $dash-font-width: $dash-font-size * 0.6;
       animation: 1s ease-out flashdash;
     }
     &.active {
-      border-color: $blue-d1;
+      border-color: $active;
 
       &.flash {
         animation: 1s ease-out flashdashactive;
@@ -90,30 +103,30 @@ $dash-font-width: $dash-font-size * 0.6;
       span {
         background: $code-background;
         padding: 0 5px;
-        line-height: $dash-font-size;
-        height: $dash-font-size;
+        height: $dash-font-height;
+        line-height: $dash-font-height;
       }
     }
 
     .dash-content {
-      overflow: hidden;
-      white-space: pre-wrap;
       max-height: 100%;
-      line-height: $dash-font-size;
+      overflow: hidden;
+      line-height: $dash-font-height;
+      white-space: pre-wrap;
 
       * {
-        line-height: $dash-font-size;
         display: inline-block;
+        line-height: $dash-font-height;
       }
       e, es {
         display: inline-block;
-        height: $dash-font-size;
-        line-height: $dash-font-size;
         width: $dash-font-width;
+        height: $dash-font-height;
+        line-height: $dash-font-height;
       }
-      e { // Double width
+      e {
         width: $dash-font-width*2;
-        font-family: emoji;
+        font-family: emoji; // Double width
       }
     }
   }
