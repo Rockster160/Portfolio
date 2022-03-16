@@ -1,4 +1,5 @@
 $(".ctr-dashboard").ready(function() {
+  if (demo) { return }
   Printer = function() {}
   Printer.request = function(cell, url, type, data) {
     var url = url
@@ -26,6 +27,7 @@ $(".ctr-dashboard").ready(function() {
     title: "Printer",
     text: "Loading...",
     socket: Server.socket("PrinterCallbackChannel", function(cell, msg) {
+      console.log("Printer Callback", msg);
       cell.reload()
     }),
     commands: {

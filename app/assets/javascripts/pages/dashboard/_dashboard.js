@@ -9,8 +9,8 @@ $(".ctr-dashboard").ready(function() {
     cell.ele = dash_cell
 
     cell.name = (init_data.name || init_data.title).replace(/^\s*|\s*$/ig, "").replace(/\s+/ig, "-").replace(/[^a-z\-]/ig, "").toLowerCase()
-    cell.title(init_data.title)
-    cell.text(init_data.text)
+    cell.title(init_data.title || "")
+    cell.text(init_data.text || "")
     cell.should_flash = init_data.flash == false ? false : true
     cell.x = init_data.x
     cell.y = init_data.y
@@ -194,16 +194,17 @@ $(".ctr-dashboard").ready(function() {
     cell_ws.cell = cell
     cell_ws.open = false
     cell_ws.reload = false
+    cell_ws.presend = init_data.presend
     // cell_ws.socket = new WebSocket(init_data.url)
     cell_ws.socket = new ReconnectingWebSocket(init_data.url)
-
-    if (init_data.authentication && typeof(init_data.authentication) === "function") {
-      init_data.authentication(cell_ws)
-    }
+    // cell_ws.send = init_data.send || function(packet) { cell_ws.push(packet) }
 
     cell_ws.socket.onopen = function() {
       cell_ws.open = true
-      cell_ws.send("subscribe", init_data.subscription)
+
+      if (init_data.authentication && typeof(init_data.authentication) === "function") {
+        init_data.authentication(cell_ws)
+      }
 
       if (init_data.onopen && typeof(init_data.onopen) === "function") { init_data.onopen() }
       if (cell_ws.reload) {
@@ -223,11 +224,8 @@ $(".ctr-dashboard").ready(function() {
 
     cell_ws.socket.onmessage = function(msg) {
       if (init_data.receive && typeof(init_data.receive) === "function") {
-        var msg_data = JSON.parse(msg.data)
-        if (msg_data.type == "ping" || !msg_data.message) { return }
-
         if (cell_ws.should_flash) { cell_ws.cell.flash() }
-        init_data.receive(cell_ws.cell, msg_data.message)
+        init_data.receive(cell_ws.cell, msg)
       }
     }
   }
@@ -241,23 +239,17 @@ $(".ctr-dashboard").ready(function() {
     cell_ws.socket.close()
   }
   // Packet data should be another function on WS that can be defined for pre-formatting ws messages
-  CellWS.prototype.send = function(command, packet) {
-    if (!packet) {
-      packet = command
-      command = "message"
-    }
+  CellWS.prototype.send = function(packet) {
     var cell_ws = this
     if (cell_ws.open) {
-      // This part is what would be defined by the packet data function rather than making opinionated decisions
-      var msg = {
-        command: command,
-        identifier: JSON.stringify(packet)
+      if (cell_ws.presend && typeof(cell_ws.presend) === "function") {
+        packet = cell_ws.presend(packet)
       }
 
-      cell_ws.socket.send(JSON.stringify(msg))
+      cell_ws.socket.send(JSON.stringify(packet))
     } else {
       setTimeout(function() {
-        cell_ws.send(command, packet)
+        cell_ws.send(packet)
       }, 500)
     }
   }
