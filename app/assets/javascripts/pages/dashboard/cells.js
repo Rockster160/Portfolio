@@ -1,4 +1,4 @@
-var demo = false
+var demo = !true
 
 $(".ctr-dashboard").ready(function() {
   var ws_protocol = location.protocol == "https:" ? "wss" : "ws", ws_open = false
@@ -256,7 +256,6 @@ $(".ctr-dashboard").ready(function() {
     title: "Notes",
     h: 2,
     w: 2,
-    y: 2,
     reloader: function(cell) {
       cell.text(localStorage.getItem("notes"))
     },

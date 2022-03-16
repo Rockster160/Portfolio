@@ -2,7 +2,7 @@
 
 $code-background: #112435;
 $dash-font-height: 0.9rem;
-$dash-font-width: $dash-font-height * 0.6;
+$dash-font-width: $dash-font-height * 0.5;
 $active-bright: #5DA6F8;
 $active: #337BCD;
 $passive: #1F4A7B;
@@ -65,11 +65,11 @@ $text-color: darken($grey-blue, 20%);
 }
 
 .dashboard {
-  row-gap: 15px;
+  row-gap: $dash-font-height;
   display: inline-grid;
   grid-template-columns: repeat(4, 241px);
-  grid-template-rows: repeat(5, 122px);
-  column-gap: 5px;
+  grid-template-rows: repeat(5, 144px);
+  column-gap: 3px;
   transition: border-color 1s;
   text-align: left;
 
