@@ -1,6 +1,8 @@
 $(".ctr-dashboard").ready(function() {
   if (demo) { return }
   Cell.init({
+    x: 3,
+    y: 2,
     title: "Rig",
     text: "Loading...",
     data: {

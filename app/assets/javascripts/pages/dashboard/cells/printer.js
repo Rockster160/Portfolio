@@ -28,7 +28,7 @@ $(".ctr-dashboard").ready(function() {
   var printer = Cell.init({
     title: "Printer",
     text: "Loading...",
-    x: 3,
+    x: 4,
     y: 2,
     socket: Server.socket("PrinterCallbackChannel", function(cell, msg) {
       console.log("Printer Callback", msg);

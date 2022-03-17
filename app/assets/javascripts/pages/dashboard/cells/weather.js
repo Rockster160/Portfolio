@@ -58,8 +58,8 @@ $(".ctr-dashboard").ready(function() {
           "",
           "  " + daily_days.join(""),
           "  " + daily_icons.join(""),
-          "▲ " + daily_highs.join(""),
-          "▼ " + daily_lows.join(""),
+          "▲  " + daily_highs.join(""),
+          "▼  " + daily_lows.join(""),
         ]
 
         cell.text(lines.join("\n"))
