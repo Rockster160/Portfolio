@@ -19,6 +19,7 @@ $(".ctr-dashboard").ready(function() {
     cell.init_data = init_data
     cell.data = init_data.data || {}
     cell.commands = init_data.commands || {}
+    cell.autocomplete_options = init_data.autocomplete_options || cell.command_list
     cell.interval = init_data.interval
     if (init_data.socket) {
       cell.ws = new CellWS(cell, init_data.socket)
@@ -131,6 +132,31 @@ $(".ctr-dashboard").ready(function() {
     cell.reload()
 
     return cell
+  }
+  Cell.prototype.command_list = function() {
+    var commands = [
+      ".reload",
+      ".debug",
+      ".start",
+      ".stop",
+      ".hide",
+      ".show",
+    ]
+    return Object.keys(this.commands).forEach(function(cmd) {
+      if (!commands.includes("." + cmd)) {
+        commands.push("." + cmd)
+      }
+    })
+  }
+  Cell.prototype.autocomplete = function(text) {
+    var options = []
+    if (this.autocomplete_options && typeof(this.autocomplete_options) === "function") {
+      options = this.autocomplete_options()
+    } else {
+      options = autocomplete_options
+    }
+
+    return Text.filterOrder(text, options)
   }
   Cell.prototype.execute = function(text) {
     if (this.my_command && typeof(this.my_command) === "function") { this.my_command(text, this) }
@@ -272,14 +298,24 @@ $(".ctr-dashboard").ready(function() {
   }).on("keydown", function(evt) {
     if (!evt.metaKey) {
       $(".dashboard-omnibar input").focus()
-    }
-  }).on("keypress", ".dashboard-omnibar input", function(evt) {
-    if (evt.which == 13) {
-      var raw = $(".dashboard-omnibar input").val()
-      var selector = raw.match(/\:(\w|\-)+ /i)
-      selector = selector ? selector[0] : ""
-      var cmd = raw.replace(/\:(\w|\-)+ /i, "")
+    } else if (evt.key == "Tab") {
+      evt.preventDefault()
 
+      // current cell . autocomplete(raw - selector)
+      // Open up autocomplete. Cell can define a function here, but default to aggregating the list of avaialble functions
+    }
+    // evt.key == ">"
+    // Enter cell. Add a new class for the cell that makes it "focused"
+    // `Esc` will break out of focus mode.
+    // During Focus, all key events are sent directly to the cell.
+    // Can be used for inline editing or live key events.
+  }).on("keydown", ".dashboard-omnibar input", function(evt) {
+    var raw = $(".dashboard-omnibar input").val()
+    var selector = raw.match(/\:(\w|\-)+ /i)
+    selector = selector ? selector[0] : ""
+    var cmd = raw.replace(/\:(\w|\-)+ /i, "")
+
+    if (evt.key == "Enter") {
       if (raw == ".reload") {
         cells.forEach(function(cell) {
           cell.reload()
@@ -311,6 +347,8 @@ $(".ctr-dashboard").ready(function() {
       }
 
       $(".dashboard-omnibar input").val(selector)
+    } else if (evt.key == "Tab") {
+      evt.preventDefault()
     }
   })
 })

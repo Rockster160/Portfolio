@@ -168,6 +168,50 @@ $(".ctr-dashboard").ready(function() {
     }
     return escaped
   }
+  Text.filterOrder = function(text, options) {
+    if (!text || text.trim().length <= 0) { return options }
+    text = text.toLowerCase().trim()
+    var results = {}
+    var words = []
+
+    options.forEach(function(word) {
+      var compare = word.toLowerCase().trim()
+      var score = 0
+      if (compare == text) { score += 100000 }
+      if (compare.indexOf(text) == 0) { score += 10000 }
+      if (compare.indexOf(text) >= 0) { score += 1000 }
+      var last_idx = -1
+      var word_length = word.length
+      text.split("").forEach(function(letter) {
+        var at = compare.indexOf(letter)
+        if (at >= 0) {
+          score += word_length - at
+
+          if (at >= last_idx) { score += word_length - at }
+        }
+
+        compare = compare.replace(letter, "")
+      })
+
+      if (score > 0) {
+         words.push(word)
+         results[word] = score
+       }
+    })
+
+    return words.sort(function(a, b) {
+      var aOrder = results[a]
+      var bOrder = results[b]
+
+      if (aOrder < bOrder) {
+        return 1
+      } else if (aOrder > bOrder) {
+        return -1
+      } else { // equal
+        return 0
+      }
+    })
+  }
 
 
   Text.prototype.center = function(opt_text) {
