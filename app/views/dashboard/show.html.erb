@@ -6,6 +6,7 @@
       uptime: "<%= ENV.fetch("UPTIME_APIKEY") %>",
       weather: "<%= ENV.fetch("WEATHER_APIKEY") %>",
       printer: "<%= ENV.fetch("PRINTER_APIKEY") %>",
+      hiveos: "<%= ENV.fetch("HIVEOS_APIKEY") %>",
     }
     getWeatherEmoji = function(code, isNight) {
       if (code >= 200 && code < 300 || code == 960 || code == 961) {

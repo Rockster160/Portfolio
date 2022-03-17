@@ -55,8 +55,14 @@ $(".ctr-dashboard").ready(function() {
         return Printer.post(cell, "/printer/printhead", { command: "home", axes: ["x", "y", "z"] })
       },
       move: function(cell, amounts) {
-        var [x, y, z] = amounts.trim().split(" ").map(function(c) { return parseInt(c) })
-        return Printer.post(cell, "/printer/printhead", { command: "jog", x: x || 0, y: y || 0, z: z || 0 })
+        var x = (amounts.match(/x:? (\-?\d+)/i) || [])[1]
+        var y = (amounts.match(/y:? (\-?\d+)/i) || [])[1]
+        var z = (amounts.match(/z:? (\-?\d+)/i) || [])[1]
+        var data = { command: "jog" }
+        if (x) { data.x = x }
+        if (y) { data.y = y }
+        if (z) { data.z = z }
+        return Printer.post(cell, "/printer/printhead", data)
       },
       cool: function(cell, amounts) {
         Printer.post(cell, "/printer/tool", { command: "target", targets: { tool0: 0 } })

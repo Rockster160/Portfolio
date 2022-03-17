@@ -9,6 +9,7 @@ $(".ctr-dashboard").ready(function() {
       dataType: "text",
       type: type || "GET",
     })
+    // Catch fails and show a useful error
   }
   Server.post   = function(url, data) { return Server.request(url, "POST",  data) }
   Server.patch  = function(url, data) { return Server.request(url, "PATCH", data) }
@@ -151,7 +152,7 @@ $(".ctr-dashboard").ready(function() {
         var lines = Text.numberedList(data.list_items)
         cell.text(lines.join("\n"))
       }).fail(function(data) {
-        cell.text("Failed to retrieve: " + data)
+        cell.text("Failed to retrieve: " + JSON.stringify(data))
       })
     },
     command: function(text, cell) {
@@ -202,7 +203,7 @@ $(".ctr-dashboard").ready(function() {
           }).join("\n")
         )
       }).fail(function(data) {
-        cell.text("Failed to retrieve: " + data)
+        cell.text("Failed to retrieve: " + JSON.stringify(data))
       })
     },
   })
@@ -233,7 +234,7 @@ $(".ctr-dashboard").ready(function() {
           return Text.justify(item.event_name + notes, time || "")
         }).join("\n"))
       }).fail(function(data) {
-        cell.text("Failed to retrieve: " + data)
+        cell.text("Failed to retrieve: " + JSON.stringify(data))
       })
     },
     command: function(text, cell) {
@@ -258,12 +259,13 @@ $(".ctr-dashboard").ready(function() {
     reloader: function(cell) {
       cell.text(localStorage.getItem("notes"))
     },
-    command: function(text, cell) {
-      if (text == ">clear") {
-        localStorage.setItem("notes", "")
-        return cell.text("")
+    commands: {
+      clear: function(cell) {
+        localStorage.removeItem("notes")
+        cell.text("")
       }
-
+    },
+    command: function(text, cell) {
       if (/^-\d+$/.test(text)) {
         var num = parseInt(text.match(/\d+/)[0])
         var lines = cell.text().split("\n")
@@ -271,8 +273,6 @@ $(".ctr-dashboard").ready(function() {
       } else {
         var lines = cell.text() ? cell.text().split("\n") : []
         lines.push(text)
-        // A ticket to 大阪 costs ¥2000 👌. Repeated emojis: 😁😁. Crying cat: 😿. Repeated emoji with skin tones: ✊🏿✊🏿✊🏿✊✊✊🏿. Flags: 🇱🇹🏴󠁧󠁢󠁷󠁬󠁳󠁿. Scales ⚖️⚖️⚖️.
-        // <div class="sup" style="color: red;"><color style="color: red;"><span>Hello!</span></color><e>✊🏿</e></div>
       }
 
       var note = Text.numberedList(lines).join("\n")
