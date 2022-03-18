@@ -92,7 +92,8 @@ $(".ctr-dashboard").ready(function() {
       render(cell)
     },
     command: function(msg, cell) {
-      cell.data.history.push(Text.color("#F81414", "Oops! You forgot the . before your command."))
+      var res = (new Roll(msg)).calculate()
+      cell.data.history.push(Text.justify("   " + res, Text.trunc(msg + "   ", 12)))
       render(cell)
     }
   })

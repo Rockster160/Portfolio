@@ -37,7 +37,15 @@ $(".ctr-dashboard").ready(function() {
     var spaces = (width - text_length) / (args.length - 1)
     spaces = spaces < 0 ? 0 : spaces
 
-    return args.map(function(text) { return text + " ".repeat(spaces) }).join("").replace(/\s+$/, "")
+    return args.map(function(text) {
+      return text + " ".repeat(spaces)
+    }).join("").slice(0, -spaces)
+  }
+  Text.trunc = function(str, num) {
+    str = String(str)
+    if (str.length <= num) { return str }
+
+    return str.slice(0, num - 3) + "..."
   }
   Text.clean = function(text) {
     text = Text.escape(text)

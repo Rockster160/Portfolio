@@ -98,7 +98,10 @@ class ApplicationController < ActionController::Base
   end
 
   def auth_from_headers
-    basic_auth_string = Base64.decode64(request.headers["HTTP_AUTHORIZATION"][6..-1]) # Strip "Basic " from hash
+    basic_auth_raw = request.headers["HTTP_AUTHORIZATION"][6..-1] # Strip "Basic " from hash
+    return unless basic_auth_raw.present?
+
+    basic_auth_string = Base64.decode64(basic_auth_raw)
     User.auth_from_basic(basic_auth_string)
   end
 

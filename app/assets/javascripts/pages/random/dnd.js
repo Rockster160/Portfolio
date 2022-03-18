@@ -28,7 +28,7 @@ function Roll(str) {
   this.val = undefined
 }
 Roll.prototype.calculate = function() {
-  // Scan for unknown characters, imbalanced parens, etc
+  // Scan for unknown characters, unbalanced parens, etc
   if (this.val) { return this.val }
   this.current = (this.current || "").trim().replace(/ *([\+\-\*\/\(\)]+) */g, "$1").replace(/ /g, "+")
   this.iterate("Initial")

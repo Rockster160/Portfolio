@@ -64,7 +64,7 @@
         <%= label_tag :random_number do %>
           Enter <a href="" data-modal="#dnd-howto">Dice Notation</a>, select a <a href="" data-modal="#range-howto">range</a>, or paste in a <a href="" data-modal="#set-howto">set of data</a> to select from.
         <% end %>
-        <%= text_area_tag :random_number, "d", autocomplete: :off %>
+        <%= text_area_tag :random_number, params[:q].presence || "d", autocomplete: :off %>
       </div>
     </div>
 
