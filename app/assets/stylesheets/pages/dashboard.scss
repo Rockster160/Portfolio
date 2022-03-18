@@ -118,6 +118,9 @@ $text-color: darken($grey-blue, 20%);
         display: inline-block;
         line-height: $dash-font-height;
       }
+      span {
+        display: inline;
+      }
       e, es {
         display: inline-block;
         width: $dash-font-width;

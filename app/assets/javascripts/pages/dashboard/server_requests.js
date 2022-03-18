@@ -1,5 +1,5 @@
 var demo = !true
-var local_calendar_cell, local_reminders_cell, local_data_timer
+var local_data_timer, local_reminders_cell, local_calendar_cell
 
 // var cell = Cell.init({
 //   title: "",
@@ -73,7 +73,6 @@ App.localData = App.cable.subscriptions.create({
   channel: "LocalDataChannel"
 }, {
   received: function(data) {
-    console.log(data);
     if (local_calendar_cell) {
       local_calendar_cell.commands.render(local_calendar_cell, data.calendar)
     }

@@ -47,7 +47,7 @@ $(".ctr-dashboard").ready(function() {
     } else {
       new_text = Text.escape(new_text)
       this.my_text = new_text
-      this.ele.children(".dash-content").html(new_text)
+      this.ele.children(".dash-content").html(Text.markup(new_text))
       return this
     }
   }

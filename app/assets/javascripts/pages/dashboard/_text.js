@@ -40,30 +40,32 @@ $(".ctr-dashboard").ready(function() {
     return args.map(function(text) { return text + " ".repeat(spaces) }).join("").replace(/\s+$/, "")
   }
   Text.clean = function(text) {
-    return String(text).replaceAll(/<.*?>/gi, "")
+    return Text.markup(Text.escape(text)).replaceAll(/<.*?>/gi, "")
   }
   Text.escape = function(text) {
     text = String(text)
     text = Text.escapeHtml(text)
-    text = Text.escapeEmoji(text)
-    text = Text.escapeSpecial(text)
 
     return text
   }
   Text.numberedList = function(list) {
     if (typeof list == "string") { list = list.split("\n") }
 
-    // Remove previous numbers, if present
     return list.map(function(line, idx) {
+      // Remove previous numbers, if present
+      // Then add the new numbers
       return (idx+1) + ". " + line.replace(/^\d+\. /, "")
     })
   }
   Text.color = function(color, text) {
-    return "<color style=\"color: " + color + ";\">" + text + "</color>"
+    if (!text || text.length <= 1) { return text }
+
+    return "[color " + color + "]" + text + "[/color]"
   }
   Text.animate = function(text) {
     if (!text || text.length <= 1) { return text }
-    return "<textanimate steps=\"" + text + "\">" + text.slice(0, 1) + "</textanimate>"
+
+    return "[ani \"" + text + "\"]"
   }
   Text.progressBar = function(percent, opts) {
     opts = opts || {}
@@ -101,48 +103,11 @@ $(".ctr-dashboard").ready(function() {
     ].join("")
   }
   Text.escapeHtml = function(text) {
-    var allowed_tags = [
-      "e",
-      "es",
-      "color",
-      "textanimate",
-    ]
-    var joined_tags = allowed_tags.map(function(tag) { return tag + "\\b|\\/" + tag + "\\b"  }).join("|")
-    var html_regex = new RegExp("\\<\\/?([^(" + joined_tags + ")])", "gi");
-    text = text.replaceAll(html_regex, "&lt;$1")
-
-    return text
-  }
-  Text.escapeEmoji = function(text) {
-    if (!text || text.length == 0) { return text }
-
-    var token = undefined
-    do { token = Math.random().toString(36).substr(2) } while(text.includes(token))
-
-    var hold = {}, i = 0
-    var subbed_text = text.replace(/<e>.*?<\/e>/ig, function(found, found_idx, full_str) {
-      var replace = token + "(" + (i+=1) + ")"
-      hold[replace] = found
-      return replace
-    })
-
-    var emoRegex = new RegExp(emojiPattern, "g")
-    var escaped = subbed_text.replaceAll(emoRegex, function(found) {
-      return "<e>" + found + "</e>"
-    })
-
-    for (const [token, emoji] of Object.entries(hold)) {
-      escaped = escaped.replace(token, emoji)
-    }
-    return escaped
+    return text.replaceAll("<", "&lt;")
   }
   Text.escapeSpecial = function(text) {
     if (!text || text.length == 0) { return text }
-    var allowed_tags = [
-      "e",
-      "es",
-      "textanimate",
-    ]
+    var allowed_tags = ["e", "es"]
     var joined_tags = allowed_tags.map(function(tag) { return "<" + tag + "\\b.*?>.*?</" + tag + ">" }).join("|")
 
     var token = undefined
@@ -167,6 +132,37 @@ $(".ctr-dashboard").ready(function() {
       escaped = escaped.replace(token, special_char)
     }
     return escaped
+  }
+  Text.escapeEmoji = function(text) {
+    if (!text || text.length == 0) { return text }
+
+    var token = undefined
+    do { token = Math.random().toString(36).substr(2) } while(text.includes(token))
+
+    var hold = {}, i = 0
+    var subbed_text = text.replace(/<e>.*?<\/e>/ig, function(found, found_idx, full_str) {
+      var replace = token + "(" + (i+=1) + ")"
+      hold[replace] = found
+      return replace
+    })
+
+    var emoRegex = new RegExp(emojiPattern, "g")
+    var escaped = subbed_text.replaceAll(emoRegex, function(found) {
+      return "<e>" + found + "</e>"
+    })
+
+    for (const [token, emoji] of Object.entries(hold)) {
+      escaped = escaped.replace(token, emoji)
+    }
+    return escaped
+  }
+  Text.markup = function(text) {
+    text = Text.escapeEmoji(text)
+    text = Text.escapeSpecial(text)
+    text = text.replaceAll(/\[color (.*?)\](.*?)\[\/color\]/gi, "<span style=\"color: $1;\">$2</span>")
+    text = text.replaceAll(/\[ani \"(.*?)\"\]/gi, "<textanimate steps=\"$1\"/>")
+
+    return text
   }
   Text.filterOrder = function(text, options) {
     if (!text || text.trim().length <= 0) { return options }
