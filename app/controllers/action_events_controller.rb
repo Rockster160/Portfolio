@@ -8,7 +8,7 @@ class ActionEventsController < ApplicationController
 
     respond_to do |format|
       format.html
-      format.json { render json: @events.per(10).serialize }
+      format.json { render json: @events.per(30).serialize }
     end
   end
 
