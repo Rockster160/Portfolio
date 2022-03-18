@@ -7,9 +7,11 @@ $(".ctr-dashboard").ready(function() {
     x: 1,
     y: 3,
     h: 3,
+    flash: false,
     commands: {
       render: function(cell, data) {
         cell.lines(data)
+        cell.flash()
       },
     },
     reloader: function(cell) {

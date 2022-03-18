@@ -27,10 +27,13 @@ class LocalDataBroadcast
 
       time = Time.parse(reminder[:due]).in_time_zone("Mountain Time (US & Canada)")
       time_words = distance_of_time_in_words(time, now)
-      direction = time > now ? "from now" : "ago"
-      "#{reminder[:name]} [color grey]#{time_words} #{direction}[/color]"
+      future = time > now
+      direction = future ? "from now" : "ago"
+      next if time > now + 1.day
+      name = future ? "[color pink]#{reminder[:name]}[/color]" : reminder[:name]
+      "#{name} [color #{future ? "807A40" : :grey}]#{time_words} #{direction}[/color]"
     rescue StandardError => e
       reminder&.dig(:name) || "FAIL(#{reminder.inspect})"
-    end
+    end.compact
   end
 end

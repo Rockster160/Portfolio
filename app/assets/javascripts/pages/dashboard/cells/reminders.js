@@ -6,10 +6,12 @@ $(".ctr-dashboard").ready(function() {
     text: "Loading...",
     x: 2,
     y: 3,
+    flash: false,
     interval: Time.minute(), // Only one local data class needs the interval
     commands: {
       render: function(cell, data) {
         cell.lines(data)
+        cell.flash()
       },
     },
     reloader: function(cell) {
