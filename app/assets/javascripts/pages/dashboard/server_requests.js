@@ -72,6 +72,10 @@ Server.socket = function(subscription, receive) {
 App.localData = App.cable.subscriptions.create({
   channel: "LocalDataChannel"
 }, {
+  connected: function() {
+    clearTimeout(local_data_timer)
+    local_data_timer = setTimeout(function() { App.localData.request() }, 50)
+  },
   received: function(data) {
     if (local_calendar_cell) {
       local_calendar_cell.commands.render(local_calendar_cell, data.calendar)
