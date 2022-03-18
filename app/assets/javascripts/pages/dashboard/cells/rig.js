@@ -21,7 +21,7 @@ $(".ctr-dashboard").ready(function() {
             lines.push("")
             json.data.forEach(function(rig) {
               if (rig.name == "Brendan Sr Murton") { return }
-              lines.push(rig.name)
+              lines.push(" " + rig.name)
               var online = "█ ".repeat(rig.stats.gpus_online)
               var offline = "█ ".repeat(rig.stats.gpus_total - rig.stats.gpus_online)
               lines.push(Text.center(Text.color("green", online) + Text.color("red", offline)))

@@ -16,6 +16,16 @@ class WebhooksController < ApplicationController
     head :no_content
   end
 
+  def local_data
+    return head :no_content unless user_signed_in? && current_user.admin?
+
+    data = params[:local_data].to_unsafe_h
+    File.write("local_data.json", data.to_json)
+    LocalDataBroadcast.call(data)
+
+    head :created
+  end
+
   def notify
     return head :no_content unless printer_authed?
 
