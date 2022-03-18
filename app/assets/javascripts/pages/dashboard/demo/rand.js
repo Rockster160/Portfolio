@@ -31,7 +31,7 @@ $(".ctr-dashboard").ready(function() {
     x: 3,
     y: 3,
     title: "Random",
-    text: Text.color("yellow", ".8ball .die .coin .draw .shuffle"),
+    text: Text.color("#FFEE14", ".8ball .die .coin .draw .shuffle"),
     commands: {
       "8ball": function(cell) {
         cell.data.history.push(random([
@@ -68,7 +68,7 @@ $(".ctr-dashboard").ready(function() {
       },
       draw: function(cell) {
         if (cell.data.cards.length == 0) {
-          cell.data.history.push("No cards left! Call " + Text.color("yellow", ".shuffle"))
+          cell.data.history.push("No cards left! Call " + Text.color("#FFEE14", ".shuffle"))
           return render(cell)
         }
         var card = random(cell.data.cards)
@@ -92,7 +92,7 @@ $(".ctr-dashboard").ready(function() {
       render(cell)
     },
     command: function(msg, cell) {
-      cell.data.history.push(Text.color("red", "Oops! You forgot the . before your command."))
+      cell.data.history.push(Text.color("#F81414", "Oops! You forgot the . before your command."))
       render(cell)
     }
   })

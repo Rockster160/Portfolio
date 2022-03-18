@@ -24,7 +24,7 @@ $(".ctr-dashboard").ready(function() {
               lines.push(" " + rig.name)
               var online = "█ ".repeat(rig.stats.gpus_online)
               var offline = "█ ".repeat(rig.stats.gpus_total - rig.stats.gpus_online)
-              lines.push(Text.center(Text.color("green", online) + Text.color("red", offline)))
+              lines.push(Text.center(Text.color("#148F14", online) + Text.color("#F81414", offline)))
               lines.push("")
             })
             cell.lines(lines)

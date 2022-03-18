@@ -37,17 +37,17 @@ $(".ctr-dashboard").ready(function() {
 
       function playerWin() {
         cell.data.player_wins += 1
-        var line = Text.justify("  " +  choice_map[choice], Text.color("green", "You Win! "), choice_map[cpu_choice] + "  ")
+        var line = Text.justify("  " +  choice_map[choice], Text.color("#148F14", "You Win! "), choice_map[cpu_choice] + "  ")
         cell.data.history = cell.data.history || []
         cell.data.history.push(line)
       }
       function draw() {
-        var line = Text.justify("  " +  choice_map[choice], Text.color("yellow", "Draw!"), choice_map[cpu_choice] + "  ")
+        var line = Text.justify("  " +  choice_map[choice], Text.color("#FFEE14", "Draw!"), choice_map[cpu_choice] + "  ")
         cell.data.history.push(line)
       }
       function playerLose() {
         cell.data.cpu_wins += 1
-        var line = Text.justify("  " +  choice_map[choice], Text.color("red", "You Lose!"), choice_map[cpu_choice] + "  ")
+        var line = Text.justify("  " +  choice_map[choice], Text.color("#F81414", "You Lose!"), choice_map[cpu_choice] + "  ")
         cell.data.history.push(line)
       }
 

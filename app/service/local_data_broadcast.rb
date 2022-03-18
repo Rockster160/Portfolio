@@ -7,7 +7,7 @@ class LocalDataBroadcast
 
   def call(data=nil)
     data ||= JSON.parse(File.read("local_data.json"))
-    data.deep_symbolize_keys!
+    data = data.deep_symbolize_keys
 
     ActionCable.server.broadcast "local_data_channel", encriched_data(data)
   end
@@ -30,8 +30,8 @@ class LocalDataBroadcast
       future = time > now
       direction = future ? "from now" : "ago"
       next if time > now + 1.day
-      name = future ? "[color pink]#{reminder[:name]}[/color]" : reminder[:name]
-      "#{name} [color #{future ? "807A40" : :grey}]#{time_words} #{direction}[/color]"
+      name = future ? reminder[:name] : "[color pink]#{reminder[:name]}[/color]"
+      "#{name} [color #{future ? :grey : "#807A40"}]#{time_words} #{direction}[/color]"
     rescue StandardError => e
       reminder&.dig(:name) || "FAIL(#{reminder.inspect})"
     end.compact

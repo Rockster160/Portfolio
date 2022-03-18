@@ -40,7 +40,13 @@ $(".ctr-dashboard").ready(function() {
     return args.map(function(text) { return text + " ".repeat(spaces) }).join("").replace(/\s+$/, "")
   }
   Text.clean = function(text) {
-    return Text.markup(Text.escape(text)).replaceAll(/<.*?>/gi, "")
+    text = Text.escape(text)
+    text = Text.markup(text)
+    text = text.replaceAll(/<e>.*?<\/e>/gi, "  ")
+    text = text.replaceAll(/<es>.*?<\/es>/gi, " ")
+    text = text.replaceAll(/<.*?>/gi, "")
+
+    return text
   }
   Text.escape = function(text) {
     text = String(text)
@@ -61,6 +67,11 @@ $(".ctr-dashboard").ready(function() {
     if (!text || text.length <= 1) { return text }
 
     return "[color " + color + "]" + text + "[/color]"
+  }
+  Text.bgColor = function(color, text) {
+    if (!text || text.length <= 1) { return text }
+
+    return "[bg " + color + "]" + text + "[/bg]"
   }
   Text.animate = function(text) {
     if (!text || text.length <= 1) { return text }
@@ -159,8 +170,9 @@ $(".ctr-dashboard").ready(function() {
   Text.markup = function(text) {
     text = Text.escapeEmoji(text)
     text = Text.escapeSpecial(text)
+    text = text.replaceAll(/\[bg (.*?)\](.*?)\[\/bg\]/gi, "<span style=\"background-color: $1;\">$2</span>")
     text = text.replaceAll(/\[color (.*?)\](.*?)\[\/color\]/gi, "<span style=\"color: $1;\">$2</span>")
-    text = text.replaceAll(/\[ani \"(.*?)\"\]/gi, "<textanimate steps=\"$1\"/>")
+    text = text.replaceAll(/\[ani \"(.*?)\"\]/gi, "<textanimate steps=\"$1\"> </textanimate>")
 
     return text
   }
