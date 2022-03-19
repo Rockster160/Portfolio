@@ -45,7 +45,8 @@ Server.socket = function(subscription, receive) {
 
   return {
     url: ws_protocol + "://" + location.host + "/cable",
-    authentication: function(ws) {
+    authentication: function() {
+      var ws = this
       ws.send({ subscribe: subscription })
     },
     presend: function(packet) {
@@ -64,11 +65,12 @@ Server.socket = function(subscription, receive) {
 
       return packet
     },
-    receive: function(cell, msg) {
+    receive: function(msg) {
+      var cell = this
       var msg_data = JSON.parse(msg.data)
       if (msg_data.type == "ping" || !msg_data.message) { return }
 
-      receive(cell, msg_data.message)
+      receive.call(cell, msg_data.message)
     }
   }
 }
@@ -83,10 +85,10 @@ App.localData = App.cable.subscriptions.create({
   },
   received: function(data) {
     if (local_calendar_cell) {
-      local_calendar_cell.commands.render(local_calendar_cell, data.calendar)
+      local_calendar_cell.commands.render.call(local_calendar_cell, data.calendar)
     }
     if (local_reminders_cell) {
-      local_reminders_cell.commands.render(local_reminders_cell, data.reminders)
+      local_reminders_cell.commands.render.call(local_reminders_cell, data.reminders)
     }
   },
   request: function() {

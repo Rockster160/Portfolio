@@ -9,13 +9,14 @@ $(".ctr-dashboard").ready(function() {
     socket: Server.socket({
       channel: "ListChannel",
       channel_id: "list_1",
-    }, function(cell, msg) {
+    }, function(msg) {
       if (!msg.list_data) { return }
 
       var lines = Text.numberedList(msg.list_data.list_items)
-      cell.text(lines.join("\n"))
+      this.text(lines.join("\n"))
     }),
-    reloader: function(cell) {
+    reloader: function() {
+      var cell = this
       $.getJSON("/lists/grocery", function(data) {
         var lines = Text.numberedList(data.list_items)
         cell.text(lines.join("\n"))
@@ -23,7 +24,8 @@ $(".ctr-dashboard").ready(function() {
         cell.text("Failed to retrieve: " + JSON.stringify(data))
       })
     },
-    command: function(text, cell) {
+    command: function(text) {
+      var cell = this
       if (/^-\d+$/.test(text)) {
         var num = parseInt(text.match(/\d+/)[0])
         var lines = cell.text().split("\n")

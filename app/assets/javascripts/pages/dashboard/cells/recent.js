@@ -20,24 +20,25 @@ $(".ctr-dashboard").ready(function() {
     x: 2,
     y: 1,
     commands: {
-      quiet: function(cell) {
-        cell.data.quiet = !cell.data.quiet
-        cell.reload()
+      quiet: function() {
+        this.data.quiet = !this.data.quiet
+        this.reload()
       },
     },
-    socket: Server.socket("RecentEventsChannel", function(cell, msg) {
+    socket: Server.socket("RecentEventsChannel", function(msg) {
       if (!msg.recent_events) { return }
 
-      renderEvents(cell, msg.recent_events)
+      renderEvents(this, msg.recent_events)
     }),
-    reloader: function(cell) {
+    reloader: function() {
+      var cell = this
       $.getJSON("/action_events", function(data) {
         renderEvents(cell, data)
       }).fail(function(data) {
         cell.text("Failed to retrieve: " + JSON.stringify(data))
       })
     },
-    command: function(text, cell) {
+    command: function(text) {
       if (/\d+/.test(text)) {
         Server.post("/functions/pullups_counter/run", { count: text })
       } else {

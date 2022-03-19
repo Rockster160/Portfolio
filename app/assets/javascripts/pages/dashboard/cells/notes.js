@@ -6,16 +6,17 @@ $(".ctr-dashboard").ready(function() {
     w: 2,
     x: 1,
     y: 2,
-    reloader: function(cell) {
-      cell.text(localStorage.getItem("notes"))
+    reloader: function() {
+      this.text(localStorage.getItem("notes"))
     },
     commands: {
-      clear: function(cell) {
+      clear: function() {
         localStorage.removeItem("notes")
-        cell.text("")
+        this.text("")
       }
     },
-    command: function(text, cell) {
+    command: function(text) {
+      var cell = this
       if (/^-\d+$/.test(text)) {
         var num = parseInt(text.match(/\d+/)[0])
         var lines = cell.text().split("\n")

@@ -1,5 +1,6 @@
 $(".ctr-dashboard").ready(function() {
   if (demo) { return }
+
   Cell.init({
     x: 3,
     y: 2,
@@ -10,7 +11,8 @@ $(".ctr-dashboard").ready(function() {
       api_token: authdata.hiveos,
     },
     interval: Time.minutes(10),
-    reloader: function(cell) {
+    reloader: function() {
+      var cell = this
       fetch(cell.data.base_url + "/farms", {
         method: "GET",
         headers: { "Authorization": "Bearer " + cell.data.api_token }

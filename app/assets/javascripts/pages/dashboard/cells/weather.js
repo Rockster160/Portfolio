@@ -6,7 +6,8 @@ $(".ctr-dashboard").ready(function() {
     x: 3,
     y: 1,
     interval: Time.msUntilNextHour() + Time.seconds(5),
-    reloader: function(cell) {
+    reloader: function() {
+      var cell = this
       cell.interval = Time.msUntilNextHour() + Time.seconds(5)
 
       var url = "https://api.openweathermap.org/data/2.5/onecall?lat=40.480476443141924&lon=-111.99818607287183&units=imperial&exclude=minutely,alerts&lang=en&appid=" + authdata.weather
@@ -66,7 +67,4 @@ $(".ctr-dashboard").ready(function() {
       })
     },
   })
-
-  function tempColorScale(temp) {
-  }
 })

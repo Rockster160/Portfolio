@@ -7,7 +7,8 @@ $(".ctr-dashboard").ready(function() {
     x: 4,
     y: 1,
     interval: Time.hour(),
-    reloader: function(cell) {
+    reloader: function() {
+      var cell = this
       var api_key = authdata.uptime
       var url = "https://api.uptimerobot.com/v2/getMonitors"
       $.post(url, { api_key: api_key, custom_uptime_ratios: "7-30" }, function(data) {

@@ -72,12 +72,12 @@ $(".ctr-dashboard").ready(function() {
     })
   }
   Text.color = function(color, text) {
-    if (!text || text.length <= 1) { return text }
+    if (!text || text.length < 1) { return text }
 
     return "[color " + color + "]" + text + "[/color]"
   }
   Text.bgColor = function(color, text) {
-    if (!text || text.length <= 1) { return text }
+    if (!text || text.length < 1) { return text }
 
     return "[bg " + color + "]" + text + "[/bg]"
   }

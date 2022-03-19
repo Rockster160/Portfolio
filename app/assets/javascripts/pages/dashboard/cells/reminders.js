@@ -8,12 +8,12 @@ $(".ctr-dashboard").ready(function() {
     y: 3,
     flash: false,
     commands: {
-      render: function(cell, data) {
-        cell.lines(data)
-        cell.flash()
+      render: function(data) {
+        this.lines(data)
+        this.flash()
       },
     },
-    reloader: function(cell) {
+    reloader: function() {
       clearTimeout(local_data_timer)
       local_data_timer = setTimeout(function() { App.localData.request() }, 50)
     }

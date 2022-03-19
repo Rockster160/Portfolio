@@ -15,7 +15,7 @@ $(".ctr-dashboard").ready(function() {
   }
 
   var deck = function() {
-    return ["♠", "♥", "♦", "♣"].map(function(suit) {
+    return ["♠", Text.color(dash_colors.red, "♥"), Text.color(dash_colors.red, "♦"), "♣"].map(function(suit) {
       return [...Array(13).keys()].map(function(num) {
         num += 1
         if (num == 1) { num = "A" }
@@ -33,8 +33,8 @@ $(".ctr-dashboard").ready(function() {
     title: "Random",
     text: Text.color(dash_colors.yellow, ".8ball .die .coin .draw .shuffle"),
     commands: {
-      "8ball": function(cell) {
-        cell.data.history.push(random([
+      "8ball": function() {
+        this.data.history.push(random([
           "It is certain.",
           "It is decidedly so.",
           "Without a doubt.",
@@ -56,17 +56,18 @@ $(".ctr-dashboard").ready(function() {
           "Outlook not so good.",
           "Very doubtful.",
         ]))
-        render(cell)
+        render(this)
       },
-      die: function(cell) {
-        cell.data.history.push(random([1, 2, 3, 4, 5, 6]))
-        render(cell)
+      die: function() {
+        this.data.history.push(random([1, 2, 3, 4, 5, 6]))
+        render(this)
       },
-      coin: function(cell) {
-        cell.data.history.push(random(["Heads", "Tails"]))
-        render(cell)
+      coin: function() {
+        this.data.history.push(random(["Heads", "Tails"]))
+        render(this)
       },
-      draw: function(cell) {
+      draw: function() {
+        var cell = this
         if (cell.data.cards.length == 0) {
           cell.data.history.push("No cards left! Call " + Text.color(dash_colors.yellow, ".shuffle"))
           return render(cell)
@@ -79,22 +80,22 @@ $(".ctr-dashboard").ready(function() {
 
         render(cell)
       },
-      shuffle: function(cell) {
-        cell.data.cards = deck()
-        cell.data.history.push("Shuffled the cards! 52 remain.")
-        render(cell)
+      shuffle: function() {
+        this.data.cards = deck()
+        this.data.history.push("Shuffled the cards! 52 remain.")
+        render(this)
       },
     },
-    reloader: function(cell) {
+    reloader: function() {
       // Ran immediately when cell loads, and also any time .reload is called
-      cell.data.history = ["Click this cell, then type one of the above commands."]
-      cell.data.cards = deck()
-      render(cell)
+      this.data.history = ["Click this cell, then type one of the above commands."]
+      this.data.cards = deck()
+      render(this)
     },
-    command: function(msg, cell) {
+    command: function(msg) {
       var res = (new Roll(msg)).calculate()
-      cell.data.history.push(Text.justify("   " + res, Text.trunc(msg + "   ", 12)))
-      render(cell)
+      this.data.history.push(Text.justify("   " + res, Text.color("grey", Text.trunc(msg + "   ", 12))))
+      render(this)
     }
   })
 })

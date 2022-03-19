@@ -1,5 +1,8 @@
 $(".ctr-dashboard").ready(function() {
   var dashboard_history = [], history_idx = -1, history_hold = ""
+  var autocomplete_on = false
+  var $omnibar = $(".dashboard-omnibar input")
+
   cells = []
   Cell = function() {}
   Cell.init = function(init_data) {
@@ -115,7 +118,7 @@ $(".ctr-dashboard").ready(function() {
   Cell.prototype.reload = function() {
     var cell = this
     if (cell.my_reloader && typeof(cell.my_reloader) === "function") {
-      cell.my_reloader(cell)
+      cell.my_reloader()
     }
 
     cell.resetTimer(cell.interval)
@@ -160,7 +163,7 @@ $(".ctr-dashboard").ready(function() {
     return Text.filterOrder(text, options)
   }
   Cell.prototype.execute = function(text) {
-    if (this.my_command && typeof(this.my_command) === "function") { this.my_command(text, this) }
+    if (this.my_command && typeof(this.my_command) === "function") { this.my_command(text) }
 
     return this
   }
@@ -183,7 +186,7 @@ $(".ctr-dashboard").ready(function() {
     if (cell.ws) { cell.ws.reopen() }
     cell.reload()
   }
-  Cell.prototype.hide = function(a, b, c, d) {
+  Cell.prototype.hide = function() {
     var cell = this
     cell.ele.addClass("hide")
   }
@@ -196,9 +199,9 @@ $(".ctr-dashboard").ready(function() {
     this.ele.addClass("active")
     if (!reset_omnibar) { return }
 
-    var prev = $(".dashboard-omnibar input").val()
+    var prev = $omnibar.val()
     prev = prev.replace(/\:(\w|\-)+ ?/i, "")
-    $(".dashboard-omnibar input").val(":" + this.name + " " + prev)
+    $omnibar.val(":" + this.name + " " + prev)
   }
   Cell.inactive = function() {
     $(".dash-cell").removeClass("active")
@@ -230,10 +233,10 @@ $(".ctr-dashboard").ready(function() {
       cell_ws.open = true
 
       if (init_data.authentication && typeof(init_data.authentication) === "function") {
-        init_data.authentication(cell_ws)
+        init_data.authentication.call(cell_ws)
       }
 
-      if (init_data.onopen && typeof(init_data.onopen) === "function") { init_data.onopen() }
+      if (init_data.onopen && typeof(init_data.onopen) === "function") { init_data.onopen.call(cell_ws) }
       if (cell_ws.reload) {
         cell_ws.cell.reload()
         cell_ws.reload = false
@@ -243,7 +246,7 @@ $(".ctr-dashboard").ready(function() {
     cell_ws.socket.onclose = function() {
       cell_ws.open = false
       cell_ws.reload = true
-      if (init_data.onclose && typeof(init_data.onclose) === "function") { init_data.onclose() }
+      if (init_data.onclose && typeof(init_data.onclose) === "function") { init_data.onclose.call(cell_ws) }
     }
 
     cell_ws.socket.onerror = function(msg, a, b, c) {
@@ -252,7 +255,7 @@ $(".ctr-dashboard").ready(function() {
     cell_ws.socket.onmessage = function(msg) {
       if (init_data.receive && typeof(init_data.receive) === "function") {
         if (cell_ws.should_flash) { cell_ws.cell.flash() }
-        init_data.receive(cell_ws.cell, msg)
+        init_data.receive.call(cell_ws.cell, msg)
       }
     }
   }
@@ -286,7 +289,7 @@ $(".ctr-dashboard").ready(function() {
 
     if (cell) { cell.active(true) }
   }).on("keyup", function(evt) {
-    var raw = $(".dashboard-omnibar input").val()
+    var raw = $omnibar.val()
     var selector = raw.match(/(?:\:)(\w|\-)+/i)
     selector = selector ? selector[0].slice(1) : ""
 
@@ -298,12 +301,17 @@ $(".ctr-dashboard").ready(function() {
     }
   }).on("keydown", function(evt) {
     if (!evt.metaKey) {
-      $(".dashboard-omnibar input").focus()
+      $omnibar.focus()
     } else if (evt.key == "Tab") {
       evt.preventDefault()
+      autocomplete_on = true
+
+      // Cell.from_ele($(".dash-cell.active").autocomplete())
 
       // current cell . autocomplete(raw - selector)
       // Open up autocomplete. Cell can define a function here, but default to aggregating the list of avaialble functions
+    } else if (evt.key == "Escape") {
+      autocomplete_on = false
     }
     // evt.key == ">"
     // Enter cell. Add a new class for the cell that makes it "focused"
@@ -311,7 +319,7 @@ $(".ctr-dashboard").ready(function() {
     // During Focus, all key events are sent directly to the cell.
     // Can be used for inline editing or live key events.
   }).on("keydown", ".dashboard-omnibar input", function(evt) {
-    var raw = $(".dashboard-omnibar input").val()
+    var raw = $omnibar.val()
     var selector = raw.match(/\:(\w|\-)+ /i)
     selector = selector ? selector[0] : ""
     var cmd = raw.replace(/\:(\w|\-)+ /i, "")
@@ -327,7 +335,7 @@ $(".ctr-dashboard").ready(function() {
           cell.reload()
         })
 
-        $(".dashboard-omnibar input").val(selector)
+        $omnibar.val(selector)
       }
 
       var cell = Cell.from_ele($(".dash-cell.active"))
@@ -339,11 +347,11 @@ $(".ctr-dashboard").ready(function() {
         var cmd = cmd.replace(func_regex, "")
         var func = cell.commands[raw_func]
         if (func && typeof(func) == "function") {
-          func.call(cell, cell, cmd)
+          func.call(cell, cmd)
         } else {
           func = cell[raw_func]
           if (func && typeof(func) == "function") {
-            func.call(cell, cell, cmd)
+            func.call(cell, cmd)
           } else {
             cell.execute("." + raw_func + " " + cmd)
           }
@@ -352,7 +360,7 @@ $(".ctr-dashboard").ready(function() {
         cell.execute(cmd)
       }
 
-      $(".dashboard-omnibar input").val(selector)
+      $omnibar.val(selector)
     } else if (evt.key == "Tab") {
       evt.preventDefault()
     } else if (evt.key == "ArrowUp") {
@@ -360,20 +368,20 @@ $(".ctr-dashboard").ready(function() {
       if (history_idx == -1 && dashboard_history.length > 0) {
         history_hold = raw
         history_idx = 0
-        $(".dashboard-omnibar input").val(dashboard_history[0])
+        $omnibar.val(dashboard_history[0])
       } else if (history_idx < dashboard_history.length - 1) {
         history_idx += 1
-        $(".dashboard-omnibar input").val(dashboard_history[history_idx])
+        $omnibar.val(dashboard_history[history_idx])
       }
     } else if (evt.key == "ArrowDown") {
       evt.preventDefault()
       if (history_idx <= 0 && history_hold.length > 0) {
         history_idx = -1
-        $(".dashboard-omnibar input").val(history_hold)
+        $omnibar.val(history_hold)
         history_hold = ""
       } else if (history_idx > 0) {
         history_idx -= 1
-        $(".dashboard-omnibar input").val(dashboard_history[history_idx])
+        $omnibar.val(dashboard_history[history_idx])
       }
     }
   })

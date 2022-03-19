@@ -1,5 +1,6 @@
 $(".ctr-dashboard").ready(function() {
   if (demo) { return }
+
   Printer = function() {}
   Printer.request = function(cell, url, type, data) {
     var url = url
@@ -25,36 +26,50 @@ $(".ctr-dashboard").ready(function() {
   Printer.post = function(cell, url, data) { return Printer.request(cell, url, "POST", data) }
   Printer.get =  function(cell, url, data) { return Printer.request(cell, url, "GET",  data) }
 
+
+  var showPrinting = function(cell) {
+    var lines = [cell.line(0), ""]
+    lines.push(Text.center(cell.data.filename))
+    lines.push(Text.progressBar(cell.data.progress, { post_text: Math.round(cell.data.progress) + "%"}))
+    lines.push(Text.justify("       ETA: ", Time.duration(cell.data.eta) + "       "))
+    lines.push(Text.justify("       Current: ", Time.duration(cell.data.time) + "       "))
+    lines.push(Text.justify("       Est: ", Time.duration(cell.data.estimated) + "       "))
+    if (cell.data.eta_ms) {
+      lines.push(Text.justify("       Complete: ", Time.local(cell.data.eta_ms) + "       "))
+    }
+    cell.lines(lines)
+  }
+
   var printer = Cell.init({
     title: "Printer",
     text: "Loading...",
     x: 4,
     y: 2,
-    socket: Server.socket("PrinterCallbackChannel", function(cell, msg) {
+    socket: Server.socket("PrinterCallbackChannel", function(msg) {
       console.log("Printer Callback", msg);
-      cell.reload()
+      this.reload()
     }),
     commands: {
-      gcode: function(cell, cmd) {
-        return Printer.post(cell, "/printer/command", { commands: cmd.split(", ") })
+      gcode: function(cmd) {
+        return Printer.post(this, "/printer/command", { commands: cmd.split(", ") })
       },
-      on: function(cell) {
-        return Printer.post(cell, "/printer/command", { command: "M80" })
+      on: function() {
+        return Printer.post(this, "/printer/command", { command: "M80" })
       },
-      off: function(cell) {
-        cell.data.prepping = false
-        return Printer.post(cell, "/printer/command", { command: "M81" })
+      off: function() {
+        this.data.prepping = false
+        return Printer.post(this, "/printer/command", { command: "M81" })
       },
-      extrude: function(cell, amount) {
-        return Printer.post(cell, "/printer/tool", { command: "extrude", amount: amount })
+      extrude: function(amount) {
+        return Printer.post(this, "/printer/tool", { command: "extrude", amount: amount })
       },
-      retract: function(cell, amount) {
-        return Printer.post(cell, "/printer/tool", { command: "extrude", amount: "-" + amount })
+      retract: function(amount) {
+        return Printer.post(this, "/printer/tool", { command: "extrude", amount: "-" + amount })
       },
-      home: function(cell) {
-        return Printer.post(cell, "/printer/printhead", { command: "home", axes: ["x", "y", "z"] })
+      home: function() {
+        return Printer.post(this, "/printer/printhead", { command: "home", axes: ["x", "y", "z"] })
       },
-      move: function(cell, amounts) {
+      move: function(amounts) {
         var x = (amounts.match(/x:? (\-?\d+)/i) || [])[1]
         var y = (amounts.match(/y:? (\-?\d+)/i) || [])[1]
         var z = (amounts.match(/z:? (\-?\d+)/i) || [])[1]
@@ -62,16 +77,18 @@ $(".ctr-dashboard").ready(function() {
         if (x) { data.x = x }
         if (y) { data.y = y }
         if (z) { data.z = z }
-        return Printer.post(cell, "/printer/printhead", data)
+        return Printer.post(this, "/printer/printhead", data)
       },
-      cool: function(cell, amounts) {
+      cool: function() {
+        var cell = this
         Printer.post(cell, "/printer/tool", { command: "target", targets: { tool0: 0 } })
         Printer.post(cell, "/printer/bed", { command: "target", target: 0 }).done(function() {
           cell.data.prepping = true
           cell.reload()
         })
       },
-      pre: function(cell) {
+      pre: function() {
+        var cell = this
         cell.commands.on(cell).success(function() {
           Printer.post(cell, "/printer/tool", { command: "target", targets: { tool0: 200 } })
           Printer.post(cell, "/printer/bed", { command: "target", target: 40 }).done(function() {
@@ -80,21 +97,9 @@ $(".ctr-dashboard").ready(function() {
           })
         })
       },
-      showPrinting: function(cell) {
-        var lines = [cell.line(0), ""]
-        lines.push(Text.center(cell.data.filename))
-        lines.push(Text.progressBar(cell.data.progress, { post_text: Math.round(cell.data.progress) + "%"}))
-        lines.push(Text.justify("       ETA: ", Time.duration(cell.data.eta) + "       "))
-        lines.push(Text.justify("       Current: ", Time.duration(cell.data.time) + "       "))
-        lines.push(Text.justify("       Est: ", Time.duration(cell.data.estimated) + "       "))
-        if (cell.data.eta_ms) {
-          lines.push(Text.justify("       Complete: ", Time.local(cell.data.eta_ms) + "       "))
-        }
-        cell.lines(lines)
-      },
     },
-    reloader: function(cell) {
-      var cell = cell
+    reloader: function() {
+      var cell = this
       Printer.get(cell, "/printer").success(function(data) {
         var data = data
         cell.data.printing = data.state.flags.printing
@@ -104,7 +109,7 @@ $(".ctr-dashboard").ready(function() {
             cell.data.eta -= 1000
             if (cell.data.eta < 0) { cell.data.eta = 0 }
             cell.data.time += 1000
-            cell.commands.showPrinting(cell)
+            showPrinting(cell)
           }, 1000)
         }
         if (cell.data.printing || cell.data.prepping) {
@@ -137,7 +142,7 @@ $(".ctr-dashboard").ready(function() {
           cell.data.estimated = data.job.estimatedPrintTime * 1000
           cell.data.filename = data.job.file.display.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "")
           cell.data.eta_ms = data.progress.completion == 100 ? cell.data.eta_ms : cell.data.now + cell.data.eta
-          cell.commands.showPrinting(cell)
+          showPrinting(cell)
         })
       })
     },

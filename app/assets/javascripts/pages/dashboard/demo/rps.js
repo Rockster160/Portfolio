@@ -15,14 +15,16 @@ $(".ctr-dashboard").ready(function() {
     x: 4,
     y: 3,
     title: "Rock-Paper-Scissors",
-    reloader: function(cell) {
+    reloader: function() {
+      var cell = this
       // Ran immediately when cell loads, and also any time .reload is called
       cell.data.player_wins = 0
       cell.data.cpu_wins = 0
       cell.data.history = ["Play by clicking this cell, then typing 'rock', 'paper', or 'scissors' and hitting enter"]
       render(cell)
     },
-    command: function(msg, cell) {
+    command: function(msg) {
+      var cell = this
       var choice = msg.trim().toLowerCase().slice(0, 1)
       var choices = ["r", "p", "s"]
       if (!choices.includes(choice)) {
