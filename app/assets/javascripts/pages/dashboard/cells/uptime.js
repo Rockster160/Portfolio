@@ -14,18 +14,18 @@ $(".ctr-dashboard").ready(function() {
         cell.text(
           data.monitors.map(function(monitor) {
             var color_map = {
-              2: "#148F14",
+              2: dash_colors.green,
               8: "orange",
-              9: "#F81414"
+              9: dash_colors.red
             }
-            var color = color_map[monitor.status] || "#FFEE14"
+            var color = color_map[monitor.status] || dash_colors.yellow
             var colored_name = Text.color(color, "• " + monitor.friendly_name)
 
             var ratios = monitor.custom_uptime_ratio.split("-").map(function(num) {
               var percent = parseInt(num.split(".")[0])
-              var color = "#FFEE14"
-              if (percent >= 99) { color = "#148F14" }
-              if (percent < 90) { color = "#F81414" }
+              var color = dash_colors.yellow
+              if (percent >= 99) { color = dash_colors.green }
+              if (percent < 90) { color = dash_colors.red }
 
               return Text.color(color, percent + "%") }
             )

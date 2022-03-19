@@ -184,40 +184,48 @@ $(".ctr-dashboard").ready(function() {
 
     return text
   }
-  Text.filterOrder = function(text, options) {
+  Text.filterOrder = function(text, options, transformer) {
     if (!text || text.trim().length <= 0) { return options }
+    transformer = transformer || function() { return this }
     text = text.toLowerCase().trim()
     var results = {}
-    var words = []
+    var found = []
 
-    options.forEach(function(word) {
+    options.forEach(function(option) {
+      var word = transformer.call(option)
       var compare = word.toLowerCase().trim()
       var score = 0
-      if (compare == text) { score += 100000 }
-      if (compare.indexOf(text) == 0) { score += 10000 }
-      if (compare.indexOf(text) >= 0) { score += 1000 }
+
+      if (compare == text) { score += 1000000 }
+      if (compare.indexOf(text) == 0) { score += 100000 }
+      if (compare.indexOf(text) >= 0) { score += 10000 }
+
       var last_idx = -1
       var word_length = word.length
+      var bad_word = false
       text.split("").forEach(function(letter) {
+        if (bad_word) { return }
         var at = compare.indexOf(letter)
-        if (at >= 0) {
-          score += word_length - at
-
-          if (at >= last_idx) { score += word_length - at }
+        if (at == -1) {
+          bad_word = true
+          score = 0
+          return
         }
 
+        score += word_length - at
+        if (at >= last_idx) { score += word_length - at }
         compare = compare.replace(letter, "")
       })
 
       if (score > 0) {
-         words.push(word)
+         found.push(option)
          results[word] = score
        }
     })
 
-    return words.sort(function(a, b) {
-      var aOrder = results[a]
-      var bOrder = results[b]
+    return found.sort(function(a, b) {
+      var aOrder = results[transformer.call(a)]
+      var bOrder = results[transformer.call(b)]
 
       if (aOrder < bOrder) {
         return 1

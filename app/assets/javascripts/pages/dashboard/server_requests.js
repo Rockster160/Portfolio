@@ -1,5 +1,10 @@
 var demo = !true
 var local_data_timer, local_reminders_cell, local_calendar_cell
+var dash_colors = {
+  red:    "#F81414",
+  yellow: "#FFEE14",
+  green:  "#148F14",
+}
 
 // var cell = Cell.init({
 //   title: "",

@@ -205,7 +205,7 @@ $(".ctr-dashboard").ready(function() {
   }
   Cell.from_selector = function(selector) {
     return cells.find(function(cell) {
-      return cell.my_title.toLowerCase() == selector.toLowerCase()
+      return cell.name.toLowerCase() == selector.toLowerCase()
     })
   }
   Cell.from_ele = function(ele) {
