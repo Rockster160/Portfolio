@@ -38,15 +38,14 @@ $(".ctr-dashboard").ready(function() {
       })
     },
     command: function(text, cell) {
-      var [name, ...notes] = text.split(" ")
-      name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
-      notes = notes.join(" ")
-      $.ajax({
-        url: "/action_events",
-        data: { event_name: name, notes: notes }, // event_name, notes, timestamp
-        type: "POST",
-        dataType: "text"
-      })
+      if (/\d+/.test(text)) {
+        Server.post("/functions/pullups_counter/run", { count: text })
+      } else {
+        var [name, ...notes] = text.split(" ")
+        name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
+        notes = notes.join(" ")
+        Server.post("/action_events", { event_name: name, notes: notes })
+      }
     },
   })
 })

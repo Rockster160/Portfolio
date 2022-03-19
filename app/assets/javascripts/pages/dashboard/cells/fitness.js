@@ -1,6 +1,6 @@
 $(".ctr-dashboard").ready(function() {
   if (demo) { return }
-  
+
   Cell.init({
     title: "Fitness",
     text: "Loading...",
@@ -21,8 +21,10 @@ $(".ctr-dashboard").ready(function() {
       if (/\d+/.test(text)) {
         Server.post("/functions/pullups_counter/run", { count: text })
       } else {
-        var name = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()
-        Server.post("/action_events", { event_name: name })
+        var [name, ...notes] = text.split(" ")
+        name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
+        notes = notes.join(" ")
+        Server.post("/action_events", { event_name: name, notes: notes })
       }
     },
   })
