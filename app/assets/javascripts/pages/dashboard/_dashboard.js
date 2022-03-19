@@ -1,4 +1,5 @@
 $(".ctr-dashboard").ready(function() {
+  var dashboard_history = [], history_idx = -1, history_hold = ""
   cells = []
   Cell = function() {}
   Cell.init = function(init_data) {
@@ -316,6 +317,11 @@ $(".ctr-dashboard").ready(function() {
     var cmd = raw.replace(/\:(\w|\-)+ /i, "")
 
     if (evt.key == "Enter") {
+      if (dashboard_history[dashboard_history.length - 1] != raw.trim()) {
+        dashboard_history.unshift(raw.trim())
+      }
+      history_hold = ""
+      history_idx = -1
       if (raw == ".reload") {
         cells.forEach(function(cell) {
           cell.reload()
@@ -349,6 +355,26 @@ $(".ctr-dashboard").ready(function() {
       $(".dashboard-omnibar input").val(selector)
     } else if (evt.key == "Tab") {
       evt.preventDefault()
+    } else if (evt.key == "ArrowUp") {
+      evt.preventDefault()
+      if (history_idx == -1 && dashboard_history.length > 0) {
+        history_hold = raw
+        history_idx = 0
+        $(".dashboard-omnibar input").val(dashboard_history[0])
+      } else if (history_idx < dashboard_history.length - 1) {
+        history_idx += 1
+        $(".dashboard-omnibar input").val(dashboard_history[history_idx])
+      }
+    } else if (evt.key == "ArrowDown") {
+      evt.preventDefault()
+      if (history_idx <= 0 && history_hold.length > 0) {
+        history_idx = -1
+        $(".dashboard-omnibar input").val(history_hold)
+        history_hold = ""
+      } else if (history_idx > 0) {
+        history_idx -= 1
+        $(".dashboard-omnibar input").val(dashboard_history[history_idx])
+      }
     }
   })
 })
