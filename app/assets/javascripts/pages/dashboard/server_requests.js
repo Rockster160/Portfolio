@@ -4,6 +4,10 @@ var dash_colors = {
   red:    "#F81414",
   yellow: "#FFEE14",
   green:  "#148F14",
+  orange:  "orange",
+  white:  "white",
+  black:  "black",
+  grey:  "grey",
 }
 
 // var cell = Cell.init({

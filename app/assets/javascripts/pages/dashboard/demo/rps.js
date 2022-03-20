@@ -23,6 +23,9 @@ $(".ctr-dashboard").ready(function() {
       cell.data.history = ["Play by clicking this cell, then typing 'rock', 'paper', or 'scissors' and hitting enter"]
       render(cell)
     },
+    autocomplete_options: function() {
+      return ["rock", "paper", "scissors"]
+    },
     command: function(msg) {
       var cell = this
       var choice = msg.trim().toLowerCase().slice(0, 1)
