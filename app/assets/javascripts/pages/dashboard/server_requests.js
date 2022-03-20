@@ -1,4 +1,4 @@
-var demo = !true
+var demo = true
 var local_data_timer, local_reminders_cell, local_calendar_cell
 var dash_colors = {
   red:    "#F81414",
