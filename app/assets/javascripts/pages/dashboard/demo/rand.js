@@ -15,14 +15,14 @@ $(".ctr-dashboard").ready(function() {
   }
 
   var deck = function() {
-    return ["♠", Text.color(dash_colors.red, "♥"), Text.color(dash_colors.red, "♦"), "♣"].map(function(suit) {
+    return [Text.color("black", "♠"), Text.color(dash_colors.red, "♥"), Text.color(dash_colors.red, "♦"), Text.color("black", "♣")].map(function(suit) {
       return [...Array(13).keys()].map(function(num) {
         num += 1
         if (num == 1) { num = "A" }
         if (num == 11) { num = "J" }
         if (num == 12) { num = "Q" }
         if (num == 13) { num = "K" }
-        return num + suit
+        return Text.bgColor("white", Text.color("black", String(num).padStart(2, " ")) + suit)
       })
     }).flat()
   }
@@ -34,7 +34,7 @@ $(".ctr-dashboard").ready(function() {
     text: Text.color(dash_colors.yellow, ".8ball .die .coin .draw .shuffle"),
     commands: {
       "8ball": function() {
-        this.data.history.push(random([
+        this.data.history.push(Emoji["8ball"] + "  " + random([
           "It is certain.",
           "It is decidedly so.",
           "Without a doubt.",
@@ -59,11 +59,11 @@ $(".ctr-dashboard").ready(function() {
         render(this)
       },
       die: function() {
-        this.data.history.push(random([1, 2, 3, 4, 5, 6]))
+        this.data.history.push(Emoji.game_die + "  " + random([1, 2, 3, 4, 5, 6]))
         render(this)
       },
       coin: function() {
-        this.data.history.push(random(["Heads", "Tails"]))
+        this.data.history.push(Text.color(dash_colors.yellow, Emoji.coin) + " " + random(["Heads", "Tails"]))
         render(this)
       },
       draw: function() {
@@ -88,7 +88,7 @@ $(".ctr-dashboard").ready(function() {
     },
     reloader: function() {
       // Ran immediately when cell loads, and also any time .reload is called
-      this.data.history = ["Click this cell, then type one of the above commands."]
+      this.data.history = [Text.color("grey", "Click this cell, then type one of the above commands.")]
       this.data.cards = deck()
       render(this)
     },

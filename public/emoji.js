@@ -893,6 +893,7 @@ const Emoji = {
   "oil_drum": "🛢",
   "money_with_wings": "💸",
   "dollar": "💵",
+  "coin": "",
   "yen": "💴",
   "euro": "💶",
   "pound": "💷",

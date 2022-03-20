@@ -146,16 +146,17 @@ $(".ctr-dashboard").ready(function() {
       ".hide",
       ".show",
     ]
-    return Object.keys(this.commands).forEach(function(cmd) {
+    Object.keys(this.commands).reverse().forEach(function(cmd) {
       if (!commands.includes("." + cmd)) {
         commands.push("." + cmd)
       }
     })
+    return commands.reverse()
   }
   Cell.prototype.autocomplete = function(text) {
     var options = []
     if (this.autocomplete_options && typeof(this.autocomplete_options) === "function") {
-      options = this.autocomplete_options()
+      options = this.autocomplete_options(text)
     } else {
       options = autocomplete_options
     }
@@ -207,8 +208,9 @@ $(".ctr-dashboard").ready(function() {
     $(".dash-cell").removeClass("active")
   }
   Cell.from_selector = function(selector) {
+    selector = selector.toLowerCase().replace(/^:/, "")
     return cells.find(function(cell) {
-      return cell.name.toLowerCase() == selector.toLowerCase()
+      return cell.name.toLowerCase() == selector
     })
   }
   Cell.from_ele = function(ele) {
@@ -284,34 +286,117 @@ $(".ctr-dashboard").ready(function() {
     }
   }
 
+  var omniRaw = function() { return $omnibar.val() }
+  var omniSelector = function() {
+    var selector = omniRaw().match(/(?:\:)(\w|\-)+/i)
+    return selector ? selector[0] : ""
+  }
+  var omniVal = function() {
+    return omniRaw().replace(/\:(\w|\-)+\s*/i, "")
+  }
+  var autocompleteOptions = function() {
+    var cell = Cell.from_ele($(".dash-cell.active"))
+    if (cell) {
+      return cell.autocomplete(omniVal())
+    } else {
+      var cell_names = cells.map(function(cell) { return ":" + cell.name + " " })
+      return Text.filterOrder(omniVal(), cell_names)
+    }
+  }
+  var resetDropup = function() {
+    $(".drop-item").remove()
+    if (autocomplete_on) {
+      autocompleteOptions().forEach(function(option) {
+        var item_name = $("<span>", { class: "name" }).text(option)
+        var drop_item = $("<div>", { class: "drop-item" }).append(item_name)
+        // var summary = $("<div>", { class: "summary" }).text(entry.summary)
+        // if (entry.summary && entry.summary.length > 0) { drop_item.append(summary) }
+
+        $(".dashboard-omnibar-autocomplete").append(drop_item)
+      })
+      if ($(".drop-item.selected").length == 0) { $(".drop-item").first().addClass("selected") }
+    }
+  }
+
   $(document).on("click", ".dash-cell", function() {
     var cell = Cell.from_ele(this)
 
     if (cell) { cell.active(true) }
+    $omnibar.focus()
   }).on("keyup", function(evt) {
-    var raw = $omnibar.val()
-    var selector = raw.match(/(?:\:)(\w|\-)+/i)
-    selector = selector ? selector[0].slice(1) : ""
-
-    var cell = Cell.from_selector(selector)
+    var cell = Cell.from_selector(omniSelector())
     if (cell) {
       cell.active()
     } else {
       Cell.inactive()
     }
+
+    if (!["ArrowUp", "ArrowDown", "Tab", "Enter"].includes(evt.key)) {
+      resetDropup()
+    }
   }).on("keydown", function(evt) {
-    if (!evt.metaKey) {
-      $omnibar.focus()
-    } else if (evt.key == "Tab") {
+    $omnibar.focus()
+    if (evt.key == "Tab") {
       evt.preventDefault()
-      autocomplete_on = true
+      if (autocomplete_on) {
+        // Duplicate of ArrowUp
+        if ($(".drop-item.selected").length > 0) {
+          // next because CSS reverses order
+          var next = $(".drop-item.selected").next()
+          if (next) {
+            $(".drop-item").removeClass("selected")
+            next.addClass("selected")
+          }
+        } else {
+          // first because CSS reverses order
+          $(".drop-item").first().addClass("selected")
+        }
+      } else {
+        autocomplete_on = true
+        resetDropup()
+      }
+      return
+    }
 
-      // Cell.from_ele($(".dash-cell.active").autocomplete())
-
-      // current cell . autocomplete(raw - selector)
-      // Open up autocomplete. Cell can define a function here, but default to aggregating the list of avaialble functions
-    } else if (evt.key == "Escape") {
+    if (!autocomplete_on) { return }
+    if (evt.key == "Escape") {
       autocomplete_on = false
+    } else if (evt.key == "ArrowUp") {
+      evt.preventDefault()
+      evt.stopPropagation()
+
+      if ($(".drop-item.selected").length > 0) {
+        // next because CSS reverses order
+        var next = $(".drop-item.selected").next()
+        if (next) {
+          $(".drop-item").removeClass("selected")
+          next.addClass("selected")
+        }
+      } else {
+        // first because CSS reverses order
+        $(".drop-item").first().addClass("selected")
+      }
+    } else if (evt.key == "ArrowDown") {
+      evt.preventDefault()
+      evt.stopPropagation()
+
+      if ($(".drop-item.selected").length > 0) {
+        // prev because CSS reverses order
+        var prev = $(".drop-item.selected").prev()
+        if (prev) {
+          $(".drop-item").removeClass("selected")
+          prev.addClass("selected")
+        }
+      } else {
+        // first because CSS reverses order
+        $(".drop-item").last().addClass("selected")
+      }
+    } else if (evt.key == "Enter") {
+      $omnibar.val([omniSelector(), $(".drop-item.selected").text()].join(" "))
+      autocomplete_on = false
+      resetDropup()
+    } else if (!evt.metaKey) {
+      $omnibar.focus()
     }
     // evt.key == ">"
     // Enter cell. Add a new class for the cell that makes it "focused"
@@ -319,13 +404,13 @@ $(".ctr-dashboard").ready(function() {
     // During Focus, all key events are sent directly to the cell.
     // Can be used for inline editing or live key events.
   }).on("keydown", ".dashboard-omnibar input", function(evt) {
-    var raw = $omnibar.val()
-    var selector = raw.match(/\:(\w|\-)+ /i)
-    selector = selector ? selector[0] : ""
-    var cmd = raw.replace(/\:(\w|\-)+ /i, "")
+    if (autocomplete_on) { return }
+    var raw = omniRaw()
+    var selector = omniSelector()
+    var cmd = omniVal()
 
     if (evt.key == "Enter") {
-      if (dashboard_history[dashboard_history.length - 1] != raw.trim()) {
+      if (dashboard_history[0] != raw.trim()) {
         dashboard_history.unshift(raw.trim())
       }
       history_hold = ""
@@ -335,7 +420,7 @@ $(".ctr-dashboard").ready(function() {
           cell.reload()
         })
 
-        $omnibar.val(selector)
+        $omnibar.val([selector, ""].join(" "))
       }
 
       var cell = Cell.from_ele($(".dash-cell.active"))
@@ -360,9 +445,7 @@ $(".ctr-dashboard").ready(function() {
         cell.execute(cmd)
       }
 
-      $omnibar.val(selector)
-    } else if (evt.key == "Tab") {
-      evt.preventDefault()
+      $omnibar.val(selector + " ")
     } else if (evt.key == "ArrowUp") {
       evt.preventDefault()
       if (history_idx == -1 && dashboard_history.length > 0) {
