@@ -36,7 +36,7 @@ class LocalDataBroadcast
   end
 
   def enrich_reminders(reminder_data)
-    now = Time.current
+    now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     reminder_data.map do |reminder|
       next reminder[:name] if reminder[:due].blank?
 
