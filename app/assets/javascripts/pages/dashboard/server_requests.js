@@ -10,7 +10,7 @@ var dash_colors = {
   grey:  "grey",
 }
 
-// var cell = Cell.init({
+// var cell = Cell.register({
 //   title: "",
 //   text: "",
 //   commands: {},

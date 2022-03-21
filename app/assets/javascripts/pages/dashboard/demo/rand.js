@@ -27,7 +27,7 @@ $(".ctr-dashboard").ready(function() {
     }).flat()
   }
 
-  Cell.init({
+  Cell.register({
     x: 3,
     y: 3,
     title: "Random",

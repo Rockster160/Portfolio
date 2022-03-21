@@ -1,7 +1,7 @@
 $(".ctr-dashboard").ready(function() {
   if (demo) { return }
 
-  Cell.init({
+  Cell.register({
     title: "TODO",
     text: "Loading...",
     x: 3,

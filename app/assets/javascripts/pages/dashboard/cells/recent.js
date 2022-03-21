@@ -14,7 +14,7 @@ $(".ctr-dashboard").ready(function() {
     }).filter(function(line) { return line && line.length > 0 }))
   }
 
-  Cell.init({
+  Cell.register({
     title: "Recent",
     text: "Loading...",
     x: 2,
@@ -39,7 +39,7 @@ $(".ctr-dashboard").ready(function() {
       })
     },
     command: function(text) {
-      if (/\d+/.test(text)) {
+      if (/^\d+/.test(text)) {
         Server.post("/functions/pullups_counter/run", { count: text })
       } else {
         var [name, ...notes] = text.split(" ")

@@ -40,7 +40,7 @@ $(".ctr-dashboard").ready(function() {
     cell.lines(lines)
   }
 
-  var printer = Cell.init({
+  var printer = Cell.register({
     title: "Printer",
     text: "Loading...",
     x: 4,

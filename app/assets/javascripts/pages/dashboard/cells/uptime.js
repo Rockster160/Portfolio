@@ -68,7 +68,7 @@ $(".ctr-dashboard").ready(function() {
     ])
   }
 
-  Cell.init({
+  Cell.register({
     title: "Uptime",
     text: "Loading...",
     x: 3,

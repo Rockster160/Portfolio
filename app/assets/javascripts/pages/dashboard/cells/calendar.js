@@ -1,7 +1,7 @@
 $(".ctr-dashboard").ready(function() {
   if (demo) { return }
 
-  local_calendar_cell = Cell.init({
+  local_calendar_cell = Cell.register({
     title: "Calendar",
     text: "Loading...",
     x: 1,

@@ -1,7 +1,7 @@
 $(".ctr-dashboard").ready(function() {
   if (demo) { return }
 
-  local_reminders_cell = Cell.init({
+  local_reminders_cell = Cell.register({
     title: "Reminders",
     text: "Loading...",
     x: 2,

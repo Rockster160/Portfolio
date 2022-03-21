@@ -38,7 +38,7 @@ $(".ctr-dashboard").ready(function() {
     }
   }
 
-  Cell.init({
+  Cell.register({
     title: "Weather",
     text: "Loading...",
     x: 3,

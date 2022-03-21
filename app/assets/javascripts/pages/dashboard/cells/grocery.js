@@ -1,7 +1,7 @@
 $(".ctr-dashboard").ready(function() {
   if (demo) { return }
 
-  Cell.init({
+  Cell.register({
     title: "Grocery",
     text: "Loading...",
     x: 4,

@@ -1,7 +1,7 @@
 $(".ctr-dashboard").ready(function() {
   if (demo) { return }
 
-  Cell.init({
+  Cell.register({
     title: "Fitness",
     text: "Loading...",
     x: 1,
@@ -18,7 +18,7 @@ $(".ctr-dashboard").ready(function() {
       this.ws.send({ action: "request" })
     },
     command: function(text) {
-      if (/\d+/.test(text)) {
+      if (/^\d+/.test(text)) {
         Server.post("/functions/pullups_counter/run", { count: text })
       } else {
         var [name, ...notes] = text.split(" ")

@@ -17,3 +17,13 @@
   <input autofocus=true type="text">
   <div class="dashboard-omnibar-autocomplete"></div>
 </div>
+
+<%= content_for(:after_js) do %>
+<script type="text/javascript">
+  $(".dashboard").ready(function() {
+    Object.keys(registered_cells).forEach(function(cell_name) {
+      Cell.init(cell_name)
+    })
+  })
+</script>
+<% end %>

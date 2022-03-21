@@ -116,7 +116,7 @@ $(".ctr-dashboard").ready(function() {
     cell.data.apple = coord
   }
 
-  cell = Cell.init({
+  cell = Cell.register({
     x: 4,
     y: 1,
     title: "Snake",

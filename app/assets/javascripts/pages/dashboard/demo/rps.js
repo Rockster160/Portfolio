@@ -11,7 +11,7 @@ $(".ctr-dashboard").ready(function() {
     cell.lines(lines)
   }
 
-  Cell.init({
+  Cell.register({
     x: 4,
     y: 3,
     title: "Rock-Paper-Scissors",

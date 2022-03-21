@@ -1,6 +1,6 @@
-var cells = [], registered_cells = []
+var cells = [], registered_cells = {}
 Cell = function() {}
-Cell.init = function(init_data) {
+Cell.register = function(init_data) {
   var cell = new Cell()
   var dash_cell = $("<div>", { class: "dash-cell" })
   dash_cell.append($("<div>", { class: "dash-title" }).append("<span></span>"))
@@ -31,10 +31,16 @@ Cell.init = function(init_data) {
   cell.reloader(init_data.reloader, cell.interval)
   cell.setGridArea()
 
-  $(".dashboard").append(dash_cell)
+  registered_cells[cell.name] = cell
+  return cell
+}
+Cell.init = function(name) {
+  var cell = registered_cells[name]
+  if (!cell) { return }
+
+  $(".dashboard").append(cell.ele)
   cells.push(cell)
   if (cell.onload && typeof(cell.onload) === "function") { cell.onload() }
-  return cell
 }
 Cell.prototype.title = function(new_title) {
   if (new_title == undefined) {
