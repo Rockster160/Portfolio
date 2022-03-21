@@ -234,9 +234,12 @@ $(".ctr-dashboard").ready(function() {
     })
   }
   Cell.startLivekey = function() {
-    $(".dash-cell.active").addClass("livekey")
-    var cell = Cell.getLivekey()
-    if (cell && cell.onfocus && typeof(cell.onfocus) === "function") { cell.onfocus() }
+    var cell = Cell.active()
+
+    if (cell && cell.livekey && typeof(cell.livekey) === "function") {
+      $(cell.ele).addClass("livekey")
+      if (cell.onfocus && typeof(cell.onfocus) === "function") { cell.onfocus() }
+    }
   }
   Cell.sendLivekey = function(evt_key) {
     var cell = Cell.getLivekey()

@@ -43,14 +43,11 @@ $(".ctr-dashboard").ready(function() {
       res.json().then(function(json) {
         if (res.ok) {
           var lines = []
-          lines.push("")
           json.data.forEach(function(rig) {
-            if (rig.name == "Brendan Sr Murton") { return }
             lines.push(" " + rig.name)
             var online = "█ ".repeat(rig.stats.gpus_online)
             var offline = "█ ".repeat(rig.stats.gpus_total - rig.stats.gpus_online)
             lines.push(Text.center(Text.color(dash_colors.green, online) + Text.color(dash_colors.red, offline)))
-            lines.push("")
           })
           cell.data.rig_lines = lines
         } else {
