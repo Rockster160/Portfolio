@@ -57,7 +57,7 @@ $(".ctr-dashboard").ready(function() {
         prev.addClass("selected")
       }
     } else {
-      // first because CSS reverses order
+      // last because CSS reverses order
       $(".drop-item").last().addClass("selected")
     }
   }
@@ -189,12 +189,6 @@ $(".ctr-dashboard").ready(function() {
     } else if (!evt.metaKey) {
       $omnibar.focus()
     }
-    // evt.key == ">"
-    // Only if cell has a "livekey" command
-    // Enter cell. Add a new class for the cell that makes it "livekey"
-    // `Esc` will break out of focus mode.
-    // During Focus, all key events are sent directly to the cell.
-    // Can be used for inline editing or live key events.
   }).on("keydown", ".dashboard-omnibar input", function(evt) {
     if (autocomplete_on || $(".dash-cell.livekey").length > 0) { return }
     var raw = omniRaw()
