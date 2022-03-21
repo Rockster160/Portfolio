@@ -13,7 +13,7 @@ class ActionEventsController < ApplicationController
   end
 
   def create
-    event = ActionEvent.create(action_event_params.merge(user: current_user))
+    event = ActionEvent.create(event_params)
     ActionEventBroadcastWorker.perform_async(event.id)
 
     respond_to do |format|
@@ -42,17 +42,43 @@ class ActionEventsController < ApplicationController
       flash[:alert] = "Failed to destroy event."
     end
 
+    ActionEventBroadcastWorker.perform_async
     redirect_to action_events_path
   end
 
   private
 
-  def action_event_params
-    if params.key?(:action_event)
-      form_event_params
+  def safeparse_time(time)
+    return Time.current if time.blank?
+
+    if time.is_a?(String)
+      begin
+        return Time.parse(time)
+      rescue StandardError
+        return Time.current
+      end
     else
-      raw_event_params
+      time
     end
+  end
+
+  def event_params
+    if params.key?(:action_event)
+      prepared_params = form_event_params
+    else
+      prepared_params = raw_event_params
+    end
+
+    prepared_params.merge!(user: current_user)
+
+    prepared_params.tap { |whitelist|
+      if whitelist[:notes].to_s.match?(/^(\-|\+)\d+/)
+        offset_time = whitelist[:notes][/^(\-|\+)\d+/].to_i
+        whitelist[:notes] = whitelist[:notes].sub(/^(\-|\+)\d+ ?/, "")
+        time = safeparse_time(whitelist[:timestamp])
+        whitelist[:timestamp] = time + offset_time.minutes
+      end
+    }
   end
 
   def raw_event_params
