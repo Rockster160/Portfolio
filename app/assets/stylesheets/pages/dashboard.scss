@@ -7,6 +7,7 @@ $active-bright: #5DA6F8;
 $active: #337BCD;
 $passive: #1F4A7B;
 $grey-blue: #6481A1;
+$complimentary: #F8B05D;
 $text-color: darken($grey-blue, 20%);
 
 @mixin animate() {
@@ -127,6 +128,9 @@ $text-color: darken($grey-blue, 20%);
       &.flash {
         animation: 1s ease-out flashdashactive;
       }
+    }
+    &.livekey {
+      border-color: $complimentary;
     }
     &.hide {
       display: none;

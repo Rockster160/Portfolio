@@ -26,8 +26,19 @@ $(".ctr-dashboard").ready(function() {
     width = width || single_width
     var spaces = (width - Text.clean(text).length) / 2
     spaces = spaces < 0 ? 0 : spaces
+    var new_line = " ".repeat(spaces) + text + " ".repeat(spaces)
 
-    return " ".repeat(spaces) + text + " ".repeat(spaces)
+    return new_line + " ".repeat(width > new_line.length ? 1 : 0)
+  }
+  Text.overlay = function(top_text, bottom_text) {
+    var length = [top_text.length, bottom_text.length].sort()[1]
+    var new_text_arr = []
+    var top_chars = top_text.padEnd(length, " ").split(""), bot_chars = bottom_text.padEnd(length, " ").split("")
+    for (var i = 0; i < length; i++) {
+      var top_char = top_chars[i]
+      new_text_arr.push(top_char == " " ? bot_chars[i] : top_char)
+    }
+    return new_text_arr.join("")
   }
   Text.justify = function(...args) {
     var width = single_width

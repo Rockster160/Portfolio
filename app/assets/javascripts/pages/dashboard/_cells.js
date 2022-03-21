@@ -19,6 +19,10 @@ $(".ctr-dashboard").ready(function() {
     cell.init_data = init_data
     cell.data = init_data.data || {}
     cell.commands = init_data.commands || {}
+    cell.onload = init_data.onload || undefined
+    cell.onblur = init_data.onblur || undefined
+    cell.onfocus = init_data.onfocus || undefined
+    cell.livekey = init_data.livekey || undefined
     cell.autocomplete_options = init_data.autocomplete_options || cell.command_list
     cell.interval = init_data.interval
     if (init_data.socket) {
@@ -30,6 +34,7 @@ $(".ctr-dashboard").ready(function() {
 
     $(".dashboard").append(dash_cell)
     cells.push(cell)
+    if (cell.onload && typeof(cell.onload) === "function") { cell.onload() }
     return cell
   }
   Cell.prototype.title = function(new_title) {
@@ -201,6 +206,17 @@ $(".ctr-dashboard").ready(function() {
     prev = prev.replace(/\:(\w|\-)+ ?/i, "")
     omnibar.val(":" + this.name + " " + prev)
   }
+  Cell.active = function() {
+    return Cell.from_ele($(".dash-cell.active"))
+  }
+  Cell.getLivekey = function() {
+    return Cell.from_ele($(".dash-cell.livekey"))
+  }
+  Cell.blur = function() {
+    var cell = Cell.getLivekey()
+    if (cell && cell.onblur && typeof(cell.onblur) === "function") { cell.onblur() }
+    $(".dash-cell").removeClass("livekey")
+  }
   Cell.inactive = function() {
     $(".dash-cell").removeClass("active")
   }
@@ -216,6 +232,18 @@ $(".ctr-dashboard").ready(function() {
     return cells.find(function(cell) {
       return cell.ele.get(0) == $ele.get(0)
     })
+  }
+  Cell.startLivekey = function() {
+    $(".dash-cell.active").addClass("livekey")
+    var cell = Cell.getLivekey()
+    if (cell && cell.onfocus && typeof(cell.onfocus) === "function") { cell.onfocus() }
+  }
+  Cell.sendLivekey = function(evt_key) {
+    var cell = Cell.getLivekey()
+
+    if (cell && cell.livekey && typeof(cell.livekey) === "function") {
+      cell.livekey(evt_key)
+    }
   }
 
   CellWS = function(cell, init_data) {

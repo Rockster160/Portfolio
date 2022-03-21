@@ -143,6 +143,17 @@ $(".ctr-dashboard").ready(function() {
       resetDropup()
     }
   }).on("keydown", function(evt) {
+    if (evt.key == "Escape") {
+      Cell.blur()
+      autocomplete_on = false
+    }
+
+    if (!evt.metaKey && $(".dash-cell.livekey").length > 0) {
+      evt.preventDefault()
+      evt.stopPropagation()
+      return Cell.sendLivekey(evt.key)
+    }
+
     $omnibar.focus()
     if (evt.key == "Tab") {
       evt.preventDefault()
@@ -153,12 +164,15 @@ $(".ctr-dashboard").ready(function() {
         resetDropup()
       }
       return
+    } else if (evt.key == ">") {
+      evt.preventDefault()
+      evt.stopPropagation()
+
+      Cell.startLivekey()
     }
 
     if (!autocomplete_on) { return }
-    if (evt.key == "Escape") {
-      autocomplete_on = false
-    } else if (evt.key == "ArrowUp") {
+    if (evt.key == "ArrowUp") {
       evt.preventDefault()
       evt.stopPropagation()
 
@@ -176,13 +190,13 @@ $(".ctr-dashboard").ready(function() {
       $omnibar.focus()
     }
     // evt.key == ">"
-    // Only if cell has a "focused" command
-    // Enter cell. Add a new class for the cell that makes it "focused"
+    // Only if cell has a "livekey" command
+    // Enter cell. Add a new class for the cell that makes it "livekey"
     // `Esc` will break out of focus mode.
     // During Focus, all key events are sent directly to the cell.
     // Can be used for inline editing or live key events.
   }).on("keydown", ".dashboard-omnibar input", function(evt) {
-    if (autocomplete_on) { return }
+    if (autocomplete_on || $(".dash-cell.livekey").length > 0) { return }
     var raw = omniRaw()
     var selector = omniSelector()
     var cmd = omniVal()
