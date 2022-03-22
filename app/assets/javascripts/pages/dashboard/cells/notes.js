@@ -1,6 +1,4 @@
-$(".ctr-dashboard").ready(function() {
-  if (demo) { return }
-
+(function() {
   Cell.register({
     title: "Notes",
     w: 2,
@@ -32,4 +30,4 @@ $(".ctr-dashboard").ready(function() {
       cell.text(note)
     }
   })
-})
+})()

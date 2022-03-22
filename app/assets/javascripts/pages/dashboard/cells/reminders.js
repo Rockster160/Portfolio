@@ -1,6 +1,4 @@
-$(".ctr-dashboard").ready(function() {
-  if (demo) { return }
-
+(function() {
   local_reminders_cell = Cell.register({
     title: "Reminders",
     text: "Loading...",
@@ -18,4 +16,4 @@ $(".ctr-dashboard").ready(function() {
       local_data_timer = setTimeout(function() { App.localData.request() }, 50)
     }
   })
-})
+})()

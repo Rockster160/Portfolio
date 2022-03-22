@@ -1,6 +1,4 @@
-$(".ctr-dashboard").ready(function() {
-  if (demo) { return }
-
+(function() {
   var renderEvents = function(cell, events) {
     cell.lines(events.map(function(item) {
       if (cell.data.quiet && item.event_name.length == 1) { return }
@@ -17,8 +15,6 @@ $(".ctr-dashboard").ready(function() {
   Cell.register({
     title: "Recent",
     text: "Loading...",
-    x: 2,
-    y: 1,
     commands: {
       quiet: function() {
         this.data.quiet = !this.data.quiet
@@ -49,4 +45,4 @@ $(".ctr-dashboard").ready(function() {
       }
     },
   })
-})
+})()

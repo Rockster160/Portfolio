@@ -1,5 +1,4 @@
-$(".ctr-dashboard").ready(function() {
-  var game_speed = 100
+(function() {
   // Need a better way to get width of a cell
   var cell_width = 32/2, cell_height = 9 // Width /2 so that icons can be square
   var directions = [
@@ -120,6 +119,9 @@ $(".ctr-dashboard").ready(function() {
     x: 4,
     y: 1,
     title: "Snake",
+    config: {
+      game_speed: 100,
+    },
     data: {
       gameover: false,
       paused: false,
@@ -134,7 +136,7 @@ $(".ctr-dashboard").ready(function() {
     commands: {
       pause: function() {
         this.data.paused = !this.data.paused
-        this.interval = this.data.paused ? null : game_speed
+        this.refreshInterval = this.data.paused ? null : this.config.game_speed
         this.reload()
       },
       reset: function() {
@@ -146,7 +148,7 @@ $(".ctr-dashboard").ready(function() {
         this.data.full = 1
         this.data.score = 0
         this.data.apple = null
-        this.interval = game_speed
+        this.refreshInterval = this.config.game_speed
         this.reload()
       }
     },
@@ -159,7 +161,7 @@ $(".ctr-dashboard").ready(function() {
         return cell.line(3, bg)
       }
       if (cell.data.gameover) {
-        cell.interval = null
+        cell.refreshInterval = null
         var lose = Text.center("You Lose!")
         var color = Text.color(dash_colors.red, lose)
         var bg = Text.bgColor(dash_colors.grey, color)
@@ -200,12 +202,12 @@ $(".ctr-dashboard").ready(function() {
     },
     onfocus: function() {
       this.data.running = true
-      this.interval = game_speed
+      this.refreshInterval = this.config.game_speed
       this.reload()
     },
     onblur: function() {
       this.data.running = false
-      this.interval = null
+      this.refreshInterval = null
     },
     livekey: function(evt_key) {
       evt_key = evt_key.toLowerCase()
@@ -224,4 +226,4 @@ $(".ctr-dashboard").ready(function() {
       }
     }
   })
-})
+})()

@@ -1,6 +1,4 @@
-$(".ctr-dashboard").ready(function() {
-  if (demo) { return }
-
+(function() {
   local_calendar_cell = Cell.register({
     title: "Calendar",
     text: "Loading...",
@@ -19,4 +17,4 @@ $(".ctr-dashboard").ready(function() {
       local_data_timer = setTimeout(function() { App.localData.request() }, 50)
     }
   })
-})
+})()

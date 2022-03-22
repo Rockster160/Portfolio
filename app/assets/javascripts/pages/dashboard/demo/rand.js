@@ -1,4 +1,4 @@
-$(".ctr-dashboard").ready(function() {
+(function() {
   var render = function(cell) {
     var lines = []
     lines.push(cell.line(0))
@@ -98,4 +98,4 @@ $(".ctr-dashboard").ready(function() {
       render(this)
     }
   })
-})
+})()

@@ -1,8 +1,6 @@
-$(".ctr-dashboard").ready(function() {
-  if (demo) { return }
-
+(function() {
   var uptimeData = function(cell) {
-    var api_key = authdata.uptime
+    var api_key = cell.config.uptime_apikey
     var url = "https://api.uptimerobot.com/v2/getMonitors"
     $.post(url, { api_key: api_key, custom_uptime_ratios: "7-30" }, function(data) {
       cell.data.uptime_lines = data.monitors.map(function(monitor) {
@@ -38,7 +36,7 @@ $(".ctr-dashboard").ready(function() {
   var rigData = function(cell) {
     fetch(cell.data.base_url + "/farms", {
       method: "GET",
-      headers: { "Authorization": "Bearer " + cell.data.api_token }
+      headers: { "Authorization": "Bearer " + cell.config.hiveos_apikey }
     }).then(function(res) {
       res.json().then(function(json) {
         if (res.ok) {
@@ -78,13 +76,12 @@ $(".ctr-dashboard").ready(function() {
       rig_lines: [],
 
       base_url: "https://api2.hiveos.farm/api/v2",
-      api_token: authdata.hiveos,
     },
-    interval: Time.minutes(10),
+    refreshInterval: Time.minutes(10),
     reloader: function() {
       var cell = this
       uptimeData(cell)
       rigData(cell)
     },
   })
-})
+})()

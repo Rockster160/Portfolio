@@ -14,7 +14,7 @@ var dash_colors = {
 //   title: "",
 //   text: "",
 //   commands: {},
-//   interval: Time.minute(),
+//   refreshInterval: Time.minute(),
 //   reloader: function(cell) {},
 //   command: function(text, cell) {},
 //   socket: {

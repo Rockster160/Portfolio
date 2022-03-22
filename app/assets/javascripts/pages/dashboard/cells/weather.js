@@ -1,6 +1,4 @@
-$(".ctr-dashboard").ready(function() {
-  if (demo) { return }
-
+(function() {
   var getWeatherEmoji = function(code, isNight) {
     if (code >= 200 && code < 300 || code == 960 || code == 961) {
       return Emoji.cloud_with_lightning_and_rain
@@ -41,14 +39,12 @@ $(".ctr-dashboard").ready(function() {
   Cell.register({
     title: "Weather",
     text: "Loading...",
-    x: 3,
-    y: 1,
-    interval: Time.msUntilNextHour() + Time.seconds(5),
+    refreshInterval: Time.msUntilNextHour() + Time.seconds(5),
     reloader: function() {
       var cell = this
-      cell.interval = Time.msUntilNextHour() + Time.seconds(5)
+      cell.refreshInterval = Time.msUntilNextHour() + Time.seconds(5)
 
-      var url = "https://api.openweathermap.org/data/2.5/onecall?lat=40.480476443141924&lon=-111.99818607287183&units=imperial&exclude=minutely,alerts&lang=en&appid=" + authdata.weather
+      var url = "https://api.openweathermap.org/data/2.5/onecall?lat=40.480476443141924&lon=-111.99818607287183&units=imperial&exclude=minutely,alerts&lang=en&appid=" + cell.config.apikey
       $.getJSON(url).done(function(json) {
         var current = json.current
         var currentTime = new Date().getTime() / 1000;
@@ -105,4 +101,4 @@ $(".ctr-dashboard").ready(function() {
       })
     },
   })
-})
+})()

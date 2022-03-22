@@ -1,19 +1,15 @@
-$(".ctr-dashboard").ready(function() {
-  if (demo) { return }
-
+(function() {
   Cell.register({
     title: "Fitness",
     text: "Loading...",
-    x: 1,
-    y: 1,
     socket: Server.socket("FitnessChannel", function(msg) {
       var lines = msg.fitness_data.split("\n")
       lines[0] = Text.center(lines[0])
       this.text(lines.join("\n"))
     }),
-    interval: Time.msUntilNextDay() + Time.seconds(5),
+    refreshInterval: Time.msUntilNextDay() + Time.seconds(5),
     reloader: function() {
-      this.interval = Time.msUntilNextDay() + Time.seconds(5)
+      this.refreshInterval = Time.msUntilNextDay() + Time.seconds(5)
 
       this.ws.send({ action: "request" })
     },
@@ -28,4 +24,4 @@ $(".ctr-dashboard").ready(function() {
       }
     },
   })
-})
+})()

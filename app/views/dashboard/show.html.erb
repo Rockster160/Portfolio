@@ -1,15 +1,9 @@
-<%= content_for(:head) do %>
-  <%= javascript_include_tag 'pages/random/dnd.js' %>
+<%= content_for(:head_before_scripts) do %>
   <script src="https://combinatronics.com/sweaver2112/Regex-combined-emojis/master/regex.js"></script>
+<% end %>
+<%= content_for(:head) do %>
+  <%= javascript_include_tag "pages/random/dnd.js" %>
   <script src="/emoji.js"></script> <!-- Only needed because Rails minifier screws up raw emoji in JS -->
-  <script type="text/javascript">
-    authdata = {
-      uptime: "<%= ENV.fetch("UPTIME_APIKEY") %>",
-      weather: "<%= ENV.fetch("WEATHER_APIKEY") %>",
-      printer: "<%= ENV.fetch("PRINTER_APIKEY") %>",
-      hiveos: "<%= ENV.fetch("HIVEOS_APIKEY") %>",
-    }
-  </script>
 <% end %>
 
 <div class="dashboard"></div>
@@ -20,10 +14,60 @@
 
 <%= content_for(:after_js) do %>
 <script type="text/javascript">
-  $(".dashboard").ready(function() {
-    Object.keys(registered_cells).forEach(function(cell_name) {
-      Cell.init(cell_name)
-    })
+  $(document).ready(function() {
+    <% if Rails.env.development? %>
+      Cell.init(Cell.register({}), { x: 3, y: 1 }).title("Weather")
+      Cell.init(Cell.register({}), { x: 3, y: 2 }).title("Uptime")
+      Cell.loadConfig({
+        fitness: { x: 1, y: 1 },
+        recent: { x: 2, y: 1 },
+        snake: { x: 4, y: 1 },
+        notes: { x: 1, y: 2, w: 2 },
+        printer: {
+          apikey: "<%= ENV.fetch("PRINTER_APIKEY") %>",
+          x: 4,
+          y: 2,
+        },
+        calendar: { x: 1, y: 3, h: 3 },
+        reminders: { x: 2, y: 3 },
+        random: { x: 3, y: 3 },
+        rock_paper_scissors: { x: 4, y: 3 },
+        todo: { x: 3, y: 4 },
+        grocery: { x: 4, y: 4 },
+      })
+    <% else %>
+      Cell.loadConfig({
+        fitness: { x: 1, y: 1 },
+        recent: { x: 2, y: 1 },
+        weather: {
+          apikey: "<%= ENV.fetch("WEATHER_APIKEY") %>",
+          x: 3,
+          y: 1,
+        },
+        snake: { x: 4, y: 1 },
+
+        notes: { x: 1, y: 2, w: 2 },
+        uptime: {
+          uptime_apikey: "<%= ENV.fetch("UPTIME_APIKEY") %>",
+          hiveos_apikey: "<%= ENV.fetch("HIVEOS_APIKEY") %>",
+          x: 3,
+          y: 2,
+        },
+        printer: {
+          apikey: "<%= ENV.fetch("PRINTER_APIKEY") %>",
+          x: 4,
+          y: 2,
+        },
+
+        calendar: { x: 1, y: 3, h: 3 },
+        reminders: { x: 2, y: 3 },
+        random: { x: 3, y: 3 },
+        rock_paper_scissors: { x: 4, y: 3 },
+
+        todo: { x: 3, y: 4 },
+        grocery: { x: 4, y: 4 },
+      })
+    <% end %>
   })
 </script>
 <% end %>

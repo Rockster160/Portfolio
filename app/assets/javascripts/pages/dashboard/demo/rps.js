@@ -1,4 +1,4 @@
-$(".ctr-dashboard").ready(function() {
+(function() {
   var render = function(cell) {
     var lines = []
     lines.push(Text.justify("  You", "CPU  "))
@@ -82,4 +82,4 @@ $(".ctr-dashboard").ready(function() {
       render(cell)
     }
   })
-})
+})()

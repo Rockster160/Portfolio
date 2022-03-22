@@ -1,6 +1,4 @@
-$(".ctr-dashboard").ready(function() {
-  if (demo) { return }
-
+(function() {
   Cell.register({
     title: "Grocery",
     text: "Loading...",
@@ -39,4 +37,4 @@ $(".ctr-dashboard").ready(function() {
         })
     },
   })
-})
+})()

@@ -1,6 +1,4 @@
-$(".ctr-dashboard").ready(function() {
-  if (demo) { return }
-
+(function() {
   Printer = function() {}
   Printer.request = function(cell, url, type, data) {
     var url = url
@@ -10,7 +8,7 @@ $(".ctr-dashboard").ready(function() {
       data: JSON.stringify(data || {}),
       type: type || "GET",
       headers: {
-        "X-Api-Key": authdata.printer,
+        "X-Api-Key": cell.config.apikey,
         "Content-Type": "application/json"
       }
     }).fail(function(err_data) {
@@ -147,7 +145,7 @@ $(".ctr-dashboard").ready(function() {
       })
     },
   })
-})
+})()
 
 // {
 //   "job": {

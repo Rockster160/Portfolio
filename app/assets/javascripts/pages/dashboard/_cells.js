@@ -7,40 +7,55 @@ Cell.register = function(init_data) {
   dash_cell.append($("<div>", { class: "dash-content" }))
   cell.ele = dash_cell
 
-  cell.name = (init_data.name || init_data.title).replace(/^\s*|\s*$/ig, "").replace(/\s+/ig, "-").replace(/[^a-z\-]/ig, "").toLowerCase()
+  cell.name = String(init_data.name || init_data.title).replace(/^\s*|\s*$/ig, "").replace(/\s+/ig, "-").replace(/[^a-z\-]/ig, "").toLowerCase()
   cell.title(init_data.title || "")
   cell.text(init_data.text || "")
   cell.should_flash = init_data.flash == false ? false : true
-  cell.x = init_data.x
-  cell.y = init_data.y
-  cell.w = init_data.w
-  cell.h = init_data.h
   cell.init_data = init_data
   cell.data = init_data.data || {}
+  cell.config = init_data.config || {}
   cell.commands = init_data.commands || {}
   cell.onload = init_data.onload || undefined
   cell.onblur = init_data.onblur || undefined
   cell.onfocus = init_data.onfocus || undefined
   cell.livekey = init_data.livekey || undefined
   cell.autocomplete_options = init_data.autocomplete_options || cell.command_list
-  cell.interval = init_data.interval
-  if (init_data.socket) {
-    cell.ws = new CellWS(cell, init_data.socket)
-  }
-  cell.command(init_data.command)
-  cell.reloader(init_data.reloader, cell.interval)
-  cell.setGridArea()
+  cell.refreshInterval = init_data.refreshInterval
 
-  registered_cells[cell.name] = cell
+  var cell_key = cell.name.replace(/-/g, "_")
+  registered_cells[cell_key] = cell
   return cell
 }
-Cell.init = function(name) {
-  var cell = registered_cells[name]
-  if (!cell) { return }
+Cell.initByName = function(name, config) {
+  var cell_key = name.replace(/^\s*|\s*$/ig, "").replace(/\s+/ig, "_").replace(/[^a-z_]/ig, "").toLowerCase()
+  var cell = registered_cells[cell_key]
+  delete registered_cells[cell_key]
+  if (!cell) {
+    return console.error("Cannot find cell registered with name: ", cell_key);
+  }
 
-  $(".dashboard").append(cell.ele)
+  return Cell.init(cell, config)
+}
+Cell.init = function(cell, config) {
+  cell.config = { ...cell.config, ...config }
+  cell.setGridArea()
+  if (cell.init_data.socket) {
+    cell.ws = new CellWS(cell, cell.init_data.socket)
+  }
+
   cells.push(cell)
+  $(".dashboard").append(cell.ele)
+
   if (cell.onload && typeof(cell.onload) === "function") { cell.onload() }
+  cell.command(cell.init_data.command)
+  cell.refreshInterval = cell.config.refreshInterval || cell.refreshInterval
+  cell.reloader(cell.init_data.reloader, cell.refreshInterval)
+  return cell
+}
+Cell.loadConfig = function(all_config) {
+  for (var [name, config] of Object.entries(all_config)) {
+    Cell.initByName(name, config)
+  }
 }
 Cell.prototype.title = function(new_title) {
   if (new_title == undefined) {
@@ -89,10 +104,10 @@ Cell.prototype.data = function(new_data) {
 }
 Cell.prototype.setGridArea = function() {
   var area = {
-    rowStart: this.y || "auto",
-    colStart: this.x || "auto",
-    rowEnd: this.h ? "span " + this.h : "auto",
-    colEnd: this.w ? "span " + this.w : "auto",
+    rowStart: this.config.y || "auto",
+    colStart: this.config.x || "auto",
+    rowEnd: this.config.h ? "span " + this.config.h : "auto",
+    colEnd: this.config.w ? "span " + this.config.w : "auto",
   }
 
   var pieces = [area.rowStart, area.colStart, area.rowEnd, area.colEnd]
@@ -113,12 +128,12 @@ Cell.prototype.resetTimer = function(new_interval) {
   var cell = this
   clearTimeout(cell.timer)
   cell.timer = undefined
-  cell.interval = new_interval
+  cell.refreshInterval = new_interval
 
   if (new_interval != undefined) {
     cell.timer = setTimeout(function() {
       cell.reload()
-    }, cell.interval)
+    }, cell.refreshInterval)
   }
 }
 Cell.prototype.reload = function() {
@@ -127,13 +142,13 @@ Cell.prototype.reload = function() {
     cell.my_reloader()
   }
 
-  cell.resetTimer(cell.interval)
+  cell.resetTimer(cell.refreshInterval)
 
   if (cell.should_flash) { cell.flash() }
 
   return cell
 }
-Cell.prototype.reloader = function(callback, interval) {
+Cell.prototype.reloader = function(callback, refreshInterval) {
   var cell = this
 
   clearTimeout(cell.timer)
