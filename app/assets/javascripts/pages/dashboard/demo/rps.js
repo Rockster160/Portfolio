@@ -12,8 +12,6 @@
   }
 
   Cell.register({
-    x: 4,
-    y: 3,
     title: "Rock-Paper-Scissors",
     reloader: function() {
       var cell = this

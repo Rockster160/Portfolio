@@ -28,8 +28,6 @@
   }
 
   Cell.register({
-    x: 3,
-    y: 3,
     title: "Random",
     text: Text.color(dash_colors.yellow, ".8ball .die .coin .draw .shuffle"),
     commands: {

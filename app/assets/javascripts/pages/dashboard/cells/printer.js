@@ -41,8 +41,6 @@
   var printer = Cell.register({
     title: "Printer",
     text: "Loading...",
-    x: 4,
-    y: 2,
     socket: Server.socket("PrinterCallbackChannel", function(msg) {
       console.log("Printer Callback", msg);
       this.reload()

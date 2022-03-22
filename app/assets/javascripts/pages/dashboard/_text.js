@@ -1,4 +1,5 @@
 var single_width = 32
+var emojiPattern
 
 Text = function() {}
 Text.new = function(data) {

@@ -69,8 +69,6 @@
   Cell.register({
     title: "Uptime",
     text: "Loading...",
-    x: 3,
-    y: 2,
     data: {
       uptime_lines: [],
       rig_lines: [],

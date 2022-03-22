@@ -2,8 +2,6 @@
   Cell.register({
     title: "TODO",
     text: "Loading...",
-    x: 3,
-    y: 4,
     socket: Server.socket({
       channel: "ListChannel",
       channel_id: "list_5",

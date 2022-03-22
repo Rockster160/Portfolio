@@ -116,8 +116,6 @@
   }
 
   cell = Cell.register({
-    x: 4,
-    y: 1,
     title: "Snake",
     config: {
       game_speed: 100,

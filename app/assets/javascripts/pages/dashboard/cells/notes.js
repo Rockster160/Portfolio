@@ -1,9 +1,6 @@
 (function() {
   Cell.register({
     title: "Notes",
-    w: 2,
-    x: 1,
-    y: 2,
     reloader: function() {
       this.text(localStorage.getItem("notes"))
     },
