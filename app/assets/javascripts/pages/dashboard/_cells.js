@@ -37,7 +37,7 @@ Cell.initByName = function(name, config) {
   return Cell.init(cell, config)
 }
 Cell.init = function(cell, config) {
-  cell.config = { ...cell.config, ...config }
+  cell.config = Object.assign(cell.config, config)
   cell.setGridArea()
   if (cell.init_data.socket) {
     cell.ws = new CellWS(cell, cell.init_data.socket)
