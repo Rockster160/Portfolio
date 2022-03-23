@@ -2,7 +2,7 @@
   <tr class="line-bot">
     <td>Name</td>
     <td>Ave</td>
-    <% if league.handicap_calculation.present? %>
+    <% if league.uses_handicap? %>
       <td>HDCP</td>
     <% end %>
     <td>Gms</td>
@@ -17,7 +17,7 @@
     <tr class="league-bowler">
       <td><%= bowler.name %></td>
       <td class="text-right"><%= bowler.average || "-" %></td>
-      <% if league.handicap_calculation.present? %>
+      <% if league.uses_handicap? %>
         <td class="text-right"><%= bowler.handicap || "-" %></td>
       <% end %>
       <td class="text-right"><%= number_with_delimiter(bowler.total_games) || "-" %></td>

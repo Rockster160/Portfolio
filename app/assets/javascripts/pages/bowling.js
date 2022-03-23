@@ -1,3 +1,26 @@
+$(".ctr-bowling_leagues.act-tms").ready(function() {
+  var calcAvgChange = function(bowler, new_val) {
+    new_val = parseInt(new_val)
+    if (isNaN(new_val)) { return "" }
+    var games = parseInt(bowler.attr("data-gms"))
+    var pins = parseInt(bowler.attr("data-pins"))
+    var series = parseInt(bowler.attr("data-gms-per-series"))
+    var old_avg = pins / games
+    if (new_val < old_avg * 2) { new_val = new_val * 3 }
+
+    var new_pins = pins + new_val
+    var new_games = games + series
+
+    return Math.floor(new_pins / new_games)
+  }
+
+  $(".quick-avg-check").keyup(function() {
+    var bowler = $(this).parents(".league-bowler")
+    var newAvg = calcAvgChange(bowler, $(this).val())
+
+    bowler.children(".quick-avg-out").text(newAvg)
+  })
+})
 $(".ctr-bowling_leagues.act-edit, .ctr-bowling_leagues.act-new").ready(function() {
   $(".league-roster").sortable({
     handle: ".bowler-handle",

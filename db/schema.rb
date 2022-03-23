@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20220209234526) do
+ActiveRecord::Schema.define(version: 20220323002558) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -124,12 +124,13 @@ ActiveRecord::Schema.define(version: 20220209234526) do
     t.integer  "user_id"
     t.text     "name"
     t.text     "team_name"
-    t.text     "handicap_calculation", default: "(210 - AVG) * 0.95"
-    t.integer  "games_per_series",     default: 3
-    t.datetime "created_at",                                          null: false
-    t.datetime "updated_at",                                          null: false
-    t.text     "absent_calculation",   default: "AVG - 10"
-    t.integer  "team_size",            default: 4
+    t.integer  "games_per_series",   default: 3
+    t.datetime "created_at",                              null: false
+    t.datetime "updated_at",                              null: false
+    t.text     "absent_calculation", default: "AVG - 10"
+    t.integer  "team_size",          default: 4
+    t.integer  "hdcp_base",          default: 210
+    t.float    "hdcp_factor",        default: 0.95
     t.index ["user_id"], name: "index_bowling_leagues_on_user_id", using: :btree
   end
 

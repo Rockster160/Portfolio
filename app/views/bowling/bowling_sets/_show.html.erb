@@ -5,7 +5,7 @@
 <table class="bowling-set-summary">
   <tr>
     <td>Name</td>
-    <% if set.league.handicap_calculation.present? %>
+    <% if set.league.uses_handicap? %>
       <td>HDCP</td>
     <% end %>
     <% set.league.games_per_series.times do |t| %>
@@ -25,7 +25,7 @@
     <% bowler_set = set.bowler_sets.find_by(bowler: bowler) %>
     <tr>
       <td><%= bowler.name %></td>
-      <% if set.league.handicap_calculation.present? %>
+      <% if set.league.uses_handicap? %>
         <td class="text-right"><%= bowler_set&.handicap %></td>
       <% end %>
       <% set.league.games_per_series.times do |t| %>
@@ -46,7 +46,7 @@
 
   <tr>
     <td></td>
-    <% if set.league.handicap_calculation.present? %>
+    <% if set.league.uses_handicap? %>
       <td></td>
     <% end %>
     <% set.league.games_per_series.times do |t| %>

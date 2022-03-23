@@ -86,7 +86,8 @@ module Bowling
       params.require(:bowling_league).permit(
         :name,
         :team_name,
-        :handicap_calculation,
+        :hdcp_base,
+        :hdcp_factor,
         :absent_calculation,
         :games_per_series,
         :team_size,

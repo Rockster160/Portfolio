@@ -100,7 +100,7 @@ module BowlingStats
     set_game_frames.each_with_object({}) do |(set_id, game_num, frame_num), obj|
       blamed_bowler_id = BowlingFrame.joins(:game).where(
         bowling_frames: { frame_num: frame_num },
-        bowling_games: { set_id: set_id, game_num: game_num }
+        bowling_games: { set_id: set_id, game_num: game_num, absent: [nil, false] }
       ).where.not(throw1: 10).take&.game&.bowler_id
       next if blamed_bowler_id.nil?
 
