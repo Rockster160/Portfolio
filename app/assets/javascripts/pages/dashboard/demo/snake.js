@@ -168,6 +168,17 @@
         var replay = Text.center("Click 'r' to restart")
         cell.line(4, Text.bgColor(dash_colors.grey, replay))
 
+        var old_high = parseInt(localStorage.getItem("snake_high") || 0)
+        if (cell.data.score > old_high) {
+          var high = Text.center("New High Score! Old score: " + old_high)
+          cell.line(1, Text.bgColor(dash_colors.grey, high))
+
+          localStorage.setItem("snake_high", cell.data.score)
+        } else {
+          var high = Text.center("High Score: " + old_high)
+          cell.line(1, Text.bgColor(dash_colors.grey, high))
+        }
+
         return
       }
       if (!cell.data.running) {

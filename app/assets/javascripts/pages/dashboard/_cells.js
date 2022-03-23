@@ -15,6 +15,7 @@ Cell.register = function(init_data) {
   cell.data = init_data.data || {}
   cell.config = init_data.config || {}
   cell.commands = init_data.commands || {}
+  cell.onlook = init_data.onlook || undefined
   cell.onload = init_data.onload || undefined
   cell.onblur = init_data.onblur || undefined
   cell.onfocus = init_data.onfocus || undefined
@@ -219,6 +220,7 @@ Cell.prototype.show = function() {
 Cell.prototype.active = function(reset_omnibar) {
   $(".dash-cell").removeClass("active")
   this.ele.addClass("active")
+  if (this && this.onlook && typeof(this.onlook) === "function") { this.onlook() }
   if (!reset_omnibar) { return }
 
   var omnibar = $(".dashboard-omnibar input")
