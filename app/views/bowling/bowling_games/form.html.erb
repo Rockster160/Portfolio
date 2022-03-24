@@ -1,5 +1,5 @@
 <%= content_for(:title) do %>
-  <%= Time.current.to_formatted_s(:short_month_day) %> - <%= @league.name %>
+  <%= (@set.created_at || Time.current).in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:short_month_day) %> - <%= @league.name %>
 <% end %>
 
 <% game_num = (params[:game].presence || 1).to_i %>

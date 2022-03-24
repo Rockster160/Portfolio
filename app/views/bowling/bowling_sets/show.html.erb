@@ -1,5 +1,5 @@
 <%= content_for(:title) do %>
-  Summary of <%= Time.current.to_formatted_s(:short_month_day) %> - <%= @set.league.name %>
+  Summary of <%= (@set.created_at || Time.current).in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:short_month_day) %> - <%= @set.league.name %>
 <% end %>
 
 <%= link_to "← League", bowling_league_path(@set.league), class: :btn %>

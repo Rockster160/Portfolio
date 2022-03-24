@@ -1,4 +1,4 @@
-<h3><%= set.created_at.to_formatted_s(:month_day) %></h3>
+<h3><%= set.created_at.in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:month_day) %></h3>
 <% if show_links ||= false %>
   <%= link_to "View Series", bowling_set_path(set) %> <br>
 <% end %>
