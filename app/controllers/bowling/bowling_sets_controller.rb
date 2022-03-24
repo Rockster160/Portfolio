@@ -5,7 +5,7 @@ module Bowling
 
     def show
       @league = @set.league
-      @stats = BowlingStatsCalculator.set(@set)
+      @stats = BowlingStatsCalculator.call(@league, @set)
     end
 
     def create
