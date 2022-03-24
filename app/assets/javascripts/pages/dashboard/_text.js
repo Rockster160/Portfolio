@@ -92,6 +92,11 @@ Text.bgColor = function(color, text) {
 
   return "[bg " + color + "]" + text + "[/bg]"
 }
+Text.img = function(url) {
+  if (!url || url.length < 1) { return url }
+
+  return "[img " + url + "]"
+}
 Text.animate = function(text) {
   if (!text || text.length <= 1) { return text }
 
@@ -192,6 +197,8 @@ Text.markup = function(text) {
   text = text.replaceAll(/\[bg (.*?)\](.*?)\[\/bg\]/gi, "<span style=\"background-color: $1;\">$2</span>")
   text = text.replaceAll(/\[color (.*?)\](.*?)\[\/color\]/gi, "<span style=\"color: $1;\">$2</span>")
   text = text.replaceAll(/\[ani \"(.*?)\"\]/gi, "<textanimate steps=\"$1\"> </textanimate>")
+  text = text.replaceAll(/\[img (.*?)\]/gi, "<span class=\"dashboard-img-wrapper\"><img src=\"$1\"\/></span>")
+  text = text.split("\n").map(function(line) { return "<div class=\"line\">" + (line || " ") + "</div>" }).join("")
 
   return text
 }

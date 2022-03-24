@@ -17,7 +17,7 @@
   $(document).ready(function() {
     <% if Rails.env.development? %>
       Cell.register({ title: "Weather" }) // Overwrite to save API calls
-      Cell.register({ title: "Uptime" }) // // Overwrite to save API calls
+      Cell.register({ title: "Uptime" }) // Overwrite to save API calls
     <% end %>
     Cell.loadConfig({
       fitness: { x: 1, y: 1 },

@@ -155,22 +155,34 @@ $text-color: darken($grey-blue, 20%);
       line-height: $dash-font-height;
       white-space: pre-wrap;
 
-      * {
-        display: inline-block;
+      .line {
+        position: relative;
         line-height: $dash-font-height;
+        white-space: pre-wrap;
+        padding: 0;
+        margin: 0;
       }
-      span {
-        display: inline;
+
+      .dashboard-img-wrapper img {
+        position: absolute;
+        margin: auto;
+        top: 0; left: 0; right: 0; bottom: 0;
+        max-width: 100%;
+        max-height: 100%;
+        overflow: hidden;
       }
-      e, es {
+      e, es, .dashboard-img-wrapper {
+        position: relative;
         display: inline-block;
         width: $dash-font-width;
         height: $dash-font-height;
-        line-height: $dash-font-height;
+        padding: 0;
+        margin: 0;
+        vertical-align: middle;
       }
-      e {
-        width: $dash-font-width*2;
-        font-family: emoji; // Double width
+      e, .dashboard-img-wrapper {
+        width: $dash-font-width*2; // Double character width
+        font-family: emoji;
         // font-size: $dash-font-height*0.75;
       }
     }
