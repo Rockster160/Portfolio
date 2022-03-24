@@ -1,4 +1,4 @@
-module BowlingStats
+module BowlingExporter
   module_function
 
   def export(league)

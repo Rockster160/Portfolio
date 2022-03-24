@@ -3,6 +3,11 @@ module Bowling
     skip_before_action :verify_authenticity_token
     before_action :authorize_user, :set_set
 
+    def show
+      @league = @set.league
+      @stats = BowlingStatsCalculator.set(@set)
+    end
+
     def create
       @league = find_or_create_league
       @set.league_id ||= @league.id
