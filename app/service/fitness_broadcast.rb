@@ -5,11 +5,12 @@ class FitnessBroadcast
     broadcast_events = [
       :Pullups,
       :Workout,
-      :Soda,
-      :Teeth,
-      :Shower,
       :Vitamins,
       :Water,
+      :Teeth,
+      :Shower,
+      :Soda,
+      :Wordle,
     ]
 
     return unless event.event_name.to_sym.in?(broadcast_events)
