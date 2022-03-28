@@ -218,6 +218,7 @@ Cell.prototype.show = function() {
   cell.ele.removeClass("hide")
 }
 Cell.prototype.active = function(reset_omnibar) {
+  if (!$(this.ele).hasClass("livekey")) { Cell.blur() }
   $(".dash-cell").removeClass("active")
   this.ele.addClass("active")
   if (this && this.onlook && typeof(this.onlook) === "function") { this.onlook() }
