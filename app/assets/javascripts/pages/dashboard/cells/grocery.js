@@ -21,12 +21,14 @@
       })
     },
     command: function(text) {
-      var cell = this
       if (/^-\d+$/.test(text)) {
         var num = parseInt(text.match(/\d+/)[0])
-        var lines = cell.text().split("\n")
+        var lines = this.text().split("\n")
         var item = lines[num-1]
         text = "remove " + item.replace(/^\d+\. /, "")
+      }
+      if (!/^[-|+|add|remove]/gi.test(text)) {
+        text = "add " + text
       }
 
       Server.patch("/lists/grocery", { message: text })

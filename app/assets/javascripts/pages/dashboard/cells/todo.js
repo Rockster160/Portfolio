@@ -27,6 +27,9 @@
         var item = lines[num-1]
         text = "remove " + item.replace(/^\d+\. /, "")
       }
+      if (!/^[-|+|add|remove]/gi.test(text)) {
+        text = "add " + text
+      }
 
       Server.patch("/lists/todo", { message: text })
         .fail(function(data) {
