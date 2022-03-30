@@ -58,7 +58,6 @@
     this.name = obj.name || undefined
   }
   Timer.loadFromJSON = function(timers_array) {
-    console.log(timers_array);
     return timers_array.map(function(timer_data) {
       return new Timer(timer_data)
     })
