@@ -1,3 +1,4 @@
+var text_height = 0.9 * 16
 var single_width = 32
 var emojiPattern
 
@@ -62,6 +63,7 @@ Text.clean = function(text) {
   text = Text.escape(text)
   text = Text.markup(text)
   text = text.replaceAll(/<e>.*?<\/e>/gi, "  ")
+  text = text.replaceAll(/<img.*?\>/gi, "  ")
   text = text.replaceAll(/<es>.*?<\/es>/gi, " ")
   text = text.replaceAll(/<.*?>/gi, "")
 
@@ -198,9 +200,12 @@ Text.markup = function(text) {
   text = text.replaceAll(/\[color (.*?)\](.*?)\[\/color\]/gi, "<span style=\"color: $1;\">$2</span>")
   text = text.replaceAll(/\[ani \"(.*?)\"\]/gi, "<textanimate steps=\"$1\"> </textanimate>")
   text = text.replaceAll(/\[img (.*?)\]/gi, "<span class=\"dashboard-img-wrapper\"><img src=\"$1\"\/></span>")
-  text = text.split("\n").map(function(line) { return "<div class=\"line\">" + (line || " ") + "</div>" }).join("")
 
   return text
+}
+Text.fixHeight = function(line) {
+  // debugger
+  return line
 }
 Text.filterOrder = function(text, options, transformer) {
   if (!text || text.trim().length <= 0) { return options }

@@ -2,6 +2,7 @@
   local_reminders_cell = Cell.register({
     title: "Reminders",
     text: "Loading...",
+    wrap: true,
     flash: false,
     commands: {
       render: function(data) {

@@ -13,6 +13,7 @@
 
   Cell.register({
     title: "Rock-Paper-Scissors",
+    wrap: true,
     reloader: function() {
       var cell = this
       // Ran immediately when cell loads, and also any time .reload is called

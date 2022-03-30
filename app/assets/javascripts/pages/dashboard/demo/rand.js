@@ -29,6 +29,7 @@
 
   Cell.register({
     title: "Random",
+    wrap: true,
     text: Text.color(dash_colors.yellow, ".8ball .die .coin .draw .shuffle"),
     commands: {
       "8ball": function() {

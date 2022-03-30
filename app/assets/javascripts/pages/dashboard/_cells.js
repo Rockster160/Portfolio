@@ -12,6 +12,7 @@ Cell.register = function(init_data) {
   cell.text(init_data.text || "")
   cell.should_flash = init_data.flash == false ? false : true
   cell.init_data = init_data
+  cell.wrap = init_data.wrap || false
   cell.data = init_data.data || {}
   cell.config = init_data.config || {}
   cell.commands = init_data.commands || {}
@@ -68,13 +69,26 @@ Cell.prototype.title = function(new_title) {
   }
 }
 Cell.prototype.text = function(new_text) {
+  var cell = this
   if (new_text == undefined) {
-    return this.my_text
+    return cell.my_text
   } else {
     new_text = Text.escape(new_text)
-    this.my_text = new_text
-    this.ele.children(".dash-content").html(Text.markup(new_text))
-    return this
+    cell.my_text = new_text
+    new_text = Text.markup(new_text)
+    new_text = new_text.split("\n").map(function(line) {
+      var wrap_class = cell.wrap ? "" : "nowrap"
+      return Text.fixHeight("<div class=\"line " + wrap_class + "\">" + (line || " ") + "</div>")
+    }).join("")
+    cell.ele.children(".dash-content").html(new_text)
+    cell.ele.find(".line").each(function() {
+      var line_height = $(this).height()
+      var rows = Math.round(line_height / text_height)
+      if (rows > 1) { return }
+      // Let this just auto wrap- there is currently a bug where single lines think they're bigger.
+      $(this).css({ height: (rows || 1) * text_height + "px" })
+    })
+    return cell
   }
 }
 Cell.prototype.lines = function(new_lines) {

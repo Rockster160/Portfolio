@@ -2,6 +2,7 @@
   Cell.register({
     title: "Grocery",
     text: "Loading...",
+    wrap: true,
     socket: Server.socket({
       channel: "ListChannel",
       channel_id: "list_1",

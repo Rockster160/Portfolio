@@ -1,7 +1,7 @@
 // https://jsonformatter.org/scss-to-css
 
 $code-background: #112435;
-$dash-font-height: 0.9rem;
+$dash-font-height: 0.9rem; // Corresponds to text.js text_height
 $dash-font-width: $dash-font-height * 0.5;
 $active-bright: #5DA6F8;
 $active: #337BCD;
@@ -161,6 +161,11 @@ $text-color: darken($grey-blue, 20%);
         white-space: pre-wrap;
         padding: 0;
         margin: 0;
+
+        &.nowrap {
+          white-space: pre;
+          height: $dash-font-height;
+        }
       }
 
       .dashboard-img-wrapper img {

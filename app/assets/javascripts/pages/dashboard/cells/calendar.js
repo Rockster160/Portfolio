@@ -2,6 +2,7 @@
   local_calendar_cell = Cell.register({
     title: "Calendar",
     text: "Loading...",
+    wrap: true,
     flash: false,
     commands: {
       render: function(data) {
