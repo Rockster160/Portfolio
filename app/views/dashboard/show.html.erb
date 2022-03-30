@@ -18,6 +18,7 @@
     <% if Rails.env.development? %>
       Cell.register({ title: "Weather" }) // Overwrite to save API calls
       Cell.register({ title: "Uptime" }) // Overwrite to save API calls
+      Cell.register({ title: "Github" }) // Overwrite to save API calls
     <% end %>
     Cell.loadConfig({
       fitness: { x: 1, y: 1 },
@@ -51,6 +52,7 @@
       random: { x: 4, y: 4 },
 
       timers: { x: 2, y: 5 },
+      github: { x: 3, y: 5, github_apikey: "<%= ENV.fetch("GITHUB_APIKEY") %>" },
     })
   })
 </script>
