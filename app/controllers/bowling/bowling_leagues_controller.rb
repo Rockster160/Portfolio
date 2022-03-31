@@ -4,7 +4,7 @@ module Bowling
     before_action :authorize_user, :set_league
 
     def index
-      @leagues = current_user.bowling_leagues.order(updated_at: :desc)
+      @leagues = current_user.bowling_leagues.order(updated_at: :asc)
     end
 
     def export

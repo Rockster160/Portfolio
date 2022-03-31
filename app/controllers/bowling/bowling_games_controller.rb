@@ -5,7 +5,7 @@ module Bowling
     before_action :set_ivars, except: [:index]
 
     def index
-      @leagues = current_user.bowling_leagues
+      @leagues = current_user.bowling_leagues.order(updated_at: :desc)
     end
 
     def new

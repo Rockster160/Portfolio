@@ -47,7 +47,7 @@
   <tr>
     <td></td>
     <% if set.league.uses_handicap? %>
-      <td></td>
+      <td class="text-right"><%= set.bowler_sets.sum(:handicap) %></td>
     <% end %>
     <% set.league.games_per_series.times do |t| %>
       <td class="text-right"><%= number_with_delimiter(set.games.where(game_num: t+1).sum(:score)) %></td>

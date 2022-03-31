@@ -37,4 +37,11 @@
       <%= game.total_score %>
     </div>
   <% end %>
+
+  <div class="bowling-cell box-align-text"></div>
+  <% 10.times do |t| %>
+    <div class="bowling-cell text-center"></div>
+  <% end %>
+  <div class="bowling-cell box-align-text"><%= games.sum(:score).to_i %></div>
+  <div class="bowling-cell box-align-text"><%= games.sum(:score).to_i + games.sum(:handicap).to_i %></div>
 </div>
