@@ -33,4 +33,6 @@ if Rails.env.production?
   ]
 end
 
-Sidekiq::Cron::Job.load_from_array!(cron_jobs)
+Rails.application.reloader.to_prepare do
+  Sidekiq::Cron::Job.load_from_array!(cron_jobs)
+end

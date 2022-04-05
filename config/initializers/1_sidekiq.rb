@@ -1,12 +1,9 @@
-config = {
-  url: ENV.fetch("REDIS_URL", "redis://127.0.0.1:6379/0"),
-  namespace: "#{Rails.application.class.parent_name}_#{Rails.env}:sidekiq"
-}
-
 if Rails.env.development?
   require 'sidekiq/testing'
   Sidekiq::Testing.inline!
 end
+
+config = { url: ENV.fetch("REDIS_URL", "redis://127.0.0.1:6379/0") }
 
 Sidekiq.configure_server do |c|
   c.redis = config
@@ -15,4 +12,5 @@ Sidekiq.configure_server do |c|
     ::Slack::Notifier.new(webhook, channel: "#portfolio", username: "Help-Bot").ping("Sidekiq Error: >>> #{exception}: #{context_hash}", attachments: [])
   end
 end
+
 Sidekiq.configure_client { |c| c.redis = config }
