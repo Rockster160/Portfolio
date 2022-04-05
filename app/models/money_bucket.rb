@@ -7,10 +7,12 @@
 #  user_id     :integer
 #
 
+require "json_wrapper"
+
 class MoneyBucket < ApplicationRecord
   belongs_to :user
 
-  serialize :bucket_json, JSONWrapper
+  serialize :bucket_json, JsonWrapper
 
   attr_accessor :deposit, :withdraw, :deposit_errors
 
