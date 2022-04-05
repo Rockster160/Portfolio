@@ -1,6 +1,6 @@
 source "https://rubygems.org"
 
-gem "rails", "6.1"
+gem "rails", "7.0"
 gem "pg"
 # gem "therubyracer"
 gem "sprockets", "~>3.0"
