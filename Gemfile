@@ -1,6 +1,6 @@
 source "https://rubygems.org"
 
-gem "rails", "5.1"
+gem "rails", "5.2"
 gem "pg"
 # gem "therubyracer"
 gem "sprockets", "~>3.0"
@@ -11,7 +11,7 @@ gem "jquery-rails"
 gem "jquery-ui-rails"
 gem "jbuilder", "~> 2.0"
 gem "sdoc", "~> 0.4.0",          group: :doc
-gem "spring",        group: :development
+gem "bootsnap"
 
 gem "dotenv-rails"
 gem "puma"
@@ -55,6 +55,7 @@ gem "command_proposal", git: "https://github.com/Rockster160/command_proposal.gi
 # gem "command_proposal", "1.0.15"
 
 group :development, :test do
+  gem "spring"
   gem "annotate"
   gem "listen"
   gem "rails_real_favicon"

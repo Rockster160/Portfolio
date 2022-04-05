@@ -1,8 +1,5 @@
 config = {
-  host:      Redis.current.client.host,
-  port:      Redis.current.client.port,
-  password:  Redis.current.client.password,
-  db:        Redis.current.client.db,
+  url: ENV.fetch("REDIS_URL", "redis://127.0.0.1:6379/0"),
   namespace: "#{Rails.application.class.parent_name}_#{Rails.env}:sidekiq"
 }
 

@@ -73,6 +73,8 @@ Rails.application.configure do
   # Set to :debug to see everything in the log.
   config.log_level = :warn
 
+  config.active_storage.service = :local
+
   # Prepend all log lines with the following tags.
   # config.log_tags = [ :subdomain, :uuid ]
   config.log_tags = [ :request_id ]

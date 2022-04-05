@@ -23,6 +23,8 @@ Rails.application.configure do
 
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log
+  config.active_record.verbose_query_logs = true
+  config.active_storage.service = :local
 
   # Run ActiveJobs inline- this is mostly a fix for the CommandProposal to work properly
   #   since it uses multiple threads which jams up the single process in development
