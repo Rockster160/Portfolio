@@ -38,10 +38,10 @@ class ListItemsController < ApplicationController
     @list_item = ListItem.with_deleted.find(params[:id])
 
     if params[:really_destroy]
-      @list_item.destroy_fully!
+      @list_item.destroy
       redirect_to list_path(@list_item.list)
     else
-      @list_item.destroy unless @list_item.permanent?
+      @list_item.soft_destroy unless @list_item.permanent?
       head :no_content
     end
   end

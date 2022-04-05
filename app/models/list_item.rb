@@ -20,7 +20,6 @@
 #
 
 class ListItem < ApplicationRecord
-  acts_as_paranoid
   attr_accessor :do_not_broadcast
   belongs_to :list
 
@@ -29,9 +28,12 @@ class ListItem < ApplicationRecord
 
   validates :name, presence: true
 
+  default_scope { where(deleted_at: nil) }
+
   scope :ordered, -> { order("list_items.sort_order DESC NULLS LAST") }
   scope :important, -> { where(important: true) }
   scope :unimportant, -> { where.not(important: true) }
+
 
   def self.by_formatted_name(name)
     find_by(formatted_name: name.to_s.downcase.gsub(/[^a-z0-9]/i, ""))
@@ -46,6 +48,18 @@ class ListItem < ApplicationRecord
     else
       create(params)
     end
+  end
+
+  def self.with_deleted
+    unscope(where: :deleted_at)
+  end
+
+  def deleted?
+    deleted_at?
+  end
+
+  def soft_destroy
+    update(deleted_at: Time.current)
   end
 
   def checked=(new_val)
