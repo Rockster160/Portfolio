@@ -1,5 +1,6 @@
-PATH
-  remote: ../command_proposal
+GIT
+  remote: https://github.com/Rockster160/command_proposal.git
+  revision: 247237d90bde41a1c5cda2cc67ec50a753cfad6f
   specs:
     command_proposal (1.0.17)
       font-awesome-rails
