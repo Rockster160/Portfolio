@@ -1,8 +1,8 @@
 GIT
   remote: https://github.com/Rockster160/command_proposal.git
-  revision: 247237d90bde41a1c5cda2cc67ec50a753cfad6f
+  revision: 2b36136c460fe5a09e739900963e1ef339f9c08b
   specs:
-    command_proposal (1.0.17)
+    command_proposal (1.0.18)
       font-awesome-rails
       rails (>= 5.0.0)
 
