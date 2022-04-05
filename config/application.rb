@@ -9,7 +9,7 @@ Bundler.require(*Rails.groups)
 module Portfolio
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
-    config.load_defaults 5.1
+    config.load_defaults 7.0
 
     config.secret_key_base = "9066475dd7ba28f4609cdf0e6df34d97216ef815207da74518a2da39f9a9d816a0463f555007fa99eb8f8ac2c875f23d370c2db41387cbfd621e6dca77b19ba4"
     config.active_record.belongs_to_required_by_default = true
