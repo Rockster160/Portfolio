@@ -13,6 +13,7 @@ gem "jbuilder", "~> 2.0"
 gem "sdoc", "~> 0.4.0",          group: :doc
 gem "bootsnap"
 
+gem "sprockets-rails"
 gem "dotenv-rails"
 gem "puma"
 gem "redis"
@@ -47,8 +48,6 @@ gem "inline_svg"
 gem "ice_cube"
 gem "webpush"
 gem "chronic"
-
-gem "honeybadger", "~> 4.0"
 
 # gem "command_proposal", path: "../command_proposal"
 gem "command_proposal", git: "https://github.com/Rockster160/command_proposal.git"

@@ -413,6 +413,7 @@ DEPENDENCIES
   spring
   spring-commands-rspec
   sprockets (~> 3.0)
+  sprockets-rails
   touchpunch-rails
   twilio-ruby (~> 4.11.1)
   uglifier (>= 1.3.0)
