@@ -49,7 +49,7 @@
 </template>
 
 <div class="bowling-table bowling-header">
-  <div class="bowling-cell"></div>
+  <div class="bowling-cell">Game <%= game_num %></div>
   <% 10.times do |t| %>
     <div class="bowling-cell"><%= t + 1 %></div>
   <% end %>
@@ -100,6 +100,7 @@
         <%= svg "bowling/pin" %> / <i class="fa fa-hashtag"></i>
       </div>
       <div class="numpad-key backspace"><i class="fa fa-trash-o"></i></div>
+      <div class="numpad-key timer-toggle active" data-pins-show=show><i class="fa fa-history"></i></div>
     </div>
 
     <div class="bowling-keypad-entry">

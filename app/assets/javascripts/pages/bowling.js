@@ -70,11 +70,16 @@ $(".ctr-bowling_leagues.act-edit, .ctr-bowling_leagues.act-new").ready(function(
 
 
 $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
-
   var inProgress = false
   var pin_knock = undefined
   var pinTimer = undefined
-  var enable_pin_timer = true
+  var timer_duration = 1000
+  var spinner = new Spinner({
+    size: 55,
+    stroke: 5,
+    duration: timer_duration,
+    color: "#2196F3",
+  })
   var should_check_stats = true
 
   var editing = false
@@ -94,6 +99,11 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     evt.preventDefault()
     return false
   })
+  $(".timer-toggle").click(function() {
+    $(this).toggleClass("active")
+    if (!$(this).hasClass("active")) { resetPinTimer() }
+  })
+  $(".timer-toggle").append(spinner.element)
 
   function resetEdits() {
     if (editing) {
@@ -203,9 +213,7 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
     })
 
     recountPins()
-    pinTimer = setTimeout(function() {
-      if (enable_pin_timer) { $(".next-frame").click() }
-    }, 3000)
+    resetPinTimer()
   })
   $(document).on("click touchstart", function(evt) {
     var is_input = evt.target.tagName == "INPUT" || evt.target.tagName == "LABEL"
@@ -486,6 +494,20 @@ $(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
 
   currentTossAtIdx = function(idx) {
     return $(".shot.current").parents(".frame").find(".shot[data-shot-idx=" + idx + "]")
+  }
+
+  resetPinTimer = function() {
+    clearTimeout(pinTimer)
+    if (!$(".timer-toggle").hasClass("active")) {
+      spinner.reset()
+      return
+    }
+
+    spinner.start()
+    pinTimer = setTimeout(function() {
+      if ($(".timer-toggle").hasClass("active")) { $(".next-frame").click() }
+    }, timer_duration)
+    // timer-toggle
   }
 
   recountPins = function() {
