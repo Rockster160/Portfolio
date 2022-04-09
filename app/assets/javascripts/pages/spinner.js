@@ -62,11 +62,11 @@ Spinner.show = function(opts) {
   spinner.start()
   return spinner.element
 }
-document.body.appendChild(
-  Spinner.show({
-    size: 200,
-    stroke: 10,
-    duration: 1000,
-    color: "#2196F3",
-  })
-)
+// document.body.appendChild(
+//   Spinner.show({
+//     size: 200,
+//     stroke: 10,
+//     duration: 1000,
+//     color: "#2196F3",
+//   })
+// )
