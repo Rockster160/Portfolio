@@ -136,7 +136,6 @@ GEM
       activesupport (>= 5.0)
     gmaps4rails (2.1.2)
     hkdf (0.3.0)
-    honeybadger (4.12.1)
     http-accept (1.7.0)
     http-cookie (1.0.4)
       domain_name (~> 0.5)
@@ -378,7 +377,6 @@ DEPENDENCIES
   faker
   font-awesome-rails
   gmaps4rails
-  honeybadger (~> 4.0)
   httparty
   ice_cube
   inline_svg
