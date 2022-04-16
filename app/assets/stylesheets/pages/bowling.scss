@@ -579,6 +579,10 @@
       grid-area: 1 / 3;
       text-decoration: none;
     }
+    .timer-toggle {
+      grid-area: 1 / 2;
+      .fa { transform: scaleY(-1) rotateZ(-90deg); }
+    }
     .bowling-form-btn {
       grid-area: 1 / 3;
       margin: 0;

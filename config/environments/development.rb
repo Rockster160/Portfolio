@@ -75,6 +75,8 @@ Rails.application.configure do
   routes.default_url_options = { protocol: "http://", host: "localhost", port: "3141" }
   config.action_mailer.default_url_options = routes.default_url_options
 
+  config.public_file_server.enabled = true
+
   # Run ActiveJobs inline- this is mostly a fix for the CommandProposal to work properly
   #   since it uses multiple threads which jams up the single process in development
   config.active_job.queue_adapter = :inline
