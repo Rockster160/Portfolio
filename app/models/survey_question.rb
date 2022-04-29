@@ -18,6 +18,8 @@ class SurveyQuestion < ApplicationRecord
   has_many :survey_question_answer_results
   has_many :user_survey_responses
 
+  before_save :set_position
+
   enum format: {
     select_one:  0,
     select_many: 1,
@@ -33,6 +35,15 @@ class SurveyQuestion < ApplicationRecord
       survey_question_answers.shuffle
     else
       survey_question_answers.order(:position)
+    end
+  end
+
+  private
+
+  def set_position
+    self.position ||= begin
+      last_pos = survey.survey_questions.maximum(:position) || -1
+      last_pos + 1
     end
   end
 end

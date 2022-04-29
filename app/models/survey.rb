@@ -12,13 +12,13 @@
 #
 
 class Survey < ApplicationRecord
-  has_many :survey_results
-  has_many :survey_result_details
-  has_many :survey_questions
-  has_many :survey_question_answers
-  has_many :survey_question_answer_results
-  has_many :user_surveys
-  has_many :user_survey_responses
+  has_many :survey_results, dependent: :destroy
+  has_many :survey_result_details, dependent: :destroy
+  has_many :survey_questions, dependent: :destroy
+  has_many :survey_question_answers, dependent: :destroy
+  has_many :survey_question_answer_results, dependent: :destroy
+  has_many :user_surveys, dependent: :destroy
+  has_many :user_survey_responses, dependent: :destroy
 
   before_save :set_slug
 
