@@ -1,0 +1,20 @@
+<%= meta_title "Surveys", include_name: false %>
+<% content_for :head do %>
+  <%= javascript_include_tag 'support/touch_punch.js' %>
+<% end %>
+
+<div class="skinny-container lists-index-container">
+  <div class="lists-title">Surveys</div>
+  <div class="lists">
+    <div class="list-field">
+      <%= text_field_tag :surveys, nil, class: "filterable", placeholder: "Search Surveys" %>
+    </div>
+    <% @surveys.each do |survey| %>
+      <div class="list-item-container">
+        <a href="<%= survey_path(survey) %>" class="list-item">
+          <span class="item-name"><%= survey.name %></span> (<%= survey.survey_questions.count %>)
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>

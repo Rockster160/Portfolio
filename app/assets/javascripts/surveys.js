@@ -1,0 +1,2 @@
+$(".ctr-surveys").ready(function() {
+})

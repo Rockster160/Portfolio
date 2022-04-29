@@ -172,6 +172,7 @@
   .important-list-items, .list-items, .lists {
     input[type=checkbox] { display: none; }
     .list-item {
+      transition: background 0.2s;
       display: block;
       position: relative;
       margin: 6px 0;
@@ -189,33 +190,21 @@
         text-decoration: none;
       }
     }
-    label { background: $blue-l5; }
+    &:not(.survey-questions) {
+      label { background: $blue-l5; }
 
-    input[type=checkbox]:checked + label {
-      border-color: red;
-      background: pink;
-      color: red;
-      text-decoration: line-through;
-
-      // &:after {
-      //   position: absolute;
-      //   top: 0px;
-      //   right: 20px;
-      //   font-family: "FontAwesome";
-      //   font-size: 35px;
-      //   line-height: 1;
-      //   content: "\f00c";
-      // }
-    }
-    .list-item-options {
       input[type=checkbox]:checked + label {
-        border-color: $base-blue;
-        background: lighten($base-blue, 30%);
-        color: $base-blue;
-        text-decoration: none;
-
-        &:after {
-
+        border-color: red;
+        background: pink;
+        color: red;
+        text-decoration: line-through;
+      }
+      .list-item-options {
+        input[type=checkbox]:checked + label {
+          border-color: $base-blue;
+          background: lighten($base-blue, 30%);
+          color: $base-blue;
+          text-decoration: none;
         }
       }
     }

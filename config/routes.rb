@@ -49,6 +49,9 @@ Rails.application.routes.draw do
   resources :emails, except: [:destroy, :edit]
   resources :log_trackers, only: [ :index, :show ]
 
+  resources :surveys
+  resources :survey_responses
+
   resource :calc, only: [:show]
 
   resources :action_events

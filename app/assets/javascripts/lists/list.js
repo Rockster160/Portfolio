@@ -1,5 +1,23 @@
 var heldListItem, heldListItemTimer
 
+$(document).on("keyup", "input.filterable", function() {
+  var currentText = $(this).val().toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
+
+  if (currentText.length == 0) {
+    $(".list-item-container").removeClass("hidden")
+  } else {
+    $(".list-item-container").each(function() {
+      var option_with_category = $(this).find(".list-item-config .category").text() + " " + $(this).find(".item-name").text()
+      var optionText = option_with_category.toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
+      if (optionText.indexOf(currentText) >= 0) {
+        $(this).removeClass("hidden")
+      } else {
+        $(this).addClass("hidden")
+      }
+    })
+  }
+})
+
 $(".ctr-lists, .ctr-list_items").ready(function() {
 
   setImportantItems = function() {
@@ -46,24 +64,6 @@ $(".ctr-lists, .ctr-list_items").ready(function() {
     $.post(this.action, $(this).serialize())
     $(".new-list-item").val("")
     return false
-  })
-
-  $(document).on("keyup", "input.filterable", function() {
-    var currentText = $(this).val().toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
-
-    if (currentText.length == 0) {
-      $(".list-item-container").removeClass("hidden")
-    } else {
-      $(".list-item-container").each(function() {
-        var option_with_category = $(this).find(".list-item-config .category").text() + " " + $(this).find(".item-name").text()
-        var optionText = option_with_category.toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
-        if (optionText.indexOf(currentText) >= 0) {
-          $(this).removeClass("hidden")
-        } else {
-          $(this).addClass("hidden")
-        }
-      })
-    }
   })
 
   $(document).on("change", ".list-item-container .list-item-checkbox", function(evt) {

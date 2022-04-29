@@ -1,0 +1,35 @@
+<%= meta_title @survey.name, include_name: false %>
+<% content_for :head do %>
+  <%= javascript_include_tag 'support/touch_punch.js' %>
+<% end %>
+
+<%= form_for @survey, html: { class: "basic" } do |f| %>
+  <% @survey.survey_questions.order(:position).each_with_index do |question, q_idx| %>
+    <div class="skinny-container lists-index-container <%= 'hidaden' unless q_idx.zero? %>">
+      <div class="lists-title instructions"><%= question.text %></div>
+      <div class="list-items survey-questions">
+        <% base_params = "survey[questions][#{question.id}]" %>
+        <% question.survey_question_answers.shuffle.each do |answer| %>
+          <div class="list-item-container">
+            <% selected = false %>
+            <% radio_id = "q#{question.id}a#{answer.id}" %>
+            <%= radio_button_tag "#{base_params}", answer.id, selected, id: radio_id %>
+            <%= label_tag "#{base_params}", class: "list-item", for: radio_id do %>
+              <div class="item-name">
+                <%= answer.text %>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+  <div class="skinny-container">
+    <div class="text-center">
+      <%= f.submit "Submit", class: "wide" %>
+      <br>
+      <br>
+      <br>
+    </div>
+  </div>
+<% end %>
