@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20220323002558) do
+ActiveRecord::Schema.define(version: 20220428012345) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -23,6 +23,34 @@ ActiveRecord::Schema.define(version: 20220323002558) do
     t.datetime "timestamp"
     t.text     "notes"
     t.index ["user_id"], name: "index_action_events_on_user_id", using: :btree
+  end
+
+  create_table "active_storage_attachments", id: :bigserial, force: :cascade do |t|
+    t.string   "name",        null: false
+    t.string   "record_type", null: false
+    t.bigint   "record_id",   null: false
+    t.bigint   "blob_id",     null: false
+    t.datetime "created_at",  null: false
+    t.index ["blob_id"], name: "index_active_storage_attachments_on_blob_id", using: :btree
+    t.index ["record_type", "record_id", "name", "blob_id"], name: "index_active_storage_attachments_uniqueness", unique: true, using: :btree
+  end
+
+  create_table "active_storage_blobs", id: :bigserial, force: :cascade do |t|
+    t.string   "key",          null: false
+    t.string   "filename",     null: false
+    t.string   "content_type"
+    t.text     "metadata"
+    t.string   "service_name", null: false
+    t.bigint   "byte_size",    null: false
+    t.string   "checksum"
+    t.datetime "created_at",   null: false
+    t.index ["key"], name: "index_active_storage_blobs_on_key", unique: true, using: :btree
+  end
+
+  create_table "active_storage_variant_records", id: :bigserial, force: :cascade do |t|
+    t.bigint "blob_id",          null: false
+    t.string "variation_digest", null: false
+    t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true, using: :btree
   end
 
   create_table "avatar_clothes", force: :cascade do |t|
@@ -372,6 +400,71 @@ ActiveRecord::Schema.define(version: 20220323002558) do
     t.datetime "updated_at",    null: false
   end
 
+  create_table "survey_question_answer_results", force: :cascade do |t|
+    t.integer  "survey_id"
+    t.integer  "survey_result_id"
+    t.integer  "survey_question_id"
+    t.integer  "survey_question_answer_id"
+    t.integer  "value"
+    t.datetime "created_at",                null: false
+    t.datetime "updated_at",                null: false
+    t.index ["survey_id"], name: "index_survey_question_answer_results_on_survey_id", using: :btree
+    t.index ["survey_question_answer_id"], name: "index_answer_result_ids", using: :btree
+    t.index ["survey_question_id"], name: "index_survey_question_answer_results_on_survey_question_id", using: :btree
+    t.index ["survey_result_id"], name: "index_survey_question_answer_results_on_survey_result_id", using: :btree
+  end
+
+  create_table "survey_question_answers", force: :cascade do |t|
+    t.integer  "survey_id"
+    t.integer  "survey_question_id"
+    t.text     "text"
+    t.integer  "position"
+    t.datetime "created_at",         null: false
+    t.datetime "updated_at",         null: false
+    t.index ["survey_id"], name: "index_survey_question_answers_on_survey_id", using: :btree
+    t.index ["survey_question_id"], name: "index_survey_question_answers_on_survey_question_id", using: :btree
+  end
+
+  create_table "survey_questions", force: :cascade do |t|
+    t.integer  "survey_id"
+    t.text     "text"
+    t.integer  "position"
+    t.integer  "format"
+    t.integer  "score_split_question"
+    t.datetime "created_at",           null: false
+    t.datetime "updated_at",           null: false
+    t.index ["survey_id"], name: "index_survey_questions_on_survey_id", using: :btree
+  end
+
+  create_table "survey_result_details", force: :cascade do |t|
+    t.integer  "survey_id"
+    t.integer  "survey_result_id"
+    t.text     "description"
+    t.integer  "value"
+    t.integer  "conditional"
+    t.datetime "created_at",       null: false
+    t.datetime "updated_at",       null: false
+    t.index ["survey_id"], name: "index_survey_result_details_on_survey_id", using: :btree
+    t.index ["survey_result_id"], name: "index_survey_result_details_on_survey_result_id", using: :btree
+  end
+
+  create_table "survey_results", force: :cascade do |t|
+    t.integer  "survey_id"
+    t.text     "name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["survey_id"], name: "index_survey_results_on_survey_id", using: :btree
+  end
+
+  create_table "surveys", force: :cascade do |t|
+    t.text     "name"
+    t.text     "slug"
+    t.text     "description"
+    t.boolean  "randomize_answers", default: true
+    t.datetime "created_at",                       null: false
+    t.datetime "updated_at",                       null: false
+  end
+
   create_table "user_lists", force: :cascade do |t|
     t.integer "user_id"
     t.integer "list_id"
@@ -391,6 +484,31 @@ ActiveRecord::Schema.define(version: 20220323002558) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_user_push_subscriptions_on_user_id", using: :btree
+  end
+
+  create_table "user_survey_responses", force: :cascade do |t|
+    t.integer  "user_id"
+    t.integer  "survey_id"
+    t.integer  "user_survey_id"
+    t.integer  "survey_question_id"
+    t.integer  "survey_question_answer_id"
+    t.datetime "created_at",                null: false
+    t.datetime "updated_at",                null: false
+    t.index ["survey_id"], name: "index_user_survey_responses_on_survey_id", using: :btree
+    t.index ["survey_question_answer_id"], name: "index_user_survey_responses_on_survey_question_answer_id", using: :btree
+    t.index ["survey_question_id"], name: "index_user_survey_responses_on_survey_question_id", using: :btree
+    t.index ["user_id"], name: "index_user_survey_responses_on_user_id", using: :btree
+    t.index ["user_survey_id"], name: "index_user_survey_responses_on_user_survey_id", using: :btree
+  end
+
+  create_table "user_surveys", force: :cascade do |t|
+    t.integer  "user_id"
+    t.integer  "survey_id"
+    t.text     "token"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["survey_id"], name: "index_user_surveys_on_survey_id", using: :btree
+    t.index ["user_id"], name: "index_user_surveys_on_user_id", using: :btree
   end
 
   create_table "users", force: :cascade do |t|
@@ -426,4 +544,6 @@ ActiveRecord::Schema.define(version: 20220323002558) do
     t.datetime "updated_at"
   end
 
+  add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
 end
