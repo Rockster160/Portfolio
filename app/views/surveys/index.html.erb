@@ -11,7 +11,7 @@
     </div>
     <% @surveys.each do |survey| %>
       <div class="list-item-container">
-        <a href="<%= survey_path(survey) %>" class="list-item">
+        <a href="<%= survey_path(survey.slug) %>" class="list-item">
           <span class="item-name"><%= survey.name %></span> (<%= survey.survey_questions.count %>)
         </a>
       </div>
