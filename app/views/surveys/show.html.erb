@@ -1,7 +1,5 @@
 <%= meta_title @survey.name, include_name: false %>
-<% content_for :head do %>
-  <%= javascript_include_tag 'support/touch_punch.js' %>
-<% end %>
+<%= meta_description @survey.description  %>
 
 <%= form_for @survey, html: { class: "basic" } do |f| %>
   <% @survey.survey_questions.order(:position).each_with_index do |question, q_idx| %>

@@ -1,23 +1,24 @@
 <%= meta_title @survey.name, include_name: false %>
+<% results = @survey_response.results %>
+<% result = results.first %>
+<%= meta_description "#{result[:percentage]}% #{result[:name]}! #{results.first[:description]}"  %>
 
+<div class="skinny-container">
+  <div class="form">
+    <div class="form-title">
+      <%= @survey.name %>
+    </div>
+    <div class="form-fields">
+      <% results.each_with_index do |result, idx| %>
+        <div class="form-field">
+          <h3 class="text-center"><%= result[:name] %>: <%= result[:percentage] %>%</h3>
+          <p class="instructions"><%= result[:description] %></p>
+        </div>
 
-  <div class="skinny-container">
-    <div class="form">
-      <div class="form-title">
-        <%= @survey.name %>
-      </div>
-      <div class="form-fields">
-        <% results = @survey_response.results %>
-        <% results.each_with_index do |result, idx| %>
-          <div class="form-field">
-            <h3 class="text-center"><%= result[:name] %>: <%= result[:percentage] %>%</h3>
-            <p><%= result[:description] %></p>
-          </div>
-
-          <% if idx < results.count - 1 %>
-            <hr>
-          <% end %>
+        <% if idx < results.count - 1 %>
+          <hr>
         <% end %>
-      </div>
+      <% end %>
+    </div>
   </div>
 </div>

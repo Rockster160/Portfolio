@@ -28,7 +28,7 @@ class UserSurvey < ApplicationRecord
         description: result.survey_result_details.first.description,
         percentage: ((result_count / total.to_f) * 100).round,
       }
-    end.select { |data| data[:percentage] > 0 }.sort_by { |data| -data[:percentage] }
+    end.sort_by { |data| -data[:percentage] }
   end
 
   def grouped_responses
