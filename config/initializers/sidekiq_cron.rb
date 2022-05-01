@@ -7,6 +7,11 @@ monthly_15th_at_2pm = "0 20 15 * *"
 
 cron_jobs = [
   {
+    name: "Clean up Guests",
+    class: "CleanGuestsWorker",
+    cron: daily_9pm
+  },
+  {
     name: "Reschedule Items",
     class: "RescheduleItemsWorker",
     cron: every_minute

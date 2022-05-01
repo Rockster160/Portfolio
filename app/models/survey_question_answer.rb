@@ -14,8 +14,8 @@
 class SurveyQuestionAnswer < ApplicationRecord
   belongs_to :survey
   belongs_to :survey_question
-  has_many :survey_question_answer_results
-  has_many :user_survey_responses
+  has_many :survey_question_answer_results, dependent: :destroy
+  has_many :user_survey_responses, dependent: :destroy
 
   before_save :set_position
 
