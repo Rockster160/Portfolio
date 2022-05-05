@@ -45,7 +45,7 @@ class BowlingLeague < ApplicationRecord
   end
 
   def temp_calc_new_avg(bowler, new_series)
-    new_pins = bowler.total_pins.to_i + new_series
+    new_pins = bowler.total_pins.to_i + new_series.to_i
     new_games = bowler.total_games.to_f + league.games_per_series
 
     (new_pins / new_games).floor
