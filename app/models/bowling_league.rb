@@ -59,7 +59,7 @@ class BowlingLeague < ApplicationRecord
     total_pins_for_change = new_avg * new_games
 
     # P = A * G
-    changed_pins = total_pins_for_change - bowler.total_pins
+    changed_pins = total_pins_for_change - bowler.total_pins.to_i
     changed_pins -= 1 unless change.positive? # Offset for flooring
 
     changed_pins
