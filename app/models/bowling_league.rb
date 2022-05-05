@@ -52,7 +52,7 @@ class BowlingLeague < ApplicationRecord
   end
 
   def avg_change_over_series(bowler, change)
-    new_avg = bowler.average + change
+    new_avg = bowler.average.to_i + change.to_i
     new_avg += 1 unless change.positive? # Offset for flooring
 
     new_games = bowler.total_games + games_per_series
