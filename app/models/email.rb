@@ -32,23 +32,6 @@ class Email < ApplicationRecord
 
   scope :order_chrono, -> { order(created_at: :desc) }
 
-  def self.receive_request(req)
-    blob = req.try(:raw_post).to_s
-    email = create(blob: blob, skip_validations: true)
-    email.reload.parse_blob if email.persisted?
-  end
-
-  def self.from_s3(bucket, filename)
-    require "mail"
-    content = FileStorage.download(filename, bucket: bucket)
-    mail = Mail.new(content)
-    attaches = mail.attachments.each_with_object({}) do |attachment, obj|
-      FileStorage.upload(attachment.read, filename: attachment.filename)
-      obj[attachment.inline_content_id] = attachment.filename
-    end
-    from_mail(mail, attaches)
-  end
-
   def self.from_mail(mail, attaches=[])
     new.from_mail(mail, attaches)
   end

@@ -11,9 +11,13 @@ class WebhooksController < ApplicationController
   end
 
   def email
-    time = Time.current.strftime("%Y-%m-%d-%H-%M-%S")
-    File.new("public/email-#{time}", "w+") { |f| f.write(request.inspect) }
-    Email.receive_request(request)
+    blob = request.try(:raw_post).to_s
+    json = JSON.parse(JSON.parse(blob)&.dig("Message")) || {}
+    action = json.dig("receipt", "action") || {}
+    bucket = action["bucketName"]
+    filename = action["objectKey"]
+
+    ReceiveEmailWorker.perform_async(bucket, filename)
 
     head :no_content
   end

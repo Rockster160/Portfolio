@@ -22,12 +22,12 @@ module FileStorage
       .read
   end
 
-  # def delete(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-  #   Aws::S3::Resource.new(region: region, credentials: CREDENTIALS)
-  #     .bucket(bucket)
-  #     .object(filename)
-  #     .delete
-  # end
+  def delete(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
+    Aws::S3::Resource.new(region: region, credentials: CREDENTIALS)
+      .bucket(bucket)
+      .object(filename)
+      .delete
+  end
 
   def expiring_url(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
     Aws::S3::Resource.new(region: region, credentials: CREDENTIALS)
