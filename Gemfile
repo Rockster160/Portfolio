@@ -48,6 +48,7 @@ gem "inline_svg"
 gem "ice_cube"
 gem "webpush"
 gem "chronic"
+gem "aws-sdk-s3"
 
 gem "honeybadger", "~> 4.0"
 

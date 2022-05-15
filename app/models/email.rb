@@ -1,24 +1,27 @@
-#== Schema Information
+# == Schema Information
 #
 # Table name: emails
 #
-#  id         :integer          not null, primary key
-#  sent_by_id :integer
-#  from       :string
-#  to         :string
-#  subject    :string
-#  blob       :text
-#  text_body  :text
-#  html_body  :text
-#  read_at    :datetime
-#  deleted_at :datetime
-#  created_at :datetime         not null
-#  updated_at :datetime         not null
+#  id          :integer          not null, primary key
+#  attachments :text
+#  blob        :text
+#  deleted_at  :datetime
+#  from        :string
+#  html_body   :text
+#  read_at     :datetime
+#  subject     :string
+#  text_body   :text
+#  to          :string
+#  created_at  :datetime         not null
+#  updated_at  :datetime         not null
+#  sent_by_id  :integer
 #
 
 class Email < ApplicationRecord
   attr_accessor :skip_validations, :from_user, :from_domain, :skip_notify
   belongs_to :sent_by, class_name: "User", optional: true
+
+  serialize :attachments, JSONWrapper
 
   scope :not_archived, -> { where(deleted_at: nil) }
   scope :outbound,     -> { where(registered_domains.map { |domain| "emails.from ILIKE '%#{domain}'" }.join(" OR ")) }
@@ -29,18 +32,33 @@ class Email < ApplicationRecord
 
   scope :order_chrono, -> { order(created_at: :desc) }
 
-  def self.receive(req)
+  def self.receive_request(req)
     blob = req.try(:raw_post).to_s
     email = create(blob: blob, skip_validations: true)
     email.reload.parse_blob if email.persisted?
   end
 
-  def self.from_mail(mail)
-    new.from_mail(mail)
+  def self.from_s3(bucket, filename)
+    require "mail"
+    content = FileStorage.download(filename, bucket: bucket)
+    mail = Mail.new(content)
+    attaches = mail.attachments.each_with_object({}) do |attachment, obj|
+      FileStorage.upload(attachment.read, filename: attachment.filename)
+      obj[attachment.inline_content_id] = attachment.filename
+    end
+    from_mail(mail, attaches)
+  end
+
+  def self.from_mail(mail, attaches=[])
+    new.from_mail(mail, attaches)
   end
 
   def self.domains_from_addresses(*addresses)
     addresses.map { |address| address.to_s.split("@").first.to_s.squish }.reject(&:blank?)
+  end
+
+  def self.registered_domains
+    ["ardesian.com", "rocconicholls.me", "rdjn.me"]
   end
 
   def notify_slack
@@ -50,6 +68,17 @@ class Email < ApplicationRecord
     message_parts << "<#{Rails.application.routes.url_helpers.email_url(id: id)}|Click here to view.>"
     message_parts << ">>> #{text_body}"
     SlackNotifier.notify(message_parts.join("\n"), channel: "#portfolio", username: "Mail-Bot", icon_emoji: ":mailbox:")
+  end
+
+  def retrieve_attachments
+    @retrieve_attachments ||= begin
+      attachments.each_with_object({}) do |(attch_id, attch_filename), obj|
+        obj[attch_id] = {
+          filename: attch_filename,
+          presigned_url: FileStorage.expiring_url(attch_filename)
+        }
+      end.with_indifferent_access
+    end
   end
 
   def outbound?
@@ -76,8 +105,11 @@ class Email < ApplicationRecord
     (from&.split("@", 2)&.last || @from_domain&.split("@", 2)&.last).to_s.downcase
   end
 
-  def self.registered_domains
-    ["ardesian.com", "rocconicholls.me", "rdjn.me"]
+  def html_with_attachments
+    html_body.gsub(/src\=\"cid\:(\w+)\"/) do |found|
+      cid = Regexp.last_match(1)
+      "src=\"#{retrieve_attachments&.dig(cid, :presigned_url)}\""
+    end
   end
 
   def to_mail
@@ -101,7 +133,7 @@ class Email < ApplicationRecord
     parser.xpath("//text()").map(&:text).join(" ").squish
   end
 
-  def from_mail(mail)
+  def from_mail(mail, attaches=[])
     content = mail.body&.decoded.presence
     html_body = clean_content(mail.html_part&.body&.decoded.presence) || clean_content(content)
     text_body = clean_content(mail.text_part&.body&.decoded.presence) || clean_content(content, parse_text: true)
@@ -111,7 +143,8 @@ class Email < ApplicationRecord
       to:        [mail.to].flatten.compact.join(","),
       subject:   mail.subject,
       text_body: text_body,
-      html_body: html_body
+      html_body: html_body,
+      attachments: attaches,
     )
     notify_slack if save && !skip_notify
     failure(*errors.full_messages) if errors.any?

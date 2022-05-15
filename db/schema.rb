@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20220428012345) do
+ActiveRecord::Schema.define(version: 20220515181843) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -220,8 +220,9 @@ ActiveRecord::Schema.define(version: 20220428012345) do
     t.text     "html_body"
     t.datetime "read_at"
     t.datetime "deleted_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
+    t.datetime "created_at",  null: false
+    t.datetime "updated_at",  null: false
+    t.text     "attachments"
     t.index ["sent_by_id"], name: "index_emails_on_sent_by_id", using: :btree
   end
 
@@ -244,6 +245,73 @@ ActiveRecord::Schema.define(version: 20220428012345) do
     t.text     "results"
     t.datetime "created_at",       null: false
     t.datetime "updated_at",       null: false
+  end
+
+  create_table "inventory_boxes", force: :cascade do |t|
+    t.integer  "inventory_box_id"
+    t.text     "name"
+    t.text     "description"
+    t.text     "location"
+    t.datetime "created_at",       null: false
+    t.datetime "updated_at",       null: false
+    t.index ["inventory_box_id"], name: "index_inventory_boxes_on_inventory_box_id", using: :btree
+  end
+
+  create_table "inventory_codes", force: :cascade do |t|
+    t.integer  "inventory_box_id"
+    t.integer  "inventory_item_id"
+    t.text     "tag_data"
+    t.datetime "created_at",        null: false
+    t.datetime "updated_at",        null: false
+    t.index ["inventory_box_id"], name: "index_inventory_codes_on_inventory_box_id", using: :btree
+    t.index ["inventory_item_id"], name: "index_inventory_codes_on_inventory_item_id", using: :btree
+  end
+
+  create_table "inventory_items", force: :cascade do |t|
+    t.integer  "inventory_box_id"
+    t.text     "name"
+    t.text     "description"
+    t.text     "location"
+    t.datetime "created_at",       null: false
+    t.datetime "updated_at",       null: false
+    t.index ["inventory_box_id"], name: "index_inventory_items_on_inventory_box_id", using: :btree
+  end
+
+  create_table "inventory_tagged_boxes", force: :cascade do |t|
+    t.integer  "inventory_box_id"
+    t.integer  "inventory_tag_id"
+    t.datetime "created_at",       null: false
+    t.datetime "updated_at",       null: false
+    t.index ["inventory_box_id"], name: "index_inventory_tagged_boxes_on_inventory_box_id", using: :btree
+    t.index ["inventory_tag_id"], name: "index_inventory_tagged_boxes_on_inventory_tag_id", using: :btree
+  end
+
+  create_table "inventory_tagged_items", force: :cascade do |t|
+    t.integer  "inventory_item_id"
+    t.integer  "inventory_tag_id"
+    t.datetime "created_at",        null: false
+    t.datetime "updated_at",        null: false
+    t.index ["inventory_item_id"], name: "index_inventory_tagged_items_on_inventory_item_id", using: :btree
+    t.index ["inventory_tag_id"], name: "index_inventory_tagged_items_on_inventory_tag_id", using: :btree
+  end
+
+  create_table "inventory_tags", force: :cascade do |t|
+    t.text     "name"
+    t.string   "color"
+    t.text     "description"
+    t.text     "location"
+    t.datetime "created_at",  null: false
+    t.datetime "updated_at",  null: false
+  end
+
+  create_table "inventory_users", force: :cascade do |t|
+    t.integer  "inventory_box_id"
+    t.integer  "user_id"
+    t.boolean  "owner",            default: false
+    t.datetime "created_at",                       null: false
+    t.datetime "updated_at",                       null: false
+    t.index ["inventory_box_id"], name: "index_inventory_users_on_inventory_box_id", using: :btree
+    t.index ["user_id"], name: "index_inventory_users_on_user_id", using: :btree
   end
 
   create_table "lines", force: :cascade do |t|

@@ -11,7 +11,9 @@ class WebhooksController < ApplicationController
   end
 
   def email
-    Email.receive(request)
+    time = Time.current.strftime("%Y-%m-%d-%H-%M-%S")
+    File.new("public/email-#{time}", "w+") { |f| f.write(request.inspect) }
+    Email.receive_request(request)
 
     head :no_content
   end
