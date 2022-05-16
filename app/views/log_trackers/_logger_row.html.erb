@@ -1,5 +1,5 @@
 <a href="<%= log_tracker_path(logger) %>" class="trow">
-  <div class="tcell"><%= logger.created_at.to_formatted_s(:short_with_time) %></div>
+  <div class="tcell"><%= logger.created_at.in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:simple_with_time) %></div>
   <div class="tcell"><%= logger.user.try(:username) %></div>
   <div class="tcell text-right"><%= logger.short_location %> - <%= logger.ip_count %></div>
   <div class="tcell <%= 'danger' if logger.ip_count == 0 %>"><%= logger.ip_address %></div>
