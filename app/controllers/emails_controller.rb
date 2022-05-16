@@ -47,7 +47,7 @@ class EmailsController < ApplicationController
   end
 
   def email_params
-    params.fetch(:email, {}).permit(:html_body, :from_user, :from_domain, :to, :subject)
+    params.fetch(:email, {}).permit(:html_body, :from_user, :from_domain, :to, :subject, tempfiles: [])
   end
 
 end

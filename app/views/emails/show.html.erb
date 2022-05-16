@@ -55,7 +55,7 @@
   <% else %>
     <%= link_to "Archive", email_path(@email, email: {archived: true}), method: :patch, class: "btn" %>
   <% end %>
-  <% if @email.attachments.any? %>
+  <% if @email.attachments&.any? %>
     <p> Attachments:
       <% @email.retrieve_attachments.each do |(attach_id, attachment)| %>
         <%= link_to "<#{attachment[:filename]}>", attachment[:presigned_url], target: "_blank" %>

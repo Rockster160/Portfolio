@@ -28,6 +28,7 @@
     <input type="text" id="temp-emails">
     <%= f.text_field :subject, placeholder: "Subject" %>
     <div id="pell" data-prefilled-mail="<%= @email.html_body %>"></div>
+    <%= f.file_field :tempfiles, multiple: true %>
     <%= f.submit "Send", style: "float: right" %>
   <% end %>
 </div>

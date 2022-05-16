@@ -18,7 +18,7 @@
 #
 
 class Email < ApplicationRecord
-  attr_accessor :skip_validations, :from_user, :from_domain, :skip_notify
+  attr_accessor :skip_validations, :from_user, :from_domain, :skip_notify, :tempfiles
   belongs_to :sent_by, class_name: "User", optional: true
 
   serialize :attachments, JSONWrapper
@@ -140,7 +140,7 @@ class Email < ApplicationRecord
   end
 
   def deliver!
-    ApplicationMailer.deliver_email(id).deliver_later
+    ApplicationMailer.deliver_email(id, tempfiles).deliver_now
   end
 
   def archive
@@ -169,8 +169,8 @@ class Email < ApplicationRecord
     return errors.add(:from, "must be a valid email address.") unless from =~ email_regexp
     self.to = [to].flatten.compact.select { |to_address| to_address =~ email_regexp }.join(",")
     return errors.add(:to, "must be a valid email address.") unless to.present?
-    self.text_body ||= Nokogiri::HTML.parse(html_body).xpath("//text()").map(&:text).join(" ") rescue nil
-    errors.add(:text_body, "must exist") unless text_body.present?
+    # self.text_body ||= Nokogiri::HTML.parse(html_body).xpath("//text()").map(&:text).join(" ") rescue nil
+    # errors.add(:text_body, "must exist") unless text_body.present?
   end
 
   def reparse!
