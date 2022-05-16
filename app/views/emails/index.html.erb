@@ -4,16 +4,18 @@
 <div class="emails-container">
   <h3>Emails Received</h3>
   <% @emails_received.each do |email| %>
-    <a href="<%= email_path(email) %>" class="email-container <%= 'unread' unless email.read? %>">
-      <div class="timestamp"><%= email.created_at.in_time_zone("America/Denver") %></div>
-      <div class="from"><%= email.from %></div>
-      <div class="to"><%= email.to %></div>
-      <div class="subject"><%= email.subject.presence || "<No Subject>" %></div>
-      <div class="body"><%= email.text_body.presence || "<No Content>" %></div>
-    </a>
-    <div class="controls">
-      <%= link_to email_path(email, email: {archived: true}), method: :patch do %><i class="fa fa-trash"></i><% end %>
-      <%= link_to email_path(email, email: {read: true}), method: :patch do %><i class="fa fa-check"></i><% end %>
+    <div class="email-wrapper">
+      <a href="<%= email_path(email) %>" class="email-container <%= 'unread' unless email.read? %>">
+        <div class="timestamp"><%= email.created_at.in_time_zone("America/Denver") %></div>
+        <div class="from"><%= email.from %></div>
+        <div class="to"><%= email.to %></div>
+        <div class="subject"><%= email.subject.presence || "<No Subject>" %></div>
+        <div class="body"><%= email.text_body.presence || "<No Content>" %></div>
+      </a>
+      <div class="controls">
+        <%= link_to email_path(email, email: { archived: true }), method: :patch, remote: true, class: "remote-email archived" do %><i class="fa fa-trash"></i><% end %>
+        <%= link_to email_path(email, email: { read: true }), method: :patch, remote: true, class: "remote-email read" do %><i class="fa fa-check"></i><% end %>
+      </div>
     </div>
   <% end %>
   <%= paginate @emails_received, param_name: :emails_received_page, params: params %>

@@ -1,3 +1,13 @@
+$(".ctr-emails.act-index").ready(function() {
+  $(document).on("click", ".remote-email", function() {
+    if ($(this).hasClass("archived")) {
+      $(this).parents(".email-wrapper").remove()
+    } else if ($(this).hasClass("read")) {
+      $(this).parents(".email-wrapper").find(".email-container").removeClass("unread")
+    }
+  })
+})
+
 $(".ctr-emails.act-new").ready(function() {
   function addRecipients() {
     var emailMatch = $("#temp-emails").val().match(/[^@\s]+@[^@\s]+/)

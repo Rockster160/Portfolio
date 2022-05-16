@@ -33,7 +33,11 @@ class EmailsController < ApplicationController
   def update
     @email = Email.find(params[:id])
     @email.update(update_params)
-    redirect_to emails_path
+
+    respond_to do |format|
+      format.html { redirect_to emails_path }
+      format.json { render json: @email }
+    end
   end
 
   private
