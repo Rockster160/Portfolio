@@ -5,7 +5,7 @@ class ApplicationMailer < ActionMailer::Base
   def deliver_email(email_id, attaches=[])
     email = Email.find(email_id).to_mail
     attaches&.each do |attachment|
-      attachments[attachment.original_filename] = attachment.tempfile
+      attachments[attachment.original_filename] = attachment.read
     end
 
     mail(
