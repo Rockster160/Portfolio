@@ -88,11 +88,14 @@ class Email < ApplicationRecord
     (from&.split("@", 2)&.last || @from_domain&.split("@", 2)&.last).to_s.downcase
   end
 
-  def html_with_attachments
-    html_body.gsub(/src\=\"cid\:(\w+)\"/) do |found|
+  def html_for_display
+    with_attach = html_body.gsub(/src\=\"cid\:(\w+)\"/) do |found|
       cid = Regexp.last_match(1)
       "src=\"#{retrieve_attachments&.dig(cid, :presigned_url)}\""
     end
+    open_links_in_new_tab = with_attach.gsub("<a ", "<a target=\"_blank\"")
+
+    open_links_in_new_tab
   end
 
   def to_mail

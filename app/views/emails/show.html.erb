@@ -66,7 +66,7 @@
 
 <div class="skinny-container">
   <% if @email.html_body.present? %>
-    <%= render_iframe(@email.html_with_attachments) %>
+    <%= render_iframe(@email.html_for_display) %>
   <% elsif @email.text_body.present? %>
     <h3 class="text-center">Text:</h3>
     <%= render_iframe(@email.text_body) %>
