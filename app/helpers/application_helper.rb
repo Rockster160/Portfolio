@@ -34,7 +34,7 @@ module ApplicationHelper
   end
 
   def svg(svg_path, options={})
-    Rails.cache.fetch(svg_path) do
+    Rails.cache.fetch("#{svg_path}.#{options.keys.join(".")}") do
       options[:nocomment] = true if options[:nocomment].nil?
       options[:title] ||= svg_path.split("/").last
       svg_html = inline_svg(svg_path, options)

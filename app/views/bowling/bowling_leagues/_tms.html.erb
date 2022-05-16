@@ -1,31 +1,33 @@
-<table>
-  <tr class="line-bot">
-    <td>Name</td>
-    <td>+2</td>
-    <td>+1</td>
-    <td>-1</td>
-    <td>-2</td>
-    <td>AVG</td>
-    <td></td>
-    <td></td>
-  </tr>
-  <% @league.bowlers.ordered.each do |bowler| %>
-    <tr class="league-bowler" data-gms-per-series="<%= @league.games_per_series %>" data-gms="<%= bowler.total_games %>" data-pins="<%= bowler.total_pins %>">
-      <td><%= bowler.name %></td>
-      <% [2, 1, -1, -2].each do |diff| %>
-        <% new_series = @league.avg_change_over_series(bowler, diff) %>
-        <% avg_game = new_series / @league.games_per_series.to_f %>
-        <% avg_game += 1 if avg_game.modulo(1) > 1 / @league.games_per_series.to_f %>
-        <td class="text-right"><%= avg_game.round %>/<%= new_series %></td>
-      <% end %>
-      <td class="text-right"><%= bowler.average %></td>
-      <td class="text-right">
-        <input type="text" class="text-right basic quick-avg-check" style="width: 50px;">
-      </td>
-      <td class="text-right quick-avg-out"></td>
+<% if @league.games.count > @league.games_per_series %>
+  <table>
+    <tr class="line-bot">
+      <td>Name</td>
+      <td>+2</td>
+      <td>+1</td>
+      <td>-1</td>
+      <td>-2</td>
+      <td>AVG</td>
+      <td></td>
+      <td></td>
     </tr>
-  <% end %>
-</table>
+    <% @league.bowlers.ordered.each do |bowler| %>
+      <tr class="league-bowler" data-gms-per-series="<%= @league.games_per_series %>" data-gms="<%= bowler.total_games %>" data-pins="<%= bowler.total_pins %>">
+        <td><%= bowler.name %></td>
+        <% [2, 1, -1, -2].each do |diff| %>
+          <% new_series = @league.avg_change_over_series(bowler, diff) %>
+          <% avg_game = new_series / @league.games_per_series.to_f %>
+          <% avg_game += 1 if avg_game.modulo(1) > 1 / @league.games_per_series.to_f %>
+          <td class="text-right"><%= avg_game.round %>/<%= new_series %></td>
+        <% end %>
+        <td class="text-right"><%= bowler.average %></td>
+        <td class="text-right">
+          <input type="text" class="text-right basic quick-avg-check" style="width: 50px;">
+        </td>
+        <td class="text-right quick-avg-out"></td>
+      </tr>
+    <% end %>
+  </table>
+<% end %>
 
 <% @stats.except(:"Splits Converted").each do |stat, data| %>
   <h3><%= stat %></h3>
