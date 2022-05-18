@@ -24,11 +24,22 @@ class Email < ApplicationRecord
   serialize :attachments, JSONWrapper
 
   scope :not_archived, -> { where(deleted_at: nil) }
+  scope :archived,     -> { where.not(deleted_at: nil) }
   scope :outbound,     -> { where(registered_domains.map { |domain| "emails.from ILIKE '%#{domain}'" }.join(" OR ")) }
   scope :inbound,      -> { where.not(registered_domains.map { |domain| "emails.from ILIKE '%#{domain}'" }.join(" OR ")) }
   scope :unread,       -> { where(read_at: nil) }
   scope :read,         -> { where.not(read_at: nil) }
   scope :failed,       -> { where.not(blob: nil).where(from: nil, to: nil) }
+  scope :search,       ->(str) {
+    str = "%#{str}%"
+    where("
+      emails.from ILIKE :str OR
+      emails.to ILIKE :str OR
+      emails.subject ILIKE :str OR
+      emails.text_body ILIKE :str
+    ", str: str)
+    # Maybe also search attachment names?
+  }
 
   scope :order_chrono, -> { order(created_at: :desc) }
 
@@ -37,7 +48,7 @@ class Email < ApplicationRecord
   end
 
   def self.domains_from_addresses(*addresses)
-    addresses.map { |address| address.to_s.split("@").first.to_s.squish }.reject(&:blank?)
+    addresses.map { |address| address.to_s.split("@", 2).last.to_s.squish }.reject(&:blank?)
   end
 
   def self.registered_domains
@@ -65,18 +76,18 @@ class Email < ApplicationRecord
   end
 
   def outbound?
-    (Email.domains_from_addresses(from) & Email.registered_domains).any?
-  end
-
-  def inbound?
     (Email.domains_from_addresses(to) & Email.registered_domains).any?
   end
 
-  def outbound_address
-    outbound? ? to : from
+  def inbound?
+    (Email.domains_from_addresses(from) & Email.registered_domains).any?
   end
 
   def inbound_address
+    outbound? ? to : from
+  end
+
+  def outbound_address
     outbound? ? from : to
   end
 

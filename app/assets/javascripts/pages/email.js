@@ -6,6 +6,23 @@ $(".ctr-emails.act-index").ready(function() {
       $(this).parents(".email-wrapper").find(".email-container").removeClass("unread")
     }
   })
+
+  var runSearch = function() {
+    var url = new URL(window.location.href)
+    url.searchParams.set("q", $(".search").val())
+    window.location.href = url.href
+  }
+
+  $(document).on("submit", ".search", function(evt) {
+      evt.preventDefault()
+      runSearch()
+  }).on("keydown", ".search", function(evt) {
+    if (evt.key == "Enter") {
+      runSearch()
+    }
+  }).on("click", ".search-button", function(evt) {
+    runSearch()
+  })
 })
 
 $(".ctr-emails.act-new").ready(function() {
