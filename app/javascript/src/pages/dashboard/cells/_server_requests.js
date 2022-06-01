@@ -1,6 +1,8 @@
+import consumer from "./../../../channels/consumer"
+
 var demo = !true
 var local_data_timer, local_reminders_cell, local_calendar_cell
-var dash_colors = {
+dash_colors = {
   red:    "#F81414",
   yellow: "#FFEE14",
   green:  "#148F14",
@@ -83,7 +85,7 @@ Server.socket = function(subscription, receive) {
 }
 
 // App.localData.request()
-App.localData = App.cable.subscriptions.create({
+consumer.subscriptions.create({
   channel: "LocalDataChannel"
 }, {
   connected: function() {

@@ -1,4 +1,5 @@
-var cells = [], registered_cells = {}
+import { text_height, single_width, emojiPattern, cells, registered_cells } from "./vars"
+
 Cell = function() {}
 Cell.register = function(init_data) {
   var cell = new Cell()

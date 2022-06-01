@@ -1,5 +1,7 @@
+import consumer from "./consumer"
+
  setupLittleWorldChannel = function() {
-  App.little_world = App.cable.subscriptions.create({
+  consumer.subscriptions.create({
     channel: "LittleWorldChannel",
     avatar_uuid: currentPlayer.id
   }, {

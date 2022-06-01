@@ -1,6 +1,8 @@
+import consumer from "./consumer"
+
 $(".ctr-nfcs.act-show").ready(function() {
 
-  App.logger = App.cable.subscriptions.create({
+  consumer.subscriptions.create({
     channel: "NfcChannel"
   }, {
     connected: function() {

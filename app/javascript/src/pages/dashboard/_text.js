@@ -1,6 +1,4 @@
-var text_height = 0.9 * 16
-var single_width = 32
-var emojiPattern
+import { text_height, single_width, emojiPattern, cells, registered_cells } from "./vars"
 
 Text = function() {}
 Text.new = function(data) {

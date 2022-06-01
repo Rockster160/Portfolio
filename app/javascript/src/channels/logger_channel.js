@@ -1,6 +1,8 @@
+import consumer from "./consumer"
+
 $('.ctr-log_trackers.act-index').ready(function() {
 
-  App.logger = App.cable.subscriptions.create({
+  consumer.subscriptions.create({
     channel: "LoggerChannel"
   }, {
     connected: function() {

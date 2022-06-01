@@ -1,8 +1,10 @@
+import consumer from "./../channels/consumer"
+
 $(".ctr-list_items.act-edit").ready(function() {
 
   var list_id = $(".list-container").attr("data-list-item-id")
 
-  App.listItems = App.cable.subscriptions.create({
+  consumer.subscriptions.create({
     channel: "ListItemChannel",
     channel_id: "list_item_" + list_id
   }, {

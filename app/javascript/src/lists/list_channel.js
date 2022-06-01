@@ -1,3 +1,5 @@
+import consumer from "./../channels/consumer"
+
 $(".ctr-lists.act-show").ready(function() {
 
   var list_id = $(".list-container").attr("data-list-id")
@@ -19,7 +21,7 @@ $(".ctr-lists.act-show").ready(function() {
     }
   }
 
-  App.lists = App.cable.subscriptions.create({
+  consumer.subscriptions.create({
     channel: "ListChannel",
     channel_id: "list_" + list_id
   }, {
