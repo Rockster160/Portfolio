@@ -9,6 +9,35 @@ exec,
 init } from "../support/pell"
 
 $(document).ready(function() {
+  if ($(".ctr-emails.act-index").length == 0) { return }
+
+  $(document).on("click", ".remote-email", function() {
+    if ($(this).hasClass("archived")) {
+      $(this).parents(".email-wrapper").remove()
+    } else if ($(this).hasClass("read")) {
+      $(this).parents(".email-wrapper").find(".email-container").removeClass("unread")
+    }
+  })
+
+  var runSearch = function() {
+    var url = new URL(window.location.href)
+    url.searchParams.set("q", $(".search").val())
+    window.location.href = url.href
+  }
+
+  $(document).on("submit", ".search", function(evt) {
+      evt.preventDefault()
+      runSearch()
+  }).on("keydown", ".search", function(evt) {
+    if (evt.key == "Enter") {
+      runSearch()
+    }
+  }).on("click", ".search-button", function(evt) {
+    runSearch()
+  })
+})
+
+$(document).ready(function() {
   if ($(".ctr-emails.act-new").length == 0) { return }
   function addRecipients() {
     var emailMatch = $("#temp-emails").val().match(/[^@\s]+@[^@\s]+/)

@@ -2,7 +2,7 @@
 
   <div style="margin-top: 20px;">
     <h4>Time</h4>
-    <p><%= @logger.created_at.to_formatted_s(:simple_with_time) %></p>
+    <p><%= @logger.created_at.in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:simple_with_time) %></p>
   </div>
   <div style="margin-top: 20px;">
     <h4>User</h4>

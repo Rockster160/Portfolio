@@ -216,7 +216,7 @@ import { dash_colors } from "../vars"
           new_timer.start.seconds += parseInt(part.match(/\d+/))
           return false
         }
-        if (/\d+m/.test(part)) {
+        if (/\d+m/.test(part) || /\d+\b/.test(part)) {
           new_timer.start.minutes += parseInt(part.match(/\d+/))
           return false
         }

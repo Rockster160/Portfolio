@@ -25,40 +25,40 @@ ActiveRecord::Schema.define(version: 2022_04_05_024912) do
     t.index ["user_id"], name: "index_action_events_on_user_id"
   end
 
-  create_table "active_storage_attachments", force: :cascade do |t|
-    t.string "name", null: false
-    t.string "record_type", null: false
-    t.bigint "record_id", null: false
-    t.bigint "blob_id", null: false
-    t.datetime "created_at", null: false
-    t.index ["blob_id"], name: "index_active_storage_attachments_on_blob_id"
-    t.index ["record_type", "record_id", "name", "blob_id"], name: "index_active_storage_attachments_uniqueness", unique: true
+  create_table "active_storage_attachments", id: :bigserial, force: :cascade do |t|
+    t.string   "name",        null: false
+    t.string   "record_type", null: false
+    t.bigint   "record_id",   null: false
+    t.bigint   "blob_id",     null: false
+    t.datetime "created_at",  null: false
+    t.index ["blob_id"], name: "index_active_storage_attachments_on_blob_id", using: :btree
+    t.index ["record_type", "record_id", "name", "blob_id"], name: "index_active_storage_attachments_uniqueness", unique: true, using: :btree
   end
 
-  create_table "active_storage_blobs", force: :cascade do |t|
-    t.string "key", null: false
-    t.string "filename", null: false
-    t.string "content_type"
-    t.text "metadata"
-    t.string "service_name", null: false
-    t.bigint "byte_size", null: false
-    t.string "checksum"
-    t.datetime "created_at", null: false
-    t.index ["key"], name: "index_active_storage_blobs_on_key", unique: true
+  create_table "active_storage_blobs", id: :bigserial, force: :cascade do |t|
+    t.string   "key",          null: false
+    t.string   "filename",     null: false
+    t.string   "content_type"
+    t.text     "metadata"
+    t.string   "service_name", null: false
+    t.bigint   "byte_size",    null: false
+    t.string   "checksum"
+    t.datetime "created_at",   null: false
+    t.index ["key"], name: "index_active_storage_blobs_on_key", unique: true, using: :btree
   end
 
-  create_table "active_storage_variant_records", force: :cascade do |t|
-    t.bigint "blob_id", null: false
+  create_table "active_storage_variant_records", id: :bigserial, force: :cascade do |t|
+    t.bigint "blob_id",          null: false
     t.string "variation_digest", null: false
-    t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+    t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true, using: :btree
   end
 
-  create_table "avatar_clothes", id: :serial, force: :cascade do |t|
-    t.integer "avatar_id"
-    t.string "gender"
-    t.string "placement"
-    t.string "garment"
-    t.string "color"
+  create_table "avatar_clothes", force: :cascade do |t|
+    t.integer  "avatar_id"
+    t.string   "gender"
+    t.string   "placement"
+    t.string   "garment"
+    t.string   "color"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["avatar_id"], name: "index_avatar_clothes_on_avatar_id"
@@ -220,9 +220,10 @@ ActiveRecord::Schema.define(version: 2022_04_05_024912) do
     t.text "html_body"
     t.datetime "read_at"
     t.datetime "deleted_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["sent_by_id"], name: "index_emails_on_sent_by_id"
+    t.datetime "created_at",  null: false
+    t.datetime "updated_at",  null: false
+    t.text     "attachments"
+    t.index ["sent_by_id"], name: "index_emails_on_sent_by_id", using: :btree
   end
 
   create_table "flash_cards", id: :serial, force: :cascade do |t|
@@ -246,10 +247,77 @@ ActiveRecord::Schema.define(version: 2022_04_05_024912) do
     t.datetime "updated_at", null: false
   end
 
-  create_table "lines", id: :serial, force: :cascade do |t|
-    t.integer "flash_card_id"
-    t.string "text", limit: 255
-    t.boolean "center"
+  create_table "inventory_boxes", force: :cascade do |t|
+    t.integer  "inventory_box_id"
+    t.text     "name"
+    t.text     "description"
+    t.text     "location"
+    t.datetime "created_at",       null: false
+    t.datetime "updated_at",       null: false
+    t.index ["inventory_box_id"], name: "index_inventory_boxes_on_inventory_box_id", using: :btree
+  end
+
+  create_table "inventory_codes", force: :cascade do |t|
+    t.integer  "inventory_box_id"
+    t.integer  "inventory_item_id"
+    t.text     "tag_data"
+    t.datetime "created_at",        null: false
+    t.datetime "updated_at",        null: false
+    t.index ["inventory_box_id"], name: "index_inventory_codes_on_inventory_box_id", using: :btree
+    t.index ["inventory_item_id"], name: "index_inventory_codes_on_inventory_item_id", using: :btree
+  end
+
+  create_table "inventory_items", force: :cascade do |t|
+    t.integer  "inventory_box_id"
+    t.text     "name"
+    t.text     "description"
+    t.text     "location"
+    t.datetime "created_at",       null: false
+    t.datetime "updated_at",       null: false
+    t.index ["inventory_box_id"], name: "index_inventory_items_on_inventory_box_id", using: :btree
+  end
+
+  create_table "inventory_tagged_boxes", force: :cascade do |t|
+    t.integer  "inventory_box_id"
+    t.integer  "inventory_tag_id"
+    t.datetime "created_at",       null: false
+    t.datetime "updated_at",       null: false
+    t.index ["inventory_box_id"], name: "index_inventory_tagged_boxes_on_inventory_box_id", using: :btree
+    t.index ["inventory_tag_id"], name: "index_inventory_tagged_boxes_on_inventory_tag_id", using: :btree
+  end
+
+  create_table "inventory_tagged_items", force: :cascade do |t|
+    t.integer  "inventory_item_id"
+    t.integer  "inventory_tag_id"
+    t.datetime "created_at",        null: false
+    t.datetime "updated_at",        null: false
+    t.index ["inventory_item_id"], name: "index_inventory_tagged_items_on_inventory_item_id", using: :btree
+    t.index ["inventory_tag_id"], name: "index_inventory_tagged_items_on_inventory_tag_id", using: :btree
+  end
+
+  create_table "inventory_tags", force: :cascade do |t|
+    t.text     "name"
+    t.string   "color"
+    t.text     "description"
+    t.text     "location"
+    t.datetime "created_at",  null: false
+    t.datetime "updated_at",  null: false
+  end
+
+  create_table "inventory_users", force: :cascade do |t|
+    t.integer  "inventory_box_id"
+    t.integer  "user_id"
+    t.boolean  "owner",            default: false
+    t.datetime "created_at",                       null: false
+    t.datetime "updated_at",                       null: false
+    t.index ["inventory_box_id"], name: "index_inventory_users_on_inventory_box_id", using: :btree
+    t.index ["user_id"], name: "index_inventory_users_on_user_id", using: :btree
+  end
+
+  create_table "lines", force: :cascade do |t|
+    t.integer  "flash_card_id"
+    t.string   "text",          limit: 255
+    t.boolean  "center"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
@@ -354,53 +422,118 @@ ActiveRecord::Schema.define(version: 2022_04_05_024912) do
     t.integer "resistance"
     t.integer "accuracy"
     t.datetime "last_updated"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
+    t.datetime "created_at",   null: false
+    t.datetime "updated_at",   null: false
   end
 
-  create_table "recipe_favorites", id: :serial, force: :cascade do |t|
-    t.integer "recipe_id"
-    t.integer "favorited_by_id"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["favorited_by_id"], name: "index_recipe_favorites_on_favorited_by_id"
-    t.index ["recipe_id"], name: "index_recipe_favorites_on_recipe_id"
+  create_table "recipe_favorites", force: :cascade do |t|
+    t.integer  "recipe_id"
+    t.integer  "favorited_by_id"
+    t.datetime "created_at",      null: false
+    t.datetime "updated_at",      null: false
+    t.index ["favorited_by_id"], name: "index_recipe_favorites_on_favorited_by_id", using: :btree
+    t.index ["recipe_id"], name: "index_recipe_favorites_on_recipe_id", using: :btree
   end
 
-  create_table "recipe_shares", id: :serial, force: :cascade do |t|
-    t.integer "recipe_id"
-    t.integer "shared_to_id"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["recipe_id"], name: "index_recipe_shares_on_recipe_id"
-    t.index ["shared_to_id"], name: "index_recipe_shares_on_shared_to_id"
+  create_table "recipe_shares", force: :cascade do |t|
+    t.integer  "recipe_id"
+    t.integer  "shared_to_id"
+    t.datetime "created_at",   null: false
+    t.datetime "updated_at",   null: false
+    t.index ["recipe_id"], name: "index_recipe_shares_on_recipe_id", using: :btree
+    t.index ["shared_to_id"], name: "index_recipe_shares_on_shared_to_id", using: :btree
   end
 
-  create_table "recipes", id: :serial, force: :cascade do |t|
-    t.integer "user_id"
-    t.string "title"
-    t.string "kitchen_of"
-    t.text "ingredients"
-    t.text "instructions"
-    t.boolean "public"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.text "description"
-    t.string "friendly_url"
-    t.index ["user_id"], name: "index_recipes_on_user_id"
+  create_table "recipes", force: :cascade do |t|
+    t.integer  "user_id"
+    t.string   "title"
+    t.string   "kitchen_of"
+    t.text     "ingredients"
+    t.text     "instructions"
+    t.boolean  "public"
+    t.datetime "created_at",   null: false
+    t.datetime "updated_at",   null: false
+    t.text     "description"
+    t.string   "friendly_url"
+    t.index ["user_id"], name: "index_recipes_on_user_id", using: :btree
   end
 
-  create_table "rlcraft_map_locations", id: :serial, force: :cascade do |t|
-    t.integer "x_coord"
-    t.integer "y_coord"
-    t.string "title"
-    t.string "location_type"
-    t.string "description"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
+  create_table "rlcraft_map_locations", force: :cascade do |t|
+    t.integer  "x_coord"
+    t.integer  "y_coord"
+    t.string   "title"
+    t.string   "location_type"
+    t.string   "description"
+    t.datetime "created_at",    null: false
+    t.datetime "updated_at",    null: false
   end
 
-  create_table "user_lists", id: :serial, force: :cascade do |t|
+  create_table "survey_question_answer_results", force: :cascade do |t|
+    t.integer  "survey_id"
+    t.integer  "survey_result_id"
+    t.integer  "survey_question_id"
+    t.integer  "survey_question_answer_id"
+    t.integer  "value"
+    t.datetime "created_at",                null: false
+    t.datetime "updated_at",                null: false
+    t.index ["survey_id"], name: "index_survey_question_answer_results_on_survey_id", using: :btree
+    t.index ["survey_question_answer_id"], name: "index_answer_result_ids", using: :btree
+    t.index ["survey_question_id"], name: "index_survey_question_answer_results_on_survey_question_id", using: :btree
+    t.index ["survey_result_id"], name: "index_survey_question_answer_results_on_survey_result_id", using: :btree
+  end
+
+  create_table "survey_question_answers", force: :cascade do |t|
+    t.integer  "survey_id"
+    t.integer  "survey_question_id"
+    t.text     "text"
+    t.integer  "position"
+    t.datetime "created_at",         null: false
+    t.datetime "updated_at",         null: false
+    t.index ["survey_id"], name: "index_survey_question_answers_on_survey_id", using: :btree
+    t.index ["survey_question_id"], name: "index_survey_question_answers_on_survey_question_id", using: :btree
+  end
+
+  create_table "survey_questions", force: :cascade do |t|
+    t.integer  "survey_id"
+    t.text     "text"
+    t.integer  "position"
+    t.integer  "format"
+    t.integer  "score_split_question"
+    t.datetime "created_at",           null: false
+    t.datetime "updated_at",           null: false
+    t.index ["survey_id"], name: "index_survey_questions_on_survey_id", using: :btree
+  end
+
+  create_table "survey_result_details", force: :cascade do |t|
+    t.integer  "survey_id"
+    t.integer  "survey_result_id"
+    t.text     "description"
+    t.integer  "value"
+    t.integer  "conditional"
+    t.datetime "created_at",       null: false
+    t.datetime "updated_at",       null: false
+    t.index ["survey_id"], name: "index_survey_result_details_on_survey_id", using: :btree
+    t.index ["survey_result_id"], name: "index_survey_result_details_on_survey_result_id", using: :btree
+  end
+
+  create_table "survey_results", force: :cascade do |t|
+    t.integer  "survey_id"
+    t.text     "name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["survey_id"], name: "index_survey_results_on_survey_id", using: :btree
+  end
+
+  create_table "surveys", force: :cascade do |t|
+    t.text     "name"
+    t.text     "slug"
+    t.text     "description"
+    t.boolean  "randomize_answers", default: true
+    t.datetime "created_at",                       null: false
+    t.datetime "updated_at",                       null: false
+  end
+
+  create_table "user_lists", force: :cascade do |t|
     t.integer "user_id"
     t.integer "list_id"
     t.boolean "is_owner"
@@ -443,12 +576,62 @@ ActiveRecord::Schema.define(version: 2022_04_05_024912) do
     t.boolean "active", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_user_push_subscriptions_on_user_id", using: :btree
   end
 
-  create_table "venmos", id: :serial, force: :cascade do |t|
-    t.string "access_code", limit: 255
-    t.string "access_token", limit: 255
-    t.string "refresh_token", limit: 255
+  create_table "user_survey_responses", force: :cascade do |t|
+    t.integer  "user_id"
+    t.integer  "survey_id"
+    t.integer  "user_survey_id"
+    t.integer  "survey_question_id"
+    t.integer  "survey_question_answer_id"
+    t.datetime "created_at",                null: false
+    t.datetime "updated_at",                null: false
+    t.index ["survey_id"], name: "index_user_survey_responses_on_survey_id", using: :btree
+    t.index ["survey_question_answer_id"], name: "index_user_survey_responses_on_survey_question_answer_id", using: :btree
+    t.index ["survey_question_id"], name: "index_user_survey_responses_on_survey_question_id", using: :btree
+    t.index ["user_id"], name: "index_user_survey_responses_on_user_id", using: :btree
+    t.index ["user_survey_id"], name: "index_user_survey_responses_on_user_survey_id", using: :btree
+  end
+
+  create_table "user_surveys", force: :cascade do |t|
+    t.integer  "user_id"
+    t.integer  "survey_id"
+    t.text     "token"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["survey_id"], name: "index_user_surveys_on_survey_id", using: :btree
+    t.index ["user_id"], name: "index_user_surveys_on_user_id", using: :btree
+  end
+
+  create_table "users", force: :cascade do |t|
+    t.string   "username"
+    t.string   "password_digest"
+    t.datetime "created_at",                   null: false
+    t.datetime "updated_at",                   null: false
+    t.string   "phone"
+    t.string   "invitation_token"
+    t.integer  "role",             default: 0
+    t.boolean  "dark_mode"
+    t.string   "email"
+  end
+
+  create_table "venmo_recurrings", force: :cascade do |t|
+    t.string   "to",           default: "3852599640"
+    t.string   "from"
+    t.integer  "amount_cents"
+    t.string   "note"
+    t.integer  "day_of_month"
+    t.integer  "hour_of_day"
+    t.boolean  "active",       default: true
+    t.datetime "created_at",                          null: false
+    t.datetime "updated_at",                          null: false
+  end
+
+  create_table "venmos", force: :cascade do |t|
+    t.string   "access_code",   limit: 255
+    t.string   "access_token",  limit: 255
+    t.string   "refresh_token", limit: 255
     t.datetime "expires_at"
     t.datetime "created_at"
     t.datetime "updated_at"

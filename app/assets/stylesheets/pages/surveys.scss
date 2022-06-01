@@ -1,0 +1,10 @@
+.ctr-surveys {
+  .survey-questions {
+    input[type=radio] { display: none; }
+    input[type=radio]:checked + label {
+      transition: color, background 0.3s;
+      background: $base-blue;;
+      color: $blue-l5;
+    }
+  }
+}

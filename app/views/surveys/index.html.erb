@@ -1,0 +1,18 @@
+<%= meta_title "Surveys", include_name: false %>
+<%= meta_description "Take a survey to see where you belong!"  %>
+
+<div class="skinny-container lists-index-container">
+  <div class="lists-title">Surveys</div>
+  <div class="lists">
+    <div class="list-field">
+      <%= text_field_tag :surveys, nil, class: "filterable", placeholder: "Search Surveys" %>
+    </div>
+    <% @surveys.each do |survey| %>
+      <div class="list-item-container">
+        <a href="<%= survey_path(survey.slug) %>" class="list-item">
+          <span class="item-name"><%= survey.name %></span> (<%= survey.survey_questions.count %>)
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>

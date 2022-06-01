@@ -631,6 +631,10 @@
         }
 
         .pin-svg-wrapper svg { height: 16px; }
+        .timer-toggle svg {
+          // Hacky, but other styles are applied inline with JS, so need to override.
+          transform: scale(0.5) rotateZ(-90deg) !important;
+        }
       }
 
       .bowling-keypad-entry {

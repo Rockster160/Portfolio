@@ -3,9 +3,39 @@ class EmailsController < ApplicationController
 
   def index
     # FIXME: Filter this by user unless admin?
-    @emails_received = Email.not_archived.inbound.order_chrono.page(params[:emails_received_page]).per(params[:emails_received_per] || 10)
-    @emails_sent = Email.not_archived.outbound.order_chrono.page(params[:emails_sent_page]).per(params[:emails_sent_per] || 10)
-    @failed_to_parse = Email.not_archived.failed.order_chrono.page(params[:emails_failed_page]).per(params[:emails_failed_per] || 10)
+    @emails = Email.order_chrono.page(params[:page]).per(params[:per] || 10)
+
+    search = params[:q]&.dup.to_s
+    @filters = search.scan(/\w*\:\w+/).each_with_object({}) do |filter, obj|
+      # Should include key:"words in quotes"
+      search.gsub!(/ ?#{filter} ?/, " ")
+      key, val = filter.starts_with?(":") ? [filter[1..-1], nil] : filter.split(":", 2).reverse
+      obj[key] = val
+    end.with_indifferent_access || {}
+    @filters[:search] = search.squish
+
+    @filters.each do |filter, val|
+      @emails = (
+        case filter.to_sym
+        when :sent     then @emails.outbound
+        when :read     then @emails.read
+        when :unread   then @emails.unread
+        when :archived then @emails.archived
+        when :failed   then @emails.failed
+        when :search   then @emails.search(search)
+        else
+          @emails
+        end
+      )
+    end
+    # Allow passing things like
+    # subject:"blah"
+    # to filter on specific fields
+    # Add buttons to add filters on the FE
+
+    # "all" is a terrible name...
+    @emails = @emails.inbound if !@filters.key?(:sent) && !@filters.key?(:all)
+    @emails = @emails.not_archived if !@filters.key?(:archived)
   end
 
   def show
@@ -33,7 +63,11 @@ class EmailsController < ApplicationController
   def update
     @email = Email.find(params[:id])
     @email.update(update_params)
-    redirect_to emails_path
+
+    respond_to do |format|
+      format.html { redirect_to emails_path }
+      format.json { render json: @email }
+    end
   end
 
   private
@@ -47,7 +81,7 @@ class EmailsController < ApplicationController
   end
 
   def email_params
-    params.fetch(:email, {}).permit(:html_body, :from_user, :from_domain, :to, :subject)
+    params.fetch(:email, {}).permit(:html_body, :from_user, :from_domain, :to, :subject, tempfiles: [])
   end
 
 end

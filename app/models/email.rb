@@ -1,46 +1,58 @@
-#== Schema Information
+# == Schema Information
 #
 # Table name: emails
 #
-#  id         :integer          not null, primary key
-#  sent_by_id :integer
-#  from       :string
-#  to         :string
-#  subject    :string
-#  blob       :text
-#  text_body  :text
-#  html_body  :text
-#  read_at    :datetime
-#  deleted_at :datetime
-#  created_at :datetime         not null
-#  updated_at :datetime         not null
+#  id          :integer          not null, primary key
+#  attachments :text
+#  blob        :text
+#  deleted_at  :datetime
+#  from        :string
+#  html_body   :text
+#  read_at     :datetime
+#  subject     :string
+#  text_body   :text
+#  to          :string
+#  created_at  :datetime         not null
+#  updated_at  :datetime         not null
+#  sent_by_id  :integer
 #
 
 class Email < ApplicationRecord
-  attr_accessor :skip_validations, :from_user, :from_domain, :skip_notify
+  attr_accessor :skip_validations, :from_user, :from_domain, :skip_notify, :tempfiles
   belongs_to :sent_by, class_name: "User", optional: true
 
+  serialize :attachments, JSONWrapper
+
   scope :not_archived, -> { where(deleted_at: nil) }
+  scope :archived,     -> { where.not(deleted_at: nil) }
   scope :outbound,     -> { where(registered_domains.map { |domain| "emails.from ILIKE '%#{domain}'" }.join(" OR ")) }
   scope :inbound,      -> { where.not(registered_domains.map { |domain| "emails.from ILIKE '%#{domain}'" }.join(" OR ")) }
   scope :unread,       -> { where(read_at: nil) }
   scope :read,         -> { where.not(read_at: nil) }
   scope :failed,       -> { where.not(blob: nil).where(from: nil, to: nil) }
+  scope :search,       ->(str) {
+    str = "%#{str}%"
+    where("
+      emails.from ILIKE :str OR
+      emails.to ILIKE :str OR
+      emails.subject ILIKE :str OR
+      emails.text_body ILIKE :str
+    ", str: str)
+    # Maybe also search attachment names?
+  }
 
   scope :order_chrono, -> { order(created_at: :desc) }
 
-  def self.receive(req)
-    blob = req.try(:raw_post).to_s
-    email = create(blob: blob, skip_validations: true)
-    email.reload.parse_blob if email.persisted?
-  end
-
-  def self.from_mail(mail)
-    new.from_mail(mail)
+  def self.from_mail(mail, attaches=[])
+    new.from_mail(mail, attaches)
   end
 
   def self.domains_from_addresses(*addresses)
-    addresses.map { |address| address.to_s.split("@").first.to_s.squish }.reject(&:blank?)
+    addresses.map { |address| address.to_s.split("@", 2).last.to_s.squish }.reject(&:blank?)
+  end
+
+  def self.registered_domains
+    ["ardesian.com", "rocconicholls.me", "rdjn.me"]
   end
 
   def notify_slack
@@ -52,19 +64,30 @@ class Email < ApplicationRecord
     SlackNotifier.notify(message_parts.join("\n"), channel: "#portfolio", username: "Mail-Bot", icon_emoji: ":mailbox:")
   end
 
-  def outbound?
-    (Email.domains_from_addresses(from) & Email.registered_domains).any?
+  def retrieve_attachments
+    @retrieve_attachments ||= begin
+      attachments.each_with_object({}) do |(attch_id, attch_filename), obj|
+        obj[attch_id] = {
+          filename: attch_filename,
+          presigned_url: FileStorage.expiring_url(attch_filename)
+        }
+      end.with_indifferent_access
+    end
   end
 
-  def inbound?
+  def outbound?
     (Email.domains_from_addresses(to) & Email.registered_domains).any?
   end
 
-  def outbound_address
-    outbound? ? to : from
+  def inbound?
+    (Email.domains_from_addresses(from) & Email.registered_domains).any?
   end
 
   def inbound_address
+    outbound? ? to : from
+  end
+
+  def outbound_address
     outbound? ? from : to
   end
 
@@ -76,8 +99,14 @@ class Email < ApplicationRecord
     (from&.split("@", 2)&.last || @from_domain&.split("@", 2)&.last).to_s.downcase
   end
 
-  def self.registered_domains
-    ["ardesian.com", "rocconicholls.me", "rdjn.me"]
+  def html_for_display
+    with_attach = html_body.gsub(/src\=\"cid\:(\w+)\"/) do |found|
+      cid = Regexp.last_match(1)
+      "src=\"#{retrieve_attachments&.dig(cid, :presigned_url)}\""
+    end
+    open_links_in_new_tab = with_attach.gsub("<a ", "<a target=\"_blank\" ")
+
+    open_links_in_new_tab
   end
 
   def to_mail
@@ -101,7 +130,7 @@ class Email < ApplicationRecord
     parser.xpath("//text()").map(&:text).join(" ").squish
   end
 
-  def from_mail(mail)
+  def from_mail(mail, attaches=[])
     content = mail.body&.decoded.presence
     html_body = clean_content(mail.html_part&.body&.decoded.presence) || clean_content(content)
     text_body = clean_content(mail.text_part&.body&.decoded.presence) || clean_content(content, parse_text: true)
@@ -111,7 +140,8 @@ class Email < ApplicationRecord
       to:        [mail.to].flatten.compact.join(","),
       subject:   mail.subject,
       text_body: text_body,
-      html_body: html_body
+      html_body: html_body,
+      attachments: attaches,
     )
     notify_slack if save && !skip_notify
     failure(*errors.full_messages) if errors.any?
@@ -124,7 +154,7 @@ class Email < ApplicationRecord
   end
 
   def deliver!
-    ApplicationMailer.deliver_email(id).deliver_later
+    ApplicationMailer.deliver_email(id, tempfiles).deliver_now
   end
 
   def archive
@@ -153,8 +183,8 @@ class Email < ApplicationRecord
     return errors.add(:from, "must be a valid email address.") unless from =~ email_regexp
     self.to = [to].flatten.compact.select { |to_address| to_address =~ email_regexp }.join(",")
     return errors.add(:to, "must be a valid email address.") unless to.present?
-    self.text_body ||= Nokogiri::HTML.parse(html_body).xpath("//text()").map(&:text).join(" ") rescue nil
-    errors.add(:text_body, "must exist") unless text_body.present?
+    # self.text_body ||= Nokogiri::HTML.parse(html_body).xpath("//text()").map(&:text).join(" ") rescue nil
+    # errors.add(:text_body, "must exist") unless text_body.present?
   end
 
   def reparse!
