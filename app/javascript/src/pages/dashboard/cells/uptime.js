@@ -40,7 +40,10 @@ import { dash_colors } from "../vars"
   var rigData = function(cell) {
     fetch(cell.data.base_url + "/farms", {
       method: "GET",
-      headers: { "Authorization": "Bearer " + cell.config.hiveos_apikey }
+      headers: {
+        "Authorization": "Bearer " + cell.config.hiveos_apikey,
+        "Access-Control-Allow-Origin": "*"
+      }
     }).then(function(res) {
       res.json().then(function(json) {
         if (res.ok) {
