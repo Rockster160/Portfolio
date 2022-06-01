@@ -1,15 +1,15 @@
-var defaultParagraphSeparatorString = "defaultParagraphSeparator"
-var formatBlock = "formatBlock"
-var addPellEventListener =  function(parent, type, listener) { return parent.addEventListener(type, listener) }
-var appendChild =       function(parent, child) { return parent.appendChild(child) }
-var createElement =     function(tag) { return document.createElement(tag) }
-var queryCommandState = function(command) { return document.queryCommandState(command) }
-var queryCommandValue = function(command) { return document.queryCommandValue(command) }
+export var defaultParagraphSeparatorString = "defaultParagraphSeparator"
+export var formatBlock = "formatBlock"
+export var addPellEventListener =  function(parent, type, listener) { return parent.addEventListener(type, listener) }
+export var appendChild =       function(parent, child) { return parent.appendChild(child) }
+export var createElement =     function(tag) { return document.createElement(tag) }
+export var queryCommandState = function(command) { return document.queryCommandState(command) }
+export var queryCommandValue = function(command) { return document.queryCommandValue(command) }
 // https://developer.mozilla.org/en-US/docs/Web/API/Document/execCommand#Commands
 // https://codepen.io/netsi1964/full/QbLLGW
-var exec = function(command, value) { return document.execCommand(command, false, value) }
+export var exec = function(command, value) { return document.execCommand(command, false, value) }
 
-var init = function(settings) {
+export var init = function(settings) {
   var actions = settings.actions
   var classes = settings.classes
   var defaultParagraphSeparator = settings[defaultParagraphSeparatorString] || "div"

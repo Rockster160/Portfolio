@@ -1,4 +1,15 @@
-$(".ctr-emails.act-new").ready(function() {
+import { defaultParagraphSeparatorString,
+formatBlock,
+addPellEventListener,
+appendChild,
+createElement,
+queryCommandState,
+queryCommandValue,
+exec,
+init } from "../support/pell"
+
+$(document).ready(function() {
+  if ($(".ctr-emails.act-new").length == 0) { return }
   function addRecipients() {
     var emailMatch = $("#temp-emails").val().match(/[^@\s]+@[^@\s]+/)
     if (!emailMatch || emailMatch.length == 0) { return }

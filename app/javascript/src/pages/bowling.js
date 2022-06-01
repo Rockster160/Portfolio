@@ -1,3 +1,5 @@
+import { Spinner } from "./spinner"
+
 $(".ctr-bowling_leagues.act-tms").ready(function() {
   var calcAvgChange = function(bowler, new_val) {
     new_val = parseInt(new_val)

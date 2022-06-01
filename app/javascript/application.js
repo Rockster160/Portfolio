@@ -35,6 +35,7 @@
 //= link_tree ../builds
 
 import "./preimports.js"
+import "./pageready.js"
 import "./jquery-ui.min.js"
 import "./src/**/*.js"
 
