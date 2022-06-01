@@ -16,7 +16,7 @@ $(document).ready(function() {
   $("#anonicon-form").submit(function(evt) {
     evt.preventDefault();
     $('.anonicon-container').html('<i class="fa fa-spinner fa-spin fa-3x"></i>');
-    $.get($(this).attr("action"), $(this).serialize()).success(function(data) {
+    $.get($(this).attr("action"), $(this).serialize()).done(function(data) {
       $('.anonicon-container').html(data);
     })
     return false;

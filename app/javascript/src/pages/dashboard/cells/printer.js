@@ -85,7 +85,7 @@
       },
       pre: function() {
         var cell = this
-        cell.commands.on(cell).success(function() {
+        cell.commands.on(cell).done(function() {
           Printer.post(cell, "/printer/tool", { command: "target", targets: { tool0: 200 } })
           Printer.post(cell, "/printer/bed", { command: "target", target: 40 }).done(function() {
             cell.data.prepping = true
@@ -96,7 +96,7 @@
     },
     reloader: function() {
       var cell = this
-      Printer.get(cell, "/printer").success(function(data) {
+      Printer.get(cell, "/printer").done(function(data) {
         var data = data
         cell.data.printing = data.state.flags.printing
         if (cell.data.printing) {
@@ -126,7 +126,7 @@
         }
         cell.line(0, Text.center([tool, bed].join(" | ")))
 
-        Printer.get(cell, "/job").success(function(data) {
+        Printer.get(cell, "/job").done(function(data) {
           if (!data.job.user) {
             return cell.line(2, Text.center("~Previous job unavailable~"))
           }

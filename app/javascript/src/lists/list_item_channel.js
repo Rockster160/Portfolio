@@ -11,7 +11,7 @@ $(document).ready(function() {
   }, {
     connected: function() {
       var url = $(".list-items").attr("data-update-url")
-      $.get(url, {}).success(function() { $(".list-error").addClass("hidden") })
+      $.get(url, {}).done(function() { $(".list-error").addClass("hidden") })
     },
     disconnected: function() {
       $(".list-error").removeClass("hidden")

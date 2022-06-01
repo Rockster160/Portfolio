@@ -296,7 +296,7 @@ $('.selector').searchableFromSelect()
         if (current_searchable_request != undefined) {
           current_searchable_request.abort();
         }
-        current_searchable_request = $.get(getOptionsFromUrl, params).success(function(data) {
+        current_searchable_request = $.get(getOptionsFromUrl, params).done(function(data) {
           hideDropdowns();
           var arrayResponse = arrayOfOptionsFromUrlResponse(data) || [];
           optionsList = arrayResponse.slice(0, max_dropdown_values);

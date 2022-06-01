@@ -1,3 +1,5 @@
+import { Parser } from "../support/parser.js"
+
 var currentMonster;
 $(document).ready(function() {
   if ($(".ctr-summoners_wars").length == 0) { return }
@@ -27,7 +29,7 @@ $(document).ready(function() {
     var monster_id = $('.monster-selector').val();
     if (!monster_id) { return updateMonsterAttributes(); }
     var url = $('.monster-selector').attr("data-monster-details") + "/" + monster_id;
-    $.get(url).success(function(data) {
+    $.get(url).done(function(data) {
       currentMonster = data;
       updateMonsterAttributes();
     })

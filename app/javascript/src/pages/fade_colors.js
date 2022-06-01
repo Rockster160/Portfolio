@@ -26,7 +26,7 @@ $(document).ready(function() {
 
   $("#color-form").submit(function(evt) {
     evt.preventDefault();
-    $.get($(this).attr("action"), $(this).serialize()).success(function(data) {
+    $.get($(this).attr("action"), $(this).serialize()).done(function(data) {
       $('.colors-container').html(data);
       generateColorPreviews();
     })

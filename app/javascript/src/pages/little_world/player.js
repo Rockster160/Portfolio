@@ -26,7 +26,7 @@ LittleWorld.prototype.loginPlayer = function(data, callback) {
   var url = $(".little-world-wrapper").attr("data-player-login-url")
   var player_id = data.uuid
   if (Player.findPlayer(player_id) != undefined) { return }
-  $.get(url, { uuid: player_id }).success(function(data) {
+  $.get(url, { uuid: player_id }).done(function(data) {
     var player = new Player($(data))
     littleWorldPlayers.push(player)
     player.logIn()

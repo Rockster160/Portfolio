@@ -1277,7 +1277,7 @@ var GAMMA_P = [
 //   condition
 // } from './functions';
 
-/*export*/ function Parser(options) {
+export function Parser(options) {
   this.options = options || {};
   this.unaryOps = {
     sin: Math.sin,

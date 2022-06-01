@@ -16,15 +16,6 @@
 //= require underscore
 //= require command_proposal
 //= require gmaps/google
-//= require_tree .
-//= stub support/colorpicker.js
-//= stub support/pell.js
-//= stub support/particles.js
-//= stub support/particles_json.js
-//= stub support/touch_punch.js
-//= stub support/parser.js
-//= stub support/gcode_splitter.js
-//= stub pages/random/dnd.js
 
 // import "*"
 //= link_tree ../images
