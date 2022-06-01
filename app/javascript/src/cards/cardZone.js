@@ -1,4 +1,5 @@
-$('.ctr-cards').ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-cards").length == 0) { return }
   setTimeout(function() {
     addZone = function(opts) {
       var $playingField = $('.playing-field')

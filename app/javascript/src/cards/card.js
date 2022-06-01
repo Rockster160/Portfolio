@@ -1,6 +1,7 @@
 var currentMouseCoord;
 var prevSelect;
-$(".ctr-cards").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-cards").length == 0) { return }
   setTimeout(function() {
     $.fn.jump = function(x, y) {
       this.css({"left": x + "px", "top": y + "px"});

@@ -2,7 +2,7 @@
 // 0 == free space
 // 1 == blocked
 // pathStart and pathEnd are arrays like [5,10]
-function findPath(world, pathStart, pathEnd) {
+export function findPath(world, pathStart, pathEnd) {
   // shortcuts for speed
   var	abs = Math.abs;
   var	max = Math.max;

@@ -1,4 +1,5 @@
-$(".ctr-money_buckets").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-money_buckets").length == 0) { return }
   var template = document.querySelector("#bucket-form")
 
   $(".add-bucket-btn").click(function() {

@@ -9,7 +9,8 @@
 // - Multiplying ft by inches does not convert units
 // Add some sort of "err"? - Divide by zero, or other problems.
 
-$(".ctr-calcs.act-show").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-calcs.act-show").length == 0) { return }
   var $screen = $(".screen"), $prev = $(".prev"), copy = "0"
 
   Array.prototype.compact = function() {

@@ -1,4 +1,5 @@
-$(".ctr-functions.act-show").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-functions.act-show").length == 0) { return }
   $(".command-form").submit(function(evt) {
     evt.preventDefault()
     $("input[type=submit]").prop("disabled", true)

@@ -1,6 +1,7 @@
 import consumer from "./consumer"
 
-$(".ctr-nfcs.act-show").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-nfcs.act-show").length == 0) { return }
 
   consumer.subscriptions.create({
     channel: "NfcChannel"

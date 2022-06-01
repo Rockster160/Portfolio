@@ -1,5 +1,6 @@
 var currentMonster;
-$('.ctr-summoners_wars').ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-summoners_wars").length == 0) { return }
 
   $('.monster-selector').searchableFromSelect({
     retainFieldValueAfterSelect: true,

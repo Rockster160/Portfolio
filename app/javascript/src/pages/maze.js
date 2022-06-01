@@ -1,4 +1,5 @@
-$(".ctr-mazes.act-show").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-mazes.act-show").length == 0) { return }
   movePlayer = function(direction) {
     var rel_coords = relativeCoordsFromDirection(direction), player_cell = $(".cell-player"), player_coords = getCellCoords(player_cell), new_coord = [rel_coords[0] + player_coords[0], rel_coords[1] + player_coords[1]];
     var new_cell = getCellAtCoord(new_coord[0], new_coord[1]);

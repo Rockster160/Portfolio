@@ -1,4 +1,5 @@
-$('.ctr-little_worlds.act-character_builder').ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-little_worlds.act-character_builder").length == 0) { return }
 
   var nextQueueTimer, animationQueue = [];
   // Must be kept in sync with CSS values!

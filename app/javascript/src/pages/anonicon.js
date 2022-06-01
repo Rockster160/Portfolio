@@ -1,4 +1,5 @@
-$('.ctr-anonicons.act-index').ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-anonicons.act-index").length == 0) { return }
 
   $('.random-anonicon').click(function(evt) {
     evt.preventDefault();

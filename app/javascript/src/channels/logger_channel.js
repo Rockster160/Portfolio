@@ -1,6 +1,7 @@
 import consumer from "./consumer"
 
-$('.ctr-log_trackers.act-index').ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-log_trackers.act-index").length == 0) { return }
 
   consumer.subscriptions.create({
     channel: "LoggerChannel"

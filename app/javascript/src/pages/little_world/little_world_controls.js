@@ -1,3 +1,7 @@
+import { Player, LittleWorld } from "./player"
+import { multiKeyDown, multiKeyUp, isKeyPressed } from "../../support/multi_key_detection"
+import { little_world_sub } from "../../channels/little_world_channel"
+
 var seed = 3141;
 function random() {
   var x = Math.sin(seed++) * 10000;
@@ -7,7 +11,8 @@ function randRange(start, end) {
   return Math.round(start + (random() * (end - start)));
 }
 
-$('.ctr-little_worlds.act-show').ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-little_worlds.act-show").length == 0) { return }
   $(".little-world-wrapper").disableSelection()
 
   var ticksPerMovementFrame = 5
@@ -157,7 +162,7 @@ $('.ctr-little_worlds.act-show').ready(function() {
     if ($(".chat-input").is(":focus")) {
       if (evt.which == keyEvent("ENTER")) {
         if ($(".chat-input").val().length > 0) {
-          App.little_world.speak($(".chat-input").val())
+          little_world_sub.speak($(".chat-input").val())
         }
         $(".chat-input").val("")
         $(".chat-input").blur()

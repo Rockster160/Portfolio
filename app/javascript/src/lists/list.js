@@ -1,6 +1,7 @@
 var heldListItem, heldListItemTimer
 
-$(".ctr-lists, .ctr-list_items").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-lists, .ctr-list_items").length == 0) { return }
 
   setImportantItems = function() {
     $(".important-list-items").html("")

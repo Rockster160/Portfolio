@@ -8,7 +8,8 @@ Date.prototype.isDstObserved = function () {
   return this.getTimezoneOffset() < this.stdTimezoneOffset();
 }
 
-$("#list-item-schedule").ready(function() {
+$(document).ready(function() {
+  if ($("#list-item-schedule").length == 0) { return }
   var hold_val
 
   $("#list-item-schedule input").on("focus", function() {

@@ -42,7 +42,6 @@ Rails.application.routes.draw do
       get :octoprint_session
     end
   end
-  get "cube" => "cubes#show"
 
   resource :nfc, only: [:show]
 

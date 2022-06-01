@@ -1,4 +1,5 @@
-$(".ctr-dashboard").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-dashboard").length == 0) { return }
   var dashboard_history = [], history_idx = -1, history_hold = ""
   var autocomplete_on = false
   var $omnibar = $(".dashboard-omnibar input")

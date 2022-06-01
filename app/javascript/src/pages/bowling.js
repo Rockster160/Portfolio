@@ -1,6 +1,7 @@
 import { Spinner } from "./spinner"
 
-$(".ctr-bowling_leagues.act-tms").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-bowling_leagues.act-tms").length == 0) { return }
   var calcAvgChange = function(bowler, new_val) {
     new_val = parseInt(new_val)
     if (isNaN(new_val)) { return "" }
@@ -23,7 +24,8 @@ $(".ctr-bowling_leagues.act-tms").ready(function() {
     bowler.children(".quick-avg-out").text(newAvg)
   })
 })
-$(".ctr-bowling_leagues.act-edit, .ctr-bowling_leagues.act-new").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-bowling_leagues.act-edit, .ctr-bowling_leagues.act-new").length == 0) { return }
   $(".league-roster").sortable({
     handle: ".bowler-handle",
     update: function(evt, ui) { updateRoster() }
@@ -71,7 +73,8 @@ $(".ctr-bowling_leagues.act-edit, .ctr-bowling_leagues.act-new").ready(function(
 })
 
 
-$(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").length == 0) { return }
   var inProgress = false
   var pin_knock = undefined
   var pinTimer = undefined

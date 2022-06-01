@@ -1,4 +1,5 @@
-$('.ctr-colors.act-index').ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-colors.act-index").length == 0) { return }
 
   $('.colorpicker').spectrum({
     change: function(spectrumColor) {

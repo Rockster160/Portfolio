@@ -1,6 +1,7 @@
 import consumer from "./../channels/consumer"
 
-$(".ctr-lists.act-show").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-lists.act-show").length == 0) { return }
 
   var list_id = $(".list-container").attr("data-list-id")
 

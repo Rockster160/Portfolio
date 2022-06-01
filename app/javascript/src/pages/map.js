@@ -1,4 +1,5 @@
-$('.ctr-index.act-map').ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-index.act-map").length == 0) { return }
   handler = Gmaps.build('Google');
   handler.buildMap(
     {

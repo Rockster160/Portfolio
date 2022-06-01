@@ -1,4 +1,5 @@
-$('.ctr-cards').ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-cards").length == 0) { return }
   setTimeout(function() {
     if (params.game == "solitaire") {
       var cardWidth = 100

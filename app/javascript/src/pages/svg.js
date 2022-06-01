@@ -1,4 +1,5 @@
-$(".ctr-svg_editors").ready(function() {
+$(document).ready(function() {
+  if ($(".ctr-svg_editors").length == 0) { return }
   SVG = {
     raw: null,
     current_id: null

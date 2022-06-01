@@ -7,7 +7,8 @@ time_ms.week = 7 * time_ms.day;
 time_ms.month = 30 * time_ms.day;
 time_ms.year = 12 * time_ms.month;
 
-$("[data-next-occurrence]").ready(function() {
+$(document).ready(function() {
+  if ($("[data-next-occurrence]").length == 0) { return }
   var occurrence_object = $(this)
 
   var configureTime = function() {

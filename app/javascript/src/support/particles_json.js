@@ -1,4 +1,4 @@
-var particlesJSON = {
+export let particlesJSON = {
   "particles": {
     "number": {
       "value": 300,

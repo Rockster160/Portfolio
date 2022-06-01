@@ -1,5 +1,8 @@
+import { findPath } from "../../support/pathfinding"
+import { little_world_sub } from "../../channels/little_world_channel"
+
 canCameraChange = true
-function LittleWorld() {
+export function LittleWorld() {
   this.players = []
   this.blockWidth = $(".block").width()
   this.blockHeight = $(".block").height()
@@ -16,7 +19,7 @@ LittleWorld.prototype.disconnected = function() {
 }
 
 LittleWorld.prototype.loadOnlinePlayers = function() {
-  App.little_world.ping()
+  little_world_sub.ping()
 }
 
 LittleWorld.prototype.loginPlayer = function(data, callback) {
@@ -98,7 +101,7 @@ LittleWorld.prototype.walkables = function() {
 }
 
 littleWorldPlayers = []
-function Player(player_html) {
+export function Player(player_html) {
   var default_coord = [30, 30]
   this.id = parseInt(player_html.attr("data-id")) || 1234
   this.x = parseInt(player_html.attr("data-location-x")) || default_coord[0]

@@ -1,8 +1,5 @@
 <%= meta_title "#{@list.name.capitalize}", include_name: false %>
 <%= content_for(:favicon) { render "lists/favicon" } %>
-<% content_for :head do %>
-  <%= javascript_include_tag 'support/touch_punch.js' %>
-<% end %>
 
 <%= render_modal "sort-list", "Sort" do %>
   <div class="text-center">

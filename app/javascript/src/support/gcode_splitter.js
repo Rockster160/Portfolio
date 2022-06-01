@@ -1,4 +1,5 @@
 $(document).ready(function() {
+  if ($(".ctr-gcode_splitter.act-index").length == 0) { return }
   var gcodes = {}
   var error = undefined
 
