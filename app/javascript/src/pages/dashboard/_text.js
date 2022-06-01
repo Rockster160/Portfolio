@@ -1,7 +1,5 @@
 import { text_height, single_width, cells, registered_cells } from "./vars"
 
-let emojiPattern
-
 export function Text() {}
 Text.new = function(data) {
   var text = new Text()
