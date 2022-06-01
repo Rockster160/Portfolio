@@ -50,6 +50,7 @@ gem "ice_cube"
 gem "webpush"
 gem "chronic"
 gem "aws-sdk-s3"
+gem "erubis"
 
 # gem "command_proposal", path: "../command_proposal"
 gem "command_proposal", git: "https://github.com/Rockster160/command_proposal.git"

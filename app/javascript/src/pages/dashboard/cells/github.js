@@ -1,5 +1,6 @@
 import { Time } from "./_time"
 import { Text } from "../_text"
+import { dash_colors } from "../vars"
 
 (function() {
   var cell = undefined
@@ -17,7 +18,6 @@ import { Text } from "../_text"
     if (res.ok) {
       var json = await res.json()
       return json.items.map(function(issue) {
-        debugger
         return {
           url: (issue.pull_request || issue.issue).html_url,
           // status to show if it's open, ready to merge, etc...
