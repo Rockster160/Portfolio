@@ -36,5 +36,6 @@ local_data.json
 
 /app/assets/builds/*
 !/app/assets/builds/.keep
+app/assets/config/manifest.js
 
 /node_modules

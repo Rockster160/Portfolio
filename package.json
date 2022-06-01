@@ -6,7 +6,8 @@
   "author": "Rocco Nicholls <rocco11nicholls@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "build": "node esbuild.config.js"
+    "build": "node esbuild.config.js",
+    "build:css": "sass .app/assets/stylesheets/application.css --no-source-map --load-path=node_modules"
   },
   "dependencies": {
     "@rails/actioncable": "^6.0.5",
