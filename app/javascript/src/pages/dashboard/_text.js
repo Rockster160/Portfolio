@@ -183,15 +183,17 @@ Text.escapeEmoji = function(text) {
     return replace
   })
 
-  var emoRegex = new RegExp(emojiPattern, "g")
-  var escaped = subbed_text.replaceAll(emoRegex, function(found) {
-    return "<e>" + found + "</e>"
-  })
+  if (emojiPattern) {
+    var emoRegex = new RegExp(emojiPattern, "g")
+    subbed_text = subbed_text.replaceAll(emoRegex, function(found) {
+      return "<e>" + found + "</e>"
+    })
+  }
 
   for (const [token, emoji] of Object.entries(hold)) {
-    escaped = escaped.replace(token, emoji)
+    subbed_text = subbed_text.replace(token, emoji)
   }
-  return escaped
+  return subbed_text
 }
 Text.markup = function(text) {
   text = Text.escapeEmoji(text)
