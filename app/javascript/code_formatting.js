@@ -1,4 +1,6 @@
+console.log("Load");
 $(document).ready(function() {
+  console.log("Code formatted");
   if ($(".no-markdown").length > 0) { return }
 
   contrastForColor = function(bg_color_hex) {

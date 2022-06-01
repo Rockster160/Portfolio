@@ -14,13 +14,13 @@
   <% end %>
   <%= yield :meta %>
   <%= yield :head_before_scripts %>
-  <%= stylesheet_link_tag    'application', media: 'all' %>
-  <%= javascript_include_tag 'application' %>
+  <%= stylesheet_link_tag    "application", media: "all" %>
+  <%= javascript_include_tag "application", "data-turbo-track": "reload", defer: true %>
   <%= yield :head %>
   <% if content_for? :favicon %>
     <%= yield :favicon %>
   <% else %>
-    <%= render 'favicon' %>
+    <%#= render 'favicon' %>
   <% end %>
   <%= csrf_meta_tags %>
 </head>

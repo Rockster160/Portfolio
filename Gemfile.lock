@@ -157,6 +157,8 @@ GEM
       thor (>= 0.14, < 2.0)
     jquery-ui-rails (6.0.1)
       railties (>= 3.2.16)
+    jsbundling-rails (1.0.2)
+      railties (>= 6.0.0)
     json (2.6.1)
     jwt (1.5.6)
     kaminari (1.2.2)
@@ -379,6 +381,7 @@ DEPENDENCIES
   jbuilder (~> 2.0)
   jquery-rails
   jquery-ui-rails
+  jsbundling-rails
   json (~> 2.3)
   kaminari
   launchy

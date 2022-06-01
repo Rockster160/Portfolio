@@ -83,7 +83,7 @@
             <p>The return is the binary for a PNG that is unique to the string passed.</p>
             <p>This can be used as a default image for newly signed up users to a website.</p>
             <%= raw pretty(:bash, "requests/anonicons/show.json") %>
-            <pre class="preformat text-center"><%= image_tag "/anonicons/#{request.ip}", width: 100 %></pre>
+            <pre class="preformat text-center"><%= image_tag "/anonicons/#{Rails.env.development? ? "127.0.0.1" : request.ip}", width: 100 %></pre>
           <% end %>
           <div class="project-title">Anonicon Generator</div>
           <div class="project-description">

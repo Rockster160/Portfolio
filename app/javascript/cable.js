@@ -4,6 +4,8 @@
 //= require action_cable
 //= require_self
 
+import "@rails/actioncable"
+
 (function() {
 
   this.App || (this.App = {});
