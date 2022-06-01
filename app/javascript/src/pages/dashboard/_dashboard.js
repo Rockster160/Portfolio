@@ -1,3 +1,5 @@
+import { Text } from "./_text"
+
 $(document).ready(function() {
   if ($(".ctr-dashboard").length == 0) { return }
   var dashboard_history = [], history_idx = -1, history_hold = ""

@@ -106,7 +106,7 @@
         return;
     }
 
-    function ReconnectingWebSocket(url, protocols, options) {
+    window.ReconnectingWebSocket = function(url, protocols, options) {
 
         // Default settings
         var settings = {

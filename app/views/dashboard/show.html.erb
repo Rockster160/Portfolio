@@ -2,18 +2,25 @@
   <script src="https://combinatronics.com/sweaver2112/Regex-combined-emojis/master/regex.js"></script>
 <% end %>
 <%= content_for(:head) do %>
-  <script src="/emoji.js"></script> <!-- Only needed because Rails minifier screws up raw emoji in JS -->
+  <script type="text/javascript">
+    fetch("/emoji.json").then(function(res) {
+      res.json().then(function(json) {
+        window.Emoji = json
+      })
+    })
+  </script>
 <% end %>
 
-<div class="dashboard"></div>
+<div class="dashboard no-markdown"></div>
 <div class="dashboard-omnibar">
   <input autofocus=true type="text">
   <div class="dashboard-omnibar-autocomplete"></div>
 </div>
 
-<%= content_for(:after_js) do %>
 <script type="text/javascript">
-  $(document).ready(function() {
+  (function load() {
+    if (!window.jQuery) { return setTimeout(load, 50); }
+
     <% if Rails.env.development? %>
       Cell.register({ title: "Weather" }) // Overwrite to save API calls
       Cell.register({ title: "Uptime" }) // Overwrite to save API calls
@@ -53,6 +60,5 @@
       timers: { x: 2, y: 5 },
       github: { x: 3, y: 5, github_apikey: "<%= ENV.fetch("GITHUB_APIKEY") %>" },
     })
-  })
+  })()
 </script>
-<% end %>

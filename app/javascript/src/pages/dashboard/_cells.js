@@ -1,4 +1,5 @@
-import { text_height, single_width, emojiPattern, cells, registered_cells } from "./vars"
+import { text_height, single_width, cells, registered_cells } from "./vars"
+import { Text } from "./_text"
 
 Cell = function() {}
 Cell.register = function(init_data) {

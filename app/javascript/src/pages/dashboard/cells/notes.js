@@ -1,3 +1,5 @@
+import { Text } from "../_text"
+
 (function() {
   Cell.register({
     title: "Notes",

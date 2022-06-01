@@ -1,112 +1,3 @@
-<%= content_for(:after_js) do %>
-  <script type="text/javascript">
-    function Monster(props) {
-      var monster = this
-      Object.keys(props).forEach(function(k) {
-        monster[k] = props [k]
-      })
-    }
-
-    Monster.fromData = function(data) {
-      var props = {
-        data: data,
-        class: data.class,
-        con: data.con,
-        atk: data.atk,
-        def: data.def,
-        spd: data.spd,
-        resist: data.resist,
-        accuracy: data.accuracy,
-        critical_rate: data.critical_rate,
-        critical_damage: data.critical_damage
-      }
-      props.name = mapping_data.getMonsterName(data.unit_master_id)
-      // set human-readable names from mappings
-      return new Monster(props)
-    }
-
-    function Rune(props) {
-      var rune = this
-      Object.keys(props).forEach(function(k) {
-        rune[k] = props[k]
-      })
-    }
-
-    Rune.fromData = function(data) {
-      var props = {
-        data: data
-      }
-      // set human-readable names from mappings
-      return new Rune(props)
-    }
-
-    player_data = <%= @player_data.to_json.html_safe %>
-    mapping_data = <%= @mapping.html_safe %>
-
-    monsters = []
-    runes = []
-
-    player_data.runes.forEach(function(rune_data) {
-      runes.push(Rune.fromData(rune_data))
-    })
-
-    player_data.unit_list.forEach(function(monster_data) {
-      var monster = Monster.fromData(monster_data)
-      monster.parsed_runes = []
-
-      monster_data.runes.forEach(function(rune_data) {
-        var rune = Rune.fromData(rune_data)
-        runes.push(rune)
-        monster.parsed_runes.push(rune)
-      })
-
-      monsters.push(monster)
-    })
-
-    // ================================ Add the monsters to a table
-
-    var table = document.querySelector(".monster-table")
-    monsters.forEach(function(monster) {
-      var row = document.createElement("div")
-      try {
-        row.classList.add("trow")
-      } catch (e) {
-        debugger
-      } finally {
-
-      }
-
-      [
-        "name",
-        "class",
-        "con",
-        "atk",
-        "def",
-        "spd",
-        "resist",
-        "accuracy",
-        "critical_rate",
-        "critical_damage"
-      ].forEach(function(key) {
-        var cell = document.createElement("div")
-        cell.classList.add("tcell")
-        cell.innerHTML = monster[key]
-
-        row.appendChild(cell)
-      })
-
-      table.appendChild(row)
-    })
-
-    runes.forEach(function(rune) {
-      var table = document.querySelector(".rune-table")
-      var row = '<div class="trow"><div class="tcell">' + rune.name + '</div></div>'
-      table.insertAdjacentHTML('beforeend', row)
-    })
-  </script>
-<% end %>
-
-
 <div class="skinny-container">
   <div class="ttable striped bordered">
     <div class="tbody monster-table">
@@ -137,6 +28,113 @@
     </div>
   </div>
 </div>
+
+
+<script type="text/javascript">
+  function Monster(props) {
+    var monster = this
+    Object.keys(props).forEach(function(k) {
+      monster[k] = props [k]
+    })
+  }
+
+  Monster.fromData = function(data) {
+    var props = {
+      data: data,
+      class: data.class,
+      con: data.con,
+      atk: data.atk,
+      def: data.def,
+      spd: data.spd,
+      resist: data.resist,
+      accuracy: data.accuracy,
+      critical_rate: data.critical_rate,
+      critical_damage: data.critical_damage
+    }
+    props.name = mapping_data.getMonsterName(data.unit_master_id)
+    // set human-readable names from mappings
+    return new Monster(props)
+  }
+
+  function Rune(props) {
+    var rune = this
+    Object.keys(props).forEach(function(k) {
+      rune[k] = props[k]
+    })
+  }
+
+  Rune.fromData = function(data) {
+    var props = {
+      data: data
+    }
+    // set human-readable names from mappings
+    return new Rune(props)
+  }
+
+  player_data = <%= @player_data.to_json.html_safe %>
+  mapping_data = <%= @mapping.html_safe %>
+
+  monsters = []
+  runes = []
+
+  player_data.runes.forEach(function(rune_data) {
+    runes.push(Rune.fromData(rune_data))
+  })
+
+  player_data.unit_list.forEach(function(monster_data) {
+    var monster = Monster.fromData(monster_data)
+    monster.parsed_runes = []
+
+    monster_data.runes.forEach(function(rune_data) {
+      var rune = Rune.fromData(rune_data)
+      runes.push(rune)
+      monster.parsed_runes.push(rune)
+    })
+
+    monsters.push(monster)
+  })
+
+  // ================================ Add the monsters to a table
+
+  var table = document.querySelector(".monster-table")
+  monsters.forEach(function(monster) {
+    var row = document.createElement("div")
+    try {
+      row.classList.add("trow")
+    } catch (e) {
+      debugger
+    } finally {
+
+    }
+
+    [
+      "name",
+      "class",
+      "con",
+      "atk",
+      "def",
+      "spd",
+      "resist",
+      "accuracy",
+      "critical_rate",
+      "critical_damage"
+    ].forEach(function(key) {
+      var cell = document.createElement("div")
+      cell.classList.add("tcell")
+      cell.innerHTML = monster[key]
+
+      row.appendChild(cell)
+    })
+
+    table.appendChild(row)
+  })
+
+  runes.forEach(function(rune) {
+    var table = document.querySelector(".rune-table")
+    var row = '<div class="trow"><div class="tcell">' + rune.name + '</div></div>'
+    table.insertAdjacentHTML('beforeend', row)
+  })
+</script>
 
 
 

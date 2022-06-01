@@ -1,3 +1,6 @@
+import { Text } from "../_text"
+import { dash_colors } from "../vars"
+
 (function() {
   var render = function(cell) {
     var lines = []

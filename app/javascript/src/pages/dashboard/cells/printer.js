@@ -1,3 +1,6 @@
+import { Text } from "../_text"
+import { Time } from "./_time"
+
 (function() {
   Printer = function() {}
   Printer.request = function(cell, url, type, data) {

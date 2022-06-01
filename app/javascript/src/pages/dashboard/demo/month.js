@@ -1,3 +1,7 @@
+import { Time } from "../cells/_time"
+import { Text } from "../_text"
+import { dash_colors } from "../vars"
+
 (function() {
   var startOfCalendarDate = function() {
     var date = Time.now()

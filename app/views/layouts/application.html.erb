@@ -30,9 +30,5 @@
   <%= yield :modals %>
   <%= render partial: "layouts/guest_banner" if @show_guest_banner %>
   <%= yield %>
-
-  <% if content_for? :after_js %>
-    <%= yield :after_js %>
-  <% end %>
 </body>
 </html>

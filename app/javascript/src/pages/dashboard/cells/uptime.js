@@ -1,3 +1,7 @@
+import { Text } from "../_text"
+import { Time } from "./_time"
+import { dash_colors } from "../vars"
+
 (function() {
   var uptimeData = function(cell) {
     var api_key = cell.config.uptime_apikey

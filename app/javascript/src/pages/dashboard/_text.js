@@ -1,6 +1,8 @@
-import { text_height, single_width, emojiPattern, cells, registered_cells } from "./vars"
+import { text_height, single_width, cells, registered_cells } from "./vars"
 
-Text = function() {}
+// let emojiPattern =
+
+export function Text() {}
 Text.new = function(data) {
   var text = new Text()
   if (typeof data == "string") {
@@ -202,7 +204,6 @@ Text.markup = function(text) {
   return text
 }
 Text.fixHeight = function(line) {
-  // debugger
   return line
 }
 Text.filterOrder = function(text, options, transformer) {

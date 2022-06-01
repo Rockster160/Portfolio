@@ -1,4 +1,4 @@
-Time = function() {}
+export function Time() {}
 Time.now = function() { return new Date() }
 Time.msSinceEpoch = function() { return Time.now().getTime() }
 Time.seconds = Time.second = function(n) { return (n || 1) * 1000 }

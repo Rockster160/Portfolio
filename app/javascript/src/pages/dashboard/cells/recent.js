@@ -1,3 +1,6 @@
+import { Text } from "../_text"
+import { Time } from "./_time"
+
 (function() {
   var renderEvents = function(cell, events) {
     cell.lines(events.map(function(item) {

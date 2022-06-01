@@ -1,3 +1,6 @@
+import { Text } from "../_text"
+import { dash_colors } from "../vars"
+
 (function() {
   // Need a better way to get width of a cell
   var cell_width = 32/2, cell_height = 9 // Width /2 so that icons can be square

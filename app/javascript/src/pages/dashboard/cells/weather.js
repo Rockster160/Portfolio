@@ -1,3 +1,6 @@
+import { Text } from "../_text"
+import { Time } from "./_time"
+
 (function() {
   var getWeatherEmoji = function(code, isNight) {
     if (code >= 200 && code < 300 || code == 960 || code == 961) {

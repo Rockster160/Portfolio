@@ -1,3 +1,7 @@
+import { Text } from "../_text"
+import { Time } from "./_time"
+import { dash_colors } from "../vars"
+
 (function() {
   var cell = undefined, cell_width = 32, cell_height = 9
   function blankCanvas() {

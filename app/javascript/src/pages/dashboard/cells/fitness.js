@@ -1,3 +1,6 @@
+import { Time } from "./_time"
+import { Text } from "../_text"
+
 (function() {
   Cell.register({
     title: "Fitness",

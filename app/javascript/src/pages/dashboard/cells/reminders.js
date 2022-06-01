@@ -1,5 +1,5 @@
 (function() {
-  local_reminders_cell = Cell.register({
+  window.local_reminders_cell = Cell.register({
     title: "Reminders",
     text: "Loading...",
     wrap: true,
@@ -11,8 +11,8 @@
       },
     },
     reloader: function() {
-      clearTimeout(local_data_timer)
-      local_data_timer = setTimeout(function() { App.localData.request() }, 50)
+      clearTimeout(window.local_data_timer)
+      window.local_data_timer = setTimeout(function() { window.localDataChannel.request() }, 50)
     }
   })
 })()
