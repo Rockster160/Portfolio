@@ -1,5 +1,6 @@
 import { Text } from "../_text"
 import { Time } from "./_time"
+import { ColorGenerator } from "./color_generator"
 
 (function() {
   var getWeatherEmoji = function(code, isNight) {
@@ -39,6 +40,35 @@ import { Time } from "./_time"
     }
   }
 
+  let tempScale = function(temp1, temp2) {
+    return temp2 - temp1
+  }
+
+  let color_shift = [
+    ...ColorGenerator.fadeBetweenHex("#00F", "#FFF", tempScale(5, 32)),
+    ...ColorGenerator.fadeBetweenHex("#FFF", "#FF0", tempScale(32, 70)),
+    ...ColorGenerator.fadeBetweenHex("#FF0", "#F00", tempScale(70, 96)),
+  ]
+
+  let scaleVal = function(value, f1, f2, t1, t2) {
+    var tr = t2 - t1
+    var fr = f2 - f1
+
+    return (value - f1) * tr / fr + t1
+  }
+
+  let shiftTempToColor = function(temp, pad) {
+    let min_temp = 5, max_temp = 96
+    let scaled_idx = scaleVal(temp, min_temp, max_temp, 0, color_shift.length - 1)
+    let constrained_idx = [Math.round(scaled_idx), 0, color_shift.length - 1].sort(function(a, b) {
+      return a - b
+    })[1]
+    let color = color_shift[constrained_idx]
+    let str = Math.round(temp) + "°"
+
+    return Text.color(color.hex, str.padStart(pad, " "))
+  }
+
   Cell.register({
     title: "Weather",
     text: "Loading...",
@@ -72,7 +102,7 @@ import { Time } from "./_time"
 
           hourly_hours.push(String(hour).padStart(pad, " "))
           hourly_icons.push("".padStart(pad - 2, " ") + icon)
-          hourly_temps.push((Math.round(hr_data.temp) + "°").padStart(pad, " "))
+          hourly_temps.push((shiftTempToColor(hr_data.temp, pad)))
         })
 
         var daily_days = [], daily_icons = [], daily_highs = [], daily_lows = []
@@ -84,8 +114,8 @@ import { Time } from "./_time"
 
           daily_days.push(day_names[time.getDay()].padStart(pad, " "))
           daily_icons.push("".padStart(pad - 2, " ") + icon)
-          daily_highs.push((Math.round(day_data.temp.max) + "°").padStart(pad, " "))
-          daily_lows.push((Math.round(day_data.temp.min) + "°").padStart(pad, " "))
+          daily_highs.push((shiftTempToColor(day_data.temp.max, pad)))
+          daily_lows.push((shiftTempToColor(day_data.temp.min, pad)))
         })
 
         var lines = [
