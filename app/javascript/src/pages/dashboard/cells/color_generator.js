@@ -68,9 +68,9 @@ export class ColorGenerator {
   }
 
   fadeTo(new_color, steps) {
+    steps = (steps || 256) - 1
     let [r1, g1, b1] = this.rgb
     let [r2, g2, b2] = new_color.rgb
-    let steps = (steps || 256) - 1
     let [rsteps, gsteps, bsteps] = [(r2 - r1) / steps, (g2 - g1) / steps, (b2 - b1) / steps]
 
     return Array(steps + 1).fill().map(function(_, step) {
