@@ -40,15 +40,23 @@ import { ColorGenerator } from "./color_generator"
     }
   }
 
-  let tempScale = function(temp1, temp2) {
-    return temp2 - temp1
+  let color_scale = {
+    "#5B6EE1": 5,
+    "#639BFF": 32,
+    "#99E550": 70,
+    "#FBF236": 80,
+    "#AC3232": 96,
   }
 
-  let color_shift = [
-    ...ColorGenerator.fadeBetweenHex("#00F", "#FFF", tempScale(5, 32)),
-    ...ColorGenerator.fadeBetweenHex("#FFF", "#FF0", tempScale(32, 70)),
-    ...ColorGenerator.fadeBetweenHex("#FF0", "#F00", tempScale(70, 96)),
-  ]
+  let color_shift = Object.keys(color_scale).map(function(this_color, idx) {
+    var this_temp = color_scale[this_color]
+    var next_color = Object.keys(color_scale)[idx+1]
+    var next_temp = color_scale[next_color]
+
+    if (next_color) {
+      return ColorGenerator.fadeBetweenHex(this_color, next_color, next_temp - this_temp)//.slice(0, -1)
+    }
+  }).flat().filter(function(col) { return col })
 
   let scaleVal = function(value, f1, f2, t1, t2) {
     var tr = t2 - t1
