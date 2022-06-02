@@ -8,9 +8,9 @@ Rails.application.config.assets.version = "1.0"
 # Add Yarn node_modules folder to the asset load path.
 Rails.application.config.assets.paths << Rails.root.join("node_modules")
 Rails.application.config.assets.paths << Rails.root.join("app", "assets", "fonts")
+Rails.application.config.assets.paths << Rails.root.join("app", "assets", "images", "**", "*")
 Rails.application.config.assets.precompile += %w( support/* )
 Rails.application.config.assets.precompile += %w( pages/random/* )
-Rails.application.config.assets.precompile += %w( cube_scripts/* )
 Rails.application.config.assets.precompile += %w( individual/**/* )
 
 # Precompile additional assets.
