@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@rails/actioncable": "^6.0.5",
+    "@rails/ujs": "^6.0.5",
     "esbuild": "^0.14.42",
     "esbuild-rails": "^1.0.3",
     "jquery": "^3.6.0",

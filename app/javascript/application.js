@@ -25,6 +25,8 @@
 //= link favicon/browserconfig.xml.erb
 //= link_tree ../builds
 
+import Rails from "@rails/ujs"
+Rails.start()
 import "./preimports.js"
 import "./pageready.js"
 import "./jquery-ui.min.js"
