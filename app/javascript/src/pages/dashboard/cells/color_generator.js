@@ -30,12 +30,12 @@ export class ColorGenerator {
 
   static colorScale(color_scale) {
     let color_shift = Object.keys(color_scale).map(function(this_color, idx) {
-      var this_temp = color_scale[this_color]
+      var this_val = color_scale[this_color]
       var next_color = Object.keys(color_scale)[idx+1]
-      var next_temp = color_scale[next_color]
+      var next_val = color_scale[next_color]
 
       if (next_color) {
-        return ColorGenerator.fadeBetweenHex(this_color, next_color, next_temp - this_temp)
+        return ColorGenerator.fadeBetweenHex(this_color, next_color, next_val - this_val)
       }
     }).flat().filter(function(col) { return col })
 
@@ -100,7 +100,7 @@ export class ColorGenerator {
   }
 
   fadeTo(new_color, steps) {
-    steps = (steps || 256) - 1
+    steps = Math.abs(Math.round(steps || 256)) - 1
     let [r1, g1, b1] = this.rgb
     let [r2, g2, b2] = new_color.rgb
     let [rsteps, gsteps, bsteps] = [(r2 - r1) / steps, (g2 - g1) / steps, (b2 - b1) / steps]

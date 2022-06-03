@@ -39,6 +39,45 @@ class WebhooksController < ApplicationController
     PrinterNotify.notify(params)
   end
 
+  def report
+    return head :no_content unless user_signed_in?
+
+    gathered = params[:report]&.each_with_object({}) do |(name, report_data), obj|
+      obj[name] = {}
+      report_data.each do |key, data|
+        case key
+        when "memory"
+          # ["Mem:", "3951", "1103", "1100", "143", "1748", "2405"]
+          _, total, used, free, shared, buff, available = data.split(/\s+/)
+          obj[name][:memory] = {
+            used: used.to_i,
+            free: free.to_i,
+            total: total.to_i,
+          }
+        when "load"
+          # 0.03 0.03 0.00 1/196 4114
+          one, five, ten, pids, _ = data.split(/\s+/)
+          obj[name][:load] = {
+            one: one.to_i,
+            five: five.to_i,
+            ten: ten.to_i,
+          }
+        when "cpu"
+          # 04:47:35 AM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+          # 04:47:35 AM  all    1.29    0.00    0.38    0.17    0.00    0.02    0.01    0.00    0.00   98.13
+          time, md, sect, usr, nice, sys, io, irq, soft, steal, guest, gnice, idle = data.split(/\s+/)
+          obj[name][:cpu] = {
+            idle: idle.to_i,
+          }
+        end
+      end
+    end
+
+    LoadtimeBroadcast.call(gathered)
+
+    head :no_content
+  end
+
   def command
     return head :no_content unless user_signed_in?
 

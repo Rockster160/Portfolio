@@ -27,6 +27,7 @@ Rails.application.routes.draw do
 
   resource :money_buckets, path: "/bucket"
 
+  post "webhooks/report" => "webhooks#report"
   post "webhooks/local_data" => "webhooks#local_data"
   post "webhooks/jenkins" => "webhooks#jenkins"
   post "webhooks/post" => "webhooks#post"

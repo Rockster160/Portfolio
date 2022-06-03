@@ -4,9 +4,9 @@ export let cells = []
 export let registered_cells = {}
 
 export let dash_colors = {
-  red:    "#F81414",
-  yellow: "#FFEE14",
-  green:  "#148F14",
+  red:    "#A22633",
+  yellow: "#FEE761",
+  green:  "#3E8948",
   blue:   "#115DCD",
   lblue:  "#3D94F6",
   bright: "#5DA6F8",
