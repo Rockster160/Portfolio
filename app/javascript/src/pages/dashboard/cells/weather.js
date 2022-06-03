@@ -4,7 +4,7 @@ import { ColorGenerator } from "./color_generator"
 
 (function() {
   var getWeatherEmoji = function(code, isNight) {
-    return "[ico wi wi-owm-" + code + " wi-own-" + (isNight ? "night" : "day") + "-" + code + "]"
+    return "[ico wi wi-owm-" + code + " wi-owm-" + (isNight ? "night" : "day") + "-" + code + "]"
   }
 
   let color_scale = ColorGenerator.colorScale({
