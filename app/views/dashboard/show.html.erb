@@ -25,44 +25,44 @@
     if (!window.jQuery) { return setTimeout(load, 50); }
 
     <% if Rails.env.development? %>
-      // Cell.register({ title: "Weather" }) // Overwrite to save API calls
-      // Cell.register({ title: "Uptime" }) // Overwrite to save API calls
-      // Cell.register({ title: "Github" }) // Overwrite to save API calls
+      Cell.register({ title: "Weather" }) // Overwrite to save API calls
+      Cell.register({ title: "Uptime" }) // Overwrite to save API calls
+      Cell.register({ title: "Github" }) // Overwrite to save API calls
     <% end %>
     Cell.loadConfig({
-      // fitness: { x: 1, y: 1 },
-      // recent: { x: 2, y: 1 },
-      // month: { x: 3, y: 1 },
-      // snake: { x: 4, y: 1 },
-      //
-      // notes: { x: 1, y: 2, w: 2 },
+      fitness: { x: 1, y: 1 },
+      recent: { x: 2, y: 1 },
+      month: { x: 3, y: 1 },
+      snake: { x: 4, y: 1 },
+
+      notes: { x: 1, y: 2, w: 2 },
       weather: {
         apikey: "<%= ENV.fetch("WEATHER_APIKEY") %>",
         x: 3,
         y: 2,
       },
-      // printer: {
-      //   apikey: "<%= ENV.fetch("PRINTER_APIKEY") %>",
-      //   x: 4,
-      //   y: 2,
-      // },
-      //
-      // calendar: { x: 1, y: 3, h: 3 },
-      // reminders: { x: 2, y: 3 },
-      // uptime: {
-      //   x: 3, y: 3,
-      //   uptime_apikey: "<%= ENV.fetch("UPTIME_APIKEY") %>",
-      //   hiveos_apikey: "<%= ENV.fetch("HIVEOS_APIKEY") %>",
-      // },
-      // rock_paper_scissors: { x: 4, y: 3 },
-      //
-      // todo: { x: 2, y: 4 },
-      // grocery: { x: 3, y: 4 },
-      // random: { x: 4, y: 4 },
-      //
-      // breathe: { x: 2, y: 5 },
-      // timers: { x: 3, y: 5 },
-      // github: { x: 4, y: 5, github_apikey: "<%= ENV.fetch("GITHUB_APIKEY") %>" },
+      printer: {
+        apikey: "<%= ENV.fetch("PRINTER_APIKEY") %>",
+        x: 4,
+        y: 2,
+      },
+
+      calendar: { x: 1, y: 3, h: 3 },
+      reminders: { x: 2, y: 3 },
+      uptime: {
+        x: 3, y: 3,
+        uptime_apikey: "<%= ENV.fetch("UPTIME_APIKEY") %>",
+        hiveos_apikey: "<%= ENV.fetch("HIVEOS_APIKEY") %>",
+      },
+      rock_paper_scissors: { x: 4, y: 3 },
+
+      todo: { x: 2, y: 4 },
+      grocery: { x: 3, y: 4 },
+      random: { x: 4, y: 4 },
+
+      breathe: { x: 2, y: 5 },
+      timers: { x: 3, y: 5 },
+      github: { x: 4, y: 5, github_apikey: "<%= ENV.fetch("GITHUB_APIKEY") %>" },
     })
   })()
 </script>
