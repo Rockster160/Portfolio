@@ -4,7 +4,8 @@ import { ColorGenerator } from "./color_generator"
 
 (function() {
   var getWeatherEmoji = function(code, isNight) {
-    return "[ico wi wi-owm-" + code + " wi-owm-" + (isNight ? "night" : "day") + "-" + code + "]"
+    let ico = "[ico wi wi-owm-" + code + " wi-owm-" + (isNight ? "night" : "day") + "-" + code + "]"
+    return Text.color(isNight ? "#C5C4DE" : "#DEDBBB", ico)
   }
 
   let color_scale = ColorGenerator.colorScale({
@@ -34,7 +35,7 @@ import { ColorGenerator } from "./color_generator"
       $.getJSON(url).done(function(json) {
         var current = json.current
         var currentTime = new Date().getTime() / 1000;
-        var isNight = currentTime >= current.sunset || currentTime <= current.sunrise
+        var isNight = (currentTime <= current.sunrise || currentTime >= current.sunset)
         var now = {
           icon: getWeatherEmoji(current.weather[0].id, isNight),
           temp: Math.round(current.temp),
@@ -50,7 +51,8 @@ import { ColorGenerator } from "./color_generator"
           var hour = time.getHours()
           if (hour > 12) { hour -= 12 }
           if (hour == 0) { hour = 12 }
-          var is_night_hour = time >= current.sunset || time <= current.sunrise
+          let time_sec = time.getTime() / 1000
+          var is_night_hour = time_sec <= current.sunrise || time_sec >= current.sunset
           var icon = getWeatherEmoji(hr_data.weather[0].id, is_night_hour)
 
           hourly_hours.push(String(hour).padStart(pad, " "))
