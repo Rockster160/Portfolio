@@ -202,6 +202,7 @@ Text.markup = function(text) {
   text = text.replaceAll(/\[color (.*?)\](.*?)\[\/color\]/gi, "<span style=\"color: $1;\">$2</span>")
   text = text.replaceAll(/\[ani \"(.*?)\"\]/gi, "<textanimate steps=\"$1\"> </textanimate>")
   text = text.replaceAll(/\[img (.*?)\]/gi, "<span class=\"dashboard-img-wrapper\"><img src=\"$1\"\/></span>")
+  text = text.replaceAll(/\[ico (.*?)\]/gi, "<i class=\"$1\"></i>")
 
   return text
 }

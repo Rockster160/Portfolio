@@ -176,7 +176,7 @@ $text-color: darken($grey-blue, 20%);
         max-height: 100%;
         overflow: hidden;
       }
-      e, es, .dashboard-img-wrapper {
+      i, e, es, .dashboard-img-wrapper {
         position: relative;
         display: inline-block;
         width: $dash-font-width;
@@ -189,6 +189,10 @@ $text-color: darken($grey-blue, 20%);
         width: $dash-font-width*2; // Double character width
         font-family: emoji;
         // font-size: $dash-font-height*0.75;
+      }
+      i {
+        width: $dash-font-width*2;
+        font-size: $dash-font-height;
       }
     }
   }
