@@ -20,9 +20,9 @@ import { dash_colors } from "../vars"
   })())
   let load_scale = ColorGenerator.colorScale((function() {
     let scale = {}
-    scale[dash_colors.green] = 8
-    scale[dash_colors.yellow] = 15
-    scale[dash_colors.red] = 25
+    scale[dash_colors.green] = 80
+    scale[dash_colors.yellow] = 150
+    scale[dash_colors.red] = 250
     return scale
   })())
 
@@ -32,31 +32,14 @@ import { dash_colors } from "../vars"
     $.post(url, { api_key: api_key, custom_uptime_ratios: "7" }, function(data) {
       let uptime_data = cell.data.uptime_data
       data.monitors.forEach(function(monitor) {
-        // var color_map = {
-        //   2: dash_colors.green,
-        //   8: dash_colors.orange,
-        //   9: dash_colors.red
-        // }
         uptime_data[monitor.friendly_name] = {}
         uptime_data[monitor.friendly_name].status = {
           2: "ok",
           8: "hm",
           9: "bad",
         }[monitor.status] || "?"
-        // var color = color_map[monitor.status] || dash_colors.yellow
-        // var colored_name = Text.color(color, "• " + monitor.friendly_name)
 
         uptime_data[monitor.friendly_name].weekly = parseInt(monitor.custom_uptime_ratio.split(".")[0])
-        // var ratios = monitor.custom_uptime_ratio.split("-").map(function(num) {
-        //   var percent = parseInt(num.split(".")[0])
-        //   var color = dash_colors.yellow
-        //   if (percent >= 99) { color = dash_colors.green }
-        //   if (percent < 90) { color = dash_colors.red }
-        //
-        //   return Text.color(color, percent + "%") }
-        // )
-
-        // return Text.justify(colored_name, "(" + ratios.join("|") + ")")
       })
       renderCell(cell)
     }).fail(function(data) {
@@ -69,33 +52,33 @@ import { dash_colors } from "../vars"
   }
 
   var rigData = function(cell) {
-    return
-    fetch(cell.data.base_url + "/farms", {
-      method: "GET",
-      headers: {
-        "Authorization": "Bearer " + cell.config.hiveos_apikey,
-        "Access-Control-Allow-Origin": "*"
-      }
-    }).then(function(res) {
-      res.json().then(function(json) {
-        if (res.ok) {
-          var lines = []
-          json.data.forEach(function(rig) {
-            lines.push(" " + rig.name)
-            var online = "█ ".repeat(rig.stats.gpus_online)
-            var offline = "█ ".repeat(rig.stats.gpus_total - rig.stats.gpus_online)
-            lines.push(Text.center(Text.color(dash_colors.green, online) + Text.color(dash_colors.red, offline)))
-          })
-          cell.data.rig_lines = lines
-        } else {
-          cell.data.rig_lines = [
-            "Error fetching farms:",
-            JSON.stringify(json),
-          ]
-        }
-        renderCell(cell)
-      })
-    })
+    // -- Currently broken because of CORS --
+    // fetch(cell.data.base_url + "/farms", {
+    //   method: "GET",
+    //   headers: {
+    //     "Authorization": "Bearer " + cell.config.hiveos_apikey,
+    //     "Access-Control-Allow-Origin": "*"
+    //   }
+    // }).then(function(res) {
+    //   res.json().then(function(json) {
+    //     if (res.ok) {
+    //       var lines = []
+    //       json.data.forEach(function(rig) {
+    //         lines.push(" " + rig.name)
+    //         var online = "█ ".repeat(rig.stats.gpus_online)
+    //         var offline = "█ ".repeat(rig.stats.gpus_total - rig.stats.gpus_online)
+    //         lines.push(Text.center(Text.color(dash_colors.green, online) + Text.color(dash_colors.red, offline)))
+    //       })
+    //       cell.data.rig_lines = lines
+    //     } else {
+    //       cell.data.rig_lines = [
+    //         "Error fetching farms:",
+    //         JSON.stringify(json),
+    //       ]
+    //     }
+    //     renderCell(cell)
+    //   })
+    // })
   }
 
   var uptimeLines = function(cell) {
@@ -122,9 +105,9 @@ import { dash_colors } from "../vars"
         stats.push(Text.bgColor(cpu_scale(data.cpu.idle).hex, Text.color("#112435", " C ")))
       }
       if (data.load) {
-        stats.push(Text.bgColor(load_scale(data.load.one * 10).hex, Text.color("#112435", " ◴1")))
-        stats.push(Text.bgColor(load_scale(data.load.five * 10).hex, Text.color("#112435", " 5 ")))
-        stats.push(Text.bgColor(load_scale(data.load.ten * 10).hex, Text.color("#112435", " 10")))
+        stats.push(Text.bgColor(load_scale(data.load.one).hex, Text.color("#112435", " ◴1")))
+        stats.push(Text.bgColor(load_scale(data.load.five).hex, Text.color("#112435", " 5 ")))
+        stats.push(Text.bgColor(load_scale(data.load.ten).hex, Text.color("#112435", " 10")))
       }
 
       lines.push(Text.justify(colored_name, stats.join(" ")))
@@ -146,26 +129,20 @@ import { dash_colors } from "../vars"
     data: {
       rig_lines: [],
       uptime_data: {},
-      load_data: {
-        "Portfolio": {
-          memory: { used: Math.random() * 100, total: 100 },
-          load: { one: Math.random()*2, five: Math.random()*2, ten: Math.random()*2 },
-          cpu: { idle: 100 - Math.random()*3 }
-        }
-      },
+      load_data: {},
 
       base_url: "https://api2.hiveos.farm/api/v2",
     },
     socket: Server.socket("LoadtimeChannel", function(msg) {
-      cell.load_data = msg
+      this.data.load_data = msg
       renderCell(this)
     }),
-    receive: {},
     refreshInterval: Time.minutes(10),
     reloader: function() {
       var cell = this
       uptimeData(cell)
       // rigData(cell)
+      cell.ws.send("request")
     },
   })
 })()

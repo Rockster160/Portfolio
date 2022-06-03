@@ -269,7 +269,7 @@ Cell.from_ele = function(ele) {
   var $ele = $(ele)
 
   return cells.find(function(cell) {
-    return cell.ele.get(0) == $ele.get(0)
+    return cell.ele.get(0) === $ele.get(0)
   })
 }
 Cell.startLivekey = function() {
@@ -296,7 +296,6 @@ CellWS = function(cell, init_data) {
   cell_ws.presend = init_data.presend
   // cell_ws.socket = new WebSocket(init_data.url)
   cell_ws.socket = new ReconnectingWebSocket(init_data.url)
-  // cell_ws.send = init_data.send || function(packet) { cell_ws.push(packet) }
 
   cell_ws.socket.onopen = function() {
     cell_ws.open = true
@@ -344,7 +343,7 @@ CellWS.prototype.send = function(packet) {
     if (cell_ws.presend && typeof(cell_ws.presend) === "function") {
       packet = cell_ws.presend(packet)
     }
-
+console.log("sending", packet);
     cell_ws.socket.send(JSON.stringify(packet))
   } else {
     setTimeout(function() {

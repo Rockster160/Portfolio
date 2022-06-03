@@ -58,9 +58,9 @@ class WebhooksController < ApplicationController
           # 0.03 0.03 0.00 1/196 4114
           one, five, ten, pids, _ = data.split(/\s+/)
           obj[name][:load] = {
-            one: one.to_i,
-            five: five.to_i,
-            ten: ten.to_i,
+            one: (one.to_f * 100).round,
+            five: (five.to_f * 100).round,
+            ten: (ten.to_f * 100).round,
           }
         when "cpu"
           # 04:47:35 AM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle

@@ -48,6 +48,11 @@ Server.socket = function(subscription, receive) {
     },
     presend: function(packet) {
       if (typeof packet != "object" || !packet.subscribe) {
+        if (typeof packet == "string") {
+          let new_packet = {}
+          new_packet[packet] = null
+          packet = new_packet
+        }
         packet = {
           command: "message",
           identifier: JSON.stringify(subscription),
@@ -67,6 +72,7 @@ Server.socket = function(subscription, receive) {
       var msg_data = JSON.parse(msg.data)
       if (msg_data.type == "ping" || !msg_data.message) { return }
 
+      console.log("receive", msg);
       receive.call(cell, msg_data.message)
     }
   }

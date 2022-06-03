@@ -118,7 +118,7 @@ import { dash_colors } from "../vars"
     cell.data.apple = coord
   }
 
-  cell = Cell.register({
+  var cell = Cell.register({
     title: "Snake",
     config: {
       game_speed: 100,
