@@ -37,7 +37,8 @@ module ApplicationHelper
     Rails.cache.fetch("#{svg_path}.#{options.to_json}") do
       options[:nocomment] = true if options[:nocomment].nil?
       options[:title] ||= svg_path.split("/").last
-      svg_html = inline_svg(svg_path, options)
+      svg_html = inline_svg_tag("#{svg_path}.svg", options)
+
       if svg_html.include?("<!-- SVG file not found:")
         # Instead of rendering an empty SVG, this will attempt to lookup
         #   the image as a regular image, which will not only show a broken

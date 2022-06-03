@@ -29,6 +29,8 @@ Rails.application.configure do
 
   # Do not fallback to assets pipeline if a precompiled asset is missed.
   config.assets.compile = false
+  # Being truthy stops throwing a 500 for a missing asset
+  config.assets.unknown_asset_fallback = true
 
   # Enable serving of images, stylesheets, and JavaScripts from an asset server.
   # config.asset_host = "http://assets.example.com"
