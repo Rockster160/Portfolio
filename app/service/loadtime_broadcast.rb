@@ -1,4 +1,4 @@
-class LoadtimeBroadcast
+module LoadtimeBroadcast
   module_function
 
   def call(data=nil)
