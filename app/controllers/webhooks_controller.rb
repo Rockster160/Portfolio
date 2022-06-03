@@ -63,11 +63,8 @@ class WebhooksController < ApplicationController
             ten: (ten.to_f * 100).round,
           }
         when "cpu"
-          # 04:47:35 AM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
-          # 04:47:35 AM  all    1.29    0.00    0.38    0.17    0.00    0.02    0.01    0.00    0.00   98.13
-          time, md, sect, usr, nice, sys, io, irq, soft, steal, guest, gnice, idle = data.split(/\s+/)
           obj[name][:cpu] = {
-            idle: idle.to_i,
+            idle: data.to_i,
           }
         end
       end
