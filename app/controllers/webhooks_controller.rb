@@ -42,7 +42,7 @@ class WebhooksController < ApplicationController
   def report
     return head :no_content unless user_signed_in?
 
-    gathered = params[:report]&.each_with_object({}) do |(name, report_data), obj|
+    gathered = params[:report]&.to_unsafe_h&.each_with_object({}) do |(name, report_data), obj|
       obj[name] = {}
       report_data.each do |key, data|
         case key
