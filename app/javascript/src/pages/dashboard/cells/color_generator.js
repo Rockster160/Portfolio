@@ -28,6 +28,38 @@ export class ColorGenerator {
     return color1.fadeTo(color2, steps)
   }
 
+  static colorScale(color_scale) {
+    let color_shift = Object.keys(color_scale).map(function(this_color, idx) {
+      var this_temp = color_scale[this_color]
+      var next_color = Object.keys(color_scale)[idx+1]
+      var next_temp = color_scale[next_color]
+
+      if (next_color) {
+        return ColorGenerator.fadeBetweenHex(this_color, next_color, next_temp - this_temp)
+      }
+    }).flat().filter(function(col) { return col })
+
+    let scaleVal = function(value, f1, f2, t1, t2) {
+      var tr = t2 - t1
+      var fr = f2 - f1
+
+      return (value - f1) * tr / fr + t1
+    }
+
+    let vals = Object.values(color_scale).sort(function(a, b) { return a - b })
+    let min_val = vals[0]
+    let max_val = vals[vals.length - 1]
+
+    return function(val) {
+      let scaled_idx = Math.round(scaleVal(val, min_val, max_val, 0, color_shift.length - 1))
+      let constrained_idx = [scaled_idx, 0, color_shift.length - 1].sort(function(a, b) {
+        return a - b
+      })[1]
+
+      return color_shift[constrained_idx]
+    }
+  }
+
   fromRGB(r, g, b) {
     this.rgb = [r, g, b]
 

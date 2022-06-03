@@ -7,38 +7,16 @@ import { ColorGenerator } from "./color_generator"
     return "[ico wi wi-owm-" + code + " wi-own-" + (isNight ? "night" : "day") + "-" + code + "]"
   }
 
-  let color_scale = {
+  let color_scale = ColorGenerator.colorScale({
     "#5B6EE1": 5,
     "#639BFF": 32,
     "#99E550": 64,
     "#FBF236": 78,
     "#AC3232": 96,
-  }
-
-  let color_shift = Object.keys(color_scale).map(function(this_color, idx) {
-    var this_temp = color_scale[this_color]
-    var next_color = Object.keys(color_scale)[idx+1]
-    var next_temp = color_scale[next_color]
-
-    if (next_color) {
-      return ColorGenerator.fadeBetweenHex(this_color, next_color, next_temp - this_temp)//.slice(0, -1)
-    }
-  }).flat().filter(function(col) { return col })
-
-  let scaleVal = function(value, f1, f2, t1, t2) {
-    var tr = t2 - t1
-    var fr = f2 - f1
-
-    return (value - f1) * tr / fr + t1
-  }
+  })
 
   let shiftTempToColor = function(temp, pad) {
-    let min_temp = 5, max_temp = 96
-    let scaled_idx = scaleVal(temp, min_temp, max_temp, 0, color_shift.length - 1)
-    let constrained_idx = [Math.round(scaled_idx), 0, color_shift.length - 1].sort(function(a, b) {
-      return a - b
-    })[1]
-    let color = color_shift[constrained_idx]
+    let color = color_scale(temp)
     let str = Math.round(temp) + "°"
 
     return Text.color(color.hex, str.padStart(pad || 0, " "))
