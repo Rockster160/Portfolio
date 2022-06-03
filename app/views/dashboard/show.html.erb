@@ -26,7 +26,7 @@
 
     <% if Rails.env.development? %>
       Cell.register({ title: "Weather" }) // Overwrite to save API calls
-      Cell.register({ title: "Uptime" }) // Overwrite to save API calls
+      // Cell.register({ title: "Uptime" }) // Overwrite to save API calls
       Cell.register({ title: "Github" }) // Overwrite to save API calls
     <% end %>
     Cell.loadConfig({

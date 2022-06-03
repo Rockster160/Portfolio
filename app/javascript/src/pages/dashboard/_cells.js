@@ -343,7 +343,6 @@ CellWS.prototype.send = function(packet) {
     if (cell_ws.presend && typeof(cell_ws.presend) === "function") {
       packet = cell_ws.presend(packet)
     }
-console.log("sending", packet);
     cell_ws.socket.send(JSON.stringify(packet))
   } else {
     setTimeout(function() {

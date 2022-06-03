@@ -72,7 +72,6 @@ Server.socket = function(subscription, receive) {
       var msg_data = JSON.parse(msg.data)
       if (msg_data.type == "ping" || !msg_data.message) { return }
 
-      console.log("receive", msg);
       receive.call(cell, msg_data.message)
     }
   }

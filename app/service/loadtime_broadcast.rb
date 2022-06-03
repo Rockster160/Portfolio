@@ -7,7 +7,7 @@ module LoadtimeBroadcast
       data = file.merge(data)
       File.write("loadtime.json", data.to_json)
     else
-      JSON.parse(File.read("loadtime.json") || "{}")
+      data = JSON.parse(File.read("loadtime.json") || "{}")
     end
 
     ActionCable.server.broadcast "loadtime_channel", data.deep_symbolize_keys

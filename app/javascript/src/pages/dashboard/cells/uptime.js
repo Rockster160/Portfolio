@@ -93,21 +93,29 @@ import { dash_colors } from "../vars"
       mixed[name] = { ...mixed[name], ...data }
     }
 
+    let decorate = function(bgcolor, text) {
+      let bold = Text.bold(text)
+      let colored = Text.color("#112435", bold)
+      let bg = Text.bgColor(bgcolor, colored)
+
+      return bg
+    }
+
     for (let [name, data] of Object.entries(mixed)) {
       let status_color = data.status == "ok" ? dash_colors.green : dash_colors.red
       let colored_name = Text.color(status_color, "• " + name)
       let stats = []
       if (data.memory) {
         let ratio = Math.round((data.memory.used / data.memory.total) * 100)
-        stats.push(Text.bgColor(mem_scale(ratio).hex, Text.color("#112435", " M ")))
+        stats.push(decorate(mem_scale(ratio).hex, " M "))
       }
       if (data.cpu) {
-        stats.push(Text.bgColor(cpu_scale(data.cpu.idle).hex, Text.color("#112435", " C ")))
+        stats.push(decorate(cpu_scale(data.cpu.idle).hex, " C "))
       }
       if (data.load) {
-        stats.push(Text.bgColor(load_scale(data.load.one).hex, Text.color("#112435", " ◴1")))
-        stats.push(Text.bgColor(load_scale(data.load.five).hex, Text.color("#112435", " 5 ")))
-        stats.push(Text.bgColor(load_scale(data.load.ten).hex, Text.color("#112435", " 10")))
+        stats.push(decorate(load_scale(data.load.one).hex, " ◴1"))
+        stats.push(decorate(load_scale(data.load.five).hex, " 5 "))
+        stats.push(decorate(load_scale(data.load.ten).hex, " 10"))
       }
 
       lines.push(Text.justify(colored_name, stats.join(" ")))

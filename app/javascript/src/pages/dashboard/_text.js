@@ -84,6 +84,11 @@ Text.numberedList = function(list) {
     return (idx+1) + ". " + line.replace(/^\d+\. /, "")
   })
 }
+Text.bold = function(text) {
+  if (!text || text.length < 1) { return text }
+
+  return "[bold]" + text + "[/bold]"
+}
 Text.color = function(color, text) {
   if (!text || text.length < 1) { return text }
 
@@ -200,6 +205,7 @@ Text.markup = function(text) {
   text = Text.escapeSpecial(text)
   text = text.replaceAll(/\[bg (.*?)\](.*?)\[\/bg\]/gi, "<span style=\"background-color: $1;\">$2</span>")
   text = text.replaceAll(/\[color (.*?)\](.*?)\[\/color\]/gi, "<span style=\"color: $1;\">$2</span>")
+  text = text.replaceAll(/\[bold\](.*?)\[\/bold\]/gi, "<b>$1</b>")
   text = text.replaceAll(/\[ani \"(.*?)\"\]/gi, "<textanimate steps=\"$1\"> </textanimate>")
   text = text.replaceAll(/\[img (.*?)\]/gi, "<span class=\"dashboard-img-wrapper\"><img src=\"$1\"\/></span>")
   text = text.replaceAll(/\[ico (.*?)\]/gi, "<i class=\"$1\"></i>")
