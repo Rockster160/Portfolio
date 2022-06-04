@@ -132,8 +132,6 @@ $(document).ready(function() {
   $(document).on("click", ".dash-cell", function() {
     var cell = Cell.from_ele(this)
     if (cell) { cell.active(true) }
-
-    $omnibar.focus()
   }).on("keyup", function(evt) {
     var cell = Cell.from_selector(omniSelector())
     if (cell) {
@@ -155,6 +153,8 @@ $(document).ready(function() {
       evt.preventDefault()
       evt.stopPropagation()
       return Cell.sendLivekey(evt.key)
+    } else if (evt.metaKey) {
+      return
     }
 
     $omnibar.focus()
