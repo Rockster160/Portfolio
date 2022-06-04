@@ -3,13 +3,21 @@ module LoadtimeBroadcast
 
   def call(data=nil)
     if data.present?
-      file = JSON.parse(File.read("loadtime.json") || "{}")
+      file = loadtime_data
       data = file.merge(data)
       File.write("loadtime.json", data.to_json)
     else
-      data = JSON.parse(File.read("loadtime.json") || "{}")
+      data = loadtime_data
     end
 
     ActionCable.server.broadcast "loadtime_channel", data.deep_symbolize_keys
+  end
+
+  def loadtime_data
+    @loadtime_data = begin
+      JSON.parse(File.read("loadtime.json") || "{}")
+    rescue
+      {}
+    end
   end
 end
