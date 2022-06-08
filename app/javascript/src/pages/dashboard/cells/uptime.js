@@ -141,18 +141,19 @@ import { dash_colors } from "../vars"
       let cpu_icon = " "
       let mem_icon = " "
       let load_icon = " "
-      if (data.memory && data.memory.timestamp > two_minutes_ago) {
+
+      if (data.memory && data.timestamp > two_minutes_ago) {
         let ratio = Math.round((data.memory.used / data.memory.total) * 100)
         stats.push(formatScale(mem_scale, cpu_icon, ratio))
       } else {
         stats.push(cpu_icon + Text.color(dash_colors.grey, "?"))
       }
-      if (data.cpu && data.cpu.timestamp > two_minutes_ago) {
+      if (data.cpu && data.timestamp > two_minutes_ago) {
         stats.push(formatScale(cpu_scale, mem_icon, 100 - data.cpu.idle))
       } else {
         stats.push(mem_icon + Text.color(dash_colors.grey, "?"))
       }
-      if (data.load && data.load.timestamp > two_minutes_ago) {
+      if (data.load && data.timestamp > two_minutes_ago) {
         stats.push(formatScale(load_scale, load_icon, data.load.one, data.load.five, data.load.ten))
       } else {
         stats.push(load_icon + Text.color(dash_colors.grey, "???"))
@@ -183,6 +184,7 @@ import { dash_colors } from "../vars"
     },
     socket: Server.socket("LoadtimeChannel", function(msg) {
       this.data.load_data = msg
+      console.log(msg);
       renderCell(this)
     }),
     refreshInterval: Time.minutes(10),

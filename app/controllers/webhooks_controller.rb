@@ -43,7 +43,7 @@ class WebhooksController < ApplicationController
     return head :no_content unless user_signed_in?
 
     gathered = params[:report]&.to_unsafe_h&.each_with_object({}) do |(name, report_data), obj|
-      obj[name] = {}
+      obj[name] = { timestamp: Time.current.to_i }
       report_data.each do |key, data|
         case key
         when "memory"

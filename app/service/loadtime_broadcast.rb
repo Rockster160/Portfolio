@@ -3,13 +3,13 @@ module LoadtimeBroadcast
 
   def call(data=nil)
     if data.present?
-      file = loadtime_data
-      data.transform_values! { |server_data| server_data.merge(timestamp: Time.current.to_i) }
-      data = file.merge(data)
+      data = loadtime_data.merge(data)
       File.write("loadtime.json", data.to_json)
     else
       data = loadtime_data
     end
+
+    data.transform_values! { |d| d.merge timestamp: Time.current.to_i }
 
     ActionCable.server.broadcast "loadtime_channel", data.deep_symbolize_keys
   end
