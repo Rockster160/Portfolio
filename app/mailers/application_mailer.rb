@@ -5,6 +5,7 @@ class ApplicationMailer < ActionMailer::Base
   def deliver_email(email_id, attaches=[])
     email = Email.find(email_id).to_mail
     attaches&.each do |attachment|
+      next if attachment.blank?
       attachments[attachment.original_filename] = attachment.read
     end
 
