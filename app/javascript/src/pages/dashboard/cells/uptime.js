@@ -105,17 +105,26 @@ import { dash_colors } from "../vars"
       let status_color = data.status == "ok" ? dash_colors.green : dash_colors.red
       let colored_name = Text.color(status_color, "• " + name)
       let stats = []
-      if (data.memory) {
+      let two_minutes_ago = ((new Date()).getTime() / 1000) - (2 * 60 * 60)
+      if (data.memory && data.memory.timestamp > two_minutes_ago) {
         let ratio = Math.round((data.memory.used / data.memory.total) * 100)
         stats.push(decorate(mem_scale(ratio).hex, " M "))
+      } else {
+        stats.push(decorate(dash_colors.grey, " M "))
       }
-      if (data.cpu) {
+      if (data.cpu && data.cpu.timestamp > two_minutes_ago) {
         stats.push(decorate(cpu_scale(data.cpu.idle).hex, " C "))
+      } else {
+        stats.push(decorate(dash_colors.grey, " C "))
       }
-      if (data.load) {
+      if (data.load && data.load.timestamp > two_minutes_ago) {
         stats.push(decorate(load_scale(data.load.one).hex, " ◴1"))
         stats.push(decorate(load_scale(data.load.five).hex, " 5 "))
         stats.push(decorate(load_scale(data.load.ten).hex, " 10"))
+      } else {
+        stats.push(decorate(dash_colors.grey, " ◴1"))
+        stats.push(decorate(dash_colors.grey, " 5 "))
+        stats.push(decorate(dash_colors.grey, " 10"))
       }
 
       lines.push(Text.justify(colored_name, stats.join(" ")))

@@ -4,6 +4,7 @@ module LoadtimeBroadcast
   def call(data=nil)
     if data.present?
       file = loadtime_data
+      data.transform_values! { |server_data| server_data.merge(timestamp: Time.current.to_i) }
       data = file.merge(data)
       File.write("loadtime.json", data.to_json)
     else
