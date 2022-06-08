@@ -13,9 +13,9 @@ import { dash_colors } from "../vars"
   })())
   let cpu_scale = ColorGenerator.colorScale((function() {
     let scale = {}
-    scale[dash_colors.red] = 80
-    scale[dash_colors.yellow] = 90
-    scale[dash_colors.green] = 95
+    scale[dash_colors.green] = 5
+    scale[dash_colors.yellow] = 10
+    scale[dash_colors.red] = 20
     return scale
   })())
   let load_scale = ColorGenerator.colorScale((function() {
@@ -101,33 +101,64 @@ import { dash_colors } from "../vars"
       return bg
     }
 
+    let scaleVal = function(value, f1, f2, t1, t2) {
+      var tr = t2 - t1
+      var fr = f2 - f1
+
+      return (value - f1) * tr / fr + t1
+    }
+
+    let batteryScale = function(val, min, max) {
+      let rounded = Math.round(scaleVal(val, min, max, 1, 8))
+      let capped = [rounded, 1, 8].sort(function(a, b) { return a - b })[1]
+      switch(capped) {
+        case 1: return "▁"; break;
+        case 2: return "▂"; break;
+        case 3: return "▃"; break;
+        case 4: return "▄"; break;
+        case 5: return "▅"; break;
+        case 6: return "▆"; break;
+        case 7: return "▇"; break;
+        case 8: return "█"; break;
+      }
+    }
+
+    let formatScale = function(scale, text, b1, b2, b3) {
+      let bs = [b1, b2, b3].filter(function(b) { return b != undefined }).map(function(b) {
+        let battery = batteryScale(b, ...scale())
+
+        return Text.color(scale(b).hex, battery)
+      }).join("")
+
+      return text + Text.bgColor(dash_colors.darkgrey, bs)
+    }
+
     for (let [name, data] of Object.entries(mixed)) {
       let status_color = data.status == "ok" ? dash_colors.green : dash_colors.red
       let colored_name = Text.color(status_color, "• " + name)
       let stats = []
       let two_minutes_ago = ((new Date()).getTime() / 1000) - (2 * 60 * 60)
-      if (data.memory && data.memory.timestamp > two_minutes_ago) {
+      let cpu_icon = " "
+      let mem_icon = " "
+      let load_icon = " "
+      if (data.memory) {// && data.memory.timestamp > two_minutes_ago) {
         let ratio = Math.round((data.memory.used / data.memory.total) * 100)
-        stats.push(decorate(mem_scale(ratio).hex, " M "))
+        stats.push(formatScale(mem_scale, cpu_icon, ratio))
       } else {
-        stats.push(decorate(dash_colors.grey, " M "))
+        stats.push(cpu_icon + Text.color(dash_colors.grey, "█"))
       }
-      if (data.cpu && data.cpu.timestamp > two_minutes_ago) {
-        stats.push(decorate(cpu_scale(data.cpu.idle).hex, " C "))
+      if (data.cpu) {// && data.cpu.timestamp > two_minutes_ago) {
+        stats.push(formatScale(cpu_scale, mem_icon, 100 - data.cpu.idle))
       } else {
-        stats.push(decorate(dash_colors.grey, " C "))
+        stats.push(mem_icon + Text.color(dash_colors.grey, "█"))
       }
-      if (data.load && data.load.timestamp > two_minutes_ago) {
-        stats.push(decorate(load_scale(data.load.one).hex, " ◴1"))
-        stats.push(decorate(load_scale(data.load.five).hex, " 5 "))
-        stats.push(decorate(load_scale(data.load.ten).hex, " 10"))
+      if (data.load) {// && data.load.timestamp > two_minutes_ago) {
+        stats.push(formatScale(load_scale, load_icon, data.load.one, data.load.five, data.load.ten))
       } else {
-        stats.push(decorate(dash_colors.grey, " ◴1"))
-        stats.push(decorate(dash_colors.grey, " 5 "))
-        stats.push(decorate(dash_colors.grey, " 10"))
+        stats.push(load_icon + Text.color(dash_colors.grey, "███"))
       }
 
-      lines.push(Text.justify(colored_name, stats.join(" ")))
+      lines.push(Text.justify(colored_name, stats.join("  ")))
     }
 
     return lines

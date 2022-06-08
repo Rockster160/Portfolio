@@ -51,6 +51,7 @@ export class ColorGenerator {
     let max_val = vals[vals.length - 1]
 
     return function(val) {
+      if (val === undefined) { return [min_val, max_val] }
       let scaled_idx = Math.round(scaleVal(val, min_val, max_val, 0, color_shift.length - 1))
       let constrained_idx = [scaled_idx, 0, color_shift.length - 1].sort(function(a, b) {
         return a - b

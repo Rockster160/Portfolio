@@ -163,7 +163,7 @@ Text.escapeSpecial = function(text) {
     return replace
   })
 
-  var special_regex = /[^\d\w\s\!\@\#\$\%\^\&\*\(\)\+\=\-\[\]\\\'\;\,\.\/\{\}\|\\\"\:\<\>\?\~]+/gi
+  var special_regex = /[^\d\w\s\!\@\#\$\%\^\&\*\(\)\+\=\-\[\]\\\'\;\,\.\/\{\}\|\\\"\:\<\>\?\~\▁\▂\▃\▄\▅\▆\▇\█]+/gi
   var escaped = subbed_text.replaceAll(special_regex, function(found) {
     if (found.charCodeAt(0) == 65039) { return "" }
 
@@ -205,6 +205,7 @@ Text.markup = function(text) {
   text = Text.escapeSpecial(text)
   text = text.replaceAll(/\[bg (.*?)\](.*?)\[\/bg\]/gi, "<span style=\"background-color: $1;\">$2</span>")
   text = text.replaceAll(/\[color (.*?)\](.*?)\[\/color\]/gi, "<span style=\"color: $1;\">$2</span>")
+  text = text.replaceAll(/\[e\](.*?)\[\/e\]/gi, "<e>$1</e>")
   text = text.replaceAll(/\[bold\](.*?)\[\/bold\]/gi, "<b>$1</b>")
   text = text.replaceAll(/\[ani \"(.*?)\"\]/gi, "<textanimate steps=\"$1\"> </textanimate>")
   text = text.replaceAll(/\[img (.*?)\]/gi, "<span class=\"dashboard-img-wrapper\"><img src=\"$1\"\/></span>")

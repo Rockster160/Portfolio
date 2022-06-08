@@ -44,12 +44,12 @@ import { dash_colors } from "../vars"
       var str = String(calStart.getDate()).padStart(3, " ")
       if (calStart.getMonth() == month) {
         color = "white"
-        if ( calStart.getDate() == date) {
+        if (calStart.getDate() == date) {
           color = "blue"
           str = Text.bgColor(dash_colors.bright, str)
         }
       }
-      line.push(Text.color(color, str))
+      line.push(Text.color(dash_colors[color], str))
 
       if (calStart.getDay() == 6) {
         lines.push(Text.center(line.join(" ")))
