@@ -12,7 +12,7 @@
 
 <div class="emails-container">
   <div class="text-center">
-    <%= paginate @emails, params: params %>
+    <%= paginate @emails, params: params.to_unsafe_h %>
   </div>
   <div class="text-right">
     <%= page_entries_info @emails %>
@@ -46,6 +46,6 @@
   <% end %>
 
   <div class="text-center">
-    <%= paginate @emails, params: params %>
+    <%= paginate @emails, params: params.to_unsafe_h %>
   </div>
 </div>

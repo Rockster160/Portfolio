@@ -112,14 +112,14 @@ import { dash_colors } from "../vars"
       let rounded = Math.round(scaleVal(val, min, max, 1, 8))
       let capped = [rounded, 1, 8].sort(function(a, b) { return a - b })[1]
       switch(capped) {
-        case 1: return "▁"; break;
-        case 2: return "▂"; break;
-        case 3: return "▃"; break;
-        case 4: return "▄"; break;
-        case 5: return "▅"; break;
-        case 6: return "▆"; break;
-        case 7: return "▇"; break;
-        case 8: return "█"; break;
+        case 1: return "▁"
+        case 2: return "▂"
+        case 3: return "▃"
+        case 4: return "▄"
+        case 5: return "▅"
+        case 6: return "▆"
+        case 7: return "▇"
+        case 8: return "█"
       }
     }
 
