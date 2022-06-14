@@ -4,10 +4,8 @@ import { dash_colors } from "../vars"
 
 (function() {
   var cell = undefined
-  var gitGet = async function(filter) {
-    var url = "https://api.github.com/search/issues"
-    var uri = url + "?q=" + encodeURIComponent(filter + " repo:WorkWave/slingshot-web-app")
-    var res = await fetch(uri, {
+  let gitGet = async function(url) {
+    let res = await fetch(url, {
       method: "GET",
       headers: {
         accept: "application/vnd.github.v3+json",
@@ -16,28 +14,53 @@ import { dash_colors } from "../vars"
     })
 
     if (res.ok) {
-      var json = await res.json()
-      return json.items.map(function(issue) {
-        return {
-          url: (issue.pull_request || issue.issue).html_url,
-          // status to show if it's open, ready to merge, etc...
-          id: issue.number,
-          title: issue.title,
-        }
-      })
-    } else {
-      return [{
-        title: Text.color(dash_colors.red, "[Failed to retrieve]")
-      }]
+      return await res.json()
     }
+  }
+  var gitSearch = async function(filter) {
+    var url = "https://api.github.com/search/issues"
+    var uri = url + "?q=" + encodeURIComponent(filter + " repo:WorkWave/slingshot-web-app")
+    let json = await gitGet(uri)
+    if (!json) { return }
+
+    return await json.items.map(async function(issue) {
+      let status = undefined
+      if (issue.pull_request) {
+        let pr = await gitGet(issue.pull_request.html_url)
+        if (pr) {
+          if (pr.mergeable_state == "clean") {
+            status = Text.color(dash_colors.green, "✓")
+          } else if (pr.mergeable_state == "blocked") {
+            status = Text.color(dash_colors.red, "𐄂")
+          } else {
+            status = Text.color(dash_colors.orange, "[" + pr.mergeable_state + "]")
+          }
+        }
+      }
+
+      return {
+        url: (issue.pull_request || issue.issue).html_url,
+        status: status,
+        id: issue.number,
+        title: issue.title,
+      }
+    })
   }
 
   var getLines = async function(cell) {
-    cell.data.pending_review = await gitGet("is:open is:pr review-requested:Rockster160")
-    cell.data.issues = await gitGet("is:open is:issue assignee:Rockster160")
-    cell.data.prs = await gitGet("is:open is:pr assignee:Rockster160")
+    cell.data.pending_review = await gitSearch("is:open is:pr review-requested:Rockster160")
+    cell.data.issues = await gitSearch("is:open is:issue assignee:Rockster160")
+    cell.data.prs = await gitSearch("is:open is:pr assignee:Rockster160")
 
     render(cell)
+  }
+
+  let renderLine = function(status, id, title) {
+    return [
+      status,
+      Text.color(dash_colors.green, id),
+      title
+    ].filter(i => i).join(" ")
   }
 
   var render = function(cell) {
@@ -45,19 +68,19 @@ import { dash_colors } from "../vars"
     if (cell.data.pending_review.length > 0) {
       lines.push("-- Pending Review:")
       cell.data.pending_review.forEach(function(review) {
-        lines.push([Text.color(dash_colors.green, review.id), review.title].join(" "))
+        renderLine(review.status, review.id, review.title)
       })
     }
     if (cell.data.issues.length > 0) {
       lines.push("-- Issues:")
       cell.data.issues.forEach(function(issue) {
-        lines.push([Text.color(dash_colors.green, issue.id), issue.title].join(" "))
+        renderLine(issue.status, issue.id, issue.title)
       })
     }
     if (cell.data.prs.length > 0) {
       lines.push("-- My PRs:")
       cell.data.prs.forEach(function(pr) {
-        lines.push([Text.color(dash_colors.green, pr.id), pr.title].join(" "))
+        renderLine(pr.status, pr.id, pr.title)
       })
     }
 
