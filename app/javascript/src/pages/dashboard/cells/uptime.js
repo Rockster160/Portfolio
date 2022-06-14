@@ -184,7 +184,6 @@ import { dash_colors } from "../vars"
     },
     socket: Server.socket("LoadtimeChannel", function(msg) {
       this.data.load_data = msg
-      console.log(msg);
       renderCell(this)
     }),
     refreshInterval: Time.minutes(10),

@@ -23,28 +23,30 @@ import { dash_colors } from "../vars"
     let json = await gitGet(uri)
     if (!json) { return }
 
-    return await json.items.map(async function(issue) {
-      let status = undefined
-      if (issue.pull_request) {
-        let pr = await gitGet(issue.pull_request.html_url)
-        if (pr) {
-          if (pr.mergeable_state == "clean") {
-            status = Text.color(dash_colors.green, "✓")
-          } else if (pr.mergeable_state == "blocked") {
-            status = Text.color(dash_colors.red, "𐄂")
-          } else {
-            status = Text.color(dash_colors.orange, "[" + pr.mergeable_state + "]")
+    return Promise.all(
+      json.items.map(async function(issue) {
+        let status = undefined
+        if (issue.pull_request) {
+          let pr = await gitGet(issue.pull_request.url)
+          if (pr) {
+            if (pr.mergeable_state == "clean") {
+              status = Text.color(dash_colors.green, "✓")
+            } else if (pr.mergeable_state == "blocked") {
+              status = Text.color(dash_colors.red, "𐄂")
+            } else {
+              status = Text.color(dash_colors.orange, "[" + pr.mergeable_state + "]")
+            }
           }
         }
-      }
 
-      return {
-        url: (issue.pull_request || issue.issue).html_url,
-        status: status,
-        id: issue.number,
-        title: issue.title,
-      }
-    })
+        return {
+          url: (issue.pull_request || issue.issue).html_url,
+          status: status,
+          id: issue.number,
+          title: issue.title,
+        }
+      })
+    )
   }
 
   var getLines = async function(cell) {
@@ -68,19 +70,20 @@ import { dash_colors } from "../vars"
     if (cell.data.pending_review.length > 0) {
       lines.push("-- Pending Review:")
       cell.data.pending_review.forEach(function(review) {
-        renderLine(review.status, review.id, review.title)
+        lines.push(renderLine(review.status, review.id, review.title))
       })
     }
     if (cell.data.issues.length > 0) {
       lines.push("-- Issues:")
       cell.data.issues.forEach(function(issue) {
-        renderLine(issue.status, issue.id, issue.title)
+        lines.push(renderLine(issue.status, issue.id, issue.title))
       })
     }
     if (cell.data.prs.length > 0) {
       lines.push("-- My PRs:")
       cell.data.prs.forEach(function(pr) {
-        renderLine(pr.status, pr.id, pr.title)
+        console.log(pr);
+        lines.push(renderLine(pr.status, pr.id, pr.title))
       })
     }
 
