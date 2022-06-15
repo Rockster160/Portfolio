@@ -42,13 +42,15 @@ class GoogleNestSubscription
     @devices ||= begin
       subscribe if @access_token.blank?
 
-      url = "https://smartdevicemanagement.googleapis.com/v1/enterprises/#{PROJECT_ID}/devices"
-      headers = {
-        "Content-Type": "application/json",
-        "Authorization": @access_token,
-      }
+      res = request_or_refresh {
+        url = "https://smartdevicemanagement.googleapis.com/v1/enterprises/#{PROJECT_ID}/devices"
+        headers = {
+          "Content-Type": "application/json",
+          "Authorization": @access_token,
+        }
 
-      res = RestClient.get(url, headers)
+        RestClient.get(url, headers)
+      }
       json = JSON.parse(res.body).with_indifferent_access
 
       json[:devices].map do |device_data|
