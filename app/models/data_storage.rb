@@ -12,12 +12,13 @@ class DataStorage < ApplicationRecord
   serialize :data, SafeJsonSerializer
 
   def self.[](key)
-    find_or_create_by(name: key)
+    storage = find_or_create_by(name: key)
+    storage.data
   end
 
   def self.[]=(key, new_data)
     storage = find_or_create_by(name: key)
     storage.update(data: new_data)
-    storage
+    storage.data
   end
 end
