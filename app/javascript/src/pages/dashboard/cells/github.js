@@ -33,6 +33,8 @@ import { dash_colors } from "../vars"
               status = Text.color(dash_colors.green, "✓")
             } else if (pr.mergeable_state == "blocked") {
               status = Text.color(dash_colors.red, "𐄂")
+            } else if (pr.mergeable_state == "unstable") {
+              status = Text.color(dash_colors.orange, "𐄂")
             } else {
               status = Text.color(dash_colors.orange, "[" + pr.mergeable_state + "]")
             }
