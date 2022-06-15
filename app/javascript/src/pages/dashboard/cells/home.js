@@ -6,20 +6,20 @@ import { dash_colors } from "../vars"
 (function() {
   var cell = undefined
 
-  let color_scale = ColorGenerator.colorScale({
-    "#5B6EE1": 5,
-    "#639BFF": 32,
-    "#99E550": 64,
-    "#FBF236": 78,
-    "#AC3232": 96,
-  })
-
-  let shiftTempToColor = function(temp, pad) {
-    let color = color_scale(temp)
-    let str = Math.round(temp) + "°"
-
-    return Text.color(color.hex, str.padStart(pad || 0, " "))
-  }
+  // let color_scale = ColorGenerator.colorScale({
+  //   "#5B6EE1": 5,
+  //   "#639BFF": 32,
+  //   "#99E550": 64,
+  //   "#FBF236": 78,
+  //   "#AC3232": 96,
+  // })
+  //
+  // let shiftTempToColor = function(temp, pad) {
+  //   let color = color_scale(temp)
+  //   let str = Math.round(temp) + "°"
+  //
+  //   return Text.color(color.hex, str.padStart(pad || 0, " "))
+  // }
 
   let cToF = function(c) {
     if (c == null || c == undefined) { return }
@@ -192,7 +192,7 @@ import { dash_colors } from "../vars"
 
   cell = Cell.register({
     title: "Home",
-    refreshInterval: Time.minutes(30),
+    refreshInterval: Time.minutes(10),
     wrap: false,
     flash: false,
     reloader: function() {
