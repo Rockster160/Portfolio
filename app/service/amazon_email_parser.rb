@@ -1,4 +1,4 @@
-module AmazonEmailParser
+class AmazonEmailParser
   def initialize(email)
     @email = email
 
