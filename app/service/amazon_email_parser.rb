@@ -18,16 +18,17 @@ module AmazonEmailParser
   end
 
   def save(str)
-    data_store = DataStorage[:amazon_deliveries] || {}
-    data_store[order_id] = str
-    DataStorage[:amazon_deliveries] = hash
+    data_store = (DataStorage[:amazon_deliveries] || {}).with_indifferent_access
+    order = data_store[order_id] || {}
+    order[:delivery] = str
+    data_store[order_id] = order
+    DataStorage[:amazon_deliveries] = data_store
 
-    # broadcast
-    # https://www.amazon.com/gp/your-account/order-details?orderID=111-6868123-4188211
+    ActionCable.server.broadcast "amz_updates_channel", data_store
   end
 
   def order_id
-    @email.html_body[/\#\d{3}-\d{7}-\d{7}/]
+    @order_id ||= @email.html_body[/\#\d{3}-\d{7}-\d{7}/]
   end
 
   def arrival_date_str
