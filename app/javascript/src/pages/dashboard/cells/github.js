@@ -29,12 +29,12 @@ import { dash_colors } from "../vars"
         if (issue.pull_request) {
           let pr = await gitGet(issue.pull_request.url)
           if (pr) {
-            if (pr.mergeable_state == "clean") {
+            if (pr.mergeable_state == "clean") { // All checks good, approved
               status = Text.color(dash_colors.green, "✓")
-            } else if (pr.mergeable_state == "blocked") {
+            } else if (pr.mergeable_state == "blocked") { // Something not ready
               status = Text.color(dash_colors.red, "𐄂")
-            } else if (pr.mergeable_state == "unstable") {
-              status = Text.color(dash_colors.orange, "𐄂")
+            } else if (pr.mergeable_state == "unstable") { // Approved, but not all checks passed
+              status = Text.color(dash_colors.orange, "✓")
             } else {
               status = Text.color(dash_colors.orange, "[" + pr.mergeable_state + "]")
             }
@@ -84,7 +84,6 @@ import { dash_colors } from "../vars"
     if (cell.data.prs.length > 0) {
       lines.push("-- My PRs:")
       cell.data.prs.forEach(function(pr) {
-        console.log(pr);
         lines.push(renderLine(pr.status, pr.id, pr.title))
       })
     }

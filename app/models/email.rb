@@ -130,6 +130,18 @@ class Email < ApplicationRecord
     parser.xpath("//text()").map(&:text).join(" ").squish
   end
 
+  def amazon_update?(from)
+    ([
+      "auto-confirm@amazon.com",
+      "order-update@amazon.com",
+      "shipment-tracking@amazon.com",
+    ] & from).any?
+  end
+
+  def parse_amazon
+    AmazonEmailParser.new(self)
+  end
+
   def from_mail(mail, attaches=[])
     content = mail.body&.decoded.presence
     html_body = clean_content(mail.html_part&.body&.decoded.presence) || clean_content(content)
@@ -143,7 +155,15 @@ class Email < ApplicationRecord
       html_body: html_body,
       attachments: attaches,
     )
-    notify_slack if save && !skip_notify
+
+    success = save
+
+    if amazon_update?([mail.from].flatten.compact)
+      skip_notify = true
+      parse_amazon
+    end
+
+    notify_slack if success && !skip_notify
     failure(*errors.full_messages) if errors.any?
     reload
   end

@@ -1,6 +1,6 @@
 <% list ||= @list || item.list %>
 
-<div class="list-item-container" data-editable data-sort-order="<%= item.sort_order %>" data-item-id="<%= item.id %>" data-item-url="<%= list_list_item_path(list, item) %>">
+<div class="list-item-container" data-editable data-sort-order="<%= item.sort_order %>" data-item-id="<%= item.id %>" data-item-url="<%= list_list_item_path(list, item) %>" data-updated="<%= item.updated_at.to_i %>">
   <div class="list-item-config">
     <%= content_tag :div, nil,           class: "important" if item.important? %>
     <%= content_tag :div, item.category, class: "category" %>

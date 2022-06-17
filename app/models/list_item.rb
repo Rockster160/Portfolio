@@ -185,7 +185,7 @@ class ListItem < ApplicationRecord
   def broadcast_commit
     return if do_not_broadcast
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
-    ActionCable.server.broadcast "list_#{self.list_id}_channel", list_html: rendered_message, list_data: list.serialize
+    ActionCable.server.broadcast "list_#{self.list_id}_channel", list_html: rendered_message, list_data: list.serialize, timestamp: Time.current.to_i
     list_item_attrs = self.attributes.symbolize_keys.slice(:important, :permanent, :category, :name)
     list_item_attrs.merge!(schedule: self.schedule_in_words)
     list_item_attrs.merge!(countdown: (self.schedule_next.to_f * 1000).round) unless self.schedule.nil?
