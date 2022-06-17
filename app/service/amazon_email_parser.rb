@@ -3,6 +3,8 @@ class AmazonEmailParser
     @email = email
 
     parse
+  rescue StandardError => e
+    SlackNotifier.notify("Failed to parse Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>\n#{e.try(:message) || e.try(:body) || e.inspect}", channel: '#portfolio', username: 'Mail-Bot', icon_emoji: ':mailbox:')
   end
 
   def parse
@@ -34,19 +36,16 @@ class AmazonEmailParser
   def arrival_date_str
     if @email.html_body.include?("your package will arrive")
       # shipment-tracking@amazon.com
-      @doc.at_css("tbody div:contains('your package will arrive')")
-        .ancestors("tbody")
-        .first
-        .css("td")
-        .last
-        .text
-        .squish
+      msg = @doc.at_css("tbody div:contains('your package will arrive')")
+      msg ||= @doc.at_css("tbody div:contains('is arriving earlier than we previously expected')")
+
+      msg&.ancestors("tbody")&.first&.css("td")&.last&.text&.squish
     elsif @email.html_body.include?("Arriving:")
       # auto-confirm@amazon.com
-      @doc.at_css("span:contains('Arriving:')").parent.at_css("b font").text.squish
+      @doc.at_css("span:contains('Arriving:')")&.parent&.at_css("b font")&.text&.squish
     elsif @email.html_body.include?("Now expected")
       # order-update@amazon.com
-      @doc.at_css("span:contains('Now expected')").text[/Now expected \w+ \d+/][/\w+ \d+$/]
+      @doc.at_css("span:contains('Now expected')")&.text.to_s[/Now expected \w+ \d+/].to_s[/\w+ \d+$/]
     else
       SlackNotifier.notify("Failed to parse Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", channel: '#portfolio', username: 'Mail-Bot', icon_emoji: ':mailbox:')
       ""
