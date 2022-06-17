@@ -25,7 +25,7 @@ class UserSurvey < ApplicationRecord
       # TODO: Don't grab the first one. Do conditional logic to find which description to show
       {
         name: result.name,
-        description: result.survey_result_details.first.description,
+        description: result.survey_result_details.first&.description,
         percentage: ((result_count / total.to_f) * 100).round,
       }
     end.sort_by { |data| -data[:percentage] }
