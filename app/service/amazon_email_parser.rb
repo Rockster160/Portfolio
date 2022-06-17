@@ -41,7 +41,8 @@ class AmazonEmailParser
       msg = @doc.at_css("tbody div:contains('your package will arrive')")
       msg ||= @doc.at_css("tbody div:contains('is arriving earlier than we previously expected')")
 
-      msg&.ancestors("tbody")&.first&.css("td")&.last&.text&.squish
+      date = msg&.ancestors("tbody")&.first&.css(".arrivalDate")&.first&.text&.squish
+      date ||= msg&.ancestors("tbody")&.first&.css("td")&.last&.text&.squish
     elsif @email.html_body.include?("Arriving:")
       # auto-confirm@amazon.com
       @doc.at_css("span:contains('Arriving:')")&.parent&.at_css("b font")&.text&.squish
