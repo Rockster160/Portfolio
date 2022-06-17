@@ -238,7 +238,7 @@ import { dash_colors } from "../vars"
         } else if (/^\d+\s*$/.test(msg)) { // No words means open the order
           let url = "https://www.amazon.com/gp/your-account/order-details?orderID="
           window.open(url + order.id.replace("#", ""), "_blank")
-        } else { // No rename the order
+        } else { // Rename the order
           this.ws.send({ action: "change", id: order.id, rename: msg.replace(/^\d+ /, "") })
         }
       } else { // Assume AC control

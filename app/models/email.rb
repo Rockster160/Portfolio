@@ -161,6 +161,7 @@ class Email < ApplicationRecord
     if amazon_update?([mail.from].flatten.compact)
       skip_notify = true
       parse_amazon
+      update(deleted_at: Time.current) # Auto archive Amazon emails
     end
 
     notify_slack if success && !skip_notify
