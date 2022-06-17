@@ -1,6 +1,6 @@
 class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :post_params
+  before_action :post_params, except: [:local_data, :report]
 
   def jenkins
     head 200

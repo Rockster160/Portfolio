@@ -139,7 +139,7 @@ class Email < ApplicationRecord
   end
 
   def parse_amazon
-    AmazonEmailParser.new(self)
+    AmazonEmailParser.parse(self)
   end
 
   def from_mail(mail, attaches=[])

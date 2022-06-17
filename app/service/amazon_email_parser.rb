@@ -1,10 +1,10 @@
 class AmazonEmailParser
+  def self.parse(email)
+    new(email).parse
+  end
+
   def initialize(email)
     @email = email
-
-    parse
-  rescue StandardError => e
-    SlackNotifier.notify("Failed to parse Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>\n#{e.try(:message) || e.try(:body) || e.inspect}", channel: '#portfolio', username: 'Mail-Bot', icon_emoji: ':mailbox:')
   end
 
   def parse
@@ -17,6 +17,8 @@ class AmazonEmailParser
       date = Date.parse(date_str) if date_str.present?
       save(date.to_s.presence || "[ERROR]")
     end
+  rescue StandardError => e
+    SlackNotifier.notify("Failed to parse Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>\n#{e.try(:message) || e.try(:body) || e.inspect}", channel: '#portfolio', username: 'Mail-Bot', icon_emoji: ':mailbox:')
   end
 
   def save(str)
