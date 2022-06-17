@@ -214,7 +214,7 @@ import { dash_colors } from "../vars"
         let order = { date: 0, id: order_id }
         let delivery = order_data.delivery || ""
         if (delivery[0] != "[") {
-          let date = new Date(delivery)
+          let date = new Date(delivery + " MDT")
           order.date = date.getTime()
           delivery = date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
         }

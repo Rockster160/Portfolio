@@ -14,8 +14,8 @@ class AmazonEmailParser
       save("[DELIVERED]")
     else
       date_str = arrival_date_str
-      date = Date.parse(date_str) if date_str.present?
-      save(date.to_s.presence || "[ERROR]")
+      date_str = Date.parse(date_str).iso8601 if date_str.present?
+      save(date_str.presence || "[ERROR]")
     end
   rescue StandardError => e
     SlackNotifier.notify("Failed to parse Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>\n#{e.try(:message) || e.try(:body) || e.inspect}", channel: '#portfolio', username: 'Mail-Bot', icon_emoji: ':mailbox:')
