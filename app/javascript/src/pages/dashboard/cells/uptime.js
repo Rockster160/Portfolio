@@ -52,33 +52,30 @@ import { dash_colors } from "../vars"
   }
 
   var rigData = function(cell) {
-    // -- Currently broken because of CORS --
-    // fetch(cell.data.base_url + "/farms", {
-    //   method: "GET",
-    //   headers: {
-    //     "Authorization": "Bearer " + cell.config.hiveos_apikey,
-    //     "Access-Control-Allow-Origin": "*"
-    //   }
-    // }).then(function(res) {
-    //   res.json().then(function(json) {
-    //     if (res.ok) {
-    //       var lines = []
-    //       json.data.forEach(function(rig) {
-    //         lines.push(" " + rig.name)
-    //         var online = "█ ".repeat(rig.stats.gpus_online)
-    //         var offline = "█ ".repeat(rig.stats.gpus_total - rig.stats.gpus_online)
-    //         lines.push(Text.center(Text.color(dash_colors.green, online) + Text.color(dash_colors.red, offline)))
-    //       })
-    //       cell.data.rig_lines = lines
-    //     } else {
-    //       cell.data.rig_lines = [
-    //         "Error fetching farms:",
-    //         JSON.stringify(json),
-    //       ]
-    //     }
-    //     renderCell(cell)
-    //   })
-    // })
+    fetch("/proxy", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        url: cell.data.base_url + "/farms",
+        headers: {
+          Authorization: "Bearer " + cell.config.hiveos_apikey,
+        }
+      })
+    }).then(function(res) {
+      res.json().then(function(json) {
+        var lines = []
+        json.data.forEach(function(rig) {
+          lines.push(" " + rig.name)
+          var online = "█ ".repeat(rig.stats.gpus_online)
+          var offline = "█ ".repeat(rig.stats.gpus_total - rig.stats.gpus_online)
+          lines.push(Text.center(Text.color(dash_colors.green, online) + Text.color(dash_colors.red, offline)))
+        })
+        cell.data.rig_lines = lines
+        renderCell(cell)
+      })
+    })
   }
 
   var uptimeLines = function(cell) {
@@ -190,7 +187,7 @@ import { dash_colors } from "../vars"
     reloader: function() {
       var cell = this
       uptimeData(cell)
-      // rigData(cell)
+      rigData(cell)
       cell.ws.send("request")
     },
   })

@@ -7,6 +7,7 @@ Rails.application.routes.draw do
 
   root "index#home"
   post "/talk" => "index#talk"
+  post "proxy" => "proxy#proxy"
   get "map" => "index#map"
   get "playground" => "index#playground"
 
