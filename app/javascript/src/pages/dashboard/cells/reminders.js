@@ -4,7 +4,7 @@ import { Time } from "./_time"
   window.local_reminders_cell = Cell.register({
     title: "Reminders",
     text: "Loading...",
-    refreshInterval: Time.hour(),
+    refreshInterval: Time.minutes(5),
     wrap: true,
     flash: false,
     commands: {
