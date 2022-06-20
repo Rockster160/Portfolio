@@ -6,6 +6,7 @@ class FitnessBroadcast
       :Pullups,
       :Workout,
       :Vitamins,
+      :Fluox,
       :Water,
       :Teeth,
       :Shower,
