@@ -50,8 +50,8 @@ import { dash_colors } from "../vars"
     })
 
     if (res.status == 401) {
-      await refreshTokens()
-      return getDevices(count + 1)
+      let refresh = await refreshTokens()
+      if (refresh) { return getDevices(count + 1) }
     }
 
     if (res.ok) {
@@ -82,7 +82,9 @@ import { dash_colors } from "../vars"
     if (res.ok) {
       let json = await res.json()
       cell.config.access_token = [json.token_type, json.access_token].join(" ")
+      return true
     }
+    return false
   }
 
   let setMode = async function(device, mode, count=0) {
