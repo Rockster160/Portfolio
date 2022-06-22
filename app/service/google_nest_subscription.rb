@@ -28,9 +28,8 @@ class GoogleNestSubscription
   end
 
   def subscribe
-    return refresh if @refresh_token.present?
-
     retrieve_tokens
+
     self
   end
 
