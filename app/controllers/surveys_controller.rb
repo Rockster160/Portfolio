@@ -1,12 +1,15 @@
 class SurveysController < ApplicationController
   before_action :authorize_user
+  skip_before_action :verify_authenticity_token
 
   def index
     @surveys = Survey.all
   end
 
   def show
-    @survey = Survey.includes(survey_questions: :survey_question_answers).find_by(slug: params[:id])
+    surveys = Survey.includes(survey_questions: :survey_question_answers)
+    @survey = surveys.find_by(slug: params[:id])
+    @survey ||= surveys.find(params[:id])
   end
 
   def update
