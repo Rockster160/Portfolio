@@ -22,24 +22,31 @@
   width: 800px;
   max-width: 100%;
 
-  .controls {
+  .email-wrapper {
     position: relative;
-    margin-top: -30px;
-    pointer-events: none;
-    text-align: right;
 
-    a {
-      display: inline-block;
-      transition: 0.3s all;
-      margin-left: 10px;
-      width: 30px;
-      height: 30px;
-      pointer-events: all;
-      font-size: 20px;
-      line-height: 30px;
-      text-align: center;
+    .controls {
+      position: absolute;
+      right: 1px;
+      bottom: 1px;
+      text-align: right;
+      background-color: white;
+      padding: 2px;
+      border-radius: 4px;
 
-      &:hover { background-color: $base-blue; }
+      a {
+        display: inline-block;
+        transition: 0.3s all;
+        margin-left: 2px;
+        width: 30px;
+        height: 30px;
+        pointer-events: all;
+        font-size: 24px;
+        line-height: 30px;
+        text-align: center;
+
+        &:hover { background-color: $base-blue; }
+      }
     }
   }
 

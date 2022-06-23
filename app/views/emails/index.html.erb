@@ -1,10 +1,10 @@
 <div class="skinny-container">
   <a href="<%= new_email_path %>" class="btn">New Email</a>
-  <div class="flex-fields">
-    <div class="flex-field" style="">
+  <div class="flex-container">
+    <div class="flex-field flex-10">
       <input type="text" name="" value="<%= params[:q] %>" class="search">
     </div>
-    <div class="flex-field" style="">
+    <div class="flex-field flex-2 flex-vert-align">
       <button type="button" name="button" class="search-button">Go</button>
     </div>
   </div>
@@ -24,13 +24,13 @@
         <div class="timestamp"><%= email.created_at.in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:simple_with_time) %></div>
         <div class="from">
           <% if email.archived? %>
-            <i class="fa fa-trash"></i>
+            <i class="ti ti-oct-trashcan"></i>
           <% end %>
           <% if email.attachments&.any? %>
-            <div class="attachments"><i class="fa fa-paperclip"></i></div>
+            <div class="attachments"><i class="ti ti-mdi-paperclip"></i></div>
           <% end %>
           <% if email.inbound? %>
-            <i class="fa fa-arrow-right"></i>
+            <i class="ti ti-fa-arrow_right"></i>
           <% end %>
           <%= email.outbound_address %>
         </div>
@@ -39,8 +39,8 @@
         <div class="body"><%= email.text_body.presence || "<No Content>" %></div>
       </a>
       <div class="controls">
-        <%= link_to email_path(email, email: { archived: true }), method: :patch, remote: true, class: "remote-email archived" do %><i class="fa fa-trash"></i><% end %>
-        <%= link_to email_path(email, email: { read: true }), method: :patch, remote: true, class: "remote-email read" do %><i class="fa fa-check"></i><% end %>
+        <%= link_to email_path(email, email: { archived: true }), method: :patch, remote: true, class: "remote-email archived" do %><i class="ti ti-oct-trashcan"></i><% end %>
+        <%= link_to email_path(email, email: { read: true }), method: :patch, remote: true, class: "remote-email read" do %><i class="ti ti-fa-check"></i><% end %>
       </div>
     </div>
   <% end %>
