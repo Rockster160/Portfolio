@@ -17,6 +17,25 @@
   white-space: pre-wrap;
 }
 
+.email-filter-buttons-container {
+  display: flex;
+  margin-left: 10px;
+
+  .email-filter {
+    @include btn-color($blue-l5);
+
+    display: inline-block;
+    margin-left: -1px;
+    border: 1px solid grey;
+    width: 25px;
+    height: 25px;
+    font-size: 24px;
+    line-height: 25px;
+    text-align: center;
+    text-shadow: none;
+  }
+}
+
 .emails-container {
   margin: 0 auto;
   width: 800px;
@@ -29,10 +48,10 @@
       position: absolute;
       right: 1px;
       bottom: 1px;
-      text-align: right;
+      border-radius: 4px;
       background-color: white;
       padding: 2px;
-      border-radius: 4px;
+      text-align: right;
 
       a {
         display: inline-block;
@@ -57,10 +76,10 @@
     border: 1px solid #DDD;
     background: white;
     padding: 10px;
+    height: 91px;
     overflow: hidden;
     color: #555;
     text-decoration: none;
-    height: 91px;
 
     &.unread { background: #EBF4FE; }
     .attachments {

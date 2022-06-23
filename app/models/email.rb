@@ -66,7 +66,7 @@ class Email < ApplicationRecord
 
   def retrieve_attachments
     @retrieve_attachments ||= begin
-      attachments.each_with_object({}) do |(attch_id, attch_filename), obj|
+      (attachments || []).each_with_object({}) do |(attch_id, attch_filename), obj|
         obj[attch_id] = {
           filename: attch_filename,
           presigned_url: FileStorage.expiring_url(attch_filename)

@@ -25,15 +25,46 @@ $(document).ready(function() {
     window.location.href = url.href
   }
 
+  let updateFilters = function() {
+    let text = $(".search").val()
+    $(".email-filter").each(function() {
+      if (text.includes($(this).attr("data-filter"))) {
+        $(this).addClass("active")
+      } else {
+        $(this).removeClass("active")
+      }
+    })
+  }
+  updateFilters()
+
   $(document).on("submit", ".search", function(evt) {
       evt.preventDefault()
       runSearch()
+  }).on("keyup", ".search", function(evt) {
+    updateFilters()
   }).on("keydown", ".search", function(evt) {
     if (evt.key == "Enter") {
       runSearch()
     }
   }).on("click", ".search-button", function(evt) {
     runSearch()
+  }).on("click", ".email-filter", function(evt) {
+    let filter_val = $(this).attr("data-filter")
+
+    $(".email-filter[data-filter!='" + filter_val + "']").each(function() {
+      let regex = new RegExp($(this).attr("data-filter") + " ?", "i")
+      $(".search").val($(".search").val().replace(regex, ""))
+      $(this).removeClass("active")
+    })
+
+    if ($(this).hasClass("active")) {
+      let regex = new RegExp(filter_val + " ?", "i")
+      $(".search").val($(".search").val().replace(regex, ""))
+    } else {
+      $(".search").val(filter_val + " " + $(".search").val())
+    }
+
+    updateFilters()
   })
 })
 

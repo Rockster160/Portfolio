@@ -132,7 +132,7 @@ textarea {
     box-shadow: 0 1px 0 0 $btn-color;
   }
 
-  &:active {
+  &:active, &.active {
     background-color: darken($btn-color, 20%);
     box-shadow: 0 1px 0 0 darken($btn-color, 5%);
   }
