@@ -10,9 +10,9 @@ class LocalDataBroadcast
     data = data.deep_symbolize_keys
 
     if data.dig(:notes, :timestamp) != DataStorage[:notes_timestamp]
-      items_hash = data.dig(:notes, :items).map do |item_name|
+      items_hash = data.dig(:notes, :items)&.map do |item_name|
         { name: item_name }
-      end
+      end || []
       User.find(1).lists.find_by(name: "Todo").add_items(items_hash)
       DataStorage[:notes_timestamp] = data.dig(:notes, :timestamp)
     end
