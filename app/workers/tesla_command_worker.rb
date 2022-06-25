@@ -3,7 +3,6 @@ class TeslaCommandWorker
 
   def perform(cmd, params=nil)
     car = Tesla.new
-    puts "\e[33m[LOGIT] | #{cmd}-#{params}\e[0m"
 
     case cmd.to_s.to_sym
     when :update, :reload
@@ -17,7 +16,6 @@ class TeslaCommandWorker
     when :frunk
       car.pop_frunk
     when :temp
-      puts "\e[33m[LOGIT] | #{params.to_i}\e[0m"
       car.set_temp(params.to_i)
     when :cool
       car.set_temp(59)
