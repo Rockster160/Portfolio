@@ -1,5 +1,5 @@
 class IndexController < ApplicationController
-  skip_before_action :verify_authenticity_token
+  # skip_before_action :verify_authenticity_token
   skip_before_action :show_guest_banner, only: :home
 
   def talk
@@ -21,7 +21,7 @@ class IndexController < ApplicationController
         TeslaCommandWorker.perform_async(car_cmd, [:update, car_params].join(" "))
 
         text = "Told car to turn #{car_cmd}" if car_cmd.in?(["on", "off"])
-        text = "Told car to pop the #{car_cmd}" if car_cmd.in?(["boot", "trunk", "frunk"])        
+        text = "Told car to pop the #{car_cmd}" if car_cmd.in?(["boot", "trunk", "frunk"])
         text = "Car temp set to #{car_params}" if car_params.present?
 
         SmsWorker.perform_async(from_number, text)
