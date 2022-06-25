@@ -1,5 +1,6 @@
 class TeslaCommandWorker
   include Sidekiq::Worker
+  sidekiq_options retry: false
 
   def perform(cmd, params=nil)
     car = Tesla.new
@@ -24,6 +25,8 @@ class TeslaCommandWorker
       car.heat_driver
       car.heat_passenger
     end
+  rescue StandardError => e
+    SlackNotifier.notify("Failed to command: #{e.inspect}")
   end
 
   def cToF(c)
