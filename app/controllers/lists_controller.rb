@@ -107,11 +107,14 @@ class ListsController < ApplicationController
 
   def list_params
     if params[:list].present?
-      params.require(:list).permit(:name, :description, :important, :show_deleted, :default, :message).tap do |whitelist|
+      params.require(:list).permit(:name, :description, :important, :show_deleted, :default, :message, :add, :remove).tap do |whitelist|
+        whitelist[:add] ||= params[:add] if params[:add].present?
+        whitelist[:remove] ||= params[:remove] if params[:remove].present?
         whitelist[:message] ||= params[:message] if params[:message].present?
       end
     else
-      params[:message].present? ? { message: params[:message] } : {}
+      params.permit(:message, :add, :remove)
+      # params[:message].present? ? { message: params[:message] } : {}
     end
   end
 

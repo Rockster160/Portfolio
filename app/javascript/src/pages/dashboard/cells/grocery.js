@@ -24,17 +24,20 @@ import { Text } from "../_text"
       })
     },
     command: function(text) {
+      data = { message: text }
       if (/^-\d+$/.test(text)) {
         var num = parseInt(text.match(/\d+/)[0])
         var lines = this.text().split("\n")
         var item = lines[num-1]
-        text = "remove " + item.replace(/^\d+\. /, "")
+        data.remove = item.replace(/^\d+\. /, "")
+        delete data.message
       }
       if (!/^[-|+|add|remove]/gi.test(text)) {
-        text = "add " + text
+        data.add = text
+        delete data.message
       }
 
-      Server.patch("/lists/grocery", { message: text })
+      Server.patch("/lists/grocery", data)
         .fail(function(data) {
           console.log("Failed to change Grocery: ", data);
         })

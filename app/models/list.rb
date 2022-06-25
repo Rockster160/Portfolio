@@ -111,6 +111,14 @@ class List < ApplicationRecord
     broadcast!
   end
 
+  def add=(str)
+    list_items.by_name_then_update(name: str)
+  end
+
+  def remove=(str)
+    list_items.find_by(name: str)&.destroy
+  end
+
   def message=(str)
     @response = modify_from_message(str)
   end
