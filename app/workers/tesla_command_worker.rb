@@ -21,7 +21,7 @@ class TeslaCommandWorker
     when :cool
       car.set_temp(59)
     when :heat
-      car.set_temp(88)
+      car.set_temp(82)
       car.heat_driver
       car.heat_passenger
     end

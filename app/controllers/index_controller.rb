@@ -8,15 +8,37 @@ class IndexController < ApplicationController
     from_user = current_user || User.find_by(phone: from_number.gsub(/[^0-9]/, "").last(10))
 
     if from_user.present?
-      # if from_user.admin?
-      #   res = CommandControl.parse(body)
-      #
-      #   SmsWorker.perform_async(from_number, res)
-      # else
+      cmd, args = body.squish.downcase.split(" ", 2)
+      cmd = cmd.to_s.to_sym
+      if cmd.in?([:car, :fn]) && !from_user.admin?
+        args = "#{cmd} #{args}"
+        cmd = nil
+      end
+
+      case cmd
+      when :car
+        car_cmd, car_params = args.split(" ", 2)
+        TeslaCommandWorker.perform(car_cmd, car_params)
+        text = "Told car to #{car_cmd}"
+
+        if car_params.present?
+          text = "Car temp set to #{car_params}"
+        end
+
+        SmsWorker.perform_async(from_number, text)
+      when :fn
+        res = CommandControl.parse(body)
+
+        SmsWorker.perform_async(from_number, res)
+      when :list
+        res = List.find_and_modify(from_user, args)
+
+        SmsWorker.perform_async(from_number, res)
+      else
         res = SmsMoney.parse(from_user, body)
 
         SmsWorker.perform_async(from_number, res)
-      # end
+      end
     else
       SmsWorker.perform_async(from_number, "Sorry- I'm not sure who you are. Please log in and add your phone number before using SMS.")
     end
