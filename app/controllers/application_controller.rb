@@ -1,10 +1,7 @@
 class ApplicationController < ActionController::Base
   # Prevent CSRF attacks by raising an exception.
   # For APIs, you may want to use :null_session instead.
-  protect_from_forgery
-  # This is bad, but with the recent update, CSRF tokens are unstable and causing lots of issues.
-  # skip_before_action :verify_authenticity_token
-  # skip_forgery_protection
+  protect_from_forgery with: :exception
   helper_method :current_user, :user_signed_in?, :guest_account?
   before_action :see_current_user, :logit
   before_action :show_guest_banner, if: :guest_account?
