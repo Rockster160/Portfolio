@@ -72,6 +72,10 @@ class TeslaControl
     command(:auto_conditioning_start)
   end
 
+  def off_car
+    command(:auto_conditioning_stop)
+  end
+
   def set_temp(temp_F)
     # Tesla expects temp in Celsius
     temp_C = ((temp_F - 32) * (5/9.to_f)).round(1)
@@ -172,7 +176,7 @@ class TeslaControl
       BASE_HEADERS
     )
 
-    json = JSON.parse(res.body, symbolize_names: true).dig(:response)
+    json = JSON.parse(res.body, symbolize_names: true)
 
     @refresh_token = DataStorage[:tesla_refresh_token] = json[:refresh_token]
     @access_token = DataStorage[:tesla_access_token] = json[:access_token]

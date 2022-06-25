@@ -1,26 +1,11 @@
 import { Text } from "../_text"
 import { Time } from "./_time"
-import { ColorGenerator } from "./color_generator"
+import { shiftTempToColor } from "../vars"
 
 (function() {
   var getWeatherEmoji = function(code, isNight) {
     let ico = "[ico wi wi-owm-" + code + " wi-owm-" + (isNight ? "night" : "day") + "-" + code + "]"
     return Text.color(isNight ? "#C5C4DE" : "#DEDBBB", ico)
-  }
-
-  let color_scale = ColorGenerator.colorScale({
-    "#5B6EE1": 5,
-    "#639BFF": 32,
-    "#99E550": 64,
-    "#FBF236": 78,
-    "#AC3232": 96,
-  })
-
-  let shiftTempToColor = function(temp, pad) {
-    let color = color_scale(temp)
-    let str = Math.round(temp) + "°"
-
-    return Text.color(color.hex, str.padStart(pad || 0, " "))
   }
 
   Cell.register({

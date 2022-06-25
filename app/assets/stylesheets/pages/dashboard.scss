@@ -106,7 +106,7 @@ $text-color: darken($grey-blue, 20%);
   row-gap: $dash-font-height;
   display: inline-grid;
   grid-template-columns: repeat(4, 241px);
-  grid-template-rows: repeat(5, 144px);
+  grid-template-rows: repeat(6, 144px);
   column-gap: 3px;
   transition: border-color 1s;
   text-align: left;

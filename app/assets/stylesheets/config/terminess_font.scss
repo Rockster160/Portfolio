@@ -18,8 +18,17 @@
   font-style: normal;
   font-weight: normal;
   line-height: 1;
+  text-align: center;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+@keyframes ti-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.ti-spin:before {
+  display: inline-block;
+  animation: 1s linear infinite ti-spin;
 }
 .ti.ti-custom-c:before { content: "\e61e"; }
 .ti.ti-custom-cpp:before { content: "\e61d"; }
@@ -3830,4 +3839,4 @@
 .ti.ti-weather-wind_south_east:before { content: "\e356"; }
 .ti.ti-weather-wind_south_west:before { content: "\e355"; }
 .ti.ti-weather-wind_west:before { content: "\e354"; }
-.ti.ti-weather-windy:before { content: "\e31e"; } 
+.ti.ti-weather-windy:before { content: "\e31e"; }

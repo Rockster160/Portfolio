@@ -49,9 +49,15 @@ Text.justify = function(...args) {
   var spaces = (width - text_length) / (args.length - 1)
   spaces = spaces < 0 ? 0 : spaces
 
-  return args.map(function(text) {
+  let text = args.map(function(text) {
     return text + " ".repeat(spaces)
-  }).join("").slice(0, -spaces)
+  }).join("")
+
+  if (spaces > 0) {
+    return text.slice(0, -spaces)
+  } else {
+    return text
+  }
 }
 Text.trunc = function(str, num) {
   str = String(str)
@@ -63,6 +69,7 @@ Text.clean = function(text) {
   text = Text.escape(text)
   text = Text.markup(text)
   text = text.replaceAll(/<e>.*?<\/e>/gi, "  ")
+  text = text.replaceAll(/<i.*?>.*?<\/i>/gi, "  ")
   text = text.replaceAll(/<img.*?\>/gi, "  ")
   text = text.replaceAll(/<es>.*?<\/es>/gi, " ")
   text = text.replaceAll(/<.*?>/gi, "")
