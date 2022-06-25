@@ -10,6 +10,7 @@ Rails.application.routes.draw do
   post "proxy" => "proxy#proxy"
   get "map" => "index#map"
   get "playground" => "index#playground"
+  resource :ping, only: :create
 
   scope module: :users do
     get :login,         controller: :sessions,      action: :new
