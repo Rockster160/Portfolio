@@ -80,4 +80,5 @@ Rails.application.configure do
   # Run ActiveJobs inline- this is mostly a fix for the CommandProposal to work properly
   #   since it uses multiple threads which jams up the single process in development
   config.active_job.queue_adapter = :inline
+  config.hosts = nil
 end

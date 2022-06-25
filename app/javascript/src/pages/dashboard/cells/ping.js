@@ -3,7 +3,7 @@
     title: "Ping",
     wrap: true,
     socket: Server.socket("PingChannel", function(msg) {
-      let str = msg.ping ? JSON.stringify(msg.ping) : ""
+      let str = JSON.stringify(msg)
 
       if (str.trim().replace(/\{|\}/ig, "").length > 0) {
         let pings = localStorage.getItem("ping_data")?.split("\n")?.slice(0, 20) || []
@@ -17,6 +17,12 @@
     }),
     reloader: function() {
       this.text(localStorage.getItem("ping_data"))
+    },
+    commands: {
+      clear: function() {
+        localStorage.setItem("ping_data", "")
+        this.text("")
+      }
     },
   })
 })()
