@@ -90,14 +90,6 @@ import { dash_colors } from "../vars"
       mixed[name] = { ...mixed[name], ...data }
     }
 
-    let decorate = function(bgcolor, text) {
-      let bold = Text.bold(text)
-      let colored = Text.color("#112435", bold)
-      let bg = Text.bgColor(bgcolor, colored)
-
-      return bg
-    }
-
     let scaleVal = function(value, f1, f2, t1, t2) {
       var tr = t2 - t1
       var fr = f2 - f1
@@ -127,7 +119,7 @@ import { dash_colors } from "../vars"
         return Text.color(scale(b).hex, battery)
       }).join("")
 
-      return text + Text.bgColor(dash_colors.darkgrey, bs)
+      return text + bs
     }
 
     for (let [name, data] of Object.entries(mixed)) {
