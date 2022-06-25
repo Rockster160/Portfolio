@@ -10,7 +10,7 @@ class CommandControl
   end
 
   def run
-    run_function if function?
+    run_function if command?
   end
 
   private
@@ -18,16 +18,17 @@ class CommandControl
   def run_function
     @msg.gsub!(/^\s*run /i, "")
 
-    function = Function.find_by("? ILIKE CONCAT(title, '%')", @msg)
-    return "No function found." if function.nil?
+    command = CommandProposal::Task.find_by("? ILIKE CONCAT(friendly_id, '%')", @msg)
+    command ||= CommandProposal::Task.find_by("? ILIKE CONCAT(REGEXP_REPLACE(friendly_id, '[^a-z]', '', 'i'), '%')", @msg.gsub(/[^a-z]/i, ""))
+    return "No command found." if command.nil?
 
-    @msg.sub!(/#{function.title}/i, "")
+    @msg.sub!(/#{command.name}/i, "")
     @msg.sub!(/send text/i, "")
 
     @msg, time = @msg.split(" at ").map(&:squish)
 
     if time.present?
-      schedule = Function.find_by(title: "Schedule Function")
+      schedule = CommandProposal::Task.find_by(name: "Schedule Function")
       return "No 'Schedule Function' found." if schedule.blank?
 
       args = args_from_msg
@@ -35,14 +36,14 @@ class CommandControl
 
       return "Sorry, I can't figure out what time that is." if time.nil?
 
-      FunctionWorker.perform_at(time, function.id, args)
-      "Sure, I'll run #{function.title} in #{distance_of_time_in_words(Time.current, time)} from now."
+      FunctionWorker.perform_at(time, command.friendly_id, args)
+      "Sure, I'll run #{command.name} in #{distance_of_time_in_words(Time.current, time)} from now."
     else
-      RunFunction.run(function.id, args_from_msg)
+      ::CommandProposal::Services::Runner.command(command.friendly_id, User.find(1), args_from_msg)&.result.presence || "No result"
     end
   end
 
-  def function?
+  def command?
     @msg.squish.starts_with?(/run /i)
   end
 

@@ -18,12 +18,11 @@ class IndexController < ApplicationController
       case cmd
       when :car
         car_cmd, car_params = args.split(" ", 2)
-        TeslaCommandWorker.perform_async(car_cmd, car_params)
-        text = "Told car to #{car_cmd}"
+        TeslaCommandWorker.perform_async(car_cmd, [:update, car_params].join(" "))
 
-        if car_params.present?
-          text = "Car temp set to #{car_params}"
-        end
+        text = "Told car to turn #{car_cmd}" if car_cmd.in?(["on", "off"])
+        text = "Told car to pop the #{car_cmd}" if car_cmd.in?(["boot", "trunk", "frunk"])        
+        text = "Car temp set to #{car_params}" if car_params.present?
 
         SmsWorker.perform_async(from_number, text)
       when :fn

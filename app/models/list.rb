@@ -23,7 +23,7 @@ class List < ApplicationRecord
   scope :unimportant, -> { where.not(important: true) }
 
   def self.find_and_modify(user, msg)
-    return if msg.blank? || user.blank?
+    return "User not found" if user.blank?
 
     list = user.default_list
     intro_regexp = /\b(to|for|on|in|into)\b/
@@ -38,7 +38,7 @@ class List < ApplicationRecord
       list = found_list if found_list.present?
     end
 
-    return unless list.present?
+    return "List not found" unless list.present?
     msg = msg.gsub(/#{intro_regexp} (?:the )?#{Regexp.quote(list.name)}/i, "")
 
     list.modify_from_message(msg)
@@ -116,7 +116,7 @@ class List < ApplicationRecord
   end
 
   def modify_from_message(msg)
-    return unless persisted?
+    return "List doesn't exist yet" unless persisted?
     msg = msg.to_s
     response_messages = []
     action, item_names = split_action_and_items_from_msg(msg)

@@ -4,6 +4,11 @@ class TeslaCommandWorker
 
   def perform(cmd, params=nil)
     car = Tesla.new
+    update_after = false
+    params.gsub(/^update ?/) do
+      update_after = true
+      ""
+    end
 
     case cmd.to_s.to_sym
     when :update, :reload
@@ -25,6 +30,8 @@ class TeslaCommandWorker
       car.heat_driver
       car.heat_passenger
     end
+
+    ActionCable.server.broadcast("tesla_channel", format_data(car.data)) if update_after
   rescue StandardError => e
     SlackNotifier.notify("Failed to command: #{e.inspect}")
   end
