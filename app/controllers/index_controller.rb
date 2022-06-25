@@ -18,7 +18,7 @@ class IndexController < ApplicationController
       case cmd
       when :car
         car_cmd, car_params = args.split(" ", 2)
-        TeslaCommandWorker.perform(car_cmd, car_params)
+        TeslaCommandWorker.perform_async(car_cmd, car_params)
         text = "Told car to #{car_cmd}"
 
         if car_params.present?
