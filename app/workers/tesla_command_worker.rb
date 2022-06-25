@@ -5,7 +5,7 @@ class TeslaCommandWorker
   def perform(cmd, params=nil)
     car = Tesla.new
     update_after = false
-    params.gsub(/^update ?/) do
+    params&.gsub(/^update ?/) do
       update_after = true
       ""
     end

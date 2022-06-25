@@ -129,6 +129,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
       }, refresh_next)
 
       renderLines()
+      this.flash()
     }),
     command: function(text) {
       let [cmd, ...params] = text.split(" ")
