@@ -6,6 +6,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
   let cell = undefined
 
   let timeago = function(epoch_s) {
+    if (!epoch_s) { return "" }
     let distance_seconds = ((new Date()).getTime() / 1000) - Math.abs(epoch_s)
     if (distance_seconds < 60) { return "just now" }
 
@@ -114,7 +115,6 @@ import { shiftTempToColor, dash_colors } from "../vars"
       this.data.loading = false
       this.data.car = msg
 
-      clearTimeout(this.data.refresh_timer)
       let refresh_next
       if (this.data.climate?.on || this.data.drive?.action == "driving") {
         refresh_next = Time.minute()
@@ -124,6 +124,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
         refresh_next = Time.msUntilNextDay() + Time.hours(7)
       }
 
+      clearTimeout(this.data.refresh_timer)
       this.data.refresh_timer = setTimeout(function() {
         cell.commands.run("update")
       }, refresh_next)
@@ -140,11 +141,6 @@ import { shiftTempToColor, dash_colors } from "../vars"
         cell.data.loading = true
         renderLines()
         cell.ws.send({ action: "command", command: cmd, params: params })
-
-        clearTimeout(cell.data.refresh_timer)
-        cell.data.refresh_timer = setTimeout(function() {
-          cell.commands.run("update")
-        }, Time.seconds(3))
       },
       update: function() { cell.commands.run("update") },
       on: function() { cell.commands.run("on") },

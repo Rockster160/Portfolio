@@ -12,7 +12,7 @@ class TeslaCommandWorker
 
     case cmd.to_s.to_sym
     when :update, :reload
-      ActionCable.server.broadcast "tesla_channel", format_data(car.data)
+      return ActionCable.server.broadcast "tesla_channel", format_data(car.data)
     when :off, :stop
       car.off
     when :on, :start
@@ -31,7 +31,8 @@ class TeslaCommandWorker
       car.heat_passenger
     end
 
-    ActionCable.server.broadcast("tesla_channel", format_data(car.data)) if update_after
+    sleep 3 # Give the API a chance to update
+    ActionCable.server.broadcast("tesla_channel", format_data(car.data))
   rescue StandardError => e
     SlackNotifier.notify("Failed to command: #{e.inspect}")
   end
