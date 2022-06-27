@@ -112,7 +112,11 @@ import { shiftTempToColor, dash_colors } from "../vars"
       cell.commands.run("update")
     },
     socket: Server.socket("TeslaChannel", function(msg) {
-      if (msg.loading) { return this.data.loading = true }
+      if (msg.loading) {
+        this.data.loading = true
+        renderLines()
+        return
+      }
 
       this.data.loading = false
       this.data.car = msg
