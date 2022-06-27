@@ -112,6 +112,8 @@ import { shiftTempToColor, dash_colors } from "../vars"
       cell.commands.run("update")
     },
     socket: Server.socket("TeslaChannel", function(msg) {
+      if (msg.loading) { return this.data.loading = true }
+
       this.data.loading = false
       this.data.car = msg
 
@@ -121,7 +123,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
       } else if (this.data.charging?.active) {
         refresh_next = Time.minutes(5)
       } else {
-        refresh_next = Time.msUntilNextDay() + Time.hours(7)
+        refresh_next = Time.hour()
       }
 
       clearTimeout(this.data.refresh_timer)

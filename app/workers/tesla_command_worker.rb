@@ -3,6 +3,7 @@ class TeslaCommandWorker
   sidekiq_options retry: false
 
   def perform(cmd, params=nil)
+    ActionCable.server.broadcast("tesla_channel", { loading: true })
     car = Tesla.new
     update_after = false
     params&.gsub(/^update ?/) do
