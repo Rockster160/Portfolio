@@ -5,10 +5,13 @@ class TeslaCommandWorker
   def perform(cmd, params=nil)
     ActionCable.server.broadcast("tesla_channel", { loading: true })
     car = Tesla.new
-    update_after = false
-    params&.gsub(/^update ?/) do
-      update_after = true
-      ""
+
+    direction = :toggle
+    if "#{cmd} #{params}".match?(/\b(open|close|pop|vent)\b/)
+      combine = "#{cmd} #{params}"
+      direction = :open if combine.match?(/\b(open|pop)\b/)
+      direction = :close if combine.match?(/\b(close)\b/)
+      cmd, params = combine.gsub(/\b(open|close|pop)\b/, "").squish.split(" ", 2)
     end
 
     case cmd.to_s.to_sym
@@ -19,10 +22,20 @@ class TeslaCommandWorker
     when :on, :start
       car.on
     when :boot, :trunk
-      car.pop_boot
+      car.pop_boot(direction)
+    when :lock
+      car.doors(:close)
+    when :unlock
+      car.doors(:open)
+    when :doors, :door
+      car.doors(direction)
+    when :windows, :window
+      car.windows(direction)
     when :frunk
       car.pop_frunk
     when :temp
+      temp = 82 if params.match?(/\b(hot|heat|high)\b/)
+      temp = 59 if params.match?(/\b(cold|cool|low)\b/)
       car.set_temp(params.to_i)
     when :cool
       car.set_temp(59)
@@ -68,6 +81,7 @@ class TeslaCommandWorker
         rp_window: data.dig(:vehicle_state, :rp_window), # Rear Passenger Window
         rt:        data.dig(:vehicle_state, :rt), # Trunk
       },
+      locked: vehicle_data.dig(:vehicle_state, :locked),
       drive: drive_data(data).merge(speed: data.dig(:drive_state, :speed).to_i),
       timestamp: data.dig(:vehicle_config, :timestamp) / 1000
     }

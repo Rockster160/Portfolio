@@ -1,3 +1,5 @@
+# https://tesla-api.timdorr.com/
+
 class TeslaControl
   BASE_HEADERS = {
     "User-Agent": "PortfolioBot/1.0",
@@ -60,8 +62,40 @@ class TeslaControl
     true
   end
 
-  def pop_boot
+  def pop_boot(direction=:toggle)
+    direction = parse_to(direction, :open, :close)
+    return command(:actuate_trunk, which_trunk: :rear) if direction == :toggle
+
+    state = vehicle_data.dig(:vehicle_state, :rt).to_i > 0 ? :open : :close
+    return if state == direction
+
     command(:actuate_trunk, which_trunk: :rear)
+  end
+
+  def windows(direction=:toggle)
+    direction = parse_to(direction, :vent, :close)
+    return command(:window_control, command: :vent) if direction == :open
+
+    data = vehicle_data
+    loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)])
+    windows = [:fd, :fp, :rd, :rp]
+    is_open = windows.any? { |window| data.dig(:vehicle_state, "#{window}_window") > 0 }
+    state = toggle && !is_open ? :vent : :close
+
+    command(:window_control, command: state, lat: loc[0], lon: loc[1])
+  end
+
+  def doors(direction=:toggle)
+    direction = parse_to(direction, :unlock, :lock)
+    return command(:door_lock) if direction == :lock
+    return command(:door_unlock) if direction == :unlock
+
+    locked = vehicle_data.dig(:vehicle_state, :locked)
+    if locked
+      command(:door_unlock)
+    else
+      command(:door_lock)
+    end
   end
 
   def pop_frunk
@@ -115,6 +149,15 @@ class TeslaControl
 
   def command(cmd, params={})
     post_vehicle("command/#{cmd}", params)
+  end
+
+  def parse_to(val, truthy, falsy)
+    val = val.to_s.to_sym
+    return :toggle if val == :toggle
+    return truthy if val == :open
+    return falsy if val == :close
+
+    val
   end
 
   def post_vehicle(endpoint, params={})
