@@ -85,7 +85,7 @@ class Jarvis
       return # Let the main splitter break things up
     end
 
-    if simple_words.match?(Regexp.new("^(#{car_commands.join('|')})\\b"))
+    if simple_words.match?(Regexp.new("\\b(#{car_commands.join('|')})\\b"))
       return parse_car_words
     end
 
