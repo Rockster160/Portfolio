@@ -22,7 +22,7 @@ class Jarvis
 
       car_cmd, car_params = @args.split(" ", 2)
 
-      # TeslaCommandWorker.perform_async(car_cmd, car_params)
+      TeslaCommandWorker.perform_async(car_cmd, car_params) if Rails.env.production?
 
       car_response(car_cmd, car_params) || "Not sure how to tell car: #{car_cmd}"
     when :fn, :run
