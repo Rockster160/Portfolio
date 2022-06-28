@@ -39,7 +39,7 @@ class List < ApplicationRecord
     end
 
     return "List not found" unless list.present?
-    msg = msg.gsub(/(#{intro_regexp} )?( the )?#{Regexp.quote(try_list.name)}(?: list ?)?/i, "")
+    msg = msg.gsub(/(#{intro_regexp} )?( the )?#{Regexp.quote(list.name)}(?: list ?)?/i, "")
 
     list.modify_from_message(msg)
   end
