@@ -25,7 +25,15 @@ class Tesla
     controller.off_car
   end
 
-  def pop_boot
+  def doors(direction=:toggle)
+    controller.doors(direction)
+  end
+
+  def windows(direction=:toggle)
+    controller.windows(direction)
+  end
+
+  def pop_boot(direction=:toggle)
     controller.pop_boot
   end
 

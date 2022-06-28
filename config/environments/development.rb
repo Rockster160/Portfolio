@@ -81,4 +81,5 @@ Rails.application.configure do
   #   since it uses multiple threads which jams up the single process in development
   config.active_job.queue_adapter = :inline
   config.hosts = nil
+  config.serve_static_assets = false
 end

@@ -12,6 +12,9 @@ class TeslaCommandWorker
       direction = :open if combine.match?(/\b(open|pop)\b/)
       direction = :close if combine.match?(/\b(close)\b/)
       cmd, params = combine.gsub(/\b(open|close|pop)\b/, "").squish.split(" ", 2)
+    elsif cmd.to_s.to_i.to_s == cmd.to_s
+      params = cmd.to_i
+      cmd = :temp
     end
 
     case cmd.to_s.to_sym
@@ -56,9 +59,10 @@ class TeslaCommandWorker
   end
 
   def format_data(data)
+    return {} # TEMP CODE
     {
       charge: data.dig(:charge_state, :battery_level),
-      miles: data.dig(:charge_state, :battery_range).floor,
+      miles: data.dig(:charge_state, :battery_range)&.floor,
       charging: {
         active: data.dig(:charge_state, :charging_state) != "Complete", # FIXME
         speed: data.dig(:charge_state, :charge_rate),
@@ -81,7 +85,7 @@ class TeslaCommandWorker
         rp_window: data.dig(:vehicle_state, :rp_window), # Rear Passenger Window
         rt:        data.dig(:vehicle_state, :rt), # Trunk
       },
-      locked: vehicle_data.dig(:vehicle_state, :locked),
+      locked: data.dig(:vehicle_state, :locked),
       drive: drive_data(data).merge(speed: data.dig(:drive_state, :speed).to_i),
       timestamp: data.dig(:vehicle_config, :timestamp) / 1000
     }
@@ -96,7 +100,7 @@ class TeslaCommandWorker
     return { action: action, location: place[0] } if place
 
     action = speed ? :Driving : :Stopped
-    city = reverse_geocode(loc)
+    city = reverse_geocode(loc) if loc.compact.length == 2
     return { action: action, location: city } if city
 
     { action: action, location: "<Unknown>" }

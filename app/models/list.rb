@@ -136,7 +136,7 @@ class List < ApplicationRecord
         item
       end.select(&:persisted?)
       return "No items added." if items.none?
-      return "Running list:\n - #{ordered_items.map(&:name).join("\n - ")}"
+      return "#{name}:\n - #{ordered_items.map(&:name).join("\n - ")}"
     when :remove
       not_destroyed = []
       destroyed_items = []

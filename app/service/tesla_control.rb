@@ -77,7 +77,7 @@ class TeslaControl
     return command(:window_control, command: :vent) if direction == :open
 
     data = vehicle_data
-    loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)])
+    loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
     windows = [:fd, :fp, :rd, :rp]
     is_open = windows.any? { |window| data.dig(:vehicle_state, "#{window}_window") > 0 }
     state = toggle && !is_open ? :vent : :close
