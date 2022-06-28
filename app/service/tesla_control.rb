@@ -128,6 +128,11 @@ class TeslaControl
     command(:remote_seat_heater_request, heater: 1, level: 3)
   end
 
+  def defrost(direction=true)
+    direction = parse_to(direction, true, false)
+    command(:set_preconditioning_max, on: direction)
+  end
+
   def vehicle_data
     get("vehicles/#{vehicle_id}/latest_vehicle_data")
   end

@@ -29,6 +29,10 @@ class Tesla
     controller.honk
   end
 
+  def defrost
+    controller.defrost
+  end
+
   def doors(direction=:toggle)
     controller.doors(direction)
   end

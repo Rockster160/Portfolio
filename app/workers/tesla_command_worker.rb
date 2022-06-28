@@ -50,6 +50,7 @@ class TeslaCommandWorker
       car.set_temp(82)
       car.heat_driver
       car.heat_passenger
+      car.defrost
     when :find
       data = car.data
       loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
