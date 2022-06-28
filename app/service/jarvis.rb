@@ -41,6 +41,7 @@ class Jarvis
       }.compact
 
       evt = ActionEvent.create(evt_data)
+      ActionEventBroadcastWorker.perform_async(evt.id)
       evt_words = ["Logged #{evt.event_name}"]
       evt_words << "(#{evt.notes})" if evt.notes.present?
       evt_words << "[#{evt.timestamp.to_formatted_s(:short_with_time)}]" if parsed_time.present?
@@ -80,8 +81,17 @@ class Jarvis
     return parse_log_words if simple_words.match?(/^log\b/)
     # Also allow for timed things, such as "Start my car in 20 minutes", "Remind me to leave in 20 minutes<sends SMS>", etc....
 
-    # try guess what hhappend next
-    # check lists for matching namr, vaar commqnds, rttc....
+    if simple_words.split(" ", 2).first.in?([:car, :fn, :log, :open, :list])
+      return # Let the main splitter break things up
+    end
+
+    if simple_words.match?(Regexp.new("^(#{car_commands.join('|')})\\b"))
+      return parse_car_words
+    end
+
+    if Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b")
+      return parse_list_words
+    end
   end
 
   def safe_date_parse(timestamp, fallback=nil)
@@ -100,7 +110,7 @@ class Jarvis
 
   def parse_log_words
     @cmd = :log
-    @args = @words
+    @args = @words.gsub(/^log /, "")
   end
 
   # Should probably extract these to a different file jarvis/car
