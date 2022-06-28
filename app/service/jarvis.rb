@@ -57,7 +57,7 @@ class Jarvis
     token = SecureRandom.hex(3)
     return shortcut if shortcut
     return parse_list_words if @words.downcase.squish.match?(/^(add|remove)/)
-    return parse_car_words if @words.include?("car")
+    return parse_car_words if @words.downcase.include?("car")
     # Also allow for timed things, such as "Start my car in 20 minutes", "Remind me to leave in 20 minutes<sends SMS>", etc....
   end
 
