@@ -26,12 +26,12 @@ class List < ApplicationRecord
     return "User not found" if user.blank?
 
     list = user.default_list
-    intro_regexp = /\b(to|for|on|in|into)\b/
+    intro_regexp = /\b(to|for|from|on|in|into)\b/
     list_intro = msg =~ intro_regexp
 
     if list_intro.try(:zero?) || list_intro.try(:positive?)
       found_list = user.ordered_lists.find do |try_list|
-        found_msg = msg =~ /#{intro_regexp} (?:the )?#{Regexp.quote(try_list.name)}/i
+        found_msg = msg =~ /#{intro_regexp} (?:the )?#{Regexp.quote(try_list.name)}(?: list ?)?/i
 
         found_msg.present? && found_msg >= 0
       end
@@ -39,7 +39,7 @@ class List < ApplicationRecord
     end
 
     return "List not found" unless list.present?
-    msg = msg.gsub(/#{intro_regexp} (?:the )?#{Regexp.quote(list.name)}/i, "")
+    msg = msg.gsub(/#{intro_regexp} (?:the )?#{Regexp.quote(list.name)}(?: list ?)?/i, "")
 
     list.modify_from_message(msg)
   end
@@ -153,7 +153,7 @@ class List < ApplicationRecord
 
       response << "Could not remove #{not_destroyed.to_sentence} from #{name}." if not_destroyed.any?
       response << "Removed #{destroyed_items.map(&:name).to_sentence} from #{name}." if destroyed_items.any?
-      response << "Running list:\n - #{ordered_items.map(&:name).join("\n - ")}"
+      response << "#{name}:\n - #{ordered_items.map(&:name).join("\n - ")}"
       return response.join("\n") if response.any?
     when :clear
       items = list_items.destroy_all
