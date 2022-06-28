@@ -155,7 +155,7 @@ class Jarvis
     when :on, :start
       "Starting car"
     when :boot, :trunk
-      if prms.match?(/\b(close)\b/)
+      if prms&.match?(/\b(close)\b/)
         "Closing the boot"
       else
         "Popping the boot"
@@ -165,13 +165,13 @@ class Jarvis
     when :unlock
       "Unlocking car doors"
     when :doors, :door
-      if prms.match?(/\b(lock|close)\b/)
+      if prms&.match?(/\b(lock|close)\b/)
         "Locking car doors"
       else
         "Unlocking car doors"
       end
     when :windows, :window
-      if prms.match?(/\b(close)\b/)
+      if prms&.match?(/\b(close)\b/)
         "Closing car windows"
       else
         "Opening car windows"
