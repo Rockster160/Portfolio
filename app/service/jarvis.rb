@@ -9,6 +9,8 @@ class Jarvis
   end
 
   def command
+    return "Sorry, I don't know who you are." unless @user.present?
+
     parse_words
     unless @cmd.present?
       @cmd, @args = @words.squish.downcase.split(" ", 2)
@@ -28,6 +30,8 @@ class Jarvis
 
       CommandControl.parse(@words)
     when :log
+      return "Sorry, you can't do that." unless @user.admin?
+
       evt, data = @args.split(" ", 2)
       *notes, timestamp = data.split(/\b(at) /)
       notes = notes.join(" at ").squish
@@ -50,8 +54,10 @@ class Jarvis
       ["Opening #{@args}", { open: @args }]
     when :list
       List.find_and_modify(@user, @args)
-    else
+    when :budget
       SmsMoney.parse(@user, @words)
+    else
+      "Unknown command <#{[@cmd, @args.presence].compact.join(': ')}>"
     end
   end
 
@@ -89,7 +95,12 @@ class Jarvis
       return parse_car_words
     end
 
-    if Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b")
+    # CommandProposal checks
+    # if simple_words.match?(Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b"))
+    #   return parse_list_words
+    # end
+
+    if simple_words.match?(Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b"))
       return parse_list_words
     end
   end
