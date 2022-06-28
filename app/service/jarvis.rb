@@ -74,7 +74,7 @@ class Jarvis
 
   def parse_words
     token = SecureRandom.hex(3)
-    @simple_words = @words.downcase.squish
+    simple_words = @words.downcase.squish
     return shortcut if shortcut
     return parse_list_words if simple_words.match?(/^(add|remove)\b/)
     return parse_car_words if simple_words.include?("car")
