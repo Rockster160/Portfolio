@@ -184,6 +184,8 @@ class Jarvis
       "Car temp set to 59"
     when :heat, :warm
       "Car temp set to 82 and seat heaters turned on"
+    when :find
+      "Finding your car..."
     else
       "Car temp set to #{cmd}" if cmd.to_s.to_i.to_s == cmd.to_s
     end
@@ -210,6 +212,8 @@ class Jarvis
       :cool,
       :heat,
       :warm,
+      :find,
+      :where,
     ]
   end
 
@@ -224,6 +228,7 @@ class Jarvis
     end
 
     @args = @args.gsub(/ ?\b(car)\b ?/, ' ').squish
+    @args = @args.gsub(/where\'?s? ?(is)?/, 'find')
 
     if @args.match?(/^\b(open)\b/)
       @args[/^\b(open)\b/] = ""
@@ -234,7 +239,7 @@ class Jarvis
       "#{Regexp.last_match(2)} #{Regexp.last_match(1)}"
     end
 
-    @args.gsub!(/\b(the|set|to)\b/, "")
+    @args.gsub!(/\b(the|set|to|is)\b/, "")
     @args.gsub!(/\b(start)\b/, "on")
     @args = @args.squish
   end

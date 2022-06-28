@@ -50,6 +50,10 @@ class TeslaCommandWorker
       car.set_temp(82)
       car.heat_driver
       car.heat_passenger
+    when :find
+      data = car.data
+      loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
+      SmsWorker.perform_async(User.find(1).phone, "http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}")
     end
 
     sleep 3 # Give the API a chance to update
