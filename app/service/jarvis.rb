@@ -115,17 +115,17 @@ class Jarvis
   def parse_car_words
     @cmd = :car
 
-    @params = @words
-    if @params.match?(/(the|my) (\w+)$/)
-      end_word = @params[/\w+$/]
-      @params[/(the|my) (\w+)$/] = ""
-      @params = "#{end_word} #{@params}"
+    @args = @words
+    if @args.match?(/(the|my) (\w+)$/)
+      end_word = @args[/\w+$/]
+      @args[/(the|my) (\w+)$/] = ""
+      @args = "#{end_word} #{@args}"
     end
 
-    @params = @params.gsub(/ ?\b(car)\b ?/, ' ').squish
+    @args = @args.gsub(/ ?\b(car)\b ?/, ' ').squish
 
-    @params = "boot open" if @params.include?("pop the boot")
-    @params.gsub!(/\b(the|set|to)\b/, "")
-    @params.gsub!(/\bstart\b/, "on")
+    @args = "boot open" if @args.include?("pop the boot")
+    @args.gsub!(/\b(the|set|to)\b/, "")
+    @args.gsub!(/\bstart\b/, "on")
   end
 end
