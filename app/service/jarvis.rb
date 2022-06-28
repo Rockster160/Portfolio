@@ -112,6 +112,29 @@ class Jarvis
     end
   end
 
+  def car_commands
+    [
+      :update,
+      :reload,
+      :off,
+      :stop,
+      :on,
+      :start,
+      :boot,
+      :trunk,
+      :lock,
+      :unlock,
+      :doors,
+      :door,
+      :windows,
+      :window,
+      :frunk,
+      :temp,
+      :cool,
+      :heat,
+    ]
+  end
+
   def parse_car_words
     @cmd = :car
 
@@ -124,8 +147,17 @@ class Jarvis
 
     @args = @args.gsub(/ ?\b(car)\b ?/, ' ').squish
 
-    @args = "boot open" if @args.include?("pop the boot")
+    if @args.match?(/^\b(open)\b/)
+      @args[/^\b(open)\b/] = ""
+      @args = "#{@args} open"
+    end
+
+    @args.gsub!(Regexp.new("(.+)\\b(#{car_commands.join('|')})\\b")) do |found|
+      "#{Regexp.last_match(2)} #{Regexp.last_match(1)}"
+    end
+
     @args.gsub!(/\b(the|set|to)\b/, "")
     @args.gsub!(/\bstart\b/, "on")
+    @args = @args.squish
   end
 end
