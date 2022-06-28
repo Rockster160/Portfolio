@@ -1,6 +1,7 @@
 Time::DATE_FORMATS[:short] = "%-m/%-d/%y"
 Time::DATE_FORMATS[:short_with_time] = "%-m/%-d/%y %-l:%M:%S %p"
 Time::DATE_FORMATS[:simple_with_time] = "%b %-d, %Y %-l:%M:%S %p"
+Time::DATE_FORMATS[:quick_week_time] = "%a %b %-d, %-l:%M %p"
 Time::DATE_FORMATS[:simple] = "%b %-d, %Y"
 Time::DATE_FORMATS[:simple12_with_time] = "%b %-d, '%y %-l:%M%P"
 Time::DATE_FORMATS[:time_with_simple12] = "%-l:%M %P %b %-d, '%y"

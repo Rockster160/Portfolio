@@ -15,6 +15,8 @@ class Jarvis
     unless @cmd.present?
       @cmd, @args = @words.squish.downcase.split(" ", 2)
     end
+    puts "\e[33m[LOGIT] | cmd:#{@cmd}\e[0m"
+    puts "\e[33m[LOGIT] | @args:#{@args}\e[0m"
 
     case @cmd.to_s.to_sym
     when :car
@@ -22,7 +24,7 @@ class Jarvis
 
       car_cmd, car_params = @args.split(" ", 2)
 
-      TeslaCommandWorker.perform_async(car_cmd, car_params)
+      # TeslaCommandWorker.perform_async(car_cmd, car_params)
 
       car_response(car_cmd, car_params) || "Not sure how to tell car: #{car_cmd}"
     when :fn, :run
@@ -64,6 +66,8 @@ class Jarvis
       List.find_and_modify(@user, @args)
     when :budget
       SmsMoney.parse(@user, @words)
+    when :scheduled
+      @args
     else
       # Respond to things like hello, are you there, etc....
       "Unknown command <#{[@cmd, @args.presence].compact.join(': ')}>"
@@ -90,11 +94,13 @@ class Jarvis
   def parse_words
     token = SecureRandom.hex(3)
     simple_words = @words.downcase.squish
+    return parse_log_words if simple_words.match?(/^log\b/)
+    # Logs have their own timestamp, so run them before checking for delayed commands
+    return schedule_command if should_schedule?(simple_words)
+
     return shortcut if shortcut
     return parse_list_words if simple_words.match?(/^(add|remove)\b/)
     return parse_car_words if simple_words.include?("car")
-    return parse_log_words if simple_words.match?(/^log\b/)
-    # Also allow for timed things, such as "Start my car in 20 minutes", "Remind me to leave in 20 minutes<sends SMS>", etc....
 
     if simple_words.split(" ", 2).first.in?([:car, :fn, :run, :log, :open, :list])
       return # Let the main splitter break things up
@@ -110,6 +116,28 @@ class Jarvis
     if simple_words.match?(Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b"))
       return parse_list_words
     end
+  end
+
+  def should_schedule?(simple_words)
+    day_words = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday]).map { |w| w.to_s.downcase.to_sym }
+    day_words_regex = Regexp.new("\\b(#{day_words.join('|')})\\b")
+    time_words = [:second, :minute, :hour, :day, :week, :month]
+    time_words_regex = Regexp.new("\\b(#{time_words.join('|')})s?\\b")
+    time_str = simple_words[/\b(in) \d+ #{time_words_regex}/]
+    time_str ||= simple_words[/(#{day_words_regex} )?\b(at) \d+:?\d*( ?(am|pm))?( #{day_words_regex})?/]
+    time_str ||= simple_words[/\d+ #{time_words_regex} from now/]
+    time_str ||= simple_words[/(next )?#{day_words_regex}]/]
+
+    @scheduled_time = safe_date_parse(time_str.to_s.gsub(/ ?\b(at)\b ?/, " ").squish)
+    @remaining_words = @words.sub(Regexp.new(time_str, "i"), "").squish if @scheduled_time
+
+    @scheduled_time.present?
+  end
+
+  def schedule_command
+    JarvisWorker.perform_at(@scheduled_time, @user.id, @remaining_words)
+    @cmd = :scheduled
+    @args = "I'll #{@remaining_words.gsub(/\b(my)\b/), 'your')} later at #{@scheduled_time.to_formatted_s(:quick_week_time)}"
   end
 
   def matches_command?(simple_words)
