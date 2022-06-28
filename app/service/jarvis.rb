@@ -27,6 +27,24 @@ class Jarvis
       return "Sorry, you can't do that." unless @user.admin?
 
       CommandControl.parse(@words)
+    when :log
+      evt, data = @args.split(" ", 2)
+      *notes, timestamp = data.split(/\b(at) /)
+      notes = notes.join(" at ").squish
+      parsed_time = safe_date_parse(timestamp)
+      notes += " at #{timestamp}" if !parsed_time
+
+      evt_data = {
+        event_name: evt.capitalize,
+        notes: notes.presence,
+        timestamp: parsed_time.presence,
+      }.compact
+
+      evt = ActionEvent.create(evt_data)
+      evt_words = ["Logged #{evt.event_name}"]
+      evt_words << "(#{evt.notes})" if evt.notes.present?
+      evt_words << "[#{evt.timestamp.to_formatted_s(:short_with_time)}]" if parsed_time.present?
+      evt_words.join(" ")
     when :open
       ["Opening #{@args}", { open: @args }]
     when :list
@@ -55,15 +73,33 @@ class Jarvis
 
   def parse_words
     token = SecureRandom.hex(3)
+    @simple_words = @words.downcase.squish
     return shortcut if shortcut
-    return parse_list_words if @words.downcase.squish.match?(/^(add|remove)/)
-    return parse_car_words if @words.downcase.include?("car")
+    return parse_list_words if simple_words.match?(/^(add|remove)\b/)
+    return parse_car_words if simple_words.include?("car")
+    return parse_log_words if simple_words.match?(/^log\b/)
     # Also allow for timed things, such as "Start my car in 20 minutes", "Remind me to leave in 20 minutes<sends SMS>", etc....
+
+    # try guess what hhappend next
+    # check lists for matching namr, vaar commqnds, rttc....
+  end
+
+  def safe_date_parse(timestamp, fallback=nil)
+    return fallback if timestamp.blank?
+
+    DateTime.parse(timestamp)
+  rescue ArgumentError
+    fallback
   end
 
   def parse_list_words
     @cmd = :list
     # Could probably move all of the word parsing logic into here rather than the model
+    @args = @words
+  end
+
+  def parse_log_words
+    @cmd = :log
     @args = @words
   end
 
