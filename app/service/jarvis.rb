@@ -5,7 +5,7 @@ class Jarvis
 
   def initialize(user, words)
     @user = user
-    @words = words
+    @words = words.to_s
   end
 
   def command
@@ -36,20 +36,26 @@ class Jarvis
       *notes, timestamp = data.split(/\b(at) /)
       notes = notes.join(" at ").squish
       parsed_time = safe_date_parse(timestamp)
-      notes += " at #{timestamp}" if !parsed_time
+      notes += " at #{timestamp}" if timestamp && !parsed_time
 
       evt_data = {
         event_name: evt.capitalize,
         notes: notes.presence,
         timestamp: parsed_time.presence,
+        user_id: @user.id,
       }.compact
 
       evt = ActionEvent.create(evt_data)
-      ActionEventBroadcastWorker.perform_async(evt.id)
-      evt_words = ["Logged #{evt.event_name}"]
-      evt_words << "(#{evt.notes})" if evt.notes.present?
-      evt_words << "[#{evt.timestamp.to_formatted_s(:short_with_time)}]" if parsed_time.present?
-      evt_words.join(" ")
+      
+      if evt.persisted?
+        ActionEventBroadcastWorker.perform_async(evt.id)
+        evt_words = ["Logged #{evt.event_name}"]
+        evt_words << "(#{evt.notes})" if evt.notes.present?
+        evt_words << "[#{evt.timestamp.to_formatted_s(:short_with_time)}]" if parsed_time.present?
+        evt_words.join(" ")
+      else
+        evt.errors.full_messages.join("\n")
+      end
     when :open
       ["Opening #{@args}", { open: @args }]
     when :list
@@ -127,7 +133,7 @@ class Jarvis
   # Should probably extract these to a different file jarvis/car
 
   def car_response(cmd, prms)
-    case cmd.to_s.to_sym
+    case cmd.to_s.downcase.to_sym
     when :update, :reload
       "Updating car cell"
     when :off, :stop
@@ -135,7 +141,7 @@ class Jarvis
     when :on, :start
       "Starting car"
     when :boot, :trunk
-      if prms == "close"
+      if prms.match?(/\b(close)\b/)
         "Closing the boot"
       else
         "Popping the boot"
@@ -145,13 +151,13 @@ class Jarvis
     when :unlock
       "Unlocking car doors"
     when :doors, :door
-      if prms.in?(["lock", "close"])
+      if prms.match?(/\b(lock|close)\b/)
         "Locking car doors"
       else
         "Unlocking car doors"
       end
     when :windows, :window
-      if prms.in?(["close"])
+      if prms.match?(/\b(close)\b/)
         "Closing car windows"
       else
         "Opening car windows"
@@ -160,9 +166,9 @@ class Jarvis
       "Opening frunk"
     when :temp
       "Car temp set to #{prms}"
-    when :cool
+    when :cool, :cold
       "Car temp set to 59"
-    when :heat
+    when :heat, :warm
       "Car temp set to 82 and seat heaters turned on"
     else
       "Car temp set to #{cmd}" if cmd.to_s.to_i.to_s == cmd.to_s
@@ -189,6 +195,7 @@ class Jarvis
       :temp,
       :cool,
       :heat,
+      :warm,
     ]
   end
 
@@ -214,7 +221,7 @@ class Jarvis
     end
 
     @args.gsub!(/\b(the|set|to)\b/, "")
-    @args.gsub!(/\bstart\b/, "on")
+    @args.gsub!(/\b(start)\b/, "on")
     @args = @args.squish
   end
 end

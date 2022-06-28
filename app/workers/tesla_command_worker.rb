@@ -6,18 +6,20 @@ class TeslaCommandWorker
     ActionCable.server.broadcast("tesla_channel", { loading: true })
     car = Tesla.new
 
+    cmd = cmd.to_s.downcase.squish
+    params = params.to_s.downcase.squish
     direction = :toggle
     if "#{cmd} #{params}".match?(/\b(open|close|pop|vent)\b/)
       combine = "#{cmd} #{params}"
       direction = :open if combine.match?(/\b(open|pop)\b/)
       direction = :close if combine.match?(/\b(close)\b/)
       cmd, params = combine.gsub(/\b(open|close|pop)\b/, "").squish.split(" ", 2)
-    elsif cmd.to_s.to_i.to_s == cmd.to_s
+    elsif cmd.to_i.to_s == cmd
       params = cmd.to_i
       cmd = :temp
     end
 
-    case cmd.to_s.to_sym
+    case cmd.to_sym
     when :update, :reload
       return ActionCable.server.broadcast "tesla_channel", format_data(car.data)
     when :off, :stop
