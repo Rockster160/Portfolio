@@ -67,8 +67,15 @@ class Jarvis
     when :scheduled
       @args
     else
-      # Respond to things like hello, are you there, etc....
-      "Unknown command <#{[@cmd, @args.presence].compact.join(': ')}>"
+      combine = [@cmd, @args.presence].compact.join(" ")
+      # if combine.match?(/\b(good morning|afternoon|evening)/)
+      #   Find the weather, summarize events (ignore morning work meetings?)
+      if combine.match?(/\b(hello|hey|hi|you there|you up)/)
+        ["For you sir, always.", "At your service, sir.", "Oh, hello sir.", "Yes, sir."].sample
+      else
+        "I don't know how to #{@cmd}#{' with ' + @args if @args.present}."
+      end
+      # complete ["Check", "Will do, sir.", "As you wish.", "Yes, sir."]
     end
   end
 
@@ -100,7 +107,7 @@ class Jarvis
     return parse_list_words if simple_words.match?(/^(add|remove)\b/)
     return parse_car_words if simple_words.include?("car")
 
-    if simple_words.split(" ", 2).first.in?([:car, :fn, :run, :log, :open, :list])
+    if simple_words.split(" ", 2).first.to_sym.in?([:car, :fn, :run, :log, :open, :list])
       return # Let the main splitter break things up
     end
 
@@ -114,6 +121,8 @@ class Jarvis
     if simple_words.match?(Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b"))
       return parse_list_words
     end
+
+    # get the car|house|home, how's the car, tell me about the car, give me the car
   end
 
   def should_schedule?(simple_words)
