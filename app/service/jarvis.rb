@@ -70,7 +70,7 @@ class Jarvis
   # Should probably extract these to a different file jarvis/car
 
   def car_response(cmd, prms)
-    case cmd
+    case cmd.to_s.to_sym
     when :update, :reload
       "Updating car cell"
     when :off, :stop
