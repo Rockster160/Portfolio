@@ -110,6 +110,10 @@ class TeslaControl
     command(:auto_conditioning_stop)
   end
 
+  def honk
+    command(:honk_horn)
+  end
+
   def set_temp(temp_F)
     # Tesla expects temp in Celsius
     temp_C = ((temp_F - 32) * (5/9.to_f)).round(1)

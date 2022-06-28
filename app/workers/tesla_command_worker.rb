@@ -38,6 +38,8 @@ class TeslaCommandWorker
       car.windows(direction)
     when :frunk
       car.pop_frunk
+    when :honk, :horn
+      car.honk
     when :temp
       temp = 82 if params.match?(/\b(hot|heat|high)\b/)
       temp = 59 if params.match?(/\b(cold|cool|low)\b/)

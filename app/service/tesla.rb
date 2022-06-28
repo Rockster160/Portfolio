@@ -25,6 +25,10 @@ class Tesla
     controller.off_car
   end
 
+  def honk
+    controller.honk
+  end
+
   def doors(direction=:toggle)
     controller.doors(direction)
   end
