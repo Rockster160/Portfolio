@@ -137,7 +137,7 @@ class Jarvis
   def schedule_command
     JarvisWorker.perform_at(@scheduled_time, @user.id, @remaining_words)
     @cmd = :scheduled
-    @args = "I'll #{@remaining_words.gsub(/\b(my)\b/), 'your')} later at #{@scheduled_time.to_formatted_s(:quick_week_time)}"
+    @args = "I'll #{@remaining_words.gsub(/\b(my)\b/, 'your')} later at #{@scheduled_time.to_formatted_s(:quick_week_time)}"
   end
 
   def matches_command?(simple_words)
