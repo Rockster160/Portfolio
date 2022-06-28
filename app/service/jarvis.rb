@@ -5,7 +5,7 @@ class Jarvis
 
   def initialize(user, words)
     @user = user
-    @words = words.to_s
+    @words = words.to_s.downcase
   end
 
   def command
@@ -25,7 +25,7 @@ class Jarvis
       TeslaCommandWorker.perform_async(car_cmd, car_params)
 
       car_response(car_cmd, car_params) || "Not sure how to tell car: #{car_cmd}"
-    when :fn
+    when :fn, :run
       return "Sorry, you can't do that." unless @user.admin?
 
       CommandControl.parse(@words)
@@ -33,10 +33,12 @@ class Jarvis
       return "Sorry, you can't do that." unless @user.admin?
 
       evt, data = @args.split(" ", 2)
-      *notes, timestamp = data.split(/\b(at) /)
+      split = data.to_s.split(/\bat /)
+      notes, timestamp = split.length > 1 ? [split[0..-2], split.last] : [split, nil]
+
       notes = notes.join(" at ").squish
       parsed_time = safe_date_parse(timestamp)
-      notes += " at #{timestamp}" if timestamp && !parsed_time
+      notes += " at #{timestamp}" if timestamp.present? && parsed_time.blank?
 
       evt_data = {
         event_name: evt.capitalize,
@@ -46,7 +48,7 @@ class Jarvis
       }.compact
 
       evt = ActionEvent.create(evt_data)
-      
+
       if evt.persisted?
         ActionEventBroadcastWorker.perform_async(evt.id)
         evt_words = ["Logged #{evt.event_name}"]
@@ -63,6 +65,7 @@ class Jarvis
     when :budget
       SmsMoney.parse(@user, @words)
     else
+      # Respond to things like hello, are you there, etc....
       "Unknown command <#{[@cmd, @args.presence].compact.join(': ')}>"
     end
   end
@@ -93,7 +96,7 @@ class Jarvis
     return parse_log_words if simple_words.match?(/^log\b/)
     # Also allow for timed things, such as "Start my car in 20 minutes", "Remind me to leave in 20 minutes<sends SMS>", etc....
 
-    if simple_words.split(" ", 2).first.in?([:car, :fn, :log, :open, :list])
+    if simple_words.split(" ", 2).first.in?([:car, :fn, :run, :log, :open, :list])
       return # Let the main splitter break things up
     end
 
@@ -101,22 +104,33 @@ class Jarvis
       return parse_car_words
     end
 
-    # CommandProposal checks
-    # if simple_words.match?(Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b"))
-    #   return parse_list_words
-    # end
+    found_command = matches_command?(simple_words)
+    return parse_command(found_command) if found_command
 
     if simple_words.match?(Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b"))
       return parse_list_words
     end
   end
 
-  def safe_date_parse(timestamp, fallback=nil)
-    return fallback if timestamp.blank?
+  def matches_command?(simple_words)
+    return false unless @user.admin?
 
-    DateTime.parse(timestamp)
-  rescue ArgumentError
-    fallback
+    command = CommandProposal::Task.find_by("? ILIKE CONCAT(friendly_id, '%')", simple_words)
+    command ||= CommandProposal::Task.find_by("? ILIKE CONCAT(REGEXP_REPLACE(friendly_id, '[^a-z]', '', 'i'), '%')", simple_words.gsub(/[^a-z]/i, ""))
+  end
+
+  def parse_command(found_command)
+    @cmd = :fn
+
+    # Should do something about spaces instead of _ as well
+    without_name = @words.gsub(Regexp.new("\\b(#{found_command.friendly_id})\\b"), "")
+    @args = "#{found_command.friendly_id} #{without_name}"
+  end
+
+  def safe_date_parse(timestamp)
+    Time.zone = "Mountain Time (US & Canada)"
+    Chronic.time_class = Time.zone
+    Chronic.parse(timestamp)
   end
 
   def parse_list_words
@@ -127,7 +141,7 @@ class Jarvis
 
   def parse_log_words
     @cmd = :log
-    @args = @words.gsub(/^log /, "")
+    @args = @words.gsub(/^log ?/i, "")
   end
 
   # Should probably extract these to a different file jarvis/car
