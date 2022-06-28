@@ -29,14 +29,12 @@ class List < ApplicationRecord
     intro_regexp = /\b(to|for|from|on|in|into)\b/
     list_intro = msg =~ intro_regexp
 
-    if list_intro.try(:zero?) || list_intro.try(:positive?)
-      found_list = user.ordered_lists.find do |try_list|
-        found_msg = msg =~ /(#{intro_regexp} )?( the )?#{Regexp.quote(try_list.name)}(?: list ?)?/i
+    found_list = user.ordered_lists.find do |try_list|
+      found_msg = msg =~ /(#{intro_regexp} )?( the )?#{Regexp.quote(try_list.name)}(?: list ?)?/i
 
-        found_msg.present? && found_msg >= 0
-      end
-      list = found_list if found_list.present?
+      found_msg.present? && found_msg >= 0
     end
+    list = found_list if found_list.present?
 
     return "List not found" unless list.present?
     msg = msg.gsub(/(#{intro_regexp} )?( the )?#{Regexp.quote(list.name)}(?: list ?)?/i, "")
