@@ -14,7 +14,7 @@ class Jarvis
       @cmd, @args = @words.squish.downcase.split(" ", 2)
     end
 
-    case @cmd
+    case @cmd.to_s.to_sym
     when :car
       return "Sorry, you can't do that." unless @user.admin?
 
