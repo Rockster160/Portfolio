@@ -15,8 +15,6 @@ class Jarvis
     unless @cmd.present?
       @cmd, @args = @words.squish.downcase.split(" ", 2)
     end
-    puts "\e[33m[LOGIT] | cmd:#{@cmd}\e[0m"
-    puts "\e[33m[LOGIT] | @args:#{@args}\e[0m"
 
     case @cmd.to_s.to_sym
     when :car
@@ -126,7 +124,7 @@ class Jarvis
     time_str = simple_words[/\b(in) \d+ #{time_words_regex}/]
     time_str ||= simple_words[/(#{day_words_regex} )?\b(at) \d+:?\d*( ?(am|pm))?( #{day_words_regex})?/]
     time_str ||= simple_words[/\d+ #{time_words_regex} from now/]
-    time_str ||= simple_words[/(next )?#{day_words_regex}]/]
+    time_str ||= simple_words[/(next )?#{day_words_regex}/]
 
     @scheduled_time = safe_date_parse(time_str.to_s.gsub(/ ?\b(at)\b ?/, " ").squish)
     @remaining_words = @words.sub(Regexp.new(time_str, "i"), "").squish if @scheduled_time
@@ -256,7 +254,7 @@ class Jarvis
     end
 
     @args = @args.gsub(/ ?\b(car)\b ?/, ' ').squish
-    @args = @args.gsub(/where\'?s? ?(is)?/, 'find')
+    @args = @args.gsub(/where\'?s?( is)?/, "find")
 
     if @args.match?(/^\b(open)\b/)
       @args[/^\b(open)\b/] = ""
