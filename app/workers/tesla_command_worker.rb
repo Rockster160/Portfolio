@@ -59,7 +59,6 @@ class TeslaCommandWorker
   end
 
   def format_data(data)
-    return {} # TEMP CODE
     {
       charge: data.dig(:charge_state, :battery_level),
       miles: data.dig(:charge_state, :battery_range)&.floor,
