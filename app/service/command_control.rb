@@ -16,6 +16,8 @@ class CommandControl
   private
 
   def run_function
+    # Verify that the command is a Function, not Task, Module, etc...
+    # We should probably just delete all of this
     @msg.gsub!(/^\s*run /i, "")
 
     command = CommandProposal::Task.find_by("? ILIKE CONCAT(friendly_id, '%')", @msg)

@@ -1,3 +1,4 @@
+return if Rails.env.test?
 # Based on UTC time
 every_minute = "* * * * *"
 every_hour = "0 * * * *"

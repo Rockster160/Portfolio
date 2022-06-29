@@ -7,7 +7,7 @@ class Jarvis
 
   def initialize(user, words)
     @user = user
-    @words = words.to_s.downcase
+    @words = words.to_s
   end
 
   def command
@@ -120,25 +120,9 @@ class Jarvis
     end
 
     # get the car|house|home, how's the car, tell me about the car, give me the car
+    # is the car unlocked?
+    # is the AC on?
   end
-
-
-
-  # def should_schedule?(simple_words)
-  #   day_words = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday]).map { |w| w.to_s.downcase.to_sym }
-  #   day_words_regex = Regexp.new("\\b(#{day_words.join('|')})\\b")
-  #   time_words = [:second, :minute, :hour, :day, :week, :month]
-  #   time_words_regex = Regexp.new("\\b(#{time_words.join('|')})s?\\b")
-  #   time_str = simple_words[/\b(in) \d+ #{time_words_regex}/]
-  #   time_str ||= simple_words[/(#{day_words_regex} )?\b(at) \d+:?\d*( ?(am|pm))?( #{day_words_regex})?/]
-  #   time_str ||= simple_words[/\d+ #{time_words_regex} from now/]
-  #   time_str ||= simple_words[/(next )?#{day_words_regex}/]
-  #
-  #   @scheduled_time = safe_date_parse(time_str.to_s.gsub(/ ?\b(at)\b ?/, " ").squish)
-  #   @remaining_words = @words.sub(Regexp.new(time_str, "i"), "").squish if @scheduled_time
-  #
-  #   @scheduled_time.present?
-  # end
 
   def extract_time(simple_words)
     day_words = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday]).map { |w| w.to_s.downcase.to_sym }
@@ -201,16 +185,10 @@ class Jarvis
 
     @args = {}
     time_str, extracted_time = extract_time(@words.downcase.squish)
-    new_words = @words.sub(Regexp.new(time_str, "i"), "").squish if extracted_time
+    new_words = @words.sub(Regexp.new(time_str, "i"), "") if extracted_time
     new_words = (new_words || @words).gsub(/^log ?/i, "")
     @args[:timestamp] = extracted_time
-    @args[:event_name], @args[:notes] = new_words.split(" ", 2)
-    # split = data.to_s.split(/\bat /)
-    # notes, timestamp = split.length > 1 ? [split[0..-2], split.last] : [split, nil]
-    #
-    # notes = notes.join(" at ").squish
-    # parsed_time = safe_date_parse(timestamp)
-    # notes += " at #{timestamp}" if timestamp.present? && parsed_time.blank?
+    @args[:event_name], @args[:notes] = new_words.gsub(/[.?!]$/i, "").squish.split(" ", 2)
   end
 
   # Should probably extract these to a different file jarvis/car

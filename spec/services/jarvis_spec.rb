@@ -145,7 +145,7 @@ RSpec.describe Jarvis do
           "boot",
           "pop boot",
           "pop trunk",
-          "open the car trunk",
+          "Open the car trunk!",
         ]
       },
       pop_frunk: {
@@ -171,7 +171,7 @@ RSpec.describe Jarvis do
         res: "Car temp set to 82 and seat heaters turned on",
         opts: [
           "warm my car",
-          "heat my car",
+          "Heat my car",
           "car heat",
         ]
       },
@@ -215,19 +215,19 @@ RSpec.describe Jarvis do
     end
 
     it "can add action events with time" do
-      expect(jarvis("log thing at 7:52")).to eq("Logged Thing [6/24/22 7:52:00 AM]")
+      expect(jarvis("Log thing at 7:52")).to eq("Logged Thing [6/24/22 7:52:00 AM]")
       expect(@admin.action_events.pluck(:event_name)).to include("Thing")
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 7, 52))
     end
 
     it "can add action events with relative time" do
-      expect(jarvis("log thing 10 minutes ago")).to eq("Logged Thing [6/24/22 5:35:00 AM]")
+      expect(jarvis("Log thing 10 minutes ago.")).to eq("Logged Thing [6/24/22 5:35:00 AM]")
       expect(@admin.action_events.pluck(:event_name)).to include("Thing")
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 5, 35))
     end
 
     it "can add action events with note and time" do
-      expect(jarvis("log thing sup at 7:52")).to eq("Logged Thing (sup) [6/24/22 7:52:00 AM]")
+      expect(jarvis("log thing sup at 7:52.")).to eq("Logged Thing (sup) [6/24/22 7:52:00 AM]")
       expect(@admin.action_events.pluck(:event_name)).to include("Thing")
       expect(@admin.action_events.pluck(:notes)).to include("sup")
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 7, 52))
@@ -235,11 +235,19 @@ RSpec.describe Jarvis do
   end
 
   context "with commands" do
+    # Verify passing arguments works as expected
+    let(:command) { ::CommandProposal::Task.create(name: "") }
   end
 
   context "with scheduling" do
     it "can schedule a job for later" do
-      
+      expect(JarvisWorker).to receive(:perform_at).with(10.minutes.from_now, @admin.id, "add something to list")
+      expect(jarvis("add something to list in 10 minutes")).to eq("I'll add something to list later at Fri Jun 24, 5:55 AM")
+    end
+
+    it "can schedule a job for a time" do
+      expect(JarvisWorker).to receive(:perform_at).with(Time.local(2022, 6, 24, 21, 45), @admin.id, "add something to list")
+      expect(jarvis("add something to list at 9:45 PM")).to eq("I'll add something to list later at Fri Jun 24, 9:45 PM")
     end
   end
 end
