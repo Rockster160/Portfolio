@@ -129,6 +129,12 @@ $(document).ready(function() {
     $omnibar.val(selector + " ")
   }
 
+  $(window).focus(function(evt) {
+    window.addEventListener("mouseover", function (e) {
+      $(document.elementFromPoint(e.pageX, e.pageY)).click()
+    }, { once: true })
+  })
+
   $(document).on("click", ".dash-cell", function() {
     var cell = Cell.from_ele(this)
     if (cell) { cell.active(true) }
