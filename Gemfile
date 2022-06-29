@@ -67,4 +67,5 @@ group :development, :test do
   gem "rspec-rails"
   gem "better_errors"
   gem "simplecov", :require => false, :group => :test
+  gem "timecop"
 end

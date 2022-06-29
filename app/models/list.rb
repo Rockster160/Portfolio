@@ -27,17 +27,21 @@ class List < ApplicationRecord
 
     list = user.default_list
     intro_regexp = /\b(to|for|from|on|in|into)\b/
+    my_rx = /\b(the|my)\b/
+    list_rx = /\b(list)\b/
     list_intro = msg =~ intro_regexp
 
     found_list = user.ordered_lists.find do |try_list|
-      found_msg = msg =~ /(#{intro_regexp} )?( the )?#{Regexp.quote(try_list.name)}(?: list ?)?/i
+      found_msg = msg =~ /( #{intro_regexp})?( #{my_rx})?( ?#{Regexp.quote(try_list.name)})( #{list_rx})?/i
 
       found_msg.present? && found_msg >= 0
     end
     list = found_list if found_list.present?
 
     return "List not found" unless list.present?
-    msg = msg.gsub(/(#{intro_regexp} )?( the )?#{Regexp.quote(list.name)}(?: list ?)?/i, "")
+    msg = msg.sub(/( #{intro_regexp})?( #{my_rx})? ?#{Regexp.quote(list.name)}( #{list_rx})?/i, "")
+    msg = msg.sub(/ #{my_rx} #{list_rx}/i, "")
+    msg = "" if msg.downcase == list.name.downcase
 
     list.modify_from_message(msg)
   end
@@ -134,7 +138,7 @@ class List < ApplicationRecord
         item
       end.select(&:persisted?)
       return "No items added." if items.none?
-      return "#{name}:\n - #{ordered_items.map(&:name).join("\n - ")}"
+      return "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join("")}"
     when :remove
       not_destroyed = []
       destroyed_items = []
@@ -150,15 +154,15 @@ class List < ApplicationRecord
       response = []
 
       response << "Could not remove #{not_destroyed.to_sentence} from #{name}." if not_destroyed.any?
-      response << "Removed #{destroyed_items.map(&:name).to_sentence} from #{name}." if destroyed_items.any?
-      response << "#{name}:\n - #{ordered_items.map(&:name).join("\n - ")}"
+      response << "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join("")}"
+      response << "<No items>" if ordered_items.none?
       return response.join("\n") if response.any?
     when :clear
       items = list_items.destroy_all
       return "Removed all items from #{name}: \n - #{items.map(&:name).join("\n - ")}"
     else
-      if (items = list_items).any?
-        return "#{name.titleize}: \n - #{items.map(&:name).join("\n - ")}"
+      if (items = ordered_items).any?
+        return "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join("")}"
       else
         return "There are no items in #{name.capitalize}."
       end

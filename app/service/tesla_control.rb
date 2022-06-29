@@ -115,6 +115,7 @@ class TeslaControl
   end
 
   def set_temp(temp_F)
+    temp_F = [59, 82, temp_F].sort[1]
     # Tesla expects temp in Celsius
     temp_C = ((temp_F - 32) * (5/9.to_f)).round(1)
     command(:set_temps, driver_temp: temp_C)

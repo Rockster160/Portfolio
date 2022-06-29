@@ -41,12 +41,12 @@ class TeslaCommandWorker
     when :honk, :horn
       car.honk
     when :temp
-      temp = 82 if params.match?(/\b(hot|heat|high)\b/)
-      temp = 59 if params.match?(/\b(cold|cool|low)\b/)
+      temp = 82 if params.to_s.match?(/\b(hot|heat|high)\b/)
+      temp = 59 if params.to_s.match?(/\b(cold|cool|low)\b/)
       car.set_temp(params.to_i)
     when :cool
       car.set_temp(59)
-    when :heat
+    when :heat, :defrost, :warm
       car.set_temp(82)
       car.heat_driver
       car.heat_passenger
@@ -57,13 +57,15 @@ class TeslaCommandWorker
       SmsWorker.perform_async(User.find(1).phone, "http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}")
     end
 
-    sleep 3 # Give the API a chance to update
+    sleep 3 unless Rails.env.test? # Give the API a chance to update
     ActionCable.server.broadcast("tesla_channel", format_data(car.data))
   rescue StandardError => e
-    SlackNotifier.notify("Failed to command: #{e.inspect}")
+    backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
+    SlackNotifier.notify("Failed to command: #{e.inspect}\n#{backtrace}")
   end
 
   def cToF(c)
+    return unless c
     (c * (9/5.to_f)).round + 32
   end
 
@@ -95,7 +97,7 @@ class TeslaCommandWorker
       },
       locked: data.dig(:vehicle_state, :locked),
       drive: drive_data(data).merge(speed: data.dig(:drive_state, :speed).to_i),
-      timestamp: data.dig(:vehicle_config, :timestamp) / 1000
+      timestamp: data.dig(:vehicle_config, :timestamp).to_i / 1000
     }
   end
 
@@ -129,6 +131,7 @@ class TeslaCommandWorker
   end
 
   def near(loc)
+    return [] unless loc.compact.length == 2
     places.find { |name, coord| distance(coord, loc) <= 0.001 }
   end
 
