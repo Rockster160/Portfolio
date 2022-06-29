@@ -60,6 +60,7 @@ class TeslaCommandWorker
     sleep 3 unless Rails.env.test? # Give the API a chance to update
     ActionCable.server.broadcast("tesla_channel", format_data(car.data))
   rescue StandardError => e
+    ActionCable.server.broadcast("tesla_channel", { failed: true })
     backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
     SlackNotifier.notify("Failed to command: #{e.inspect}\n#{backtrace}")
   end

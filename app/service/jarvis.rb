@@ -1,5 +1,5 @@
 class Jarvis
-  IM_HERE_RESPONSES = ["For you sir, always.", "At your service, sir.", "Oh, hello sir.", "Yes, sir."]
+  IM_HERE_RESPONSES = ["For you sir, always.", "At your service, sir.", "Yes, sir."]
 
   def self.command(user, words)
     new(user, words).command

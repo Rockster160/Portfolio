@@ -92,7 +92,8 @@ import { shiftTempToColor, dash_colors } from "../vars"
       lines.push("")
     }
 
-    lines.push(Text.justify("", timeago(data.timestamp)))
+    let notify = cell.data.failed ? Text.color(dash_colors.red, "[FAILED]") : ""
+    lines.push(Text.justify(notify, timeago(data.timestamp)))
 
     cell.lines(lines)
   }
@@ -112,6 +113,16 @@ import { shiftTempToColor, dash_colors } from "../vars"
       cell.commands.run("update")
     },
     socket: Server.socket("TeslaChannel", function(msg) {
+      if (msg.failed) {
+        this.data.loading = false
+        this.data.failed = true
+        clearTimeout(this.data.refresh_timer) // Don't try anymore until we manually update
+        renderLines()
+        return
+      } else {
+        this.refreshInterval = Time.minute()
+        this.data.failed = false
+      }
       if (msg.loading) {
         this.data.loading = true
         renderLines()

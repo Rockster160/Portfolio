@@ -236,7 +236,15 @@ RSpec.describe Jarvis do
 
   context "with commands" do
     # Verify passing arguments works as expected
-    let(:command) { ::CommandProposal::Task.create(name: "") }
+    let(:command) { ::CommandProposal::Task.create(name: "Lumber Spacer") }
+
+    it "can run a function" do
+      expect(::CommandProposal::Services::Runner).to receive(:command).with(
+        "lumber_spacer", @admin.id, ""
+      )
+
+      expect(jarvis("run lumber spacer")).to eq("")
+    end
   end
 
   context "with scheduling" do
