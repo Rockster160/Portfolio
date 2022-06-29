@@ -8,6 +8,7 @@ class Jarvis
   def initialize(user, words)
     @user = user
     @words = words.to_s
+    Time.zone = "Mountain Time (US & Canada)"
   end
 
   def command
@@ -46,7 +47,20 @@ class Jarvis
         ActionEventBroadcastWorker.perform_async(evt.id)
         evt_words = ["Logged #{evt.event_name}"]
         evt_words << "(#{evt.notes})" if evt_data[:notes].present?
-        evt_words << "[#{evt.timestamp.to_formatted_s(:short_with_time)}]" if evt_data[:timestamp].present?
+        if evt_data[:timestamp].present?
+          day = (
+            if evt_data[:timestamp].today?
+              "Today"
+            elsif evt_data[:timestamp].tomorrow?
+              "Tomorrow"
+            elsif evt_data[:timestamp].yesterday?
+              "Yesterday"
+            else
+              evt_data[:timestamp].to_formatted_s(:short)
+            end
+          )
+          evt_words << "[#{day} #{evt.timestamp.to_formatted_s(:short_time)}]"
+        end
         evt_words.join(" ")
       else
         evt.errors.full_messages.join("\n")
@@ -169,7 +183,6 @@ class Jarvis
   end
 
   def safe_date_parse(timestamp)
-    Time.zone = "Mountain Time (US & Canada)"
     Chronic.time_class = Time.zone
     Chronic.parse(timestamp)
   end
