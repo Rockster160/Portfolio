@@ -47,3 +47,16 @@
     }
   }
 }
+
+.dark-mode {
+  .act-playground {
+    .app-card-container {
+      .project-wrapper {
+        .project-title {
+          text-shadow: 0 0 2px $blue-d3;
+          color: darken($grey-light, 15%);
+        }
+      }
+    }
+  }
+}

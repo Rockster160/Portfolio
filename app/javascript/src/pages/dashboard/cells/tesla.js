@@ -45,7 +45,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
     status_pieces.push(Text.color(dash_colors.yellow, (data.miles || "?") + "m"))
     lines.push(Text.center(status_pieces.join(" | ")))
 
-    if (data.charging?.active) {
+    if (data.charging?.active && data.charging.eta > 0 && data.charging.speed > 0 && !(data.drive?.speed > 0)) {
       let charging_text = "Full: " + data.charging.eta + "min | [ico ti ti-weather-lightning]" + data.charging.speed + "mph"
       lines.push(Text.center(Text.color(dash_colors.yellow, charging_text)))
     } else {
@@ -76,7 +76,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
     lines.push("")
 
     if (data.climate?.on) {
-      let climate_text = "Climate: "
+      let climate_text = "Climate: " // [ico ti ti-mdi-fan ti-spin] - Not centered, so looks weird
       climate_text += Text.color(dash_colors.green, "[ON] ")
       climate_text += shiftTempToColor(data.climate.set)
       lines.push(Text.center(climate_text))
@@ -85,8 +85,10 @@ import { shiftTempToColor, dash_colors } from "../vars"
     }
 
     if (data.drive) {
-      let drive_text = data.drive.action + ":" + data.drive.location
-      if (data.drive.speed > 0) { drive_text += data.drive.speed + "mph" }
+      let drive_icon = ""
+      let drive_text = ""
+      drive_text += drive_icon + " [ico ti ti-oct-location]" + data.drive.location
+      if (data.drive.speed > 0) { drive_text += " [ico ti ti-mdi-speedometer]" + data.drive.speed + "mph" }
       lines.push(Text.center(Text.color(dash_colors.grey, drive_text)))
     } else {
       lines.push("")

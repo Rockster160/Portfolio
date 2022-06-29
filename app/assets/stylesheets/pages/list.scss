@@ -220,16 +220,22 @@
 }
 
 .dark-mode {
-  .list-container, .lists-index-container {
+  .important-container, .list-item-container, .list-item-options {
     color: $blue-l5;
+    .list-item-config {
+      color: $blue-l5;
+    }
+  }
+  .list-container, .lists-index-container {
+    color: $grey-light;
 
     .important-list-items, .list-items, .lists {
-      border-color: $blue-l5;
+      border-color: $grey-light;
 
       .list-item {
         border: 1px solid $blue-l5;
         background: $blue-d5;
-        color: $blue-l5;
+        color: $grey-light;
 
         &:hover {
           background: $blue-d3;

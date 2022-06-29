@@ -47,3 +47,10 @@ pre.preformat {
   white-space: nowrap;
   white-space: pre;
 }
+
+.dark-mode {
+  code {
+    // color: "";
+    background: $blue-d1;
+  }
+}

@@ -108,3 +108,29 @@
     }
   }
 }
+
+.dark-mode {
+  #list-item-schedule {
+    select {
+      background: $blue-d2 url('https://image.freepik.com/free-icon/caret-arrowhead-facing-down_318-34455.png') no-repeat calc(100% - 2px) 55%;
+    }
+    input[type=checkbox]#meridian {
+      & + label {
+        border: 1px solid $grey-light;
+        color: $grey-light;
+      }
+    }
+    .calendar {
+      input[type=checkbox] {
+        & + label {
+          border: 2px solid $grey-light;
+          color: $grey-light;
+        }
+        &:checked + label {
+          background: $grey-light;
+          color: $text-color;
+        }
+      }
+    }
+  }
+}

@@ -3,6 +3,9 @@ class TeslaCommandWorker
   sidekiq_options retry: false
 
   def perform(cmd, params=nil)
+    if Rails.env.development?
+      return ActionCable.server.broadcast "tesla_channel", stubbed_data
+    end
     ActionCable.server.broadcast("tesla_channel", { loading: true })
     car = Tesla.new
 
@@ -102,15 +105,51 @@ class TeslaCommandWorker
     }
   end
 
+  def stubbed_data
+    {
+      charge: 77,
+      miles: 194,
+      charging: {
+        active: true,
+        speed: 34.4,
+        eta: 35,
+      },
+      climate: {
+        on: true,
+        set: 69,
+        current: 70,
+      },
+      open: {
+        ft:        false, # Frunk
+        df:        false, # Driver Door
+        fd_window: true, # Driver Window
+        pf:        false, # Passenger Door
+        fp_window: false, # Passenger Window
+        dr:        false, # Rear Driver Door
+        rd_window: false, # Rear Driver Window
+        pr:        false, # Rear Passenger Door
+        rp_window: false, # Rear Passenger Window
+        rt:        true, # Trunk
+      },
+      locked: true,
+      drive: {
+        action: ["Driving", "Near", "At", "Stopped"].sample,
+        location: places.keys.sample,
+        speed: 0,
+      },
+      timestamp: Time.current.to_i
+    }
+  end
+
   def drive_data(data)
     loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
-    speed = data.dig(:drive_state, :speed).to_i > 0
+    is_driving = data.dig(:drive_state, :speed).to_i > 0
 
     place = near(loc)
-    action = speed ? :Near : :At
+    action = is_driving ? :Near : :At
     return { action: action, location: place[0] } if place
 
-    action = speed ? :Driving : :Stopped
+    action = is_driving ? :Driving : :Stopped
     city = reverse_geocode(loc) if loc.compact.length == 2
     return { action: action, location: city } if city
 

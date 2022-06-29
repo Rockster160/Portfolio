@@ -144,3 +144,19 @@
     }
   }
 }
+
+.dark-mode {
+  .ctr-little_worlds.act-character_builder {
+    background: $grey-dark;
+    color: $grey-light;
+    .character-container {
+      .character-wrapper {
+        background-image: radial-gradient(150px 16% at 50% 93%, rgba(0, 50, 40, 0.48) 15%, transparent 50%);
+      }
+    }
+
+    .character-form-wrapper {
+      background: $blue-d4;
+    }
+  }
+}

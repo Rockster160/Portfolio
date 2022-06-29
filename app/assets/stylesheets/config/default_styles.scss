@@ -13,6 +13,7 @@ html {
 html.dark-mode {
   &,
   body {
+    color: $grey-light;
     background: darken($blue-d5, 5%);
   }
 }
