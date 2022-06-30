@@ -337,16 +337,16 @@ select {
 .dark-mode {
   .app-card-container, .form, form:not(.basic) {
     box-shadow: 3px 3px 10px $grey-dark;
-    background: $blue-d3;
+    background: $blue-d2;
     color: $grey-light;
 
     .app-card-title, .form-title {
-      background: $blue-d2;
+      background: $blue-d3;
     }
 
     .app-card-inner, .form-field {
       label {
-        color: $grey-blue;
+        color: $grey-light;
       }
     }
   }
@@ -371,14 +371,14 @@ select {
     &:not(.basic) {
       border: 2px solid rgba($blue-d2, 0.5);
       color: $grey-light;
-      background: $blue-d2;
+      background: $grey-blue;
     }
     &select {
-      background: $blue-d2 url("https://image.freepik.com/free-icon/caret-arrowhead-facing-down_318-34455.png") no-repeat calc(100% - 15px) 55%;
-      background-color: $blue-d2;
+      background: $grey-blue url("https://image.freepik.com/free-icon/caret-arrowhead-facing-down_318-34455.png") no-repeat calc(100% - 15px) 55%;
+      background-color: $grey-blue;
     }
     &::placeholder {
-      color: $grey-blue;
+      color: $grey-light;
     }
   }
 
@@ -387,7 +387,7 @@ select {
   input[type=button],
   input[type=reset],
   input[type=submit] {
-    @include btn-color($blue-d2);
+    @include btn-color($blue-d1);
 
     color: $grey-light !important;
 

@@ -1,4 +1,6 @@
 RSpec.describe Jarvis do
+  include ActiveJob::TestHelper
+
   def jarvis(msg, user=@user)
     res = Jarvis.command(user, msg)
     res.is_a?(Array) ? res[0] : res
@@ -215,19 +217,19 @@ RSpec.describe Jarvis do
     end
 
     it "can add action events with time" do
-      expect(jarvis("Log thing at 7:52")).to eq("Logged Thing [6/24/22 7:52:00 AM]")
+      expect(jarvis("Log thing at 7:52")).to eq("Logged Thing [Today 7:52 AM]")
       expect(@admin.action_events.pluck(:event_name)).to include("Thing")
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 7, 52))
     end
 
     it "can add action events with relative time" do
-      expect(jarvis("Log thing 10 minutes ago.")).to eq("Logged Thing [6/24/22 5:35:00 AM]")
+      expect(jarvis("Log thing 10 minutes ago.")).to eq("Logged Thing [Today 5:35 AM]")
       expect(@admin.action_events.pluck(:event_name)).to include("Thing")
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 5, 35))
     end
 
     it "can add action events with note and time" do
-      expect(jarvis("log thing sup at 7:52.")).to eq("Logged Thing (sup) [6/24/22 7:52:00 AM]")
+      expect(jarvis("log thing sup at 7:52.")).to eq("Logged Thing (sup) [Today 7:52 AM]")
       expect(@admin.action_events.pluck(:event_name)).to include("Thing")
       expect(@admin.action_events.pluck(:notes)).to include("sup")
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 7, 52))
@@ -236,14 +238,17 @@ RSpec.describe Jarvis do
 
   context "with commands" do
     # Verify passing arguments works as expected
-    let(:command) { ::CommandProposal::Task.create(name: "Lumber Spacer") }
+    let!(:command) { ::CommandProposal::Task.create(name: "Lumber Spacer", session_type: :function) }
+
+    before do
+      command.update(code: "print 'Lumber output!'")
+      command.current_iteration.update(status: :approved)
+    end
 
     it "can run a function" do
-      expect(::CommandProposal::Services::Runner).to receive(:command).with(
-        "lumber_spacer", @admin.id, ""
-      )
-
-      expect(jarvis("run lumber spacer")).to eq("")
+      perform_enqueued_jobs {
+        expect(jarvis("run lumber spacer")).to eq("Lumber output!")
+      }
     end
   end
 

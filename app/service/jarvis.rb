@@ -18,6 +18,7 @@ class Jarvis
     unless @cmd.present?
       @cmd, @args = @words.squish.downcase.split(" ", 2)
     end
+
     case @cmd.to_s.to_sym
     when :car
       return "Sorry, you can't do that." unless @user.admin?
@@ -29,8 +30,9 @@ class Jarvis
       car_response(car_cmd, car_params) || "Not sure how to tell car: #{car_cmd}"
     when :fn, :run
       return "Sorry, you can't do that." unless @user.admin?
+      return "Sorry, couldn't find a function called #{@args}." if !@args.is_a?(Hash) || @args.dig(:fn).blank?
 
-      CommandControl.parse(@words)
+      CommandRunner.run(@user, @args[:fn], @args[:fn_args])
     when :log
       return "Sorry, you can't do that." unless @user.admin?
 
@@ -118,7 +120,7 @@ class Jarvis
     return parse_car_words if simple_words.include?("car")
 
     # Open needs to be special for urls?
-    if simple_words.split(" ", 2).first.to_sym.in?([:car, :fn, :run, :log, :list])
+    if simple_words.split(" ", 2).first.to_sym.in?([:car, :list])
       return # Let the main splitter break things up
     end
 
@@ -126,10 +128,9 @@ class Jarvis
       return parse_car_words
     end
 
-    found_command = matches_command?(simple_words)
-    return parse_command(found_command) if found_command
+    return if parse_command(simple_words)
 
-    if @user.lists.any? && simple_words.match?(Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b", "i"))
+    if @user.lists.any? && simple_words.match?(Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b", :i))
       return parse_list_words
     end
 
@@ -153,7 +154,7 @@ class Jarvis
 
   def should_schedule?(simple_words)
     time_str, @scheduled_time = extract_time(simple_words)
-    @remaining_words = @words.sub(Regexp.new(time_str, "i"), "").squish if @scheduled_time
+    @remaining_words = @words.sub(Regexp.new(time_str, :i), "").squish if @scheduled_time
 
     @scheduled_time.present?
   end
@@ -164,22 +165,27 @@ class Jarvis
     @args = "I'll #{@remaining_words.gsub(/\b(my)\b/, 'your')} later at #{@scheduled_time.to_formatted_s(:quick_week_time)}"
   end
 
-  def matches_command?(simple_words)
+  def parse_command(simple_words)
     return false unless @user.admin?
     tasks = ::CommandProposal::Task.where.not("REGEXP_REPLACE(COALESCE(friendly_id, ''), '[^a-z]', '', 'i') = ''")
+    tasks = tasks.where(session_type: :function)
 
     return false unless tasks.any?
 
-    command = tasks.find_by("? ILIKE CONCAT(friendly_id, '%')", simple_words)
-    command ||= tasks.find_by("? ILIKE CONCAT(REGEXP_REPLACE(friendly_id, '[^a-z]', '', 'i'), '%')", simple_words.gsub(/[^a-z]/i, ""))
-  end
+    command = tasks.find_by("? ILIKE CONCAT('%', friendly_id, '%""')", simple_words)
+    command ||= tasks.find_by("? ILIKE CONCAT('%', REGEXP_REPLACE(friendly_id, '[^a-z]', '', 'i'), '%')", simple_words.gsub(/[^a-z]/i, ""))
 
-  def parse_command(found_command)
+    return false unless command.present?
+
+    without_name = @words.gsub(Regexp.new("\\b(#{command.friendly_id.gsub("_", "\.\?")})\\b", :i), "")
+    without_fn = without_name.squish.gsub(/^(fn|run|function)\b ?(fn|run|function)?/i, "")
+
     @cmd = :fn
-
-    # Should do something about spaces instead of _ as well
-    without_name = @words.gsub(Regexp.new("\\b(#{found_command.friendly_id})\\b"), "")
-    @args = "#{found_command.friendly_id} #{without_name}"
+    @args = {
+      fn: command,
+      args: without_fn.squish,
+    }
+    true
   end
 
   def safe_date_parse(timestamp)
@@ -198,7 +204,7 @@ class Jarvis
 
     @args = {}
     time_str, extracted_time = extract_time(@words.downcase.squish)
-    new_words = @words.sub(Regexp.new(time_str, "i"), "") if extracted_time
+    new_words = @words.sub(Regexp.new(time_str, :i), "") if extracted_time
     new_words = (new_words || @words).gsub(/^log ?/i, "")
     @args[:timestamp] = extracted_time
     @args[:event_name], @args[:notes] = new_words.gsub(/[.?!]$/i, "").squish.split(" ", 2)
