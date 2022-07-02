@@ -24,11 +24,11 @@ class TeslaCommandWorker
 
     case cmd.to_sym
     when :update, :reload
-      return ActionCable.server.broadcast "tesla_channel", format_data(car.data)
+      return ActionCable.server.broadcast "tesla_channel", format_data(car.vehicle_data)
     when :off, :stop
-      car.off
+      car.off_car
     when :on, :start
-      car.on
+      car.start_car
     when :boot, :trunk
       car.pop_boot(direction)
     when :lock
@@ -55,13 +55,13 @@ class TeslaCommandWorker
       car.heat_passenger
       car.defrost
     when :find
-      data = car.data
+      data = car.vehicle_data
       loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
       SmsWorker.perform_async(User.find(1).phone, "http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}")
     end
 
     sleep 3 unless Rails.env.test? # Give the API a chance to update
-    ActionCable.server.broadcast("tesla_channel", format_data(car.data))
+    ActionCable.server.broadcast("tesla_channel", format_data(car.vehicle_data))
   rescue StandardError => e
     ActionCable.server.broadcast("tesla_channel", { failed: true })
     backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")

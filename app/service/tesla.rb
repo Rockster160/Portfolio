@@ -13,52 +13,23 @@ class Tesla
     @id = @controller.vehicle_id
   end
 
-  def data
-    controller.vehicle_data
-  end
-
-  def on
-    controller.start_car
-  end
-
-  def off
-    controller.off_car
-  end
-
-  def honk
-    controller.honk
-  end
-
-  def defrost
-    controller.defrost
-  end
-
-  def doors(direction=:toggle)
-    controller.doors(direction)
-  end
-
-  def windows(direction=:toggle)
-    controller.windows(direction)
-  end
-
-  def pop_boot(direction=:toggle)
-    controller.pop_boot
-  end
-
-  def pop_frunk
-    controller.pop_frunk
-  end
+  delegate(
+    :vehicle_data,
+    :start_car,
+    :off_car,
+    :honk,
+    :defrost,
+    :doors,
+    :windows,
+    :pop_boot,
+    :pop_frunk,
+    :heat_driver,
+    :heat_passenger,
+    to: :controller
+  )
 
   def set_temp(temp_F)
     controller.start_car
     controller.set_temp(temp_F)
-  end
-
-  def heat_driver
-    controller.heat_driver
-  end
-
-  def heat_passenger
-    controller.heat_passenger
   end
 end
