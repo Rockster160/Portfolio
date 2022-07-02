@@ -6,155 +6,12 @@ import { dash_colors } from "../vars"
 (function() {
   var cell = undefined
 
-  let cToF = function(c) {
-    if (c == null || c == undefined) { return }
-
-    return Math.round((c * (9/5)) + 32)
-  }
-
-  let fToC = function(f) {
-    if (f == null || f == undefined) { return }
-
-    return ((f - 32) * (5/9))
-  }
-
-  let capitalize = function(word) {
-    return word.replace(/./, function(letter) { return letter.toUpperCase() })
-  }
-
-  let serializeDevice = function(device_data) {
-    return {
-      key:      device_data.name,
-      name:     device_data.parentRelations[0].displayName == "Entryway" ? "Main" : "  Up",
-      humidity: parseInt(device_data.traits["sdm.devices.traits.Humidity"].ambientHumidityPercent),
-      current_mode: device_data.traits["sdm.devices.traits.ThermostatMode"].mode.toLowerCase(),
-      current_temp: cToF(device_data.traits["sdm.devices.traits.Temperature"].ambientTemperatureCelsius),
-      status:   device_data.traits["sdm.devices.traits.ThermostatHvac"].status.toLowerCase(),
-      heat_set: cToF(device_data.traits["sdm.devices.traits.ThermostatTemperatureSetpoint"].heatCelsius),
-      cool_set: cToF(device_data.traits["sdm.devices.traits.ThermostatTemperatureSetpoint"].coolCelsius),
-    }
-  }
-
-  let getDevices = async function(count=0) {
-    if (count > 1) {
-      console.log("Get Devices failed again");
-      return
-    }
-
-    let res = await fetch("https://smartdevicemanagement.googleapis.com/v1/enterprises/" + cell.config.project_id + "/devices", {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": cell.config.access_token,
-      }
-    })
-
-    if (res.status == 401) {
-      let refresh = await refreshTokens()
-      if (refresh) { return getDevices(count + 1) }
-    }
-
-    if (res.ok) {
-      cell.data.devices = (await res.json()).devices.map(function(device_data) {
-        return serializeDevice(device_data)
-      })
-
-      renderLines()
-      cell.flash()
-    }
-  }
-
-  let refreshTokens = async function() {
-    let res = await fetch("https://www.googleapis.com/oauth2/v4/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": cell.config.access_token,
-      },
-      body: JSON.stringify({
-        client_id:     cell.config.client_id,
-        client_secret: cell.config.client_secret,
-        refresh_token: cell.config.refresh_token,
-        grant_type:    "refresh_token",
-      })
-    })
-
-    if (res.ok) {
-      let json = await res.json()
-      cell.config.access_token = [json.token_type, json.access_token].join(" ")
-      return true
-    }
-    return false
-  }
-
-  let setMode = async function(device, mode, count=0) {
-    if (count > 1) {
-      console.log("Set Mode failed again");
-      return
-    }
-
-    let res = await fetch("https://smartdevicemanagement.googleapis.com/v1/" + device.key + ":executeCommand", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": cell.config.access_token,
-      },
-      body: JSON.stringify({
-        command: "sdm.devices.commands.ThermostatMode.SetMode",
-        params: {
-          mode: mode.toUpperCase()
-        }
-      })
-    })
-
-    if (res.status == 401) {
-      await refreshTokens()
-      return setMode(device, mode, count + 1)
-    }
-
-    if (res.ok) {
-      getDevices()
-      // Schedule a few more refreshes to ping again soon
-      setTimeout(function() { getDevices() }, Time.minute())
-      setTimeout(function() { getDevices() }, Time.minutes(5))
-    }
-  }
-
-  let setTemp = async function(device, temp, count=0) {
-    if (count > 1) {
-      console.log("Set Temp failed again");
-      return
-    }
-
-    let mode = device.current_mode
-    let data = {
-      command: "sdm.devices.commands.ThermostatTemperatureSetpoint.Set" + capitalize(mode),
-      params: {}
-    }
-    data["params"][mode + "Celsius"] = fToC(parseFloat(temp))
-
-    let res = await fetch("https://smartdevicemanagement.googleapis.com/v1/" + device.key + ":executeCommand", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": cell.config.access_token,
-      },
-      body: JSON.stringify(data)
-    })
-
-    if (res.status == 401) {
-      await refreshTokens()
-      return setTemp(device, temp, count + 1)
-    }
-
-    if (res.ok) {
-      getDevices()
-    }
-  }
-
   let renderLines = function() {
     let lines = []
-    lines.push("") // Empty line just for looks
+    let first_row = []
+    first_row.push(cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "")
+    first_row.push(cell.data.failed ? Text.color(dash_colors.orange, "[FAILED]") : "")
+    lines.push(Text.justify(...first_row))
 
     cell.data.devices?.forEach(function(device) {
       let mode_color = device.current_mode == "cool" ? dash_colors.lblue : dash_colors.orange
@@ -185,64 +42,101 @@ import { dash_colors } from "../vars"
     cell.lines(lines)
   }
 
+  let subscribeWebsockets = function() {
+    cell.amz_socket = new CellWS(
+      cell,
+      Server.socket("AmzUpdatesChannel", function(msg) {
+        this.flash()
+
+        let data = []
+        for (var [order_id, order_data] of Object.entries(msg)) {
+          let order = { date: 0, id: order_id }
+          let delivery = order_data.delivery || ""
+          if (delivery[0] != "[") {
+            let date = new Date(delivery + " MDT")
+            order.date = date.getTime()
+            delivery = date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
+          }
+          order.delivery = delivery
+          order.name = order_data.name || "#"
+
+          data.push(order)
+        }
+        this.data.amz_updates = data.sort(function(a, b) {
+          return a.date - b.date
+        })
+        renderLines()
+      })
+    )
+    cell.amz_socket.send({ action: "request" })
+
+    // Get webhooks from Google when states change?
+    cell.nest_socket = new CellWS(
+      cell,
+      Server.socket("NestChannel", function(msg) {
+        this.flash()
+
+        if (msg.failed) {
+          this.data.loading = false
+          this.data.failed = true
+          clearInterval(this.data.nest_timer) // Don't try anymore until we manually update
+          renderLines()
+          return
+        } else {
+          this.data.failed = false
+        }
+        if (msg.loading) {
+          this.data.loading = true
+          renderLines()
+          return
+        }
+
+        this.data.loading = false
+        this.data.devices = msg.devices
+
+        renderLines()
+      })
+    )
+    cell.nest_socket.send({ action: "command", settings: "update" })
+    this.data.nest_timer = setInterval(function() {
+      cell.nest_socket.send({ action: "command", settings: "update" })
+    }, Time.minutes(10))
+  }
+
   cell = Cell.register({
     title: "Home",
-    refreshInterval: Time.minutes(10),
+    refreshInterval: Time.minute(),
     wrap: false,
     flash: false,
+    onload: subscribeWebsockets,
     reloader: function() {
-      getDevices(this)
+      // Update timer?
+      // TODO: Have a different timer for resetting devices
       // get garage
-      this.ws.send({ action: "request" })
     },
-    socket: Server.socket("AmzUpdatesChannel", function(msg) {
-      let data = []
-      for (var [order_id, order_data] of Object.entries(msg)) {
-        let order = { date: 0, id: order_id }
-        let delivery = order_data.delivery || ""
-        if (delivery[0] != "[") {
-          let date = new Date(delivery + " MDT")
-          order.date = date.getTime()
-          delivery = date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
-        }
-        order.delivery = delivery
-        order.name = order_data.name || "#"
-
-        data.push(order)
-      }
-      this.data.amz_updates = data.sort(function(a, b) {
-        return a.date - b.date
-      })
-      renderLines()
-    }),
+    started: function() {
+      cell.amz_socket.reopen()
+      cell.nest_socket.reopen()
+    },
+    stopped: function() {
+      cell.amz_socket.close()
+      cell.nest_socket.close()
+    },
     command: function(msg) {
       if (/^-?\d+/.test(msg)) {
         var num = parseInt(msg.match(/\d+/)[0])
         let order = this.data.amz_updates[num - 1]
 
         if (/^-\d+/.test(msg)) { // Use - to remove item
-          this.ws.send({ action: "change", id: order.id, remove: true })
+          cell.amz_socket.send({ action: "change", id: order.id, remove: true })
         } else if (/^\d+\s*$/.test(msg)) { // No words means open the order
           let url = "https://www.amazon.com/gp/your-account/order-details?orderID="
           window.open(url + order.id.replace("#", ""), "_blank")
         } else { // Rename the order
-          this.ws.send({ action: "change", id: order.id, rename: msg.replace(/^\d+ /, "") })
+          cell.amz_socket.send({ action: "change", id: order.id, rename: msg.replace(/^\d+ /, "") })
         }
       } else { // Assume AC control
-        let [area, mode, temp] = msg.split(" ")
-        if (!temp) { temp = mode }
-
-        this.data.devices?.forEach(function(device) {
-          if (device.name.toLowerCase().trim() == area.toLowerCase().trim()) {
-            if (mode == "heat" || mode == "cool") {
-              setMode(device, mode)
-            }
-
-            if (temp && !Number.isNaN(Number(temp))) {
-              setTemp(device, temp)
-            }
-          }
-        })
+        cell.nest_socket.send({ action: "command", settings: msg })
         // up|main 74
         // up|main heat
         // up|main cool

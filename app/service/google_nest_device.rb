@@ -19,28 +19,28 @@ class GoogleNestDevice
   end
 
   def initialize(subscription=nil, args={})
-    @subscription = subscription || GoogleNestSubscription.new(self)
+    @subscription = subscription || GoogleNestControl.new
     set_all(args)
     self
   end
 
   def set_all(args)
-    args.each do |k, v|
-      self.send("#{k}=", v)
+    args&.each do |k, v|
+      self.instance_variable_set("@#{k}".to_sym, v)
     end
     self
   end
 
   def to_json
     {
-      key:          key,
-      name:         name,
-      humidity:     humidity,
-      current_mode: current_mode,
-      current_temp: current_temp,
-      hvac:         hvac,
-      heat_set:     heat_set,
-      cool_set:     cool_set,
+      key:          @key,
+      name:         @name,
+      humidity:     @humidity,
+      current_mode: @current_mode,
+      current_temp: @current_temp,
+      hvac:         @hvac,
+      heat_set:     @heat_set,
+      cool_set:     @cool_set,
     }
   end
 

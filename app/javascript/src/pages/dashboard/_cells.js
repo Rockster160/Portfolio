@@ -219,10 +219,12 @@ Cell.prototype.stop = function() {
   var cell = this
   clearTimeout(cell.timer)
   if (cell.ws) { cell.ws.close() }
+  if (cell.stopped && typeof(cell.stopped) === "function") { cell.stopped() }
 }
 Cell.prototype.start = function() {
   var cell = this
   if (cell.ws) { cell.ws.reopen() }
+  if (cell.started && typeof(cell.started) === "function") { cell.started() }
   cell.reload()
 }
 Cell.prototype.hide = function() {

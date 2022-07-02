@@ -29,7 +29,6 @@
       Cell.register({ title: "Uptime" })  // Overwrite to save API calls
       Cell.register({ title: "Github" })  // Overwrite to save API calls
       Cell.register({ title: "Home" })    // Overwrite to save API calls
-      // Cell.register({ title: "Tesla" })   // Overwrite to save API calls
     <% end %>
     Cell.loadConfig({
       fitness: { x: 1, y: 1 },
@@ -49,11 +48,6 @@
       },
       home: {
         x: 4, y: 2,
-        client_id: "<%= ENV.fetch("PORTFOLIO_GCP_CLIENT_ID") %>",
-        client_secret: "<%= ENV.fetch("PORTFOLIO_GCP_CLIENT_SECRET") %>",
-        project_id: "<%= ENV.fetch("PORTFOLIO_GCP_PROJECT_ID") %>",
-        access_token: "<%= DataStorage[:google_nest_access_token] %>",
-        refresh_token: "<%= DataStorage[:google_nest_refresh_token] %>",
       },
 
       calendar: { x: 1, y: 3, h: 3 },

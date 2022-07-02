@@ -49,13 +49,13 @@ class GoogleNestControl
 
       json = request(:get, "enterprises/#{PROJECT_ID}/devices")
 
-      json[:devices].map do |device_data|
+      devices = json[:devices].map do |device_data|
         GoogleNestDevice.new(self).set_all(serialize_device(device_data))
       end
-      DataStorage[:devices] = json[:devices].each_with_object({}) { |device_data, obj|
-        obj[device.name] = device_data
+      DataStorage[:nest_devices] = devices.each_with_object({}) { |device, obj|
+        obj[device.name] = device.to_json
       }
-      json[:devices]
+      devices
     end
   end
 
@@ -99,7 +99,7 @@ class GoogleNestControl
     res = RestClient.post("https://www.googleapis.com/oauth2/v4/token", params)
     json = JSON.parse(res.body, symbolize_names: true)
 
-    @refresh_token = DataStorage[:google_nest_refresh_token] = json[:refresh_token]
+    @refresh_token = DataStorage[:google_nest_refresh_token] = json[:refresh_token] if json[:refresh_token].present?
     @access_token = DataStorage[:google_nest_access_token] = "#{json[:token_type]} #{json[:access_token]}"
   rescue RestClient::ExceptionWithResponse => err
     raise err
@@ -142,10 +142,11 @@ class GoogleNestControl
     retries += 1
     return refresh && retry if retries < 2 && err.response.code == 401
 
+    ::SlackNotifier.notify("Failed to request from GoogleNestControl##{method}(#{url}):\nCode: #{res&.code}\n```#{params}```\n```#{res&.body}```")
     raise err
   rescue JSON::ParserError => err
-    ::SlackNotifier.notify("Failed to parse json from GoogleNestControl##{request}(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```")
-    raise "Failed to parse json from GoogleNestControl##{request}(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```"
+    ::SlackNotifier.notify("Failed to parse json from GoogleNestControl##{method}(#{url}):\nCode: #{res&.code}\n```#{params}```\n```#{res&.body}```")
+    raise "Failed to parse json from GoogleNestControl##{method}"
   end
 
   def base_headers

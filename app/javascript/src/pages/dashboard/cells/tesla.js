@@ -94,7 +94,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
       lines.push("")
     }
 
-    let notify = cell.data.failed ? Text.color(dash_colors.red, "[FAILED]") : ""
+    let notify = cell.data.failed ? Text.color(dash_colors.orange, "[FAILED]") : ""
     lines.push(Text.justify(notify, timeago(data.timestamp)))
 
     cell.lines(lines)

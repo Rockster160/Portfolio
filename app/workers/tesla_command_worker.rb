@@ -6,7 +6,7 @@ class TeslaCommandWorker
     if Rails.env.development?
       return ActionCable.server.broadcast "tesla_channel", stubbed_data
     end
-    ActionCable.server.broadcast("tesla_channel", { loading: true })
+    ActionCable.server.broadcast("tesla_channel", loading: true)
     car = Tesla.new
 
     cmd = cmd.to_s.downcase.squish
@@ -63,7 +63,7 @@ class TeslaCommandWorker
     sleep 3 unless Rails.env.test? # Give the API a chance to update
     ActionCable.server.broadcast("tesla_channel", format_data(car.vehicle_data))
   rescue StandardError => e
-    ActionCable.server.broadcast("tesla_channel", { failed: true })
+    ActionCable.server.broadcast("tesla_channel", failed: true)
     backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
     SlackNotifier.notify("Failed to command: #{e.inspect}\n#{backtrace}")
   end
