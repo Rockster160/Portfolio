@@ -28,6 +28,12 @@ class Jarvis
       TeslaCommandWorker.perform_async(car_cmd, car_params)
 
       car_response(car_cmd, car_params) || "Not sure how to tell car: #{car_cmd}"
+    when :home
+      return "Sorry, you can't do that." unless @user.admin?
+
+      NestCommandWorker.perform_async(@args)
+
+      home_response(@args) || "Not sure how to tell home: #{@args}"
     when :fn, :run
       return "Sorry, you can't do that." unless @user.admin?
       return "Sorry, couldn't find a function called #{@args}." if !@args.is_a?(Hash) || @args.dig(:fn).blank?
@@ -84,27 +90,10 @@ class Jarvis
       else
         reversed_words = @words.gsub(/\b(my)\b/, "your").squish
         reversed_words = reversed_words.tap { |line| line[0] = line[0].downcase }
-        reversed_words = reversed_words.gsub(/[^a-z]*$/, "")
+        reversed_words = reversed_words.gsub(/[^a-z0-9]*$/, "")
         "I don't know how to #{reversed_words}, sir."
       end
       # complete ["Check", "Will do, sir.", "As you wish.", "Yes, sir."]
-    end
-  end
-
-  def shortcut
-    return @shortcut if defined?(@shortcut)
-
-    return @shortcut = nil unless @user.admin?
-    @shortcut = begin
-      jarvis_shortcuts = DataStorage[:jarvis_shortcuts] ||= {}
-      found = jarvis_shortcuts.find { |key, val|
-        next true if @words == key
-        @words.gsub(/\b(the|my|set|to)\b/, "").squish == key
-      }&.dig(1) # Get the value
-      # How would this work for "Remind me to X in 30 minutes" -> Send text delayed for 30 mins
-
-      # Maybe use DataStorage to save preset commands
-      # Many of these could even run other functions, such as formatting data
     end
   end
 
@@ -112,27 +101,29 @@ class Jarvis
     token = SecureRandom.hex(3)
     simple_words = @words.downcase.squish
     return parse_log_words if simple_words.match?(/^log\b/)
+
     # Logs have their own timestamp, so run them before checking for delayed commands
     return schedule_command if should_schedule?(simple_words)
 
-    return shortcut if shortcut
+    # Check lists since they have custom names
+    if @user.lists.any? && simple_words.match?(Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b", :i))
+      return parse_list_words
+    end
+
     return parse_list_words if simple_words.match?(/^(add|remove)\b/)
     return parse_car_words if simple_words.include?("car")
+    return parse_home_words if simple_words.match?(/\b(home|house|ac|up|upstairs|main|entry|entryway|rooms)\b/i)
 
     # Open needs to be special for urls?
-    if simple_words.split(" ", 2).first.to_sym.in?([:car, :list])
-      return # Let the main splitter break things up
-    end
+    # if simple_words.split(" ", 2).first.to_sym.in?([:car, :list])
+    #   return # Let the main splitter break things up
+    # end
 
     if simple_words.match?(Regexp.new("\\b(#{car_commands.join('|')})\\b"))
       return parse_car_words
     end
 
     return if parse_command(simple_words)
-
-    if @user.lists.any? && simple_words.match?(Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b", :i))
-      return parse_list_words
-    end
 
     # get the car|house|home, how's the car, tell me about the car, give me the car
     # is the car unlocked?
@@ -279,8 +270,6 @@ class Jarvis
       :window,
       :frunk,
       :temp,
-      :cool,
-      :heat,
       :warm,
       :find,
       :where,
@@ -301,7 +290,7 @@ class Jarvis
       @args = "#{end_word} #{@args}"
     end
 
-    @args = @args.gsub(/ ?\b(car)\b ?/, ' ').squish
+    @args = @args.gsub(/\b(car)\b/, "").squish
     @args = @args.gsub(/where\'?s?( is)?/, "find")
     @args = @args.gsub(/\b(horn)\b/, "honk")
     @args = @args.gsub(/\b(vent)\b/, "windows")
@@ -317,6 +306,41 @@ class Jarvis
 
     @args.gsub!(/\b(the|set|to|is)\b/, "")
     @args.gsub!(/\b(start)\b/, "on")
+    @args = @args.squish
+  end
+
+  def home_response(settings)
+    mode = nil
+    temp = nil
+    mode = :heat if settings.match?(/\b(heat)\b/i)
+    mode = :cool if settings.match?(/\b(cool)\b/i)
+    temp = settings[/\b\d+\b/].to_i if settings.match?(/\b\d+\b/)
+    area = "upstairs" if settings.match?(/(up|rooms)/i)
+    area ||= "main"
+
+    if mode.present? && temp.present?
+      "Set house #{area} #{mode == :cool ? "AC" : "heat"} to #{temp}°."
+    elsif mode.present? && temp.blank?
+      "Set house #{area} to #{mode}."
+    elsif mode.blank? && temp.present?
+      "Set house #{area} to #{temp}°."
+    end
+  end
+
+  def parse_home_words
+    @cmd = :home
+
+    @args = @words
+    if @args.match?(/(the|my) (\w+)$/i)
+      end_word = @args[/\w+$/i]
+      @args[/(the|my) (\w+)$/i] = ""
+      @args = "#{end_word} #{@args}"
+    end
+
+    @args = @args.gsub(/\b(home|house)\b/i, "").squish
+    @args = @args.gsub(/\b(ac)\b/i, "cool").squish
+
+    @args.gsub!(/\b(the|set|to|is)\b/i, "")
     @args = @args.squish
   end
 end

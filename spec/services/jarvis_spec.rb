@@ -63,6 +63,12 @@ RSpec.describe Jarvis do
       expect(jarvis("home depot")).to eq("Home Depot:\n - Hammer")
     end
 
+    it "can retrieve lists with a question" do
+      @other_list.list_items.create(name: "Hammer")
+
+      expect(jarvis("What's on my Home Depot list?")).to eq("Home Depot:\n - Hammer")
+    end
+
     it "can remove items from a list" do
       @other_list.list_items.create(name: "Hammer")
 
@@ -83,8 +89,7 @@ RSpec.describe Jarvis do
     let(:tesla_control) { double("TeslaControl", vehicle_id: 1, vehicle_data: {}) }
 
     before do
-      allow(DataStorage).to receive(:[]).with(any_args).and_return("hi")
-      allow(DataStorage).to receive(:[]).with(:jarvis_shortcuts).and_return({})
+      allow(DataStorage).to receive(:[]).with(any_args).and_return("unimportant")
       allow(TeslaControl).to receive(:new).and_return(tesla_control)
     end
 
@@ -200,6 +205,61 @@ RSpec.describe Jarvis do
           end
           expect(jarvis(opt)).to eq(data[:res])
         end
+      end
+    end
+  end
+
+  context "with home" do
+    let(:home_control) { double("GoogleNestControl") }
+    let(:upstairs) { { key: "", name: "Upstairs" } }
+    let(:entryway) { { key: "", name: "Entryway" } }
+    let(:devices) { { "Upstairs": upstairs, "Entryway": entryway } }
+
+    before do
+      allow(DataStorage).to receive(:[]).with(any_args).and_return("unimportant")
+      allow(DataStorage).to receive(:[]).with(:nest_devices).and_return(devices)
+      allow(GoogleNestControl).to receive(:new).and_return(home_control)
+      allow(home_control).to receive(:devices) do
+        devices.map { |device_name, device_data|
+          GoogleNestDevice.new(home_control).set_all(device_data)
+        }
+      end
+    end
+
+    actions = {
+      "turn the upstairs heat to 69" => {
+        res: "Set house upstairs heat to 69°.",
+        actions: [:set_mode, :set_temp],
+      },
+      "set upstairs 69" => {
+        res: "Set house upstairs to 69°.",
+        actions: [:set_temp],
+      },
+      "upstairs to heat" => {
+        res: "Set house upstairs to heat.",
+        actions: [:set_mode],
+      },
+      "cool upstairs" => {
+        res: "Set house upstairs to cool.",
+        actions: [:set_mode],
+      },
+      "cool house" => {
+        res: "Set house main to cool.",
+        actions: [:set_mode],
+      },
+      "set ac to 69" => {
+        res: "Set house main AC to 69°.",
+        actions: [:set_mode, :set_temp],
+      },
+    }
+
+    actions.each do |action, data|
+      it "can #{action}" do
+        data[:actions]&.each do |k, args|
+          expect(home_control).to receive(k)
+        end
+
+        expect(jarvis(action)).to eq(data[:res])
       end
     end
   end

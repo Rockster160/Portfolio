@@ -123,6 +123,7 @@ import { dash_colors } from "../vars"
       cell.nest_socket.close()
     },
     command: function(msg) {
+      // Also check if the number is even valid. If it's not, it's probably meant to be a temp
       if (/^-?\d+/.test(msg)) {
         var num = parseInt(msg.match(/\d+/)[0])
         let order = this.data.amz_updates[num - 1]

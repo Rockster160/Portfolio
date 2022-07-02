@@ -119,6 +119,7 @@ class GoogleNestControl
   end
 
   def request(method, url, params={})
+    raise "Don't make requests!"
     raise "Cannot request without access token" if @access_token.blank?
     retries ||= 0
 
