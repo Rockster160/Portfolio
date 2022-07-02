@@ -34,6 +34,12 @@ class Jarvis
       NestCommandWorker.perform_async(@args)
 
       home_response(@args) || "Not sure how to tell home: #{@args}"
+    # when :text
+    #   return "Sorry, you can't do that." unless @user.admin?
+    #
+    #   SmsWorker.perform_async("3852599640", @args)
+    #
+    #   "Sending you a text saying: #{@args}"
     when :fn, :run
       return "Sorry, you can't do that." unless @user.admin?
       return "Sorry, couldn't find a function called #{@args}." if !@args.is_a?(Hash) || @args.dig(:fn).blank?
