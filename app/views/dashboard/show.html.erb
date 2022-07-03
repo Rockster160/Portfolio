@@ -31,49 +31,48 @@
       Cell.register({ title: "Home" })    // Overwrite to save API calls
     <% end %>
     Cell.loadConfig({
-      // fitness: { x: 1, y: 1 },
-      // recent: { x: 2, y: 1 },
-      // month: { x: 3, y: 1 },
-      // weather: {
-      //   apikey: "<%= ENV.fetch("WEATHER_APIKEY") %>",
-      //   x: 4,
-      //   y: 1,
-      // },
-      //
-      // notes: { x: 1, y: 2, w: 2 },
-      // uptime: {
-      //   x: 3, y: 2,
-      //   uptime_apikey: "<%= ENV.fetch("UPTIME_APIKEY") %>",
-      //   hiveos_apikey: "<%= ENV.fetch("HIVEOS_APIKEY") %>",
-      // },
-      // home: {
-      //   x: 4, y: 2,
-      // },
-      //
-      // calendar: { x: 1, y: 3, h: 3 },
-      // reminders: { x: 2, y: 3 },
-      // github: {
-      //   x: 3, y: 3,
-      //   github_apikey: "<%= ENV.fetch("GITHUB_APIKEY") %>"
-      // },
-      // tesla: { x: 4, y: 3 },
-      //
-      // todo: { x: 2, y: 4 },
-      // grocery: { x: 3, y: 4 },
-      // printer: {
-      //   apikey: "<%= ENV.fetch("PRINTER_APIKEY") %>",
-      //   x: 4,
-      //   y: 4,
-      // },
-      //
-      // timers: { x: 2, y: 5 },
-      random: { },
-      // random: { x: 3, y: 5 },
-      // snake: { x: 4, y: 5 },
-      //
-      // breathe: { x: 1, y: 6 },
-      // ping: { x: 2, y: 6 },
-      // jarvis: { x: 3, y: 6, w: 2 },
+      fitness: { x: 1, y: 1 },
+      recent: { x: 2, y: 1 },
+      month: { x: 3, y: 1 },
+      weather: {
+        apikey: "<%= ENV.fetch("WEATHER_APIKEY") %>",
+        x: 4,
+        y: 1,
+      },
+
+      notes: { x: 1, y: 2, w: 2 },
+      uptime: {
+        x: 3, y: 2,
+        uptime_apikey: "<%= ENV.fetch("UPTIME_APIKEY") %>",
+        hiveos_apikey: "<%= ENV.fetch("HIVEOS_APIKEY") %>",
+      },
+      home: {
+        x: 4, y: 2,
+      },
+
+      calendar: { x: 1, y: 3, h: 3 },
+      reminders: { x: 2, y: 3 },
+      github: {
+        x: 3, y: 3,
+        github_apikey: "<%= ENV.fetch("GITHUB_APIKEY") %>"
+      },
+      tesla: { x: 4, y: 3 },
+
+      todo: { x: 2, y: 4 },
+      grocery: { x: 3, y: 4 },
+      printer: {
+        apikey: "<%= ENV.fetch("PRINTER_APIKEY") %>",
+        x: 4,
+        y: 4,
+      },
+
+      timers: { x: 2, y: 5 },
+      random: { x: 3, y: 5 },
+      snake: { x: 4, y: 5 },
+
+      breathe: { x: 1, y: 6 },
+      ping: { x: 2, y: 6 },
+      jarvis: { x: 3, y: 6, w: 2 },
     })
   })()
 </script>

@@ -92,7 +92,7 @@ export class Roll {
     if (mathScope.indexOf(operator) >= 0) {
       var mathApplied = mathScope.repeatReplace(new RegExp("\\d+(?:\.\d+)?\\" + operator + "\\d+(?:\.\d+)?"), function(found) {
         try {
-          return eval(found)
+          return (0, eval)(found)
         } catch(err) {
           console.log(description + " Error: ", err)
           return 0
