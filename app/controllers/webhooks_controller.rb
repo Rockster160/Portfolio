@@ -10,6 +10,12 @@ class WebhooksController < ApplicationController
     head 200
   end
 
+  def google_pub_sub
+    SlackNotifier.notify(params.to_unsafe_h)
+
+    head 200
+  end
+
   def email
     blob = request.try(:raw_post).to_s
     json = JSON.parse(JSON.parse(blob)&.dig("Message")) || {}

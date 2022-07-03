@@ -34,6 +34,7 @@ Rails.application.routes.draw do
   post "webhooks/local_data" => "webhooks#local_data"
   post "webhooks/jenkins" => "webhooks#jenkins"
   post "webhooks/post" => "webhooks#post"
+  post "webhooks/google_pub_sub" => "webhooks#google_pub_sub"
   post "webhooks/email" => "webhooks#email"
   post "webhooks/speak" => "webhooks#speak"
   post "webhooks/notify" => "webhooks#notify"
