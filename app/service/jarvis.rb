@@ -106,6 +106,7 @@ class Jarvis
   def parse_words
     token = SecureRandom.hex(3)
     simple_words = @words.downcase.squish
+    @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/\b(what|where|when|why)\s+(is|are|were|did)\b/)
     return parse_log_words if simple_words.match?(/^log\b/)
 
     # Logs have their own timestamp, so run them before checking for delayed commands

@@ -1,3 +1,4 @@
+import { Roll, Dice } from "../../random/roll"
 import { Text } from "../_text"
 import { dash_colors } from "../vars"
 
