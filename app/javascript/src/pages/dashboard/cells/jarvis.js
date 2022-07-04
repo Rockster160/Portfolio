@@ -6,7 +6,7 @@
   let cell = undefined
 
   let renderLines = function(history) {
-    cell.lines(history || getHistory())
+    cell.lines((history || getHistory()).slice(cell.data.scroll || 0, 50))
   }
 
   let getHistory = function() {
@@ -19,8 +19,10 @@
 
   cell = Cell.register({
     title: "Jarvis",
-    text: "Loading...",
-    onload: function() { renderLines() },
+    onload: function() {
+      this.data.scroll = 0
+      renderLines()
+    },
     socket: Server.socket("JarvisChannel", function(msg) {
       if (msg.response?.trim().length == 0) { msg.response = "<No response>" }
       // TODO: Do stuff with msg.data
@@ -42,5 +44,29 @@
         this.text("")
       }
     },
+    onfocus: function() {
+      this.data.scroll = 0
+      renderLines()
+    },
+    onblur: function() {
+      this.data.scroll = 0
+      renderLines()
+    },
+    livekey: function(evt_key) {
+      this.data.scroll = this.data.scroll || 0
+
+      evt_key = evt_key.toLowerCase()
+      if (evt_key == "arrowup" || evt_key == "w") {
+        if (this.data.scroll > 0) {
+          this.data.scroll -= 1
+        }
+      } else if (evt_key == "arrowdown" || evt_key == "s") {
+        if (this.data.scroll < getHistory().length) {
+          this.data.scroll += 1
+        }
+      }
+
+      renderLines()
+    }
   })
 })()

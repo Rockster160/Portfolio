@@ -1,11 +1,26 @@
 import { Text } from "../_text"
 
 (function() {
-  Cell.register({
+  let cell = undefined
+
+  let renderLines = function() {
+    let lines = getLines()
+    if (cell.data.scroll > 0) {
+      lines = lines.slice(cell.data.scroll, lines.length + 1)
+    }
+
+    cell.lines(lines)
+  }
+
+  let getLines = function() {
+    return localStorage.getItem("notes").split("\n")
+  }
+
+  cell = Cell.register({
     title: "Notes",
     wrap: true,
     reloader: function() {
-      this.text(localStorage.getItem("notes"))
+      this.lines(getLines())
     },
     commands: {
       clear: function() {
@@ -28,6 +43,30 @@ import { Text } from "../_text"
 
       localStorage.setItem("notes", note)
       cell.text(note)
+    },
+    onfocus: function() {
+      this.data.scroll = 0
+      renderLines()
+    },
+    onblur: function() {
+      this.data.scroll = 0
+      renderLines()
+    },
+    livekey: function(evt_key) {
+      this.data.scroll = this.data.scroll || 0
+
+      evt_key = evt_key.toLowerCase()
+      if (evt_key == "arrowup" || evt_key == "w") {
+        if (this.data.scroll > 0) {
+          this.data.scroll -= 1
+        }
+      } else if (evt_key == "arrowdown" || evt_key == "s") {
+        if (this.data.scroll < getLines().length) {
+          this.data.scroll += 1
+        }
+      }
+
+      renderLines()
     }
   })
 })()
