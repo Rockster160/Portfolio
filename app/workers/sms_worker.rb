@@ -2,6 +2,7 @@ class SmsWorker
   include Sidekiq::Worker
 
   def perform(to, msg)
+    raise "Should not text in tests!" if Rails.env.test?
     return puts("\e[33m[LOGIT] | #{to}:#{msg}\e[0m") if Rails.env.development?
 
     api = Twilio::REST::Client.new(ENV['PORTFOLIO_TWILIO_ACCOUNT_SID'], ENV['PORTFOLIO_TWILIO_AUTH_TOKEN'])

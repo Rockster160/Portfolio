@@ -96,6 +96,8 @@ class GoogleNestControl
   private
 
   def auth(params)
+    raise "Should not auth in tests!" if Rails.env.test?
+
     res = RestClient.post("https://www.googleapis.com/oauth2/v4/token", params)
     json = JSON.parse(res.body, symbolize_names: true)
 
@@ -119,6 +121,7 @@ class GoogleNestControl
   end
 
   def request(method, url, params={})
+    raise "Should not request in tests!" if Rails.env.test?
     raise "Cannot request without access token" if @access_token.blank?
     retries ||= 0
 

@@ -171,6 +171,7 @@ class TeslaControl
   end
 
   def post_vehicle(endpoint, params={})
+    raise "Should not POST in tests!" if Rails.env.test?
     raise "Cannot post without access token" if @access_token.blank?
 
     res = RestClient.post(
@@ -206,6 +207,7 @@ class TeslaControl
   end
 
   def get(endpoint)
+    raise "Should not GET in tests!" if Rails.env.test?
     raise "Cannot get without access token" if @access_token.blank?
 
     res = RestClient.get(
@@ -223,6 +225,8 @@ class TeslaControl
   end
 
   def auth(params)
+    raise "Should not auth in tests!" if Rails.env.test?
+
     res = RestClient.post(
       "https://auth.tesla.com/oauth2/v3/token",
       params.to_json,

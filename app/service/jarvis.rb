@@ -1,10 +1,23 @@
 # =============================== TODO ===============================
 # Allow asking questions: What's my car temp? What's the house temp? etc...
 # create a timer that sends a WS to Dashboard and starts a timer (or sms? How to determine which is which?)
-# Send text?? Somehow sync contacts and be able to look them up and message
 # Ability to undo messages or logs
 # If question that doesn't match others, google and read the first result?
 # Pick random number, weather update...
+
+
+# =============================== Desired examples ===============================
+# get the car|house|home, how's the car, tell me about the car, give me the car
+# is the car unlocked?
+# is the AC on?
+# What did I have for breakfast?
+# > You had cereal this morning, sir.
+# Good morning / greeting
+# > Good morning, sir. The weather today is <>. You don't have anything scheduled after your morning meetings.
+# Good afternoon
+# > Good afternoon, sir. The weather for the rest of the day is <>. You don't have any more meetings scheduled.
+# Good night
+# > Good night, sir. The weather tomorrow is <>. You don't have anything scheduled after your morning meetings.
 
 class Jarvis
   IM_HERE_RESPONSES = ["For you sir, always.", "At your service, sir.", "Yes, sir."]
@@ -46,12 +59,12 @@ class Jarvis
       NestCommandWorker.perform_async(@args)
 
       home_response(@args) || "Not sure how to tell home: #{@args}"
-    # when :text
-    #   return "Sorry, you can't do that." unless @user.admin?
-    #
-    #   SmsWorker.perform_async("3852599640", @args)
-    #
-    #   "Sending you a text saying: #{@args}"
+    when :text
+      return "Sorry, you can't do that." unless @user.admin?
+
+      SmsWorker.perform_async("3852599640", @args)
+
+      "Sending you a text saying: #{@args}"
     when :fn, :run
       return "Sorry, you can't do that." unless @user.admin?
       return "Sorry, couldn't find a function called #{@args}." if !@args.is_a?(Hash) || @args.dig(:fn).blank?
@@ -109,13 +122,17 @@ class Jarvis
       elsif combine.match?(/\b(thank)/)
         APPRECIATE_RESPONSES.sample
       else
-        reversed_words = @words.gsub(/\b(my)\b/, "your").squish
-        reversed_words = reversed_words.tap { |line| line[0] = line[0].downcase }
-        reversed_words = reversed_words.gsub(/[^a-z0-9]*$/, "")
-        "I don't know how to #{reversed_words}, sir."
+        "I don't know how to #{rephrase_words(@words)}, sir."
       end
       # complete ["Check", "Will do, sir.", "As you wish.", "Yes, sir."]
     end
+  end
+
+  def rephrase_words(words)
+    reversed_words = words.gsub(/\b(my)\b/i, "your")
+    reversed_words = reversed_words.gsub(/\b(me|i)\b/i, "you")
+    reversed_words = reversed_words.gsub(/[^a-z0-9]*$/, "").squish
+    reversed_words = reversed_words.tap { |line| line[0] = line[0].downcase }
   end
 
   def parse_words
@@ -129,20 +146,15 @@ class Jarvis
     return schedule_command if should_schedule?(simple_words)
 
     return parse_list_words if simple_words.match?(/^(add|remove)\b/)
-    # Check lists since they have custom names
 
+    # Check lists since they have custom names
     if @user.lists.any?
-      list_names = @user.lists.pluck(:name).gsub(/[^a-z0-9]/i, "")
+      list_names = @user.lists.pluck(:name).map { |name| name.gsub(/[^a-z0-9 ]/i, "") }
       return parse_list_words if simple_words.match?(Regexp.new("\\b(#{list_names.join('|')})\\b", :i))
     end
 
     return parse_car_words if simple_words.include?("car")
     return parse_home_words if simple_words.match?(/\b(home|house|ac|up|upstairs|main|entry|entryway|rooms)\b/i)
-
-    # Open needs to be special for urls?
-    # if simple_words.split(" ", 2).first.to_sym.in?([:car, :list])
-    #   return # Let the main splitter break things up
-    # end
 
     if simple_words.match?(Regexp.new("\\b(#{car_commands.join('|')})\\b"))
       return parse_car_words
@@ -150,12 +162,11 @@ class Jarvis
 
     return if parse_command(simple_words)
 
-    # get the car|house|home, how's the car, tell me about the car, give me the car
-    # is the car unlocked?
-    # is the AC on?
+    return parse_text_words if simple_words.match?(/\b(text|txt|message|msg|sms)\b/i)
   end
 
   def extract_time(simple_words)
+    simple_words = simple_words.gsub(/\b(later)\b/, "today")
     day_words = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday]).map { |w| w.to_s.downcase.to_sym }
     day_words_regex = Regexp.new("\\b(#{day_words.join('|')})\\b")
     time_words = [:second, :minute, :hour, :day, :week, :month]
@@ -178,7 +189,7 @@ class Jarvis
   def schedule_command
     JarvisWorker.perform_at(@scheduled_time, @user.id, @remaining_words)
     @cmd = :scheduled
-    @args = "I'll #{@remaining_words.gsub(/\b(my)\b/, 'your')} later at #{@scheduled_time.to_formatted_s(:quick_week_time)}"
+    @args = "I'll #{rephrase_words(@remaining_words)} later at #{@scheduled_time.to_formatted_s(:quick_week_time)}"
   end
 
   def parse_command(simple_words)
@@ -202,6 +213,17 @@ class Jarvis
       args: without_fn.squish,
     }
     true
+  end
+
+  def parse_text_words
+    @cmd = :text
+
+    @args = @words.gsub(/#{rx_opt_words(:send, :shoot, :me, :a, :text, :txt, :sms)} ?\b(text|txt|message|msg|sms)s?\b ?#{rx_opt_words(:that, :which, :me, :saying, :says)}/i, "")
+    @args = @args.squish.capitalize
+  end
+
+  def rx_opt_words(*words)
+    Regexp.new(words.map { |word| "(?: ?\\b#{word}\\b)\?" }.join(""), :i)
   end
 
   def safe_date_parse(timestamp)
