@@ -37,8 +37,7 @@
 
 
 class Jarvis
-  IM_HERE_RESPONSES = ["For you sir, always.", "At your service, sir.", "Yes, sir.", "Good --time--, sir"]
-  APPRECIATE_RESPONSES = ["You're welcome, sir."]
+  MY_NUMBER = "3852599640"
 
   def self.command(user, words)
     res, res_data = new(user, words).command
@@ -48,16 +47,24 @@ class Jarvis
   end
 
   def self.say(msg, channel=:ws)
+    return unless msg.present?
+
     case channel
-    when :sms then SmsWorker.perform_async("3852599640", msg)
+    when :sms then SmsWorker.perform_async(MY_NUMBER, msg)
     when :ws then ActionCable.server.broadcast("jarvis_channel", say: msg)
+    else
+      msg
     end
   end
 
   def self.send(data, channel=:ws)
+    return unless data.present?
+
     case channel
-    when :sms then SmsWorker.perform_async("3852599640", data)
+    when :sms then SmsWorker.perform_async(MY_NUMBER, data)
     when :ws then ActionCable.server.broadcast("jarvis_channel", data: data)
+    else
+      data
     end
   end
 
@@ -67,7 +74,22 @@ class Jarvis
     Time.zone = "Mountain Time (US & Canada)"
   end
 
+  def actions
+    # Order sensitive classes to iterate through and attempt commands
+    [
+      Jarvis::Car,
+    ]
+  end
+
   def command
+    actions.lazy.map do |action_klass| # lazy map means stop at the first one that returns a truthy value
+      action_klass.attempt(@user, @words)
+    end.first
+  rescue Jarvis::Error => msg
+    Jarvis.say(msg)
+  end
+
+  def old_command
     return "Sorry, I don't know who you are." unless @user.present?
 
     parse_words
@@ -76,14 +98,6 @@ class Jarvis
     end
 
     case @cmd.to_s.to_sym
-    when :car
-      return "Sorry, you can't do that." unless @user.admin?
-
-      car_cmd, car_params = @args.split(" ", 2)
-
-      TeslaCommandWorker.perform_async(car_cmd, car_params)
-
-      car_response(car_cmd, car_params) || "Not sure how to tell car: #{car_cmd}"
     when :home
       return "Sorry, you can't do that." unless @user.admin?
 
@@ -93,7 +107,7 @@ class Jarvis
     when :text
       return "Sorry, you can't do that." unless @user.admin?
 
-      SmsWorker.perform_async("3852599640", @args)
+      SmsWorker.perform_async(MY_NUMBER, @args)
 
       "Sending you a text saying: #{@args}"
     when :fn, :run
@@ -146,33 +160,14 @@ class Jarvis
       # if combine.match?(/\b(good morning|afternoon|evening)/)
       #   Find the weather, summarize events (ignore morning work meetings?)
       if combine.match?(/\b(hello|hey|hi|you there|you up)/)
-        decorate(IM_HERE_RESPONSES.sample)
+        Jarvis::Text.im_here
       elsif combine.match?(/\b(thank)/)
-        decorate(APPRECIATE_RESPONSES.sample)
+        Jarvis::Text.appreciate
       else
-        "I don't know how to #{rephrase_words(@words)}, sir."
+        "I don't know how to #{Jarvis::Text.rephrase(@words)}, sir."
       end
       # complete ["Check", "Will do, sir.", "As you wish.", "Yes, sir."]
     end
-  end
-
-  def decorate(words)
-    words = words.gsub(/--time--/) { current_time_decoration }
-  end
-
-  def current_time_decoration
-    case Time.current.hour
-    when 0..4, 19..25 then :evening
-    when 5..12 then :morning
-    when 12..18 then :afternoon
-    end
-  end
-
-  def rephrase_words(words)
-    reversed_words = words.gsub(/\b(my)\b/i, "your")
-    reversed_words = reversed_words.gsub(/\b(me|i)\b/i, "you")
-    reversed_words = reversed_words.gsub(/[^a-z0-9]*$/, "").squish
-    reversed_words = reversed_words.tap { |line| line[0] = line[0].downcase }
   end
 
   def parse_words
@@ -195,11 +190,11 @@ class Jarvis
 
     # Home should be !match? car\Tesla
     return parse_home_words if simple_words.match?(/\b(home|house|ac|up|upstairs|main|entry|entryway|rooms)\b/i)
-    return parse_car_words if simple_words.include?("car")
-
-    if simple_words.match?(Regexp.new("\\b(#{car_commands.join('|')})\\b"))
-      return parse_car_words
-    end
+    # return parse_car_words if simple_words.include?("car")
+    #
+    # if simple_words.match?(Regexp.new("\\b(#{car_commands.join('|')})\\b"))
+    #   return parse_car_words
+    # end
 
     return if parse_command(simple_words)
 
@@ -230,7 +225,7 @@ class Jarvis
   def schedule_command
     JarvisWorker.perform_at(@scheduled_time, @user.id, @remaining_words)
     @cmd = :scheduled
-    @args = "I'll #{rephrase_words(@remaining_words)} later at #{@scheduled_time.to_formatted_s(:quick_week_time)}"
+    @args = "I'll #{Jarvis::Text.rephrase(@remaining_words)} later at #{@scheduled_time.to_formatted_s(:quick_week_time)}"
   end
 
   def parse_command(simple_words)
@@ -287,114 +282,6 @@ class Jarvis
     new_words = (new_words || @words).gsub(/^log ?/i, "")
     @args[:timestamp] = extracted_time
     @args[:event_name], @args[:notes] = new_words.gsub(/[.?!]$/i, "").squish.split(" ", 2)
-  end
-
-  # Should probably extract these to a different file jarvis/car
-
-  def car_response(cmd, prms)
-    case cmd.to_s.downcase.to_sym
-    when :update, :reload
-      "Updating car cell"
-    when :off, :stop
-      "Stopping car"
-    when :on, :start
-      "Starting car"
-    when :boot, :trunk
-      if prms&.match?(/\b(close)\b/)
-        "Closing the boot"
-      else
-        "Popping the boot"
-      end
-    when :lock
-      "Locking car doors"
-    when :unlock
-      "Unlocking car doors"
-    when :doors, :door
-      if prms&.match?(/\b(lock|close)\b/)
-        "Locking car doors"
-      else
-        "Unlocking car doors"
-      end
-    when :windows, :window, :vent
-      if prms&.match?(/\b(close)\b/)
-        "Closing car windows"
-      else
-        "Opening car windows"
-      end
-    when :frunk
-      "Opening frunk"
-    when :temp
-      "Car temp set to #{prms}"
-    when :cool, :cold
-      "Car temp set to 59"
-    when :heat, :warm
-      "Car temp set to 82 and seat heaters turned on"
-    when :find
-      "Finding your car..."
-    when :honk, :horn
-      "Honking the horn"
-    when :defrost
-      "Defrosting the car"
-    else
-      "Car temp set to #{cmd}" if cmd.to_s.to_i.to_s == cmd.to_s
-    end
-  end
-
-  def car_commands
-    [
-      :update,
-      :reload,
-      :off,
-      :stop,
-      :on,
-      :start,
-      :boot,
-      :trunk,
-      :lock,
-      :unlock,
-      :doors,
-      :door,
-      :windows,
-      :window,
-      :frunk,
-      :temp,
-      :warm,
-      :find,
-      :where,
-      :honk,
-      :horn,
-      :vent,
-      :defrost,
-    ]
-  end
-
-  def parse_car_words
-    @cmd = :car
-
-    @args = @words
-    if @args.match?(/(the|my) (\w+)$/)
-      end_word = @args[/\w+$/]
-      @args[/(the|my) (\w+)$/] = ""
-      @args = "#{end_word} #{@args}"
-    end
-
-    @args = @args.gsub(/\b(car)\b/, "").squish
-    @args = @args.gsub(/where\'?s?( is)?/, "find")
-    @args = @args.gsub(/\b(horn)\b/, "honk")
-    @args = @args.gsub(/\b(vent)\b/, "windows")
-
-    if @args.match?(/^\b(open)\b/)
-      @args[/^\b(open)\b/] = ""
-      @args = "#{@args} open"
-    end
-
-    @args.gsub!(Regexp.new("(.+)\\b(#{car_commands.join('|')})\\b")) do |found|
-      "#{Regexp.last_match(2)} #{Regexp.last_match(1)}"
-    end
-
-    @args.gsub!(/\b(the|set|to|is)\b/, "")
-    @args.gsub!(/\b(start)\b/, "on")
-    @args = @args.squish
   end
 
   def home_response(settings)

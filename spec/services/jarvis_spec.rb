@@ -37,7 +37,7 @@ RSpec.describe Jarvis do
   context "with regular words as admin" do
     it "responds" do
       expect(jarvis("Do my homework")).to eq("I don't know how to do your homework, sir.")
-      expect(Jarvis::IM_HERE_RESPONSES).to include(jarvis("You there?"))
+      expect(Jarvis::Text::IM_HERE_RESPONSES.map { |r| Jarvis::Text.decorate(r) }).to include(jarvis("You there?"))
     end
   end
 
@@ -89,7 +89,7 @@ RSpec.describe Jarvis do
       start_car: {
         res: "Starting car",
         opts: [
-          # "start climate",
+          "start climate",
           "start the car",
           "start my car",
           "turn my car on",
@@ -167,7 +167,7 @@ RSpec.describe Jarvis do
       heat: {
         skip: true,
         others: [:start_car, [:set_temp, 82], :heat_driver, :heat_passenger, :defrost],
-        res: "Car temp set to 82 and seat heaters turned on",
+        res: "Defrosting the car",
         opts: [
           "warm my car",
           "Heat my car",
