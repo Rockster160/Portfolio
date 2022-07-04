@@ -4,8 +4,6 @@ class JarvisChannel < ApplicationCable::Channel
   end
 
   def command(data)
-    response, jdata = Jarvis.command(current_user, data["words"])
-
-    ActionCable.server.broadcast("jarvis_channel", response: response, data: jdata)
+    Jarvis.command(current_user, data["words"])
   end
 end

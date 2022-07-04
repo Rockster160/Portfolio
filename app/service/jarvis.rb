@@ -4,15 +4,17 @@
 # Send text?? Somehow sync contacts and be able to look them up and message
 # Ability to undo messages or logs
 # If question that doesn't match others, google and read the first result?
-# ping Jarvis log whenever it does something- especially scheduled items
-# pick random number, weather update...
+# Pick random number, weather update...
 
 class Jarvis
   IM_HERE_RESPONSES = ["For you sir, always.", "At your service, sir.", "Yes, sir."]
   APPRECIATE_RESPONSES = ["You're welcome, sir."]
 
   def self.command(user, words)
-    new(user, words).command
+    res, res_data = new(user, words).command
+
+    ActionCable.server.broadcast("jarvis_channel", response: res, data: res_data) if res.present?
+    [res, res_data]
   end
 
   def initialize(user, words)
