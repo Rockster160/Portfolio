@@ -1,5 +1,15 @@
+# =============================== TODO ===============================
+# Allow asking questions: What's my car temp? What's the house temp? etc...
+# create a timer that sends a WS to Dashboard and starts a timer (or sms? How to determine which is which?)
+# Send text?? Somehow sync contacts and be able to look them up and message
+# Ability to undo messages or logs
+# If question that doesn't match others, google and read the first result?
+# ping Jarvis log whenever it does something- especially scheduled items
+# pick random number, weather update...
+
 class Jarvis
   IM_HERE_RESPONSES = ["For you sir, always.", "At your service, sir.", "Yes, sir."]
+  APPRECIATE_RESPONSES = ["You're welcome, sir."]
 
   def self.command(user, words)
     new(user, words).command
@@ -92,7 +102,10 @@ class Jarvis
       # if combine.match?(/\b(good morning|afternoon|evening)/)
       #   Find the weather, summarize events (ignore morning work meetings?)
       if combine.match?(/\b(hello|hey|hi|you there|you up)/)
+        # Include time specific- good morning, good afternoon, good evening...
         IM_HERE_RESPONSES.sample
+      elsif combine.match?(/\b(thank)/)
+        APPRECIATE_RESPONSES.sample
       else
         reversed_words = @words.gsub(/\b(my)\b/, "your").squish
         reversed_words = reversed_words.tap { |line| line[0] = line[0].downcase }
@@ -106,18 +119,21 @@ class Jarvis
   def parse_words
     token = SecureRandom.hex(3)
     simple_words = @words.downcase.squish
-    @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/\b(what|where|when|why)\s+(is|are|were|did)\b/)
+    # do you, would you, can I/you
+    @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/^(what|where|when|why|is|how|are)\s+(about|is|are|were|did|have|it)\b/)
     return parse_log_words if simple_words.match?(/^log\b/)
 
     # Logs have their own timestamp, so run them before checking for delayed commands
     return schedule_command if should_schedule?(simple_words)
 
+    return parse_list_words if simple_words.match?(/^(add|remove)\b/)
     # Check lists since they have custom names
-    if @user.lists.any? && simple_words.match?(Regexp.new("\\b(#{@user.lists.pluck(:name).join('|')})\\b", :i))
-      return parse_list_words
+
+    if @user.lists.any?
+      list_names = @user.lists.pluck(:name).gsub(/[^a-z0-9]/i, "")
+      return parse_list_words if simple_words.match?(Regexp.new("\\b(#{list_names.join('|')})\\b", :i))
     end
 
-    return parse_list_words if simple_words.match?(/^(add|remove)\b/)
     return parse_car_words if simple_words.include?("car")
     return parse_home_words if simple_words.match?(/\b(home|house|ac|up|upstairs|main|entry|entryway|rooms)\b/i)
 
