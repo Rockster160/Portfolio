@@ -24,14 +24,15 @@
       renderLines()
     },
     socket: Server.socket("JarvisChannel", function(msg) {
-      if (msg.response?.trim().length == 0) { msg.response = "<No response>" }
       // TODO: Do stuff with msg.data
+      if (msg.say?.trim()?.length > 0)  {
+        let history = getHistory()
+        history.unshift(msg.say)
+        saveHistory(history)
 
-      let history = getHistory()
-      history.unshift(msg.response)
-      saveHistory(history)
+        renderLines(history)
+      }
 
-      renderLines(history)
       this.flash()
     }),
     command: function(text) {

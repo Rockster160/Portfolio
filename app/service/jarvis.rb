@@ -4,6 +4,14 @@
 # Ability to undo messages or logs
 # If question that doesn't match others, google and read the first result?
 # Pick random number, weather update...
+# (do thing) tonight > schedule thing for 7pm
+# (do thing) in the morning > schedule thing for 8am
+# Able to schedule an event for "every day" -> For example, sending good morning text
+# Eventually? Able to say, "Remind me when I get home to..."
+# * This triggers a job that reschedules itself for distance from house - 5 minutes
+# * When <5 minutes from house, trigger given action
+# Eventually? "Let me know before any night that's going to be a hard freeze"
+# Monitor phone location with FindMy API
 
 
 # =============================== Desired examples ===============================
@@ -18,16 +26,39 @@
 # > Good afternoon, sir. The weather for the rest of the day is <>. You don't have any more meetings scheduled.
 # Good night
 # > Good night, sir. The weather tomorrow is <>. You don't have anything scheduled after your morning meetings.
+# > You'll need to leave for PT by 9:55
+
+
+# =============================== Jarvis.js ===============================
+# Able to remove items from history using live-key, which enumerates the list items.
+# -## will remove that item from display
+# Able to ignore some messages?
+# Able to set rules to only show certain messages for a certain amount of time?
+
 
 class Jarvis
-  IM_HERE_RESPONSES = ["For you sir, always.", "At your service, sir.", "Yes, sir."]
+  IM_HERE_RESPONSES = ["For you sir, always.", "At your service, sir.", "Yes, sir.", "Good --time--, sir"]
   APPRECIATE_RESPONSES = ["You're welcome, sir."]
 
   def self.command(user, words)
     res, res_data = new(user, words).command
 
-    ActionCable.server.broadcast("jarvis_channel", response: res, data: res_data) if res.present?
+    ActionCable.server.broadcast("jarvis_channel", say: res, data: res_data) if res.present?
     [res, res_data]
+  end
+
+  def self.say(msg, channel=:ws)
+    case channel
+    when :sms then SmsWorker.perform_async("3852599640", msg)
+    when :ws then ActionCable.server.broadcast("jarvis_channel", say: msg)
+    end
+  end
+
+  def self.send(data, channel=:ws)
+    case channel
+    when :sms then SmsWorker.perform_async("3852599640", data)
+    when :ws then ActionCable.server.broadcast("jarvis_channel", data: data)
+    end
   end
 
   def initialize(user, words)
@@ -104,8 +135,6 @@ class Jarvis
       else
         evt.errors.full_messages.join("\n")
       end
-    when :open
-      ["Opening #{@args}", { open: @args }]
     when :list
       List.find_and_modify(@user, @args)
     when :budget
@@ -117,14 +146,25 @@ class Jarvis
       # if combine.match?(/\b(good morning|afternoon|evening)/)
       #   Find the weather, summarize events (ignore morning work meetings?)
       if combine.match?(/\b(hello|hey|hi|you there|you up)/)
-        # Include time specific- good morning, good afternoon, good evening...
-        IM_HERE_RESPONSES.sample
+        decorate(IM_HERE_RESPONSES.sample)
       elsif combine.match?(/\b(thank)/)
-        APPRECIATE_RESPONSES.sample
+        decorate(APPRECIATE_RESPONSES.sample)
       else
         "I don't know how to #{rephrase_words(@words)}, sir."
       end
       # complete ["Check", "Will do, sir.", "As you wish.", "Yes, sir."]
+    end
+  end
+
+  def decorate(words)
+    words = words.gsub(/--time--/) { current_time_decoration }
+  end
+
+  def current_time_decoration
+    case Time.current.hour
+    when 0..4, 19..25 then :evening
+    when 5..12 then :morning
+    when 12..18 then :afternoon
     end
   end
 
@@ -153,8 +193,9 @@ class Jarvis
       return parse_list_words if simple_words.match?(Regexp.new("\\b(#{list_names.join('|')})\\b", :i))
     end
 
-    return parse_car_words if simple_words.include?("car")
+    # Home should be !match? car\Tesla
     return parse_home_words if simple_words.match?(/\b(home|house|ac|up|upstairs|main|entry|entryway|rooms)\b/i)
+    return parse_car_words if simple_words.include?("car")
 
     if simple_words.match?(Regexp.new("\\b(#{car_commands.join('|')})\\b"))
       return parse_car_words
@@ -218,7 +259,7 @@ class Jarvis
   def parse_text_words
     @cmd = :text
 
-    @args = @words.gsub(/#{rx_opt_words(:send, :shoot, :me, :a, :text, :txt, :sms)} ?\b(text|txt|message|msg|sms)s?\b ?#{rx_opt_words(:that, :which, :me, :saying, :says)}/i, "")
+    @args = @words.gsub(/#{rx_opt_words(:send, :shoot, :me, :a, :text, :txt, :sms)} ?\b(text|txt|message|msg|sms)s?\b ?#{rx_opt_words(:to, :that, :which, :me, :saying, :says)}/i, "")
     @args = @args.squish.capitalize
   end
 
