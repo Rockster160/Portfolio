@@ -1,7 +1,7 @@
 class Jarvis::Nest < Jarvis::Action
   def attempt
     return unless valid_words?
-    raise Jarvis::Error.not_allowed unless user&.admin?
+    raise Jarvis::Error.not_allowed unless @user&.admin?
 
     response = NestCommand.command(parse_cmd)
     if Rails.env.production?

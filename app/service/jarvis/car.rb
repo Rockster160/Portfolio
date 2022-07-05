@@ -1,7 +1,7 @@
 class Jarvis::Car < Jarvis::Action
   def attempt
     return unless valid_words?
-    raise Jarvis::Error.not_allowed unless user&.admin?
+    raise Jarvis::Error.not_allowed unless @user&.admin?
 
     cmd, params = parse_cmd_and_params
     response = TeslaCommand.command(cmd, params)

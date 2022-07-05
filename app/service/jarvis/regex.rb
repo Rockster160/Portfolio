@@ -5,7 +5,7 @@ module Jarvis::Regex
     str.match?(words(words))
   end
 
-  def words(*words)
-    Regexp.new("\\b(?:#{words.flatten.join('|')})\\b", :i)
+  def words(*words, suffix: nil, prefix: nil)
+    Regexp.new("\\b(?:#{prefix}(?:#{words.flatten.join('|')})#{suffix})\\b", :i)
   end
 end

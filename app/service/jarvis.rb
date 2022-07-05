@@ -80,7 +80,7 @@ class Jarvis
   def actions
     # Order sensitive classes to iterate through and attempt commands
     [
-      # Jarvis::Log,
+      Jarvis::Log,
       # Jarvis::Schedule,
       # Jarvis::List,
       Jarvis::Nest,
@@ -118,40 +118,6 @@ class Jarvis
       return "Sorry, couldn't find a function called #{@args}." if !@args.is_a?(Hash) || @args.dig(:fn).blank?
 
       CommandRunner.run(@user, @args[:fn], @args[:fn_args])
-    when :log
-      return "Sorry, you can't do that." unless @user.admin?
-
-      evt_data = {
-        event_name: @args[:event_name].capitalize,
-        notes: @args[:notes].presence,
-        timestamp: @args[:timestamp].presence,
-        user_id: @user.id,
-      }.compact
-
-      evt = ActionEvent.create(evt_data)
-
-      if evt.persisted?
-        ActionEventBroadcastWorker.perform_async(evt.id)
-        evt_words = ["Logged #{evt.event_name}"]
-        evt_words << "(#{evt.notes})" if evt_data[:notes].present?
-        if evt_data[:timestamp].present?
-          day = (
-            if evt_data[:timestamp].today?
-              "Today"
-            elsif evt_data[:timestamp].tomorrow?
-              "Tomorrow"
-            elsif evt_data[:timestamp].yesterday?
-              "Yesterday"
-            else
-              evt_data[:timestamp].to_formatted_s(:short)
-            end
-          )
-          evt_words << "[#{day} #{evt.timestamp.to_formatted_s(:short_time)}]"
-        end
-        evt_words.join(" ")
-      else
-        evt.errors.full_messages.join("\n")
-      end
     when :list
       List.find_and_modify(@user, @args)
     when :budget
@@ -177,7 +143,7 @@ class Jarvis
     simple_words = @words.downcase.squish
     # do you, would you, can I/you
     @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/^(what|where|when|why|is|how|are)\s+(about|is|are|were|did|have|it)\b/)
-    return parse_log_words if simple_words.match?(/^log\b/)
+    # return parse_log_words if simple_words.match?(/^log\b/)
 
     # Logs have their own timestamp, so run them before checking for delayed commands
     return schedule_command if should_schedule?(simple_words)
@@ -203,23 +169,9 @@ class Jarvis
     return parse_text_words if simple_words.match?(/\b(text|txt|message|msg|sms)\b/i)
   end
 
-  def extract_time(simple_words)
-    simple_words = simple_words.gsub(/\b(later)\b/, "today")
-    day_words = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday]).map { |w| w.to_s.downcase.to_sym }
-    day_words_regex = Regexp.new("\\b(#{day_words.join('|')})\\b")
-    time_words = [:second, :minute, :hour, :day, :week, :month]
-    time_words_regex = Regexp.new("\\b(#{time_words.join('|')})s?\\b")
-    time_str = simple_words[/\b(in) \d+ #{time_words_regex}/]
-    time_str ||= simple_words[/(#{day_words_regex} )?\b(at) \d+:?\d*( ?(am|pm))?( #{day_words_regex})?/]
-    time_str ||= simple_words[/\d+ #{time_words_regex} \b(from now|ago)\b/]
-    time_str ||= simple_words[/((next|last) )?#{day_words_regex}/]
-
-    [time_str, safe_date_parse(time_str.to_s.gsub(/ ?\b(at)\b ?/, " ").squish)]
-  end
-
   def should_schedule?(simple_words)
     time_str, @scheduled_time = extract_time(simple_words)
-    @remaining_words = @words.sub(Regexp.new(time_str, :i), "").squish if @scheduled_time
+    @remaining_words = @words.sub(Regexp.new("\b(?:at)\b ?#{time_str}", :i), "").squish if @scheduled_time
 
     @scheduled_time.present?
   end
@@ -264,25 +216,9 @@ class Jarvis
     Regexp.new(words.map { |word| "(?: ?\\b#{word}\\b)\?" }.join(""), :i)
   end
 
-  def safe_date_parse(timestamp)
-    Chronic.time_class = Time.zone
-    Chronic.parse(timestamp)
-  end
-
   def parse_list_words
     @cmd = :list
     # Could probably move all of the word parsing logic into here rather than the model
     @args = @words
-  end
-
-  def parse_log_words
-    @cmd = :log
-
-    @args = {}
-    time_str, extracted_time = extract_time(@words.downcase.squish)
-    new_words = @words.sub(Regexp.new(time_str, :i), "") if extracted_time
-    new_words = (new_words || @words).gsub(/^log ?/i, "")
-    @args[:timestamp] = extracted_time
-    @args[:event_name], @args[:notes] = new_words.gsub(/[.?!]$/i, "").squish.split(" ", 2)
   end
 end
