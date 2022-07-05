@@ -332,11 +332,11 @@ RSpec.describe Jarvis do
 
     it "can schedule a job in the middle of a command" do
       msg = "Do the laundry"
-      expect(JarvisWorker).to receive(:perform_at).with(5.minutes.from_now, @admin.id, "Message me saying do the laundry").and_call_original
-      # Call original above to make sure the SmsWorker gets called
-      expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
-
       perform_enqueued_jobs {
+        expect(JarvisWorker).to receive(:perform_at).with(5.minutes.from_now, @admin.id, "Message me saying do the laundry").and_call_original
+        # Call original above to make sure the SmsWorker gets called
+        expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
+
         expect(jarvis("Message me in 5 minutes saying do the laundry")).to eq("I'll message you saying do the laundry later at Fri Jun 24, 5:50 AM")
       }
     end

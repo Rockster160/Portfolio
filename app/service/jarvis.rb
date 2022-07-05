@@ -15,6 +15,7 @@
 # * When <5 minutes from house, trigger given action
 # Eventually? "Let me know before any night that's going to be a hard freeze"
 # Monitor phone location with FindMy API
+# Text me at 11:15 AM tomorrow saying Move schedule for Friday
 
 
 # =============================== Desired examples ===============================
@@ -81,7 +82,7 @@ class Jarvis
     # Order sensitive classes to iterate through and attempt commands
     [
       Jarvis::Log,
-      # Jarvis::Schedule,
+      Jarvis::Schedule,
       # Jarvis::List,
       Jarvis::Nest,
       Jarvis::Car,
@@ -93,7 +94,7 @@ class Jarvis
   def command
     actions.lazy.map do |action_klass| # lazy map means stop at the first one that returns a truthy value
       action_klass.attempt(@user, @words)
-    end.first
+    end.compact_blank.first
   rescue Jarvis::Error => msg
     Jarvis.say(msg)
   end
@@ -122,8 +123,6 @@ class Jarvis
       List.find_and_modify(@user, @args)
     when :budget
       SmsMoney.parse(@user, @words)
-    when :scheduled
-      @args
     else
       combine = [@cmd, @args.presence].compact.join(" ")
       # if combine.match?(/\b(good morning|afternoon|evening)/)
@@ -146,7 +145,7 @@ class Jarvis
     # return parse_log_words if simple_words.match?(/^log\b/)
 
     # Logs have their own timestamp, so run them before checking for delayed commands
-    return schedule_command if should_schedule?(simple_words)
+    # return schedule_command if should_schedule?(simple_words)
 
     return parse_list_words if simple_words.match?(/^(add|remove)\b/)
 
@@ -167,19 +166,6 @@ class Jarvis
     return if parse_command(simple_words)
 
     return parse_text_words if simple_words.match?(/\b(text|txt|message|msg|sms)\b/i)
-  end
-
-  def should_schedule?(simple_words)
-    time_str, @scheduled_time = extract_time(simple_words)
-    @remaining_words = @words.sub(Regexp.new("\b(?:at)\b ?#{time_str}", :i), "").squish if @scheduled_time
-
-    @scheduled_time.present?
-  end
-
-  def schedule_command
-    JarvisWorker.perform_at(@scheduled_time, @user.id, @remaining_words)
-    @cmd = :scheduled
-    @args = "I'll #{Jarvis::Text.rephrase(@remaining_words)} later at #{@scheduled_time.to_formatted_s(:quick_week_time)}"
   end
 
   def parse_command(simple_words)
