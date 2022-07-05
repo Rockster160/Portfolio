@@ -1,4 +1,7 @@
 # =============================== TODO ===============================
+# Jarvis schedule responding with array
+# Remind me should be alias for text me
+# Text me without message will send a greeting - Orrrrrr. "You asked me to text you, sir."
 # Allow asking questions: What's my car temp? What's the house temp? etc...
 # create a timer that sends a WS to Dashboard and starts a timer (or sms? How to determine which is which?)
 # Ability to undo messages or logs
@@ -77,7 +80,13 @@ class Jarvis
   def actions
     # Order sensitive classes to iterate through and attempt commands
     [
+      # Jarvis::Log,
+      # Jarvis::Schedule,
+      # Jarvis::List,
+      Jarvis::Nest,
       Jarvis::Car,
+      # Jarvis::Cmd,
+      # Jarvis::Sms,
     ]
   end
 
@@ -98,12 +107,6 @@ class Jarvis
     end
 
     case @cmd.to_s.to_sym
-    when :home
-      return "Sorry, you can't do that." unless @user.admin?
-
-      NestCommandWorker.perform_async(@args)
-
-      home_response(@args) || "Not sure how to tell home: #{@args}"
     when :text
       return "Sorry, you can't do that." unless @user.admin?
 
@@ -171,7 +174,6 @@ class Jarvis
   end
 
   def parse_words
-    token = SecureRandom.hex(3)
     simple_words = @words.downcase.squish
     # do you, would you, can I/you
     @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/^(what|where|when|why|is|how|are)\s+(about|is|are|were|did|have|it)\b/)
@@ -189,7 +191,7 @@ class Jarvis
     end
 
     # Home should be !match? car\Tesla
-    return parse_home_words if simple_words.match?(/\b(home|house|ac|up|upstairs|main|entry|entryway|rooms)\b/i)
+    # return parse_home_words if simple_words.match?(/\b(home|house|ac|up|upstairs|main|entry|entryway|rooms)\b/i)
     # return parse_car_words if simple_words.include?("car")
     #
     # if simple_words.match?(Regexp.new("\\b(#{car_commands.join('|')})\\b"))
@@ -282,40 +284,5 @@ class Jarvis
     new_words = (new_words || @words).gsub(/^log ?/i, "")
     @args[:timestamp] = extracted_time
     @args[:event_name], @args[:notes] = new_words.gsub(/[.?!]$/i, "").squish.split(" ", 2)
-  end
-
-  def home_response(settings)
-    mode = nil
-    temp = nil
-    mode = :heat if settings.match?(/\b(heat)\b/i)
-    mode = :cool if settings.match?(/\b(cool)\b/i)
-    temp = settings[/\b\d+\b/].to_i if settings.match?(/\b\d+\b/)
-    area = "upstairs" if settings.match?(/(up|rooms)/i)
-    area ||= "main"
-
-    if mode.present? && temp.present?
-      "Set house #{area} #{mode == :cool ? "AC" : "heat"} to #{temp}°."
-    elsif mode.present? && temp.blank?
-      "Set house #{area} to #{mode}."
-    elsif mode.blank? && temp.present?
-      "Set house #{area} to #{temp}°."
-    end
-  end
-
-  def parse_home_words
-    @cmd = :home
-
-    @args = @words
-    if @args.match?(/(the|my) (\w+)$/i)
-      end_word = @args[/\w+$/i]
-      @args[/(the|my) (\w+)$/i] = ""
-      @args = "#{end_word} #{@args}"
-    end
-
-    @args = @args.gsub(/\b(home|house)\b/i, "").squish
-    @args = @args.gsub(/\b(ac)\b/i, "cool").squish
-
-    @args.gsub!(/\b(the|set|to|is)\b/i, "")
-    @args = @args.squish
   end
 end

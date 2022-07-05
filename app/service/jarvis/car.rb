@@ -24,7 +24,6 @@ class Jarvis::Car < Jarvis::Action
       :door,
       :windows,
       :window,
-      # These need to be first so they don't override action words
       :car,
       :tesla,
       :update,

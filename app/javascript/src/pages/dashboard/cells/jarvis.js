@@ -1,7 +1,3 @@
-// import { Text } from "../_text"
-// import { Time } from "./_time"
-// import { shiftTempToColor, dash_colors } from "../vars"
-
 (function() {
   let cell = undefined
 

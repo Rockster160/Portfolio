@@ -236,11 +236,11 @@ RSpec.describe Jarvis do
         actions: [:set_mode],
       },
       "cool house" => {
-        res: "Set house main to cool.",
+        res: "Set house entryway to cool.",
         actions: [:set_mode],
       },
       "set ac to 69" => {
-        res: "Set house main AC to 69°.",
+        res: "Set house entryway AC to 69°.",
         actions: [:set_mode, :set_temp],
       },
     }
