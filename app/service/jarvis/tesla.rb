@@ -1,4 +1,4 @@
-class Jarvis::Car < Jarvis::Action
+class Jarvis::Tesla < Jarvis::Action
   def attempt
     return unless valid_words?
     raise Jarvis::Error.not_allowed unless @user&.admin?

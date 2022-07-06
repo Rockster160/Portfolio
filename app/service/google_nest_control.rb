@@ -45,7 +45,7 @@ class GoogleNestControl
 
   def devices
     @devices ||= begin
-      subscribe if @access_token.blank?
+      raise "No access token" if @access_token.blank?
 
       json = request(:get, "enterprises/#{PROJECT_ID}/devices")
 

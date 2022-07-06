@@ -83,9 +83,9 @@ class Jarvis
     [
       Jarvis::Log,
       Jarvis::Schedule,
-      # Jarvis::List,
+      Jarvis::List,
       Jarvis::Nest,
-      Jarvis::Car,
+      Jarvis::Tesla,
       # Jarvis::Cmd,
       # Jarvis::Sms,
     ]
@@ -119,8 +119,6 @@ class Jarvis
       return "Sorry, couldn't find a function called #{@args}." if !@args.is_a?(Hash) || @args.dig(:fn).blank?
 
       CommandRunner.run(@user, @args[:fn], @args[:fn_args])
-    when :list
-      List.find_and_modify(@user, @args)
     when :budget
       SmsMoney.parse(@user, @words)
     else
@@ -147,13 +145,13 @@ class Jarvis
     # Logs have their own timestamp, so run them before checking for delayed commands
     # return schedule_command if should_schedule?(simple_words)
 
-    return parse_list_words if simple_words.match?(/^(add|remove)\b/)
-
-    # Check lists since they have custom names
-    if @user.lists.any?
-      list_names = @user.lists.pluck(:name).map { |name| name.gsub(/[^a-z0-9 ]/i, "") }
-      return parse_list_words if simple_words.match?(Regexp.new("\\b(#{list_names.join('|')})\\b", :i))
-    end
+    # return parse_list_words if simple_words.match?(/^(add|remove)\b/)
+    #
+    # # Check lists since they have custom names
+    # if @user.lists.any?
+    #   list_names = @user.lists.pluck(:name).map { |name| name.gsub(/[^a-z0-9 ]/i, "") }
+    #   return parse_list_words if simple_words.match?(Regexp.new("\\b(#{list_names.join('|')})\\b", :i))
+    # end
 
     # Home should be !match? car\Tesla
     # return parse_home_words if simple_words.match?(/\b(home|house|ac|up|upstairs|main|entry|entryway|rooms)\b/i)
