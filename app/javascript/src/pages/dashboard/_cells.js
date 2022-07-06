@@ -345,6 +345,8 @@ CellWS.prototype.send = function(packet) {
     if (cell_ws.presend && typeof(cell_ws.presend) === "function") {
       packet = cell_ws.presend(packet)
     }
+    // Use the below for easy copy-pasting 
+    // console.log(JSON.stringify(JSON.stringify(packet)));
     cell_ws.socket.send(JSON.stringify(packet))
   } else {
     setTimeout(function() {

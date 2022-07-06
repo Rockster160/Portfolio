@@ -22,6 +22,9 @@
       clear: function() {
         localStorage.setItem("ping_data", "")
         this.text("")
+      },
+      ping: function() {
+        this.ws.send({ action: "message", ping: "pong" })
       }
     },
   })
