@@ -32,9 +32,9 @@ import { dash_colors } from "../vars"
 
     if (cell.data.garage) {
       if (cell.data.garage.open) {
-        lines.push("[ico ti ti-mdi-garage_open]")
+        lines.push(Text.center(Text.color(dash_colors.orange, "[ico ti ti-mdi-garage_open]")))
       } else {
-        lines.push("[ico ti ti-mdi-garage]")
+        lines.push(Text.center(Text.color(dash_colors.green, "[ico ti ti-mdi-garage]")))
       }
     } else {
       lines.push("")
