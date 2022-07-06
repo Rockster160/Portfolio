@@ -10,7 +10,19 @@ import { dash_colors } from "../vars"
     let lines = []
     let first_row = []
     first_row.push(cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "")
+
+    if ("open" in (cell.data?.garage || {})) {
+      if (cell.data.garage.open) {
+        first_row.push(Text.color(dash_colors.orange, "[ico ti ti-mdi-garage_open]"))
+      } else {
+        first_row.push(Text.color(dash_colors.green, "[ico ti ti-mdi-garage]"))
+      }
+    } else {
+      first_row.push(Text.color(dash_colors.grey, "[ico ti ti-mdi-garage]?"))
+    }
+
     first_row.push(cell.data.failed ? Text.color(dash_colors.orange, "[FAILED]") : "")
+
     lines.push(Text.justify(...first_row))
 
     cell.data.devices?.forEach(function(device) {
@@ -29,16 +41,7 @@ import { dash_colors } from "../vars"
       lines.push(Text.center([name, current, goal, on].join(" ")))
     })
 
-
-    if (cell.data.garage) {
-      if (cell.data.garage.open) {
-        lines.push(Text.center(Text.color(dash_colors.orange, "[ico ti ti-mdi-garage_open]")))
-      } else {
-        lines.push(Text.center(Text.color(dash_colors.green, "[ico ti ti-mdi-garage]")))
-      }
-    } else {
-      lines.push("")
-    }
+    lines.push("")
 
     if (cell.data.amz_updates) {
       cell.data.amz_updates.forEach(function(order, idx) {
@@ -81,8 +84,6 @@ import { dash_colors } from "../vars"
       cell,
       Server.socket("GarageChannel", function(msg) {
         this.flash()
-
-        console.log("Garage: ", JSON.stringify(msg))
 
         cell.data.garage = cell.data.garage || {}
         if (msg.data?.garageState) {
