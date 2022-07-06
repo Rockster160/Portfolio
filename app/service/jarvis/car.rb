@@ -1,2 +1,0 @@
-class Jarvis::Car
-end

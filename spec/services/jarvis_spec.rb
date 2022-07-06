@@ -37,7 +37,7 @@ RSpec.describe Jarvis do
   context "with regular words as admin" do
     it "responds" do
       expect(jarvis("Do my homework")).to eq("I don't know how to do your homework, sir.")
-      expect(Jarvis::IM_HERE_RESPONSES).to include(jarvis("You there?"))
+      expect(Jarvis::Text::IM_HERE_RESPONSES.map { |r| Jarvis::Text.decorate(r) }).to include(jarvis("You there?"))
     end
   end
 
@@ -89,7 +89,7 @@ RSpec.describe Jarvis do
       start_car: {
         res: "Starting car",
         opts: [
-          # "start climate",
+          "start climate",
           "start the car",
           "start my car",
           "turn my car on",
@@ -167,7 +167,7 @@ RSpec.describe Jarvis do
       heat: {
         skip: true,
         others: [:start_car, [:set_temp, 82], :heat_driver, :heat_passenger, :defrost],
-        res: "Car temp set to 82 and seat heaters turned on",
+        res: "Defrosting the car",
         opts: [
           "warm my car",
           "Heat my car",
@@ -236,11 +236,11 @@ RSpec.describe Jarvis do
         actions: [:set_mode],
       },
       "cool house" => {
-        res: "Set house main to cool.",
+        res: "Set house entryway to cool.",
         actions: [:set_mode],
       },
       "set ac to 69" => {
-        res: "Set house main AC to 69°.",
+        res: "Set house entryway AC to 69°.",
         actions: [:set_mode, :set_temp],
       },
     }
@@ -261,6 +261,7 @@ RSpec.describe Jarvis do
       "Send me a text saying go running" => "Go running",
       "Message me hype train" => "Hype train",
       "Send me a msg that says time to go shopping" => "Time to go shopping",
+      "Text me go do something" => "Go do something",
     }
 
     actions.each do |action, msg|
@@ -332,11 +333,11 @@ RSpec.describe Jarvis do
 
     it "can schedule a job in the middle of a command" do
       msg = "Do the laundry"
-      expect(JarvisWorker).to receive(:perform_at).with(5.minutes.from_now, @admin.id, "Message me saying do the laundry").and_call_original
-      # Call original above to make sure the SmsWorker gets called
-      expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
-
       perform_enqueued_jobs {
+        expect(JarvisWorker).to receive(:perform_at).with(5.minutes.from_now, @admin.id, "Message me saying do the laundry").and_call_original
+        # Call original above to make sure the SmsWorker gets called
+        expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
+
         expect(jarvis("Message me in 5 minutes saying do the laundry")).to eq("I'll message you saying do the laundry later at Fri Jun 24, 5:50 AM")
       }
     end
