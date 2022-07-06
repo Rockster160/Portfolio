@@ -85,7 +85,7 @@ import { dash_colors } from "../vars"
         console.log("Garage: ", JSON.stringify(msg))
 
         cell.data.garage = cell.data.garage || {}
-        if (msg.data?,garageState) {
+        if (msg.data?.garageState) {
           cell.data.garage.open = msg.data.garageState == "open"
         }
 
