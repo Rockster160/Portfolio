@@ -8,7 +8,7 @@ class GarageChannel < ApplicationCable::Channel
   end
 
   def control(data)
-    ActionCable.server.broadcast("garage_channel", { msg: "#{data}Garage" })
+    ActionCable.server.broadcast("garage_channel", { msg: "#{data['direction']}Garage" })
   end
 
   def message(data)
