@@ -6,6 +6,6 @@ module Jarvis::Regex
   end
 
   def words(*words, suffix: nil, prefix: nil)
-    Regexp.new("\\b(?:#{prefix}(?:#{words.flatten.join('|')})#{suffix})\\b", :i)
+    Regexp.new("(?:\\b#{prefix}(?:#{words.flatten.join('|')})#{suffix}\\b)", :i)
   end
 end

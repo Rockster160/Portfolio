@@ -87,7 +87,7 @@ class Jarvis
       Jarvis::Nest,
       Jarvis::Tesla,
       Jarvis::Cmd,
-      # Jarvis::Sms,
+      Jarvis::Sms,
     ]
   end
 
@@ -108,12 +108,6 @@ class Jarvis
     end
 
     case @cmd.to_s.to_sym
-    when :text
-      return "Sorry, you can't do that." unless @user.admin?
-
-      SmsWorker.perform_async(MY_NUMBER, @args)
-
-      "Sending you a text saying: #{@args}"
     when :budget
       SmsMoney.parse(@user, @words)
     else
@@ -158,18 +152,7 @@ class Jarvis
 
     # return if parse_command(simple_words)
 
-    return parse_text_words if simple_words.match?(/\b(text|txt|message|msg|sms)\b/i)
-  end
-
-  def parse_text_words
-    @cmd = :text
-
-    @args = @words.gsub(/#{rx_opt_words(:send, :shoot, :me, :a, :text, :txt, :sms)} ?\b(text|txt|message|msg|sms)s?\b ?#{rx_opt_words(:to, :that, :which, :me, :saying, :says)}/i, "")
-    @args = @args.squish.capitalize
-  end
-
-  def rx_opt_words(*words)
-    Regexp.new(words.map { |word| "(?: ?\\b#{word}\\b)\?" }.join(""), :i)
+    # return parse_text_words if simple_words.match?(/\b(text|txt|message|msg|sms)\b/i)
   end
 
   def parse_list_words
