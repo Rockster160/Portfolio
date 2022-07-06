@@ -3,7 +3,7 @@ class PingChannel < ApplicationCable::Channel
     stream_from "ping_channel"
   end
 
-  def message(data)
+  def receive(data)
     ActionCable.server.broadcast("ping_channel", { msg: "Thanks! I got your packet.", data: data })
   end
 end
