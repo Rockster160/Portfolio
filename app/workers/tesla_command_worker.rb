@@ -7,6 +7,6 @@ class TeslaCommandWorker
 
     return unless update_later
     sleep 3 unless Rails.env.test? # Give the API a chance to update
-    Tesla.command(:update)
+    TeslaCommand.command(:update)
   end
 end
