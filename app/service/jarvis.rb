@@ -86,7 +86,7 @@ class Jarvis
       Jarvis::List,
       Jarvis::Nest,
       Jarvis::Tesla,
-      # Jarvis::Cmd,
+      Jarvis::Cmd,
       # Jarvis::Sms,
     ]
   end
@@ -114,11 +114,6 @@ class Jarvis
       SmsWorker.perform_async(MY_NUMBER, @args)
 
       "Sending you a text saying: #{@args}"
-    when :fn, :run
-      return "Sorry, you can't do that." unless @user.admin?
-      return "Sorry, couldn't find a function called #{@args}." if !@args.is_a?(Hash) || @args.dig(:fn).blank?
-
-      CommandRunner.run(@user, @args[:fn], @args[:fn_args])
     when :budget
       SmsMoney.parse(@user, @words)
     else
@@ -161,32 +156,9 @@ class Jarvis
     #   return parse_car_words
     # end
 
-    return if parse_command(simple_words)
+    # return if parse_command(simple_words)
 
     return parse_text_words if simple_words.match?(/\b(text|txt|message|msg|sms)\b/i)
-  end
-
-  def parse_command(simple_words)
-    return false unless @user.admin?
-    tasks = ::CommandProposal::Task.where.not("REGEXP_REPLACE(COALESCE(friendly_id, ''), '[^a-z]', '', 'i') = ''")
-    tasks = tasks.where(session_type: :function)
-
-    return false unless tasks.any?
-
-    command = tasks.find_by("? ILIKE CONCAT('%', friendly_id, '%""')", simple_words)
-    command ||= tasks.find_by("? ILIKE CONCAT('%', REGEXP_REPLACE(friendly_id, '[^a-z]', '', 'i'), '%')", simple_words.gsub(/[^a-z]/i, ""))
-
-    return false unless command.present?
-
-    without_name = @words.gsub(Regexp.new("\\b(#{command.friendly_id.gsub("_", "\.\?")})\\b", :i), "")
-    without_fn = without_name.squish.gsub(/^(fn|run|function)\b ?(fn|run|function)?/i, "")
-
-    @cmd = :fn
-    @args = {
-      fn: command,
-      args: without_fn.squish,
-    }
-    true
   end
 
   def parse_text_words
