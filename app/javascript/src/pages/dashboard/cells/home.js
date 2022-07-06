@@ -29,11 +29,18 @@ import { dash_colors } from "../vars"
       lines.push(Text.center([name, current, goal, on].join(" ")))
     })
 
-    // TODO: Garage
+
+    if (cell.data.garage) {
+      if (cell.data.garage.open) {
+        lines.push("[ico ti ti-mdi-garage_open]")
+      } else {
+        lines.push("[ico ti ti-mdi-garage")
+      }
+    } else {
+      lines.push("")
+    }
 
     if (cell.data.amz_updates) {
-      lines.push("")
-
       cell.data.amz_updates.forEach(function(order, idx) {
         lines.push(Text.justify((idx + 1) + ". " + order.name, order.delivery))
       })
@@ -70,7 +77,21 @@ import { dash_colors } from "../vars"
     )
     cell.amz_socket.send({ action: "request" })
 
-    // Get webhooks from Google when states change?
+    cell.garage_socket = new CellWS(
+      cell,
+      Server.socket("GarageChannel", function(msg) {
+        this.flash()
+
+        console.log("Garage: ", + JSON.stringify(msg))
+
+        cell.data.garage = cell.data.garage || {}
+        cell.data.garage.open = msg.message.garageState == "open"
+
+        renderLines()
+      })
+    )
+    cell.garage_socket.send({ action: "request" })
+
     cell.nest_socket = new CellWS(
       cell,
       Server.socket("NestChannel", function(msg) {
@@ -136,6 +157,8 @@ import { dash_colors } from "../vars"
         } else { // Rename the order
           cell.amz_socket.send({ action: "change", id: order.id, rename: msg.replace(/^\d+ /, "") })
         }
+      } else if (/\b(open|close|toggle)\b/.test(msg)) { // open/close
+        cell.garage_socket.send({ action: "control", direction: msg })
       } else { // Assume AC control
         cell.nest_socket.send({ action: "command", settings: msg })
         // up|main 74

@@ -3,6 +3,14 @@ class GarageChannel < ApplicationCable::Channel
     stream_from "garage_channel"
   end
 
+  def request
+    ActionCable.server.broadcast("garage_channel", { msg: "getGarage" })
+  end
+
+  def control(data)
+    ActionCable.server.broadcast("garage_channel", { msg: "#{data}Garage" })
+  end
+
   def message(data)
     # open
     # ActionCable.server.broadcast("garage_channel", { msg: "openGarage" })
