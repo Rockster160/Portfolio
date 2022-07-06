@@ -2,6 +2,8 @@ module Jarvis::Regex
   module_function
 
   def match_any_words?(str, *words)
+    return false if words.flatten.none?
+
     str.match?(words(words))
   end
 

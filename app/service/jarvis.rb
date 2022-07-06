@@ -16,6 +16,7 @@
 # Eventually? "Let me know before any night that's going to be a hard freeze"
 # Monitor phone location with FindMy API
 # Text me at 11:15 AM tomorrow saying Move schedule for Friday
+# Add budget stuff back in
 
 
 # =============================== Desired examples ===============================
@@ -80,6 +81,7 @@ class Jarvis
 
   def actions
     # Order sensitive classes to iterate through and attempt commands
+    # @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/^(what|where|when|why|is|how|are)\s+(about|is|are|were|did|have|it)\b/)
     [
       Jarvis::Log,
       Jarvis::Schedule,
@@ -88,6 +90,7 @@ class Jarvis
       Jarvis::Tesla,
       Jarvis::Cmd,
       Jarvis::Sms,
+      Jarvis::Talk,
     ]
   end
 
@@ -95,69 +98,7 @@ class Jarvis
     actions.lazy.map do |action_klass| # lazy map means stop at the first one that returns a truthy value
       action_klass.attempt(@user, @words)
     end.compact_blank.first
-  rescue Jarvis::Error => msg
-    Jarvis.say(msg)
-  end
-
-  def old_command
-    return "Sorry, I don't know who you are." unless @user.present?
-
-    parse_words
-    unless @cmd.present?
-      @cmd, @args = @words.squish.downcase.split(" ", 2)
-    end
-
-    case @cmd.to_s.to_sym
-    when :budget
-      SmsMoney.parse(@user, @words)
-    else
-      combine = [@cmd, @args.presence].compact.join(" ")
-      # if combine.match?(/\b(good morning|afternoon|evening)/)
-      #   Find the weather, summarize events (ignore morning work meetings?)
-      if combine.match?(/\b(hello|hey|hi|you there|you up)/)
-        Jarvis::Text.im_here
-      elsif combine.match?(/\b(thank)/)
-        Jarvis::Text.appreciate
-      else
-        "I don't know how to #{Jarvis::Text.rephrase(@words)}, sir."
-      end
-      # complete ["Check", "Will do, sir.", "As you wish.", "Yes, sir."]
-    end
-  end
-
-  def parse_words
-    simple_words = @words.downcase.squish
-    # do you, would you, can I/you
-    @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/^(what|where|when|why|is|how|are)\s+(about|is|are|were|did|have|it)\b/)
-    # return parse_log_words if simple_words.match?(/^log\b/)
-
-    # Logs have their own timestamp, so run them before checking for delayed commands
-    # return schedule_command if should_schedule?(simple_words)
-
-    # return parse_list_words if simple_words.match?(/^(add|remove)\b/)
-    #
-    # # Check lists since they have custom names
-    # if @user.lists.any?
-    #   list_names = @user.lists.pluck(:name).map { |name| name.gsub(/[^a-z0-9 ]/i, "") }
-    #   return parse_list_words if simple_words.match?(Regexp.new("\\b(#{list_names.join('|')})\\b", :i))
-    # end
-
-    # Home should be !match? car\Tesla
-    # return parse_home_words if simple_words.match?(/\b(home|house|ac|up|upstairs|main|entry|entryway|rooms)\b/i)
-    # return parse_car_words if simple_words.include?("car")
-    #
-    # if simple_words.match?(Regexp.new("\\b(#{car_commands.join('|')})\\b"))
-    #   return parse_car_words
-    # end
-
-    # return if parse_command(simple_words)
-
-    # return parse_text_words if simple_words.match?(/\b(text|txt|message|msg|sms)\b/i)
-  end
-
-  def parse_list_words
-    @cmd = :list
-    # Could probably move all of the word parsing logic into here rather than the model
-    @args = @words
+  rescue Jarvis::Error => err
+    err.message
   end
 end
