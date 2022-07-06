@@ -34,7 +34,7 @@ import { dash_colors } from "../vars"
       if (cell.data.garage.open) {
         lines.push("[ico ti ti-mdi-garage_open]")
       } else {
-        lines.push("[ico ti ti-mdi-garage")
+        lines.push("[ico ti ti-mdi-garage]")
       }
     } else {
       lines.push("")
@@ -82,10 +82,10 @@ import { dash_colors } from "../vars"
       Server.socket("GarageChannel", function(msg) {
         this.flash()
 
-        console.log("Garage: ", + JSON.stringify(msg))
+        console.log("Garage: ", JSON.stringify(msg))
 
         cell.data.garage = cell.data.garage || {}
-        cell.data.garage.open = msg.message.garageState == "open"
+        cell.data.garage.open = msg.garageState == "open"
 
         renderLines()
       })

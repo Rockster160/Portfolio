@@ -7,6 +7,6 @@ class TeslaCommandWorker
 
     return unless update_later
     sleep 3 unless Rails.env.test? # Give the API a chance to update
-    ActionCable.server.broadcast("tesla_channel", format_data(Tesla.vehicle_data))
+    Tesla.command(:update)
   end
 end
