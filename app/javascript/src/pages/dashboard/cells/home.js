@@ -97,6 +97,8 @@ import { dash_colors } from "../vars"
       Server.socket("GarageChannel", function(msg) {
         this.flash()
 
+        if (msg.data?.refreshGarage) { getGarage() }
+
         cell.data.garage = cell.data.garage || {}
         if (msg.data?.garageState) {
           cell.recent_garage = true

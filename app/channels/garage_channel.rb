@@ -3,6 +3,10 @@ class GarageChannel < ApplicationCable::Channel
     stream_from "garage_channel"
   end
 
+  def unsubscribed
+    ActionCable.server.broadcast("garage_channel", { msg: "refreshGarage" })
+  end
+
   def request
     ActionCable.server.broadcast("garage_channel", { msg: "getGarage" })
   end
