@@ -13,9 +13,9 @@ import { dash_colors } from "../vars"
 
     if ("open" in (cell.data?.garage || {})) {
       if (cell.data.garage.open) {
-        first_row.push(Text.color(dash_colors.orange, "[ico ti ti-mdi-garage_open] "))
+        first_row.push(Text.color(dash_colors.orange, " [ico ti ti-mdi-garage_open]"))
       } else {
-        first_row.push(Text.color(dash_colors.green, "[ico ti ti-mdi-garage] "))
+        first_row.push(Text.color(dash_colors.green, " [ico ti ti-mdi-garage]"))
       }
     } else {
       first_row.push(Text.color(dash_colors.grey, "[ico ti ti-mdi-garage]?"))
