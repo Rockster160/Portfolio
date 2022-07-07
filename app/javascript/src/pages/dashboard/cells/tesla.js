@@ -1,3 +1,5 @@
+// Tesla .reload should schedule for the time charging is estimated to complete
+
 import { Text } from "../_text"
 import { Time } from "./_time"
 import { shiftTempToColor, dash_colors } from "../vars"

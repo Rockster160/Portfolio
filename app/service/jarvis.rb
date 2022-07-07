@@ -17,6 +17,11 @@
 # Monitor phone location with FindMy API
 # Text me at 11:15 AM tomorrow saying Move schedule for Friday
 # Add budget stuff back in
+# > I don’t remember what I had for breakfast
+# > When was the last time I had <food>
+# > When was the last time I ate
+# > I don’t know the last time I ate
+# > What was the last thing I ate?
 
 
 # =============================== Desired examples ===============================

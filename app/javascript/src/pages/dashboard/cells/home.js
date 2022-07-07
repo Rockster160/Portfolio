@@ -9,19 +9,19 @@ import { dash_colors } from "../vars"
   let renderLines = function() {
     let lines = []
     let first_row = []
-    first_row.push(cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "")
+    first_row.push(cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]      " : "        ")
 
     if ("open" in (cell.data?.garage || {})) {
       if (cell.data.garage.open) {
-        first_row.push(Text.color(dash_colors.orange, "[ico ti ti-mdi-garage_open]"))
+        first_row.push(Text.color(dash_colors.orange, "[ico ti ti-mdi-garage_open] "))
       } else {
-        first_row.push(Text.color(dash_colors.green, "[ico ti ti-mdi-garage]"))
+        first_row.push(Text.color(dash_colors.green, "[ico ti ti-mdi-garage] "))
       }
     } else {
       first_row.push(Text.color(dash_colors.grey, "[ico ti ti-mdi-garage]?"))
     }
 
-    first_row.push(cell.data.failed ? Text.color(dash_colors.orange, "[FAILED]") : "")
+    first_row.push(cell.data.failed ? Text.color(dash_colors.orange, "[FAILED]") : "        ")
 
     lines.push(Text.justify(...first_row))
 
@@ -50,6 +50,18 @@ import { dash_colors } from "../vars"
     }
 
     cell.lines(lines)
+  }
+
+  let getGarage = function() {
+    cell.recent_garage = false
+    cell.garage_socket.send({ action: "request" })
+
+    // If no response within 10 seconds, forget the current state
+    clearTimeout(cell.garage_timeout)
+    cell.garage_timeout = setTimeout(function() {
+      if (!cell.recent_garage) { delete cell.data.garage.open }
+      renderLines()
+    }, Time.seconds(10))
   }
 
   let subscribeWebsockets = function() {
@@ -87,13 +99,17 @@ import { dash_colors } from "../vars"
 
         cell.data.garage = cell.data.garage || {}
         if (msg.data?.garageState) {
+          cell.recent_garage = true
           cell.data.garage.open = msg.data.garageState == "open"
         }
 
         renderLines()
       })
     )
-    cell.garage_socket.send({ action: "request" })
+    getGarage()
+    setInterval(function() {
+      getGarage()
+    }, Time.hour())
 
     cell.nest_socket = new CellWS(
       cell,
@@ -134,21 +150,20 @@ import { dash_colors } from "../vars"
     flash: false,
     onload: subscribeWebsockets,
     reloader: function() {
-      // Update timer?
-      // TODO: Have a different timer for resetting devices
-      // get garage
+      // Update times? "1 minute ago", etc...
     },
     started: function() {
       cell.amz_socket.reopen()
       cell.nest_socket.reopen()
+      cell.garage_socket.reopen()
     },
     stopped: function() {
       cell.amz_socket.close()
       cell.nest_socket.close()
+      cell.garage_socket.close()
     },
     command: function(msg) {
-      // Also check if the number is even valid. If it's not, it's probably meant to be a temp
-      if (/^-?\d+/.test(msg)) {
+      if (/^-?\d+/.test(msg) && parseInt(msg.match(/\d+/)[0]) < 30) {
         var num = parseInt(msg.match(/\d+/)[0])
         let order = this.data.amz_updates[num - 1]
 
@@ -160,17 +175,11 @@ import { dash_colors } from "../vars"
         } else { // Rename the order
           cell.amz_socket.send({ action: "change", id: order.id, rename: msg.replace(/^\d+ /, "") })
         }
-      } else if (/\b(open|close|toggle)\b/.test(msg)) { // open/close
+      } else if (/\b(open|close|toggle|garage)\b/.test(msg)) { // open/close
         cell.garage_socket.send({ action: "control", direction: msg })
       } else { // Assume AC control
         cell.nest_socket.send({ action: "command", settings: msg })
-        // up|main 74
-        // up|main heat
-        // up|main cool
       }
-      // Garage
-      // open
-      // close
     }
   })
 })()

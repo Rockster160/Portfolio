@@ -8,7 +8,12 @@ class GarageChannel < ApplicationCable::Channel
   end
 
   def control(data)
-    ActionCable.server.broadcast("garage_channel", { msg: "#{data['direction']}Garage" })
+    data_dir = data["direction"]
+    direction = :toggle if data_dir.match?(/(toggle|garage)/)
+    direction = :open if data_dir.match?(/(open)/)
+    direction = :close if data_dir.match?(/(close)/)
+    direction ||= :toggle
+    ActionCable.server.broadcast("garage_channel", { msg: "#{direction}Garage" })
   end
 
   def message(data)
