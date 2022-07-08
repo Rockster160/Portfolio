@@ -12,7 +12,7 @@ class Jarvis::Nest < Jarvis::Action
   end
 
   def valid_words?
-    return false if @rx.match_any_words?(@msg, :car, :tesla)
+    return false if @rx.match_any_words?(@msg, :car, :tesla, :garage)
 
     @rx.match_any_words?(@msg, *home_commands)
   end

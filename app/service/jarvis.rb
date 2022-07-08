@@ -93,6 +93,7 @@ class Jarvis
       Jarvis::List,
       Jarvis::Nest,
       Jarvis::Tesla,
+      Jarvis::Garage,
       Jarvis::Cmd,
       Jarvis::Sms,
       Jarvis::Talk,
