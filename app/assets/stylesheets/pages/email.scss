@@ -15,6 +15,7 @@
   overflow: hidden;
   overflow-x: auto;
   white-space: pre-wrap;
+  background: $blue-l5;
 }
 
 .email-filter-buttons-container {
@@ -227,5 +228,11 @@
     .email-selected {
       background: blue;
     }
+  }
+}
+
+.dark-mode {
+  .email-filter-buttons-container {
+    color: $text-color;
   }
 }

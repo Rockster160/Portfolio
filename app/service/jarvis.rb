@@ -53,6 +53,7 @@ class Jarvis
     res, res_data = new(user, words).command
 
     ActionCable.server.broadcast("jarvis_channel", say: res, data: res_data) if res.present?
+    return res if res_data.blank?
     [res, res_data]
   end
 

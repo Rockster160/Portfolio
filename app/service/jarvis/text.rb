@@ -23,7 +23,7 @@ module Jarvis::Text
     reversed_words = words.gsub(/\b(my)\b/i, "your")
     reversed_words = reversed_words.gsub(/\b(me|i)\b/i, "you")
     reversed_words = reversed_words.gsub(/[^a-z0-9]*$/, "").squish
-    reversed_words = reversed_words.tap { |line| line[0] = line[0].downcase }
+    reversed_words = reversed_words.tap { |line| line[0] = line[0].to_s.downcase }
   end
 
   # ============== Support ============
