@@ -1,7 +1,7 @@
 module Jarvis::Times
   module_function
 
-  def extract_time(words)
+  def extract_time(words, chronic_opts={})
     rx = Jarvis::Regex
     words = words.gsub(rx.words(:later), "today")
     day_words = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday]).map { |w| w.to_s.downcase.to_sym }
@@ -13,11 +13,11 @@ module Jarvis::Times
     time_str ||= words[/\d+ #{time_words_regex} \b(from now|ago)\b/]
     time_str ||= words[/((next|last) )?#{day_words_regex}/]
 
-    [time_str, safe_date_parse(time_str.to_s.gsub(/ ?\b(at)\b ?/, " ").squish)]
+    [time_str, safe_date_parse(time_str.to_s.gsub(/ ?\b(at)\b ?/, " ").squish, chronic_opts)]
   end
 
-  def safe_date_parse(timestamp)
+  def safe_date_parse(timestamp, chronic_opts={})
     Chronic.time_class = ::Time.zone
-    Chronic.parse(timestamp)
+    Chronic.parse(timestamp, chronic_opts)
   end
 end

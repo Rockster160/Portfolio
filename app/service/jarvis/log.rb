@@ -17,7 +17,7 @@ class Jarvis::Log < Jarvis::Action
 
   def parse_log_data
     @evt = {}
-    time_str, extracted_time = Jarvis::Times.extract_time(@msg.downcase.squish)
+    time_str, extracted_time = Jarvis::Times.extract_time(@msg.downcase.squish, context: :past)
     new_words = @msg.sub(Regexp.new("(?:\b(?:at)\b)? ?#{time_str}", :i), "") if extracted_time
     new_words = (new_words || @msg).gsub(/^log ?/i, "")
     @evt[:timestamp] = extracted_time

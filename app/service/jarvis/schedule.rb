@@ -9,7 +9,7 @@ class Jarvis::Schedule < Jarvis::Action
   end
 
   def valid_words?
-    time_str, @scheduled_time = Jarvis::Times.extract_time(@msg.downcase.squish)
+    time_str, @scheduled_time = Jarvis::Times.extract_time(@msg.downcase.squish, context: :future)
     @remaining_words = @msg.sub(Regexp.new("(?:\b(?:at)\b )?#{time_str}", :i), "").squish if @scheduled_time
 
     @scheduled_time.present?
