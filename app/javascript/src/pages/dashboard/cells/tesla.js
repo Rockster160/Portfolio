@@ -1,5 +1,3 @@
-// Tesla .reload should schedule for the time charging is estimated to complete
-
 import { Text } from "../_text"
 import { Time } from "./_time"
 import { shiftTempToColor, dash_colors } from "../vars"
@@ -102,6 +100,17 @@ import { shiftTempToColor, dash_colors } from "../vars"
     cell.lines(lines)
   }
 
+  let constrain = function(min, max, val) {
+    return [min, max, val].sort(function(a, b) { return a - b })[1]
+  }
+
+  let resetTimeout = function(time) {
+    clearTimeout(this.data.refresh_timer)
+    this.data.refresh_timer = setTimeout(function() {
+      cell.commands.run("update")
+    }, time)
+  }
+
   cell = Cell.register({
     title: "Tesla",
     text: "Loading...",
@@ -120,7 +129,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
       if (msg.failed) {
         this.data.loading = false
         this.data.failed = true
-        clearTimeout(this.data.refresh_timer) // Don't try anymore until we manually update
+        resetTimeout(Time.minutes(5))
         renderLines()
         return
       } else {
@@ -140,15 +149,13 @@ import { shiftTempToColor, dash_colors } from "../vars"
       if (this.data.climate?.on || this.data.drive?.action == "driving") {
         refresh_next = Time.minute()
       } else if (this.data.charging?.active) {
-        refresh_next = Time.minutes(5)
+        let eta_minutes = constrain(parseInt(this.data.charging.eta) || 5, 1, 5)
+        refresh_next = Time.minutes(eta_minutes)
       } else {
         refresh_next = Time.hour()
       }
 
-      clearTimeout(this.data.refresh_timer)
-      this.data.refresh_timer = setTimeout(function() {
-        cell.commands.run("update")
-      }, refresh_next)
+      resetTimeout(refresh_next)
 
       renderLines()
       this.flash()
