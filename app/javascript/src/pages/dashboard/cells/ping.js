@@ -18,6 +18,11 @@
     reloader: function() {
       this.text(localStorage.getItem("ping_data"))
     },
+    command: function(msg) {
+      console.log(msg);
+      let [channel, ...data] = msg.split(" ")
+      this.ws.send({ channel: channel, data: data.join(" ") })
+    },
     commands: {
       clear: function() {
         localStorage.setItem("ping_data", "")

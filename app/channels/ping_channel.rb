@@ -4,6 +4,12 @@ class PingChannel < ApplicationCable::Channel
   end
 
   def receive(data)
-    ActionCable.server.broadcast("ping_channel", { msg: "Thanks! I got your packet.", data: data })
+    channel = data["channel"]
+    raw_json = (" " + data["data"]).gsub(/\:(\w+)/, "\"\\1\"").gsub(/([^\"])(\w+)([^\"]):/, "\\1\"\\2\\3\":")
+    raw_json = "{#{raw_json}}" unless raw_json.squish[0].in?(["{", "["])
+    json = JSON.parse(raw_json) rescue { data: data["data"] }
+
+    ActionCable.server.broadcast("#{channel}_channel", json)
+    ActionCable.server.broadcast("ping_channel", "Sending #{channel}: #{json}")
   end
 end
