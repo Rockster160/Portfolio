@@ -37,6 +37,7 @@
 # Good night
 # > Good night, sir. The weather tomorrow is <>. You don't have anything scheduled after your morning meetings.
 # > You'll need to leave for PT by 9:55
+# Start my car before I need to leave for PT
 
 
 # =============================== Jarvis.js ===============================

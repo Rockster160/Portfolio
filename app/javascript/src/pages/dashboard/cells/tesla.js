@@ -115,7 +115,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
     title: "Tesla",
     text: "Loading...",
     flash: false,
-    refreshInterval: Time.minute(1),
+    refreshInterval: Time.minute(),
     reloader: function() { renderLines() },
     onload: function() {
       this.data.refresh_timer = undefined
@@ -125,6 +125,11 @@ import { shiftTempToColor, dash_colors } from "../vars"
       renderLines()
       cell.commands.run("update")
     },
+    stopped: function() {
+      clearTimeout(this.data.refresh_timer)
+      this.data.loading = false
+      renderLines()
+    },
     socket: Server.socket("TeslaChannel", function(msg) {
       if (msg.failed) {
         this.data.loading = false
@@ -133,7 +138,6 @@ import { shiftTempToColor, dash_colors } from "../vars"
         renderLines()
         return
       } else {
-        this.refreshInterval = Time.minute()
         this.data.failed = false
       }
       if (msg.loading) {
