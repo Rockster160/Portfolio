@@ -105,8 +105,8 @@ import { shiftTempToColor, dash_colors } from "../vars"
   }
 
   let resetTimeout = function(time) {
-    clearTimeout(this.data.refresh_timer)
-    this.data.refresh_timer = setTimeout(function() {
+    clearTimeout(cell.data.refresh_timer)
+    cell.data.refresh_timer = setTimeout(function() {
       cell.commands.run("update")
     }, time)
   }
