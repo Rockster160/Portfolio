@@ -1,4 +1,8 @@
 class Jarvis::Garage < Jarvis::Action
+  def self.reserved_words
+    [:garage]
+  end
+
   def attempt
     return unless valid_words?
     raise Jarvis::Error.not_allowed unless @user&.admin?
@@ -9,7 +13,7 @@ class Jarvis::Garage < Jarvis::Action
   end
 
   def valid_words?
-    return false if @rx.match_any_words?(@msg, :car, :tesla, :home, :house)
+    return false if @rx.match_any_words?(@msg, Jarvis.reserved_words - self.class.reserved_words)
 
     @rx.match_any_words?(@msg, *garage_commands)
   end

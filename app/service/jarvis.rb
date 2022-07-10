@@ -81,19 +81,19 @@ class Jarvis
     end
   end
 
-  def initialize(user, words)
-    @user = user
-    @words = words.to_s
-    Time.zone = "Mountain Time (US & Canada)"
+  def self.reserved_words
+    @@reserved_words ||= actions.flat_map { |action| action.reserved_words }
   end
 
-  def actions
+  delegate :actions, to: :class
+  def self.actions
     # Order sensitive classes to iterate through and attempt commands
     # @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/^(what|where|when|why|is|how|are)\s+(about|is|are|were|did|have|it)\b/)
     [
       Jarvis::Log,
       Jarvis::Schedule,
       Jarvis::List,
+      Jarvis::Printer,
       Jarvis::Nest,
       Jarvis::Tesla,
       Jarvis::Garage,
@@ -101,6 +101,12 @@ class Jarvis
       Jarvis::Sms,
       Jarvis::Talk,
     ]
+  end
+
+  def initialize(user, words)
+    @user = user
+    @words = words.to_s
+    Time.zone = "Mountain Time (US & Canada)"
   end
 
   def command

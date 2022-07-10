@@ -5,6 +5,10 @@ class Jarvis::Action
     new(user, msg).attempt
   end
 
+  def self.reserved_words
+    []
+  end
+
   def initialize(user, msg)
     @user = user
     @msg = msg

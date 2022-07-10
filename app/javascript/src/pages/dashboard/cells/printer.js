@@ -68,7 +68,6 @@ import { Time } from "./_time"
       // =========================================
       Printer.post("printer").done(function(data) {
         var data = data
-        debugger
         cell.data.printing = data.state.flags.printing
         if (cell.data.printing) {
           cell.data.prepping = false
