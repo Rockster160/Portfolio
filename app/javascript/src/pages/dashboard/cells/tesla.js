@@ -153,10 +153,10 @@ import { shiftTempToColor, dash_colors } from "../vars"
       if (this.data.climate?.on || this.data.drive?.action == "driving") {
         refresh_next = Time.minute()
       } else if (this.data.charging?.active) {
-        let eta_minutes = constrain(parseInt(this.data.charging.eta) || 5, 1, 5)
+        let eta_minutes = constrain(parseInt(this.data.charging.eta) || 60, 1, 60)
         refresh_next = Time.minutes(eta_minutes)
       } else {
-        refresh_next = Time.hour()
+        refresh_next = Time.hours(3)
       }
 
       resetTimeout(refresh_next)

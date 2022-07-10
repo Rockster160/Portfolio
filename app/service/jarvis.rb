@@ -22,6 +22,7 @@
 # > When was the last time I ate
 # > I don’t know the last time I ate
 # > What was the last thing I ate?
+# Log thing an hour ago
 
 
 # =============================== Desired examples ===============================

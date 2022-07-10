@@ -21,7 +21,7 @@ class PrintersController < ApplicationController
 
   def verify_command
     return if params[:command]&.to_sym.in?(permitted_commands)
-binding.pry
+
     head :bad_request
   end
 
