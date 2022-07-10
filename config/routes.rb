@@ -9,6 +9,7 @@ Rails.application.routes.draw do
   post "/talk" => "index#talk"
   post "/jarvis" => "jarvis#command"
   post "proxy" => "proxy#proxy"
+  post "/printer_control" => "printers#control"
   get "map" => "index#map"
   get "playground" => "index#playground"
   resource :ping, only: :create

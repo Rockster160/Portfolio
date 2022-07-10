@@ -2,31 +2,16 @@ import { Text } from "../_text"
 import { Time } from "./_time"
 
 (function() {
-  Printer = function() {}
-  Printer.request = function(cell, url, type, data) {
-    var url = url
-    var data = data
-    return $.ajax({
-      url: "http://zoro-pi-1.local/api" + (url || ""),
-      data: JSON.stringify(data || {}),
-      type: type || "GET",
-      headers: {
-        "X-Api-Key": cell.config.apikey,
-        "Content-Type": "application/json"
-      }
-    }).fail(function(err_data) {
-      var lines = [
-        cell.line(0),
-        url,
-        data,
-        JSON.stringify(err_data)
-      ]
-      cell.lines(lines)
-    })
+  class Printer {
+    static post(command, args) {
+      return $.ajax({
+        url: "/printer_control",
+        data: { command: command, args: args },
+        dataType: "json",
+        type: "POST",
+      })
+    }
   }
-  Printer.post = function(cell, url, data) { return Printer.request(cell, url, "POST", data) }
-  Printer.get =  function(cell, url, data) { return Printer.request(cell, url, "GET",  data) }
-
 
   var showPrinting = function(cell) {
     var lines = [cell.line(0), ""]
@@ -44,63 +29,46 @@ import { Time } from "./_time"
   var printer = Cell.register({
     title: "Printer",
     text: "Loading...",
-    socket: Server.socket("PrinterCallbackChannel", function(msg) {
-      console.log("Printer Callback", msg);
-      this.reload()
-    }),
     commands: {
       gcode: function(cmd) {
-        return Printer.post(this, "/printer/command", { commands: cmd.split(", ") })
+        return Printer.post("command", cmd)
       },
       on: function() {
-        return Printer.post(this, "/printer/command", { command: "M80" })
+        return Printer.post("on")
       },
       off: function() {
         this.data.prepping = false
-        return Printer.post(this, "/printer/command", { command: "M81" })
+        return Printer.post("off")
       },
       extrude: function(amount) {
-        return Printer.post(this, "/printer/tool", { command: "extrude", amount: amount })
+        return Printer.post("extrude", amount)
       },
       retract: function(amount) {
-        return Printer.post(this, "/printer/tool", { command: "extrude", amount: "-" + amount })
+        return Printer.post("retract", amount)
       },
       home: function() {
-        return Printer.post(this, "/printer/printhead", { command: "home", axes: ["x", "y", "z"] })
+        return Printer.post("home")
       },
       move: function(amounts) {
-        var x = (amounts.match(/x:? (\-?\d+)/i) || [])[1]
-        var y = (amounts.match(/y:? (\-?\d+)/i) || [])[1]
-        var z = (amounts.match(/z:? (\-?\d+)/i) || [])[1]
-        var data = { command: "jog" }
-        if (x) { data.x = x }
-        if (y) { data.y = y }
-        if (z) { data.z = z }
-        return Printer.post(this, "/printer/printhead", data)
+        return Printer.post("move", amounts)
       },
       cool: function() {
-        var cell = this
-        Printer.post(cell, "/printer/tool", { command: "target", targets: { tool0: 0 } })
-        Printer.post(cell, "/printer/bed", { command: "target", target: 0 }).done(function() {
-          cell.data.prepping = true
-          cell.reload()
-        })
+        Printer.post("cool")
+        cell.data.prepping = true
+        cell.reload()
       },
       pre: function() {
-        var cell = this
-        cell.commands.on(cell).done(function() {
-          Printer.post(cell, "/printer/tool", { command: "target", targets: { tool0: 200 } })
-          Printer.post(cell, "/printer/bed", { command: "target", target: 40 }).done(function() {
-            cell.data.prepping = true
-            cell.reload()
-          })
-        })
+        Printer.post("pre")
+        cell.data.prepping = true
+        cell.reload()
       },
     },
     reloader: function() {
       var cell = this
-      Printer.get(cell, "/printer").done(function(data) {
+      // =========================================
+      Printer.post("printer").done(function(data) {
         var data = data
+        debugger
         cell.data.printing = data.state.flags.printing
         if (cell.data.printing) {
           cell.data.prepping = false
@@ -129,7 +97,7 @@ import { Time } from "./_time"
         }
         cell.line(0, Text.center([tool, bed].join(" | ")))
 
-        Printer.get(cell, "/job").done(function(data) {
+        Printer.post("job").done(function(data) {
           if (!data.job.user) {
             return cell.line(2, Text.center("~Previous job unavailable~"))
           }
