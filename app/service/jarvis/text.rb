@@ -1,7 +1,13 @@
 module Jarvis::Text
   module_function
 
-  IM_HERE_RESPONSES = [
+  IM_HERE_QUESTION_RESPONSES = [
+    "For you sir, always.",
+    "At your service, sir.",
+    "Yes, sir.",
+    "Good --time--, sir"
+  ]
+  IM_HERE_DIRECT_RESPONSES = [
     "For you sir, always.",
     "At your service, sir.",
     "Yes, sir.",
@@ -12,7 +18,11 @@ module Jarvis::Text
   ]
 
   def im_here
-    decorate(IM_HERE_RESPONSES.sample)
+    decorate(IM_HERE_DIRECT_RESPONSES.sample)
+  end
+
+  def im_here_response
+    decorate(IM_HERE_QUESTION_RESPONSES.sample)
   end
 
   def appreciate

@@ -37,7 +37,7 @@ RSpec.describe Jarvis do
   context "with regular words as admin" do
     it "responds" do
       expect(jarvis("Do my homework")).to eq("I don't know how to do your homework, sir.")
-      expect(Jarvis::Text::IM_HERE_RESPONSES.map { |r| Jarvis::Text.decorate(r) }).to include(jarvis("You there?"))
+      expect(Jarvis::Text::IM_HERE_DIRECT_RESPONSES.map { |r| Jarvis::Text.decorate(r) }).to include(jarvis("You there?"))
     end
   end
 

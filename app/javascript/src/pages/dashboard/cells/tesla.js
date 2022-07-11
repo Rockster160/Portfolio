@@ -134,7 +134,8 @@ import { shiftTempToColor, dash_colors } from "../vars"
       if (msg.failed) {
         this.data.loading = false
         this.data.failed = true
-        resetTimeout(Time.minutes(5))
+        clearTimeout(this.data.refresh_timer)
+        // resetTimeout(Time.minutes(5))
         renderLines()
         return
       } else {
