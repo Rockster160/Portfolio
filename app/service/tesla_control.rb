@@ -194,7 +194,7 @@ class TeslaControl
   def wake_vehicle
     res = RestClient.post(
       "https://owner-api.teslamotors.com/api/1/vehicles/#{vehicle_id}/wake_up",
-      {},
+      nil,
       BASE_HEADERS.merge(Authorization: "Bearer #{@access_token}")
     )
 
