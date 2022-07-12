@@ -1,6 +1,8 @@
 # https://tesla-api.timdorr.com/
 
 class TeslaControl
+  attr_accessor :access_token, :refresh_token, :car
+
   BASE_HEADERS = {
     "User-Agent": "PortfolioBot/1.0",
     "Content-Type": "application/json",
