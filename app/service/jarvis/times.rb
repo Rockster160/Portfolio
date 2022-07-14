@@ -13,7 +13,15 @@ module Jarvis::Times
     time_str ||= words[/\d+ #{time_words_regex} \b(from now|ago)\b/]
     time_str ||= words[/((next|last) )?#{day_words_regex}/]
 
-    [time_str, safe_date_parse(time_str.to_s.gsub(/ ?\b(at)\b ?/, " ").squish, chronic_opts)]
+    pre_sub = time_str
+
+    # Need to clean up a little bit for Chronic syntax
+    time_str = time_str.to_s.gsub(/ ?\b(at)\b ?/, " ")
+    time_str = time_str.gsub(/(.+)(#{day_words_regex})/) do |found|
+      "#{Regexp.last_match(2)} #{Regexp.last_match(1)}"
+    end
+
+    [pre_sub, safe_date_parse(time_str.squish, chronic_opts)]
   end
 
   def safe_date_parse(timestamp, chronic_opts={})

@@ -22,6 +22,7 @@ class Jarvis::Sms < Jarvis::Action
   def sms_words
     @rx.words(
       :text,
+      :remind,
       :txt,
       :message,
       :msg,
@@ -35,6 +36,7 @@ class Jarvis::Sms < Jarvis::Action
       :send,
       :shoot,
       :me,
+      :later,
       :a,
       :text,
       :which,

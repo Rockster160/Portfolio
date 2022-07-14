@@ -37,7 +37,7 @@ RSpec.describe Jarvis do
   context "with regular words as admin" do
     it "responds" do
       expect(jarvis("Do my homework")).to eq("I don't know how to do your homework, sir.")
-      expect(Jarvis::Text::IM_HERE_DIRECT_RESPONSES.map { |r| Jarvis::Text.decorate(r) }).to include(jarvis("You there?"))
+      expect(Jarvis::Text::IM_HERE_QUESTION_RESPONSES.map { |r| Jarvis::Text.decorate(r) }).to include(jarvis("You there?"))
     end
   end
 
@@ -348,14 +348,26 @@ RSpec.describe Jarvis do
   end
 
   context "with scheduling" do
+    # now Time.local(2022, 6, 24, 5, 45)
     it "can schedule a job for later" do
       expect(JarvisWorker).to receive(:perform_at).with(10.minutes.from_now, @admin.id, "add something to list")
-      expect(jarvis("add something to list in 10 minutes")).to eq("I'll add something to list later at Fri Jun 24, 5:55 AM")
+      expect(jarvis("add something to list in 10 minutes")).to eq("I'll add something to list on Fri Jun 24, 5:55 AM")
     end
 
     it "can schedule a job for a time" do
       expect(JarvisWorker).to receive(:perform_at).with(Time.local(2022, 6, 24, 21, 45), @admin.id, "add something to list")
-      expect(jarvis("add something to list at 9:45 PM")).to eq("I'll add something to list later at Fri Jun 24, 9:45 PM")
+      expect(jarvis("add something to list at 9:45 PM")).to eq("I'll add something to list on Fri Jun 24, 9:45 PM")
+    end
+
+    it "can understand time names" do
+      msg = "Do the laundry"
+      perform_enqueued_jobs {
+        expect(JarvisWorker).to receive(:perform_at).with(Time.local(2022, 6, 25, 11, 15), @admin.id, "Remind me saying #{msg}").and_call_original
+        # Call original above to make sure the SmsWorker gets called
+        expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
+
+        expect(jarvis("Remind me at 11:15 AM tomorrow saying #{msg}")).to eq("I'll remind you saying #{msg} on Sat Jun 25, 11:15 AM")
+      }
     end
 
     it "can schedule a job in the middle of a command" do
@@ -365,7 +377,7 @@ RSpec.describe Jarvis do
         # Call original above to make sure the SmsWorker gets called
         expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
 
-        expect(jarvis("Message me in 5 minutes saying do the laundry")).to eq("I'll message you saying do the laundry later at Fri Jun 24, 5:50 AM")
+        expect(jarvis("Message me in 5 minutes saying do the laundry")).to eq("I'll message you saying do the laundry on Fri Jun 24, 5:50 AM")
       }
     end
   end

@@ -1,6 +1,4 @@
 # =============================== TODO ===============================
-# Jarvis schedule responding with array
-# Remind me should be alias for text me
 # Text me without message will send a greeting - Orrrrrr. "You asked me to text you, sir."
 # Allow asking questions: What's my car temp? What's the house temp? etc...
 # create a timer that sends a WS to Dashboard and starts a timer (or sms? How to determine which is which?)
