@@ -8,13 +8,20 @@ import { shiftTempToColor } from "../vars"
     return Text.color(isNight ? "#C5C4DE" : "#DEDBBB", ico)
   }
 
+  let getNextPingTime = function() {
+    let next_hour = Time.msUntilNextHour() + Time.seconds(5)
+    let ten_minutes = Time.msSinceEpoch() + Time.minutes(10)
+
+    return next_hour < ten_minutes ? next_hour : ten_minutes
+  }
+
   Cell.register({
     title: "Weather",
     text: "Loading...",
-    refreshInterval: Time.msUntilNextHour() + Time.seconds(5),
+    refreshInterval: getNextPingTime(),
     reloader: function() {
       var cell = this
-      cell.refreshInterval = Time.msUntilNextHour() + Time.seconds(5)
+      cell.refreshInterval = getNextPingTime()
 
       var url = "https://api.openweathermap.org/data/2.5/onecall?lat=40.480476443141924&lon=-111.99818607287183&units=imperial&exclude=minutely,alerts&lang=en&appid=" + cell.config.apikey
       $.getJSON(url).done(function(json) {
