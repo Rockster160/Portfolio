@@ -360,6 +360,17 @@ RSpec.describe Jarvis do
       expect(jarvis("add something to list at 9:45 PM")).to eq("I'll add something to list on Fri Jun 24, 9:45 PM")
     end
 
+    it "can understand relative time" do
+      msg = "Do the laundry"
+      perform_enqueued_jobs {
+        expect(JarvisWorker).to receive(:perform_at).with(1.hour.from_now, @admin.id, "Remind me to do the laundry").and_call_original
+        # Call original above to make sure the SmsWorker gets called
+        expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
+
+        expect(jarvis("Remind me in an hour to do the laundry")).to eq("I'll remind you to do the laundry on Fri Jun 24, 6:45 AM")
+      }
+    end
+
     it "can understand time names" do
       msg = "Do the laundry"
       perform_enqueued_jobs {

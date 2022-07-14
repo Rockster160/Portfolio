@@ -6,9 +6,9 @@ module Jarvis::Times
     words = words.gsub(rx.words(:later), "today")
     day_words = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday]).map { |w| w.to_s.downcase.to_sym }
     day_words_regex = rx.words(day_words)
-    time_words = [:second, :minute, :hour, :day, :week, :month]
+    time_words = [:second, :minute, :hour, :day, :week, :month, :year]
     time_words_regex = rx.words(time_words, suffix: "s?")
-    time_str = words[/\b(in) \d+ #{time_words_regex}/]
+    time_str = words[/\b(in) (\d+|an?) #{time_words_regex}/]
     time_str ||= words[/(#{day_words_regex} )?\b(at) \d+:?\d*( ?(am|pm))?( #{day_words_regex})?/]
     time_str ||= words[/\d+ #{time_words_regex} \b(from now|ago)\b/]
     time_str ||= words[/((next|last) )?#{day_words_regex}/]
@@ -17,6 +17,7 @@ module Jarvis::Times
 
     # Need to clean up a little bit for Chronic syntax
     time_str = time_str.to_s.gsub(/ ?\b(at)\b ?/, " ")
+    time_str = time_str.to_s.gsub(/\b(?:in) an? (#{time_words_regex})/, 'in 1 \1')
     time_str = time_str.gsub(/(.+)(#{day_words_regex})/) do |found|
       "#{Regexp.last_match(2)} #{Regexp.last_match(1)}"
     end

@@ -1,9 +1,9 @@
 # =============================== TODO ===============================
 # Allow asking questions: What's my car temp? What's the house temp? etc...
+# * Pick random number, weather update...
 # create a timer that sends a WS to Dashboard and starts a timer (or sms? How to determine which is which?)
 # Ability to undo messages or logs
 # If question that doesn't match others, google and read the first result?
-# Pick random number, weather update...
 # (do thing) tonight > schedule thing for 7pm
 # (do thing) in the morning > schedule thing for 8am
 # Able to schedule an event for "every day" -> For example, sending good morning text
@@ -12,7 +12,6 @@
 # * When <5 minutes from house, trigger given action
 # Eventually? "Let me know before any night that's going to be a hard freeze"
 # Monitor phone location with FindMy API
-# Text me at 11:15 AM tomorrow saying Move schedule for Friday
 # Add budget stuff back in
 # > I don’t remember what I had for breakfast
 # > When was the last time I had <food>
@@ -22,6 +21,7 @@
 # Log thing an hour ago
 # Able to see schedules somehow
 # Able to paste in an address and have it go to the car
+# Remind me every 5 minutes to jump until I say stop 😱
 
 
 # =============================== Desired examples ===============================
