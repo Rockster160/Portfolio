@@ -24,6 +24,7 @@
 # > What was the last thing I ate?
 # Log thing an hour ago
 # Able to see schedules somehow
+# Able to paste in an address and have it go to the car
 
 
 # =============================== Desired examples ===============================

@@ -135,7 +135,6 @@ import { shiftTempToColor, dash_colors } from "../vars"
         this.data.loading = false
         this.data.failed = true
         clearTimeout(this.data.refresh_timer)
-        // resetTimeout(Time.minutes(5))
         renderLines()
         return
       } else {
@@ -157,7 +156,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
         let eta_minutes = constrain(parseInt(this.data.charging.eta) || 60, 1, 60)
         refresh_next = Time.minutes(eta_minutes)
       } else {
-        refresh_next = Time.hours(3)
+        refresh_next = Time.hours(1)
       }
 
       resetTimeout(refresh_next)

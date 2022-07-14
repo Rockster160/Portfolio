@@ -1,17 +1,15 @@
 module Jarvis::Text
   module_function
 
+  IM_HERE_DIRECT_RESPONSES = [
+    "At your service, sir.",
+    "Good --time--, sir."
+  ]
   IM_HERE_QUESTION_RESPONSES = [
     "For you sir, always.",
     "At your service, sir.",
     "Yes, sir.",
-    "Good --time--, sir"
-  ]
-  IM_HERE_DIRECT_RESPONSES = [
-    "For you sir, always.",
-    "At your service, sir.",
-    "Yes, sir.",
-    "Good --time--, sir"
+    "Good --time--, sir."
   ]
   APPRECIATE_RESPONSES = [
     "You're welcome, sir."

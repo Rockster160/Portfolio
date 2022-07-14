@@ -1,3 +1,5 @@
+import { Time } from "./_time"
+
 (function() {
   let cell = undefined
 
@@ -15,6 +17,7 @@
 
   cell = Cell.register({
     title: "Jarvis",
+    wrap: true,
     onload: function() {
       this.data.scroll = 0
       renderLines()
@@ -23,7 +26,7 @@
       // TODO: Do stuff with msg.data
       if (msg.say?.trim()?.length > 0)  {
         let history = getHistory()
-        history.unshift(msg.say)
+        history.unshift("[" + Time.local() + "] " + msg.say)
         saveHistory(history)
 
         renderLines(history)
