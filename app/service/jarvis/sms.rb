@@ -16,7 +16,8 @@ class Jarvis::Sms < Jarvis::Action
 
   def parse_text_words
     @args = @msg.gsub(/#{pre_words}* ?#{sms_words} ?#{post_words}*/i, "")
-    @args = @args.squish.tap { |words| words[0] = words[0]&.upcase }
+    @args = @args.squish.presence&.tap { |words| words[0] = words[0]&.upcase }
+    @args = @args || "You asked me to text you, sir."
   end
 
   def sms_words

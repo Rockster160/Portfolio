@@ -289,6 +289,7 @@ RSpec.describe Jarvis do
       "Message me hype train" => "Hype train",
       "Send me a msg that says time to go shopping" => "Time to go shopping",
       "Text me go do something" => "Go do something",
+      "Text me" => "You asked me to text you, sir.",
     }
 
     actions.each do |action, msg|
