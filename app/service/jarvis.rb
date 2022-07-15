@@ -18,7 +18,6 @@
 # > When was the last time I ate
 # > I don’t know the last time I ate
 # > What was the last thing I ate?
-# Log thing an hour ago
 # Able to see schedules somehow
 # Able to paste in an address and have it go to the car
 # Remind me every 5 minutes to jump until I say stop 😱

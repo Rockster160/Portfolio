@@ -41,5 +41,6 @@ Time.local = function(ms_since_epoch) {
   var hr = time.getHours()
   var mz = hr >= 12 ? "PM" : "AM"
   hr = hr > 12 ? hr - 12 : hr
-  return hr + ":" + time.getMinutes() + " " + mz
+  hr = hr == 0 ? 12 : hr
+  return hr + ":" + String(time.getMinutes()).padStart(2, "0") + " " + mz
 }

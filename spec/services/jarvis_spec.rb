@@ -360,37 +360,35 @@ RSpec.describe Jarvis do
       expect(jarvis("add something to list at 9:45 PM")).to eq("I'll add something to list on Fri Jun 24, 9:45 PM")
     end
 
-    it "can understand relative time" do
-      msg = "Do the laundry"
-      perform_enqueued_jobs {
-        expect(JarvisWorker).to receive(:perform_at).with(1.hour.from_now, @admin.id, "Remind me to do the laundry").and_call_original
-        # Call original above to make sure the SmsWorker gets called
-        expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
-
-        expect(jarvis("Remind me in an hour to do the laundry")).to eq("I'll remind you to do the laundry on Fri Jun 24, 6:45 AM")
-      }
-    end
-
-    it "can understand time names" do
-      msg = "Do the laundry"
-      perform_enqueued_jobs {
-        expect(JarvisWorker).to receive(:perform_at).with(Time.local(2022, 6, 25, 11, 15), @admin.id, "Remind me saying #{msg}").and_call_original
-        # Call original above to make sure the SmsWorker gets called
-        expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
-
-        expect(jarvis("Remind me at 11:15 AM tomorrow saying #{msg}")).to eq("I'll remind you saying #{msg} on Sat Jun 25, 11:15 AM")
-      }
-    end
-
     it "can schedule a job in the middle of a command" do
       msg = "Do the laundry"
       perform_enqueued_jobs {
-        expect(JarvisWorker).to receive(:perform_at).with(5.minutes.from_now, @admin.id, "Message me saying do the laundry").and_call_original
+        expect(JarvisWorker).to receive(:perform_at).with(5.minutes.from_now, @admin.id, "Remind me to do the laundry").and_call_original
         # Call original above to make sure the SmsWorker gets called
         expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
 
-        expect(jarvis("Message me in 5 minutes saying do the laundry")).to eq("I'll message you saying do the laundry on Fri Jun 24, 5:50 AM")
+        expect(jarvis("Remind me in 5 minutes to do the laundry")).to eq("I'll remind you to do the laundry on Fri Jun 24, 5:50 AM")
       }
+    end
+
+    actions = {
+      # If the middle of the day, check "morning" is the next morning and "11:15" does that night
+      "tomorrow" => Time.local(2022, 6, 25, 12, 00), # Default time is noon
+      "in an hour" => Time.local(2022, 6, 24, 6, 45),
+      "at 11:15 tomorrow" => Time.local(2022, 6, 25, 11, 15),
+      "at 9:15 tomorrow night" => Time.local(2022, 6, 25, 21, 15),
+      "in the morning" => Time.local(2022, 6, 24, 9, 00), # Morning is 9am - same day because it's early
+      "at 9:45 pm" => Time.local(2022, 6, 24, 21, 45),
+      "tomorrow afternoon" => Time.local(2022, 6, 25, 15, 00), # Afternoon is 3pm
+      "next wednesday" => Time.local(2022, 6, 29, 12, 00), # Default is noon
+      # "now" => Time.local(2022, 6, 24, 5, 45),
+    }
+
+    actions.each do |time_words, timestamp|
+      it "can schedule #{time_words}" do
+        expect(JarvisWorker).to receive(:perform_at).with(timestamp, @admin.id, "Do thing")
+        expect(jarvis("Do thing #{time_words}")).to eq("I'll do thing on #{timestamp.to_formatted_s(:quick_week_time)}")
+      end
     end
   end
 end
