@@ -232,6 +232,13 @@
 }
 
 .dark-mode {
+  .emails-container {
+    .email-wrapper {
+      .controls {
+        background-color: $grey-blue;
+      }
+    }
+  }
   .email-filter-buttons-container {
     color: $text-color;
   }

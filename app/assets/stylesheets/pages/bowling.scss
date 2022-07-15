@@ -643,3 +643,50 @@
     }
   }
 }
+
+.dark-mode {
+  .ctr-bowling_leagues, .ctr-bowling_sets, .ctr-bowling_games {
+    .pin-container {
+      .pin-wrapper {
+        .pin-num, .pin-dot {
+          color: $grey-blue;
+        }
+        &.fallen * {
+          fill: rgba($grey-blue, 0.4);
+          color: rgba($grey-blue, 0.4);
+        }
+        &.fallen-before * {
+          fill: rgba($grey-blue, 0.1);
+          color: rgba($grey-blue, 0.1);
+        }
+      }
+    }
+    svg {
+      fill: $grey-blue;
+    }
+    input.shot {
+      color: $grey-blue;
+    }
+    .bowler-form {
+      background: $grey-dark;
+      &.bowler-select:hover {
+        background: $grey-blue;
+      }
+    }
+    .bowler-options {
+      background: $grey-dark;
+      border: 1px solid $grey-blue;
+    }
+    .bowling-btn {
+      background: $grey-dark;
+      border-color: $grey-blue;
+
+      &:active {
+        background: $grey-blue;
+      }
+      &.active {
+        background: $grey-blue;
+      }
+    }
+  }
+}

@@ -25,6 +25,7 @@
 
 # =============================== Desired examples ===============================
 # get the car|house|home, how's the car, tell me about the car, give me the car
+# Did I leave the car/house unlocked?
 # is the car unlocked?
 # is the AC on?
 # What did I have for breakfast?
