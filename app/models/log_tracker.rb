@@ -81,5 +81,4 @@ class LogTracker < ApplicationRecord
     rendered_message = LogTrackersController.render partial: 'log_trackers/logger_row', locals: { logger: self }
     ActionCable.server.broadcast "logger_channel", message: rendered_message
   end
-
 end

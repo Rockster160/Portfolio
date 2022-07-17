@@ -5,6 +5,9 @@ class ApplicationController < ActionController::Base
   helper_method :current_user, :user_signed_in?, :guest_account?
   before_action :see_current_user, :logit
   before_action :show_guest_banner, if: :guest_account?
+  prepend_before_action :block_banned_ip
+
+  rescue_from ::ActionController::InvalidAuthenticityToken, with: :ban_spam_ip
 
   def flash_message
     flash.now[params[:flash_type].to_sym] = params[:message]
@@ -118,4 +121,29 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  def current_ip
+    @current_ip ||= request.try(:remote_ip) || request.env['HTTP_X_REAL_IP'] || request.env['REMOTE_ADDR']
+  end
+
+  def current_ip_spamming?
+    LogTracker.where(ip_address: current_ip).where(created_at: 5.seconds.ago...).count >= 5
+  end
+
+  def ip_whitelisted?
+    # If it becomes an issue, whitelist ips in some file storage
+    false
+  end
+
+  def ban_spam_ip(exception)
+    if !ip_whitelisted? && current_ip_spamming?
+      BannedIp.create(ip: current_ip)
+      SlackNotifier.notify("Banned: #{current_ip}")
+    end
+
+    raise exception
+  end
+
+  def block_banned_ip
+    head :unauthorized if BannedIp.where(ip: current_ip).any?
+  end
 end
