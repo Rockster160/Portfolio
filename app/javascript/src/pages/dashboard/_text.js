@@ -91,6 +91,9 @@ Text.numberedList = function(list) {
     return (idx+1) + ". " + line.replace(/^\d+\. /, "")
   })
 }
+Text.hr = function() {
+  return "[hr]"
+}
 Text.bold = function(text) {
   if (!text || text.length < 1) { return text }
 
@@ -210,6 +213,7 @@ Text.escapeEmoji = function(text) {
 Text.markup = function(text) {
   text = Text.escapeEmoji(text)
   text = Text.escapeSpecial(text)
+  text = text.replaceAll(/\[hr]/gi, "-".repeat(single_width))
   text = text.replaceAll(/\[bg (.*?)\](.*?)\[\/bg\]/gi, "<span style=\"background-color: $1;\">$2</span>")
   text = text.replaceAll(/\[color (.*?)\](.*?)\[\/color\]/gi, "<span style=\"color: $1;\">$2</span>")
   text = text.replaceAll(/\[e\](.*?)\[\/e\]/gi, "<e>$1</e>")

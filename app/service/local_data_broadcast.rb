@@ -29,18 +29,23 @@ class LocalDataBroadcast
     end
   end
 
-  def enrich_calendar(calendar_data)
+  def enrich_calendar(calendar_lines)
     today_str = Time.current.in_time_zone("Mountain Time (US & Canada)").strftime("%b %-d, %Y:")
-    return calendar_data if calendar_data.include?(today_str)
+    calendar_data = LocalDataCalendarParser.call
 
-    today_chunk = [
-      today_str,
-      "------------------------",
-      "  No Events left today",
-      "",
-    ]
+    # Dash colors from app/javascript/src/pages/dashboard/vars.js
+    yellow = "#FEE761"
+    lblue =  "#3D94F6"
 
-    today_chunk + calendar_data
+    calendar_data.map { |date_str, events|
+      lines = [date_str, "[hr]"]
+      events.sort_by { |evt| evt[:start_time] }.each do |event|
+        lines.push("• #{event[:name] || event[:uid]}")
+        lines.push("    [color #{lblue}]#{event[:time_str]}[/color]") if event[:time_str].present?
+        lines.push("    [color #{yellow}]#{event[:location]}[/color]") if event[:location].present?
+      end
+      lines.push("") # Empty line between days
+    }.flatten
   end
 
   def enrich_reminders(reminder_data)
