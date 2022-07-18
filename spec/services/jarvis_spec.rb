@@ -85,6 +85,7 @@ RSpec.describe Jarvis do
       allow(TeslaControl).to receive(:new).and_return(tesla_control)
     end
 
+    address = "123 fake street"
     actions = {
       start_car: {
         res: "Starting car",
@@ -183,7 +184,20 @@ RSpec.describe Jarvis do
           "car cool",
         ]
       },
+      navigate: {
+        res: "Navigating to #{address}",
+        opts: [
+          "#{address}",
+          " go to #{address}",
+          "Navigate #{address}",
+          "Take me to #{address}",
+        ]
+      },
     }
+    # take me home
+    # take me to PT
+    # take me to Home Depot
+    # go to Home Depot
 
     actions.each do |action, data|
       data[:opts].each do |opt|

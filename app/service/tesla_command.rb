@@ -64,6 +64,9 @@ class TeslaCommand
     when :honk, :horn
       @response = "Honking the horn"
       car.honk
+    when :navigate
+      @response = "Navigating to #{params}"
+      car.navigate(params)
     when :temp
       temp = 82 if params.to_s.match?(/\b(hot|heat|high)\b/)
       temp = 59 if params.to_s.match?(/\b(cold|cool|low)\b/)

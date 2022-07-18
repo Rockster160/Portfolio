@@ -118,6 +118,19 @@ class TeslaControl
     command(:honk_horn)
   end
 
+  def navigate(address)
+    address_params = {
+      type: :share_ext_content_raw,
+      locale: :"en-US",
+      timestamp_ms: (Time.current.to_f * 1000).round,
+      value: {
+        "android.intent.extra.TEXT": address,
+      },
+    }
+
+    command(:share, address_params)
+  end
+
   def set_temp(temp_F)
     temp_F = [59, 82, temp_F].sort[1]
     # Tesla expects temp in Celsius

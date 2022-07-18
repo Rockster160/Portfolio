@@ -22,9 +22,6 @@ module Jarvis::Times
       "#{Regexp.last_match(1)} #{Regexp.last_match(3)} #{Regexp.last_match(2)}"
     end
     time_str = time_str.to_s.gsub(/ ?\b(at)\b ?/, " ")
-    # puts "\e[33m[LOGIT] | #{pre_sub}\e[0m"
-    # puts "\e[33m[LOGIT] | #{time_str}\e[0m"
-    # binding.pry if words.include?("do thing")
 
     [pre_sub, safe_date_parse(time_str.squish, chronic_opts)]
   end

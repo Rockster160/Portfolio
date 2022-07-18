@@ -1,6 +1,6 @@
 class Jarvis::Tesla < Jarvis::Action
   def self.reserved_words
-    [:car, :tesla]
+    [:car, :tesla, :navigate, :take, :drive, "go to", "take me"]
   end
 
   def attempt
@@ -19,7 +19,38 @@ class Jarvis::Tesla < Jarvis::Action
   def valid_words?
     return false if @rx.match_any_words?(@msg, Jarvis.reserved_words - self.class.reserved_words)
 
-    @rx.match_any_words?(@msg, *car_commands)
+    @rx.match_any_words?(@msg, *car_commands) || @msg.squish.match?(/^#{address_regex}$/)
+  end
+
+  def address_regex
+    @address_regex ||= begin
+      street_name_words = [
+        :highway,
+        :autoroute,
+        :north,
+        :south,
+        :east,
+        :west,
+        :avenue,
+        :lane,
+        :road,
+        :route,
+        :drive,
+        :boulevard,
+        :circle,
+        :street,
+        :cir,
+        :blvd,
+        :hway,
+        :st,
+        :ave,
+        :ln,
+        :rd,
+        :hw,
+        :dr,
+      ]
+      /(suite|ste)? ?[0-9]+[ \w.,]*#{street_name_words}([ .,-]*[a-z0-9]*)*/i
+    end
   end
 
   def car_commands
@@ -29,6 +60,10 @@ class Jarvis::Tesla < Jarvis::Action
       :windows,
       :window,
       :car,
+      :navigate,
+      :drive,
+      :take,
+      :"go to",
       :tesla,
       :update,
       :reload,
@@ -56,6 +91,9 @@ class Jarvis::Tesla < Jarvis::Action
   end
 
   def parse_cmd_and_params
+    address = @msg[address_regex]
+    return [:navigate, address] if address.present?
+
     words = @msg.downcase
     cmd = nil
     if words.match?(/#{@rx.words(:the, :my)} (\w+)$/)
@@ -65,6 +103,7 @@ class Jarvis::Tesla < Jarvis::Action
     end
 
     words = words.gsub(@rx.words(:car, :tesla), "")
+    words = words.gsub(@rx.words(:take, :go, :drive), "navigate")
     words = words.gsub(/where\'?s?( is)?/, "find")
 
     if @rx.match_any_words?(words, :open, :vent)
@@ -77,7 +116,7 @@ class Jarvis::Tesla < Jarvis::Action
       "#{Regexp.last_match(1)}"
     end
 
-    words = words.gsub(@rx.words(:the, :set, :to, :is, :my), "").squish
+    words = words.gsub(@rx.words(:the, :set, :to, :is, :my, :me), "").squish
 
     [cmd, words].map(&:presence).compact # If no cmd, use the words
   end

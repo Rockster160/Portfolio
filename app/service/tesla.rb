@@ -18,6 +18,7 @@ class Tesla
     :start_car,
     :off_car,
     :honk,
+    :navigate,
     :defrost,
     :doors,
     :windows,
