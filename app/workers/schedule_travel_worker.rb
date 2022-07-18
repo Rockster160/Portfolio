@@ -16,7 +16,7 @@ class ScheduleTravelWorker
     jids_to_remove = []
 
     event_listings.each do |event_listing|
-      next unless event_listing[:name].downcase.to_sym == :travel
+      next unless event_listing[:name].to_s.downcase.to_sym == :travel
       # Remove/cancel if no longer present in calendar
       jids_to_remove.push(event_listing[:jid]) unless uids.include?(event_listing[:uid])
 
@@ -42,9 +42,10 @@ class ScheduleTravelWorker
 
   def schedulable_events(events)
     events.each_with_object([]) do |(event, idx), new_events|
-      next unless event[:name].downcase.to_sym == :travel
+      next unless event[:name].to_s.downcase.to_sym == :travel
 
       new_events.push(
+        name: event[:name],
         uid: event[:uid],
         type: :travel,
         words: "Start car",
