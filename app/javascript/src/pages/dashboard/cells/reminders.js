@@ -4,7 +4,8 @@ import { Time } from "./_time"
   window.local_reminders_cell = Cell.register({
     title: "Reminders",
     text: "Loading...",
-    refreshInterval: Time.minutes(5),
+    // We want timers to update every... Minute? But don't need to make a full server request
+    // refreshInterval: Time.minutes(5),
     wrap: true,
     flash: false,
     commands: {

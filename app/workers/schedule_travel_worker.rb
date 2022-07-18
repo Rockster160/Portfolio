@@ -2,6 +2,8 @@ class ScheduleTravelWorker
   include Sidekiq::Worker
 
   def perform
+    return if Rails.env.development?
+
     calendar_data = LocalDataCalendarParser.call
     _date, events = calendar_data.first # First should always be "today"
     events = events.sort_by { |evt| evt[:start_time] }
