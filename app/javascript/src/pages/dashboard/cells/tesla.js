@@ -105,8 +105,12 @@ import { shiftTempToColor, dash_colors } from "../vars"
   }
 
   let resetTimeout = function(time) {
+    let next_words = Time.local(Time.msSinceEpoch() + time)
+    console.log("Scheduling next run for: " + next_words + " (" + time + ")");
     clearTimeout(cell.data.refresh_timer)
     cell.data.refresh_timer = setTimeout(function() {
+      let now_words = Time.local()
+      console.log("Running update per schedule at " + now_words);
       cell.commands.run("update")
     }, time)
   }
@@ -155,8 +159,10 @@ import { shiftTempToColor, dash_colors } from "../vars"
       } else if (this.data.charging?.active) {
         let eta_minutes = constrain(parseInt(this.data.charging.eta) || 60, 1, 60)
         refresh_next = Time.minutes(eta_minutes)
+      } else if (Time.now().getHours() < 7 || Time.now().getHours() > 22) {
+        // Every 3 hours during night, every 1 hour during day
+        refresh_next = Time.hours(3)
       } else {
-        // Every 4-6 hours during night, 1 hour during day
         refresh_next = Time.hours(1)
       }
 
