@@ -43,7 +43,7 @@ class LocalDataCalendarParser
         when /uid:/i
           evt[:uid] = cal_line.sub(/\s*uid: /i, "")
         when /^\-+$/, /^$/
-          # no-op, skip the dash lines
+          # no-op, skip the dash lines and empty spaces
         else
           evt[:unknown] ||= []
           evt[:unknown].push(cal_line)

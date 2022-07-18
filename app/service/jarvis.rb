@@ -90,7 +90,7 @@ class Jarvis
     # @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/^(what|where|when|why|is|how|are)\s+(about|is|are|were|did|have|it)\b/)
     [
       Jarvis::Log,
-      Jarvis::Schedule,
+      Jarvis::ScheduleParser,
       Jarvis::List,
       Jarvis::Printer,
       Jarvis::Nest,

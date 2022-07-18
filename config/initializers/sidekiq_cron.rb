@@ -16,7 +16,7 @@ cron_jobs = [
     name: "Reschedule Items",
     class: "RescheduleItemsWorker",
     cron: every_minute
-  }
+  },
 ]
 
 if Rails.env.production?

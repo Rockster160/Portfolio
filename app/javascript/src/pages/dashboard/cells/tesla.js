@@ -156,6 +156,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
         let eta_minutes = constrain(parseInt(this.data.charging.eta) || 60, 1, 60)
         refresh_next = Time.minutes(eta_minutes)
       } else {
+        // Every 4-6 hours during night, 1 hour during day
         refresh_next = Time.hours(1)
       }
 

@@ -1,19 +1,45 @@
-class Jarvis::Schedule < Jarvis::Action
-  def attempt
-    return unless valid_words?
+class Jarvis::Schedule
+  module_function
 
-    JarvisWorker.perform_at(@scheduled_time, @user.id, @remaining_words)
-    @response = "I'll #{Jarvis::Text.rephrase(@remaining_words)} on #{@scheduled_time.to_formatted_s(:quick_week_time)}"
-
-    return @response.presence || true # Even if no response is returned, still return true since it did stuff
+  def get_events
+    DataStorage[:scheduled_events] || []
   end
 
-  def valid_words?
-    time_str, @scheduled_time = Jarvis::Times.extract_time(@msg.downcase.squish, context: :future)
-    return unless @scheduled_time
+  def schedule(*new_events)
+    events = get_events
+    new_events.each do |new_event|
+      jid = JarvisWorker.perform_at(scheduled_time, user_id, words)
 
-    @remaining_words = @msg.sub(Regexp.new("(?:\b(?:at)\b )?#{time_str}", :i), "").squish
+      events.push(
+        jid: jid,
+        scheduled_time: new_event[:scheduled_time],
+        user_id: new_event[:user_id],
+        command: new_event[:words],
+        type: new_event[:type],
+        uid: new_event[:uid],
+      )
+    end
 
-    @scheduled_time.present?
+    DataStorage[:scheduled_events] = events
+
+    jid
+  end
+
+  def cancel(*jids)
+    queue = Sidekiq::Queue.new("default")
+    queue.each do |job|
+      job.delete if job.jid.in(jids)
+    end
+
+    cleanup
+  end
+
+  def cleanup
+    queue = Sidekiq::Queue.new("default")
+    jids = queue.map(&:jid)
+
+    events = get_events.select { |evt| evt[:jid].in?(jids) }
+
+    DataStorage[:scheduled_events] = events
   end
 end

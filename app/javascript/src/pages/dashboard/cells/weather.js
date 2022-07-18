@@ -10,7 +10,7 @@ import { shiftTempToColor } from "../vars"
 
   let getNextPingTime = function() {
     let next_hour = Time.msUntilNextHour() + Time.seconds(5)
-    let ten_minutes = Time.msSinceEpoch() + Time.minutes(10)
+    let ten_minutes = Time.minutes(10)
 
     return next_hour < ten_minutes ? next_hour : ten_minutes
   }
