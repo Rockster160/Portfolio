@@ -1,4 +1,4 @@
-class TeslaCommand
+ class TeslaCommand
   def self.command(cmd, params=nil)
     new.command(cmd, params)
   end
@@ -75,7 +75,7 @@ class TeslaCommand
       )
       if address
         @response = "Navigating to #{original_params.squish}"
-        car.navigate(original_params)
+        car.navigate(address)
       else
         @response = "I can't find #{original_params.squish}"
       end
