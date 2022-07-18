@@ -33,6 +33,7 @@ sidekiq_tail_portfolio
 tail_portfolio
 public/assets/*
 local_data.json
+address_book.json
 loadtime.json
 
 /app/assets/builds/*

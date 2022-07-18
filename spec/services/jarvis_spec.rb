@@ -194,10 +194,6 @@ RSpec.describe Jarvis do
         ]
       },
     }
-    # take me home
-    # take me to PT
-    # take me to Home Depot
-    # go to Home Depot
 
     actions.each do |action, data|
       data[:opts].each do |opt|
@@ -211,6 +207,35 @@ RSpec.describe Jarvis do
           end
           expect(jarvis(opt)).to eq(data[:res])
         end
+      end
+    end
+
+    specific_actions = {
+      "take me home" => {
+        res: "Navigating to home",
+        stub: :navigate,
+      },
+      "take me to PT" => {
+        res: "Navigating to PT",
+        stub: :navigate,
+      },
+      "take me to home depot" => {
+        res: "Navigating to home depot",
+        stub: :navigate,
+      },
+      "go to Home Depot" => {
+        res: "Navigating to Home Depot",
+        stub: :navigate,
+      },
+    }
+
+    specific_actions.each do |action, data|
+      it "can #{action}" do
+        Array.wrap(data[:stub]).each do |k, args|
+          expect(tesla_control).to receive(k).with(args) if args
+          expect(tesla_control).to receive(k) unless args
+        end
+        expect(jarvis(action)).to eq(data[:res])
       end
     end
   end

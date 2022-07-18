@@ -91,6 +91,7 @@ class Jarvis
     [
       Jarvis::Log,
       Jarvis::ScheduleParser,
+      Jarvis::Navigate,
       Jarvis::List,
       Jarvis::Printer,
       Jarvis::Nest,

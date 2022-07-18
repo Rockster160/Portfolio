@@ -13,6 +13,7 @@ class TeslaCommand
     car = Tesla.new
 
     cmd = cmd.to_s.downcase.squish
+    original_params = params
     params = params.to_s.downcase.squish
     direction = :toggle
     if "#{cmd} #{params}".match?(/\b(unlock|open|lock|close|pop|vent)\b/)
@@ -65,8 +66,19 @@ class TeslaCommand
       @response = "Honking the horn"
       car.honk
     when :navigate
-      @response = "Navigating to #{params}"
-      car.navigate(params)
+      address = (
+        if params.match?(::Jarvis::Regex.address)
+          params
+        else
+          place_by_name(original_params)&.dig(1, :address)
+        end
+      )
+      if address
+        @response = "Navigating to #{original_params.squish}"
+        car.navigate(original_params)
+      else
+        @response = "I can't find #{original_params.squish}"
+      end
     when :temp
       temp = 82 if params.to_s.match?(/\b(hot|heat|high)\b/)
       temp = 59 if params.to_s.match?(/\b(cold|cool|low)\b/)
@@ -204,23 +216,21 @@ class TeslaCommand
 
   def near(loc)
     return [] unless loc.compact.length == 2
-    places.find { |name, coord| distance(coord, loc) <= 0.001 }
+    places.find { |name, details| distance(details[:loc], loc) <= 0.001 }
+  end
+
+  def place_by_name(name)
+    name = name.to_s.downcase
+    found = places.find { |place_name, _details| place_name.to_s.downcase == name }
+    found ||= places.find { |place_name, _details|
+      place_name.to_s.downcase.gsub(/[^ a-z0-9]/, "") == name.gsub(/[^ a-z0-9]/, "")
+    }
+    found ||= places.find { |place_name, _details|
+      place_name.to_s.downcase.gsub(/[^a-z]/, "") == name.gsub(/[^a-z]/, "")
+    }
   end
 
   def places
-    {
-      "Home":       [40.480397533491380, -111.99813671577154],
-      "B's":        [40.479102753787934, -111.99827125324934],
-      "PT":         [40.529137812652580, -111.85281503864579],
-      "Home Depot": [40.510199316274665, -111.98287918290242],
-      "Lowe's":     [40.524773389671120, -111.98219609144238],
-      "Bowling":    [40.523552559740600, -111.97905149726870],
-      "Walmart":    [40.506277043465650, -111.97889518732400],
-      "Harmon's":   [40.508948110252156, -112.00113553075886],
-      "Costco":     [40.513301237988970, -112.00187873309916],
-      "Rich's":     [40.665129778039770, -111.95385943760118],
-      "Doug's":     [40.475594135832644, -111.92496882799394],
-      "Wil's":      [40.606558473360530, -111.84936827661250],
-    }
+    @places ||= JSON.parse(File.read("address_book.json")).with_indifferent_access
   end
 end
