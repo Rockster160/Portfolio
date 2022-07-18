@@ -10,7 +10,9 @@ class LocalDataCalendarParser
     Time.use_zone("Mountain Time (US & Canada)") do
       @current_day = Time.current
       evt = {}
-      raw_calendar_lines.each_with_object({}) do |cal_line, parsed_data|
+      parsed_obj = {}
+      add_event(parsed_obj, evt) # Adds "today"
+      raw_calendar_lines.each_with_object(parsed_obj) do |cal_line, parsed_data|
         if cal_line.match?(/\w{3} \d{1,2}, \d{4}:/i)
           @current_day = Time.parse(cal_line)
           next

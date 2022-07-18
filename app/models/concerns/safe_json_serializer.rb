@@ -4,7 +4,7 @@ class SafeJsonSerializer
   end
 
   def self.load(str)
-    str.present? ? JSON.parse(str).try(:deep_symbolize_keys) : str
+    str.present? ? JSON.parse(str, symbolize_names: true) : str
   rescue JSON::ParserError
     str
   end

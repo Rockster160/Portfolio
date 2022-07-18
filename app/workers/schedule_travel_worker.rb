@@ -2,7 +2,6 @@ class ScheduleTravelWorker
   include Sidekiq::Worker
 
   def perform
-    # Should be idempotent, rerun every change of calendar?
     calendar_data = LocalDataCalendarParser.call
     _date, events = calendar_data.first # First should always be "today"
     events = events.sort_by { |evt| evt[:start_time] }
@@ -28,8 +27,11 @@ class ScheduleTravelWorker
 
     travel_events.each do |travel_event|
       # Add new event if calendar /  Do NOT add duplicates
-      events_to_add.push(travel_event[:uid]) unless listing_uids.include?(travel_event[:uid])
+      events_to_add.push(travel_event) unless listing_uids.include?(travel_event[:uid])
     end
+
+    Jarvis::Schedule.schedule(*events_to_add)
+    Jarvis::Schedule.cancel(*jids_to_remove)
   end
 
   def times_near?(time1, time2)
@@ -51,20 +53,19 @@ class ScheduleTravelWorker
       followup_events = events.filter_map do |followup_event|
         travel_range = (event[:start_time] - 5.minutes)..(event[:end_time] + 20.minutes)
 
-        travel_range.cover?(followup_event[:start_time])
+        followup_event if travel_range.cover?(followup_event[:start_time])
       end
 
-      traveling_to = followup_events.filter_map { |evt|
-        next if evt[:location]&.include?("Webinar")
-
-        evt[:location]
-      }.compact.first
+      traveling_to = followup_events.find { |evt|
+        next if evt[:location].blank?
+        !evt[:location].include?("Webinar")
+      }
 
       if traveling_to.present?
         new_events.push(
           uid: traveling_to[:uid],
           type: :travel,
-          words: "Take me to #{traveling_to}",
+          words: "Take me to #{traveling_to[:location]}",
           user_id: 1,
           scheduled_time: event[:start_time] - 5.minutes,
         )
