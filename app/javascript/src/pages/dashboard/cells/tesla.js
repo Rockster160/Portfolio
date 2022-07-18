@@ -163,7 +163,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
         // Every 3 hours during night, every 1 hour during day
         refresh_next = Time.hours(3)
       } else {
-        refresh_next = Time.hours(1)
+        refresh_next = Time.hour()
       }
 
       resetTimeout(refresh_next)

@@ -1,6 +1,4 @@
 # https://tesla-api.timdorr.com/
-# https://tesla-api.timdorr.com/vehicle/commands/sharing#post-api-1-vehicles-id-command-share
-# (suite|ste)? ?[0-9]+[ \w.,]*\b(highway|autoroute|north|south|east|west|avenue|lane|road|route|drive|boulevard|circle|street|cir|blvd|hway|st|ave|ln|rd|hw|dr)\b([ .,-]*[a-z0-9]*)*
 
 class TeslaControl
   attr_accessor :access_token, :refresh_token, :car

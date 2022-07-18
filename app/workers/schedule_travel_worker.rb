@@ -43,6 +43,7 @@ class ScheduleTravelWorker
   def schedulable_events(events)
     events.each_with_object([]) do |(event, idx), new_events|
       next unless event[:name].to_s.downcase.to_sym == :travel
+      next if event[:start_time] - 6.minutes > Time.current # Extra minute for padding
 
       new_events.push(
         name: event[:name],
@@ -53,16 +54,20 @@ class ScheduleTravelWorker
         scheduled_time: event[:start_time] - 5.minutes,
       )
 
-      followup_events = events.filter_map do |followup_event|
+      followup_events = events.select do |followup_event|
         travel_range = (event[:start_time] - 5.minutes)..(event[:end_time] + 20.minutes)
 
         followup_event if travel_range.cover?(followup_event[:start_time])
       end
 
-      traveling_to = followup_events.find { |evt|
-        next if evt[:location].blank?
-        !evt[:location].include?("Webinar")
-      }
+      traveling_to = followup_events.filter_map { |evt|
+        next evt if evt[:location].present? && !evt[:location].include?("Webinar")
+
+        contact = AddressBook.contact_by_name(evt[:name])
+        next unless contact
+
+        evt.merge(location: contact[:address])
+      }.first
 
       if traveling_to.present?
         new_events.push(
@@ -74,7 +79,7 @@ class ScheduleTravelWorker
         )
       elsif followup_events.none?
         new_events.push(
-          uid: event[:uid],
+          uid: event[:uid] + "-1", # Adding an extra char so the uids are different
           type: :travel,
           words: "Take me home",
           user_id: 1,

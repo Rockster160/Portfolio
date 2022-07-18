@@ -70,7 +70,7 @@
         if params.match?(::Jarvis::Regex.address)
           params
         else
-          place_by_name(original_params)&.dig(1, :address)
+          AddressBook.contact_by_name(original_params)&.dig(1, :address)
         end
       )
       if address
@@ -176,7 +176,7 @@
       locked: true,
       drive: {
         action: ["Driving", "Near", "At", "Stopped"].sample,
-        location: places.keys.sample,
+        location: AddressBook.contacts.keys.sample,
         speed: 0,
       },
       timestamp: Time.current.to_i
@@ -187,50 +187,14 @@
     loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
     is_driving = data.dig(:drive_state, :speed).to_i > 0
 
-    place = near(loc)
+    place = AddressBook.near(loc)
     action = is_driving ? :Near : :At
     return { action: action, location: place[0] } if place
 
     action = is_driving ? :Driving : :Stopped
-    city = reverse_geocode(loc) if loc.compact.length == 2
+    city = AddressBook.reverse_geocode(loc) if loc.compact.length == 2
     return { action: action, location: city } if city
 
     { action: action, location: "<Unknown>" }
-  end
-
-  def reverse_geocode(loc)
-    return "Herriman" unless Rails.env.production?
-
-    url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=#{loc.join(",")}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
-    res = RestClient.get(url)
-    json = JSON.parse(res.body, symbolize_names: true)
-    json.dig(:results, 0, :address_components)&.find { |comp|
-      comp[:types] == ["locality", "political"]
-    }&.dig(:short_name)
-  end
-
-  def distance(c1, c2)
-    # √[(x₂ - x₁)² + (y₂ - y₁)²]
-    Math.sqrt((c2[0] - c1[0])**2 + (c2[1] - c1[1])**2)
-  end
-
-  def near(loc)
-    return [] unless loc.compact.length == 2
-    places.find { |name, details| distance(details[:loc], loc) <= 0.001 }
-  end
-
-  def place_by_name(name)
-    name = name.to_s.downcase
-    found = places.find { |place_name, _details| place_name.to_s.downcase == name }
-    found ||= places.find { |place_name, _details|
-      place_name.to_s.downcase.gsub(/[^ a-z0-9]/, "") == name.gsub(/[^ a-z0-9]/, "")
-    }
-    found ||= places.find { |place_name, _details|
-      place_name.to_s.downcase.gsub(/[^a-z]/, "") == name.gsub(/[^a-z]/, "")
-    }
-  end
-
-  def places
-    @places ||= JSON.parse(File.read("address_book.json")).with_indifferent_access
   end
 end
