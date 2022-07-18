@@ -24,7 +24,7 @@ module Jarvis::Schedule
   end
 
   def cancel(*jids)
-    Sidekiq::Queue.new("default").each do |job|
+    Sidekiq::ScheduledSet.new.each do |job|
       job.delete if jids.include?(job.jid)
     end
 
@@ -32,7 +32,7 @@ module Jarvis::Schedule
   end
 
   def cleanup
-    jids = Sidekiq::Queue.new("default").map(&:jid)
+    jids = Sidekiq::ScheduledSet.new.map(&:jid)
 
     events = get_events.select { |evt| evt[:jid].in?(jids) }
 
