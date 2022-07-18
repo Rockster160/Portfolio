@@ -15,6 +15,6 @@
     "esbuild": "^0.14.42",
     "esbuild-rails": "^1.0.3",
     "jquery": "^3.6.0",
-    "jquery-ui": "^1.13.1"
+    "jquery-ui": "^1.13.2"
   }
 }
