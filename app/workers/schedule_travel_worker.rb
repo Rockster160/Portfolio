@@ -29,7 +29,7 @@ class ScheduleTravelWorker
           evt[:uid]
         }.compact
 
-        listing_uids.delete_if { |uid| rescheduled_uids.include?(uid) }
+        listing_uids.delete_if { |uid| rescheduled_uids.any? { |ruid| uid.starts_with?(ruid) } }
         next if rescheduled_uids.none?
       end
 
