@@ -60,14 +60,14 @@ class ScheduleTravelWorker
         followup_event if travel_range.cover?(followup_event[:start_time])
       end
 
-      traveling_to = followup_events.filter_map { |evt|
-        next evt if evt[:location].present? && !evt[:location].include?("Webinar")
+      traveling_to = followup_events.map { |evt|
+        break evt if evt[:location].present? && !evt[:location].include?("Webinar")
 
         contact = AddressBook.contact_by_name(evt[:name])
         next unless contact
 
-        evt.merge(location: contact[:address])
-      }.first
+        break evt.merge(location: contact[:address])
+      }.compact
 
       if traveling_to.present?
         new_events.push(
