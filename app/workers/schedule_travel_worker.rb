@@ -41,9 +41,10 @@ class ScheduleTravelWorker
   end
 
   def schedulable_events(events)
+    now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
       next unless event[:name].to_s.downcase.to_sym == :travel
-      next if event[:start_time] - 6.minutes > Time.current # Extra minute for padding
+      next if event[:start_time] - 6.minutes > now # Extra minute for padding
 
       new_events.push(
         name: event[:name],
