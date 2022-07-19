@@ -55,6 +55,7 @@ class ScheduleTravelWorker
       )
 
       followup_events = events.select do |followup_event|
+        next if followup_event[:name].to_s.downcase.to_sym == :travel
         travel_range = (event[:start_time] - 5.minutes)..(event[:end_time] + 20.minutes)
 
         followup_event if travel_range.cover?(followup_event[:start_time])
