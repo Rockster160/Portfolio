@@ -9,19 +9,13 @@ class LocalDataCalendarParser
     raw_calendar_lines ||= JSON.parse(File.read("local_data.json")).deep_symbolize_keys[:calendar]
 
     Time.use_zone("Mountain Time (US & Canada)") do
-      @current_day = Time.current
+      @current_day = Time.zone.now
       evt = {}
       parsed_obj = {}
       add_event(parsed_obj, evt) # Adds "today"
       raw_calendar_lines.each_with_object(parsed_obj) do |cal_line, parsed_data|
         if cal_line.match?(/\w{3} \d{1,2}, \d{4}:/i)
           @current_day = Time.zone.parse(cal_line)
-          next
-        end
-
-        if cal_line.starts_with?("•")
-          add_event(parsed_data, evt)
-          evt = { name: cal_line.sub(/•\s*/, "") }
           next
         end
 
@@ -45,8 +39,9 @@ class LocalDataCalendarParser
           evt[:location] = cal_line.sub(/\s*location: /i, "")
         when /uid:/i
           evt[:uid] = cal_line.sub(/\s*uid: /i, "")
-        when /^\-+$/, /^$/
-          # no-op, skip the dash lines and empty spaces
+        when /^\-+$/, /^$/, /^•/
+          add_event(parsed_data, evt)
+          evt = { name: cal_line.sub(/•\s*/, "") }
         else
           evt[:unknown] ||= []
           evt[:unknown].push(cal_line)
