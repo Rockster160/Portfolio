@@ -22,14 +22,15 @@ class ScheduleTravelWorker
       next unless event_listing[:type].to_s.downcase.to_sym == :travel
       # Remove/cancel if no longer present in calendar
       if uids.include?(event_listing[:uid])
-        rescheduled_events = events.select { |evt|
+        rescheduled_uids = events.map { |evt|
           next unless event_listing[:uid].starts_with?(evt[:uid])
+          next if (evt[:start_time] - PRE_OFFSET).to_s == event_listing[:scheduled_time].to_s
 
-          (evt[:start_time] - PRE_OFFSET).to_s != event_listing[:scheduled_time].to_s
-        }
+          evt[:uid]
+        }.compact
 
-        listing_uids.delete_if { |uid| uid == rescheduled_events[:uid] }
-        next if rescheduled_events.none?
+        listing_uids.delete_if { |uid| rescheduled_uids.include?(uid) }
+        next if rescheduled_uids.none?
       end
 
       jids_to_remove.push(event_listing[:jid])
@@ -42,10 +43,6 @@ class ScheduleTravelWorker
 
     Jarvis::Schedule.cancel(*jids_to_remove)
     Jarvis::Schedule.schedule(*events_to_add)
-  end
-
-  def times_near?(time1, time2)
-    (time1 - time2).abs < 1.minute
   end
 
   def schedulable_events(events)
