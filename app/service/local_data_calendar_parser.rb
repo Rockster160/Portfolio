@@ -26,13 +26,13 @@ class LocalDataCalendarParser
 
           if start_time_str.present?
             start_hour, start_min = start_time_str.split(":")
-            start_hour = start_hour.to_i + 12 if start_time_str.match(/PM/)
+            start_hour = start_hour.to_i + 12 if start_time_str.match(/PM/) && start_hour.to_i < 12
             evt[:start_time] = @current_day.change(hour: start_hour.to_i, min: start_min.to_i)
           end
 
           if end_time_str.present?
             end_hour, end_min = end_time_str.split(":")
-            end_hour = end_hour.to_i + 12 if end_time_str.match(/PM/)
+            end_hour = end_hour.to_i + 12 if end_time_str.match(/PM/) && end_hour.to_i < 12
             evt[:end_time] = @current_day.change(hour: end_hour.to_i, min: end_min.to_i)
           end
         when /location:/i
