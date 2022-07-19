@@ -1,6 +1,9 @@
 class ScheduleTravelWorker
   include Sidekiq::Worker
 
+  PRE_OFFSET = 5.minutes
+  POST_OFFSET = 20.minutes
+
   def perform
     return if Rails.env.development?
 
@@ -16,15 +19,20 @@ class ScheduleTravelWorker
     jids_to_remove = []
 
     event_listings.each do |event_listing|
-      next unless event_listing[:name].to_s.downcase.to_sym == :travel
+      next unless event_listing[:type].to_s.downcase.to_sym == :travel
       # Remove/cancel if no longer present in calendar
-      jids_to_remove.push(event_listing[:jid]) unless uids.include?(event_listing[:uid])
+      if uids.include?(event_listing[:uid])
+        rescheduled_events = events.select { |evt|
+          next unless event_listing[:uid].starts_with?(evt[:uid])
 
-      # Reschedule items if the timestamps don't match
-      timestamp = Time.parse(event_listing[:scheduled_time])
-      next if travel_events.any? { |travel_event| times_near?(travel_event[:start_time], timestamp) }
+          (evt[:start_time] - PRE_OFFSET).to_s != event_listing[:scheduled_time].to_s
+        }
 
-      listing_uids.delete_if { |uid| uid == travel_event[:uid] }
+        listing_uids.delete_if { |uid| uid == rescheduled_events[:uid] }
+        next if rescheduled_events.none?
+      end
+
+      jids_to_remove.push(event_listing[:jid])
     end
 
     travel_events.each do |travel_event|
@@ -32,8 +40,8 @@ class ScheduleTravelWorker
       events_to_add.push(travel_event) unless listing_uids.include?(travel_event[:uid])
     end
 
-    Jarvis::Schedule.schedule(*events_to_add)
     Jarvis::Schedule.cancel(*jids_to_remove)
+    Jarvis::Schedule.schedule(*events_to_add)
   end
 
   def times_near?(time1, time2)
@@ -44,7 +52,7 @@ class ScheduleTravelWorker
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
       next unless event[:name].to_s.downcase.to_sym == :travel
-      next if event[:start_time] - 6.minutes < now # Extra minute for padding
+      next if event[:start_time] - PRE_OFFSET - 1.minute < now # Extra minute for padding
 
       new_events.push(
         name: event[:name],
@@ -52,12 +60,12 @@ class ScheduleTravelWorker
         type: :travel,
         words: "Start car",
         user_id: 1,
-        scheduled_time: event[:start_time] - 5.minutes,
+        scheduled_time: event[:start_time] - PRE_OFFSET,
       )
 
       followup_events = events.select do |followup_event|
         next if followup_event[:name].to_s.downcase.to_sym == :travel
-        travel_range = (event[:start_time] - 5.minutes)..(event[:end_time] + 20.minutes)
+        travel_range = (event[:start_time] - PRE_OFFSET)..(event[:end_time] + POST_OFFSET)
 
         followup_event if travel_range.cover?(followup_event[:start_time])
       end
@@ -77,7 +85,7 @@ class ScheduleTravelWorker
           type: :travel,
           words: "Take me to #{traveling_to[:location]}",
           user_id: 1,
-          scheduled_time: event[:start_time] - 5.minutes,
+          scheduled_time: event[:start_time] - PRE_OFFSET,
         )
       elsif followup_events.none?
         new_events.push(
@@ -85,7 +93,7 @@ class ScheduleTravelWorker
           type: :travel,
           words: "Take me home",
           user_id: 1,
-          scheduled_time: event[:start_time] - 5.minutes,
+          scheduled_time: event[:start_time] - PRE_OFFSET,
         )
       end
     end
