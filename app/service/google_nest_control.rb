@@ -2,7 +2,7 @@ class GoogleNestControl
   PROJECT_ID = ENV.fetch("PORTFOLIO_GCP_PROJECT_ID")
   CLIENT_ID = ENV.fetch("PORTFOLIO_GCP_CLIENT_ID")
   CLIENT_SECRET = ENV.fetch("PORTFOLIO_GCP_CLIENT_SECRET")
-  REDIRECT_URI = "https://ardesian.com"
+  REDIRECT_URI = "https://ardesian.com/nest_subscribe"
   BASE_URL = "https://smartdevicemanagement.googleapis.com/v1"
 
   attr_accessor :access_token, :refresh_token

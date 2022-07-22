@@ -16,4 +16,9 @@ class IndexController < ApplicationController
       SmsWorker.perform_async(from_number, "Sorry- I'm not sure who you are. Please log in and add your phone number before using SMS.")
     end
   end
+
+  def nest_subscribe
+    GoogleNestControl.subscribe(params[:code])
+    render :home
+  end
 end

@@ -7,6 +7,7 @@ Rails.application.routes.draw do
 
   root "index#home"
   post "/talk" => "index#talk"
+  post "/nest_subscribe" => "index#nest_subscribe"
   post "/jarvis" => "jarvis#command"
   post "proxy" => "proxy#proxy"
   post "/printer_control" => "printers#control"
