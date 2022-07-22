@@ -40,7 +40,7 @@ class LocalDataBroadcast
 
     calendar_data.map { |date_str, events|
       lines = [date_str, "[hr]"]
-      events.sort_by { |evt| evt[:start_time] }.each do |event|
+      events.sort_by { |evt| evt[:start_time] || Time.current }.each do |event|
         lines.push("• #{event[:name] || event[:uid]}")
         lines.push("    [color #{lblue}]#{event[:time_str]}[/color]") if event[:time_str].present?
         lines.push("    [color #{yellow}]#{event[:location]}[/color]") if event[:location].present?
