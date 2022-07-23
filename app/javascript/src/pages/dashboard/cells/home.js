@@ -5,6 +5,17 @@ import { dash_colors } from "../vars"
 
 (function() {
   var cell = undefined
+  let flashing = undefined
+  let flash_on = true
+
+  let flash = function(active) {
+    if (active) {
+      flashing = flashing || setInterval(renderLines, 400)
+    } else {
+      clearInterval(flashing)
+      flashing = undefined
+    }
+  }
 
   let renderLines = function() {
     let lines = []
@@ -13,11 +24,22 @@ import { dash_colors } from "../vars"
 
     if ("open" in (cell.data?.garage || {})) {
       if (cell.data.garage.open) {
+        flash(false)
         first_row.push(Text.color(dash_colors.orange, "  [ico ti ti-mdi-garage_open]"))
-      } else {
+      } else if (cell.data.garage.closed) {
+        flash(false)
         first_row.push(Text.color(dash_colors.green, "  [ico ti ti-mdi-garage]"))
+      } else {
+        flash(true)
+        if (flash_on) {
+          first_row.push(Text.color(dash_colors.yellow, "  [ico ti ti-mdi-garage_open]"))
+        } else {
+          first_row.push(Text.color(dash_colors.yellow, "    "))
+        }
+        flash_on = !flash_on
       }
     } else {
+      flash(false)
       first_row.push(Text.color(dash_colors.grey, " [ico ti ti-mdi-garage]?"))
     }
 
@@ -103,6 +125,8 @@ import { dash_colors } from "../vars"
         if (msg.data?.garageState) {
           cell.recent_garage = true
           cell.data.garage.open = msg.data.garageState == "open"
+          cell.data.garage.closed = msg.data.garageState == "closed"
+          cell.data.garage.between = msg.data.garageState == "between"
         }
 
         renderLines()
