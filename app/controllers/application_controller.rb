@@ -126,7 +126,7 @@ class ApplicationController < ActionController::Base
   end
 
   def current_ip_spamming?
-    LogTracker.where(ip_address: current_ip).where(created_at: 5.seconds.ago...).count >= 5
+    LogTracker.where(ip_address: current_ip).where(created_at: 30.seconds.ago...).count >= 5
   end
 
   def ip_whitelisted?
