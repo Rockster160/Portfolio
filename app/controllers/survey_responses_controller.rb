@@ -1,5 +1,5 @@
 class SurveyResponsesController < ApplicationController
-  skip_before_action :verify_authenticity_token
+  skip_before_action :verify_authenticity_token, raise: false
 
   def show
     @survey_response = UserSurvey.find_by!(token: params[:id])

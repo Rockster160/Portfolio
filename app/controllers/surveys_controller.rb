@@ -1,6 +1,6 @@
 class SurveysController < ApplicationController
   before_action :authorize_user
-  skip_before_action :verify_authenticity_token
+  skip_before_action :verify_authenticity_token, raise: false
 
   def index
     @surveys = Survey.all
