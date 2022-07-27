@@ -186,7 +186,7 @@
 
     place = AddressBook.near(loc)
     action = is_driving ? :Near : :At
-    return { action: action, location: place[0] } if place
+    return { action: action, location: place[:name] } if place
 
     action = is_driving ? :Driving : :Stopped
     city = AddressBook.reverse_geocode(loc) if loc.compact.length == 2
