@@ -173,7 +173,7 @@
       locked: true,
       drive: {
         action: ["Driving", "Near", "At", "Stopped"].sample,
-        location: AddressBook.contacts.keys.sample,
+        location: AddressBook.contacts.map { |c| c[:name] }.sample,
         speed: 0,
       },
       timestamp: Time.current.to_i

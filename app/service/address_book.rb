@@ -56,7 +56,7 @@ module AddressBook
   def near(coord, distance=0.001)
     return [] unless coord.compact.length == 2
 
-    contacts.find { |name, details| distance(details[:loc], coord) <= distance }
+    contacts.find { |details| distance(details[:loc], coord) <= distance }
   end
 
   def reverse_geocode(loc)
