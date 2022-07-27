@@ -1,7 +1,7 @@
 class ApplicationController < ActionController::Base
   # Prevent CSRF attacks by raising an exception.
   # For APIs, you may want to use :null_session instead.
-  # protect_from_forgery with: :exception
+  protect_from_forgery with: :exception, if: { current_user&.id != 1 } # Hack- skip CSRF if it's me
   helper_method :current_user, :user_signed_in?, :guest_account?
   before_action :see_current_user, :logit
   before_action :show_guest_banner, if: :guest_account?
@@ -134,7 +134,6 @@ class ApplicationController < ActionController::Base
   end
 
   def ban_spam_ip(exception)
-    return if current_user&.id == 1 # Hack- skip CSRF if it's me
     if !ip_whitelisted? && current_ip_spamming?
       BannedIp.find_or_create_by(ip: current_ip)
       SlackNotifier.notify("Banned: #{current_ip}")
