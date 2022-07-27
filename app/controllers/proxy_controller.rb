@@ -1,6 +1,6 @@
 class ProxyController < ApplicationController
   before_action :authorize_admin
-  skip_before_action :verify_authenticity_token, raise: false
+  skip_before_action :verify_authenticity_token
 
   def proxy
     respond_to do |format|

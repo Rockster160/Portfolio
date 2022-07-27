@@ -1,4 +1,5 @@
 class Users::RegistrationsController < ApplicationController
+  protect_from_forgery with: :exception
   before_action :unauthorize_user, :set_invitation_token
 
   def new

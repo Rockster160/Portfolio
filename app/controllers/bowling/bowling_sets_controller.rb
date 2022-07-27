@@ -1,6 +1,6 @@
 module Bowling
   class BowlingSetsController < ApplicationController
-    skip_before_action :verify_authenticity_token, raise: false
+    skip_before_action :verify_authenticity_token
     before_action :authorize_user, :set_set
 
     def show
