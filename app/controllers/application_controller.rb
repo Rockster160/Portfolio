@@ -130,13 +130,12 @@ class ApplicationController < ActionController::Base
   end
 
   def ip_whitelisted?
-    # If it becomes an issue, whitelist ips in some file storage
-    false
+    BannedIp.where(ip: current_ip, whitelisted: true).any?
   end
 
   def ban_spam_ip(exception)
     if !ip_whitelisted? && current_ip_spamming?
-      BannedIp.create(ip: current_ip)
+      BannedIp.find_or_create_by(ip: current_ip)
       SlackNotifier.notify("Banned: #{current_ip}")
     end
 
@@ -144,6 +143,6 @@ class ApplicationController < ActionController::Base
   end
 
   def block_banned_ip
-    head :unauthorized if BannedIp.where(ip: current_ip).any?
+    head :unauthorized if BannedIp.where(ip: current_ip, whitelisted: false).any?
   end
 end
