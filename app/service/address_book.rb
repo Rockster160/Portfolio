@@ -2,7 +2,11 @@ module AddressBook
   module_function
 
   def contacts
-    @contacts ||= JSON.parse(File.read("address_book.json")).with_indifferent_access
+    @contacts ||= JSON.parse(File.read("address_book.json"), symbolize_names: true)
+  end
+
+  def home
+    contact_by_name("Home")
   end
 
   def distance(c1, c2)
@@ -12,13 +16,41 @@ module AddressBook
 
   def contact_by_name(name)
     name = name.to_s.downcase
-    found = contacts.find { |place_name, _details| place_name.to_s.downcase == name }
-    found ||= contacts.find { |place_name, _details|
-      place_name.to_s.downcase.gsub(/[^ a-z0-9]/, "") == name.gsub(/[^ a-z0-9]/, "")
+    # Exact match (no casing)
+    found = contacts.find { |details| details[:name].to_s.downcase == name }
+    # Match without special chars
+    found ||= contacts.find { |details|
+      details[:name].to_s.downcase.gsub(/[^ a-z0-9]/, "") == name.gsub(/[^ a-z0-9]/, "")
     }
-    found ||= contacts.find { |place_name, _details|
-      place_name.to_s.downcase.gsub(/[^a-z]/, "") == name.gsub(/[^a-z]/, "")
+    # Match with only letters
+    found ||= contacts.find { |details|
+      details[:name].to_s.downcase.gsub(/[^a-z]/, "") == name.gsub(/[^a-z]/, "")
     }
+  end
+
+  def address_from_name(name, loc=nil)
+    # TODO: This should default to the current location of phone
+    loc ||= home[:loc]
+    params = {
+      input: name,
+      inputtype: :textquery,
+      fields: [:formatted_address, :geometry].join(","),
+      locationbias: "point:#{loc.join(",")}",
+      key: ENV["PORTFOLIO_GMAPS_PAID_KEY"],
+    }.to_query
+
+    url = "https://maps.googleapis.com/maps/api/place/findplacefromtext/json?#{params}"
+    res = RestClient.get(url)
+    json = JSON.parse(res.body, symbolize_names: true)
+
+    if json&.dig(:candidates)&.one?
+      json.dig(:candidates).first[:formatted_address]
+    else
+      json.dig(:candidates).sort_by { |candidate|
+        next if candidate&.dig(:geometry, :location).blank?
+        distance(loc, candidate.dig(:geometry, :location).values)
+      }.first&.dig(:formatted_address)
+    end
   end
 
   def near(coord, distance=0.001)

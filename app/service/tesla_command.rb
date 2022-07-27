@@ -66,14 +66,11 @@
       @response = "Honking the horn"
       car.honk
     when :navigate
-      address = (
-        if params.match?(::Jarvis::Regex.address)
-          params
-        else
-          AddressBook.contact_by_name(original_params)&.dig(1, :address)
-        end
-      )
-      if address
+      address = params[::Jarvis::Regex.address]&.squish.presence if params.match?(::Jarvis::Regex.address)
+      address ||= AddressBook.contact_by_name(original_params)&.dig(:address)
+      address ||= AddressBook.address_from_name(original_params)
+
+      if address.present?
         @response = "Navigating to #{original_params.squish}"
         car.navigate(address)
       else
