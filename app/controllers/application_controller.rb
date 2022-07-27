@@ -134,6 +134,7 @@ class ApplicationController < ActionController::Base
   end
 
   def ban_spam_ip(exception)
+    return if current_user&.id == 1 # Hack- skip CSRF if it's me
     if !ip_whitelisted? && current_ip_spamming?
       BannedIp.find_or_create_by(ip: current_ip)
       SlackNotifier.notify("Banned: #{current_ip}")
