@@ -18,7 +18,7 @@ class LocalDataBroadcast
     end
 
     ActionCable.server.broadcast "local_data_channel", encriched_data(data)
-    ScheduleTravelWorker.perform_async
+    # ScheduleTravelWorker.perform_async
   end
 
   private

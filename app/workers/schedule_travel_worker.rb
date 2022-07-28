@@ -5,6 +5,7 @@ class ScheduleTravelWorker
   POST_OFFSET = 20.minutes
 
   def perform
+    return # Car is dead. :( ☠️
     return if Rails.env.development?
 
     calendar_data = LocalDataCalendarParser.call
