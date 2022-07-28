@@ -35,7 +35,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
 
   let renderLines = function() {
     cell.lines([
-      "","","",
+      "", "", "",
       Text.center(Emoji.skull + Emoji.cry + Emoji.sob),
     ])
     return

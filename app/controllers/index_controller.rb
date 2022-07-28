@@ -18,7 +18,10 @@ class IndexController < ApplicationController
   end
 
   def nest_subscribe
-    GoogleNestControl.subscribe(params[:code])
+    if current_user.try(:admin?)
+      GoogleNestControl.subscribe(params[:code])
+    end
+
     render :home
   end
 end

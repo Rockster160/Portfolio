@@ -6,6 +6,7 @@
 <% end %>
 <%= content_for(:head) do %>
   <script type="text/javascript">
+    window.Emoji = {}
     fetch("/emoji.json").then(function(res) {
       res.json().then(function(json) {
         window.Emoji = json
