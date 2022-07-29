@@ -49,6 +49,9 @@ class AmazonEmailParser
     elsif @email.html_body.include?("Now expected")
       # order-update@amazon.com
       @doc.at_css("span:contains('Now expected')")&.text.to_s[/Now expected \w+ \d+/].to_s[/\w+ \d+$/]
+    elsif @email.html_body.include?("New estimated delivery date:")
+      # order-update@amazon.com
+      @doc.at_css("span:contains('New estimated delivery date:')")&.parent&.at_css("b")&.text.to_s
     else
       SlackNotifier.notify("Failed to parse Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", channel: '#portfolio', username: 'Mail-Bot', icon_emoji: ':mailbox:')
       ""
