@@ -339,6 +339,28 @@ RSpec.describe Jarvis do
     end
   end
 
+  context "with printer" do
+    actions = {
+      "turn my printer on" => ["Pre-heating your printer", :pre],
+      "preheat printer" => ["Pre-heating your printer", :pre],
+      "turn printer off" => ["Cooling your printer", :cool],
+      "move printer back and forth" => ["Moving the print head back and forth 10mm", :move, :move],
+      "move printer side to side" => ["Moving the print head side to side 10mm", :move, :move],
+      "move printer up and down" => ["Moving the print head up and down 10mm", :move, :move],
+      "printer up" => ["Moving the print head up 10mm", :move],
+      "home printer" => ["Homing printer head", :home],
+    }
+
+    actions.each do |action, (msg, *cmds)|
+      it "can #{action}" do
+        Array.wrap(cmds).each do |cmd|
+          expect(PrinterApi).to receive(cmd)
+        end
+        expect(jarvis(action)).to eq(msg)
+      end
+    end
+  end
+
   context "with action events" do
     it "can add action events" do
       expect(jarvis("log thing")).to eq("Logged Thing")
