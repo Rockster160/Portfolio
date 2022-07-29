@@ -411,16 +411,17 @@ RSpec.describe Jarvis do
     end
 
     actions = {
+      # Time.local(2022, 6, 24, 5, 45),
       # If the middle of the day, check "morning" is the next morning and "11:15" does that night
       "tomorrow" => Time.local(2022, 6, 25, 12, 00), # Default time is noon
       "in an hour" => Time.local(2022, 6, 24, 6, 45),
       "at 11:15 tomorrow" => Time.local(2022, 6, 25, 11, 15),
       "at 9:15 tomorrow night" => Time.local(2022, 6, 25, 21, 15),
+      "at 4:30 pm yesterday" => Time.local(2022, 6, 23, 16, 30),
       "in the morning" => Time.local(2022, 6, 24, 9, 00), # Morning is 9am - same day because it's early
       "at 9:45 pm" => Time.local(2022, 6, 24, 21, 45),
       "tomorrow afternoon" => Time.local(2022, 6, 25, 15, 00), # Afternoon is 3pm
       "next wednesday" => Time.local(2022, 6, 29, 12, 00), # Default is noon
-      # "now" => Time.local(2022, 6, 24, 5, 45),
     }
 
     actions.each do |time_words, timestamp|

@@ -18,7 +18,7 @@ module Jarvis::Times
 
     # Need to clean up a little bit for Chronic syntax
     time_str = time_str.to_s.gsub(/an? (#{time_words_regex})/, '1 \1')
-    time_str = time_str.gsub(/^(.*?)(at \d+(?::\d+)?)(.*?)$/) do |found| # If two day words are found here, only 1 is moved to the front
+    time_str = time_str.gsub(/^(.*?)(at \d+(?::\d+)?(?: ?(?:a|p)m)?)(.*?)$/) do |found| # If two day words are found here, only 1 is moved to the front
       "#{Regexp.last_match(1)} #{Regexp.last_match(3)} #{Regexp.last_match(2)}"
     end
     time_str = time_str.to_s.gsub(/ ?\b(at)\b ?/, " ")

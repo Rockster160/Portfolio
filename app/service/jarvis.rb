@@ -21,7 +21,11 @@
 # Able to see schedules somehow
 # Able to paste in an address and have it go to the car
 # Remind me every 5 minutes to jump until I say stop 😱
-
+# Jarvis, Venmo X $Y
+# Somehow automate running the soecs to notify when there is a failing one Githook -> server -> test env on server?
+# Jarvis conversations- can ask questions and have a timed(?) response back
+# Auto message when garage is still open after a certain time
+# Add contacts to Jarvis for navigating
 
 # =============================== Desired examples ===============================
 # get the car|house|home, how's the car, tell me about the car, give me the car
