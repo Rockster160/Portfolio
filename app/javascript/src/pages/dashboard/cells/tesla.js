@@ -126,13 +126,14 @@ import { shiftTempToColor, dash_colors } from "../vars"
     // text: "Loading...",
     // flash: false,
     // refreshInterval: Time.minute(),
-    // reloader: function() { renderLines() },
+    reloader: function() { renderLines() },
     onload: function() {
+      setTimeout(function() { renderLines() }, 1000)
       // this.data.refresh_timer = undefined
       // this.data.loading = true
       // this.data.car = {}
       //
-      renderLines()
+      // renderLines()
       // cell.commands.run("update")
     },
     // stopped: function() {
