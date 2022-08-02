@@ -4,7 +4,7 @@ module PrinterCommand
   def command(msg)
     num = msg[/\d+/] || 10
     case msg
-    when /\b(on|pre ?heat|heat)\b/
+    when /\b(on|pre ?heat|heat|start)\b/
       PrinterApi.pre
       "Pre-heating your printer"
     when /\b(off|cool)\b/
