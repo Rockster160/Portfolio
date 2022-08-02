@@ -1,7 +1,9 @@
 import { Text } from "../_text"
 import { Time } from "./_time"
+import { dash_colors } from "../vars"
 
 (function() {
+  let cell = {}
   class Printer {
     static post(command, args) {
       return $.ajax({
@@ -13,22 +15,44 @@ import { Time } from "./_time"
     }
   }
 
-  var showPrinting = function(cell) {
-    var lines = [cell.line(0), ""]
-    lines.push(Text.center(cell.data.filename))
-    lines.push(Text.progressBar(cell.data.progress, { post_text: Math.round(cell.data.progress) + "%"}))
-    lines.push(Text.justify("       ETA: ", Time.duration(cell.data.eta) + "       "))
-    lines.push(Text.justify("       Current: ", Time.duration(cell.data.time) + "       "))
-    lines.push(Text.justify("       Est: ", Time.duration(cell.data.estimated) + "       "))
-    if (cell.data.eta_ms) {
-      lines.push(Text.justify("       Complete: ", Time.local(cell.data.eta_ms) + "       "))
-    }
-    cell.lines(lines)
+  let paddedLineFromData = function(str, duration) {
+    if (!duration) { return "" }
+    let pad = "       "
+    return Text.justify(pad + str + ": ", duration + pad)
   }
 
-  var printer = Cell.register({
+  var renderLines = function() {
+    if (!cell) { return cell.lines("Loading...") }
+    if (!cell.data.temps.tool || cell.data.fail) {
+      return cell.lines(["", "", "", Text.center(Text.color(dash_colors.red, "[ERROR]"))])
+    }
+
+    var lines = [
+      Text.center([cell.data.temps.tool, cell.data.temps.bed].join(" | ")),
+      "",
+      Text.center(cell.data.filename || "[Job not found]"),
+      (cell.data.progress == 0 || cell.data.progress) ? Text.progressBar(cell.data.progress, { post_text: Math.round(cell.data.progress) + "%"}) : "",
+      paddedLineFromData("ETA", cell.data.eta ? Time.duration(cell.data.eta) : ""),
+      paddedLineFromData("Current", cell.data.time ? Time.duration(cell.data.time) : ""),
+      paddedLineFromData("Est", cell.data.estimated ? Time.duration(cell.data.estimated) : ""),
+      paddedLineFromData("Complete", cell.data.eta_ms ? Time.local(cell.data.eta_ms) : ""),
+      "",
+      Text.justify("", Text.color(dash_colors.orange, "[EXPIRED]")),
+    ]
+
+    cell.lines(lines)
+
+    if (cell.data.lastUpdated < Time.now() + Time.minutes(6)) {
+      return cell.line(9, Text.justify("", Text.color(dash_colors.orange, "[EXPIRED]")))
+    }
+  }
+
+  cell = Cell.register({
     title: "Printer",
     text: "Loading...",
+    data: {
+      lastUpdated: Time.now()
+    },
     commands: {
       gcode: function(cmd) {
         return Printer.post("command", cmd)
@@ -67,6 +91,7 @@ import { Time } from "./_time"
       var cell = this
       // =========================================
       Printer.post("printer").done(function(data) {
+        cell.data.lastUpdated = Time.msSinceEpoch()
         var data = data
         cell.data.printing = data.state.flags.printing
         if (cell.data.printing) {
@@ -75,7 +100,7 @@ import { Time } from "./_time"
             cell.data.eta -= 1000
             if (cell.data.eta < 0) { cell.data.eta = 0 }
             cell.data.time += 1000
-            showPrinting(cell)
+            renderLines()
           }, 1000)
         }
         if (cell.data.printing || cell.data.prepping) {
@@ -94,22 +119,34 @@ import { Time } from "./_time"
         if (data.temperature.bed.target - 0.5 > data.temperature.bed.actual) {
           bed = bed + " (" + Math.round(data.temperature.bed.target) + ")"
         }
-        cell.line(0, Text.center([tool, bed].join(" | ")))
+        cell.data.temps = {
+          tool: tool,
+          bed: bed,
+        }
+        renderLines()
 
         Printer.post("job").done(function(data) {
+          cell.data.fail = false
           if (!data.job.user) {
-            return cell.line(2, Text.center("~Previous job unavailable~"))
+            cell.data.printer_data = {}
+            return renderLines()
           }
+          let printer_data = {}
 
-          cell.data.now = Time.msSinceEpoch()
-          cell.data.progress = data.progress.completion
-          cell.data.eta = data.progress.printTimeLeft * 1000
-          cell.data.time = data.progress.printTime * 1000
-          cell.data.estimated = data.job.estimatedPrintTime * 1000
-          cell.data.filename = data.job.file.display.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "")
-          cell.data.eta_ms = data.progress.completion == 100 ? cell.data.eta_ms : cell.data.now + cell.data.eta
-          showPrinting(cell)
+          printer_data.msSinceEpoch = Time.msSinceEpoch()
+          printer_data.progress = data.progress.completion
+          printer_data.eta = data.progress.printTimeLeft * 1000
+          printer_data.time = data.progress.printTime * 1000
+          printer_data.estimated = data.job.estimatedPrintTime * 1000
+          printer_data.filename = data.job.file.display.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "")
+          printer_data.eta_ms = data.progress.completion == 100 ? printer_data.eta_ms : printer_data.now + printer_data.eta
+
+          cell.data.printer_data = printer_data
+          renderLines()
         })
+      }).fail(function(data) {
+        cell.data.fail = true
+        renderLines()
       })
     },
   })
