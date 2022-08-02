@@ -1,5 +1,6 @@
 class SmsWorker
   include Sidekiq::Worker
+  sidekiq_options retry: false
 
   def perform(to, msg)
     raise "Should not text in tests!" if Rails.env.test?
