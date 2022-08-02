@@ -1,5 +1,7 @@
 # https://tesla-api.timdorr.com/
 
+# Remove to reactivate API:
+# Temp until Tesla is back to life
 class TeslaControl
   attr_accessor :access_token, :refresh_token, :car
 
@@ -186,6 +188,7 @@ class TeslaControl
   end
 
   def post_vehicle(endpoint, params={})
+    return {} # Temp until Tesla is back to life
     raise "Should not POST in tests!" if Rails.env.test?
     raise "Cannot post without access token" if @access_token.blank?
 
@@ -205,6 +208,7 @@ class TeslaControl
   end
 
   def wake_vehicle
+    return true # Temp until Tesla is back to life
     res = RestClient.post(
       "https://owner-api.teslamotors.com/api/1/vehicles/#{vehicle_id}/wake_up",
       nil,
@@ -222,6 +226,7 @@ class TeslaControl
   end
 
   def get(endpoint)
+    return { vehicles: [{id: 1}] } # Temp until Tesla is back to life
     raise "Should not GET in tests!" if Rails.env.test?
     raise "Cannot get without access token" if @access_token.blank?
 
@@ -240,6 +245,7 @@ class TeslaControl
   end
 
   def auth(params)
+    return # Temp until Tesla is back to life
     raise "Should not auth in tests!" if Rails.env.test?
 
     res = RestClient.post(
