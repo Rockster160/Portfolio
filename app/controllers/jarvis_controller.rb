@@ -5,10 +5,10 @@ class JarvisController < ApplicationController
     msg = case parsed_message
     when Hash
       @responding_alexa = true
-      slots = params.dig(:message, :request, :intent, :slots)
+      slots = params.dig(:request, :intent, :slots)
       [slots.dig(:control, :value), slots.dig(:device, :value)].compact.join(" ")
     else
-      params[:message]
+      parsed_message
     end
 
     response = Jarvis.command(current_user, msg)
@@ -23,12 +23,14 @@ class JarvisController < ApplicationController
   private
 
   def parsed_message
-    return "" if params[:message].blank?
-    return params[:message] unless params[:message].include?("{")
+    @parsed_message ||= begin
+      return "" if params[:message].blank?
+      return params[:message] unless params[:message].include?("{")
 
-    JSON.parse(params[:message], symbolize_names: true)
-  rescue JSON::ParserError
-    params[:message]
+      JSON.parse(params[:message], symbolize_names: true)
+    rescue JSON::ParserError
+      params[:message]
+    end
   end
 
   def alexa_response(words)
