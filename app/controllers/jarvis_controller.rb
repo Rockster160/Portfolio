@@ -2,7 +2,7 @@ class JarvisController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def command
-    msg = case params[:message]
+    msg = case parsed_message
     when Hash
       @responding_alexa = true
       slots = params.dig(:message, :request, :intent, :slots)
@@ -21,6 +21,15 @@ class JarvisController < ApplicationController
   end
 
   private
+
+  def parsed_message
+    return "" if params[:message].blank?
+    return params[:message] unless params[:message].include?("{")
+
+    JSON.parse(params[:message], symbolize_names: true)
+  rescue JSON::ParserError
+    params[:message]
+  end
 
   def alexa_response(words)
     {
