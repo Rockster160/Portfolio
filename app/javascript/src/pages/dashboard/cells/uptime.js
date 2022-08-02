@@ -58,12 +58,20 @@ import { dash_colors } from "../vars"
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        url: cell.data.base_url + "/farms",
+        url: cell.data.rig_url + "/farms",
         headers: {
           Authorization: "Bearer " + cell.config.hiveos_apikey,
         }
       })
     }).then(function(res) {
+      if (!res.ok) {
+        cell.data.rig_lines = [
+          "",
+          "",
+          Text.center(Text.color(dash_colors.orange, "[FAILED]")),
+        ]
+        return renderCell(cell)
+      }
       res.json().then(function(json) {
         var lines = []
         json.data.forEach(function(rig) {
@@ -169,7 +177,7 @@ import { dash_colors } from "../vars"
       uptime_data: {},
       load_data: {},
 
-      base_url: "https://api2.hiveos.farm/api/v2",
+      rig_url: "https://api2.hiveos.farm/api/v2",
     },
     socket: Server.socket("LoadtimeChannel", function(msg) {
       this.data.load_data = msg
