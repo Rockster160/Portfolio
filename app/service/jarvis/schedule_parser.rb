@@ -9,7 +9,7 @@ class Jarvis::ScheduleParser < Jarvis::Action
       type: :command,
     )
     # TODO: Use relative words if it's nearby (today, tomorrow, etc)
-    @response = "I'll #{Jarvis::Text.rephrase(@remaining_words)} on #{@scheduled_time.strftime("%a %b %-d at %-l:%M%p")}"
+    @response = "I'll #{Jarvis::Text.rephrase(@remaining_words)} on #{@scheduled_time.strftime("%a %b %-d at %-l:%M %p")}"
 
     return @response.presence || true # Even if no response is returned, still return true since it did stuff
   end

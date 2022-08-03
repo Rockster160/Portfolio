@@ -22,10 +22,6 @@ class Jarvis::Tesla < Jarvis::Action
     @rx.match_any_words?(@msg, *car_commands)
   end
 
-  def address_regex
-    @address_regex ||= ::Jarvis::Regex.address
-  end
-
   def car_commands
     [
       :doors,

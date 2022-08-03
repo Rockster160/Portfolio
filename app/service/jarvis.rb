@@ -4,8 +4,6 @@
 # create a timer that sends a WS to Dashboard and starts a timer (or sms? How to determine which is which?)
 # Ability to undo messages or logs
 # If question that doesn't match others, google and read the first result?
-# (do thing) tonight > schedule thing for 7pm
-# (do thing) in the morning > schedule thing for 8am
 # Able to schedule an event for "every day" -> For example, sending good morning text
 # Eventually? Able to say, "Remind me when I get home to..."
 # * This triggers a job that reschedules itself for distance from house - 5 minutes
@@ -19,11 +17,10 @@
 # > I don’t know the last time I ate
 # > What was the last thing I ate?
 # Able to see schedules somehow
-# Able to paste in an address and have it go to the car
 # Remind me every 5 minutes to jump until I say stop 😱
 # Jarvis, Venmo X $Y
 # Somehow automate running the soecs to notify when there is a failing one Githook -> server -> test env on server?
-# Jarvis conversations- can ask questions and have a timed(?) response back
+# Jarvis conversations- can ask questions and allow responding back
 # Auto message when garage is still open after a certain time
 # Add contacts to Jarvis for navigating
 

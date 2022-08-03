@@ -413,12 +413,12 @@ RSpec.describe Jarvis do
     # now Time.local(2022, 6, 24, 5, 45)
     it "can schedule a job for later" do
       expect(JarvisWorker).to receive(:perform_at).with(10.minutes.from_now, @admin.id, "add something to list")
-      expect(jarvis("add something to list in 10 minutes")).to eq("I'll add something to list on Fri Jun 24, 5:55 AM")
+      expect(jarvis("add something to list in 10 minutes")).to eq("I'll add something to list on Fri Jun 24 at 5:55 AM")
     end
 
     it "can schedule a job for a time" do
       expect(JarvisWorker).to receive(:perform_at).with(Time.local(2022, 6, 24, 21, 45), @admin.id, "add something to list")
-      expect(jarvis("add something to list at 9:45 PM")).to eq("I'll add something to list on Fri Jun 24, 9:45 PM")
+      expect(jarvis("add something to list at 9:45 PM")).to eq("I'll add something to list on Fri Jun 24 at 9:45 PM")
     end
 
     it "can schedule a job in the middle of a command" do
@@ -428,7 +428,7 @@ RSpec.describe Jarvis do
         # Call original above to make sure the SmsWorker gets called
         expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
 
-        expect(jarvis("Remind me in 5 minutes to do the laundry")).to eq("I'll remind you to do the laundry on Fri Jun 24, 5:50 AM")
+        expect(jarvis("Remind me in 5 minutes to do the laundry")).to eq("I'll remind you to do the laundry on Fri Jun 24 at 5:50 AM")
       }
     end
 
@@ -437,6 +437,7 @@ RSpec.describe Jarvis do
       # If the middle of the day, check "morning" is the next morning and "11:15" does that night
       "tomorrow" => Time.local(2022, 6, 25, 12, 00), # Default time is noon
       "in an hour" => Time.local(2022, 6, 24, 6, 45),
+      "tonight" => Time.local(2022, 6, 24, 22, 0),
       "at 11:15 tomorrow" => Time.local(2022, 6, 25, 11, 15),
       "at 9:15 tomorrow night" => Time.local(2022, 6, 25, 21, 15),
       "at 4:30 pm yesterday" => Time.local(2022, 6, 23, 16, 30),
@@ -449,7 +450,7 @@ RSpec.describe Jarvis do
     actions.each do |time_words, timestamp|
       it "can schedule #{time_words}" do
         expect(JarvisWorker).to receive(:perform_at).with(timestamp, @admin.id, "Do thing")
-        expect(jarvis("Do thing #{time_words}")).to eq("I'll do thing on #{timestamp.to_formatted_s(:quick_week_time)}")
+        expect(jarvis("Do thing #{time_words}")).to eq("I'll do thing on #{timestamp.strftime("%a %b %-d at %-l:%M %p")}")
       end
     end
   end
