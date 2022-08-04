@@ -5,7 +5,6 @@ class ScheduleTravelWorker
   POST_OFFSET = 20.minutes
 
   def perform
-    return # Car is dead. :( ☠️
     return if Rails.env.development?
 
     calendar_data = LocalDataCalendarParser.call
@@ -13,25 +12,40 @@ class ScheduleTravelWorker
     events = events.sort_by { |evt| evt[:start_time] }
     event_listings = Jarvis::Schedule.get_events
     listing_uids = event_listings.map { |evt| evt[:uid] }
-    travel_events = schedulable_events(events)
-    uids = travel_events.map { |evt| evt[:uid] }
+    travel_events = schedulable_travel_events(events)
+    travel_uids = travel_events.map { |evt| evt[:uid] }
+    other_events = other_events(events)
+    other_uids = other_events.map { |evt| evt[:uid] }
 
     events_to_add = []
     jids_to_remove = []
 
     event_listings.each do |event_listing|
-      next unless event_listing[:type].to_s.downcase.to_sym == :travel
-      # Remove/cancel if no longer present in calendar
-      if uids.include?(event_listing[:uid])
-        rescheduled_uids = events.map { |evt|
-          next unless event_listing[:uid].starts_with?(evt[:uid])
-          next if (evt[:start_time] - PRE_OFFSET).to_s == event_listing[:scheduled_time].to_s
+      if event_listing[:type].to_s.downcase.to_sym == :travel
+        # Remove/cancel if no longer present in calendar
+        if travel_uids.include?(event_listing[:uid])
+          rescheduled_uids = events.map { |evt|
+            next unless event_listing[:uid].starts_with?(evt[:uid])
+            next if (evt[:start_time] - PRE_OFFSET).to_s == event_listing[:scheduled_time].to_s
 
-          evt[:uid]
-        }.compact
+            evt[:uid]
+          }.compact
 
-        listing_uids.delete_if { |uid| rescheduled_uids.any? { |ruid| uid&.starts_with?(ruid) } }
-        next if rescheduled_uids.none?
+          listing_uids.delete_if { |uid| rescheduled_uids.any? { |ruid| uid&.starts_with?(ruid) } }
+          next if rescheduled_uids.none?
+        end
+      elsif event_listing[:type].to_s.downcase.to_sym == :pt
+        if other_uids.include?(event_listing[:uid])
+          rescheduled_uids = events.map { |evt|
+            next unless event_listing[:uid].starts_with?(evt[:uid])
+            next if evt[:start_time].to_s == event_listing[:scheduled_time].to_s
+
+            evt[:uid]
+          }.compact
+
+          listing_uids.delete_if { |uid| rescheduled_uids.any? { |ruid| uid&.starts_with?(ruid) } }
+          next if rescheduled_uids.none?
+        end
       end
 
       jids_to_remove.push(event_listing[:jid])
@@ -46,7 +60,25 @@ class ScheduleTravelWorker
     Jarvis::Schedule.schedule(*events_to_add)
   end
 
-  def schedulable_events(events)
+  def other_events
+    now = Time.current.in_time_zone("Mountain Time (US & Canada)")
+    events.each_with_object([]) do |(event, idx), new_events|
+      next if event[:start_time] - 1.minute < now # Extra minute for padding
+
+      if event[:name].to_s.downcase.to_sym == :pt
+        new_events.push(
+          name: event[:name],
+          uid: event[:uid],
+          type: :pt,
+          words: "Remind me to start workout",
+          user_id: 1,
+          scheduled_time: event[:start_time],
+        )
+      end
+    end
+  end
+
+  def schedulable_travel_events(events)
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
       next unless event[:name].to_s.downcase.to_sym == :travel
