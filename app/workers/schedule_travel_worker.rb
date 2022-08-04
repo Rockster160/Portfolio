@@ -56,11 +56,16 @@ class ScheduleTravelWorker
       events_to_add.push(travel_event) unless listing_uids.include?(travel_event[:uid])
     end
 
+    other_events.each do |other_event|
+      # Add new event if calendar /  Do NOT add duplicates
+      events_to_add.push(other_event) unless listing_uids.include?(other_event[:uid])
+    end
+
     Jarvis::Schedule.cancel(*jids_to_remove)
     Jarvis::Schedule.schedule(*events_to_add)
   end
 
-  def other_events
+  def other_events(events)
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
       next if event[:start_time] - 1.minute < now # Extra minute for padding
