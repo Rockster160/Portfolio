@@ -65,6 +65,10 @@ class ScheduleTravelWorker
     Jarvis::Schedule.schedule(*events_to_add)
   end
 
+  def address_book
+    @address_book ||= User.find(1).address_book
+  end
+
   def other_events(events)
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
@@ -108,7 +112,7 @@ class ScheduleTravelWorker
       traveling_to = followup_events.map { |evt|
         break evt if evt[:location].present? && !evt[:location].include?("Webinar")
 
-        contact = AddressBook.contact_by_name(evt[:name])
+        contact = address_book.contact_by_name(evt[:name])
         next unless contact
 
         break evt.merge(location: contact[:address])

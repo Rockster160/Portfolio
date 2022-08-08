@@ -18,6 +18,7 @@ class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 
   has_many :bowling_leagues, dependent: :destroy
+  has_many :contacts, dependent: :destroy
   has_many :user_lists, dependent: :destroy
   has_many :recipes, dependent: :destroy
   has_many :recipe_favorites, class_name: "RecipeFavorite", foreign_key: :favorited_by_id
@@ -92,6 +93,10 @@ class User < ApplicationRecord
 
   def see!
     # last logged in at NOW
+  end
+
+  def address_book
+    @address_book ||= AddressBook.new(self)
   end
 
   def update_with_password(new_attrs)

@@ -3,6 +3,10 @@
     new.command(cmd, params)
   end
 
+  def address_book
+    @address_book ||= User.find(1).address_book
+  end
+
   def command(cmd, params=nil)
     if Rails.env.development?
       ActionCable.server.broadcast "tesla_channel", stubbed_data
@@ -67,8 +71,8 @@
       car.honk
     when :navigate
       address = params[::Jarvis::Regex.address]&.squish.presence if params.match?(::Jarvis::Regex.address)
-      address ||= AddressBook.contact_by_name(original_params)&.dig(:address)
-      address ||= AddressBook.address_from_name(original_params)
+      address ||= address_book.contact_by_name(original_params)&.dig(:address)
+      address ||= address_book.address_from_name(original_params)
 
       if address.present?
         @response = "Navigating to #{original_params.squish}"
@@ -173,7 +177,7 @@
       locked: true,
       drive: {
         action: ["Driving", "Near", "At", "Stopped"].sample,
-        location: AddressBook.contacts.map { |c| c[:name] }.sample,
+        location: address_book.contacts.pluck(:name).sample,
         speed: 0,
       },
       timestamp: Time.current.to_i
@@ -184,12 +188,12 @@
     loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
     is_driving = data.dig(:drive_state, :speed).to_i > 0
 
-    place = AddressBook.near(loc)
+    place = address_book.near(loc)
     action = is_driving ? :Near : :At
     return { action: action, location: place[:name] } if place.present?
 
     action = is_driving ? :Driving : :Stopped
-    city = AddressBook.reverse_geocode(loc) if loc.compact.length == 2
+    city = address_book.reverse_geocode(loc) if loc.compact.length == 2
     return { action: action, location: city } if city.present?
 
     { action: action, location: "<Unknown>" }

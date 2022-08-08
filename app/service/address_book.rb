@@ -1,5 +1,7 @@
-module AddressBook
-  module_function
+class AddressBook
+  def initialize(user)
+    @user = user
+  end
 
   def contacts
     @contacts ||= JSON.parse(File.read("address_book.json"), symbolize_names: true)
@@ -17,15 +19,11 @@ module AddressBook
   def contact_by_name(name)
     name = name.to_s.downcase
     # Exact match (no casing)
-    found = contacts.find { |details| details[:name].to_s.downcase == name }
+    found = contacts.find_by("name ILIKE ?", name)
     # Match without special chars
-    found ||= contacts.find { |details|
-      details[:name].to_s.downcase.gsub(/[^ a-z0-9]/, "") == name.gsub(/[^ a-z0-9]/, "")
-    }
+    found ||= contacts.find_by("REGEXP_REPLACE(name, '[^ a-z0-9]', '', 'i') ILIKE ?", name.gsub(/[^ a-z0-9]/, ""))
     # Match with only letters
-    found ||= contacts.find { |details|
-      details[:name].to_s.downcase.gsub(/[^a-z]/, "") == name.gsub(/[^a-z]/, "")
-    }
+    found ||= contacts.find_by("REGEXP_REPLACE(name, '[^a-z]', '', 'i') ILIKE ?", name.gsub(/[^a-z]/, ""))
   end
 
   def address_from_name(name, loc=nil)
