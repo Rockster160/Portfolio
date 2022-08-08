@@ -19,9 +19,11 @@ class ScheduleTravelWorker
 
     events_to_add = []
     jids_to_remove = []
+    event_types = [:travel, :pt]
 
     event_listings.each do |event_listing|
-      if event_listing[:type].to_s.downcase.to_sym == :travel
+      event_type = event_listing[:type].to_s.downcase.to_sym
+      if event_type == :travel
         # Remove/cancel if no longer present in calendar
         if travel_uids.include?(event_listing[:uid])
           rescheduled_uids = events.map { |evt|
@@ -34,7 +36,7 @@ class ScheduleTravelWorker
           listing_uids.delete_if { |uid| rescheduled_uids.any? { |ruid| uid&.starts_with?(ruid) } }
           next if rescheduled_uids.none?
         end
-      elsif event_listing[:type].to_s.downcase.to_sym == :pt
+      elsif event_type == :pt
         if other_uids.include?(event_listing[:uid])
           rescheduled_uids = events.map { |evt|
             next unless event_listing[:uid].starts_with?(evt[:uid])
@@ -48,7 +50,7 @@ class ScheduleTravelWorker
         end
       end
 
-      jids_to_remove.push(event_listing[:jid])
+      jids_to_remove.push(event_listing[:jid]) if event_type.in?(event_types)
     end
 
     travel_events.each do |travel_event|
