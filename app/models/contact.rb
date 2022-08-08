@@ -18,4 +18,10 @@ class Contact < ApplicationRecord
   def loc
     [lat, lng]
   end
+
+  def loc=(*new_loc)
+    new_lat, new_lng = *Array.wrap(new_loc).flatten
+    self.lat = new_lat
+    self.lng = new_lng
+  end
 end

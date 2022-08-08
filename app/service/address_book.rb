@@ -4,7 +4,8 @@ class AddressBook
   end
 
   def contacts
-    @contacts ||= JSON.parse(File.read("address_book.json"), symbolize_names: true)
+    # @contacts ||= JSON.parse(File.read("address_book.json"), symbolize_names: true)
+    @contacts ||= @user.contacts
   end
 
   def home
@@ -28,7 +29,7 @@ class AddressBook
 
   def address_from_name(name, loc=nil)
     # TODO: This should default to the current location of phone
-    loc ||= home[:loc]
+    loc ||= home&.loc
     params = {
       input: name,
       inputtype: :textquery,

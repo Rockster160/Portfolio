@@ -19,6 +19,7 @@ RSpec.describe Jarvis do
       u.password = :password
       u.password_confirmation = :password
     }
+    @admin.contacts.create(JSON.parse(File.read("address_book.json"), symbolize_names: true))
     @default_list = @admin.lists.find_or_create_by(name: "TODO")
     @other_list = @admin.lists.find_or_create_by(name: "Home Depot")
     @user = @admin
