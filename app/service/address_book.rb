@@ -4,7 +4,6 @@ class AddressBook
   end
 
   def contacts
-    # @contacts ||= JSON.parse(File.read("address_book.json"), symbolize_names: true)
     @contacts ||= @user.contacts
   end
 
