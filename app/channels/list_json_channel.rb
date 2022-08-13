@@ -13,8 +13,8 @@ class ListJsonChannel < ApplicationCable::Channel
 
     if data[:get]
       list.broadcast!
+    else
+      list.update(data.slice(:add, :remove))
     end
-
-    list.update(data.slice(:add, :remove))
   end
 end

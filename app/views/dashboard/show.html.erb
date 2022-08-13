@@ -28,8 +28,8 @@
     <% if Rails.env.development? %>
       Cell.loadConfig({
         todo: {},
+        grocery: {},
         jarvis: { w: 2 },
-        ping: {},
       })
     <% else %>
       Cell.loadConfig({

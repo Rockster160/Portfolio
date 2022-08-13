@@ -24,7 +24,7 @@ import { Text } from "../_text"
       })
     },
     command: function(text) {
-      data = { message: text }
+      let data = { message: text }
       if (/^-\d+$/.test(text)) {
         var num = parseInt(text.match(/\d+/)[0])
         var lines = this.text().split("\n")
