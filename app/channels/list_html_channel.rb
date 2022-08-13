@@ -6,4 +6,8 @@ class ListHtmlChannel < ApplicationCable::Channel
   def unsubscribed
     # Any cleanup needed when channel is unsubscribed
   end
+
+  def receive(data)
+    puts "\e[33m[LOGIT] | #{data}\e[0m"
+  end
 end
