@@ -21,6 +21,10 @@ class ListsController < ApplicationController
   end
 
   def update
+    if params[:get]
+      @list.broadcast!
+      return head :ok
+    end
     if params[:sort]
       @list.sort_items!(params[:sort], params[:order])
       return head :ok
