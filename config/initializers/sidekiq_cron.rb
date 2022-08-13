@@ -3,7 +3,7 @@ return if Rails.env.test?
 every_minute = "* * * * *"
 every_hour = "0 * * * *"
 daily_9pm = "0 3 * * *"
-thursdays_at_5pm = "0 23 * * 4"
+thursdays_at_noon = "0 18 * * 4"
 monthly_5th_at_11am = "0 17 5 * *"
 monthly_15th_at_2pm = "0 20 15 * *"
 
@@ -30,7 +30,7 @@ if Rails.env.production?
     {
       name: "RefreshNestMessage",
       class: "RefreshNestMessageWorker",
-      cron: thursdays_at_5pm,
+      cron: thursdays_at_noon,
     },
     # {
     #   name:  "Charge Car",

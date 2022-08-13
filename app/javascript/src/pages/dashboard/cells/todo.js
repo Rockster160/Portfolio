@@ -6,10 +6,11 @@ import { Text } from "../_text"
     text: "Loading...",
     wrap: true,
     socket: Server.socket({
-      channel: "ListChannel",
+      channel: "ListJsonChannel",
       channel_id: "list_5",
     }, function(msg) {
       if (!msg.list_data) { return }
+      console.log(msg);
 
       var lines = Text.numberedList(msg.list_data.list_items)
       this.text(lines.join("\n"))

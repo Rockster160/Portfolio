@@ -7,6 +7,7 @@ class FitnessBroadcast
       :Workout,
       :Vitamins,
       :Fluox,
+      :Escitalopram,
       :Water,
       :Teeth,
       :Shower,

@@ -1,3 +1,9 @@
+# =============================== Bugs ===============================
+# "Take" is acting as a keyword for traveling, but should not take priority over "remind"
+#   [5:01 PM] Navigating to remind steak out
+#   [1:14 PM] I'll remind you to take steak out on Mon Aug 8 at 5:00 PM
+
+
 # =============================== TODO ===============================
 # Allow asking questions: What's my car temp? What's the house temp? etc...
 # * Pick random number, weather update...

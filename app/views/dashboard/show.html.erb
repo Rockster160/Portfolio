@@ -27,7 +27,7 @@
 
     <% if Rails.env.development? %>
       Cell.loadConfig({
-        uptime: {},
+        todo: {},
         jarvis: { w: 2 },
       })
     <% else %>
@@ -42,7 +42,6 @@
         },
 
         notes: { x: 1, y: 2, w: 2 },
-        notes: { w: 2 },
         uptime: {
           x: 3, y: 2,
           uptime_apikey: "<%= ENV.fetch("UPTIME_APIKEY") %>",

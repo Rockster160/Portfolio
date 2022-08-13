@@ -6,7 +6,7 @@ import { Text } from "../_text"
     text: "Loading...",
     wrap: true,
     socket: Server.socket({
-      channel: "ListChannel",
+      channel: "ListJsonChannel",
       channel_id: "list_1",
     }, function(msg) {
       if (!msg.list_data) { return }

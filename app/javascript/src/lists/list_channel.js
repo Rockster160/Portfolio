@@ -23,7 +23,7 @@ $(document).ready(function() {
   }
 
   consumer.subscriptions.create({
-    channel: "ListChannel",
+    channel: "ListHtmlChannel",
     channel_id: "list_" + list_id
   }, {
     connected: function() {
