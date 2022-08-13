@@ -118,7 +118,7 @@ class List < ApplicationRecord
   end
 
   def remove=(str)
-    list_items.find_by(name: str)&.destroy
+    list_items.find_by(name: str)&.soft_destroy
   end
 
   def message=(str)
@@ -145,7 +145,7 @@ class List < ApplicationRecord
       item_names.each do |item_name|
         item = list_items.by_formatted_name(item_name)
         next unless item.present?
-        if item.destroy
+        if item.soft_destroy
           destroyed_items << item
         else
           not_destroyed << item_name.squish
