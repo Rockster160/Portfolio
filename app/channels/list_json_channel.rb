@@ -9,7 +9,7 @@ class ListJsonChannel < ApplicationCable::Channel
 
   def message(data)
     data = data.deep_symbolize_keys!
-    list = List.find(params[:channel_id])
+    list = List.find(params[:channel_id].gsub(/^list_/, ""))
 
     if data[:get]
       list.broadcast!
