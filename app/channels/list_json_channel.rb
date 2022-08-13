@@ -7,7 +7,7 @@ class ListJsonChannel < ApplicationCable::Channel
     # Any cleanup needed when channel is unsubscribed
   end
 
-  def message(data)
+  def receive(data)
     data = data.deep_symbolize_keys!
     list = List.find(params[:channel_id].gsub(/^list_/, ""))
 

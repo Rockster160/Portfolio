@@ -15,13 +15,7 @@ import { Text } from "../_text"
       this.text(lines.join("\n"))
     }),
     reloader: function() {
-      var cell = this
-      $.getJSON("/lists/todo", function(data) {
-        var lines = Text.numberedList(data.list_items)
-        cell.text(lines.join("\n"))
-      }).fail(function(data) {
-        cell.text("Failed to retrieve: " + JSON.stringify(data))
-      })
+      this.ws.send({ get: true })
     },
     command: function(text) {
       let data = { message: text }
@@ -37,10 +31,7 @@ import { Text } from "../_text"
         delete data.message
       }
 
-      Server.patch("/lists/todo", data)
-        .fail(function(data) {
-          console.log("Failed to change TODO: ", data);
-        })
+      this.ws.send(data)
     },
   })
 })()
