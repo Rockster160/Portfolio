@@ -8,6 +8,7 @@ class ListJsonChannel < ApplicationCable::Channel
   end
 
   def message(data)
+    puts "\e[33m[LOGIT] | Precheck\e[0m"
     puts "\e[33m[LOGIT] | #{data}\e[0m"
   end
 end
