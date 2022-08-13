@@ -8,7 +8,13 @@ class ListJsonChannel < ApplicationCable::Channel
   end
 
   def message(data)
-    puts "\e[33m[LOGIT] | Precheck\e[0m"
-    puts "\e[33m[LOGIT] | #{data}\e[0m"
+    data = data.deep_symbolize_keys!
+    list = List.find(params[:channel_id])
+
+    if data[:get]
+      list.broadcast!
+    end
+
+    list.update(data.slice(:add, :remove))
   end
 end
