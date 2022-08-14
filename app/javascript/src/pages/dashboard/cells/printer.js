@@ -26,16 +26,17 @@ import { dash_colors } from "../vars"
     if (!cell.data.temps.tool || cell.data.fail) {
       return cell.lines(["", "", "", Text.center(Text.color(dash_colors.red, "[ERROR]"))])
     }
+    let printer_data = cell.data.printer_data || {}
 
     var lines = [
       Text.center([cell.data.temps.tool, cell.data.temps.bed].join(" | ")),
       "",
-      Text.center(cell.data.filename || "[Job not found]"),
-      (cell.data.progress == 0 || cell.data.progress) ? Text.progressBar(cell.data.progress, { post_text: Math.round(cell.data.progress) + "%"}) : "",
-      paddedLineFromData("ETA", cell.data.eta ? Time.duration(cell.data.eta) : ""),
-      paddedLineFromData("Current", cell.data.time ? Time.duration(cell.data.time) : ""),
-      paddedLineFromData("Est", cell.data.estimated ? Time.duration(cell.data.estimated) : ""),
-      paddedLineFromData("Complete", cell.data.eta_ms ? Time.local(cell.data.eta_ms) : ""),
+      Text.center(printer_data.filename || "[Job not found]"),
+      (printer_data.progress == 0 || printer_data.progress) ? Text.progressBar(printer_data.progress, { post_text: Math.round(printer_data.progress) + "%"}) : "",
+      paddedLineFromData("ETA", printer_data.eta ? Time.duration(printer_data.eta) : ""),
+      paddedLineFromData("Current", printer_data.time ? Time.duration(printer_data.time) : ""),
+      paddedLineFromData("Est", printer_data.estimated ? Time.duration(printer_data.estimated) : ""),
+      paddedLineFromData("Complete", printer_data.eta_ms ? Time.local(printer_data.eta_ms) : ""),
       "",
       Text.justify("", Text.color(dash_colors.orange, "[EXPIRED]")),
     ]
