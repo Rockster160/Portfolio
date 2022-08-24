@@ -45,6 +45,12 @@ class WebhooksController < ApplicationController
     PrinterNotify.notify(params)
   end
 
+  def uptime
+    ActionCable.server.broadcast "uptime_channel", {}
+
+    head :no_content
+  end
+
   def report
     return head :no_content unless user_signed_in?
 

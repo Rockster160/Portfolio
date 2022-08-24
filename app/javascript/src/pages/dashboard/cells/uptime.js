@@ -4,6 +4,7 @@ import { ColorGenerator } from "./color_generator"
 import { dash_colors } from "../vars"
 
 (function() {
+  let cell
   let mem_scale = ColorGenerator.colorScale((function() {
     let scale = {}
     scale[dash_colors.green] = 50
@@ -163,6 +164,15 @@ import { dash_colors } from "../vars"
     return lines
   }
 
+  let subscribeWebsockets = function() {
+    cell.uptime_socket = new CellWS(
+      cell,
+      Server.socket("UptimeChannel", function(msg) {
+        uptimeData(cell)
+      })
+    )
+  }
+
   var renderCell = function(cell) {
     cell.lines([
       ...uptimeLines(cell),
@@ -170,7 +180,7 @@ import { dash_colors } from "../vars"
     ])
   }
 
-  Cell.register({
+  cell = Cell.register({
     title: "Uptime",
     text: "Loading...",
     data: {
@@ -180,13 +190,19 @@ import { dash_colors } from "../vars"
 
       rig_url: "https://api2.hiveos.farm/api/v2",
     },
+    onload: subscribeWebsockets,
+    started: function() {
+      cell.uptime_socket.reopen()
+    },
+    stopped: function() {
+      cell.uptime_socket.close()
+    },
     socket: Server.socket("LoadtimeChannel", function(msg) {
       this.data.load_data = msg
       renderCell(this)
     }),
     refreshInterval: Time.minutes(10),
     reloader: function() {
-      var cell = this
       uptimeData(cell)
       rigData(cell)
       cell.ws.send("request")
