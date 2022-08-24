@@ -40,6 +40,7 @@ Rails.application.routes.draw do
   post "webhooks/email" => "webhooks#email"
   post "webhooks/speak" => "webhooks#speak"
   post "webhooks/notify" => "webhooks#notify"
+  get "webhooks/uptime" => "webhooks#uptime"
   post "webhooks/uptime" => "webhooks#uptime"
   post "webhooks/command" => "webhooks#command"
   post "push_notification_subscribe" => "webhooks#push_notification_subscribe"

@@ -27,7 +27,7 @@
 
     <% if Rails.env.development? %>
       Cell.loadConfig({
-        uptime: {hiveos_apikey: "<%= ENV.fetch("HIVEOS_APIKEY") %>"},
+        // uptime: {},
         jarvis: { w: 2 },
       })
     <% else %>

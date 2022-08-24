@@ -27,7 +27,7 @@ import { dash_colors } from "../vars"
     return scale
   })())
 
-  var uptimeData = function(cell) {
+  var uptimeData = function(cell, flash=false) {
     var api_key = cell.config.uptime_apikey
     var url = "https://api.uptimerobot.com/v2/getMonitors"
     $.post(url, { api_key: api_key, custom_uptime_ratios: "7" }, function(data) {
@@ -43,6 +43,7 @@ import { dash_colors } from "../vars"
         uptime_data[monitor.friendly_name].weekly = parseInt(monitor.custom_uptime_ratio.split(".")[0])
       })
       renderCell(cell)
+      if (flash) { cell.flash() }
     }).fail(function(data) {
       cell.uptime_lines = [
         "Failed to retrieve:",
@@ -168,7 +169,7 @@ import { dash_colors } from "../vars"
     cell.uptime_socket = new CellWS(
       cell,
       Server.socket("UptimeChannel", function(msg) {
-        uptimeData(cell)
+        uptimeData(cell, true)
       })
     )
   }
