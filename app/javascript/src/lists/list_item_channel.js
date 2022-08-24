@@ -33,5 +33,4 @@ $(document).ready(function() {
       $(".list-item-container .list-item-field[name='category']").val(item.category || "")
     }
   })
-
 })

@@ -49,9 +49,9 @@ class GoogleNestControl
 
       json = request(:get, "enterprises/#{PROJECT_ID}/devices")
 
-      devices = json[:devices].map do |device_data|
+      devices = json[:devices]&.map do |device_data|
         GoogleNestDevice.new(self).set_all(serialize_device(device_data))
-      end
+      end || []
       DataStorage[:nest_devices] = devices.each_with_object({}) { |device, obj|
         obj[device.name] = device.to_json
       }

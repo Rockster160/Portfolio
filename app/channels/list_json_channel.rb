@@ -11,6 +11,7 @@ class ListJsonChannel < ApplicationCable::Channel
     data = data.deep_symbolize_keys!
     list = List.find(params[:channel_id].gsub(/^list_/, ""))
 
+    # TODO: Support updating order
     if data[:get]
       list.broadcast!
     else

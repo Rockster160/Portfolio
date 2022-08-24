@@ -5,8 +5,8 @@ class JarvisController < ApplicationController
     msg = case parsed_message
     when Hash
       @responding_alexa = true
-      slots = parsed_message.dig(:request, :intent, :slots)
-      [slots.dig(:control, :value), slots.dig(:device, :value)].compact.join(" ")
+      slots = parsed_message&.dig(:request, :intent, :slots)
+      [slots&.dig(:control, :value), slots&.dig(:device, :value)].compact.join(" ")
     else
       parsed_message
     end

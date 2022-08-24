@@ -22,7 +22,7 @@ $(document).ready(function() {
     }
   }
 
-  consumer.subscriptions.create({
+  listWS = consumer.subscriptions.create({
     channel: "ListHtmlChannel",
     channel_id: "list_" + list_id
   }, {
