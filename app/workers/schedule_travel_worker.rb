@@ -85,6 +85,14 @@ class ScheduleTravelWorker
           user_id: 1,
           scheduled_time: event[:start_time],
         )
+        new_events.push(
+          name: event[:name],
+          uid: event[:uid],
+          type: :pt,
+          words: "Log workout PT",
+          user_id: 1,
+          scheduled_time: event[:start_time],
+        )
       end
     end
   end
