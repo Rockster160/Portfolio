@@ -87,7 +87,7 @@ class ScheduleTravelWorker
         )
         new_events.push(
           name: event[:name],
-          uid: event[:uid],
+          uid: event[:uid] + "-1", # Adding an extra char so the uids are different,
           type: :pt,
           words: "Log workout PT",
           user_id: 1,
