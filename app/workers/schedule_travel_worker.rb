@@ -9,7 +9,7 @@ class ScheduleTravelWorker
 
     calendar_data = LocalDataCalendarParser.call
     _date, events = calendar_data.first # First should always be "today"
-    events = events.sort_by { |evt| evt[:start_time] || 0 }
+    events = events.sort_by { |evt| evt[:start_time] || DateTime.new }
     event_listings = Jarvis::Schedule.get_events
     listing_uids = event_listings.map { |evt| evt[:uid] }
     travel_events = schedulable_travel_events(events)
