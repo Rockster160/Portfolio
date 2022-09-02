@@ -23,7 +23,6 @@ module ApplicationCable
 
     def user_from_headers
       basic_auth_raw = request.headers["HTTP_AUTHORIZATION"].to_s[6..-1] # Strip "Basic " from hash
-      basic_auth_raw = basic_auth_raw.presence || params[:basic_auth]
       return unless basic_auth_raw.present?
 
       basic_auth_string = Base64.decode64(basic_auth_raw)

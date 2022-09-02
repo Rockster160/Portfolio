@@ -74,6 +74,7 @@ class ScheduleTravelWorker
   def other_events(events)
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
+      next if event[:start_time].blank?
       next if event[:start_time] - 1.minute < now # Extra minute for padding
 
       if event[:name].to_s.downcase.to_sym == :pt
@@ -101,6 +102,7 @@ class ScheduleTravelWorker
     return [] # Temp until Tesla is back to life
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
+      next if event[:start_time].blank?
       next unless event[:name].to_s.downcase.to_sym == :travel
       next if event[:start_time] - PRE_OFFSET - 1.minute < now # Extra minute for padding
 
