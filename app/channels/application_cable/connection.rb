@@ -22,7 +22,6 @@ module ApplicationCable
     end
 
     def user_from_headers
-      puts "\e[33m[LOGIT] | #{request.headers.to_h}\e[0m"
       basic_auth_raw = request.headers["HTTP_AUTHORIZATION"].to_s[6..-1] # Strip "Basic " from hash
       return unless basic_auth_raw.present?
 
