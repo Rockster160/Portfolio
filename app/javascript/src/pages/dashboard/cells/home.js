@@ -104,9 +104,9 @@ import { dash_colors } from "../vars"
             order.date = date.getTime()
             delivery = date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
 
-            if (now + Time.msUntilNextDay(now) > date) {
+            if (now + Time.msUntilNextDay(now.getTime()) > date) {
               delivery = Text.color(dash_colors.green, "Today")
-            } else if (now + Time.msUntilNextDay(now + Time.day()) > date) {
+            } else if (now + Time.msUntilNextDay(now.getTime() + Time.day()) > date) {
               delivery = Text.color(dash_colors.yellow, "Tomorrow")
             }
           } else {
