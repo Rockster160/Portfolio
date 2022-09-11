@@ -92,14 +92,25 @@ import { dash_colors } from "../vars"
       Server.socket("AmzUpdatesChannel", function(msg) {
         this.flash()
 
+        let now = Time.now()
         let data = []
         for (var [order_id, order_data] of Object.entries(msg)) {
           let order = { date: 0, id: order_id }
           let delivery = order_data.delivery || ""
-          if (delivery[0] != "[") {
+          if (delivery[0] != "[DELIVERED]") {
+            delivery = Text.color(dash_colors.green, "✓")
+          } else if (delivery[0] != "[") {
             let date = new Date(delivery + " MDT")
             order.date = date.getTime()
             delivery = date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
+
+            if (now + Time.msUntilNextDay(now) > date) {
+              delivery = Text.color(dash_colors.green, "Today")
+            } else if (now + Time.msUntilNextDay(now + Time.day()) > date) {
+              delivery = Text.color(dash_colors.yellow, "Tomorrow")
+            }
+          } else {
+            delivery = Text.color(dash_colors.red, delivery)
           }
           order.delivery = delivery
           order.name = order_data.name || "#"

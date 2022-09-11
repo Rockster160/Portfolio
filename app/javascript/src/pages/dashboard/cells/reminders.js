@@ -5,7 +5,7 @@ import { Time } from "./_time"
     title: "Reminders",
     text: "Loading...",
     // We want timers to update every... Minute? But don't need to make a full server request
-    // refreshInterval: Time.minutes(5),
+    refreshInterval: Time.minutes(5),
     wrap: true,
     flash: false,
     commands: {
