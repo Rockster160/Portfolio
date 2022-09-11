@@ -81,7 +81,9 @@ import { dash_colors } from "../vars"
     // If no response within 10 seconds, forget the current state
     clearTimeout(cell.garage_timeout)
     cell.garage_timeout = setTimeout(function() {
-      if (!cell.recent_garage) { delete cell.data.garage.open }
+      if (!cell.recent_garage && cell.data.garage.hasOwnProperty("open")) {
+        delete cell.data.garage.open
+      }
       renderLines()
     }, Time.seconds(10))
   }
