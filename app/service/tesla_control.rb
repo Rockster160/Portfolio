@@ -151,7 +151,7 @@ class TeslaControl
   end
 
   def vehicle_data
-    get("vehicles/#{vehicle_id}/latest_vehicle_data")
+    get("vehicles/#{vehicle_id}/latest_vehicle_data").dig(:legacy)
   end
 
   def vehicle_id
@@ -160,7 +160,7 @@ class TeslaControl
       vehicle = vehicles.find { |car| car[:vin] == DataStorage[:tesla_car_vin] }
       vehicle ||= vehicles.first
 
-      vehicle[:id] 
+      vehicle[:id]
     end
   end
 
