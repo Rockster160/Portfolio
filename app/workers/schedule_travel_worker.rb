@@ -99,7 +99,6 @@ class ScheduleTravelWorker
   end
 
   def schedulable_travel_events(events)
-    return [] # Temp until Tesla is back to life
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
       next if event[:start_time].blank?

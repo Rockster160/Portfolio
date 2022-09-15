@@ -34,12 +34,6 @@ import { shiftTempToColor, dash_colors } from "../vars"
   }
 
   let renderLines = function() {
-    cell.lines([
-      "", "", "",
-      Text.center(Emoji.skull + Emoji.cry + Emoji.sob),
-    ])
-    return
-
     let lines = [], data = cell.data.car
     lines.push(cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "")
 
@@ -123,78 +117,78 @@ import { shiftTempToColor, dash_colors } from "../vars"
 
   cell = Cell.register({
     title: "Tesla",
-    // text: "Loading...",
-    // flash: false,
-    // refreshInterval: Time.minute(),
+    text: "Loading...",
+    flash: false,
+    refreshInterval: Time.minute(),
     reloader: function() { renderLines() },
     onload: function() {
       setTimeout(function() { renderLines() }, 1000)
-      // this.data.refresh_timer = undefined
-      // this.data.loading = true
-      // this.data.car = {}
-      //
-      // renderLines()
-      // cell.commands.run("update")
+      this.data.refresh_timer = undefined
+      this.data.loading = true
+      this.data.car = {}
+
+      renderLines()
+      cell.commands.run("update")
     },
-    // stopped: function() {
-      // clearTimeout(this.data.refresh_timer)
-      // this.data.loading = false
-      // renderLines()
-    // },
-    // socket: Server.socket("TeslaChannel", function(msg) {
-    //   if (msg.failed) {
-    //     this.data.loading = false
-    //     this.data.failed = true
-    //     clearTimeout(this.data.refresh_timer)
-    //     renderLines()
-    //     return
-    //   } else {
-    //     this.data.failed = false
-    //   }
-    //   if (msg.loading) {
-    //     this.data.loading = true
-    //     renderLines()
-    //     return
-    //   }
-    //
-    //   this.data.loading = false
-    //   this.data.car = msg
-    //
-    //   let refresh_next
-    //   if (this.data.climate?.on || this.data.drive?.action == "driving") {
-    //     refresh_next = Time.minute()
-    //   } else if (this.data.charging?.active) {
-    //     let eta_minutes = constrain(parseInt(this.data.charging.eta) || 60, 1, 60)
-    //     refresh_next = Time.minutes(eta_minutes)
-    //   } else if (Time.now().getHours() < 7 || Time.now().getHours() > 22) { // 10pm-7am
-    //     // Every 3 hours during night, every 1 hour during day
-    //     refresh_next = Time.hours(3)
-    //   } else {
-    //     refresh_next = Time.hour()
-    //   }
-    //
-    //   resetTimeout(refresh_next)
-    //
-    //   renderLines()
-    //   this.flash()
-    // }),
-    // command: function(text) {
-    //   let [cmd, ...params] = text.split(" ")
-    //   cell.commands.run(cmd, params.join(" "))
-    // },
-    // commands: {
-    //   run: function(cmd, params) {
-    //     cell.data.loading = true
-    //     renderLines()
-    //     cell.ws.send({ action: "command", command: cmd, params: params })
-    //   },
-    //   update: function() { cell.commands.run("update") },
-    //   on: function() { cell.commands.run("on") },
-    //   off: function() { cell.commands.run("off") },
-    //   boot: function() { cell.commands.run("boot") },
-    //   frunk: function() { cell.commands.run("frunk") },
-    //   temp: function(val) { cell.commands.run("temp", val) },
-    //   heat: function() { cell.commands.run("heat") },
-    // },
+    stopped: function() {
+      clearTimeout(this.data.refresh_timer)
+      this.data.loading = false
+      renderLines()
+    },
+    socket: Server.socket("TeslaChannel", function(msg) {
+      if (msg.failed) {
+        this.data.loading = false
+        this.data.failed = true
+        clearTimeout(this.data.refresh_timer)
+        renderLines()
+        return
+      } else {
+        this.data.failed = false
+      }
+      if (msg.loading) {
+        this.data.loading = true
+        renderLines()
+        return
+      }
+
+      this.data.loading = false
+      this.data.car = msg
+
+      let refresh_next
+      if (this.data.climate?.on || this.data.drive?.action == "driving") {
+        refresh_next = Time.minute()
+      } else if (this.data.charging?.active) {
+        let eta_minutes = constrain(parseInt(this.data.charging.eta) || 60, 1, 60)
+        refresh_next = Time.minutes(eta_minutes)
+      } else if (Time.now().getHours() < 7 || Time.now().getHours() > 22) { // 10pm-7am
+        // Every 3 hours during night, every 1 hour during day
+        refresh_next = Time.hours(3)
+      } else {
+        refresh_next = Time.hour()
+      }
+
+      resetTimeout(refresh_next)
+
+      renderLines()
+      this.flash()
+    }),
+    command: function(text) {
+      let [cmd, ...params] = text.split(" ")
+      cell.commands.run(cmd, params.join(" "))
+    },
+    commands: {
+      run: function(cmd, params) {
+        cell.data.loading = true
+        renderLines()
+        cell.ws.send({ action: "command", command: cmd, params: params })
+      },
+      update: function() { cell.commands.run("update") },
+      on: function() { cell.commands.run("on") },
+      off: function() { cell.commands.run("off") },
+      boot: function() { cell.commands.run("boot") },
+      frunk: function() { cell.commands.run("frunk") },
+      temp: function(val) { cell.commands.run("temp", val) },
+      heat: function() { cell.commands.run("heat") },
+    },
   })
 })()
