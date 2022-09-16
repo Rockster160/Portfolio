@@ -33,7 +33,16 @@ Time.msUntilNextDay = function(now) {
   return (24 - now.getHours() - 1) * Time.hour() + Time.msUntilNextHour(now)
 }
 Time.duration = function(ms) {
-  return (new Date(ms)).toISOString().substr(11, 8)
+  let seconds = Math.floor(ms / 1000);
+  let minutes = Math.floor(seconds / 60);
+  let hours = Math.floor(minutes / 60);
+
+  seconds = seconds % 60;
+  minutes = minutes % 60;
+
+  return [hours, minutes, seconds].map(function(n) {
+    return n.toString().padStart(2, '0');
+  }).join(":")
 }
 Time.local = function(ms_since_epoch) {
   ms_since_epoch = ms_since_epoch ? ms_since_epoch : Time.msSinceEpoch()
