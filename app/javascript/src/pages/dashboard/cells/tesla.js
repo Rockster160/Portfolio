@@ -155,10 +155,10 @@ import { shiftTempToColor, dash_colors } from "../vars"
       this.data.car = msg
 
       let refresh_next
-      if (this.data.climate?.on || this.data.drive?.action == "driving") {
+      if (this.data.car.climate?.on || this.data.car.drive?.action == "driving") {
         refresh_next = Time.minute()
-      } else if (this.data.charging?.active) {
-        let eta_minutes = constrain(parseInt(this.data.charging.eta) || 5, 1, 5)
+      } else if (this.data.car.charging?.active) {
+        let eta_minutes = constrain(parseInt(this.data.car.charging.eta) || 5, 1, 5)
         refresh_next = Time.minutes(eta_minutes)
       } else if (Time.now().getHours() < 7 || Time.now().getHours() > 22) { // 10pm-7am
         // Every 3 hours during night, every 1 hour during day
