@@ -31,6 +31,8 @@ table.monsters {
   &.wide { width: 100%; max-width: 100%; }
   &.equal { table-layout: fixed; }
   &.striped {
+    color: $text-color;
+
     .trow:nth-child(even) {
       background-color: $blue-l5;
     }

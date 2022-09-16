@@ -35,6 +35,7 @@ class ApplicationController < ActionController::Base
   end
 
   def logit
+    @logged_it = true
     return CustomLogger.log_blip! if params[:checker]
 
     CustomLogger.log_request(request, current_user)
@@ -134,6 +135,7 @@ class ApplicationController < ActionController::Base
   end
 
   def ban_spam_ip(exception)
+    logit unless @logged_it
     if !ip_whitelisted? && current_ip_spamming?
       BannedIp.find_or_create_by(ip: current_ip)
       SlackNotifier.notify("Banned: #{current_ip}")
