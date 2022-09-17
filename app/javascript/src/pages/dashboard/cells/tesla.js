@@ -85,9 +85,10 @@ import { shiftTempToColor, dash_colors } from "../vars"
     }
 
     if (data.drive) {
-      let drive_icon = ""
-      let drive_text = ""
-      drive_text += drive_icon + " [ico ti ti-oct-location]" + data.drive.location
+      let lock = data.locked ? "[ico ti ti-fa-lock]" : "[ico ti ti-fa-unlock]"
+      let drive_text = lock
+
+      drive_text += "[ico ti ti-oct-location]" + data.drive.location
       if (data.drive.speed > 0) { drive_text += " [ico ti ti-mdi-speedometer]" + data.drive.speed + "mph" }
       lines.push(Text.center(Text.color(dash_colors.grey, drive_text)))
     } else {
