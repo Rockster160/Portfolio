@@ -81,15 +81,15 @@ class ScheduleTravelWorker
       if event[:name].to_s.downcase.to_sym == :pt
         new_events.push(
           name: event[:name],
-          uid: event[:uid],
+          uid: event[:uid] + "reminder",
           type: :pt,
-          words: "Remind me to start workout",
+          words: "Remind me to start workout", # Adding an extra char so the uids are different,
           user_id: 1,
           scheduled_time: event[:start_time],
         )
         new_events.push(
           name: event[:name],
-          uid: event[:uid] + "-1", # Adding an extra char so the uids are different,
+          uid: event[:uid] + "-workout", # Adding an extra char so the uids are different,
           type: :pt,
           words: "Log workout PT",
           user_id: 1,
@@ -133,7 +133,7 @@ class ScheduleTravelWorker
 
       if traveling_to.present?
         new_events.push(
-          uid: traveling_to[:uid],
+          uid: traveling_to[:uid] + "-travel", # Adding an extra char so the uids are different
           type: :travel,
           words: "Take me to #{traveling_to[:location]}",
           user_id: 1,
@@ -141,7 +141,7 @@ class ScheduleTravelWorker
         )
       elsif followup_events.none?
         new_events.push(
-          uid: event[:uid] + "-1", # Adding an extra char so the uids are different
+          uid: event[:uid] + "-travel", # Adding an extra char so the uids are different
           type: :travel,
           words: "Take me home",
           user_id: 1,
