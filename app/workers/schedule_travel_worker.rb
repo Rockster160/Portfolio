@@ -5,7 +5,7 @@ class ScheduleTravelWorker
   POST_OFFSET = 20.minutes
 
   def perform
-    return if Rails.env.development?
+    # return if Rails.env.development?
 
     calendar_data = LocalDataCalendarParser.call
     _date, events = calendar_data.first # First should always be "today"
@@ -37,6 +37,7 @@ class ScheduleTravelWorker
           next if rescheduled_uids.none?
         end
       elsif event_type == :pt
+        # Remove/cancel if no longer present in calendar
         if other_uids.include?(event_listing[:uid])
           rescheduled_uids = events.map { |evt|
             next unless event_listing[:uid].starts_with?(evt[:uid])

@@ -8,6 +8,8 @@ module Jarvis::Schedule
   def schedule(*new_events)
     events = get_events
     new_events.each do |new_event|
+      next if already_scheduled?(new_event[:uid])
+
       jid = JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], new_event[:words])
 
       events.push(
@@ -21,6 +23,10 @@ module Jarvis::Schedule
     end
 
     DataStorage[:scheduled_events] = events
+  end
+
+  def already_scheduled?(uid)
+    DataStorage[:scheduled_events].any? { |event| event[:uid] == uid }
   end
 
   def cancel(*jids)
