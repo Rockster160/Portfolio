@@ -39,6 +39,7 @@ class ActionEventsController < ApplicationController
     @event = ActionEvent.find(params[:id])
 
     @event.update(event_params)
+    ActionEventBroadcastWorker.perform_async
   end
 
   def destroy
