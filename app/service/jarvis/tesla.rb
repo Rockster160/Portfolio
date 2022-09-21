@@ -66,6 +66,7 @@ class Jarvis::Tesla < Jarvis::Action
 
     words = words.gsub(@rx.words(:car, :tesla), "")
     words = words.gsub(/where\'?s?( is)?/, "find")
+    words = words.gsub(/[^a-z0-9 ]/i, "")
 
     if @rx.match_any_words?(words, :open, :vent)
       words = words.gsub(@rx.words(:open), "") # Leave the vent word, if it's there

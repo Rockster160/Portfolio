@@ -26,7 +26,7 @@ module Jarvis::Schedule
   end
 
   def already_scheduled?(uid)
-    DataStorage[:scheduled_events].any? { |event| event[:uid] == uid }
+    DataStorage[:scheduled_events]&.any? { |event| event[:uid] == uid }
   end
 
   def cancel(*jids)

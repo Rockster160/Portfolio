@@ -100,7 +100,7 @@
       loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
       Jarvis.say("http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}", :sms)
     else
-      @response = "Not sure how to tell car: #{[cmd, params].map(&:presence).join('|')}"
+      @response = "Not sure how to tell car: #{[cmd, params].map(&:presence).compact.join('|')}"
     end
 
     @response
