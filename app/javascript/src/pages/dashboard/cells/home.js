@@ -67,7 +67,27 @@ import { dash_colors } from "../vars"
 
     if (cell.data.amz_updates) {
       cell.data.amz_updates.forEach(function(order, idx) {
-        lines.push(Text.justify((idx + 1) + ". " + order.name, order.delivery))
+        let today = Time.beginningOfDay()
+        let delivery = order.delivery || ""
+        if (delivery == "[DELIVERED]") {
+          delivery = Text.color(dash_colors.green, "✓")
+        } else if (delivery[0] != "[") {
+          let date = new Date(delivery + " MDT")
+          let deliverTime = Time.at(date)
+          delivery = date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
+
+          if (today > deliverTime) {
+            delivery = Text.color(dash_colors.orange, "Delayed?")
+          } else if (today + Time.day() > deliverTime) {
+            delivery = Text.color(dash_colors.green, "Today")
+          } else if (today + Time.days(2) > deliverTime) {
+            delivery = Text.color(dash_colors.yellow, "Tomorrow")
+          }
+        } else {
+          delivery = Text.color(dash_colors.red, delivery)
+        }
+
+        lines.push(Text.justify((idx + 1) + ". " + order.name, delivery))
       })
     }
 
@@ -94,29 +114,15 @@ import { dash_colors } from "../vars"
       Server.socket("AmzUpdatesChannel", function(msg) {
         this.flash()
 
-        let now = Time.now().getTime()
         let data = []
         for (var [order_id, order_data] of Object.entries(msg)) {
           let order = { date: 0, id: order_id }
-          let delivery = order_data.delivery || ""
-          if (delivery == "[DELIVERED]") {
-            delivery = Text.color(dash_colors.green, "✓")
-          } else if (delivery[0] != "[") {
-            let date = new Date(delivery + " MDT")
-            let deliverTime = date.getTime()
-            order.date = deliverTime
-            delivery = date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
-
-            if (now + Time.msUntilNextDay() >= deliverTime) {
-              delivery = Text.color(dash_colors.green, "Today")
-            } else if (now + Time.msUntilNextDay(Time.at(now + Time.day())) >= deliverTime) {
-              delivery = Text.color(dash_colors.yellow, "Tomorrow")
-            }
-          } else {
-            delivery = Text.color(dash_colors.red, delivery)
+          let delivery = order_data.delivery
+          if (delivery[0] != "[") {
+            order.date = (new Date(delivery + " MDT")).getTime()
           }
-          order.delivery = delivery
           order.name = order_data.name || "#"
+          order.delivery = delivery
 
           data.push(order)
         }
@@ -151,36 +157,37 @@ import { dash_colors } from "../vars"
       getGarage()
     }, Time.hour())
 
-    cell.nest_socket = new CellWS(
-      cell,
-      Server.socket("NestChannel", function(msg) {
-        this.flash()
-
-        if (msg.failed) {
-          this.data.loading = false
-          this.data.failed = true
-          clearInterval(this.data.nest_timer) // Don't try anymore until we manually update
-          renderLines()
-          return
-        } else {
-          this.data.failed = false
-        }
-        if (msg.loading) {
-          this.data.loading = true
-          renderLines()
-          return
-        }
-
-        this.data.loading = false
-        this.data.devices = msg.devices
-
-        renderLines()
-      })
-    )
-    cell.nest_socket.send({ action: "command", settings: "update" })
-    this.data.nest_timer = setInterval(function() {
-      cell.nest_socket.send({ action: "command", settings: "update" })
-    }, Time.minutes(10))
+    cell.nest_socket = {}
+    // cell.nest_socket = new CellWS(
+    //   cell,
+    //   Server.socket("NestChannel", function(msg) {
+    //     this.flash()
+    //
+    //     if (msg.failed) {
+    //       this.data.loading = false
+    //       this.data.failed = true
+    //       clearInterval(this.data.nest_timer) // Don't try anymore until we manually update
+    //       renderLines()
+    //       return
+    //     } else {
+    //       this.data.failed = false
+    //     }
+    //     if (msg.loading) {
+    //       this.data.loading = true
+    //       renderLines()
+    //       return
+    //     }
+    //
+    //     this.data.loading = false
+    //     this.data.devices = msg.devices
+    //
+    //     renderLines()
+    //   })
+    // )
+    // cell.nest_socket.send({ action: "command", settings: "update" })
+    // this.data.nest_timer = setInterval(function() {
+    //   cell.nest_socket.send({ action: "command", settings: "update" })
+    // }, Time.minutes(10))
   }
 
   cell = Cell.register({
@@ -190,6 +197,7 @@ import { dash_colors } from "../vars"
     flash: false,
     onload: subscribeWebsockets,
     reloader: function() {
+      renderLines()
       // Update times? "1 minute ago", etc...
     },
     started: function() {

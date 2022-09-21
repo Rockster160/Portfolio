@@ -32,6 +32,16 @@ Time.msUntilNextDay = function(now) {
 
   return (24 - now.getHours() - 1) * Time.hour() + Time.msUntilNextHour(now)
 }
+Time.beginningOfDay = function(now) {
+  now = now || Time.now()
+
+  return now.setHours(0, 0, 0, 0)
+}
+Time.endOfDay = function(now) {
+  now = now || Time.now()
+
+  return now.setHours(23, 59, 59, 999)
+}
 Time.duration = function(ms) {
   let seconds = Math.floor(ms / 1000);
   let minutes = Math.floor(seconds / 60);
