@@ -5,18 +5,18 @@ import { dash_colors } from "../vars"
 
 (function() {
   let cell
-  let mem_scale = ColorGenerator.colorScale((function() {
-    let scale = {}
-    scale[dash_colors.green] = 50
-    scale[dash_colors.yellow] = 75
-    scale[dash_colors.red] = 80
-    return scale
-  })())
   let cpu_scale = ColorGenerator.colorScale((function() {
     let scale = {}
     scale[dash_colors.green] = 5
     scale[dash_colors.yellow] = 10
     scale[dash_colors.red] = 20
+    return scale
+  })())
+  let mem_scale = ColorGenerator.colorScale((function() {
+    let scale = {}
+    scale[dash_colors.green] = 50
+    scale[dash_colors.yellow] = 75
+    scale[dash_colors.red] = 80
     return scale
   })())
   let load_scale = ColorGenerator.colorScale((function() {
@@ -143,15 +143,15 @@ import { dash_colors } from "../vars"
       let load_icon = " "
 
       if (data.cpu && data.timestamp > two_minutes_ago) {
-        stats.push(formatScale(cpu_scale, mem_icon, 100 - data.cpu.idle))
+        stats.push(formatScale(cpu_scale, cpu_icon, 100 - data.cpu.idle))
       } else {
-        stats.push(mem_icon + Text.color(dash_colors.grey, "?"))
+        stats.push(cpu_icon + Text.color(dash_colors.grey, "?"))
       }
       if (data.memory && data.timestamp > two_minutes_ago) {
         let ratio = Math.round((data.memory.used / data.memory.total) * 100)
-        stats.push(formatScale(mem_scale, cpu_icon, ratio))
+        stats.push(formatScale(mem_scale, mem_icon, ratio))
       } else {
-        stats.push(cpu_icon + Text.color(dash_colors.grey, "?"))
+        stats.push(mem_icon + Text.color(dash_colors.grey, "?"))
       }
       if (data.load && data.timestamp > two_minutes_ago) {
         stats.push(formatScale(load_scale, load_icon, data.load.one, data.load.five, data.load.ten))
