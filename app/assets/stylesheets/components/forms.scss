@@ -103,7 +103,7 @@ input[type=time],
 input[type=url],
 input[type=week],
 textarea {
-  &:not(.basic) {
+  &:not(.basic):not(.invisi-field) {
     box-sizing: border-box;
     margin: 4px auto;
 
@@ -114,6 +114,15 @@ textarea {
     color: $text-color;
 
     font-size: 18px;
+  }
+  &.invisi-field {
+    border: none;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    color: inherit;
+    background: inherit;
   }
 }
 
@@ -379,6 +388,11 @@ select {
     }
     &::placeholder {
       color: $grey-light;
+    }
+    &.invisi-field {
+      border: none;
+      color: inherit;
+      background: inherit;
     }
   }
 

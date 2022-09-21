@@ -16,23 +16,29 @@
   <%= paginate @events %>
 </div>
 
-<table>
-  <thead>
-    <th></th>
-    <th>Name</th>
-    <th>Notes</th>
-    <th>Timestamp</th>
-  </thead>
+<div class="ttable striped bordered wide">
+  <div class="thead text-center">
+    <div class="th"></div>
+    <div class="th">Name</div>
+    <div class="th">Notes</div>
+    <div class="th">Timestamp</div>
+  </div>
 
   <% @events.each do |event| %>
-    <tr>
-      <td><%= link_to "X", action_event_path(event), method: :delete %></td>
-      <td><%= event.event_name %></td>
-      <td><%= event.notes %></td>
-      <td><%= event.timestamp.in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:time_with_simple12) %></td>
-    </tr>
+    <div class="trow live-edit-events">
+      <%= link_to "X", action_event_path(event), method: :delete, class: "tcell text-center" %>
+      <div class="tcell">
+        <input data-update-url="<%= action_event_path(event) %>" name="event_name" value="<%= event.event_name %>" class="invisi-field" style="width: 100%;" type="text">
+      </div>
+      <div class="tcell">
+        <input data-update-url="<%= action_event_path(event) %>" name="notes" value="<%= event.notes %>" class="invisi-field" style="width: 100%;" type="text">
+      </div>
+      <div class="tcell">
+        <input data-update-url="<%= action_event_path(event) %>" name="timestamp" value="<%= event.timestamp.in_time_zone("Mountain Time (US & Canada)").iso8601[0..-7] %>" class="invisi-field" style="width: 100%;" type="datetime-local">
+      </div>
+    </div>
   <% end %>
-</table>
+</div>
 
 <div class="text-center">
   <%= paginate @events %>

@@ -35,6 +35,12 @@ class ActionEventsController < ApplicationController
     end
   end
 
+  def update
+    @event = ActionEvent.find(params[:id])
+
+    @event.update(event_params)
+  end
+
   def destroy
     event = current_user.action_events.find(params[:id])
 

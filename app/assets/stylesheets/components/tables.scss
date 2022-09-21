@@ -64,3 +64,26 @@ table.monsters {
 .tbody { display: table-row-group; }
 .trow, .thead { display: table-row; }
 .tcell, .th { display: table-cell; }
+
+.dark-mode {
+  .ttable {
+    &.striped {
+      color: $grey-light;
+
+      .trow:nth-child(even) {
+        background-color: $blue-d2;
+      }
+      .trow:nth-child(odd) {
+        background-color: $blue-d3;
+      }
+    }
+    &.bordered .tcell {
+      border-color: $blue-d5;
+    }
+    a.trow, a.tcell {
+      &:hover {
+        background-color: $base-blue !important;
+      }
+    }
+  }
+}
