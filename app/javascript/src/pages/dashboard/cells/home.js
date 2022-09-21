@@ -157,37 +157,36 @@ import { dash_colors } from "../vars"
       getGarage()
     }, Time.hour())
 
-    cell.nest_socket = {}
-    // cell.nest_socket = new CellWS(
-    //   cell,
-    //   Server.socket("NestChannel", function(msg) {
-    //     this.flash()
-    //
-    //     if (msg.failed) {
-    //       this.data.loading = false
-    //       this.data.failed = true
-    //       clearInterval(this.data.nest_timer) // Don't try anymore until we manually update
-    //       renderLines()
-    //       return
-    //     } else {
-    //       this.data.failed = false
-    //     }
-    //     if (msg.loading) {
-    //       this.data.loading = true
-    //       renderLines()
-    //       return
-    //     }
-    //
-    //     this.data.loading = false
-    //     this.data.devices = msg.devices
-    //
-    //     renderLines()
-    //   })
-    // )
-    // cell.nest_socket.send({ action: "command", settings: "update" })
-    // this.data.nest_timer = setInterval(function() {
-    //   cell.nest_socket.send({ action: "command", settings: "update" })
-    // }, Time.minutes(10))
+    cell.nest_socket = new CellWS(
+      cell,
+      Server.socket("NestChannel", function(msg) {
+        this.flash()
+
+        if (msg.failed) {
+          this.data.loading = false
+          this.data.failed = true
+          clearInterval(this.data.nest_timer) // Don't try anymore until we manually update
+          renderLines()
+          return
+        } else {
+          this.data.failed = false
+        }
+        if (msg.loading) {
+          this.data.loading = true
+          renderLines()
+          return
+        }
+
+        this.data.loading = false
+        this.data.devices = msg.devices
+
+        renderLines()
+      })
+    )
+    cell.nest_socket.send({ action: "command", settings: "update" })
+    this.data.nest_timer = setInterval(function() {
+      cell.nest_socket.send({ action: "command", settings: "update" })
+    }, Time.minutes(10))
   }
 
   cell = Cell.register({
