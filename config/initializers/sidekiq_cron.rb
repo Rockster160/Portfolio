@@ -1,6 +1,7 @@
 return if Rails.env.test?
 # Based on UTC time
 every_minute = "* * * * *"
+every_5_minutes = "*/5 * * * *"
 every_hour = "0 * * * *"
 daily_9pm = "0 3 * * *"
 thursdays_at_noon = "0 18 * * 4"
@@ -23,6 +24,11 @@ cron_jobs = [
 
 if Rails.env.production?
   cron_jobs += [
+    {
+      name: "CaptureQueryStats",
+      class: "CaptureQueryStatsWorker",
+      cron: every_5_minutes,
+    },
     {
       name: "HourlyVenmoCheck",
       class: "HourlyVenmoCheckWorker",
