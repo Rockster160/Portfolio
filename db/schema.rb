@@ -10,9 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2022_09_21_211246) do
+ActiveRecord::Schema.define(version: 2022_09_21_220113) do
 
   # These are extensions that must be enabled in order to support this database
+  enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
 
   create_table "action_events", id: :serial, force: :cascade do |t|
@@ -31,7 +32,6 @@ ActiveRecord::Schema.define(version: 2022_09_21_211246) do
     t.bigint "record_id", null: false
     t.bigint "blob_id", null: false
     t.datetime "created_at", null: false
-    t.index ["blob_id"], name: "index_active_storage_attachments_on_blob_id"
     t.index ["record_type", "record_id", "name", "blob_id"], name: "index_active_storage_attachments_uniqueness", unique: true
   end
 
@@ -184,7 +184,6 @@ ActiveRecord::Schema.define(version: 2022_09_21_211246) do
     t.text "body"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["author_id"], name: "index_command_proposal_comments_on_author_id"
     t.index ["iteration_id"], name: "index_command_proposal_comments_on_iteration_id"
   end
 
@@ -202,8 +201,6 @@ ActiveRecord::Schema.define(version: 2022_09_21_211246) do
     t.datetime "stopped_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["approver_id"], name: "index_command_proposal_iterations_on_approver_id"
-    t.index ["requester_id"], name: "index_command_proposal_iterations_on_requester_id"
     t.index ["task_id"], name: "index_command_proposal_iterations_on_task_id"
   end
 
@@ -344,7 +341,6 @@ ActiveRecord::Schema.define(version: 2022_09_21_211246) do
     t.integer "location_id"
     t.text "headers"
     t.text "body"
-    t.index ["location_id"], name: "index_log_trackers_on_location_id"
     t.index ["user_id"], name: "index_log_trackers_on_user_id"
   end
 
@@ -393,7 +389,6 @@ ActiveRecord::Schema.define(version: 2022_09_21_211246) do
     t.float "total_time"
     t.bigint "calls"
     t.datetime "captured_at"
-    t.index ["database", "captured_at"], name: "index_pghero_query_stats_on_database_and_captured_at"
   end
 
   create_table "recipe_favorites", id: :serial, force: :cascade do |t|
@@ -402,7 +397,6 @@ ActiveRecord::Schema.define(version: 2022_09_21_211246) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["favorited_by_id"], name: "index_recipe_favorites_on_favorited_by_id"
-    t.index ["recipe_id"], name: "index_recipe_favorites_on_recipe_id"
   end
 
   create_table "recipe_shares", id: :serial, force: :cascade do |t|
@@ -410,7 +404,6 @@ ActiveRecord::Schema.define(version: 2022_09_21_211246) do
     t.integer "shared_to_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["recipe_id"], name: "index_recipe_shares_on_recipe_id"
     t.index ["shared_to_id"], name: "index_recipe_shares_on_shared_to_id"
   end
 
@@ -446,10 +439,7 @@ ActiveRecord::Schema.define(version: 2022_09_21_211246) do
     t.integer "value"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["survey_id"], name: "index_survey_question_answer_results_on_survey_id"
     t.index ["survey_question_answer_id"], name: "index_answer_result_ids"
-    t.index ["survey_question_id"], name: "index_survey_question_answer_results_on_survey_question_id"
-    t.index ["survey_result_id"], name: "index_survey_question_answer_results_on_survey_result_id"
   end
 
   create_table "survey_question_answers", id: :serial, force: :cascade do |t|
@@ -459,7 +449,6 @@ ActiveRecord::Schema.define(version: 2022_09_21_211246) do
     t.integer "position"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["survey_id"], name: "index_survey_question_answers_on_survey_id"
     t.index ["survey_question_id"], name: "index_survey_question_answers_on_survey_question_id"
   end
 
@@ -532,9 +521,7 @@ ActiveRecord::Schema.define(version: 2022_09_21_211246) do
     t.integer "survey_question_answer_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["survey_id"], name: "index_user_survey_responses_on_survey_id"
     t.index ["survey_question_answer_id"], name: "index_user_survey_responses_on_survey_question_answer_id"
-    t.index ["survey_question_id"], name: "index_user_survey_responses_on_survey_question_id"
     t.index ["user_id"], name: "index_user_survey_responses_on_user_id"
     t.index ["user_survey_id"], name: "index_user_survey_responses_on_user_survey_id"
   end

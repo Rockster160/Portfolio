@@ -24,19 +24,14 @@ class LogTracker < ApplicationRecord
   after_initialize :set_additional_tracking
   after_create_commit :broadcast_creation
 
-  scope :by_fuzzy_url, ->(url) { where("url ILIKE '%#{url}%'") }
+  scope :by_fuzzy_text, ->(text) {
+    where("
+      url ILIKE :text OR
+      http_method ILIKE :text
+    ", text: "%#{text}%")
+  }
   scope :by_ip, ->(ip) { where(ip_address: ip) }
   scope :not_me, -> { where.not(user_id: 1) }
-  scope :not_log_tracker, -> { where.not("url ILIKE '%log_tracker%'") }
-  scope :not_uptime, -> { where.not("user_agent ILIKE '%UptimeRobot%'") }
-
-  def self.uniq_ips
-    pluck(:ip_address).uniq
-  end
-
-  def displayable?
-    url.to_s.exclude?("log_tracker") && user_agent.to_s.exclude?("UptimeRobot")
-  end
 
   def readable_json(json)
     JSON.parse(json.gsub("=>", ":")) rescue json.try(:read) || json.try(:inspect) || json.to_s
@@ -77,7 +72,6 @@ class LogTracker < ApplicationRecord
   end
 
   def broadcast_creation
-    return unless displayable?
     rendered_message = LogTrackersController.render partial: 'log_trackers/logger_row', locals: { logger: self }
     ActionCable.server.broadcast "logger_channel", message: rendered_message
   end

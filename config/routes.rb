@@ -138,8 +138,8 @@ Rails.application.routes.draw do
   require "sidekiq/web"
   # constraints ->(req) { binding.pry } do
   constraints RoleConstraint.new(:admin) do
-    mount Sidekiq::Web => "/sidekiq"
-    mount PgHero::Engine, at: "pghero"
+    mount ::Sidekiq::Web => "/sidekiq"
+    mount ::PgHero::Engine, at: "pghero"
   end
-  mount ActionCable.server => "/cable"
+  mount ::ActionCable.server => "/cable"
 end

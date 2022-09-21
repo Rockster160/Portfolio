@@ -12,17 +12,20 @@ class CustomLogger
 
     def log(message, user=nil, request=nil)
       return if Rails.env.development?
+
       if request.nil?
         ip_address = "No IP"
       else
         ip_address = "IP: #{request.try(:remote_ip)}\n"
       end
+
       display_name = user.present? ? "#{user.try(:id)}: #{user.try(:username)}\n" : ''
       formatted_time = Time.zone.now.in_time_zone('America/Denver')
       message_to_log = "\n#{formatted_time.strftime('%b %d, %Y %H:%M:%S.%L')} - #{message}\n#{ip_address}#{display_name}\n"
-      if request
+
+      if request && trackable?(request)
         filtered_params = filter_hash(request.env["action_dispatch.request.parameters"])
-        LogTracker.create({
+        LogTracker.create(
           user_agent: request.user_agent,
           ip_address: request.try(:remote_ip),
           http_method: request.env["REQUEST_METHOD"],
@@ -32,10 +35,21 @@ class CustomLogger
           body: request.try(:raw_post).inspect.presence || request.try(:body).inspect.presence,
           user_id: user.try(:id),
           created_at: formatted_time
-        })
+        )
       end
       Rails.logger.info "\nCustomLogger: #{message_to_log}\n\n"
       File.open("log/custom_logger.txt", "a+") { |f| f << message_to_log }
+    end
+
+    def trackable?(request)
+      return false if request.env["REQUEST_PATH"].include?("log_tracker")
+      return false if request.user_agent.include?("UptimeRobot")
+      # TODO: Should check Dashboard UserAgent -- OR! Include some kind of param/token/header
+      #   that disabled the log tracker
+      return false if request.env["REQUEST_PATH"] == "/webhooks/report"
+      return false if request.env["REQUEST_PATH"] == "/printer_control"
+
+      true
     end
 
     def filter_hash(hash)
