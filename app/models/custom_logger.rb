@@ -42,8 +42,8 @@ class CustomLogger
     end
 
     def trackable?(request)
-      return false if request.env["REQUEST_PATH"].include?("log_tracker")
-      return false if request.user_agent.include?("UptimeRobot")
+      return false if request.env["REQUEST_PATH"]&.include?("log_tracker")
+      return false if request.user_agent&.include?("UptimeRobot")
       # TODO: Should check Dashboard UserAgent -- OR! Include some kind of param/token/header
       #   that disabled the log tracker
       return false if request.env["REQUEST_PATH"] == "/webhooks/report"
