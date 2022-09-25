@@ -40,6 +40,11 @@ if Rails.env.production?
       cron: mondays_at_noon,
     },
     {
+      name: "RefreshNestMessage",
+      class: "RefreshNestMessageWorker",
+      cron: thursdays_at_noon,
+    },
+    {
       name: "DropLogTrackers",
       class: "DropLogTrackersWorker",
       cron: monthly_1st_at_midnight,

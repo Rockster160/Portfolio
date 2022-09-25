@@ -1,7 +1,7 @@
 import { Time } from "./_time"
 import { Text } from "../_text"
 import { ColorGenerator } from "./color_generator"
-import { dash_colors } from "../vars"
+import { dash_colors, beep } from "../vars"
 
 (function() {
   var cell = undefined
@@ -31,12 +31,12 @@ import { dash_colors } from "../vars"
         first_row.push(Text.color(dash_colors.green, "  [ico ti ti-mdi-garage]"))
       } else {
         flash(true)
-        if (flash_on) {
+        if (flash_on = !flash_on) {
           first_row.push(Text.color(dash_colors.yellow, "  [ico ti ti-mdi-garage_open]"))
+          beep(100, 350, 0.02, "square")
         } else {
           first_row.push(Text.color(dash_colors.yellow, "    "))
         }
-        flash_on = !flash_on
       }
     } else {
       flash(false)

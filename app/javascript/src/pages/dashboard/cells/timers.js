@@ -1,6 +1,6 @@
 import { Text } from "../_text"
 import { Time } from "./_time"
-import { dash_colors } from "../vars"
+import { dash_colors, beep } from "../vars"
 
 (function() {
   var cell = undefined, cell_width = 32, cell_height = 9
@@ -8,32 +8,6 @@ import { dash_colors } from "../vars"
     return Array.from({ length: cell_height }, function() {
       return Array.from({ length: cell_width }, function() { return " " }).join("")
     })
-  }
-
-  //if you have another AudioContext class use that one, as some browsers have a limit
-  var audioCtx = new (window.AudioContext || window.webkitAudioContext || window.audioContext)
-
-  //All arguments are optional:
-
-  //duration of the tone in milliseconds. Default is 500
-  //frequency of the tone in hertz. default is 440
-  //volume of the tone. Default is 1, off is 0.
-  //type of tone. Possible values are sine, square, sawtooth, triangle, and custom. Default is sine.
-  //callback to use on end of tone
-  function beep(duration, frequency, volume, type, callback) {
-    var oscillator = audioCtx.createOscillator()
-    var gainNode = audioCtx.createGain()
-
-    oscillator.connect(gainNode)
-    gainNode.connect(audioCtx.destination)
-
-    if (volume) { gainNode.gain.value = volume }
-    if (frequency) { oscillator.frequency.value = frequency }
-    if (type) { oscillator.type = type }
-    if (callback) { oscillator.onended = callback }
-
-    oscillator.start(audioCtx.currentTime)
-    oscillator.stop(audioCtx.currentTime + ((duration || 500) / 1000))
   }
 
   Timer = function(obj) {
