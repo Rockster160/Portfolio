@@ -37,12 +37,17 @@ class LocalDataBroadcast
     # Dash colors from app/javascript/src/pages/dashboard/vars.js
     yellow = "#FEE761"
     lblue =  "#3D94F6"
+    purple = "#68386C"
 
     calendar_data.map { |date_str, events|
       lines = [date_str, "[hr]"]
       events.sort_by { |evt| evt[:start_time] || Time.current }.each do |event|
-        lines.push("• #{event[:name] || event[:uid]}")
-        lines.push("    [color #{lblue}]#{event[:time_str]}[/color]") if event[:time_str].present?
+        if event[:time_str].present?
+          lines.push("• #{event[:name] || event[:uid]}")
+          lines.push("    [color #{lblue}]#{event[:time_str]}[/color]")
+        else
+          lines.push("• [color #{purple}]#{event[:name] || event[:uid]}[/color]")
+        end
         lines.push("    [color #{yellow}]#{event[:location]}[/color]") if event[:location].present?
       end
       lines.push("") # Empty line between days

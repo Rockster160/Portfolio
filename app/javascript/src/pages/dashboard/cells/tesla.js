@@ -106,12 +106,8 @@ import { shiftTempToColor, dash_colors } from "../vars"
   }
 
   let resetTimeout = function(time) {
-    let next_words = Time.local(Time.msSinceEpoch() + time)
-    console.log("Scheduling next run for: " + next_words + " (" + time + ")");
     clearTimeout(cell.data.refresh_timer)
     cell.data.refresh_timer = setTimeout(function() {
-      let now_words = Time.local()
-      console.log("Running update per schedule at " + now_words);
       cell.commands.run("update")
     }, time)
   }
@@ -140,7 +136,7 @@ import { shiftTempToColor, dash_colors } from "../vars"
       if (msg.failed) {
         this.data.loading = false
         this.data.failed = true
-        clearTimeout(this.data.refresh_timer)
+        resetTimeout(Time.minutes(30))
         renderLines()
         return
       } else {
