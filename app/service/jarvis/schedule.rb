@@ -8,6 +8,7 @@ module Jarvis::Schedule
   def schedule(*new_events)
     events = get_events
     new_events.each do |new_event|
+      new_event[:uid] = new_event[:uid].presence || SecureRandom.hex
       next if already_scheduled?(new_event[:uid])
 
       jid = JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], new_event[:words])
@@ -18,7 +19,7 @@ module Jarvis::Schedule
         user_id: new_event[:user_id],
         command: new_event[:words],
         type: new_event[:type],
-        uid: new_event[:uid].presence || SecureRandom.hex,
+        uid: new_event[:uid],
       )
     end
 
