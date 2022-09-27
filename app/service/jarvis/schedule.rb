@@ -18,7 +18,7 @@ module Jarvis::Schedule
         user_id: new_event[:user_id],
         command: new_event[:words],
         type: new_event[:type],
-        uid: new_event[:uid],
+        uid: new_event[:uid].presence || SecureRandom.hex,
       )
     end
 

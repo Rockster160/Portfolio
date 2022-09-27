@@ -8,6 +8,8 @@ class FitnessBroadcast
       :Vitamins,
       :Fluox,
       :Escitalopram,
+      :Buspirone,
+      :Methylphenidate,
       :Water,
       :Teeth,
       :Shower,
