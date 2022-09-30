@@ -37,7 +37,7 @@ class LocalDataBroadcast
     # Dash colors from app/javascript/src/pages/dashboard/vars.js
     yellow = "#FEE761"
     lblue =  "#3D94F6"
-    purple = "#68386C"
+    magenta = "#B55088"
 
     calendar_data.map { |date_str, events|
       lines = [date_str, "[hr]"]
@@ -46,7 +46,7 @@ class LocalDataBroadcast
           lines.push("• #{event[:name] || event[:uid]}")
           lines.push("    [color #{lblue}]#{event[:time_str]}[/color]")
         else
-          lines.push("• [color #{purple}]#{event[:name] || event[:uid]}[/color]")
+          lines.push("• [color #{magenta}]#{event[:name] || event[:uid]}[/color]")
         end
         lines.push("    [color #{yellow}]#{event[:location]}[/color]") if event[:location].present?
       end

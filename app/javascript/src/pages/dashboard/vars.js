@@ -10,6 +10,7 @@ export let registered_cells = {}
 export let dash_colors = {
   red:    "#A22633",
   purple: "#68386C",
+  magenta: "#B55088",
   yellow: "#FEE761",
   green:  "#3E8948",
   blue:   "#115DCD", // Not Endesga32
