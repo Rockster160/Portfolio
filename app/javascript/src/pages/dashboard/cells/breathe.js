@@ -1,3 +1,5 @@
+// import { Spinner } from "./spinner"
+
 (function() {
   Cell.register({
     title: "Breathe",
