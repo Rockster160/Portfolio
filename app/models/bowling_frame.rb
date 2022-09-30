@@ -22,6 +22,7 @@
 class BowlingFrame < ApplicationRecord
   belongs_to :game, class_name: "BowlingGame", inverse_of: :new_frames, foreign_key: :bowling_game_id
   has_one :set, class_name: "BowlingSet", through: :game
+  has_one :bowler, through: :game
   # throwN == COUNT of how many pins were knocked down (For the shot itself- a spare will never be 10)
   # throwN_remaining == string list/array of the pins that are left AFTER the designated roll
 

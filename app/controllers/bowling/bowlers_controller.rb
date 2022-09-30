@@ -27,7 +27,7 @@ module Bowling
 
       return render json: { status: :ok, stats: {} } if @bowler.nil?
 
-      stats = BowlingStats.pickup(@bowler, params[:pins])
+      stats = BowlingStats.pickup_stats_by_name(@bowler.name, params[:pins])
 
       render json: { status: :ok, stats: { spare: stats[0], total: stats[1] } }
     end

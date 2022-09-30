@@ -4,6 +4,10 @@ class BowlingStats
     new(nil).pickup(bowler, str_pins)
   end
 
+  def self.pickup_stats_by_name(bowler_name, str_pins)
+    new(nil).pickup_stats_by_name(bowler_name, str_pins)
+  end
+
   delegate :pickup, to: :class
 
   def initialize(league, set=nil)
@@ -15,6 +19,22 @@ class BowlingStats
     return "N/A" unless total&.positive?
 
     "#{((num / total.to_f)*100).round(round)}%"
+  end
+
+  def pickup_stats_by_name(bowler_name, str_pins)
+    frames = BowlingFrame.joins(:bowler).where(bowlers: { name: bowler_name })
+
+    if str_pins.nil?
+      [frames.where(strike: true).count, frames.count]
+    else
+      str_pins = JSON.parse(str_pins) rescue str_pins
+      str_pins = "[#{str_pins.sort.join(", ")}]" unless str_pins.is_a?(String)
+
+      left = frames.where(throw1_remaining: str_pins)
+      # tleft = frames.where(throw1_remaining: "[]", throw2_remaining: str_pins)
+
+      [left.where(spare: true).count, left.count]
+    end
   end
 
   def pickup(bowler, str_pins)
