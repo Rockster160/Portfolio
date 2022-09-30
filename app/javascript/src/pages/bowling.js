@@ -769,7 +769,7 @@ $(document).ready(function() {
       var frames = bowler.find(".bowling-cell.frame")
 
       if (absent) {
-        var absent_score = parseInt(bowler.attr("data-absent-score"))
+        var absent_score = parseInt(bowler.attr("data-absent-score")) || 0
         var absent_frame_score = Math.floor(absent_score / 10)
         var current_final_score = absent_frame_score * frame_num
         if (frame_num == 10) { current_final_score = absent_score }
