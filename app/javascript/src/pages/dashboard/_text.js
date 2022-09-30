@@ -1,7 +1,5 @@
 import { text_height, single_width, cells, registered_cells } from "./vars"
 
-window.emojiPattern = window.emojiPattern
-
 export function Text() {}
 Text.new = function(data) {
   var text = new Text()
@@ -186,6 +184,7 @@ Text.escapeSpecial = function(text) {
   return escaped
 }
 Text.escapeEmoji = function(text) {
+  // return text
   if (!text || text.length == 0) { return text }
 
   var token = undefined
@@ -198,12 +197,11 @@ Text.escapeEmoji = function(text) {
     return replace
   })
 
-  if (emojiPattern) {
-    var emoRegex = new RegExp(emojiPattern, "g")
-    subbed_text = subbed_text.replaceAll(emoRegex, function(found) {
-      return "<e>" + found + "</e>"
-    })
-  }
+  var emoRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g
+  subbed_text = subbed_text.replaceAll(emoRegex, function(found) {
+    if (/𐄂|✓/.test(found)) { return found }
+    return "<e>" + found + "</e>"
+  })
 
   for (const [token, emoji] of Object.entries(hold)) {
     subbed_text = subbed_text.replace(token, emoji)
