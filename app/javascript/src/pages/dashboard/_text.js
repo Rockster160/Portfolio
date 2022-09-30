@@ -1,5 +1,7 @@
 import { text_height, single_width, cells, registered_cells } from "./vars"
 
+let specials_regex = /[^\d\w\s\!\@\#\$\%\^\&\*\(\)\+\=\-\[\]\\\'\;\,\.\/\{\}\|\\\"\:\<\>\?\~\𐄂\✓\▲\▼\▁\▂\▃\▄\▅\▆\▇\█]+/gi
+
 export function Text() {}
 Text.new = function(data) {
   var text = new Text()
@@ -171,8 +173,7 @@ Text.escapeSpecial = function(text) {
     return replace
   })
 
-  var special_regex = /[^\d\w\s\!\@\#\$\%\^\&\*\(\)\+\=\-\[\]\\\'\;\,\.\/\{\}\|\\\"\:\<\>\?\~\▁\▂\▃\▄\▅\▆\▇\█]+/gi
-  var escaped = subbed_text.replaceAll(special_regex, function(found) {
+  var escaped = subbed_text.replaceAll(specials_regex, function(found) {
     if (found.charCodeAt(0) == 65039) { return "" }
 
     return "<es>" + found + "</es>"
@@ -199,7 +200,7 @@ Text.escapeEmoji = function(text) {
 
   var emoRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g
   subbed_text = subbed_text.replaceAll(emoRegex, function(found) {
-    if (/𐄂|✓/.test(found)) { return found }
+    if (specials_regex.test(found)) { return found }
     return "<e>" + found + "</e>"
   })
 
