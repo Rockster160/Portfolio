@@ -1,5 +1,5 @@
 class IndexController < ApplicationController
-  # skip_before_action :verify_authenticity_token
+  skip_before_action :verify_authenticity_token
   skip_before_action :show_guest_banner, only: :home
 
   def talk
