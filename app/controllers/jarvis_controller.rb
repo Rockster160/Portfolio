@@ -1,5 +1,5 @@
 class JarvisController < ApplicationController
-  skip_before_action :verify_authenticity_token
+  # skip_before_action :verify_authenticity_token
 
   def command
     msg = case parsed_message
