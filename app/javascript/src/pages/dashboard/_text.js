@@ -197,7 +197,6 @@ Text.escapeEmoji = function(text) {
     hold[replace] = found
     return replace
   })
-
   subbed_text = subbed_text.replaceAll(emoji_regex, function(found) {
     if (/𐄂|✓/.test(found)) { return found }
     return "<e>" + found + "</e>"

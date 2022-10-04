@@ -25,11 +25,11 @@ import { Time } from "./_time"
       renderLines()
     },
     onfocus: function() {
-      this.data.scroll = 0
+      this.data.scroll = cell.data.lines.length - 9
       renderLines()
     },
     onblur: function() {
-      this.data.scroll = 0
+      this.data.scroll = cell.data.lines.length - 9
       renderLines()
     },
     livekey: function(evt_key) {
