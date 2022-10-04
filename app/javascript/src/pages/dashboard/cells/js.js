@@ -1,50 +1,70 @@
 import { Time } from "./_time"
+import { Text } from "../_text"
+import { text_height, dash_colors } from "../vars"
 
 (function() {
   let cell = undefined
 
+  const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+
   let renderLines = function() {
     let lines = cell.data.lines
-    if (cell.data.scroll > 0) {
-      lines = lines.slice(cell.data.scroll, lines.length + 1)
+    cell.lines(lines)
+
+    let content = cell.ele[0].querySelector(".dash-content")
+    let max_lines = (content.scrollHeight - content.clientHeight)/text_height
+
+    if (cell.livekey_active) {
+      cell.data.scroll = clamp(cell.data.scroll, 0, max_lines)
+    } else {
+      cell.data.scroll = max_lines
     }
 
-    cell.lines(lines)
+    content.scroll({ top: cell.data.scroll * text_height })
   }
 
   cell = Cell.register({
     title: "JS",
     wrap: true,
     data: {
-      lines: [],
+      lines: localStorage.getItem("js")?.split("\n") || [],
+    },
+    onload: function() {
+      localStorage.getItem("js")?.split("\n")?.forEach(function(line) {
+        if (line.trim().length > 0 && line.includes("[color")) { return }
+        console.log(line);
+        try { (0, eval)(line) } catch {}
+      })
+      renderLines()
+    },
+    commands: {
+      clear: function() {
+        localStorage.setItem("js", [])
+        cell.data.lines = []
+        renderLines()
+      }
     },
     command: function(msg) {
       this.data.lines.push(msg)
       renderLines()
-      this.data.lines.push("[color grey]=> " + eval(msg) + "[/color]")
+      try {
+        if (msg.trim().length > 0) {
+          this.data.lines.push(Text.color(dash_colors.grey, "=>" + (0, eval)(msg)))
+        }
+      } catch(e) {
+        this.data.lines.push(Text.color(dash_colors.red, e))
+      }
       renderLines()
+      localStorage.setItem("js", this.data.lines.join("\n"))
     },
-    onfocus: function() {
-      this.data.scroll = cell.data.lines.length - 9
-      renderLines()
-    },
-    onblur: function() {
-      this.data.scroll = cell.data.lines.length - 9
-      renderLines()
-    },
+    onfocus: function() { renderLines() },
+    onblur: function() { renderLines() },
     livekey: function(evt_key) {
       this.data.scroll = this.data.scroll || 0
 
       evt_key = evt_key.toLowerCase()
-      if (evt_key == "arrowup" || evt_key == "w") {
-        if (this.data.scroll > 0) {
-          this.data.scroll -= 1
-        }
-      } else if (evt_key == "arrowdown" || evt_key == "s") {
-        if (this.data.scroll < cell.data.lines.length) {
-          this.data.scroll += 1
-        }
-      }
+      if (evt_key == "arrowup" || evt_key == "w") { this.data.scroll -= 1 }
+      if (evt_key == "arrowdown" || evt_key == "s") { this.data.scroll += 1 }
 
       renderLines()
     }

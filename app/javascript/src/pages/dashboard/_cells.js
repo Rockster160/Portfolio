@@ -23,6 +23,7 @@ Cell.register = function(init_data) {
   cell.onblur = init_data.onblur || undefined
   cell.onfocus = init_data.onfocus || undefined
   cell.livekey = init_data.livekey || undefined
+  cell.livekey_active = false
   cell.autocomplete_options = init_data.autocomplete_options || cell.command_list
   cell.refreshInterval = init_data.refreshInterval
 
@@ -213,7 +214,8 @@ Cell.prototype.command = function(command) {
 }
 Cell.prototype.debug = function() {
   var cell = this
-  console.log(cell)
+  window.cell = cell
+  console.log("cell = ", cell)
 }
 Cell.prototype.stop = function() {
   var cell = this
@@ -255,8 +257,9 @@ Cell.getLivekey = function() {
 }
 Cell.blur = function() {
   var cell = Cell.getLivekey()
-  if (cell && cell.onblur && typeof(cell.onblur) === "function") { cell.onblur() }
+  if (cell) { cell.livekey_active = false }
   $(".dash-cell").removeClass("livekey")
+  if (cell && cell.onblur && typeof(cell.onblur) === "function") { cell.onblur() }
 }
 Cell.inactive = function() {
   $(".dash-cell").removeClass("active")
@@ -278,6 +281,7 @@ Cell.startLivekey = function() {
   var cell = Cell.active()
 
   if (cell && cell.livekey && typeof(cell.livekey) === "function") {
+    cell.livekey_active = true
     $(cell.ele).addClass("livekey")
     if (cell.onfocus && typeof(cell.onfocus) === "function") { cell.onfocus() }
   }
@@ -345,7 +349,7 @@ CellWS.prototype.send = function(packet) {
     if (cell_ws.presend && typeof(cell_ws.presend) === "function") {
       packet = cell_ws.presend(packet)
     }
-    // Use the below for easy copy-pasting 
+    // Use the below for easy copy-pasting
     // console.log(JSON.stringify(JSON.stringify(packet)));
     cell_ws.socket.send(JSON.stringify(packet))
   } else {
