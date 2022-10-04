@@ -1,3 +1,4 @@
+import { emoji_regex } from "./emoji_regex"
 import { text_height, single_width, cells, registered_cells } from "./vars"
 
 export function Text() {}
@@ -197,8 +198,7 @@ Text.escapeEmoji = function(text) {
     return replace
   })
 
-  var emoRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g
-  subbed_text = subbed_text.replaceAll(emoRegex, function(found) {
+  subbed_text = subbed_text.replaceAll(emoji_regex, function(found) {
     if (/𐄂|✓/.test(found)) { return found }
     return "<e>" + found + "</e>"
   })
