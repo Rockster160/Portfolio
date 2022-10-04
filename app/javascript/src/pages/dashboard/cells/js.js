@@ -32,7 +32,6 @@ import { text_height, dash_colors } from "../vars"
     onload: function() {
       localStorage.getItem("js")?.split("\n")?.forEach(function(line) {
         if (line.trim().length > 0 && line.includes("[color")) { return }
-        console.log(line);
         try { (0, eval)(line) } catch {}
       })
       renderLines()
@@ -49,7 +48,7 @@ import { text_height, dash_colors } from "../vars"
       renderLines()
       try {
         if (msg.trim().length > 0) {
-          this.data.lines.push(Text.color(dash_colors.grey, "=>" + (0, eval)(msg)))
+          this.data.lines.push(Text.color(dash_colors.grey, "=> " + JSON.stringify((0, eval)(msg))))
         }
       } catch(e) {
         this.data.lines.push(Text.color(dash_colors.red, e))
