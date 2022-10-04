@@ -4,6 +4,7 @@ class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception, if: -> { current_user&.id != 1 } # Hack- skip CSRF if it's me
   skip_forgery_protection
   def verify_authenticity_token; end
+  prepend_before_action :verify_authenticity_token
   helper_method :current_user, :user_signed_in?, :guest_account?
   before_action :see_current_user, :logit
   before_action :show_guest_banner, if: :guest_account?
