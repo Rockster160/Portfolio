@@ -1,6 +1,6 @@
 class Jarvis::Navigate < Jarvis::Action
   def self.reserved_words
-    [:navigate, :take, :drive, "go to", "take me"]
+    [:navigate, :drive, "go to", "take me", "take us"]
   end
 
   def attempt
@@ -40,7 +40,7 @@ class Jarvis::Navigate < Jarvis::Action
     end
 
     words = words.gsub(@rx.words(drive_commands), "")
-    words = words.gsub(@rx.words(:the, :set, :to, :is, :my, :me), "")
+    words = words.gsub(@rx.words(:the, :set, :to, :is, :my, :me, :us), "")
 
     words.squish
   end

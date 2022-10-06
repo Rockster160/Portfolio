@@ -1,5 +1,32 @@
+# ============================ High TODO =============================
+# Able to input next week lane to Jarvis somehow
+# ** Every bowling night should remind Lane, brace, belt as well as usual conditioning and GPS
+# Add some sort of interface for managing automations
+# ** "X minutes before events called Y run Z command"
+# ** Parse this schedule on every calendar change, but only schedule for the next 6? hours?
+# Jarvis should interpret word numbers "two"
+# Car should show if camp/wait/etc mode is on
+# ActionEvent Index should show total/page counts (especially when filtering)
+# Passive notifications into Reminders cell- notification shows up, isn't noisy or obtrusive.
+# Log events with types - for example, WS should get logged and be visible on a page
+# Remind should always be future
+# "take" should not have such high priority
+# # "at noon/midnight" should work
+# Printer functions should not require dots to call
+# Only send start/directions to car if it’s off
+# "Refresh" in Home (cell) should open the link for Nest
+# Able to add other deliveries to Home(cell) with expected dates
+# Jarvis app - downloadable, tracks location, manages reminders, lists, automations, etc
+# Jarvis RNG
+# Fix Notes and other livekey cells to use new scrolling techniques used with Js.Js
+# Scrape a site. Provide a URL and some selectors and then set an interval and have it alert you when your requested check happens.
+# Some reminders in [Reminders] should only show up when it's time, not 6-7 hours before...
+# Jarvis specific dates don't get picked up "Remind me Oct 23 at 9:32am to wish B Happy Birthday"
+
+
 # =============================== Bugs ===============================
 # "Take" is acting as a keyword for traveling, but should not take priority over "remind"
+# -- Should only be "take ME"
 #   [5:01 PM] Navigating to remind steak out
 #   [1:14 PM] I'll remind you to take steak out on Mon Aug 8 at 5:00 PM
 
@@ -29,7 +56,6 @@
 # Jarvis conversations- can ask questions and allow responding back
 # Auto message when garage is still open after a certain time
 # Add contacts to Jarvis for navigating
-
 
 # =============================== Desired examples ===============================
 # get the car|house|home, how's the car, tell me about the car, give me the car
