@@ -54,6 +54,10 @@ import { dash_colors } from "../vars"
     data: {
       lastUpdated: Time.now()
     },
+    command: function(words) {
+      let [cmd, ...args] = words.split(" ")
+      Printer.post(cmd, args.join(" "))
+    },
     commands: {
       gcode: function(cmd) {
         return Printer.post("command", cmd)
