@@ -30,5 +30,6 @@
   <%= yield :modals %>
   <%= render partial: "layouts/guest_banner" if @show_guest_banner %>
   <%= yield %>
+  <%= yield :after_body %>
 </body>
 </html>

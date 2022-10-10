@@ -1,0 +1,45 @@
+<% content_for :head do %>
+  <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+<% end %>
+
+<div id="blocklyDiv" style="height: 480px; width: 600px;"></div>
+
+<% content_for :after_body do %>
+  <script type="text/javascript">
+    var toolbox = {
+      "kind": "flyoutToolbox",
+      "contents": [
+      {
+        "kind": "block",
+        "type": "controls_if"
+      },
+      {
+        "kind": "block",
+        "type": "controls_repeat_ext"
+      },
+      {
+        "kind": "block",
+        "type": "logic_compare"
+      },
+      {
+        "kind": "block",
+        "type": "math_number"
+      },
+      {
+        "kind": "block",
+        "type": "math_arithmetic"
+      },
+      {
+        "kind": "block",
+        "type": "text"
+      },
+      {
+        "kind": "block",
+        "type": "text_print"
+      },
+      ]
+    }
+
+    var workspace = Blockly.inject("blocklyDiv", { toolbox: toolbox, sounds: false, snap: true });
+  </script>
+<% end %>
