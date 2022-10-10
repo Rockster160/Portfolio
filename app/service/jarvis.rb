@@ -22,9 +22,13 @@
 # Scrape a site. Provide a URL and some selectors and then set an interval and have it alert you when your requested check happens.
 # Some reminders in [Reminders] should only show up when it's time, not 6-7 hours before...
 # Jarvis specific dates don't get picked up "Remind me Oct 23 at 9:32am to wish B Happy Birthday"
+# If car is off, location should be nearest store - if car is on, show street/city
+# Don’t show Log in Jarvis logs
+# Navigate should also start the car (if not already on)
 
 
 # =============================== Bugs ===============================
+# Always navving home with directions
 # "Take" is acting as a keyword for traveling, but should not take priority over "remind"
 # -- Should only be "take ME"
 #   [5:01 PM] Navigating to remind steak out

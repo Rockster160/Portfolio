@@ -11,6 +11,9 @@ class Jarvis::Talk < Jarvis::Action
     else
       "I don't know how to #{Jarvis::Text.rephrase(@msg)}, sir."
     end
-    # complete ["Check", "Will do, sir.", "As you wish.", "Yes, sir."]
   end
+
+  # def complete
+    # ["Check", "Will do, sir.", "As you wish.", "Yes, sir."]
+  # end
 end

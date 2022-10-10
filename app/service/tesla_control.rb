@@ -1,6 +1,5 @@
 # https://tesla-api.timdorr.com/
 
-# Remove to reactivate API:
 class TeslaControl
   attr_accessor :access_token, :refresh_token, :car
 

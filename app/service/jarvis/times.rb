@@ -27,6 +27,8 @@ module Jarvis::Times
   end
 
   def safe_date_parse(timestamp, chronic_opts={})
+    # If past opt is passed and time is in future, roll back 12/24 hours. (Based on am/pm)
+    # If future opt is passed and time is in past, roll forward 12/24 hours. (Based on am/pm)
     Chronic.time_class = ::Time.zone
     Chronic.parse(timestamp, chronic_opts)
   end

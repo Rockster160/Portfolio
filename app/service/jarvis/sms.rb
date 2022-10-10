@@ -1,3 +1,4 @@
+# Might be special/not an integration
 class Jarvis::Sms < Jarvis::Action
   def self.reserved_words
     [:text, :remind, :message, :msg, :sms, :txt]
