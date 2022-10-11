@@ -62,6 +62,7 @@
 
 <%= form_for @set, html: { class: "basic bowling-game-form" } do |f| %>
   <%= f.hidden_field :league_id, value: @set.league_id || params[:league] %>
+  <%= f.hidden_field :set_id, value: @set.id || params[:set] %>
   <% @games.each_with_index do |game, idx| %>
     <%= render partial: "bowling_game_form", locals: { game: game, idx: idx } %>
   <% end %>

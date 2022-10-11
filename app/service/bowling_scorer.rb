@@ -56,7 +56,7 @@ module BowlingScorer
       }
     }
 
-    toss1[:score] ||= 10 - toss1[:count]
+    toss1[:score] ||= toss1[:na] ? nil : 10 - toss1[:count]
     toss2[:score] ||= if toss2[:na]
       nil
     elsif frame == 10 && toss1[:closed]

@@ -72,7 +72,6 @@ $(document).ready(function() {
   })
 })
 
-
 $(document).ready(function() {
   if ($(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").length == 0) { return }
   var inProgress = false
@@ -1134,7 +1133,17 @@ $(document).ready(function() {
         if (currentThrowNum() < 3) { return moveToNextThrow() }
       }
     }
+    pushScores()
     gotoNextFrame()
+  }
+
+  pushScores = function() {
+    let form = $("form.bowling-game-form")
+    $.ajax({
+      type: form.attr("method"),
+      url: form.attr("action"),
+      data: form.serialize() + "&throw_update=true"
+    })
   }
 
   $(".shot").filter(function() {

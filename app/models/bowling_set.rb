@@ -35,6 +35,7 @@ class BowlingSet < ApplicationRecord
   end
 
   def future_save
+    save_scores
     league.bowler_sets.where("bowler_sets.created_at >= ?", created_at).find_each(&:recalc)
     league.sets.where("bowling_sets.created_at >= ?", created_at).find_each(&:save_scores)
   end
