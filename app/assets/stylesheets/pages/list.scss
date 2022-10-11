@@ -16,9 +16,9 @@
     user-select: none;
     color: $text-color;
 
-    .list-item-handle {
+    .settings-btn {
       position: absolute;
-      top: 0;
+      top: 25px;
       right: 0;
       z-index: 2;
       width: 30px;
@@ -26,23 +26,13 @@
       text-align: center;
     }
 
-    .settings-btn {
+    .category-btn {
       position: absolute;
-      top: 25px;
+      top: 0;
       right: 0;
       z-index: 2;
       width: 30px;
-      line-height: 20px;
-      text-align: center;
-    }
-
-    .category-btn {
-      position: absolute;
-      top: 3px;
-      right: 18px;
-      z-index: 2;
-      width: 30px;
-      line-height: 20px;
+      line-height: 25px;
       text-align: center;
       cursor: pointer;
     }
@@ -166,8 +156,6 @@
   .important-list-items {
     border-bottom: 1px solid $text-color;
     padding-bottom: 10px;
-
-    .list-item-handle { display: none; }
   }
   .important-list-items, .list-items, .lists {
     input[type=checkbox] { display: none; }
