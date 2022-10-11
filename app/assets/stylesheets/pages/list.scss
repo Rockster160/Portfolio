@@ -16,35 +16,27 @@
     user-select: none;
     color: $text-color;
 
-    .list-item-handle {
-      position: absolute;
-      top: 0;
-      right: 0;
-      z-index: 2;
-      width: 30px;
-      line-height: 25px;
-      text-align: center;
-    }
-
     .settings-btn {
       position: absolute;
       top: 25px;
       right: 0;
       z-index: 2;
-      width: 30px;
-      line-height: 20px;
+      width: 40px;
+      line-height: 25px;
       text-align: center;
+      // border: 1px solid red;
     }
 
     .category-btn {
       position: absolute;
-      top: 3px;
-      right: 18px;
+      top: 0;
+      right: 0;
       z-index: 2;
-      width: 30px;
-      line-height: 20px;
+      width: 40px;
+      line-height: 25px;
       text-align: center;
       cursor: pointer;
+      // border: 1px solid red;
     }
 
     .item-name big {
@@ -166,8 +158,6 @@
   .important-list-items {
     border-bottom: 1px solid $text-color;
     padding-bottom: 10px;
-
-    .list-item-handle { display: none; }
   }
   .important-list-items, .list-items, .lists {
     input[type=checkbox] { display: none; }

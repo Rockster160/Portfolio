@@ -30,7 +30,7 @@ $(document).ready(function() {
   }
 
   $(".lists").sortable({
-    handle: ".list-item-handle",
+    // handle: ".list-item-container",
     start: function() {
       $(".list-item-container .list-item-field:not(.hidden)").blur()
     },
@@ -42,7 +42,7 @@ $(document).ready(function() {
     }
   })
   $(".list-items").sortable({
-    handle: ".list-item-handle",
+    // handle: ".list-item-container",
     start: function() {
       $(".list-item-container .list-item-field:not(.hidden)").blur()
     },

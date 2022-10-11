@@ -1,6 +1,5 @@
 import consumer from "./../../../channels/consumer"
 import { dash_colors } from "../vars"
-
 var demo = !true
 
 // var cell = Cell.register({
@@ -77,23 +76,25 @@ Server.socket = function(subscription, receive) {
   }
 }
 
-// window.localDataChannel.request()
-window.localDataChannel = consumer.subscriptions.create({
-  channel: "LocalDataChannel"
-}, {
-  connected: function() {
-    clearTimeout(window.local_data_timer)
-    window.local_data_timer = setTimeout(function() { window.localDataChannel.request() }, 50)
-  },
-  received: function(data) {
-    if (window.local_calendar_cell) {
-      window.local_calendar_cell.commands.render.call(window.local_calendar_cell, data.calendar)
+if (window.location.pathname == "/dashboard") {
+  // window.localDataChannel.request()
+  window.localDataChannel = consumer.subscriptions.create({
+    channel: "LocalDataChannel"
+  }, {
+    connected: function() {
+      clearTimeout(window.local_data_timer)
+      window.local_data_timer = setTimeout(function() { window.localDataChannel.request() }, 50)
+    },
+    received: function(data) {
+      if (window.local_calendar_cell) {
+        window.local_calendar_cell.commands.render.call(window.local_calendar_cell, data.calendar)
+      }
+      if (window.local_reminders_cell) {
+        window.local_reminders_cell.commands.render.call(window.local_reminders_cell, data.reminders)
+      }
+    },
+    request: function() {
+      return this.perform("request")
     }
-    if (window.local_reminders_cell) {
-      window.local_reminders_cell.commands.render.call(window.local_reminders_cell, data.reminders)
-    }
-  },
-  request: function() {
-    return this.perform("request")
-  }
-})
+  })
+}

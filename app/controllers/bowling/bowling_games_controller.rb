@@ -9,7 +9,11 @@ module Bowling
     end
 
     def new
-      render :form
+      if params[:series].blank?
+        redirect_to new_bowling_game_path(league: @set.league_id, series: @set.id, game: 1)
+      else
+        render :form
+      end
     end
 
     def edit
@@ -28,11 +32,12 @@ module Bowling
       elsif params[:series].present?
         @set = user_sets.find(params[:series])
       elsif params[:league]
-        @set = user_sets.new(league_id: params[:league])
+        @set = user_sets.create(league_id: params[:league])
       else
-        @set = user_sets.new
+        @set = user_sets.create
       end
       @league = @set.league || BowlingLeague.create_default(current_user)
+      @set.league ||= @league
 
       if params[:game].present?
         @games = @set.games_for_display(params[:game])

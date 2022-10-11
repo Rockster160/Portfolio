@@ -72,7 +72,6 @@ $(document).ready(function() {
   })
 })
 
-
 $(document).ready(function() {
   if ($(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").length == 0) { return }
   var inProgress = false
@@ -459,13 +458,15 @@ $(document).ready(function() {
 
     if (shot_idx == 1) {
       if (currentTossAtIdx(0).val() != "X") {
-        knockPinsForShot(currentTossAtIdx(0), "fallen-before")
+        return knockPinsForShot(currentTossAtIdx(0), "fallen-before")
       }
     } else if (shot_idx == 2) {
       if (currentTossAtIdx(1).val() != "X" && currentTossAtIdx(1).val() != "/") {
-        knockPinsForShot(currentTossAtIdx(1), "fallen-before")
+        return knockPinsForShot(currentTossAtIdx(1), "fallen-before")
       }
     }
+
+    $(".pin-wrapper").removeClass("fallen-before")
   }
 
   knockPinsForShot = function(shot, klass) {
@@ -1134,7 +1135,17 @@ $(document).ready(function() {
         if (currentThrowNum() < 3) { return moveToNextThrow() }
       }
     }
+    pushScores()
     gotoNextFrame()
+  }
+
+  pushScores = function() {
+    let form = $("form.bowling-game-form")
+    $.ajax({
+      type: form.attr("method"),
+      url: form.attr("action"),
+      data: form.serialize() + "&throw_update=true"
+    })
   }
 
   $(".shot").filter(function() {
