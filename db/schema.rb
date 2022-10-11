@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2022_09_21_220113) do
+ActiveRecord::Schema.define(version: 2022_10_11_140701) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -268,6 +268,29 @@ ActiveRecord::Schema.define(version: 2022_09_21_220113) do
     t.text "results"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+  end
+
+  create_table "jarvis_caches", force: :cascade do |t|
+    t.bigint "user_id"
+    t.jsonb "data"
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["user_id"], name: "index_jarvis_caches_on_user_id"
+  end
+
+  create_table "jarvis_tasks", force: :cascade do |t|
+    t.bigint "user_id"
+    t.text "name"
+    t.text "cron"
+    t.integer "trigger"
+    t.text "last_result"
+    t.jsonb "last_ctx"
+    t.datetime "last_trigger_at", precision: 6
+    t.datetime "next_trigger_at", precision: 6
+    t.jsonb "tasks"
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["user_id"], name: "index_jarvis_tasks_on_user_id"
   end
 
   create_table "lines", id: :serial, force: :cascade do |t|

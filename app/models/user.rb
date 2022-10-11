@@ -17,6 +17,7 @@
 class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 
+  has_many :jarvis_tasks, dependent: :destroy
   has_many :bowling_leagues, dependent: :destroy
   has_many :contacts, dependent: :destroy
   has_many :user_lists, dependent: :destroy
@@ -33,6 +34,7 @@ class User < ApplicationRecord
   has_one :avatar
   has_one :push_sub, class_name: "UserPushSubscription"
   has_one :money_bucket
+  has_one :jarvis_cache, dependent: :destroy
 
   has_secure_password validations: false
 

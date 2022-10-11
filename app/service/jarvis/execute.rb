@@ -5,20 +5,23 @@ class Jarvis::Execute
 
   def call(task)
     @task = task
-    @ctx = { vars: {}, i: 0 }
-    # task.update(last_trigger: Time.current) # Also update next trigger
+    @ctx = { vars: {}, i: 0, msg: [] }
+    # task.next_trigger_at = Cronit.next(task.cron) if task.cron.present?
+    task.update(last_trigger_at: Time.current)
 
     task.tasks.each do |task_block|
-      break @ctx[:msg] = "Overflow - only 1,000 iterations allowed." if @ctx[:i] > 1000
+      break @ctx[:msg] << "Overflow - only 1,000 iterations allowed." if @ctx[:i] > 1000
       break if @ctx[:exit]
 
       eval_block(task_block.deep_symbolize_keys)
     end
+    @ctx[:msg] << "Success"
+    # Trigger success?
   rescue StandardError => e
-    @ctx[:msg] = "Failed: #{e.message}"
+    @ctx[:msg] << "Failed: #{e.message}"
     # trigger fail unless task has a fail trigger
   ensure
-    @task.update(last_result: @ctx[:msg] || "Success", last_ctx: @ctx)
+    @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx)
   end
 
   def eval_block(task_block, scope_ctx={})
@@ -72,7 +75,9 @@ class Jarvis::Execute
     when :next, :break then nil
     when :exit
       @ctx[:exit] = true
-      @ctx[:msg] = eval_block(task_block[:reason]) || "Exit"
+      @ctx[:msg] << eval_block(task_block[:reason]) || "Exit"
+    when :print
+      @ctx[:msg] << eval_block(task_block[:message])
       # LOOPS
     when :loop
       loop_exit = false

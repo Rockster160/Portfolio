@@ -107,6 +107,16 @@ return
 
 # ============================================ TEXT ================================================
 
+{
+  type: :match,
+  value: RX|STR
+}
+
+{
+  type: :split,
+  value: RX|STR
+}
+
 #   Text:
 #     String
 #     Match? # Able to test regexp matching -- Belongs in logic?
