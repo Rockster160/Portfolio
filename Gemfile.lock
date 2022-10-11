@@ -400,6 +400,7 @@ DEPENDENCIES
   exception_notification
   faker
   font-awesome-rails
+  fugit
   gmaps4rails
   httparty
   ice_cube
