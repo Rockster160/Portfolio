@@ -456,7 +456,9 @@ $(document).ready(function() {
     // Always knock the current pins down
     knockPinsForShot(toss, "fallen")
 
-    if (shot_idx == 1) {
+    if (shot_idx == 0) {
+      $(".pin-wrapper").removeClass("fallen-before")
+    } else if (shot_idx == 1) {
       if (currentTossAtIdx(0).val() != "X") {
         knockPinsForShot(currentTossAtIdx(0), "fallen-before")
       }
