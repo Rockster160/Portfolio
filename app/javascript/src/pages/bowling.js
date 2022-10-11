@@ -456,17 +456,17 @@ $(document).ready(function() {
     // Always knock the current pins down
     knockPinsForShot(toss, "fallen")
 
-    if (shot_idx == 0) {
-      $(".pin-wrapper").removeClass("fallen-before")
-    } else if (shot_idx == 1) {
+    if (shot_idx == 1) {
       if (currentTossAtIdx(0).val() != "X") {
-        knockPinsForShot(currentTossAtIdx(0), "fallen-before")
+        return knockPinsForShot(currentTossAtIdx(0), "fallen-before")
       }
     } else if (shot_idx == 2) {
       if (currentTossAtIdx(1).val() != "X" && currentTossAtIdx(1).val() != "/") {
-        knockPinsForShot(currentTossAtIdx(1), "fallen-before")
+        return knockPinsForShot(currentTossAtIdx(1), "fallen-before")
       }
     }
+
+    $(".pin-wrapper").removeClass("fallen-before")
   }
 
   knockPinsForShot = function(shot, klass) {
