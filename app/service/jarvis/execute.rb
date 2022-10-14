@@ -6,7 +6,7 @@ class Jarvis::Execute
   def call(task)
     @task = task
     @ctx = { vars: {}, i: 0, msg: [] }
-    # task.next_trigger_at = Cronit.next(task.cron) if task.cron.present?
+    task.next_trigger_at = Fugit::Cron.parse(task.cron).next_time if task.cron.present?
     task.update(last_trigger_at: Time.current)
 
     task.tasks.each do |task_block|
@@ -22,13 +22,15 @@ class Jarvis::Execute
     # trigger fail unless task has a fail trigger
   ensure
     @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx)
+    @ctx[:msg]#.join("\n")
   end
 
   def eval_block(task_block, scope_ctx={})
-    @ctx[:i] += 1
     return if @ctx[:i] > 1000
-    return if task_block.nil?
+    return task_block if [true, false, nil].include?(task_block)
+    return task_block if task_block.class.in?([String, Integer, Float])
     return task_block.each { |sub_block| eval_block(sub_block) } && nil if task_block.is_a?(Array)
+    @ctx[:i] += 1
 
     case task_block[:type].to_sym
       # LOGIC
@@ -39,14 +41,14 @@ class Jarvis::Execute
     when :or
       task_block[:args].any? { |a| eval_block(a) }
     when :compare
-      return unless task_block[:sign].in?("==", "!=", "<", "<=", ">", ">=")
+      return unless task_block[:sign].in?(["==", "!=", "<", "<=", ">", ">="])
       a, b = task_block[:args].first(2).map { |a| eval_block(a) }
       a.send(task_block[:sign], b)
     when :not
       !eval_block(task_block[:arg])
       # MATH
     when :operation
-      return unless task_block[:op].in?("+", "-", "*", "/", "%")
+      return unless task_block[:op].in?(["+", "-", "*", "/", "%"])
       c, *rest = task_block[:args]
       rest.each_with_object(eval_block(c)) { |a, pass| pass.send(task_block[:op], eval_block(a)) }
     when :adv_ops
