@@ -51,6 +51,15 @@ return
   do: [BLOCK]
 }
 
+{
+  type: :each, # each|map
+  do: [BLOCK]
+}
+
+# Special values available within a loop
+{ type: :index }
+{ type: :object }
+
 # WHILE
 {
   type: :while,
@@ -117,8 +126,15 @@ return
   value: RX|STR
 }
 
+# =========================================== Jarvis ===============================================
+
+{
+  type: :say,
+  message: STR
+}
+
 #   Text:
-#     String
+#     √ String
 #     Match? # Able to test regexp matching -- Belongs in logic?
 #     Split? # Based on regex? -- Would need some way to set to an array/enumerator
 #     Format # lower, upper, snake?, camel?
@@ -127,8 +143,8 @@ return
 #     Prompt? (with...)
 #     Base64 # / Other encodings/decodings?
 #   ToLevel?:
-#     Comment # Should be able to leave comments
-#     Exit # Do not execute the remainder of the task
+#     Comment # Should be able to leave comments -- Does not count as iteration
+#     √ Exit # Do not execute the remainder of the task
 #     Fail # Raise an error / trigger a callback to the "failed_task" action - Do not execute rest
 #     Schedule # trigger a job to run later -- Should also return a JID that can be stored in cache
 #     Get # take from cache
@@ -143,7 +159,7 @@ return
 #     Prepend/Append
 #     Join # -- Becomes string
 #     Get/Del at index
-#     Iterate / Map
+#     √ Iterate / Map
 #     Count
 #   Dictionary:
 #     Set key
@@ -152,7 +168,7 @@ return
 #     Iterate / Map
 #     Count
 #   Variables:
-#     List of vars -- including var type
+#     √ List of vars -- including var type
 #   Notify:
 #     SMS
 #     Email

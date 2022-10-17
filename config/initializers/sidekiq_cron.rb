@@ -20,15 +20,20 @@ cron_jobs = [
     class: "RescheduleItemsWorker",
     cron: every_minute
   },
+  {
+    name: "Trigger Jarvis Cron",
+    class: "JarvisScheduleWorker",
+    cron: every_minute
+  },
 ]
 
 if Rails.env.production?
   cron_jobs += [
-    {
-      name: "CaptureQueryStats",
-      class: "CaptureQueryStatsWorker",
-      cron: every_5_minutes,
-    },
+    # {
+    #   name: "CaptureQueryStats",
+    #   class: "CaptureQueryStatsWorker",
+    #   cron: every_5_minutes,
+    # },
     {
       name: "HourlyVenmoCheck",
       class: "HourlyVenmoCheckWorker",

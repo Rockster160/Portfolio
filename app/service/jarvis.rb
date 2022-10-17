@@ -17,6 +17,7 @@
 
 
 # ============================== TODO ================================
+# [ ] Somehow sync freaking contacts for Venmo and navigation
 # [ ] "at noon/midnight" should work
 # [ ] Only send calendar start/directions to car if it’s off
 # [ ] "Refresh" in Home (cell) should open the link for Nest
@@ -25,7 +26,6 @@
 # [ ] Navigate should also start the car (if not already on)
 # [ ] If a remind is within a few hours, say “I’ll remind you in 3 hours at 16 minutes to…”
 # [ ] Jarvis conversations- can ask questions and allow responding back
-# [ ] Add contacts to Jarvis for navigating
 # [*] Printer functions should not require dots to call
 # [*] Car should show if camp/wait/etc mode is on
 # [*] Passive notifications into Reminders cell- notification shows up, isn't noisy or obtrusive.
@@ -86,6 +86,10 @@ class Jarvis
   MY_NUMBER = "3852599640"
 
   def self.trigger(action)
+    ::JarvisTriggerWorker.perform_async(action.to_s)
+  end
+
+  def self.execute_trigger(action)
     JarvisTask.where(trigger: action).find_each do |task|
       Jarvis::Execute.call(task)
     end

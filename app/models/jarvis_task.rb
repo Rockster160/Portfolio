@@ -16,7 +16,7 @@
 #  user_id         :bigint
 #
 class JarvisTask < ApplicationRecord
-  belongs_to :user
+  belongs_to :user, required: true
 
   enum trigger: {
     action_event:      1,
