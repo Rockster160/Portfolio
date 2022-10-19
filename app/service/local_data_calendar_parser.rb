@@ -66,6 +66,7 @@ class LocalDataCalendarParser
     today_str = @current_day.strftime("%b %-d, %Y:")
     parsed_data[today_str] ||= []
     return if evt[:uid].blank?
+    return if parsed_data[today_str].any? { |other_evt| other_evt[:uid] == evt[:uid] }
 
     parsed_data[today_str].push(evt)
   end
