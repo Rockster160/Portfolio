@@ -5,8 +5,6 @@ class ScheduleTravelWorker
   POST_OFFSET = 20.minutes
 
   def perform
-    # return if Rails.env.development?
-
     calendar_data = LocalDataCalendarParser.call
     _date, events = calendar_data.first # First should always be "today"
     events = events.sort_by { |evt| evt[:start_time] || DateTime.new }

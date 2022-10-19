@@ -33,7 +33,9 @@ import { dash_colors, beep } from "../vars"
         flash(true)
         if (flash_on = !flash_on) {
           first_row.push(Text.color(dash_colors.yellow, "  [ico ti ti-mdi-garage_open]"))
-          beep(100, 350, 0.02, "square")
+          if (cell.data.sound) {
+            beep(100, 350, 0.02, "square")
+          }
         } else {
           first_row.push(Text.color(dash_colors.yellow, "    "))
         }
@@ -194,6 +196,9 @@ import { dash_colors, beep } from "../vars"
     refreshInterval: Time.minute(),
     wrap: false,
     flash: false,
+    data: {
+      sound: true,
+    },
     onload: subscribeWebsockets,
     reloader: function() {
       renderLines()
@@ -208,6 +213,11 @@ import { dash_colors, beep } from "../vars"
       cell.amz_socket.close()
       cell.nest_socket.close()
       cell.garage_socket.close()
+    },
+    commands: {
+      quiet: function() {
+        cell.data.sound = !cell.data.sound
+      }
     },
     command: function(msg) {
       if (/^-?\d+/.test(msg) && parseInt(msg.match(/\d+/)[0]) < 30) {
