@@ -10,7 +10,7 @@
       <td></td>
       <td></td>
     </tr>
-    <% @league.bowlers.ordered.each do |bowler| %>
+    <% @league.bowlers.where(total_games: 1..).ordered.each do |bowler| %>
       <tr class="league-bowler" data-gms-per-series="<%= @league.games_per_series %>" data-gms="<%= bowler.total_games %>" data-pins="<%= bowler.total_pins %>">
         <td><%= bowler.name %></td>
         <% [2, 1, -1, -2].each do |diff| %>
