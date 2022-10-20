@@ -38,7 +38,7 @@ class Bowler < ApplicationRecord
   end
 
   def first_set_games
-    sets.order(:created_at).first&.games || BowlingGames.none
+    sets.order(:created_at).first&.games.where(bowler: self) || BowlingGames.none
   end
 
   def games_at_time(time=Time.current)
