@@ -28,8 +28,8 @@ class Bowler < ApplicationRecord
 
   def recalculate_scores
     update(
-      total_games:  games_at_time,
-      total_pins:   pins_at_time,
+      total_games:  games_at_time.then { |n| n.zero? ? games_present.count : n },
+      total_pins:   pins_at_time.then { |n| n.zero? ? games_present.sum(:score) : n },
       total_points: games.points + winning_sets.count,
       high_game:    games_present.maximum(:score),
       high_series:  games_present.group_by(&:set_id).map { |setid, set_games| set_games.sum(&:score) }.max,
@@ -37,11 +37,15 @@ class Bowler < ApplicationRecord
   end
 
   def games_at_time(time=Time.current)
-    total_games_offset.to_i + games_present.where("bowling_games.created_at <= ?", time).count
+    total_games_offset.to_i +
+      games_present.where("bowling_games.created_at <= ?", time)
+        .then { |g| g.none? ? games_present : g }.count
   end
 
   def pins_at_time(time=Time.current)
-    total_pins_offset.to_i + games_present.where("bowling_games.created_at <= ?", time).sum(:score)
+    total_pins_offset.to_i +
+      games_present.where("bowling_games.created_at <= ?", time)
+        .then { |g| g.none? ? games_present : g }.sum(:score)
   end
 
   def winning_sets

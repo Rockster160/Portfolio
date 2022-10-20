@@ -1,7 +1,7 @@
 class BowlingStatsCalculator
 
   def self.call(league, set=nil)
-    bowlers = league.bowlers.ordered
+    bowlers = league.bowlers.ordered.where(total_games: 1..)
     stats = BowlingStats.new(league, set)
     missed_drinks = stats.missed_drink_frames
 
