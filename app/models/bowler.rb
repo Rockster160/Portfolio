@@ -20,6 +20,7 @@
 class Bowler < ApplicationRecord
   belongs_to :league, class_name: "BowlingLeague", foreign_key: :league_id, inverse_of: :bowlers
   has_many :bowler_sets, dependent: :destroy
+  has_many :sets, through: :bowler_sets
   has_many :games, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
   has_many :games_present, -> { attended }, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
   has_many :frames, through: :games, source: :new_frames
@@ -36,16 +37,20 @@ class Bowler < ApplicationRecord
     )
   end
 
+  def first_set_games
+    sets.order(:created_at).first&.games || BowlingGames.none
+  end
+
   def games_at_time(time=Time.current)
     total_games_offset.to_i +
       games_present.where("bowling_games.created_at <= ?", time)
-        .then { |g| g.none? ? games_present : g }.count
+        .then { |g| g.none? ? first_set_games : g }.count
   end
 
   def pins_at_time(time=Time.current)
     total_pins_offset.to_i +
       games_present.where("bowling_games.created_at <= ?", time)
-        .then { |g| g.none? ? games_present : g }.sum(:score)
+        .then { |g| g.none? ? first_set_games : g }.sum(:score)
   end
 
   def winning_sets
