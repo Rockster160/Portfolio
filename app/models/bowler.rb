@@ -29,8 +29,8 @@ class Bowler < ApplicationRecord
 
   def recalculate_scores
     update(
-      total_games:  games_at_time.then { |n| n.zero? ? games_present.count : n },
-      total_pins:   pins_at_time.then { |n| n.zero? ? games_present.sum(:score) : n },
+      total_games:  games_at_time.then { |n| n.zero? ? first_set_games.count : n },
+      total_pins:   pins_at_time.then { |n| n.zero? ? first_set_games.sum(:score) : n },
       total_points: games.points + winning_sets.count,
       high_game:    games_present.maximum(:score),
       high_series:  games_present.group_by(&:set_id).map { |setid, set_games| set_games.sum(&:score) }.max,
