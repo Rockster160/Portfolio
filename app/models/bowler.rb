@@ -41,7 +41,7 @@ class Bowler < ApplicationRecord
     present_set = games_present.joins(:set).order("bowling_sets.created_at").first&.set
     return BowlingGame.none if present_set.blank?
 
-    present_set.games.attended
+    present_set.games.attended.where(bowler: self)
   end
 
   def games_at_time(time=Time.current)
