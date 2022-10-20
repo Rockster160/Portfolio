@@ -1,5 +1,6 @@
 # https://tesla-api.timdorr.com/
 
+class TeslaError < StandardError; end
 class TeslaControl
   attr_accessor :access_token, :refresh_token, :car
 
@@ -167,7 +168,7 @@ class TeslaControl
     start = Time.current.to_i
 
     loop do
-      raise "Timed out waiting to wake up" if Time.current.to_i - start > 35
+      raise TeslaError, "Timed out waiting to wake up" if Time.current.to_i - start > 35
 
       break true if wake_vehicle
       sleep(rand * 5)

@@ -104,6 +104,9 @@
     end
 
     @response
+  rescue TeslaError => e
+    ActionCable.server.broadcast("tesla_channel", failed: true)
+    "Tesla #{e.message}"
   rescue StandardError => e
     ActionCable.server.broadcast("tesla_channel", failed: true)
     backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
@@ -117,6 +120,8 @@
   end
 
   def format_data(data)
+    return {} if data.blank?
+
     {
       charge: data.dig(:charge_state, :battery_level),
       miles: data.dig(:charge_state, :battery_range)&.floor,
