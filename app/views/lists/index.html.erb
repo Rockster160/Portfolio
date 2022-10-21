@@ -15,9 +15,13 @@
     <% @lists.each do |list| %>
       <div class="list-item-container" data-list-id="<%= list.id %>">
         <div class="list-item-config">
-          <%= content_tag :div, nil, class: "important" if list.important? && list.list_items.any? %>
+          <% if list.important? && list.list_items.any? %>
+            <div class="important"><i class="fa fa-star"></i></div>
+          <% end %>
+          
           <%= content_tag :div, nil, class: "details" if list.description.present? %>
         </div>
+        <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>
         <a href="<%= edit_list_path(list) %>" class="settings-btn"><i class="fa fa-cog"></i></a>
         <a href="<%= list_path(list) %>" class="list-item">
           <span class="item-name"><%= list.name.titleize %></span> (<%= list.list_items.count %>)
