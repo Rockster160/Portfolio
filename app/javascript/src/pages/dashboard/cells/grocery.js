@@ -18,6 +18,8 @@ import { Text } from "../_text"
       this.ws.send({ get: true })
     },
     command: function(text) {
+      if (text == "o") { return window.open("https://ardesian.com/lists/grocery", "_blank") }
+
       let data = { message: text }
       if (/^-\d+$/.test(text)) {
         var num = parseInt(text.match(/\d+/)[0])
