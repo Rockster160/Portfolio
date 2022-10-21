@@ -28,7 +28,7 @@ import { Text } from "../_text"
         data.remove = item.replace(/^\d+\. /, "")
         delete data.message
       }
-      if (!/^[-|+|add|remove]/gi.test(text)) {
+      if (!/^(\-|\+|add|remove)/gi.test(text)) {
         data.add = text
         delete data.message
       }
