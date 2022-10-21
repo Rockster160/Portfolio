@@ -94,9 +94,7 @@ class Jarvis
   def self.command(user, words)
     res, res_data = new(user, words).command
 
-    if res.present? && !res.match?(/^Logged/)
-      ActionCable.server.broadcast("jarvis_channel", say: res, data: res_data)
-    end
+    ActionCable.server.broadcast("jarvis_channel", say: res, data: res_data) if res.present?
     return res if res_data.blank?
     [res, res_data]
   end
