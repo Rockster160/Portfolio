@@ -134,8 +134,7 @@ class List < ApplicationRecord
     case action
     when :add
       items = item_names.map do |item_name|
-        item = list_items.by_name_then_update(name: item_name)
-        item
+        list_items.by_name_then_update(name: item_name)
       end.select(&:persisted?)
       return "No items added." if items.none?
       return "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join("")}"
