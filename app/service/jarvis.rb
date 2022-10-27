@@ -9,9 +9,8 @@
 
 
 # =============================== Bugs ===============================
-# [^] Always navving home with directions
-# [^] Remind should always be future
-# [^] Log should always be past
+# [^] Remind should ALWAYS be future
+# [^] Log should ALWAYS be past
 # [^] Jarvis specific dates don't get picked up "Remind me Oct 23 at 9:32am to wish B Happy Birthday"
 # [^] Jarvis should interpret word numbers "two"
 
