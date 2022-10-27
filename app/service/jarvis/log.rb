@@ -22,6 +22,8 @@ class Jarvis::Log < Jarvis::Action
     new_words = (new_words || @msg).gsub(/^log ?/i, "")
     @evt[:timestamp] = extracted_time
     @evt[:event_name], @evt[:notes] = new_words.gsub(/[.?!]$/i, "").squish.split(" ", 2)
+    # Stupid Alexa tries to expand mg to milligrams
+    @evt[:notes] = @evt[:notes]&.gsub(" milligrams", "mg")
   end
 
   def create_event
