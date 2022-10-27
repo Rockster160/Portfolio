@@ -99,6 +99,8 @@ class ActionEventsController < ApplicationController
       :timestamp,
     ).tap do |whitelist|
       whitelist[:timestamp] = whitelist[:timestamp].presence || Time.current
+      # Stupid Alexa tries to expand mg to milligrams
+      whitelist[:notes] = whitelist[:notes]&.gsub(" milligrams", "mg")
     end
   end
 end
