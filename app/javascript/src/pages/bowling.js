@@ -74,6 +74,7 @@ $(document).ready(function() {
 
 $(document).ready(function() {
   if ($(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").length == 0) { return }
+  let currentScorePush = null
   var inProgress = false
   var pin_knock = undefined
   var pinTimer = undefined
@@ -873,6 +874,7 @@ $(document).ready(function() {
 
     updateFallenPins()
     calcScores()
+    pushScores()
   }
 
   shotIndex = function(shot) {
@@ -1142,8 +1144,13 @@ $(document).ready(function() {
   }
 
   pushScores = function() {
+    if (currentScorePush) {
+      currentScorePush.abort()
+      currentScorePush = null
+    }
+
     let form = $("form.bowling-game-form")
-    $.ajax({
+    currentScorePush = $.ajax({
       type: form.attr("method"),
       url: form.attr("action"),
       data: form.serialize() + "&throw_update=true"
