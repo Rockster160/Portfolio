@@ -155,12 +155,12 @@ $(document).ready(function() {
 
   $(".pin-all-toggle").on("click", function(evt) {
     clearTimeout(pinTimer)
-    if ($(this).hasClass("fall")) {
-      $(".pin-wrapper:not(.fallen-before)").addClass("fallen")
-    } else {
-      $(".pin-wrapper:not(.fallen-before)").removeClass("fallen")
-    }
     $(this).toggleClass("fall")
+    if ($(this).hasClass("fall")) {
+      $(".pin-wrapper:not(.fallen-before)").removeClass("fallen")
+    } else {
+      $(".pin-wrapper:not(.fallen-before)").addClass("fallen")
+    }
   })
   $(".pocket-toggle").click(function() {
     var prev_val = $(".shot.current").parents(".frame").find(".strike-point").val()
@@ -466,7 +466,8 @@ $(document).ready(function() {
       }
     }
 
-    $(".pin-wrapper").removeClass("fallen-before")
+    // Else consider pin full reset, so knock all pins over by default
+    $(".pin-wrapper").addClass("fallen").removeClass("fallen-before")
   }
 
   knockPinsForShot = function(shot, klass) {
@@ -480,7 +481,8 @@ $(document).ready(function() {
         $(".pin-wrapper[data-pin-num=" + pin + "]").addClass(klass)
       })
     } else {
-      if (!$(".pin-all-toggle").hasClass("fall")) {
+      // Start of frame
+      if (parseInt(shot.attr("data-shot-idx")) == 0) { // || last shot was strike
         $(".pin-wrapper").addClass("fallen")
       }
     }
@@ -653,9 +655,8 @@ $(document).ready(function() {
   })
 
   resetPinFall = function() {
-    if (!$(".pin-all-toggle").hasClass("fall")) {
-      $(".pin-wrapper").addClass("fallen").removeClass("fallen-before")
-    }
+    // $(".pin-wrapper:not(.fallen-before)").addClass("fallen")
+    $(".pin-wrapper").addClass("fallen").removeClass("fallen-before")
   }
 
   throwScore = function(text) {
@@ -1015,7 +1016,8 @@ $(document).ready(function() {
     $(".shot.current").removeClass("current")
     toss.addClass("current")
     clearTimeout(pinTimer)
-    resetPinFall()
+    // $(".pin-wrapper:not(.fallen-before)").addClass("fallen")
+    // resetPinFall()
     resetStrikePoint()
     checkStats()
     updateFallenPins()

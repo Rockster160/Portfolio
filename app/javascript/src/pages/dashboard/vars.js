@@ -16,7 +16,7 @@ export let dash_colors = {
   blue:   "#115DCD", // Not Endesga32
   lblue:  "#3D94F6", // Not Endesga32
   bright: "#5DA6F8", // Not Endesga32
-  orange: "#f77622",
+  orange: "#F77622",
   white:  "#FFFFFF",
   darkgrey: "#262B44",
   black:  "#181425",
