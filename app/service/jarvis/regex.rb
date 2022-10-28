@@ -11,6 +11,10 @@ module Jarvis::Regex
     Regexp.new("(?:\\b#{prefix}(?:#{words.flatten.join('|')})#{suffix}\\b)", :i)
   end
 
+  def words_to_nums(str)
+    NumberParser.parse(str)
+  end
+
   def address
     street_name_words = [
       :highway,
