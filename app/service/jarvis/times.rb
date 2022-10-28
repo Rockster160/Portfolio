@@ -4,12 +4,15 @@ module Jarvis::Times
   def extract_time(words, chronic_opts={})
     rx = Jarvis::Regex
     words = words.gsub(rx.words(:later), "today")
+    month_words = Date::MONTHNAMES + Date::ABBR_MONTHNAMES
+    month_words_regex = rx.words(month_words)
     day_words = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday, :morning, :night, :afternoon, :evening, :tonight]).map { |w| w.to_s.downcase.to_sym }
     day_words_regex = rx.words(day_words)
     time_words = [:second, :minute, :hour, :day, :week, :month, :year]
     time_words_regex = rx.words(time_words, suffix: "s?")
     time_str = words[/\b(in) (\d+|an?) #{time_words_regex}/]
-    time_str ||= words[/((in the )?(#{day_words_regex} ?)+ )?\b(at) \d+:?\d*( ?(am|pm))?( (#{day_words_regex} ?)+)?/]
+    time_str ||= words[/(#{month_words_regex} \d{,2}(\w{2})?(,? '?\d{2,4})? )?((in the )?(#{day_words_regex} ?)+ )?\b(at) \d+:?\d*( ?(am|pm))?( (#{day_words_regex} ?)+)?/]
+    time_str ||= words[/#{month_words_regex} \d{,2}(\w{2})?(,? '?\d{2,4})?/]
     time_str ||= words[/in the #{day_words_regex}/]
     time_str ||= words[/(\d+|an?) #{time_words_regex} \b(from now|ago)\b/]
     time_str ||= words[/((next|last) )?(#{day_words_regex} ?)+/]
@@ -27,10 +30,9 @@ module Jarvis::Times
   end
 
   def safe_date_parse(timestamp, chronic_opts={})
-    # If past opt is passed and time is in future, roll back 12/24 hours. (Based on am/pm)
-    # If future opt is passed and time is in past, roll forward 12/24 hours. (Based on am/pm)
+    opts = chronic_opts.reverse_merge(ambiguous_time_range: 8)
     Chronic.time_class = ::Time.zone
-    Chronic.parse(timestamp, chronic_opts).then { |time|
+    Chronic.parse(timestamp, opts).then { |time|
       next if time.nil?
       skip = timestamp.match?(/(a|p)m/) ? 24.hours : 12.hours
       time += skip while chronic_opts[:context] == :future && time < Time.current

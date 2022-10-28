@@ -23,6 +23,7 @@ class Jarvis::ScheduleParser < Jarvis::Action
     elsif @scheduled_time.tomorrow?
       "tomorrow at #{@scheduled_time.strftime("%-l:%M%P")}"
     else
+      # Show year if different?
       # Maybe even say things like "next Wednesday at ..."
       "on #{@scheduled_time.strftime("%a, %b %-d at %-l:%M%P")}"
     end

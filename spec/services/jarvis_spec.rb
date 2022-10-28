@@ -446,6 +446,9 @@ RSpec.describe Jarvis do
       "at 9:45 pm" => [Time.local(2022, 6, 24, 21, 45), "today at 9:45pm"],
       "tomorrow afternoon" => [Time.local(2022, 6, 25, 15, 00), "tomorrow at 3pm"], # Afternoon is 3pm
       "next wednesday" => [Time.local(2022, 6, 29, 12, 00), "on Wed, Jun 29 at noon"], # Default is noon
+      "oct 23" => [Time.local(2022, 10, 23, 12, 00), "on Sun, Oct 23 at noon"], # Default is noon
+      "oct 23, 2022" => [Time.local(2022, 10, 23, 12, 00), "on Sun, Oct 23 at noon"], # Default is noon
+      "october 23 25 at 9" => [Time.local(2025, 10, 23, 9, 00), "on Thu, Oct 23 at 9am"],
     }
 
     actions.each do |time_words, (timestamp, rel_time)|
