@@ -10,6 +10,14 @@ class AmzUpdatesChannel < ApplicationCable::Channel
     elsif data["rename"]
       order = deliveries[data["id"]]
       order[:name] = data["rename"]
+    elsif data["add"]
+      msg = data["add"].gsub(/^add /, "")
+      sub, time = ::Jarvis::Times.extract_time(msg, context: :future)
+      name = msg.gsub(sub, "")
+      deliveries[name] = {
+        name: name,
+        delivery: time&.strftime("%Y-%m-%-d") || "[ERROR]",
+      }
     end
 
     DataStorage[:amazon_deliveries] = deliveries

@@ -232,6 +232,8 @@ import { dash_colors, beep } from "../vars"
         } else { // Rename the order
           cell.amz_socket.send({ action: "change", id: order.id, rename: msg.replace(/^\d+ /, "") })
         }
+      } else if (/^add\b/i.test(msg)) { // Add item to AMZ deliveries
+        cell.amz_socket.send({ action: "change", add: msg })
       } else if (/\b(open|close|toggle|garage)\b/.test(msg)) { // open/close
         cell.garage_socket.send({ action: "control", direction: msg })
       } else { // Assume AC control
