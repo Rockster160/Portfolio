@@ -375,9 +375,9 @@ RSpec.describe Jarvis do
     end
 
     it "can add action events with time" do
-      expect(jarvis("Log thing at 7:52")).to eq("Logged Thing [Today 7:52 AM]")
+      expect(jarvis("Log thing at 4:52")).to eq("Logged Thing [Today 4:52 AM]")
       expect(@admin.action_events.pluck(:event_name)).to include("Thing")
-      expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 7, 52))
+      expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 4, 52))
     end
 
     it "can add action events with relative time" do
@@ -387,10 +387,10 @@ RSpec.describe Jarvis do
     end
 
     it "can add action events with note and time" do
-      expect(jarvis("log thing sup at 7:52.")).to eq("Logged Thing (sup) [Today 7:52 AM]")
+      expect(jarvis("log thing sup at 4:52.")).to eq("Logged Thing (sup) [Today 4:52 AM]")
       expect(@admin.action_events.pluck(:event_name)).to include("Thing")
       expect(@admin.action_events.pluck(:notes)).to include("sup")
-      expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 7, 52))
+      expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 4, 52))
     end
   end
 
@@ -414,12 +414,12 @@ RSpec.describe Jarvis do
     # now Time.local(2022, 6, 24, 5, 45)
     it "can schedule a job for later" do
       expect(JarvisWorker).to receive(:perform_at).with(10.minutes.from_now, @admin.id, "add something to list")
-      expect(jarvis("add something to list in 10 minutes")).to eq("I'll add something to list on Fri Jun 24 at 5:55 AM")
+      expect(jarvis("add something to list in 10 minutes")).to eq("I'll add something to list today at 5:55am")
     end
 
     it "can schedule a job for a time" do
       expect(JarvisWorker).to receive(:perform_at).with(Time.local(2022, 6, 24, 21, 45), @admin.id, "add something to list")
-      expect(jarvis("add something to list at 9:45 PM")).to eq("I'll add something to list on Fri Jun 24 at 9:45 PM")
+      expect(jarvis("add something to list at 9:45 PM")).to eq("I'll add something to list today at 9:45pm")
     end
 
     it "can schedule a job in the middle of a command" do
@@ -429,29 +429,33 @@ RSpec.describe Jarvis do
         # Call original above to make sure the SmsWorker gets called
         expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
 
-        expect(jarvis("Remind me in 5 minutes to do the laundry")).to eq("I'll remind you to do the laundry on Fri Jun 24 at 5:50 AM")
+        expect(jarvis("Remind me in 5 minutes to do the laundry")).to eq("I'll remind you to do the laundry today at 5:50am")
       }
     end
 
     actions = {
       # Time.local(2022, 6, 24, 5, 45),
       # If the middle of the day, check "morning" is the next morning and "11:15" does that night
-      "tomorrow" => Time.local(2022, 6, 25, 12, 00), # Default time is noon
-      "in an hour" => Time.local(2022, 6, 24, 6, 45),
-      "tonight" => Time.local(2022, 6, 24, 22, 0),
-      "at 11:15 tomorrow" => Time.local(2022, 6, 25, 11, 15),
-      "at 9:15 tomorrow night" => Time.local(2022, 6, 25, 21, 15),
-      "at 4:30 pm yesterday" => Time.local(2022, 6, 23, 16, 30),
-      "in the morning" => Time.local(2022, 6, 24, 9, 00), # Morning is 9am - same day because it's early
-      "at 9:45 pm" => Time.local(2022, 6, 24, 21, 45),
-      "tomorrow afternoon" => Time.local(2022, 6, 25, 15, 00), # Afternoon is 3pm
-      "next wednesday" => Time.local(2022, 6, 29, 12, 00), # Default is noon
+      "tomorrow" => [Time.local(2022, 6, 25, 12, 00), "tomorrow at noon"], # Default time is noon
+      "in an hour" => [Time.local(2022, 6, 24, 6, 45), "today at 6:45am"],
+      "tonight" => [Time.local(2022, 6, 24, 22, 0), "today at 10pm"],
+      "at 11:15 tomorrow" => [Time.local(2022, 6, 25, 11, 15), "tomorrow at 11:15am"],
+      "at 9:15 tomorrow night" => [Time.local(2022, 6, 25, 21, 15), "tomorrow at 9:15pm"],
+      "in the morning" => [Time.local(2022, 6, 24, 9, 00), "today at 9am"], # Morning is 9am - same day because it's early
+      "at 5:30am" => [Time.local(2022, 6, 25, 5, 30), "tomorrow at 5:30am"], # Morning is 9am - same day because it's early
+      "at 9:45 pm" => [Time.local(2022, 6, 24, 21, 45), "today at 9:45pm"],
+      "tomorrow afternoon" => [Time.local(2022, 6, 25, 15, 00), "tomorrow at 3pm"], # Afternoon is 3pm
+      "next wednesday" => [Time.local(2022, 6, 29, 12, 00), "on Wed, Jun 29 at noon"], # Default is noon
     }
 
-    actions.each do |time_words, timestamp|
+    actions.each do |time_words, (timestamp, rel_time)|
       it "can schedule #{time_words}" do
         expect(JarvisWorker).to receive(:perform_at).with(timestamp, @admin.id, "Do thing")
-        expect(jarvis("Do thing #{time_words}")).to eq("I'll do thing on #{timestamp.strftime("%a %b %-d at %-l:%M %p")}")
+        if rel_time.present?
+          expect(jarvis("Do thing #{time_words}")).to eq("I'll do thing #{rel_time}")
+        else
+          expect(jarvis("Do thing #{time_words}")).to eq("I'll do thing on #{timestamp.strftime("%a, %b %-d at %-l:%M%P")}")
+        end
       end
     end
   end

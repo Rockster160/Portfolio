@@ -30,6 +30,12 @@ module Jarvis::Times
     # If past opt is passed and time is in future, roll back 12/24 hours. (Based on am/pm)
     # If future opt is passed and time is in past, roll forward 12/24 hours. (Based on am/pm)
     Chronic.time_class = ::Time.zone
-    Chronic.parse(timestamp, chronic_opts)
+    Chronic.parse(timestamp, chronic_opts).then { |time|
+      next if time.nil?
+      skip = timestamp.match?(/(a|p)m/) ? 24.hours : 12.hours
+      time += skip while chronic_opts[:context] == :future && time < Time.current
+      time -= skip while chronic_opts[:context] == :past && time > Time.current
+      time
+    }
   end
 end

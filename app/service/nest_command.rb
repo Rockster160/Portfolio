@@ -4,7 +4,7 @@ class NestCommand
   end
 
   def command(settings)
-    return unless Rails.env.production?
+    return unless Rails.env.production? || Rails.env.test?
 
     ActionCable.server.broadcast("nest_channel", loading: true)
     get_devices if DataStorage[:nest_devices].blank?
