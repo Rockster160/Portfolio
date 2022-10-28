@@ -3,32 +3,33 @@ module NumberParser
 
   def parse(str)
     str.gsub(/(\ba )?\b(#{reg_or(all_nums)})([ -]?(#{reg_or(all_nums, :and, :a)}))*\b/) do |found|
-    # Clean up
-    found.gsub!(/\ba (#{reg_or(big_nums)})/, 'one \1') # Replace "a" with "one"
-    found.gsub!(/(#{reg_or(big_nums)}) and (#{reg_or(small_nums)})/, '\1 \2') # Remove "and" between big->small
-    found.gsub!(/(#{reg_or(all_nums)}) ?- ?(#{reg_or(all_nums)})/, '\1 \2') # Remove "-" between any
-    # Split different chunks of numbers
-    found.gsub!(/(#{reg_or(ones, teens)}) (#{reg_or(small_nums)})/, '\1 | \2')
-    found.gsub!(/(#{reg_or(tens)}) (#{reg_or(teens, tens)})/, '\1 | \2')
-    found.gsub!(/(#{reg_or(tens)}) (hundred)/, '\1 | \2')
-    found.gsub!(/(#{reg_or(all_nums)}) (\1)/, '\1 | \2')
-    found.gsub!(/(#{reg_or(all_nums)}) and (#{reg_or(all_nums)})/, '\1 | and | \2')
-    found.gsub!(/(#{reg_or(all_nums)}) and\b/, '\1 | and')
-    found.gsub!(/\band (#{reg_or(all_nums)})/, 'and | \1')
-    big_nums.keys.each_with_index do |num_name, idx|
-      next if num_name == :hundred # Nothing under hundred to check
-      # Replace any big nums followed by a smaller (million thousand is bad, but thousand million is fine)
-      found.gsub!(/(#{num_name}) (#{reg_or(big_nums.keys[(idx+1)..-1])})/, '\1 | \2')
-    end
-
-    # Split the separate words and parse each one
-    found.split(" | ").map { |num|
-      if num.match?(/(#{reg_or(all_nums)})/)
-        parseNum(num)
-      else
-        num
+      # Clean up
+      found.gsub!(/\ba (#{reg_or(big_nums)})/, 'one \1') # Replace "a" with "one"
+      found.gsub!(/(#{reg_or(big_nums)}) and (#{reg_or(small_nums)})/, '\1 \2') # Remove "and" between big->small
+      found.gsub!(/(#{reg_or(all_nums)}) ?- ?(#{reg_or(all_nums)})/, '\1 \2') # Remove "-" between any
+      # Split different chunks of numbers
+      found.gsub!(/(#{reg_or(ones, teens)}) (#{reg_or(small_nums)})/, '\1 | \2')
+      found.gsub!(/(#{reg_or(tens)}) (#{reg_or(teens, tens)})/, '\1 | \2')
+      found.gsub!(/(#{reg_or(tens)}) (hundred)/, '\1 | \2')
+      found.gsub!(/(#{reg_or(all_nums)}) (\1)/, '\1 | \2')
+      found.gsub!(/(#{reg_or(all_nums)}) and (#{reg_or(all_nums)})/, '\1 | and | \2')
+      found.gsub!(/(#{reg_or(all_nums)}) and\b/, '\1 | and')
+      found.gsub!(/\band (#{reg_or(all_nums)})/, 'and | \1')
+      big_nums.keys.each_with_index do |num_name, idx|
+        next if num_name == :hundred # Nothing under hundred to check
+        # Replace any big nums followed by a smaller (million thousand is bad, but thousand million is fine)
+        found.gsub!(/(#{num_name}) (#{reg_or(big_nums.keys[(idx+1)..-1])})/, '\1 | \2')
       end
-    }.join(" ")
+
+      # Split the separate words and parse each one
+      found.split(" | ").map { |num|
+        if num.match?(/(#{reg_or(all_nums)})/)
+          parseNum(num)
+        else
+          num
+        end
+      }.join(" ")
+    end
   end
 
   def big_nums
