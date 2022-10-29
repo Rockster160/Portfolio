@@ -13,6 +13,7 @@ import { Text } from "../_text"
 
       var lines = Text.numberedList(msg.list_data.list_items)
       this.text(lines.join("\n"))
+      this.flash()
     }),
     reloader: function() {
       this.ws.send({ get: true })
