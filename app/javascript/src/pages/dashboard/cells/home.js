@@ -74,9 +74,10 @@ import { dash_colors, beep } from "../vars"
         if (delivery == "[DELIVERED]") {
           delivery = Text.color(dash_colors.green, "✓")
         } else if (delivery[0] != "[") {
-          let date = new Date(delivery + " MDT")
+          let [year, month, day, ...tz] = delivery.split(/-| /)
+          let date = (new Date()).setFullYear(year, parseInt(month) - 1, day)
           let deliverTime = Time.at(date)
-          delivery = date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
+          delivery = deliverTime.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
 
           if (today > deliverTime) {
             delivery = Text.color(dash_colors.orange, "Delayed?")
@@ -121,7 +122,8 @@ import { dash_colors, beep } from "../vars"
           let order = { date: 0, id: order_id }
           let delivery = order_data.delivery
           if (delivery[0] != "[") {
-            order.date = (new Date(delivery + " MDT")).getTime()
+            let [year, month, day, ...tz] = delivery.split(/-| /)
+            order.date = (new Date()).setFullYear(year, parseInt(month) - 1, day)
           }
           order.name = order_data.name || "#"
           order.delivery = delivery
