@@ -42,7 +42,7 @@
 # [*] > When was the last time I ate
 # [*] > I don’t know the last time I ate
 # [*] > What was the last thing I ate?
-# [*] Jarvis, Venmo X $Y
+# [*] Jarvis, Venmo X $Y -- If contacts have same name, JV should announce a conflict
 # [*] Somehow automate running specs to notify when there is a failing one Githook -> server -> test env on server?
 
 

@@ -72,7 +72,7 @@
     when :navigate
       address = params[::Jarvis::Regex.address]&.squish.presence if params.match?(::Jarvis::Regex.address)
       address ||= address_book.contact_by_name(original_params)&.address
-      address ||= address_book.address_from_name(original_params)
+      address ||= address_book.nearest_address_from_name(original_params)
 
       if address.present?
         @response = "Navigating to #{original_params.squish}"

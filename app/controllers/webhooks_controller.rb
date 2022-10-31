@@ -32,7 +32,8 @@ class WebhooksController < ApplicationController
     return head :no_content unless user_signed_in? && current_user.admin?
 
     data = params[:local_data].to_unsafe_h
-    File.write("local_data.json", data.to_json)
+    json = File.exists?("local_data.json") ? JSON.parse(File.read("local_data.json")) : {}
+    File.write("local_data.json", json.merge(data).to_json)
     LocalDataBroadcast.call(data)
 
     head :created
