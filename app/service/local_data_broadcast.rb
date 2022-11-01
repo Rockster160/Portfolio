@@ -37,6 +37,8 @@ class LocalDataBroadcast
 
   def update_contacts
     @data[:contacts].each do |contact_data|
+      next if contact_data[:phones].blank? && contact_data[:addresses].blank?
+
       contact = @user.contacts.find_or_initialize_by(apple_contact_id: contact_data[:id])
       contact.update(raw: contact_data)
       contact.resync

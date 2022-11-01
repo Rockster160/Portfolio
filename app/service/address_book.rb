@@ -33,7 +33,9 @@ class AddressBook
   end
 
   def loc_from_name
-    # TODO
+    # TODO - Give an address and find the lat/lng for it.
+    # Should also have a UI where we can move the pin to a precise location.
+    # Contacts should also have a preferred phone/address - perhaps just a bool on the associations?
   end
 
   def nearest_address_from_name(name, loc=nil)

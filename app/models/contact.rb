@@ -18,6 +18,10 @@
 class Contact < ApplicationRecord
   belongs_to :user
 
+  serialize :raw, SafeJsonSerializer
+
+  validates_uniqueness_of :apple_contact_id, allow_nil: true
+
   def loc
     [lat, lng]
   end
