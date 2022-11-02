@@ -1,7 +1,7 @@
 class ScheduleTravelWorker
   include Sidekiq::Worker
 
-  PRE_OFFSET = 5.minutes
+  PRE_OFFSET = 20.minutes
   POST_OFFSET = 20.minutes
 
   def perform
