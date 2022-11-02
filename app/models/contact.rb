@@ -42,6 +42,7 @@ class Contact < ApplicationRecord
       name: json[:name]&.split(" ", 2)&.first, # Should include aliases and allow last names?
       phone: json[:phones]&.first&.dig(:value)&.gsub(/[^\d]/, "")&.last(10),
       address: json[:addresses]&.first,
+      nickname: json[:nickname],
       lat: lat,
       lng: lng,
     )

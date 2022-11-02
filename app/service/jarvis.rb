@@ -136,6 +136,7 @@ class Jarvis
       Jarvis::Garage,
       Jarvis::Cmd,
       Jarvis::Sms,
+      Jarvis::Venmo,
       Jarvis::Talk,
     ]
   end
