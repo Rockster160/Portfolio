@@ -20,6 +20,7 @@
 class Bowler < ApplicationRecord
   belongs_to :league, class_name: "BowlingLeague", foreign_key: :league_id, inverse_of: :bowlers
   has_many :bowler_sets, dependent: :destroy
+  has_many :sets, through: :bowler_sets
   has_many :games, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
   has_many :games_present, -> { attended }, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
   has_many :frames, through: :games, source: :new_frames
@@ -28,20 +29,31 @@ class Bowler < ApplicationRecord
 
   def recalculate_scores
     update(
-      total_games:  games_at_time,
-      total_pins:   pins_at_time,
+      total_games:  games_at_time.then { |n| n.zero? ? first_set_games.count : n },
+      total_pins:   pins_at_time.then { |n| n.zero? ? first_set_games.sum(:score) : n },
       total_points: games.points + winning_sets.count,
       high_game:    games_present.maximum(:score),
       high_series:  games_present.group_by(&:set_id).map { |setid, set_games| set_games.sum(&:score) }.max,
     )
   end
 
+  def first_set_games
+    present_set = games_present.joins(:set).order("bowling_sets.created_at").first&.set
+    return BowlingGame.none if present_set.blank?
+
+    present_set.games.attended.where(bowler: self)
+  end
+
   def games_at_time(time=Time.current)
-    total_games_offset.to_i + games_present.where("bowling_games.created_at <= ?", time).count
+    total_games_offset.to_i +
+      games_present.where("bowling_games.created_at <= ?", time)
+        .then { |g| g.none? ? first_set_games : g }.count
   end
 
   def pins_at_time(time=Time.current)
-    total_pins_offset.to_i + games_present.where("bowling_games.created_at <= ?", time).sum(:score)
+    total_pins_offset.to_i +
+      games_present.where("bowling_games.created_at <= ?", time)
+        .then { |g| g.none? ? first_set_games : g }.sum(:score)
   end
 
   def winning_sets

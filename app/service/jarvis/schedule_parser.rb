@@ -8,10 +8,28 @@ class Jarvis::ScheduleParser < Jarvis::Action
       words: @remaining_words,
       type: :command,
     )
-    # TODO: Use relative words if it's nearby (today, tomorrow, etc)
-    @response = "I'll #{Jarvis::Text.rephrase(@remaining_words)} on #{@scheduled_time.strftime("%a %b %-d at %-l:%M %p")}"
+    @response = "I'll #{Jarvis::Text.rephrase(@remaining_words)} #{natural_time}"
 
     return @response.presence || true # Even if no response is returned, still return true since it did stuff
+  end
+
+  def natural_time
+    relative_time.gsub(":00", "").gsub(/12 ?pm/i, "noon").gsub(/12 ?am/i, "midnight")
+  end
+
+  def relative_time
+    if @scheduled_time.today?
+      "today at #{@scheduled_time.strftime("%-l:%M%P")}"
+    elsif @scheduled_time.tomorrow?
+      "tomorrow at #{@scheduled_time.strftime("%-l:%M%P")}"
+    else
+      # Maybe even say things like "next Wednesday at ..."
+      if Time.current.year == @scheduled_time.year
+        "on #{@scheduled_time.strftime("%a, %b %-d at %-l:%M%P")}"
+      else
+        "on #{@scheduled_time.strftime("%a, %b %-d, %Y at %-l:%M%P")}"
+      end
+    end
   end
 
   def valid_words?

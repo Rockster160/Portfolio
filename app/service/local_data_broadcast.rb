@@ -6,27 +6,42 @@ class LocalDataBroadcast
   end
 
   def call(data=nil)
-    data ||= JSON.parse(File.read("local_data.json"))
-    data = data.deep_symbolize_keys
+    data ||= JSON.parse(File.read("local_data.json")) if File.exists?("local_data.json")
+    data ||= {}
+    @data = data.deep_symbolize_keys
+    @user = User.find(1)
 
-    if data.dig(:notes, :timestamp) != DataStorage[:notes_timestamp]
-      items_hash = data.dig(:notes, :items)&.map do |item_name|
+    update_contacts if @data.key?(:contacts)
+
+    if @data.key?(:notes) && @data.dig(:notes, :timestamp) != DataStorage[:notes_timestamp]
+      items_hash = @data.dig(:notes, :items)&.map do |item_name|
         { name: item_name }
       end || []
-      User.find(1).lists.find_by(name: "Todo").add_items(items_hash)
-      DataStorage[:notes_timestamp] = data.dig(:notes, :timestamp)
+      @user.lists.find_by(name: "Todo").add_items(items_hash)
+      DataStorage[:notes_timestamp] = @data.dig(:notes, :timestamp)
     end
 
-    ActionCable.server.broadcast "local_data_channel", encriched_data(data)
-    ScheduleTravelWorker.perform_async
+    ActionCable.server.broadcast "local_data_channel", encriched_data
+
+    ScheduleTravelWorker.perform_async if @data.key?(:calendar)
   end
 
   private
 
-  def encriched_data(to_enrich)
-    to_enrich.tap do |data|
+  def encriched_data
+    @data.tap do |data|
       data[:calendar] = enrich_calendar(data[:calendar]) if data.key?(:calendar)
       data[:reminders] = enrich_reminders(data[:reminders]) if data.key?(:reminders)
+    end
+  end
+
+  def update_contacts
+    @data[:contacts].each do |contact_data|
+      next if contact_data[:phones].blank? && contact_data[:addresses].blank?
+
+      contact = @user.contacts.find_or_initialize_by(apple_contact_id: contact_data[:id])
+      contact.update(raw: contact_data)
+      contact.resync
     end
   end
 
@@ -48,7 +63,9 @@ class LocalDataBroadcast
         else
           lines.push("• [color #{magenta}]#{event[:name] || event[:uid]}[/color]")
         end
-        lines.push("    [color #{yellow}]#{event[:location]}[/color]") if event[:location].present?
+        if event[:location].present? && !event[:location].include?("zoom.us")
+          lines.push("    [color #{yellow}]#{event[:location].strip}[/color]")
+        end
       end
       lines.push("") # Empty line between days
     }.flatten

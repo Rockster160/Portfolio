@@ -42,7 +42,7 @@ class JarvisController < ApplicationController
       response: {
         outputSpeech: {
           type: "PlainText",
-          text: words,
+          text: words.split("\n").first(2).join("\n"), # Only return the first item
           # playBehavior: "REPLACE_ENQUEUED"
         },
         # card: {

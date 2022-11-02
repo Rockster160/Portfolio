@@ -34,6 +34,7 @@ class BowlerSet < ApplicationRecord
     )
 
     games.update_all(handicap: calc_handicap)
+    games.absent.update_all(score: calc_absent_score)
   end
 
   def avg_diff

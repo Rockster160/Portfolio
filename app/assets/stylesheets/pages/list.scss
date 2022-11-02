@@ -16,6 +16,21 @@
     user-select: none;
     color: $text-color;
 
+    .list-item-handle {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+      width: 30px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+
+      &:active { cursor: grabbing; }
+    }
+
     .settings-btn {
       position: absolute;
       top: 25px;
@@ -56,9 +71,7 @@
       }
 
       .important {
-        animation: 1s ease-out pulse infinite;
-        border-radius: 100%;
-        background: radial-gradient(circle at 5px 8px, lighten($flash-alert-bg, 40%), $flash-alert-bg);
+        color: gold;
         width: 14px;
         height: 14px;
       }
@@ -156,6 +169,8 @@
   .important-list-items {
     border-bottom: 1px solid $text-color;
     padding-bottom: 10px;
+
+    .list-item-handle { display: none; }
   }
   .important-list-items, .list-items, .lists {
     input[type=checkbox] { display: none; }
@@ -168,6 +183,7 @@
       border-radius: 5px;
       background: $blue-l5;
       padding: 15px 40px 15px 10px;
+      padding-left: 25px; // Make space for draggable thing
       color: $text-color;
       text-decoration: none;
 
@@ -195,6 +211,11 @@
           text-decoration: none;
         }
       }
+    }
+  }
+  .important-list-items {
+    .list-item {
+      padding: 15px 40px 15px 10px;
     }
   }
 }

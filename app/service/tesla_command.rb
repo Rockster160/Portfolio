@@ -72,7 +72,7 @@
     when :navigate
       address = params[::Jarvis::Regex.address]&.squish.presence if params.match?(::Jarvis::Regex.address)
       address ||= address_book.contact_by_name(original_params)&.address
-      address ||= address_book.address_from_name(original_params)
+      address ||= address_book.nearest_address_from_name(original_params)
 
       if address.present?
         @response = "Navigating to #{original_params.squish}"
@@ -104,6 +104,9 @@
     end
 
     @response
+  rescue TeslaError => e
+    ActionCable.server.broadcast("tesla_channel", failed: true)
+    "Tesla #{e.message}"
   rescue StandardError => e
     ActionCable.server.broadcast("tesla_channel", failed: true)
     backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
@@ -117,6 +120,8 @@
   end
 
   def format_data(data)
+    return {} if data.blank?
+
     {
       charge: data.dig(:charge_state, :battery_level),
       miles: data.dig(:charge_state, :battery_range)&.floor,

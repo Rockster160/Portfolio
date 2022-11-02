@@ -26,8 +26,10 @@ import { Time } from "./_time"
       // TODO: Do stuff with msg.data
       if (msg.say?.trim()?.length > 0)  {
         let history = getHistory()
-        history.unshift("[" + Time.local() + "] " + msg.say)
-        saveHistory(history)
+        if (!/^Logged /.test(msg.say) || /\[/.test(msg.say)) {
+          history.unshift("[" + Time.local() + "] " + msg.say)
+          saveHistory(history)
+        }
 
         renderLines(history)
       }

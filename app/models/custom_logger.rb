@@ -20,7 +20,7 @@ class CustomLogger
       end
 
       display_name = user.present? ? "#{user.try(:id)}: #{user.try(:username)}\n" : ''
-      formatted_time = Time.zone.now.in_time_zone('America/Denver')
+      formatted_time = Time.zone.now.in_time_zone('Mountain Time (US & Canada)')
       message_to_log = "\n#{formatted_time.strftime('%b %d, %Y %H:%M:%S.%L')} - #{message}\n#{ip_address}#{display_name}\n"
 
       if request && trackable?(request)

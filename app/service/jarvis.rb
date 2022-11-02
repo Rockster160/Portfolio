@@ -9,11 +9,7 @@
 
 
 # =============================== Bugs ===============================
-# [^] Always navving home with directions
-# [^] Remind should always be future
-# [^] Log should always be past
-# [^] Jarvis specific dates don't get picked up "Remind me Oct 23 at 9:32am to wish B Happy Birthday"
-# [^] Jarvis should interpret word numbers "two"
+# [^] Jarvis should interpret word numbers "two" -- NumberParser.parse(str)
 
 
 # ============================== TODO ================================
@@ -46,7 +42,7 @@
 # [*] > When was the last time I ate
 # [*] > I don’t know the last time I ate
 # [*] > What was the last thing I ate?
-# [*] Jarvis, Venmo X $Y
+# [*] Jarvis, Venmo X $Y -- If contacts have same name, JV should announce a conflict
 # [*] Somehow automate running specs to notify when there is a failing one Githook -> server -> test env on server?
 
 
@@ -144,6 +140,7 @@ class Jarvis
       Jarvis::Garage,
       Jarvis::Cmd,
       Jarvis::Sms,
+      Jarvis::Venmo,
       Jarvis::Talk,
     ]
   end

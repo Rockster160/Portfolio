@@ -32,6 +32,7 @@ class BowlingGame < ApplicationRecord
 
   before_validation { self.bowler_id ||= Bowler.create(league_id: set.league_id) }
 
+  scope :absent, -> { where(absent: true) }
   scope :attended, -> { where(absent: [nil, false]) }
 
   def self.points

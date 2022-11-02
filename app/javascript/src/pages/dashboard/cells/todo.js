@@ -13,11 +13,15 @@ import { Text } from "../_text"
 
       var lines = Text.numberedList(msg.list_data.list_items)
       this.text(lines.join("\n"))
+      this.flash()
     }),
     reloader: function() {
       this.ws.send({ get: true })
     },
     command: function(text) {
+      text = text.trim()
+      if (text == "o") { return window.open("https://ardesian.com/lists/todo", "_blank") }
+
       let data = { message: text }
       if (/^-\d+$/.test(text)) {
         var num = parseInt(text.match(/\d+/)[0])
@@ -25,8 +29,13 @@ import { Text } from "../_text"
         var item = lines[num-1]
         data.remove = item.replace(/^\d+\. /, "")
         delete data.message
-      }
-      if (!/^[-|+|add|remove]/gi.test(text)) {
+      } else if (/^\d+-\d+$/gi.test(text)) {
+        data.swap = true
+      } else if (/^\d+\^-?\d*$/gi.test(text)) {
+        data.move = true
+      } else if (/^\d+ /gi.test(text)) {
+        data.rename = true
+      } else if (!/^(\-|\+|add|remove)/gi.test(text)) {
         data.add = text
         delete data.message
       }

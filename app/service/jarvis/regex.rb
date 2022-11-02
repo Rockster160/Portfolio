@@ -8,7 +8,11 @@ module Jarvis::Regex
   end
 
   def words(*words, suffix: nil, prefix: nil)
-    Regexp.new("(?:\\b#{prefix}(?:#{words.flatten.join('|')})#{suffix}\\b)", :i)
+    Regexp.new("(?:\\b#{prefix}(?:#{words.flatten.compact.uniq.join('|')})#{suffix}\\b)", :i)
+  end
+
+  def words_to_nums(str)
+    NumberParser.parse(str)
   end
 
   def address

@@ -13,6 +13,7 @@ class LocalDataCalendarParser
       evt = {}
       parsed_obj = {}
       add_event(parsed_obj, evt) # Adds "today"
+      prev_line = nil
       raw_calendar_lines.each_with_object(parsed_obj) do |cal_line, parsed_data|
         if cal_line.match?(/\w{3} \d{1,2}, \d{4}:/i)
           @current_day = Time.zone.parse(cal_line)
@@ -35,16 +36,25 @@ class LocalDataCalendarParser
             end_hour = end_hour.to_i + 12 if end_time_str.match(/PM/) && end_hour.to_i < 12
             evt[:end_time] = @current_day.change(hour: end_hour.to_i, min: end_min.to_i)
           end
+          prev_line = :timestamp
         when /location:/i
           evt[:location] = cal_line.sub(/\s*location: /i, "")
+          prev_line = :location
         when /uid:/i
           evt[:uid] = cal_line.sub(/\s*uid: /i, "")
+          prev_line = :uid
         when /^\-+$/, /^$/, /^•/
           add_event(parsed_data, evt)
           evt = { name: cal_line.sub(/•\s*/, "") }
+          prev_line = :event
         else
-          evt[:unknown] ||= []
-          evt[:unknown].push(cal_line)
+          if prev_line == :location
+            evt[:location] += " " + cal_line.sub(/\s*/i, "")
+          else
+            evt[:unknown] ||= []
+            evt[:unknown].push(cal_line)
+          end
+          prev_line = nil
         end
       end
     end
@@ -56,6 +66,7 @@ class LocalDataCalendarParser
     today_str = @current_day.strftime("%b %-d, %Y:")
     parsed_data[today_str] ||= []
     return if evt[:uid].blank?
+    return if parsed_data[today_str].any? { |other_evt| other_evt[:uid] == evt[:uid] }
 
     parsed_data[today_str].push(evt)
   end

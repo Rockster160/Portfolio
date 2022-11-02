@@ -20,13 +20,25 @@ class AddressBook
     name = name.to_s.downcase
     # Exact match (no casing)
     found = contacts.find_by("name ILIKE ?", name)
+    found ||= contacts.find_by("nickname ILIKE ?", name)
+    # Exact match without 's and/or house|place
+    found ||= contacts.find_by("name ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
+    found ||= contacts.find_by("nickname ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
     # Match without special chars
-    found ||= contacts.find_by("REGEXP_REPLACE(name, '[^ a-z0-9]', '', 'i') ILIKE ?", name.gsub(/[^ a-z0-9]/, ""))
+    found ||= contacts.find_by("REGEXP_REPLACE(name, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
+    found ||= contacts.find_by("REGEXP_REPLACE(nickname, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
     # Match with only letters
-    found ||= contacts.find_by("REGEXP_REPLACE(name, '[^a-z]', '', 'i') ILIKE ?", name.gsub(/[^a-z]/, ""))
+    found ||= contacts.find_by("REGEXP_REPLACE(name, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
+    found ||= contacts.find_by("REGEXP_REPLACE(nickname, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
   end
 
-  def address_from_name(name, loc=nil)
+  def loc_from_name
+    # TODO - Give an address and find the lat/lng for it.
+    # Should also have a UI where we can move the pin to a precise location.
+    # Contacts should also have a preferred phone/address - perhaps just a bool on the associations?
+  end
+
+  def nearest_address_from_name(name, loc=nil)
     # TODO: This should default to the current location of phone
     loc ||= home&.loc
     params = {

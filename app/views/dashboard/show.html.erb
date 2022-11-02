@@ -21,9 +21,8 @@
 
     <% if Rails.env.development? %>
       Cell.loadConfig({
-        js: {},
-        uptime: {},
-        notes: {},
+        recent: {},
+        home: {},
         jarvis: { w: 2 },
       })
     <% else %>
