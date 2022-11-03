@@ -1,0 +1,29 @@
+<div class="split-container">
+  <div class="tree lists-index-container">
+    <div class="list-field">
+      <%= text_field_tag "list[name]", "", class: "filterable", placeholder: "Search" %>
+    </div>
+    <div class="lists">
+      <%# Accordion groups, search should filter by group %>
+      <% TaskMap::TASKS.each do |task_group, group_items| %>
+        <h3><%= task_group.to_s.titleize %></h3>
+        <% group_items.each do |op, data| %>
+          <div class="list-item-container">
+            <span class="list-item" data="<%= ["#{task_group}.#{op}", data].to_json %>">
+              <span class="item-name"><%= op.to_s.titleize %></span>
+            </span>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="skinny-container lists-index-container">
+    <div class="lists-title">J.I.L.</div>
+    <div class="tasks lists" data-reorder-url="<%=  %>">
+      <div class="list-field">
+        <%= text_field_tag "list[name]", "", class: "filterable", placeholder: "Search" %>
+      </div>
+    </div>
+  </div>
+</div>

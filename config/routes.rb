@@ -106,6 +106,11 @@ Rails.application.routes.draw do
     get :change_clothes, action: :load_character
   end
 
+  namespace :jil do
+    get :/, action: :index, controller: :tasks
+    resources :tasks
+  end
+
   namespace :bowling, as: nil do
     resources :bowlers, only: [:create] do
       get :throw_stats, on: :collection
