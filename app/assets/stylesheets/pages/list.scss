@@ -190,7 +190,8 @@
       .checkbox-wrapper {}
       .item-name {}
       &:hover {
-        background: darken($blue-l5, 10%);
+        &:not(.nohover) { background: darken($blue-l5, 10%); }
+
         text-decoration: none;
       }
     }
@@ -246,7 +247,7 @@
         background: $blue-d5;
         color: $grey-light;
 
-        &:hover {
+        &:hover:not(.nohover) {
           background: $blue-d3;
         }
       }

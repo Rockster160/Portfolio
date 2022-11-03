@@ -20,10 +20,20 @@
       padding: 4px;
       padding-left: 10px;
       font-size: 14px;
+      cursor: pointer;
     }
   }
 
   .tasks {
+    min-height: 30px;
+
+    .list-item-placeholder {
+      background: $blue-d1;
+      height: 20px;
+      border-radius: 10px;
+    }
+  }
+  .tasks.lists {
     min-height: 500px;
 
     .list-item-container {
@@ -32,11 +42,12 @@
 
       .list-item {
         position: relative;
+        padding-right: 10px;
 
         .item-name {
-          & > * {
-            &:not(:first-of-type) { margin-left: 10px; }
-            &:not(:last-of-type) { margin-right: 10px; }
+          & > span {
+            &:not(:first-child) { margin-left: 10px; }
+            &:not(:last-child) { margin-right: 10px; }
           }
         }
         select {
