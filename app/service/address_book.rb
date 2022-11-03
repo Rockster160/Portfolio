@@ -66,7 +66,11 @@ class AddressBook
   def near(coord, near_threshold=0.001)
     return [] unless coord.compact.length == 2
 
-    contacts.find { |details| distance(details.loc, coord) <= near_threshold }
+    contacts.find { |details|
+      next unless details.loc&.compact&.length == 2
+
+      distance(details.loc, coord) <= near_threshold
+    }
   end
 
   def reverse_geocode(loc)
