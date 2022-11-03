@@ -6,6 +6,7 @@ class Jarvis::Execute
   end
 
   def call(task)
+    # Can call another Task, but carry @ctx (especially i)
     @task = task
     @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil }
     task.next_trigger_at = Fugit::Cron.parse(task.cron).next_time if task.cron.present?

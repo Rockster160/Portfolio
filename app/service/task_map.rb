@@ -17,7 +17,7 @@ class TaskMap
   #     bool - adds a toggle - value is label
   #     multiple - dropdown of checkboxes, can select multiple
   TASKS = {
-    raw: [
+    raw: {
       bool:       [
         { return: :bool },
         { bool: :value },
@@ -37,19 +37,19 @@ class TaskMap
         # Also needs draggable/reorder?
         # [[ str(key) : :block]] :block OR :text?? Or other types?
       ],
-      array:       [
+      array:        [
         { return: :array },
         # How to do this?
         # Maybe just fields, and as you enter one a new one appears?
         # Also needs draggable/reorder?
         # :block OR :text??
       ],
-      duration: [
+      duration:     [
         { return: :duration },
         { block: :num, name: :amount },
         [:seconds, :minutes, :hours, :days, :weeks, :months, :years],
       ],
-      date: [
+      date:         [
         { return: :date },
         { num: :year, default: :current }, # (current is run time, not write time)
         { num: :month, default: :current },
@@ -61,35 +61,36 @@ class TaskMap
       # Vars exist only during the current running task
       # Get returns the var itself. Treated like the object, but changes save to the var
       # `var` should be treated like `any` unless it has been cast
-      get_var:    [
+      get_var:      [
         { return: :var },
-        { text: :name },
+        { block: :str, name: :name },
       ],
       # Clone returns the object the variable has, modifying this does NOT change the var
       clone_var:    [
         { return: :any },
-        { text: :name },
+        { block: :str, name: :name },
       ],
-      set_var:    [
+      set_var:      [
         { return: :var },
-        { text: :name },
+        { block: :str, name: :name },
         :value,
         { block: :any },
       ],
       # Cache is permanent across all tasks - should cache be within a transaction?
       # For example, if task fails, should changes to the cache during the task undo?
+      # Cache needs to be saved - it does not do so automatically
       get_cache:    [
-        { return: :var },
-        { text: :name },
+        { return: :any },
+        { block: :str, name: :name },
       ],
       set_cache:    [
-        { return: :var },
-        { text: :name },
+        { return: :any },
+        { block: :str, name: :name },
         :value,
-        { block: :any },
+        { block: :any, name: :value },
       ],
-    ],
-    logic: [
+    },
+    logic: {
       if:         [
         { return: :any }, # implicitly returns last val
         :IF,
@@ -158,8 +159,8 @@ class TaskMap
         { return: :any, description: "Stop current loop completely" },
         { block: :any, optional: true },
       ],
-    ],
-    text: [
+    },
+    text: {
       cast: [
         { return: :str },
         { block: :any },
@@ -187,8 +188,8 @@ class TaskMap
         { str: :regex }, # Should regex be an object, or just a text entry?
         { multiple: :flags, checkboxes: [:g, :i, :u, :m] }
       ],
-    ],
-    numbers: [
+    },
+    numbers: {
       cast:           [
         { return: :num },
         { block: :any },
@@ -236,8 +237,8 @@ class TaskMap
         { block: :num, name: :value },
         { block: :num, name: :decimal_points, default: 0 },
       ],
-    ],
-    array: [
+    },
+    array: {
       get:         [
         { return: :any, description: "Value of array at index" },
         { block: :array },
@@ -320,8 +321,8 @@ class TaskMap
         { block: :array },
         :content, # last value from content is used as new array value
       ],
-    ],
-    hash: [
+    },
+    hash: {
       get: [
         { return: :any },
         { block: :hash },
@@ -361,8 +362,8 @@ class TaskMap
         { block: :hash },
         :content, # last value from content is used as new array value
       ],
-    ],
-    date: [
+    },
+    date: {
       cast: [
         { return: :date },
         { block: :any },
@@ -382,8 +383,8 @@ class TaskMap
         { block: :date },
         [:iso8601], # Other standard formats?
       ],
-    ],
-    task: [
+    },
+    task: {
       comment:    [
         { block: :str, name: :message },
       ],
@@ -443,6 +444,6 @@ class TaskMap
       #   { block: :hash }, # - data
       # ],
       # SSH - ?
-    ]
+    }
   }
 end
