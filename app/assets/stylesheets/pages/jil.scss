@@ -25,11 +25,11 @@
   }
 
   .tasks {
-    min-height: 30px;
+    min-height: 20px;
 
     .list-item-placeholder {
       background: $blue-d1;
-      height: 20px;
+      height: 30px;
       border-radius: 10px;
     }
   }
@@ -43,6 +43,7 @@
       .list-item {
         position: relative;
         padding-right: 10px;
+        min-height: 50px;
 
         .item-name {
           & > span {
@@ -70,7 +71,7 @@
           position: absolute;
           font-size: 10px;
           bottom: 2px;
-          left: 4px;
+          right: 4px;
         }
       }
     }
