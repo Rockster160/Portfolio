@@ -32,7 +32,7 @@ module Jarvis::Times
 
   def safe_date_parse(timestamp, chronic_opts={})
     opts = chronic_opts.reverse_merge(ambiguous_time_range: 8)
-    ::Chronic.time_class = ::ActiveSupport::TimeZone.new(-6) # Timezone
+    ::Chronic.time_class = ::ActiveSupport::TimeZone.new("Mountain Time (US & Canada)")
     ::Chronic.parse(timestamp, opts).then { |time|
       next if time.nil?
       skip = timestamp.match?(/(a|p)m/) ? 24.hours : 12.hours

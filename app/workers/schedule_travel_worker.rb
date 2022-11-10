@@ -1,7 +1,7 @@
 class ScheduleTravelWorker
   include Sidekiq::Worker
 
-  PRE_OFFSET = 5.minutes
+  PRE_OFFSET = 20.minutes
   POST_OFFSET = 20.minutes
 
   def perform
@@ -73,7 +73,7 @@ class ScheduleTravelWorker
   def other_events(events)
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
-      next if event[:start_time].blank?
+      next if event[:start_time].blank? || event[:end_time].blank?
       next if event[:start_time] - 1.minute < now # Extra minute for padding
 
       if event[:name].to_s.downcase.to_sym == :pt
@@ -100,7 +100,7 @@ class ScheduleTravelWorker
   def schedulable_travel_events(events)
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
-      next if event[:start_time].blank?
+      next if event[:start_time].blank? || event[:end_time].blank?
       next unless event[:name].to_s.downcase.to_sym == :travel
       next if event[:start_time] - PRE_OFFSET - 1.minute < now # Extra minute for padding
 
