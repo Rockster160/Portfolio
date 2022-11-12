@@ -33,6 +33,12 @@
       font-size: 14px;
       width: 100px;;
       padding: 5px;
+
+      &.invalid {
+        &, &:active, &:hover, &:focus, &:focus-within, &:target, &:visited, &:focus-visible {
+          background-color: $danger;
+        }
+      }
     }
 
     &:not(.lists) {

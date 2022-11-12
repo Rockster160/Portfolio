@@ -26,6 +26,7 @@ $(document).ready(function() {
       if (this.value == "input" && this.getAttribute("unattached")) {
         this.removeAttribute("unattached")
         this.addEventListener("change", function() {
+          resetDropdowns()
           displaySelectTemplate(this)
         })
         this.dispatchEvent(new Event("change"))
@@ -37,36 +38,56 @@ $(document).ready(function() {
     let tokens = Array.from($(".token").map(function(idx) {
       return {
         token: this.textContent,
-        pos: idx,
+        idx: idx,
         scope: "", // - maybe the closest token it is inside?
-        type: "any",
+        type: this.parentElement.querySelector(".return").getAttribute("blocktype"),
       }
     }))
     let token_names = tokens.map(function(token) { return token.token })
 
-    $(".item-name select.block-select").each(function(a) {
+    let removeOrInvalidOpt = function(select, option) {
+      if (select.val() == option.val()) {
+        select.addClass("invalid")
+      } else {
+        option.remove()
+      }
+    }
+
+    $(".item-name select.block-select").each(function() {
       let select = $(this)
+      let selectToken = select.parents(".list-item").find(".token").get(0).textContent
+      let currentBlockIdx = token_names.indexOf(selectToken)
+      select.removeClass("invalid")
+
+      // Existing options (removing current options that are no longer valid)
       let existing_options = Array.from(select.children("option").map(function() {
         let option = $(this)
+        let optionVal = this.textContent
+        let optionBlockIdx = token_names.indexOf(optionVal)
 
-        if (this.textContent == "input") { return }
+        if (optionVal == "input") { return }
 
-        // Should not find tokens below current
-        // Should not find tokens out of scope (inside an unrelated block)
-        // * Should not find own token
-        if (token_names.indexOf(this.textContent) < 0) {
-          option.remove()
+        if (optionBlockIdx < 0) { // Token no longer exists (block was deleted)
+          removeOrInvalidOpt(select, option)
+        } else if (optionBlockIdx >= currentBlockIdx) { // Token is after current (not defined yet)
+          removeOrInvalidOpt(select, option)
         } else {
           return this.textContent
         }
       }))
       tokens.forEach(function(token) {
-        // Should only find tokens that match the desired type
-        if (existing_options.indexOf(token.token) < 0) {
-          let option = document.createElement("option")
-          option.textContent = token.token
-          select.append(option)
-        }
+        // Should not find tokens out of scope (inside an unrelated block)
+
+        // Option is already there. Don't add it again.
+        if (existing_options.indexOf(token.token) >= 0) { return }
+        // Token hasn't been executed yet. Not available for use
+        if (currentBlockIdx <= token.idx) { return }
+        // Types have to match (or be ANY)
+        if (select.attr("blocktype") != "any" && select.attr("blocktype") != token.type) { return }
+
+        let option = document.createElement("option")
+        option.textContent = token.token
+        select.append(option)
       })
     })
     attachSelectEvents()
@@ -106,7 +127,7 @@ $(document).ready(function() {
             })
             name_wrapper.append(dropdown)
           }
-          if (data.return) { item.prepend(`<span class="return">=> ${data.return}</span>`) }
+          if (data.return) { item.prepend(`<span class="return" blocktype="${data.return}">=> ${data.return}</span>`) }
           if (data.block) { name_wrapper.append(`
             <span class="select-wrapper">
               <select type="select" class="block-select" unattached=true blocktype="${data.block}">
