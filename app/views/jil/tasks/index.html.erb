@@ -1,3 +1,38 @@
+<template id="select">
+</template>
+<template id="bool">
+  <label class="switch">
+    <input type="checkbox" name="bool-{}">
+    <span class="slider"></span>
+  </label>
+</template>
+<template id="str">
+  <input type="text" name="str-{}" placeholder="Hello, World!">
+</template>
+<template id="num">
+  <input type="number" name="num-{}" placeholder="#">
+</template>
+<template id="hash">
+  <!-- Cannot be done inline -->
+</template>
+<template id="array">
+  <!-- Cannot be done inline -->
+</template>
+<template id="duration">
+</template>
+<template id="date">
+  <input type="date" name="date-{}">
+</template>
+<template id="var">
+  <!-- No inline, since the input is ANY -->
+</template>
+<template id="any">
+  <!-- adds a new dropdown to select input type, and then renders the template based on that -->
+  <!-- OR -- don't allow "any" to be set with a raw value -->
+</template>
+<template id="task">
+</template>
+
 <div class="split-container">
   <div class="tree lists-index-container">
     <div class="list-field">
@@ -21,9 +56,7 @@
   <div class="skinny-container lists-index-container">
     <div class="lists-title">J.I.L.</div>
     <div class="tasks lists">
-      <div class="list-field">
-        <%= text_field_tag "list[name]", "", class: "filterable", placeholder: "Search" %>
-      </div>
+      <%# Iterate through existing task and populate the blocks here %>
     </div>
   </div>
 </div>

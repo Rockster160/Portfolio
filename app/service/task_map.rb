@@ -16,19 +16,34 @@ class TaskMap
   #     num - adds a number input - value is the placeholder/label
   #     bool - adds a toggle - value is label
   #     multiple - dropdown of checkboxes, can select multiple
+  TYPES = [
+    :bool,
+    :str,
+    :num,
+    :hash,
+    :array,
+    :duration,
+    :date,
+    :var,
+    :any,
+    :task
+  ]
   TASKS = {
     raw: {
       bool:       [
         { return: :bool },
-        { bool: :value },
+        { block: :bool },
+        # { bool: :value },
       ],
       str:       [
         { return: :str },
-        { str: :value },
+        { block: :str },
+        # { str: :value },
       ],
       num:       [
         { return: :num },
-        { num: :value },
+        { block: :num },
+        # { num: :value },
       ],
       hash:       [
         { return: :hash },
@@ -44,20 +59,21 @@ class TaskMap
         # Also needs draggable/reorder?
         # :block OR :text??
       ],
-      duration:     [
-        { return: :duration },
-        { block: :num, name: :amount },
-        [:seconds, :minutes, :hours, :days, :weeks, :months, :years],
-      ],
-      date:         [
-        { return: :date },
-        { num: :year, default: :current }, # (current is run time, not write time)
-        { num: :month, default: :current },
-        { num: :day, default: :current },
-        { num: :hour, default: :current },
-        { num: :minute, default: :current },
-        { num: :second, default: :current },
-      ],
+      # duration:     [
+      #   { return: :duration },
+      #   { block: :num, name: :amount },
+      #   [:seconds, :minutes, :hours, :days, :weeks, :months, :years],
+      # ],
+      # date:         [
+      #   { return: :date },
+      #   { block: :date },
+      #   { num: :year, default: :current }, # (current is run time, not write time)
+      #   { num: :month, default: :current },
+      #   { num: :day, default: :current },
+      #   { num: :hour, default: :current },
+      #   { num: :minute, default: :current },
+      #   { num: :second, default: :current },
+      # ],
       # Vars exist only during the current running task
       # Get returns the var itself. Treated like the object, but changes save to the var
       # `var` should be treated like `any` unless it has been cast
@@ -123,7 +139,7 @@ class TaskMap
       ],
       not:       [
         { return: :bool },
-        :!,
+        :NOT,
         { block: :any },
       ],
       times:      [

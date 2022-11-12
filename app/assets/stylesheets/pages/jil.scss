@@ -7,11 +7,6 @@
       margin-left: 20px;
     }
 
-    .list-field input {
-      font-size: 14px;
-      padding: 5px;
-    }
-
     .list-item-container {
       width: 150px;
     }
@@ -26,15 +21,37 @@
 
   .tasks {
     min-height: 20px;
+    position: relative;
 
     .list-item-placeholder {
       background: $blue-d1;
       height: 30px;
       border-radius: 10px;
     }
+
+    input, select {
+      font-size: 14px;
+      width: 100px;;
+      padding: 5px;
+    }
+
+    &:not(.lists) {
+      &:before {
+        position: absolute;
+        content: "";
+        left: -5px;
+        height: 100%;
+        width: 2px;
+        border: 1px solid white;
+        border-right: none;
+      }
+    }
   }
   .tasks.lists {
     min-height: 500px;
+    height: 100%;
+    background: $blue-d5;
+    border-radius: 8px;
 
     .list-item-container {
       width: 100%;
@@ -51,21 +68,21 @@
             &:not(:last-child) { margin-right: 10px; }
           }
         }
-        select {
-          width: auto;
-          min-width: 100px;
+        .select-wrapper {
+          @include bool-slider(60px);
+          .switch { top: 6px; }
         }
         .token {
           position: absolute;
           font-size: 10px;
           top: 2px;
-          left: 4px;
+          right: 4px;
         }
         .type {
           position: absolute;
           font-size: 10px;
           top: 2px;
-          right: 4px;
+          left: 4px;
         }
         .return {
           position: absolute;

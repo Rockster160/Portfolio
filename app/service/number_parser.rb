@@ -90,6 +90,7 @@ module NumberParser
       three:     3,
       two:       2,
       one:       1,
+      zero:      0,
     }
   end
 
@@ -106,30 +107,32 @@ module NumberParser
     num_data.flatten.map { |d| d.is_a?(Hash) ? d.keys : d }.flatten.join("|")
   end
 
-  def log10(num)
-    Math.log10(num)
-  end
-  def power10?(num)
-    return true if num.zero?
-    l = log10(num)
-    l == l.round
-  end
-
   def parseNum(words)
     mem = 0
     ans = 0
     words.split(/ +/).each { |word|
       num = all_nums[word.to_sym]
       next if num.nil?
-
+      # Mem just stores the previous number in case we need to do multiply logic to it without
+      #   affecting the rest of the `ans`.
+      # If we hit a zero, it means the mem doesn't need to do anything and we have nothing to add.
+      # In this case, just reset mem and move on.
       next mem = num if mem == 0
-      if power10?(num) && num > 100
-        mem *= num
-        ans += mem
-        mem = 0
-        next
+
+      # If the num is a large num/power of 10 (million, thousand, etc...) then we multiply with num
+      # "two hundred"
+      # mem = 2
+      # num = 100
+      # 2 * 100 = 200
+      if num > 100 && big_nums.value?(num)
+        # Add the multiplied value to our final num, then reset our mem
+        ans += (mem * num)
+        next mem = 0
       end
-      mem < num ? mem *= num : mem += num
+
+      # If num is 100, multiple num like the big nums above, but don't reset mem
+      # Otherwise add (40 + 6)
+      num == 100 ? mem *= num : mem += num
     }
     ans + mem
   end

@@ -1,0 +1,70 @@
+@mixin bool-slider($width) {
+  $padding: $width * 0.05;;
+  $height: ($width/3) + $padding; // 34
+  $innerheight: ($width/3) - $padding; // 26
+  $font-size: $width/5;
+
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: $width;
+    height: $height;
+    background: none;
+
+    /* Hide default HTML checkbox */
+    input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+  }
+
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: $grey-disabled; // Off color
+    transition: .4s;
+    border-radius: $height;
+
+    &:before {
+      position: absolute;
+      content: "";
+      height: $innerheight;
+      width: $innerheight;
+      left: $padding;
+      bottom: $padding;
+      background-color: white; // button color
+      transition: .4s;
+      border-radius: $height;
+    }
+    &:after {
+      position: absolute;
+      content: "false";
+      line-height: $height;
+      font-size: $font-size;
+      left: $padding*2;
+      right: $padding*2;
+      text-align: right;
+      color: $text-color; // Text color
+    }
+  }
+
+  input:checked + .slider {
+    background-color: #2196F3; // On color
+  }
+
+  input:checked + .slider {
+    &:before {
+      transform: translateX($width - $innerheight - ($padding*2));
+    }
+    &:after {
+      content: "true";
+      text-align: left;
+      color: $blue-l5; // Text color
+    }
+  }
+}
