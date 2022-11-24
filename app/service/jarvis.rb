@@ -13,6 +13,10 @@
 
 
 # ============================== TODO ================================
+# [ ] Do stuff when I get home
+# [ ] Do stuff when PT starts
+# [ ] Do stuff 10 minutes before PT ends/starts
+# [ ] Take me to Home Depot after PT - look for event called PT, schedule message to Jarvis at the ending time
 # [ ] "at noon/midnight" should work
 # [ ] Only send calendar start/directions to car if it’s off
 # [ ] "Refresh" in Home (cell) should open the link for Nest
