@@ -9,17 +9,13 @@ class AmzUpdatesChannel < ApplicationCable::Channel
       deliveries.delete(data["id"])
     elsif data["rename"]
       order = deliveries[data["id"]]
-      msg = data["rename"]
+      # order[:name] = data["rename"]
+      name = data["rename"]
 
-      sub, time = ::Jarvis::Times.extract_time(msg, context: :future)
-      name = msg.gsub(sub, "")
-      deliveries[name] = {
-        name: name,
-      }.tap { |delivery|
-        if time.present?
-          delivery[:delivery] = time.strftime("%Y-%m-%-d")
-        end
-      }
+      sub, time = ::Jarvis::Times.extract_time(name, context: :future)
+      name = name.gsub(sub, "") if sub.present?
+      order[:name] = name
+      order[:delivery] = time.strftime("%Y-%m-%-d") if time.present?
     elsif data["add"]
       msg = data["add"].gsub(/^add /, "")
       sub, time = ::Jarvis::Times.extract_time(msg, context: :future)
