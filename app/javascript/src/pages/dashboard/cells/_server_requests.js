@@ -41,7 +41,7 @@ Server.socket = function(subscription, receive, domain) {
   }
 
   return {
-    url: ws_protocol + "://" + domain.host + "/cable",
+    url: ws_protocol + "://" + domain.host + "/cable?" + domain.searchParams?.toString(),
     authentication: function() {
       var ws = this
       ws.send({ subscribe: subscription })

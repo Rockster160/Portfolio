@@ -1,4 +1,4 @@
-// import { Time } from "./_time"
+import { Time } from "./_time"
 import { Text } from "../_text"
 import { dash_colors, text_height } from "../vars"
 
@@ -28,53 +28,46 @@ import { dash_colors, text_height } from "../vars"
     data: {
       lines: localStorage.getItem("broker_logger")?.split("\n") || [],
     },
-    socket: Server.socket("AgentsChannel", function(msg) {
-      // Catch errors, too?
-      let agent = msg.log.agent == "Murton, Brendan" ? "B" : msg.log.agent.split(", ")[1]
-      let arrows = {
-        right: "ﰲ",
-        up:    "ﰵ",
-        left:  "ﰯ",
-        down:  "ﰬ",
-      }
-      let methodArr = {
-        get: Text.color(dash_colors.yellow, arrows.left),
-        post: Text.color(dash_colors.blue, arrows.right),
-        patch: Text.color(dash_colors.orange, arrows.up),
-        put: Text.color(dash_colors.magenta, arrows.up),
-        delete: Text.color(dash_colors.orange, arrows.down),
-      }
-      let method = methodArr[msg.log.method.toLowerCase()]
-      let path = msg.log.path
-      let params = JSON.stringify(msg.log.params).replaceAll(/\"(\w+)\":/g, "$1:")
-
-      this.data.lines.push(`${method} ${agent} ${path} ${params}`)
-      renderLines()
-      localStorage.setItem("broker_logger", this.data.lines.join("\n"))
-    }, "https://itswildcat.com"),
     onload: function() {
+      this.ws = new CellWS(this,
+        Server.socket("AgentsChannel", function(msg) {
+          // Catch errors, too?
+          let agent
+          if (msg.log.agent == "Murton, Brendan") {
+            agent = Text.color(dash_colors.green, "B")
+          } else {
+            agent = Text.color(dash_colors.red, msg.log.agent.split(", ")[1])
+          }
+          let arrows = {
+            right: "ﰲ",
+            up:    "ﰵ",
+            left:  "ﰯ",
+            down:  "ﰬ",
+          }
+          let methodArr = {
+            get: Text.color(dash_colors.yellow, arrows.left),
+            post: Text.color(dash_colors.blue, arrows.right),
+            patch: Text.color(dash_colors.orange, arrows.up),
+            put: Text.color(dash_colors.magenta, arrows.up),
+            delete: Text.color(dash_colors.orange, arrows.down),
+          }
+          let method = methodArr[msg.log.method.toLowerCase()]
+          let path = msg.log.path
+          let params = Text.color(dash_colors.grey, JSON.stringify(msg.log.params).replaceAll(/\"(\w+)\":/g, "$1:"))
+          let time = Time.local()
+
+          this.data.lines.push(Text.justify(`${method} ${agent} ${path}`, time))
+          if (Object.keys(msg.log.params).length > 0) {
+            this.data.lines.push(`  ${params}`)
+          }
+          this.data.lines = this.data.lines.slice(-100)
+          renderLines()
+          localStorage.setItem("broker_logger", this.data.lines.join("\n"))
+        }, "https://itswildcat.com?Authorization=Basic%20" + this.config.broker_auth)
+        // }, "http://localhost:3315?Authorization=Basic%20" + this.config.broker_auth)
+      )
       renderLines()
     },
-    // commands: {
-    //   clear: function() {
-    //     localStorage.setItem("js", [])
-    //     cell.data.lines = []
-    //     renderLines()
-    //   }
-    // },
-    // command: function(msg) {
-    //   this.data.lines.push(msg)
-    //   renderLines()
-    //   try {
-    //     if (msg.trim().length > 0) {
-    //       this.data.lines.push(Text.color(dash_colors.grey, "=> " + JSON.stringify((0, eval)(msg))))
-    //     }
-    //   } catch(e) {
-    //     this.data.lines.push(Text.color(dash_colors.red, e))
-    //   }
-    //   renderLines()
-    //   localStorage.setItem("js", this.data.lines.join("\n"))
-    // },
     onfocus: function() { renderLines() },
     onblur: function() { renderLines() },
     livekey: function(evt_key) {

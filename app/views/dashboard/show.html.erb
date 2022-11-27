@@ -22,7 +22,7 @@
     <% if Rails.env.development? %>
       Cell.loadConfig({
         recent: {},
-        brokerlogger: {},
+        brokerlogger: { broker_auth: "<%= ENV.fetch("BROKER_AUTH") %>" },
         jarvis: { w: 2 },
       })
     <% else %>
@@ -67,7 +67,10 @@
         snake: { x: 4, y: 5 },
 
         timers: { x: 1, y: 6 },
-        brokerlogger: { x: 2, y: 6 },
+        brokerlogger: {
+          x: 2, y: 6,
+          broker_auth: "<%= ENV.fetch("BROKER_AUTH") %>"
+        },
         // js: { x: 2, y: 6 },
         jarvis: { x: 3, y: 6, w: 2 },
       })
