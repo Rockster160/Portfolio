@@ -32,7 +32,7 @@ import { dash_colors, text_height } from "../vars"
       this.ws = new CellWS(this,
         Server.socket("AgentsChannel", function(msg) {
           // Catch errors, too?
-          let agent = Text.color(dash_colors.red, msg.log.agent.split(", ").slice(-1))
+          let agent = Text.color(dash_colors.orange, msg.log.agent.split(", ").slice(-1))
           if (msg.log.agent == "Murton, Brendan") {
             agent = Text.color(dash_colors.green, "B")
           } else if (msg.log.agent == "Nicholls, Rocco") {
