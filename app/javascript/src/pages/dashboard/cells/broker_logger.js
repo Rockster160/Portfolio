@@ -35,6 +35,8 @@ import { dash_colors, text_height } from "../vars"
           let agent
           if (msg.log.agent == "Murton, Brendan") {
             agent = Text.color(dash_colors.green, "B")
+          } else if (msg.log.agent == "Nicholls, Rocco") {
+            agent = Text.color(dash_colors.rblue, "R")
           } else {
             agent = Text.color(dash_colors.red, msg.log.agent.split(", ")[1])
           }
