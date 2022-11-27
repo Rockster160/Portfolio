@@ -37,6 +37,8 @@ import { dash_colors, text_height } from "../vars"
             agent = Text.color(dash_colors.green, "B")
           } else if (msg.log.agent == "Nicholls, Rocco") {
             agent = Text.color(dash_colors.rblue, "R")
+          } else if (msg.log.agent == "Barker, Derek") {
+            agent = Text.color(dash_colors.magenta, "D")
           }
           let arrows = {
             right: "ﰲ",
