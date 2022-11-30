@@ -32,15 +32,16 @@ Server.request = function(url, type, data) {
 Server.post   = function(url, data) { return Server.request(url, "POST",  data) }
 Server.patch  = function(url, data) { return Server.request(url, "PATCH", data) }
 Server.get    = function(url, data) { return Server.request(url, "GET",   data) }
-Server.socket = function(subscription, receive) {
+Server.socket = function(subscription, receive, domain) {
+  domain = domain ? new URL(domain) : location
   var receive = receive
-  var ws_protocol = location.protocol == "https:" ? "wss" : "ws", ws_open = false
+  var ws_protocol = domain.protocol == "https:" ? "wss" : "ws", ws_open = false
   if (typeof subscription != "object") {
     subscription = { channel: subscription }
   }
 
   return {
-    url: ws_protocol + "://" + location.host + "/cable",
+    url: ws_protocol + "://" + domain.host + "/cable?" + domain.searchParams?.toString(),
     authentication: function() {
       var ws = this
       ws.send({ subscribe: subscription })
