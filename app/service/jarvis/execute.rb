@@ -1,11 +1,11 @@
 class Jarvis::Execute
   MAX_ITERATIONS = 1000
 
-  def self.call(task)
-    new.call(task)
+  def self.call(task) #, data
+    new.call(task) #, data
   end
 
-  def call(task)
+  def call(task) #, data
     # Can call another Task, but carry @ctx (especially i)
     @task = task
     @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil }

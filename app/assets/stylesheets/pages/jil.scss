@@ -66,6 +66,7 @@
       .list-item {
         position: relative;
         padding-right: 10px;
+        padding-top: 20px;
         min-height: 50px;
 
         .item-name {
@@ -76,7 +77,16 @@
         }
         .select-wrapper {
           @include bool-slider(60px);
+          position: relative;
+
           .switch { top: 6px; }
+          label {
+            position: absolute;
+            top: -14px;
+            left: 7px;
+            background: none;
+            font-size: 10px;
+          }
         }
         .token {
           position: absolute;

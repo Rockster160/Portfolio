@@ -7,7 +7,7 @@ $(document).ready(function() {
 
   let displaySelectTemplate = function(select) {
     let wrapper = select.parentElement
-    if (select.value == "input" && wrapper.children.length == 1) {
+    if (select.value == "input" && wrapper.querySelectorAll(".raw-input").length < 1) {
       // Array and hash have to be built- can't do them inline
       // ANY cannot be done inline
 
@@ -16,8 +16,8 @@ $(document).ready(function() {
       let clone = template.content.cloneNode(true)
 
       wrapper.appendChild(clone)
-    } else if (wrapper.children.length > 1) {
-      $(wrapper).children(":not(.block-select)").remove()
+    } else if (wrapper.querySelectorAll(".raw-input").length > 0) {
+      $(wrapper).children(".raw-input").remove()
     }
   }
 
@@ -101,22 +101,18 @@ $(document).ready(function() {
       revert: "invalid",
       start: function(event, ui) {
         $(ui.helper).prepend('<div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>');
-        // Add the draggable handler here
-        // Also add any fields or configurable data
-        // Anything with blocks (if, loops, etc...)
-        //   Have a start and close "card"/cell/row with a sneaky left border so it appears like a big
-        //   "C" - allow items to be dropped inside of this. - Act as nested sortable lists
       },
       stop: function(event, ui) {
         let container = $(ui.helper)
         let item = container.find(".list-item")
         let name_wrapper = item.find(".item-name")
+        let token = parser.token()
         name_wrapper.html("")
         item.addClass("nohover") // Stops highlight on hover
         container.attr("style", "") // Clear draggable styles (position and width/height)
 
         let [type, datum] = JSON.parse(item.attr("data"))
-        item.prepend(`<span class="token">${parser.token()}</span>`)
+        item.prepend(`<span class="token">${token}</span>`)
         item.prepend(`<span class="type">${type}</span>`)
 
         datum.forEach(function(data) {
@@ -128,14 +124,17 @@ $(document).ready(function() {
             name_wrapper.append(dropdown)
           }
           if (data.return) { item.prepend(`<span class="return" blocktype="${data.return}">=> ${data.return}</span>`) }
-          if (data.block) { name_wrapper.append(`
-            <span class="select-wrapper">
-              <select type="select" class="block-select" unattached=true blocktype="${data.block}">
-                ${data.optional && '<option value="">{None}</option>'}
-                ${rawVals.indexOf(data.block) >= 0 && '<option value="input">input</option>'}
-              </select>
-            </span>
-          `) }
+          if (data.block) {
+            name_wrapper.append(`
+              <span class="select-wrapper">
+                ${data.label ? `<label for="${token}">${data.label}</label>` : ''}
+                <select id="${token}" type="select" class="block-select" unattached=true blocktype="${data.block}">
+                  ${data.optional ? '<option value="">{None}</option>' : ''}
+                  ${rawVals.indexOf(data.block) >= 0 && `<option value="input">${'input'}</option>`}
+                </select>
+              </span>
+            `)
+          }
           if (data == "content") {
             // name_wrapper.append(`<span>${data}</span>`)
             name_wrapper.append('<div class="tasks"></div>')

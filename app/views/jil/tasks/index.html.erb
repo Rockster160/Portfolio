@@ -1,16 +1,16 @@
 <template id="select">
 </template>
 <template id="bool">
-  <label class="switch">
+  <label class="switch raw-input">
     <input type="checkbox" name="bool-{}">
     <span class="slider"></span>
   </label>
 </template>
 <template id="str">
-  <input type="text" name="str-{}" placeholder="Hello, World!">
+  <input type="text" name="str-{}" placeholder="Hello, World!" class="raw-input">
 </template>
 <template id="num">
-  <input type="number" name="num-{}" placeholder="#">
+  <input type="number" name="num-{}" placeholder="#" class="raw-input">
 </template>
 <template id="hash">
   <!-- Cannot be done inline -->
@@ -21,7 +21,7 @@
 <template id="duration">
 </template>
 <template id="date">
-  <input type="date" name="date-{}">
+  <input type="date" name="date-{}" class="raw-input">
 </template>
 <template id="var">
   <!-- No inline, since the input is ANY -->

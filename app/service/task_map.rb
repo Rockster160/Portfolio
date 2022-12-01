@@ -114,7 +114,7 @@ class TaskMap
         # Only allow a single block for now so we don't have to deal with logic yet
         # Logic can come from other blocks. Maybe later we can do AND|OR inside of the if.
         :content,
-        :else,
+        :ELSE,
         # Eventually support removing the else
         # Eventually support having multiple if/else
         :content,
@@ -400,7 +400,44 @@ class TaskMap
         [:iso8601], # Other standard formats?
       ],
     },
+    lists: {
+      # create? | destroy | all -- lists, not items?
+      add: [
+        { return: :bool },
+        { block: :str, name: :list_name },
+        { block: :str, name: :item_name },
+        { block: :str, name: :category, optional: true },
+      ],
+      edit: [
+        { return: :bool },
+        { block: :str, name: :list_name },
+        { block: :str, name: :old_item_name },
+        { block: :str, name: :new_item_name },
+        { block: :str, name: :new_category, optional: true },
+      ],
+      remove: [
+        { return: :bool },
+        { block: :str, name: :list_name, label: "List Name" },
+        { block: :str, name: :item_name, label: "Item Name" },
+      ],
+      get: [
+        { return: :array }, # Array of hashes { name: <item name>, category: <item category> }
+        { block: :str, name: :list_name },
+      ],
+      # TODO: Support ordering?
+    },
+    action_events: {
+      # Support querying action events
+      # limit to... 1000?
+      # add
+      # remove
+      # filter - string, date, notes, etc....
+    },
     task: {
+      data:       [
+        { return: :hash },
+        "Task Input Data"
+      ],
       comment:    [
         { block: :str, name: :message },
       ],

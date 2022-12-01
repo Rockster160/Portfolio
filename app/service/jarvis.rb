@@ -23,7 +23,7 @@
 # [ ] Able to add other deliveries to Home(cell) with expected dates
 # [ ] Fix Notes and other livekey cells to use new scrolling techniques used with Js.Js
 # [ ] Navigate should also start the car (if not already on)
-# [ ] If a remind is within a few hours, say “I’ll remind you in 3 hours at 16 minutes to…”
+# [ ] If a remind is within a few hours, say “I’ll remind you in 3 hours and 16 minutes to…”
 # [ ] Jarvis conversations- can ask questions and allow responding back
 # [*] Printer functions should not require dots to call
 # [*] Car should show if camp/wait/etc mode is on
@@ -84,13 +84,13 @@
 class Jarvis
   MY_NUMBER = "3852599640"
 
-  def self.trigger(action)
-    ::JarvisTriggerWorker.perform_async(action.to_s)
+  def self.trigger(action) #, data
+    ::JarvisTriggerWorker.perform_async(action.to_s) #, data
   end
 
-  def self.execute_trigger(action)
+  def self.execute_trigger(action) #, data
     JarvisTask.where(trigger: action).find_each do |task|
-      Jarvis::Execute.call(task)
+      Jarvis::Execute.call(task) #, data
     end
   end
 
