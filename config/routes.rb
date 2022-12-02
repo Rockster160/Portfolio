@@ -106,9 +106,10 @@ Rails.application.routes.draw do
     get :change_clothes, action: :load_character
   end
 
+  resources :jarvis_tasks, path: :tasks
   namespace :jil do
     get :/, action: :index, controller: :tasks
-    resources :tasks
+    resources :jarvis_tasks, path: :tasks
   end
 
   namespace :bowling, as: nil do

@@ -1,11 +1,32 @@
 import { JsChance } from "./js_chance"
 
+export let tokens = []
+let maxtokens = 124950 // Hardcoded by calculating the permutations
+
+// 6 + 6 + 10 + 6 + 11 + 12 = 51
+// P(n,r) = P(51,3) = 124,950 possibilities
+export let genUniqToken = function() {
+  let token
+  do { token = parser.token() } while (tokens.indexOf(token) >= 0);
+  tokens.push(token)
+  return token
+}
 export let parser = new JsChance(`
 token
-  [adjective].[object].[place]
-  [animal].[verb].[food]
+  [three]
 
-food
+three
+  [category].[category].[category]
+
+category
+  [food]
+  [animal]
+  [object]
+  [place]
+  [verb]
+  [adjective]
+
+food // 6
   apple
   bisquit
   carrot
@@ -13,7 +34,7 @@ food
   eclair
   wine
 
-animal
+animal // 6
   aphid
   cat
   dog
@@ -21,7 +42,7 @@ animal
   shrimp
   zebra
 
-object
+object // 10
   frost
   mug
   clip
@@ -33,7 +54,7 @@ object
   oak
   cable
 
-place
+place // 6
   saloon
   bed
   car
@@ -41,7 +62,7 @@ place
   ocean
   town
 
-verb
+verb // 11
   stand
   sit
   wash
@@ -54,7 +75,7 @@ verb
   join
   goto
 
-adjective
+adjective // 12
   dirty
   clean
   heavy

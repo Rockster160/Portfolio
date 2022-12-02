@@ -1,0 +1,95 @@
+<%
+  def render_type(type)
+    case type
+    when :bool
+      content_tag(:label, class: "switch raw-input") do
+        content_tag(:input, nil, type: :checkbox, name: "bool-{}") + content_tag(:span, nil, class: "slider")
+      end
+    when :str
+      content_tag(:input, nil, type: :text, name: "str-{}", placeholder: "Hello, World!", class: "raw-input")
+    when :num
+      content_tag(:input, nil, type: :number, name: "num-{}", placeholder: "#", class: "raw-input")
+    when :date
+      content_tag(:input, nil, type: :date, name: "date-{}", class: "raw-input")
+    end
+  end
+%>
+
+<% [:select, :bool, :str, :num, :hash, :array, :duration, :date, :var, :any, :task].each do |type| %>
+  <template id="<%= type %>">
+    <%= render_type(type) %>
+  </template>
+<% end %>
+
+<div class="split-container">
+  <div class="tree lists-index-container">
+    <div class="list-field">
+      <%= text_field_tag "", "", class: "filterable", placeholder: "Search" %>
+    </div>
+    <div class="lists">
+      <%# Accordion groups, search should filter by group %>
+      <% TaskMap::TASKS.each do |task_group, group_items| %>
+        <h3><%= task_group.to_s.titleize %></h3>
+        <% group_items.each do |op, data| %>
+          <div class="list-item-container">
+            <span class="list-item" data-type="<%= "#{task_group}.#{op}" %>" data="<%= ["#{task_group}.#{op}", data].to_json %>">
+              <span class="item-name"><%= op.to_s.titleize %></span>
+            </span>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="skinny-container lists-index-container">
+    <div class="btn-container text-right">
+      <%= form_for [:jil, @task], html: { class: "basic", id: "task-form" } do |f| %>
+        <%= f.submit "Save", class: "btn save-task" %>
+      <% end %>
+    </div>
+    <div class="lists-title">J.I.L.</div>
+    <%= text_field_tag "task[name]", @task.name, class: "", placeholder: "Task Name" %>
+    <div class="tasks lists" data-tasks="<%= @task.tasks.to_json %>">
+      <%# Iterate through existing task and populate the blocks here %>
+    </div>
+  </div>
+</div>
+
+
+<!--
+let item = container.find(".list-item")
+let name_wrapper = item.find(".item-name")
+let token = genUniqToken()
+name_wrapper.html("")
+item.addClass("nohover") // Stops highlight on hover
+container.attr("style", "") // Clear draggable styles (position and width/height)
+
+let [type, datum] = JSON.parse(item.attr("data"))
+item.prepend(`<span class="token">${token}</span>`)
+item.prepend(`<span class="type">${type}</span>`)
+  if (Array.isArray(data)) {
+    let dropdown = $("<select>")
+    data.forEach(function(item) {
+      dropdown.append(`<option name="${item}">${item}</option>`)
+    })
+    name_wrapper.append(dropdown)
+  }
+  if (data.return) { item.prepend(`<span class="return" blocktype="${data.return}">=> ${data.return}</span>`) }
+  if (data.block) {
+    name_wrapper.append(`
+      <span class="select-wrapper">
+        ${data.label ? `<label for="${token}[${idx}]">${data.label}</label>` : ''}
+        <select id="${token}[${idx}]" type="select" class="block-select" unattached=true blocktype="${data.block}">
+          ${data.optional ? '<option value="">{None}</option>' : ''}
+          ${rawVals.indexOf(data.block) >= 0 && `<option value="input">${'input'}</option>`}
+        </select>
+      </span>
+    `)
+  }
+  if (data == "content") {
+    name_wrapper.append('<div class="tasks"></div>')
+    initInteractivity()
+  } else if (String(data) === data) {
+    name_wrapper.append(`<span>${data}</span>`)
+  }
+-->

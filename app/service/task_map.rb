@@ -45,8 +45,14 @@ class TaskMap
         { block: :num },
         # { num: :value },
       ],
+      keyval:     [
+        { return: :keyval },
+        { block: :str },
+        { block: :any },
+      ],
       hash:       [
         { return: :hash },
+        :content, # Maybe this content can only have 1 type (key/vals)
         # How to do this?
         # Maybe just fields, and as you enter one a new one appears?
         # Also needs draggable/reorder?
@@ -54,6 +60,8 @@ class TaskMap
       ],
       array:        [
         { return: :array },
+        # Maybe arrays/hashes DO have a type?
+        :content, # Maybe this content can only have 1 type (no mixed types in an array)
         # How to do this?
         # Maybe just fields, and as you enter one a new one appears?
         # Also needs draggable/reorder?
