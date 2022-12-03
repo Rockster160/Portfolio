@@ -123,6 +123,7 @@ $(document).ready(function() {
     $(".tasks").sortable({
       handle: ".list-item-handle",
       connectWith: ".tasks",
+      connectToSortable: ".tree .lists .list-item-container",
       placeholder: "list-item-placeholder",
       stop: function(event, ui) {
         resetDropdowns()
@@ -164,12 +165,17 @@ $(document).ready(function() {
     }
   }
 
+  document.addEventListener("click", function(evt) {
+    if (evt.target.parentElement.classList.contains("delete")) {
+      evt.target.closest(".list-item-container").remove()
+    }
+  })
+
   $(".save-task").removeAttr("data-disable-with")
   $("#task-form").submit(function(evt) {
     evt.preventDefault()
     let form = document.getElementById("task-form")
     let data = collectBlocksFromList(document.querySelector(".lists-index-container > .tasks"))
-    debugger
 
     form.querySelectorAll(".data-field").forEach(function(f) { f.remove() })
 
@@ -208,7 +214,6 @@ $(document).ready(function() {
     $("[data-tasks]").each(function() {
       let container = this
       JSON.parse($(this).attr("data-tasks")).forEach(function(task) {
-        if (!task.type) { debugger }
         let populated_block = templates.block(task.type, task)
         tokens.push(task.token)
         container.append(populated_block)

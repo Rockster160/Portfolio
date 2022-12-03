@@ -66,6 +66,7 @@ export let templates = {
             content: function() {
               let elms = []
 
+              elms.push({ span: { class: "delete", content: [{ i: "fa fa-trash" }] } })
               elms.push({ span: { class: "type", content: key } })
               if (existingdata.token) { elms.push({ span: { class: "token", content: existingdata.token } }) }
               schema.forEach(function(data, idx) {
