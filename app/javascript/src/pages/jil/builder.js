@@ -1,6 +1,6 @@
 // TODO:
 /*
-Save blocks as they change - live save? Or only save on "submit"? Maybe save drafts?
+input raw: :empty -- invalid
 Show temp variables in function list
 // Block: :any should be invalid when empty
 // All blocks should be invalid when/if empty unless optional (invalid if/when there are no possible options)
@@ -31,7 +31,7 @@ $(document).ready(function() {
       if (this.value == "input" && this.getAttribute("unattached")) {
         this.removeAttribute("unattached")
         this.addEventListener("change", function() {
-          resetDropdowns()
+          initInteractivity()
           displaySelectTemplate(this)
         })
         this.dispatchEvent(new Event("change"))
@@ -39,62 +39,85 @@ $(document).ready(function() {
     })
   }
 
+  let removeOrInvalidOpt = function(select, option) {
+    if (select.val() == option.val()) {
+      select.addClass("invalid")
+    } else {
+      option.remove()
+    }
+  }
+
+  let itemParents = function(element) {
+    for (var parents = []; element; element = element.parentElement) {
+      if (element.classList?.contains("list-item")) {
+        parents.push(element)
+      }
+    }
+
+    return parents.reverse()
+  }
+
+  let parentTokens = function(item) {
+    // Does not include current token
+    return itemParents(item).slice(0, -1).map(parent => parent.querySelector(".token").innerText)
+  }
+
   let resetDropdowns = function() {
     // Maybe use this to figure out what tokens are being used on the page?
     let usedtokens = Array.from($(".token").map(function(idx) {
       return {
+        item: this.parentElement,
         token: this.textContent,
         idx: idx,
-        scope: "", // - maybe the closest token it is inside?
+        parentTokens: parentTokens(this),
         type: this.parentElement.querySelector(".return").getAttribute("blocktype"),
       }
     }))
-    let token_names = usedtokens.map(function(token) { return token.token })
-
-    let removeOrInvalidOpt = function(select, option) {
-      if (select.val() == option.val()) {
-        select.addClass("invalid")
-      } else {
-        option.remove()
-      }
-    }
+    let token_names = usedtokens.map(function(tokendata) { return tokendata.token })
 
     $(".item-name select.block-select").each(function() {
       let select = $(this)
-      let selectToken = select.parents(".list-item").find(".token").get(0).textContent
-      let currentBlockIdx = token_names.indexOf(selectToken)
+      let thisToken = select.closest(".list-item").find(".token").get(0).textContent
+      let selectParentTokens = parentTokens(select.get(0))
       select.removeClass("invalid")
+
+      let available_tokens = usedtokens.filter(function(tokendata) {
+        // Token hasn't been executed yet. Not available for use
+        if (token_names.indexOf(thisToken) <= tokendata.idx) { return }
+        // Token is an ancestor - hasn't been executed yet
+        if (selectParentTokens.includes(tokendata.token)) { return }
+        // Types have to match (or be ANY)
+        if (select.attr("blocktype") != tokendata.type && select.attr("blocktype") != "any") { return }
+        // Make sure scope matches -- Has a shared ancestor
+        if (tokendata.parentTokens.length > 0) {
+          let sharedParents = tokendata.parentTokens.filter(token => selectParentTokens.includes(token))
+          if (sharedParents.length == 0) { return }
+        }
+
+        return true
+      }).map(tokendata => tokendata.token)
 
       // Existing options -- removing current options that are no longer valid
       let existing_options = Array.from(select.children("option").map(function() {
         let option = $(this)
         let optionVal = this.textContent
-        let optionBlockIdx = token_names.indexOf(optionVal)
 
-        if (optionVal == "input") { return }
-
-        if (optionBlockIdx < 0) { // Token no longer exists (block was deleted)
-          removeOrInvalidOpt(select, option)
-        } else if (optionBlockIdx >= currentBlockIdx) { // Token is after current (not defined yet)
-          removeOrInvalidOpt(select, option)
+        if (optionVal == "input") { return } // Ignore the magic "input" value
+        if (available_tokens.indexOf(optionVal) < 0) {
+          removeOrInvalidOpt(select, option) // Token no longer exists (block was deleted)
         } else {
           return this.textContent
         }
       }))
-      usedtokens.forEach(function(token) {
-        // TODO: Should not find usedtokens out of scope (inside an unrelated block)
-
+      available_tokens.forEach(function(token) {
         // Option is already there. Don't add it again.
-        if (existing_options.indexOf(token.token) >= 0) { return }
-        // Token hasn't been executed yet. Not available for use
-        if (currentBlockIdx <= token.idx) { return }
-        // Types have to match (or be ANY)
-        if (select.attr("blocktype") != "any" && select.attr("blocktype") != token.type) { return }
+        if (existing_options.indexOf(token) >= 0) { return }
 
         let option = document.createElement("option")
-        option.textContent = token.token
+        option.textContent = token
         select.append(option)
       })
+      if (select.children("option").length == 0) { select.addClass("invalid") }
     })
     attachSelectEvents()
   }
@@ -135,7 +158,9 @@ $(document).ready(function() {
   let collectBlocksFromList = function(tasksNode) {
     return Array.from(tasksNode.querySelectorAll(":scope > .list-item-container > .list-item")).map(function(nestedItem) {
       let blocks = collectBlockData(nestedItem)
-      if (Array.isArray(blocks.data[0])) { blocks.data = blocks.data[0] }
+      if (Array.isArray(blocks.data) && blocks.data.length == 1 && Array.isArray(blocks.data[0])) {
+        blocks.data = blocks.data[0]
+      }
       return blocks
     })
   }
@@ -168,6 +193,25 @@ $(document).ready(function() {
   document.addEventListener("click", function(evt) {
     if (evt.target.parentElement.classList.contains("delete")) {
       evt.target.closest(".list-item-container").remove()
+    }
+  })
+
+  $(document).on("keyup", "input.filter-tree", function() {
+    let wrapper = $(".tree .lists")
+    var currentText = $(this).val().toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
+
+    if (currentText.length == 0) {
+      wrapper.find("h3, .list-item-container").removeClass("hidden")
+    } else {
+      wrapper.find(".list-item-container").each(function() {
+        var option_with_category = $(this).attr("data-group") + " " + $(this).find(".item-name").text()
+        var optionText = option_with_category.toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
+        $(this).toggleClass("hidden", optionText.indexOf(currentText) < 0)
+      })
+      wrapper.find("h3").each(function() {
+        let visible = wrapper.find(`.list-item-container:not(.hidden)[data-group="${$(this).attr("data-group")}"]`)
+        $(this).toggleClass("hidden", visible.length == 0)
+      })
     }
   })
 
@@ -214,6 +258,7 @@ $(document).ready(function() {
     $("[data-tasks]").each(function() {
       let container = this
       JSON.parse($(this).attr("data-tasks")).forEach(function(task) {
+        if (!task.type) { return } // Skip empty
         let populated_block = templates.block(task.type, task)
         tokens.push(task.token)
         container.append(populated_block)

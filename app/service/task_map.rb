@@ -53,19 +53,13 @@ class TaskMap
       hash:       [
         { return: :hash },
         :content, # Maybe this content can only have 1 type (key/vals)
-        # How to do this?
-        # Maybe just fields, and as you enter one a new one appears?
-        # Also needs draggable/reorder?
-        # [[ str(key) : :block]] :block OR :text?? Or other types?
+        # { content: { only: :keyval } }
+        # { content: { only: [:keyval, :str] } }
       ],
       array:        [
         { return: :array },
         # Maybe arrays/hashes DO have a type?
         :content, # Maybe this content can only have 1 type (no mixed types in an array)
-        # How to do this?
-        # Maybe just fields, and as you enter one a new one appears?
-        # Also needs draggable/reorder?
-        # :block OR :text??
       ],
       # duration:     [
       #   { return: :duration },
@@ -118,9 +112,9 @@ class TaskMap
       if:         [
         { return: :any }, # implicitly returns last val
         :IF,
-        { block: :any },
-        # Only allow a single block for now so we don't have to deal with logic yet
-        # Logic can come from other blocks. Maybe later we can do AND|OR inside of the if.
+        :content,
+        # Implicit- last block in content is used to eval the if
+        :DO,
         :content,
         :ELSE,
         # Eventually support removing the else
@@ -442,9 +436,13 @@ class TaskMap
       # filter - string, date, notes, etc....
     },
     task: {
-      data:       [
+      input_data: [
         { return: :hash },
         "Task Input Data"
+      ],
+      print:      [
+        { return: :str },
+        { block: :str, name: :message },
       ],
       comment:    [
         { block: :str, name: :message },

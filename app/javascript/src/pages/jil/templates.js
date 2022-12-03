@@ -42,6 +42,16 @@ let jsonToElem = function(json) {
   }
 }
 
+export let shorttype = function(type) {
+  switch(type) {
+    case "num":  return "#"; break;
+    case "str":  return "s"; break;
+    case "bool": return "T"; break;
+    case "date": return "0"; break;
+    default:     return "X"
+  }
+}
+
 export let templates = {
   bool: () => `<label class="switch raw-input"><input type="checkbox" name="bool-{}"><span class="slider"></span></label>`,
   str:  () => `<input type="text" name="str-{}" placeholder="Hello, World!" class="raw-input">`,
@@ -52,7 +62,7 @@ export let templates = {
     let schemaNode = document.querySelector(`[data-type="${key}"]`)
     let [_, schema] = JSON.parse(schemaNode.getAttribute("data"))
 
-    let a = jsonToElem({
+    return jsonToElem({
       div: {
         class: "list-item-container ui-draggable ui-draggable-handle",
         content: [
@@ -81,35 +91,25 @@ export let templates = {
                   let idx = 0
                   schema.filter(obj => !obj.return).forEach(function(data) {
                     let fillitem = filler[idx] || {}
-                    if (Array.isArray(data)) {
-                      items.push({ select: {
-                        content: data.map(function(item) {
-                          return { option: {
-                            name: item,
-                            content: item,
-                          } }
-                        })
-                      } })
-                    }
-
                     if (data == "content") {
-                      // Add the data as a `data-tasks` to get added in another loop
                       let tasks_data = []
                       if (key == "raw.array") {
                         tasks_data = filler
                       } else {
                         tasks_data = fillitem
                       }
+                      if (!Array.isArray(tasks_data)) { tasks_data = [tasks_data] }
+                      // Add the data as a `data-tasks` to get added in another loop
                       items.push({ div: { class: "tasks", "data-tasks": JSON.stringify(tasks_data) } })
                     } else if (String(data) === data) {
                       items.push({ span: { content: data } })
-                      return // Skip incrementing the idx
+                      return // Skip incrementing the idx since this isn't a user input
                     } else if (data.block) {
                       items.push({ span: {
                         class: "select-wrapper",
                         content: function() {
                           let children = []
-                          if (data.label) { children.push({ label: { for: `${existingdata.token}[${idx}]`, content: data.label } }) }
+                          children.push({ label: { for: `${existingdata.token}[${idx}]`, content: `${shorttype(data.block)} ${data.label || ""}` } })
                           children.push({ select: {
                             id: `${existingdata.token}[${idx}]`,
                             type: "select",
@@ -144,6 +144,19 @@ export let templates = {
                           return children
                         }
                       } })
+                    } else if (Array.isArray(data)) {
+                      items.push({ span: {
+                        class: "select-wrapper",
+                        content: [{ select: {
+                          content: data.map(function(item) {
+                            if (fillitem.option == item) {
+                              return { option: { value: item, selected: true, content: item } }
+                            } else {
+                              return { option: { value: item, content: item } }
+                            }
+                          })
+                        } }]
+                      } })
                     }
                     idx += 1
                   })
@@ -157,8 +170,5 @@ export let templates = {
         ]
       }
     })
-    console.log(a);
-    // debugger
-    return a
   }
 }

@@ -2,20 +2,50 @@ RSpec.describe ::Jarvis::Execute do
   let(:user) { User.create(role: :admin) }
   let(:task) { JarvisTask.create(tasks: tasks, user: user) }
   let(:execute) { ::Jarvis::Execute.call(task) }
-  let(:hello) { { type: :print, message: "Hello, World!" } }
-  let(:goodbye) { { type: :print, message: "Goodbye, World!" } }
+  let(:hello) { "Hello, World!" }
+  let(:goodbye) { "Goodbye, World!" }
 
   describe "#if" do
     let(:tasks) {
       [
         {
-          type: :if,
-          condition: {
-            type: :or,
-            args: [false, { type: :compare, sign: "==", args: args }]
-          },
-          do: [hello],
-          else: [goodbye]
+          returntype: :any,
+          type: "logic.if",
+          token: "desk.monkey.zebra",
+          data: [
+            [
+              {
+                returntype: :bool,
+                type: "numbers.compare",
+                token: "oak.desert.funky",
+                data: [
+                  { option: :input, raw: "1" },
+                  { option: ">" },
+                  { option: :input, raw: "5" }
+                ]
+              }
+            ],
+            [
+              {
+                returntype: :str,
+                type: "task.print",
+                token: "dirty.tree.goto",
+                data: [
+                  { option: :input, raw: "Hello, World!" }
+                ]
+              }
+            ],
+            [
+              {
+                returntype: :str,
+                type: "task.print",
+                token: "soft.read.apple",
+                data: [
+                  { option: :input, raw: "Goodbye, World!" }
+                ]
+              }
+            ]
+          ]
         }
       ]
     }
@@ -23,13 +53,13 @@ RSpec.describe ::Jarvis::Execute do
     context "with positive blocks" do
       let(:args) { [1, 1] } # Matching
 
-      specify { expect(execute).to include("Hello, World!") }
+      specify { expect(execute).to include(hello) }
     end
 
     context "with negative blocks" do
       let(:args) { [1, 0] } # NOT matching
 
-      specify { expect(execute).to include("Goodbye, World!") }
+      specify { expect(execute).to include(goodbye) }
     end
   end
 
@@ -38,19 +68,39 @@ RSpec.describe ::Jarvis::Execute do
       let(:tasks) {
         [
           {
-            type: :loop,
-            times: 10,
-            do: [hello]
+            returntype: :num,
+            type: "logic.times",
+            token: "aphid.saloon.dirty",
+            data: [
+              {
+                option: :input,
+                raw: "10"
+              },
+              [
+                {
+                  returntype: :str,
+                  type: "task.print",
+                  token: "stand.frost.town",
+                  data: [
+                    {
+                      option: :input,
+                      raw: "Hello, World!"
+                    }
+                  ]
+                }
+              ]
+            ]
           }
         ]
       }
 
       it "runs the block X times" do
-        expect(execute.count { |i| i == "Hello, World!" }).to eq(10)
+        expect(execute.count { |i| i == hello }).to eq(10)
       end
     end
 
     context "with an index block" do
+      # FIXME!! Dropdowns don't show values for other blocks in the same :content
       let(:tasks) {
         [
           {
@@ -73,8 +123,8 @@ RSpec.describe ::Jarvis::Execute do
       }
 
       it "runs the block 5 times" do
-        expect(execute.count { |i| i == "Hello, World!" }).to eq(5)
-        expect(execute.count { |i| i == "Goodbye, World!" }).to eq(5)
+        expect(execute.count { |i| i == hello }).to eq(5)
+        expect(execute.count { |i| i == goodbye }).to eq(5)
         expect(execute).to include("After loop!")
       end
     end
@@ -107,7 +157,7 @@ RSpec.describe ::Jarvis::Execute do
 
       it "runs the block 1000 times then errors out" do
         expect(execute.last).to eq("Failed: Blocks exceed 1,000 allowed.")
-        expect(task.last_ctx["i"]).to eq(1001) # 1001 because it only errors AFTER exceeding
+        expect(task.last_ctx[:i]).to eq(1001) # 1001 because it only errors AFTER exceeding
       end
     end
 
@@ -125,8 +175,8 @@ RSpec.describe ::Jarvis::Execute do
       }
 
       it "runs the block 1000 times without error" do
-        expect(execute.last).to eq("Success")
-        expect(task.last_ctx["i"]).to eq(1000)
+        expect(execute.last).to eq(:Success)
+        expect(task.last_ctx[:i]).to eq(1000)
       end
     end
   end
@@ -144,7 +194,7 @@ RSpec.describe ::Jarvis::Execute do
     }
 
     it "sets and gets a variable" do
-      expect(execute).to match_array(["This is my value!", "Success"])
+      expect(execute).to match_array(["This is my value!", :Success])
     end
   end
 

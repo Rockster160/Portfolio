@@ -133,18 +133,18 @@ class Jarvis
     # Order sensitive classes to iterate through and attempt commands
     # @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/^(what|where|when|why|is|how|are)\s+(about|is|are|were|did|have|it)\b/)
     [
-      Jarvis::Log,
-      Jarvis::ScheduleParser,
-      Jarvis::Navigate,
-      Jarvis::List,
-      Jarvis::Printer,
-      Jarvis::Nest,
-      Jarvis::Tesla,
-      Jarvis::Garage,
-      Jarvis::Cmd,
-      Jarvis::Sms,
-      Jarvis::Venmo,
-      Jarvis::Talk,
+      Jarvis::Log,            # √
+      Jarvis::ScheduleParser, # √
+      Jarvis::Navigate,       # -- integration
+      Jarvis::List,           # √
+      Jarvis::Printer,        # -- integration
+      Jarvis::Nest,           # -- integration
+      Jarvis::Tesla,          # -- integration
+      Jarvis::Garage,         # -- integration
+      Jarvis::Cmd,            # √
+      Jarvis::Sms,            # √
+      Jarvis::Venmo,          # -- integration
+      Jarvis::Talk,           # √
     ]
   end
 

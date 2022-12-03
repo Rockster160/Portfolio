@@ -1,5 +1,5 @@
 @mixin bool-slider($width) {
-  $padding: $width * 0.05;;
+  $padding: $width * 0.05;
   $height: ($width/3) + $padding; // 34
   $innerheight: ($width/3) - $padding; // 26
   $font-size: $width/5;
@@ -27,7 +27,7 @@
     right: 0;
     bottom: 0;
     background-color: $grey-disabled; // Off color
-    transition: .4s;
+    transition: 0.4s;
     border-radius: $height;
 
     &:before {
@@ -38,7 +38,7 @@
       left: $padding;
       bottom: $padding;
       background-color: white; // button color
-      transition: .4s;
+      transition: 0.4s;
       border-radius: $height;
     }
     &:after {
