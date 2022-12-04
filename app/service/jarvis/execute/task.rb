@@ -1,6 +1,6 @@
 class Jarvis::Execute::Task < Jarvis::Execute::Executor
   def input_data
-    raise NotImplementedError
+    jil.data
   end
 
   def print
