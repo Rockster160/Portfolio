@@ -79,6 +79,7 @@ export let templates = {
           } },
           { span: {
             class: "list-item nohover",
+            token: existingdata.token,
             data: schemaNode.getAttribute("data"),
             content: function() {
               let elms = []
