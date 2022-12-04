@@ -21,4 +21,19 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   rescue NoMethodError
     0
   end
+
+  def get_var
+  end
+
+  def clone_var
+  end
+
+  def set_var
+  end
+
+  def get_cache
+  end
+
+  def set_cache
+  end
 end

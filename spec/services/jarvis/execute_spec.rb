@@ -16,12 +16,12 @@ RSpec.describe ::Jarvis::Execute do
             [
               {
                 returntype: :bool,
-                type: "numbers.compare",
+                type: "math.compare",
                 token: "oak.desert.funky",
                 data: [
-                  { option: :input, raw: "1" },
-                  { option: ">" },
-                  { option: :input, raw: "5" }
+                  { option: :input, raw: args[0] },
+                  { option: "==" },
+                  { option: :input, raw: args[1] }
                 ]
               }
             ],
@@ -123,7 +123,7 @@ RSpec.describe ::Jarvis::Execute do
                     [
                       {
                         returntype: :bool,
-                        type: "numbers.compare",
+                        type: "math.compare",
                         token: "shrimp.danish.bed",
                         data: [
                           { option: :input, raw: "5" },
@@ -257,7 +257,7 @@ RSpec.describe ::Jarvis::Execute do
       }
 
       it "runs the block 1000 times without error" do
-        expect(execute.last).to eq(:Success)
+        expect(execute.last).to eq("Success")
         expect(task.last_ctx[:i]).to eq(1000)
       end
     end
@@ -311,7 +311,7 @@ RSpec.describe ::Jarvis::Execute do
     }
 
     it "sets and gets a variable" do
-      expect(execute).to match_array(["This is my value!", :Success])
+      expect(execute).to match_array(["This is my value!", "Success"])
     end
   end
 

@@ -18,6 +18,7 @@
 class JarvisTask < ApplicationRecord
   belongs_to :user, required: true
   serialize :tasks, SafeJsonSerializer
+  serialize :last_ctx, SafeJsonSerializer
 
   enum trigger: {
     action_event:      1,

@@ -1,4 +1,6 @@
 class Jarvis::Execute::Logic < Jarvis::Execute::Executor
+  MAX_ITERATIONS = Jarvis::Execute::MAX_ITERATIONS
+
   def logic_if
     task_cond, task_do, task_else = args
     eval_block(eval_block(task_cond) ? task_do : task_else)
@@ -49,14 +51,6 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
     jil.ctx[:msg] << eval_block(args) || "Exit"
   end
 
-  def logic_print
-    jil.ctx[:msg] << eval_block(eval_block(args))
-  end
-
-  def logic_say
-    jil.ctx[:msg] << Jarvis.command(jil.task.user, eval_block(eval_block(args)))
-  end
-
   def logic_map
     loop_exit = false
     pre_idx, pre_obj = jil.ctx[:loop_idx], jil.ctx[:loop_obj] # save state
@@ -66,17 +60,17 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
       jil.ctx[:loop_obj], jil.ctx[:loop_idx] = item, idx
       break if loop_exit || jil.ctx[:i] > MAX_ITERATIONS
 
-      val = steps.map { |step|
+      val = steps.map { |arg|
         # next and break only break out of one layer
-        case step[:type]&.to_sym
+        case arg[:type].try(:to_sym)
         when :"logic.next"
           # Don't run any more steps in the block, but continue the loop
-          break [eval_block(step)] # still evaling here so that it increments
+          break [eval_block(arg)] # still evaling here so that it increments
         when :"logic.break"
           loop_exit = true
-          break [eval_block(step)] # still evaling here so that it increments
+          break [eval_block(arg)] # still evaling here so that it increments
         else
-          eval_block(step)
+          eval_block(arg)
         end
       }.last
       break val if loop_exit
@@ -95,24 +89,24 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
     pre_idx, pre_obj = jil.ctx[:loop_idx], jil.ctx[:loop_obj] # save state
 
     i = -1
-    loop do |i|
+    loop do
       break if loop_exit || jil.ctx[:i] > MAX_ITERATIONS
       break unless args&.any?
       jil.ctx[:loop_idx] = i += 1
 
-      args.each do |step|
+      args.each do |arg|
         break if loop_exit || jil.ctx[:i] > MAX_ITERATIONS
-        case step[:type]&.to_sym
+        case arg[:type].try(:to_sym)
         when :"logic.next"
           # Don't run any more steps in the block, but continue the loop
           # Only breaks out of the "each", effectively being a next
-          break eval_block(step) # still evaling here so that it increments
+          break eval_block(arg) # still evaling here so that it increments
         when :"logic.break"
           loop_exit = true
-          break eval_block(step) # still evaling here so that it increments
+          break eval_block(arg) # still evaling here so that it increments
         end
 
-        eval_block(step)
+        eval_block(arg)
       end
     end
 
@@ -124,28 +118,28 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
     loop_exit = false
     pre_idx, pre_obj = jil.ctx[:loop_idx], jil.ctx[:loop_obj] # save state
     max_times, steps = args
-    max_times = eval_block(max_times)
+    max_times = Jarvis::Execute::Raw.num(eval_block(max_times))
 
     i = -1
-    loop do |i|
+    loop do
       break if loop_exit || jil.ctx[:i] > MAX_ITERATIONS
-      break unless args&.any?
+      break unless steps&.any?
       jil.ctx[:loop_idx] = i += 1
       break if i >= max_times
 
-      args.each do |step|
+      steps.each do |arg|
         break if loop_exit || jil.ctx[:i] > MAX_ITERATIONS
-        case step[:type]&.to_sym
+        case arg[:type].try(:to_sym)
         when :"logic.next"
           # Don't run any more steps in the block, but continue the loop
           # Only breaks out of the "each", effectively being a next
-          break eval_block(step) # still evaling here so that it increments
+          break eval_block(arg) # still evaling here so that it increments
         when :"logic.break"
           loop_exit = true
-          break eval_block(step) # still evaling here so that it increments
+          break eval_block(arg) # still evaling here so that it increments
         end
 
-        eval_block(step)
+        eval_block(arg)
       end
     end
 
@@ -158,25 +152,25 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
     pre_idx, pre_obj = jil.ctx[:loop_idx], jil.ctx[:loop_obj] # save state
 
     i = -1
-    loop do |i|
+    loop do
       break if loop_exit || jil.ctx[:i] > MAX_ITERATIONS
       break unless args&.any?
       jil.ctx[:loop_idx] = i += 1
       break if i >= max_times
 
-      args.each do |step|
+      args.each do |arg|
         break if loop_exit || jil.ctx[:i] > MAX_ITERATIONS
-        case step[:type]&.to_sym
+        case arg[:type].try(:to_sym)
         when :"logic.next"
           # Don't run any more steps in the block, but continue the loop
           # Only breaks out of the "each", effectively being a next
-          break eval_block(step) # still evaling here so that it increments
+          break eval_block(arg) # still evaling here so that it increments
         when :"logic.break"
           loop_exit = true
-          break eval_block(step) # still evaling here so that it increments
+          break eval_block(arg) # still evaling here so that it increments
         end
 
-        loop_exit = true if eval_block(step)
+        loop_exit = true if eval_block(arg)
       end
     end
 
