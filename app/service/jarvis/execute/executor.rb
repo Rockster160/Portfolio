@@ -11,4 +11,8 @@ class Jarvis::Execute::Executor
   def args
     task_block[:data]
   end
+
+  def evalargs
+    args.map { |t| eval_block(t) }
+  end
 end

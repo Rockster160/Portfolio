@@ -409,18 +409,21 @@ class TaskMap
     },
     lists: {
       # create? | destroy | all -- lists, not items?
+      # TODO: Support ordering?
+      # TODO: Support Notes?
+      # TODO: Support Category?
       add: [
         { return: :bool },
         { block: :str, name: :list_name },
         { block: :str, name: :item_name },
-        { block: :str, name: :category, optional: true },
+        # { block: :str, name: :category, optional: true },
       ],
       edit: [
         { return: :bool },
         { block: :str, name: :list_name },
         { block: :str, name: :old_item_name },
         { block: :str, name: :new_item_name },
-        { block: :str, name: :new_category, optional: true },
+        # { block: :str, name: :new_category, optional: true },
       ],
       remove: [
         { return: :bool },
@@ -428,10 +431,9 @@ class TaskMap
         { block: :str, name: :item_name, label: "Item Name" },
       ],
       get: [
-        { return: :array }, # Array of hashes { name: <item name>, category: <item category> }
+        { return: :hash }, # list.serialize
         { block: :str, name: :list_name },
       ],
-      # TODO: Support ordering?
     },
     action_events: {
       # Support querying action events

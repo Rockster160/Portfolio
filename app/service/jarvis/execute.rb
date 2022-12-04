@@ -47,7 +47,7 @@ class Jarvis::Execute
     # Maybe only do this while in test mode?
     if task_block.is_a?(Hash) && task_block[:token].present?
       ActionCable.server.broadcast("jil_channel", { token: task_block[:token] })
-      sleep 0.1
+      sleep 0.5
     end
     return task_block.map { |sub_block| eval_block(sub_block) }.last if task_block.is_a?(Array)
     return task_block if [true, false, nil].include?(task_block)

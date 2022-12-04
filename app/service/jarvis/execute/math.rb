@@ -4,21 +4,21 @@ class Jarvis::Execute::Math < Jarvis::Execute::Executor
   end
 
   def compare
-    task_left, task_sign, task_right = args.map { |t| eval_block(t) }
+    task_left, task_sign, task_right = evalargs
     return unless task_sign.in?(["==", "!=", "<", "<=", ">", ">="])
 
     cast_num(task_left).send(task_sign, cast_num(task_right))
   end
 
   def operation
-    task_left, task_op, task_right = args.map { |t| eval_block(t) }
+    task_left, task_op, task_right = evalargs
     return unless task_op.in?(["+", "-", "*", "/", "%"])
 
     cast_num(task_left).send(task_sign, cast_num(task_right))
   end
 
   def single_op
-    task_op, task_num = args.map { |t| eval_block(t) }
+    task_op, task_num = evalargs
     task_num = cast_num(task_num)
     case task_op.to_sym
     when :abs    then ::Math.abs(task_num)
