@@ -44,11 +44,18 @@ let jsonToElem = function(json) {
 
 export let shorttype = function(type) {
   switch(type) {
-    case "num":  return "#"; break;
-    case "str":  return "s"; break;
-    case "bool": return "T"; break;
-    case "date": return "0"; break;
-    default:     return "X"
+    case "bool":     return "T|F"; break;
+    case "str":      return "s"; break;
+    case "num":      return "#"; break;
+    case "keyval":   return "k:v"; break;
+    case "hash":     return "{}"; break;
+    case "array":    return "[]"; break;
+    case "date":     return "0"; break;
+    case "duration": return "dur"; break;
+    case "var":      return "var"; break;
+    case "task":     return "tsk"; break;
+    case "any":      return "any"; break;
+    default:         return "X"
   }
 }
 

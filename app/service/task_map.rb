@@ -21,6 +21,7 @@ class TaskMap
     :str,
     :num,
     :hash,
+    :keyval,
     :array,
     :duration,
     :date,
@@ -40,6 +41,10 @@ class TaskMap
         { block: :str },
         # { str: :value },
       ],
+      # text:      [
+        # { return: :str },
+        # This should allow a multi-line text input field, but still act as a string otherwise
+      # ],
       num:       [
         { return: :num },
         { block: :num },
@@ -186,7 +191,7 @@ class TaskMap
       match:      [
         { return: :array, description: "Returns match groups found by regex" },
         { block: :str },
-        { str: :regex }, # Should regex be an object, or just a text entry?
+        { block: :str, label: :regex }, # Should regex be an object, or just a text entry?
         { multiple: [:g, :i, :u, :m], name: :flags }
       ],
       split:      [
@@ -207,7 +212,7 @@ class TaskMap
         { multiple: :flags, checkboxes: [:g, :i, :u, :m] }
       ],
     },
-    numbers: {
+    math: {
       cast:           [
         { return: :num },
         { block: :any },
@@ -226,13 +231,13 @@ class TaskMap
       ],
       single_op:      [
         { return: :num },
-        [:abs, :sqrt, :square, :cubed, :log10, :e_up], # e_up is e to power of val
+        [:abs, :sqrt, :square, :cubed, :log10, :"e^"],
         { block: :num },
       ],
       advanced_ops:   [
         { return: :num },
         { block: :num },
-        [:abs, :n_root, :abs, :log, :pow],
+        [:n_root, :log, :pow],
         { block: :num },
       ],
       advanced_value: [
@@ -472,6 +477,7 @@ class TaskMap
         { block: :date },
         { block: :task },
       ],
+      # Inject/run JS on page + web scraping
       request: [
         { return: :hash },
         [:GET, :POST, :PATCH, :PUT, :DELETE],

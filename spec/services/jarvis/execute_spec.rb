@@ -31,7 +31,7 @@ RSpec.describe ::Jarvis::Execute do
                 type: "task.print",
                 token: "dirty.tree.goto",
                 data: [
-                  { option: :input, raw: "Hello, World!" }
+                  { option: :input, raw: hello }
                 ]
               }
             ],
@@ -41,7 +41,7 @@ RSpec.describe ::Jarvis::Execute do
                 type: "task.print",
                 token: "soft.read.apple",
                 data: [
-                  { option: :input, raw: "Goodbye, World!" }
+                  { option: :input, raw: goodbye }
                 ]
               }
             ]
@@ -84,7 +84,7 @@ RSpec.describe ::Jarvis::Execute do
                   data: [
                     {
                       option: :input,
-                      raw: "Hello, World!"
+                      raw: hello
                     }
                   ]
                 }
@@ -100,25 +100,71 @@ RSpec.describe ::Jarvis::Execute do
     end
 
     context "with an index block" do
-      # FIXME!! Dropdowns don't show values for other blocks in the same :content
       let(:tasks) {
         [
           {
-            type: :loop,
-            times: 10,
-            do: [
-              {
-                type: :if,
-                condition: {
-                  type: :or,
-                  args: [false, { type: :compare, sign: ">", args: [5, { type: :index }] }]
+            returntype: :num,
+            type: "logic.times",
+            token: "apple.shiny.car",
+            data: [
+              { option: :input, raw: "10" },
+              [
+                {
+                  returntype: :num,
+                  type: "logic.index",
+                  token: "limp.town.wash",
+                  data: []
                 },
-                do: [hello],
-                else: [goodbye]
-              },
+                {
+                  returntype: :any,
+                  type: "logic.if",
+                  token: "soft.carrot.frost",
+                  data: [
+                    [
+                      {
+                        returntype: :bool,
+                        type: "numbers.compare",
+                        token: "shrimp.danish.bed",
+                        data: [
+                          { option: :input, raw: "5" },
+                          { option: ">" },
+                          { option: "limp.town.wash" }
+                        ]
+                      }
+                    ],
+                    [
+                      {
+                        returntype: :str,
+                        type: "task.print",
+                        token: "shiny.shiny.ocean",
+                        data: [
+                          { option: :input, raw: hello }
+                        ]
+                      }
+                    ],
+                    [
+                      {
+                        returntype: :str,
+                        type: "task.print",
+                        token: "dog.wash.town",
+                        data: [
+                          { option: :input, raw: goodbye }
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              ]
             ]
           },
-          { type: :print, message: "After loop!" }
+          {
+            returntype: :str,
+            type: "task.print",
+            token: "cat.bisquit.saloon",
+            data: [
+              { option: :input, raw: "After loop!" }
+            ]
+          }
         ]
       }
 
@@ -132,12 +178,32 @@ RSpec.describe ::Jarvis::Execute do
     context "with an exit block" do
       let(:tasks) {
         [
-          { type: :exit },
-          { type: :print, message: "After exit!" }
+          {
+            returntype: "str",
+            type: "task.print",
+            token: "heavy.limp.push",
+            data: [
+              { option: "input", raw: "Before exit!" }
+            ]
+          },
+          {
+            returntype: "any",
+            type: "task.exit",
+            token: "saloon.push.saloon"
+          },
+          {
+            returntype: "str",
+            type: "task.print",
+            token: "heavy.limp.push",
+            data: [
+              { option: "input", raw: "After exit!" }
+            ]
+          }
         ]
       }
 
       it "does not run " do
+        expect(execute).to include("Before exit!")
         expect(execute).to_not include("After exit!")
       end
     end
@@ -146,10 +212,18 @@ RSpec.describe ::Jarvis::Execute do
       let(:tasks) {
         [
           {
-            type: :loop,
-            times: 1005,
-            do: [
-              { type: :index }
+            returntype: "num",
+            type: "logic.times",
+            token: "apple.shiny.car",
+            data: [
+              { option: "input", raw: "1005" },
+              [
+                {
+                  returntype: "num",
+                  type: "logic.index",
+                  token: "bed.blue.purple"
+                }
+              ]
             ]
           }
         ]
@@ -165,10 +239,18 @@ RSpec.describe ::Jarvis::Execute do
       let(:tasks) {
         [
           {
-            type: :loop,
-            times: 999, # 999 because the initial loop also counts as a block
-            do: [
-              { type: :index }
+            returntype: "num",
+            type: "logic.times",
+            token: "apple.shiny.car",
+            data: [
+              { option: "input", raw: "999" }, # 999 because the initial loop also counts as a block
+              [
+                {
+                  returntype: "num",
+                  type: "logic.index",
+                  token: "bed.blue.purple"
+                }
+              ]
             ]
           }
         ]
@@ -185,11 +267,46 @@ RSpec.describe ::Jarvis::Execute do
     let(:tasks) {
       [
         {
-          type: :set_var,
-          name: "blah blah",
-          value: "This is my value!"
+          returntype: "str",
+          type: "raw.str",
+          token: "soft.frost.cable",
+          data: [
+            { option: "input", raw: "This is my value!" }
+          ]
         },
-        { type: :print, message: { type: :get_var, name: "blah blah" } }
+        {
+          returntype: "var",
+          type: "raw.set_var",
+          token: "wine.wine.wine",
+          data: [
+            { option: "input", raw: "blah blah" },
+            { option: "soft.frost.cable" }
+          ]
+        },
+        {
+          returntype: "var",
+          type: "raw.get_var",
+          token: "grow.eclair.zebra",
+          data: [
+            { option: "input", raw: "blah blah" }
+          ]
+        },
+        {
+          returntype: "str",
+          type: "text.cast",
+          token: "aphid.monkey.apple",
+          data: [
+            { option: "grow.eclair.zebra" }
+          ]
+        },
+        {
+          returntype: "str",
+          type: "task.print",
+          token: "limp.ocean.stand",
+          data: [
+            { option: "aphid.monkey.apple" }
+          ]
+        }
       ]
     }
 
