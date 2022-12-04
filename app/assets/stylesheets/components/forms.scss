@@ -377,7 +377,7 @@ select {
   input[type=url],
   input[type=week],
   textarea {
-    &:not(.basic) {
+    &:not(.basic, .invisi-field) {
       border: 2px solid rgba($blue-d2, 0.5);
       color: $grey-light;
       &:not(select) {
