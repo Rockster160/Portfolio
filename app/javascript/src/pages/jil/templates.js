@@ -45,7 +45,7 @@ let jsonToElem = function(json) {
 export let shorttype = function(type) {
   switch(type) {
     case "bool":     return "T|F"; break;
-    case "str":      return "s"; break;
+    case "str":      return "str"; break;
     case "num":      return "#"; break;
     case "keyval":   return "k:v"; break;
     case "hash":     return "{}"; break;
@@ -88,7 +88,16 @@ export let templates = {
               elms.push({ span: { class: "type", content: key } })
               if (existingdata.token) { elms.push({ span: { class: "token", content: existingdata.token } }) }
               schema.forEach(function(data, idx) {
-                if (data.return) { elms.push({ span: { class: "return", blocktype: data.return, content: `=&gt; ${data.return}` } }) }
+                if (data.return) {
+                  elms.push({ span: {
+                    class: "return",
+                    blocktype: data.return,
+                    content: [
+                      { span: { class: "return-label", content: "returns" }},
+                      { span: { class: "return-type", content: data.return }}
+                    ]
+                  } })
+                }
               })
               let filler = existingdata?.data || []
 
