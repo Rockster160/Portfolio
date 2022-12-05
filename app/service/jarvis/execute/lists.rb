@@ -17,7 +17,7 @@ class Jarvis::Execute::Lists < Jarvis::Execute::Executor
   def remove
     list, item = evalargs
 
-    !!list_by(name: list).list_items.by_formatted_name(item).soft_destroy
+    !!list_by(name: list).list_items.by_formatted_name(item)&.soft_destroy
   end
 
   def get

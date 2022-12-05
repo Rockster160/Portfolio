@@ -84,15 +84,21 @@
 class Jarvis
   MY_NUMBER = "3852599640"
 
-  def self.trigger(action_data)
-    ::JarvisTriggerWorker.perform_async(action_data.stringify_keys)
+  def self.trigger(trigger_data)
+    ::JarvisTriggerWorker.perform_async(trigger_data.stringify_keys)
   end
 
-  def self.execute_trigger(action_data)
-    action_data.deep_symbolize_keys!
-    # Need to filter by user - B adding a Log should not trigger R events
-    ::JarvisTask.where(trigger: action_data[:trigger]).find_each do |task|
-      ::Jarvis::Execute.call(task, action_data)
+  def self.execute_trigger(trigger_data)
+    trigger_data.deep_symbolize_keys!
+    tasks = ::JarvisTask.where(trigger: trigger_data[:trigger])
+    case trigger_data[:trigger]
+    when :action_event
+      evt = ActionEvent.find(trigger_data.delete(:id))
+      tasks = tasks.where(user_id: evt.user_id)
+    end
+
+    tasks.find_each do |task|
+      ::Jarvis::Execute.call(task, trigger_data)
     end
   end
 

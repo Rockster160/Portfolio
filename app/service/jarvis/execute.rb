@@ -12,6 +12,7 @@ class Jarvis::Execute
   end
 
   def call
+    @test_mode = false
     # Can call another Task, but carry @ctx (especially i)
     @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil }
     task.next_trigger_at = Fugit::Cron.parse(task.cron).next_time if task.cron.present?
@@ -34,7 +35,7 @@ class Jarvis::Execute
     # Jil should have an interface / logger that displays all recent task runs and failure messages
     # trigger fail unless task has a fail trigger
   ensure
-    ActionCable.server.broadcast("jil_channel", { done: true, output: @ctx[:msg] })
+    ActionCable.server.broadcast("jil_channel", { done: true, output: @ctx[:msg].join("\n") })
     @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx)
     @ctx[:msg]#.join("\n")
   end
@@ -44,10 +45,9 @@ class Jarvis::Execute
   end
 
   def eval_block(task_block)
-    # Maybe only do this while in test mode?
-    if task_block.is_a?(Hash) && task_block[:token].present?
+    if @test_mode && task_block.is_a?(::Hash) && task_block[:token].present?
       ActionCable.server.broadcast("jil_channel", { token: task_block[:token] })
-      sleep 0.5
+      sleep 0.2
     end
     return task_block.map { |sub_block| eval_block(sub_block) }.last if task_block.is_a?(Array)
     return task_block if [true, false, nil].include?(task_block)

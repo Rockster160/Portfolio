@@ -3,7 +3,7 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
 
   def logic_if
     task_cond, task_do, task_else = args
-    eval_block(eval_block(task_cond) ? task_do : task_else)
+    eval_block(eval_block(task_cond).present? ? task_do : task_else)
   end
 
   def logic_and

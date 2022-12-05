@@ -7,6 +7,7 @@ class ActionEventBroadcastWorker
     if event.present?
       Jarvis.trigger(
         trigger: :action_event,
+        id: event.id,
         name: event.event_name,
         notes: event.notes,
         timestamp: event.timestamp,
