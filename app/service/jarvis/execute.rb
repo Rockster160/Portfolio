@@ -35,7 +35,7 @@ class Jarvis::Execute
     # Jil should have an interface / logger that displays all recent task runs and failure messages
     # trigger fail unless task has a fail trigger
   ensure
-    ActionCable.server.broadcast("jil_channel", { done: true, output: @ctx[:msg].join("\n") })
+    ActionCable.server.broadcast("jil_#{@task.id}_channel", { done: true, output: @ctx[:msg].join("\n") })
     @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx)
     @ctx[:msg]#.join("\n")
   end
@@ -45,9 +45,9 @@ class Jarvis::Execute
   end
 
   def eval_block(task_block)
-    if @test_mode && task_block.is_a?(::Hash) && task_block[:token].present?
-      ActionCable.server.broadcast("jil_channel", { token: task_block[:token] })
-      sleep 0.1
+    if task_block.is_a?(::Hash) && task_block[:token].present?
+      ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token] })
+      sleep 0.1 if @test_mode
     end
     return task_block.map { |sub_block| eval_block(sub_block) }.last if task_block.is_a?(Array)
     return task_block if [true, false, nil].include?(task_block)

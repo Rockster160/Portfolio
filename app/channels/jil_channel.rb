@@ -1,5 +1,7 @@
 class JilChannel < ApplicationCable::Channel
   def subscribed
-    stream_from "jil_channel"
+    if current_user.jarvis_task_ids.include?(params[:id].to_i)
+      stream_from "jil_#{params[:id]}_channel"
+    end
   end
 end

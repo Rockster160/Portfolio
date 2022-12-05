@@ -3,9 +3,10 @@ import consumer from "./consumer"
 $(document).ready(function() {
   if ($(".ctr-jarvis_tasks.act-new, .ctr-jarvis_tasks.act-edit").length == 0) { return }
 
-  consumer.subscriptions.create(
-    "JilChannel",
-    {
+  consumer.subscriptions.create({
+    channel: "JilChannel",
+    id: window.location.pathname.match(/tasks\/(\d+)/)[1],
+  },{
       received: function(data) {
         console.log(data);
         $("[token]").removeClass("task-running")
