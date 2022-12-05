@@ -1,18 +1,18 @@
 class Jarvis::Execute::Hash < Jarvis::Execute::Executor
   def get
     hash, key = evalargs
-    hash[key]
+    hash.with_indifferent_access[key]
   end
 
   def set
     hash, key, val = evalargs
-    hash[key] = val
+    hash.with_indifferent_access[key] = val
     hash
   end
 
   def del
     hash, key = evalargs
-    hash.delete(key)
+    hash.with_indifferent_access.delete(key)
     hash
   end
 

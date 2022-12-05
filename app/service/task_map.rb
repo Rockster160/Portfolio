@@ -189,10 +189,10 @@ class TaskMap
         { block: :any },
       ],
       match:      [
-        { return: :array, description: "Returns match groups found by regex" },
+        { return: :bool },
         { block: :str },
-        { block: :str, label: :regex }, # Should regex be an object, or just a text entry?
-        { multiple: [:g, :i, :u, :m], name: :flags }
+        { block: :str }, # Should regex be an object, or just a text entry?
+        # { multiple: [:g, :i, :u, :m], name: :flags }
       ],
       split:      [
         { return: :array },

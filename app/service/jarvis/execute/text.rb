@@ -7,7 +7,7 @@ class Jarvis::Execute::Text < Jarvis::Execute::Executor
     # TODO: Allow flags
     str, reg = args.first(2).map { |t| cast_str(eval_block(t)) }
     flags = args[2]
-    str.match(/#{reg}/)
+    str.match?(/#{reg}/)
   end
 
   def split

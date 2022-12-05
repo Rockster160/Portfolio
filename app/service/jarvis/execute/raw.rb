@@ -11,7 +11,11 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def self.str(val)
-    val.to_s
+    case val
+    when Hash, Array then val.to_json
+    else
+      val.to_s
+    end
   rescue NoMethodError
     ""
   end

@@ -41,13 +41,13 @@ class Jarvis::Execute
   end
 
   def lookup_option(option)
-    @ctx[:vars][option] || option
+    @ctx[:vars].key?(option) ? @ctx[:vars][option] : option
   end
 
   def eval_block(task_block)
     if @test_mode && task_block.is_a?(::Hash) && task_block[:token].present?
       ActionCable.server.broadcast("jil_channel", { token: task_block[:token] })
-      sleep 0.2
+      sleep 0.1
     end
     return task_block.map { |sub_block| eval_block(sub_block) }.last if task_block.is_a?(Array)
     return task_block if [true, false, nil].include?(task_block)
