@@ -53,42 +53,6 @@ import { dash_colors } from "../vars"
     })
   }
 
-  var rigData = function(cell) {
-    fetch("/proxy", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        url: cell.data.rig_url + "/farms",
-        headers: {
-          Authorization: "Bearer " + cell.config.hiveos_apikey,
-        }
-      })
-    }).then(function(res) {
-      if (!res.ok) {
-        cell.data.rig_lines = [
-          "",
-          "",
-          Text.center(Text.color(dash_colors.orange, "[FAILED]")),
-        ]
-        return renderCell(cell)
-      }
-      res.json().then(function(json) {
-        var lines = []
-        lines.push(" ")
-        json.data.forEach(function(rig) {
-          var online = "█ ".repeat(rig.stats.gpus_online)
-          var offline = "█ ".repeat(rig.stats.gpus_total - rig.stats.gpus_online)
-          let status = Text.color(dash_colors.green, online) + Text.color(dash_colors.red, offline)
-          lines.push(Text.justify(" " + rig.name, status))
-        })
-        cell.data.rig_lines = lines
-        renderCell(cell)
-      })
-    })
-  }
-
   var uptimeLines = function(cell) {
     let mixed = {}
     let lines = []
@@ -177,7 +141,6 @@ import { dash_colors } from "../vars"
   var renderCell = function(cell) {
     cell.lines([
       ...uptimeLines(cell),
-      ...cell.data.rig_lines,
     ])
   }
 
@@ -185,11 +148,9 @@ import { dash_colors } from "../vars"
     title: "Uptime",
     text: "Loading...",
     data: {
-      rig_lines: [],
       uptime_data: {},
       load_data: {},
 
-      rig_url: "https://api2.hiveos.farm/api/v2",
     },
     onload: subscribeWebsockets,
     started: function() {
@@ -205,7 +166,6 @@ import { dash_colors } from "../vars"
     refreshInterval: Time.minutes(10),
     reloader: function() {
       uptimeData(cell)
-      rigData(cell)
       cell.ws.send("request")
     },
   })
