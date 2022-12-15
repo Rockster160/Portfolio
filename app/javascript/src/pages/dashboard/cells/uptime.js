@@ -150,7 +150,6 @@ import { dash_colors } from "../vars"
     data: {
       uptime_data: {},
       load_data: {},
-
     },
     onload: subscribeWebsockets,
     started: function() {

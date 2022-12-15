@@ -20,6 +20,7 @@ class GoogleNestControl
     "https://nestservices.google.com/partnerconnections/#{PROJECT_ID}/auth?#{params.to_query}"
     # Login and copy the `code` param from the redirect
     # then call GoogleNestControl.subscribe(code)
+    # RefreshNestMessageWorker.perform_async
   end
 
   def self.subscribe(code)

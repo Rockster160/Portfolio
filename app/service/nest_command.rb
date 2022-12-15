@@ -37,8 +37,12 @@ class NestCommand
     end
   rescue StandardError => e
     ActionCable.server.broadcast("nest_channel", failed: true)
-    backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
-    SlackNotifier.notify("Failed to set Nest: #{e.inspect}\n#{backtrace}")
+    if e.message == "400 Bad Request"
+      RefreshNestMessageWorker.perform_async
+    else
+      backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
+      SlackNotifier.notify("Failed to set Nest: #{e.inspect}\n#{backtrace}")
+    end
   end
 
   def get_devices
