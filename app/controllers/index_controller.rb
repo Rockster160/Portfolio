@@ -20,6 +20,7 @@ class IndexController < ApplicationController
   def nest_subscribe
     if current_user.try(:admin?)
       GoogleNestControl.subscribe(params[:code])
+      NestCommand.command("update")
     end
 
     render :home
