@@ -115,6 +115,7 @@ module PrinterApi
       BASE_HEADERS
     )
 
+    return {} if res.code == 204
     JSON.parse(res.body, symbolize_names: true)
   rescue JSON::ParserError => err
     if !DataStorage[:printer_needs_reset]
