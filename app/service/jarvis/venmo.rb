@@ -35,9 +35,6 @@ class Jarvis::Venmo < Jarvis::Action
   end
 
   def parse_data
-    # @msg.squish.match(/venmo (request )?([\w' ]+) \$?(\d+(?:\.\d+)?) ?(.*?)\.?/i).to_a
-    # @msg.squish.match(/venmo (request )?([\w' ]+) \$?(\d+(?:\.\d+)?) ?((?:.|\p{Emoji_Presentation})*?)\.?/iu).to_a
-    # @msg.squish.match(/\p{Emoji_Presentation}]/iu).to_a
     @msg.squish.match(/venmo (request )?([\w' ]+) \$?(\d+(?:\.\d+)?) ?((?:.|\p{Emoji_Presentation}){0,})/iu).to_a
   end
 end
