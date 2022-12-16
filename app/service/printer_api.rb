@@ -8,6 +8,7 @@ module PrinterApi
   }
 
   def update_ngrok(base_url)
+    DataStorage[:printer_needs_reset] = false
     DataStorage[:printer_ngrok_base_url] = base_url
   end
 
@@ -99,7 +100,10 @@ module PrinterApi
 
     JSON.parse(res.body, symbolize_names: true)
   rescue JSON::ParserError => err
-    SlackNotifier.notify("Failed to parse json from PrinterControl#get(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```")
+    if !DataStorage[:printer_needs_reset]
+      SlackNotifier.notify("Failed to parse json from PrinterControl#get(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```")
+    end
+    DataStorage[:printer_needs_reset] = true
   end
 
   def post(endpoint, params={})
@@ -113,6 +117,9 @@ module PrinterApi
 
     JSON.parse(res.body, symbolize_names: true)
   rescue JSON::ParserError => err
-    SlackNotifier.notify("Failed to parse json from PrinterControl#post(#{endpoint}, #{params}):\nCode: #{res.code}\n```#{res.body}```")
+    if !DataStorage[:printer_needs_reset]
+      SlackNotifier.notify("Failed to parse json from PrinterControl#post(#{endpoint}, #{params}):\nCode: #{res.code}\n```#{res.body}```")
+    end
+    DataStorage[:printer_needs_reset] = true
   end
 end
