@@ -22,10 +22,14 @@
     <div class="btn-container text-right">
       <%= form_for [:jil, @task], html: { class: "basic", id: "task-form" } do |f| %>
         <%= f.submit "Save", class: "btn save-task" %>
+        <div class="flex">
+          <%= f.select :trigger, options_for_select(JarvisTask.triggers.collect { |trigger, _| [trigger.titleize, trigger] }, @task.trigger), include_blank: "Select Trigger" %>
+          <%= f.text_field :cron, placeholder: "Cron (If no trigger selected)" %>
+        </div>
       <% end %>
     </div>
     <div class="lists-title">J.I.L.</div>
-    <%= text_field_tag "task[name]", @task.name, class: "", placeholder: "Task Name" %>
+    <%= text_field_tag "jarvis_task[name]", @task.name, class: "", placeholder: "Task Name" %>
     <div class="tasks lists" data-tasks="<%= @task.tasks.to_json %>"></div>
   </div>
 </div>

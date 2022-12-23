@@ -225,16 +225,16 @@ $(document).ready(function() {
 
     let datainput = document.createElement("input")
     datainput.setAttribute("type", "hidden")
-    datainput.setAttribute("name", "task[tasks]")
+    datainput.setAttribute("name", "jarvis_task[tasks]")
     datainput.classList.add("data-field")
     datainput.value = JSON.stringify(data)
     form.appendChild(datainput)
 
     let nameinput = document.createElement("input")
     nameinput.setAttribute("type", "hidden")
-    nameinput.setAttribute("name", "task[name]")
+    nameinput.setAttribute("name", "jarvis_task[name]")
     nameinput.classList.add("data-field")
-    nameinput.value = document.querySelector("[name='task[name]']").value
+    nameinput.value = document.querySelector("[name='jarvis_task[name]']").value
     form.appendChild(nameinput)
 
     let body = new FormData(form)

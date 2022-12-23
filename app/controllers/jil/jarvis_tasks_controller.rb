@@ -2,7 +2,7 @@ class Jil::JarvisTasksController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def index
-    @tasks = current_user.jarvis_task
+    @tasks = current_user.jarvis_tasks
   end
 
   def new
@@ -20,7 +20,8 @@ class Jil::JarvisTasksController < ApplicationController
   def update
     @task = current_user.jarvis_tasks.find(params[:id])
     @task.update(task_params)
-
+puts "\e[33m[LOGIT] | #{task_params.to_h}\e[0m"
+puts "\e[33m[LOGIT] | #{@task.reload.inspect}\e[0m"
     respond_to do |format|
       format.json { render json: { status: :found, url: edit_jil_jarvis_task_path(@task) } }
     end
@@ -35,8 +36,10 @@ class Jil::JarvisTasksController < ApplicationController
   end
 
   def task_params
-    params.require(:task).permit(
+    params.require(:jarvis_task).permit(
       :name,
+      :trigger,
+      :cron,
       :tasks,
     ).tap { |whitelist|
       begin
