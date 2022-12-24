@@ -26,6 +26,10 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
     jil.ctx[:loop_idx]
   end
 
+  def logic_key
+    jil.ctx[:loop_key]
+  end
+
   def logic_object
     (jil.ctx[:loop_obj] || jil.ctx[:loop_idx])
   end

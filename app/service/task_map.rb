@@ -53,7 +53,7 @@ class TaskMap
       keyval:     [
         { return: :keyval },
         { block: :str },
-        { block: :any },
+        { block: :str },
       ],
       hash:       [
         { return: :hash },
@@ -166,13 +166,16 @@ class TaskMap
         # Validates: error if empty
       ],
       index:      [
-        { return: :num, description: "Current index of loop" }
+        { return: :num, description: "Current index of loop" },
+        "Current Index",
       ],
       key:        [
-        { return: :str, description: "Current key of loop" }
+        { return: :str, description: "Current key of loop" },
+        "Current Key",
       ],
       object:     [
-        { return: :any, description: "Current object of loop" }
+        { return: :any, description: "Current object of loop" },
+        "Current Value"
       ],
       next:       [
         { return: :any, description: "Skip to next iteration of current loop" },

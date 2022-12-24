@@ -36,7 +36,7 @@ class Jil::JarvisTasksController < ApplicationController
 
   def run
     @task = current_user.jarvis_tasks.find(params[:id])
-    Jarvis::Execute.call(@task, test_mode: true)
+    ::Jarvis::Execute.call(@task, test_mode: true)
 
     respond_to do |format|
       format.json

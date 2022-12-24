@@ -110,7 +110,7 @@ export let templates = {
                     let fillitem = filler[idx] || {}
                     if (data == "content") {
                       let tasks_data = []
-                      if (key == "raw.array") {
+                      if (key == "raw.array" || key == "raw.hash") {
                         tasks_data = filler
                       } else {
                         tasks_data = fillitem

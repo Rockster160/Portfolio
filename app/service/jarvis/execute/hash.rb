@@ -38,7 +38,7 @@ class Jarvis::Execute::Hash < Jarvis::Execute::Executor
 
     vals = eval_block(arr).map.with_index do |(key, val), idx|
       jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] = key, val, idx
-      break if loop_exit || jil.ctx[:i] > MAX_ITERATIONS
+      break if loop_exit || jil.ctx[:i] > Jarvis::Execute::MAX_ITERATIONS
 
       val = steps.map { |arg|
         # next and break only break out of one layer

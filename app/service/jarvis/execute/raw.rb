@@ -26,6 +26,27 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
     0
   end
 
+  def keyval
+    key, val = evalargs
+    [key, val]
+  rescue NoMethodError
+    [nil, nil]
+  end
+
+  def hash
+    evalargs.each_with_object({}) do |(key, val), new_hash|
+      new_hash[key] = val
+    end
+  rescue NoMethodError
+    {}
+  end
+
+  def array
+    evalargs
+  rescue NoMethodError
+    []
+  end
+
   def get_var
   end
 
@@ -40,4 +61,8 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
 
   def set_cache
   end
+
+  # def self.map_eval_args(vals)
+  #   vals.map { |t| eval_block(t) }
+  # end
 end
