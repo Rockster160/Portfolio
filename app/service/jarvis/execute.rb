@@ -12,9 +12,9 @@ class Jarvis::Execute
   end
 
   def call
-    @test_mode = false
+    @test_mode = data.delete(:test_mode)
     # Can call another Task, but carry @ctx (especially i)
-    @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil }
+    @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil, current_token: nil }
     task.next_trigger_at = Time.at(Fugit::Cron.parse(task.cron).next_time.to_i) if task.cron.present?
     task.update(last_trigger_at: Time.current)
 
@@ -32,7 +32,7 @@ class Jarvis::Execute
   rescue StandardError => e
     # puts "\e[31m[LOGIT] | #{e.message}\n#{e.backtrace.select {|r|r.include?("/app/")}.join("\n")}\e[0m"
     Rails.logger.error("\e[31m#{e.backtrace.select{|l|l.include?("/app/")}.reverse.join("\n")}\e[0m")
-    @ctx[:msg] << "Failed: #{e.message}"
+    @ctx[:msg] << "[#{@ctx[:current_token]}] Failed: #{e.message}"
     # Jil should have an interface / logger that displays all recent task runs and failure messages
     # trigger fail unless task has a fail trigger
   ensure
@@ -47,8 +47,9 @@ class Jarvis::Execute
 
   def eval_block(task_block)
     if task_block.is_a?(::Hash) && task_block[:token].present?
+      @ctx[:current_token] = task_block[:token]
       ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token] })
-      sleep 0.1 if @test_mode
+      sleep 0.2 if @test_mode
     end
     return task_block.map { |sub_block| eval_block(sub_block) }.last if task_block.is_a?(::Array)
     return task_block if [true, false, nil].include?(task_block)
@@ -64,7 +65,9 @@ class Jarvis::Execute
 
     @ctx[:vars][task_block[:token]] = (
       "Jarvis::Execute::#{klass.titleize.gsub(" ", "")}".constantize.new(self, task_block).send(method)
-    )
+    ).tap { |res|
+      ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token], res: res })
+    }
   # rescue StandardError => e
   #   binding.pry
   #   raise e

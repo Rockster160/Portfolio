@@ -93,6 +93,10 @@ class User < ApplicationRecord
     guest_account.destroy
   end
 
+  def timezone
+    "America/Denver"
+  end
+
   def see!
     # last logged in at NOW
   end

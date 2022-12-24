@@ -38,6 +38,9 @@ $(document).ready(function() {
       }
     })
   }
+  document.addEventListener("change", function (e) {
+    disableRunButton("change")
+  }, { once: true })
 
   let removeOrInvalidOpt = function(select, option) {
     if (select.val() == option.val()) {
@@ -139,6 +142,7 @@ $(document).ready(function() {
         let populated_block = templates.block(type, { token: genUniqToken() })
         container.replaceWith(populated_block)
 
+        disableRunButton("drag")
         initInteractivity()
       },
     })
@@ -149,11 +153,20 @@ $(document).ready(function() {
       connectToSortable: ".tree .lists .list-item-container",
       placeholder: "list-item-placeholder",
       stop: function(event, ui) {
+        disableRunButton("sort")
         resetDropdowns()
       }
     })
   }
   initInteractivity()
+
+  let disableRunButton = function(name) {
+    $(".run-task")
+      .attr("disabled", "disabled")
+      .addClass("disabled")
+      .removeAttr("data-remote")
+      .removeAttr("href")
+  }
 
   let collectBlocksFromList = function(tasksNode) {
     return Array.from(tasksNode.querySelectorAll(":scope > .list-item-container > .list-item")).map(function(nestedItem) {
@@ -192,6 +205,7 @@ $(document).ready(function() {
 
   document.addEventListener("click", function(evt) {
     if (evt.target.parentElement.classList.contains("delete")) {
+      disableRunButton("delete")
       evt.target.closest(".list-item-container").remove()
     }
   })

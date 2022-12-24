@@ -109,7 +109,9 @@ Rails.application.routes.draw do
   resources :jarvis_tasks, path: :tasks
   namespace :jil do
     get :/, action: :index, controller: :tasks
-    resources :jarvis_tasks, path: :tasks
+    resources :jarvis_tasks, path: :tasks do
+      post :run, on: :member
+    end
   end
 
   namespace :bowling, as: nil do

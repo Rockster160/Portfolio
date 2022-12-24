@@ -16,22 +16,22 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
   end
 
   def min
-    arr = evalargs
+    arr = evalargs.first
     arr.min
   end
 
   def max
-    arr = evalargs
+    arr = evalargs.first
     arr.max
   end
 
   def sample
-    arr = evalargs
+    arr = evalargs.first
     arr.sample
   end
 
   def prepend
-    val, arr = evalargs
+    val, arr = evalargs.first
     arr.prepend(val)
   end
 
@@ -41,7 +41,7 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
   end
 
   def length
-    arr = evalargs
+    arr = evalargs.first
     arr.length
   end
 

@@ -4,8 +4,8 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
 
     user.action_events
       .order(timestamp: :desc)
-      .search(search)
-      .limit(limit.presence || "")
+      .name_search(search)
+      .limit(limit.presence || 1000)
       .where(timestamp: since..)
   end
 end
