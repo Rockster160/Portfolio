@@ -29,6 +29,6 @@ class Jarvis::Execute::Lists < Jarvis::Execute::Executor
   private
 
   def list_by(params)
-    jil.task.user.lists.find_by(params)
+    user.lists.find_by(params)
   end
 end

@@ -15,7 +15,7 @@ class Jarvis::Execute
     @test_mode = false
     # Can call another Task, but carry @ctx (especially i)
     @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil }
-    task.next_trigger_at = Fugit::Cron.parse(task.cron).next_time if task.cron.present?
+    task.next_trigger_at = Time.at(Fugit::Cron.parse(task.cron).next_time.to_i) if task.cron.present?
     task.update(last_trigger_at: Time.current)
 
     task.tasks.each_with_index do |task_block, idx|
@@ -31,6 +31,7 @@ class Jarvis::Execute
     # Trigger success?
   rescue StandardError => e
     # puts "\e[31m[LOGIT] | #{e.message}\n#{e.backtrace.select {|r|r.include?("/app/")}.join("\n")}\e[0m"
+    Rails.logger.error("\e[31m#{e.backtrace.select{|l|l.include?("/app/")}.reverse.join("\n")}\e[0m")
     @ctx[:msg] << "Failed: #{e.message}"
     # Jil should have an interface / logger that displays all recent task runs and failure messages
     # trigger fail unless task has a fail trigger
@@ -49,10 +50,10 @@ class Jarvis::Execute
       ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token] })
       sleep 0.1 if @test_mode
     end
-    return task_block.map { |sub_block| eval_block(sub_block) }.last if task_block.is_a?(Array)
+    return task_block.map { |sub_block| eval_block(sub_block) }.last if task_block.is_a?(::Array)
     return task_block if [true, false, nil].include?(task_block)
-    return task_block if task_block.class.in?([String, Integer, Float])
-    return task_block[:raw] if task_block[:option] == "input"
+    return task_block if task_block.class.in?([::String, ::Integer, ::Float])
+    return raw_val(task_block) if task_block[:option] == "input"
     return lookup_option(task_block[:option]) if task_block[:option].present?
     @ctx[:i] += 1
     # Instead, this should raise an error so we don't have the weird off-by-one issue
@@ -62,7 +63,14 @@ class Jarvis::Execute
     method = "logic_#{method}" if klass == "logic"
 
     @ctx[:vars][task_block[:token]] = (
-      "Jarvis::Execute::#{klass.titleize}".constantize.new(self, task_block).send(method)
+      "Jarvis::Execute::#{klass.titleize.gsub(" ", "")}".constantize.new(self, task_block).send(method)
     )
+  # rescue StandardError => e
+  #   binding.pry
+  #   raise e
+  end
+
+  def raw_val(task_block)
+    task_block[:raw]
   end
 end

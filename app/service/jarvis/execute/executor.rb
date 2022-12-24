@@ -15,4 +15,8 @@ class Jarvis::Execute::Executor
   def evalargs
     args.map { |t| eval_block(t) }
   end
+
+  def user
+    @user ||= jil.task.user
+  end
 end

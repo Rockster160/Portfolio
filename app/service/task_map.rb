@@ -304,46 +304,46 @@ class TaskMap
         { block: :array },
         { block: :any },
       ],
-      sort:        [ # - Fail for incompatible types
-        { return: :array },
-        { block: :array },
-        [:asc, :desc, :random]
-      ],
-      sort_by:     [
-        { return: :array },
-        { block: :array },
-        :content, # last value from content is used to sort asc
-      ],
-      find:        [
-        { return: :any, description: "First truthy value from array" },
-        { block: :array },
-        :content,
-      ],
-      find_map:    [
-        { return: :any, description: "First truthy return from array (the return, not the object)" },
-        { block: :array },
-        :content,
-      ],
-      merge:       [
-        { return: :array },
-        { block: :array },
-        { block: :array },
-      ],
-      join:        [
-        { return: :str },
-        { block: :array },
-        { block: :str, name: :join_by, default: ", " },
-      ],
-      each:        [
-        { return: :num }, # number of times the loop ran
-        { block: :array },
-        :content,
-      ],
-      map:         [
-        { return: :array },
-        { block: :array },
-        :content, # last value from content is used as new array value
-      ],
+      # sort:        [ # - Fail for incompatible types
+      #   { return: :array },
+      #   { block: :array },
+      #   [:asc, :desc, :random]
+      # ],
+      # sort_by:     [
+      #   { return: :array },
+      #   { block: :array },
+      #   :content, # last value from content is used to sort asc
+      # ],
+      # find:        [
+      #   { return: :any, description: "First truthy value from array" },
+      #   { block: :array },
+      #   :content,
+      # ],
+      # find_map:    [
+      #   { return: :any, description: "First truthy return from array (the return, not the object)" },
+      #   { block: :array },
+      #   :content,
+      # ],
+      # merge:       [
+      #   { return: :array },
+      #   { block: :array },
+      #   { block: :array },
+      # ],
+      # join:        [
+      #   { return: :str },
+      #   { block: :array },
+      #   { block: :str, name: :join_by, default: ", " },
+      # ],
+      # each:        [
+      #   { return: :num }, # number of times the loop ran
+      #   { block: :array },
+      #   :content,
+      # ],
+      # map:         [
+      #   { return: :array },
+      #   { block: :array },
+      #   :content, # last value from content is used as new array value
+      # ],
     },
     hash: {
       get: [
@@ -387,24 +387,42 @@ class TaskMap
       ],
     },
     date: {
-      cast: [
+      now: [
         { return: :date },
-        { block: :any },
+        :NOW
+      ],
+      # cast: [
+      #   { return: :date },
+      #   { block: :any },
+      # ],
+      round: [
+        { return: :date },
+        { block: :date },
+        :TO,
+        [:beginning, :end],
+        :OF,
+        [:minute, :hour, :day, :week, :month, :year],
       ],
       adjust: [
         { return: :date },
         { block: :date },
+        [:+, :-],
         { block: :duration },
       ],
-      format_str: [
-        { return: :str },
-        { block: :date },
-        { block: :str, name: :format },
-      ],
-      format: [
-        { return: :str },
-        { block: :date },
-        [:iso8601], # Other standard formats?
+      # format_str: [
+      #   { return: :str },
+      #   { block: :date },
+      #   { block: :str, name: :format },
+      # ],
+      # format: [
+      #   { return: :str },
+      #   { block: :date },
+      #   [:iso8601], # Other standard formats?
+      # ],
+      duration: [
+        { return: :duration },
+        { block: :num },
+        [:seconds, :minutes, :hours, :days, :weeks, :months, :years],
       ],
     },
     lists: {
@@ -414,8 +432,8 @@ class TaskMap
       # TODO: Support Category?
       add: [
         { return: :bool },
-        { block: :str, name: :list_name },
-        { block: :str, name: :item_name },
+        { block: :str, label: :list_name },
+        { block: :str, label: :item_name },
         # { block: :str, name: :category, optional: true },
       ],
       edit: [
@@ -436,6 +454,12 @@ class TaskMap
       ],
     },
     action_events: {
+      get: [
+        { return: :array },
+        { block: :str, label: :Search },
+        { block: :num, label: :Limit },
+        { block: :date, label: :Since },
+      ]
       # Support querying action events
       # limit to... 1000?
       # add

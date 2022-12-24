@@ -20,8 +20,7 @@ class Jil::JarvisTasksController < ApplicationController
   def update
     @task = current_user.jarvis_tasks.find(params[:id])
     @task.update(task_params)
-puts "\e[33m[LOGIT] | #{task_params.to_h}\e[0m"
-puts "\e[33m[LOGIT] | #{@task.reload.inspect}\e[0m"
+
     respond_to do |format|
       format.json { render json: { status: :found, url: edit_jil_jarvis_task_path(@task) } }
     end
@@ -42,6 +41,11 @@ puts "\e[33m[LOGIT] | #{@task.reload.inspect}\e[0m"
       :cron,
       :tasks,
     ).tap { |whitelist|
+      if whitelist[:cron].present?
+        whitelist[:next_trigger_at] = Time.at(Fugit::Cron.parse(whitelist[:cron]).next_time.to_i)
+      else
+        whitelist[:next_trigger_at] = nil
+      end
       begin
         whitelist[:tasks] = JSON.parse(whitelist[:tasks]) if whitelist[:tasks].is_a?(String)
       rescue JSON::ParserError

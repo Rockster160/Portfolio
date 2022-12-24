@@ -18,6 +18,16 @@ class ActionEvent < ApplicationRecord
 
   before_save { self.timestamp ||= Time.current }
 
+  scope :search, ->(q) {
+    # Eventually this should use advanced search
+    # name:"Hello World"
+    # name:Workout notes:Parkour
+    where("event_name ILIKE :q OR notes ILIKE :q", q: "%#{q}%")
+  }
+  scope :name_search, ->(q) {
+    where("event_name ILIKE :q", q: "%#{q}%")
+  }
+
   def timestamp=(str_stamp)
     return if str_stamp.blank?
 

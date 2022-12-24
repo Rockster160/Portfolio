@@ -126,7 +126,13 @@ export let templates = {
                         class: "select-wrapper",
                         content: function() {
                           let children = []
-                          children.push({ label: { for: `${existingdata.token}[${idx}]`, content: `${shorttype(data.block)} ${data.label || ""}` } })
+                          children.push({ label: {
+                            for: `${existingdata.token}[${idx}]`,
+                            content: [
+                              { span: { class: "shorttype", content: shorttype(data.block) } },
+                              { span: { class: "select-name", content: data.label || "" } },
+                            ]
+                          } })
                           children.push({ select: {
                             id: `${existingdata.token}[${idx}]`,
                             type: "select",

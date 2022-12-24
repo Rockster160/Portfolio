@@ -4,7 +4,7 @@ class ActionEventsController < ApplicationController
 
   def index
     @events = current_user.action_events.order(timestamp: :desc).page(params[:page]).per(50)
-    @events = @events.where("event_name ILIKE :q OR notes ILIKE :q", q: "%#{params[:q]}%") if params[:q].present?
+    @events = @events.search(params[:q]) if params[:q].present?
 
     respond_to do |format|
       format.html
