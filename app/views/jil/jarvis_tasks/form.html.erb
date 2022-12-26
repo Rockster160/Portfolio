@@ -20,6 +20,12 @@
 
   <div class="skinny-container lists-index-container">
     <div class="btn-container">
+      <%= link_to "Tasks", :jil, class: "btn" %>
+      <%= link_to "Config (Import/Export/Delete - Modal)", nil, class: "btn pull-right disabled" %>
+      <br>
+      <br>
+    </div>
+    <div class="btn-container">
       <%= form_for [:jil, @task], html: { class: "basic", id: "task-form" } do |f| %>
         <%= link_to "Run", [:run, :jil, @task], class: "btn run-task", remote: true, method: :post if @task.persisted? %>
         <%= f.submit "Save", class: "btn save-task pull-right" %>

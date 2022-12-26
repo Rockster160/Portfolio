@@ -84,34 +84,34 @@ class TaskMap
       # Vars exist only during the current running task
       # Get returns the var itself. Treated like the object, but changes save to the var
       # `var` should be treated like `any` unless it has been cast
-      get_var:      [
-        { return: :var },
-        { block: :str, name: :name },
-      ],
+      # get_var:      [
+      #   { return: :var },
+      #   { block: :str, name: :name },
+      # ],
       # Clone returns the object the variable has, modifying this does NOT change the var
-      clone_var:    [
-        { return: :any },
-        { block: :str, name: :name },
-      ],
-      set_var:      [
-        { return: :var },
-        { block: :str, name: :name },
-        :value,
-        { block: :any },
-      ],
+      # clone_var:    [
+      #   { return: :any },
+      #   { block: :str, name: :name },
+      # ],
+      # set_var:      [
+      #   { return: :var },
+      #   { block: :str, name: :name },
+      #   :value,
+      #   { block: :any },
+      # ],
       # Cache is permanent across all tasks - should cache be within a transaction?
       # For example, if task fails, should changes to the cache during the task undo?
       # Cache needs to be saved - it does not do so automatically
-      get_cache:    [
-        { return: :any },
-        { block: :str, name: :name },
-      ],
-      set_cache:    [
-        { return: :any },
-        { block: :str, name: :name },
-        :value,
-        { block: :any, name: :value },
-      ],
+      # get_cache:    [
+      #   { return: :any },
+      #   { block: :str, name: :name },
+      # ],
+      # set_cache:    [
+      #   { return: :any },
+      #   { block: :str, name: :name },
+      #   :value,
+      #   { block: :any, name: :value },
+      # ],
     },
     logic: {
       if:         [
@@ -489,48 +489,48 @@ class TaskMap
         { return: :any },
         { block: :any, optional: true, name: :reason },
       ],
-      fail:       [ # Stop current task entirely - as a failure
-        { return: :any },
-        { block: :any, optional: true, name: :reason },
-      ],
-      run:        [
-        { return: :any },
-        { block: :task },
-      ],
-      find:       [
-        { return: :task },
-        { block: :str, name: :task_id },
-      ],
-      schedule: [
-        { return: :str }, # jid of the task
-        { block: :date },
-        { block: :task },
-      ],
+      # fail:       [ # Stop current task entirely - as a failure
+      #   { return: :any },
+      #   { block: :any, optional: true, name: :reason },
+      # ],
+      # run:        [
+      #   { return: :any },
+      #   { block: :task },
+      # ],
+      # find:       [
+      #   { return: :task },
+      #   { block: :str, name: :task_id },
+      # ],
+      # schedule: [
+      #   { return: :str }, # jid of the task
+      #   { block: :date },
+      #   { block: :task },
+      # ],
       # Inject/run JS on page + web scraping
-      request: [
-        { return: :hash },
-        [:GET, :POST, :PATCH, :PUT, :DELETE],
-        { block: :str, name: :url },
-        { block: :str, name: :body, optional: true },
-        { block: :hash, name: :params, optional: true },
-        { block: :hash, name: :headers, optional: true },
-      ],
+      # request: [
+      #   { return: :hash },
+      #   [:GET, :POST, :PATCH, :PUT, :DELETE],
+      #   { block: :str, name: :url },
+      #   { block: :str, name: :body, optional: true },
+      #   { block: :hash, name: :params, optional: true },
+      #   { block: :hash, name: :headers, optional: true },
+      # ],
       # Send email from Jarvis - Admin only? - Or just require some kind of email setup/permissions
-      email: [
-        { block: :str, name: :to }, # Allow multiple?
-        { block: :str, name: :from },
-        { block: :str, name: :subject },
-        { block: :str, name: :body }, # Allow html
-      ],
-      sms: [
-        { block: :str, name: :to }, # Allow multiple?
-        { block: :str, name: :from }, # Requires Twilio auth/set up
-        { block: :str, name: :body }, # maybe allow images eventually?
-      ],
-      ws: [
-        { block: :str, name: :channel },
-        { block: :hash, name: :data },
-      ],
+      # email: [
+      #   { block: :str, name: :to }, # Allow multiple?
+      #   { block: :str, name: :from },
+      #   { block: :str, name: :subject },
+      #   { block: :str, name: :body }, # Allow html
+      # ],
+      # sms: [
+      #   { block: :str, name: :to }, # Allow multiple?
+      #   { block: :str, name: :from }, # Requires Twilio auth/set up
+      #   { block: :str, name: :body }, # maybe allow images eventually?
+      # ],
+      # ws: [
+      #   { block: :str, name: :channel },
+      #   { block: :hash, name: :data },
+      # ],
       # Not supported yet, but once the app exists, allow sending notifications via app?
       # notification: [
       #   { return: :bool },

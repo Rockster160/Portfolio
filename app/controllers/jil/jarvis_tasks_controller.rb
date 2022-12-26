@@ -34,6 +34,16 @@ class Jil::JarvisTasksController < ApplicationController
     end
   end
 
+  def destroy
+    @task = current_user.jarvis_tasks.find(params[:id])
+
+    if @task.destroy
+      redirect_to :jil
+    else
+      redirect_to [:jil, @task, :edit]
+    end
+  end
+
   def run
     @task = current_user.jarvis_tasks.find(params[:id])
     ::Jarvis::Execute.call(@task, test_mode: true)
@@ -42,6 +52,8 @@ class Jil::JarvisTasksController < ApplicationController
       format.json
     end
   end
+
+  private
 
   def task_params
     params.require(:jarvis_task).permit(

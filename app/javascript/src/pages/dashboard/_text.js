@@ -22,13 +22,14 @@ Text.length = function(data) {
 }
 
 
-Text.center = function(text, width) {
+Text.center = function(text, width, spacer) {
   width = width || single_width
+  spacer = spacer || " "
   var spaces = (width - Text.clean(text).length) / 2
   spaces = spaces < 0 ? 0 : spaces
-  var new_line = " ".repeat(spaces) + text + " ".repeat(spaces)
+  var new_line = spacer.repeat(spaces) + text + spacer.repeat(spaces)
 
-  return new_line + " ".repeat(width > new_line.length ? 1 : 0)
+  return new_line + spacer.repeat(width > new_line.length ? 1 : 0)
 }
 Text.overlay = function(top_text, bottom_text) {
   var length = [top_text.length, bottom_text.length].sort()[1]

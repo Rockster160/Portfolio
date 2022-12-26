@@ -28,11 +28,23 @@ import { dash_colors, text_height } from "../vars"
     data: {
       lines: localStorage.getItem("broker_logger")?.split("\n") || [],
     },
+    refreshInterval: Time.msUntilNextDay(),
+    reloader: function() {
+      var cell = this
+      cell.refreshInterval = Time.msUntilNextDay()
+      if (cell.refreshInterval < Time.hours(23)) { return }
+      let date = (new Date).toDateString()
+
+      cell.data.lines.push(Text.center(`  ${date}  `, null, "-"))
+      cell.data.lines = cell.data.lines.slice(-100)
+      renderLines()
+      localStorage.setItem("broker_logger", cell.data.lines.join("\n"))
+    },
     onload: function() {
       this.ws = new CellWS(this,
         Server.socket("AgentsChannel", function(msg) {
           // Catch errors, too?
-          let agent = Text.color(dash_colors.orange, msg.log.agent.split(", ").slice(-1))
+          let agent = Text.color(dash_colors.orange, msg.log.agent.split(", ").slice(-1)[0])
           if (msg.log.agent == "Murton, Brendan") {
             agent = Text.color(dash_colors.green, "B")
           } else if (msg.log.agent == "Nicholls, Rocco") {
