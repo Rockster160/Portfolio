@@ -18,8 +18,8 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
   }
 
   let battery_color_scale = ColorGenerator.colorScale({
-    "#AC3232": 0,
-    "#FBF236": 60,
+    "#AC3232": 40,
+    "#FBF236": 70,
     "#99E550": 100,
   })
 
