@@ -24,6 +24,16 @@ export let dash_colors = {
   grey:   "#8B9BB4",
 }
 
+export let scaleVal = function(value, f1, f2, t1, t2) {
+  var tr = t2 - t1
+  var fr = f2 - f1
+
+  return (value - f1) * tr / fr + t1
+}
+export let clamp = function(a, b, c) {
+  return [a, b, c].sort(function(a, b) { return a - b })[1]
+}
+
 export let temp_scale = ColorGenerator.colorScale({
   "#5B6EE1": 5,
   "#639BFF": 32,

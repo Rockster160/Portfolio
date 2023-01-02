@@ -28,6 +28,19 @@ class WebhooksController < ApplicationController
     head :no_content
   end
 
+  def battery
+    return head :no_content unless user_signed_in? && current_user.admin?
+
+    data = params.slice(:Phone, :iPad, :Watch, :Pencil)
+    json = DataStorage[:device_battery] || {}
+    new_data = json.merge(data)
+    DataStorage[:device_battery] = new_data
+
+    ActionCable.server.broadcast("device_battery_channel", DataStorage[:device_battery])
+
+    head :created
+  end
+
   def local_data
     return head :no_content unless user_signed_in? && current_user.admin?
 

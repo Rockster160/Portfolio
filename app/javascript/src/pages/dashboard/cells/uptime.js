@@ -1,7 +1,7 @@
 import { Text } from "../_text"
 import { Time } from "./_time"
 import { ColorGenerator } from "./color_generator"
-import { dash_colors } from "../vars"
+import { dash_colors, scaleVal } from "../vars"
 
 (function() {
   let cell
@@ -63,13 +63,6 @@ import { dash_colors } from "../vars"
     for (let [name, data] of Object.entries(cell.data.load_data || {})) {
       mixed[name] = mixed[name] || {}
       mixed[name] = { ...mixed[name], ...data }
-    }
-
-    let scaleVal = function(value, f1, f2, t1, t2) {
-      var tr = t2 - t1
-      var fr = f2 - f1
-
-      return (value - f1) * tr / fr + t1
     }
 
     let batteryScale = function(val, min, max) {

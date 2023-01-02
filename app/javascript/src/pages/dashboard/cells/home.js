@@ -1,7 +1,7 @@
 import { Time } from "./_time"
 import { Text } from "../_text"
 import { ColorGenerator } from "./color_generator"
-import { dash_colors, beep } from "../vars"
+import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
 (function() {
   var cell = undefined
@@ -15,6 +15,21 @@ import { dash_colors, beep } from "../vars"
       clearInterval(flashing)
       flashing = undefined
     }
+  }
+
+  let battery_color_scale = ColorGenerator.colorScale({
+    "#AC3232": 0,
+    "#FBF236": 60,
+    "#99E550": 100,
+  })
+
+  let batteryIcon = function(name, icon) {
+    let val = cell.data.device_battery[name]
+    if (!val) { return Text.color(dash_colors.grey, icon + "?") }
+    let char = clamp(Math.round(scaleVal(val, 0, 100, 0, 7)), 0, 7)
+    let level = "▁▂▃▄▅▆▇█"[char]
+    let battery_color = battery_color_scale(val).hex
+    return icon + Text.color(battery_color, level)
   }
 
   let renderLines = function() {
@@ -65,7 +80,17 @@ import { dash_colors, beep } from "../vars"
       lines.push(Text.center([name, current, goal, on].join(" ")))
     })
 
-    lines.push("")
+    let battery_icons = {
+      Phone:  "[ico ti ti-fa-mobile_phone]",
+      Watch:  "[ico ti ti-oct-watch]",
+      iPad:   "[ico ti ti-mdi-tablet_ipad]",
+      Pencil: "[ico ti ti-mdi-pencil]",
+    }
+    let battery_line = []
+    for (let [name, icon] of Object.entries(battery_icons)) {
+      battery_line.push(batteryIcon(name, icon))
+    }
+    lines.push(Text.center(battery_line.join(" ")))
 
     if (cell.data.amz_updates) {
       cell.data.amz_updates.forEach(function(order, idx) {
@@ -137,6 +162,20 @@ import { dash_colors, beep } from "../vars"
       })
     )
     cell.amz_socket.send({ action: "request" })
+    cell.device_battery_socket = new CellWS(
+      cell,
+      Server.socket("DeviceBatteryChannel", function(msg) {
+        this.flash()
+
+        if (msg.Phone) { cell.data.device_battery.Phone = msg.Phone }
+        if (msg.iPad) { cell.data.device_battery.iPad = msg.iPad }
+        if (msg.Watch) { cell.data.device_battery.Watch = msg.Watch }
+        if (msg.Pencil) { cell.data.device_battery.Pencil = msg.Pencil }
+
+        renderLines()
+      })
+    )
+    cell.device_battery_socket.send({ action: "request" })
 
     cell.garage_socket = new CellWS(
       cell,
@@ -200,6 +239,7 @@ import { dash_colors, beep } from "../vars"
     flash: false,
     data: {
       sound: true,
+      device_battery: {},
     },
     onload: subscribeWebsockets,
     reloader: function() {
@@ -208,11 +248,13 @@ import { dash_colors, beep } from "../vars"
     },
     started: function() {
       cell.amz_socket.reopen()
+      cell.device_battery_socket.reopen()
       cell.nest_socket.reopen()
       cell.garage_socket.reopen()
     },
     stopped: function() {
       cell.amz_socket.close()
+      cell.device_battery_socket.close()
       cell.nest_socket.close()
       cell.garage_socket.close()
     },
