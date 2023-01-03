@@ -85,7 +85,7 @@ class Jarvis
   MY_NUMBER = "3852599640"
 
   def self.trigger(trigger_data)
-    ::JarvisTriggerWorker.perform_async(trigger_data.stringify_keys)
+    ::JarvisTriggerWorker.perform_async(trigger_data.to_json)
   end
 
   def self.execute_trigger(trigger_data)
