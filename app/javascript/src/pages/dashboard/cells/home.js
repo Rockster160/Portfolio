@@ -20,13 +20,13 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
   let battery_color_scale = ColorGenerator.colorScale({
     "#AC3232": 40,
     "#FBF236": 70,
-    "#99E550": 100,
+    "#99E550": 96,
   })
 
   let batteryIcon = function(name, icon) {
     let val = cell.data.device_battery[name]
     if (!val) { return Text.color(dash_colors.grey, icon + "?") }
-    let char = clamp(Math.round(scaleVal(val, 0, 100, 0, 7)), 0, 7)
+    let char = clamp(Math.round(scaleVal(val, 5, 95, 0, 7)), 0, 7)
     let level = "▁▂▃▄▅▆▇█"[char]
     let battery_color = battery_color_scale(val).hex
     return icon + Text.color(battery_color, level)
