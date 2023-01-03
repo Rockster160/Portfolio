@@ -17,13 +17,13 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     }
   }
 
-  let battery_color_scale = ColorGenerator.colorScale(function() {
+  let battery_color_scale = ColorGenerator.colorScale((function() {
     let colors = {}
     colors[dash_colors.red]    = 40
     colors[dash_colors.yellow] = 70
     colors[dash_colors.green]  = 96
     return colors
-  })
+  })())
 
   let batteryIcon = function(name, icon) {
     let val = cell.data.device_battery[name]
