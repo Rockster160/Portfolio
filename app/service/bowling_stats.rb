@@ -51,6 +51,10 @@ class BowlingStats
     end
   end
 
+  def strike_points(bowler)
+    frames(bowler).where(strike: true).group_by(&:strike_point).transform_values(&:count)
+  end
+
   def frames(bowler)
     if @set.present?
       bowler.frames.joins(:set).where(bowling_sets: { id: @set.id })

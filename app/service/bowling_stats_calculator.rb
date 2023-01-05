@@ -4,6 +4,7 @@ class BowlingStatsCalculator
     bowlers = league.bowlers.ordered.where(total_games: 1..)
     stats = BowlingStats.new(league, set)
     missed_drinks = stats.missed_drink_frames
+    strike_points = [:pocket, :brooklyn, :other].map(&:to_s)
 
     @stats = {
       "Team Drink Frames": [[league.team_name, stats.strike_count_frames.length]],
@@ -11,6 +12,10 @@ class BowlingStatsCalculator
       "Ten Pins": bowlers.map { |bowler|
         pickup = stats.pickup(bowler, [10])
         [bowler.name, "#{pickup[0]}/#{pickup[1]}", stats.percent(*pickup)]
+      },
+      "Strike Point": [[nil, *strike_points.map(&:titleize)]] + bowlers.map { |bowler|
+        bowler_points = stats.strike_points(bowler)
+        [bowler.name, *strike_points.map { |point| bowler_points[point == "other" ? nil : point].to_i }]
       },
       "Strike Chance": bowlers.map { |bowler|
         strike_data = stats.pickup(bowler, nil)
