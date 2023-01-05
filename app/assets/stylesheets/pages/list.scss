@@ -183,7 +183,7 @@
       border-radius: 5px;
       background: $blue-l5;
       padding: 15px 40px 15px 10px;
-      padding-left: 25px; // Make space for draggable thing
+      padding-left: 25px; // Make space for draggable handle
       color: $text-color;
       text-decoration: none;
 
@@ -251,11 +251,14 @@
           background: $blue-d3;
         }
       }
-      input[type=checkbox]:checked + label {
-        background: pink;
 
-        .list-item-access {
-          color: red;
+      &:not(.survey-questions) {
+        input[type=checkbox]:checked + label {
+          background: pink;
+
+          .list-item-access {
+            color: red;
+          }
         }
       }
       .list-item-options {
