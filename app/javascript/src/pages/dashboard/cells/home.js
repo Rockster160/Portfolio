@@ -20,17 +20,22 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
   let battery_color_scale = ColorGenerator.colorScale((function() {
     let colors = {}
     colors[dash_colors.red]    = 30
-    // colors[dash_colors.yellow] = 60
+    colors[dash_colors.yellow] = 50
     colors[dash_colors.green]  = 95
     return colors
   })())
 
   let batteryIcon = function(name, icon) {
-    let val = cell.data.device_battery[name]
+    let data = cell.data.device_battery[name]
+    let val = data.val
     if (!val) { return Text.color(dash_colors.grey, icon + "?") }
     let char = clamp(Math.round(scaleVal(val, 10, 90, 0, 7)), 0, 7)
     let level = "▁▂▃▄▅▆▇█"[char]
+    let reported_at = Time.at(data.time)
     let battery_color = battery_color_scale(val).hex
+    if (Time.now() - reported_at > Time.hours(12)) {
+      battery_color = dash_colors.grey
+    }
     return icon + Text.color(battery_color, level)
   }
 
@@ -90,6 +95,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     }
     let battery_line = []
     for (let [name, icon] of Object.entries(battery_icons)) {
+      // Check last updated
       battery_line.push(batteryIcon(name, icon))
     }
     lines.push(Text.center(battery_line.join(" ")))

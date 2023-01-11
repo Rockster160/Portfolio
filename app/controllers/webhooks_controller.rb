@@ -31,7 +31,9 @@ class WebhooksController < ApplicationController
   def battery
     return head :no_content unless user_signed_in? && current_user.admin?
 
-    data = params.slice(:Phone, :iPad, :Watch, :Pencil)
+    data = params.slice(:Phone, :iPad, :Watch, :Pencil).transform_values { |v|
+      { val: v, time: Time.current.to_i }
+    }
     json = DataStorage[:device_battery] || {}
     new_data = json.merge(data)
     DataStorage[:device_battery] = new_data
