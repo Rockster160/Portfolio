@@ -1,6 +1,6 @@
 import { Text } from "../_text"
 import { Time } from "./_time"
-import { shiftTempToColor, dash_colors } from "../vars"
+import { shiftTempToColor, dash_colors, single_width } from "../vars"
 
 (function() {
   let cell = undefined
@@ -35,7 +35,13 @@ import { shiftTempToColor, dash_colors } from "../vars"
 
   let renderLines = function() {
     let lines = [], data = cell.data.car
-    lines.push(cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "")
+    let topchar = cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "  "
+    let topline = topchar + " ".repeat(single_width - 2)
+    if (data.charging?.active) {
+      lines.push(topline)
+    } else {
+      lines.push(Text.bgColor(dash_colors.red, topline))
+    }
 
     let status_pieces = []
     if (data.climate?.current) {

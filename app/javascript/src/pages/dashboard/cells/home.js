@@ -27,6 +27,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
   let batteryIcon = function(name, icon) {
     let data = cell.data.device_battery[name]
+    if (!data) { return "" }
     let val = data.val
     if (!val) { return Text.color(dash_colors.grey, icon + "?") }
     let char = clamp(Math.round(scaleVal(val, 10, 90, 0, 7)), 0, 7)
