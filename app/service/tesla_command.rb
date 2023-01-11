@@ -126,6 +126,7 @@
       charge: data.dig(:charge_state, :battery_level),
       miles: data.dig(:charge_state, :battery_range)&.floor,
       charging: {
+        state: data.dig(:charge_state, :charging_state),
         active: data.dig(:charge_state, :charging_state) != "Complete", # FIXME
         speed: data.dig(:charge_state, :charge_rate),
         eta: data.dig(:charge_state, :minutes_to_full_charge),
