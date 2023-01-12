@@ -9,14 +9,13 @@ class Jarvis::Bedtime < Jarvis::Action
 
     before_bed = []
     if @user.default_list.list_items.any?
-      before_bed << "Still todo:\n  #{@user.default_list.list_items.join("  \n")}"
+      before_bed << "Still todo:\n  #{@user.default_list.ordered_items.pluck(:name).join("  \n")}"
     end
     # Check if garage is open
     # Check if Tesla is charging
     SmsWorker.perform_async(Jarvis::MY_NUMBER, before_bed.join("\n")) if before_bed.any?
 
-    # No response- an sms is sent
-    return true
+    return before_bed.any? ? "You may still need to close up shop, sir." : "Good night, sir."
   end
 
   def valid_words?
