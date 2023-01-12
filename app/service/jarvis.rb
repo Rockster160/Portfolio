@@ -143,6 +143,7 @@ class Jarvis
     [
       Jarvis::Log,            # √
       Jarvis::ScheduleParser, # √
+      Jarvis::Bedtime,        # -- integration
       Jarvis::Navigate,       # -- integration
       Jarvis::List,           # √
       Jarvis::Printer,        # -- integration
