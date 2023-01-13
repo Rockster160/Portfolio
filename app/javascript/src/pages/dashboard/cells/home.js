@@ -36,6 +36,8 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     let battery_color = battery_color_scale(val).hex
     if (Time.now() - reported_at > Time.hours(12)) {
       battery_color = dash_colors.grey
+    } else if (val == 100) {
+      battery_color = dash_colors.rocco
     }
     return icon + Text.color(battery_color, level)
   }
