@@ -60,6 +60,12 @@ $(document).ready(function() {
     return parents.reverse()
   }
 
+  let toggleCronInput = function() {
+    $(".cron-input").toggleClass("hidden", $(".cron-input-select").val() != "")
+  }
+  $(".cron-input-select").change(toggleCronInput)
+  toggleCronInput()
+
   let parentTokens = function(item) {
     // Does not include current token
     return itemParents(item).slice(0, -1).map(parent => parent.querySelector(".token").innerText)

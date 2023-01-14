@@ -30,8 +30,16 @@
         <%= link_to "Run", [:run, :jil, @task], class: "btn run-task", remote: true, method: :post if @task.persisted? %>
         <%= f.submit "Save", class: "btn save-task pull-right" %>
         <div class="flex">
-          <%= f.select :trigger, options_for_select(JarvisTask.triggers.collect { |trigger, _| [trigger.titleize, trigger] }, @task.trigger), include_blank: "Cron" %>
-          <%= f.text_field :cron, placeholder: "min hr day month wday" %>
+          <%= f.select(
+            :trigger,
+            options_for_select(
+              JarvisTask.triggers.collect { |trigger, _| [trigger.titleize, trigger] },
+              @task.trigger
+            ),
+            { include_blank: "Cron" },
+            { class: "cron-input-select" }
+          ) %>
+          <%= f.text_field :cron, placeholder: "min hr day month wday", class: "cron-input" %>
         </div>
       <% end %>
     </div>
