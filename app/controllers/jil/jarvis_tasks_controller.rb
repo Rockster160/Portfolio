@@ -63,7 +63,7 @@ class Jil::JarvisTasksController < ApplicationController
       :tasks,
     ).tap { |whitelist|
       if whitelist[:cron].present?
-        whitelist[:next_trigger_at] = Time.at(Fugit::Cron.parse(whitelist[:cron]).next_time.to_i)
+        whitelist[:next_trigger_at] = CronParse.next(whitelist[:cron])
       else
         whitelist[:next_trigger_at] = nil
       end

@@ -15,7 +15,7 @@ class Jarvis::Execute
     @test_mode = data.delete(:test_mode)
     # Can call another Task, but carry @ctx (especially i)
     @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil, current_token: nil }
-    task.next_trigger_at = Time.at(Fugit::Cron.parse(task.cron).next_time.to_i) if task.cron.present?
+    task.next_trigger_at = CronParse.next(task.cron) if task.cron.present?
     task.update(last_trigger_at: Time.current)
 
     task.tasks.each_with_index do |task_block, idx|
