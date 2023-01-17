@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2022_10_31_034909) do
+ActiveRecord::Schema.define(version: 2023_01_17_002631) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -482,7 +482,7 @@ ActiveRecord::Schema.define(version: 2022_10_31_034909) do
     t.integer "survey_id"
     t.text "text"
     t.integer "position"
-    t.integer "format"
+    t.integer "format", default: 0
     t.integer "score_split_question"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -516,6 +516,7 @@ ActiveRecord::Schema.define(version: 2022_10_31_034909) do
     t.boolean "randomize_answers", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "score_type", default: 0
   end
 
   create_table "user_lists", id: :serial, force: :cascade do |t|

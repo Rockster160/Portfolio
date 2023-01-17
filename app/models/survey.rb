@@ -6,6 +6,7 @@
 #  description       :text
 #  name              :text
 #  randomize_answers :boolean          default(TRUE)
+#  score_type        :integer          default("aggregate")
 #  slug              :text
 #  created_at        :datetime         not null
 #  updated_at        :datetime         not null
@@ -23,8 +24,8 @@ class Survey < ApplicationRecord
   before_save :set_slug
 
   enum score_type: {
-    aggregate:  0,
-    accumulate: 1,
+    aggregate:  0, # give a percentage of each result type
+    accumulate: 1, # a summation of each result type
   }
 
   def questions

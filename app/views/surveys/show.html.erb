@@ -3,11 +3,11 @@
 
 <%= form_for @survey, html: { class: "basic" } do |f| %>
   <% @survey.survey_questions.order(:position).each_with_index do |question, q_idx| %>
-    <div class="skinny-container lists-index-container <%= 'hidaden' unless q_idx.zero? %>">
+    <div class="skinny-container lists-index-container">
       <div class="lists-title instructions"><%= question.text %></div>
       <div class="list-items survey-questions">
         <% base_params = "survey[questions][#{question.id}]" %>
-        <% question.survey_question_answers.shuffle.each do |answer| %>
+        <% question.answers.each do |answer| %>
           <div class="list-item-container">
             <% selected = false %>
             <% radio_id = "q#{question.id}a#{answer.id}" %>

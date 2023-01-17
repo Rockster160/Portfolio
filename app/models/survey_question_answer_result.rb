@@ -15,5 +15,6 @@
 class SurveyQuestionAnswerResult < ApplicationRecord
   belongs_to :survey
   belongs_to :survey_question
+  belongs_to :survey_question_answer
   belongs_to :survey_result
 end

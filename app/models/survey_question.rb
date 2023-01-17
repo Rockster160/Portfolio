@@ -3,7 +3,7 @@
 # Table name: survey_questions
 #
 #  id                   :integer          not null, primary key
-#  format               :integer
+#  format               :integer          default("select_one")
 #  position             :integer
 #  score_split_question :integer
 #  text                 :text
@@ -25,7 +25,7 @@ class SurveyQuestion < ApplicationRecord
     select_many: 1,
     scale:       2,
   }
-  enum score_split_question: {
+  enum score_split_question: { # What does this mean?
     whole:   0,
     divided: 1,
   }

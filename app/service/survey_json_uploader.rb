@@ -30,6 +30,7 @@
 #   }
 # }
 
+# Also SurveyUploader
 class SurveyJsonUploader
   def self.parse(json)
     new.parse(json)

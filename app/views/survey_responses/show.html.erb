@@ -11,7 +11,15 @@
     <div class="form-fields">
       <% results.each_with_index do |result, idx| %>
         <div class="form-field">
-          <h3 class="text-center"><%= result[:name] %>: <%= result[:percentage] %>%</h3>
+          <h3 class="text-center">
+            <%= result[:name] %>:
+            <% if result[:percentage] %>
+              <%= result[:percentage] %>%
+            <% end %>
+            <% if result[:amount] %>
+              <%= result[:amount] %>
+            <% end %>
+          </h3>
           <p class="instructions"><%= result[:description] %></p>
         </div>
 
