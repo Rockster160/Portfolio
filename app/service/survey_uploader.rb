@@ -10,15 +10,18 @@
 #     Answer2
 #       result: 2
 
-# Dir["lib/assets/surveys/*"].each { |survey_path| SurveyUploader.upload_by_lib(survey_path) }
+# TODO: Only upload if doesn't exist already
+# Dir["lib/assets/surveys/*"].each { |survey_path|
+#   SurveyUploader.upload_by_lib(survey_path, rm_if_exists: false)
+# }
 
 # Also SurveyJsonUploader
 class SurveyUploader
-  def self.upload_by_lib(filepath)
-    SurveyUploader.upload(File.read(filepath))
+  def self.upload_by_lib(filepath, rm_if_exists: true)
+    SurveyUploader.upload(File.read(filepath), rm_if_exists: rm_if_exists)
   end
 
-  def self.upload(data)
+  def self.upload(data, rm_if_exists: true)
     parsed = EasyYmlParser.parse(data) || {}
     survey_params = {
       description:       parsed.delete("description"),
@@ -28,6 +31,8 @@ class SurveyUploader
     groups = parsed.delete("Groups")
 
     parsed.each do |survey_name, survey_data|
+      return if !rm_if_exists && Survey.where(name: survey_name).any?
+
       survey = Survey.find_or_create_by(name: survey_name)
       survey.update(survey_params) if survey_params.any?
 
