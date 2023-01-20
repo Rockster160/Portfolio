@@ -2,12 +2,12 @@ import { Text } from "../_text"
 
 (function() {
   Cell.register({
-    title: "Grocery",
+    title: "Food",
     text: "Loading...",
     wrap: true,
     socket: Server.socket({
       channel: "ListJsonChannel",
-      channel_id: "list_1",
+      channel_id: "list_173",
     }, function(msg) {
       if (!msg.list_data) { return }
 
@@ -20,7 +20,7 @@ import { Text } from "../_text"
     },
     command: function(text) {
       text = text.trim()
-      if (text == "o") { return window.open("https://ardesian.com/lists/grocery", "_blank") }
+      if (text == "o") { return window.open("https://ardesian.com/lists/food", "_blank") }
 
       let data = { message: text }
       if (/^-\d+$/.test(text)) {
