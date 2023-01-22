@@ -1,5 +1,6 @@
 class RecipesController < ApplicationController
   before_action :authorize_user, :set_recipe
+  before_action :authorize_owner, only: [:edit, :update, :destroy]
 
   def index
     @recipes = Recipe.viewable(current_user).order(:created_at)
@@ -55,6 +56,12 @@ class RecipesController < ApplicationController
   end
 
   private
+
+  def authorize_owner
+    return if @recipe.user == current_user
+
+    redirect_to @recipe, alert: "You cannot make changes to this recipe."
+  end
 
   def set_recipe
     if params[:friendly_id].present?
