@@ -70,6 +70,12 @@
     when :honk, :horn
       @response = "Honking the horn"
       car.honk
+    when :seat
+      @response = "Turning on driver seat heater"
+      car.heat_driver
+    when :passenger
+      @response = "Turning on passenger seat heater"
+      car.heat_passenger
     when :navigate
       address = params[::Jarvis::Regex.address]&.squish.presence if params.match?(::Jarvis::Regex.address)
       address ||= address_book.contact_by_name(original_params)&.address

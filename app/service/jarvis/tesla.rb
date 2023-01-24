@@ -30,6 +30,8 @@ class Jarvis::Tesla < Jarvis::Action
       :window,
       :car,
       :tesla,
+      :passenger,
+      :seat,
       :update,
       :reload,
       :off,
