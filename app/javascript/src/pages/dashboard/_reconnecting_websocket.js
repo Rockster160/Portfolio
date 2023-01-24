@@ -205,7 +205,7 @@
         	return evt;
         };
 
-        this.open = function (reconnectAttempt) {
+        this.open = function(reconnectAttempt) {
             ws = new WebSocket(self.url, protocols || []);
             ws.binaryType = this.binaryType;
 

@@ -99,11 +99,18 @@ module PrinterApi
     )
 
     JSON.parse(res.body, symbolize_names: true)
+  rescue RestClient::Exception => err
+    if !DataStorage[:printer_needs_reset]
+      SlackNotifier.notify("Failed to request from PrinterControl#get(#{endpoint}):\nErr: #{err}\n```#{err.message}```")
+    end
+    DataStorage[:printer_needs_reset] = true
+    {}
   rescue JSON::ParserError => err
     if !DataStorage[:printer_needs_reset]
       SlackNotifier.notify("Failed to parse json from PrinterControl#get(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```")
     end
     DataStorage[:printer_needs_reset] = true
+    {}
   end
 
   def post(endpoint, params={})
@@ -117,10 +124,17 @@ module PrinterApi
 
     return {} if res.code == 204
     JSON.parse(res.body, symbolize_names: true)
+  rescue RestClient::Exception => err
+    if !DataStorage[:printer_needs_reset]
+      SlackNotifier.notify("Failed to request from PrinterControl#post(#{endpoint}, #{params}):\nErr: #{err}\n```#{err.message}```")
+    end
+    DataStorage[:printer_needs_reset] = true
+    {}
   rescue JSON::ParserError => err
     if !DataStorage[:printer_needs_reset]
       SlackNotifier.notify("Failed to parse json from PrinterControl#post(#{endpoint}, #{params}):\nCode: #{res.code}\n```#{res.body}```")
     end
     DataStorage[:printer_needs_reset] = true
+    {}
   end
 end

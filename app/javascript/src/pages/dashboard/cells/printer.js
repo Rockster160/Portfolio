@@ -98,7 +98,7 @@ import { dash_colors } from "../vars"
       Printer.post("printer").done(function(data) {
         cell.data.lastUpdated = Time.msSinceEpoch()
         var data = data
-        cell.data.printing = data.state.flags.printing
+        cell.data.printing = data.state?.flags?.printing
         if (cell.data.printing) {
           cell.data.prepping = false
           cell.data.interval_timer = cell.data.interval_timer || setInterval(function() {
@@ -116,13 +116,13 @@ import { dash_colors } from "../vars"
           cell.data.interval_timer = null
         }
 
-        var tool = Emoji.pen + Math.round(data.temperature.tool0.actual) + "°"
-        var bed = Emoji.printer + " " + Math.round(data.temperature.bed.actual) + "°"
-        if (data.temperature.tool0.target - 0.5 > data.temperature.tool0.actual) {
-          tool = tool + " (" + Math.round(data.temperature.tool0.target) + ")"
+        var tool = Emoji.pen + (Math.round(data.temperature?.tool0?.actual) || "?") + "°"
+        var bed = Emoji.printer + " " + (Math.round(data.temperature?.bed?.actual) || "?") + "°"
+        if (data.temperature?.tool0?.target - (0.5 > data.temperature?.tool0?.actual)) {
+          tool = tool + " (" + (Math.round(data.temperature?.tool0?.target) || "?") + ")"
         }
-        if (data.temperature.bed.target - 0.5 > data.temperature.bed.actual) {
-          bed = bed + " (" + Math.round(data.temperature.bed.target) + ")"
+        if (data.temperature?.bed?.target - (0.5 > data.temperature?.bed?.actual)) {
+          bed = bed + " (" + (Math.round(data.temperature?.bed?.target) || "?") + ")"
         }
         cell.data.temps = {
           tool: tool,

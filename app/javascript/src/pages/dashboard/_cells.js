@@ -301,6 +301,7 @@ CellWS = function(cell, init_data) {
   cell_ws.reload = false
   cell_ws.presend = init_data.presend
   // cell_ws.socket = new WebSocket(init_data.url)
+  if (!init_data.url) { return }
   cell_ws.socket = new ReconnectingWebSocket(init_data.url)
 
   cell_ws.socket.onopen = function() {
