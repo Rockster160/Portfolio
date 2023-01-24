@@ -13,7 +13,9 @@ class JarvisController < ApplicationController
 
     response = Jarvis.command(current_user, msg)
     list, item = response.split("\n").first(2)
-    if msg.downcase.starts_with?("remove")
+    if item.blank?
+      words = list
+    elsif msg.downcase.starts_with?("remove")
       words = "Removed #{item} from #{list}"
     else
       words = "Added #{item} to #{list}"
