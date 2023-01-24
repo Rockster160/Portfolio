@@ -32,7 +32,7 @@ import { dash_colors } from "../vars"
       Text.center([cell.data.temps.tool, cell.data.temps.bed].join(" | ")),
       "",
       Text.center(printer_data.filename || "[Job not found]"),
-      (printer_data.progress == 0 || printer_data.progress) ? Text.progressBar(printer_data.progress, { post_text: Math.round(printer_data.progress) + "%"}) : "",
+      (printer_data.progress == 0 || printer_data.progress) ? Text.progressBar(printer_data.progress) : "",
       paddedLineFromData("ETR", printer_data.eta ? Time.duration(printer_data.eta) : ""),
       paddedLineFromData("Current", printer_data.time ? Time.duration(printer_data.time) : ""),
       paddedLineFromData("Est", printer_data.estimated ? Time.duration(printer_data.estimated) : ""),

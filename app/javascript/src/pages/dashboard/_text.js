@@ -121,35 +121,43 @@ Text.animate = function(text) {
 }
 Text.progressBar = function(percent, opts) {
   opts = opts || {}
+  opts.width         = (opts.width || single_width)
   opts.open_char     = Text.animate(opts.hasOwnProperty("open_char") ? opts.open_char : "[")
   opts.progress_char = Text.animate(opts.hasOwnProperty("progress_char") ? opts.progress_char : "=")
   opts.current_char  = Text.animate(opts.hasOwnProperty("current_char") ? opts.current_char : ">")
   opts.empty_char    = Text.animate(opts.hasOwnProperty("empty_char") ? opts.empty_char : " ")
   opts.close_char    = Text.animate(opts.hasOwnProperty("close_char") ? opts.close_char : "]")
-  opts.post_text     = opts.post_text || ""
-  opts.width = (opts.width || single_width)
+  opts.post_text     = opts.hasOwnProperty("post_text") ? opts.post_text : (function(pc) {
+    return (Math.floor(pc) < 100 ? " " : "") + Math.floor(pc) + "%"
+  })(percent)
 
-  if (percent <= 1) { opts.current_char = opts.empty_char }
-  if (percent >= 99) { opts.current_char = opts.progress_char }
+  const clamp = (num, min, max) => Math.min(Math.max(num, min), max)
+  percent = clamp(percent, 0, 100)
+
+  // In cases of animate, these should use the length of the visible char, otherwise length of the char
   if (opts.open_char) { opts.width -= 1 }
-  if (opts.current_char) { opts.width -= 1 }
   if (opts.close_char) { opts.width -= 1 }
-  if (opts.post_text) {
-    opts.post_text = " " + opts.post_text
-    opts.width -= opts.post_text.length
-  }
+  if (opts.post_text) { opts.width -= opts.post_text.length }
 
-  var per_px = (100 / opts.width)
-  var progress = Math.round(percent / per_px)
-  progress = progress > 0 ? progress : 0
-  var remaining = opts.width - progress
-  remaining = remaining > 0 ? remaining : 0
+  // 1 Extra state for empty, since there is both empty and only current char
+  var per_px = 100 / (opts.width + (opts.current_char ? 1 : 0))
+  var progress_chars = Math.floor(percent / per_px)
+  if (progress_chars == 0) {
+    opts.current_char = ""
+  }
+  if (percent >= 100) {
+    progress_chars = opts.width
+    opts.current_char = ""
+  }
+  opts.width -= opts.current_char.length || 0
+  progress_chars = clamp(progress_chars - opts.current_char.length, 0, opts.width)
+  var remaining_chars = clamp(opts.width - progress_chars, 0, opts.width)
 
   return [
     opts.open_char,
-    opts.progress_char.repeat(progress),
+    opts.progress_char.repeat(progress_chars),
     opts.current_char,
-    opts.empty_char.repeat(remaining),
+    opts.empty_char.repeat(remaining_chars),
     opts.close_char,
     opts.post_text,
   ].join("")
