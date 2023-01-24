@@ -13,6 +13,9 @@
     <div class="important-list-items"></div>
     <% @tasks.each do |task| %>
       <div class="list-item-container" data-list-id="<%= task.id %>">
+        <div class="list-item-config">
+          <%= content_tag :div, task.humanized_schedule, class: "category" %>
+        </div>
         <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>
         <a href="<%= edit_jil_jarvis_task_path(task) %>" class="list-item">
           <span class="item-name"><%= task.name.titleize %></span>

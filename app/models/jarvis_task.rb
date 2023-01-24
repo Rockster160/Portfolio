@@ -31,4 +31,10 @@ class JarvisTask < ApplicationRecord
     integration:       8,
     failed_task:       9,
   }
+
+  def humanized_schedule
+    return trigger.titleize if trigger.present?
+
+    cron
+  end
 end
