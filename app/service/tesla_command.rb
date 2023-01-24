@@ -83,10 +83,11 @@
         @response = "I can't find #{original_params.squish}"
       end
     when :temp
+      temp = params.to_s[/\d+/]
       temp = 82 if params.to_s.match?(/\b(hot|heat|high)\b/)
       temp = 59 if params.to_s.match?(/\b(cold|cool|low)\b/)
-      @response = "Car temp set to #{params.to_i}"
-      car.set_temp(params.to_i)
+      @response = "Car temp set to #{temp.to_i}"
+      car.set_temp(temp.to_i)
     when :cool
       @response = "Car temp set to 59"
       car.set_temp(59)
