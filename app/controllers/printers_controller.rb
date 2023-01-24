@@ -4,6 +4,7 @@ class PrintersController < ApplicationController
   before_action :verify_command
 
   def control
+    return render json: {}
     res = (
       if params[:args].present?
         PrinterApi.send(params[:command], params[:args])
