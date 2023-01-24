@@ -9,7 +9,7 @@ class Jarvis::Printer < Jarvis::Action
 
     response = PrinterCommand.command(@msg)
 
-    return response.presence || true # Even if no response is returned, still return true since it did stuff
+    return response.presence || "Sent to Printer"
   end
 
   def valid_words?

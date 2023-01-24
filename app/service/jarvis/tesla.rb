@@ -13,7 +13,7 @@ class Jarvis::Tesla < Jarvis::Action
       TeslaCommandWorker.perform_in(3.seconds, :update.to_s, nil, false) # to_s because Sidekiq complains
     end
 
-    return response.presence || true # Even if no response is returned, still return true since it did stuff
+    return response.presence || "Sent to Tesla"
   end
 
   def valid_words?

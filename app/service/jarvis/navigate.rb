@@ -9,7 +9,7 @@ class Jarvis::Navigate < Jarvis::Action
 
     response = TeslaCommand.command(:navigate, parse_params)
 
-    return response.presence || true # Even if no response is returned, still return true since it did stuff
+    return response.presence || "Sent to Tesla"
   end
 
   def valid_words?

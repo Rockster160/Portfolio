@@ -10,7 +10,7 @@ class Jarvis::ScheduleParser < Jarvis::Action
     )
     @response = "I'll #{Jarvis::Text.rephrase(@remaining_words)} #{natural_time}"
 
-    return @response.presence || true # Even if no response is returned, still return true since it did stuff
+    return @response.presence || "Sent to Schedule"
   end
 
   def natural_time

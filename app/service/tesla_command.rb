@@ -32,8 +32,9 @@
 
     case cmd.to_sym
     when :update, :reload
+      ActionCable.server.broadcast "tesla_channel", format_data(car.vehicle_data)
       @response = "Updating car cell"
-      return ActionCable.server.broadcast "tesla_channel", format_data(car.vehicle_data)
+      return @response
     when :off, :stop
       @response = "Stopping car"
       car.off_car
@@ -76,6 +77,7 @@
 
       if address.present?
         @response = "Navigating to #{original_params.squish}"
+        car.start_car
         car.navigate(address)
       else
         @response = "I can't find #{original_params.squish}"

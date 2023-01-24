@@ -9,7 +9,7 @@ class Jarvis::Garage < Jarvis::Action
 
     response = GarageCommand.command(@msg)
 
-    return response.presence || true # Even if no response is returned, still return true since it did stuff
+    return response.presence || "Sent to garage"
   end
 
   def valid_words?

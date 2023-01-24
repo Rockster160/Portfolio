@@ -12,7 +12,7 @@ class Jarvis::Nest < Jarvis::Action
       NestCommandWorker.perform_in(10.seconds, :update.to_s) # to_s because Sidekiq complains
     end
 
-    return response.presence || true # Even if no response is returned, still return true since it did stuff
+    return response.presence || "Sent to Nest"
   end
 
   def valid_words?
