@@ -44,3 +44,4 @@ app/assets/config/manifest.js
 node_modules/.yarn-integrity
 
 runner.rb
+gitignore*
