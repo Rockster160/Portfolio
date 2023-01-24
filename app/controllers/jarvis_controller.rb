@@ -12,9 +12,15 @@ class JarvisController < ApplicationController
     end
 
     response = Jarvis.command(current_user, msg)
+    list, item = response.split("\n").first(2)
+    if msg.downcase.starts_with?("remove")
+      words = "Removed #{item} from #{list}"
+    else
+      words = "Added #{item} to #{list}"
+    end
 
     if @responding_alexa
-      render json: alexa_response(response)
+      render json: alexa_response(words)
     else
       render plain: response
     end
