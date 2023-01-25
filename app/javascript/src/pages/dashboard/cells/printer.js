@@ -21,6 +21,14 @@ import { dash_colors } from "../vars"
     return Text.justify(pad + str + ": ", duration + pad)
   }
 
+  let timestamp = function(elapsedTime) {
+    if (elapsedTime) {
+      return Time.duration(elapsedTime)
+    } else {
+      return "??:??:??"
+    }
+  }
+
   var renderLines = function() {
     if (!cell) { return cell.lines("Loading...") }
     if (!cell.data.temps.tool || cell.data.fail) {
@@ -28,18 +36,21 @@ import { dash_colors } from "../vars"
     }
     let printer_data = cell.data.printer_data || {}
 
-    var lines = [
-      Text.center([cell.data.temps.tool, cell.data.temps.bed].join(" | ")),
-      "",
-      Text.center(printer_data.filename || "[Job not found]"),
-      (printer_data.progress == 0 || printer_data.progress) ? Text.progressBar(printer_data.progress) : "",
-      paddedLineFromData("ETR", printer_data.eta ? Time.duration(printer_data.eta) : ""),
-      paddedLineFromData("Current", printer_data.time ? Time.duration(printer_data.time) : ""),
-      paddedLineFromData("Est", printer_data.estimated ? Time.duration(printer_data.estimated) : ""),
-      paddedLineFromData("Complete", printer_data.eta_ms ? Time.local(printer_data.eta_ms) : ""),
-      "",
-      Text.justify("", Text.color(dash_colors.orange, "[EXPIRED]")),
-    ]
+    let lines = []
+    lines.push(Text.center([cell.data.temps.tool, cell.data.temps.bed].join(" | ")))
+    lines.push("")
+    lines.push(Text.center(printer_data.filename || "[Job not found]"))
+
+    if (printer_data.filename) {
+      lines.push((printer_data.progress == 0 || printer_data.progress) ? Text.progressBar(printer_data.progress) : "")
+      lines.push(Text.center(timestamp(printer_data.elapsedTime) + " / " + timestamp(printer_data.timeLeft)))
+      lines.push(
+        Text.center(
+          "ETA: " + (printer_data.eta_ms ? Time.local(printer_data.eta_ms) : "??:??")
+          + " (" + timestamp(printer_data.estimated) + ")"
+        )
+      )
+    }
 
     cell.lines(lines)
 
@@ -102,9 +113,9 @@ import { dash_colors } from "../vars"
         if (cell.data.printing) {
           cell.data.prepping = false
           cell.data.interval_timer = cell.data.interval_timer || setInterval(function() {
-            cell.data.eta -= 1000
-            if (cell.data.eta < 0) { cell.data.eta = 0 }
-            cell.data.time += 1000
+            cell.data.printer_data.timeLeft -= 1000
+            if (cell.data.printer_data.timeLeft < 0) { cell.data.printer_data.timeLeft = 0 }
+            cell.data.printer_data.elapsedTime = (cell.data.printer_data.elapsedTime || 0) + 1000
             renderLines()
           }, 1000)
         }
@@ -140,11 +151,11 @@ import { dash_colors } from "../vars"
 
           printer_data.msSinceEpoch = Time.msSinceEpoch()
           printer_data.progress = (data.progress.printTime / data.job.estimatedPrintTime) * 100
-          printer_data.eta = data.progress.printTimeLeft * 1000
-          printer_data.time = data.progress.printTime * 1000
+          printer_data.timeLeft = data.progress.printTimeLeft * 1000
+          printer_data.elapsedTime = data.progress.printTime * 1000
           printer_data.estimated = data.job.estimatedPrintTime * 1000
           printer_data.filename = data.job.file.display.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "")
-          printer_data.eta_ms = data.progress.completion == 100 ? printer_data.eta_ms : printer_data.now + printer_data.eta
+          printer_data.eta_ms = data.progress.completion == 100 ? printer_data.elapsedTime : printer_data.msSinceEpoch + printer_data.timeLeft
 
           cell.data.printer_data = printer_data
           renderLines()
