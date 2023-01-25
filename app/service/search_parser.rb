@@ -1,40 +1,81 @@
 module SearchParser
   module_function
 
-  def call(str)
+  def call(str, delimiters={})
     str = str.dup
     tr = Tokenizer.new(str)
-    tr.tokenize!(str, /\\\"/)
-    tr.tokenize!(str, /".*?"/)
 
-    pieces = str.split(" ").map { |piece| tr.untokenize!(piece) }
-    pieces.each_with_object({}) do |piece, obj|
-      if piece.match?(/[\w"!]:[\w"]/)
-        key, val = piece.split(":")
-        obj[key.to_sym] ||= []
-        obj[key.to_sym] << (val.match?(/^".*?"$/) ? val[1..-2] : val)
-      else
-        obj[:words] ||= []
-        obj[:words] << (piece.match?(/^".*?"$/) ? piece[1..-2] : piece)
+    sorted_delims = delimiters.to_a.sort_by { |dk, d| -d.length }
+    tokenized_split(str, tr).each_with_object({}) { |piece, obj|
+      next if sorted_delims.find do |delim_key, delim|
+        next unless piece.include?(delim)
+        key, val = piece.split(delim, 2).map { |piece|
+          case tr.untokenize!(piece)
+          when /^".*?"$/ then piece[1..-2]
+          when /\(.*?\)/
+            tokenized_split(piece[1..-2]).map { |piece| SearchParser.call(piece, delimiters) }
+          else piece
+          end
+        }
+
+        obj[:props] ||= {}
+        delim_obj = obj[:props][delim_key] ||= {}
+
+        if key.blank?
+          delim_obj[:terms] ||= []
+          delim_obj[:terms] << val
+        else
+          delim_obj[:props] ||= {}
+          delim_obj[:props][key.to_sym] ||= []
+          delim_obj[:props][key.to_sym] << val
+        end
       end
-    end
+      # Missed all delims, so put into the default
+      obj[:terms] ||= []
+      obj[:terms] << (piece.match?(/^".*?"$/) ? piece[1..-2] : piece)
+    }
+  end
+
+  def tokenized_split(str, tr=nil)
+    str = str.dup
+    rebuild = !tr.nil?
+    tr ||= Tokenizer.new(str)
+    tr.tokenize!(str, /\\./)
+    tr.tokenize!(str, /".*?"/)
+    tr.tokenize!(str, /\(.*?\)/)
+
+    return str.split(/\s/) unless rebuild
+
+    str.split(/\s/).map { |piece| tr.untokenize!(piece) }
   end
 end
 
-# SearchParser.call("name:thing has:\"bigger string\" search each word !:bad")
+# reload!; ActionEvent.query('name:thing has:"bigger string" search each ~sorta word !bad notes!:z name::thing or:(includes:dog includes:cat)')
+# reload!; SearchParser.call(
+# 'name:thing has:"bigger string" search each ~sorta word !bad notes!:z name::thing or:(includes:dog includes:cat)'
+# )
+# 'name:thing has:"bigger string" search each ~sorta word !bad notes!:z name::thing or:(includes:dog includes:cat)'
 # {
-#   "name":  [
+#   name: [
 #     "thing"
 #   ],
-#   "has":   [
+#   has: [
 #     "bigger string"
 #   ],
-#   "words": [
+#   words: [
 #     "search",
 #     "each",
 #     "word"
 #   ],
-#   "!":     [
+#   "!": [
 #     "bad"
+#   ],
+#   or: [
+#     {
+#       includes: [
+#         "dog",
+#         "cat"
+#       ]
+#     }
 #   ]
 # }

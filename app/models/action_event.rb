@@ -18,15 +18,54 @@ class ActionEvent < ApplicationRecord
 
   before_save { self.timestamp ||= Time.current }
 
-  scope :search, ->(q) {
-    # Eventually this should use advanced search
-    # name:"Hello World"
-    # name:Workout notes:Parkour
-    where("event_name ILIKE :q OR notes ILIKE :q", q: "%#{q}%")
+  scope :search, ->(q) { ilike(event_name: "%#{q}%", notes: "%#{q}%") }
+  scope :name_search, ->(q) { ilike(event_name: "%#{q}%") }
+  scope :note_search, ->(q) { ilike(notes: "%#{q}%") }
+  scope :unsearch, ->(q) { not_ilike(event_name: "%#{q}%", notes: "%#{q}%") }
+  scope :unname_search, ->(q) { not_ilike(event_name: "%#{q}%") }
+  scope :unnote_search, ->(q) { not_ilike(notes: "%#{q}%") }
+  scope :query, ->(q) {
+    data = q.is_a?(Hash) ? q : SearchParser.call(
+      q,
+      or: "OR:",
+      not: "!",
+      contains: ":",
+      not_contains: "!:",
+      not_exact: "!::",
+      exact: "::",
+      similar: "~",
+    )
+
+    #   ~   - similar? (95% text match?)
+
+    built = all
+    data.dig(:terms)&.each { |word| built = built.search(word) }
+    data.dig(:props, :not)&.each { |word| built = built.unsearch(word) }
+
+    data.dig(:props, :contains, :terms)&.each { |word| built = built.search(word) }
+    data.dig(:props, :contains, :props, :name)&.each { |word| built = built.name_search(word) }
+    data.dig(:props, :contains, :props, :notes)&.each { |word| built = built.note_search(word) }
+    data.dig(:props, :not_contains, :terms)&.each { |word| built = built.unsearch(word) }
+    data.dig(:props, :not_contains, :props, :name)&.each { |word| built = built.unname_search(word) }
+    data.dig(:props, :not_contains, :props, :notes)&.each { |word| built = built.unnote_search(word) }
+
+    data.dig(:props, :exact, :terms)&.each { |word| built = built.ilike(event_name: word, notes: word) }
+    data.dig(:props, :exact, :props, :name)&.each { |word| built = built.ilike(event_name: word) }
+    data.dig(:props, :exact, :props, :notes)&.each { |word| built = built.ilike(notes: word) }
+    data.dig(:props, :not_exact, :terms)&.each { |word| built = built.not_ilike(event_name: word, notes: word) }
+    data.dig(:props, :not_exact, :props, :name)&.each { |word| built = built.not_ilike(event_name: word) }
+    data.dig(:props, :not_exact, :props, :notes)&.each { |word| built = built.not_ilike(notes: word) }
+
+    data.dig(:props, :or, :terms)&.each do |or_groups|
+      sql_chunks = or_groups.map { |or_group| unscoped.query(or_group).stripped_sql }
+      built = built.where("(#{sql_chunks.join(" OR ")})")
+    end
+    built
   }
-  scope :name_search, ->(q) {
-    where("event_name ILIKE :q", q: "%#{q}%")
-  }
+
+  def self.stripped_sql
+    all.to_sql.gsub("SELECT \"#{table_name}\".* FROM \"#{table_name}\" WHERE ", "")
+  end
 
   def timestamp=(str_stamp)
     return if str_stamp.blank?
