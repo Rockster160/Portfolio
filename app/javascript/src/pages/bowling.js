@@ -1077,9 +1077,20 @@ $(document).ready(function() {
   }
 
   findNextFrame = function(bowler) {
-    return bowler.find('.shot[data-shot-idx="0"]').filter(function() {
-      return !$(this).val()
-    }).first().parents(".frame")
+    return bowler.find(".frame").filter(function() {
+      let shot0 = $(this).find(".shot[data-shot-idx=0]").val()
+      if (shot0 == "") { return true }
+
+      let shot1 = $(this).find(".shot[data-shot-idx=1]").val()
+      if (shot0 != "X" && shot1 == "") { return true }
+
+      if ($(this).attr("data-frame") == "10") {
+        let shot2 = $(this).find(".shot[data-shot-idx=2]").val()
+        if (shot0 == "X" && shot2 == "") { return true  }
+        if (shot0 != "X" && shot1 == "/" && shot2 == "") { return true  }
+        // True means frame is NOT complete
+      }
+    }).first()
   }
 
   findCurrentFrame = function() {
@@ -1116,7 +1127,11 @@ $(document).ready(function() {
       return a_frame - b_frame
     }).first()
 
-    moveToThrow(findNextFrame(next_bowler).find(".shot").first())
+    let toThrow = findNextFrame(next_bowler).find(".shot").filter(function() {
+      return !$(this).val()
+    }).first() || findNextFrame(next_bowler).find(".shot").first()
+
+    moveToThrow(toThrow)
   }
 
   shotScore = function(toss) {
