@@ -159,7 +159,8 @@ class Jarvis
 
   def initialize(user, words)
     @user = user
-    @words = words.to_s
+    @words = NumberParser.parse(words.to_s)
+
     Time.zone = "Mountain Time (US & Canada)"
   end
 
