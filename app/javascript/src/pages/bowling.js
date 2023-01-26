@@ -76,6 +76,7 @@ $(document).ready(function() {
   if ($(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").length == 0) { return }
   let currentScorePush = null
   var inProgress = false
+  var lockTimer = false
   var pin_knock = undefined
   var pinTimer = undefined
   var timer_duration = 1000
@@ -232,7 +233,17 @@ $(document).ready(function() {
       target.parents(".pin-wrapper:not(.fallen-before)").toggleClass("fallen").trigger("pin:change")
     }
     return false
-  }).on("touchend", function(evt) {
+  }).on("touchstart, mousedown", function(evt) {
+    var target = $(evt.target)
+    if (target.hasClass("pin")) {
+      lockTimer = true
+      resetPinTimer()
+    }
+  }).on("touchend, mouseup", function(evt) {
+    if (lockTimer) {
+      lockTimer = false
+      resetPinTimer()
+    }
     var target = $(evt.target)
 
     if (target.hasClass("pin")) {
@@ -513,7 +524,7 @@ $(document).ready(function() {
 
   resetPinTimer = function() {
     clearTimeout(pinTimer)
-    if (!$(".timer-toggle").hasClass("active")) {
+    if (!$(".timer-toggle").hasClass("active") || lockTimer) {
       spinner.reset()
       return
     }
