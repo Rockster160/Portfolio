@@ -454,11 +454,17 @@ $(document).ready(function() {
     var toss = $(".shot.current")
     var shot_idx = shotIndex(toss)
 
+    // Reset all pins
+    $(".pin-wrapper").removeClass("fallen").removeClass("fallen-before")
     // Always knock the current pins down
     knockPinsForShot(toss, "fallen")
 
-    if (shot_idx == 1) {
-      if (currentTossAtIdx(0).val() != "X") {
+    if (shot_idx == 0) {
+      return // Don't do a full pin reset
+    } else if (shot_idx == 1) {
+      if (currentTossAtIdx(0).val() == "X") {
+        return // Don't do a full pin reset
+      } else {
         return knockPinsForShot(currentTossAtIdx(0), "fallen-before")
       }
     } else if (shot_idx == 2) {
