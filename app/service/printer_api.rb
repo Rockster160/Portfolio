@@ -81,7 +81,7 @@ module PrinterApi
     post(:tool, command: cmd, **opts)
   end
 
-  def tool(cmd, opts={})
+  def bed(cmd, opts={})
     post(:bed, command: cmd, **opts)
   end
 
