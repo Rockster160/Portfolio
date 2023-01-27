@@ -104,7 +104,7 @@ class Email < ApplicationRecord
       cid = Regexp.last_match(1)
       "src=\"#{retrieve_attachments&.dig(cid, :presigned_url)}\""
     end
-    open_links_in_new_tab = with_attach.gsub("<a ", "<a target=\"_blank\" ")
+    open_links_in_new_tab = with_attach.gsub(/\<a\s/, "<a target=\"_blank\" ")
 
     open_links_in_new_tab
   end
