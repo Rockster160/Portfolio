@@ -23,7 +23,7 @@
     if "#{cmd} #{params}".match?(/\b(unlock|open|lock|close|pop|vent)\b/)
       combine = "#{cmd} #{params}"
       direction = :open if combine.match?(/\b(unlock|open|pop)\b/)
-      direction = :close if combine.match?(/\b(lock|close)\b/)
+      direction = :close if combine.match?(/\b(lock|close|shut)\b/)
       cmd, params = combine.gsub(/\b(open|close|pop)\b/, "").squish.split(" ", 2)
     elsif cmd.to_i.to_s == cmd
       params = cmd.to_i

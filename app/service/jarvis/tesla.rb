@@ -38,6 +38,8 @@ class Jarvis::Tesla < Jarvis::Action
       :stop,
       :on,
       :start,
+      :close,
+      :shut,
       :boot,
       :trunk,
       :lock,

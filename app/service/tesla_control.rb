@@ -221,6 +221,8 @@ class TeslaControl
 
     state = JSON.parse(res.body, symbolize_names: true).dig(:response, :state)
     state == "online"
+  rescue RestClient::GatewayTimeout => err
+    return wake_up && retry
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response.code == 408
     return refresh && retry if err.response.code == 401
@@ -239,6 +241,8 @@ class TeslaControl
     )
 
     JSON.parse(res.body, symbolize_names: true).dig(:response)
+  rescue RestClient::GatewayTimeout => err
+    return wake_up && retry
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response.code == 408
     return refresh && retry if err.response.code == 401
@@ -260,6 +264,8 @@ class TeslaControl
 
     @refresh_token = DataStorage[:tesla_refresh_token] = json[:refresh_token]
     @access_token = DataStorage[:tesla_access_token] = json[:access_token]
+  rescue RestClient::GatewayTimeout => err
+    return wake_up && retry
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to auth Tesla:\nCode: #{res.code}\n```#{res.body}```")
   end
