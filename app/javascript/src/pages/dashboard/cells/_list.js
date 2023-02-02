@@ -1,7 +1,7 @@
 import { Text } from "../_text"
 
 export class ListCell {
-  constructor() {
+  constructor(list_name) {
     let cell = undefined
     let setList = async function(name) {
       cell.text("Loading...")
@@ -32,7 +32,7 @@ export class ListCell {
     }
 
     cell = Cell.register({
-      title: "TODO",
+      title: list_name,
       text: "Loading...",
       wrap: true,
       onload: function() {
