@@ -244,13 +244,14 @@ $(document).ready(function() {
       lockTimer = false
       resetPinTimer()
     }
+    if (evt.type == "touchend") { return }
     var target = $(evt.target)
 
     if (target.hasClass("pin")) {
       evt.preventDefault()
     }
   }).on("mousemove", function(evt) {
-    if (evt.which != 1) { return }
+    if (evt.which != 1) { return } // ?
 
     if ($(".pin:hover").length > 0) {
       evt.preventDefault()
