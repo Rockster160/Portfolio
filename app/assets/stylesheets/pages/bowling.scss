@@ -197,11 +197,28 @@
       &.invisi-frame {
         border: none;
       }
+      &.drink-frame {
+        border-color: gold;
+
+        input[type=text] {
+          border-color: gold;
+          color: gold;
+
+          &.current {
+            border-color: purple;
+          }
+        }
+      }
     }
 
     &.bowling-header .bowling-cell {
       height: auto;
       font-size: 12px;
+
+      &.drink-frame {
+        background: gold;
+        color: white;
+      }
     }
 
     .prev-scores {

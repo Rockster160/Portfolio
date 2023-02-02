@@ -794,6 +794,7 @@ $(document).ready(function() {
   }
 
   calcScores = function() {
+    detectDrinkFrames()
     var team_total = 0
     var team_hdcp = 0
     var frame_num = findCurrentFrame()
@@ -851,6 +852,24 @@ $(document).ready(function() {
     inProgress = findCurrentFrame() < 11
     if (findCurrentFrame() > 1 && !inProgress) {
       $(".bowling-form-btn").removeClass("hidden")
+    }
+  }
+
+  detectDrinkFrames = function() {
+    $(".drink-frame").removeClass("drink-frame")
+    if ($(".bowler:not(.absent, .skip)").length < 2) { return }
+
+    for (var i=1; i<10; i++) {
+      let frames = $(".bowler:not(.absent, .skip) .frame[data-frame=" + i + "]")
+      let drinkFrame = Array.from(frames).every(function(frame) {
+        return $(frame).find(".shot[data-shot-idx=0]").val() == "X"
+      })
+      if (drinkFrame) {
+        frames.addClass("drink-frame")
+        $(".bowling-header .bowling-cell:contains(" + i + ")").filter(function() {
+          return $(this).text() == String(i)
+        }).addClass("drink-frame")
+      }
     }
   }
 
