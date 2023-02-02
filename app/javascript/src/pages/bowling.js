@@ -79,7 +79,7 @@ $(document).ready(function() {
   var lockTimer = false
   var pin_knock = undefined
   var pinTimer = undefined
-  var timer_duration = 1000
+  var timer_duration = 800
   var spinner = new Spinner({
     size: 55,
     stroke: 5,
