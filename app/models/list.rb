@@ -24,6 +24,7 @@ class List < ApplicationRecord
 
   scope :important, -> { where(important: true) }
   scope :unimportant, -> { where.not(important: true) }
+  scope :by_param, ->(name) { where(parameterized_name: name.parameterize) }
 
   def self.find_and_modify(user, msg)
     return "User not found" if user.blank?
