@@ -474,7 +474,7 @@ $(document).ready(function() {
       return // Don't do a full pin reset
     } else if (shot_idx == 1) {
       if (currentTossAtIdx(0).val() == "X") {
-        return // Don't do a full pin reset
+        // DO do a full pin reset since we should have a full rack
       } else {
         return knockPinsForShot(currentTossAtIdx(0), "fallen-before")
       }
