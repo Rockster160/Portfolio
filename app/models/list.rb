@@ -2,13 +2,14 @@
 #
 # Table name: lists
 #
-#  id           :integer          not null, primary key
-#  description  :text
-#  important    :boolean          default(FALSE)
-#  name         :string(255)
-#  show_deleted :boolean
-#  created_at   :datetime
-#  updated_at   :datetime
+#  id                 :integer          not null, primary key
+#  description        :text
+#  important          :boolean          default(FALSE)
+#  name               :string(255)
+#  parameterized_name :text
+#  show_deleted       :boolean
+#  created_at         :datetime
+#  updated_at         :datetime
 #
 
 class List < ApplicationRecord
@@ -18,6 +19,8 @@ class List < ApplicationRecord
   has_many :users, through: :user_lists
 
   validates_presence_of :name
+
+  before_save -> { self.parameterized_name = name.parameterize }
 
   scope :important, -> { where(important: true) }
   scope :unimportant, -> { where.not(important: true) }
