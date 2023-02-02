@@ -10,7 +10,7 @@ export class ListCell {
       cell.list = (
         await fetch("https://ardesian.com/lists/" + name)
           .then(res => res.json())
-          .then(json => { return Array.isArray(json) ? json[0] : json })
+          .then(json => { return json })
       )
 
       cell.title(cell.list.name)

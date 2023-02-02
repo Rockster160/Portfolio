@@ -98,7 +98,7 @@ class ListsController < ApplicationController
   end
 
   def set_list
-    @list = current_user.lists.find_by(id: params[:id]) || current_user.lists.by_param(params[:id])
+    @list = current_user.lists.find_by(id: params[:id]) || current_user.lists.by_param(params[:id]).take
     @user_list = current_user.user_lists.find_by(list: @list)
 
     return if @list.present?
