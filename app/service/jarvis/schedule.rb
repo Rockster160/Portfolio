@@ -1,6 +1,13 @@
 module Jarvis::Schedule
   module_function
 
+  def output_schedule
+    Jarvis::Schedule.get_events.sort_by { |a| a[:scheduled_time] }.each { |a|
+      timestamp = Jarvis::Times.safe_date_parse(a[:scheduled_time]).strftime("%a, %_b %_d %_l:%M%P")
+      puts "\e[33m#{timestamp}\e[0m: \e[36m#{a[:command]}\e[0m"
+    }; nil
+  end
+
   def get_events
     DataStorage[:scheduled_events] || []
   end
