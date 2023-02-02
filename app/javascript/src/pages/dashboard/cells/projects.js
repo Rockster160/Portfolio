@@ -20,7 +20,7 @@ import { Text } from "../_text"
     },
     command: function(text) {
       text = text.trim()
-      if (text == "o") { return window.open("https://ardesian.com/lists/todo", "_blank") }
+      if (text == "o") { return window.open("https://ardesian.com/lists/projects", "_blank") }
 
       let data = { message: text }
       if (/^-\d+$/.test(text)) {
