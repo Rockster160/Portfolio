@@ -237,6 +237,10 @@ $(document).ready(function() {
       }
     }
     return false
+  }).on("contextmenu", function(evt) {
+    if ($(evt.target).hasClass("pin")) {
+      evt.preventDefault()
+    }
   }).on("touchend mouseup", function(evt) {
     if (lockTimer) {
       lockTimer = false
