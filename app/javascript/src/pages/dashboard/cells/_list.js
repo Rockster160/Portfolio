@@ -8,7 +8,7 @@ export class ListCell {
       cell.socket?.close()
 
       cell.list = (
-        await fetch("http://localhost:3141/lists/" + name)
+        await fetch("https://ardesian.com/lists/" + name)
           .then(res => res.json())
           .then(json => { return Array.isArray(json) ? json[0] : json })
       )
