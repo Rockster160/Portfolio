@@ -29,6 +29,7 @@ class Jarvis::Execute::Lists < Jarvis::Execute::Executor
   private
 
   def list_by(params)
-    user.lists.find_by(params)
+    # If searching by anything else, need to refactor ilike
+    user.lists.ilike(params).take
   end
 end

@@ -2,15 +2,15 @@ class ApplicationRecord < ActiveRecord::Base
   attr_accessor :new_attributes
   self.abstract_class = true
 
-  def self.ilike(hash)
-    where(build_query(hash, :ILIKE, :OR), *hash.values)
+  def self.ilike(hash, join=:OR)
+    where(build_query(hash, :ILIKE, join), *hash.values)
   end
 
-  def self.not_ilike(hash)
-    where(build_query(hash, "NOT ILIKE", :AND), *hash.values)
+  def self.not_ilike(hash, join=:AND)
+    where(build_query(hash, "NOT ILIKE", join), *hash.values)
   end
 
-  def self.build_query(hash, point, join_with="AND")
+  def self.build_query(hash, point, join_with=:AND)
     hash.map { |k, v| "#{table_name}.#{k} #{point} ?" }.join(" #{join_with} ")
   end
 
