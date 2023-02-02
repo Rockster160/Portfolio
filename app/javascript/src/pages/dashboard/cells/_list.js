@@ -36,7 +36,7 @@ export class ListCell {
       text: "Loading...",
       wrap: true,
       onload: function() {
-        setList("Todo")
+        setList(list_name)
       },
       reloader: function() {
         cell.socket?.send({ get: true })
