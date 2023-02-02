@@ -231,27 +231,37 @@ $(document).ready(function() {
     if (target.hasClass("pin")) {
       pin_knock = !target.parents(".pin-wrapper:not(.fallen-before)").hasClass("fallen")
       target.parents(".pin-wrapper:not(.fallen-before)").toggleClass("fallen").trigger("pin:change")
+      if (evt.type == "touchstart") {
+        lockTimer = true
+        resetPinTimer()
+      }
     }
     return false
-  }).on("touchstart, mousedown", function(evt) {
-    var target = $(evt.target)
-    if (target.hasClass("pin")) {
-      lockTimer = true
-      resetPinTimer()
-    }
-  }).on("touchend, mouseup", function(evt) {
+  }).on("touchend mouseup", function(evt) {
     if (lockTimer) {
       lockTimer = false
       resetPinTimer()
     }
-    if (evt.type == "touchend") { return }
+  }).on("touchend", function(evt) {
     var target = $(evt.target)
 
     if (target.hasClass("pin")) {
       evt.preventDefault()
     }
   }).on("mousemove", function(evt) {
-    if (evt.which != 1) { return } // ?
+    if (evt.which != 1) { // Left mouse is NOT held
+      if (lockTimer) {
+        lockTimer = false
+        resetPinTimer()
+      }
+      return
+    }
+    // Left click is held
+
+    if (!lockTimer && $(evt.target).hasClass("pin")) {
+      lockTimer = true
+      resetPinTimer()
+    }
 
     if ($(".pin:hover").length > 0) {
       evt.preventDefault()
