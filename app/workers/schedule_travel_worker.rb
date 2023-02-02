@@ -5,6 +5,7 @@ class ScheduleTravelWorker
   POST_OFFSET = 20.minutes
 
   def perform
+    ActionCable.server.broadcast("jarvis_channel", say: "ScheduleTravelWorker")
     calendar_data = LocalDataCalendarParser.call
     _date, events = calendar_data.first # First should always be "today"
     events = events.sort_by { |evt| evt[:start_time] || DateTime.new }
@@ -64,6 +65,7 @@ class ScheduleTravelWorker
 
     Jarvis::Schedule.cancel(*jids_to_remove)
     Jarvis::Schedule.schedule(*events_to_add)
+    ActionCable.server.broadcast("jarvis_channel", say: "STW: Add[#{events_to_add.map { |evt| evt[:words]}.join("][")}]")
   end
 
   def address_book
@@ -79,15 +81,15 @@ class ScheduleTravelWorker
       if event[:name].to_s.downcase.to_sym == :pt
         new_events.push(
           name: event[:name],
-          uid: event[:uid] + "reminder",
+          uid: event[:uid] + "reminder", # Adding extra chars so the uids are different,
           type: :pt,
-          words: "Remind me to start workout", # Adding an extra char so the uids are different,
+          words: "Remind me to start workout",
           user_id: 1,
           scheduled_time: event[:start_time],
         )
         new_events.push(
           name: event[:name],
-          uid: event[:uid] + "-workout", # Adding an extra char so the uids are different,
+          uid: event[:uid] + "-workout", # Adding extra chars so the uids are different,
           type: :pt,
           words: "Log workout PT",
           user_id: 1,
