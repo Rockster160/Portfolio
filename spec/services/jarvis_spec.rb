@@ -199,6 +199,7 @@ RSpec.describe Jarvis do
     actions.each do |action, data|
       data[:opts].each do |opt|
         it "can #{opt}" do
+          allow(tesla_control).to receive(:start_car)
           data[:others]&.each do |k, args|
             expect(tesla_control).to receive(k).with(args) if args
             expect(tesla_control).to receive(k) unless args
@@ -232,6 +233,7 @@ RSpec.describe Jarvis do
 
     specific_actions.each do |action, data|
       it "can #{action}" do
+        allow(tesla_control).to receive(:start_car)
         data[:stub]&.each do |k, args|
           expect(tesla_control).to receive(k).with(args) if args
           expect(tesla_control).to receive(k) unless args
@@ -414,26 +416,26 @@ RSpec.describe Jarvis do
     context "sending money" do
       specify {
         expect(::Venmo).to receive(:charge).with("8013497798", 10.0, "🐱")
-        expect(jarvis("venmo B $10 🐱")).to eq("Sending $10 to B")
+        expect(jarvis("venmo B $10 🐱")).to eq("Sending $10 to Brendan")
       }
       specify {
         expect(::Venmo).to receive(:charge).with("8013497798", 10.47, "bowling and pizza")
-        expect(jarvis("Venmo B $10.47 bowling and pizza")).to eq("Sending $10.47 to B")
+        expect(jarvis("Venmo B $10.47 bowling and pizza")).to eq("Sending $10.47 to Brendan")
       }
       specify {
         expect(::Venmo).to receive(:charge).with("8013497798", 10.47, "🎳 and 🍕")
-        expect(jarvis("Venmo B $10.47 🎳 and 🍕")).to eq("Sending $10.47 to B")
+        expect(jarvis("Venmo B $10.47 🎳 and 🍕")).to eq("Sending $10.47 to Brendan")
       }
       specify {
         expect(::Venmo).to receive(:charge).with("8013497798", 10.47, "🎳🍕🐱 food")
-        expect(jarvis("Venmo B $10.47 🎳🍕🐱 food")).to eq("Sending $10.47 to B")
+        expect(jarvis("Venmo B $10.47 🎳🍕🐱 food")).to eq("Sending $10.47 to Brendan")
       }
     end
 
     context "requesting money" do
       specify {
         expect(::Venmo).to receive(:charge).with("8013497798", -10.0, "🐱")
-        expect(jarvis("venmo request B $10 🐱")).to eq("Requesting $10 from B")
+        expect(jarvis("venmo request B $10 🐱")).to eq("Requesting $10 from Brendan")
       }
     end
   end
