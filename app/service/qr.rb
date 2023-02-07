@@ -5,7 +5,7 @@ class Qr
     filename = Digest::SHA1.hexdigest("#{ssid}:#{pass}") + ".png"
 
     FileStorage.get_or_upload(filename) do
-      new("WIFI:S:#{ssid};T:WPA;P:#{pass};;").to_io
+      new("WIFI:S:#{ssid};T:WPA;P:#{pass};;").to_io(size: 600)
     end
   end
 
@@ -36,8 +36,8 @@ class Qr
     @qr.as_png.to_s
   end
 
-  def to_io
-    StringIO.new(@qr.as_png(size: 120).to_s)
+  def to_io(opts={})
+    StringIO.new(@qr.as_png(opts).to_s)
   end
 
   def to_s
