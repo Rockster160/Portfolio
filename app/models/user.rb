@@ -93,6 +93,9 @@ class User < ApplicationRecord
     guest_account.destroy
   end
 
+  def self.timezone
+    "America/Denver"
+  end
   def timezone
     "America/Denver"
   end

@@ -20,6 +20,8 @@ class JarvisTask < ApplicationRecord
   serialize :tasks, SafeJsonSerializer
   serialize :last_ctx, SafeJsonSerializer
 
+  scope :cron, -> { where(trigger: nil) }
+
   enum trigger: {
     action_event:      1,
     tell:              2,
