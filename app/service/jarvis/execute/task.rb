@@ -17,7 +17,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
 
   def exit
     jil.ctx[:exit] = true
-    eval_block(args)
+    eval_block(args) if args
   end
 
   def fail
