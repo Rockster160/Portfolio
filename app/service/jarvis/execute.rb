@@ -60,6 +60,7 @@ class Jarvis::Execute
     @ctx[:i] += 1
     # Instead, this should raise an error so we don't have the weird off-by-one issue
     return if @ctx[:i] > MAX_ITERATIONS
+    return if task_block[:type].nil?
 
     klass, method = task_block[:type].split(".")
     method = "logic_#{method}" if klass == "logic"
