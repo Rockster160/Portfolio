@@ -22,9 +22,9 @@
         </a>
         <% if task.cron? %>
           <div class="list-item-brief">
-            Last: <%= task.last_trigger_at.to_formatted_s(:short_with_time) %>
+            Last: <%= task.last_trigger_at&.to_formatted_s(:short_with_time) || "N/A" %>
             --
-            Next: <%= task.next_trigger_at.to_formatted_s(:short_with_time) %>
+            Next: <%= task.next_trigger_at&.to_formatted_s(:short_with_time) || "N/A" %>
             <% if task.next_trigger_at > Time.current %>
               (<%= distance_of_time_in_words(Time.current, task.next_trigger_at) + " from now" %>)
             <% end %>
