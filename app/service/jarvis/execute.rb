@@ -36,6 +36,7 @@ class Jarvis::Execute
     # Jil should have an interface / logger that displays all recent task runs and failure messages
     # trigger fail unless task has a fail trigger
   ensure
+    sleep 0.2 if @test_mode
     ActionCable.server.broadcast("jil_#{@task.id}_channel", { done: true, output: @ctx[:msg].join("\n") })
     @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx)
     @ctx[:msg]#.join("\n")

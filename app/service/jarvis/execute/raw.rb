@@ -12,7 +12,8 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
 
   def self.str(val)
     case val
-    when Hash, Array then val.to_json
+    when Array then (val.one? && val.first.try(:dig, :raw)) || val.to_json
+    when Hash then val[:raw] || val.to_json
     else
       val.to_s
     end
@@ -57,9 +58,20 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def get_cache
+    str = evalargs
+
+    user_cache.get(eval_block(str))
   end
 
   def set_cache
+    str, val = evalargs
+
+    # TODO: Should NOT be able to set complex objects...
+    user_cache.set(eval_block(str), eval_block(val))
+  end
+
+  def user_cache
+    @user_cache ||= user.jarvis_cache || user.create_jarvis_cache
   end
 
   # def self.map_eval_args(vals)

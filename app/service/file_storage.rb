@@ -13,27 +13,21 @@ module FileStorage
 
   def upload(file_data, filename: nil, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
     filename = filename || "file-#{Time.current.strftime("%Y-%m-%d-%H-%M-%S")}"
-    object(filename).tap { |f|
-      f.put(body: file_data)
+    object(filename, bucket: bucket, region: region).tap { |obj|
+      obj.put(body: file_data)
     }
   end
 
   def download(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    object(filename, bucket: bucket, region: region)
-      .get
-      .body
-      .read
-  end
-
-  def soft_get(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    obj = object(filename, bucket: bucket, region: region)
-
-    obj.get.body.read if obj.exists?
+    object(filename, bucket: bucket, region: region).tap { |obj|
+      obj.get.body.read if obj.exists?
+    }
   end
 
   def get_or_upload(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION, &block)
-    FileStorage.soft_get(filename, bucket: bucket, region: region)
-      &.tap { |f| return f.presigned_url(:get, expires_in: 1.hour.to_i) }
+    object(filename, bucket: bucket, region: region).tap { |obj|
+      return obj.presigned_url(:get, expires_in: 1.hour.to_i) if obj.exists?
+    }
 
     data = block.call
     FileStorage.upload(data, filename: filename, bucket: bucket, region: region)

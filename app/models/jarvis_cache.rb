@@ -10,4 +10,15 @@
 #
 class JarvisCache < ApplicationRecord
   belongs_to :user
+
+  def get(key)
+    (data || {})[key.to_s]
+  end
+
+  def set(key, new_data)
+    data ||= {}
+    data[key.to_s] = new_data
+
+    !!update(data: data)
+  end
 end

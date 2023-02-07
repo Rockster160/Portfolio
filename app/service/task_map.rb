@@ -102,16 +102,16 @@ class TaskMap
       # Cache is permanent across all tasks - should cache be within a transaction?
       # For example, if task fails, should changes to the cache during the task undo?
       # Cache needs to be saved - it does not do so automatically
-      # get_cache:    [
-      #   { return: :any },
-      #   { block: :str, name: :name },
-      # ],
-      # set_cache:    [
-      #   { return: :any },
-      #   { block: :str, name: :name },
-      #   :value,
-      #   { block: :any, name: :value },
-      # ],
+      get_cache:    [
+        { return: :any },
+        { block: :str, name: :name },
+      ],
+      set_cache:    [
+        { return: :bool },
+        { block: :str, name: :name },
+        :value,
+        { block: :any, name: :value }, # TODO: Should NOT be able to set complex objects...
+      ],
     },
     logic: {
       if:         [
