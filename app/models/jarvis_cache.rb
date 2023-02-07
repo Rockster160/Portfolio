@@ -15,10 +15,10 @@ class JarvisCache < ApplicationRecord
     (data || {})[key.to_s]
   end
 
-  def set(key, new_data)
-    data ||= {}
-    data[key.to_s] = new_data
+  def set(key, val)
+    old_data = data || {}
+    old_data[key.to_s] = val
 
-    !!update(data: data)
+    !!update(data: old_data)
   end
 end

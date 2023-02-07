@@ -7,7 +7,12 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def self.bool(val)
-    !!val
+    case val
+    when Array then val.first.try(:dig, :raw)
+    when Hash then val[:raw]
+    else
+      !!val
+    end
   end
 
   def self.str(val)
