@@ -1,6 +1,13 @@
 module Jarvis::Text
   module_function
 
+  AFFIRMATIVE_RESPONSES = [
+    "As you wish.",
+    "Will do, sir.",
+    "Check.",
+    "It's done.",
+    "It is complete.",
+  ]
   IM_HERE_DIRECT_RESPONSES = [
     "At your service, sir.",
     "Good --time--, sir."
@@ -14,6 +21,10 @@ module Jarvis::Text
   APPRECIATE_RESPONSES = [
     "You're welcome, sir."
   ]
+
+  def affirmative
+    decorate(AFFIRMATIVE_RESPONSES.sample)
+  end
 
   def im_here
     decorate(IM_HERE_DIRECT_RESPONSES.sample)
