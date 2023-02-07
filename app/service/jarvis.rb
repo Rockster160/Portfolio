@@ -145,6 +145,7 @@ class Jarvis
       Jarvis::ScheduleParser, # √
       Jarvis::Bedtime,        # -- integration
       Jarvis::Navigate,       # -- integration
+      Jarvis::Wifi,           # -- integration
       Jarvis::List,           # √
       Jarvis::Printer,        # -- integration
       Jarvis::Nest,           # -- integration
