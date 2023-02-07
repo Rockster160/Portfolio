@@ -48,14 +48,14 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
     []
   end
 
-  def get_var
-  end
-
-  def clone_var
-  end
-
-  def set_var
-  end
+  # def get_var
+  # end
+  #
+  # def clone_var
+  # end
+  #
+  # def set_var
+  # end
 
   def get_cache
     str = evalargs
