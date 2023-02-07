@@ -19,30 +19,39 @@ module FileStorage
   end
 
   def download(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    object(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
+    object(filename, bucket: bucket, region: region)
       .get
       .body
       .read
   end
 
   def soft_get(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    obj = object(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
+    obj = object(filename, bucket: bucket, region: region)
 
     obj.get.body.read if obj.exists?
   end
 
+  def get_or_upload(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION, &block)
+    FileStorage.soft_get(filename, bucket: bucket, region: region)
+      &.tap { |f| return f.presigned_url(:get, expires_in: 1.hour.to_i) }
+
+    data = block.call
+    FileStorage.upload(data, filename: filename, bucket: bucket, region: region)
+      .presigned_url(:get, expires_in: 1.hour.to_i)
+  end
+
   def delete(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    object(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
+    object(filename, bucket: bucket, region: region)
       .delete
   end
 
   def exists?(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    object(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
+    object(filename, bucket: bucket, region: region)
       .exists?
   end
 
   def expiring_url(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    object(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
+    object(filename, bucket: bucket, region: region)
       .presigned_url(:get, expires_in: 1.hour.to_i)
   end
 end

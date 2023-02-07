@@ -2,11 +2,11 @@ class Qr
   attr_accessor :qr
 
   def self.wifi(ssid, pass)
-    filename = Digest::SHA1.hexdigest("#{ssid}:#{pass}") + ".svg"
-    FileStorage.soft_get(filename)&.tap { |f| return f.presigned_url(:get, expires_in: 1.hour.to_i) }
+    filename = Digest::SHA1.hexdigest("#{ssid}:#{pass}") + ".png"
 
-    qr = new("WIFI:S:#{ssid};T:WPA;P:#{pass};;")
-    FileStorage.upload(qr.to_svg, filename: filename).presigned_url(:get, expires_in: 1.hour.to_i)
+    FileStorage.get_or_upload(filename) do
+      new("WIFI:S:#{ssid};T:WPA;P:#{pass};;").to_io
+    end
   end
 
   def initialize(str, opts={})
@@ -19,7 +19,7 @@ class Qr
   end
 
   def to_html
-    # <img src="data:image/png;base64,<%= qr.to_png.to_s %>" />
+    # <img src="data:image/png;base64,<%= qr.as_png.to_s %>" />
   end
 
   def to_svg
@@ -34,6 +34,10 @@ class Qr
 
   def to_bi
     @qr.as_png.to_s
+  end
+
+  def to_io
+    StringIO.new(@qr.as_png(size: 120).to_s)
   end
 
   def to_s
