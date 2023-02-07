@@ -54,6 +54,7 @@ gem "erubis"
 gem "pghero"
 gem "pg_query", ">= 2"
 gem "fugit"
+gem "rqrcode"
 
 # gem "command_proposal", path: "../command_proposal"
 gem "command_proposal", git: "https://github.com/Rockster160/command_proposal.git"
