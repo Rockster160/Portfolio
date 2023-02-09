@@ -19,8 +19,8 @@ module FileStorage
   end
 
   def download(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    object(filename, bucket: bucket, region: region).tap { |obj|
-      obj.get.body.read if obj.exists?
+    object(filename, bucket: bucket, region: region).then { |obj|
+      obj.exists? ? obj.get.body.read : obj
     }
   end
 
