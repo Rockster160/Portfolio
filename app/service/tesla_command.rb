@@ -84,7 +84,7 @@
       address ||= address_book.nearest_address_from_name(original_params)
 
       if address.present?
-        duration = address_book.traveltime_seconds(to, car.loc)
+        duration = address_book.traveltime_seconds(address, car.loc)
         if duration
           @response = "It will take #{distance_of_time_in_words(duration)} to get to #{original_params.squish}"
         else
