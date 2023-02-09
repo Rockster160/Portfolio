@@ -1,5 +1,5 @@
 class FlashcardsController < ApplicationController
-  skip_before_action :verify_authenticity_token
+  skip_before_action :verify_authenticity_token, raise: false
 
   def flashcard
     @all = FlashCard.all

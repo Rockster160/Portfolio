@@ -1,5 +1,5 @@
 class Users::SessionsController < ApplicationController
-  skip_before_action :verify_authenticity_token
+  skip_before_action :verify_authenticity_token, raise: false
   before_action :unauthorize_user, :set_invitation_token, except: [ :destroy ], unless: :guest_account?
   before_action :authorize_user, only: [ :destroy ]
 
