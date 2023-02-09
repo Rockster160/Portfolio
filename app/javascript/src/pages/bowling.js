@@ -857,18 +857,26 @@ $(document).ready(function() {
 
   detectDrinkFrames = function() {
     $(".drink-frame").removeClass("drink-frame")
+    $(".missed-drink-frame").removeClass("missed-drink-frame")
     if ($(".bowler:not(.absent, .skip)").length < 2) { return }
 
-    for (var i=1; i<10; i++) {
+    for (var i=1; i<=10; i++) {
       let frames = $(".bowler:not(.absent, .skip) .frame[data-frame=" + i + "]")
-      let drinkFrame = Array.from(frames).every(function(frame) {
+      let strikes = Array.from(frames).filter(function(frame) {
         return $(frame).find(".shot[data-shot-idx=0]").val() == "X"
-      })
-      if (drinkFrame) {
+      }).length
+
+      if (strikes == frames.length) {
         frames.addClass("drink-frame")
         $(".bowling-header .bowling-cell:contains(" + i + ")").filter(function() {
           return $(this).text() == String(i)
         }).addClass("drink-frame")
+      } else if (strikes == frames.length - 1) {
+        frames.each(function() {
+          if ($(this).find(".shot[data-shot-idx=0]").val() != "X" && $(this).find(".shot[data-shot-idx=0]").val() != "") {
+            $(this).addClass("missed-drink-frame")
+          }
+        })
       }
     }
   }

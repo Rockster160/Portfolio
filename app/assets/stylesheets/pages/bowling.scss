@@ -209,6 +209,18 @@
           }
         }
       }
+      &.missed-drink-frame {
+        border-color: red;
+
+        input[type=text] {
+          border-color: red;
+          color: red;
+
+          &.current {
+            border-color: purple;
+          }
+        }
+      }
     }
 
     &.bowling-header .bowling-cell {
