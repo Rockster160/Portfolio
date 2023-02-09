@@ -121,7 +121,6 @@ GEM
       coffee-script-source
       execjs
     coffee-script-source (1.12.2)
-    colorize (0.8.1)
     concurrent-ruby (1.1.10)
     connection_pool (2.2.5)
     crass (1.0.6)
@@ -397,7 +396,6 @@ DEPENDENCIES
   chroma
   chronic
   coffee-rails
-  colorize
   command_proposal!
   dotenv-rails
   erubis

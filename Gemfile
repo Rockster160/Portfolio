@@ -23,7 +23,6 @@ gem "sidekiq-cron"
 gem "json", "~> 2.3"
 gem "autoprefixer-rails"
 gem "font-awesome-rails"
-gem "colorize"
 gem "faker"
 gem "twilio-ruby", "~> 4.11.1"
 gem "sinatra", :require => nil
