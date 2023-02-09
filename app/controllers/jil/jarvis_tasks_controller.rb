@@ -1,5 +1,5 @@
 class Jil::JarvisTasksController < ApplicationController
-  skip_before_action :verify_authenticity_token, raise: false
+  skip_before_action :verify_authenticity_token
 
   def index
     @tasks = current_user.jarvis_tasks

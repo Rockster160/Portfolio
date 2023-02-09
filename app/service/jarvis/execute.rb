@@ -30,7 +30,6 @@ class Jarvis::Execute
     @ctx[:msg] << "Success"
     # Trigger success?
   rescue StandardError => e
-    # puts "\e[31m[LOGIT] | #{e.message}\n#{e.backtrace.select {|r|r.include?("/app/")}.join("\n")}\e[0m"
     Rails.logger.error("\e[31m#{e.class}: #{e}\n#{e.backtrace.select{|l|l.include?("/app/")}.reverse.join("\n")}\e[0m")
     @ctx[:msg] << "[#{@ctx[:current_token]}] Failed: #{e.message}"
     # Jil should have an interface / logger that displays all recent task runs and failure messages

@@ -1,5 +1,5 @@
 class ActionEventsController < ApplicationController
-  skip_before_action :verify_authenticity_token, raise: false
+  skip_before_action :verify_authenticity_token
   before_action :authorize_user
 
   def index

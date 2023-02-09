@@ -55,9 +55,9 @@ gem "pg_query", ">= 2"
 gem "fugit", "1.5.3"
 gem "rqrcode", "2.1.2"
 # Dependency
-# gem "net-http", "0.3.2"
-# gem "uri", "0.12.0"
-# gem "pathname", "0.2.1"
+gem "net-http", "0.3.2"
+gem "uri", "0.12.0"
+gem "pathname", "0.2.1"
 
 # gem "command_proposal", path: "../command_proposal"
 gem "command_proposal", git: "https://github.com/Rockster160/command_proposal.git"

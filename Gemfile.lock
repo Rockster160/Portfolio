@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/Rockster160/command_proposal.git
-  revision: 5d2294422b2de84ec6ec1efd57e10bda8711abd3
+  revision: 283b172f1af76966c3f13ddf8cfb1d81991fa5b0
   specs:
     command_proposal (1.0.20)
       font-awesome-rails
@@ -219,6 +219,8 @@ GEM
     multi_xml (0.6.0)
     mustermann (2.0.2)
       ruby2_keywords (~> 0.0.1)
+    net-http (0.3.2)
+      uri
     net-imap (0.3.4)
       date
       net-protocol
@@ -236,6 +238,7 @@ GEM
     numbers_in_words (1.0.1)
     oily_png (1.2.1)
       chunky_png (~> 1.3.7)
+    pathname (0.2.1)
     pg (1.3.5)
     pg_query (2.2.1)
       google-protobuf (>= 3.19.2)
@@ -388,6 +391,7 @@ GEM
     unf (0.1.4)
       unf_ext
     unf_ext (0.0.8.2)
+    uri (0.12.0)
     webpush (0.3.2)
       hkdf (~> 0.2)
       jwt
@@ -431,9 +435,11 @@ DEPENDENCIES
   kaminari (= 1.2.2)
   launchy (= 2.5.0)
   listen (= 3.7.1)
+  net-http (= 0.3.2)
   nokogiri (~> 1.13.9)
   numbers_in_words (= 1.0.1)
   oily_png (= 1.2.1)
+  pathname (= 0.2.1)
   pg (= 1.3.5)
   pg_query (>= 2)
   pghero (~> 3.1.0)
@@ -464,6 +470,7 @@ DEPENDENCIES
   twilio-ruby (~> 4.11.1)
   uglifier (>= 1.3.0)
   underscore-rails (= 1.8.3)
+  uri (= 0.12.0)
   webpush (= 0.3.2)
 
 BUNDLED WITH

@@ -1,7 +1,7 @@
 class UserListsController < ApplicationController
   before_action :authorize_user, :color_scheme
   before_action :set_list, :set_current_list_user
-  skip_before_action :verify_authenticity_token, raise: false
+  skip_before_action :verify_authenticity_token
 
   def create
     @user = User.find(params[:id]) # Using id here for easier lookup
