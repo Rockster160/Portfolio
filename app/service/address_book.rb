@@ -50,15 +50,17 @@ class AddressBook
     # Contacts should also have a preferred phone/address - perhaps just a bool on the associations?
   end
 
-  def address_from_words(words)
-    address = words[::Jarvis::Regex.address]&.squish.presence if words.match?(::Jarvis::Regex.address)
-    address ||= contact_by_name(words)&.address
-    address ||= nearest_address_from_name(words)
+  def to_address(data)
+    address = data.first if data.is_a?(Array) && data.length == 1
+    address = reverse_geocode(data, get: :address) if data.is_a?(Array) && data.length == 2
+    address ||= data[::Jarvis::Regex.address]&.squish.presence if data.match?(::Jarvis::Regex.address)
+    address ||= contact_by_name(data)&.address
+    address ||= nearest_address_from_name(data)
   end
 
   def traveltime_seconds(to, from=nil)
     from ||= home.address
-    to, from = [to, from].map { |add| address_from_words(add) }
+    to, from = [to, from].map { |add| to_address(add) }
     # Should be stringified addresses
 
     params = {
