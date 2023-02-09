@@ -208,7 +208,7 @@ GEM
       mime-types-data (~> 3.2015)
     mime-types-data (3.2022.0105)
     mini_mime (1.1.2)
-    mini_portile2 (2.4.0)
+    mini_portile2 (2.8.1)
     minitest (5.17.0)
     msgpack (1.5.2)
     multi_json (1.15.0)
@@ -217,8 +217,9 @@ GEM
       ruby2_keywords (~> 0.0.1)
     netrc (0.11.0)
     nio4r (2.5.8)
-    nokogiri (1.10.10)
-      mini_portile2 (~> 2.4.0)
+    nokogiri (1.13.10)
+      mini_portile2 (~> 2.8.0)
+      racc (~> 1.4)
     numbers_in_words (1.0.1)
     oily_png (1.2.1)
       chunky_png (~> 1.3.7)
@@ -243,6 +244,7 @@ GEM
     puma (5.6.4)
       nio4r (~> 2.0)
     raabro (1.4.0)
+    racc (1.6.2)
     rack (2.2.6.2)
     rack-protection (2.2.0)
       rack
@@ -415,7 +417,7 @@ DEPENDENCIES
   kaminari
   launchy
   listen
-  nokogiri (~> 1.10.4)
+  nokogiri (~> 1.13.10)
   numbers_in_words
   oily_png
   pg
