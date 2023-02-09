@@ -47,6 +47,6 @@ class NestCommand
 
   def get_devices
     subscription ||= GoogleNestControl.new
-    ActionCable.server.broadcast "nest_channel", { devices: subscription.devices.map(&:to_json) })
+    ActionCable.server.broadcast("nest_channel", { devices: subscription.devices.map(&:to_json) })
   end
 end
