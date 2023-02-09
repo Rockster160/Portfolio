@@ -77,7 +77,7 @@ class BetterJson
 
   # Use "key: val" syntax instead of ":key => val" + colors!
   def inspect
-    FancyRenderJson.display(@hash)
+    FancyRenderJson.pretty(@hash)
   end
 
   # Quack like a hash
