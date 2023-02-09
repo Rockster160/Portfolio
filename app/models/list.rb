@@ -219,10 +219,10 @@ class List < ApplicationRecord
   def broadcast!
     return if do_not_broadcast
 
-    ActionCable.server.broadcast "list_#{self.id}_json_channel", list_data: serialize, timestamp: Time.current.to_i
+    ActionCable.server.broadcast "list_#{self.id}_json_channel", { list_data: serialize, timestamp: Time.current.to_i }
 
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self }, layout: false
-    ActionCable.server.broadcast "list_#{self.id}_html_channel", list_html: rendered_message, timestamp: Time.current.to_i
+    ActionCable.server.broadcast "list_#{self.id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
   end
 
 end
