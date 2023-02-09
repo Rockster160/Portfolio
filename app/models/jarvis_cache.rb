@@ -9,6 +9,8 @@
 #  user_id    :bigint
 #
 class JarvisCache < ApplicationRecord
+  serialize :data, SafeJsonSerializer
+
   belongs_to :user
 
   def get(key)

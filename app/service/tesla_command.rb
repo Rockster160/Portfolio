@@ -1,4 +1,6 @@
  class TeslaCommand
+   include ActionView::Helpers::DateHelper
+
   def self.command(cmd, params=nil)
     new.command(cmd, params)
   end
@@ -82,7 +84,12 @@
       address ||= address_book.nearest_address_from_name(original_params)
 
       if address.present?
-        @response = "Navigating to #{original_params.squish}"
+        duration = address_book.traveltime_seconds(to, car.loc)
+        if duration
+          @response = "It will take #{distance_of_time_in_words(duration)} to get to #{original_params.squish}"
+        else
+          @response = "Navigating to #{original_params.squish}"
+        end
         car.start_car
         car.navigate(address)
       else

@@ -4,11 +4,10 @@ class BetterJson
   COLOR_MAP = {
     key: :yellow,
     string: :lime,
-    symbol: :cyan,
-    boolean: :magenta,
-    numeric: :orange,
-    # float: :orange,
-    # integer: :orange,
+    symbol: :orange,
+    boolean: :cyan,
+    numeric: :magenta,
+    date: :blue,
     null: :grey,
     unknown: :red,
   }.freeze
@@ -34,6 +33,7 @@ class BetterJson
     when TrueClass, FalseClass then obj.to_s.colorize(COLOR_MAP[:boolean])
     when Numeric then obj.to_s.colorize(COLOR_MAP[:numeric])
     when NilClass then "nil".colorize(COLOR_MAP[:null])
+    when Date then v.to_s.colorize(COLOR_MAP[:date])
     when Array
       "[#{obj.map { |v| colorit(v, depth) }.join(", ")}]"
     when Hash, BetterJson

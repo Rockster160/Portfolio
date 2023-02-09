@@ -11,6 +11,18 @@ class AddressBook
     contact_by_name("Home")
   end
 
+  def current_loc
+    @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
+      [state.latitude, state.longitude]
+    } || home&.loc
+  end
+
+  def current_address
+    @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
+      reverse_geocode([state.latitude, state.longitude], get: :address)
+    } || home&.address
+  end
+
   def distance(c1, c2)
     # √[(x₂ - x₁)² + (y₂ - y₁)²]
     Math.sqrt((c2[0] - c1[0])**2 + (c2[1] - c1[1])**2)
@@ -38,9 +50,35 @@ class AddressBook
     # Contacts should also have a preferred phone/address - perhaps just a bool on the associations?
   end
 
+  def address_from_words(words)
+    address = words[::Jarvis::Regex.address]&.squish.presence if words.match?(::Jarvis::Regex.address)
+    address ||= contact_by_name(words)&.address
+    address ||= nearest_address_from_name(words)
+  end
+
+  def traveltime_seconds(to, from=nil)
+    from ||= home.address
+    to, from = [to, from].map { |add| address_from_words(add) }
+    # Should be stringified addresses
+
+    params = {
+      destinations: to,
+      origins: from,
+      key: ENV["PORTFOLIO_GMAPS_PAID_KEY"],
+    }.to_query
+    url = "https://maps.googleapis.com/maps/api/distancematrix/json?#{params}"
+    res = RestClient.get(url)
+    json = JSON.parse(res.body, symbolize_names: true)
+
+    json.dig(:rows, 0, :elements, 0, :duration, :value)
+  rescue StandardError => e
+    SlackNotifier.notify("Traveltime failed: (to:\"#{to}\", from:\"#{from}\")\n#{e}\n#{e.message}")
+    nil
+  end
+
   def nearest_address_from_name(name, loc=nil)
-    # TODO: This should default to the current location of phone
-    loc ||= home&.loc
+    # TODO: This should default to the current location of phone (or car?)
+    loc ||= current_loc
     params = {
       input: name,
       inputtype: :textquery,
@@ -73,14 +111,20 @@ class AddressBook
     }
   end
 
-  def reverse_geocode(loc)
+  def reverse_geocode(loc, get: :name)
     return "Herriman" unless Rails.env.production?
 
     url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=#{loc.join(",")}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
     res = RestClient.get(url)
     json = JSON.parse(res.body, symbolize_names: true)
-    json.dig(:results, 0, :address_components)&.find { |comp|
-      comp[:types] == ["locality", "political"]
-    }&.dig(:short_name)
+
+    case get
+    when :name
+      json.dig(:results, 0, :address_components)&.find { |comp|
+        comp[:types] == ["locality", "political"]
+      }&.dig(:short_name)
+    when :address
+      json.dig(:results, 0, :formatted_address)
+    end
   end
 end

@@ -154,7 +154,13 @@ class TeslaControl
   end
 
   def vehicle_data
-    get("vehicles/#{vehicle_id}/latest_vehicle_data").dig(:legacy)
+    @vehicle_data ||= get("vehicles/#{vehicle_id}/latest_vehicle_data").dig(:legacy).tap { |car_data|
+      User.find(1).jarvis_cache.set(:car_data, car_data)
+    }
+  end
+
+  def loc
+    [vehicle_data.dig(:drive_state, :latitude), vehicle_data.dig(:drive_state, :longitude)]
   end
 
   def vehicle_id
