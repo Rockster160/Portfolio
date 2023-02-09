@@ -15,6 +15,7 @@ class Tesla
 
   delegate(
     :vehicle_data,
+    :loc,
     :start_car,
     :off_car,
     :honk,
