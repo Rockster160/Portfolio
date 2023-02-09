@@ -199,6 +199,7 @@ RSpec.describe Jarvis do
     actions.each do |action, data|
       data[:opts].each do |opt|
         it "can #{opt}" do
+          allow(tesla_control).to receive(:loc)
           allow(tesla_control).to receive(:start_car)
           data[:others]&.each do |k, args|
             expect(tesla_control).to receive(k).with(args) if args
@@ -233,6 +234,7 @@ RSpec.describe Jarvis do
 
     specific_actions.each do |action, data|
       it "can #{action}" do
+        allow(tesla_control).to receive(:loc)
         allow(tesla_control).to receive(:start_car)
         data[:stub]&.each do |k, args|
           expect(tesla_control).to receive(k).with(args) if args

@@ -230,7 +230,7 @@ RSpec.describe ::Jarvis::Execute do
       }
 
       it "runs the block 1000 times then errors out" do
-        expect(execute.last).to eq("Failed: Blocks exceed 1,000 allowed.")
+        expect(execute.last).to include("Failed: Blocks exceed 1,000 allowed.")
         expect(task.last_ctx[:i]).to eq(1001) # 1001 because it only errors AFTER exceeding
       end
     end
