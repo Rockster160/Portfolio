@@ -26,6 +26,10 @@ class BetterJson
     @hash = HashWithIndifferentAccess.new(*args)
   end
 
+  def to_json
+    @hash.to_json
+  end
+
   def colorit(obj, depth=nil)
     case obj
     when String then "\"#{obj}\"".colorize(COLOR_MAP[:string])

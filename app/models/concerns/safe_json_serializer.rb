@@ -1,6 +1,6 @@
 class SafeJsonSerializer
   def self.dump(obj)
-    obj.is_a?(String) ? obj : JSON.dump(obj)
+    obj.is_a?(String) ? obj : obj.try(:to_json) || JSON.dump(obj)
   end
 
   def self.load(str)
