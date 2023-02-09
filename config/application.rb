@@ -21,6 +21,7 @@ module Portfolio
     config.autoload_paths += ["#{config.root}/app/service"]
     config.after_initialize do
       require "#{config.root}/app/service/colorize.rb"
+      require "#{config.root}/app/service/better_json.rb"
     end
 
     # Configuration for the application, engines, and railties goes here.
