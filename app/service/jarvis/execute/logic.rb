@@ -34,15 +34,6 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
     (jil.ctx[:loop_obj] || jil.ctx[:loop_idx])
   end
 
-  def logic_get_var
-    jil.ctx.dig(:vars, eval_block(args))
-  end
-
-  def logic_set_var
-    name, value = args.map { |arg| eval_block(arg) }
-    jil.ctx[:vars][name] = eval_block(value)
-  end
-
   def logic_next
     args # No-op - just return what's put in
   end

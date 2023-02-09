@@ -82,26 +82,17 @@ class TaskMap
       #   { num: :second, default: :current },
       # ],
       # Vars exist only during the current running task
-      # Get returns the var itself. Treated like the object, but changes save to the var
-      # `var` should be treated like `any` unless it has been cast
-      # get_var:      [
-      #   { return: :var },
-      #   { block: :str, name: :name },
-      # ],
-      # Clone returns the object the variable has, modifying this does NOT change the var
-      # clone_var:    [
-      #   { return: :any },
-      #   { block: :str, name: :name },
-      # ],
-      # set_var:      [
-      #   { return: :var },
-      #   { block: :str, name: :name },
-      #   :value,
-      #   { block: :any },
-      # ],
-      # Cache is permanent across all tasks - should cache be within a transaction?
-      # For example, if task fails, should changes to the cache during the task undo?
-      # Cache needs to be saved - it does not do so automatically
+      get_var:      [
+        { return: :any },
+        { block: :str, name: :name },
+      ],
+      set_var:      [
+        { return: :any },
+        { block: :str, name: :name },
+        :value,
+        { block: :any },
+      ],
+      # Cache is permanent across all tasks
       get_cache:    [
         { return: :any },
         { block: :str, name: :name },
@@ -110,7 +101,7 @@ class TaskMap
         { return: :bool },
         { block: :str, name: :name },
         :value,
-        { block: :any, name: :value }, # TODO: Should NOT be able to set complex objects...
+        { block: :any, name: :value },
       ],
     },
     logic: {

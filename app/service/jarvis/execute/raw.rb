@@ -8,8 +8,8 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
 
   def self.bool(val)
     case val
-    when Array then val.first.try(:dig, :raw)
-    when Hash then val[:raw]
+    when ::Array then val.first.try(:dig, :raw)
+    when ::Hash then val[:raw]
     else
       !!val
     end
@@ -17,8 +17,8 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
 
   def self.str(val)
     case val
-    when Array then (val.one? && val.first.try(:dig, :raw)) || val.to_json
-    when Hash then val[:raw] || val.to_json
+    when ::Array then (val.one? && val.first.try(:dig, :raw)) || val.to_json
+    when ::Hash then val[:raw] || val.to_json
     else
       val.to_s
     end
@@ -54,12 +54,12 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def get_var
-  end
-
-  def clone_var
+    jil.ctx.dig(:vars, eval_block(args))
   end
 
   def set_var
+    name, value = args.map { |arg| eval_block(arg) }
+    jil.ctx[:vars][name] = eval_block(value)
   end
 
   def get_cache
