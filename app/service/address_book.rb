@@ -53,6 +53,8 @@ class AddressBook
   def to_address(data)
     address = data.first if data.is_a?(Array) && data.length == 1
     address = reverse_geocode(data, get: :address) if data.is_a?(Array) && data.length == 2
+    return address if address.present?
+
     address ||= data[::Jarvis::Regex.address]&.squish.presence if data.match?(::Jarvis::Regex.address)
     address ||= contact_by_name(data)&.address
     address ||= nearest_address_from_name(data)
@@ -74,7 +76,7 @@ class AddressBook
 
     json.dig(:rows, 0, :elements, 0, :duration, :value)
   rescue StandardError => e
-    SlackNotifier.notify("Traveltime failed: (to:\"#{to}\", from:\"#{from}\")\n#{e}\n#{e.message}")
+    SlackNotifier.notify("Traveltime failed: (to:\"#{to}\", from:\"#{from}\")\n#{e}\n#{e.message}\n```#{e.backtrace.select{|l|l.include?("/app/")}.reverse.join("\n")}```")
     nil
   end
 
