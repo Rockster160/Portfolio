@@ -62,7 +62,15 @@
   }
 }
 
-
+@function textoutline($color) {
+  $list: 0 0 0 $color;
+  @for $x from -1 through 1 {
+    @for $y from -1 through 1 {
+      $list: #{$list}, #{$x/2}px #{$y/2}px 1px $color;
+    }
+  }
+  @return $list
+}
 
 .ctr-bowling_leagues, .ctr-bowling_sets, .ctr-bowling_games {
   overscroll-behavior: contain;
@@ -211,13 +219,15 @@
       }
       &.missed-drink-frame {
         border-color: red;
-        // https://staticg.sportskeeda.com/editor/2022/08/2d25d-16594604976321-1920.jpg
-        // text shadow
-        // background on toss boxes?
+        background-image: url("https://staticg.sportskeeda.com/editor/2022/08/2d25d-16594604976321-1920.jpg");
+        background-position: -9px 0;
+        background-size: cover;
+        text-shadow: textoutline(black);
 
         input[type=text] {
           border-color: red;
           color: red;
+          text-shadow: textoutline(black);
 
           &.current {
             border-color: purple;
