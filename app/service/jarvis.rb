@@ -80,7 +80,6 @@
 #    > Good night, sir. The weather tomorrow is <>. You don't have anything scheduled after your morning meetings.
 #    > You'll need to leave for PT by 9:55
 
-
 class Jarvis
   MY_NUMBER = "3852599640"
 
@@ -100,6 +99,7 @@ class Jarvis
     tasks.find_each do |task|
       ::Jarvis::Execute.call(task, trigger_data)
     end
+    ::BroadcastUpcomingWorker.perform_async
   end
 
   def self.command(user, words)
@@ -108,6 +108,7 @@ class Jarvis
     ActionCable.server.broadcast("jarvis_channel", { say: res, data: res_data }) if res.present?
     return res if res_data.blank?
     [res, res_data]
+    # ::BroadcastUpcomingWorker.perform_async - Is this needed?
   end
 
   def self.say(msg, channel=:ws)

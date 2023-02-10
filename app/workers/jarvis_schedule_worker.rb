@@ -3,8 +3,10 @@ class JarvisScheduleWorker
   sidekiq_options retry: false
 
   def perform
-    ::JarvisTask.where(next_trigger_at: ..Time.current).find_each do |task|
+    tasks = ::JarvisTask.where(next_trigger_at: ..Time.current)
+    tasks.find_each do |task|
       ::Jarvis::Execute.call(task)
     end
+    ::BroadcastUpcomingWorker.perform_async if tasks.any?
   end
 end

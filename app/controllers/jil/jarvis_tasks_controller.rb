@@ -20,6 +20,7 @@ class Jil::JarvisTasksController < ApplicationController
   def update
     @task = current_user.jarvis_tasks.find(params[:id])
     @task.update(task_params)
+    ::BroadcastUpcomingWorker.perform_async
 
     respond_to do |format|
       format.json { render json: { status: :found, url: edit_jil_jarvis_task_path(@task) } }
@@ -28,6 +29,7 @@ class Jil::JarvisTasksController < ApplicationController
 
   def create
     @task = current_user.jarvis_tasks.create(task_params)
+    ::BroadcastUpcomingWorker.perform_async
 
     respond_to do |format|
       format.json { render json: { status: :found, url: edit_jil_jarvis_task_path(@task) } }
@@ -38,6 +40,7 @@ class Jil::JarvisTasksController < ApplicationController
     @task = current_user.jarvis_tasks.find(params[:id])
 
     if @task.destroy
+      ::BroadcastUpcomingWorker.perform_async
       redirect_to :jil
     else
       redirect_to [:jil, @task, :edit]
@@ -47,6 +50,7 @@ class Jil::JarvisTasksController < ApplicationController
   def run
     @task = current_user.jarvis_tasks.find(params[:id])
     ::Jarvis::Execute.call(@task, test_mode: true)
+    ::BroadcastUpcomingWorker.perform_async
 
     respond_to do |format|
       format.json

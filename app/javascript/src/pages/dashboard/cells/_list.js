@@ -4,6 +4,7 @@ export class ListCell {
   constructor(list_name) {
     let cell = undefined
     let setList = async function(name) {
+      cell.title(name)
       cell.text("Loading...")
       cell.socket?.close()
 

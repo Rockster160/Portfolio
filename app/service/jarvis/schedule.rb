@@ -2,13 +2,14 @@ module Jarvis::Schedule
   module_function
 
   def upcoming
+    # Should be per User!
     [*JarvisTask.cron, *Jarvis::Schedule.get_events].map { |sched|
       {
         timestamp: sched.is_a?(JarvisTask) ? sched.next_trigger_at&.in_time_zone(User.timezone) : Jarvis::Times.safe_date_parse(sched[:scheduled_time]),
         name: sched.is_a?(JarvisTask) ? sched.name : sched[:command],
+        recurring: sched.is_a?(JarvisTask) && sched.cron
       }
     }.sort_by { |sched| sched[:timestamp] }
-
   end
 
   def output_upcoming
@@ -19,6 +20,7 @@ module Jarvis::Schedule
   end
 
   def get_events
+    # Should be per User!
     DataStorage[:scheduled_events] || []
   end
 
