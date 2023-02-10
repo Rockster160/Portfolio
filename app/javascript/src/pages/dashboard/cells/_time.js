@@ -5,6 +5,7 @@ Time.seconds = Time.second = function(n) { return (n || 1) * 1000 }
 Time.minutes = Time.minute = function(n) { return Time.seconds((n || 1) * 60) }
 Time.hours = Time.hour = function(n) { return Time.minutes((n || 1) * 60) }
 Time.days = Time.day = function(n) { return Time.hours((n || 1) * 24) }
+Time.weeks = Time.week = function(n) { return Time.days((n || 1) * 7) }
 Time.fromNow = function(duration_ms, now) {
   now = now || Time.msSinceEpoch()
   return Time.at(now + duration_ms)
