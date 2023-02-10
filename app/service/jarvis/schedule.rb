@@ -4,20 +4,17 @@ module Jarvis::Schedule
   def upcoming
     [*JarvisTask.cron, *Jarvis::Schedule.get_events].map { |sched|
       {
-        timestamp: sched.is_a?(JarvisTask) ? sched.next_trigger_at.in_time_zone(User.timezone) : Jarvis::Times.safe_date_parse(sched[:scheduled_time]),
+        timestamp: sched.is_a?(JarvisTask) ? sched.next_trigger_at&.in_time_zone(User.timezone) : Jarvis::Times.safe_date_parse(sched[:scheduled_time]),
         name: sched.is_a?(JarvisTask) ? sched.name : sched[:command],
       }
     }.sort_by { |sched| sched[:timestamp] }
-    # .each { |a|
-    #   timestamp = a[:timestamp].strftime("%a, %_b %_d %_l:%M%P")
-    #   puts "\e[33m#{timestamp}\e[0m: \e[36m#{a[:name]}\e[0m"
-    # }; nil
+
   end
 
-  def output_schedule
-    Jarvis::Schedule.get_events.sort_by { |a| a[:scheduled_time] }.each { |a|
-      timestamp = Jarvis::Times.safe_date_parse(a[:scheduled_time]).strftime("%a, %_b %_d %_l:%M%P")
-      puts "\e[33m#{timestamp}\e[0m: \e[36m#{a[:command]}\e[0m"
+  def output_upcoming
+    upcoming.each { |a|
+      timestamp = a[:timestamp].strftime("%a, %_b %_d %_l:%M%P")
+      puts "\e[33m#{timestamp}\e[0m: \e[36m#{a[:name]}\e[0m"
     }; nil
   end
 
