@@ -43,6 +43,7 @@ module Jarvis::Schedule
     end
 
     DataStorage[:scheduled_events] = events
+    ::BroadcastUpcomingWorker.perform_async
   end
 
   def already_scheduled?(uid)
@@ -63,5 +64,6 @@ module Jarvis::Schedule
     events = get_events.select { |evt| evt[:jid].in?(jids) }
 
     DataStorage[:scheduled_events] = events
+    ::BroadcastUpcomingWorker.perform_async
   end
 end
