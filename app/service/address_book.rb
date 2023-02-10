@@ -77,7 +77,7 @@ class AddressBook
 
     json.dig(:rows, 0, :elements, 0, :duration, :value)
   rescue StandardError => e
-    SlackNotifier.notify("Traveltime failed: (to:\"#{to}\", from:\"#{from}\")\n#{e}\n#{e.message}\n```#{e.backtrace.select{|l|l.include?("/app/")}.reverse.join("\n")}```")
+    SlackNotifier.err(e, "Traveltime failed: (to:\"#{to}\", from:\"#{from}\")")
     nil
   end
 

@@ -18,7 +18,7 @@ class AmazonEmailParser
       save(date_str.presence || "[ERROR]")
     end
   rescue StandardError => e
-    SlackNotifier.notify("Failed to parse Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>\n#{e.try(:message) || e.try(:body) || e.inspect}", channel: '#portfolio', username: 'Mail-Bot', icon_emoji: ':mailbox:')
+    SlackNotifier.err(e, "Error parsing Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
   end
 
   def save(str)
@@ -53,7 +53,7 @@ class AmazonEmailParser
       # order-update@amazon.com
       @doc.at_css("span:contains('New estimated delivery date:')")&.parent&.at_css("b")&.text.to_s
     else
-      SlackNotifier.notify("Failed to parse Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", channel: '#portfolio', username: 'Mail-Bot', icon_emoji: ':mailbox:')
+      SlackNotifier.notify("Failed to parse Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
       ""
     end
   end

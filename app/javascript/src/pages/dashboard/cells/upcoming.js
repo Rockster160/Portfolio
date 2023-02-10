@@ -40,7 +40,7 @@ import { dash_colors, text_height, clamp } from "../vars"
 
         if (timestamp < Time.fromNow(Time.day())) { // if < 1 day
           // "10P"
-          date = `${d.hour}${d.minute == 0 ? "" : String(d.minute).padStart(2, "0")}${d.mz[0]}`
+          date = `${d.hour}${d.minute == 0 ? "" : ":" + String(d.minute).padStart(2, "0")}${d.mz[0]}`
         } else if (timestamp < Time.fromNow(Time.week())) { // if < 1 week
           // "T24 10M"
           let wday = Time.weekdays("single")[d.wday]
