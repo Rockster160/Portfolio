@@ -35,13 +35,25 @@ import { dash_colors, text_height, clamp } from "../vars"
       let lines = []
       console.log("Evt");
       msg.forEach(function(evt) {
-        let d = Time.asData(Date.parse(evt.timestamp))
-        let mth = Time.monthnames("short")[d.month]
-        let wday = Time.weekdays("single")[d.wday]
+        let timestamp = Date.parse(evt.timestamp)
+        let d = Time.asData(timestamp)
+        let date
 
-        let short = `${mth}${wday}${d.date} ${String(d.hour).padStart(2, " ")}:${String(d.minute).padStart(2, "0")}${d.mz}`
-        let line = `${Text.color(dash_colors.yellow, short)}: ${Text.color(dash_colors.rocco, evt.name)}`
-        // "JanT24 10:00AM"
+        if (timestamp < Time.fromNow(Time.day())) { // if < 1 day
+          // "10P"
+          date = `${d.hour}${d.minute == 0 ? "" : String(d.minute).padStart(2, "0")}${d.mz[0]}`
+        } else if (timestamp < Time.fromNow(Time.week())) { // if < 1 week
+          // "T24 10M"
+          let wday = Time.weekdays("single")[d.wday]
+          date = `${wday}${d.date} ${d.hour}${d.minute == 0 ? "" : ":" + String(d.minute).padStart(2, "0")}${d.mz[0]}`
+        } else { // if > week
+          // "JanT24 10M"
+          let mth = Time.monthnames("short")[d.month]
+          let wday = Time.weekdays("single")[d.wday]
+          date = `${mth}${wday}${d.date} ${String(d.hour).padStart(2, " ")}${d.minute == 0 ? "" : ":" + String(d.minute).padStart(2, "0")}${d.mz[0]}`
+        }
+
+        let line = `${Text.color(dash_colors.yellow, date)}: ${Text.color(dash_colors.rocco, evt.name)}`
 
         lines.push(line)
       })
