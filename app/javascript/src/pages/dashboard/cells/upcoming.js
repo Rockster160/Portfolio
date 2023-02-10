@@ -33,7 +33,6 @@ import { dash_colors, text_height, clamp } from "../vars"
     },
     socket: Server.socket("UpcomingEventsChannel", function(msg) {
       let lines = []
-      console.log("Evt");
       msg.forEach(function(evt) {
         let timestamp = Date.parse(evt.timestamp)
         let d = Time.asData(timestamp)
