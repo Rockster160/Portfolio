@@ -128,6 +128,7 @@
     backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
     SlackNotifier.notify("Failed to command: #{e.inspect}\n#{backtrace}")
     raise e # Re-raise to stop worker from sleeping and attempting to re-get
+    "Failed to request from Tesla"
   end
 
   def cToF(c)

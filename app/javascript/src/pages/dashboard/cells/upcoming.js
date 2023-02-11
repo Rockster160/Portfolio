@@ -15,7 +15,7 @@ import { dash_colors, text_height, clamp } from "../vars"
     if (cell.livekey_active) {
       cell.data.scroll = clamp(cell.data.scroll, 0, max_lines)
     } else {
-      cell.data.scroll = max_lines
+      cell.data.scroll = 0
     }
 
     content.scroll({ top: cell.data.scroll * text_height })

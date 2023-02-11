@@ -107,8 +107,9 @@ class Jarvis
 
     ActionCable.server.broadcast("jarvis_channel", { say: res, data: res_data }) if res.present?
     return res if res_data.blank?
-    [res, res_data]
+
     # ::BroadcastUpcomingWorker.perform_async - Is this needed?
+    [res, res_data]
   end
 
   def self.say(msg, channel=:ws)
