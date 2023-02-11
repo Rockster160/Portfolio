@@ -13,13 +13,13 @@ class AddressBook
 
   def current_loc
     @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
-      [state.latitude, state.longitude]
+      [state[:latitude], state[:longitude]]
     } || home&.loc
   end
 
   def current_address
     @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
-      reverse_geocode([state.latitude, state.longitude], get: :address)
+      reverse_geocode([state[:latitude], state[:longitude]], get: :address)
     } || home&.address
   end
 
