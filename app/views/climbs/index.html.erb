@@ -1,0 +1,18 @@
+<%= content_for(:title) { "Climbs" } %>
+
+<%= link_to "New Climb", [:new, :climb], class: "btn" %>
+
+<% @climbs.each do |climb| %>
+  <div class="climb-row">
+    <h3>
+      <%= climb.created_at.in_time_zone(current_user.timezone).to_formatted_s(:quick_week_time) %>
+      <%= link_to climb_path(climb), method: :delete, style: "color: maroon; font-size: 16px;", data: { confirm: "Are you sure? This cannot be undone." } do %>
+        <i class="fa fa-trash"></i>
+      <% end %>
+    </h3>
+    <p>
+      &nbsp;&nbsp;<%= climb.data %><br>
+      &nbsp;&nbsp;Score: <%= climb.score %>
+    </p>
+  </div>
+<% end %>

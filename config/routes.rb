@@ -115,6 +115,8 @@ Rails.application.routes.draw do
     end
   end
 
+  resources :climbs
+
   namespace :bowling, as: nil do
     resources :bowlers, only: [:create] do
       get :throw_stats, on: :collection
