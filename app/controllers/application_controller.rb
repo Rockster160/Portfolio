@@ -27,7 +27,7 @@ class ApplicationController < ActionController::Base
   def see_current_user
     Rails.logger.silence do
       if request.get? && controller_action != "users#account"
-        session[:forwarding_url] = request.original_url 
+        session[:forwarding_url] = request.original_url
       end
 
       if user_signed_in?

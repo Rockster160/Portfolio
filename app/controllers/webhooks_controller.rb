@@ -1,7 +1,7 @@
 class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :post_params, except: [:local_data, :report]
-  before_action :skip_without_user, only: [:jil_task, :command]
+  before_action :skip_without_user, only: [:jil, :command]
   before_action :skip_without_admin, only: [:battery, :local_data, :report, :speak]
 
   def jenkins
@@ -12,9 +12,10 @@ class WebhooksController < ApplicationController
     head 200
   end
 
-  def jil_task
+  def jil
     ::Jarvis.execute_trigger(
-      params.to_unsafe_h.except(:controller, :action).merge(trigger: :webhook),
+      :webhook,
+      params.to_unsafe_h.except(:controller, :action),
       scope: { user: current_user }
     )
 
