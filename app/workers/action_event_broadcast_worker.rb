@@ -6,11 +6,13 @@ class ActionEventBroadcastWorker
 
     if event.present?
       Jarvis.trigger(
-        trigger: :action_event,
-        id: event.id,
-        name: event.event_name,
-        notes: event.notes,
-        timestamp: event.timestamp,
+        :action_event,
+        {
+          name: event.event_name,
+          notes: event.notes,
+          timestamp: event.timestamp,
+        },
+        scope: { user_id: event.user_id }
       )
     end
     FitnessBroadcast.call(event)

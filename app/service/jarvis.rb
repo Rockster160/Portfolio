@@ -87,14 +87,9 @@ class Jarvis
     ::JarvisTriggerWorker.perform_async(trigger_data.to_json)
   end
 
-  def self.execute_trigger(trigger_data)
+  def self.execute_trigger(trigger, trigger_data={}, scope: {})
     trigger_data.deep_symbolize_keys!
-    tasks = ::JarvisTask.where(trigger: trigger_data[:trigger])
-    case trigger_data[:trigger]
-    when :action_event
-      evt = ActionEvent.find(trigger_data.delete(:id))
-      tasks = tasks.where(user_id: evt.user_id)
-    end
+    tasks = ::JarvisTask.where(trigger: trigger).where(scope)
 
     tasks.find_each do |task|
       ::Jarvis::Execute.call(task, trigger_data)

@@ -1,12 +1,23 @@
 class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :post_params, except: [:local_data, :report]
+  before_action :skip_without_user, only: [:jil_task, :command]
+  before_action :skip_without_admin, only: [:battery, :local_data, :report, :speak]
 
   def jenkins
     head 200
   end
 
   def post
+    head 200
+  end
+
+  def jil_task
+    ::Jarvis.execute_trigger(
+      params.to_unsafe_h.except(:controller, :action).merge(trigger: :webhook),
+      scope: { user: current_user }
+    )
+
     head 200
   end
 
@@ -29,8 +40,6 @@ class WebhooksController < ApplicationController
   end
 
   def battery
-    return head :no_content unless user_signed_in? && current_user.admin?
-
     data = params.slice(:Phone, :iPad, :Watch, :Pencil).transform_values { |v|
       { val: v, time: Time.current.to_i }
     }
@@ -44,8 +53,6 @@ class WebhooksController < ApplicationController
   end
 
   def local_data
-    return head :no_content unless user_signed_in? && current_user.admin?
-
     data = params[:local_data].to_unsafe_h
     json = File.exists?("local_data.json") ? JSON.parse(File.read("local_data.json")) : {}
     File.write("local_data.json", json.merge(data).to_json)
@@ -68,8 +75,6 @@ class WebhooksController < ApplicationController
   end
 
   def report
-    return head :no_content unless user_signed_in?
-
     gathered = params[:report]&.to_unsafe_h&.each_with_object({}) do |(name, report_data), obj|
       obj[name] = { timestamp: Time.current.to_i }
       report_data.each do |key, data|
@@ -104,14 +109,10 @@ class WebhooksController < ApplicationController
   end
 
   def command
-    return head :no_content unless user_signed_in?
-
     List.find_and_modify(current_user, params[:command])
   end
 
   def speak
-    return head :no_content unless user_signed_in?
-
     SmsWorker.perform_async("3852599640", params[:text])
   end
 
@@ -127,6 +128,14 @@ class WebhooksController < ApplicationController
   end
 
   private
+
+  def skip_without_user
+    head :no_content unless user_signed_in?
+  end
+
+  def skip_without_admin
+    head :no_content unless user_signed_in? && current_user.admin?
+  end
 
   def printer_authed?
     params[:apiSecret] == ENV["PORTFOLIO_PRINTER_SECRET"]
