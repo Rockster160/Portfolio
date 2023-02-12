@@ -16,7 +16,9 @@ class WebhooksController < ApplicationController
     ::Jarvis.execute_trigger(
       :webhook,
       params.to_unsafe_h.except(:controller, :action),
-      scope: { user: current_user }
+      scope: { user: current_user }.tap { |task_scope|
+        task_scope[:name] = params[:task_name] if params[:task_name].present?
+      }
     )
 
     head 200
