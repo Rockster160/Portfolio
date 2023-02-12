@@ -26,7 +26,7 @@ let jsonToElem = function(json) {
         attrv = attrv()
       }
       switch (attrk) {
-        case "class": element.classList.add(...attrv.split(" ")); break;
+        case "class": element.classList.add(...attrv.replaceAll(/^ *| *$/g, "").split(" ")); break;
         case "content":
           if (Array.isArray(attrv)) {
             attrv.forEach(function(obj) { element.appendChild(jsonToElem(obj)) })
@@ -136,7 +136,7 @@ export let templates = {
                           children.push({ select: {
                             id: `${existingdata.token}[${idx}]`,
                             type: "select",
-                            class: "block-select",
+                            class: `block-select ${data.optional ? "optional" : ""}`,
                             unattached: true,
                             blocktype: data.block,
                             content: function() {

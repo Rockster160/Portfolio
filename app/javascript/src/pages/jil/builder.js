@@ -44,7 +44,9 @@ $(document).ready(function() {
 
   let removeOrInvalidOpt = function(select, option) {
     if (select.val() == option.val()) {
-      select.addClass("invalid")
+      if (!(select.hasClass("optional") && option.text() == "{None}")) {
+        select.addClass("invalid")
+      }
     } else {
       option.remove()
     }
@@ -126,7 +128,9 @@ $(document).ready(function() {
         option.textContent = token
         select.append(option)
       })
-      if (select.children("option").length == 0) { select.addClass("invalid") }
+      if (select.children("option").length == 0 && !select.hasClass("optional")) {
+        debugger
+        select.addClass("invalid") }
     })
     attachSelectEvents()
   }
