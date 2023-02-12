@@ -1,4 +1,7 @@
 class ClimbsController < ApplicationController
+  skip_before_action :verify_authenticity_token
+  before_action :authorize_user
+
   def index
     @climbs = current_user.climbs.order(created_at: :desc)
   end
