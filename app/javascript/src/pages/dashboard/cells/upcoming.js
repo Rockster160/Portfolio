@@ -52,7 +52,8 @@ import { dash_colors, text_height, clamp } from "../vars"
           date = `${mth}${wday}${d.date} ${String(d.hour).padStart(2, " ")}${d.minute == 0 ? "" : ":" + String(d.minute).padStart(2, "0")}${d.mz[0]}`
         }
 
-        let line = `${Text.color(dash_colors.yellow, date)}: ${Text.color(dash_colors.rocco, evt.name)}`
+        let name = evt.name.replace(/^add /i, "")
+        let line = `${Text.color(dash_colors.yellow, date)}: ${Text.color(dash_colors.rocco, name)}`
 
         lines.push(line)
       })
