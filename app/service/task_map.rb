@@ -488,16 +488,18 @@ class TaskMap
         { return: :any },
         "Task Name",
         { block: :str, name: :task_name },
+        "When to run (Optional)",
+        { block: :date, optional: true },
       ],
       # find:       [
       #   { return: :task },
       #   { block: :str, name: :task_id },
       # ],
-      # schedule: [
-      #   { return: :str }, # jid of the task
-      #   { block: :date },
-      #   { block: :task },
-      # ],
+      schedule: [
+        { return: :str }, # jid of the task
+        { block: :str, name: :task_name },
+        { block: :date },
+      ],
       # Inject/run JS on page + web scraping
       # request: [
       #   { return: :hash },

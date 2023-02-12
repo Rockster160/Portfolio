@@ -25,6 +25,7 @@ module Jarvis::Schedule
   end
 
   def schedule(*new_events)
+    jids = []
     events = get_events
     new_events.each do |new_event|
       new_event[:uid] = new_event[:uid].presence || SecureRandom.hex
@@ -32,6 +33,7 @@ module Jarvis::Schedule
 
       jid = JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], new_event[:words])
 
+      jids.push(jid)
       events.push(
         jid: jid,
         scheduled_time: new_event[:scheduled_time],
@@ -44,6 +46,7 @@ module Jarvis::Schedule
 
     DataStorage[:scheduled_events] = events
     ::BroadcastUpcomingWorker.perform_async
+    jids
   end
 
   def already_scheduled?(uid)

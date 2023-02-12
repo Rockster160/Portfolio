@@ -25,13 +25,28 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def run
-    name = evalargs
+    name, timestamp = evalargs
+    run_task = jil.task.user.jarvis_tasks.find_by!(name: name)
 
-    run_task = jil.task.user.jarvis_tasks.find_by("name ILIKE ?", evalargs)
-    msg = ::Jarvis::Execute.call(run_task, { ctx: { i: jil.ctx[:i] } })
-    jil.ctx[:i] = run_task.last_ctx[:i]
+    if timestamp
+      # TODO: The ctx[:i] will not be passed- this can be used to bypass block limitations
+      # Not sure how to work around this...
+      jid = Jarvis::Schedule.schedule(
+        scheduled_time: timestamp,
+        user_id: jil.task.user.id,
+        words: run_task.name,
+        type: :command,
+      ).first
+      # jil.ctx[:i] = run_task.last_ctx[:i]
+      ::BroadcastUpcomingWorker.perform_async
 
-    msg
+      jid
+    else
+      msg = ::Jarvis::Execute.call(run_task, { ctx: { i: jil.ctx[:i] } })
+      jil.ctx[:i] = run_task.last_ctx[:i]
+
+      msg
+    end
   end
 
   def find
