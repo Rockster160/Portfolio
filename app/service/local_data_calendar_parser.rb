@@ -8,7 +8,7 @@ class LocalDataCalendarParser
   def call(raw_calendar_lines=nil)
     raw_calendar_lines ||= JSON.parse(File.read("local_data.json")).deep_symbolize_keys[:calendar]
 
-    Time.use_zone("Mountain Time (US & Canada)") do
+    Time.use_zone(User.timezone) do
       @current_day = Time.zone.now
       evt = {}
       parsed_obj = {}

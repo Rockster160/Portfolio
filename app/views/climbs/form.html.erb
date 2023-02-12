@@ -5,7 +5,7 @@
     <%= form_for @climb, html: { class: "basic" } do |f| %>
       <div class="flex-fields">
         <%= f.submit "Save Climb", class: "btn" %>
-        <% Time.use_zone("Mountain Time (US & Canada)") do %>
+        <% Time.use_zone(User.timezone) do %>
           <% f.object.timestamp ||= Time.current %>
           <%= f.datetime_local_field :timestamp %>
         <% end %>
