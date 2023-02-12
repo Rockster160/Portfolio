@@ -3,7 +3,7 @@ class ClimbsController < ApplicationController
   before_action :authorize_user
 
   def index
-    @climbs = current_user.climbs.order(created_at: :desc)
+    @climbs = current_user.climbs.order(timestamp: :desc)
   end
 
   def new
@@ -12,8 +12,20 @@ class ClimbsController < ApplicationController
     render :form
   end
 
+  def edit
+    @climb = current_user.climbs.find(params[:id])
+
+    render :form
+  end
+
   def create
     @climb = current_user.climbs.create(climb_params)
+
+    redirect_to :climbs
+  end
+
+  def update
+    @climb = current_user.climbs.update(climb_params)
 
     redirect_to :climbs
   end
@@ -27,6 +39,9 @@ class ClimbsController < ApplicationController
   private
 
   def climb_params
-    params.require(:climb).permit(:data)
+    params.require(:climb).permit(
+      :data,
+      :timestamp,
+    )
   end
 end

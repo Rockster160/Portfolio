@@ -12,11 +12,12 @@ $(document).ready(function() {
     const output = document.querySelector(".output")
     output.scrollLeft = output.scrollWidth - output.clientWidth
 
-    let scores = $(".output span").toArray().map(function(span) { return Number($(span).attr("score")) })
+    let climb_spans = $(".output span").toArray()
 
-    $("#climb_data").val(scores.join(" "))
-    $(".full-score").text(
-      scores.reduce(function(sum, score) { return sum + score }, 0)
-    )
+    let climbs = climb_spans.map(function(span) { return Number($(span).text()) })
+    let scores = climb_spans.map(function(span) { return Number($(span).attr("score")) })
+
+    $("#climb_data").val(climbs.join(" "))
+    $(".full-score").text(scores.sum())
   })
 })

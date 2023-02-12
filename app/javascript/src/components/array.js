@@ -1,3 +1,6 @@
+Array.prototype.sum = function (array) {
+  array.reduce(function(sum, val) { return sum + val }, 0)
+}
 Array.prototype.eq = function (array) {
   // if the other array is a falsy value, return
   if (!array) { return false }

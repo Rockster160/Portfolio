@@ -3,16 +3,25 @@
 <div class="skinny-container">
   <div class="btn-container text-right">
     <%= form_for @climb, html: { class: "basic" } do |f| %>
-      <%= f.hidden_field :data %>
-      <%= f.submit "Save Climb", class: "btn" %>
+      <div class="flex-fields">
+        <%= f.submit "Save Climb", class: "btn" %>
+        <% Time.use_zone("Mountain Time (US & Canada)") do %>
+          <% f.object.timestamp ||= Time.current %>
+          <%= f.datetime_local_field :timestamp %>
+        <% end %>
+        <%= f.hidden_field :data %>
+      </div>
     <% end %>
   </div>
 </div>
 
 <div class="output">
+  <% @climb.data&.split(" ")&.each do |go| %>
+    <span score="<%= @climb.score_for(go) %>"><%= go %></span>
+  <% end %>
 </div>
 
-<div class="full-score">0</div>
+<div class="full-score"><%= @climb.score %></div>
 
 <div class="keypad-wrapper">
   <div class="keypad-entry">
