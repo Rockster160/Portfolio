@@ -4,7 +4,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def print
-    jil.ctx[:msg] << eval_block(args)
+    jil.ctx[:msg] << evalargs
   end
 
   def comment
@@ -12,12 +12,12 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def command
-    jil.ctx[:msg] << Jarvis.command(jil.task.user, eval_block(args))
+    Jarvis.command(jil.task.user, evalargs)
   end
 
   def exit
     jil.ctx[:exit] = true
-    eval_block(args) if args
+    evalargs if args
   end
 
   def fail
@@ -25,7 +25,13 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def run
-    raise NotImplementedError
+    name = evalargs
+
+    run_task = jil.task.user.jarvis_tasks.find_by("name ILIKE ?", evalargs)
+    msg = ::Jarvis::Execute.call(run_task, { ctx: { i: jil.ctx[:i] } })
+    jil.ctx[:i] = run_task.last_ctx[:i]
+
+    msg
   end
 
   def find

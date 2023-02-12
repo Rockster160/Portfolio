@@ -484,10 +484,11 @@ class TaskMap
       #   { return: :any },
       #   { block: :any, optional: true, name: :reason },
       # ],
-      # run:        [
-      #   { return: :any },
-      #   { block: :task },
-      # ],
+      run:        [
+        { return: :any },
+        "Task Name",
+        { block: :str, name: :task_name },
+      ],
       # find:       [
       #   { return: :task },
       #   { block: :str, name: :task_id },
