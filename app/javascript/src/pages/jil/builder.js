@@ -281,7 +281,7 @@ $(document).ready(function() {
     // Loop because more "tasks"/containers are added later (arrays and conditionals)
     $("[data-tasks]").each(function() {
       let container = this
-      JSON.parse($(this).attr("data-tasks")).forEach(function(task) {
+      JSON.parse($(this).attr("data-tasks"))?.forEach(function(task) {
         if (!task.type) { return } // Skip empty
         let populated_block = templates.block(task.type, task)
         tokens.push(task.token)
