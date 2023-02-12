@@ -53,14 +53,23 @@
 }
 
 .dark-mode {
-  .numpad-key {
-    background: grey;
-
-    &:hover {
-      background: darken(grey, 10%);
+  .ctr-climbs {
+    .output {
+      background: grey;
     }
-    &:active {
-      background: darken(grey, 20%);
+    .keypad-wrapper {
+      .keypad-entry {
+        .numpad-key {
+          background: grey;
+
+          &:hover {
+            background: darken(grey, 10%);
+          }
+          &:active {
+            background: darken(grey, 20%);
+          }
+        }
+      }
     }
   }
 }
