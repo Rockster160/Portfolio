@@ -15,7 +15,7 @@ class Climb < ApplicationRecord
   SCORE_MAP = { "0": 0.5 }
 
   def score
-    data.split(" ").sum { |v| score_for(v) }
+    data&.split(" ")&.sum { |v| score_for(v) } || 0
   end
 
   def score_for(go)
