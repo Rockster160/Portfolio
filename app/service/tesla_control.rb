@@ -135,9 +135,9 @@ class TeslaControl
     # Tesla expects temp in Celsius
     temp_C = ((temp_F - 32) * (5/9.to_f)).round(1)
     command(:set_temps, driver_temp: temp_C)
-    if Rails.env.production?
-      TeslaVerifyTempWorker.perform_in(5.seconds, temp_F)
-    end
+    # For some reason sometimes when setting temp while car is sleeping, it instead sets to TEMP_MIN
+    # To counter that, wait 5 seconds after command is performed and attempt to set the temp again
+    TeslaVerifyTempWorker.perform_in(5.seconds, temp_F) if Rails.env.production?
   end
 
   def heat_driver

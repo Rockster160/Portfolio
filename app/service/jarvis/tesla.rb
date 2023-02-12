@@ -8,10 +8,7 @@ class Jarvis::Tesla < Jarvis::Action
     raise Jarvis::Error.not_allowed unless @user&.admin?
 
     cmd, params = parse_cmd_and_params
-    response = TeslaCommand.command(cmd, params)
-    if Rails.env.production?
-      TeslaCommandWorker.perform_in(3.seconds, :update.to_s, nil, false) # to_s because Sidekiq complains
-    end
+    response = TeslaCommand.quick_command(cmd, params)
 
     return response.presence || "Sent to Tesla"
   end

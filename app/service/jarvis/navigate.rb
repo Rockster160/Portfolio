@@ -7,7 +7,7 @@ class Jarvis::Navigate < Jarvis::Action
     return unless valid_words?
     raise Jarvis::Error.not_allowed unless @user&.admin?
 
-    response = TeslaCommand.command(:navigate, parse_params)
+    response = TeslaCommand.quick_command(:navigate, parse_params)
 
     return response.presence || "Sent to Tesla"
   end

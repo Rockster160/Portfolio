@@ -1,26 +1,32 @@
  class TeslaCommand
    include ActionView::Helpers::DateHelper
+   TEMP_MIN = 59
+   TEMP_MAX = 82
 
-  def self.command(cmd, params=nil)
-    new.command(cmd, params)
+  def self.command(cmd, params=nil, quick=false)
+    new.command(cmd, params, quick)
+  end
+
+  def self.quick_command(cmd, params=nil)
+    TeslaCommandWorker.perform_async(cmd.to_s, params.to_json)
+    command(cmd, params, true)
   end
 
   def address_book
     @address_book ||= User.find(1).address_book
   end
 
-  def command(cmd, params=nil)
+  def command(original_cmd, original_params=nil, quick=false)
     if Rails.env.development?
-      ActionCable.server.broadcast "tesla_channel", stubbed_data
+      ActionCable.server.broadcast("tesla_channel", stubbed_data)
       return "Stubbed data"
     end
 
     ActionCable.server.broadcast("tesla_channel", { loading: true })
-    car = Tesla.new
+    car = Tesla.new unless quick
 
-    cmd = cmd.to_s.downcase.squish
-    original_params = params
-    params = params.to_s.downcase.squish
+    cmd = original_cmd.to_s.downcase.squish
+    params = original_params.to_s.downcase.squish
     direction = :toggle
     if "#{cmd} #{params}".match?(/\b(unlock|open|lock|close|pop|vent)\b/)
       combine = "#{cmd} #{params}"
@@ -34,87 +40,94 @@
 
     case cmd.to_sym
     when :update, :reload
-      ActionCable.server.broadcast "tesla_channel", format_data(car.vehicle_data)
+      ActionCable.server.broadcast "tesla_channel", format_data(car.vehicle_data) unless quick
       @response = "Updating car cell"
       return @response
     when :off, :stop
       @response = "Stopping car"
-      car.off_car
+      car.off_car unless quick
     when :on, :start, :climate
       @response = "Starting car"
-      car.start_car
+      car.start_car unless quick
     when :boot, :trunk
       @response = "Popping the boot"
-      car.pop_boot(direction)
+      car.pop_boot(direction) unless quick
     when :lock
       @response = "Locking car doors"
-      car.doors(:close)
+      car.doors(:close) unless quick
     when :unlock
       @response = "Unlocking car doors"
-      car.doors(:open)
+      car.doors(:open) unless quick
     when :doors, :door
       if direction == :open
         @response = "Unlocking car doors"
       else
         @response = "Locking car doors"
       end
-      car.doors(direction)
+      car.doors(direction) unless quick
     when :windows, :window, :vent
       if direction == :open
         @response = "Opening car windows"
       else
         @response = "Closing car windows"
       end
-      car.windows(direction)
+      car.windows(direction) unless quick
     when :frunk
       @response = "Opening frunk"
-      car.pop_frunk
+      car.pop_frunk unless quick
     when :honk, :horn
       @response = "Honking the horn"
-      car.honk
+      car.honk unless quick
     when :seat
       @response = "Turning on driver seat heater"
-      car.heat_driver
+      car.heat_driver unless quick
     when :passenger
       @response = "Turning on passenger seat heater"
-      car.heat_passenger
+      car.heat_passenger unless quick
     when :navigate
       address = params[::Jarvis::Regex.address]&.squish.presence if params.match?(::Jarvis::Regex.address)
       address ||= address_book.contact_by_name(original_params)&.address
       address ||= address_book.nearest_address_from_name(original_params)
 
       if address.present?
-        duration = address_book.traveltime_seconds(address, car.loc)
+        duration = address_book.traveltime_seconds(address)
         if duration
           @response = "It will take #{distance_of_time_in_words(duration)} to get to #{original_params.squish}"
         else
           @response = "Navigating to #{original_params.squish}"
         end
-        car.start_car
-        car.navigate(address)
+
+        unless quick
+          car.start_car
+          car.navigate(address)
+        end
       else
         @response = "I can't find #{original_params.squish}"
       end
     when :temp
       temp = params.to_s[/\d+/]
-      temp = 82 if params.to_s.match?(/\b(hot|heat|high)\b/)
-      temp = 59 if params.to_s.match?(/\b(cold|cool|low)\b/)
+      temp = TEMP_MAX if params.to_s.match?(/\b(hot|heat|high)\b/)
+      temp = TEMP_MIN if params.to_s.match?(/\b(cold|cool|low)\b/)
       @response = "Car temp set to #{temp.to_i}"
-      car.set_temp(temp.to_i)
+      car.set_temp(temp.to_i) unless quick
     when :cool
-      @response = "Car temp set to 59"
-      car.set_temp(59)
+      @response = "Car temp set to #{TEMP_MIN}"
+      car.set_temp(TEMP_MIN) unless quick
     when :heat, :defrost, :warm
       @response = "Defrosting the car"
-      car.set_temp(82)
-      car.heat_driver
-      car.heat_passenger
-      car.defrost
+      unless quick
+        car.set_temp(TEMP_MAX)
+        car.heat_driver
+        car.heat_passenger
+        car.defrost
+      end
     when :find
       @response = "Finding car..."
-      data = car.vehicle_data
-      loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
-      Jarvis.say("http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}", :sms)
+      unless quick
+        data = car.vehicle_data
+        loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
+        Jarvis.say("http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}", :sms)
+      end
     else
       @response = "Not sure how to tell car: #{[cmd, params].map(&:presence).compact.join('|')}"
     end
