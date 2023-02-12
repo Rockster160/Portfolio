@@ -26,12 +26,19 @@ class ApplicationController < ActionController::Base
 
   def see_current_user
     Rails.logger.silence do
-      session[:forwarding_url] = request.original_url if request.get?
+      if request.get? && controller_action != "users#account"
+        session[:forwarding_url] = request.original_url 
+      end
+
       if user_signed_in?
         current_user.see!
         request.env['exception_notifier.exception_data'] = { current_user: current_user }
       end
     end
+  end
+
+  def controller_action
+    "#{params[:controller]}##{params[:action]}"
   end
 
   def logit

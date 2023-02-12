@@ -61,9 +61,10 @@ class AddressBook
   end
 
   def traveltime_seconds(to, from=nil)
-    return nil unless Rails.env.production?
+    return unless Rails.env.production?
+
     from ||= home.address
-    to, from = [to, from].map { |add| to_address(add) }
+    to, from = [to, from].map { |address| to_address(address) }
     # Should be stringified addresses
 
     params = {
@@ -82,7 +83,6 @@ class AddressBook
   end
 
   def nearest_address_from_name(name, loc=nil)
-    # TODO: This should default to the current location of phone (or car?)
     loc ||= current_loc
     params = {
       input: name,
