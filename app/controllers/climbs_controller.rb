@@ -19,13 +19,17 @@ class ClimbsController < ApplicationController
   end
 
   def create
-    @climb = current_user.climbs.create(climb_params)
+    Time.use_zone(current_user.timezone) {
+      @climb = current_user.climbs.create(climb_params)
+    }
 
     redirect_to :climbs
   end
 
   def update
-    @climb = current_user.climbs.update(climb_params)
+    Time.use_zone(current_user.timezone) {
+      @climb = current_user.climbs.update(climb_params)
+    }
 
     redirect_to :climbs
   end
