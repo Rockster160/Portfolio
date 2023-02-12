@@ -497,7 +497,9 @@ class TaskMap
       # ],
       schedule: [
         { return: :str }, # jid of the task
-        { block: :str, name: :task_name },
+        "Jarvis Command:",
+        { block: :str, name: :cmd },
+        "When to run:",
         { block: :date },
       ],
       # Inject/run JS on page + web scraping

@@ -54,7 +54,20 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def schedule
-    raise NotImplementedError
+    cmd, timestamp = evalargs
+
+    # TODO: The ctx[:i] will not be passed- this can be used to bypass block limitations
+    # Not sure how to work around this...
+    jid = Jarvis::Schedule.schedule(
+      scheduled_time: timestamp,
+      user_id: jil.task.user.id,
+      words: cmd,
+      type: :command,
+    ).first
+    # jil.ctx[:i] = run_task.last_ctx[:i]
+    ::BroadcastUpcomingWorker.perform_async
+
+    jid
   end
 
   def request
