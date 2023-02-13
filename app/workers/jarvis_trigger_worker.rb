@@ -1,7 +1,7 @@
 class JarvisTriggerWorker
   include Sidekiq::Worker
 
-  def perform(trigger_data)
-    Jarvis.execute_trigger(JSON.parse(trigger_data))
+  def perform(trigger, trigger_data={}, scope={})
+    Jarvis.execute_trigger(trigger, JSON.parse(trigger_data), scope: JSON.parse(scope))
   end
 end

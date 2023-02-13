@@ -129,8 +129,8 @@ $(document).ready(function() {
         select.append(option)
       })
       if (select.children("option").length == 0 && !select.hasClass("optional")) {
-        debugger
-        select.addClass("invalid") }
+        select.addClass("invalid")
+      }
     })
     attachSelectEvents()
   }

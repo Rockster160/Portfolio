@@ -5,7 +5,7 @@ class ActionEventBroadcastWorker
     event = event_id.present? ? ActionEvent.find_by(id: event_id) : nil
 
     if event.present?
-      Jarvis.trigger(
+      ::Jarvis.trigger(
         :action_event,
         {
           name: event.event_name,
@@ -14,8 +14,8 @@ class ActionEventBroadcastWorker
         },
         scope: { user_id: event.user_id }
       )
+      FitnessBroadcast.call(event)
     end
-    FitnessBroadcast.call(event)
     RecentEventsBroadcast.call
   end
 end
