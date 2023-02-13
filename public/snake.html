@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title></title>
+  <style>
+      html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body {
+        position: fixed;
+        background: black;
+        max-width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+      canvas {
+        border: 1px solid white;
+      }
+      </style>
+</head>
+<body>
+    <canvas id="game"></canvas>
+  <script>
+  var canvas = document.getElementById('game');
+  var context = canvas.getContext('2d');
+
+  var canvasSize = [400, window.innerWidth, window.innerHeight].sort(function(a, b){return a - b})[0] - 10
+  canvasSize = Math.floor(canvasSize / 16) * 16
+  canvas.width = canvasSize
+  canvas.height = canvasSize
+  context.canvas.width = canvasSize
+  context.canvas.height = canvasSize
+
+  var paused = false
+  var dead = false
+  var minDrag = 10
+  var cellSize = 16;
+  var cellCount = canvasSize / 16
+  var midPoint = Math.round(cellCount / 2) * 16
+  var prevX = 0;
+  var prevY = 0;
+  var snake = {};
+  var minSize = 4
+  var score = 0;
+  var frameCount = 0;
+  var apple = {
+    x: getRandomInt(0, cellCount - 1) * cellSize,
+    y: getRandomInt(0, cellCount - 1) * cellSize
+  };
+
+  function getRandomInt(min, max) {
+    return Math.floor(Math.random() * (max - min)) + min;
+  }
+
+  function canSnakeTurn(direction) {
+    if (snake.cells.length == 0) { return false }
+    var snakeHead = snake.cells[0]
+    var nextDestination = {x: snakeHead.x + direction.dx, y: snakeHead.y + direction.dy}
+    var canTurn = true
+
+    snake.cells.some(function(cell, index) {
+      if (cell.x == nextDestination.x && cell.y == nextDestination.y) {
+        canTurn = false
+        return true
+      }
+    })
+    return canTurn
+  }
+
+  function turnSnake(directionWord) {
+    if (directionWord == "up") {
+      if (snake.dy != 0) { return }
+      desiredDirection = {dx: 0, dy: -cellSize}
+    } else if (directionWord == "left") {
+      if (snake.dx != 0) { return }
+      desiredDirection = {dx: -cellSize, dy: 0}
+    } else if (directionWord == "down") {
+      if (snake.dy != 0) { return }
+      desiredDirection = {dx: 0, dy: cellSize}
+    } else if (directionWord == "right") {
+      if (snake.dx != 0) { return }
+      desiredDirection = {dx: cellSize, dy: 0}
+    }
+    console.log(directionWord);
+    if (!canSnakeTurn(desiredDirection)) { return }
+    snake.dx = desiredDirection.dx
+    snake.dy = desiredDirection.dy
+  }
+
+  function reset() {
+    snake.x = midPoint;
+    snake.y = midPoint;
+    snake.cells = [];
+    snake.maxCells = minSize;
+    snake.dx = cellSize;
+    snake.dy = 0;
+    score = 0
+    dead = false
+    paused = false
+  }
+
+  // game loop
+  function loop() {
+    requestAnimationFrame(loop);
+    if (dead) {
+      context.font = "20px monospace"
+      context.fillStyle = "white"
+      context.textAlign = "center"
+      context.fillText("You died! Score: " + score, canvas.width / 2, canvas.height / 2)
+      return
+    } else if (paused) {
+      context.font = "20px monospace"
+      context.fillStyle = "white"
+      context.textAlign = "center"
+      context.fillText("Paused", canvas.width / 2, canvas.height / 2)
+      return
+    }
+
+    // slow game loop to 10 fps instead of 60 - 60/10 = 6
+    if (++frameCount < 6) { return }
+
+    frameCount = 0;
+    context.clearRect(0,0,canvas.width,canvas.height);
+
+    snake.x += snake.dx;
+    snake.y += snake.dy;
+
+    // wrap snake position on edge of screen
+    if (snake.x < 0) {
+      snake.x = canvas.width - cellSize;
+    } else if (snake.x >= canvas.width) {
+      snake.x = 0;
+    }
+
+    if (snake.y < 0) {
+      snake.y = canvas.height - cellSize;
+    } else if (snake.y >= canvas.height) {
+      snake.y = 0;
+    }
+
+    // keep track of where snake has been. [0] is always the head
+    snake.cells.unshift({x: snake.x, y: snake.y});
+
+    // remove cells as we move away from them
+    if (snake.cells.length > snake.maxCells) {
+      snake.cells.pop();
+    }
+
+    // draw apple
+    context.fillStyle = 'red';
+    context.fillRect(apple.x, apple.y, cellSize-1, cellSize-1);
+
+    // draw snake
+    snake.cells.forEach(function(cell, index) {
+      context.fillStyle = 'green';
+      context.fillRect(cell.x, cell.y, cellSize-1, cellSize-1);
+
+      // snake ate apple
+      if (cell.x === apple.x && cell.y === apple.y) {
+        snake.maxCells++;
+        score++
+
+        apple.x = getRandomInt(0, cellCount - 1) * cellSize;
+        apple.y = getRandomInt(0, cellCount - 1) * cellSize;
+      }
+
+      // check collision with all cells after this one (modified bubble sort)
+      for (var i = index + 1; i < snake.cells.length; i++) {
+
+        // collision. reset game
+        if (cell.x === snake.cells[i].x && cell.y === snake.cells[i].y) {
+          dead = true
+
+          apple.x = getRandomInt(0, cellCount - 1) * cellSize;
+          apple.y = getRandomInt(0, cellCount - 1) * cellSize;
+        }
+      }
+    });
+
+    // draw score
+    context.font = "10px monospace"
+    context.fillStyle = "yellow"
+    context.textAlign = "right"
+    context.fillText(score, canvas.width - 5, 15)
+  }
+
+  window.onscroll = function(e) {
+    e.preventDefault()
+    window.scrollTo(0, 0)
+    return false
+  }
+
+  document.addEventListener('touchstart', function(e){
+    e.preventDefault()
+    var touch = e.changedTouches[0]
+    prevX = touch.pageX
+    prevY = touch.pageY
+    return false
+  }, false)
+
+  document.addEventListener('touchmove', function(e){
+    e.preventDefault()
+    var touch = e.changedTouches[0]
+    distX = touch.pageX - prevX
+    distY = touch.pageY - prevY
+    prevX = touch.pageX
+    prevY = touch.pageY
+
+    if (Math.abs(distX) < minDrag && Math.abs(distY) < minDrag) { return false }
+    if (Math.abs(distX) > Math.abs(distY)) {
+      if (distX > 0) { turnSnake("right") }
+      else if (distX < 0) { turnSnake("left") }
+    } else {
+      if (distY > 0) { turnSnake("down") }
+      else if (distY < 0) { turnSnake("up") }
+    }
+    return false
+  }, false)
+
+  document.addEventListener('touchend', function(e){
+    e.preventDefault()
+    return false
+  }, false)
+
+  document.addEventListener('keydown', function(e) {
+    if (e.which === 32) { // Space
+      if (dead) {
+        reset()
+      } else {
+        paused = !paused
+      }
+    } else if (e.which === 37 || e.which === 65) {
+      turnSnake("left")
+    } else if (e.which === 38 || e.which === 87) {
+      turnSnake("up")
+    } else if (e.which === 39 || e.which === 68) {
+      turnSnake("right")
+    } else if (e.which === 40 || e.which === 83) {
+      turnSnake("down")
+    }
+  });
+
+  reset()
+  requestAnimationFrame(loop);
+</script>
+</body>
+</html>
