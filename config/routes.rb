@@ -51,6 +51,7 @@ Rails.application.routes.draw do
 
   get "dashboard" => "dashboard#show"
   resource :dashboard, controller: :dashboard, only: [:show] do
+    get :demo, on: :collection
     collection do
       get :octoprint_session
     end
@@ -111,7 +112,9 @@ Rails.application.routes.draw do
   resources :jarvis_tasks, path: :tasks
   namespace :jil do
     get :/, action: :index, controller: :jarvis_tasks
+    resources :functions, controller: :jarvis_tasks
     resources :jarvis_tasks, path: :tasks do
+      get :config, on: :member, action: :configuration
       post :run, on: :member
     end
   end

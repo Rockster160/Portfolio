@@ -1,0 +1,25 @@
+<%= content_for(:head) do %>
+  <script type="text/javascript">
+    window.Emoji = {}
+    fetch("/emoji.json").then(function(res) {
+      res.json().then(function(json) {
+        window.Emoji = json
+      })
+    })
+  </script>
+<% end %>
+
+<div class="dashboard no-markdown"></div>
+<div class="dashboard-omnibar">
+  <input autofocus=true type="text">
+  <div class="dashboard-omnibar-autocomplete"></div>
+</div>
+
+<script type="text/javascript">
+  (function load() {
+    if (!window.jQuery) { return setTimeout(load, 50); }
+    Cell.loadConfig({
+      snake: { x: 2, y: 2 },
+    })
+  })()
+</script>
