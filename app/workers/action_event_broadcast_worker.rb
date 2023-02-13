@@ -2,7 +2,7 @@ class ActionEventBroadcastWorker
   include Sidekiq::Worker
 
   def perform(event_id=nil)
-    event = event_id.present? ? ActionEvent.find_by(id: event_id) : nil
+    event = event_id.present? ? ::ActionEvent.find_by(id: event_id) : nil
 
     if event.present?
       ::Jarvis.trigger(
@@ -14,8 +14,8 @@ class ActionEventBroadcastWorker
         },
         scope: { user_id: event.user_id }
       )
-      FitnessBroadcast.call(event)
+      ::FitnessBroadcast.call(event)
     end
-    RecentEventsBroadcast.call
+    ::RecentEventsBroadcast.call
   end
 end

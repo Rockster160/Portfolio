@@ -83,7 +83,7 @@
 class Jarvis
   MY_NUMBER = "3852599640"
 
-  def self.trigger(trigger, trigger_data, scope)
+  def self.trigger(trigger, trigger_data, scope: {})
     ::JarvisTriggerWorker.perform_async(trigger.to_s, trigger_data.to_json, scope.to_json)
   end
 
