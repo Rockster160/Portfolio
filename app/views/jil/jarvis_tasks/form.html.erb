@@ -1,3 +1,7 @@
+<% if running_function? && @task.new_record? %>
+  <i hidden data-onload-modal="#config"></i>
+<% end %>
+
 <div class="split-container">
   <div class="tree lists-index-container">
     <div class="list-field">
@@ -5,6 +9,27 @@
     </div>
     <div class="lists">
       <%# Accordion groups, search should filter by group %>
+      <% if running_function? %>
+        <% task_group = :input %>
+        <h3 data-group="<%= task_group %>"><%= task_group.to_s.titleize %></h3>
+        <% @task.inputs.each do |op, data| %>
+          <div class="list-item-container" data-group="<%= task_group %>">
+            <span class="list-item" data-type="<%= "#{task_group}.#{op}" %>" data="<%= ["#{task_group}.#{op}", data].to_json %>">
+              <span class="item-name"><%= op.to_s.titleize %></span>
+            </span>
+          </div>
+        <% end %>
+      <% end %>
+      <% task_group = :custom %>
+      <h3 data-group="<%= task_group %>"><%= task_group.to_s.titleize %></h3>
+      <% current_user.jarvis_tasks.function.each do |fn| %>
+        <% op, data = fn.to_op_data %>
+        <div class="list-item-container" data-group="<%= task_group %>">
+          <span class="list-item" data-type="<%= "#{task_group}.#{op}" %>" data="<%= ["#{task_group}.#{op}", data].to_json %>">
+            <span class="item-name"><%= op.to_s.titleize %></span>
+          </span>
+        </div>
+      <% end %>
       <% TaskMap::TASKS.each do |task_group, group_items| %>
         <h3 data-group="<%= task_group %>"><%= task_group.to_s.titleize %></h3>
         <% group_items.each do |op, data| %>
@@ -18,29 +43,61 @@
     </div>
   </div>
 
+  <%= render_modal(:config, "Config") do %>
+    <% if running_function? %>
+      <%= form_for [:jil, @task], html: { class: "basic" } do |f| %>
+        <p>Input format:</p>
+        <ul>
+          <li>Line by itself will be an inline text that shows.</li>
+          <li>Lines starting with &gt; will use key: :val syntax</li>
+          <li><code>val</code> can be a :symbol for a type, then followed by a comma for options</li>
+          <li><code>val</code> can also be an array to allow a user to select from a dropdown</li>
+          <li>options can include <code>optional</code> which will allow the function to run even with no value provided.</li>
+        </ul>
+        Or have each input be added as a new type (Input.from, Input.multiplier, Input.other)
+        <pre>
+Choose date:
+> from: :date, optional, default: Now
+> multiplier: [seconds, minutes, hours]
+> event_name: :str, label: Event Name
+        </pre>
+        <%= f.label :input, "Newline separated input data" %>
+        <%= f.text_area :input %>
+        <%= f.select :output_type, options_for_select(JarvisTask.output_types.map { |k, v| [k.humanize, k] }, selected: @task.output_type) %>
+        <%= f.submit "Save", remote: true %>
+      <% end %>
+    <% else %>
+      <p>No config available (import/export)</p>
+    <% end %>
+  <% end %>
+
   <div class="skinny-container lists-index-container">
     <div class="btn-container">
       <%= link_to "Tasks", :jil, class: "btn" %>
-      <%= link_to "Config (Import/Export/Delete - Modal)", nil, class: "btn pull-right disabled" %>
+      <%= link_to "Config", nil, data: { modal: "#config" }, class: "btn pull-right config-btn" %>
       <br>
       <br>
     </div>
     <div class="btn-container">
       <%= form_for [:jil, @task], html: { class: "basic", id: "task-form" } do |f| %>
-        <%= link_to "Run", [:run, :jil, @task], class: "btn run-task", remote: true, method: :post if @task.persisted? %>
+        <%= link_to "Run", [:run, :jil, @task], class: "btn run-task", remote: true, method: :post if @task.persisted? && !running_function? %>
         <%= f.submit "Save", class: "btn save-task pull-right" %>
-        <div class="flex">
-          <%= f.select(
-            :trigger,
-            options_for_select(
-              JarvisTask.triggers.collect { |trigger, _| [trigger.titleize, trigger] },
-              @task.trigger
-            ),
-            { include_blank: "Cron" },
-            { class: "cron-input-select" }
-          ) %>
-          <%= f.text_field :cron, placeholder: "min hr day month wday", class: "cron-input" %>
-        </div>
+        <% if running_function? %>
+          <%= f.hidden_field :trigger %>
+        <% else %>
+          <div class="flex">
+            <%= f.select(
+              :trigger,
+              options_for_select(
+                JarvisTask::AVAILABLE_TRIGGERS.collect { |trigger| [trigger.to_s.titleize, trigger] },
+                @task.trigger
+              ),
+              {},
+              { class: "cron-input-select" }
+            ) %>
+            <%= f.text_field :cron, placeholder: "min hr day month wday", class: "cron-input" %>
+          </div>
+        <% end %>
       <% end %>
     </div>
     <div class="lists-title">J.I.L.</div>

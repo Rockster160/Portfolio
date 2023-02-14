@@ -125,3 +125,8 @@ class Hash
     JSON.parse(self.to_json, object_class: BetterJson)
   end
 end
+class Array
+  def better
+    JSON.parse(self.to_json, object_class: BetterJson)
+  end
+end

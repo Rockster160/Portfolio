@@ -2,6 +2,7 @@ import consumer from "./consumer"
 
 $(document).ready(function() {
   if ($(".ctr-jarvis_tasks.act-new, .ctr-jarvis_tasks.act-edit").length == 0) { return }
+  if (!window.location.pathname.match(/tasks\/([\d\w]+)/)) { return }
 
   consumer.subscriptions.create({
     channel: "JilChannel",

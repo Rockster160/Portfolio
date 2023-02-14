@@ -17,16 +17,16 @@ class TaskMap
   #     bool - adds a toggle - value is label
   #     multiple - dropdown of checkboxes, can select multiple
   TYPES = [
-    :bool,
+    :any,
     :str,
+    :bool,
     :num,
+    :duration,
+    :date,
     :hash,
     :keyval,
     :array,
-    :duration,
-    :date,
     :var,
-    :any,
     :task
   ]
   TASKS = {
@@ -66,11 +66,6 @@ class TaskMap
         # Maybe arrays/hashes DO have a type?
         :content, # Maybe this content can only have 1 type (no mixed types in an array)
       ],
-      # duration:     [
-      #   { return: :duration },
-      #   { block: :num, name: :amount },
-      #   [:seconds, :minutes, :hours, :days, :weeks, :months, :years],
-      # ],
       # date:         [
       #   { return: :date },
       #   { block: :date },
@@ -416,7 +411,9 @@ class TaskMap
       duration: [
         { return: :duration },
         { block: :num },
-        [:seconds, :minutes, :hours, :days, :weeks, :months, :years],
+        # [:seconds, :minutes, :hours, :days, :weeks, :months, :years],
+        # block: :select allows dynamically selecting the value
+        { block: :select, values: [:seconds, :minutes, :hours, :days, :weeks, :months, :years] },
       ],
     },
     lists: {

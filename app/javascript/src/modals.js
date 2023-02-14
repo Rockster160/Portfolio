@@ -43,4 +43,8 @@ $(document).ready(function() {
       hideModal(".modal.shown")
     }
   })
+  $("[data-onload-modal]").each(function() {
+    showModal($(this).attr("data-onload-modal"))
+    this.remove()
+  })
 })

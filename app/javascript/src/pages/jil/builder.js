@@ -7,7 +7,7 @@ Show temp variables in function list
 // On load, collect all of the existing tokens and store them in the `tokens` array
 */
 
-import { render, templates } from "./templates"
+import { render, templates, tokenSelector } from "./templates"
 import { genUniqToken, tokens } from "../random/js_chance_generator"
 
 $(document).ready(function() {
@@ -25,6 +25,19 @@ $(document).ready(function() {
       $(wrapper).children(".raw-input").remove()
     }
   }
+  let displayDynamicSelect = function(select) {
+    let wrapper = select.parentElement
+    // if (select.value == "&lt;dynamic&gt;") console.log("is dynamic");
+    // if (wrapper.querySelectorAll(".block-select").length == 0) console.log("no block-select");
+    if (select.value == "&lt;dynamic&gt;" && wrapper.querySelectorAll(".block-select").length == 0) {
+      // console.log("add dynamic");
+      wrapper.appendChild(tokenSelector())
+      initInteractivity()
+    } else {
+      // console.log("remove dynamic");
+      $(wrapper).children(".block-select").remove()
+    }
+  }
 
   let attachSelectEvents = function() {
     $(".item-name select.block-select").each(function() {
@@ -38,7 +51,14 @@ $(document).ready(function() {
       }
     })
   }
-  document.addEventListener("change", function (e) {
+  document.addEventListener("change", function(evt) {
+    // console.log("change");
+    if (evt.target.classList?.contains("dynamic-select")) {
+      // console.log("dynamic");
+      displayDynamicSelect(evt.target)
+    }
+  })
+  document.addEventListener("change", function(e) {
     disableRunButton("change")
   }, { once: true })
 
@@ -63,7 +83,7 @@ $(document).ready(function() {
   }
 
   let toggleCronInput = function() {
-    $(".cron-input").toggleClass("hidden", $(".cron-input-select").val() != "")
+    $(".cron-input").toggleClass("hidden", $(".cron-input-select").val() != "cron")
   }
   $(".cron-input-select").change(toggleCronInput)
   toggleCronInput()
@@ -176,6 +196,11 @@ $(document).ready(function() {
       .addClass("disabled")
       .removeAttr("data-remote")
       .removeAttr("href")
+    $(".config-btn")
+      .attr("disabled", "disabled")
+      .addClass("disabled")
+      .removeAttr("data-modal")
+      .removeAttr("href")
   }
 
   let collectBlocksFromList = function(tasksNode) {
@@ -205,7 +230,8 @@ $(document).ready(function() {
             }
           }
           return {
-            option: block.querySelector("select")?.value,
+            option: (block.querySelector(".block-select") || block.querySelector("select"))?.value,
+            selected: block.querySelector("select")?.value,
             raw: rawval,
           }
         }
@@ -214,7 +240,7 @@ $(document).ready(function() {
   }
 
   document.addEventListener("click", function(evt) {
-    if (evt.target.parentElement.classList.contains("delete")) {
+    if (evt.target.parentElement?.classList?.contains("delete")) {
       disableRunButton("delete")
       evt.target.closest(".list-item-container").remove()
     }
@@ -267,6 +293,9 @@ $(document).ready(function() {
     fetch(form.getAttribute("action"), {
       method: form.querySelector("[name=_method]")?.value?.toUpperCase() || form.getAttribute("method"),
       body: new FormData(form),
+      headers: {
+        "Accept": "application/json"
+      }
     }).then(function(res) {
       if (res.ok) {
         res.json().then(function(json) {
@@ -289,6 +318,11 @@ $(document).ready(function() {
       })
       container.removeAttribute("data-tasks")
     })
+
     initInteractivity()
   } while ($("[data-tasks]").length > 0);
+  $(".dynamic-select").each(function() {
+    let select = this
+    displayDynamicSelect(this)
+  })
 })

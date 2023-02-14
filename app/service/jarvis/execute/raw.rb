@@ -1,6 +1,8 @@
 class Jarvis::Execute::Raw < Jarvis::Execute::Executor
+  CASTABLE = [:bool, :str, :num]
+  # TODO: cast date
 
-  [:bool, :str, :num].each do |method|
+  CASTABLE.each do |method|
     define_method(method) do
       self.class.send(method, args)
     end
@@ -78,8 +80,4 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   def user_cache
     @user_cache ||= user.jarvis_cache || user.create_jarvis_cache
   end
-
-  # def self.map_eval_args(vals)
-  #   vals.map { |t| eval_block(t) }
-  # end
 end

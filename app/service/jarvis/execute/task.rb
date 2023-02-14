@@ -12,7 +12,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def command
-    Jarvis.command(jil.task.user, evalargs)
+    Jarvis.command(jil.task.user, evalargs.first)
   end
 
   def exit

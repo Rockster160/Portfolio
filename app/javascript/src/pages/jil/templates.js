@@ -26,7 +26,10 @@ let jsonToElem = function(json) {
         attrv = attrv()
       }
       switch (attrk) {
-        case "class": element.classList.add(...attrv.replaceAll(/^ *| *$/g, "").split(" ")); break;
+        case "class":
+          let klasses = attrv.replaceAll(/^ *| *$/g, "").split(" ").filter((i) => i.length > 0)
+          if (klasses.length > 0) { element.classList.add(...klasses) }
+          break;
         case "content":
           if (Array.isArray(attrv)) {
             attrv.forEach(function(obj) { element.appendChild(jsonToElem(obj)) })
@@ -50,13 +53,42 @@ export let shorttype = function(type) {
     case "keyval":   return "k:v"; break;
     case "hash":     return "{}"; break;
     case "array":    return "[]"; break;
-    case "date":     return "0"; break;
+    case "date":     return "date"; break;
     case "duration": return "dur"; break;
     case "var":      return "var"; break;
     case "task":     return "tsk"; break;
     case "any":      return "any"; break;
-    default:         return "X"
+    default:         return `&lt;unknown(${type})&gt;`
   }
+}
+
+// Still TODO:
+// init dropdowns on load
+// Save the dynamic value -- currently being ignored? Check `collectBlockData`
+// Load the value on the next page load
+// Use the dynamic value to in Jarvis::Execute
+export let tokenSelector = function() {
+  return jsonToElem({ select: {
+    // id: `${existingdata.token}[${idx}]`,
+    type: "select",
+    class: `block-select`,
+    unattached: true,
+    blocktype: "str",
+    content: function() {
+      let opts = []
+      // if (data.optional) { opts.push({ option: { value: "", content: `{${data.default || "None"}}` } }) }
+      // bool str num allow raw entries
+      // if (fillitem.option != "input" && rawVals.indexOf(data.block) >= 0) {
+      //   opts.push({ option: { value: "input", content: "input" } })
+      // }
+      // if (fillitem.option) {
+      //   opts.push({ option: {
+      //     value: fillitem.option, selected: true, content: fillitem.option
+      //   } })
+      // }
+      return opts
+    }
+  } })
 }
 
 export let templates = {
@@ -121,7 +153,7 @@ export let templates = {
                     } else if (String(data) === data) {
                       items.push({ span: { content: data } })
                       return // Skip incrementing the idx since this isn't a user input
-                    } else if (data.block) {
+                    } else if (data.block && data.block != "select") {
                       items.push({ span: {
                         class: "select-wrapper",
                         content: function() {
@@ -141,7 +173,8 @@ export let templates = {
                             blocktype: data.block,
                             content: function() {
                               let opts = []
-                              if (data.optional) { opts.push({ option: { value: "", content: "{None}" } }) }
+                              if (data.optional) { opts.push({ option: { value: "", content: `{${data.default || "None"}}` } }) }
+                              // bool str num allow raw entries
                               if (fillitem.option != "input" && rawVals.indexOf(data.block) >= 0) {
                                 opts.push({ option: { value: "input", content: "input" } })
                               }
@@ -167,7 +200,32 @@ export let templates = {
                           return children
                         }
                       } })
+                    } else if (data.block && data.block == "select") {
+                      // This whole block is essentially a duplicate of the next one (Array check)
+                      // Ideally, these would work together to DRY up the code, but in the sake of
+                      //   speed and not knowing a great way to merge these without a lot of
+                      //   conditional code, going with duplicate blocks for now.
+                      // We want the regular array + an option for <dynamic>
+                      // When <dynamic> is selected, add a second select field which acts like a
+                      //   standard str token selection (allows selecting a token like wash.sit.cat)
+                      let dyn_str = "&lt;dynamic&gt;"
+                      items.push({ span: {
+                        class: "select-wrapper",
+                        content: [{ select: {
+                          class: "dynamic-select",
+                          unattached: true,
+                          content: [...data.values, dyn_str].map(function(item) {
+                            let dynamic = item == dyn_str
+                            if (fillitem.selected == item || fillitem.option == item) {
+                              return { option: { value: item, selected: true, content: item, class: `${dynamic ? "dynamic-option" : ""}` } }
+                            } else {
+                              return { option: { value: item, content: item, class: `${dynamic ? "dynamic-option" : ""}` } }
+                            }
+                          })
+                        } }]
+                      } })
                     } else if (Array.isArray(data)) {
+                      // Array of items- add a select dropdown to allow choosing an item
                       items.push({ span: {
                         class: "select-wrapper",
                         content: [{ select: {

@@ -1,14 +1,24 @@
-<%= meta_title "My Tasks", include_name: false %>
+<% name = running_function? ? "Function" : "Task" %>
+<%= meta_title "My #{name.pluralize}", include_name: false %>
 
 <div class="skinny-container lists-index-container">
   <div class="btn-container">
     <a href="<%= account_path %>" class="btn">Account</a>
-    <a href="<%= new_jil_jarvis_task_path %>" class="btn pull-right">New Task +</a>
+    <% if running_function? %>
+      <a href="<%= new_jil_function_path %>" class="btn pull-right">New Function +</a>
+    <% else %>
+      <a href="<%= new_jil_jarvis_task_path %>" class="btn pull-right">New Task +</a>
+    <% end %>
   </div>
-  <div class="lists-title">My Tasks</div>
+  <div class="lists-title">My <%= name.pluralize %></div>
+  <% if running_function? %>
+    <%= link_to "Tasks", jil_path, class: "btn pull-right" %>
+  <% else %>
+    <%= link_to "Custom Functions", jil_functions_path, class: "btn pull-right" %>
+  <% end %>
   <div class="lists">
     <div class="list-field">
-      <%= text_field_tag "task[name]", "", class: "filterable", placeholder: "Search tasks" %>
+      <%= text_field_tag "task[name]", "", class: "filterable", placeholder: "Search #{name.downcase}s" %>
     </div>
     <div class="important-list-items"></div>
     <% @tasks.each do |task| %>
@@ -17,7 +27,12 @@
           <%= content_tag :div, task.humanized_schedule, class: "category" %>
         </div>
         <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>
-        <a href="<%= edit_jil_jarvis_task_path(task) %>" class="list-item">
+        <% if running_function? %>
+          <% url = edit_jil_function_path(task) %>
+        <% else %>
+          <% url = edit_jil_jarvis_task_path(task) %>
+        <% end %>
+        <a href="<%= url %>" class="list-item">
           <span class="item-name"><%= task.name.titleize %></span>
         </a>
         <% if task.cron? %>

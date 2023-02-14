@@ -1,9 +1,16 @@
-class Jarvis::Execute
+ class Jarvis::Execute
   MAX_ITERATIONS = 1000
   attr_accessor :ctx, :task, :data
 
   def self.call(task, data={})
     new(task, data).call
+  end
+
+  def self.call_with_data(task, data={})
+    new(task, data).then { |exe|
+      exe.call
+      [exe.ctx, exe.task, exe.data]
+    }
   end
 
   def initialize(task, data={})
@@ -46,6 +53,7 @@ class Jarvis::Execute
   end
 
   def eval_block(task_block)
+    # binding.pry if task_block.is_a?(::Hash) && task_block[:token] == "shrimp.car.desk"
     if task_block.is_a?(::Hash) && task_block[:token].present?
       @ctx[:current_token] = task_block[:token]
       ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token] })
@@ -67,7 +75,7 @@ class Jarvis::Execute
     @ctx[:vars][task_block[:token]] = (
       "Jarvis::Execute::#{klass.titleize.gsub(" ", "")}".constantize.new(self, task_block).send(method)
     ).tap { |res|
-      ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token], res: res })
+      ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token], res: res.as_json })
     }
   # rescue StandardError => e
   #   binding.pry
