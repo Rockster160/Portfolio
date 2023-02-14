@@ -4,9 +4,9 @@ class Jil::JarvisTasksController < ApplicationController
 
   def index
     if running_function?
-      @tasks = current_user.jarvis_tasks.where(trigger: :function)
+      @tasks = current_user.jarvis_tasks.function
     else
-      @tasks = current_user.jarvis_tasks.where.not(trigger: :function)
+      @tasks = current_user.jarvis_tasks.without_fn
     end
   end
 

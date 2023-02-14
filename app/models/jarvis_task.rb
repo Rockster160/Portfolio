@@ -36,6 +36,7 @@ class JarvisTask < ApplicationRecord
     # :function,
   ]
 
+  scope :without_fn, -> { where.not(trigger: :function).or(where(trigger: nil)) }
   scope :cron, -> { where(trigger: nil).where.not(next_trigger_at: nil) }
 
   enum trigger: {
