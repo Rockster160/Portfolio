@@ -14,8 +14,8 @@ class ActionEventBroadcastWorker
         },
         scope: { user_id: event.user_id }
       )
-      ::FitnessBroadcast.call(event)
     end
+    ::FitnessBroadcast.call(event)
     ::RecentEventsBroadcast.call
   end
 end
