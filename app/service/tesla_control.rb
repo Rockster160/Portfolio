@@ -154,7 +154,7 @@ class TeslaControl
   end
 
   def vehicle_data
-    @vehicle_data ||= get("vehicles/#{vehicle_id}/latest_vehicle_data").dig(:legacy).tap { |car_data|
+    @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data").tap { |car_data|
       User.find(1).jarvis_cache.set(:car_data, car_data)
     }
   end
