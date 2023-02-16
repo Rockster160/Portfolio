@@ -2,10 +2,17 @@ module SearchParser
   module_function
 
   def call(str, delimiters={})
+    aliases = delimiters.delete(:aliases)
     str = str.dup
     tr = Tokenizer.new(str)
 
-    sorted_delims = delimiters.to_a.sort_by { |dk, d| -d.length }
+    delims_with_aliases = delimiters.to_a.each_with_object([]) { |(dk, d), obj|
+      obj << [dk, d]
+      aliases.each do |old_a, new_a|
+        obj << [dk, d.gsub(old_a.to_s, new_a.to_s)] if d.include?(old_a.to_s)
+      end
+    }.uniq
+    sorted_delims = delims_with_aliases.sort_by { |dk, d| -d.length }
     tokenized_split(str, tr).each_with_object({}) { |piece, obj|
       next if sorted_delims.find do |delim_key, delim|
         next unless piece.include?(delim)

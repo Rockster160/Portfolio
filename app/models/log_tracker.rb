@@ -33,6 +33,16 @@ class LogTracker < ApplicationRecord
   scope :by_ip, ->(ip) { where(ip_address: ip) }
   scope :not_me, -> { where.not(user_id: 1) }
 
+  def search_scope
+    joins(:user)
+  end
+
+  search_terms(
+    :url,
+    method: :http_method,
+    user: "users.username",
+  )
+
   def readable_json(json)
     JSON.parse(json.gsub("=>", ":")) rescue json.try(:read) || json.try(:inspect) || json.to_s
   end
