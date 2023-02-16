@@ -33,7 +33,7 @@ class LogTracker < ApplicationRecord
   scope :by_ip, ->(ip) { where(ip_address: ip) }
   scope :not_me, -> { where.not(user_id: 1) }
 
-  def search_scope
+  def self.search_scope
     joins(:user)
   end
 

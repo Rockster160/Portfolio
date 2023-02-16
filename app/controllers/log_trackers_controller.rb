@@ -3,7 +3,7 @@ class LogTrackersController < ApplicationController
 
   def index
     @loggers = LogTracker.order(created_at: :desc).page(params[:page])
-    @loggers = @loggers.by_fuzzy_text(params[:q]) if params[:q].present?
+    @loggers = @loggers.query(params[:q]) if params[:q].present?
   end
 
   def show

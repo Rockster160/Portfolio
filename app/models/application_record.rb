@@ -11,7 +11,7 @@ class ApplicationRecord < ActiveRecord::Base
   end
 
   def self.build_query(hash, point, join_with=:AND)
-    hash.map { |k, v| "#{table_name}.#{k} #{point} ?" }.join(" #{join_with} ")
+    hash.map { |k, v| "#{k} #{point} ?" }.join(" #{join_with} ")
   end
 
   def self.search_scope
@@ -44,7 +44,7 @@ class ApplicationRecord < ActiveRecord::Base
   scope :search, ->(q) { ilike(search_indexed("%#{q}%"), :OR) }
   scope :unsearch, ->(q) { not_ilike(search_indexed("%#{q}%"), :AND) }
   scope :query, ->(q) {
-    built = all
+    built = search_scope
     data = q.is_a?(Hash) ? q : SearchParser.call(
       q,
       or: "OR:",
