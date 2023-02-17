@@ -1,6 +1,7 @@
 # Might be special/not an integration
 class Jarvis::Venmo < Jarvis::Action
   def attempt
+    # Should also convert "1 dollar" to "$1"
     return unless valid_words?
     raise Jarvis::Error.not_allowed unless @user&.admin?
 
