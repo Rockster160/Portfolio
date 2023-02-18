@@ -1,6 +1,7 @@
 class ScheduleTravelWorker
   include Sidekiq::Worker
 
+  FOLLOWUP_OFFSET = 1.hour
   PRE_OFFSET = 20.minutes
   POST_OFFSET = 20.minutes
 
@@ -101,49 +102,61 @@ class ScheduleTravelWorker
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
       next if event[:start_time].blank? || event[:end_time].blank?
-      next unless event[:name].to_s.downcase.to_sym == :travel
+      next if event[:location].blank?
+      next if event[:location].include?("zoom.us")
+      next if event[:location].include?("meet.google")
+      next if event[:location].match?(/webinar/i) # GoToWebinar
+      # Don't schedule the same event again if it's already run
       next if event[:start_time] - PRE_OFFSET - 1.minute < now # Extra minute for padding
 
+      # Should show in schedule how long travel time will be
+      # travel_from = :home
+      traveltime = address_book.traveltime_seconds(event[:location])
+      new_events.push(
+        name: "TT: #{distance_of_time_in_words(traveltime)}",
+        uid: event[:uid] + "-tt",
+        type: :message,
+        user_id: 1,
+        scheduled_time: event[:start_time] - traveltime,
+      )
+
+      # If home, 5 minutes in advance before travel time
+      # If elsewhere, 10? 15? minutes
       new_events.push(
         name: event[:name],
-        uid: event[:uid],
+        uid: event[:uid] + "-start-car",
         type: :travel,
         words: "Start car",
         user_id: 1,
         scheduled_time: event[:start_time] - PRE_OFFSET,
       )
 
-      followup_events = events.select do |followup_event|
-        next if followup_event[:name].to_s.downcase.to_sym == :travel
-        travel_range = (event[:start_time] - PRE_OFFSET)..(event[:end_time] + POST_OFFSET)
+      new_events.push(
+        uid: event[:uid] + "-travel", # Adding an extra char so the uids are different
+        type: :travel,
+        words: "Take me to #{event[:location].presence || event[:name]}",
+        user_id: 1,
+        scheduled_time: event[:start_time] - PRE_OFFSET,
+      )
+
+      followup_event = events.find do |followup_event|
+        next if event[:start_time].blank? || event[:end_time].blank?
+        next if event[:location].blank?
+        next if event[:location].include?("zoom.us")
+        next if event[:location].include?("meet.google")
+        next if event[:location].match?(/webinar/i) # GoToWebinar
+
+        travel_range = (event[:start_time] - FOLLOWUP_OFFSET)..(event[:end_time] + FOLLOWUP_OFFSET)
 
         followup_event if travel_range.cover?(followup_event[:start_time])
       end
-
-      traveling_to = followup_events.map { |evt|
-        break evt if evt[:location].present? && !evt[:location].include?("Webinar")
-
-        contact = address_book.contact_by_name(evt[:name])
-        next unless contact
-
-        break evt.merge(location: contact[:address])
-      }.compact
-
-      if traveling_to.present?
+      if followup_event.blank?
         new_events.push(
-          uid: traveling_to[:uid] + "-travel", # Adding an extra char so the uids are different
-          type: :travel,
-          words: "Take me to #{traveling_to[:location]}",
-          user_id: 1,
-          scheduled_time: event[:start_time] - PRE_OFFSET,
-        )
-      elsif followup_events.none?
-        new_events.push(
-          uid: event[:uid] + "-travel", # Adding an extra char so the uids are different
+          uid: event[:uid] + "-home", # Adding an extra char so the uids are different
           type: :travel,
           words: "Take me home",
           user_id: 1,
-          scheduled_time: event[:start_time] - PRE_OFFSET,
+          scheduled_time: event[:end_time] - PRE_OFFSET,
         )
       end
     end

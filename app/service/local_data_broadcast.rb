@@ -63,9 +63,12 @@ class LocalDataBroadcast
         else
           lines.push("• [color #{magenta}]#{event[:name] || event[:uid]}[/color]")
         end
-        if event[:location].present? && !event[:location].include?("zoom.us")
-          lines.push("    [color #{yellow}]#{event[:location].strip}[/color]")
-        end
+        next if event[:location].blank?
+        next if event[:location].include?("zoom.us")
+        next if event[:location].include?("meet.google")
+        next if event[:location].match?(/webinar/i) # GoToWebinar
+
+        lines.push("    [color #{yellow}]#{event[:location].strip}[/color]")
       end
       lines.push("") # Empty line between days
     }.flatten
