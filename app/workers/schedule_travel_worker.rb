@@ -1,4 +1,5 @@
 class ScheduleTravelWorker
+  include ActionView::Helpers::DateHelper
   include Sidekiq::Worker
 
   FOLLOWUP_OFFSET = 1.hour
