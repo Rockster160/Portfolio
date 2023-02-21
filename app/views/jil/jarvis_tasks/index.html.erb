@@ -35,16 +35,22 @@
         <a href="<%= url %>" class="list-item">
           <span class="item-name"><%= task.name.titleize %></span>
         </a>
-        <% if task.cron? %>
-          <div class="list-item-brief">
-            Last: <%= task.last_trigger_at&.in_time_zone(current_user.timezone)&.to_formatted_s(:short_with_time) || "N/A" %>
-            --
-            Next: <%= task.next_trigger_at&.in_time_zone(current_user.timezone)&.to_formatted_s(:short_with_time) || "N/A" %>
-            <% if task.next_trigger_at && task.next_trigger_at > Time.current %>
+        <div class="list-item-brief">
+          <div class="left-brief">
+            <% if task.last_trigger_at.present? %>
+              <%= task.last_trigger_at.in_time_zone(current_user.timezone)&.to_formatted_s(:compact_week_month_time).gsub(":00 ", "") %>
+              (<%= distance_of_time_in_words(Time.current, task.last_trigger_at) + " ago" %>)
+            <% else %>
+              --Never Run--
+            <% end %>
+          </div>
+          <div class="right-brief">
+            <% if task.next_trigger_at.present? %>
+              <%= task.next_trigger_at.in_time_zone(current_user.timezone)&.to_formatted_s(:compact_week_month_time).gsub(":00 ", "") %>
               (<%= distance_of_time_in_words(Time.current, task.next_trigger_at) + " from now" %>)
             <% end %>
           </div>
-        <% end %>
+        </div>
       </div>
     <% end %>
   </div>
