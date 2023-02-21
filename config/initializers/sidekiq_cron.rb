@@ -1,3 +1,4 @@
+return if ENV["RAILS_CONSOLE"] == "true"
 return if Rails.env.test?
 # Based on UTC time
 every_minute = "* * * * *"
