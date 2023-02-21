@@ -1,6 +1,6 @@
 class Jarvis::Execute::Custom < Jarvis::Execute::Executor
   def method_missing(method, *method_args, &block)
-    run_task = user.jarvis_tasks.function.find_by(name: method)
+    run_task = user.jarvis_tasks.find_by(name: method)
     super(method, *method_args, &block) if run_task.blank?
 
     task_input_data = run_task.inputs.to_h

@@ -38,7 +38,7 @@
     # Trigger success?
   rescue StandardError => e
     Rails.logger.error("\e[31m#{e.class}: #{e}\n#{e.backtrace.select{|l|l.include?("/app/")}.reverse.join("\n")}\e[0m")
-    @ctx[:msg] << "[#{@ctx[:current_token]}] Failed: #{e.message}"
+    @ctx[:msg] << "[#{@ctx[:current_token]}] Failed: #{e.try(:message) || e.try(:body) || e}"
     # Jil should have an interface / logger that displays all recent task runs and failure messages
     # trigger fail unless task has a fail trigger
     SlackNotifier.err("Jil Error[#{task.name}]", e)

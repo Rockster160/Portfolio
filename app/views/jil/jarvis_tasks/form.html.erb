@@ -9,7 +9,7 @@
     </div>
     <div class="lists">
       <%# Accordion groups, search should filter by group %>
-      <% if running_function? %>
+      <% if @task.inputs.any? %>
         <% task_group = :input %>
         <h3 data-group="<%= task_group %>"><%= task_group.to_s.titleize %></h3>
         <% @task.inputs.each do |op, data| %>
@@ -44,8 +44,8 @@
   </div>
 
   <%= render_modal(:config, "Config") do %>
-    <% if running_function? %>
-      <%= form_for [:jil, @task], html: { class: "basic" } do |f| %>
+    <%= form_for [:jil, @task], html: { class: "basic" } do |f| %>
+      <% if running_function? %>
         <p>Input format:</p>
         <ul>
           <li>Line by itself will be an inline text that shows.</li>
@@ -65,9 +65,23 @@ Choose date:
         <%= f.text_area :input %>
         <%= f.select :output_type, options_for_select(JarvisTask.output_types.map { |k, v| [k.humanize, k] }, selected: @task.output_type) %>
         <%= f.submit "Save", remote: true %>
+      <% else %>
+        <div class="" data-watches-selector=".trigger-selector" data-watches-value="tell">
+          <p>Input Format:</p>
+          <ul>
+            <li>Common words will be filtered out of task names and inputs (<%= Jarvis::MatchTask::COMMON_WORDS.join(", ") %>)</li>
+            <li>(opt) will be optional text (no group)</li>
+            <li>(this|that|other) will be optional text and match any of the givens (no group)</li>
+            <li>(:/regexp/) optional that matches regex</li>
+            <li>(!opt) is required text (no group) - mostly only used when multiple options are provided:</li>
+            <li>(!this|that|other) will require any of the givens (no group)</li>
+            <li>{var} will lazy match everything by default. Can provide a regexp to be more specific - accessed through `var` variable within function</li>
+          </ul>
+          <%= f.label :input, "Newline separated input data" %>
+          <%= f.text_field :input %>
+          <%= f.submit "Save", remote: true %>
+        </div>
       <% end %>
-    <% else %>
-      <p>No config available (import/export)</p>
     <% end %>
   <% end %>
 
@@ -93,7 +107,7 @@ Choose date:
                 @task.trigger
               ),
               {},
-              { class: "cron-input-select" }
+              { class: "cron-input-select trigger-selector" }
             ) %>
             <%= f.text_field :cron, placeholder: "min hr day month wday", class: "cron-input" %>
           </div>

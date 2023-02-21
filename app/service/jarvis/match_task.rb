@@ -2,6 +2,7 @@
 #   * Common words will be filtered out of task names and inputs
 #   * (opt) will be optional text (no group)
 #   * (this|that|other) will be optional text and match any of the givens (no group)
+#   * (*this|that|other) optional, match as many as possible
 #   * (:/regexp/) optional that matches regex
 #   * (!opt) is required text (no group) - mostly only used when multiple options are provided:
 #   * (!this|that|other) will require any of the givens (no group)
@@ -15,33 +16,47 @@ module Jarvis::MatchTask
   module_function
 
   COMMON_WORDS = [:to, :my, :it, :I, :you, :the, :at, :on, :is, :me, :us, :we]
+  SPECIAL = ["?", "\\"]
 
   def match_run(user, ostr, skip=[])
     task = find_match(user, ostr, skip)
     return unless task.present?
 
     # TODO- Do NOT replace common words that are inside () and {}
-    simple_str = ostr.gsub(rx.words(*COMMON_WORDS), "").downcase.squish # Filter out special chars? Like () {} []...
-    simple_name = task.name.gsub(rx.words(*COMMON_WORDS), "").downcase.squish
-    simple_name.gsub!(/(\{.*?\})|(\(.*?\))/) { |found|
+    simple_str = ostr.gsub(rx.words(*COMMON_WORDS), "").squish # Filter out special chars? Like () {} []...
+    task_matcher = task.input.gsub(rx.words(*COMMON_WORDS), "").squish
+    task_matcher.gsub!(/ ?((\{.*?\})|(\(.*?\)))/) { |found|
       optional = found.squish.first == "("
+      many = false
       match_data = found.match(/\{(?<name>\w+)(?::?\s*(?<regex>\/.*?\/))?(?<word>.*?)?\s*\}/)
       match_data ||= found.match(/\((?<name>)(?::?\s*(?<regex>\/.*?\/))?(?<word>.*?)?\s*\)/)
       match = match_data[:regex].to_s[1..-2].presence
-      match ||= match_data[:word].presence
+      match ||= match_data[:word].presence&.then { |s|
+        SPECIAL.each { |char| s = s.gsub(char, Regexp.escape(char)) }
+        if s[0] == "!"
+          optional = false
+          s[0] = ""
+        end
+        if s[0] == "*"
+          many = true
+          s[0] = ""
+        end
+        s.match?(/\w/) ? "(\\b(#{s})\\b)" : s
+      }
       match ||= ".*?"
-      if match[0] == "!"
-        optional = false
-        match[0] = ""
-      end
-      "(#{"?<#{match_data[:name]}>" if match_data[:name].present?}#{match.gsub("\\", "\\\\")})#{"?" if optional}"
-    }.gsub!(/ *(\([^\)]*?\)\?)/, ' ?\1')
-    md = simple_str.match(Regexp.new(simple_name))
+      new_regex = " #{"?" if optional}("
+      new_regex += "?<#{match_data[:name]}>" if match_data[:name].present?
+      new_regex += match
+      new_regex += ")"
+      new_regex = "(#{new_regex})*" if many
+      new_regex += "?" if optional && !many
+      new_regex
+    }
+    md = simple_str.match(Regexp.new("^#{task_matcher}$"))
 
     return match_run(user, ostr, skip + [task.id]) if md.blank?
 
-
-    ::Jarvis::Execute.call(task, vars: md.named_captures).then { |res|
+    ::Jarvis::Execute.call(task, input_vars: md.named_captures.symbolize_keys).then { |res|
       res = Array.wrap(res).select { |item| item.present? && item != "Success" }
       res.first || Jarvis::Text.affirmative
     }
@@ -87,7 +102,7 @@ module Jarvis::MatchTask
   end
 
   def replaces(hash)
-    nest = "name"
+    nest = "input"
     hash.map.each do |k, v|
       nest = "REGEXP_REPLACE(#{nest}, \'#{k}\', \'#{v}\', \'ig\')"
     end

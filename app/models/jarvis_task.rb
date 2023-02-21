@@ -96,19 +96,32 @@ class JarvisTask < ApplicationRecord
   end
 
   def inputs
-    # Choose date:
-    # > from: :date, optional, default: Now
-    # > multiplier: [seconds, minutes, hours]
-    # > other: :str, label: Hello World
-    input.split(/\r?\n/).map { |line|
-      next unless line.starts_with?(/\s*>/)
-      full, key, type = line.match(/\s*>\s*(\w+):\s*(?::(\w+))?,?\s*/)&.to_a
-      type ||= :str
+    if function?
+      # Choose date:
+      # > from: :date, optional, default: Now
+      # > multiplier: [seconds, minutes, hours]
+      # > other: :str, label: Hello World
+      input.to_s.split(/\r?\n/).map { |line|
+        next unless line.starts_with?(/\s*>/)
+        full, key, type = line.match(/\s*>\s*(\w+):\s*(?::(\w+))?,?\s*/)&.to_a
+        type ||= :str
 
-      [key, [
-        { return: type },
-        key.titleize
-      ]]
-    }.compact
+        [key, [
+          { return: type },
+          key.titleize
+        ]]
+      }.compact
+    elsif tell?
+      ["Full Input", [
+        { return: :str },
+        "Full Input"
+      ]] + input.to_s.scan(/\{\w+/).map { |match|
+        word = match[1..]
+        [word, [
+          { return: :str },
+          word.titleize
+        ]]
+      }
+    end
   end
 end
