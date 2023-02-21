@@ -44,7 +44,7 @@
   ensure
     sleep 0.2 if @test_mode
     ActionCable.server.broadcast("jil_#{@task.id}_channel", { done: true, output: @ctx[:msg].join("\n") })
-    @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx)
+    @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx, last_result_val: @ctx[:last_val])
     @ctx[:msg]#.join("\n")
   end
 
@@ -76,6 +76,7 @@
       "Jarvis::Execute::#{klass.titleize.gsub(" ", "")}".constantize.new(self, task_block).send(method)
     ).tap { |res|
       ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token], res: res.as_json })
+      @ctx[:last_val] = res
     }
   # rescue StandardError => e
   #   binding.pry
