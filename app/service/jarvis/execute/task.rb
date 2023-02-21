@@ -31,13 +31,15 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
     if timestamp
       # TODO: The ctx[:i] will not be passed- this can be used to bypass block limitations
       # Not sure how to work around this...
+      # At least pass `i` through, so the scheduled job will continue off of this one.
+      # * This prevents infinity, but can still be used to bypass the 1k limit
       jid = Jarvis::Schedule.schedule(
         scheduled_time: timestamp,
         user_id: jil.task.user.id,
         words: run_task.name,
         type: :command,
+        # vars: { i: jil.ctx[:i] }
       ).first
-      # jil.ctx[:i] = run_task.last_ctx[:i]
       ::BroadcastUpcomingWorker.perform_async
 
       jid

@@ -31,6 +31,8 @@ class JarvisTask < ApplicationRecord
 
   before_save :set_next_cron
 
+  orderable_scope ->(task) { task.user.jarvis_tasks }
+
   AVAILABLE_TRIGGERS = [
     :cron,
     :action_event,

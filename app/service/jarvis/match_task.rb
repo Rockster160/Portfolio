@@ -87,7 +87,7 @@ module Jarvis::MatchTask
     #
     # puts "\e[36m?a #{exe_bool("'#{str}' ~~* #{regex}").then { |b| "\e[3#{b ? 2 : 1}m#{b}" }}\e[0m"
     # puts "\e[36m?a #{exe_bool("'#{str}' ~~* '#{exe_rx(regex)}'").then { |b| "\e[3#{b ? 2 : 1}m#{b}" }}\e[0m"
-    user.jarvis_tasks.tell.where.not(id: skip).find_by("'#{str}' ~~* #{name_regex}")
+    user.jarvis_tasks.tell.ordered.where.not(id: skip).find_by("'#{str}' ~~* #{name_regex}")
   end
 
   def exe_rx(st)
