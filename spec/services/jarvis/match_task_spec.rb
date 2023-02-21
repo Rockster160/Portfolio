@@ -1,11 +1,19 @@
 RSpec.describe ::Jarvis::MatchTask do
   let(:user) { User.create(username: "Admin", role: :admin, password: :password, password_confirmation: :password) }
-  def find_by(str) = Jarvis::MatchTask.find_by(user, str)
+  def find_match(str) = Jarvis::MatchTask.find_match(user, str)
+  def match_run(str) = Jarvis::MatchTask.match_run(user, str)
 
-  describe ".find_by" do
+  describe ".find_match" do
     it "finds with not exact matching common words" do
-      task = JarvisTask.create(name: "Set the house to {temp:/\d+/} (degrees) (this|that|other) (!this|matters) {rest}", user: user)
-      expect(find_by("Set the house 72 degrees matters")).to eq(task)
+      task = JarvisTask.create(name: "Set the house to {temp:/\d+/} (degrees) (this|that|other) (!this|matters) {rest}", user: user, trigger: :tell)
+      expect(find_match("Set the house 72 degrees matters")).to eq(task)
+    end
+  end
+
+  describe ".match_run" do
+    it "finds with not exact matching common words" do
+      task = JarvisTask.create(name: "Set the house to {temp:/\\d+/} (degrees) (this|that|other) (!this|matters) {rest}", user: user, trigger: :tell)
+      expect(match_run("Set the house 72 degrees other this more")).to eq(task)
     end
   end
 end
