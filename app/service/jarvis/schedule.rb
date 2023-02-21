@@ -14,7 +14,7 @@ module Jarvis::Schedule
       next if timestamp.blank?
       {
         timestamp: timestamp,
-        name: sched.is_a?(JarvisTask) ? sched.name : sched[:command],
+        name: sched.is_a?(JarvisTask) ? sched.name : (sched[:name].presence || sched[:command]),
         recurring: sched.is_a?(JarvisTask) && sched.input
       }
     }.compact.sort_by { |sched| sched[:timestamp] }
@@ -44,6 +44,7 @@ module Jarvis::Schedule
       jids.push(jid)
       events.push(
         jid: jid,
+        name: new_event[:name],
         scheduled_time: new_event[:scheduled_time],
         user_id: new_event[:user_id],
         command: new_event[:words],

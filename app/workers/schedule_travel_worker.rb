@@ -118,19 +118,20 @@ class ScheduleTravelWorker
         uid: event[:uid] + "-tt",
         type: :message,
         user_id: 1,
-        scheduled_time: event[:start_time] - traveltime,
+        scheduled_time: event[:start_time] - traveltime - PRE_OFFSET,
       )
 
+      # Car starts automatically with the "take me to command"
       # If home, 5 minutes in advance before travel time
       # If elsewhere, 10? 15? minutes
-      new_events.push(
-        name: event[:name],
-        uid: event[:uid] + "-start-car",
-        type: :travel,
-        words: "Start car",
-        user_id: 1,
-        scheduled_time: event[:start_time] - PRE_OFFSET,
-      )
+      # new_events.push(
+      #   name: event[:name],
+      #   uid: event[:uid] + "-start-car",
+      #   type: :travel,
+      #   words: "Start car",
+      #   user_id: 1,
+      #   scheduled_time: event[:start_time] - PRE_OFFSET,
+      # )
 
       new_events.push(
         uid: event[:uid] + "-travel", # Adding an extra char so the uids are different

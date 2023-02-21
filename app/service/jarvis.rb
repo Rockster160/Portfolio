@@ -98,6 +98,8 @@ class Jarvis
   end
 
   def self.command(user, words)
+    return unless words.present?
+
     res, res_data = new(user, words).command
 
     ActionCable.server.broadcast("jarvis_channel", { say: res, data: res_data }) if res.present?
