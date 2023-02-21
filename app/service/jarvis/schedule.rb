@@ -15,7 +15,7 @@ module Jarvis::Schedule
       {
         timestamp: timestamp,
         name: sched.is_a?(JarvisTask) ? sched.name : sched[:command],
-        recurring: sched.is_a?(JarvisTask) && sched.cron
+        recurring: sched.is_a?(JarvisTask) && sched.input
       }
     }.compact.sort_by { |sched| sched[:timestamp] }
   end

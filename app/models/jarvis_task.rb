@@ -7,20 +7,29 @@
 #  input           :text
 #  last_ctx        :jsonb
 #  last_result     :text
+#  last_result_val :text
 #  last_trigger_at :datetime
 #  name            :text
 #  next_trigger_at :datetime
 #  output_type     :integer          default("any")
+#  sort_order      :integer
 #  tasks           :jsonb
-#  trigger         :integer
+#  trigger         :integer          default("cron")
 #  created_at      :datetime         not null
 #  updated_at      :datetime         not null
 #  user_id         :bigint
 #
+
+# Scheduled for deletion: `cron` (Replaced by `input`)
 class JarvisTask < ApplicationRecord
-  belongs_to :user, required: true
+  include Orderable
+
   serialize :tasks, SafeJsonSerializer
   serialize :last_ctx, SafeJsonSerializer
+
+  belongs_to :user, required: true
+
+  before_save :set_next_cron
 
   AVAILABLE_TRIGGERS = [
     :cron,
@@ -36,11 +45,8 @@ class JarvisTask < ApplicationRecord
     # :function,
   ]
 
-  scope :without_fn, -> { where.not(trigger: :function).or(where(trigger: nil)) }
-  scope :cron, -> { where(trigger: nil).where.not(next_trigger_at: nil) }
-
   enum trigger: {
-    cron:              nil,
+    cron:              0,
     action_event:      1,
     tell:              2,
     list:              3,
@@ -48,7 +54,7 @@ class JarvisTask < ApplicationRecord
     webhook:           5,
     websocket:         6,
     websocket_expires: 7,
-    integration:       8,
+    # integration:     8, - Not needed, as "tell" can handle this
     failed_task:       9,
     function:          10,
   }
@@ -123,5 +129,11 @@ class JarvisTask < ApplicationRecord
         ]]
       }.uniq
     end
+  end
+
+  private
+
+  def set_next_cron
+    self.next_trigger_at = ::CronParse.next(input) if cron? && input.present?
   end
 end

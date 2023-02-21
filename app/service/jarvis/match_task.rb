@@ -15,7 +15,7 @@
 module Jarvis::MatchTask
   module_function
 
-  COMMON_WORDS = [:to, :my, :it, :I, :you, :the, :at, :on, :is, :me, :us, :we]
+  COMMON_WORDS = [:to, :my, :it, :I, :you, :the, :at, :on, :is, :me, :us, :we, :and]
   SPECIAL = ["?", "\\"]
 
   def match_run(user, ostr, skip=[])
@@ -23,8 +23,8 @@ module Jarvis::MatchTask
     return unless task.present?
 
     # TODO- Do NOT replace common words that are inside () and {}
-    simple_str = ostr.gsub(rx.words(*COMMON_WORDS), "").squish # Filter out special chars? Like () {} []...
-    task_matcher = task.input.gsub(rx.words(*COMMON_WORDS), "").squish
+    simple_str = ostr.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish
+    task_matcher = task.input.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish
     task_matcher.gsub!(/ ?((\{.*?\})|(\(.*?\)))/) { |found|
       match_many = false
       optional = found.squish.first == "("

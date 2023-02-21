@@ -22,7 +22,6 @@
     @test_mode = data.delete(:test_mode)
     @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil, current_token: nil }
     @ctx.merge!(@data[:ctx] || {})
-    task.next_trigger_at = CronParse.next(task.cron) if task.cron.present?
     task.update(last_trigger_at: Time.current)
 
     task.tasks.each_with_index do |task_block, idx|

@@ -6,12 +6,13 @@ class Jil::JarvisTasksController < ApplicationController
     if running_function?
       @tasks = current_user.jarvis_tasks.function
     else
-      @tasks = current_user.jarvis_tasks.without_fn
+      @tasks = current_user.jarvis_tasks.not_function
     end
   end
 
   def new
-    @task = current_user.jarvis_tasks.new(trigger: running_function? ? :function : :cron)
+    @task = current_user.jarvis_tasks.new
+    @task.trigger = :function if running_function?
 
     render :form
   end
@@ -80,11 +81,6 @@ class Jil::JarvisTasksController < ApplicationController
       :cron,
       :tasks,
     ).tap { |whitelist|
-      if whitelist[:cron].present?
-        whitelist[:next_trigger_at] = CronParse.next(whitelist[:cron])
-      else
-        whitelist[:next_trigger_at] = nil
-      end
       begin
         whitelist[:tasks] = JSON.parse(whitelist[:tasks]) if whitelist[:tasks].is_a?(String)
       rescue JSON::ParserError
