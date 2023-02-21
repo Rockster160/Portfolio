@@ -112,16 +112,16 @@ class JarvisTask < ApplicationRecord
         ]]
       }.compact
     elsif tell?
-      ["Full Input", [
+      [["Full Input", [
         { return: :str },
         "Full Input"
-      ]] + input.to_s.scan(/\{\w+/).map { |match|
+      ]]] + input.to_s.scan(/\{\w+/).map { |match|
         word = match[1..]
         [word, [
           { return: :str },
           word.titleize
         ]]
-      }
+      }.uniq
     end
   end
 end

@@ -9,7 +9,7 @@
     </div>
     <div class="lists">
       <%# Accordion groups, search should filter by group %>
-      <% if @task.inputs.any? %>
+      <% if @task.inputs.present? %>
         <% task_group = :input %>
         <h3 data-group="<%= task_group %>"><%= task_group.to_s.titleize %></h3>
         <% @task.inputs.each do |op, data| %>
@@ -77,8 +77,8 @@ Choose date:
             <li>(!this|that|other) will require any of the givens (no group)</li>
             <li>{var} will lazy match everything by default. Can provide a regexp to be more specific - accessed through `var` variable within function</li>
           </ul>
-          <%= f.label :input, "Newline separated input data" %>
-          <%= f.text_field :input %>
+          <%= f.label :input, "Trigger Phrases- alternatives separated by new lines" %>
+          <%= f.text_area :input, style: "white-space: nowrap;  overflow: auto;" %>
           <%= f.submit "Save", remote: true %>
         </div>
       <% end %>
