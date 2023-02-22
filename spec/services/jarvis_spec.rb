@@ -186,7 +186,7 @@ RSpec.describe Jarvis do
         ]
       },
       navigate: {
-        res: "Navigating to #{address}",
+        res: "It will take about 1 hour to get to #{address}",
         opts: [
           "#{address}",
           " go to #{address}",
@@ -215,19 +215,19 @@ RSpec.describe Jarvis do
 
     specific_actions = {
       "take me home" => {
-        res: "Navigating to home",
+        res: "It will take about 1 hour to get to home",
         stub: [[:navigate, "4512 W Bartlett Dr, Herriman, UT 84096"]],
       },
       "take me to PT" => {
-        res: "Navigating to PT",
+        res: "It will take about 1 hour to get to PT",
         stub: [[:navigate, "12197 S Draper Gate Dr., Ste B, Draper, UT 84020"]],
       },
       "take me to home depot" => {
-        res: "Navigating to home depot",
+        res: "It will take about 1 hour to get to home depot",
         stub: [[:navigate, "3852 13400 S, Riverton, UT 84065"]],
       },
       "go to Home Depot" => {
-        res: "Navigating to Home Depot",
+        res: "It will take about 1 hour to get to Home Depot",
         stub: [[:navigate, "3852 13400 S, Riverton, UT 84065"]],
       },
     }

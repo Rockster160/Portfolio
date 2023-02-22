@@ -61,7 +61,7 @@ class AddressBook
   end
 
   def traveltime_seconds(to, from=nil)
-    return unless Rails.env.production?
+    return 2700 unless Rails.env.production?
 
     from ||= home.address
     to, from = [to, from].map { |address| to_address(address) }

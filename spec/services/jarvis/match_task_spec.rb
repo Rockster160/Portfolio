@@ -12,7 +12,11 @@ RSpec.describe ::Jarvis::MatchTask do
 
   describe ".match_run" do
     it "finds with not exact matching common words" do
-      task = JarvisTask.create(input: "Set the house to {temp:/\\d+/} (degrees) (this|that|other) (!this|matters) {rest}", user: user, trigger: :tell)
+      task = JarvisTask.create(
+        user: user,
+        trigger: :tell,
+        input: "Set the house to {temp:/\\d+/} (degrees) (this|that|other) (!this|matters) {rest}\nChange to {temp} (please)"
+      )
       expect(Jarvis::Text::AFFIRMATIVE_RESPONSES).to include(match_run("Set the house 72 degrees other this more"))
     end
   end

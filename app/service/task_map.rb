@@ -457,6 +457,13 @@ class TaskMap
       # remove
       # filter - string, date, notes, etc....
     },
+    temporary: {
+      distance: [
+        { return: :str },
+        :Address,
+        { block: :str }
+      ]
+    },
     task: {
       input_data: [
         { return: :hash },
