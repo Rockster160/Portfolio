@@ -4,7 +4,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def print
-    jil.ctx[:msg] << evalargs
+    jil.ctx[:msg] << evalargs.first
   end
 
   def comment

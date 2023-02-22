@@ -43,7 +43,7 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
 
   def logic_exit
     jil.ctx[:exit] = true
-    jil.ctx[:msg] << eval_block(args) || "Exit"
+    jil.ctx[:msg] << (eval_block(args) || "Exit")
   end
 
   def logic_map

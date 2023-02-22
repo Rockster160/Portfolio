@@ -24,7 +24,7 @@ module Jarvis::MatchTask
 
     # TODO- Do NOT replace common words that are inside () and {}
     simple_str = ostr.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish
-    task_matcher = task.input.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish
+    task_matcher = task.input.gsub(rx.words(*COMMON_WORDS), "").squish
     task_matcher.gsub!(/ ?((\{.*?\})|(\(.*?\)))/) { |found|
       match_many = false
       optional = found.squish.first == "("
@@ -68,7 +68,7 @@ module Jarvis::MatchTask
   def find_match(user, ostr, skip=[])
     # BIG TODO!
     # SANTIZE `str` - it is user input and can be executed against the db
-    str = ostr.gsub(rx.words(*COMMON_WORDS), "").downcase.squish # Filter out special chars? Like () {} []...
+    str = ostr.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish
 
     name_regex = replaces(
       "\\m(#{COMMON_WORDS.join("|")})\\M" => "",
@@ -78,15 +78,6 @@ module Jarvis::MatchTask
       "\\% *\\%" => "%",
     )
 
-    # task_name = JarvisTask.first.name
-    # regex = name_regex.gsub("REGEXP_REPLACE(name", "REGEXP_REPLACE('#{task_name}'")
-    # puts "\e[36m<< '#{ostr}'\e[0m"
-    # puts "\e[36m>> '#{exe_rx(regex)}'\e[0m"
-    # puts "\e[36m?r '#{str}' ~~* '#{exe_rx(regex)}'\e[0m"
-    # puts "\e[36m?r #{exe_bool("'#{str}' ~~* '#{exe_rx(regex)}'").then { |b| "\e[3#{b ? 2 : 1}m#{b}" }}\e[0m"
-    #
-    # puts "\e[36m?a #{exe_bool("'#{str}' ~~* #{regex}").then { |b| "\e[3#{b ? 2 : 1}m#{b}" }}\e[0m"
-    # puts "\e[36m?a #{exe_bool("'#{str}' ~~* '#{exe_rx(regex)}'").then { |b| "\e[3#{b ? 2 : 1}m#{b}" }}\e[0m"
     user.jarvis_tasks.tell.ordered.where.not(id: skip).find_by("'#{str}' ~~* #{name_regex}")
   end
 

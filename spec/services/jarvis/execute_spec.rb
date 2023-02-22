@@ -1,5 +1,6 @@
 RSpec.describe ::Jarvis::Execute do
-  let(:user) { User.create(role: :admin) }
+  before { allow(SlackNotifier).to receive(:err) }
+  let(:user) { User.create(id: 1, role: :admin) }
   let(:task) { JarvisTask.create(tasks: tasks, user: user) }
   let(:execute) { ::Jarvis::Execute.call(task) }
   let(:hello) { "Hello, World!" }

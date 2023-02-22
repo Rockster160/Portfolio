@@ -24,7 +24,7 @@
     @ctx.merge!(@data[:ctx] || {})
     task.update(last_trigger_at: Time.current)
 
-    task.tasks.each_with_index do |task_block, idx|
+    task.tasks&.each_with_index do |task_block, idx|
       break if @ctx[:i] >= MAX_ITERATIONS
       break if @ctx[:exit]
 
@@ -40,7 +40,8 @@
     @ctx[:msg] << "[#{@ctx[:current_token]}] Failed: #{e.try(:message) || e.try(:body) || e}"
     # Jil should have an interface / logger that displays all recent task runs and failure messages
     # trigger fail unless task has a fail trigger
-    SlackNotifier.err("Jil Error[#{task.name}]", e)
+    SlackNotifier.err(e, "Jil Error[#{task.name}]")
+    @ctx[:msg]
   ensure
     sleep 0.2 if @test_mode
     ActionCable.server.broadcast("jil_#{@task.id}_channel", { done: true, output: @ctx[:msg].join("\n") })

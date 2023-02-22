@@ -13,7 +13,7 @@
   end
 
   def address_book
-    @address_book ||= User.find(1).address_book
+    @address_book ||= User.admin.first.address_book
   end
 
   def command(original_cmd, original_params=nil, quick=false)

@@ -3,8 +3,7 @@ class ScheduleTravelWorker
   include Sidekiq::Worker
 
   FOLLOWUP_OFFSET = 1.hour
-  PRE_OFFSET = 20.minutes
-  POST_OFFSET = 20.minutes
+  PRE_OFFSET = 10.minutes
 
   def perform
     calendar_data = LocalDataCalendarParser.call
@@ -118,7 +117,7 @@ class ScheduleTravelWorker
         uid: event[:uid] + "-tt",
         type: :message,
         user_id: 1,
-        scheduled_time: event[:start_time] - traveltime - PRE_OFFSET,
+        scheduled_time: event[:start_time] - traveltime, # This will show the time to leave and how long it takes to get there
       )
 
       # Car starts automatically with the "take me to command"
@@ -138,7 +137,7 @@ class ScheduleTravelWorker
         type: :travel,
         words: "Take me to #{event[:location].presence || event[:name]}",
         user_id: 1,
-        scheduled_time: event[:start_time] - PRE_OFFSET,
+        scheduled_time: event[:start_time] - traveltime - PRE_OFFSET,
       )
 
       followup_event = events.find do |followup_event|
