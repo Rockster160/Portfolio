@@ -45,6 +45,11 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
     arr.length
   end
 
+  def join
+    with, *vals = evalargs
+    vals.join(with)
+  end
+
   # def sort
   # - Fail for incompatible types
   #   { return: :array },
@@ -74,12 +79,6 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
   #   { return: :array },
   #   { block: :array },
   #   { block: :array },
-  # end
-
-  # def join
-  #   { return: :str },
-  #   { block: :array },
-  #   { block: :str, name: :join_by, default: ", " },
   # end
 
   # def each

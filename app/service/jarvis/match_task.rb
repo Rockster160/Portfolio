@@ -31,7 +31,7 @@ module Jarvis::MatchTask
       match_data = found.match(/\{(?<name>\w+)(?::?\s*(?<regex>\/.*?\/))?(?<word>.*?)?\s*\}/)
       match_data ||= found.match(/\((?<name>)(?::?\s*(?<regex>\/.*?\/))?(?<word>.*?)?\s*\)/)
       match = match_data[:regex].to_s[1..-2].presence
-      match ||= match_data[:word].to_s[1..-2].presence&.then { |s|
+      match ||= match_data[:word].to_s.gsub(/^\(|\)$/, "").presence&.then { |s|
         SPECIAL.each { |char| s = s.gsub(char, Regexp.escape(char)) }
         if s[0] == "!"
           optional = false
@@ -41,7 +41,7 @@ module Jarvis::MatchTask
           match_many = true
           s[0] = ""
         end
-        s.match?(/\w/) ? "(\\b(#{s})\\b)" : s
+        s.match?(/\w/) ? "\\b(#{s})\\b" : s
       }
       match ||= ".*?"
       new_regex = "#{" " if found.first == " "}#{"?" if optional}("
@@ -53,7 +53,7 @@ module Jarvis::MatchTask
       new_regex
     }
     md = task_matcher.split("\n").find { |line_match|
-      success = simple_str.match(Regexp.new("^#{line_match}$"))
+      success = simple_str.match(Regexp.new("^#{line_match}$", "i"))
       break success if success
     }
     return match_run(user, ostr, skip + [task.id]) if md.blank?

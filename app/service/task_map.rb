@@ -271,6 +271,11 @@ class TaskMap
         { return: :num },
         { block: :array },
       ],
+      join:        [
+        { return: :str },
+        { block: :str, label: "Join with" },
+        { block: :array },
+      ],
       min:         [
         { return: :any, description: "Smallest value from array" },
         { block: :array },
