@@ -29,7 +29,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
     run_task = jil.task.user.jarvis_tasks.find_by!(name: name)
 
     if timestamp
-      # TODO: The ctx[:i] will not be passed- this can be used to bypass block limitations
+      # TODO: The ctx[:i] will not be passed back- this can be used to bypass block limitations
       # Not sure how to work around this...
       # At least pass `i` through, so the scheduled job will continue off of this one.
       # * This prevents infinity, but can still be used to bypass the 1k limit
