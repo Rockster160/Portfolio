@@ -20,10 +20,13 @@ $(document).ready(function() {
     var reactToChange = function() {
       if (watching.val() == watcher.attr("data-watches-value")) {
         watcher.removeClass("hidden")
+        watcher.find("input").prop("disabled", false)
       } else if (watcher.attr("data-watches-radio") !== undefined && $(watcher.attr("data-watches-selector") + ":checked").val() == watcher.attr("data-watches-radio")) {
         watcher.removeClass("hidden")
+        watcher.find("input").prop("disabled", false)
       } else {
         watcher.addClass("hidden")
+        watcher.find("input").prop("disabled", true)
       }
     }
 

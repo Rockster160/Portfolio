@@ -66,7 +66,7 @@ Choose date:
         <%= f.select :output_type, options_for_select(JarvisTask.output_types.map { |k, v| [k.humanize, k] }, selected: @task.output_type) %>
         <%= f.submit "Save", remote: true %>
       <% else %>
-        <div class="" data-watches-selector=".trigger-selector" data-watches-value="tell">
+        <div data-watches-selector=".trigger-selector" data-watches-value="tell">
           <p>Input Format:</p>
           <ul>
             <li>Common words will be filtered out of task names and inputs (<%= Jarvis::MatchTask::COMMON_WORDS.join(", ") %>)</li>
@@ -81,7 +81,7 @@ Choose date:
           <%= f.text_area :input, style: "white-space: nowrap; overflow: auto;" %>
           <%= f.submit "Save", remote: true %>
         </div>
-        <div class="" data-watches-selector=".trigger-selector" data-watches-value="websocket">
+        <div data-watches-selector=".trigger-selector" data-watches-value="websocket">
           <p>Websocket Channel</p>
           <%= f.label :input, "Channel ID, excluding prefix and postfix" %>
           <%= f.text_field :input, placeholder: "abcd" %>
@@ -115,7 +115,15 @@ Choose date:
               {},
               { class: "cron-input-select trigger-selector" }
             ) %>
-            <%= f.text_field :input, placeholder: "min hr day month wday", class: "cron-input" %>
+            <div data-watches-selector=".trigger-selector" data-watches-value="cron">
+              <%= f.text_field :input, placeholder: "min hr day month wday", class: "cron-input" %>
+            </div>
+            <div data-watches-selector=".trigger-selector" data-watches-value="tell">
+              <%= f.text_area :input, style: "white-space: nowrap; overflow: auto;" %>
+            </div>
+            <div data-watches-selector=".trigger-selector" data-watches-value="websocket">
+              <%= f.text_field :input, placeholder: "abcd" %>
+            </div>
           </div>
         <% end %>
       <% end %>
