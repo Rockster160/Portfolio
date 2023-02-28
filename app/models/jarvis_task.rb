@@ -130,6 +130,11 @@ class JarvisTask < ApplicationRecord
           word.titleize
         ]]
       }.uniq
+    elsif websocket?
+      [["WS Receive Data", [
+        { return: :hash },
+        "WS Receive Data"
+      ]]]
     end
   end
 

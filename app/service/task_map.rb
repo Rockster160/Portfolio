@@ -532,10 +532,11 @@ class TaskMap
       #   { block: :str, name: :from }, # Requires Twilio auth/set up
       #   { block: :str, name: :body }, # maybe allow images eventually?
       # ],
-      # ws: [
-      #   { block: :str, name: :channel },
-      #   { block: :hash, name: :data },
-      # ],
+      ws: [
+        { return: :num },
+        { block: :str, name: :channel },
+        { block: :hash, name: :data },
+      ],
       # Not supported yet, but once the app exists, allow sending notifications via app?
       # notification: [
       #   { return: :bool },

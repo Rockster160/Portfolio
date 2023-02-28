@@ -78,7 +78,13 @@ Choose date:
             <li>{var} will lazy match everything by default. Can provide a regexp to be more specific - accessed through `var` variable within function</li>
           </ul>
           <%= f.label :input, "Trigger Phrases- alternatives separated by new lines" %>
-          <%= f.text_area :input, style: "white-space: nowrap;  overflow: auto;" %>
+          <%= f.text_area :input, style: "white-space: nowrap; overflow: auto;" %>
+          <%= f.submit "Save", remote: true %>
+        </div>
+        <div class="" data-watches-selector=".trigger-selector" data-watches-value="websocket">
+          <p>Websocket Channel</p>
+          <%= f.label :input, "Channel ID, excluding prefix and postfix" %>
+          <%= f.text_field :input, placeholder: "abcd" %>
           <%= f.submit "Save", remote: true %>
         </div>
       <% end %>

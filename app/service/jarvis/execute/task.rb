@@ -85,6 +85,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def ws
-    raise NotImplementedError
+    channel, data = evalargs
+    ActionCable.server.broadcast(channel, data)
   end
 end

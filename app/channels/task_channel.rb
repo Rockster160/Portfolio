@@ -4,12 +4,12 @@ class TaskChannel < ApplicationCable::Channel
   end
 
   def receive(data)
+    data.deep_symbolize_keys!
     ::Jarvis.execute_trigger(
       :websocket,
       data,
-      scope: { name: "task_#{params[:channel_id]}_channel" }
+      scope: { input: data[:btn_id] }
     )
-    # ActionCable.server.broadcast("jarvis_channel", { say: data })
   end
 end
 # ActionCable.server.broadcast("task_#{btn_id}_channel", { rgb: "0,255,0", for_ms: 1000 })
