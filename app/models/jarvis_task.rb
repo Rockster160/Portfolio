@@ -40,7 +40,7 @@ class JarvisTask < ApplicationRecord
     # :list,
     # :email,
     :webhook,
-    # :websocket,
+    :websocket,
     # :websocket_expires,
     # :integration,
     # :failed_task,
