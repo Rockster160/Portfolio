@@ -73,6 +73,10 @@ class JarvisTask < ApplicationRecord
     keyval:   9,
   }, _prefix: :output #.output_any?
 
+  def name
+    super.presence || "Task ##{id}"
+  end
+
   def humanized_schedule
     return trigger.titleize if trigger.present?
 

@@ -12,10 +12,12 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
   def add
     name, notes, timestamp = evalargs
 
-    user.action_events.create(
+    event = user.action_events.create(
       event_name: name,
       notes: notes,
       timestamp: timestamp,
-    ).persisted?
+    )
+    ::ActionEventBroadcastWorker.perform_async(event.id) if event.persisted?
+    event.persisted?
   end
 end
