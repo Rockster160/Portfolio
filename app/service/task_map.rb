@@ -455,12 +455,14 @@ class TaskMap
         { block: :str, label: :Search },
         { block: :num, label: :Limit },
         { block: :date, label: :Since },
-      ]
-      # Support querying action events
-      # limit to... 1000?
-      # add
+      ],
+      add: [
+        { return: :bool },
+        { block: :str, label: :Name },
+        { block: :str, label: :Notes, optional: true },
+        { block: :date, label: "Date (Now)", optional: true },
+      ],
       # remove
-      # filter - string, date, notes, etc....
     },
     temporary: {
       distance: [

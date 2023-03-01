@@ -1,9 +1,10 @@
-// TODO:
 /*
-input raw: :empty -- invalid
+//------------------ TODO ------------------
 Show temp variables in function list
 // Block: :any should be invalid when empty
-// All blocks should be invalid when/if empty unless optional (invalid if/when there are no possible options)
+// input: :raw should be invalid when empty
+// All blocks should be invalid when/if empty unless optional
+// All blocks should be invalid if/when there are no possible options unless optional
 // On load, collect all of the existing tokens and store them in the `tokens` array
 */
 
@@ -13,6 +14,7 @@ import { genUniqToken, tokens } from "../random/js_chance_generator"
 $(document).ready(function() {
   if ($(".ctr-jarvis_tasks.act-new, .ctr-jarvis_tasks.act-edit").length == 0) { return }
 
+  // Adds a field for inputting a simple value (str, toggle/bool, integer, etc) inline without use of a var
   let displaySelectTemplate = function(select) {
     let wrapper = select.parentElement
     if (select.value == "input" && wrapper.querySelectorAll(".raw-input").length < 1) {
@@ -25,16 +27,13 @@ $(document).ready(function() {
       $(wrapper).children(".raw-input").remove()
     }
   }
+  // Can't remember what this does- add a comment when I figure it out
   let displayDynamicSelect = function(select) {
     let wrapper = select.parentElement
-    // if (select.value == "&lt;dynamic&gt;") console.log("is dynamic");
-    // if (wrapper.querySelectorAll(".block-select").length == 0) console.log("no block-select");
     if (select.value == "&lt;dynamic&gt;" && wrapper.querySelectorAll(".block-select").length == 0) {
-      // console.log("add dynamic");
       wrapper.appendChild(tokenSelector())
       initInteractivity()
     } else {
-      // console.log("remove dynamic");
       $(wrapper).children(".block-select").remove()
     }
   }
@@ -52,10 +51,11 @@ $(document).ready(function() {
     })
   }
   document.addEventListener("change", function(evt) {
-    // console.log("change");
     if (evt.target.classList?.contains("dynamic-select")) {
-      // console.log("dynamic");
       displayDynamicSelect(evt.target)
+    }
+    if (evt.target.classList?.contains("block-select")) {
+      attachSelectEvents()
     }
   })
   document.addEventListener("change", function(e) {
@@ -93,8 +93,11 @@ $(document).ready(function() {
     return itemParents(item).slice(0, -1).map(parent => parent.querySelector(".token").innerText)
   }
 
+  // Populate available tokens
+  // Mark "invalid" if bad token chosen or no token selected/available
   let resetDropdowns = function() {
     // Maybe use this to figure out what tokens are being used on the page?
+    // Collect all possible tokens, as well as where they are defined
     let usedtokens = Array.from($(".token").map(function(idx) {
       return {
         item: this.parentElement,
@@ -106,6 +109,8 @@ $(document).ready(function() {
     }))
     let token_names = usedtokens.map(function(tokendata) { return tokendata.token })
 
+    // PopulateOptions
+    // Iterate through each dropdown, add available tokens and mark invalid status
     $(".item-name select.block-select").each(function() {
       let select = $(this)
       let thisToken = select.closest(".list-item").find(".token").get(0).textContent
@@ -124,7 +129,7 @@ $(document).ready(function() {
           let sharedParents = tokendata.parentTokens.filter(token => selectParentTokens.includes(token))
           if (sharedParents.length == 0) { return }
         }
-
+        // If none of the above apply, this token is available for this dropdown
         return true
       }).map(tokendata => tokendata.token)
 
@@ -134,12 +139,15 @@ $(document).ready(function() {
         let optionVal = this.textContent
 
         if (optionVal == "input") { return } // Ignore the magic "input" value
+        if (optionVal == "{None}" && select.hasClass("optional")) { return } // Ignore the empty/optional - probably don't want to hardcode the {None}?
         if (available_tokens.indexOf(optionVal) < 0) {
           removeOrInvalidOpt(select, option) // Token no longer exists (block was deleted)
         } else {
           return this.textContent
         }
       }))
+
+      // Add tokens that aren't already in the list
       available_tokens.forEach(function(token) {
         // Option is already there. Don't add it again.
         if (existing_options.indexOf(token) >= 0) { return }
@@ -148,6 +156,10 @@ $(document).ready(function() {
         option.textContent = token
         select.append(option)
       })
+      // TODO: Order tokens by reverse order of when they appear on the page
+      // Mark invalid if no option selected
+      // Check? Should not remove invalid class from an optional select that's chosen a
+      //   non-existent token
       if (select.children("option").length == 0 && !select.hasClass("optional")) {
         select.addClass("invalid")
       }
