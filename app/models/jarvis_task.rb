@@ -44,7 +44,7 @@ class JarvisTask < ApplicationRecord
     # :websocket_expires,
     # :integration,
     # :failed_task,
-    # :function,
+    :function,
   ]
 
   enum trigger: {
@@ -74,6 +74,8 @@ class JarvisTask < ApplicationRecord
   }, _prefix: :output #.output_any?
 
   def name
+    return super unless persisted?
+
     super.presence || "Task ##{id}"
   end
 
@@ -87,6 +89,8 @@ class JarvisTask < ApplicationRecord
     vals = [{ return: output_type.to_sym }]
     vals += input.split(/\r?\n/).map { |line|
       next line unless line.starts_with?(/\s*>/)
+      tz = Tokenizer.new(line)
+      tz.tokenize!(line, /\".*?\"/)
       full, name, type = line.match(/\s*>\s*(\w+):\s*(?::(\w+))?,?\s*/)&.to_a
 
       remaining = line.sub(full, "")
@@ -98,7 +102,8 @@ class JarvisTask < ApplicationRecord
         opts[:optional] = true if str_opts.delete("optional")
         str_opts.each do |str_opt|
           k, v = str_opt.split(/:\s+:?/)
-          opts[k.to_sym] = (v || true) if k.present?
+          v = tz.untokenize!(v).gsub(/^\"|\"$/, "")
+          opts[k.to_sym] = (v.presence || true) if k.present?
         end
       }
 

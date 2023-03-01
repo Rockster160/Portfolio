@@ -112,7 +112,6 @@ Rails.application.routes.draw do
   resources :jarvis_tasks, path: :tasks
   namespace :jil do
     get :/, action: :index, controller: :jarvis_tasks
-    resources :functions, controller: :jarvis_tasks
     resources :jarvis_tasks, path: :tasks do
       get :config, on: :member, action: :configuration
       post :run, on: :member

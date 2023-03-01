@@ -1,3 +1,8 @@
+# tz = Tokenizer.new(str)
+# tz.tokenize!(str, /\".*?\"/m)
+# # Make other changes to `str`
+# tz.untokenize!(str)
+
 class Tokenizer
   attr_accessor :stored_strings, :token
 
@@ -20,6 +25,20 @@ class Tokenizer
   def untokenize!(full)
     @stored_strings.each_with_index do |stored, idx|
       full.gsub!("#{@token}..#{idx}..", stored)
+    end
+    full
+  end
+
+  def tokenize(full, regex)
+    full.gsub(regex) do |found|
+      @stored_strings << found
+      "#{@token}..#{@stored_strings.length-1}.."
+    end
+  end
+
+  def untokenize(full)
+    @stored_strings.each_with_index do |stored, idx|
+      full = full.gsub("#{@token}..#{idx}..", stored)
     end
     full
   end

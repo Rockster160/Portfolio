@@ -1,10 +1,9 @@
 class Jil::JarvisTasksController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action {  }
 
   def index
-    if running_function?
-      @tasks = current_user.jarvis_tasks.function
+    if params[:trigger].present?
+      @tasks = current_user.jarvis_tasks.where(trigger: params[:trigger])
     else
       @tasks = current_user.jarvis_tasks.not_function
     end
@@ -12,7 +11,7 @@ class Jil::JarvisTasksController < ApplicationController
 
   def new
     @task = current_user.jarvis_tasks.new
-    @task.trigger = :function if running_function?
+    @task.trigger = :function if params[:trigger] == "function"
 
     render :form
   end
@@ -29,7 +28,7 @@ class Jil::JarvisTasksController < ApplicationController
     ::BroadcastUpcomingWorker.perform_async
 
     respond_to do |format|
-      format.html { redirect_to edit_jil_jarvis_task_path(@task) if running_function? }
+      format.html { redirect_to edit_jil_jarvis_task_path(@task) }
       format.json { render json: { status: :found, url: edit_jil_jarvis_task_path(@task) } }
     end
   end
@@ -66,11 +65,6 @@ class Jil::JarvisTasksController < ApplicationController
   end
 
   private
-
-  def running_function?
-    @running_function ||= request.path.match?(/\/jil\/functions/) || @task&.function?
-  end
-  helper_method :running_function?
 
   def task_params
     params.require(:jarvis_task).permit(

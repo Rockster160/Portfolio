@@ -1,3 +1,8 @@
+// NOCOMMIT - scope this so it doesn't hit everything
+html, body {
+  overscroll-behavior: auto none;
+}
+
 .list-container, .lists-index-container {
   padding-bottom: 40px;
   color: $blue-d5;

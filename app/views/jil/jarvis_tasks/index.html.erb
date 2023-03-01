@@ -1,20 +1,20 @@
-<% name = running_function? ? "Function" : "Task" %>
+<% name = params[:trigger] == "function" ? "Function" : "Task" %>
 <%= meta_title "My #{name.pluralize}", include_name: false %>
 
 <div class="skinny-container lists-index-container">
   <div class="btn-container">
     <a href="<%= account_path %>" class="btn">Account</a>
-    <% if running_function? %>
-      <a href="<%= new_jil_function_path %>" class="btn pull-right">New Function +</a>
+    <% if params[:trigger] == "function" %>
+      <a href="<%= new_jil_jarvis_task_path(trigger: :function) %>" class="btn pull-right">New Function +</a>
     <% else %>
       <a href="<%= new_jil_jarvis_task_path %>" class="btn pull-right">New Task +</a>
     <% end %>
   </div>
   <div class="lists-title">My <%= name.pluralize %></div>
-  <% if running_function? %>
+  <% if params[:trigger] == "function" %>
     <%= link_to "Tasks", jil_path, class: "btn pull-right" %>
   <% else %>
-    <%= link_to "Custom Functions", jil_functions_path, class: "btn pull-right" %>
+    <%= link_to "Custom Functions", jil_path(trigger: :function), class: "btn pull-right" %>
   <% end %>
   <div class="lists">
     <div class="list-field">
@@ -27,12 +27,7 @@
           <%= content_tag :div, task.humanized_schedule, class: "category" %>
         </div>
         <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>
-        <% if running_function? %>
-          <% url = edit_jil_function_path(task) %>
-        <% else %>
-          <% url = edit_jil_jarvis_task_path(task) %>
-        <% end %>
-        <a href="<%= url %>" class="list-item">
+        <a href="<%= edit_jil_jarvis_task_path(task) %>" class="list-item">
           <span class="item-name"><%= task.name.titleize %></span>
         </a>
         <div class="list-item-brief">
