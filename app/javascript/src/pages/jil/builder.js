@@ -31,7 +31,7 @@ $(document).ready(function() {
       $(wrapper).children(".raw-input").remove()
     }
   }
-  // Can't remember what this does- add a comment when I figure it out
+  // Dynamic selects allow a user to select an item from a dropdown using a block rather than hard-coding/selecting an option
   let displayDynamicSelect = function(select) {
     let wrapper = select.parentElement
     if (select.value == "&lt;dynamic&gt;" && wrapper.querySelectorAll(".block-select").length == 0) {
