@@ -3,10 +3,13 @@ module Orderable
 
   included do
     @@orderable_scope = nil
-    @@orderable_by = nil
+    @@orderable_by_key = nil
+    @@orderable_by_dir = :asc
 
     def self.orderable_by(attr)
-      @@orderable_by = attr
+      attr, dir = attr.to_h if attr.is_a?(Hash)
+      @@orderable_by_key = attr
+      @@orderable_by_dir = dir || :asc
     end
 
     def self.orderable_scope(method=nil, &block)
@@ -34,10 +37,12 @@ module Orderable
 
     orderable_by(:sort_order) # Set default order column to `sort_order`
     before_save :set_orderable # Callback to set the order column
-    scope :ordered, -> { order(@@orderable_by) } # Add a scope that can be used to return in order
+    scope :ordered, -> { # Add a scope that can be used to return in order
+      order(@@orderable_by_key => @@orderable_by_dir)
+    }
 
     def set_orderable
-      self[@@orderable_by] ||= orderable_ordered.maximum(@@orderable_by).to_i + 1
+      self[@@orderable_by_key] ||= orderable_ordered.maximum(@@orderable_by_key).to_i + 1
     end
   end
 end
