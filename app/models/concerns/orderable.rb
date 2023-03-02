@@ -4,12 +4,12 @@ module Orderable
   included do
     @@orderable_scope = nil
     @@orderable_by_key = nil
-    @@orderable_by_dir = :asc
+    @@orderable_by_dir = :ASC
 
     def self.orderable_by(attr)
-      attr, dir = attr.to_h if attr.is_a?(Hash)
-      @@orderable_by_key = attr
-      @@orderable_by_dir = dir || :asc
+      key, dir = *attr.to_a.first if attr.is_a?(Hash)
+      @@orderable_by_key = key || attr
+      @@orderable_by_dir = ([dir&.upcase&.to_sym] & [:DESC, :ASC]).first || :ASC
     end
 
     def self.orderable_scope(method=nil, &block)
@@ -35,7 +35,8 @@ module Orderable
       end
     end
 
-    orderable_by(:sort_order) # Set default order column to `sort_order`
+    # Set default order column to `sort_order`
+    orderable_by(:sort_order) unless @@orderable_by_key.present?
     before_save :set_orderable # Callback to set the order column
     scope :ordered, -> { # Add a scope that can be used to return in order
       order(@@orderable_by_key => @@orderable_by_dir)
