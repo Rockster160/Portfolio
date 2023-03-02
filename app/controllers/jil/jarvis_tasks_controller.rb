@@ -3,9 +3,9 @@ class Jil::JarvisTasksController < ApplicationController
 
   def index
     if params[:trigger].present?
-      @tasks = current_user.jarvis_tasks.where(trigger: params[:trigger])
+      @tasks = current_user.jarvis_tasks.ordered.where(trigger: params[:trigger])
     else
-      @tasks = current_user.jarvis_tasks.not_function
+      @tasks = current_user.jarvis_tasks.ordered.not_function
     end
   end
 

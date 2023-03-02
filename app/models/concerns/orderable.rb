@@ -13,6 +13,15 @@ module Orderable
       @@orderable_scope = method || block
     end
 
+    # ordereable :sort_order
+    # ordereable sort_order: :asc
+    # ordereable sort_order: :desc, scope: -> { task.owner.tasks }
+    def self.orderable(opts={})
+      set_scope = opts.delete(:scope)
+      orderable_by(opts) if opts.present?
+      orderable_scope(set_scope) if set_scope
+    end
+
     def orderable_ordered
       if @@orderable_scope.is_a?(Proc)
         @@orderable_scope.call(self)
