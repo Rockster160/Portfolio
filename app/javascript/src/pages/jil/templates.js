@@ -156,6 +156,7 @@ export let templates = {
                     } else if (data.block && data.block != "select") {
                       items.push({ span: {
                         class: "select-wrapper",
+                        blockdata: JSON.stringify(data),
                         content: function() {
                           let children = []
                           children.push({ label: {
@@ -192,7 +193,7 @@ export let templates = {
                             if (!field) { debugger }
                             switch (field.type) {
                               case "checkbox": field.checked = fillitem.raw; break;
-                              default: field.value = fillitem.raw
+                              default: field.value = (fillitem.raw || data.default || "")
                             }
 
                             children.push(input)

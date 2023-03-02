@@ -22,6 +22,10 @@ $(document).ready(function() {
       // ANY cannot be done inline
 
       let node = render(select.getAttribute("blocktype"))
+      if (wrapper.getAttribute("blockdata")) {
+        let preset = JSON.parse(wrapper.getAttribute("blockdata")).default
+        node.value = preset || ""
+      }
       if (node) { wrapper.appendChild(node) }
     } else if (select.value != "input" && wrapper.querySelectorAll(".raw-input").length > 0) {
       $(wrapper).children(".raw-input").remove()
