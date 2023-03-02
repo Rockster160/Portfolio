@@ -795,6 +795,7 @@ $(document).ready(function() {
 
   calcScores = function() {
     detectDrinkFrames()
+    detectConsecutiveStrikes()
     var team_total = 0
     var team_hdcp = 0
     var frame_num = findCurrentFrame()
@@ -853,6 +854,29 @@ $(document).ready(function() {
     if (findCurrentFrame() > 1 && !inProgress) {
       $(".bowling-form-btn").removeClass("hidden")
     }
+  }
+
+  detectConsecutiveStrikes = function() {
+    $(".consec-frame").removeClass("consec-frame")
+    $(".bowler").each(function() {
+      let bowler = $(this)
+      let frameNum = parseInt(bowler.attr("data-current-frame"))
+      let currentVal = bowler.find(".frame[data-frame=" + frameNum + "] .shot[data-shot-idx=0]").val()
+      if (currentVal != "" && currentVal != "X") { return }
+
+      let consec = true;
+      for (var i=1; i<frameNum; i++) {
+        if (consec && bowler.find(".frame[data-frame=" + i + "] .shot[data-shot-idx=0]").val() != "X") {
+          i = 11
+          consec = false
+        }
+      }
+      if (consec) {
+        for (var i=1; i<frameNum; i++) {
+          bowler.find(".frame[data-frame=" + i + "]").addClass("consec-frame")
+        }
+      }
+    })
   }
 
   detectDrinkFrames = function() {

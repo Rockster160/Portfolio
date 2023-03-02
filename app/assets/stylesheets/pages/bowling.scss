@@ -205,7 +205,7 @@
       &.invisi-frame {
         border: none;
       }
-      &.drink-frame {
+      &.drink-frame, &.consec-frame {
         border-color: gold;
 
         input[type=text] {
