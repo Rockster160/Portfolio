@@ -8,7 +8,7 @@ class TaskChannel < ApplicationCable::Channel
     ::Jarvis.execute_trigger(
       :websocket,
       { input_vars: { "WS Receive Data" => data } },
-      scope: { input: data[:btn_id] }
+      scope: ["input ~* ? OR input = '*'", "\\m#{data[:btn_id]}\\M"]
     )
   end
 end
