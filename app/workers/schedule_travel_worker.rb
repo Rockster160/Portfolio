@@ -112,6 +112,8 @@ class ScheduleTravelWorker
       # Should show in schedule how long travel time will be
       # travel_from = :home
       traveltime = address_book.traveltime_seconds(event[:location])
+      # If travel has already started, don't queue the job again
+      next if event[:start_time] - traveltime - 1.minute < now
       new_events.push(
         name: "TT: #{distance_of_time_in_words(traveltime)}",
         uid: event[:uid] + "-tt",
