@@ -174,7 +174,7 @@ export let templates = {
                             blocktype: data.block,
                             content: function() {
                               let opts = []
-                              if (data.optional) { opts.push({ option: { value: "", content: `{${data.default || "None"}}` } }) }
+                              if (data.optional) { opts.push({ option: { value: "", content: `{None}` } }) }
                               // bool str num allow raw entries
                               if (fillitem.option != "input" && rawVals.indexOf(data.block) >= 0) {
                                 opts.push({ option: { value: "input", content: "input" } })
