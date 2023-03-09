@@ -24,7 +24,8 @@ class Jarvis::Execute::Custom < Jarvis::Execute::Executor
     if custom_error
       raise custom_error
     else
-      ::Jarvis::Execute::Cast.cast(custom_task.last_result_val, run_task.output_type)
+      # Don't use last_result_val - it stores `true` as "t"
+      ::Jarvis::Execute::Cast.cast(custom_task.last_ctx[:last_val], run_task.output_type)
     end
   end
 end

@@ -12,6 +12,7 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
     case val
     when ::Array then val.first.try(:dig, :raw)
     when ::Hash then val[:raw]
+    when ::String then !val.match?(/^(0|f|false|falsy|no)$/i)
     else
       !!val
     end
