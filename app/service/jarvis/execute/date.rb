@@ -4,11 +4,11 @@ class Jarvis::Execute::Date < Jarvis::Execute::Executor
   end
 
   def round
-    pre, direction, batch = evalargs
+    pre, direction, dur = evalargs
     return unless direction.to_sym.in?([:beginning, :end])
-    return unless batch.to_sym.in?([:second, :minute, :hour, :day, :week, :month, :year])
+    return unless dur.singularize.to_sym.in?([:second, :minute, :hour, :day, :week, :month, :year])
 
-    pre.send("#{direction}_of_#{batch}")
+    pre.send("#{direction}_of_#{dur}")
   end
 
   def adjust
@@ -18,7 +18,7 @@ class Jarvis::Execute::Date < Jarvis::Execute::Executor
 
   def duration
     amount, dur = evalargs
-    return unless dur.to_sym.in?([:second, :minute, :hour, :day, :week, :month, :year])
+    return unless dur.singularize.to_sym.in?([:second, :minute, :hour, :day, :week, :month, :year])
 
     amount.to_f.send(dur)
   end
