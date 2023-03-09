@@ -17,7 +17,9 @@ class Jarvis::Execute::Date < Jarvis::Execute::Executor
   end
 
   def duration
-    amount, type = evalargs
-    amount.to_f.send(type)
+    amount, dur = evalargs
+    return unless dur.to_sym.in?([:second, :minute, :hour, :day, :week, :month, :year])
+
+    amount.to_f.send(dur)
   end
 end

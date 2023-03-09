@@ -35,7 +35,7 @@ $(document).ready(function() {
   let displayDynamicSelect = function(select) {
     let wrapper = select.parentElement
     if (select.value == "&lt;dynamic&gt;" && wrapper.querySelectorAll(".block-select").length == 0) {
-      wrapper.appendChild(tokenSelector())
+      wrapper.appendChild(tokenSelector(select.getAttribute("dynamic_raw")))
       initInteractivity()
     } else {
       $(wrapper).children(".block-select").remove()
@@ -238,7 +238,7 @@ $(document).ready(function() {
         if (block.classList.contains("tasks")) {
           return collectBlocksFromList(block)
         } else if (block.classList.contains("select-wrapper")) {
-          let rawinput = block.querySelector("input"), rawval;
+          let rawinput = block.querySelector(".raw-input"), rawval;
           if (rawinput) {
             switch(rawinput.type) {
               case "checkbox": rawval = rawinput.checked; break;

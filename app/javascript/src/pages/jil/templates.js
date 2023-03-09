@@ -67,16 +67,18 @@ export let shorttype = function(type) {
 // Save the dynamic value -- currently being ignored? Check `collectBlockData`
 // Load the value on the next page load
 // Use the dynamic value to in Jarvis::Execute
-export let tokenSelector = function() {
+export let tokenSelector = function(selected_option) {
   return jsonToElem({ select: {
     // id: `${existingdata.token}[${idx}]`,
     type: "select",
-    class: `block-select`,
+    class: `block-select raw-input`,
     unattached: true,
     blocktype: "str",
     content: function() {
       let opts = []
-      // if (data.optional) { opts.push({ option: { value: "", content: `{${data.default || "None"}}` } }) }
+      opts.push({ option: { value: selected_option, content: selected_option } })
+      // if (data.optional) { opts.push({ option: { value: "", content: `{None}` } }) }
+      // if (data.optional) { opts.push({ option: { value: "", content: `{None}` } }) }
       // bool str num allow raw entries
       // if (fillitem.option != "input" && rawVals.indexOf(data.block) >= 0) {
       //   opts.push({ option: { value: "input", content: "input" } })
@@ -215,6 +217,7 @@ export let templates = {
                         content: [{ select: {
                           class: "dynamic-select",
                           unattached: true,
+                          dynamic_raw: fillitem.option,
                           content: [...data.values, dyn_str].map(function(item) {
                             let dynamic = item == dyn_str
                             if (fillitem.selected == item || fillitem.option == item) {
