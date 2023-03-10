@@ -205,8 +205,22 @@
       &.invisi-frame {
         border: none;
       }
-      &.drink-frame, &.consec-frame {
+      &.clean-start {
+        border-color: $base-blue;
+        color: $base-blue;
+
+        input[type=text] {
+          border-color: $base-blue;
+          color: $base-blue;
+
+          &.current {
+            border-color: purple;
+          }
+        }
+      }
+      &.drink-frame, &.consec-start {
         border-color: gold;
+        color: inherit;
 
         input[type=text] {
           border-color: gold;

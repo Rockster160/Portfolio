@@ -795,7 +795,7 @@ $(document).ready(function() {
 
   calcScores = function() {
     detectDrinkFrames()
-    detectConsecutiveStrikes()
+    detectCleanStarts()
     var team_total = 0
     var team_hdcp = 0
     var frame_num = findCurrentFrame()
@@ -856,24 +856,28 @@ $(document).ready(function() {
     }
   }
 
-  detectConsecutiveStrikes = function() {
-    $(".consec-frame").removeClass("consec-frame")
+  detectCleanStarts = function() {
+    $(".consec-start").removeClass("consec-start")
+    $(".clean-start").removeClass("clean-start")
     $(".bowler").each(function() {
       let bowler = $(this)
       let frameNum = parseInt(bowler.attr("data-current-frame"))
       let currentVal = bowler.find(".frame[data-frame=" + frameNum + "] .shot[data-shot-idx=0]").val()
-      if (currentVal != "" && currentVal != "X") { return }
 
-      let consec = true;
+      let consec = currentVal == "" || currentVal == "X", clean = true
       for (var i=1; i<frameNum; i++) {
-        if (consec && bowler.find(".frame[data-frame=" + i + "] .shot[data-shot-idx=0]").val() != "X") {
-          i = 11
-          consec = false
+        if (consec || clean) {
+          let first = bowler.find(".frame[data-frame=" + i + "] .shot[data-shot-idx=0]").val()
+          let second = bowler.find(".frame[data-frame=" + i + "] .shot[data-shot-idx=1]").val()
+          if (first != "X") { consec = false }
+          if (first != "X" && second != "/" && second != "X") { clean = false }
         }
       }
-      if (consec) {
+      if (consec || clean) {
         for (var i=1; i<frameNum; i++) {
-          bowler.find(".frame[data-frame=" + i + "]").addClass("consec-frame")
+          let frame = bowler.find(".frame[data-frame=" + i + "]")
+          if (consec) { frame.addClass("consec-start") }
+          if (clean) { frame.addClass("clean-start") }
         }
       }
     })
