@@ -2,8 +2,54 @@
   <i hidden data-onload-modal="#config"></i>
 <% end %>
 
-<div class="split-container">
-  <div class="tree lists-index-container">
+<%= render_modal(:config, "Config") do %>
+  <%= form_for [:jil, @task], html: { class: "basic" } do |f| %>
+    <div data-watches-selector=".trigger-selector" data-watches-value="function">
+      <p>Input format:</p>
+      <ul>
+        <li>Line by itself will be an inline text that shows.</li>
+        <li>Lines starting with &gt; will use key: :val syntax</li>
+        <li><code>val</code> can be a :symbol for a type, then followed by a comma for options</li>
+        <li><code>val</code> can also be an array to allow a user to select from a dropdown</li>
+        <li>options can include <code>optional</code> which will allow the function to run even with no value provided.</li>
+      </ul>
+      Or have each input be added as a new type (Input.from, Input.multiplier, Input.other)
+      <pre>
+Choose date:
+> from: :date, optional, default: Now
+> multiplier: [seconds, minutes, hours]
+> event_name: :str, label: Event Name
+      </pre>
+      <%= f.label :input, "Newline separated input data" %>
+      <%= f.text_area :input %>
+      <%= f.select :output_type, options_for_select(JarvisTask.output_types.map { |k, v| [k.humanize, k] }, selected: @task.output_type) %>
+    </div>
+    <div data-watches-selector=".trigger-selector" data-watches-value="tell">
+      <p>Input Format:</p>
+      <ul>
+        <li>Common words will be filtered out of task names and inputs (<%= Jarvis::MatchTask::COMMON_WORDS.join(", ") %>)</li>
+        <li>(opt) will be optional text (no group)</li>
+        <li>(this|that|other) will be optional text and match any of the givens (no group)</li>
+        <li>(:/regexp/) optional that matches regex</li>
+        <li>(!opt) is required text (no group) - mostly only used when multiple options are provided:</li>
+        <li>(!this|that|other) will require any of the givens (no group)</li>
+        <li>{var} will lazy match everything by default. Can provide a regexp to be more specific - accessed through `var` variable within function</li>
+      </ul>
+      <%= f.label :input, "Trigger Phrases- alternatives separated by new lines" %>
+      <%= f.text_area :input, style: "white-space: nowrap; overflow: auto;" %>
+    </div>
+    <div data-watches-selector=".trigger-selector" data-watches-value="websocket">
+      <p>Websocket Channel</p>
+      <%= f.label :input, "Channel ID, excluding prefix and postfix" %>
+      <%= f.text_field :input, placeholder: "abcd" %>
+    </div>
+    <%= f.submit "Save", remote: true %>
+  <% end %>
+<% end %>
+
+<div class="drawer-tree collapsed lists-index-container">
+  <div class="tab"></div>
+  <div class="wrapper">
     <div class="list-field">
       <%= text_field_tag "", "", class: "filter-tree", placeholder: "Search" %>
     </div>
@@ -42,92 +88,47 @@
       <% end %>
     </div>
   </div>
+</div>
 
-  <%= render_modal(:config, "Config") do %>
-    <%= form_for [:jil, @task], html: { class: "basic" } do |f| %>
-      <div data-watches-selector=".trigger-selector" data-watches-value="function">
-        <p>Input format:</p>
-        <ul>
-          <li>Line by itself will be an inline text that shows.</li>
-          <li>Lines starting with &gt; will use key: :val syntax</li>
-          <li><code>val</code> can be a :symbol for a type, then followed by a comma for options</li>
-          <li><code>val</code> can also be an array to allow a user to select from a dropdown</li>
-          <li>options can include <code>optional</code> which will allow the function to run even with no value provided.</li>
-        </ul>
-        Or have each input be added as a new type (Input.from, Input.multiplier, Input.other)
-        <pre>
-Choose date:
-> from: :date, optional, default: Now
-> multiplier: [seconds, minutes, hours]
-> event_name: :str, label: Event Name
-        </pre>
-        <%= f.label :input, "Newline separated input data" %>
-        <%= f.text_area :input %>
-        <%= f.select :output_type, options_for_select(JarvisTask.output_types.map { |k, v| [k.humanize, k] }, selected: @task.output_type) %>
-      </div>
-      <div data-watches-selector=".trigger-selector" data-watches-value="tell">
-        <p>Input Format:</p>
-        <ul>
-          <li>Common words will be filtered out of task names and inputs (<%= Jarvis::MatchTask::COMMON_WORDS.join(", ") %>)</li>
-          <li>(opt) will be optional text (no group)</li>
-          <li>(this|that|other) will be optional text and match any of the givens (no group)</li>
-          <li>(:/regexp/) optional that matches regex</li>
-          <li>(!opt) is required text (no group) - mostly only used when multiple options are provided:</li>
-          <li>(!this|that|other) will require any of the givens (no group)</li>
-          <li>{var} will lazy match everything by default. Can provide a regexp to be more specific - accessed through `var` variable within function</li>
-        </ul>
-        <%= f.label :input, "Trigger Phrases- alternatives separated by new lines" %>
-        <%= f.text_area :input, style: "white-space: nowrap; overflow: auto;" %>
-      </div>
-      <div data-watches-selector=".trigger-selector" data-watches-value="websocket">
-        <p>Websocket Channel</p>
-        <%= f.label :input, "Channel ID, excluding prefix and postfix" %>
-        <%= f.text_field :input, placeholder: "abcd" %>
-      </div>
-      <%= f.submit "Save", remote: true %>
-    <% end %>
-  <% end %>
-
-  <div class="skinny-container lists-index-container">
-    <div class="btn-container">
-      <%= link_to "Tasks", :jil, class: "btn" %>
-      <%= link_to "Config", nil, data: { modal: "#config" }, class: "btn pull-right config-btn" %>
-      <br>
-      <br>
-    </div>
-    <div class="btn-container">
-      <%= form_for [:jil, @task], html: { class: "basic", id: "task-form" } do |f| %>
-        <%= link_to "Run", [:run, :jil, @task], class: "btn run-task", remote: true, method: :post if @task.persisted? %>
-        <%= f.submit "Save", class: "btn save-task pull-right" %>
-        <div class="flex">
-          <%= f.select(
-            :trigger,
-            options_for_select(
-              JarvisTask::AVAILABLE_TRIGGERS.collect { |trigger| [trigger.to_s.titleize, trigger] },
-              @task.trigger
-            ),
-            {},
-            { class: "cron-input-select trigger-selector" }
-          ) %>
-          <div data-watches-selector=".trigger-selector" data-watches-value="cron">
-            <%= f.text_field :input, placeholder: "min hr day month wday", class: "cron-input" %>
-          </div>
-          <div data-watches-selector=".trigger-selector" data-watches-value="tell">
-            <%= f.text_area :input, style: "white-space: nowrap; overflow: auto;" %>
-          </div>
-          <div data-watches-selector=".trigger-selector" data-watches-value="websocket">
-            <%= f.text_field :input, placeholder: "abcd" %>
-          </div>
-          <div data-watches-selector=".trigger-selector" data-watches-value="function">
-            <%= f.text_area :input, style: "white-space: nowrap; overflow: auto;" %>
-          </div>
-        </div>
-      <% end %>
-    </div>
-    <div class="lists-title">J.I.L.</div>
-    <%= text_field_tag "jarvis_task[name]", @task.name, class: "", placeholder: "Task Name" %>
-    <div class="tasks lists" data-tasks="<%= @task.tasks.to_json %>"></div>
+<div class="function-container skinny-container lists-index-container">
+  <div class="btn-container">
+    <%= link_to "Tasks", :jil, class: "btn" %>
+    <%= link_to "Config", nil, data: { modal: "#config" }, class: "btn pull-right config-btn" %>
+    <br>
+    <br>
   </div>
+  <div class="btn-container">
+    <%= form_for [:jil, @task], html: { class: "basic", id: "task-form" } do |f| %>
+      <%= link_to "Run", [:run, :jil, @task], class: "btn run-task", remote: true, method: :post if @task.persisted? %>
+      <%= f.submit "Save", class: "btn save-task pull-right" %>
+      <div class="flex">
+        <%= f.select(
+          :trigger,
+          options_for_select(
+            JarvisTask::AVAILABLE_TRIGGERS.collect { |trigger| [trigger.to_s.titleize, trigger] },
+            @task.trigger
+          ),
+          {},
+          { class: "cron-input-select trigger-selector" }
+        ) %>
+        <div data-watches-selector=".trigger-selector" data-watches-value="cron">
+          <%= f.text_field :input, placeholder: "min hr day month wday", class: "cron-input" %>
+        </div>
+        <div data-watches-selector=".trigger-selector" data-watches-value="tell">
+          <%= f.text_area :input, style: "white-space: nowrap; overflow: auto;" %>
+        </div>
+        <div data-watches-selector=".trigger-selector" data-watches-value="websocket">
+          <%= f.text_field :input, placeholder: "abcd" %>
+        </div>
+        <div data-watches-selector=".trigger-selector" data-watches-value="function">
+          <%= f.text_area :input, style: "white-space: nowrap; overflow: auto;" %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+  <div class="lists-title">J.I.L.</div>
+  <%= text_field_tag "jarvis_task[name]", @task.name, class: "", placeholder: "Task Name" %>
+  <div class="tasks lists" data-tasks="<%= @task.tasks.to_json %>"></div>
 </div>
 
 <div class="jil-console">

@@ -14,6 +14,13 @@ import { genUniqToken, tokens } from "../random/js_chance_generator"
 $(document).ready(function() {
   if ($(".ctr-jarvis_tasks.act-new, .ctr-jarvis_tasks.act-edit").length == 0) { return }
 
+  $(".drawer-tree .tab").on("click touchstart", function() {
+    $(".drawer-tree").removeClass("collapsed")
+  })
+  $(".function-container").on("click touchend", function() {
+    $(".drawer-tree").addClass("collapsed")
+  })
+
   // Adds a field for inputting a simple value (str, toggle/bool, integer, etc) inline without use of a var
   let displaySelectTemplate = function(select) {
     let wrapper = select.parentElement
@@ -173,7 +180,7 @@ $(document).ready(function() {
 
   let initInteractivity = function() {
     resetDropdowns()
-    $(".tree .lists .list-item-container").draggable({
+    $(".drawer-tree .lists .list-item-container").draggable({
       helper: "clone",
       connectToSortable: ".tasks",
       revert: "invalid",
@@ -196,7 +203,7 @@ $(document).ready(function() {
     $(".tasks").sortable({
       handle: ".list-item-handle",
       connectWith: ".tasks",
-      connectToSortable: ".tree .lists .list-item-container",
+      connectToSortable: ".drawer-tree .lists .list-item-container",
       placeholder: "list-item-placeholder",
       stop: function(event, ui) {
         disableRunButton("sort")
@@ -262,8 +269,8 @@ $(document).ready(function() {
     }
   })
 
-  $(document).on("keyup", "input.filter-tree", function() {
-    let wrapper = $(".tree .lists")
+  $(document).on("keyup", "input.filter-drawer-tree", function() {
+    let wrapper = $(".drawer-tree .lists")
     var currentText = $(this).val().toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
 
     if (currentText.length == 0) {
