@@ -184,10 +184,15 @@ $(document).ready(function() {
       helper: "clone",
       connectToSortable: ".tasks",
       revert: "invalid",
+      handle: ".handle",
       start: function(event, ui) {
+        $(".tasks.ui-sortable:not(.lists)").addClass("pending-drop")
         $(ui.helper).prepend('<div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>');
       },
       stop: function(event, ui) {
+        $(".pending-drop").removeClass("pending-drop")
+        // $(".placeholder-drop").removeClass("placeholder-drop")
+        if ($(ui.helper).parents(".drawer-tree").length > 0) { return }
         let container = $(ui.helper)
         let item = container.find(".list-item")
         let [type, datum] = JSON.parse(item.attr("data"))
@@ -205,7 +210,20 @@ $(document).ready(function() {
       connectWith: ".tasks",
       connectToSortable: ".drawer-tree .lists .list-item-container",
       placeholder: "list-item-placeholder",
+      start: function(event, ui) {
+        $(".tasks.ui-sortable:not(.lists)").addClass("pending-drop")
+      },
+      // over: function(event, ui) {
+      //   $(this).addClass("placeholder-drop")
+      //   // $(".tasks.ui-sortable:not(.lists)").addClass("placeholder-drop")
+      // },
+      // out: function(event, ui) {
+      //   $(this).removeClass("placeholder-drop")
+      //   // $(".tasks.ui-sortable:not(.lists)").addClass("placeholder-drop")
+      // },
       stop: function(event, ui) {
+        $(".pending-drop").removeClass("pending-drop")
+        // $(".placeholder-drop").removeClass("placeholder-drop")
         disableRunButton("sort")
         resetDropdowns()
       }
