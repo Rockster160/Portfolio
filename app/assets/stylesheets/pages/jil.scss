@@ -169,6 +169,21 @@ $faded-compl: rgba($base-complementary, 0.6);
             }
           }
         }
+        .duplicate {
+          position: absolute;
+          top: 0;
+          left: 0;
+          cursor: copy;
+          padding: 2px;
+          width: 16px;
+          height: 16px;
+          color: $grey-blue;
+          font-size: 10px;
+          text-align: center;
+          z-index: 2;
+
+          .fa { font-weight: bold; }
+        }
         .delete {
           position: absolute;
           top: 0;

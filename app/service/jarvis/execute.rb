@@ -70,7 +70,7 @@
     return if @ctx[:i] > MAX_ITERATIONS
     return if task_block[:type].nil?
 
-    klass, method = task_block[:type].split(".")
+    klass, method = task_block[:type].split(".", 2)
     method = "logic_#{method}" if klass == "logic"
 
     @ctx[:vars][task_block[:token]] = (

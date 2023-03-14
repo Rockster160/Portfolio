@@ -280,10 +280,33 @@ $(document).ready(function() {
     }
   }
 
+  let renameToken = function(scope, old_name, new_name) {
+    scope.find("[token='" + old_name + "']").attr("token", new_name)
+    scope.find(".token:contains('" + old_name + "')").text(new_name)
+    scope.find("option[value='" + old_name + "']").text(new_name)
+    scope.find("option[value='" + old_name + "']").val(new_name)
+  }
+
   document.addEventListener("click", function(evt) {
     if (evt.target.parentElement?.classList?.contains("delete")) {
       disableRunButton("delete")
       evt.target.closest(".list-item-container").remove()
+    }
+    if (evt.target.parentElement?.classList?.contains("duplicate")) {
+      disableRunButton("duplicate")
+      // let data = collectBlockData(evt.target.closest(".list-item"))
+      // let node = render(select.getAttribute("blocktype"))
+      // Recursively go through all node.data {type:block} and do the same
+      // Because we're re-rendering, don't need to rename tokens?
+
+      let original = $(evt.target.closest(".list-item-container"))
+      let clone = original.clone()
+
+      clone.find("[token]").each(function() {
+        renameToken(clone, this.getAttribute("token"), genUniqToken())
+      })
+      original.after(clone)
+      initInteractivity()
     }
   })
 

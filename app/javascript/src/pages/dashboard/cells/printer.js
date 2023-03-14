@@ -143,7 +143,7 @@ import { dash_colors } from "../vars"
 
         Printer.post("job").done(function(data) {
           cell.data.fail = false
-          if (!data.job.user) {
+          if (!data?.job?.user) {
             cell.data.printer_data = {}
             return renderLines()
           }
