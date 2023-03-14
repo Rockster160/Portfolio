@@ -191,7 +191,6 @@ $(document).ready(function() {
       },
       stop: function(event, ui) {
         $(".pending-drop").removeClass("pending-drop")
-        // $(".placeholder-drop").removeClass("placeholder-drop")
         if ($(ui.helper).parents(".drawer-tree").length > 0) { return }
         let container = $(ui.helper)
         let item = container.find(".list-item")
@@ -211,19 +210,18 @@ $(document).ready(function() {
       connectToSortable: ".drawer-tree .lists .list-item-container",
       placeholder: "list-item-placeholder",
       start: function(event, ui) {
+        // $(this).closest(".list-item-container").addClass("tasks-drag-over")
         $(".tasks.ui-sortable:not(.lists)").addClass("pending-drop")
       },
-      // over: function(event, ui) {
-      //   $(this).addClass("placeholder-drop")
-      //   // $(".tasks.ui-sortable:not(.lists)").addClass("placeholder-drop")
-      // },
-      // out: function(event, ui) {
-      //   $(this).removeClass("placeholder-drop")
-      //   // $(".tasks.ui-sortable:not(.lists)").addClass("placeholder-drop")
-      // },
+      over: function(event, ui) {
+        // $(this).closest(".list-item-container").addClass("tasks-drag-over")
+      },
+      out: function(event, ui) {
+        // $(this).closest(".list-item-container").removeClass("tasks-drag-over")
+      },
       stop: function(event, ui) {
         $(".pending-drop").removeClass("pending-drop")
-        // $(".placeholder-drop").removeClass("placeholder-drop")
+        // $(".tasks-drag-over").removeClass("tasks-drag-over")
         disableRunButton("sort")
         resetDropdowns()
       }
