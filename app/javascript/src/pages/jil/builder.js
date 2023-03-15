@@ -286,11 +286,18 @@ $(document).ready(function() {
   }
 
   document.addEventListener("click", function(evt) {
+    if ($(evt.target).closest("span.token").length > 0) {
+      let wrapper = $(evt.target).closest("span.token")
+      let newname = window.prompt("Enter new token name", wrapper.text().replace(/\:var$/, ""))
+      if (newname != null && newname.length > 2) {
+        renameToken(wrapper.closest(".tasks"), wrapper.text(), newname + ":var")
+      }
+    }
     if (evt.target.parentElement?.classList?.contains("delete")) {
       disableRunButton("delete")
       evt.target.closest(".list-item-container").remove()
     }
-    if (evt.target.parentElement?.classList?.contains("duplicate")) {
+    if ($(evt.target).closest(".duplicate").length > 0) {
       disableRunButton("duplicate")
       // let data = collectBlockData(evt.target.closest(".list-item"))
       // let node = render(select.getAttribute("blocktype"))

@@ -62,11 +62,6 @@ export let shorttype = function(type) {
   }
 }
 
-// Still TODO:
-// init dropdowns on load
-// Save the dynamic value -- currently being ignored? Check `collectBlockData`
-// Load the value on the next page load
-// Use the dynamic value to in Jarvis::Execute
 export let tokenSelector = function(selected_option) {
   return jsonToElem({ select: {
     // id: `${existingdata.token}[${idx}]`,
