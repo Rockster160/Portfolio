@@ -289,8 +289,11 @@ $(document).ready(function() {
     if ($(evt.target).closest("span.token").length > 0) {
       let wrapper = $(evt.target).closest("span.token")
       let newname = window.prompt("Enter new token name", wrapper.text().replace(/\:var$/, ""))
-      if (newname != null && newname.length > 2) {
+      if (newname != null && newname.length > 2 && !tokens.includes(newname + ":var")) {
         renameToken(wrapper.closest(".tasks"), wrapper.text(), newname + ":var")
+      } else {
+        if (newname.length <= 2) { console.log("Name not long enough"); }
+        if (tokens.includes(newname + ":var")) { console.log("Name already used."); }
       }
     }
     if (evt.target.parentElement?.classList?.contains("delete")) {
