@@ -25,6 +25,8 @@ class GoogleNestControl
 
   def self.subscribe(code)
     new.subscribe(code)
+    # Remove from TODO
+    ::User.first.lists.ilike(name: "Todo").list_items.by_formatted_name("Refresh Nest")&.soft_destroy
   end
 
   def initialize
