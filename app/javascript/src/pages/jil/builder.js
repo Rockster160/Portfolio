@@ -337,6 +337,8 @@ $(document).ready(function() {
     }
   })
 
+  $(".filter-drawer-tree").focus(function() { $(this).select() })
+
   $(".save-task").removeAttr("data-disable-with")
   $("#task-form").submit(function(evt) {
     evt.preventDefault()
