@@ -7,7 +7,7 @@ class TaskChannel < ApplicationCable::Channel
     data.deep_symbolize_keys!
     ::Jarvis.execute_trigger(
       :websocket,
-      { input_vars: { "WS Receive Data" => data } },
+      { input_vars: { "WS Receive Data" => data.reverse_merge(params) } },
       scope: ["input ~* ? OR input = '*'", "\\m#{params[:channel_id]}\\M"]
     )
   end
