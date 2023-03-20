@@ -1,4 +1,8 @@
 class Jarvis::Execute::Array < Jarvis::Execute::Executor
+  def cast
+    eval_block(args).to_a
+  end
+
   def get
     arr, idx = evalargs
     arr[idx]
@@ -13,6 +17,11 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
   def del
     arr, idx = evalargs
     arr.dup.tap { |a| a.delete_at(idx) }
+  end
+
+  def includes
+    arr, val = evalargs
+    arr.include?(val)
   end
 
   def min

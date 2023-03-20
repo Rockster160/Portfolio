@@ -1,4 +1,8 @@
 class Jarvis::Execute::Hash < Jarvis::Execute::Executor
+  def cast
+    eval_block(args).to_h
+  end
+
   def get
     hash, key = evalargs
     hash.with_indifferent_access[key]

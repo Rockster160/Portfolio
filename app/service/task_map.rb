@@ -251,6 +251,10 @@ class TaskMap
       ],
     },
     array: {
+      cast:           [
+        { return: :array },
+        { block: :any },
+      ],
       get:         [
         { return: :any, description: "Value of array at index" },
         { block: :array },
@@ -298,6 +302,11 @@ class TaskMap
         { block: :array },
         { block: :any },
       ],
+      includes:    [
+        { return: :bool },
+        { block: :array },
+        { block: :any },
+      ],
       # sort:        [ # - Fail for incompatible types
       #   { return: :array },
       #   { block: :array },
@@ -340,6 +349,10 @@ class TaskMap
       ],
     },
     hash: {
+      cast:           [
+        { return: :hash },
+        { block: :any },
+      ],
       get: [
         { return: :any },
         { block: :hash },
