@@ -73,6 +73,10 @@ class JarvisTask < ApplicationRecord
     keyval:   9,
   }, _prefix: :output #.output_any?
 
+  def execute
+    ::Jarvis::Execute.call(self)
+  end
+
   def name
     return super unless persisted?
 
@@ -109,6 +113,9 @@ class JarvisTask < ApplicationRecord
 
       { block: type, **line_opts }
     }.compact
+    # Add the name as the title in case there isn't anything else
+    vals << name if vals.one? && vals.first.try(:keys) == [:return]
+
     [name, vals]
   end
 

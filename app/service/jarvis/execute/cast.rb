@@ -1,5 +1,7 @@
 class Jarvis::Execute::Cast < Jarvis::Execute::Executor
   def self.cast(val, to)
+    return val if to.to_sym == :any
+
     if ::Jarvis::Execute::Raw::CASTABLE.include?(to.to_sym)
       return ::Jarvis::Execute::Raw.send(to.to_sym, val)
     end
