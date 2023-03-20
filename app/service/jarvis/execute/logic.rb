@@ -35,9 +35,11 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
   end
 
   def logic_next
+    jil.ctx[:next] = true
     args # No-op - just return what's put in
   end
   def logic_break
+    jil.ctx[:break] = true
     args # No-op - just return what's put in
   end
 

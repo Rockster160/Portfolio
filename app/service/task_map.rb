@@ -328,16 +328,16 @@ class TaskMap
       #   { block: :array },
       #   { block: :str, name: :join_by, default: ", " },
       # ],
-      # each:        [
-      #   { return: :num }, # number of times the loop ran
-      #   { block: :array },
-      #   :content,
-      # ],
-      # map:         [
-      #   { return: :array },
-      #   { block: :array },
-      #   :content, # last value from content is used as new array value
-      # ],
+      each:        [
+        { return: :num }, # number of times the loop ran
+        { block: :array },
+        :content,
+      ],
+      map:         [
+        { return: :array },
+        { block: :array },
+        :content, # last value from content is used as new array value
+      ],
     },
     hash: {
       get: [

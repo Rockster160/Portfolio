@@ -50,10 +50,16 @@ class Jarvis::Execute::Hash < Jarvis::Execute::Executor
           loop_exit = true
           break [eval_block(arg)] # still evaling here so that it increments
         else
-          eval_block(arg)
+          eval_block(arg).tap { |arg_val|
+            break arg_val if jil.ctx.delete(:next)
+            if jil.ctx.delete(:break)
+              loop_exit = true
+              break arg_val
+            end
+          }
         end
       }.last
-      break val if loop_exit
+      break val if loop_exit || jil.ctx.delete(:break)
       val
     end
 

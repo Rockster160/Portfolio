@@ -30,7 +30,13 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def self.num(val)
-    val.to_i == val.to_f ? val.to_i : val.to_f
+    casted = case val
+    when ::Array then (val.one? && val.first.try(:dig, :raw)) || raise("Unable to cast <Array> to <Num>")
+    when ::Hash then val[:raw] || raise("Unable to cast <Hash> to <Num>")
+    else
+      val
+    end
+    casted.to_i == casted.to_f ? casted.to_i : casted.to_f
   rescue NoMethodError
     0
   end
