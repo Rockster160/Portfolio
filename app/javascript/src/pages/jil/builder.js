@@ -263,9 +263,10 @@ $(document).ready(function() {
         } else if (block.classList.contains("select-wrapper")) {
           let rawinput = block.querySelector(".raw-input"), rawval;
           if (rawinput) {
-            switch(rawinput.type) {
-              case "checkbox": rawval = rawinput.checked; break;
-              default: rawval = rawinput.value
+            if (rawinput.classList.contains("switch")) {
+              rawval = rawinput.querySelector("input[type=checkbox]").checked
+            } else {
+              rawval = rawinput.value
             }
           }
           return {
