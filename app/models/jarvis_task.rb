@@ -4,6 +4,7 @@
 #
 #  id              :bigint           not null, primary key
 #  cron            :text
+#  enabled         :boolean          default(TRUE)
 #  input           :text
 #  last_ctx        :jsonb
 #  last_result     :text

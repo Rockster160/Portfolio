@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_02_21_144043) do
+ActiveRecord::Schema.define(version: 2023_03_21_151839) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -306,6 +306,7 @@ ActiveRecord::Schema.define(version: 2023_02_21_144043) do
     t.integer "output_type", default: 1
     t.integer "sort_order"
     t.text "last_result_val"
+    t.boolean "enabled", default: true
     t.index ["user_id"], name: "index_jarvis_tasks_on_user_id"
   end
 
