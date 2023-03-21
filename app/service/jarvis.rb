@@ -88,7 +88,7 @@ class Jarvis
 
   def self.execute_trigger(trigger, trigger_data={}, scope: {})
     trigger_data.deep_symbolize_keys! unless trigger_data.is_a?(HashWithIndifferentAccess)
-    tasks = ::JarvisTask.eneabled.where(trigger: trigger).where(scope)
+    tasks = ::JarvisTask.enabled.where(trigger: trigger).where(scope)
 
     tasks.find_each do |task|
       ::Jarvis::Execute.call(task, trigger_data)
