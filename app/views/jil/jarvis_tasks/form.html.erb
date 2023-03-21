@@ -43,6 +43,13 @@ Choose date:
       <%= f.label :input, "Channel ID, excluding prefix and postfix" %>
       <%= f.text_field :input, placeholder: "abcd" %>
     </div>
+    <div class="">
+      Enabled:
+      <label class="switch">
+        <%= f.check_box :enabled %>
+        <span class="slider"></span>
+      </label>
+    </div>
     <%= f.submit "Save", remote: true %>
   <% end %>
 <% end %>

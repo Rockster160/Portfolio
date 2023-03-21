@@ -3,7 +3,7 @@ module Jarvis::Schedule
 
   def upcoming
     # Should be per User!
-    [*JarvisTask.cron, *Jarvis::Schedule.get_events].map { |sched|
+    [*JarvisTask.enabled.cron, *Jarvis::Schedule.get_events].map { |sched|
       timestamp = (
         if sched.is_a?(JarvisTask)
           sched.next_trigger_at&.in_time_zone(User.timezone)

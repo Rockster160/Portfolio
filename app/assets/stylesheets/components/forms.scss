@@ -228,6 +228,8 @@ select {
   }
 }
 
+@include bool-slider(60px);
+
 .checkbox-wrapper {
   input[type=checkbox] {
     display: none;

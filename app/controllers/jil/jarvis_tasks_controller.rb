@@ -70,6 +70,7 @@ class Jil::JarvisTasksController < ApplicationController
     params.require(:jarvis_task).permit(
       :name,
       :trigger,
+      :enabled,
       :input,
       :output_type,
       :cron,
