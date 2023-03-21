@@ -14,6 +14,8 @@ import { genUniqToken, tokens } from "../random/js_chance_generator"
 $(document).ready(function() {
   if ($(".ctr-jarvis_tasks.act-new, .ctr-jarvis_tasks.act-edit").length == 0) { return }
 
+  let dirtyChanges = false, formSubmitting = false
+
   $(".drawer-tree .tab").on("click touchstart", function() {
     $(".drawer-tree").removeClass("collapsed")
   })
@@ -230,6 +232,7 @@ $(document).ready(function() {
   initInteractivity()
 
   let disableRunButton = function(name) {
+    dirtyChanges = true
     $(".run-task")
       .attr("disabled", "disabled")
       .addClass("disabled")
@@ -342,6 +345,7 @@ $(document).ready(function() {
 
   $(".save-task").removeAttr("data-disable-with")
   $("#task-form").submit(function(evt) {
+    formSubmitting = true
     evt.preventDefault()
     let form = document.getElementById("task-form")
     let data = collectBlocksFromList(document.querySelector(".lists-index-container > .tasks"))
@@ -379,6 +383,12 @@ $(document).ready(function() {
       }
     })
   })
+
+  window.onbeforeunload = function(evt) {
+    if (formSubmitting || !dirtyChanges) { return }
+
+    return "You have unsaved changes. Are you sure you want to leave?"
+  }
 
   // On load, render the existing tasks
   do {
