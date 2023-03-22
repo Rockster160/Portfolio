@@ -39,7 +39,7 @@ class ActionEventsController < ApplicationController
     @event = ActionEvent.find(params[:id])
 
     @event.update(event_params)
-    ActionEventBroadcastWorker.perform_async
+    ActionEventBroadcastWorker.perform_async(@event.id)
   end
 
   def destroy
@@ -48,6 +48,15 @@ class ActionEventsController < ApplicationController
     unless event.destroy
       flash[:alert] = "Failed to destroy event."
     end
+
+    # Reset following event streak info
+    matching_events = ActionEvent
+      .where(user_id: event.user_id)
+      .ilike(event_name: event.event_name)
+      .where.not(id: event.id)
+    following = matching_events.where("timestamp > ?", event.timestamp).order(:timestamp).first
+    UpdateActionStreak.perform_async(following.id) if following.present?
+    # / streak info
 
     ActionEventBroadcastWorker.perform_async
     redirect_to action_events_path
