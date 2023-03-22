@@ -16,8 +16,8 @@ class UpdateActionStreak
       return UpdateActionStreak.perform_async(earliest_nil.id)
     else
       Time.use_zone(event.user.timezone) do
-        yesterday = (event.timestamp - 1.day).beginning_of_day
-        today = event.timestamp.beginning_of_day
+        yesterday = (event.timestamp - 1.day).in_time_zone.beginning_of_day
+        today = event.timestamp.in_time_zone.beginning_of_day
         if previous.timestamp > today # Happened Today
           event.update(streak_length: previous.streak_length) # Same streak length - don't increase
         elsif previous.timestamp > yesterday # Happened yesterday
