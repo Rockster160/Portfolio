@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_03_21_151839) do
+ActiveRecord::Schema.define(version: 2023_03_22_201910) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -23,6 +23,7 @@ ActiveRecord::Schema.define(version: 2023_03_21_151839) do
     t.datetime "updated_at", null: false
     t.datetime "timestamp"
     t.text "notes"
+    t.integer "streak_length"
     t.index ["user_id"], name: "index_action_events_on_user_id"
   end
 

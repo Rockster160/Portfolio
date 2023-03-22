@@ -2,13 +2,14 @@
 #
 # Table name: action_events
 #
-#  id         :integer          not null, primary key
-#  event_name :text
-#  notes      :text
-#  timestamp  :datetime
-#  created_at :datetime         not null
-#  updated_at :datetime         not null
-#  user_id    :integer
+#  id            :integer          not null, primary key
+#  event_name    :text
+#  notes         :text
+#  streak_length :integer
+#  timestamp     :datetime
+#  created_at    :datetime         not null
+#  updated_at    :datetime         not null
+#  user_id       :integer
 #
 
 class ActionEvent < ApplicationRecord

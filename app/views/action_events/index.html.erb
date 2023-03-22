@@ -23,6 +23,7 @@
     <div class="th">Name</div>
     <div class="th">Notes</div>
     <div class="th">Timestamp</div>
+    <div class="th">Streak</div>
   </div>
 
   <% @events.each do |event| %>
@@ -36,6 +37,9 @@
       </div>
       <div class="tcell">
         <input data-update-url="<%= action_event_path(event) %>" name="timestamp" value="<%= event.timestamp.in_time_zone("Mountain Time (US & Canada)").iso8601[0..-7] %>" class="invisi-field" style="width: 100%;" type="datetime-local">
+      </div>
+      <div class="tcell">
+        <%= event.streak_length || "nil" %>
       </div>
     </div>
   <% end %>

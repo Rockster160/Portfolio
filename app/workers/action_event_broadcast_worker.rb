@@ -14,6 +14,7 @@ class ActionEventBroadcastWorker
         },
         scope: { user_id: event.user_id }
       )
+      ::UpdateActionStreak.perform_async(event_id)
     end
     ::FitnessBroadcast.call(event)
     ::RecentEventsBroadcast.call
