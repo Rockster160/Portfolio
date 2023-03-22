@@ -1,7 +1,7 @@
 class ActionEventBroadcastWorker
   include Sidekiq::Worker
 
-  def perform(event_id=nil, trigger: true)
+  def perform(event_id=nil, trigger=true)
     event = event_id.present? ? ::ActionEvent.find_by(id: event_id) : nil
 
     if event.present? && trigger
