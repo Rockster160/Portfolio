@@ -40,7 +40,7 @@ class JarvisTask < ApplicationRecord
     :cron,
     :action_event,
     :tell,
-    # :list,
+    :list,
     # :email,
     :webhook,
     :websocket,

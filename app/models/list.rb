@@ -223,6 +223,8 @@ class List < ApplicationRecord
 
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self }, layout: false
     ActionCable.server.broadcast "list_#{self.id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
+
+    JarvisTriggerWorker.perform(:list, {}, { user: users.ids })
   end
 
 end
