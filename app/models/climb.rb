@@ -12,13 +12,20 @@
 class Climb < ApplicationRecord
   belongs_to :user
 
-  SCORE_MAP = { "0": 0.5 }
+  MULTIPLIER_PER_V = 2
+
+  scope :not_empty, -> { where.not(data: [nil, ""]) }
 
   def score
-    data&.split(" ")&.sum { |v| score_for(v) } || 0
+    data&.split(" ")&.sum { |v| score_for(v.to_i) } || 0
   end
 
   def score_for(go)
-    SCORE_MAP[go.to_s.to_sym] || go.to_f
+    @score_list ||= {}
+    @score_list[go] ||= begin
+      val = 1
+      go.times { val *= MULTIPLIER_PER_V }
+      val
+    end
   end
 end

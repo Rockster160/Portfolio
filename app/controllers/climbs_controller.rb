@@ -3,13 +3,13 @@ class ClimbsController < ApplicationController
   before_action :authorize_user
 
   def index
-    @climbs = current_user.climbs.order(timestamp: :desc)
+    @climbs = current_user.climbs.not_empty.order(timestamp: :desc)
   end
 
   def new
-    @climb = Climb.new
+    @climb = current_user.climbs.create
 
-    render :form
+    redirect_to [:edit, @climb]
   end
 
   def edit
