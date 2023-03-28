@@ -113,7 +113,8 @@ class ScheduleTravelWorker
       # travel_from = :home
       traveltime = address_book.traveltime_seconds(event[:location])
       # If travel has already started, don't queue the job again
-      next if event[:start_time] - traveltime - 1.minute < now
+      next if event[:start_time] - traveltime - 1.minute - PRE_OFFSET < now
+
       new_events.push(
         name: "TT: #{distance_of_time_in_words(traveltime)}",
         uid: event[:uid] + "-tt",
@@ -125,14 +126,6 @@ class ScheduleTravelWorker
       # Car starts automatically with the "take me to command"
       # If home, 5 minutes in advance before travel time
       # If elsewhere, 10? 15? minutes
-      # new_events.push(
-      #   name: event[:name],
-      #   uid: event[:uid] + "-start-car",
-      #   type: :travel,
-      #   words: "Start car",
-      #   user_id: 1,
-      #   scheduled_time: event[:start_time] - PRE_OFFSET,
-      # )
 
       new_events.push(
         uid: event[:uid] + "-travel", # Adding an extra char so the uids are different
@@ -141,27 +134,13 @@ class ScheduleTravelWorker
         user_id: 1,
         scheduled_time: event[:start_time] - traveltime - PRE_OFFSET,
       )
-
-      followup_event = events.find do |followup_event|
-        next if event[:start_time].blank? || event[:end_time].blank?
-        next if event[:location].blank?
-        next if event[:location].include?("zoom.us")
-        next if event[:location].include?("meet.google")
-        next if event[:location].match?(/webinar/i) # GoToWebinar
-
-        travel_range = (event[:start_time] - FOLLOWUP_OFFSET)..(event[:end_time] + FOLLOWUP_OFFSET)
-
-        followup_event if travel_range.cover?(followup_event[:start_time])
-      end
-      if followup_event.blank?
-        new_events.push(
-          uid: event[:uid] + "-home", # Adding an extra char so the uids are different
-          type: :travel,
-          words: "Take me home",
-          user_id: 1,
-          scheduled_time: event[:end_time] - PRE_OFFSET,
-        )
-      end
+      new_events.push(
+        uid: event[:uid] + "-home", # Adding an extra char so the uids are different
+        type: :travel,
+        words: "Take me home",
+        user_id: 1,
+        scheduled_time: event[:end_time] - PRE_OFFSET,
+      )
     end
   end
 end
