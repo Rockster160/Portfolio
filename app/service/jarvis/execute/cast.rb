@@ -10,6 +10,8 @@ class Jarvis::Execute::Cast < Jarvis::Execute::Executor
         return val.try(:to_a) || []
       when :hash
         return val.try(:to_h) || val.try(:to_json) || []
+      else
+        return val
       end
     end
 
