@@ -71,6 +71,6 @@ class Jarvis::Execute::Hash < Jarvis::Execute::Executor
     return vals
   end
   def each
-    map
+    map.count
   end
 end

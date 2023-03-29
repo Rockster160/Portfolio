@@ -96,6 +96,7 @@ export let templates = {
 
   block: (key, existingdata) => {
     let schemaNode = document.querySelector(`[data-type="${key}"]`)
+    if (!schemaNode) { return } // TODO: Better way to handle unknown schema
     let [_, schema] = JSON.parse(schemaNode.getAttribute("data"))
 
     return jsonToElem({

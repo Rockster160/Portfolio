@@ -9,7 +9,6 @@ $(document).ready(function() {
     id: window.location.pathname.match(/tasks\/([\d\w]+)/)[1],
   },{
     received: function(data) {
-      console.log(data);
       $("[token]").removeClass("task-running")
       $(".jil-console code").text(data.output)
       if (data.token) {
