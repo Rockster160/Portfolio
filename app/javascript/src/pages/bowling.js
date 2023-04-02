@@ -156,7 +156,7 @@ $(document).ready(function() {
   }
 
   $(".pin-all-toggle").on("click", function(evt) {
-    clearTimeout(pinTimer)
+    pinTimer = clearTimeout(pinTimer)
     $(this).toggleClass("fall")
     if ($(this).hasClass("fall")) {
       $(".pin-wrapper:not(.fallen-before)").removeClass("fallen")
@@ -173,6 +173,11 @@ $(document).ready(function() {
     strikePoint(prev_val == "brooklyn" ? null : "brooklyn")
   })
   $(".close-frame, .pocket-close, .brooklyn-close").on("click", function() {
+    // If pins have been clicked, first move to the next toss
+    // if (parseInt($(".shot.current").attr("data-shot-idx")) == 0) {
+    //   nextFrame(this)
+    // }
+
     $(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
     if ($(this).hasClass("pocket-close")) { strikePoint("pocket") }
     if ($(this).hasClass("brooklyn-close")) { strikePoint("brooklyn") }
@@ -180,32 +185,7 @@ $(document).ready(function() {
     addScore("X")
   })
   $(".next-frame").on("click", function(evt) {
-    recountPins()
-    var toss = $(".shot.current")
-    var shot_idx = parseInt(toss.attr("data-shot-idx"))
-    var nextShot = toss.parents(".frame").find(".shot").filter(function() {
-      return parseInt($(this).attr("data-shot-idx")) > shot_idx
-    })
-
-    recalculateFrame(toss)
-
-    if (toss.parents(".frame").attr("data-frame") == "10") {
-      if (shot_idx == 0) {
-        moveToThrow(nextShot.first())
-      } else if (shot_idx == 1) {
-        if (currentTossAtIdx(0).val() == "X") {
-          moveToThrow(nextShot.first())
-        } else {
-          moveToNextFrame()
-        }
-      } else if (shot_idx == 2) {
-        moveToNextFrame()
-      }
-    } else if (nextShot.length > 0 && toss.val() != "X") {
-      moveToThrow(nextShot.first())
-    } else {
-      moveToNextFrame()
-    }
+    nextFrame(this)
   })
   $(".pin-wrapper").on("pin:change", function() {
     var shot_idx = parseInt($(".shot.current").attr("data-shot-idx"))
@@ -223,7 +203,7 @@ $(document).ready(function() {
   })
   $(document).on("click touchstart", function(evt) {
     var is_input = evt.target.tagName == "INPUT" || evt.target.tagName == "LABEL"
-    if (is_input || $(evt.target).hasClass("numpad-key")) { return }
+    if (is_input || $(evt.target).closest(".numpad-key").length > 0) { return }
     evt.preventDefault()
     pin_knock = undefined
 
@@ -237,7 +217,7 @@ $(document).ready(function() {
       }
     }
     return false
-  }).on("contextmenu", function(evt) {
+  }).on("contextmenu", function(evt) { // Disable holding for right click on mobile
     if ($(evt.target).hasClass("pin")) {
       evt.preventDefault()
     }
@@ -530,7 +510,7 @@ $(document).ready(function() {
 
     knockPinsForShot(prev_shot, "fallen-before")
     knockPinsForShot(toss, "fallen")
-    if ($(".fallen").length == 0) { clearTimeout(pinTimer) }
+    if ($(".fallen").length == 0) { pinTimer = clearTimeout(pinTimer) }
   }
 
   currentTossAtIdx = function(idx) {
@@ -538,7 +518,7 @@ $(document).ready(function() {
   }
 
   resetPinTimer = function() {
-    clearTimeout(pinTimer)
+    pinTimer = clearTimeout(pinTimer)
     if (!$(".timer-toggle").hasClass("active") || lockTimer) {
       spinner.reset()
       return
@@ -546,13 +526,13 @@ $(document).ready(function() {
 
     spinner.start()
     pinTimer = setTimeout(function() {
+      pinTimer = clearTimeout(pinTimer)
       if ($(".timer-toggle").hasClass("active")) { $(".next-frame").click() }
     }, timer_duration)
-    // timer-toggle
   }
 
   recountPins = function() {
-    clearTimeout(pinTimer)
+    pinTimer = clearTimeout(pinTimer)
     var toss = $(".shot.current")
     var pins = $(".pin-wrapper:not(.fallen, .fallen-before)").map(function() {
       return parseInt($(this).attr("data-pin-num"))
@@ -886,7 +866,7 @@ $(document).ready(function() {
   detectDrinkFrames = function() {
     $(".drink-frame").removeClass("drink-frame")
     $(".missed-drink-frame").removeClass("missed-drink-frame")
-    if ($(".bowler:not(.absent, .skip)").length < 2) { return }
+    if ($(".bowler:not(.absent, .skip)").length < 3) { return }
 
     for (var i=1; i<=10; i++) {
       let frames = $(".bowler:not(.absent, .skip) .frame[data-frame=" + i + "]")
@@ -979,6 +959,35 @@ $(document).ready(function() {
     if (shotIndex(earliest_empty_shot) < shotIndex(toss)) {
       $(".shot.current").removeClass("current")
       toss = earliest_empty_shot.addClass("current")
+    }
+  }
+
+  nextFrame = function(frame) {
+    recountPins()
+    var toss = $(".shot.current")
+    var shot_idx = parseInt(toss.attr("data-shot-idx"))
+    var nextShot = toss.parents(".frame").find(".shot").filter(function() {
+      return parseInt($(frame).attr("data-shot-idx")) > shot_idx
+    })
+
+    recalculateFrame(toss)
+
+    if (toss.parents(".frame").attr("data-frame") == "10") {
+      if (shot_idx == 0) {
+        moveToThrow(nextShot.first())
+      } else if (shot_idx == 1) {
+        if (currentTossAtIdx(0).val() == "X") {
+          moveToThrow(nextShot.first())
+        } else {
+          moveToNextFrame()
+        }
+      } else if (shot_idx == 2) {
+        moveToNextFrame()
+      }
+    } else if (nextShot.length > 0 && toss.val() != "X") {
+      moveToThrow(nextShot.first())
+    } else {
+      moveToNextFrame()
     }
   }
 
@@ -1104,7 +1113,7 @@ $(document).ready(function() {
   moveToThrow = function(toss) {
     $(".shot.current").removeClass("current")
     toss.addClass("current")
-    clearTimeout(pinTimer)
+    pinTimer = clearTimeout(pinTimer)
     // $(".pin-wrapper:not(.fallen-before)").addClass("fallen")
     // resetPinFall()
     resetStrikePoint()
