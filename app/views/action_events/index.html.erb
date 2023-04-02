@@ -7,7 +7,7 @@
   <%= f.text_field :notes, placeholder: :notes %>
   <% Time.use_zone(User.timezone) do %>
     <% f.object.timestamp ||= Time.current %>
-    <%= f.datetime_local_field :timestamp %>
+    <%= f.datetime_local_field :timestamp, value: f.object.timestamp.strftime("%Y-%m-%dT%H:%M") %>
   <% end %>
   <%= f.submit %>
 <% end %>
