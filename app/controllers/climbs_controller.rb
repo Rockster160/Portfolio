@@ -28,7 +28,7 @@ class ClimbsController < ApplicationController
 
   def update
     Time.use_zone(current_user.timezone) {
-      @climb = current_user.climbs.update(climb_params)
+      @climb = current_user.climbs.find(params[:id]).update(climb_params)
     }
 
     redirect_to :climbs
