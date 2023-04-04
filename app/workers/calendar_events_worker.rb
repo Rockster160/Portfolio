@@ -7,22 +7,22 @@ class CalendarEventsWorker
 
   def perform
     @user_id = 1
-    coming_events = LocalDataCalendarParser.call.values.flatten # JarvisCache for @user_id
-    sorted_events = coming_events.sort_by { |evt| evt[:start_time] || DateTime.new }
+    coming_events = ::LocalDataCalendarParser.call.values.flatten # JarvisCache for @user_id
+    sorted_events = coming_events.sort_by { |evt| evt[:start_time] || ::DateTime.new }
     schedulable_events = gather_events(sorted_events)
 
     events_to_add = schedulable_events.select { |event| event[:scheduled_time] > 1.minute.from_now }
     event_uids = events_to_add.map { |event| event[:uid] }
 
-    scheduled_events = Jarvis::Schedule.get_events # Only for @user_id
+    scheduled_events = ::Jarvis::Schedule.get_events # Only for @user_id
     listing_uids = scheduled_events.map { |evt| evt[:uid] }
 
     jids_to_remove = scheduled_events.filter_map { |listing|
       !event_uids.include?(listing[:uid]) && listing[:jid]
     }
 
-    Jarvis::Schedule.cancel(*jids_to_remove)
-    Jarvis::Schedule.schedule(*events_to_add)
+    ::Jarvis::Schedule.cancel(*jids_to_remove)
+    ::Jarvis::Schedule.schedule(*events_to_add)
   end
 
   def address_book
@@ -48,10 +48,10 @@ class CalendarEventsWorker
       next if event[:start_time].blank? || event[:end_time].blank?
 
       # If notes starts with Jarvis, send to Jarvis as a message
-      if event[:notes]&.match?(/^jarvis:? */i)
+      if event[:notes]&.match?(/^jarvis[:,]? */i)
         new_events.push(
           name: event[:name],
-          uid: event[:uid],
+          uid: event[:uid] + "-notes",
           type: :message,
           words: event[:notes].gsub(/^jarvis:? */i, ""),
           user_id: @user_id,
@@ -64,7 +64,7 @@ class CalendarEventsWorker
         traveltime = address_book.traveltime_seconds(event[:location])
         # Show time to leave
         new_events.push(
-          name: "Leave now - TT:#{distance_of_time_in_words(traveltime)}",
+          name: "TTL: #{distance_of_time_in_words(traveltime)}",
           uid: event[:uid] + "-tt",
           type: :message,
           user_id: @user_id,

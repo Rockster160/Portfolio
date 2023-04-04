@@ -74,8 +74,8 @@ module Jarvis::Schedule
       )
     end
 
-    cancel(*jids_to_remove)
     ::DataStorage[:scheduled_events] = events
+    cancel(*jids_to_remove)
     ::BroadcastUpcomingWorker.perform_async
     jids_to_add
   end
