@@ -39,6 +39,7 @@ class LogTracker < ApplicationRecord
 
   search_terms(
     :url,
+    ip: :ip_address,
     method: :http_method,
     user: "users.username",
   )
