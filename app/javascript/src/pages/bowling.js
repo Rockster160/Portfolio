@@ -173,7 +173,7 @@ $(document).ready(function() {
     strikePoint(prev_val == "brooklyn" ? null : "brooklyn")
   })
   $(".close-frame, .pocket-close, .brooklyn-close").on("click", function() {
-    // If pins have been clicked, first move to the next toss
+    // If pins have been clicked and timer is running, move to the next toss before triggering btn press
     // if (parseInt($(".shot.current").attr("data-shot-idx")) == 0) {
     //   nextFrame(this)
     // }

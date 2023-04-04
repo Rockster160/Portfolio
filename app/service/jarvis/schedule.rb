@@ -3,19 +3,19 @@ module Jarvis::Schedule
 
   def upcoming
     # Should be per User!
-    [*JarvisTask.enabled.cron, *Jarvis::Schedule.get_events].map { |sched|
+    [*::JarvisTask.enabled.cron, *::Jarvis::Schedule.get_events].map { |sched|
       timestamp = (
-        if sched.is_a?(JarvisTask)
-          sched.next_trigger_at&.in_time_zone(User.timezone)
+        if sched.is_a?(::JarvisTask)
+          sched.next_trigger_at&.in_time_zone(::User.timezone)
         else
-          Jarvis::Times.safe_date_parse(sched[:scheduled_time])
+          ::Jarvis::Times.safe_date_parse(sched[:scheduled_time])
         end
       )
       next if timestamp.blank?
       {
         timestamp: timestamp,
-        name: sched.is_a?(JarvisTask) ? sched.name : (sched[:name].presence || sched[:command]),
-        recurring: sched.is_a?(JarvisTask) && sched.input
+        name: sched.is_a?(::JarvisTask) ? sched.name : (sched[:name].presence || sched[:command]),
+        recurring: sched.is_a?(::JarvisTask) && sched.input
       }
     }.compact.sort_by { |sched| sched[:timestamp] }
   end
@@ -29,19 +29,40 @@ module Jarvis::Schedule
 
   def get_events
     # Should be per User!
-    DataStorage[:scheduled_events] || []
+    ::DataStorage[:scheduled_events] || []
+  end
+
+  def similar_time?(time1, time2, coverage=1.minute)
+    time1.then { |t| ((t-coverage)..(t+coverage)) }.cover?(time2)
   end
 
   def schedule(*new_events)
-    jids = []
+    jids_to_add = []
     events = get_events
+    jids_to_remove = []
+
     new_events.each do |new_event|
       new_event[:uid] = new_event[:uid].presence || SecureRandom.hex
-      next if already_scheduled?(new_event[:uid])
 
-      jid = JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], new_event[:words])
+      existing_event = events.find { |event| event[:uid] == new_event[:uid] }
+      if existing_event.present?
+        found_diff = !similar_time?(Time.parse(existing_event[:scheduled_time]), new_event[:scheduled_time])
+        new_event.each do |k, v|
+          next if k == :scheduled_time
 
-      jids.push(jid)
+          found_diff ||= existing_event[k].to_s != v.to_s
+        end
+
+        if found_diff
+          jids_to_remove << existing_event[:jid]
+        else
+          next # Don't run the rest of the block- the event already exists
+        end
+      end
+
+      jid = ::JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], new_event[:words])
+
+      jids_to_add.push(jid)
       events.push(
         jid: jid,
         name: new_event[:name],
@@ -53,17 +74,14 @@ module Jarvis::Schedule
       )
     end
 
-    DataStorage[:scheduled_events] = events
+    cancel(*jids_to_remove)
+    ::DataStorage[:scheduled_events] = events
     ::BroadcastUpcomingWorker.perform_async
-    jids
-  end
-
-  def already_scheduled?(uid)
-    DataStorage[:scheduled_events]&.any? { |event| event[:uid] == uid }
+    jids_to_add
   end
 
   def cancel(*jids)
-    Sidekiq::ScheduledSet.new.each do |job|
+    ::Sidekiq::ScheduledSet.new.each do |job|
       job.delete if jids.include?(job.jid)
     end
 
@@ -71,11 +89,11 @@ module Jarvis::Schedule
   end
 
   def cleanup
-    jids = Sidekiq::ScheduledSet.new.map(&:jid)
+    jids = ::Sidekiq::ScheduledSet.new.filter_map { |j| j.klass == "JarvisWorker" && j.jid }
 
     events = get_events.select { |evt| evt[:jid].in?(jids) }
 
-    DataStorage[:scheduled_events] = events
+    ::DataStorage[:scheduled_events] = events
     ::BroadcastUpcomingWorker.perform_async
   end
 end

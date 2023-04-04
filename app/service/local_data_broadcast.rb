@@ -23,7 +23,8 @@ class LocalDataBroadcast
 
     ActionCable.server.broadcast "local_data_channel", encriched_data
 
-    ScheduleTravelWorker.perform_async if @data.key?(:calendar)
+    CalendarEventsWorker.perform_async if @data.key?(:calendar)
+    # ScheduleTravelWorker.perform_async if @data.key?(:calendar)
   end
 
   private
