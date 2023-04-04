@@ -73,6 +73,9 @@ import { dash_colors, text_height, clamp } from "../vars"
       if (evt_key == "arrowdown" || evt_key == "s") { this.data.scroll += 1 }
 
       renderLines()
+    },
+    command: function(text) {
+      return window.open("https://ardesian.com/scheduled", "_blank")
     }
   })
 })()

@@ -3,7 +3,7 @@ class ScheduledTasksController < ApplicationController
   before_action :authorize_user
 
   def index
-    @events = ::Jarvis::Schedule.get_events
+    @events = ::Jarvis::Schedule.get_events.sort_by { |evt| evt[:scheduled_time] || ::DateTime.new }
 
     respond_to do |format|
       format.html
@@ -13,7 +13,6 @@ class ScheduledTasksController < ApplicationController
 
   def create
     @event = event_params
-    binding.pry
     ::Jarvis::Schedule.schedule(@event)
 
     respond_to do |format|
