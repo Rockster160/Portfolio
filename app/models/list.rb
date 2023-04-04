@@ -182,7 +182,7 @@ class List < ApplicationRecord
       action = try_action if check_string_starts_word?(msg, try_action)
     end
 
-    msg = msg.sub(/#{action}/i, "")
+    msg = msg.sub(/#{action}:?/i, "")
     items = items_from_message(msg)
 
     [action, items]

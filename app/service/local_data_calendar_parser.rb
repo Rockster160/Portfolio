@@ -55,6 +55,7 @@ class LocalDataCalendarParser
             evt[:location] += " " + cal_line.sub(/\s*/i, "")
           elsif prev_line == :notes
             evt[:notes] += "\n" + cal_line.sub(/\s*/i, "")
+            next # Do not reset the prev_line
           else
             evt[:unknown] ||= []
             evt[:unknown].push(cal_line)
