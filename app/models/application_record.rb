@@ -21,7 +21,7 @@ class ApplicationRecord < ActiveRecord::Base
 
   def self.search_terms(*set_terms)
     # alias => column
-    @@search_terms ||= begin
+    @search_terms ||= begin
       terms = {}
       set_terms.each do |set_term|
         case set_term
