@@ -40,6 +40,9 @@ class LocalDataCalendarParser
         when /location:/i
           evt[:location] = cal_line.sub(/\s*location: /i, "")
           prev_line = :location
+        when /notes:/i
+          evt[:notes] = cal_line.sub(/\s*notes: /i, "")
+          prev_line = :notes
         when /uid:/i
           evt[:uid] = cal_line.sub(/\s*uid: /i, "")
           prev_line = :uid
@@ -50,6 +53,8 @@ class LocalDataCalendarParser
         else
           if prev_line == :location
             evt[:location] += " " + cal_line.sub(/\s*/i, "")
+          elsif prev_line == :notes
+            evt[:notes] += "\n" + cal_line.sub(/\s*/i, "")
           else
             evt[:unknown] ||= []
             evt[:unknown].push(cal_line)
