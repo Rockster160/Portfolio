@@ -17,14 +17,13 @@ class LocalDataBroadcast
       items_hash = @data.dig(:notes, :items)&.map do |item_name|
         { name: item_name }
       end || []
-      @user.lists.find_by(name: "Todo").add_items(items_hash)
+      @user.default_list.add_items(items_hash)
       DataStorage[:notes_timestamp] = @data.dig(:notes, :timestamp)
     end
 
     ActionCable.server.broadcast "local_data_channel", encriched_data
 
     CalendarEventsWorker.perform_async if @data.key?(:calendar)
-    # ScheduleTravelWorker.perform_async if @data.key?(:calendar)
   end
 
   private

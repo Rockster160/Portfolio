@@ -1,0 +1,32 @@
+<%= form_tag scheduled_tasks_path do |f| %>
+  <%= text_field_tag :name, "", placeholder: :Name %>
+  <%= text_field_tag :command, "", placeholder: :command %>
+  <% Time.use_zone(User.timezone) do %>
+    <%= datetime_local_field_tag :scheduled_time, 1.hour.from_now.strftime("%Y-%m-%dT%H:%M") %>
+  <% end %>
+  <%= submit_tag "Add Task" %>
+<% end %>
+
+<div class="ttable striped bordered wide">
+  <div class="thead text-center">
+    <div class="th"></div>
+    <div class="th">Name</div>
+    <div class="th">Command</div>
+    <div class="th">Schedule</div>
+  </div>
+
+  <% @events.each do |event| %>
+    <div class="trow live-edit-events">
+      <%= link_to "X", scheduled_task_path(event[:uid]), method: :delete, class: "tcell text-center" %>
+      <div class="tcell">
+        <input data-update-url="<%= scheduled_task_path(event[:uid]) %>" name="name" value="<%= event[:name] %>" class="invisi-field" style="width: 100%;" type="text">
+      </div>
+      <div class="tcell">
+        <input data-update-url="<%= scheduled_task_path(event[:uid]) %>" name="command" value="<%= event[:command] %>" class="invisi-field" style="width: 100%;" type="text">
+      </div>
+      <div class="tcell">
+        <input data-update-url="<%= scheduled_task_path(event[:uid]) %>" name="scheduled_time" value="<%= event[:scheduled_time].in_time_zone("Mountain Time (US & Canada)").iso8601[0..-7] %>" class="invisi-field" style="width: 100%;" type="datetime-local">
+      </div>
+    </div>
+  <% end %>
+</div>

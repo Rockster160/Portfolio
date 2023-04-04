@@ -27,7 +27,7 @@ module Jarvis::Schedule
     }; nil
   end
 
-  def get_events
+  def get_events(user=nil)
     # Should be per User!
     ::DataStorage[:scheduled_events] || []
   end
@@ -60,7 +60,8 @@ module Jarvis::Schedule
         end
       end
 
-      jid = ::JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], new_event[:words])
+      words = new_event[:words] || new_event[:command]
+      jid = ::JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], words)
 
       jids_to_add.push(jid)
       events.push(
@@ -68,15 +69,14 @@ module Jarvis::Schedule
         name: new_event[:name],
         scheduled_time: new_event[:scheduled_time],
         user_id: new_event[:user_id],
-        command: new_event[:words],
+        command: words,
         type: new_event[:type],
         uid: new_event[:uid],
       )
     end
 
     ::DataStorage[:scheduled_events] = events
-    cancel(*jids_to_remove)
-    ::BroadcastUpcomingWorker.perform_async
+    cancel(*jids_to_remove) # Triggers cleanup, which triggers broadcast
     jids_to_add
   end
 
