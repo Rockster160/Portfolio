@@ -44,8 +44,7 @@ class CalendarEventsWorker
   def gather_events(events)
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
-      # Skip all-day events
-      next if event[:start_time].blank? || event[:end_time].blank?
+      next if event[:start_time].blank? || event[:end_time].blank? # Skip all-day events
 
       # If notes starts with Jarvis, send to Jarvis as a message
       if event[:notes]&.match?(/^jarvis[:,]? */i)
