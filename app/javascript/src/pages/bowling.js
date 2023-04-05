@@ -173,12 +173,7 @@ $(document).ready(function() {
     strikePoint(prev_val == "brooklyn" ? null : "brooklyn")
   })
   $(".close-frame, .pocket-close, .brooklyn-close").on("click", function() {
-    // If pins have been clicked and timer is running, move to the next toss before triggering btn press
-    // if (parseInt($(".shot.current").attr("data-shot-idx")) == 0) {
-    //   nextFrame(this)
-    // }
-    if (pinTimer) {
-      console.log("pin timer going!");
+    if (pinTimer && parseInt($(".shot.current").attr("data-shot-idx")) == 0) {
       $(".next-frame").click()
     }
 
@@ -189,7 +184,32 @@ $(document).ready(function() {
     addScore("X")
   })
   $(".next-frame").on("click", function(evt) {
-    nextFrame(this)
+    recountPins()
+    var toss = $(".shot.current")
+    var shot_idx = parseInt(toss.attr("data-shot-idx"))
+    var nextShot = toss.parents(".frame").find(".shot").filter(function() {
+      return parseInt($(this).attr("data-shot-idx")) > shot_idx
+    })
+
+    recalculateFrame(toss)
+
+    if (toss.parents(".frame").attr("data-frame") == "10") {
+      if (shot_idx == 0) {
+        moveToThrow(nextShot.first())
+      } else if (shot_idx == 1) {
+        if (currentTossAtIdx(0).val() == "X") {
+          moveToThrow(nextShot.first())
+        } else {
+          moveToNextFrame()
+        }
+      } else if (shot_idx == 2) {
+        moveToNextFrame()
+      }
+    } else if (nextShot.length > 0 && toss.val() != "X") {
+      moveToThrow(nextShot.first())
+    } else {
+      moveToNextFrame()
+    }
   })
   $(".pin-wrapper").on("pin:change", function() {
     var shot_idx = parseInt($(".shot.current").attr("data-shot-idx"))
@@ -963,35 +983,6 @@ $(document).ready(function() {
     if (shotIndex(earliest_empty_shot) < shotIndex(toss)) {
       $(".shot.current").removeClass("current")
       toss = earliest_empty_shot.addClass("current")
-    }
-  }
-
-  nextFrame = function(frame) {
-    recountPins()
-    var toss = $(".shot.current")
-    var shot_idx = parseInt(toss.attr("data-shot-idx"))
-    var nextShot = toss.parents(".frame").find(".shot").filter(function() {
-      return parseInt($(frame).attr("data-shot-idx")) > shot_idx
-    })
-
-    recalculateFrame(toss)
-
-    if (toss.parents(".frame").attr("data-frame") == "10") {
-      if (shot_idx == 0) {
-        moveToThrow(nextShot.first())
-      } else if (shot_idx == 1) {
-        if (currentTossAtIdx(0).val() == "X") {
-          moveToThrow(nextShot.first())
-        } else {
-          moveToNextFrame()
-        }
-      } else if (shot_idx == 2) {
-        moveToNextFrame()
-      }
-    } else if (nextShot.length > 0 && toss.val() != "X") {
-      moveToThrow(nextShot.first())
-    } else {
-      moveToNextFrame()
     }
   }
 
