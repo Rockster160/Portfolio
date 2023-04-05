@@ -9,7 +9,7 @@ class ScheduledEventsWorker
 
   def perform(args={})
     args = JSON.parse(args) if args.is_a?(String)
-    events = ::DataStorage[:scheduled_events]
+    events = ::DataStorage[:scheduled_events] || []
 
     events += Array.wrap(args["add"])
     jids_to_remove = Array.wrap(args["remove"])

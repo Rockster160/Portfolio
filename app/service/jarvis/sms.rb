@@ -1,7 +1,7 @@
 # Might be special/not an integration
 class Jarvis::Sms < Jarvis::Action
   def self.reserved_words
-    [:text, :remind, :message, :msg, :sms, :txt]
+    [:text, :remind, :message, :msg, :sms, :txt, :ping]
   end
 
   def attempt
@@ -10,6 +10,9 @@ class Jarvis::Sms < Jarvis::Action
 
     parse_text_words
 
+    if @rx.match_any_words?(@msg, :remind)
+      @user.default_list.add_items(name: @args)
+    end
     SmsWorker.perform_async(Jarvis::MY_NUMBER, @args)
 
     "Sending you a text saying: #{@args}"
