@@ -6,6 +6,8 @@ class LocalDataBroadcast
   end
 
   def call(data=nil)
+    return if Rails.env.development?
+
     data ||= JSON.parse(File.read("local_data.json")) if File.exists?("local_data.json")
     data ||= {}
     @data = data.deep_symbolize_keys

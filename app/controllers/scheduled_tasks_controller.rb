@@ -15,6 +15,7 @@ class ScheduledTasksController < ApplicationController
     @event = event_params
     ::Jarvis::Schedule.schedule(@event)
 
+    sleep 0.5
     respond_to do |format|
       format.json { head :ok }
       format.html { redirect_to scheduled_tasks_path }
@@ -25,6 +26,7 @@ class ScheduledTasksController < ApplicationController
     @event = ::Jarvis::Schedule.get_events(current_user).find { |event| event[:uid] == params[:uid] }
     ::Jarvis::Schedule.schedule(@event.merge!(event_params))
 
+    sleep 0.5
     respond_to do |format|
       format.json { head :ok }
       format.html { redirect_to scheduled_tasks_path }
@@ -35,6 +37,7 @@ class ScheduledTasksController < ApplicationController
     @event = ::Jarvis::Schedule.get_events(current_user).find { |event| event[:uid] == params[:uid] }
     ::Jarvis::Schedule.cancel(@event[:jid])
 
+    sleep 0.5
     respond_to do |format|
       format.json { head :ok }
       format.html { redirect_to scheduled_tasks_path }
@@ -48,7 +51,7 @@ class ScheduledTasksController < ApplicationController
 
     if time.is_a?(String)
       begin
-        return Time.parse(time)
+        Time.use_zone(current_user.timezone) { Time.parse(time) }
       rescue StandardError
         return Time.current
       end
@@ -67,7 +70,7 @@ class ScheduledTasksController < ApplicationController
       # :type,
     ).tap do |whitelist|
       whitelist[:user_id] = current_user.id
-      whitelist[:scheduled_time] = safeparse_time(whitelist[:scheduled_time])
+      whitelist[:scheduled_time] = safeparse_time(whitelist[:scheduled_time]) if whitelist.key?(:scheduled_time)
     end
   end
 end

@@ -36,10 +36,14 @@ module Jarvis::Schedule
     time1.then { |t| ((t-coverage)..(t+coverage)) }.cover?(time2)
   end
 
+  # Only run within ScheduledEventsWorker
   def schedule(*new_events)
-    jids_to_add = []
+    return if new_events.none?
+
+    new_jids = []
     events = get_events
     jids_to_remove = []
+    events_to_add = []
 
     new_events.each do |new_event|
       new_event[:uid] = new_event[:uid].presence || SecureRandom.hex
@@ -63,8 +67,8 @@ module Jarvis::Schedule
       words = new_event[:words] || new_event[:command]
       jid = ::JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], words)
 
-      jids_to_add.push(jid)
-      events.push(
+      new_jids.push(jid)
+      events_to_add.push(
         jid: jid,
         name: new_event[:name],
         scheduled_time: new_event[:scheduled_time],
@@ -75,25 +79,23 @@ module Jarvis::Schedule
       )
     end
 
-    ::DataStorage[:scheduled_events] = events
-    cancel(*jids_to_remove) # Triggers cleanup, which triggers broadcast
-    jids_to_add
+    ::ScheduledEventsWorker.perform_async(JSON.parse({
+      add: events_to_add,
+      remove: jids_to_remove
+    }.to_json))
+    new_jids
   end
 
+  # Only run within ScheduledEventsWorker
   def cancel(*jids)
-    ::Sidekiq::ScheduledSet.new.each do |job|
-      job.delete if jids.include?(job.jid)
-    end
+    return if jids.none?
 
-    cleanup
+    ::ScheduledEventsWorker.perform_async(JSON.parse({
+      remove: jids
+    }.to_json))
   end
 
   def cleanup
-    jids = ::Sidekiq::ScheduledSet.new.filter_map { |j| j.klass == "JarvisWorker" && j.jid }
-
-    events = get_events.select { |evt| evt[:jid].in?(jids) }
-
-    ::DataStorage[:scheduled_events] = events
-    ::BroadcastUpcomingWorker.perform_async
+    ::ScheduledEventsWorker.perform_async
   end
 end
