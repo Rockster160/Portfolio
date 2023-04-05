@@ -177,6 +177,10 @@ $(document).ready(function() {
     // if (parseInt($(".shot.current").attr("data-shot-idx")) == 0) {
     //   nextFrame(this)
     // }
+    if (pinTimer) {
+      console.log("pin timer going!");
+      $(".next-frame").click()
+    }
 
     $(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
     if ($(this).hasClass("pocket-close")) { strikePoint("pocket") }
