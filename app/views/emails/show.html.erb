@@ -59,7 +59,6 @@
     <p> Attachments:
       <% @email.retrieve_attachments.each do |(attach_id, attachment)| %>
         <%= link_to "<#{attachment[:filename]}>", attachment[:presigned_url], target: "_blank" %>
-        <img src="<%= attachment[:presigned_url] %>" alt="<%= attachment[:filename] %>">
       <% end %>
     </p>
   <% end %>
@@ -76,6 +75,12 @@
     <%= render_iframe(@email.blob) %>
   <% else %>
     <h3 class="text-center">No Content</h3>
+  <% end %>
+  <% if @email.attachments&.any? %>
+    <p> Attachments:</p>
+    <% @email.retrieve_attachments.each do |(attach_id, attachment)| %>
+      <img src="<%= attachment[:presigned_url] %>" alt="<%= attachment[:filename] %>">
+    <% end %>
   <% end %>
 </div>
 
