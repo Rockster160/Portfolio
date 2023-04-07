@@ -59,6 +59,7 @@
     <p> Attachments:
       <% @email.retrieve_attachments.each do |(attach_id, attachment)| %>
         <%= link_to "<#{attachment[:filename]}>", attachment[:presigned_url], target: "_blank" %>
+        <img src="<%= attachment[:presigned_url] %>" alt="<%= attachment[:filename] %>">
       <% end %>
     </p>
   <% end %>
