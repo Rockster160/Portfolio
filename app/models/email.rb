@@ -56,11 +56,16 @@ class Email < ApplicationRecord
   end
 
   def notify_slack
+    clean_text = text_body.gsub!(/\n{3,}/, "\n\n")
+    clean_text = clean_text.gsub(/\b= \b/, "")
+    clean_text = clean_text.gsub(/[^\s]{30,}/, "blahblah")
+    clean_text = clean_text.gsub(/(blahblah blahblah ?)*/, "blahblah")
+
     message_parts = []
     message_parts << "*#{to} received email from #{from}*"
     message_parts << "_#{subject}_"
     message_parts << "<#{Rails.application.routes.url_helpers.email_url(id: id)}|Click here to view.>"
-    message_parts << ">>> #{text_body}"
+    message_parts << ">>> #{clean_text.truncate(2000)}"
     SlackNotifier.notify(message_parts.join("\n"), channel: "#portfolio", username: "Mail-Bot", icon_emoji: ":mailbox:")
   end
 
