@@ -51,6 +51,7 @@ module Jarvis::Schedule
       existing_event = events.find { |event| event[:uid] == new_event[:uid] }
       if existing_event.present?
         found_diff = !similar_time?(Time.parse(existing_event[:scheduled_time]), new_event[:scheduled_time])
+        # Bug probably here somewhere
         new_event.each do |k, v|
           next if k == :scheduled_time
 

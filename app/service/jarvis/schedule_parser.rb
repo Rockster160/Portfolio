@@ -34,7 +34,7 @@ class Jarvis::ScheduleParser < Jarvis::Action
 
   def valid_words?
     time_str, @scheduled_time = Jarvis::Times.extract_time(@msg.downcase.squish, context: :future)
-    return unless @scheduled_time
+    return false unless @scheduled_time
 
     @remaining_words = @msg.sub(Regexp.new("(?:\b(?:at)\b )?#{time_str}", :i), "").squish
 

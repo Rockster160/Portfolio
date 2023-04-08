@@ -59,7 +59,7 @@ class Email < ApplicationRecord
     clean_text = text_body.gsub!(/\n{3,}/, "\n\n")
     clean_text = clean_text.gsub(/\b= \b/, "")
     clean_text = clean_text.gsub(/[^\s]{30,}/, "blahblah")
-    clean_text = clean_text.gsub(/(blahblah blahblah ?)*/, "blahblah")
+    clean_text = clean_text.gsub(/(blahblah blahblah ?)+/, "blahblah")
 
     message_parts = []
     message_parts << "*#{to} received email from #{from}*"
