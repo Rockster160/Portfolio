@@ -1,7 +1,7 @@
 # Might be special/not an integration
 class Jarvis::Sms < Jarvis::Action
   def self.reserved_words
-    [:text, :remind, :message, :msg, :sms, :txt, :ping]
+    [:text, :remind, :message, :msg, :sms, :txt, :tell, :ping]
   end
 
   def attempt
@@ -35,6 +35,7 @@ class Jarvis::Sms < Jarvis::Action
       :text,
       :remind,
       :txt,
+      :tell,
       :message,
       :msg,
       :sms,
@@ -46,6 +47,7 @@ class Jarvis::Sms < Jarvis::Action
     @rx.words(
       :send,
       :shoot,
+      :tell,
       :me,
       :later,
       :a,
