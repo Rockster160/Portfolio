@@ -24,7 +24,7 @@ class Climb < ApplicationRecord
     @score_list ||= {}
     @score_list[go] ||= begin
       val = 1
-      go.times { val *= MULTIPLIER_PER_V }
+      go.to_i.times { val *= MULTIPLIER_PER_V }
       val
     end
   end
