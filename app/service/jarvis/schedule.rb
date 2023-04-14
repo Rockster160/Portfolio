@@ -47,8 +47,17 @@ module Jarvis::Schedule
 
     new_events.each do |new_event|
       new_event[:uid] = new_event[:uid].presence || SecureRandom.hex
+      words = new_event[:words] || new_event[:command]
 
-      existing_event = events.find { |event| event[:uid] == new_event[:uid] }
+      existing_event = events.find { |event| new_event[:uid] == event[:uid] }
+      existing_event ||= events.find { |event|
+        next false if (event[:words].presence || event[:command]).blank?
+        # Duplicate if words and time match
+        next false unless words == (event[:words] || event[:command])
+
+        similar_time?(Time.parse(event[:scheduled_time]), new_event[:scheduled_time])
+      }
+
       if existing_event.present?
         found_diff = !similar_time?(Time.parse(existing_event[:scheduled_time]), new_event[:scheduled_time])
         found_diff ||= new_event.any? do |k, v|
@@ -58,10 +67,10 @@ module Jarvis::Schedule
         end
 
         if found_diff
-          # Remove the existing event then run the rest of the block which adds the event back
+          # Remove the old event then run the rest of the block which adds the new event back
           jids_to_remove << existing_event[:jid]
         else
-          next # Don't run the rest of the block- the event already exists
+          next # Event already exists- Don't run the rest of the block
         end
       end
 
