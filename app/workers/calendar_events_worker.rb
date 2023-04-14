@@ -41,6 +41,10 @@ class CalendarEventsWorker
     !online_meeting?(event[:location])
   end
 
+  def calendar_event?(event)
+    return false
+  end
+
   def gather_events(events)
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
     events.each_with_object([]) do |(event, idx), new_events|
@@ -85,7 +89,7 @@ class CalendarEventsWorker
           user_id: @user_id,
           scheduled_time: event[:end_time] - PRE_OFFSET,
         )
-      else
+      elsif calendar_event?(event)
         # Potential future: Trigger a JarvisTask for every calendar event when it starts
         # new_events.push(
         #   name: event[:name],
@@ -95,6 +99,8 @@ class CalendarEventsWorker
         #   user_id: @user_id,
         #   scheduled_time: event[:start_time],
         # )
+      else
+        new_events.push(event)
       end
     end
   end

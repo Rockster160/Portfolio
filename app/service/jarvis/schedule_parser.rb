@@ -14,7 +14,7 @@ class Jarvis::ScheduleParser < Jarvis::Action
   end
 
   def natural_time
-    relative_time.gsub(":00", "").gsub(/12 ?pm/i, "noon").gsub(/12 ?am/i, "midnight")
+    relative_time.gsub(/12:00 ?pm/i, "noon").gsub(/12:00 ?am/i, "midnight").gsub(":00", "")
   end
 
   def relative_time
