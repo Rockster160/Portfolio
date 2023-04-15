@@ -17,6 +17,7 @@ class CalendarEventsWorker
     scheduled_events = ::Jarvis::Schedule.get_events # Only for @user_id
     listing_uids = scheduled_events.map { |evt| evt[:uid] }
 
+    # Previous events DO have UID - does that come through over here?
     jids_to_remove = scheduled_events.filter_map { |listing|
       # listing[:uid] so that we only remove calendar events
       # listing[:jid] last as the implicit return of the map
