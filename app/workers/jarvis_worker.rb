@@ -11,7 +11,7 @@ class JarvisWorker
       if event_data[:user_id].present? && event_data[:type].present?
         ::Jarvis.trigger(
           event[:type],
-          { input_vars: { "Event Data": event.except(:type, :user_id) } }.to_json
+          { input_vars: { "Event Data": event.except(:type, :user_id) } }.to_json,
           scope: { user_id: event[:user_id] }
         )
       end
