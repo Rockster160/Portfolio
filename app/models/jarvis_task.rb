@@ -41,6 +41,7 @@ class JarvisTask < ApplicationRecord
     :action_event,
     :tell,
     :list,
+    :calendar,
     # :email,
     :webhook,
     :websocket,
@@ -62,6 +63,7 @@ class JarvisTask < ApplicationRecord
     # integration:     8, - Not needed, as "tell" can handle this
     failed_task:       9,
     function:          10,
+    calendar:          11,
   }
 
   enum output_type: {
@@ -153,6 +155,11 @@ class JarvisTask < ApplicationRecord
       [["List Data", [
         { return: :hash },
         "List Data"
+      ]]]
+    elsif calendar?
+      [["Event Data", [
+        { return: :hash },
+        "Event Data"
       ]]]
     elsif websocket?
       [["WS Receive Data", [

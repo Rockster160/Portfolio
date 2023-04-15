@@ -75,7 +75,10 @@ module Jarvis::Schedule
       end
 
       words = new_event[:words] || new_event[:command]
-      jid = ::JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], words)
+      # jid = ::JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], words)
+      jid = ::JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], JSON.parse({
+        event: new_event
+      }.to_json))
 
       new_jids.push(jid)
       events_to_add.push(
