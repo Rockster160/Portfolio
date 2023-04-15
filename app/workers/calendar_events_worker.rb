@@ -18,7 +18,9 @@ class CalendarEventsWorker
     listing_uids = scheduled_events.map { |evt| evt[:uid] }
 
     jids_to_remove = scheduled_events.filter_map { |listing|
-      listing[:uid] && listing[:jid] && !event_uids.include?(listing[:uid])
+      # listing[:uid] so that we only remove calendar events
+      # listing[:jid] last as the implicit return of the map
+      listing[:uid].present? && !event_uids.include?(listing[:uid]) && listing[:jid]
     }
 
     ::Jarvis::Schedule.cancel(*jids_to_remove)
