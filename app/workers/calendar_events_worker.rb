@@ -90,15 +90,14 @@ class CalendarEventsWorker
           scheduled_time: event[:end_time] - PRE_OFFSET,
         )
       elsif calendar_event?(event)
-        # Potential future: Trigger a JarvisTask for every calendar event when it starts
-        # new_events.push(
-        #   name: event[:name],
-        #   uid: event[:uid],
-        #   type: :calendar, # TODO: Need a customer JarvisTask for this
-        #   # words: event[:notes],
-        #   user_id: @user_id,
-        #   scheduled_time: event[:start_time],
-        # )
+        new_events.push(
+          name: event[:name],
+          uid: event[:uid],
+          type: :calendar, 
+          notes: event[:notes],
+          user_id: @user_id,
+          scheduled_time: event[:start_time],
+        )
       else
         new_events.push(event)
       end
