@@ -11,7 +11,7 @@ class CalendarEventsWorker
     sorted_events = coming_events.sort_by { |evt| evt[:start_time] || ::DateTime.new }
     schedulable_events = gather_events(sorted_events)
 
-    events_to_add = schedulable_events.select { |event| event[:scheduled_time] > 1.minute.from_now }
+    events_to_add = schedulable_events.select { |event| event[:scheduled_time].to_i > 1.minute.from_now.to_i }
     event_uids = events_to_add.map { |event| event[:uid] }
 
     scheduled_events = ::Jarvis::Schedule.get_events # Only for @user_id
@@ -93,7 +93,7 @@ class CalendarEventsWorker
         new_events.push(
           name: event[:name],
           uid: event[:uid],
-          type: :calendar, 
+          type: :calendar,
           notes: event[:notes],
           user_id: @user_id,
           scheduled_time: event[:start_time],
