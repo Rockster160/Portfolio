@@ -87,7 +87,7 @@ class Jarvis
   end
 
   def self.execute_trigger(trigger, trigger_data={}, scope: {})
-    trigger_data.deep_symbolize_keys! unless trigger_data.is_a?(HashWithIndifferentAccess)
+    trigger_data = SafeJsonSerializer.load(trigger_data) || trigger_data
     tasks = ::JarvisTask.enabled.where(trigger: trigger).where(scope)
 
     tasks.find_each do |task|
