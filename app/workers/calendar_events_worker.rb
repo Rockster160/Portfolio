@@ -53,6 +53,8 @@ class CalendarEventsWorker
     events.each_with_object([]) do |(event, idx), new_events|
       next if event[:start_time].blank? || event[:end_time].blank? # Skip all-day events
 
+      event[:uid] = "unix:#{event[:start_time].to_i}:#{event[:uid]}"
+
       # If notes starts with Jarvis, send to Jarvis as a message
       if event[:notes]&.match?(/^jarvis[:,]? */i)
         new_events.push(
