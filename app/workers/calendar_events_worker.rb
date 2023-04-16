@@ -19,7 +19,8 @@ class CalendarEventsWorker
 
     # Previous events DO have UID - does that come through over here?
     jids_to_remove = scheduled_events.filter_map { |listing|
-      # listing[:uid] so that we only remove calendar events
+      # Commands aren't scheduled, so skip them to prevent them being removed
+      next if listing[:type] == "command"
       # listing[:jid] last as the implicit return of the map
       listing[:uid].present? && !event_uids.include?(listing[:uid]) && listing[:jid]
     }
@@ -74,7 +75,7 @@ class CalendarEventsWorker
         new_events.push(
           name: "TTL: #{distance_of_time_in_words(traveltime)}",
           uid: event[:uid] + "-tt",
-          type: :message,
+          type: :travel,
           user_id: @user_id,
           scheduled_time: event[:start_time] - traveltime - 2.minutes,
         )
