@@ -122,65 +122,62 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
   #   :content, # last value from content is used to sort asc
   # end
 
-  # def find
-  #   { return: :any, description: "First truthy value from array" },
-  #   { block: :array },
-  #   :content,
-  # end
+  def find
+    loop_exit = false
+    pre_key, pre_obj, pre_idx = jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] # save state
+    arr, steps = args
+    arr = SafeJsonSerializer.load(arr)
 
-  # def find_map
-  #   { return: :any, description: "First truthy return from array (the return, not the object)" },
-  #   { block: :array },
-  #   :content,
-  # end
+    found = eval_block(arr).find.with_index do |val, idx|
+      jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] = idx, val, idx
+      break if loop_exit || jil.ctx[:i] > Jarvis::Execute::MAX_ITERATIONS
+
+      val = steps.map { |arg|
+        # next and break only break out of one layer
+        case arg[:type].try(:to_sym)
+        when :"logic.next"
+          # Don't run any more steps in the block, but continue the loop
+          break [eval_block(arg)] # still evaling here so that it increments
+        when :"logic.break"
+          loop_exit = true
+          break [eval_block(arg)] # still evaling here so that it increments
+        else
+          eval_block(arg).tap { |arg_val|
+            break arg_val if jil.ctx.delete(:next)
+            if jil.ctx.delete(:break)
+              loop_exit = true
+              break arg_val
+            end
+          }
+        end
+      }.last
+      break val if loop_exit || jil.ctx.delete(:break)
+      val
+    end
+
+    jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] = pre_key, pre_obj, pre_idx # reset state
+    return found
+  end
+
+  def any?
+    arr = evalargs.first
+    arr = SafeJsonSerializer.load(arr)
+    arr.any?
+  end
+
+  def none?
+    !any?
+  end
+
+  def all?
+    arr = evalargs.first
+    arr = SafeJsonSerializer.load(arr)
+    arr.all?
+  end
 
   # def merge
   #   { return: :array },
   #   { block: :array },
   #   { block: :array },
-  # end
-
-  # def each
-  #   { return: :num }, # number of times the loop ran
-  #   { block: :array },
-  #   :content,
-  # end
-
-  # def map
-  #   { return: :array },
-  #   { block: :array },
-  #   :content, # last value from content is used as new array value
-  # end
-  # def map
-  #   loop_exit = false
-  #   pre_key, pre_obj, pre_idx = jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] # save state
-  #   arr, steps = args
-  #
-  #   vals = eval_block(arr).map.with_index do |(key, val), idx|
-  #     jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] = key, val, idx
-  #     break if loop_exit || jil.ctx[:i] > MAX_ITERATIONS
-  #
-  #     val = steps.map { |arg|
-  #       # next and break only break out of one layer
-  #       case arg[:type].try(:to_sym)
-  #       when :"logic.next"
-  #         # Don't run any more steps in the block, but continue the loop
-  #         break [eval_block(arg)] # still evaling here so that it increments
-  #       when :"logic.break"
-  #         loop_exit = true
-  #         break [eval_block(arg)] # still evaling here so that it increments
-  #       else
-  #         eval_block(arg)
-  #       end
-  #     }.last
-  #     break val if loop_exit
-  #     val
-  #   end
-  #
-  #   jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] = pre_key, pre_obj, pre_idx # reset state
-  #   return vals
-  # end
-  # def each
-  #   map
   # end
 end

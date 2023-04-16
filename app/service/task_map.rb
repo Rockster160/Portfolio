@@ -317,25 +317,27 @@ class TaskMap
       #   { block: :array },
       #   :content, # last value from content is used to sort asc
       # ],
-      # find:        [
-      #   { return: :any, description: "First truthy value from array" },
-      #   { block: :array },
-      #   :content,
-      # ],
-      # find_map:    [
-      #   { return: :any, description: "First truthy return from array (the return, not the object)" },
-      #   { block: :array },
-      #   :content,
-      # ],
+      find:        [
+        { return: :any, description: "First truthy value from array" },
+        { block: :array },
+        :content,
+      ],
+      any?:        [
+        { return: :bool, description: "Bool of any truthy values in array." },
+        { block: :array },
+      ],
+      all?:        [
+        { return: :bool, description: "Bool of all truthy values in array." },
+        { block: :array },
+      ],
+      none?:        [
+        { return: :bool, description: "Bool of all falsy values in array." },
+        { block: :array },
+      ],
       # merge:       [
       #   { return: :array },
       #   { block: :array },
       #   { block: :array },
-      # ],
-      # join:        [
-      #   { return: :str },
-      #   { block: :array },
-      #   { block: :str, name: :join_by, default: ", " },
       # ],
       each:        [
         { return: :num }, # number of times the loop ran

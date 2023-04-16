@@ -33,6 +33,7 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
     casted = case val
     when ::Array then (val.one? && val.first.try(:dig, :raw)) || raise("Unable to cast <Array> to <Num>")
     when ::Hash then val[:raw] || raise("Unable to cast <Hash> to <Num>")
+    when ::TrueClass then 1
     else
       val
     end
