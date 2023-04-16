@@ -5,42 +5,50 @@ class Jarvis::Execute::Hash < Jarvis::Execute::Executor
 
   def get
     hash, key = evalargs
+    hash = SafeJsonSerializer.load(hash)
     hash.with_indifferent_access[key]
   end
 
   def set
     hash, key, val = evalargs
+    hash = SafeJsonSerializer.load(hash)
     hash.with_indifferent_access[key] = val
     hash
   end
 
   def del
     hash, key = evalargs
+    hash = SafeJsonSerializer.load(hash)
     hash.with_indifferent_access.delete(key)
     hash
   end
 
   def keys
     hash = evalargs
+    hash = SafeJsonSerializer.load(hash)
     hash.keys
   end
 
   def length
     hash = evalargs
+    hash = SafeJsonSerializer.load(hash)
     hash.keys.length
   end
 
   def merge
     hash1, hash2 = evalargs
+    hash1 = SafeJsonSerializer.load(hash1)
+    hash2 = SafeJsonSerializer.load(hash2)
     hash1.merge(hash2)
   end
 
   def map
     loop_exit = false
     pre_key, pre_obj, pre_idx = jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] # save state
-    arr, steps = args
+    hash, steps = args
+    hash = SafeJsonSerializer.load(hash)
 
-    vals = eval_block(arr).map.with_index do |(key, val), idx|
+    vals = eval_block(hash).map.with_index do |(key, val), idx|
       jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] = key, val, idx
       break if loop_exit || jil.ctx[:i] > Jarvis::Execute::MAX_ITERATIONS
 
