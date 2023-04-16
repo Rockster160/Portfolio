@@ -1,6 +1,6 @@
 class CalendarEventsWorker
-  include ActionView::Helpers::DateHelper
   include Sidekiq::Worker
+  include ActionView::Helpers::DateHelper
 
   FOLLOWUP_OFFSET = 1.hour
   PRE_OFFSET = 10.minutes
