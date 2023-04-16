@@ -47,18 +47,24 @@ module Jarvis::Schedule
 
     new_events.each do |new_event|
       new_event[:uid] = new_event[:uid].presence || SecureRandom.hex
-      words = new_event[:words] || new_event[:command]
+      words = new_event[:words].presence || new_event[:command]
 
-      existing_event = events.find { |event| new_event[:uid] == event[:uid] }
-      existing_event ||= events.find { |event|
-        next false if (event[:words].presence || event[:command]).blank?
-        # Duplicate if words and time match
-        next false unless words == (event[:words] || event[:command])
+      similiar_events = events.select { |event|
+        # Only similar if names match
+        next true if new_event[:uid] == event[:uid]
+        next false unless new_event[:name] == event[:name]
+        # In the case we gave it a new uid, check if words match
+        evt_words = event[:words].presence || event[:command]
+        next false if words.present? && words != evt_words
 
+        # If names match, check if times are the same, making it a match
         similar_time?(Time.parse(event[:scheduled_time]), new_event[:scheduled_time])
       }
 
-      if existing_event.present?
+      found_duplicate = false
+      similiar_events.each do |existing_event|
+        jids_to_remove << existing_event[:jid] if found_duplicate
+
         found_diff = !similar_time?(Time.parse(existing_event[:scheduled_time]), new_event[:scheduled_time])
         found_diff ||= new_event.any? do |k, v|
           next if k == :scheduled_time
@@ -70,15 +76,18 @@ module Jarvis::Schedule
           # Remove the old event then run the rest of the block which adds the new event back
           jids_to_remove << existing_event[:jid]
         else
-          next # Event already exists- Don't run the rest of the block
+          # Event already exists- Don't need to add it again
+          found_duplicate = true
         end
       end
 
-      words = new_event[:words] || new_event[:command]
-      # jid = ::JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], words)
-      jid = ::JarvisWorker.perform_at(new_event[:scheduled_time], new_event[:user_id], JSON.parse({
-        event: new_event
-      }.to_json))
+      next if found_duplicate
+
+      jid = ::JarvisWorker.perform_at(
+        new_event[:scheduled_time],
+        new_event[:user_id],
+        JSON.parse({ event: new_event }.to_json)
+      )
 
       new_jids.push(jid)
       events_to_add.push(
