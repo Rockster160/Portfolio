@@ -88,7 +88,12 @@ class Jarvis
 
   def self.execute_trigger(trigger, trigger_data={}, scope: {})
     trigger_data = SafeJsonSerializer.load(trigger_data) || trigger_data
-    tasks = ::JarvisTask.enabled.where(trigger: trigger).where(scope)
+
+    if trigger == "command"
+      command(User.find(scope["user_id"]), )
+    else
+      tasks = ::JarvisTask.enabled.where(trigger: trigger).where(scope)
+    end
 
     tasks.find_each do |task|
       ::Jarvis::Execute.call(task, trigger_data)
