@@ -67,7 +67,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       if (data.open.pf > 0)        { opens.push("FPD") }
       if (data.open.fp_window > 0) { opens.push("FPW") }
       if (data.open.dr > 0)        { opens.push("RDD") }
-      if (data.open.rd_window > 0) { opens.push("RDR") }
+      if (data.open.rd_window > 0) { opens.push("RDW") }
       if (data.open.pr > 0)        { opens.push("RPD") }
       if (data.open.rp_window > 0) { opens.push("RPW") }
       if (data.open.rt > 0)        { opens.push("Trunk") }
