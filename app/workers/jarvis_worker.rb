@@ -20,3 +20,10 @@ class JarvisWorker
     ::Jarvis::Schedule.cleanup
   end
 end
+# trigger, trigger_data, scope = event_data[:type],
+# { input_vars: { "Event Data": event_data.except(:type, :user_id) } },
+# { user_id: event_data[:user_id] }
+#
+# trigger, trigger_data, scope = trigger.to_s, trigger_data.to_json, scope.to_json
+#
+# trigger, trigger_data, scope = trigger, JSON.parse(trigger_data), JSON.parse(scope)
