@@ -7,36 +7,44 @@
   to { visibility: visible; }
 }
 
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
 html, body {
-  color: $grey-light;
   background: darken($blue-d5, 5%);
+  color: $grey-light;
   font-family: terminess, monospace;
 }
 
 .hidden { display: none; }
 
 .widget-wrapper {
-  width: 100%;
-  max-width: 600px;
-  margin: 0 auto;
+  grid-gap: 20px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-gap: 20px;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 600px;
 
   .widget-holder {
-    border: 1px solid blue;
-    border-radius: 8px;
-    width: 150px;
-    height: 150px;
-    margin: auto;
     display: flex;
+    position: relative;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    position: relative;
+    margin: auto;
+    border: 1px solid $base-blue;
+    border-radius: 8px;
+    width: 150px;
+    height: 150px;
 
     .widget {
       text-align: center;
+
+      .content {
+        line-height: 0;
+      }
 
       &.garage {
         font-size: 100px;
@@ -78,16 +86,31 @@ html, body {
         }
       }
 
+      .loading {
+        position: absolute;
+        top: 2.4px; left: 3.7px;
+        animation: spin 1s linear infinite;
+        width: 10px; height: 10px;
+
+        .ti {
+          position: absolute;
+          top: -3px; left: 0;
+          width: 0; height: 0;
+          color: $grey-light;
+          font-size: 10px;
+          text-align: left;
+        }
+      }
       .disconnected {
         position: absolute;
         top: 5px; left: 6px;
 
         &:before {
-          content: "";
           position: absolute;
-          width: 5px; height: 5px;
           border-radius: 100%;
           background: red;
+          width: 5px; height: 5px;
+          content: "";
         }
       }
       .refresh {
@@ -95,14 +118,14 @@ html, body {
         top: 0; right: 0;
         padding: 5px;
         width: 25px; height: 25px;
-        line-height: 25px;
 
         color: $grey-light;
         font-size: 24px;
+        line-height: 25px;
       }
       .last-sync {
-        position: absolute;
-        bottom: 5px; right: 5px;
+        position: absolute; right: 5px;
+        bottom: 5px;
         color: $grey-light;
         font-size: 12px;
       }
