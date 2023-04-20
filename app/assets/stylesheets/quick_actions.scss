@@ -1,0 +1,80 @@
+@import "config/_variables";
+@import "config/terminess_font.scss";
+
+@keyframes blink {
+  from { visibility: hidden; }
+  50% { visibility: hidden; }
+  to { visibility: visible; }
+}
+
+html, body {
+  color: $grey-light;
+  background: darken($blue-d5, 5%);
+  font-family: terminess, monospace;
+}
+
+.widget-wrapper {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-gap: 20px;
+
+  .widget-holder {
+    border: 1px solid blue;
+    border-radius: 8px;
+    width: 150px;
+    height: 150px;
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+
+    .widget {
+      text-align: center;
+
+      &.garage {
+        font-size: 100px;
+
+        .ti-mdi-garage_open { display: none; visibility: hidden; }
+        .ti-mdi-garage { display: none; visibility: hidden; }
+
+        &.open {
+          color: orange;
+
+          .ti-mdi-garage_open {
+            display: inline-block;
+            visibility: visible;
+          }
+        }
+        &.between {
+          color: yellow;
+
+          .ti-mdi-garage_open {
+            display: inline-block;
+            animation: 1s infinite blink;
+          }
+        }
+        &.closed {
+          color: green;
+
+          .ti-mdi-garage {
+            display: inline-block;
+            visibility: visible;
+          }
+        }
+      }
+
+      .last-sync {
+        position: absolute;
+        bottom: 5px; right: 5px;
+        color: $grey-light;
+        font-size: 12px;
+      }
+    }
+
+  }
+}

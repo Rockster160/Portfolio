@@ -17,6 +17,8 @@ Rails.application.routes.draw do
   get "playground" => "index#playground"
   resource :ping, only: :create
 
+  resource :quick_action, only: :show
+
   scope module: :users do
     get :login,         controller: :sessions,      action: :new
     post :login,        controller: :sessions,      action: :create

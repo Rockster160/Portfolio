@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html style="height: 100%;" class="html-ctr-<%= controller_name %> html-act-<%= action_name %> <%= 'dark-mode' if !@skip_dark_mode && current_user.try(:dark_mode?) %>">
+<head>
+  <title><%= content_for(:title) || "Rocco Nicholls" %></title>
+  <%= action_cable_meta_tag %>
+  <% description = content_for(:description) || "This is the Portfolio site for Rocco Nicholls. I host tools I build as well as links to projects I've worked on here. Please feel free to take a look around let me know what you think!" %>
+  <meta name="description" content="<%= description %>">
+  <meta name="uptime" content="true">
+  <% if content_for? :viewport_tag %>
+    <%= content_for :viewport_tag %>
+  <% else %>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  <% end %>
+  <%= yield :meta %>
+  <%= yield :head_before_scripts %>
+  <%= stylesheet_link_tag "quick_actions", media: "all" %>
+  <script type="module" src="/quick_actions.js"></script>
+  <%= yield :head %>
+  <% if content_for? :favicon %>
+    <%= yield :favicon %>
+  <% else %>
+    <%#= render 'favicon' %>
+  <% end %>
+  <%= csrf_meta_tags %>
+</head>
+<body class="ctr-<%= controller_name %> act-<%= action_name %> <%= content_for :body_classes %>" data-sub-auth="<%= current_user&.sub_auth %>">
+  <%= yield :modals %>
+  <%= yield %>
+  <%= yield :after_body %>
+</body>
+</html>

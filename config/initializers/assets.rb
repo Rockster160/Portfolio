@@ -12,6 +12,7 @@ Rails.application.config.assets.paths << Rails.root.join("*.svg")
 Rails.application.config.assets.precompile += %w( support/* )
 Rails.application.config.assets.precompile += %w( pages/random/* )
 Rails.application.config.assets.precompile += %w( individual/**/* )
+Rails.application.config.assets.precompile += %w( quick_actions.css )
 
 # Precompile additional assets.
 # application.js, application.css, and all non-JS/CSS in the app/assets
