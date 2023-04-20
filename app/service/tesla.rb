@@ -13,6 +13,7 @@ class Tesla
 
   delegate(
     :vehicle_data,
+    :cached_vehicle_data,
     :loc,
     :start_car,
     :off_car,
