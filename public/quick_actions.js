@@ -15,8 +15,14 @@ class Widget {
       this.ele.parentElement.addEventListener("ontouchstart", touch_callback)
     }
     let refresh_btn = this.ele.parentElement.querySelector(".refresh")
-    refresh_btn.addEventListener("click", function() { widget.refresh() })
-    refresh_btn.addEventListener("ontouchstart", function() { widget.refresh() })
+    refresh_btn.addEventListener("click", function(evt) {
+      evt.stopPropagation()
+      widget.refresh()
+    })
+    refresh_btn.addEventListener("ontouchstart", function(evt) {
+      evt.stopPropagation()
+      widget.refresh()
+    })
 
     widgets[name] = this
   }
