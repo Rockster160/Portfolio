@@ -34,6 +34,12 @@ class Widget {
 
     return Math.round(((new Date()).getTime() - this.#last_sync) / 1000)
   }
+  connected() {
+    this.ele.parentElement.querySelector(".disconnected").classList.add("hidden")
+  }
+  disconnected() {
+    this.ele.parentElement.querySelector(".disconnected").classList.remove("hidden")
+  }
 }
 
 function timeAgo(input) {
@@ -62,14 +68,23 @@ function timeAgo(input) {
 let garage = new Widget("garage", function() {
   garage.socket.send({ action: "control", direction: "toggle" })
 })
-garage.socket = new AuthWS("GarageChannel", function(msg) {
-  if (msg.data?.garageState) {
-    garage.state = msg.data.garageState
+garage.socket = new AuthWS("GarageChannel", {
+  onmessage: function(msg) {
+    if (msg.data?.garageState) {
+      garage.state = msg.data.garageState
 
-    garage.ele.classList.remove("open", "closed", "between")
-    garage.ele.classList.add(garage.state)
+      garage.ele.classList.remove("open", "closed", "between")
+      garage.ele.classList.add(garage.state)
 
-    garage.last_sync = new Date()
+      garage.last_sync = new Date()
+    }
+  },
+  onopen: function() {
+    garage.connected()
+    garage.refresh()
+  },
+  onclose: function() {
+    garage.disconnected()
   }
 })
 garage.refresh = function() { garage.socket.send({ action: "request" }) }

@@ -69,7 +69,7 @@ class SimpleWS {
 }
 
 export class AuthWS {
-  constructor(subscription, receive) {
+  constructor(subscription, callbacks) {
     let domain = location
 
     let ws_protocol = domain.protocol == "https:" ? "wss" : "ws", ws_open = false
@@ -109,11 +109,11 @@ export class AuthWS {
         let msg_data = JSON.parse(msg.data)
         if (msg_data.type == "ping" || !msg_data.message) { return }
 
-        receive.call(cell, msg_data.message)
+        callbacks?.onmessage?.call(cell, msg_data.message)
       }
     }
 
-    this.simple_socket = new SimpleWS(this, this.init_data)
+    this.simple_socket = new SimpleWS(this, {...this.init_data, ...callbacks})
   }
 
   send(packet) {

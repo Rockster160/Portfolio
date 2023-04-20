@@ -13,6 +13,8 @@ html, body {
   font-family: terminess, monospace;
 }
 
+.hidden { display: none; }
+
 .widget-wrapper {
   width: 100%;
   max-width: 600px;
@@ -76,6 +78,18 @@ html, body {
         }
       }
 
+      .disconnected {
+        position: absolute;
+        top: 5px; left: 6px;
+
+        &:before {
+          content: "";
+          position: absolute;
+          width: 5px; height: 5px;
+          border-radius: 100%;
+          background: red;
+        }
+      }
       .refresh {
         position: absolute;
         top: 0; right: 0;
