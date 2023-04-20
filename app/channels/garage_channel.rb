@@ -12,7 +12,7 @@ class GarageChannel < ApplicationCable::Channel
   end
 
   def control(data)
-    GarageControl.command(data["direction"])
+    GarageCommand.command(data["direction"])
   end
 
   # :ping garage data: { garageState: :open }

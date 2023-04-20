@@ -8,7 +8,7 @@ module SearchParser
 
     delims_with_aliases = delimiters.to_a.each_with_object([]) { |(dk, d), obj|
       obj << [dk, d]
-      aliases.each do |old_a, new_a|
+      aliases&.each do |old_a, new_a|
         obj << [dk, d.gsub(old_a.to_s, new_a.to_s)] if d.include?(old_a.to_s)
       end
     }.uniq

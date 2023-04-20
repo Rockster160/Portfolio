@@ -36,7 +36,7 @@ html, body {
     .widget {
       text-align: center;
 
-      &.home {
+      &.garage {
         font-size: 100px;
 
         .ti-mdi-garage_open { display: none; visibility: hidden; }
@@ -50,7 +50,7 @@ html, body {
             visibility: visible;
           }
         }
-        &.opening {
+        &.between {
           color: yellow;
 
           .ti-mdi-garage_open {
