@@ -197,9 +197,13 @@ tesla.refresh = function() {
   tesla.loading = true
   tesla.socket.send({ action: "command", command: "reload", params: {} })
 }
-tesla.tick = function() {
-  // Do we want this page to refresh every hour?
-  // if (tesla.state == "between" && tesla.delta() > 9 && tesla.delta() % 5 == 0) {
-  //   tesla.refresh()
-  // }
+
+let tryAgain = function() {
+  if ("climate" in tesla.data) { return }
+
+  setTimeout(function() {
+    tesla.socket.send({ action: "request" })
+    tryAgain()
+  }, 3000)
 }
+tryAgain()
