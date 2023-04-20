@@ -96,7 +96,7 @@ tesla.socket = new AuthWS("TeslaChannel", {
       tesla.error = false
     }
 
-    tesla.data = msg
+    if (msg.climate) { tesla.data = msg }
     let lines = [], data = msg
 
     // Line 1 - Blank
