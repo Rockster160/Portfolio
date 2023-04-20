@@ -80,7 +80,7 @@ function span(str, style) {
 export let tesla = new Widget("tesla", function() {
   tesla.loading = true
 
-  if (!tesla.data?.climate) {
+  if (!tesla.data?.climate?.on) {
     tesla.socket.send({ action: "command", command: "on", params: {} })
   } else {
     tesla.socket.send({ action: "command", command: "off", params: {} })
@@ -96,7 +96,11 @@ tesla.socket = new AuthWS("TeslaChannel", {
       tesla.error = false
     }
 
-    if (msg.climate) { tesla.data = msg }
+    if ("climate" in msg) {
+      tesla.data = msg
+    } else {
+      return
+    }
     let lines = [], data = msg
 
     // Line 1 - Blank
@@ -117,7 +121,7 @@ tesla.socket = new AuthWS("TeslaChannel", {
     if (data.charging?.active && data.charging.eta > 0 && data.charging.speed > 0 && !(data.drive?.speed > 0)) {
       let charging_text = "Full: " + data.charging.eta + "min | " + ico("weather-lightning") + data.charging.speed + "mph"
       lines.push(span(charging_text, "color: yellow;"))
-    } else if (!data.charging || data.charging.state == "Disconnected") {
+    } else if ("charging" in data && !data.charging || data.charging.state == "Disconnected") {
       lines.push(span("[NOT CHARGING]", "color: red;"))
     } else {
       lines.push("")
@@ -154,11 +158,11 @@ tesla.socket = new AuthWS("TeslaChannel", {
     // Line 7 - Climate
     if (data.climate?.on) {
       let climate_text = "Climate: " //ico("mdi-fan ti-spin") - Not centered, so looks weird
-      climate_text += "[ON] "
+      climate_text += span("[ON] ", "color: green;")
       climate_text += shiftTempToColor(data.climate.set)
       lines.push(climate_text)
     } else {
-      lines.push("[OFF]")
+      lines.push(span("[OFF]", "color: grey;"))
     }
 
     // Line 8 - Locked / Location
@@ -168,7 +172,7 @@ tesla.socket = new AuthWS("TeslaChannel", {
 
       drive_text += ico("oct-location") + data.drive.location
       if (data.drive.speed > 0) { drive_text += ico("mdi-speedometer") + data.drive.speed + "mph" }
-      lines.push(drive_text)
+      lines.push(span(drive_text, "color: grey;"))
     } else {
       lines.push("")
     }
