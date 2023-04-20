@@ -57,16 +57,20 @@ class ColorMapper {
   }
 }
 
-let colorMap = new ColorMapper({
+let tempMap = new ColorMapper({
   "#5B6EE1": 5,
   "#639BFF": 32,
   "#99E550": 64,
   "#FBF236": 78,
   "#AC3232": 96,
 })
+let energyMap = new ColorMapper({
+  "#AC3232": 25,
+  "#99E550": 100,
+})
 
 function shiftTempToColor(temp) {
-  return span(temp + "°", `color: ${colorMap.scale(temp)}`)
+  return span(temp + "°", `color: ${tempMap.scale(temp)}`)
 }
 
 function ico(str, style) {
@@ -113,8 +117,9 @@ tesla.socket = new AuthWS("TeslaChannel", {
     } else {
       status_pieces.push("?°")
     }
-    status_pieces.push((data.charge || "?") + "%")
-    status_pieces.push((data.miles || "?") + "m")
+    let color = data.charge ? tempMap.scale(data.charge) : "undefined"
+    status_pieces.push(span((data.charge || "?") + "%", `color: ${color}`))
+    status_pieces.push(span((data.miles || "?") + "m", `color: ${color}`))
     lines.push(status_pieces.join(" | "))
 
     // Line 3 - Charging state
