@@ -153,6 +153,10 @@ class TeslaControl
     command(:set_preconditioning_max, on: direction)
   end
 
+  def cached_vehicle_data
+    User.find(1).jarvis_cache.get(:car_data)
+  end
+
   def vehicle_data
     @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data").tap { |car_data|
       User.find(1).jarvis_cache.set(:car_data, car_data)

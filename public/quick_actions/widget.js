@@ -55,14 +55,15 @@ export class Widget {
     this.updateTimestamp()
   }
   set loading(bool) {
-    console.log(this.name, "loading: ", bool);
-    console.log(this);
     this.wrapper.querySelector(".loading").classList.toggle("hidden", !bool)
-    // if (bool) {
-    //   this.ele.querySelector(".loading").classList.remove("hidden")
-    // } else {
-    //   this.ele.querySelector(".loading").classList.add("hidden")
-    // }
+  }
+  set error(bool) {
+    this.wrapper.querySelector(".error").classList.toggle("hidden", !bool)
+  }
+  set lines(new_lines) {
+    this.wrapper.querySelector(".lines").innerHTML = new_lines.map(function(line) {
+      return `<p>${line}</p>`
+    }).join("")
   }
   updateTimestamp() {
     this.ele.querySelector(".last-sync").textContent = timeAgo(this.#last_sync)

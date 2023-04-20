@@ -42,7 +42,11 @@ html, body {
     .widget {
       text-align: center;
 
-      .content {
+      .lines p {
+        font-size: 12px;
+        height: 15px;
+        margin: 0;
+        padding: 0;
         line-height: 0;
       }
 

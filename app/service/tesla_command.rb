@@ -39,6 +39,8 @@
     end
 
     case cmd.to_sym
+    when :request
+      ActionCable.server.broadcast "tesla_channel", format_data(car.cached_vehicle_data)
     when :update, :reload
       ActionCable.server.broadcast "tesla_channel", format_data(car.vehicle_data) unless quick
       @response = "Updating car cell"
