@@ -66,8 +66,26 @@ html, body {
             visibility: visible;
           }
         }
+        &:not(.open, .between, .closed) {
+          color: grey;
+
+          .ti-mdi-garage {
+            display: inline-block;
+            visibility: visible;
+          }
+        }
       }
 
+      .refresh {
+        position: absolute;
+        top: 0; right: 0;
+        padding: 5px;
+        width: 25px; height: 25px;
+        line-height: 25px;
+
+        color: $grey-light;
+        font-size: 24px;
+      }
       .last-sync {
         position: absolute;
         bottom: 5px; right: 5px;

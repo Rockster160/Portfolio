@@ -5,6 +5,7 @@ let widgets = {}
 class Widget {
   #last_sync = 0
   constructor(name, touch_callback) {
+    let widget = this
     this.name = name
     this.ele = document.querySelector(`.widget.${name}`)
     this.last_sync = 0
@@ -13,6 +14,9 @@ class Widget {
       this.ele.parentElement.addEventListener("click", touch_callback)
       this.ele.parentElement.addEventListener("ontouchstart", touch_callback)
     }
+    let refresh_btn = this.ele.parentElement.querySelector(".refresh")
+    refresh_btn.addEventListener("click", function() { widget.refresh() })
+    refresh_btn.addEventListener("ontouchstart", function() { widget.refresh() })
 
     widgets[name] = this
   }
@@ -24,6 +28,11 @@ class Widget {
   }
   updateTimestamp() {
     this.ele.querySelector(".last-sync").textContent = timeAgo(this.#last_sync)
+  }
+  delta() {
+    if (this.#last_sync == 0) { return }
+
+    return Math.round(((new Date()).getTime() - this.#last_sync) / 1000)
   }
 }
 
@@ -47,6 +56,7 @@ function timeAgo(input) {
       return formatter.format(Math.round(delta), key);
     }
   }
+  return "just now"
 }
 
 let garage = new Widget("garage", function() {
@@ -62,10 +72,18 @@ garage.socket = new AuthWS("GarageChannel", function(msg) {
     garage.last_sync = new Date()
   }
 })
-garage.socket.send({ action: "request" })
+garage.refresh = function() { garage.socket.send({ action: "request" }) }
+garage.refresh()
+garage.tick = function() {
+  if (garage.state == "between" && garage.delta() > 9 && garage.delta() % 5 == 0) {
+    garage.refresh()
+  }
+}
 
 setInterval(function() {
   Object.keys(widgets).forEach(function(name) {
-    widgets[name].updateTimestamp()
+    let widget = widgets[name]
+    widget.updateTimestamp()
+    if (widget.tick && typeof(widget.tick) === "function") { widget.tick() }
   })
 }, 1000)

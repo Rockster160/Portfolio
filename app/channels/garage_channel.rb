@@ -8,7 +8,11 @@ class GarageChannel < ApplicationCable::Channel
   end
 
   def request
-    ActionCable.server.broadcast("garage_channel", { msg: "getGarage" })
+    if Rails.env.development?
+      Broadcast.ping(:garage, { data: { garageState: :closed } })
+    else
+      ActionCable.server.broadcast("garage_channel", { msg: "getGarage" })
+    end
   end
 
   def control(data)
