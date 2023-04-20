@@ -66,7 +66,11 @@ function timeAgo(input) {
 }
 
 let garage = new Widget("garage", function() {
-  garage.socket.send({ action: "control", direction: "toggle" })
+  switch (garage.state) {
+    case "open": garage.socket.send({ action: "control", direction: "close" }); break;
+    case "closed": garage.socket.send({ action: "control", direction: "open" }); break;
+    default: garage.socket.send({ action: "control", direction: "toggle" }); break;
+  }
 })
 garage.socket = new AuthWS("GarageChannel", {
   onmessage: function(msg) {
