@@ -15,6 +15,7 @@ export function resizeModal() {
   if (!window.visualViewport) { return }
 
   setTimeout(function() {
+    // This works when pasting into the console, but breaks on deploy. :(
     document.querySelector("html").style.height = window.visualViewport.height + "px"
     document.querySelector("body").style.height = window.visualViewport.height + "px"
     document.querySelector(".modal.show").style.height = window.visualViewport.height - 40 + "px"
@@ -25,6 +26,9 @@ window.addEventListener("resize", resizeModal)
 document.querySelectorAll("input").forEach((input) => {
   input.addEventListener("focus", resizeModal)
 })
+document.querySelectorAll(".modal").forEach((item, i) => {
+  item.addEventListener("transitionend", resizeModal)
+});
 
 document.addEventListener("click", function(evt) {
   // Somehow detect an off-modal click
