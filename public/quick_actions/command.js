@@ -4,5 +4,7 @@ import { showModal } from './modal.js';
 
 export let command = new Widget("command", function() {
   showModal("command-modal")
-  document.querySelector("#command-modal input").focus()
+  setTimeout(function() {
+    document.querySelector("#command-modal input").focus()
+  }, 350)
 })

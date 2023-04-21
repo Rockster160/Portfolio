@@ -14,12 +14,12 @@ document.querySelector(".close").addEventListener("click", function(evt) {
 window.addEventListener("resize focus", function() {
   if (!window.visualViewport) { return }
 
-  setTimeout(function() {
+  // setTimeout(function() {
     let modals = document.querySelectorAll(".modal")
     modals.forEach((modal) => {
       modal.style.height = window.visualViewport.height - 40 + "px"
     })
-  }, 300)
+  // }, 300)
 })
 
 document.addEventListener("click", function(evt) {
