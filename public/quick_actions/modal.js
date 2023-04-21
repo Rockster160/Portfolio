@@ -11,6 +11,13 @@ document.querySelector(".close").addEventListener("click", function(evt) {
   target.classList.remove("show")
 })
 
+window.addEventListener("resize", function() {
+  var modal = document.querySelector(".modal");
+  if (!window.visualViewport) { return }
+
+  modal.style.height = window.visualViewport.height - 40 + "px"
+});
+
 document.addEventListener("click", function(evt) {
   // Somehow detect an off-modal click
   // const modal = evt.target.closest(".modal")
