@@ -11,13 +11,15 @@ document.querySelector(".close").addEventListener("click", function(evt) {
   target.classList.remove("show")
 })
 
-window.addEventListener("resize", function() {
+window.addEventListener("resize focus", function() {
   if (!window.visualViewport) { return }
 
-  let modals = document.querySelectorAll(".modal")
-  modals.forEach((modal) => {
-    modal.style.height = window.visualViewport.height - 40 + "px"
-  })
+  setTimeout(function() {
+    let modals = document.querySelectorAll(".modal")
+    modals.forEach((modal) => {
+      modal.style.height = window.visualViewport.height - 40 + "px"
+    })
+  }, 300)
 })
 
 document.addEventListener("click", function(evt) {

@@ -15,6 +15,8 @@ html, body {
   background: darken($blue-d5, 5%);
   color: $grey-light;
   font-family: terminess, monospace;
+  height: 100%;
+  overflow: hidden;
 
   &, * { box-sizing: border-box; }
 }
@@ -155,6 +157,7 @@ html, body {
   opacity: 1;
   transition: all 0.3s ease;
   pointer-events: auto;
+  overflow: hidden;
 
   .modal-content {
     display: flex;
@@ -177,8 +180,9 @@ html, body {
     }
     .messages {
       display: flex;
+      flex-grow: 1;
       flex-direction: column-reverse;
-      height: 100%;
+      overflow: scroll;
 
       .message {
         margin: 5px 10px;
