@@ -188,7 +188,7 @@
 
   def stubbed_data
     {
-      charge: 77,
+      charge: 100,
       miles: 194,
       charging: {
         active: true,
