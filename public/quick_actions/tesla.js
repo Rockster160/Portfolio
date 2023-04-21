@@ -127,6 +127,7 @@ tesla.socket = new AuthWS("TeslaChannel", {
       let charging_text = "Full: " + data.charging.eta + "min | " + ico("weather-lightning") + data.charging.speed + "mph"
       lines.push(span(charging_text, "color: yellow;"))
     } else if ("charging" in data && !data.charging || data.charging.state == "Disconnected") {
+      // Only show at home
       lines.push(span("[NOT CHARGING]", "color: red;"))
     } else {
       lines.push("")
