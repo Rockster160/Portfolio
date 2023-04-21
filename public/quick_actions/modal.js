@@ -12,11 +12,13 @@ document.querySelector(".close").addEventListener("click", function(evt) {
 })
 
 window.addEventListener("resize", function() {
-  var modal = document.querySelector(".modal");
   if (!window.visualViewport) { return }
 
-  modal.style.height = window.visualViewport.height - 40 + "px"
-});
+  let modals = document.querySelectorAll(".modal")
+  modals.forEach((modal) => {
+    modal.style.height = window.visualViewport.height - 40 + "px"
+  })
+})
 
 document.addEventListener("click", function(evt) {
   // Somehow detect an off-modal click
