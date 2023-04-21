@@ -25,12 +25,12 @@ window.addEventListener("resize", resizeModal)
 document.querySelectorAll("input").forEach((input) => {
   input.addEventListener("focus", resizeModal)
 })
-document.querySelectorAll(".modal").forEach((item, i) => {
-  item.addEventListener("transitionend", resizeModal)
-});
+document.querySelectorAll(".modal").forEach((modal) => {
+  modal.addEventListener("transitionend", resizeModal)
+})
 
 document.addEventListener("click", function(evt) {
-  // Somehow detect an off-modal click
+  // Somehow detect an out-of-modal click
   // const modal = evt.target.closest(".modal")
   // const widget = evt.target.closest(".widget-wrapper")
   //
