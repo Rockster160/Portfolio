@@ -14,13 +14,14 @@ document.querySelector(".close").addEventListener("click", function(evt) {
 window.addEventListener("resize focus", function() {
   if (!window.visualViewport) { return }
 
-  document.querySelector("html").style.height = window.visualViewport.height + "px"
-  // setTimeout(function() {
+  setTimeout(function() {
+    console.log("Resize/Focus");
+    document.querySelector("html").style.height = window.visualViewport.height + "px"
     // let modals = document.querySelectorAll(".modal")
     // modals.forEach((modal) => {
     //   modal.style.height = window.visualViewport.height - 40 + "px"
     // })
-  // }, 300)
+  }, 100)
 })
 
 document.addEventListener("click", function(evt) {
