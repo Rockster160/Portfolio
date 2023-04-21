@@ -105,6 +105,13 @@ html, body {
           text-align: left;
         }
       }
+      .error {
+        position: absolute;
+        left: 5px;
+        bottom: 5px;
+        color: red;
+        font-size: 12px;
+      }
       .disconnected {
         position: absolute;
         top: 5px; left: 6px;
@@ -128,7 +135,8 @@ html, body {
         line-height: 25px;
       }
       .last-sync {
-        position: absolute; right: 5px;
+        position: absolute;
+        right: 5px;
         bottom: 5px;
         color: $grey-light;
         font-size: 12px;
