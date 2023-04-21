@@ -15,7 +15,6 @@ export function resizeModal() {
   if (!window.visualViewport) { return }
 
   setTimeout(function() {
-    // This works when pasting into the console, but breaks on deploy. :(
     document.querySelector("html").style.height = window.visualViewport.height + "px"
     document.querySelector("body").style.height = window.visualViewport.height + "px"
     document.querySelector(".modal.show").style.height = window.visualViewport.height - 40 + "px"
