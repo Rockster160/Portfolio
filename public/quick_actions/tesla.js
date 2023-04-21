@@ -66,7 +66,7 @@ let tempMap = new ColorMapper({
 })
 let energyMap = new ColorMapper({
   "#AC3232": 25,
-  "#99E550": 100,
+  "#99E550": 95,
 })
 
 function shiftTempToColor(temp) {
@@ -117,7 +117,7 @@ tesla.socket = new AuthWS("TeslaChannel", {
     } else {
       status_pieces.push("?°")
     }
-    let color = data.charge ? tempMap.scale(data.charge) : "undefined"
+    let color = data.charge ? energyMap.scale(data.charge) : "undefined"
     status_pieces.push(span((data.charge || "?") + "%", `color: ${color}`))
     status_pieces.push(span((data.miles || "?") + "m", `color: ${color}`))
     lines.push(status_pieces.join(" | "))
