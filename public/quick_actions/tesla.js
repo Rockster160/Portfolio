@@ -38,7 +38,7 @@ class ColorMapper {
     }
     if (min === undefined) {
       // Return the first/last val if num is outside of boundaries
-      return mapping[0][1] >= num ? mapping[0][1] : mapping[mapping.length-1][1]
+      return mapping[0][1] >= num ? mapping[0][0] : mapping[mapping.length-1][0]
     }
     let min_color = new Color(min[0]), min_val = min[1]
     let max_color = new Color(max[0]), max_val = max[1]
@@ -70,6 +70,7 @@ let energyMap = new ColorMapper({
 })
 
 function shiftTempToColor(temp) {
+  energyMap.scale(96)
   return span(temp + "°", `color: ${tempMap.scale(temp)}`)
 }
 
