@@ -199,9 +199,9 @@ tesla.refresh = function() {
 }
 
 let tryAgain = function() {
-  if ("climate" in tesla.data) { return }
-
   setTimeout(function() {
+    if (tesla?.data && "climate" in tesla.data) { return }
+
     tesla.socket.send({ action: "request" })
     tryAgain()
   }, 3000)
