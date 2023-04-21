@@ -118,7 +118,6 @@ tesla.socket = new AuthWS("TeslaChannel", {
     } else {
       status_pieces.push("?°")
     }
-    debugger
     let color = data.charge ? energyMap.scale(parseInt(data.charge)) : "undefined"
     status_pieces.push(span((data.charge || "?") + "%", `color: ${color}`))
     status_pieces.push(span((data.miles || "?") + "m", `color: ${color}`))
