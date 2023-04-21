@@ -11,17 +11,19 @@ document.querySelector(".close").addEventListener("click", function(evt) {
   target.classList.remove("show")
 })
 
-window.addEventListener("resize focus", function() {
+export function resizeModal() {
   if (!window.visualViewport) { return }
 
   setTimeout(function() {
-    console.log("Resize/Focus");
     document.querySelector("html").style.height = window.visualViewport.height + "px"
-    // let modals = document.querySelectorAll(".modal")
-    // modals.forEach((modal) => {
-    //   modal.style.height = window.visualViewport.height - 40 + "px"
-    // })
-  }, 100)
+    document.querySelector("body").style.height = window.visualViewport.height + "px"
+    document.querySelector(".modal.show").style.height = window.visualViewport.height - 40 + "px"
+  }, 600)
+}
+
+window.addEventListener("resize", resizeModal)
+document.querySelectorAll("input").forEach((input) => {
+  input.addEventListener("focus", resizeModal)
 })
 
 document.addEventListener("click", function(evt) {

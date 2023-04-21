@@ -13,10 +13,10 @@
 
 html, body {
   background: darken($blue-d5, 5%);
-  color: $grey-light;
-  font-family: terminess, monospace;
   height: 100%;
   overflow: hidden;
+  color: $grey-light;
+  font-family: terminess, monospace;
 
   &, * { box-sizing: border-box; }
 }
@@ -152,12 +152,12 @@ html, body {
 .modal {
   position: fixed;
   top: 20px; left: 20px;
-  width: calc(100% - 40px);
-  height: calc(100% - 40px);
   opacity: 1;
   transition: all 0.3s ease;
-  pointer-events: auto;
+  width: calc(100% - 40px);
+  height: calc(100% - 40px);
   overflow: hidden;
+  pointer-events: auto;
 
   .modal-content {
     display: flex;
@@ -180,8 +180,8 @@ html, body {
     }
     .messages {
       display: flex;
-      flex-grow: 1;
       flex-direction: column-reverse;
+      flex-grow: 1;
       overflow: scroll;
 
       .message {
@@ -208,13 +208,13 @@ html, body {
       input {
         box-sizing: border-box;
         margin: 4px auto;
-        font-size: 16px;
 
         border: 2px solid rgba($grey-blue, 0.5);
         border-radius: 4px;
         padding: 8px;
         width: 100%;
         color: $text-color;
+        font-size: 16px;
       }
     }
   }
