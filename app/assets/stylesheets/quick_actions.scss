@@ -15,6 +15,8 @@ html, body {
   background: darken($blue-d5, 5%);
   color: $grey-light;
   font-family: terminess, monospace;
+
+  &, * { box-sizing: border-box; }
 }
 
 .hidden { display: none; }
@@ -43,10 +45,10 @@ html, body {
       text-align: center;
 
       .lines p {
-        font-size: 12px;
-        height: 15px;
         margin: 0;
         padding: 0;
+        height: 15px;
+        font-size: 12px;
         line-height: 0;
       }
 
@@ -107,9 +109,9 @@ html, body {
       }
       .error {
         position: absolute;
-        left: 5px;
         bottom: 5px;
-        color: red;
+        left: 5px;
+        color: $danger;
         font-size: 12px;
       }
       .disconnected {
@@ -119,7 +121,7 @@ html, body {
         &:before {
           position: absolute;
           border-radius: 100%;
-          background: red;
+          background: $danger;
           width: 5px; height: 5px;
           content: "";
         }
@@ -142,6 +144,78 @@ html, body {
         font-size: 12px;
       }
     }
+  }
+}
 
+.modal {
+  position: fixed;
+  top: 20px; right: 20px; bottom: 20px; left: 20px;
+  opacity: 1;
+  transition: all 0.3s ease;
+  pointer-events: auto;
+
+  .modal-content {
+    display: flex;
+    flex-direction: column;
+    border-radius: 12px;
+    background: $grey-blue;
+    width: 100%;
+    height: 100%;
+    color: $text-color;
+    font-family: "Arial Unicode MS";
+
+    .close {
+      position: absolute;
+      top: 0; right: 0;
+      width: 35px; height: 35px;
+      color: $danger;
+      font-size: 25px;
+      line-height: 35px;
+      text-align: center;
+    }
+    .messages {
+      display: flex;
+      flex-direction: column-reverse;
+      height: 100%;
+
+      .message {
+        margin: 5px 10px;
+        box-shadow: 2px 2px 3px 0 $grey-dark;
+        border-radius: 8px;
+        padding: 8px;
+        color: $grey-light;
+        white-space: pre-wrap;
+
+        &.in {
+          margin-right: 50px;
+          background: $grey-dark;
+        }
+        &.out {
+          margin-left: 50px;
+          background: $base-blue;
+        }
+      }
+    }
+    .text-entry {
+      padding: 5px;
+
+      input {
+        box-sizing: border-box;
+        margin: 4px auto;
+
+        border: 2px solid rgba($grey-blue, 0.5);
+        border-radius: 4px;
+        padding: 8px;
+        width: 100%;
+        color: $text-color;
+      }
+    }
+  }
+
+  &:not(.show) {
+    top: -280px;
+    bottom: 320px;
+    opacity: 0;
+    pointer-events: none;
   }
 }

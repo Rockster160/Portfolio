@@ -37,11 +37,11 @@ export class Widget {
       this.wrapper.addEventListener("ontouchstart", touch_callback)
     }
     let refresh_btn = this.wrapper.querySelector(".refresh")
-    refresh_btn.addEventListener("click", function(evt) {
+    refresh_btn?.addEventListener("click", function(evt) {
       evt.stopPropagation()
       widget.refresh()
     })
-    refresh_btn.addEventListener("ontouchstart", function(evt) {
+    refresh_btn?.addEventListener("ontouchstart", function(evt) {
       evt.stopPropagation()
       widget.refresh()
     })
@@ -66,6 +66,8 @@ export class Widget {
     }).join("")
   }
   updateTimestamp() {
+    if (!this.ele.querySelector(".last-sync")) { return }
+
     this.ele.querySelector(".last-sync").textContent = timeAgo(this.#last_sync)
   }
   delta() {

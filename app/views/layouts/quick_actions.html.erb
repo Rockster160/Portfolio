@@ -14,7 +14,7 @@
   <%= yield :meta %>
   <%= yield :head_before_scripts %>
   <%= stylesheet_link_tag "quick_actions", media: "all" %>
-  <script type="module" src="/quick_actions.js"></script>
+  <script defer type="module" src="/quick_actions.js"></script>
   <%= yield :head %>
   <% if content_for? :favicon %>
     <%= yield :favicon %>
