@@ -31,11 +31,16 @@ command.socket = new AuthWS("JarvisChannel", {
   }
 })
 
+// modal.querySelector("input").addEventListener("keypress", function(evt) {
+//
+// })
 modal.querySelector("input").addEventListener("keypress", function(evt) {
   if (evt.key == "Enter") {
     let input = modal.querySelector("input")
     command.socket.send({ action: "command", words: input.value })
     addMessage("out", input.value)
     input.value = ""
+  } else {
+    console.log(evt.key, evt.which);
   }
 })

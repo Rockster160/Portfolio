@@ -17,7 +17,10 @@ export function resizeModal() {
   setTimeout(function() {
     document.querySelector("html").style.height = window.visualViewport.height + "px"
     document.querySelector("body").style.height = window.visualViewport.height + "px"
-    document.querySelector(".modal.show").style.height = window.visualViewport.height - 40 + "px"
+    let modal = document.querySelector(".modal.show")
+    if (modal) {
+      modal.style.height = window.visualViewport.height - 40 + "px"
+    }
   }, 600)
 }
 
