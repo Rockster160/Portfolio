@@ -5,10 +5,12 @@ export function hideModal(id) {
   document.querySelector(`#${id}`).classList.remove("show")
 }
 
-document.querySelector(".close").addEventListener("click", function(evt) {
-  const target = evt.target.closest("#command-modal")
+document.querySelectorAll(".close").forEach((close) => {
+  close.addEventListener("click", function(evt) {
+    const target = evt.target.closest(".modal")
 
-  target.classList.remove("show")
+    target.classList.remove("show")
+  })
 })
 
 export function resizeModal() {

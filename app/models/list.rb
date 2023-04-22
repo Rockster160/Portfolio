@@ -167,7 +167,7 @@ class List < ApplicationRecord
       if (items = ordered_items).any?
         return "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join("")}"
       else
-        return "There are no items in #{name.capitalize}."
+        return "There are no items in #{name}."
       end
     end
     "Something went wrong."

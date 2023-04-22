@@ -27,15 +27,15 @@
     </div>
   </div>
 
-  <!-- <div class="widget-holder">
-    <div class="widget">
-      Lists?
+  <div class="widget-holder">
+    <div class="widget drugs">
+      <i class="emoji">💊</i>
     </div>
-  </div> -->
+  </div>
 
   <div class="widget-holder">
-    <div class="widget">
-      Quick Logs
+    <div class="widget events">
+      <i class="emoji ti ti-fa-paper_plane"></i>
     </div>
   </div>
 
@@ -58,6 +58,86 @@
     </div>
     <div class="text-entry">
       <input type="text" name="" value="">
+    </div>
+  </div>
+</div>
+
+<div class="modal mini-widgets" id="events-modal" tabindex="-1">
+  <div class="modal-content">
+    <div class="close">
+      <i class="ti ti-fa-close"></i>
+    </div>
+    <div class="mini-widgets widget-wrapper">
+      <% [
+        # display, id, cmd- whether to ask for input
+        ["🥤", :Soda],
+        ["💧", :Water],
+        ["🦷", :Teeth],
+        ["🚿", :Shower],
+        ["👕", :Laundry, "do laundry"],
+        ["<i class=\"emoji\">🏋️‍♂️</i>".html_safe, :Workout],
+        ["5<i class=\"emoji\">💪</i>".html_safe, :five_pulls, "log Pullups 5"],
+        ["#<i class=\"emoji\">💪</i>".html_safe, :enter_pulls, "log Pullups {{How many pullups?}}"],
+      ].each do |display, id, cmd| %>
+        <% id ||= display.to_s %>
+        <% cmd ||= "log #{id}" %>
+        <% input ||= false %>
+
+        <div class="widget-holder">
+          <div class="widget mini-widget <%= id.downcase %>" data-id="<%= id.downcase %>" data-cmd="<%= cmd %>">
+            <% if display.match?(/^ti-/) %>
+              <i class="emoji ti <%= display %>"></i>
+            <% elsif display.match?(/\p{Emoji_Presentation}+/u) && !display.match?("<i") %>
+              <i class="emoji"><%= display %></i>
+            <% else %>
+              <%= display %>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</div>
+
+<div class="modal mini-widgets" id="drugs-modal" tabindex="-1">
+  <div class="modal-content">
+    <div class="close">
+      <i class="ti ti-fa-close"></i>
+    </div>
+    <div class="mini-widgets widget-wrapper">
+      <% [
+        # display, id, cmd- whether to ask for input
+        [:Vitamins],
+        ["D-AmphetamineXR 20mg"],
+        ["AdderallXR 15mg"],
+        ["AdderallXR 20mg"],
+        ["Buspirone 15mg"],
+        ["Relaxium 1"],
+        ["Relaxium 2"],
+        ["NQ"],
+        ["NQ Half"],
+        ["Methylphenidate 10mg"],
+        ["Methylphenidate 20mg"],
+        ["Escitalopram 20mg"],
+        ["X"],
+        ["Z", nil, "log Z {{}}"],
+      ].each do |display, id, cmd| %>
+        <% id ||= display.to_s %>
+        <% cmd ||= "log #{id}" %>
+        <% input ||= false %>
+
+        <div class="widget-holder">
+          <div class="widget mini-widget <%= id.downcase.gsub(/[^a-z0-9]/i, "") %>" data-id="<%= id.downcase.gsub(/[^a-z0-9]/i, "") %>" data-cmd="<%= cmd %>">
+            <% if display.match?(/^ti-/) %>
+              <i class="emoji ti <%= display %>"></i>
+            <% elsif display.match?(/\p{Emoji_Presentation}+/u) && !display.match?("<i") %>
+              <i class="emoji"><%= display %></i>
+            <% else %>
+              <%= display %>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
     </div>
   </div>
 </div>

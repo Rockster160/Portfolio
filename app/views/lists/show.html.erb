@@ -1,4 +1,4 @@
-<%= meta_title "#{@list.name.capitalize}", include_name: false %>
+<%= meta_title "#{@list.name}", include_name: false %>
 <%= content_for(:favicon) { render "lists/favicon" } %>
 
 <%= render_modal "sort-list", "Sort" do %>
