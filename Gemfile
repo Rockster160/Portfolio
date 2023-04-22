@@ -57,7 +57,7 @@ gem "rqrcode", "2.1.2"
 gem "sidekiq-unique-jobs"
 # Dependency
 gem "net-http", "0.3.2"
-gem "uri", "0.12.0"
+gem "uri", "0.12.1"
 gem "pathname", "0.2.1"
 
 # gem "command_proposal", path: "../command_proposal"
