@@ -16,25 +16,17 @@ document.querySelectorAll(".close").forEach((close) => {
 export function resizeModal() {
   if (!window.visualViewport) { return }
 
-  setTimeout(function() {
-    // document.querySelector("html").style.height = window.visualViewport.height + "px"
-    // document.querySelector("body").style.height = window.visualViewport.height + "px"
-    let modal = document.querySelector(".modal.show")
-    if (modal) {
-      modal.style.height = window.visualViewport.height - 40 + "px"
-    }
-  }, 600)
-  // document.querySelector("html").style.height = window.visualViewport.height + "px"
-  // document.querySelector("body").style.height = window.visualViewport.height + "px"
   let modal = document.querySelector(".modal.show")
-  if (modal) {
-    modal.style.height = window.visualViewport.height - 40 + "px"
-  }
+  if (modal) { modal.style.height = window.visualViewport.height - 40 + "px" }
+  setTimeout(function() {
+    let modal = document.querySelector(".modal.show")
+    if (modal) { modal.style.height = window.visualViewport.height - 40 + "px" }
+  }, 600)
 }
 
 window.addEventListener("resize", resizeModal)
 window.addEventListener("focusout", function() {
-  document.querySelector(".modal.show").classList.remove("show")
+  document.querySelector(".modal.show")?.classList?.remove("show")
   resizeModal()
 })
 document.querySelectorAll("input").forEach((input) => {

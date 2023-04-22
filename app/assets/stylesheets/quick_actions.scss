@@ -165,7 +165,7 @@ i.emoji {
   position: fixed;
   top: 20px; left: 20px;
   opacity: 1;
-  transition: all 0.3s ease;
+  transition: top 0.3s ease, opacity 0.3s ease;
   width: calc(100% - 40px);
   height: calc(100% - 40px);
   overflow: hidden;
@@ -219,48 +219,52 @@ i.emoji {
     }
   }
 
-  &#command-modal .modal-content {
-    display: flex;
-    flex-direction: column;
-    font-family: "Arial Unicode MS", "Segoe UI", "Helvetica Neue", "Open Sans", "Roboto";
+  &#command-modal {
+    height: 350px;
 
-    .messages {
+    .modal-content {
       display: flex;
-      flex-direction: column-reverse;
-      flex-grow: 1;
-      overflow: scroll;
+      flex-direction: column;
+      font-family: "Arial Unicode MS", "Segoe UI", "Helvetica Neue", "Open Sans", "Roboto";
 
-      .message {
-        margin: 5px 10px;
-        box-shadow: 2px 2px 3px 0 $grey-dark;
-        border-radius: 8px;
-        padding: 8px;
-        color: $grey-light;
-        white-space: pre-wrap;
+      .messages {
+        display: flex;
+        flex-direction: column-reverse;
+        flex-grow: 1;
+        overflow: scroll;
 
-        &.in {
-          margin-right: 50px;
-          background: $grey-dark;
-        }
-        &.out {
-          margin-left: 50px;
-          background: $base-blue;
+        .message {
+          margin: 5px 10px;
+          box-shadow: 2px 2px 3px 0 $grey-dark;
+          border-radius: 8px;
+          padding: 8px;
+          color: $grey-light;
+          white-space: pre-wrap;
+
+          &.in {
+            margin-right: 50px;
+            background: $grey-dark;
+          }
+          &.out {
+            margin-left: 50px;
+            background: $base-blue;
+          }
         }
       }
-    }
-    .text-entry {
-      padding: 5px;
+      .text-entry {
+        padding: 5px;
 
-      input {
-        box-sizing: border-box;
-        margin: 4px auto;
+        input {
+          box-sizing: border-box;
+          margin: 4px auto;
 
-        border: 2px solid rgba($grey-blue, 0.5);
-        border-radius: 4px;
-        padding: 8px;
-        width: 100%;
-        color: $text-color;
-        font-size: 16px;
+          border: 2px solid rgba($grey-blue, 0.5);
+          border-radius: 4px;
+          padding: 8px;
+          width: 100%;
+          color: $text-color;
+          font-size: 16px;
+        }
       }
     }
   }
