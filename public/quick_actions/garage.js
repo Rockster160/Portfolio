@@ -11,8 +11,8 @@ export let garage = new Widget("garage", function() {
 })
 garage.socket = new AuthWS("GarageChannel", {
   onmessage: function(msg) {
+    garage.loading = false
     if (msg.data?.garageState) {
-      garage.loading = false
       garage.state = msg.data.garageState
 
       garage.ele.classList.remove("open", "closed", "between")
