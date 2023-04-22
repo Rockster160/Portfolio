@@ -16,7 +16,7 @@
   "id": "jarvis/?source=pwa",
   "start_url": "jarvis/?source=pwa",
   "background_color": "#00102B",
-  "display": "minimal-ui",
+  "display": "fullscreen",
   "scope": "/jarvis",
   "theme_color": "#00102B",
   "shortcuts": [
