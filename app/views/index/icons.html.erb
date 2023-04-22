@@ -1,0 +1,44 @@
+<% content_for :head do %>
+  <style media="screen">
+    i {
+      font-size: 128px;
+    }
+  </style>
+<% end %>
+
+<input type="text" autofocus="true" autocomplete="off" placeholder="Quick Search" class="emoji-quick-search">
+
+<% JSON.parse(File.read("icons.json")).each do |icon, terms| %>
+  <i title="<%= icon %>" class="ti <%= icon %>" data-searchable-by="<%= icon.sub(/^ti-/, "") %> <%= terms %>"></i>
+<% end %>
+
+<% content_for :after_body do %>
+  <script type="text/javascript">
+    $(".emoji-quick-search").on("keyup", function() {
+      var search_text = $(this).val()
+      search_text = search_text.toLowerCase().replace(/[ \_\-\:\@]/, "")
+
+      $("i").each(function() {
+        var names = $(this).attr("data-searchable-by").toLowerCase().trim().split(" ")
+
+        var hasMatched = search_text.length == 0
+        names.forEach(function(name) {
+          if (hasMatched) { return }
+
+          var searchableText = name, string_valid = true
+          searchableText = searchableText.replace(/[ \_\-\:\@]/g, "")
+
+          // Full word-based matching
+          if (searchableText.indexOf(search_text) < 0) { string_valid = false }
+
+          if (string_valid) { hasMatched = true }
+        })
+        if (hasMatched) {
+          $(this).removeClass("hidden")
+        } else {
+          $(this).addClass("hidden")
+        }
+      })
+    })
+  </script>
+<% end %>

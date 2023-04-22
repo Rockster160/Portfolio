@@ -2,6 +2,7 @@ Rails.application.routes.draw do
   mount ::CommandProposal::Engine => "/commands"
 
   get "/blockly" => "index#blockly"
+  get "/icons" => "index#icons"
 
   constraints subdomain: "sub" do
     get "/sub" => "index#sub"
