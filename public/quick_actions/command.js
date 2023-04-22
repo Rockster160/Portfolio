@@ -3,6 +3,17 @@ import { Widget } from './widget.js';
 import { showModal } from './modal.js';
 
 let modal = document.querySelector("#command-modal")
+modal.querySelector("input").addEventListener("keypress", function(evt) {
+  console.log("Added listener");
+  if (evt.key == "Enter") {
+    let input = modal.querySelector("input")
+    command.socket.send({ action: "command", words: input.value })
+    addMessage("out", input.value)
+    input.value = ""
+  } else {
+    console.log(evt.key, evt.which);
+  }
+})
 
 function addMessage(direction, msg) {
   let div = document.createElement("div")
@@ -28,19 +39,5 @@ command.socket = new AuthWS("JarvisChannel", {
   },
   onclose: function() {
     command.disconnected()
-  }
-})
-
-// modal.querySelector("input").addEventListener("keypress", function(evt) {
-//
-// })
-modal.querySelector("input").addEventListener("keypress", function(evt) {
-  if (evt.key == "Enter") {
-    let input = modal.querySelector("input")
-    command.socket.send({ action: "command", words: input.value })
-    addMessage("out", input.value)
-    input.value = ""
-  } else {
-    console.log(evt.key, evt.which);
   }
 })
