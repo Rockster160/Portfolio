@@ -40,7 +40,11 @@ modal.querySelector("input").addEventListener("keypress", function(evt) {
     }
     if (input.value.toLowerCase().trim() == "request notifications") {
       // Register Notifications
-      return registerNotifications()
+      addMessage("out", "Request notifications")
+      input.value = ""
+      registerNotifications()
+      addMessage("in", "Registering for notifications...")
+      return
     }
     command.socket.send({ action: "command", words: input.value })
     addMessage("out", input.value)
