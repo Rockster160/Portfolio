@@ -78,7 +78,7 @@ class LocalDataBroadcast
 
   def enrich_reminders(reminder_data)
     now = Time.current.in_time_zone("Mountain Time (US & Canada)")
-    reminder_data.map do |reminder|
+    (reminder_data || []).map { |reminder|
       next reminder[:name] if reminder[:due].blank?
 
       time = Time.parse(reminder[:due]).in_time_zone("Mountain Time (US & Canada)")
@@ -97,6 +97,6 @@ class LocalDataBroadcast
       "#{name} #{time_words}"
     rescue StandardError => e
       reminder&.dig(:name) || "FAIL(#{reminder.inspect})"
-    end.compact
+    }.compact
   end
 end

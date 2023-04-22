@@ -10,7 +10,7 @@ class WebPushNotifications
     #   url: "https://google.com"
     # }
 
-    Webpush.payload_send(
+    WebPush.payload_send(
       message: format_payload(payload).to_json,
       endpoint: user.push_sub.endpoint,
       p256dh: user.push_sub.p256dh,
