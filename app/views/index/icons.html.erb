@@ -3,13 +3,27 @@
     i {
       font-size: 128px;
     }
+    .icon-wrapper {
+      display: inline-block;
+      width: 200px;
+      text-align: center;
+    }
+    .icon-name {
+      display: block;
+      width: auto;
+      overflow: auto;
+      font-size: 12px;
+    }
   </style>
 <% end %>
 
 <input type="text" autofocus="true" autocomplete="off" placeholder="Quick Search" class="emoji-quick-search">
 
 <% JSON.parse(File.read("icons.json")).each do |icon, terms| %>
-  <i title="<%= icon %>" class="ti <%= icon %>" data-searchable-by="<%= icon.sub(/^ti-/, "") %> <%= terms %>"></i>
+  <span class="icon-wrapper" data-searchable-by="<%= icon.sub(/^ti-/, "") %> <%= terms %>">
+    <i title="<%= icon %>" class="ti <%= icon %>"></i>
+    <span class="icon-name"><%= icon %></span>
+  </span>
 <% end %>
 
 <% content_for :after_body do %>
@@ -18,7 +32,7 @@
       var search_text = $(this).val()
       search_text = search_text.toLowerCase().replace(/[ \_\-\:\@]/, "")
 
-      $("i").each(function() {
+      $(".icon-wrapper").each(function() {
         var names = $(this).attr("data-searchable-by").toLowerCase().trim().split(" ")
 
         var hasMatched = search_text.length == 0
