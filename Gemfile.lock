@@ -238,7 +238,7 @@ GEM
       net-protocol
     netrc (0.11.0)
     nio4r (2.5.8)
-    nokogiri (1.13.10)
+    nokogiri (1.14.3)
       mini_portile2 (~> 2.8.0)
       racc (~> 1.4)
     numbers_in_words (1.0.1)
@@ -450,7 +450,7 @@ DEPENDENCIES
   launchy (= 2.5.0)
   listen (= 3.7.1)
   net-http (= 0.3.2)
-  nokogiri (~> 1.13.9)
+  nokogiri (~> 1.14.3)
   numbers_in_words (= 1.0.1)
   oily_png (= 1.2.1)
   pathname (= 0.2.1)
