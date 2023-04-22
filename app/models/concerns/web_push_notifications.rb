@@ -1,3 +1,4 @@
+# WebPushNotifications.send_to(User.find(1), { title: "Hello, World", body: "This is a message from Jarvis" })
 class WebPushNotifications
   def self.send_to(user, payload={})
     return "Failed to push - user not found" unless user.present?
