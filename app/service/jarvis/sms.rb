@@ -16,11 +16,11 @@ class Jarvis::Sms < Jarvis::Action
 
     if @rx.match_any_words?(@msg, :remind, :ping, :tell)
       ::WebPushNotifications.send_to(@user, { title: @args })
+      "Sending you a ping saying: #{@args}"
     else
       ::SmsWorker.perform_async(::Jarvis::MY_NUMBER, @args)
+      "Sending you a text saying: #{@args}"
     end
-
-    "Sending you a text saying: #{@args}"
   end
 
   def valid_words?
