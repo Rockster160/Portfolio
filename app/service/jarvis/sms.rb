@@ -13,7 +13,12 @@ class Jarvis::Sms < Jarvis::Action
     if @rx.match_any_words?(@msg, :remind)
       @user.default_list.add_items(name: @args)
     end
-    SmsWorker.perform_async(Jarvis::MY_NUMBER, @args)
+
+    if @rx.match_any_words?(@msg, :remind, :ping, :tell)
+      ::WebPushNotifications.send_to(@user, { title: @args })
+    else
+      ::SmsWorker.perform_async(::Jarvis::MY_NUMBER, @args)
+    end
 
     "Sending you a text saying: #{@args}"
   end
