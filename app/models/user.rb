@@ -33,7 +33,7 @@ class User < ApplicationRecord
   has_many :user_surveys
   has_many :user_survey_responses
   has_one :avatar
-  has_one :push_sub, class_name: "UserPushSubscription", dependent: :destry
+  has_one :push_sub, class_name: "UserPushSubscription", dependent: :destroy
   has_one :money_bucket
   has_one :jarvis_cache, dependent: :destroy
 
