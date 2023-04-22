@@ -1,16 +1,11 @@
 <!DOCTYPE html>
 <html style="height: 100%;" class="html-ctr-<%= controller_name %> html-act-<%= action_name %> <%= 'dark-mode' if !@skip_dark_mode && current_user.try(:dark_mode?) %>">
 <head>
-  <title><%= content_for(:title) || "Rocco Nicholls" %></title>
+  <title><%= content_for(:title) || "JARVIS" %></title>
   <%= action_cable_meta_tag %>
-  <% description = content_for(:description) || "This is the Portfolio site for Rocco Nicholls. I host tools I build as well as links to projects I've worked on here. Please feel free to take a look around let me know what you think!" %>
+  <% description = content_for(:description) || "Jarvis actions" %>
   <meta name="description" content="<%= description %>">
-  <meta name="uptime" content="true">
-  <% if content_for? :viewport_tag %>
-    <%= content_for :viewport_tag %>
-  <% else %>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-  <% end %>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <%= yield :meta %>
   <%= yield :head_before_scripts %>
   <%= stylesheet_link_tag "quick_actions", media: "all" %>

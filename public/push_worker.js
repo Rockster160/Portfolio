@@ -41,7 +41,7 @@ var saveSubscription = async function(subscription) {
 async function showLocalNotification(swRegistration, data) {
   // console.log("data", data)
   var title = data.title || "Ardesian"
-  data.icon = data.icon || "/favicon.ico"
+  data.icon = data.icon || "/favicon/favicon.ico"
   // https://developer.mozilla.org/en-US/docs/Web/API/notification
   swRegistration.showNotification(title, data)
 }
