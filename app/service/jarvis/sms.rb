@@ -37,13 +37,7 @@ class Jarvis::Sms < Jarvis::Action
 
   def sms_words
     @rx.words(
-      :text,
-      :remind,
-      :txt,
-      :tell,
-      :message,
-      :msg,
-      :sms,
+      *self.class.reserved_words
       suffix: "s\?",
     )
   end
@@ -63,6 +57,7 @@ class Jarvis::Sms < Jarvis::Action
       :saying,
       :txt,
       :sms,
+      :ping,
       :to,
       :me,
       prefix: " ?",
