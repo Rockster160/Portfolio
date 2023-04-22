@@ -32,6 +32,11 @@ command.socket = new AuthWS("JarvisChannel", {
 modal.querySelector("input").addEventListener("keypress", function(evt) {
   if (evt.key == "Enter") {
     let input = modal.querySelector("input")
+
+    if (input.value.toLowerCase().trim() == "reload") {
+      // Do a full page cache reload
+      return window.location.reload(true)
+    }
     command.socket.send({ action: "command", words: input.value })
     addMessage("out", input.value)
     input.value = ""
