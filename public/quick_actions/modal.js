@@ -27,8 +27,13 @@ export function resizeModal() {
 }
 
 window.addEventListener("resize", resizeModal)
+window.addEventListener("focusout", function() {
+  document.querySelector(".modal.show").classList.remove("show")
+  resizeModal()
+})
 document.querySelectorAll("input").forEach((input) => {
   input.addEventListener("focus", resizeModal)
+  input.addEventListener("blur", resizeModal)
 })
 document.querySelectorAll(".modal").forEach((modal) => {
   modal.addEventListener("transitionend", resizeModal)
