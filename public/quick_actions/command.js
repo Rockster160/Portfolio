@@ -1,3 +1,4 @@
+import { registerNotifications } from "./push_subscribe.js";
 import { AuthWS } from './auth_ws.js';
 import { Widget } from './widget.js';
 import { showModal } from './modal.js';
@@ -36,6 +37,10 @@ modal.querySelector("input").addEventListener("keypress", function(evt) {
     if (input.value.toLowerCase().trim() == "reload") {
       // Do a full page cache reload
       return window.location.reload(true)
+    }
+    if (input.value.toLowerCase().trim() == "request notifications") {
+      // Register Notifications
+      return registerNotifications()
     }
     command.socket.send({ action: "command", words: input.value })
     addMessage("out", input.value)
