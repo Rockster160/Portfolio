@@ -17,13 +17,19 @@ export function resizeModal() {
   if (!window.visualViewport) { return }
 
   setTimeout(function() {
-    document.querySelector("html").style.height = window.visualViewport.height + "px"
-    document.querySelector("body").style.height = window.visualViewport.height + "px"
+    // document.querySelector("html").style.height = window.visualViewport.height + "px"
+    // document.querySelector("body").style.height = window.visualViewport.height + "px"
     let modal = document.querySelector(".modal.show")
     if (modal) {
       modal.style.height = window.visualViewport.height - 40 + "px"
     }
   }, 600)
+  // document.querySelector("html").style.height = window.visualViewport.height + "px"
+  // document.querySelector("body").style.height = window.visualViewport.height + "px"
+  let modal = document.querySelector(".modal.show")
+  if (modal) {
+    modal.style.height = window.visualViewport.height - 40 + "px"
+  }
 }
 
 window.addEventListener("resize", resizeModal)
