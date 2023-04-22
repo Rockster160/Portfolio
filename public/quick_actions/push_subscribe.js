@@ -13,7 +13,7 @@ function checkPushAPI() {
 }
 
 function registerServiceWorker() {
-  var sub_auth = $("[data-sub-auth]").attr("data-sub-auth")
+  var sub_auth = document.querySelector("[data-sub-auth]").getAttribute("data-sub-auth")
   if (sub_auth.length == 0) { return false }
   var swRegistration = navigator.serviceWorker.register("push_worker.js" + "?auth=" + sub_auth)
   return swRegistration
