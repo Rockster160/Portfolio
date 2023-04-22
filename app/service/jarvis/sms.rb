@@ -37,7 +37,7 @@ class Jarvis::Sms < Jarvis::Action
 
   def sms_words
     @rx.words(
-      *self.class.reserved_words
+      *self.class.reserved_words,
       suffix: "s\?",
     )
   end
