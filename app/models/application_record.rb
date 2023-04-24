@@ -76,8 +76,7 @@ class ApplicationRecord < ActiveRecord::Base
       data.dig(:props, :not_exact, :props, alt_name)&.each { |word| built = built.not_ilike(col_name => word) }
     end
 
-    # This is buggy and doesn't really work...
-    data.dig(:props, :contains, :props, :or)&.each do |or_groups|
+    data.dig(:props, :or, :terms)&.each do |or_groups|
       sql_chunks = or_groups.map { |or_group| unscoped.query(or_group).stripped_sql }
       built = built.where("(#{sql_chunks.join(" OR ")})")
     end
