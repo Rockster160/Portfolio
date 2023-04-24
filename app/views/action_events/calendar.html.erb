@@ -2,19 +2,10 @@
   <input type="text" name="q" value="<%= params[:q] %>" placeholder="Filter">
 <% end %>
 
-<%= form_for ActionEvent.new do |f| %>
-  <%= f.text_field :event_name, placeholder: :event_name %>
-  <%= f.text_field :notes, placeholder: :notes %>
-  <% Time.use_zone(User.timezone) do %>
-    <% f.object.timestamp ||= Time.current %>
-    <%= f.datetime_local_field :timestamp, value: f.object.timestamp.strftime("%Y-%m-%dT%H:%M") %>
-  <% end %>
-  <%= f.submit %>
-<% end %>
-
-<div class="text-center">
-  <%= link_to "< Prev week", { date: @date - 1.week } %>
-  <%= link_to "Next week >", { date: @date + 1.week } %>
+<div class="text-center" style="margin: 20px 0;">
+  <%= link_to "< Prev week", params.permit!.except(:action, :controller).merge(date: @date - 1.week) %>
+  - <%= link_to "Today", params.permit!.except(:action, :controller, :date) %> -
+  <%= link_to "Next week >", params.permit!.except(:action, :controller).merge(date: @date + 1.week) %>
 </div>
 
 <div class="calendar">
@@ -36,7 +27,7 @@
       <% else %>
         <div class="cal-cell">
           <% col&.each do |evt| %>
-            <li><%= evt.event_name %></li>
+            <%= evt.event_name %><br>
           <% end %>
         </div>
       <% end %>

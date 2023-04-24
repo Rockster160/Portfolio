@@ -18,7 +18,7 @@ class ActionEventsController < ApplicationController
       @week = @date.then { |t| (t - 6.days)..t }
       @events = current_user.action_events.order(timestamp: :asc)
       @events = @events.query(params[:q]) if params[:q].present?
-      @events = @events.where(timestamp: @week)
+      @events = @events.where(timestamp: @week.min.beginning_of_day..@week.max.end_of_day)
 
       grouped_events = @events.group_by { |evt| [evt.timestamp.to_date, evt.timestamp.hour] }
       @cal_events = [[nil, *@week]]
