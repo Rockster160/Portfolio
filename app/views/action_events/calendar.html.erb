@@ -1,0 +1,45 @@
+<%= form_tag nil, method: :get, enforce_utf8: false, authenticity_token: false do |f| %>
+  <input type="text" name="q" value="<%= params[:q] %>" placeholder="Filter">
+<% end %>
+
+<%= form_for ActionEvent.new do |f| %>
+  <%= f.text_field :event_name, placeholder: :event_name %>
+  <%= f.text_field :notes, placeholder: :notes %>
+  <% Time.use_zone(User.timezone) do %>
+    <% f.object.timestamp ||= Time.current %>
+    <%= f.datetime_local_field :timestamp, value: f.object.timestamp.strftime("%Y-%m-%dT%H:%M") %>
+  <% end %>
+  <%= f.submit %>
+<% end %>
+
+<div class="text-center">
+  <%= link_to "< Prev week", { date: @date - 1.week } %>
+  <%= link_to "Next week >", { date: @date + 1.week } %>
+</div>
+
+<div class="calendar">
+  <% @cal_events.each_with_index do |row, ridx| %>
+    <% row.each_with_index do |col, cidx| %>
+      <% if ridx == 0 %>
+        <div class="cal-date"><%= col&.strftime("%a %-m/%-d/%y") %></div>
+      <% elsif cidx == 0 %>
+        <div class="cal-hour">
+          <%=
+            case col
+            when 0 then :Midnight
+            when 12 then :Noon
+            when ..12 then "#{col}am"
+            when 12.. then "#{col-12}pm"
+            end
+          %>
+        </div>
+      <% else %>
+        <div class="cal-cell">
+          <% col&.each do |evt| %>
+            <li><%= evt.event_name %></li>
+          <% end %>
+        </div>
+      <% end %>
+    <% end %>
+  <% end %>
+</div>

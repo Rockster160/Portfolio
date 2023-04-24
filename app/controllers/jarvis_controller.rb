@@ -12,7 +12,7 @@ class JarvisController < ApplicationController
     end
 
     response = Jarvis.command(current_user, msg)
-    list, item = response.split("\n").first(2)
+    list, item = response&.split("\n")&.first(2)
     if item.blank?
       words = list
     elsif msg.downcase.starts_with?("remove")

@@ -70,7 +70,9 @@ Rails.application.routes.draw do
 
   resource :calc, only: [:show]
 
-  resources :action_events
+  resources :action_events do
+    get :calendar, on: :collection
+  end
 
   resource :summoners_war do
     get :runes

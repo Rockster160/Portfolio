@@ -12,6 +12,22 @@ class ActionEventsController < ApplicationController
     end
   end
 
+  def calendar
+    Time.use_zone(current_user.timezone) do
+      @date = safeparse_time(params[:date]).to_date
+      @week = @date.then { |t| (t - 6.days)..t }
+      @events = current_user.action_events.order(timestamp: :asc)
+      @events = @events.query(params[:q]) if params[:q].present?
+      @events = @events.where(timestamp: @week)
+
+      grouped_events = @events.group_by { |evt| [evt.timestamp.to_date, evt.timestamp.hour] }
+      @cal_events = [[nil, *@week]]
+      (0..23).each do |hour|
+        @cal_events << [hour, *@week.map { |day| grouped_events[[day, hour]] }]
+      end
+    end
+  end
+
   def create
     event = ActionEvent.create(event_params)
     ActionEventBroadcastWorker.perform_async(event.id)
