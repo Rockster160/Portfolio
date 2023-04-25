@@ -13,7 +13,7 @@
     <% evts = row[1..].flatten %>
     <% row.each_with_index do |col, cidx| %>
       <% if ridx == 0 %>
-        <div class="cal-date"><%= col&.strftime("%a %-m/%-d/%y") %></div>
+        <div class="cal-date <%= :today if @today == col %>"><%= col&.strftime("%a %-m/%-d/%y") %></div>
       <% elsif cidx == 0 %>
         <div class="cal-hour <%= :mini if evts.none? %>">
           <%=

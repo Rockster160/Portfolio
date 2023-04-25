@@ -14,7 +14,8 @@ class ActionEventsController < ApplicationController
 
   def calendar
     Time.use_zone(current_user.timezone) do
-      @date = safeparse_time(params[:date]).to_date
+      @today = Time.current.to_date
+      @date = safeparse_time(params[:date]).to_date.end_of_week(:sunday)
       @week = @date.then { |t| (t - 6.days)..t }
       @events = current_user.action_events.order(timestamp: :asc)
       @events = @events.query(params[:q]) if params[:q].present?
