@@ -1,13 +1,13 @@
 .ctr-action_events.act-calendar {
   .calendar {
     display: grid;
-    grid-template-columns: 20px repeat(7, 1fr);
+    grid-template-columns: auto repeat(7, 1fr);
     grid-auto-rows: minmax(0, auto);
-    gap: 10px;
-    // grid-gap: 10px;
+    border-collapse: collapse;
 
-    .cal-hour {
-
+    .cal-date, .cal-hour, .cal-cell {
+      padding: 5px;
+      border: 1px solid $blue-d2;
     }
   }
 }
