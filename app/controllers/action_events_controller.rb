@@ -29,6 +29,45 @@ class ActionEventsController < ApplicationController
     end
   end
 
+  def pullups
+    Time.use_zone(current_user.timezone) do
+      @today = Time.current.to_date
+      @date = safeparse_time(params[:date]).to_date
+
+      @month = @date.then { |t| t.beginning_of_month..t.end_of_month }
+
+      @events = current_user.action_events.where(event_name: "Pullups").order(timestamp: :asc)
+      @events = @events.query(params[:q]) if params[:q].present?
+      @events = @events.where(timestamp: @month.min.beginning_of_day..@month.max.end_of_day)
+
+      grouped_events = @events.group_by { |evt| evt.timestamp.to_date }
+      @month_data = @month.each_with_object({}) { |date, obj| obj[date] = grouped_events[date] }
+
+      @chart_data = {
+        labels: @month_data.map { |date, evts| date.strftime("%a %-m/%-d/%y") },
+        datasets: [{
+          data: @month_data.map { |date, evts| evts&.sum { |evt| evt.notes.to_i } || 0 }
+        }]
+      }
+
+      if @date == @today
+        days_left = @date.end_of_month - @today + 1 # +1 to include today
+      else
+        days_left = 0
+      end
+
+      goal = 1000
+      current = @events.sum("notes::integer")
+      remaining = goal - current
+      @stats = {
+        remaining: remaining,
+        current: current,
+        goal: goal,
+        daily_need: days_left > 0 ? remaining / days_left.to_f : 0,
+      }
+    end
+  end
+
   def create
     event = ActionEvent.create(event_params)
     ActionEventBroadcastWorker.perform_async(event.id)

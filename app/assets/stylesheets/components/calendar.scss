@@ -7,14 +7,16 @@
 
     .cal-date, .cal-hour, .cal-cell {
       padding: 5px;
-      border: 1px solid $blue-d2;
+      border: 1px solid $blue-d4;
+      font-size: 12px;
+      line-height: 16px;
     }
     .mini {
       font-size: 6px;
       padding: 2px;
     }
     .today {
-      background: $base-blue;
+      background: $blue-d3;
     }
   }
 }
