@@ -10,11 +10,12 @@
 
 <div class="calendar">
   <% @cal_events.each_with_index do |row, ridx| %>
+    <% evts = row[1..].flatten %>
     <% row.each_with_index do |col, cidx| %>
       <% if ridx == 0 %>
         <div class="cal-date"><%= col&.strftime("%a %-m/%-d/%y") %></div>
       <% elsif cidx == 0 %>
-        <div class="cal-hour">
+        <div class="cal-hour <%= :mini if evts.none? %>">
           <%=
             case col
             when 0 then :Midnight
@@ -27,7 +28,7 @@
       <% else %>
         <div class="cal-cell">
           <% col&.each do |evt| %>
-            <%= evt.event_name %><br>
+            <span title="<%= evt.notes %>"><%= evt.event_name %></span><br>
           <% end %>
         </div>
       <% end %>
