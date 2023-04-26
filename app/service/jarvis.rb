@@ -83,20 +83,16 @@ class Jarvis
   MY_NUMBER = "3852599640"
 
   def self.trigger(trigger, trigger_data, scope: {})
-    ::SlackNotifier.notify("Trigger")
     ::JarvisTriggerWorker.perform_async(trigger.to_s, trigger_data.to_json, scope.to_json)
   end
 
   def self.execute_trigger(trigger, trigger_data={}, scope: {})
-    ::SlackNotifier.notify("Execute Trigger")
     trigger_data = SafeJsonSerializer.load(trigger_data) || trigger_data
 
     if trigger == "command"
       command(User.find(scope["user_id"]), )
     else
-      ::SlackNotifier.notify("By scope: #{scope}")
       tasks = ::JarvisTask.enabled.where(trigger: trigger).where(scope)
-      ::SlackNotifier.notify("Tasks: #{tasks.map(&:name).join(", ")}")
     end
 
     tasks.find_each do |task|
