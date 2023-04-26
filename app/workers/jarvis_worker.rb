@@ -8,8 +8,10 @@ class JarvisWorker
     case parsed
     when String then ::Jarvis.command(User.find(user_id), parsed)
     when Hash
+      ::SlackNotifier.notify("Hit hash...")
       event_data = parsed[:event]
       if event_data[:user_id].present? && event_data[:type].present?
+        ::SlackNotifier.notify("Event data present")
         ::Jarvis.trigger(
           event_data[:type],
           { input_vars: { "Event Data": event_data.except(:type, :user_id) } },

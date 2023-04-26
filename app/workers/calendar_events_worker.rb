@@ -87,6 +87,9 @@ class CalendarEventsWorker
           user_id: @user_id,
           scheduled_time: event[:start_time] - traveltime - PRE_OFFSET,
         )
+        # TODO: Only nav home if there are no other events
+        # Also time estimate should be from "current" location-
+        #   guessed based on the last event left us at
         # Start car + navigate home 10 minutes prior to end-time
         new_events.push(
           uid: event[:uid] + "-home",

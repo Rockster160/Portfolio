@@ -2,6 +2,7 @@ class JarvisTriggerWorker
   include Sidekiq::Worker
 
   def perform(trigger, trigger_data={}, scope={})
-    Jarvis.execute_trigger(trigger, JSON.parse(trigger_data), scope: JSON.parse(scope))
+    ::SlackNotifier.notify("Trigger worker:\n#{trigger}\n#{scope}\n trigger_data class:#{trigger_data.class}\n```#{trigger_data}```")
+    Jarvis.execute_trigger(trigger, SafeJsonSerializer.load(trigger_data), scope: SafeJsonSerializer.load(scope))
   end
 end
