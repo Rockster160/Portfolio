@@ -92,7 +92,7 @@ class Jarvis
     if trigger == "command"
       command(User.find(scope["user_id"]), )
     else
-      tasks = ::JarvisTask.enabled.where(trigger: trigger).where(scope)
+      tasks = ::JarvisTask.enabled.where(trigger: trigger).where(scope.to_h)
     end
 
     tasks.find_each do |task|
