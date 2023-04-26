@@ -3,6 +3,7 @@ class JarvisWorker
 
   def perform(user_id, msg)
     parsed = SafeJsonSerializer.load(msg)
+    ::SlackNotifier.notify("#{parsed.class}\n```#{parsed}```")
 
     case parsed
     when String then ::Jarvis.command(User.find(user_id), parsed)
