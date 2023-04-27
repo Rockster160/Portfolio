@@ -93,7 +93,7 @@ class Jarvis
     if trigger.to_sym == :command
       command(User.find(scope["user_id"]), trigger_data[:words] || trigger_data[:command] || trigger_data)
     else
-      tasks = ::JarvisTask.enabled.where(trigger: trigger).where(scope.try(:to_h) || scope)
+      tasks = ::JarvisTask.enabled.where(trigger: trigger).where(**(scope.try(:to_h) || scope))
     end
 
     tasks.find_each do |task|
