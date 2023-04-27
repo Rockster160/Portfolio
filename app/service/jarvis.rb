@@ -177,7 +177,7 @@ class Jarvis
   def command
     actions.lazy.map do |action_klass| # lazy map means stop at the first one that returns a truthy value
       action_klass.attempt(@user, @words)
-    end.compact_blank.then { |arr| arr.reverse.find { |item| item.present? && item != "Success" } || arr.first }
+    end.compact_blank.first
   rescue Jarvis::Error => err
     err.message
   end
