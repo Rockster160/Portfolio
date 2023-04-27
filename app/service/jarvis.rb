@@ -97,8 +97,7 @@ class Jarvis
       puts "\e[36m[LOGIT] | trigger_data:[#{trigger_data.class}]#{trigger_data}\e[0m"
       puts "\e[36m[LOGIT] | scope:[#{scope.class}]#{scope}\e[0m"
       tasks = ::JarvisTask.enabled.where(trigger: trigger)
-      scope = scope.to_h
-      tasks = scope.is_a?(Array) ? tasks.where(*scope) : tasks.where(scope)
+      tasks = scope.is_a?(Array) ? tasks.where(*scope.to_a) : tasks.where(scope.to_h)
     end
 
     tasks.find_each do |task|
