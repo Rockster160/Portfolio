@@ -70,9 +70,13 @@ class BetterJson
     klass == BetterJson || @hash.is_a?(klass)
   end
 
+  def to_h
+    @hash
+  end
+
   # Use "key: val" syntax instead of ":key => val"
   def to_s
-    FancyRenderJson.pretty(@hash).uncolor.gsub(/[\s\n]*/, " ")
+    FancyRenderJson.pretty(@hash).uncolor.gsub(/(\s*\n)+/, " ").gsub(/\s{2,}/, " ")
   end
 
   # Use "key: val" syntax instead of ":key => val" + colors!
