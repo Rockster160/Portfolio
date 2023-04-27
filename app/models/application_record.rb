@@ -102,4 +102,8 @@ class ApplicationRecord < ActiveRecord::Base
     @new_attributes = attrs
     super(attrs)
   end
+
+  def to_h
+    as_json
+  end
 end
