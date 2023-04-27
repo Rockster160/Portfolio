@@ -68,6 +68,16 @@ class CalendarEventsWorker
         )
       end
 
+      # Trigger a Calendar event for everything that comes through
+      new_events.push(
+        name: event[:name],
+        uid: event[:uid],
+        type: :calendar,
+        notes: event[:notes],
+        user_id: @user_id,
+        scheduled_time: event[:start_time],
+      )
+
       # If travelable - add TT and nav there and back
       if travelable_event?(event)
         traveltime = address_book.traveltime_seconds(event[:location])
@@ -98,17 +108,6 @@ class CalendarEventsWorker
           user_id: @user_id,
           scheduled_time: event[:end_time] - PRE_OFFSET,
         )
-      else#if calendar_event?(event)
-        new_events.push(
-          name: event[:name],
-          uid: event[:uid],
-          type: :calendar,
-          notes: event[:notes],
-          user_id: @user_id,
-          scheduled_time: event[:start_time],
-        )
-      # else
-      #   new_events.push(event)
       end
     end
   end
