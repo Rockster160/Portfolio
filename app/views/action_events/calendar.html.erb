@@ -2,6 +2,11 @@
   <input type="text" name="q" value="<%= params[:q] %>" placeholder="Filter">
 <% end %>
 
+<div class="text-center" style="margin-bottom: 10px;">
+  <%= link_to "Pullups", pullups_action_events_path %>
+  <%= link_to "List", action_events_path %>
+</div>
+
 <div class="text-center" style="margin: 20px 0;">
   <%= link_to "< Prev week", params.permit!.except(:action, :controller).merge(date: @date - 1.week) %>
   - <%= link_to "Today", params.permit!.except(:action, :controller, :date) %> -

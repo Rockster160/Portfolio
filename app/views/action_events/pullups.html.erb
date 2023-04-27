@@ -6,6 +6,11 @@
   <input type="text" name="q" value="<%= params[:q] %>" placeholder="Filter">
 <% end %>
 
+<div class="text-center" style="margin-bottom: 10px;">
+  <%= link_to "List", action_events_path %>
+  <%= link_to "Calendar", calendar_action_events_path %>
+</div>
+
 <div class="text-center" style="margin: 20px 0;">
   <%= link_to "< Prev month", params.permit!.except(:action, :controller).merge(date: @date - 1.month) %>
   - <%= link_to "Today", params.permit!.except(:action, :controller, :date) %> -

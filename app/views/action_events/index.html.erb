@@ -12,6 +12,11 @@
   <%= f.submit %>
 <% end %>
 
+<div class="text-center" style="margin-bottom: 10px;">
+  <%= link_to "Pullups", pullups_action_events_path %>
+  <%= link_to "Calendar", calendar_action_events_path %>
+</div>
+
 <div class="text-center">
   <%= page_entries_info @events %>
   <%= paginate @events %>
