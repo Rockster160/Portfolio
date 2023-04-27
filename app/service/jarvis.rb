@@ -91,12 +91,12 @@ class Jarvis
     scope = ::SafeJsonSerializer.load(scope) || scope
 
     if trigger.to_sym == :command
-      command(User.find(scope["user_id"]), trigger_data[:words] || trigger_data[:command] || trigger_data)
+      command(User.find(scope[:user_id]), trigger_data[:words] || trigger_data[:command] || trigger_data)
     else
       puts "\e[36m[LOGIT] | trigger:[#{trigger.class}]#{trigger}\e[0m"
       puts "\e[36m[LOGIT] | trigger_data:[#{trigger_data.class}]#{trigger_data}\e[0m"
       puts "\e[36m[LOGIT] | scope:[#{scope.class}]#{scope}\e[0m"
-      tasks = ::JarvisTask.enabled.where(trigger: trigger).where(**(scope.try(:to_h) || scope))
+      tasks = ::JarvisTask.enabled.where(trigger: trigger).where(scope.to_h)
     end
 
     tasks.find_each do |task|
