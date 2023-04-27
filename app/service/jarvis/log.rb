@@ -1,7 +1,6 @@
 class Jarvis::Log < Jarvis::Action
   def attempt
     return unless valid_words?
-    raise Jarvis::Error.not_allowed unless @user&.admin?
 
     parse_log_data
     if create_event.persisted?
