@@ -280,6 +280,10 @@ class TaskMap
         { block: :str, label: "Join with" },
         { block: :array },
       ],
+      sum:        [
+        { return: :num },
+        { block: :array },
+      ],
       min:         [
         { return: :any, description: "Smallest value from array" },
         { block: :array },
