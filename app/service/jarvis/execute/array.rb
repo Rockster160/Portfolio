@@ -64,6 +64,12 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
     arr.length
   end
 
+  def sum
+    arr = evalargs.first
+    arr = SafeJsonSerializer.load(arr)
+    arr.sum
+  end
+
   def join
     with, *vals = evalargs
     vals.join(with)
