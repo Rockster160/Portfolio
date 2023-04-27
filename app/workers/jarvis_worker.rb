@@ -4,7 +4,7 @@ class JarvisWorker
   def perform(user_id, msg)
     parsed = SafeJsonSerializer.load(msg)
 
-    puts "\e[35m[LOGIT] | JarvisWorker(#{user_id})parsed:[#{parsed.class}]#{parsed}\e[0m"
+    # puts "\e[35m[LOGIT] | JarvisWorker(#{user_id})parsed:[#{parsed.class}]#{parsed}\e[0m"
     case parsed
     when String then ::Jarvis.command(User.find(user_id), parsed)
     when BetterJson, Hash
