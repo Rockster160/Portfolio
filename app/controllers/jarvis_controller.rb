@@ -27,6 +27,7 @@ class JarvisController < ApplicationController
       render plain: response
     end
   rescue StandardError => e
+    SlackNotifier.err(e)
     render plain: "Unable to complete your request. Something went wrong."
   end
 
