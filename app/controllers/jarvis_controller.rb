@@ -26,6 +26,8 @@ class JarvisController < ApplicationController
     else
       render plain: response
     end
+  rescue StandardError => e
+    render plain: "Unable to complete your request. Something went wrong."
   end
 
   private

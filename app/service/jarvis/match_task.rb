@@ -68,6 +68,7 @@ module Jarvis::MatchTask
   end
 
   def find_match(user, ostr, skip=[])
+    return ::JarvisTask.none if user.blank?
     # BIG TODO!
     # SANTIZE `str` - it is user input and can be executed against the db
     str = ostr.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish
