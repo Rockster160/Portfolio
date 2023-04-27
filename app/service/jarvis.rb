@@ -87,12 +87,13 @@ class Jarvis
   end
 
   def self.execute_trigger(trigger, trigger_data={}, scope: {})
-    trigger_data = SafeJsonSerializer.load(trigger_data) || trigger_data
+    trigger_data = ::SafeJsonSerializer.load(trigger_data) || trigger_data
+    scope = ::SafeJsonSerializer.load(scope) || scope
 
-    if trigger == "command"
-      command(User.find(scope["user_id"]), )
+    if trigger.to_sym == :command
+      command(User.find(scope["user_id"]), trigger_data[:words] || trigger_data[:command] || trigger_data)
     else
-      tasks = ::JarvisTask.enabled.where(trigger: trigger).where(scope.to_h)
+      tasks = ::JarvisTask.enabled.where(trigger: trigger).where(scope.try(:to_h) || scope)
     end
 
     tasks.find_each do |task|
