@@ -21,7 +21,6 @@
 # [ ] "Refresh" in Home (cell) should open the link for Nest
 # [ ] Able to add other deliveries to Home(cell) with expected dates
 # [ ] Fix Notes and other livekey cells to use new scrolling techniques used with Js.Js
-# [ ] Navigate should also start the car (if not already on)
 # [ ] If a remind is within a few hours, say “I’ll remind you in 3 hours and 16 minutes to…”
 # [ ] Jarvis conversations- can ask questions and allow responding back
 # [*] Printer functions should not require dots to call
@@ -44,23 +43,16 @@
 # [*] > When was the last time I ate
 # [*] > I don’t know the last time I ate
 # [*] > What was the last thing I ate?
-# [*] Jarvis, Venmo X $Y -- If contacts have same name, JV should announce a conflict
 # [*] Somehow automate running specs to notify when there is a failing one Githook -> server -> test env on server?
 
 
 # =============================== JarvisTasks ===============================
-# [/] Able to see schedules somehow
-# [/] JarvisCache should have an interface to view/edit/add/remove anything from the cache
-# [ ] Able to input next week lane to Jarvis somehow
-#     * Use a JarvisCache to store the next week and on schedule, send message
-#     * Every bowling night should remind Lane, brace, belt as well as usual conditioning and GPS
 # [ ] Add some sort of interface for managing automations
 #     * "X minutes before events called Y run Z command"
 #     * Parse this schedule on every calendar change, but only schedule for the next 6? hours?
 # [*] Scrape a site. Provide a URL and some selectors and then set an interval and have it alert you when your requested check happens.
 # [*] Sending good morning/day summary text
 # [*] Check for hard freeze next day / next week
-# [*] Auto message when garage is still open after a certain time of day
 
 
 # =============================== Desired examples ===============================
