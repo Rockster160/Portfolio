@@ -21,6 +21,8 @@ class CalendarEventsWorker
     jids_to_remove = scheduled_events.filter_map { |listing|
       # Commands aren't scheduled, so skip them to prevent them being removed
       next if listing[:type] == "command"
+      # If an event is about to run, do not remove it
+      next if Time.parse(listing[:scheduled_time]).to_i < 1.minute.from_now
       # listing[:jid] last as the implicit return of the map
       listing[:uid].present? && !event_uids.include?(listing[:uid]) && listing[:jid]
     }
