@@ -2,6 +2,7 @@ import { registerNotifications } from "./push_subscribe.js";
 import { AuthWS } from './auth_ws.js';
 import { Widget } from './widget.js';
 import { showModal } from './modal.js';
+import { showFlash } from './flash.js';
 
 let modal = document.querySelector("#command-modal")
 
@@ -10,6 +11,10 @@ function addMessage(direction, msg) {
   div.classList.add("message")
   div.classList.add(direction)
   div.textContent = msg
+
+  if (direction == "in") {
+    showFlash(msg)
+  }
 
   modal.querySelector(".messages").prepend(div)
 }
