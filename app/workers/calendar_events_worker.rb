@@ -80,6 +80,12 @@ class CalendarEventsWorker
         scheduled_time: event[:start_time],
       )
 
+      # Add helper to get "current location at time" which looks through scheduled events
+      # if between start of event and 1 hour after event
+      #   (priority to "during" event - so that back to back events don't grab the previous one
+      #   with the extra time)
+      #   Set location for time there, otherwise default to home
+
       # If travelable - add TT and nav there and back
       if travelable_event?(event)
         traveltime = address_book.traveltime_seconds(event[:location])

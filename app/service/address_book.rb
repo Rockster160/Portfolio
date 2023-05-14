@@ -51,6 +51,7 @@ class AddressBook
   end
 
   def to_address(data)
+    data = SafeJsonSerializer.load(data)
     address = data.first if data.is_a?(Array) && data.length == 1
     address = reverse_geocode(data, get: :address) if data.is_a?(Array) && data.length == 2
     return address if address.present?
