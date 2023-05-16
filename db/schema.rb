@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_03_22_201910) do
+ActiveRecord::Schema.define(version: 2023_05_16_223438) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -183,7 +183,7 @@ ActiveRecord::Schema.define(version: 2023_03_22_201910) do
     t.text "data"
     t.datetime "created_at", precision: 6, null: false
     t.datetime "updated_at", precision: 6, null: false
-    t.datetime "timestamp", precision: 6, default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime "timestamp", precision: 6, default: -> { "now()" }
     t.index ["user_id"], name: "index_climbs_on_user_id"
   end
 
@@ -589,18 +589,6 @@ ActiveRecord::Schema.define(version: 2023_03_22_201910) do
     t.integer "role", default: 0
     t.boolean "dark_mode"
     t.string "email"
-  end
-
-  create_table "venmo_recurrings", id: :serial, force: :cascade do |t|
-    t.string "to", default: "3852599640"
-    t.string "from"
-    t.integer "amount_cents"
-    t.string "note"
-    t.integer "day_of_month"
-    t.integer "hour_of_day"
-    t.boolean "active", default: true
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
   end
 
   create_table "venmos", id: :serial, force: :cascade do |t|

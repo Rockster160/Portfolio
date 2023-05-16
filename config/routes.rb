@@ -156,8 +156,6 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :venmo_recurrings, path: :venmo_charges
-
   require "sidekiq/web"
   # constraints ->(req) { binding.pry } do
   constraints RoleConstraint.new(:admin) do
