@@ -14,6 +14,8 @@
 # To create a new Venmo, visit `/venmo/auth`
 # Call Venmo.charge(from, amount, note)
 class Venmo < ApplicationRecord
+  include ActionView::Helpers::NumberHelper
+
   class << self
     def charge(from, amount, note)
       Venmo.first.charge(from, amount, note)
@@ -21,21 +23,11 @@ class Venmo < ApplicationRecord
   end
 
   def pay(to, amount, note)
-    SmsWorker.perform_async('3852599640', "Paying #{from} $#{amount}")
-    refresh_access_token if expired?
-    response = HTTParty.post("https://api.venmo.com/v1/payments", body: {
-      "access_token" => access_token,
-      "phone" => from,
-      "note" => note,
-      "amount" => -amount
-    })
-    if response['error'].present?
-      SmsWorker.perform_async('3852599640', "Venmo Error: #{response['error']['message']}")
-    end
+    charge(to, -amount.abs, note)
   end
 
   def charge(from, amount, note)
-    SmsWorker.perform_async("3852599640", "#{amount.positive? ? "Charging" : "Paying"} #{from} $#{amount.abs}")
+    ::SmsWorker.perform_async("3852599640", "#{amount.positive? ? "Charging" : "Paying"} #{from} #{number_to_currency(amount.abs)}")
     refresh_access_token if expired?
     response = HTTParty.post("https://api.venmo.com/v1/payments", body: {
       "access_token" => access_token,
@@ -43,8 +35,8 @@ class Venmo < ApplicationRecord
       "note" => note,
       "amount" => amount
     })
-    if response['error'].present?
-      SmsWorker.perform_async('3852599640', "Venmo Error: #{response['error']['message']}")
+    if response["error"].present?
+      ::SmsWorker.perform_async('3852599640', "Venmo Error: #{response['error']['message']}")
     end
   end
 
