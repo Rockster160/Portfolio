@@ -19,9 +19,9 @@ class Jarvis::Venmo < Jarvis::Action
     # Make sure the charge succeeds?
 
     if req.present?
-      "Requesting $#{amount} from #{contact&.name || from}"
+      "Requesting $#{amount} from #{contact&.name || from} for #{note}"
     else
-      "Sending $#{amount} to #{contact&.name || from}"
+      "Sending $#{amount} to #{contact&.name || from} for #{note}"
     end
   end
 
@@ -36,6 +36,6 @@ class Jarvis::Venmo < Jarvis::Action
   end
 
   def parse_data
-    @msg.squish.match(/venmo (request )?([\w' ]+) \$?(\d+(?:\.\d+)?) ?((?:.|\p{Emoji_Presentation}){0,})/iu).to_a
+    @msg.squish.match(/venmo (request )?([\w' ]+) \$?(\d+(?:\.\d+)?) ?(?:for )?((?:.|\p{Emoji_Presentation}){0,})/iu).to_a
   end
 end

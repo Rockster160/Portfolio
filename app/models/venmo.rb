@@ -27,7 +27,7 @@ class Venmo < ApplicationRecord
   end
 
   def charge(from, amount, note)
-    ::SmsWorker.perform_async("3852599640", "#{amount.positive? ? "Charging" : "Paying"} #{from} #{number_to_currency(amount.abs)}")
+    ::SmsWorker.perform_async("3852599640", "#{amount.positive? ? "Paying" : "Charging"} #{from} #{number_to_currency(amount.abs)}")
     refresh_access_token if expired?
     response = HTTParty.post("https://api.venmo.com/v1/payments", body: {
       "access_token" => access_token,

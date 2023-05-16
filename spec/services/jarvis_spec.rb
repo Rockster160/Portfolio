@@ -418,26 +418,26 @@ RSpec.describe Jarvis do
     context "sending money" do
       specify {
         expect(::Venmo).to receive(:charge).with("8013497798", 10.0, "🐱")
-        expect(jarvis("venmo B $10 🐱")).to eq("Sending $10 to Brendan")
+        expect(jarvis("venmo B $10 for 🐱")).to eq("Sending $10 to Brendan for 🐱")
       }
       specify {
         expect(::Venmo).to receive(:charge).with("8013497798", 10.47, "bowling and pizza")
-        expect(jarvis("Venmo B $10.47 bowling and pizza")).to eq("Sending $10.47 to Brendan")
+        expect(jarvis("Venmo B $10.47 bowling and pizza")).to eq("Sending $10.47 to Brendan for bowling and pizza")
       }
       specify {
         expect(::Venmo).to receive(:charge).with("8013497798", 10.47, "🎳 and 🍕")
-        expect(jarvis("Venmo B $10.47 🎳 and 🍕")).to eq("Sending $10.47 to Brendan")
+        expect(jarvis("Venmo B $10.47 🎳 and 🍕")).to eq("Sending $10.47 to Brendan for 🎳 and 🍕")
       }
       specify {
         expect(::Venmo).to receive(:charge).with("8013497798", 10.47, "🎳🍕🐱 food")
-        expect(jarvis("Venmo B $10.47 🎳🍕🐱 food")).to eq("Sending $10.47 to Brendan")
+        expect(jarvis("Venmo B $10.47 🎳🍕🐱 food")).to eq("Sending $10.47 to Brendan for 🎳🍕🐱 food")
       }
     end
 
     context "requesting money" do
       specify {
         expect(::Venmo).to receive(:charge).with("8013497798", -10.0, "🐱")
-        expect(jarvis("venmo request B $10 🐱")).to eq("Requesting $10 from Brendan")
+        expect(jarvis("venmo request B $10 🐱")).to eq("Requesting $10 from Brendan for 🐱")
       }
     end
   end
@@ -457,11 +457,11 @@ RSpec.describe Jarvis do
     it "can schedule a job in the middle of a command" do
       msg = "Do the laundry"
       perform_enqueued_jobs {
-        expect(JarvisWorker).to receive(:perform_at).with(5.minutes.from_now, @admin.id, "Remind me to do the laundry").and_call_original
+        expect(JarvisWorker).to receive(:perform_at).with(5.minutes.from_now, @admin.id, "Text me to do the laundry").and_call_original
         # Call original above to make sure the SmsWorker gets called
         expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
 
-        expect(jarvis("Remind me in 5 minutes to do the laundry")).to eq("I'll remind you to do the laundry today at 5:50am")
+        expect(jarvis("Text me in 5 minutes to do the laundry")).to eq("I'll text you to do the laundry today at 5:50am")
       }
     end
 
