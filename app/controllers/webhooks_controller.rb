@@ -49,6 +49,13 @@ class WebhooksController < ApplicationController
     json = DataStorage[:device_battery] || {}
     new_data = json.merge(data)
     DataStorage[:device_battery] = new_data
+    if data.dig(:Phone, :val) <= 50 || data.dig(:Watch, :val) <= 50
+      @user = User.find(1)
+      items = []
+      items << { name: "Charge Phone" } if data.dig(:Phone, :val) <= 50
+      items << { name: "Charge Watch" } if data.dig(:Watch, :val) <= 50
+      @user.default_list.add_items(items)
+    end
 
     ActionCable.server.broadcast("device_battery_channel", DataStorage[:device_battery])
 
