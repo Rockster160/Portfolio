@@ -46,7 +46,7 @@ module FancyRenderJson
 
     [
       "{",
-      *hash.map { |k, v| "#{INDENT}#{k.to_s.colorize(COLOR_MAP[:key])}: #{format(v, depth+1)}" },
+      *hash.map { |k, v| "#{INDENT}#{k.to_s.colorize(COLOR_MAP[:key])}: #{format(v, depth+1)}," },
       "}"
     ].join("\n#{curdent}")
   end
@@ -74,14 +74,18 @@ class BetterJson
     @hash
   end
 
+  def pretty
+    FancyRenderJson.pretty(@hash)
+  end
+
   # Use "key: val" syntax instead of ":key => val"
   def to_s
-    FancyRenderJson.pretty(@hash).uncolor.gsub(/(\s*\n)+/, " ").gsub(/\s{2,}/, " ")
+    pretty.uncolor.gsub(/(\s*\n)+/, " ").gsub(/\s{2,}/, " ")
   end
 
   # Use "key: val" syntax instead of ":key => val" + colors!
   def inspect
-    FancyRenderJson.pretty(@hash).uncolor
+    pretty.uncolor
   end
 
   # Quack like a hash
