@@ -13,6 +13,9 @@ class TeslaControl
   CODE_CHALLENGE = Base64.urlsafe_encode64(Digest::SHA256.hexdigest(CODE_VERIFIER))
 
   def self.authorize
+    # Current access token generation is broken. Can use this site to get it:
+    # https://tesla-info.com/tesla-token.php
+
     # Open in browser
     params = {
       client_id: :ownerapi,
@@ -24,7 +27,7 @@ class TeslaControl
       state: STABLE_STATE,
       login_hint: "rocco11nicholls@gmail.com",
     }
-    # "https://auth.tesla.com/oauth2/v3/authorize?#{params.to_query}"
+    "https://auth.tesla.com/oauth2/v3/authorize?#{params.to_query}"
     # HTTParty.get(TeslaControl.authorize, headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" })
     # Login and copy the `code` param from the redirect
     # then call TeslaControl.subscribe(code)
