@@ -192,8 +192,7 @@ class TeslaControl
   private
 
   def command(cmd, params={})
-    # TODO: Broken until update API issues
-    # post_vehicle("command/#{cmd}", params)
+    post_vehicle("command/#{cmd}", params)
   end
 
   def parse_to(val, truthy, falsy)
