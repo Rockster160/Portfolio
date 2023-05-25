@@ -54,6 +54,13 @@ class AddressBook
     data = SafeJsonSerializer.load(data)
     address = data.first if data.is_a?(Array) && data.length == 1
     address = reverse_geocode(data, get: :address) if data.is_a?(Array) && data.length == 2
+    data.tap { |str|
+      next unless str.is_a?(String)
+      next unless str.match?(/-?\d+(?:\.\d+)?, ?-?\d+(?:\.\d+)?/)
+
+      coords = str.split(/, ?/).map(&:to_f)
+      address = reverse_geocode(coords, get: :address)
+    }
     return address if address.present?
 
     address ||= data[::Jarvis::Regex.address]&.squish.presence if data.match?(::Jarvis::Regex.address)

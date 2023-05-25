@@ -13,6 +13,8 @@ class TeslaControl
   CODE_CHALLENGE = Base64.urlsafe_encode64(Digest::SHA256.hexdigest(CODE_VERIFIER))
 
   def self.authorize
+    # Might need to increase verifier length? (Looks like already using 86)
+    # https://github.com/timdorr/tesla-api/discussions/689
     # Current access token generation is broken. Can use this site to get it:
     # https://tesla-info.com/tesla-token.php
 
