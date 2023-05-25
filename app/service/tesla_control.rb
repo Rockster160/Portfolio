@@ -24,7 +24,8 @@ class TeslaControl
       state: STABLE_STATE,
       login_hint: "rocco11nicholls@gmail.com",
     }
-    "https://auth.tesla.com/oauth2/v3/authorize?#{params.to_query}"
+    # "https://auth.tesla.com/oauth2/v3/authorize?#{params.to_query}"
+    # HTTParty.get(TeslaControl.authorize, headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" })
     # Login and copy the `code` param from the redirect
     # then call TeslaControl.subscribe(code)
   end
@@ -191,7 +192,8 @@ class TeslaControl
   private
 
   def command(cmd, params={})
-    post_vehicle("command/#{cmd}", params)
+    # TODO: Broken until update API issues
+    # post_vehicle("command/#{cmd}", params)
   end
 
   def parse_to(val, truthy, falsy)
