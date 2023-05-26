@@ -139,5 +139,8 @@ class AddressBook
     when :address
       json.dig(:results, 0, :formatted_address)
     end
+  rescue StandardError => e
+    ::SlackNotifier.err(e, "reverse_geocode failed: (#{loc}): [#{e.class}]:#{e.message}")
+    nil
   end
 end
