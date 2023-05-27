@@ -30,7 +30,7 @@ class TeslaControl
       login_hint: "rocco11nicholls@gmail.com",
     }
     "https://auth.tesla.com/oauth2/v3/authorize?#{params.to_query}"
-    # HTTParty.get(TeslaControl.authorize, headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" })
+    # HTTParty.get(TeslaControl.authorize, headers: { "User-Agent": "PortfolioBot/1.0" })
     # Login and copy the `code` param from the redirect
     # then call TeslaControl.subscribe(code)
   end
@@ -224,6 +224,8 @@ class TeslaControl
     return wake_up && retry if err.response.code == 408
     return refresh && retry if err.response.code == 401
     raise err
+  rescue RestClient::Forbidden => err
+    # Nothing. We lost connection, so just be quiet
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#post(#{endpoint}):\n#{params}\nCode: #{res.code}\n```#{res.body}```")
   end
@@ -280,6 +282,8 @@ class TeslaControl
 
     @refresh_token = DataStorage[:tesla_refresh_token] = json[:refresh_token]
     @access_token = DataStorage[:tesla_access_token] = json[:access_token]
+  rescue RestClient::Forbidden => err
+    # Nothing. We lost connection, so just be quiet
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry
   rescue JSON::ParserError => err
