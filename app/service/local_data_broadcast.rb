@@ -23,7 +23,7 @@ class LocalDataBroadcast
       DataStorage[:notes_timestamp] = @data.dig(:notes, :timestamp)
     end
 
-    ActionCable.server.broadcast "local_data_channel", encriched_data
+    ActionCable.server.broadcast :local_data_channel, encriched_data
 
     CalendarEventsWorker.perform_async if @data.key?(:calendar)
   end

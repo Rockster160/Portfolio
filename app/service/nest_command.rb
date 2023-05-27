@@ -6,7 +6,7 @@ class NestCommand
   def command(settings)
     return unless Rails.env.production? || Rails.env.test?
 
-    ActionCable.server.broadcast("nest_channel", { loading: true })
+    ActionCable.server.broadcast(:nest_channel, { loading: true })
     get_devices if DataStorage[:nest_devices].blank?
 
     settings = settings.to_s.squish.downcase
@@ -36,7 +36,7 @@ class NestCommand
       "Set house #{device_name.downcase} to #{@temp}°."
     end
   rescue StandardError => e
-    ActionCable.server.broadcast("nest_channel", { failed: true })
+    ActionCable.server.broadcast(:nest_channel, { failed: true })
     if e.message == "400 Bad Request"
       RefreshNestMessageWorker.perform_async
     else
@@ -47,6 +47,6 @@ class NestCommand
 
   def get_devices
     subscription ||= GoogleNestControl.new
-    ActionCable.server.broadcast("nest_channel", { devices: subscription.devices.map(&:to_json) })
+    ActionCable.server.broadcast(:nest_channel, { devices: subscription.devices.map(&:to_json) })
   end
 end

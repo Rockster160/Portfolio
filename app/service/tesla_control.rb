@@ -10,7 +10,7 @@ class TeslaControl
   }
   STABLE_STATE = DataStorage[:tesla_stable_state] ||= SecureRandom.hex
   CODE_VERIFIER = DataStorage[:tesla_code_verifier] ||= rand(36**86).to_s(36)
-  CODE_CHALLENGE = Base64.urlsafe_encode64(Digest::SHA256.hexdigest(CODE_VERIFIER))
+  CODE_CHALLENGE = Base64.urlsafe_encode64(Digest::SHA256.digest(CODE_VERIFIER), padding: false)
 
   def self.authorize
     # Might need to increase verifier length? (Looks like already using 86)
@@ -226,7 +226,7 @@ class TeslaControl
     raise err
   rescue RestClient::Forbidden => err
     User.me.jarvis_cache.set(:car_data, {})
-    ActionCable.server.broadcast("tesla_channel", { status: :forbidden })
+    ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#post(#{endpoint}):\n#{params}\nCode: #{res.code}\n```#{res.body}```")
   end
@@ -248,7 +248,7 @@ class TeslaControl
     raise err
   rescue RestClient::Forbidden => err
     User.me.jarvis_cache.set(:car_data, {})
-    ActionCable.server.broadcast("tesla_channel", { status: :forbidden })
+    ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#wake_vehicle:\nCode: #{res.code}\n```#{res.body}```")
   end
@@ -271,7 +271,7 @@ class TeslaControl
     raise err
   rescue RestClient::Forbidden => err
     User.me.jarvis_cache.set(:car_data, {})
-    ActionCable.server.broadcast("tesla_channel", { status: :forbidden })
+    ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#get(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```")
   end
@@ -291,7 +291,7 @@ class TeslaControl
     @access_token = DataStorage[:tesla_access_token] = json[:access_token]
   rescue RestClient::Forbidden => err
     User.me.jarvis_cache.set(:car_data, {})
-    ActionCable.server.broadcast("tesla_channel", { status: :forbidden })
+    ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry
   rescue JSON::ParserError => err

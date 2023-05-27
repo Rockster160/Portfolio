@@ -18,11 +18,11 @@
 
   def command(original_cmd, original_params=nil, quick=false)
     if Rails.env.development?
-      ActionCable.server.broadcast("tesla_channel", stubbed_data)
+      ActionCable.server.broadcast(:tesla_channel, stubbed_data)
       return "Stubbed data"
     end
 
-    ActionCable.server.broadcast("tesla_channel", { loading: true })
+    ActionCable.server.broadcast(:tesla_channel, { loading: true })
     car = Tesla.new unless quick
 
     cmd = original_cmd.to_s.downcase.squish
@@ -40,9 +40,9 @@
 
     case cmd.to_sym
     when :request
-      ActionCable.server.broadcast "tesla_channel", format_data(Tesla.new.cached_vehicle_data)
+      ActionCable.server.broadcast(:tesla_channel, format_data(Tesla.new.cached_vehicle_data)
     when :update, :reload
-      ActionCable.server.broadcast "tesla_channel", format_data(car.vehicle_data) unless quick
+      ActionCable.server.broadcast(:tesla_channel, format_data(car.vehicle_data) unless quick
       @response = "Updating car cell"
       return @response
     when :off, :stop
@@ -136,10 +136,10 @@
 
     @response
   rescue TeslaError => e
-    ActionCable.server.broadcast("tesla_channel", { failed: true })
+    ActionCable.server.broadcast(:tesla_channel, { failed: true })
     "Tesla #{e.message}"
   rescue StandardError => e
-    ActionCable.server.broadcast("tesla_channel", { failed: true })
+    ActionCable.server.broadcast(:tesla_channel, { failed: true })
     backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
     SlackNotifier.notify("Failed to command: #{e.inspect}\n#{backtrace}")
     raise e # Re-raise to stop worker from sleeping and attempting to re-get

@@ -60,7 +60,7 @@ class WebhooksController < ApplicationController
     #   @user.default_list.add_items(items)
     # end
 
-    ActionCable.server.broadcast("device_battery_channel", DataStorage[:device_battery])
+    ActionCable.server.broadcast(:device_battery_channel, DataStorage[:device_battery])
 
     head :created
   end
@@ -77,12 +77,12 @@ class WebhooksController < ApplicationController
   def notify
     return head :no_content unless printer_authed?
 
-    ActionCable.server.broadcast "printer_callback_channel", { reload: true }
+    ActionCable.server.broadcast :printer_callback_channel, { reload: true }
     PrinterNotify.notify(params)
   end
 
   def uptime
-    ActionCable.server.broadcast "uptime_channel", {}
+    ActionCable.server.broadcast :uptime_channel, {}
 
     head :no_content
   end

@@ -9,7 +9,7 @@ class GarageCommand
     direction = :close if dir_str.match?(/(clos)/i)
     direction ||= :toggle
 
-    ActionCable.server.broadcast("garage_channel", { msg: "#{direction}Garage" })
+    ActionCable.server.broadcast(:garage_channel, { msg: "#{direction}Garage" })
 
     case direction
     when :open then "Opening the garage"

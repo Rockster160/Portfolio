@@ -4,14 +4,14 @@ class GarageChannel < ApplicationCable::Channel
   end
 
   def unsubscribed
-    ActionCable.server.broadcast("garage_channel", { data: "refreshGarage" })
+    ActionCable.server.broadcast(:garage_channel, { data: "refreshGarage" })
   end
 
   def request
     if Rails.env.development?
       Broadcast.ping(:garage, { data: { garageState: :closed } })
     else
-      ActionCable.server.broadcast("garage_channel", { msg: "getGarage" })
+      ActionCable.server.broadcast(:garage_channel, { msg: "getGarage" })
     end
   end
 
@@ -21,16 +21,16 @@ class GarageChannel < ApplicationCable::Channel
 
   # :ping garage data: { garageState: :open }
   # :ping garage data: :refreshGarage
-  # ActionCable.server.broadcast("garage_channel", { data: { garageState: :closed } })
+  # ActionCable.server.broadcast(:garage_channel, { data: { garageState: :closed } })
   # open
-  # ActionCable.server.broadcast("garage_channel", { msg: "openGarage" })
+  # ActionCable.server.broadcast(:garage_channel, { msg: "openGarage" })
   # close
-  # ActionCable.server.broadcast("garage_channel", { msg: "closeGarage" })
+  # ActionCable.server.broadcast(:garage_channel, { msg: "closeGarage" })
   # toggle
-  # ActionCable.server.broadcast("garage_channel", { msg: "toggleGarage" })
+  # ActionCable.server.broadcast(:garage_channel, { msg: "toggleGarage" })
   # get
-  # ActionCable.server.broadcast("garage_channel", { msg: "getGarage" })
+  # ActionCable.server.broadcast(:garage_channel, { msg: "getGarage" })
   def message(data)
-    ActionCable.server.broadcast("garage_channel", { data: data })
+    ActionCable.server.broadcast(:garage_channel, { data: data })
   end
 end

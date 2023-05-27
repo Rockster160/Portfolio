@@ -103,7 +103,7 @@ class Jarvis
 
     res, res_data = new(user, words).command
 
-    ActionCable.server.broadcast("jarvis_channel", { say: res, data: res_data }) if res.present? && user&.admin?
+    ActionCable.server.broadcast(:jarvis_channel, { say: res, data: res_data }) if res.present? && user&.admin?
     return res if res_data.blank?
 
     # ::BroadcastUpcomingWorker.perform_async - Is this needed?
@@ -115,7 +115,7 @@ class Jarvis
 
     case channel
     when :sms then SmsWorker.perform_async(MY_NUMBER, msg)
-    when :ws then ActionCable.server.broadcast("jarvis_channel", say: msg)
+    when :ws then ActionCable.server.broadcast(:jarvis_channel, say: msg)
     else
       msg
     end
@@ -126,7 +126,7 @@ class Jarvis
 
     case channel
     when :sms then SmsWorker.perform_async(MY_NUMBER, data)
-    when :ws then ActionCable.server.broadcast("jarvis_channel", data: data)
+    when :ws then ActionCable.server.broadcast(:jarvis_channel, data: data)
     else
       data
     end

@@ -4,6 +4,6 @@ class DeviceBatteryChannel < ApplicationCable::Channel
   end
 
   def request(_)
-    ActionCable.server.broadcast("device_battery_channel", DataStorage[:device_battery])
+    ActionCable.server.broadcast(:device_battery_channel, DataStorage[:device_battery])
   end
 end

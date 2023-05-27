@@ -28,10 +28,10 @@ class AmzUpdatesChannel < ApplicationCable::Channel
 
     DataStorage[:amazon_deliveries] = deliveries
 
-    ActionCable.server.broadcast "amz_updates_channel", deliveries
+    ActionCable.server.broadcast :amz_updates_channel, deliveries
   end
 
   def request(_)
-    ActionCable.server.broadcast "amz_updates_channel", DataStorage[:amazon_deliveries]
+    ActionCable.server.broadcast :amz_updates_channel, DataStorage[:amazon_deliveries]
   end
 end

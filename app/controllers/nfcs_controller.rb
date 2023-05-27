@@ -5,6 +5,6 @@ class NfcsController < ApplicationController
     @nfc = params[:nfc] || "--"
     return unless params[:nfc].present?
 
-    ActionCable.server.broadcast "nfc_channel", {message: params[:nfc].to_s}
+    ActionCable.server.broadcast :nfc_channel, {message: params[:nfc].to_s}
   end
 end

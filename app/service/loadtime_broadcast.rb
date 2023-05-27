@@ -11,7 +11,7 @@ module LoadtimeBroadcast
 
     data.transform_values! { |d| d.merge timestamp: Time.current.to_i }
 
-    ActionCable.server.broadcast "loadtime_channel", data.deep_symbolize_keys
+    ActionCable.server.broadcast :loadtime_channel, data.deep_symbolize_keys
   end
 
   def loadtime_data

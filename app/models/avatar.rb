@@ -79,7 +79,7 @@ class Avatar < ApplicationRecord
   end
 
   def broadcast_movement
-    ActionCable.server.broadcast "little_world_channel", player_details
+    ActionCable.server.broadcast :little_world_channel, player_details
   end
 
   def log_in
@@ -87,7 +87,7 @@ class Avatar < ApplicationRecord
   end
 
   def log_out
-    ActionCable.server.broadcast "little_world_channel", { uuid: uuid, log_out: true }
+    ActionCable.server.broadcast :little_world_channel, { uuid: uuid, log_out: true }
   end
 
   private

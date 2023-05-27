@@ -10,6 +10,6 @@ class PingChannel < ApplicationCable::Channel
     json = JSON.parse(raw_json) rescue { data: data["data"] || data }
 
     ActionCable.server.broadcast("#{channel}_channel", json)
-    ActionCable.server.broadcast("ping_channel", "Sending #{channel}: #{json}")
+    ActionCable.server.broadcast(:ping_channel, "Sending #{channel}: #{json}")
   end
 end
