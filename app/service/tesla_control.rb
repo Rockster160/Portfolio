@@ -160,12 +160,12 @@ class TeslaControl
   end
 
   def cached_vehicle_data
-    User.find(1).jarvis_cache.get(:car_data)
+    User.me.jarvis_cache.get(:car_data)
   end
 
   def vehicle_data
     @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data").tap { |car_data|
-      User.find(1).jarvis_cache.set(:car_data, car_data)
+      User.me.jarvis_cache.set(:car_data, car_data)
     }
   end
 
@@ -225,7 +225,8 @@ class TeslaControl
     return refresh && retry if err.response.code == 401
     raise err
   rescue RestClient::Forbidden => err
-    # Nothing. We lost connection, so just be quiet
+    User.me.jarvis_cache.set(:car_data, {})
+    ActionCable.server.broadcast("tesla_channel", { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#post(#{endpoint}):\n#{params}\nCode: #{res.code}\n```#{res.body}```")
   end
@@ -245,6 +246,9 @@ class TeslaControl
     return wake_up && retry if err.response.code == 408
     return refresh && retry if err.response.code == 401
     raise err
+  rescue RestClient::Forbidden => err
+    User.me.jarvis_cache.set(:car_data, {})
+    ActionCable.server.broadcast("tesla_channel", { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#wake_vehicle:\nCode: #{res.code}\n```#{res.body}```")
   end
@@ -265,6 +269,9 @@ class TeslaControl
     return wake_up && retry if err.response.code == 408
     return refresh && retry if err.response.code == 401
     raise err
+  rescue RestClient::Forbidden => err
+    User.me.jarvis_cache.set(:car_data, {})
+    ActionCable.server.broadcast("tesla_channel", { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#get(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```")
   end
@@ -283,7 +290,8 @@ class TeslaControl
     @refresh_token = DataStorage[:tesla_refresh_token] = json[:refresh_token]
     @access_token = DataStorage[:tesla_access_token] = json[:access_token]
   rescue RestClient::Forbidden => err
-    # Nothing. We lost connection, so just be quiet
+    User.me.jarvis_cache.set(:car_data, {})
+    ActionCable.server.broadcast("tesla_channel", { status: :forbidden })
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry
   rescue JSON::ParserError => err

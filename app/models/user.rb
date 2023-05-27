@@ -53,6 +53,10 @@ class User < ApplicationRecord
 
   delegate :sub_auth, to: :push_sub
 
+  def self.me
+    find(1)
+  end
+
   def self.auth_from_basic(basic_auth)
     username, password = basic_auth.split(":", 2)
     attempt_login(username, password)
@@ -99,6 +103,10 @@ class User < ApplicationRecord
   end
   def timezone
     "America/Denver"
+  end
+
+  def me?
+    id == 1 && admin?
   end
 
   def see!

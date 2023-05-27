@@ -11,7 +11,7 @@ class LocalDataBroadcast
     data ||= JSON.parse(File.read("local_data.json")) if File.exists?("local_data.json")
     data ||= {}
     @data = data.deep_symbolize_keys
-    @user = User.find(1)
+    @user = User.me
 
     update_contacts if @data.key?(:contacts)
 

@@ -53,7 +53,7 @@ class WebhooksController < ApplicationController
     # -- Watch has no way to remove the item.
     # -- Can't monitor if currently charging or not
     # if data.dig(:Phone, :val) <= 50 || data.dig(:Watch, :val) <= 50
-    #   @user = User.find(1)
+    #   @user = User.me
     #   items = []
     #   items << { name: "Charge Phone" } if data.dig(:Phone, :val) <= 50
     #   items << { name: "Charge Watch" } if data.dig(:Watch, :val) <= 50

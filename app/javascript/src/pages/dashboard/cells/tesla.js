@@ -102,6 +102,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     }
 
     let notify = cell.data.failed ? Text.color(dash_colors.orange, "[FAILED]") : ""
+    notify = cell.data.forbidden ? Text.color(dash_colors.orange, "[AUTH]") : notify
     lines.push(Text.justify(notify, timeago(data.timestamp)))
 
     cell.lines(lines)
@@ -139,13 +140,22 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       renderLines()
     },
     socket: Server.socket("TeslaChannel", function(msg) {
-      if (msg.failed) {
+      if (msg.status == "forbidden") {
+        this.data.loading = false
+        this.data.forbidden = true
+        if (cell?.data?.refresh_timer) {
+          clearTimeout(cell.data.refresh_timer)
+        }
+        renderLines()
+        return
+      } else if (msg.failed) {
         this.data.loading = false
         this.data.failed = true
         resetTimeout(Time.minutes(30))
         renderLines()
         return
       } else {
+        this.data.forbidden = false
         this.data.failed = false
       }
       if (msg.loading) {
