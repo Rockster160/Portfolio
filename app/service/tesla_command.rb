@@ -40,7 +40,7 @@
 
     case cmd.to_sym
     when :request
-      ActionCable.server.broadcast(:tesla_channel, format_data(Tesla.new.cached_vehicle_data)
+      ActionCable.server.broadcast(:tesla_channel, format_data(Tesla.new.cached_vehicle_data))
     when :update, :reload
       ActionCable.server.broadcast(:tesla_channel, format_data(car.vehicle_data) unless quick
       @response = "Updating car cell"
@@ -143,7 +143,7 @@
     backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
     SlackNotifier.notify("Failed to command: #{e.inspect}\n#{backtrace}")
     raise e # Re-raise to stop worker from sleeping and attempting to re-get
-    # "Failed to request from Tesla"
+    "Failed to request from Tesla"
   end
 
   def cToF(c)
