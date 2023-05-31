@@ -72,19 +72,21 @@ class AddressBook
     return 2700 unless Rails.env.production?
 
     from ||= current_loc
-    to, from = [to, from].map { |address| to_address(address) }
-    # Should be stringified addresses
+    Rails.cache.fetch("traveltime_seconds(#{to},#{from})") do
+      to, from = [to, from].map { |address| to_address(address) }
+      # Should be stringified addresses
 
-    params = {
-      destinations: to,
-      origins: from,
-      key: ENV["PORTFOLIO_GMAPS_PAID_KEY"],
-    }.to_query
-    url = "https://maps.googleapis.com/maps/api/distancematrix/json?#{params}"
-    res = RestClient.get(url)
-    json = JSON.parse(res.body, symbolize_names: true)
+      params = {
+        destinations: to,
+        origins: from,
+        key: ENV["PORTFOLIO_GMAPS_PAID_KEY"],
+      }.to_query
+      url = "https://maps.googleapis.com/maps/api/distancematrix/json?#{params}"
+      res = RestClient.get(url)
+      json = JSON.parse(res.body, symbolize_names: true)
 
-    json.dig(:rows, 0, :elements, 0, :duration, :value)
+      json.dig(:rows, 0, :elements, 0, :duration, :value)
+    end
   rescue StandardError => e
     SlackNotifier.err(e, "Traveltime failed: (to:\"#{to}\", from:\"#{from}\")")
     nil
@@ -92,25 +94,27 @@ class AddressBook
 
   def nearest_address_from_name(name, loc=nil)
     loc ||= current_loc
-    params = {
-      input: name,
-      inputtype: :textquery,
-      fields: [:formatted_address, :geometry].join(","),
-      locationbias: "point:#{loc.join(",")}",
-      key: ENV["PORTFOLIO_GMAPS_PAID_KEY"],
-    }.to_query
+    Rails.cache.fetch("nearest_address_from_name(#{name},#{loc.join(",")})") do
+      params = {
+        input: name,
+        inputtype: :textquery,
+        fields: [:formatted_address, :geometry].join(","),
+        locationbias: "point:#{loc.join(",")}",
+        key: ENV["PORTFOLIO_GMAPS_PAID_KEY"],
+      }.to_query
 
-    url = "https://maps.googleapis.com/maps/api/place/findplacefromtext/json?#{params}"
-    res = RestClient.get(url)
-    json = JSON.parse(res.body, symbolize_names: true)
+      url = "https://maps.googleapis.com/maps/api/place/findplacefromtext/json?#{params}"
+      res = RestClient.get(url)
+      json = JSON.parse(res.body, symbolize_names: true)
 
-    if json&.dig(:candidates)&.one?
-      json.dig(:candidates).first[:formatted_address]
-    else
-      json.dig(:candidates).sort_by { |candidate|
-        next if candidate&.dig(:geometry, :location).blank?
-        distance(loc, candidate.dig(:geometry, :location).values)
-      }.first&.dig(:formatted_address)
+      if json&.dig(:candidates)&.one?
+        json.dig(:candidates).first[:formatted_address]
+      else
+        json.dig(:candidates).sort_by { |candidate|
+          next if candidate&.dig(:geometry, :location).blank?
+          distance(loc, candidate.dig(:geometry, :location).values)
+        }.first&.dig(:formatted_address)
+      end
     end
   end
 
@@ -127,17 +131,19 @@ class AddressBook
   def reverse_geocode(loc, get: :name)
     return "Herriman" unless Rails.env.production?
 
-    url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=#{loc.join(",")}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
-    res = RestClient.get(url)
-    json = JSON.parse(res.body, symbolize_names: true)
+    Rails.cache.fetch("reverse_geocode(#{loc.join(",")},#{get})") do
+      url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=#{loc.join(",")}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
+      res = RestClient.get(url)
+      json = JSON.parse(res.body, symbolize_names: true)
 
-    case get
-    when :name
-      json.dig(:results, 0, :address_components)&.find { |comp|
-        comp[:types] == ["locality", "political"]
-      }&.dig(:short_name)
-    when :address
-      json.dig(:results, 0, :formatted_address)
+      case get
+      when :name
+        json.dig(:results, 0, :address_components)&.find { |comp|
+          comp[:types] == ["locality", "political"]
+        }&.dig(:short_name)
+      when :address
+        json.dig(:results, 0, :formatted_address)
+      end
     end
   rescue StandardError => e
     ::SlackNotifier.err(e, "reverse_geocode failed: (#{loc}): [#{e.class}]:#{e.message}")
