@@ -36,7 +36,7 @@ class List < ApplicationRecord
     list_intro = msg =~ intro_regexp
 
     found_list = user.ordered_lists.find do |try_list|
-      found_msg = msg =~ /( #{intro_regexp})?( #{my_rx})?( ?#{Regexp.quote(try_list.name.gsub(/[^a-z0-9 ]/i, ""))})( #{list_rx})?/i
+      found_msg = msg =~ /( #{intro_regexp})?( #{my_rx})?( ?\b#{Regexp.quote(try_list.name.gsub(/[^a-z0-9 ]/i, ""))}\b)( #{list_rx})?/i
 
       found_msg.present? && found_msg >= 0
     end
