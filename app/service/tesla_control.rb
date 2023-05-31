@@ -39,7 +39,7 @@ class TeslaControl
     new.subscribe(code)
   end
 
-  def quick(double_str)
+  def self.quick(double_str)
     refresh, access = double_str.split(" ", 2)
     DataStorage[:tesla_access_token] = access
     DataStorage[:tesla_refresh_token] = refresh
