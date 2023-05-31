@@ -94,6 +94,7 @@ class CalendarEventsWorker
           name: "TTL: #{distance_of_time_in_words(traveltime)}",
           uid: event[:uid] + "-tt",
           type: :travel,
+          words: "Ping me Get ready to leave! It will take #{distance_of_time_in_words(traveltime)} to travel.",
           user_id: @user_id,
           scheduled_time: event[:start_time] - traveltime - 2.minutes,
         )

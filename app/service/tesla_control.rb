@@ -225,7 +225,6 @@ class TeslaControl
     return refresh && retry if err.response.code == 401
     raise err
   rescue RestClient::Forbidden => err
-    User.me.jarvis_cache.set(:car_data, {})
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#post(#{endpoint}):\n#{params}\nCode: #{res.code}\n```#{res.body}```")
@@ -247,7 +246,6 @@ class TeslaControl
     return refresh && retry if err.response.code == 401
     raise err
   rescue RestClient::Forbidden => err
-    User.me.jarvis_cache.set(:car_data, {})
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#wake_vehicle:\nCode: #{res.code}\n```#{res.body}```")
@@ -270,7 +268,6 @@ class TeslaControl
     return refresh && retry if err.response.code == 401
     raise err
   rescue RestClient::Forbidden => err
-    User.me.jarvis_cache.set(:car_data, {})
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#get(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```")
@@ -290,7 +287,6 @@ class TeslaControl
     @refresh_token = DataStorage[:tesla_refresh_token] = json[:refresh_token]
     @access_token = DataStorage[:tesla_access_token] = json[:access_token]
   rescue RestClient::Forbidden => err
-    User.me.jarvis_cache.set(:car_data, {})
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry
