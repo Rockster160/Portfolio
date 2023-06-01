@@ -14,7 +14,9 @@ class AmazonEmailParser
       save("[DELIVERED]")
     else
       date_str = arrival_date_str
-      date_str = Date.parse(date_str).iso8601 if date_str.present?
+      # Remove times from string
+      date = Date.parse(date_str.gsub(/,? ?\d+ ?(a|p)\.?m\.?\.?/i, ""))
+      date_str = date.iso8601 if date.present?
       save(date_str.presence || "[ERROR]")
     end
   rescue StandardError => e
