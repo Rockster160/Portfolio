@@ -114,8 +114,9 @@ class Jarvis
     return unless msg.present?
 
     case channel
+    when :ping then ::WebPushNotifications.send_to(User.me, { title: msg })
     when :sms then SmsWorker.perform_async(MY_NUMBER, msg)
-    when :ws then ActionCable.server.broadcast(:jarvis_channel, say: msg)
+    when :ws then ActionCable.server.broadcast(:jarvis_channel, { say: msg })
     else
       msg
     end
@@ -125,8 +126,9 @@ class Jarvis
     return unless data.present?
 
     case channel
+    when :ping then ::WebPushNotifications.send_to(User.me, { title: msg })
     when :sms then SmsWorker.perform_async(MY_NUMBER, data)
-    when :ws then ActionCable.server.broadcast(:jarvis_channel, data: data)
+    when :ws then ActionCable.server.broadcast(:jarvis_channel, { data: data })
     else
       data
     end
