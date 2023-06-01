@@ -73,6 +73,7 @@ class AddressBook
 
     from ||= current_loc
     Rails.cache.fetch("traveltime_seconds(#{to},#{from})") do
+      ::Jarvis.say("Traveltime #{to},#{from}")
       to, from = [to, from].map { |address| to_address(address) }
       # Should be stringified addresses
 
@@ -95,6 +96,7 @@ class AddressBook
   def nearest_address_from_name(name, loc=nil)
     loc ||= current_loc
     Rails.cache.fetch("nearest_address_from_name(#{name},#{loc.join(",")})") do
+      ::Jarvis.say("Nearest name #{name},#{loc.join(",")}")
       params = {
         input: name,
         inputtype: :textquery,
@@ -132,6 +134,7 @@ class AddressBook
     return "Herriman" unless Rails.env.production?
 
     Rails.cache.fetch("reverse_geocode(#{loc.join(",")},#{get})") do
+      ::Jarvis.say("Geocoding #{loc.join(",")},#{get}")
       url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=#{loc.join(",")}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
       res = RestClient.get(url)
       json = JSON.parse(res.body, symbolize_names: true)
