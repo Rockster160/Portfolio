@@ -8,6 +8,8 @@
   end
 
   def self.quick_command(cmd, params=nil)
+    return "Currently forbidden" if DataStorage[:tesla_forbidden]
+
     TeslaCommandWorker.perform_async(cmd.to_s, params.to_json)
     command(cmd, params, true)
   end
@@ -136,6 +138,9 @@
 
     @response
   rescue TeslaError => e
+    if e.message.match?(/forbidden/i)
+      ActionCable.server.broadcast(:tesla_channel, { forbidden: true })
+    end
     ActionCable.server.broadcast(:tesla_channel, { failed: true })
     "Tesla #{e.message}"
   rescue StandardError => e
