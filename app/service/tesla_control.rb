@@ -43,6 +43,8 @@ class TeslaControl
     refresh, access = double_str.split(" ", 2)
     DataStorage[:tesla_access_token] = access
     DataStorage[:tesla_refresh_token] = refresh
+    DataStorage[:tesla_forbidden] = false
+    # update car to reset `auth`
     true
   end
 
@@ -54,6 +56,7 @@ class TeslaControl
   end
 
   def subscribe(code)
+    DataStorage[:tesla_forbidden] = false
     auth(
       grant_type:    :authorization_code,
       client_id:     :ownerapi,
@@ -217,6 +220,7 @@ class TeslaControl
   end
 
   def post_vehicle(endpoint, params={})
+    raise "Currently Forbidden!" if DataStorage[:tesla_forbidden]
     raise "Should not POST in tests!" if Rails.env.test?
     raise "Cannot post without access token" if @access_token.blank?
 
@@ -232,12 +236,15 @@ class TeslaControl
     return refresh && retry if err.response.code == 401
     raise err
   rescue RestClient::Forbidden => err
+    DataStorage[:tesla_forbidden] = true
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#post(#{endpoint}):\n#{params}\nCode: #{res.code}\n```#{res.body}```")
   end
 
   def wake_vehicle
+    raise "Currently Forbidden!" if DataStorage[:tesla_forbidden]
+
     res = RestClient.post(
       "https://owner-api.teslamotors.com/api/1/vehicles/#{vehicle_id}/wake_up",
       nil,
@@ -248,17 +255,19 @@ class TeslaControl
     state == "online"
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry
+  rescue RestClient::Forbidden => err
+    DataStorage[:tesla_forbidden] = true
+    ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response.code == 408
     return refresh && retry if err.response.code == 401
     raise err
-  rescue RestClient::Forbidden => err
-    ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#wake_vehicle:\nCode: #{res.code}\n```#{res.body}```")
   end
 
   def get(endpoint)
+    raise "Currently Forbidden!" if DataStorage[:tesla_forbidden]
     raise "Should not GET in tests!" if Rails.env.test?
     raise "Cannot get without access token" if @access_token.blank?
 
@@ -270,12 +279,13 @@ class TeslaControl
     JSON.parse(res.body, symbolize_names: true).dig(:response)
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry
+  rescue RestClient::Forbidden => err
+    DataStorage[:tesla_forbidden] = true
+    ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response.code == 408
     return refresh && retry if err.response.code == 401
     raise err
-  rescue RestClient::Forbidden => err
-    ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#get(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```")
   end
@@ -294,6 +304,7 @@ class TeslaControl
     @refresh_token = DataStorage[:tesla_refresh_token] = json[:refresh_token]
     @access_token = DataStorage[:tesla_access_token] = json[:access_token]
   rescue RestClient::Forbidden => err
+    DataStorage[:tesla_forbidden] = true
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry

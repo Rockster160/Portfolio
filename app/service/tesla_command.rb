@@ -155,6 +155,7 @@
     return {} if data.blank?
 
     {
+      forbidden: DataStorage[:tesla_forbidden],
       charge: data.dig(:charge_state, :battery_level),
       miles: data.dig(:charge_state, :battery_range)&.floor,
       charging: {
@@ -188,6 +189,7 @@
 
   def stubbed_data
     {
+      forbidden: false,
       charge: 100,
       miles: 194,
       charging: {
