@@ -23,10 +23,22 @@ html, body {
 
 .hidden { display: none; }
 
-i.emoji {
+i.emoji, .emoji-stack {
   font-size: 64px;
   font-style: normal;
   white-space: nowrap;
+}
+
+.emoji-stack {
+  position: relative;
+  height: 64px;
+  width: 64px;
+  line-height: 64px;
+
+  .emoji {
+    position: absolute;
+    left: 0;
+  }
 }
 
 .widget-wrapper {
