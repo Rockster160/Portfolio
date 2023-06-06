@@ -140,6 +140,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       renderLines()
     },
     socket: Server.socket("TeslaChannel", function(msg) {
+      if (msg.forbidden) { this.data.forbidden = true }
       if (msg.status == "forbidden") {
         this.data.loading = false
         this.data.forbidden = true
@@ -155,7 +156,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
         renderLines()
         return
       } else {
-        this.data.forbidden = false
+        this.data.forbidden = msg.forbidden || false
         this.data.failed = false
       }
       if (msg.loading) {

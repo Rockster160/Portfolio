@@ -139,9 +139,10 @@
     @response
   rescue TeslaError => e
     if e.message.match?(/forbidden/i)
-      ActionCable.server.broadcast(:tesla_channel, { forbidden: true })
+      ActionCable.server.broadcast(:tesla_channel, format_data(Tesla.new.cached_vehicle_data))
+    else
+      ActionCable.server.broadcast(:tesla_channel, { failed: true })
     end
-    ActionCable.server.broadcast(:tesla_channel, { failed: true })
     "Tesla #{e.message}"
   rescue StandardError => e
     ActionCable.server.broadcast(:tesla_channel, { failed: true })
