@@ -46,7 +46,8 @@ class ActionEventsController < ApplicationController
       @chart_data = {
         labels: @month_data.map { |date, evts| date.strftime("%a %-m/%-d/%y") },
         datasets: [{
-          data: @month_data.map { |date, evts| evts&.sum { |evt| evt.notes.to_i } || 0 }
+          data: @month_data.map { |date, evts| evts&.sum { |evt| evt.notes.to_i } || 0 },
+          backgroundColor: "#0160FF",
         }]
       }
 

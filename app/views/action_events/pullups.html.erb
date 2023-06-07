@@ -1,5 +1,5 @@
 <% content_for(:head) do %>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
 <% end %>
 
 <%= form_tag nil, method: :get, enforce_utf8: false, authenticity_token: false do |f| %>
@@ -20,4 +20,4 @@
 <div class="text-center">
   <%= @stats[:current] %><small>/<%= @stats[:goal] %></small> | <%= @stats[:remaining] %>r | <%= @stats[:daily_need].round(1) %>d
 </div>
-<div class="pullups-charts" data-pullups-data="<%= @chart_data.to_json %>"></div>
+<div class="pullups-charts no-markdown" data-pullups-data="<%= @chart_data.to_json %>"></div>
