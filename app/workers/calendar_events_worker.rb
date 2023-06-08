@@ -88,7 +88,7 @@ class CalendarEventsWorker
 
       # If travelable - add TT and nav there and back
       if travelable_event?(event)
-        traveltime = address_book.traveltime_seconds(event[:location], current_contact&.loc)
+        traveltime = address_book.traveltime_seconds(event[:location], address_book.current_contact&.loc)
         # Show time to leave
         new_events.push(
           name: "TTL: #{distance_of_time_in_words(traveltime)}",
