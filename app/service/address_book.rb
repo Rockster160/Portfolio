@@ -17,6 +17,12 @@ class AddressBook
     } || home&.loc
   end
 
+  def current_contact
+    @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
+      contact_by_loc([state[:latitude], state[:longitude]])
+    } || home
+  end
+
   def current_address
     @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
       reverse_geocode([state[:latitude], state[:longitude]], get: :address)
@@ -26,6 +32,10 @@ class AddressBook
   def distance(c1, c2)
     # √[(x₂ - x₁)² + (y₂ - y₁)²]
     Math.sqrt((c2[0] - c1[0])**2 + (c2[1] - c1[1])**2)
+  end
+
+  def contact_by_loc(loc)
+    near(loc)
   end
 
   def contact_by_name(name)
@@ -120,6 +130,7 @@ class AddressBook
     end
   end
 
+  # Find contact at [lat,lng]
   def near(coord, near_threshold=0.001)
     return [] unless coord.compact.length == 2
 
@@ -130,6 +141,11 @@ class AddressBook
     }
   end
 
+  # Get [lat,lng] from address
+  # def geocode(address)
+  # end
+
+  # Get address from [lat,lng]
   def reverse_geocode(loc, get: :name)
     return "Herriman" unless Rails.env.production?
 
