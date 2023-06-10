@@ -12,10 +12,10 @@ function checkPushAPI() {
   return true
 }
 
-function registerServiceWorker() {
+async function registerServiceWorker() {
   var sub_auth = document.querySelector("[data-sub-auth]").getAttribute("data-sub-auth")
   if (sub_auth.length == 0) { return false }
-  var swRegistration = navigator.serviceWorker.register("/push_worker.js" + "?auth=" + sub_auth)
+  var swRegistration = await navigator.serviceWorker.register("/push_worker.js" + "?auth=" + sub_auth)
   return swRegistration
 }
 
@@ -41,7 +41,7 @@ export async function registerNotifications() {
     var permissionGranted = await requestNotificationPermission()
     if (permissionGranted) {
       console.log("[Push API] Permission Granted!")
-      var registration = registerServiceWorker()
+      var registration = await registerServiceWorker()
       if (registration) { console.log("[Push API] Registered!") }
       console.log("[Push API] registration", registration)
       if (!registration) { return console.log("[Push API] Failed to Register") }

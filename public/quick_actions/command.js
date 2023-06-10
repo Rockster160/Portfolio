@@ -48,6 +48,7 @@ modal.querySelector("input").addEventListener("keypress", function(evt) {
       addMessage("out", "Request notifications")
       input.value = ""
       registerNotifications().then(function() {
+        console.log("Registering notifications");
         addMessage("in", "Registering for notifications...")
       })
       return
