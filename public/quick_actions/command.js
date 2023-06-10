@@ -47,8 +47,9 @@ modal.querySelector("input").addEventListener("keypress", function(evt) {
       // Register Notifications
       addMessage("out", "Request notifications")
       input.value = ""
-      registerNotifications()
-      addMessage("in", "Registering for notifications...")
+      registerNotifications().then(function() {
+        addMessage("in", "Registering for notifications...")
+      })
       return
     }
     command.socket.send({ action: "command", words: input.value })

@@ -19,8 +19,8 @@ function registerServiceWorker() {
   return swRegistration
 }
 
-function requestNotificationPermission() {
-  var permission = window.Notification.requestPermission()
+async function requestNotificationPermission() {
+  let permission = await window.Notification.requestPermission()
   // value of permission can be 'granted', 'default', 'denied'
   if (permission == "granted") {
     // User accepted notifications
@@ -34,17 +34,18 @@ function requestNotificationPermission() {
   }
 }
 
-export function registerNotifications() {
+export async function registerNotifications() {
   if (checkPushAPI()) {
-    // console.log("[Push API] Support!")
+    console.log("[Push API] Support!")
 
-    var registration = registerServiceWorker()
-    // if (registration) { console.log("[Push API] Registered!") }
-    // console.log("[Push API] registration", registration)
-    if (!registration) { return console.log("[Push API] Failed to Register") }
-
-    var permissionGranted = requestNotificationPermission()
-    // if (permissionGranted) { console.log("[Push API] Permission Granted!") }
+    var permissionGranted = await requestNotificationPermission()
+    if (permissionGranted) {
+      console.log("[Push API] Permission Granted!")
+      var registration = registerServiceWorker()
+      if (registration) { console.log("[Push API] Registered!") }
+      console.log("[Push API] registration", registration)
+      if (!registration) { return console.log("[Push API] Failed to Register") }
+    }
   } else {
     console.log("[Push API] Unsupported Browser")
   }

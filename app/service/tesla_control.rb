@@ -36,6 +36,8 @@ class TeslaControl
     # Login and copy the `code` param from the redirect
     # then call TeslaControl.subscribe(code)
     # If this works, should allow just pasting the entire url into the Tesla cell and parse/update
+    # https://github.com/timdorr/tesla-api/issues/431
+    # Update this comment if new auth works
   end
 
   def self.subscribe(code)
