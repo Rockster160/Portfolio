@@ -149,7 +149,7 @@ class AddressBook
   def reverse_geocode(loc, get: :name)
     return "Herriman" unless Rails.env.production?
 
-    Rails.cache.fetch("reverse_geocode(#{loc.join(",")},#{get})") do
+    Rails.cache.fetch("reverse_geocode(#{loc.map { |l| l.round(3) }.join(",")},#{get})") do
       ::Jarvis.say("Geocoding #{loc.join(",")},#{get}")
       url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=#{loc.join(",")}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
       res = RestClient.get(url)

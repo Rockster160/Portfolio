@@ -7,16 +7,18 @@ class TeslaControl
   BASE_HEADERS = {
     "User-Agent": "PortfolioBot/1.0",
     "Content-Type": "application/json",
+    "Accept": "*/*",
+    "accept-encoding": "deflate",
   }
   STABLE_STATE = DataStorage[:tesla_stable_state] ||= SecureRandom.hex
   CODE_VERIFIER = DataStorage[:tesla_code_verifier] ||= rand(36**86).to_s(36)
   CODE_CHALLENGE = Base64.urlsafe_encode64(Digest::SHA256.digest(CODE_VERIFIER), padding: false)
 
   def self.authorize
-    # Might need to increase verifier length? (Looks like already using 86)
-    # https://github.com/timdorr/tesla-api/discussions/689
-    # Current access token generation is broken. Can use this site to get it:
-    # https://tesla-info.com/tesla-token.php
+    # If this is still broken, try cleaning the challenge:
+    # https://github.com/timdorr/tesla-api/discussions/689#discussioncomment-5013335
+    # https://github.com/timdorr/tesla-api/discussions/689#discussioncomment-5074272
+    # https://github.com/timdorr/tesla-api/discussions/689#discussioncomment-5062878
 
     # Open in browser
     params = {
@@ -33,6 +35,7 @@ class TeslaControl
     # HTTParty.get(TeslaControl.authorize, headers: { "User-Agent": "PortfolioBot/1.0" })
     # Login and copy the `code` param from the redirect
     # then call TeslaControl.subscribe(code)
+    # If this works, should allow just pasting the entire url into the Tesla cell and parse/update
   end
 
   def self.subscribe(code)
@@ -40,12 +43,13 @@ class TeslaControl
   end
 
   def self.quick(double_str)
+    # https://tesla-info.com/tesla-token.php
     refresh, access = double_str.split(" ", 2)
     DataStorage[:tesla_access_token] = access
     DataStorage[:tesla_refresh_token] = refresh
     DataStorage[:tesla_forbidden] = false
-    # update car to reset `auth`
-    true
+
+    TeslaCommand.quick_command(:reload)
   end
 
   def initialize(car=nil)
@@ -300,6 +304,8 @@ class TeslaControl
     )
 
     json = JSON.parse(res.body, symbolize_names: true)
+
+    DataStorage[:tesla_forbidden] = false
 
     @refresh_token = DataStorage[:tesla_refresh_token] = json[:refresh_token]
     @access_token = DataStorage[:tesla_access_token] = json[:access_token]
