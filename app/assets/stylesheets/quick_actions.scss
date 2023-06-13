@@ -74,6 +74,16 @@ i.emoji, .emoji-stack {
         line-height: 0;
       }
 
+      &.upcoming {
+        .lines p {
+          line-height: 15px;
+          overflow-x: hidden;
+          white-space: nowrap;
+          text-overflow: ellipsis;
+          width: 125px;
+        }
+      }
+
       &.garage {
         font-size: 100px;
 
