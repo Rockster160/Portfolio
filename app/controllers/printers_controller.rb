@@ -17,6 +17,8 @@ class PrintersController < ApplicationController
     respond_to do |format|
       format.json { render json: res }
     end
+  rescue OpenSSL::SSL::SSLError
+    head :ok
   end
 
   private
