@@ -5,6 +5,7 @@ class FitnessBroadcast
     broadcast_events = [
       :Pullups,
       :Workout,
+      :Z,
       :Vitamins,
       :Fluox,
       :Escitalopram,
@@ -13,6 +14,7 @@ class FitnessBroadcast
       :Water,
       :Teeth,
       :Shower,
+      :Treat,
       :Soda,
       :Wordle,
     ]

@@ -1,7 +1,7 @@
 <%= content_for(:head) do %>
   <script type="text/javascript">
     resizeIframe = function(evt) {
-      var iframe = $(".display-email-container").get(0)
+      let iframe = document.querySelector(".display-email-container")
 
       iframe.style.height = iframe.contentWindow.document.body.scrollHeight + 50 + "px"
     }
