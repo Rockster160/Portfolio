@@ -163,11 +163,16 @@ class Email < ApplicationRecord
 
     success = save
 
+    blacklist = [
+      "LV Bag",
+      "Louis Vuitton"
+    ]
+
     if amazon_update?([mail.from].flatten.compact)
       skip_notify = true
       parse_amazon
       update(deleted_at: Time.current) # Auto archive Amazon emails
-    elsif html_body.include?("LV Bag") # Should be a blacklist of some sort
+    elsif blacklist.any? { |bad| html_body.include?(bad) }
       skip_notify = true
       update(deleted_at: Time.current)
     end
