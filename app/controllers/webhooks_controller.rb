@@ -2,14 +2,14 @@ class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :post_params, except: [:local_data, :report]
   before_action :skip_without_user, only: [:jil, :command]
-  before_action :skip_without_admin, only: [:battery, :local_data, :report, :speak]
+  before_action :skip_without_admin, only: [:battery, :local_data, :report, :speak, :tesla_local]
 
   def jenkins
-    head 200
+    head :ok
   end
 
   def post
-    head 200
+    head :ok
   end
 
   def jil
@@ -21,7 +21,7 @@ class WebhooksController < ApplicationController
       }
     )
 
-    head 200
+    head :ok
   end
 
   def tesla_local
@@ -30,12 +30,14 @@ class WebhooksController < ApplicationController
     DataStorage[:tesla_forbidden] = false
 
     TeslaCommand.quick_command(:reload)
+
+    head :ok
   end
 
   def google_pub_sub
     SlackNotifier.notify(params.to_unsafe_h)
 
-    head 200
+    head :ok
   end
 
   def email

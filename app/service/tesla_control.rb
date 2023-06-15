@@ -63,11 +63,9 @@ class TeslaControl
           refresh_token: DataStorage[:tesla_refresh_token],
         }.to_json,
         BASE_HEADERS.merge(
-          Authorization: "Basic #{
-            ::ActionController::HttpAuthentication::Basic.encode_credentials(
-              :Rockster160, ENV["LOCAL_ME_PASS"]
-            )
-          }"
+          Authorization: ::ActionController::HttpAuthentication::Basic.encode_credentials(
+            :Rockster160, ENV["LOCAL_ME_PASS"]
+          )
         )
       )
     end
