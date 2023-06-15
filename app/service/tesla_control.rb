@@ -79,7 +79,6 @@ class TeslaControl
   end
 
   def subscribe(code)
-    DataStorage[:tesla_forbidden] = false
     success = auth(
       grant_type:    :authorization_code,
       client_id:     :ownerapi,
@@ -314,6 +313,7 @@ class TeslaControl
   end
 
   def auth(params)
+    return if Rails.env.production? # Seems to be ip banned for this endpoint?
     raise "Should not auth in tests!" if Rails.env.test?
 
     res = RestClient.post(
