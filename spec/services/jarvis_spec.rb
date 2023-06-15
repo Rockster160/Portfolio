@@ -83,6 +83,7 @@ RSpec.describe Jarvis do
 
     before do
       allow(DataStorage).to receive(:[]).with(any_args).and_return("unimportant")
+      allow(DataStorage).to receive(:[]).with(:tesla_forbidden).and_return(false)
       allow(TeslaControl).to receive(:new).and_return(tesla_control)
     end
 
@@ -149,6 +150,14 @@ RSpec.describe Jarvis do
           "Open the car trunk!",
         ]
       },
+      x_pop_boot: { # x_ allows multiple keys at the same time
+        res: "Closing the boot",
+        opts: [
+          "close boot",
+          "close the boot",
+          "close the trunk",
+        ]
+      },
       pop_frunk: {
         res: "Opening frunk",
         opts: [
@@ -197,6 +206,7 @@ RSpec.describe Jarvis do
     }
 
     actions.each do |action, data|
+      action = action.to_s.gsub(/x+_/, "").to_sym
       data[:opts].each do |opt|
         it "can #{opt}" do
           allow(tesla_control).to receive(:loc)

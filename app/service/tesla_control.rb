@@ -242,8 +242,8 @@ class TeslaControl
   end
 
   def post_vehicle(endpoint, params={})
-    raise TeslaError, "Currently Forbidden!" if DataStorage[:tesla_forbidden]
     raise "Should not POST in tests!" if Rails.env.test?
+    raise TeslaError, "Currently Forbidden!" if DataStorage[:tesla_forbidden]
     raise "Cannot post without access token" if @access_token.blank?
 
     res = RestClient.post(
@@ -289,8 +289,8 @@ class TeslaControl
   end
 
   def get(endpoint)
-    raise TeslaError, "Currently Forbidden!" if DataStorage[:tesla_forbidden]
     raise "Should not GET in tests!" if Rails.env.test?
+    raise TeslaError, "Currently Forbidden!" if DataStorage[:tesla_forbidden]
     raise "Cannot get without access token" if @access_token.blank?
 
     res = RestClient.get(

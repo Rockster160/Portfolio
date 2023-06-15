@@ -3,22 +3,22 @@
    TEMP_MIN = 59
    TEMP_MAX = 82
 
-  def self.command(cmd, params=nil, quick=false)
-    new.command(cmd, params, quick)
+  def self.command(cmd, opt=nil, quick=false)
+    new.command(cmd, opt, quick)
   end
 
-  def self.quick_command(cmd, params=nil)
+  def self.quick_command(cmd, opt=nil)
     return "Currently forbidden" if DataStorage[:tesla_forbidden]
 
-    TeslaCommandWorker.perform_async(cmd.to_s, params.to_json)
-    command(cmd, params, true)
+    TeslaCommandWorker.perform_async(cmd.to_s, opt&.to_s)
+    command(cmd, opt, true)
   end
 
   def address_book
     @address_book ||= User.admin.first.address_book
   end
 
-  def command(original_cmd, original_params=nil, quick=false)
+  def command(original_cmd, original_opt=nil, quick=false)
     if Rails.env.development?
       ActionCable.server.broadcast(:tesla_channel, stubbed_data)
       return "Stubbed data"
@@ -28,15 +28,15 @@
     car = Tesla.new unless quick
 
     cmd = original_cmd.to_s.downcase.squish
-    params = original_params.to_s.downcase.squish
+    opt = original_opt.to_s.downcase.squish
     direction = :toggle
-    if "#{cmd} #{params}".match?(/\b(unlock|open|lock|close|pop|vent)\b/)
-      combine = "#{cmd} #{params}"
+    if "#{cmd} #{opt}".match?(/\b(unlock|open|lock|close|pop|vent)\b/)
+      combine = "#{cmd} #{opt}"
       direction = :open if combine.match?(/\b(unlock|open|pop)\b/)
       direction = :close if combine.match?(/\b(lock|close|shut)\b/)
-      cmd, params = combine.gsub(/\b(open|close|pop)\b/, "").squish.split(" ", 2)
+      cmd, opt = combine.gsub(/\b(open|close|pop)\b/, "").squish.split(" ", 2)
     elsif cmd.to_i.to_s == cmd
-      params = cmd.to_i
+      opt = cmd.to_i
       cmd = :temp
     end
 
@@ -54,7 +54,8 @@
       @response = "Starting car"
       car.start_car unless quick
     when :boot, :trunk
-      @response = "Popping the boot"
+      dir = "Closing" if direction == :close
+      @response = "#{dir || "Popping"} the boot"
       car.pop_boot(direction) unless quick
     when :lock
       @response = "Locking car doors"
@@ -89,16 +90,16 @@
       @response = "Turning on passenger seat heater"
       car.heat_passenger unless quick
     when :navigate
-      address = params[::Jarvis::Regex.address]&.squish.presence if params.match?(::Jarvis::Regex.address)
-      address ||= address_book.contact_by_name(original_params)&.address
-      address ||= address_book.nearest_address_from_name(original_params)
+      address = opt[::Jarvis::Regex.address]&.squish.presence if opt.match?(::Jarvis::Regex.address)
+      address ||= address_book.contact_by_name(original_opt)&.address
+      address ||= address_book.nearest_address_from_name(original_opt)
 
       if address.present?
         duration = address_book.traveltime_seconds(address)
         if duration
-          @response = "It will take #{distance_of_time_in_words(duration)} to get to #{original_params.squish}"
+          @response = "It will take #{distance_of_time_in_words(duration)} to get to #{original_opt.squish}"
         else
-          @response = "Navigating to #{original_params.squish}"
+          @response = "Navigating to #{original_opt.squish}"
         end
 
         unless quick
@@ -106,12 +107,12 @@
           car.navigate(address)
         end
       else
-        @response = "I can't find #{original_params.squish}"
+        @response = "I can't find #{original_opt.squish}"
       end
     when :temp
-      temp = params.to_s[/\d+/]
-      temp = TEMP_MAX if params.to_s.match?(/\b(hot|heat|high)\b/)
-      temp = TEMP_MIN if params.to_s.match?(/\b(cold|cool|low)\b/)
+      temp = opt.to_s[/\d+/]
+      temp = TEMP_MAX if opt.to_s.match?(/\b(hot|heat|high)\b/)
+      temp = TEMP_MIN if opt.to_s.match?(/\b(cold|cool|low)\b/)
       @response = "Car temp set to #{temp.to_i}"
       car.set_temp(temp.to_i) unless quick
     when :cool
@@ -133,7 +134,7 @@
         Jarvis.say("http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}", :sms)
       end
     else
-      @response = "Not sure how to tell car: #{[cmd, params].map(&:presence).compact.join('|')}"
+      @response = "Not sure how to tell car: #{[cmd, opt].map(&:presence).compact.join('|')}"
     end
 
     @response
