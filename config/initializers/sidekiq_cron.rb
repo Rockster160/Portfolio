@@ -4,6 +4,7 @@ return if Rails.env.test?
 every_minute = "* * * * *"
 every_5_minutes = "*/5 * * * *"
 every_hour = "0 * * * *"
+every_6_hours = "0 */6 * * *"
 daily_9pm = "0 3 * * *"
 thursdays_at_noon = "0 18 * * 4"
 mondays_at_noon = "0 18 * * 1"
@@ -44,6 +45,14 @@ if Rails.env.production?
       name: "DropLogTrackers",
       class: "DropLogTrackersWorker",
       cron: monthly_1st_at_midnight,
+    },
+  ]
+elsif Rails.env.development?
+  cron_jobs += [
+    {
+      name: "ReloadTeslaLocal",
+      class: "ReloadTeslaLocalWorker",
+      cron: every_6_hours,
     },
   ]
 end

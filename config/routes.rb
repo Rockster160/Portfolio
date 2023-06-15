@@ -37,6 +37,7 @@ Rails.application.routes.draw do
 
   resource :money_buckets, path: "/bucket"
 
+  post "webhooks/tesla_local" => "webhooks#tesla_local"
   post "webhooks/jil" => "webhooks#jil"
   post "webhooks/battery" => "webhooks#battery"
   post "webhooks/report" => "webhooks#report"

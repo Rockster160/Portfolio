@@ -54,6 +54,25 @@ class TeslaControl
     TeslaCommand.quick_command(:reload)
   end
 
+  def self.local
+    if new.refresh
+      RestClient.post(
+        "https://ardesian.com/webhooks/tesla_local",
+        {
+          access_token: DataStorage[:tesla_access_token],
+          refresh_token: DataStorage[:tesla_refresh_token],
+        }.to_json,
+        BASE_HEADERS.merge(
+          Authorization: "Basic #{
+            ::ActionController::HttpAuthentication::Basic.encode_credentials(
+              :Rockster160, ENV["LOCAL_ME_PASS"]
+            )
+          }"
+        )
+      )
+    end
+  end
+
   def initialize(car=nil)
     @access_token = DataStorage[:tesla_access_token]
     @refresh_token = DataStorage[:tesla_refresh_token]
@@ -63,7 +82,7 @@ class TeslaControl
 
   def subscribe(code)
     DataStorage[:tesla_forbidden] = false
-    auth(
+    success = auth(
       grant_type:    :authorization_code,
       client_id:     :ownerapi,
       code:          code,
@@ -77,14 +96,14 @@ class TeslaControl
   def refresh
     raise "Cannot refresh without refresh token" if @refresh_token.blank?
 
-    auth(
+    success = auth(
       grant_type:    :refresh_token,
       client_id:     :ownerapi,
       refresh_token: @refresh_token,
       scope:         "openid email offline_access"
     )
 
-    true
+    success
   end
 
   def pop_boot(direction=:toggle)
@@ -311,12 +330,15 @@ class TeslaControl
 
     @refresh_token = DataStorage[:tesla_refresh_token] = json[:refresh_token]
     @access_token = DataStorage[:tesla_access_token] = json[:access_token]
+    true
   rescue RestClient::Forbidden => err
     DataStorage[:tesla_forbidden] = true
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
+    false
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to auth Tesla:\nCode: #{res.code}\n```#{res.body}```")
+    false
   end
 end

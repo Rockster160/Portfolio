@@ -24,6 +24,14 @@ class WebhooksController < ApplicationController
     head 200
   end
 
+  def tesla_local
+    DataStorage[:tesla_access_token] = params[:access_token]
+    DataStorage[:tesla_refresh_token] = params[:refresh_token]
+    DataStorage[:tesla_forbidden] = false
+
+    TeslaCommand.quick_command(:reload)
+  end
+
   def google_pub_sub
     SlackNotifier.notify(params.to_unsafe_h)
 
