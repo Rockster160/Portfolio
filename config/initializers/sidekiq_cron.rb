@@ -49,11 +49,12 @@ if Rails.env.production?
   ]
 elsif Rails.env.development?
   cron_jobs += [
-    {
-      name: "ReloadTeslaLocal",
-      class: "ReloadTeslaLocalWorker",
-      cron: every_6_hours,
-    },
+    # JAPAN
+    # {
+    #   name: "ReloadTeslaLocal",
+    #   class: "ReloadTeslaLocalWorker",
+    #   cron: every_6_hours,
+    # },
   ]
 end
 

@@ -6,6 +6,8 @@ class CalendarEventsWorker
   PRE_OFFSET = 10.minutes
 
   def perform
+    return if Rails.env.development?
+
     @user_id = 1
     coming_events = ::LocalDataCalendarParser.call.values.flatten # JarvisCache for @user_id
     sorted_events = coming_events.sort_by { |evt| evt[:start_time] || ::DateTime.new }
@@ -42,6 +44,7 @@ class CalendarEventsWorker
   end
 
   def travelable_event?(event)
+    return false # JAPAN - No travel / auto starts
     return false unless event[:location].present?
 
     !online_meeting?(event[:location])

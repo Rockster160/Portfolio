@@ -43,7 +43,7 @@ class User < ApplicationRecord
   validates_uniqueness_of :phone, allow_nil: true
   validate :proper_fields_present?
 
-  scope :by_username, ->(username) { where("lower(username) = ?", username.to_s.downcase) }
+  scope :by_username, ->(username) { where("LOWER(username) = ?", username.to_s.downcase) }
 
   enum role: {
     guest:    5,
@@ -68,6 +68,8 @@ class User < ApplicationRecord
     return unless user.present? && user.authenticate(password)
 
     user
+  rescue PG::CharacterNotInRepertoire
+    nil # Bad username passed
   end
 
   def self.find_or_create_by_filtered_params(raw_params)
