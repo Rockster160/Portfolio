@@ -56,6 +56,7 @@ gem "fugit", "1.5.3"
 gem "rqrcode", "2.1.2"
 gem "sidekiq-unique-jobs"
 gem "ruby-openai"
+gem "webdrivers"
 # Dependency
 gem "net-http", "0.3.2"
 gem "uri", "0.12.0"
