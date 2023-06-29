@@ -184,6 +184,11 @@ i.emoji, .emoji-stack {
     &:active, &:hover {
       box-shadow: 0 0 0 0 $grey-blue, inset 2px 2px 5px 0 $grey-blue;
     }
+
+    &.empty {
+      border: none;
+      box-shadow: none;
+    }
   }
 }
 

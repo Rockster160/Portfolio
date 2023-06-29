@@ -55,11 +55,20 @@
   </div>
 
   <div class="widget-holder">
+    <div class="widget care">
+      <i class="emoji">💆‍♂️</i>
+    </div>
+  </div>
+
+  <div class="widget-holder">
     <div class="widget command">
       Command
 
       <span class="disconnected"></span>
     </div>
+  </div>
+
+  <div class="widget-holder empty">
   </div>
 
   <div class="widget-holder">
@@ -87,6 +96,47 @@
   </div>
 </div>
 
+<div class="modal mini-widgets" id="care-modal" tabindex="-1">
+  <div class="modal-content">
+    <div class="close">
+      <i class="ti ti-fa-close"></i>
+    </div>
+    <div class="mini-widgets widget-wrapper">
+      <% [
+        # display, id, cmd- whether to ask for input
+        ["🦷", :Teeth],
+        ["🚿", :Shower],
+        ["👕", :Laundry, "do laundry"],
+
+        ["🧴", :WashHair, "log Wash Hair"],
+        ["💅", :CutNails, "log Cut Nails"],
+        ["<i class=\"emoji\">🖋</i>".html_safe, :Custom, "log {{Log what?}}"],
+      ].each do |display, id, cmd| %>
+        <% id ||= display.to_s %>
+        <% cmd ||= "log #{id}" %>
+        <% input ||= false %>
+
+        <% if display.blank? %>
+          <div class="widget-holder hidden"></div>
+          <% next %>
+        <% end %>
+
+        <div class="widget-holder">
+          <div class="widget mini-widget <%= id.downcase %>" data-id="<%= id.downcase %>" data-cmd="<%= cmd %>">
+            <% if display.match?(/^ti-/) %>
+              <i class="emoji ti <%= display %>"></i>
+            <% elsif display.match?(/\p{Emoji_Presentation}+/u) && !display.match?("<i") %>
+              <i class="emoji"><%= display %></i>
+            <% else %>
+              <%= display %>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</div>
+
 <div class="modal mini-widgets" id="events-modal" tabindex="-1">
   <div class="modal-content">
     <div class="close">
@@ -107,7 +157,7 @@
         ["5<i class=\"emoji\">💪</i>".html_safe, :five_pulls, "log Pullups 5"],
         ["#<i class=\"emoji\">💪</i>".html_safe, :enter_pulls, "log Pullups {{How many pullups?}}"],
 
-        [],
+        ["<i class=\"emoji\">🖋</i>".html_safe, :Custom, "log {{Log what?}}"],
         ["🍕", :Food, "log Food {{What did you eat?}}"],
         ["🧃", :Drink, "log Drink {{What did you drink?}}"],
 

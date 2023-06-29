@@ -11,6 +11,10 @@ export let logs = new Widget("drugs", function() {
   showModal("drugs-modal")
 })
 
+export let care = new Widget("care", function() {
+  showModal("care-modal")
+})
+
 document.querySelectorAll(".mini-widget").forEach((widget) => {
   let id = widget.getAttribute("data-id")
 
