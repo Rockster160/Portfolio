@@ -1,6 +1,24 @@
 $faded-label: rgba($base-blue, 0.7);
 $faded-compl: rgba($base-complementary, 0.6);
 
+.ctr-jarvis_tasks.act-index {
+
+  .list-item-container {
+    position: relative;
+
+    .list-item-config {
+      width: 100%;
+
+      .status.disabled {
+        position: absolute;
+        right: 10px;
+        font-size: 8px;
+        color: rgba($danger, 0.8);
+      }
+    }
+  }
+}
+
 .ctr-jarvis_tasks.act-new, .ctr-jarvis_tasks.act-edit {
   .drawer-tree {
     position: fixed;

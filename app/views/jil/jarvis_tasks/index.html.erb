@@ -21,10 +21,12 @@
       <%= text_field_tag "task[name]", "", class: "filterable", placeholder: "Search #{name.downcase}s" %>
     </div>
     <div class="important-list-items"></div>
+
     <% @tasks.each do |task| %>
       <div class="list-item-container" data-list-id="<%= task.id %>">
         <div class="list-item-config">
           <%= content_tag :div, task.humanized_schedule, class: "category" %>
+          <%= content_tag :div, :Disabled, class: "status disabled" if !task.enabled? %>
         </div>
         <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>
         <a href="<%= edit_jil_jarvis_task_path(task) %>" class="list-item">
