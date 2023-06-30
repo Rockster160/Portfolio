@@ -29,9 +29,15 @@ command.socket = new AuthWS("JarvisChannel", {
   },
   onopen: function() {
     command.connected()
+    document.querySelectorAll(".status").forEach((item, i) => {
+      item.classList.add("connected")
+    })
   },
   onclose: function() {
     command.disconnected()
+    document.querySelectorAll(".status").forEach((item, i) => {
+      item.classList.remove("connected")
+    })
   }
 })
 
