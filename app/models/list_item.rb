@@ -39,13 +39,51 @@ class ListItem < ApplicationRecord
   end
 
   def self.by_name_then_update(params)
-    old_item = with_deleted.find_by(id: params[:id]) || with_deleted.by_formatted_name(params[:name])
+    old_item = by_data(params)
 
     if old_item.present?
       old_item.update(params.merge(deleted_at: nil, sort_order: nil))
       old_item
     else
       create(params)
+    end
+  end
+
+  def self.by_data(params)
+    if params.is_a?(Hash) || params.is_a?(ActionController::Parameters)
+      with_deleted.find_by(id: params[:id]) || with_deleted.by_formatted_name(params[:name])
+    else
+      with_deleted.by_formatted_name(name: params.to_s)
+    end
+  end
+
+  def self.add(item_name)
+    old_item = by_data(item_name)
+
+    if old_item.present?
+      old_item.update({ name: item_name }.merge(deleted_at: nil, sort_order: nil))
+      old_item
+    else
+      create(name: item_name)
+    end
+  end
+
+  def self.remove(item_name)
+    old_item = by_data(item_name)
+
+    old_item&.soft_destroy
+  end
+
+  def self.toggle(item_name)
+    old_item = by_data(item_name)
+
+    if old_item.present? && !old_item.deleted?
+      old_item&.soft_destroy
+    elsif old_item.present?
+      old_item.update({ name: item_name }.merge(deleted_at: nil, sort_order: nil))
+      old_item
+    else
+      create(name: item_name)
     end
   end
 

@@ -26,21 +26,23 @@ class List < ApplicationRecord
   scope :unimportant, -> { where.not(important: true) }
   scope :by_param, ->(name) { where(parameterized_name: name.parameterize) }
 
-  def self.find_and_modify(user, msg)
-    return "User not found" if user.blank?
-
-    list = user.default_list
+  def self.by_name_for_user(name, user)
     intro_regexp = /\b(to|for|from|on|in|into)\b/
     my_rx = /\b(the|my)\b/
     list_rx = /\b(list)\b/
-    list_intro = msg =~ intro_regexp
+    list_intro = name =~ intro_regexp
 
     found_list = user.ordered_lists.find do |try_list|
-      found_msg = msg =~ /( #{intro_regexp})?( #{my_rx})?( ?\b#{Regexp.quote(try_list.name.gsub(/[^a-z0-9 ]/i, ""))}\b)( #{list_rx})?/i
+      found_msg = name =~ /( #{intro_regexp})?( #{my_rx})?( ?\b#{Regexp.quote(try_list.name.gsub(/[^a-z0-9 ]/i, ""))}\b)( #{list_rx})?/i
 
       found_msg.present? && found_msg >= 0
     end
-    list = found_list if found_list.present?
+  end
+
+  def self.find_and_modify(user, msg)
+    return "User not found" if user.blank?
+
+    list = by_name_for_user(user, msg) || user.default_list
 
     return "List not found" unless list.present?
     msg = msg.sub(/( #{intro_regexp})?( #{my_rx})? ?#{Regexp.quote(list.name.gsub(/[^a-z0-9 ]/i, ""))}( #{list_rx})?/i, "")
@@ -96,6 +98,18 @@ class List < ApplicationRecord
     end
   end
 
+  def add(item_name)
+    list_items.add(item_name)
+  end
+
+  def remove(item_name)
+    list_items.remove(item_name)
+  end
+
+  def toggle(item_name)
+    list_items.toggle(item_name)
+  end
+
   def sort_items!(sort=nil, order=:asc)
     return unless sort.present?
     order = order.to_s.downcase.to_sym
@@ -118,11 +132,11 @@ class List < ApplicationRecord
   end
 
   def add=(str)
-    list_items.by_name_then_update(name: str)
+    add(str)
   end
 
   def remove=(str)
-    list_items.find_by(name: str)&.soft_destroy
+    remove(str)
   end
 
   def message=(str)

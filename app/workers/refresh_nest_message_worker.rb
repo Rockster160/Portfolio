@@ -5,6 +5,6 @@ class RefreshNestMessageWorker
   def perform
     SmsWorker.perform_async(Jarvis::MY_NUMBER, "Time to refresh Nest: #{GoogleNestControl.code_url}")
     # Add to TODO
-    ::User.me.lists.ilike(name: "Todo").take.list_items.by_name_then_update(name: "Refresh Nest")
+    ::User.me.list_by_name(:TODO).add("Refresh Nest")
   end
 end

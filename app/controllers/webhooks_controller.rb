@@ -92,7 +92,13 @@ class WebhooksController < ApplicationController
   end
 
   def uptime
-    ActionCable.server.broadcast :uptime_channel, {}
+    if params[:alertTypeFriendlyName] == "Down"
+      User.me.list_by_name(:TODO).add("#{params[:monitorFriendlyName]} DOWN")
+    else
+      User.me.list_by_name(:TODO).remove("#{params[:monitorFriendlyName]} DOWN")
+    end
+
+    ::ActionCable.server.broadcast :uptime_channel, {}
 
     head :no_content
   end

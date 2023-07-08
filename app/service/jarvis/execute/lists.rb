@@ -5,7 +5,7 @@ class Jarvis::Execute::Lists < Jarvis::Execute::Executor
   def add
     list, item = evalargs
 
-    !!list_by(name: list).list_items.by_name_then_update(name: item)
+    !!list_by(name: list).add(item)
   end
 
   def edit
@@ -17,7 +17,7 @@ class Jarvis::Execute::Lists < Jarvis::Execute::Executor
   def remove
     list, item = evalargs
 
-    !!list_by(name: list).list_items.by_formatted_name(item)&.soft_destroy
+    !!list_by(name: list).remove(item)
   end
 
   def get
