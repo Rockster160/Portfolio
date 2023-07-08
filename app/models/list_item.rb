@@ -53,7 +53,7 @@ class ListItem < ApplicationRecord
     if params.is_a?(Hash) || params.is_a?(ActionController::Parameters)
       with_deleted.find_by(id: params[:id]) || with_deleted.by_formatted_name(params[:name])
     else
-      with_deleted.by_formatted_name(name: params.to_s)
+      with_deleted.by_formatted_name(params.to_s)
     end
   end
 
