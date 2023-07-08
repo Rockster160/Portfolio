@@ -44,7 +44,6 @@ class CalendarEventsWorker
   end
 
   def travelable_event?(event)
-    return false # JAPAN - No travel / auto starts
     return false unless event[:location].present?
 
     !online_meeting?(event[:location])
