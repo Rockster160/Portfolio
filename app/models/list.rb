@@ -42,7 +42,7 @@ class List < ApplicationRecord
   def self.find_and_modify(user, msg)
     return "User not found" if user.blank?
 
-    list = by_name_for_user(user, msg) || user.default_list
+    list = by_name_for_user(msg, user) || user.default_list
 
     return "List not found" unless list.present?
     msg = msg.sub(/( #{intro_regexp})?( #{my_rx})? ?#{Regexp.quote(list.name.gsub(/[^a-z0-9 ]/i, ""))}( #{list_rx})?/i, "")
