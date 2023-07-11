@@ -45,6 +45,10 @@ class List < ApplicationRecord
     list = by_name_for_user(msg, user) || user.default_list
 
     return "List not found" unless list.present?
+    intro_regexp = /\b(to|for|from|on|in|into)\b/
+    my_rx = /\b(the|my)\b/
+    list_rx = /\b(list)\b/
+    list_intro = name =~ intro_regexp
     msg = msg.sub(/( #{intro_regexp})?( #{my_rx})? ?#{Regexp.quote(list.name.gsub(/[^a-z0-9 ]/i, ""))}( #{list_rx})?/i, "")
     msg = msg.sub(/ #{my_rx} #{list_rx}/i, "")
     msg = "" if msg.downcase == list.name.downcase
