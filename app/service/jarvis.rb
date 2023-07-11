@@ -119,16 +119,15 @@ class Jarvis
     end
   end
 
+  def self.ping(msg, channel=:ping)
+    say(msg, channel)
+  end
+
   def self.send(data, channel=:ws)
     return unless data.present?
+    return say(data, channel) if channel != :ws
 
-    case channel
-    when :ping then ::WebPushNotifications.send_to(User.me, { title: msg })
-    when :sms then SmsWorker.perform_async(MY_NUMBER, data)
-    when :ws then ActionCable.server.broadcast(:jarvis_channel, { data: data })
-    else
-      data
-    end
+    ActionCable.server.broadcast(:jarvis_channel, { data: data })
   end
 
   def self.reserved_words

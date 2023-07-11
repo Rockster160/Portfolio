@@ -137,6 +137,7 @@
       @response = "Not sure how to tell car: #{[cmd, opt].map(&:presence).compact.join('|')}"
     end
 
+    Jarvis.ping(@response) unless quick
     @response
   rescue TeslaError => e
     if e.message.match?(/forbidden/i)
