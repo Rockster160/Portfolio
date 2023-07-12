@@ -46,21 +46,22 @@ i.emoji, .emoji-stack {
 }
 
 .widget-wrapper {
-  grid-gap: 20px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
   margin: 0 auto;
   width: 100%;
-  max-width: 450px;
+  max-width: 675px;
 
   .widget-holder {
+    align-self: center;
+    margin: 10px;
     display: flex;
     position: relative;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     transition: box-shadow 0.2s;
-    margin: auto;
     box-shadow: 1px 1px 3px 0 $grey-blue, inset 0 0 0 0 $grey-blue;
     border: 1px solid $grey-blue;
     border-radius: 8px;
