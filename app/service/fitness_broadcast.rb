@@ -10,6 +10,7 @@ class FitnessBroadcast
       :Fluox,
       :Escitalopram,
       :Buspirone,
+      :DesvenlafaxineER,
       :Methylphenidate,
       :Water,
       :Teeth,

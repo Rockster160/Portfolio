@@ -25,7 +25,7 @@ $(document).ready(function() {
     return luminescence > 150 ? black : white
   }
 
-  $("body:not(.ctr-jarvis_tasks), body:not(.ctr-jarvis_tasks) *:not(script):not(noscript):not(style):not(iframe):not(.no-markdown), body :not(textarea), body :not(input)").each(function() {
+  $("body:not(.ctr-jarvis_tasks), body:not(.ctr-jarvis_tasks) *:not(script):not(noscript):not(style):not(iframe):not(.no-markdown):not(textarea):not(input)").each(function() {
     $(this).html($(this).html().replace(/([^\\])\`(.*?[^\\])\`/g, "$1<code>$2</code>"))
     $(this).html($(this).html().replace(/\\`/g, "`"))
     $(this).html($(this).html().replace(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})([^\w])/g, function(match, group1, group2) {
