@@ -1,3 +1,5 @@
+<%= meta_title @task.name.presence || "Blank Task", include_name: false %>
+
 <% if params[:trigger] == "function" && @task.new_record? %>
   <i hidden data-onload-modal="#config"></i>
 <% end %>
