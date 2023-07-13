@@ -255,10 +255,8 @@ i.emoji, .emoji-stack {
     }
 
     .widget-wrapper {
-      grid-gap: 10px;
-      grid-template-columns: 1fr 1fr 1fr;
-
       .widget-holder {
+        margin: 8px;
         box-shadow: 1px 1px 3px 0 $grey-dark, inset 0 0 0 0 $grey-dark;
         border: 1px solid $grey-dark;
         width: 80px;

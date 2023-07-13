@@ -38,12 +38,10 @@ document.querySelectorAll(".modal").forEach((modal) => {
 })
 
 document.addEventListener("click", function(evt) {
-  // Somehow detect an out-of-modal click
-  // const modal = evt.target.closest(".modal")
-  // const widget = evt.target.closest(".widget-wrapper")
-  //
-  // // debugger
-  // if (!widget && !modal) {
-  //   document.querySelector(".modal.show").classList.remove("show")
-  // }
+  let x = evt.clientX, y = evt.clientY
+  let w = window.outerWidth, h = window.outerHeight
+
+  if (x < 30 || y < 30 || x > w-30 || y > h-30) {
+    document.querySelector(".modal.show")?.classList?.remove("show")
+  }
 })
