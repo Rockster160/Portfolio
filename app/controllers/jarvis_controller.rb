@@ -45,6 +45,7 @@ class JarvisController < ApplicationController
   end
 
   def alexa_response(words)
+    words = words.to_s.presence || "No response from Jarvis"
     {
       version: "1.0",
       # sessionAttributes: {
