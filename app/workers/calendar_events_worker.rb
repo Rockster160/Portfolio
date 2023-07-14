@@ -61,12 +61,21 @@ class CalendarEventsWorker
       event[:uid] = "unix:#{event[:start_time].to_i}:#{event[:uid]}"
 
       # If notes starts with Jarvis, send to Jarvis as a message
-      if event[:notes]&.match?(/^jarvis[:,]? */i)
+      if event[:notes]&.match?(/^\s*jarvis[:,]? */i)
         new_events.push(
           name: event[:name],
           uid: event[:uid] + "-notes",
           type: :message,
           words: event[:notes].gsub(/^jarvis:? */i, ""),
+          user_id: @user_id,
+          scheduled_time: event[:start_time],
+        )
+      elsif event[:notes]&.match?(/^\s*j\s*$/i)
+        new_events.push(
+          name: event[:name],
+          uid: event[:uid] + "-notes",
+          type: :message,
+          words: "Remind me #{event[:name]}",
           user_id: @user_id,
           scheduled_time: event[:start_time],
         )
