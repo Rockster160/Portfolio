@@ -106,7 +106,7 @@
 
       ["🧴", :WashHair, "log care Wash Hair"],
       ["💅", :CutNails, "log care Cut Nails"],
-      ["<i class=\"emoji\">🖋</i>".html_safe, :Custom, "log {{Log what?}}"],
+      [emoji("🖋"), :Custom, "log {{Log what?}}"],
     ]
   end
 %>
@@ -120,13 +120,14 @@
 
       ["🚿", :Shower],
       ["👕", :Laundry, "do laundry"],
-      ["<div class=\"emoji-stack\"><i class=\"emoji\">💪</i><i class=\"emoji\">❌</i></div>".html_safe, :Done, "No more pullups today"],
 
-      ["<i class=\"emoji\">🏋️‍♂️</i>".html_safe, :Workout, "log Workout {{What did you do?}}"],
-      ["5<i class=\"emoji\">💪</i>".html_safe, :five_pulls, "log Pullups 5"],
-      ["#<i class=\"emoji\">💪</i>".html_safe, :enter_pulls, "log Pullups {{How many pullups?}}"],
+      [emoji_stack("💪", "❌"), :Done, "No more pullups today"],
 
-      ["<i class=\"emoji\">🖋</i>".html_safe, :Custom, "log {{Log what?}}"],
+      [emoji("🏋️‍♂️"), :Workout, "log Workout {{What did you do?}}"],
+      ["5#{emoji("💪")}".html_safe, :five_pulls, "log Pullups 5"],
+      ["##{emoji("💪")}".html_safe, :enter_pulls, "log Pullups {{How many pullups?}}"],
+
+      [emoji("🖋"), :Custom, "log {{Log what?}}"],
       ["🍕", :Food, "log Food {{What did you eat?}}"],
       ["🧃", :Drink, "log Drink {{What did you drink?}}"],
 
@@ -134,9 +135,9 @@
       ["🍍", :Pineapple, "log Drink Pineapple Juice"],
       ["🥃", :Alcohol, "log Alcohol {{What did you drink?}}"],
 
-      ["<i class=\"emoji\"><img src='/can.png'/></i>".html_safe, :log_soda_dew, "log soda Mountain Dew"],
-      ["<i class=\"emoji\"><img src='/pepsi.png'/></i>".html_safe, :log_soda_pep, "log soda Pep"],
-      ["<i class=\"emoji\"><img src='/coke.png'/></i>".html_safe, :log_soda_coke, "log soda Coke"],
+      [img(:can), :log_soda_dew, "log soda Mountain Dew"],
+      [img(:pepsi), :log_soda_pep, "log soda Pep"],
+      [img(:coke), :log_soda_coke, "log soda Coke"],
     ]
   end
 %>

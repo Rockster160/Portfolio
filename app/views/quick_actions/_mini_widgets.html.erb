@@ -8,7 +8,6 @@
       <% items.each do |display, item_id, cmd| %>
         <% item_id ||= display.to_s %>
         <% cmd ||= "log #{item_id}" %>
-        <% input ||= false %>
 
         <% if display.blank? %>
           <div class="widget-holder hidden"></div>
