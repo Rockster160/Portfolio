@@ -97,148 +97,69 @@
   </div>
 </div>
 
-<div class="modal mini-widgets" id="care-modal" tabindex="-1">
-  <div class="modal-content">
-    <div class="status"></div>
-    <div class="close">
-      <i class="ti ti-fa-close"></i>
-    </div>
-    <div class="mini-widgets widget-wrapper">
-      <% [
-        # display, id, cmd- whether to ask for input
-        ["🦷", :Teeth],
-        ["🚿", :Shower],
-        ["👕", :Laundry, "do laundry"],
+<%=
+  mini_widgets("care-modal") do
+    [
+      ["🦷", :Teeth],
+      ["🚿", :Shower],
+      ["👕", :Laundry, "do laundry"],
 
-        ["🧴", :WashHair, "log care Wash Hair"],
-        ["💅", :CutNails, "log care Cut Nails"],
-        ["<i class=\"emoji\">🖋</i>".html_safe, :Custom, "log {{Log what?}}"],
-      ].each do |display, id, cmd| %>
-        <% id ||= display.to_s %>
-        <% cmd ||= "log #{id}" %>
-        <% input ||= false %>
+      ["🧴", :WashHair, "log care Wash Hair"],
+      ["💅", :CutNails, "log care Cut Nails"],
+      ["<i class=\"emoji\">🖋</i>".html_safe, :Custom, "log {{Log what?}}"],
+    ]
+  end
+%>
 
-        <% if display.blank? %>
-          <div class="widget-holder hidden"></div>
-          <% next %>
-        <% end %>
+<%=
+  mini_widgets("events-modal") do
+    [
+      ["🥤", :Soda],
+      ["💧", :Water],
+      ["🦷", :Teeth],
 
-        <div class="widget-holder">
-          <div class="widget mini-widget <%= id.downcase %>" data-id="<%= id.downcase %>" data-cmd="<%= cmd %>">
-            <% if display.match?(/^ti-/) %>
-              <i class="emoji ti <%= display %>"></i>
-            <% elsif display.match?(/\p{Emoji_Presentation}+/u) && !display.match?("<i") %>
-              <i class="emoji"><%= display %></i>
-            <% else %>
-              <%= display %>
-            <% end %>
-          </div>
-        </div>
-      <% end %>
-    </div>
-  </div>
-</div>
+      ["🚿", :Shower],
+      ["👕", :Laundry, "do laundry"],
+      ["<div class=\"emoji-stack\"><i class=\"emoji\">💪</i><i class=\"emoji\">❌</i></div>".html_safe, :Done, "No more pullups today"],
 
-<div class="modal mini-widgets" id="events-modal" tabindex="-1">
-  <div class="modal-content">
-    <div class="status"></div>
-    <div class="close">
-      <i class="ti ti-fa-close"></i>
-    </div>
-    <div class="mini-widgets widget-wrapper">
-      <% [
-        # display, id, cmd- whether to ask for input
-        ["🥤", :Soda],
-        ["💧", :Water],
-        ["🦷", :Teeth],
+      ["<i class=\"emoji\">🏋️‍♂️</i>".html_safe, :Workout, "log Workout {{What did you do?}}"],
+      ["5<i class=\"emoji\">💪</i>".html_safe, :five_pulls, "log Pullups 5"],
+      ["#<i class=\"emoji\">💪</i>".html_safe, :enter_pulls, "log Pullups {{How many pullups?}}"],
 
-        ["🚿", :Shower],
-        ["👕", :Laundry, "do laundry"],
-        ["<div class=\"emoji-stack\"><i class=\"emoji\">💪</i><i class=\"emoji\">❌</i></div>".html_safe, :Done, "No more pullups today"],
+      ["<i class=\"emoji\">🖋</i>".html_safe, :Custom, "log {{Log what?}}"],
+      ["🍕", :Food, "log Food {{What did you eat?}}"],
+      ["🧃", :Drink, "log Drink {{What did you drink?}}"],
 
-        ["<i class=\"emoji\">🏋️‍♂️</i>".html_safe, :Workout, "log Workout {{What did you do?}}"],
-        ["5<i class=\"emoji\">💪</i>".html_safe, :five_pulls, "log Pullups 5"],
-        ["#<i class=\"emoji\">💪</i>".html_safe, :enter_pulls, "log Pullups {{How many pullups?}}"],
+      ["Protein", :Protein, "log Drink Protein"],
+      ["🍍", :Pineapple, "log Drink Pineapple Juice"],
+      ["🥃", :Alcohol, "log Alcohol {{What did you drink?}}"],
 
-        ["<i class=\"emoji\">🖋</i>".html_safe, :Custom, "log {{Log what?}}"],
-        ["🍕", :Food, "log Food {{What did you eat?}}"],
-        ["🧃", :Drink, "log Drink {{What did you drink?}}"],
+      ["<i class=\"emoji\"><img src='/can.png'/></i>".html_safe, :log_soda_dew, "log soda Mountain Dew"],
+      ["<i class=\"emoji\"><img src='/pepsi.png'/></i>".html_safe, :log_soda_pep, "log soda Pep"],
+      ["<i class=\"emoji\"><img src='/coke.png'/></i>".html_safe, :log_soda_coke, "log soda Coke"],
+    ]
+  end
+%>
 
-        ["Protein", :Protein, "log Drink Protein"],
-        ["🍍", :Pineapple, "log Drink Pineapple Juice"],
-        ["🥃", :Alcohol, "log Alcohol {{What did you drink?}}"],
-
-        ["<i class=\"emoji\"><img src='/can.png'/></i>".html_safe, :log_soda_dew, "log soda Mountain Dew"],
-        ["<i class=\"emoji\"><img src='/pepsi.png'/></i>".html_safe, :log_soda_pep, "log soda Pep"],
-        ["<i class=\"emoji\"><img src='/coke.png'/></i>".html_safe, :log_soda_coke, "log soda Coke"],
-      ].each do |display, id, cmd| %>
-        <% id ||= display.to_s %>
-        <% cmd ||= "log #{id}" %>
-        <% input ||= false %>
-
-        <% if display.blank? %>
-          <div class="widget-holder hidden"></div>
-          <% next %>
-        <% end %>
-
-        <div class="widget-holder">
-          <div class="widget mini-widget <%= id.downcase %>" data-id="<%= id.downcase %>" data-cmd="<%= cmd %>">
-            <% if display.match?(/^ti-/) %>
-              <i class="emoji ti <%= display %>"></i>
-            <% elsif display.match?(/\p{Emoji_Presentation}+/u) && !display.match?("<i") %>
-              <i class="emoji"><%= display %></i>
-            <% else %>
-              <%= display %>
-            <% end %>
-          </div>
-        </div>
-      <% end %>
-    </div>
-  </div>
-</div>
-
-<div class="modal mini-widgets" id="drugs-modal" tabindex="-1">
-  <div class="modal-content">
-    <div class="status"></div>
-    <div class="close">
-      <i class="ti ti-fa-close"></i>
-    </div>
-    <div class="mini-widgets widget-wrapper">
-      <% [
-        # display, id, cmd- whether to ask for input
-        [:Vitamins],
-        ["D-AmphXR 20mg"],
-        ["D-Amph 20mg"],
-        ["Pristiq 25mg"],
-        ["AdderallXR 15mg"],
-        ["AdderallXR 20mg"],
-        ["Buspirone 20mg"],
-        ["Relaxium 1"],
-        ["Relaxium 2"],
-        ["NQ"],
-        ["NQ Half"],
-        ["Methyl 10mg"],
-        ["Methyl 20mg"],
-        ["Escital 20mg"],
-        ["X"],
-        ["Z", nil, "log Z {{}}"],
-      ].each do |display, id, cmd| %>
-        <% id ||= display.to_s %>
-        <% cmd ||= "log #{id}" %>
-        <% input ||= false %>
-
-        <div class="widget-holder">
-          <div class="widget mini-widget <%= id.downcase.gsub(/[^a-z0-9]/i, "") %>" data-id="<%= id.downcase.gsub(/[^a-z0-9]/i, "") %>" data-cmd="<%= cmd %>">
-            <% if display.match?(/^ti-/) %>
-              <i class="emoji ti <%= display %>"></i>
-            <% elsif display.match?(/\p{Emoji_Presentation}+/u) && !display.match?("<i") %>
-              <i class="emoji"><%= display %></i>
-            <% else %>
-              <%= display %>
-            <% end %>
-          </div>
-        </div>
-      <% end %>
-    </div>
-  </div>
-</div>
+<%=
+  mini_widgets("drugs-modal") do
+    [
+      [:Vitamins],
+      ["D-AmphXR 20mg"],
+      ["D-Amph 20mg"],
+      ["Pristiq 25mg"],
+      ["AdderallXR 15mg"],
+      ["AdderallXR 20mg"],
+      ["Buspirone 20mg"],
+      ["Relaxium 1"],
+      ["Relaxium 2"],
+      ["NQ"],
+      ["NQ Half"],
+      ["Methyl 10mg"],
+      ["Methyl 20mg"],
+      ["Escital 20mg"],
+      ["X"],
+      ["Z", nil, "log Z {{}}"],
+    ]
+  end
+%>
