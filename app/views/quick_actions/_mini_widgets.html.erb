@@ -5,7 +5,7 @@
       <i class="ti ti-fa-close"></i>
     </div>
     <div class="mini-widgets widget-wrapper">
-      <% items.each do |display, item_id, cmd| %>
+      <% items.each do |display, item_id, cmd, title| %>
         <% item_id ||= display.to_s %>
         <% cmd ||= "log #{item_id}" %>
 
@@ -22,6 +22,9 @@
               <i class="emoji"><%= display.to_s.html_safe %></i>
             <% else %>
               <%= display.to_s.html_safe %>
+            <% end %>
+            <% if title.present? %>
+              <span class="title"><%= title %></span>
             <% end %>
           </div>
         </div>

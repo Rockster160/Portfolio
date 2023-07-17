@@ -137,6 +137,15 @@
       [img(:can), :log_soda_dew, "log soda Mountain Dew"],
       [img(:pepsi), :log_soda_pep, "log soda Pep"],
       [img(:coke), :log_soda_coke, "log soda Coke"],
+
+      *[:tropical, :peach, :arctic].map { |flavor|
+        [
+          img(:celsius),
+          "log_celsius_#{flavor.to_s.downcase}",
+          "log drink Celsius #{flavor.to_s.titleize} Vibe",
+          flavor.to_s.titleize
+        ]
+      }
     ]
   end
 %>
