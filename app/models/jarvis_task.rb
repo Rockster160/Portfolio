@@ -152,10 +152,20 @@ class JarvisTask < ApplicationRecord
         ]]
       }.uniq
     elsif list?
-      [["List Data", [
-        { return: :hash },
-        "List Data"
-      ]]]
+      [
+        ["List Data", [
+          { return: :hash },
+          "List Data"
+        ]],
+        ["Item Name", [
+          { return: :str },
+          "Item Name"
+        ]],
+        ["Item Added", [
+          { return: :bool },
+          "Item Added"
+        ]]
+      ]
     elsif calendar?
       [["Event Data", [
         { return: :hash },
