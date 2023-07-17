@@ -8,6 +8,10 @@
       <% items.each do |display, item_id, cmd, title| %>
         <% item_id ||= display.to_s %>
         <% cmd ||= "log #{item_id}" %>
+        <% item_id = item_id&.to_s %>
+        <% cmd = cmd&.to_s %>
+        <% display = display&.to_s %>
+        <% title = title&.to_s %>
 
         <% if display.blank? %>
           <div class="widget-holder hidden"></div>
@@ -15,13 +19,13 @@
         <% end %>
 
         <div class="widget-holder">
-          <div class="widget mini-widget <%= item_id.downcase %>" data-id="<%= item_id.downcase %>" data-cmd="<%= cmd %>">
+          <div class="widget mini-widget <%= item_id.parameterize %>" data-id="<%= item_id.parameterize %>" data-cmd="<%= cmd %>">
             <% if display.match?(/^ti-/) %>
               <i class="emoji ti <%= display %>"></i>
             <% elsif display.match?(/\p{Emoji_Presentation}+/u) && !display.match?("<i") %>
-              <i class="emoji"><%= display.to_s.html_safe %></i>
+              <i class="emoji"><%= display.html_safe %></i>
             <% else %>
-              <%= display.to_s.html_safe %>
+              <%= display.html_safe %>
             <% end %>
             <% if title.present? %>
               <span class="title"><%= title %></span>
