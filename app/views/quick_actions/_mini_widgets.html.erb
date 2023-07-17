@@ -19,9 +19,9 @@
             <% if display.match?(/^ti-/) %>
               <i class="emoji ti <%= display %>"></i>
             <% elsif display.match?(/\p{Emoji_Presentation}+/u) && !display.match?("<i") %>
-              <i class="emoji"><%= display %></i>
+              <i class="emoji"><%= display.to_s.html_safe %></i>
             <% else %>
-              <%= display %>
+              <%= display.to_s.html_safe %>
             <% end %>
           </div>
         </div>

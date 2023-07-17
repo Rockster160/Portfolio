@@ -120,12 +120,11 @@
 
       ["🚿", :Shower],
       ["👕", :Laundry, "do laundry"],
-
       [emoji_stack("💪", "❌"), :Done, "No more pullups today"],
 
       [emoji("🏋️‍♂️"), :Workout, "log Workout {{What did you do?}}"],
-      ["5#{emoji("💪")}".html_safe, :five_pulls, "log Pullups 5"],
-      ["##{emoji("💪")}".html_safe, :enter_pulls, "log Pullups {{How many pullups?}}"],
+      ["5#{emoji("💪")}", :five_pulls, "log Pullups 5"],
+      ["##{emoji("💪")}", :enter_pulls, "log Pullups {{How many pullups?}}"],
 
       [emoji("🖋"), :Custom, "log {{Log what?}}"],
       ["🍕", :Food, "log Food {{What did you eat?}}"],
