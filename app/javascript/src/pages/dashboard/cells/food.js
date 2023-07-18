@@ -1,5 +1,5 @@
 import { ListCell } from "./_list"
 
 (function() {
-  new ListCell("Food")
+  new ListCell("Things to Eat")
 })()
