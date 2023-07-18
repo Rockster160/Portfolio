@@ -439,6 +439,11 @@ class TaskMap
         # block: :select allows dynamically selecting the value
         { block: :select, values: [:seconds, :minutes, :hours, :days, :weeks, :months, :years] },
       ],
+      piece: [
+        { return: :num },
+        { block: :date },
+        { block: :select, values: [:second, :minute, :hour, :day, :week, :month, :year] },
+      ],
     },
     lists: {
       # create? | destroy | all -- lists, not items?
