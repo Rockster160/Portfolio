@@ -1,4 +1,17 @@
 var heldListItem, heldListItemTimer, clearListItemTimer, clearListActive
+
+function parseParams(str) {
+  var pieces = str.split("&"), data = {}, i, parts;
+  for (i = 0; i < pieces.length; i++) {
+    parts = pieces[i].split("=");
+    if (parts.length < 2) {
+      parts.push("");
+    }
+    data[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1]);
+  }
+  return data;
+}
+params = parseParams(window.location.search.slice(1))
 clearListActive = params.clear == "1"
 // import listWS from "./list_channel"
 
