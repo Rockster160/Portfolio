@@ -1,4 +1,5 @@
-var heldListItem, heldListItemTimer, clearListItemTimer
+var heldListItem, heldListItemTimer, clearListItemTimer, clearListActive
+clearListActive = params.clear == "1"
 // import listWS from "./list_channel"
 
 $(document).on("keyup", "input.filterable", function() {
@@ -62,6 +63,10 @@ $(document).ready(function() {
   $(".new-list-item-form").submit(function(e) {
     e.preventDefault()
     if ($(".new-list-item").val() == "") { return false }
+    if ($(".new-list-item").val() == ".clear") {
+      clearListActive = true
+      return false
+    }
     $(window).animate({ scrollTop: window.scrollHeight }, 300)
     $.post(this.action, $(this).serialize())
     $(".new-list-item").val("")
@@ -78,7 +83,7 @@ $(document).ready(function() {
     var item_id = $(this).closest("[data-item-id]").attr("data-item-id")
     $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]").prop("checked", this.checked)
     listWS.perform("receive", { list_item: { id: item_id, checked: this.checked } })
-    if (params.clear == "1") {
+    if (clearListActive) {
       clearTimeout(clearListItemTimer)
       clearListItemTimer = setTimeout(function() {
         $(".list-item-checkbox:checked").each(function() {
