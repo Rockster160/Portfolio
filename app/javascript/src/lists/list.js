@@ -1,4 +1,4 @@
-var heldListItem, heldListItemTimer
+var heldListItem, heldListItemTimer, clearListItemTimer
 // import listWS from "./list_channel"
 
 $(document).on("keyup", "input.filterable", function() {
@@ -37,8 +37,8 @@ $(document).ready(function() {
     update: function(evt, ui) {
       var list_order = $(this).children().map(function() { return $(this).attr("data-list-id") })
       var url = $(this).attr("data-reorder-url")
-      var params = { list_ids: list_order.toArray() }
-      $.post(url, params)
+      var args = { list_ids: list_order.toArray() }
+      $.post(url, args)
     }
   })
   $(".list-items").sortable({
@@ -54,8 +54,8 @@ $(document).ready(function() {
       })
 
       var url = $(this).attr("data-update-url")
-      var params = { list_item_order: list_item_order.toArray() }
-      $.post(url, params)
+      var args = { list_item_order: list_item_order.toArray() }
+      $.post(url, args)
     }
   })
 
@@ -78,15 +78,23 @@ $(document).ready(function() {
     var item_id = $(this).closest("[data-item-id]").attr("data-item-id")
     $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]").prop("checked", this.checked)
     listWS.perform("receive", { list_item: { id: item_id, checked: this.checked } })
+    if (params.clear == "1") {
+      clearTimeout(clearListItemTimer)
+      clearListItemTimer = setTimeout(function() {
+        $(".list-item-checkbox:checked").each(function() {
+          $(this).closest(".list-item-container").remove()
+        })
+      }, 3000)
+    }
   }).on("change", ".list-item-options .list-item-checkbox", function(evt) {
-    var params = {}
-    params.id = $(this).parents(".list-item-options").attr("data-item-id")
-    params[$(this).attr("name")] = this.checked
+    var args = {}
+    args.id = $(this).parents(".list-item-options").attr("data-item-id")
+    args[$(this).attr("name")] = this.checked
 
     $.ajax({
       url: $(this).attr("data-submit-url"),
       type: "PATCH",
-      data: params
+      data: args
     })
   })
 
@@ -111,20 +119,20 @@ $(document).ready(function() {
       updatedName = $(this).val(),
       $itemName = $container.find(".item-name"),
       $itemField = $(this),
-      params = {}
+      args = {}
 
     $itemName.val(updatedName)
     $itemName.removeClass("hidden")
     $itemField.addClass("hidden")
 
     var fieldName = $(this).attr("name")
-    params.list_item = {}
-    params.list_item[fieldName] = updatedName
+    args.list_item = {}
+    args.list_item[fieldName] = updatedName
 
     $.ajax({
       url: submitUrl,
       type: "PUT",
-      data: params
+      data: args
     })
   })
 
