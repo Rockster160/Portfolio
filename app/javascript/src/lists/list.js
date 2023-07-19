@@ -67,6 +67,9 @@ $(document).ready(function() {
       clearListActive = true
       return false
     }
+    if ($(".new-list-item").val() == ".reload") {
+      return window.location.reload(true)
+    }
     $(window).animate({ scrollTop: window.scrollHeight }, 300)
     $.post(this.action, $(this).serialize())
     $(".new-list-item").val("")
