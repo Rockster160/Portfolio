@@ -33,6 +33,17 @@ $(document).on("keyup", "input.filterable", function() {
   }
 })
 
+clearRemovedItems = function() {
+  if (clearListActive) {
+    clearTimeout(clearListItemTimer)
+    clearListItemTimer = setTimeout(function() {
+      $(".list-item-checkbox:checked").each(function() {
+        $(this).closest(".list-item-container").remove()
+      })
+    }, 3000)
+  }
+}
+
 $(document).ready(function() {
   if ($(".ctr-lists, .ctr-list_items").length == 0) { return }
 
@@ -101,14 +112,7 @@ $(document).ready(function() {
     var item_id = $(this).closest("[data-item-id]").attr("data-item-id")
     $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]").prop("checked", this.checked)
     listWS.perform("receive", { list_item: { id: item_id, checked: this.checked } })
-    if (clearListActive) {
-      clearTimeout(clearListItemTimer)
-      clearListItemTimer = setTimeout(function() {
-        $(".list-item-checkbox:checked").each(function() {
-          $(this).closest(".list-item-container").remove()
-        })
-      }, 3000)
-    }
+    clearRemovedItems()
   }).on("change", ".list-item-options .list-item-checkbox", function(evt) {
     var args = {}
     args.id = $(this).parents(".list-item-options").attr("data-item-id")
