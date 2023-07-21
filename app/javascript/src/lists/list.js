@@ -78,9 +78,11 @@ $(document).ready(function() {
     if ($(".new-list-item").val() == "") { return false }
     if ($(".new-list-item").val() == ".clear") {
       clearListActive = true
+      $(".new-list-item").val("")
       return false
     }
     if ($(".new-list-item").val() == ".reload") {
+      $(".new-list-item").val("")
       return window.location.reload(true)
     }
     $(window).animate({ scrollTop: window.scrollHeight }, 300)
