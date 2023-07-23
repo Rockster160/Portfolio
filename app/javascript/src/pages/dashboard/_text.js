@@ -46,6 +46,10 @@ Text.justify = function(...args) {
   if (typeof args[0] == "number") { width = args.shift() }
 
   var text_length = Text.clean(args.join("")).length
+  if (text_length > width) {
+    let remove = (text_length - width) + 1
+    args[args.length - 2] = args[args.length - 2].slice(0, -remove) + "…"
+  }
   var spaces = (width - text_length) / (args.length - 1)
   spaces = spaces < 0 ? 0 : spaces
 
