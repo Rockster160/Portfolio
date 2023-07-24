@@ -71,7 +71,6 @@ $(document).ready(function() {
         if ($(this).find(".list-item-config .locked").length == 0) {
           matching_items.find(".list-item-checkbox").prop("checked", $(this).find(".list-item-checkbox").prop("checked"))
         }
-        clearRemovedItems()
         return matching_items.length == 0
       })
       $(".list-items").append(new_items)
@@ -86,6 +85,7 @@ $(document).ready(function() {
         }
       })
 
+      clearRemovedItems()
       setImportantItems()
       reorderList()
     }
