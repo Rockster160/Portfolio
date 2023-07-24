@@ -369,7 +369,7 @@ RSpec.describe Jarvis do
     actions.each do |action, (msg, *cmds)|
       it "can #{action}" do
         Array.wrap(cmds).each do |cmd|
-          expect(PrinterApi).to receive(cmd)
+          expect(PrinterAPI).to receive(cmd)
         end
         expect(jarvis(action)).to eq(msg)
       end

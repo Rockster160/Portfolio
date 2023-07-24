@@ -27,7 +27,7 @@ class Oauth
     end
 
     def auth(code, params={})
-      Api.post(TOKEN_URL, {
+      API.post(TOKEN_URL, {
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
         redirect_uri: REDIRECT_URI

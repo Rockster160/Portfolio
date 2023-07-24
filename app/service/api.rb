@@ -1,4 +1,4 @@
-class Api
+class API
   # BASE_URL="https://www.googleapis.com/calendar/v3"
   attr_accessor :res
 
