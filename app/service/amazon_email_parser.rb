@@ -15,7 +15,7 @@ class AmazonEmailParser
       save("[DELIVERED]")
     else
       date_str = arrival_date_str
-      raise AmazonEmailParserError if date_str.blank?
+      raise AmazonEmailParserError, "Failed to parse arrival_date_str" if date_str.blank?
       # Remove times from string
       date = Date.parse(date_str&.gsub(/,? ?\d+ ?(a|p)\.?m\.?\.?/i, ""))
       date_str = date.iso8601 if date.present?
@@ -27,10 +27,15 @@ class AmazonEmailParser
 
   def gpt_parse
     order, time = ChatGPT.order_with_timestamp(@email.text_body) if @email.text_body.present?
-    raise AmazonEmailParserError if order.blank? || time.blank?
+    if order.blank? || time.blank?
+      raise(
+        AmazonEmailParserError,
+        "Invalid response from GPT: [#{order.inspect}, #{time.inspect}]\n#{ChatGPT.last_chat_data}"
+      )
+    end
 
     @order_id = "##{order}"
-    save(time)
+    save(Date.parse(time).iso8601)
   rescue StandardError => e
     SlackNotifier.err(e, "Error parsing Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
   end

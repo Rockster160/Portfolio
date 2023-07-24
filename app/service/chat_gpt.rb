@@ -1,6 +1,9 @@
 module ChatGPT
   module_function
 
+  def last_response = @last_response
+  def last_chat_data = @last_chat_data
+
   def client
     @client ||= OpenAI::Client.new
   end
@@ -12,8 +15,8 @@ module ChatGPT
         messages: [{ role: "user", content: str }], # Required.
       }
     )
-
-    response.dig("choices", 0, "message", "content")
+    @last_chat_data = response
+    @last_response = response.dig("choices", 0, "message", "content")
   end
 
   def short_name_from_order(order_title)
