@@ -48,6 +48,7 @@ class AmazonEmailParser
     DataStorage[:amazon_deliveries] = data_store
 
     ActionCable.server.broadcast(:amz_updates_channel, data_store)
+    order
   end
 
   def order_id

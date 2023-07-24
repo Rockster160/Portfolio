@@ -1,6 +1,7 @@
 module ChatGPT
   module_function
 
+  def last_ask = @last_ask
   def last_response = @last_response
   def last_chat_data = @last_chat_data
 
@@ -9,6 +10,7 @@ module ChatGPT
   end
 
   def ask(str)
+    @last_ask = str
     response = client.chat(
       parameters: {
         model: "gpt-3.5-turbo", # Required.
