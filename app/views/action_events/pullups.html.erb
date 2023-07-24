@@ -12,9 +12,11 @@
 </div>
 
 <div class="text-center" style="margin: 20px 0;">
-  <%= link_to "< Prev month", params.permit!.except(:action, :controller).merge(date: @date - 1.month) %>
-  - <%= link_to "Today", params.permit!.except(:action, :controller, :date) %> -
-  <%= link_to "Next month >", params.permit!.except(:action, :controller).merge(date: @date + 1.month) %>
+  <%= link_to "< Prev month", params.permit!.except(:action, :controller, :start_date, :end_date).merge(date: @date - 1.month) %>
+  - <%= link_to "Today", params.permit!.except(:action, :controller, :start_date, :end_date, :date) %> -
+  <%= link_to "Next month >", params.permit!.except(:action, :controller, :start_date, :end_date).merge(date: @date + 1.month) %>
+  <br>
+  <%= link_to "All Year", params.permit!.except(:action, :controller, :date).merge(start_date: @date.beginning_of_year, end_date: @date.end_of_year) %>
 </div>
 
 <div class="text-center">

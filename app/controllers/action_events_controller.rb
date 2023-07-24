@@ -32,21 +32,27 @@ class ActionEventsController < ApplicationController
   def pullups
     Time.use_zone(current_user.timezone) do
       @today = Time.current.to_date
-      @date = safeparse_time(params[:date]).to_date
 
-      @month = @date.then { |t| t.beginning_of_month..t.end_of_month }
+      if params[:start_date].present? && params[:end_date].present?
+        @date = start_date = safeparse_time(params[:start_date]).to_date
+        end_date = safeparse_time(params[:end_date]).to_date
+        @range = (start_date.beginning_of_month..end_date.end_of_month)
+      else
+        @date = safeparse_time(params[:date]).to_date
+        @range = @date.then { |t| t.beginning_of_month..t.end_of_month }
+      end
 
       @events = current_user.action_events.where(event_name: "Pullups").order(timestamp: :asc)
       @events = @events.query(params[:q]) if params[:q].present?
-      @events = @events.where(timestamp: @month.min.beginning_of_day..@month.max.end_of_day)
+      @events = @events.where(timestamp: @range.min.beginning_of_day..@range.max.end_of_day)
 
       grouped_events = @events.group_by { |evt| evt.timestamp.to_date }
-      @month_data = @month.each_with_object({}) { |date, obj| obj[date] = grouped_events[date] }
+      @range_data = @range.each_with_object({}) { |date, obj| obj[date] = grouped_events[date] }
 
       @chart_data = {
-        labels: @month_data.map { |date, evts| date.strftime("%a %-m/%-d/%y") },
+        labels: @range_data.map { |date, evts| date.strftime("%a %-m/%-d/%y") },
         datasets: [{
-          data: @month_data.map { |date, evts| evts&.sum { |evt| evt.notes.to_i } || 0 },
+          data: @range_data.map { |date, evts| evts&.sum { |evt| evt.notes.to_i } || 0 },
           backgroundColor: "#0160FF",
         }]
       }
@@ -58,7 +64,7 @@ class ActionEventsController < ApplicationController
       end
 
       goal = 1000
-      current = @events.sum("notes::integer")
+      current = @events.where("notes LIKE '\d+'").sum("notes::integer")
       remaining = goal - current
       @stats = {
         remaining: remaining,
