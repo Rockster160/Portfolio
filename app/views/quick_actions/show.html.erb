@@ -146,6 +146,15 @@
           flavor.to_s.titleize
         ]
       }
+
+      *[:orange, :kiwi_guava, :wild_berry].map { |flavor|
+        [
+          img(:celsius),
+          "log_celsius_#{flavor.to_s.downcase}",
+          "log drink Celsius #{flavor.to_s.titleize}",
+          flavor.to_s.titleize
+        ]
+      }
     ]
   end
 %>

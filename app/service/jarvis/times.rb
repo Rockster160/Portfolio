@@ -11,6 +11,8 @@ module Jarvis::Times
     time_words = [:second, :minute, :hour, :day, :week, :month, :year]
     time_words_regex = rx.words(time_words, suffix: "s?")
     time_str = words[/\b(in) (\d+|an?) #{time_words_regex}/]
+    # Chronic doesn't like "in an hour and 20 minutes"
+    # time_str = words[/\b(in) (\d+|an?) #{time_words_regex}( (and )?\d+( #{time_words_regex})?)?/]
     time_str ||= words[/(\bon )?(#{month_words_regex} \d{1,2}(\w{2})?(,? '?\d{2,4})? )?((in the )?(#{day_words_regex} ?)+ )?\b(at) \d+:?\d*( ?(am|pm))?( (#{day_words_regex} ?)+)?/]
     time_str ||= words[/(\bon )?#{month_words_regex} \d{1,2}(\w{2})?(,? '?\d{2,4})?/]
     time_str ||= words[/(\bon )?\d{1,2}\/\d{1,2}(\/(\d{2}|\d{4})\b)?/]

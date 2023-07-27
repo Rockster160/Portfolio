@@ -480,6 +480,9 @@ RSpec.describe Jarvis do
       # If the middle of the day, check "morning" is the next morning and "11:15" does that night
       "tomorrow" => [Time.local(2022, 6, 25, 12, 00), "tomorrow at noon"], # Default time is noon
       "in an hour" => [Time.local(2022, 6, 24, 6, 45), "today at 6:45am"],
+      # "in an hour 20" => [Time.local(2022, 6, 24, 6, 45), "today at 7:05am"],
+      # "in an hour and 20" => [Time.local(2022, 6, 24, 6, 45), "today at 7:05am"],
+      # "in an hour and 20 minutes" => [Time.local(2022, 6, 24, 6, 45), "today at 7:05am"],
       "tonight" => [Time.local(2022, 6, 24, 22, 0), "today at 10pm"],
       "at 11:15 tomorrow" => [Time.local(2022, 6, 25, 11, 15), "tomorrow at 11:15am"],
       "at 9:15 tomorrow night" => [Time.local(2022, 6, 25, 21, 15), "tomorrow at 9:15pm"],
