@@ -160,6 +160,7 @@ class Email < ApplicationRecord
       html_body: html_body,
       attachments: attaches,
     )
+    self.blob = self.blob.presence || mail.to_s
 
     success = save
 
