@@ -16,6 +16,6 @@ class ReceiveEmailWorker
 
     Email.from_mail(mail, attaches)
 
-    FileStorage.delete(filename, bucket: bucket)
+    # FileStorage.delete(filename, bucket: bucket)
   end
 end
