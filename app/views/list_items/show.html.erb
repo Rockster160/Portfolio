@@ -1,19 +1,23 @@
 <% list ||= @list || item.list %>
+<% item ||= @list.list_items.new(id: :new) %>
+<% template ||= false %>
 
-<div class="list-item-container" data-editable data-sort-order="<%= item.sort_order %>" data-item-id="<%= item.id %>" data-item-url="<%= list_list_item_path(list, item) %>" data-updated="<%= item.updated_at.to_i %>">
-  <div class="list-item-config">
-    <% if item.important? %>
-      <div class="important"><i class="fa fa-star"></i></div>
-    <% end %>
-    <%= content_tag :div, item.category, class: "category" %>
-    <%= content_tag :div, nil,           class: "locked"    if item.permanent? %>
-    <%= content_tag :div, nil,           class: "recurring" if item.schedule? %>
-  </div>
-  <div class="list-item-access">
-     <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>
-    <a href="<%= edit_list_list_item_path(list, item) %>" class="settings-btn"><i class="fa fa-cog"></i></a>
-    <div class="category-btn"><i class="fa fa-tag"></i></div>
-  </div>
+<div class="list-item-container" data-editable data-sort-order="<%= item.sort_order %>" data-item-id="<%= item.id %>" data-item-url="<%= list_list_item_path(list, item) unless template %>" data-updated="<%= item.updated_at.to_i %>">
+  <% unless template %>
+    <div class="list-item-config">
+      <% if item.important? %>
+        <div class="important"><i class="fa fa-star"></i></div>
+      <% end %>
+      <%= content_tag :div, item.category, class: "category" %>
+      <%= content_tag :div, nil,           class: "locked"    if item.permanent? %>
+      <%= content_tag :div, nil,           class: "recurring" if item.schedule? %>
+    </div>
+    <div class="list-item-access">
+      <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>
+      <a href="<%= edit_list_list_item_path(list, item) %>" class="settings-btn"><i class="fa fa-cog"></i></a>
+      <div class="category-btn"><i class="fa fa-tag"></i></div>
+    </div>
+  <% end %>
   <%= content_tag :input, "",
     type: :checkbox,
     id: "list_item[#{item.id}]",
@@ -22,8 +26,8 @@
     value: "#{item.id}",
     checked: item.deleted?,
     data: {
-      "checked-url": "#{list_list_item_path(list, item)}",
-      "create-url": "#{list_list_items_path(list)}"
+      "checked-url": "#{list_list_item_path(list, item) unless template}",
+      "create-url": "#{list_list_items_path(list) unless template}"
     }
   %>
   <label for="list_item[<%= item.id %>]" class="list-item">

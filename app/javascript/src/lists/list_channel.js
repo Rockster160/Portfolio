@@ -38,6 +38,19 @@ $(document).ready(function() {
       var updated_list = $(data.list_html)
       var updated_list_ids = updated_list.map(function() { return $(this).attr("data-item-id") })
 
+      $(".item-placeholder").each(function() {
+        let item = this
+        let name = $(item).find(".item-name").text()
+
+        let new_item = updated_list.find(function() {
+          return $(this).find(".item-name").text() == name
+        })
+        if (new_item) {
+          item.replaceWith(new_item)
+          // $(item).attr("data-item-id", $(new_item).attr("data-item-id")).removeClass("item-placeholder")
+        }
+      })
+
       var new_items = updated_list.filter(function() {
         var item_id = $(this).attr("data-item-id")
         if (item_id == undefined || item_id.length == 0) { return false }

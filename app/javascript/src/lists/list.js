@@ -86,18 +86,28 @@ $(document).ready(function() {
 
   $(".new-list-item-form").submit(function(e) {
     e.preventDefault()
-    if ($(".new-list-item").val() == "") { return false }
-    if ($(".new-list-item").val() == ".clear") {
+    let input = $(".new-list-item").val()
+    if (input == "") { return false }
+    if (input == ".clear") {
       clearListActive = true
       $(".new-list-item").val("")
       return false
     }
-    if ($(".new-list-item").val() == ".reload") {
+    if (input == ".reload") {
       $(".new-list-item").val("")
       return window.location.reload(true)
     }
     $(window).animate({ scrollTop: window.scrollHeight }, 300)
     $.post(this.action, $(this).serialize())
+
+    // Add a placeholder
+    let template = document.getElementById("list-item-template")
+    let clone = template.content.firstElementChild.cloneNode(true)
+    clone.querySelector(".item-name").innerText = input
+    clone.classList.add("item-placeholder")
+    $(".list-items").prepend(clone)
+
+    // Clear out
     $(".new-list-item").val("")
     return false
   })

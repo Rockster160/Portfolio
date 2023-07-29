@@ -238,6 +238,11 @@ html, body {
   }
 }
 
+.list-container .list-items .list-item-container.item-placeholder .list-item {
+  color: rgba($text-color, 0.5);
+  background: rgba($blue-l5, 0.5);
+}
+
 @keyframes pulse {
   0%   { transform: scale(1);   }
   25%  { transform: scale(1.1); }
@@ -285,5 +290,10 @@ html, body {
         }
       }
     }
+  }
+  .list-container .list-items .list-item-container.item-placeholder .list-item {
+    color: rgba($grey-light, 0.5);
+    border-color: rgba($grey-light, 0.5);
+    background: rgba($blue-d5, 0.5);
   }
 }
