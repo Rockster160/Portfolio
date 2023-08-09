@@ -34,10 +34,10 @@
   <% end %>
   <div class="list-error hidden">Disconnected...</div>
   <div class="important-list-items"></div>
+  <template id="list-item-template">
+    <%= render template: "list_items/show", locals: { list: @list, template: true }, layout: false %>
+  </template>
   <div class="list-items" data-update-url="<%= receive_update_list_path(@list) %>">
-    <template id="list-item-template">
-      <%= render template: "list_items/show", locals: { list: @list, template: true }, layout: false %>
-    </template>
     <%= render template: "list_items/index", locals: {list: @list} %>
   </div>
 </div>
