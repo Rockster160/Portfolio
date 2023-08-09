@@ -87,14 +87,16 @@ $(document).ready(function() {
   $(".new-list-item-form").submit(function(e) {
     e.preventDefault()
     let input = $(".new-list-item").val()
-    if (input == "") { return false }
+    $(".new-list-item").val("")
+
+    if (input == "") {
+      return false
+    }
     if (input == ".clear") {
       clearListActive = true
-      $(".new-list-item").val("")
       return false
     }
     if (input == ".reload") {
-      $(".new-list-item").val("")
       return window.location.reload(true)
     }
     $(window).animate({ scrollTop: window.scrollHeight }, 300)
@@ -107,8 +109,6 @@ $(document).ready(function() {
     clone.classList.add("item-placeholder")
     $(".list-items").prepend(clone)
 
-    // Clear out
-    $(".new-list-item").val("")
     return false
   })
 
