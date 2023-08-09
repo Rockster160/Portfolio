@@ -10,6 +10,8 @@ class JarvisWorker
     when BetterJson, Hash
       event_data = parsed[:event]
       if event_data[:user_id].present? && event_data[:type].present?
+        # if traveling_to_current?(event_data)
+        # end
         ::Jarvis.trigger(
           event_data[:type],
           { input_vars: { "Event Data": event_data.except(:type, :user_id) } },
@@ -21,5 +23,23 @@ class JarvisWorker
     end
 
     ::Jarvis::Schedule.cleanup
+  end
+
+  def traveling_to_current?(event_data)
+    # if task travel, if task end with -tt, -home, -travel
+    #  if car currently at location traveling to
+    #  OR car is currently driving
+    return false unless event_data[:type].to_sym == :travel
+    return false unless event_data[:uid].match?(/\-(tt|home|travel)$/)
+
+    book = AddressBook.new(User.me)
+    return false if book.blank?
+
+    # How do we get the location that's being traveled to?
+    # Maybe we just check for the current location in the "take me to" event
+    # This should only check if the car is currently driving
+    destination = [0, 0]
+
+    book.distance(book.current_loc, destination)
   end
 end
