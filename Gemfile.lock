@@ -124,8 +124,8 @@ GEM
       coffee-script-source
       execjs
     coffee-script-source (1.12.2)
-    concurrent-ruby (1.2.0)
-    connection_pool (2.3.0)
+    concurrent-ruby (1.2.2)
+    connection_pool (2.4.1)
     crass (1.0.6)
     date (3.3.3)
     diff-lcs (1.5.0)
@@ -271,7 +271,7 @@ GEM
       nio4r (~> 2.0)
     raabro (1.4.0)
     racc (1.6.2)
-    rack (2.2.6.2)
+    rack (2.2.8)
     rack-protection (2.2.4)
       rack
     rack-test (2.0.2)
@@ -362,11 +362,11 @@ GEM
       rexml (~> 3.2, >= 3.2.5)
       rubyzip (>= 1.2.2, < 3.0)
       websocket (~> 1.0)
-    sidekiq (6.4.2)
-      connection_pool (>= 2.2.2)
+    sidekiq (6.5.9)
+      connection_pool (>= 2.2.5, < 3)
       rack (~> 2.0)
-      redis (>= 4.2.0)
-    sidekiq-cron (1.4.0)
+      redis (>= 4.5.0, < 5)
+    sidekiq-cron (1.9.0)
       fugit (~> 1)
       sidekiq (>= 4.2.1)
     sidekiq-unique-jobs (7.1.29)
@@ -487,8 +487,8 @@ DEPENDENCIES
   rspec-rails (= 5.1.2)
   ruby-openai
   sass-rails (= 6.0.0)
-  sidekiq (= 6.4.2)
-  sidekiq-cron (= 1.4.0)
+  sidekiq (= 6.5.9)
+  sidekiq-cron (= 1.9.0)
   sidekiq-unique-jobs
   simplecov (= 0.21.2)
   sinatra (~> 2.2.3)

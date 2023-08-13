@@ -91,18 +91,23 @@
       car.heat_passenger unless quick
     when :navigate
       address = opt[::Jarvis::Regex.address]&.squish.presence if opt.match?(::Jarvis::Regex.address)
+      # If specify nearest, search based on car location.
+      # Otherwise use the one in contacts and fallback to nearest to house
       address ||= address_book.contact_by_name(original_opt)&.address
       address ||= address_book.nearest_address_from_name(original_opt)
 
       if address.present?
         duration = address_book.traveltime_seconds(address)
-        if duration
+        if duration && duration < 100 # seconds
+          @cancel = true
+          @response = "You're already at your destination."
+        elsif duration
           @response = "It will take #{distance_of_time_in_words(duration)} to get to #{original_opt.squish}"
         else
           @response = "Navigating to #{original_opt.squish}"
         end
 
-        unless quick
+        if !@cancel && !quick
           car.start_car
           car.navigate(address)
         end
