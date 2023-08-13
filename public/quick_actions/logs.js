@@ -21,6 +21,10 @@ document.querySelectorAll(".mini-widget").forEach((widget) => {
   new Widget(id, function() {
     let cmd = widget.getAttribute("data-cmd")
 
+    if (cmd == ".reload") {
+      return window.location.reload(true)
+    }
+
     if (cmd.includes("{{")) {
       let req = cmd.match(/\{\{(.*?)\}\}/)[1].trim()
       if (req.length == 0) { req = "What is the text?" }
