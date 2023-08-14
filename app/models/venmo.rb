@@ -26,6 +26,7 @@ class Venmo < ApplicationRecord
     charge(to, -amount.abs, note)
   end
 
+  # +pay -charge
   def charge(from, amount, note)
     ::SmsWorker.perform_async("3852599640", "#{amount.positive? ? "Paying" : "Charging"} #{from} #{number_to_currency(amount.abs)}")
     refresh_access_token if expired?
@@ -63,7 +64,7 @@ class Venmo < ApplicationRecord
       client_secret: ENV["PORTFOLIO_VENMO_SECRET"]
     }.merge(extra_params))
     venmo_params = {}
-    venmo_params[:expires_at] = DateTime.current + response["expires_in"].to_i.seconds if response['expires_at'].present?
+    venmo_params[:expires_at] = DateTime.current + response["expires_in"].to_i.seconds if response['expires_in'].present?
     venmo_params[:refresh_token] = response["refresh_token"] if response['refresh_token'].present?
     venmo_params[:access_token] = response["access_token"] if response['access_token'].present?
     update(venmo_params)

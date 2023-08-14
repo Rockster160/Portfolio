@@ -10,7 +10,7 @@ class VenmosController < ApplicationController
 
   def auth
     client_id = '3191'
-    scopes = ['make_payments']
+    scopes = ['make_payments', 'access_profile']
     redirect_to "https://api.venmo.com/v1/oauth/authorize?client_id=#{client_id}&response_type=code&scope=#{scopes.join("%20")}"
   end
 
