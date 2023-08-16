@@ -6,6 +6,7 @@ class TeslaControl
 
   BASE_HEADERS = {
     "User-Agent": "PortfolioBot/1.0",
+    # Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)
     "Content-Type": "application/json",
     "Accept": "*/*",
     "accept-encoding": "deflate",
@@ -27,9 +28,10 @@ class TeslaControl
       code_challenge_method: :S256,
       redirect_uri: "https://auth.tesla.com/void/callback",
       response_type: :code,
-      scope: "openid email offline_access",
+      scope: "openid email offline_access phone",
       state: STABLE_STATE,
       login_hint: "rocco11nicholls@gmail.com",
+      is_in_app: true,
     }
     "https://auth.tesla.com/oauth2/v3/authorize?#{params.to_query}"
     # HTTParty.get(TeslaControl.authorize, headers: { "User-Agent": "PortfolioBot/1.0" })
@@ -260,6 +262,7 @@ class TeslaControl
   rescue RestClient::Forbidden => err
     DataStorage[:tesla_forbidden] = true
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
+    SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#post(#{endpoint}):\n#{params}\nCode: #{res.code}\n```#{res.body}```")
   end
@@ -280,6 +283,7 @@ class TeslaControl
   rescue RestClient::Forbidden => err
     DataStorage[:tesla_forbidden] = true
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
+    SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response.code == 408
     return refresh && retry if err.response.code == 401
@@ -304,6 +308,7 @@ class TeslaControl
   rescue RestClient::Forbidden => err
     DataStorage[:tesla_forbidden] = true
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
+    SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response.code == 408
     return refresh && retry if err.response.code == 401
@@ -333,6 +338,7 @@ class TeslaControl
   rescue RestClient::Forbidden => err
     DataStorage[:tesla_forbidden] = true
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
+    SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
     false
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry

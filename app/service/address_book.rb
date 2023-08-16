@@ -4,7 +4,7 @@ class AddressBook
   end
 
   def contacts
-    @contacts ||= @user.contacts
+    @contacts ||= @user.contacts.where.not(address: nil)
   end
 
   def home
@@ -82,7 +82,7 @@ class AddressBook
     return 2700 unless Rails.env.production?
 
     from ||= current_loc
-    Rails.cache.fetch("traveltime_seconds(#{to},#{from})") do
+    nonnil_cache("traveltime_seconds(#{to},#{from})") {
       ::Jarvis.say("Traveltime #{to},#{from}")
       to, from = [to, from].map { |address| to_address(address) }
       # Should be stringified addresses
@@ -97,7 +97,7 @@ class AddressBook
       json = JSON.parse(res.body, symbolize_names: true)
 
       json.dig(:rows, 0, :elements, 0, :duration, :value)
-    end
+    }
   rescue StandardError => e
     SlackNotifier.err(e, "Traveltime failed: (to:\"#{to}\", from:\"#{from}\")")
     nil
@@ -105,7 +105,7 @@ class AddressBook
 
   def nearest_address_from_name(name, loc=nil)
     loc ||= current_loc
-    Rails.cache.fetch("nearest_address_from_name(#{name},#{loc.join(",")})") do
+    nonnil_cache("nearest_address_from_name(#{name},#{loc.join(",")})") do
       ::Jarvis.say("Nearest name #{name},#{loc.join(",")}")
       params = {
         input: name,
@@ -141,6 +141,14 @@ class AddressBook
     }
   end
 
+  def nonnil_cache(key, &block)
+    Rails.cache.fetch(key) {
+      block.call
+    }.tap { |val|
+      Rails.cache.delete(key) if val.blank?
+    }
+  end
+
   # Get [lat,lng] from address
   # def geocode(address)
   # end
@@ -149,7 +157,7 @@ class AddressBook
   def reverse_geocode(loc, get: :name)
     return "Herriman" unless Rails.env.production?
 
-    Rails.cache.fetch("reverse_geocode(#{loc.map { |l| l.round(2) }.join(",")},#{get})") do
+    nonnil_cache("reverse_geocode(#{loc.map { |l| l.round(2) }.join(",")},#{get})") do
       ::Jarvis.say("Geocoding #{loc.join(",")},#{get}")
       url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=#{loc.join(",")}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
       res = RestClient.get(url)
