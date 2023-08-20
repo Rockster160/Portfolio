@@ -37,11 +37,11 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     let lines = [], data = cell.data.car
     let topchar = cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "  "
     let topline = topchar + " ".repeat(single_width - 2)
-    if (!data.charging || data.charging.state == "Disconnected") {
-      lines.push(Text.bgColor(dash_colors.red, topline))
-    } else {
-      lines.push(topline)
+    if (data.charging?.state == "Disconnected") {
+      topline = Text.center(Text.color(dash_colors.red, "[NOT CHARGING]"))
+      topline = topline.replace(/^../, topchar)
     }
+    lines.push(topline)
 
     let status_pieces = []
     if (data.climate?.current) {
