@@ -39,6 +39,8 @@ class LocalDataBroadcast
   end
 
   def update_contacts
+    return if Rails.env.development?
+
     @data[:contacts].each do |contact_data|
       next if contact_data[:phones].blank? && contact_data[:addresses].blank?
 
