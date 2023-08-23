@@ -49,7 +49,7 @@ class LocalDataCalendarParser
         when /^\-+$/, /^$/, /^•/
           cal_name_regex = / \(([^\)]*?)\)$/
           evt[:calendar_name] = cal_line[cal_name_regex].to_s[2..-2]
-          evt[:name] = cal_line.sub(cal_name_regex, "").sub(/•\s*/, "")
+          evt[:name] = cal_line.sub(cal_name_regex, "").sub(/•\s*/, "").sub(/ ?\([^\)]*?\)/)
           add_event(parsed_data, evt)
           evt = { name: evt[:name] }
           prev_line = :event
