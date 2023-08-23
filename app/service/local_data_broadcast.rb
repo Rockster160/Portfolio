@@ -6,7 +6,7 @@ class LocalDataBroadcast
   end
 
   def call(data=nil)
-    # return if Rails.env.development?
+    return if Rails.env.development?
 
     data ||= JSON.parse(File.read("local_data.json")) if File.exists?("local_data.json")
     data ||= {}
@@ -25,7 +25,7 @@ class LocalDataBroadcast
 
     ActionCable.server.broadcast(:local_data_channel, enriched_data)
 
-    # CalendarEventsWorker.perform_async if @data.key?(:calendar)
+    CalendarEventsWorker.perform_async if @data.key?(:calendar)
     enriched_data
   end
 
@@ -39,20 +39,19 @@ class LocalDataBroadcast
   end
 
   def update_contacts
-    # @data[:contacts].each do |contact_data|
-    #   next if contact_data[:phones].blank? && contact_data[:addresses].blank?
-    #
-    #   contact = @user.contacts.find_or_initialize_by(apple_contact_id: contact_data[:id])
-    #   contact.update(raw: contact_data)
-    #   contact.resync
-    # end
+    @data[:contacts].each do |contact_data|
+      next if contact_data[:phones].blank? && contact_data[:addresses].blank?
+
+      contact = @user.contacts.find_or_initialize_by(apple_contact_id: contact_data[:id])
+      contact.update(raw: contact_data)
+      contact.resync
+    end
   end
 
   def enrich_calendar(calendar_lines)
     today_str = Time.current.in_time_zone("Mountain Time (US & Canada)").strftime("%b %-d, %Y:")
     calendar_data = LocalDataCalendarParser.call
 
-    # Dash colors from app/javascript/src/pages/dashboard/vars.js
     grey = "#42464A"
     yellow = "#AFA652"
     lblue =  "#3D94F6"
