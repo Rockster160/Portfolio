@@ -53,8 +53,8 @@ class LocalDataBroadcast
     calendar_data = LocalDataCalendarParser.call
 
     # Dash colors from app/javascript/src/pages/dashboard/vars.js
-    grey = "#5050A0"
-    yellow = "#FEE761"
+    grey = "#42464A"
+    yellow = "#AFA652"
     # lblue =  "#3D94F6"
     magenta = "#B55088"
     calendar_colors = {
