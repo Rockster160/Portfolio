@@ -6,7 +6,7 @@ class LocalDataBroadcast
   end
 
   def call(data=nil)
-    return if Rails.env.development?
+    # return if Rails.env.development?
 
     data ||= JSON.parse(File.read("local_data.json")) if File.exists?("local_data.json")
     data ||= {}
@@ -23,28 +23,29 @@ class LocalDataBroadcast
       DataStorage[:notes_timestamp] = @data.dig(:notes, :timestamp)
     end
 
-    ActionCable.server.broadcast :local_data_channel, encriched_data
+    ActionCable.server.broadcast(:local_data_channel, enriched_data)
 
-    CalendarEventsWorker.perform_async if @data.key?(:calendar)
+    # CalendarEventsWorker.perform_async if @data.key?(:calendar)
+    enriched_data
   end
 
   private
 
-  def encriched_data
-    @data.tap do |data|
+  def enriched_data
+    @enriched_data ||= @data.tap do |data|
       data[:calendar] = enrich_calendar(data[:calendar]) if data.key?(:calendar)
       data[:reminders] = enrich_reminders(data[:reminders]) if data.key?(:reminders)
     end
   end
 
   def update_contacts
-    @data[:contacts].each do |contact_data|
-      next if contact_data[:phones].blank? && contact_data[:addresses].blank?
-
-      contact = @user.contacts.find_or_initialize_by(apple_contact_id: contact_data[:id])
-      contact.update(raw: contact_data)
-      contact.resync
-    end
+    # @data[:contacts].each do |contact_data|
+    #   next if contact_data[:phones].blank? && contact_data[:addresses].blank?
+    #
+    #   contact = @user.contacts.find_or_initialize_by(apple_contact_id: contact_data[:id])
+    #   contact.update(raw: contact_data)
+    #   contact.resync
+    # end
   end
 
   def enrich_calendar(calendar_lines)
@@ -52,16 +53,25 @@ class LocalDataBroadcast
     calendar_data = LocalDataCalendarParser.call
 
     # Dash colors from app/javascript/src/pages/dashboard/vars.js
+    grey = "#5050A0"
     yellow = "#FEE761"
-    lblue =  "#3D94F6"
+    # lblue =  "#3D94F6"
     magenta = "#B55088"
+    calendar_colors = {
+      "rocco11nicholls@gmail.com"   => "#0160FF",
+      "rocco.nicholls@workwave.com" => "#FF9500",
+      "Rae Sched"                   => "#6FFB62",
+    }
 
     calendar_data.map { |date_str, events|
       lines = [date_str, "[hr]"]
       events.sort_by { |evt| evt[:start_time] || Time.current }.each do |event|
         if event[:time_str].present?
-          lines.push("• #{event[:name] || event[:uid]}")
-          lines.push("    [color #{lblue}]#{event[:time_str]}[/color]")
+          name = event[:name] || event[:uid]
+          color = calendar_colors[event[:calendar_name]]
+          name = "[color #{color}]#{name}[/color]" if color.present?
+          lines.push("• #{name}")
+          lines.push("    [color #{yellow}]#{event[:time_str]}[/color]")
         else
           lines.push("• [color #{magenta}]#{event[:name] || event[:uid]}[/color]")
         end
@@ -70,7 +80,7 @@ class LocalDataBroadcast
         next if event[:location].include?("meet.google")
         next if event[:location].match?(/webinar/i) # GoToWebinar
 
-        lines.push("    [color #{yellow}]#{event[:location].strip}[/color]")
+        lines.push("    [color #{grey}]#{event[:location].strip}[/color]")
       end
       lines.push("") # Empty line between days
     }.flatten

@@ -47,8 +47,11 @@ class LocalDataCalendarParser
           evt[:uid] = cal_line.sub(/\s*uid: /i, "")
           prev_line = :uid
         when /^\-+$/, /^$/, /^•/
+          cal_name_regex = / \(([^\)]*?)\)$/
+          evt[:calendar_name] = cal_line[cal_name_regex].to_s[2..-2]
+          evt[:name] = cal_line.sub(cal_name_regex, "").sub(/•\s*/, "")
           add_event(parsed_data, evt)
-          evt = { name: cal_line.sub(/•\s*/, "") }
+          evt = { name: evt[:name] }
           prev_line = :event
         else
           if prev_line == :location
