@@ -6,26 +6,26 @@ class LocalDataBroadcast
   end
 
   def call(data=nil)
-    # return if Rails.env.development?
+    return if Rails.env.development?
 
     data ||= JSON.parse(File.read("local_data.json")) if File.exists?("local_data.json")
     data ||= {}
     @data = data.deep_symbolize_keys
     @user = User.me
 
-    # update_contacts if @data.key?(:contacts)
+    update_contacts if @data.key?(:contacts)
 
-    # if @data.key?(:notes) && @data.dig(:notes, :timestamp) != DataStorage[:notes_timestamp]
-    #   items_hash = @data.dig(:notes, :items)&.map do |item_name|
-    #     { name: item_name }
-    #   end || []
-    #   @user.default_list.add_items(items_hash)
-    #   DataStorage[:notes_timestamp] = @data.dig(:notes, :timestamp)
-    # end
+    if @data.key?(:notes) && @data.dig(:notes, :timestamp) != DataStorage[:notes_timestamp]
+      items_hash = @data.dig(:notes, :items)&.map do |item_name|
+        { name: item_name }
+      end || []
+      @user.default_list.add_items(items_hash)
+      DataStorage[:notes_timestamp] = @data.dig(:notes, :timestamp)
+    end
 
     ActionCable.server.broadcast(:local_data_channel, enriched_data)
 
-    # CalendarEventsWorker.perform_async if @data.key?(:calendar)
+    CalendarEventsWorker.perform_async if @data.key?(:calendar)
     enriched_data
   end
 
