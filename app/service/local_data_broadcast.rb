@@ -6,26 +6,26 @@ class LocalDataBroadcast
   end
 
   def call(data=nil)
-    return if Rails.env.development?
+    # return if Rails.env.development?
 
     data ||= JSON.parse(File.read("local_data.json")) if File.exists?("local_data.json")
     data ||= {}
     @data = data.deep_symbolize_keys
     @user = User.me
 
-    update_contacts if @data.key?(:contacts)
+    # update_contacts if @data.key?(:contacts)
 
-    if @data.key?(:notes) && @data.dig(:notes, :timestamp) != DataStorage[:notes_timestamp]
-      items_hash = @data.dig(:notes, :items)&.map do |item_name|
-        { name: item_name }
-      end || []
-      @user.default_list.add_items(items_hash)
-      DataStorage[:notes_timestamp] = @data.dig(:notes, :timestamp)
-    end
+    # if @data.key?(:notes) && @data.dig(:notes, :timestamp) != DataStorage[:notes_timestamp]
+    #   items_hash = @data.dig(:notes, :items)&.map do |item_name|
+    #     { name: item_name }
+    #   end || []
+    #   @user.default_list.add_items(items_hash)
+    #   DataStorage[:notes_timestamp] = @data.dig(:notes, :timestamp)
+    # end
 
     ActionCable.server.broadcast(:local_data_channel, enriched_data)
 
-    CalendarEventsWorker.perform_async if @data.key?(:calendar)
+    # CalendarEventsWorker.perform_async if @data.key?(:calendar)
     enriched_data
   end
 
@@ -53,7 +53,7 @@ class LocalDataBroadcast
     calendar_data = LocalDataCalendarParser.call
 
     grey = "#42464A"
-    yellow = "#AFA652"
+    yellow = "#CBCB4D"
     lblue =  "#3D94F6"
     magenta = "#B55088"
     calendar_colors = {
@@ -64,10 +64,10 @@ class LocalDataBroadcast
 
     calendar_data.map { |date_str, events|
       lines = [date_str, "[hr]"]
-      events.sort_by { |evt| evt[:start_time] || Time.current }.each do |event|
+      events.sort_by { |evt| evt[:start_time] || Time.current.beginning_of_day }.each do |event|
         if event[:time_str].present?
           name = event[:name] || event[:uid]
-          color = calendar_colors[event[:calendar_name]]
+          color = calendar_colors[event[:calendar]]
           name = "[color #{color}]#{name}[/color]" if color.present?
           lines.push("• #{name}")
           lines.push("    [color #{yellow}]#{event[:time_str]}[/color]")
