@@ -55,10 +55,10 @@ class LocalDataBroadcast
     # Dash colors from app/javascript/src/pages/dashboard/vars.js
     grey = "#42464A"
     yellow = "#AFA652"
-    # lblue =  "#3D94F6"
+    lblue =  "#3D94F6"
     magenta = "#B55088"
     calendar_colors = {
-      "rocco11nicholls@gmail.com"   => "#0160FF",
+      "rocco11nicholls@gmail.com"   => lblue,
       "rocco.nicholls@workwave.com" => "#FF9500",
       "Rae Sched"                   => "#6FFB62",
     }
