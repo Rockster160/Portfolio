@@ -275,7 +275,9 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       }
     },
     command: function(msg) {
-      if (/^-?\d+/.test(msg) && parseInt(msg.match(/\d+/)[0]) < 30) {
+      if (msg.trim() == "o") {
+        window.open(cell.config.google_api_url, "_blank")
+      } else if (/^-?\d+/.test(msg) && parseInt(msg.match(/\d+/)[0]) < 30) {
         var num = parseInt(msg.match(/\d+/)[0])
         let order = this.data.amz_updates[num - 1]
 

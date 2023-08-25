@@ -174,6 +174,7 @@ class User < ApplicationRecord
     else
       message += Rails.application.routes.url_helpers.list_url(list.name.parameterize)
     end
+    # Is the other user required to opt-in first?
     SmsWorker.perform_async(phone, message)
   end
 

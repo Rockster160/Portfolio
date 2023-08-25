@@ -7,11 +7,7 @@ class Jarvis::Wifi < Jarvis::Action
     return unless valid_words?
     raise Jarvis::Error.not_allowed unless @user&.admin?
 
-    if @rx.match_any_words?(parse_cmd, :nighthawk)
-      qr = Qr.wifi("Nighthawk", DataStorage[:WIFIPASS_Nighthawk])
-    else
-      qr = Qr.wifi("CenturyLink7046", DataStorage[:WIFIPASS_CenturyLink7046])
-    end
+    qr = Qr.wifi("Nighthawk", DataStorage[:WIFIPASS_Nighthawk])
     ::SmsWorker.perform_async(Jarvis::MY_NUMBER, qr)
 
     return "Sent"

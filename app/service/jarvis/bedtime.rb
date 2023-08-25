@@ -14,7 +14,7 @@ class Jarvis::Bedtime < Jarvis::Action
     if @user.default_list.list_items.any?
       before_bed << "Still todo:\n  * #{@user.default_list.ordered_items.pluck(:name).join("  \n")}"
     end
-    SmsWorker.perform_async(Jarvis::MY_NUMBER, before_bed.join("\n")) if before_bed.any?
+    Jarvis.ping(before_bed.join("\n")) if before_bed.any?
 
     return before_bed.any? ? "You may still need to close up shop, sir." : "Good night, sir."
   end

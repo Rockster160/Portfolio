@@ -28,7 +28,7 @@ class Venmo < ApplicationRecord
 
   # +pay -charge
   def charge(from, amount, note)
-    ::SmsWorker.perform_async("3852599640", "#{amount.positive? ? "Paying" : "Charging"} #{from} #{number_to_currency(amount.abs)}")
+    Jarvis.ping("#{amount.positive? ? "Paying" : "Charging"} #{from} #{number_to_currency(amount.abs)}")
     refresh_access_token if expired?
     response = HTTParty.post("https://api.venmo.com/v1/payments", body: {
       "access_token" => access_token,
@@ -37,7 +37,7 @@ class Venmo < ApplicationRecord
       "amount" => amount
     })
     if response["error"].present?
-      ::SmsWorker.perform_async('3852599640', "Venmo Error: #{response["error"]["message"]}")
+      Jarvis.ping("Venmo Error: #{response["error"]["message"]}")
     end
   end
 

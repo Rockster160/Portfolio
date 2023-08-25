@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_05_16_223438) do
+ActiveRecord::Schema.define(version: 2023_08_25_061105) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -346,14 +346,6 @@ ActiveRecord::Schema.define(version: 2023_05_16_223438) do
     t.boolean "important", default: false
     t.boolean "show_deleted"
     t.text "parameterized_name"
-  end
-
-  create_table "litter_text_reminders", id: :serial, force: :cascade do |t|
-    t.integer "turn", default: 0
-    t.datetime "created_at"
-    t.datetime "updated_at"
-    t.string "regex", limit: 255
-    t.string "message", limit: 255
   end
 
   create_table "locations", id: :serial, force: :cascade do |t|

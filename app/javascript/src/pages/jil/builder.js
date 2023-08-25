@@ -322,7 +322,7 @@ $(document).ready(function() {
     }
   })
 
-  $(document).on("keyup", "input.filter-drawer-tree", function() {
+  $(document).on("keyup search", "input.filter-drawer-tree", function() {
     let wrapper = $(".drawer-tree .lists")
     var currentText = $(this).val().toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
 

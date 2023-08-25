@@ -21,7 +21,9 @@
 
     <% if Rails.env.development? %>
       Cell.loadConfig({
-        // home: {},
+        home: {
+          google_api_url: "https://google.com",
+        },
         jarvis: { w: 2 },
         calendar: { h: 3 },
       })
@@ -43,6 +45,7 @@
         },
         home: {
           x: 4, y: 2,
+          google_api_url: "<%= DataStorage[:google_api_reload_url] %>",
         },
 
         calendar: { x: 1, y: 3, h: 3 },
