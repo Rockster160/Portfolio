@@ -68,6 +68,12 @@
     </div>
   </div>
 
+  <div class="widget-holder">
+    <div class="widget contacts">
+      <i class="emoji">👤</i>
+    </div>
+  </div>
+
   <div class="widget-holder empty">
   </div>
 
@@ -98,16 +104,29 @@
 </div>
 
 <%=
-  mini_widgets("care-modal") do
+  mini_widgets("contacts-modal") do
     [
-      ["🦷", :Teeth],
-      ["🚿", :Shower],
-      ["👕", :Laundry, "do laundry"],
+      ["🏠", :Home],
+      ["👧", :Rachel],
+      ["👦", :Christian],
+      ["🔨", :"Home Depot"],
+      ["🤸‍♀️", :"Lowe's Airsports"],
+      ["🎳", :Bowling],
+      ["🏬", :Costco],
+      ["🐥", :CarWash],
+      ["📦", :ParkourUtah],
+      ["🏌️‍♂️", :Lighten],
+    ].then { |contact_names|
+      contacts = Contact.where.not(address: nil).where(name: contact_names.map(&:last)).to_a
+      contact_names.map { |line|
+        line.tap { line[1] = contacts.find { |c| c.name.to_s == line[1].to_s } }
+      }
+    }.map do |display, contact|
+      name = contact&.nickname || contact&.name
+      next if name.blank?
 
-      ["🧴", :WashHair, "log care Wash Hair"],
-      ["💅", :CutNails, "log care Cut Nails"],
-      [emoji("🖋"), :Custom, "log {{Log what?}}"],
-    ]
+      [display, name, "Take me to #{name}", name]
+    end
   end
 %>
 

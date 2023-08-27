@@ -15,6 +15,10 @@ export let care = new Widget("care", function() {
   showModal("care-modal")
 })
 
+export let contacts = new Widget("contacts", function() {
+  showModal("contacts-modal")
+})
+
 document.querySelectorAll(".mini-widget").forEach((widget) => {
   let id = widget.getAttribute("data-id")
 
