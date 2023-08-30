@@ -256,8 +256,8 @@ class TeslaControl
 
     JSON.parse(res.body, symbolize_names: true).dig(:response)
   rescue RestClient::ExceptionWithResponse => err
-    return wake_up && retry if err.response.code == 408
-    return refresh && retry if err.response.code == 401
+    return wake_up && retry if err.response&.code == 408
+    return refresh && retry if err.response&.code == 401
     raise err
   rescue RestClient::Forbidden => err
     DataStorage[:tesla_forbidden] = true
@@ -285,8 +285,8 @@ class TeslaControl
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
     SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
   rescue RestClient::ExceptionWithResponse => err
-    return wake_up && retry if err.response.code == 408
-    return refresh && retry if err.response.code == 401
+    return wake_up && retry if err.response&.code == 408
+    return refresh && retry if err.response&.code == 401
     raise err
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#wake_vehicle:\nCode: #{res.code}\n```#{res.body}```")
@@ -310,9 +310,9 @@ class TeslaControl
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
     SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
   rescue RestClient::ExceptionWithResponse => err
-    return wake_up && retry if err.response.code == 408
-    return refresh && retry if err.response.code == 401
-    return { status: 500, message: "Internal Server Error"  } if err.response.code == 500
+    return wake_up && retry if err.response&.code == 408
+    return refresh && retry if err.response&.code == 401
+    return { status: 500, message: err.message.presence || "Internal Server Error"  } if err.response.code == 500
     raise err
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#get(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```")
