@@ -4,43 +4,39 @@
     <script type="text/javascript">
       function initMap() {
         setTimeout(function() {
-          console.log("Init Map");
           // Delay if DOM isn't loaded yet
           if (!document.getElementById("contact_lng")) {
-            console.log("Not ready yet, retrying...");
             return setTimeout(initMap, 500)
           }
 
           let [homelat, homelng] = <%= current_user.address_book&.home&.loc || [] %>
-          console.log("Set defaults", homelat, homelng);
 
           let lat_field = document.getElementById("contact_lat")
           let lng_field = document.getElementById("contact_lng")
-          console.log("Set fields", lat_field, lng_field);
 
           let start_lat = parseFloat(lat_field.value || homelat || 0)
           let start_lng = parseFloat(lng_field.value || homelng || 0)
-          console.log("Set vals", start_lat, start_lng);
 
           var map = new google.maps.Map(document.getElementById("map"), {
             center: { lat: start_lat, lng: start_lng },
             zoom: 14
           });
-          console.log("Map started");
 
           var marker = new google.maps.Marker({
             map: map,
             draggable: true,
             position: { lat: start_lat, lng: start_lng }
           });
-          console.log("Marker Added");
 
           google.maps.event.addListener(marker, "dragend", function(event) {
-            console.log("Drag done");
+            let c1 = [lat_field.value, lng_field.value]
+            let c2 = [event.latLng.lat(), event.latLng.lng()]
+
             lat_field.value = event.latLng.lat();
             lng_field.value = event.latLng.lng();
+
+            console.log(Math.sqrt((c2[0] - c1[0])**2 + (c2[1] - c1[1])**2))
           });
-          console.log("Init complete");
         }, 1000)
       }
     </script>
