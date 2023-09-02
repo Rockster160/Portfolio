@@ -1,10 +1,13 @@
 <% if @contact.address.present? %>
   <% content_for(:head) do %>
     <script src="https://maps.googleapis.com/maps/api/js?key=<%= ENV["PORTFOLIO_GMAPS_KEY"] %>&callback=initMap" async defer></script>
-  <% end %>
-  <% content_for(:after_body) do %>
-    <script>
+    <script type="text/javascript">
       function initMap() {
+        if (!document.getElementById("contact_lng")) {
+          // Delay if DOM isn't loaded yet
+          return setTimeout(initMap, 500)
+        }
+
         let [homelat, homelng] = <%= current_user.address_book&.home&.loc || [] %>
 
         let lat_field = document.getElementById("contact_lat")
