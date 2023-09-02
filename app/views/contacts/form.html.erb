@@ -5,6 +5,7 @@
       function initMap() {
         if (!document.getElementById("contact_lng")) {
           // Delay if DOM isn't loaded yet
+          console.log("Not ready yet, retrying...");
           return setTimeout(initMap, 500)
         }
 
