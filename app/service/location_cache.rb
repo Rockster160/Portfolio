@@ -11,7 +11,8 @@ class LocationCache
     ::Jarvis.trigger(
       :travel,
       {
-        location: last_location,
+        coord: last_location,
+        location: nearby_contact&.name,
         action: bool ? :departed : :arrived,
         timestamp: Time.current,
       },
@@ -22,9 +23,12 @@ class LocationCache
     User.me.jarvis_cache.set(:is_driving, bool)
   end
 
+  def self.nearby_contact
+    User.me.address_book.contact_by_loc(last_location[:loc])
+  end
+
   def self.notify(bool)
-    contact = AddressBook.new(User.me).contact_by_loc(last_location[:loc])
-    location = contact&.name.presence || last_location[:loc]
+    location = nearby_contact&.name.presence || last_location[:loc]
     Jarvis.ping("#{bool ? 'Departing' : 'Arrived at'} #{location}")
   end
 

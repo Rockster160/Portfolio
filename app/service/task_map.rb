@@ -19,6 +19,7 @@ class TaskMap
   TYPES = [
     :any,
     :str,
+    # :text, acts like str, but allows more text to be entered
     :bool,
     :num,
     :duration,
@@ -505,7 +506,8 @@ class TaskMap
         { block: :str, name: :message },
       ],
       comment:    [
-        { block: :str, name: :message },
+        { return: :str },
+        { block: :text },
       ],
       command:    [
         { return: :str },
