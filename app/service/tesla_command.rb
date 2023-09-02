@@ -241,7 +241,7 @@
     loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
     is_driving = data.dig(:drive_state, :speed).to_i > 0
 
-    place = address_book.near(loc)
+    place = address_book.find_contact_near(loc)
     action = is_driving ? :Near : :At
     return { action: action, location: place[:name] } if place.present?
 
