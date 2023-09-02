@@ -51,7 +51,7 @@ class AddressBook
     found ||= contacts.find_by("REGEXP_REPLACE(nickname, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
   end
 
-  def loc_from_name
+  def loc_from_address(address)
     # TODO - Give an address and find the lat/lng for it.
     # Should also have a UI where we can move the pin to a precise location.
     # Contacts should also have a preferred phone/address - perhaps just a bool on the associations?
@@ -147,15 +147,26 @@ class AddressBook
   end
 
   # Get [lat,lng] from address
-  # def geocode(address)
-  # end
+  def geocode(address)
+    nonnil_cache("geocode(#{address})") do
+      # ::Jarvis.say("Geocoding #{address}")
+      encoded = CGI.escape(address)
+      url = "https://maps.googleapis.com/maps/api/geocode/json?address=#{encoded}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
+      res = RestClient.get(url)
+      json = JSON.parse(res.body, symbolize_names: true)
+
+      json.dig(:results, 0, :geometry, :location)&.then { |loc_data|
+        [loc_data[:lat], loc_data[:lng]]
+      }
+    end
+  end
 
   # Get address from [lat,lng]
   def reverse_geocode(loc, get: :name)
     return "Herriman" unless Rails.env.production?
 
     nonnil_cache("reverse_geocode(#{loc.map { |l| l.round(2) }.join(",")},#{get})") do
-      # ::Jarvis.say("Geocoding #{loc.join(",")},#{get}")
+      # ::Jarvis.say("Reverse Geocoding #{loc.join(",")},#{get}")
       url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=#{loc.join(",")}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
       res = RestClient.get(url)
       json = JSON.parse(res.body, symbolize_names: true)

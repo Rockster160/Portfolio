@@ -40,7 +40,7 @@ class Contact < ApplicationRecord
     # Only relookup loc if address has changed
 
     if lat.nil? || (address.present? && address != self.address)
-      lat, lng = AddressBook.loc_from_name(address) || []
+      lat, lng = AddressBook.new(user).loc_from_address(address) || []
     end
 
     update(
