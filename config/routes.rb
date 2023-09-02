@@ -139,6 +139,7 @@ Rails.application.routes.draw do
     resources :bowling_games, path: "/"
   end
 
+  resources :contacts
   resources :recipes, param: :friendly_id do
     post :export_to_list, on: :member
   end

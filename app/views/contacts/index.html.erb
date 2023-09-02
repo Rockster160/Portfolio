@@ -1,0 +1,25 @@
+<%= meta_title "Contacts", include_name: false %>
+
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <% if user_signed_in? %>
+      <a href="<%= account_path %>" class="btn">Account</a>
+      <a href="<%= new_contact_path %>" class="btn pull-right">New Contact +</a>
+    <% else %>
+      <a href="<%= login_path %>" class="btn">Sign In</a>
+    <% end %>
+  </div>
+  <div class="lists-title">Contacts</div>
+  <div class="lists">
+    <div class="list-field">
+      <%= text_field_tag "contact[name]", "", class: "filterable", placeholder: "Search Contacts" %>
+    </div>
+    <% @contacts.each do |contact| %>
+      <div class="list-item-container" data-list-id="<%= contact.id %>">
+        <a href="<%= edit_contact_path(contact) %>" class="list-item">
+          <span class="item-name"><%= contact.name %><%= " (#{contact.nickname})" if contact.nickname.present? %></span>
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>

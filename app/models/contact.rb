@@ -26,10 +26,32 @@ class Contact < ApplicationRecord
     [lat, lng]
   end
 
+  def lat=(val)
+    return super(nil) if val.to_i == 0
+    super(val)
+  end
+
+  def lng=(val)
+    return super(nil) if val.to_i == 0
+    super(val)
+  end
+
   def loc=(*new_loc)
     new_lat, new_lng = *Array.wrap(new_loc).flatten
     self.lat = new_lat
     self.lng = new_lng
+  end
+
+  def address=(new_address)
+    return if self.address == new_address
+
+    if new_address.present?
+      lat, lng = AddressBook.new(user).loc_from_address(new_address) || []
+      self.lat = lat
+      self.lng = lng
+    end
+
+    super(new_address)
   end
 
   def resync
@@ -37,9 +59,8 @@ class Contact < ApplicationRecord
 
     address = raw[:addresses]&.first
     json = raw.deep_symbolize_keys
-    # Only relookup loc if address has changed
 
-    if lat.nil? || (address.present? && address != self.address)
+    if lat.nil? && address.present?
       lat, lng = AddressBook.new(user).loc_from_address(address) || []
     end
 

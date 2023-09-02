@@ -1,0 +1,81 @@
+<% if @contact.address.present? %>
+  <% content_for(:head) do %>
+    <script src="https://maps.googleapis.com/maps/api/js?key=<%= ENV["PORTFOLIO_GMAPS_KEY"] %>&callback=initMap" async defer></script>
+  <% end %>
+  <% content_for(:after_body) do %>
+    <script>
+      function initMap() {
+        let [homelat, homelng] = <%= current_user.address_book&.home&.loc || [] %>
+
+        let lat_field = document.getElementById("contact_lat")
+        let lng_field = document.getElementById("contact_lng")
+
+        let start_lat = parseFloat(lat_field.value || homelat || 0)
+        let start_lng = parseFloat(lng_field.value || homelng || 0)
+
+        var map = new google.maps.Map(document.getElementById("map"), {
+          // map center should be home if not specified
+          center: { lat: start_lat, lng: start_lng },
+          zoom: 14
+        });
+
+        var marker = new google.maps.Marker({
+          map: map,
+          draggable: true,
+          position: { lat: start_lat, lng: start_lng }
+        });
+
+        google.maps.event.addListener(marker, "dragend", function (event) {
+          lat_field.value = event.latLng.lat();
+          lng_field.value = event.latLng.lng();
+        });
+      }
+    </script>
+  <% end %>
+<% end %>
+
+<div class="skinny-container">
+  <div class="btn-container">
+    <a href="<%= contacts_path %>" class="btn">&larr; All Contacts</a>
+    <a href="<%= logout_path %>" class="btn pull-right">Logout</a>
+  </div>
+  <%= form_for @contact do |f| %>
+    <div class="form-title"><%= @contact.persisted? ? :Edit : :New %> Contact</div>
+
+    <%= render partial: 'layouts/error_container', locals: { resource: @contact } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= f.label :name %>
+        <%= f.text_field :name %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :nickname %>
+        <%= f.text_field :nickname %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :phone %>
+        <%= f.phone_field :phone %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :address %>
+        <%= f.text_area :address %>
+      </div>
+
+      <% if @contact.address.present? %>
+        <div class="form-field">
+          <div id="map" style="height: 300px;"></div>
+          <%= f.hidden_field :lat %>
+          <%= f.hidden_field :lng %>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit %>
+    </div>
+  <% end %>
+</div>

@@ -52,9 +52,7 @@ class AddressBook
   end
 
   def loc_from_address(address)
-    # TODO - Give an address and find the lat/lng for it.
-    # Should also have a UI where we can move the pin to a precise location.
-    # Contacts should also have a preferred phone/address - perhaps just a bool on the associations?
+    geocode(address)
   end
 
   def to_address(data)
@@ -148,6 +146,8 @@ class AddressBook
 
   # Get [lat,lng] from address
   def geocode(address)
+    return if address.blank?
+
     nonnil_cache("geocode(#{address})") do
       # ::Jarvis.say("Geocoding #{address}")
       encoded = CGI.escape(address)
