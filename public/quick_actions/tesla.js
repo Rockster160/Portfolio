@@ -200,12 +200,13 @@ tesla.refresh = function() {
   tesla.socket.send({ action: "command", command: "reload", params: {} })
 }
 
-let tryAgain = function() {
-  setTimeout(function() {
-    if (tesla?.data && "climate" in tesla.data) { return }
-
-    tesla.socket.send({ action: "request" })
-    tryAgain()
-  }, 3000)
-}
-tryAgain()
+tesla.socket.send({ action: "request" })
+// let tryAgain = function() {
+//   setTimeout(function() {
+//     if (tesla?.data && "climate" in tesla.data) { return }
+//
+//     tesla.socket.send({ action: "request" })
+//     tryAgain()
+//   }, 3000)
+// }
+// tryAgain()

@@ -86,6 +86,7 @@ class CalendarEventsWorker
         name: event[:name],
         uid: event[:uid],
         type: :calendar,
+        calendar: event[:calendar],
         notes: event[:notes],
         user_id: @user_id,
         scheduled_time: event[:start_time],
@@ -116,6 +117,24 @@ class CalendarEventsWorker
           words: "Take me to #{event[:location].presence || event[:name]}",
           user_id: @user_id,
           scheduled_time: event[:start_time] - traveltime - PRE_OFFSET,
+        )
+        # Check car after we're supposed to leave
+        new_events.push(
+          name: "Check Car",
+          uid: event[:uid] + "-precheck",
+          type: :travel,
+          words: "Reload Car",
+          user_id: @user_id,
+          scheduled_time: (event[:start_time] - traveltime) + 5.minutes,
+        )
+        # Check car after we're supposed to arrive
+        new_events.push(
+          name: "Check Car",
+          uid: event[:uid] + "-postcheck",
+          type: :travel,
+          words: "Reload Car",
+          user_id: @user_id,
+          scheduled_time: event[:start_time] + 5.minutes,
         )
         # TODO: Only nav home if there are no other events
         # Also time estimate should be from "current" location-

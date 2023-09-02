@@ -12,9 +12,12 @@ module Jarvis::Schedule
         end
       )
       next if timestamp.blank?
+      name = sched.is_a?(::JarvisTask) ? sched.name : (sched[:name].presence || sched[:command])
+      next if name == "Check Car"
+
       {
         timestamp: timestamp,
-        name: sched.is_a?(::JarvisTask) ? sched.name : (sched[:name].presence || sched[:command]),
+        name: name,
         recurring: sched.is_a?(::JarvisTask) && sched.input
       }
     }.compact.sort_by { |sched| sched[:timestamp] }
@@ -93,6 +96,7 @@ module Jarvis::Schedule
       events_to_add.push(
         jid: jid,
         name: new_event[:name],
+        calendar: new_event[:calendar],
         scheduled_time: new_event[:scheduled_time],
         user_id: new_event[:user_id],
         command: words,

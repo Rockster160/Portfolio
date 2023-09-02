@@ -103,6 +103,12 @@ class TeslaControl
     )
 
     success
+  rescue RestClient::ExceptionWithResponse => e
+    if e.response&.code >= 500
+      expo_backoff(:update)
+    else
+      raise e
+    end
   end
 
   def pop_boot(direction=:toggle)
@@ -209,6 +215,12 @@ class TeslaControl
       end
       LocationCache.driving = driving
     }
+  rescue RestClient::ExceptionWithResponse => e
+    if e.response&.code >= 500
+      expo_backoff(:update)
+    else
+      raise e
+    end
   end
 
   def loc
@@ -238,8 +250,28 @@ class TeslaControl
 
   private
 
+  def exponential_backoff_time(attempt)
+    ((attempt ** 2) + 15 + (rand(30) * (attempt + 1))).seconds
+  end
+
+  def reset_counter
+    DataStorage[:tesla_retry_count] = 0
+  end
+
+  def expo_backoff(cmd, params={})
+    attempt = DataStorage[:tesla_retry_count] ||= 0
+    DataStorage[:tesla_retry_count] += 1
+    TeslaCommandWorker.perform_in(exponential_backoff_time(attempt), cmd.to_s, params)
+  end
+
   def command(cmd, params={})
     post_vehicle("command/#{cmd}", params)
+  rescue RestClient::ExceptionWithResponse => e
+    if e.response&.code >= 500
+      expo_backoff(cmd, params)
+    else
+      raise e
+    end
   end
 
   def parse_to(val, truthy, falsy)
@@ -262,6 +294,7 @@ class TeslaControl
       BASE_HEADERS.merge(Authorization: "Bearer #{@access_token}")
     )
 
+    reset_counter
     JSON.parse(res.body, symbolize_names: true).dig(:response)
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response&.code == 408
@@ -284,6 +317,7 @@ class TeslaControl
       BASE_HEADERS.merge(Authorization: "Bearer #{@access_token}")
     )
 
+    reset_counter
     state = JSON.parse(res.body, symbolize_names: true).dig(:response, :state)
     state == "online"
   rescue RestClient::GatewayTimeout => err
@@ -295,6 +329,8 @@ class TeslaControl
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response&.code == 408
     return refresh && retry if err.response&.code == 401
+    return expo_backoff(:update) if err.response&.code >= 500
+
     raise err
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#wake_vehicle:\nCode: #{res.code}\n```#{res.body}```")
@@ -310,6 +346,7 @@ class TeslaControl
       BASE_HEADERS.merge(Authorization: "Bearer #{@access_token}")
     )
 
+    reset_counter
     JSON.parse(res.body, symbolize_names: true).dig(:response)
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry
@@ -320,7 +357,6 @@ class TeslaControl
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response&.code == 408
     return refresh && retry if err.response&.code == 401
-    return { status: 500, message: err.message.presence || "Internal Server Error"  } if err.response.code == 500
     raise err
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#get(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```")
@@ -338,6 +374,7 @@ class TeslaControl
 
     json = JSON.parse(res.body, symbolize_names: true)
 
+    reset_counter
     DataStorage[:tesla_forbidden] = false
 
     @refresh_token = DataStorage[:tesla_refresh_token] = json[:refresh_token]
