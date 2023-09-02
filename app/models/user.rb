@@ -54,7 +54,7 @@ class User < ApplicationRecord
   delegate :sub_auth, to: :push_sub
 
   def self.me
-    admin.find(1)
+    @@me ||= admin.find(1)
   end
 
   def self.auth_from_basic(basic_auth)

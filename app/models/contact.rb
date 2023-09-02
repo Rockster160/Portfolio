@@ -35,9 +35,14 @@ class Contact < ApplicationRecord
   def resync
     return if raw.blank?
 
+    address = raw[:addresses]&.first
     json = raw.deep_symbolize_keys
     # Only relookup loc if address has changed
-    # lat, lng = AddressBook.loc_from_name(raw[:addresses].first) || []
+
+    if lat.nil? || (address.present? && address != self.address)
+      lat, lng = AddressBook.loc_from_name(address) || []
+    end
+
     update(
       name: json[:name]&.split(" ", 2)&.first, # Should include aliases and allow last names?
       phone: json[:phones]&.first&.dig(:value)&.gsub(/[^\d]/, "")&.last(10),

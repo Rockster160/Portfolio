@@ -49,6 +49,7 @@ class JarvisTask < ApplicationRecord
     # :integration,
     # :failed_task,
     :function,
+    :travel,
   ]
 
   enum trigger: {
@@ -64,6 +65,7 @@ class JarvisTask < ApplicationRecord
     failed_task:       9,
     function:          10,
     calendar:          11,
+    travel:            12,
   }
 
   enum output_type: {

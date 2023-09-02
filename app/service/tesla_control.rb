@@ -200,6 +200,14 @@ class TeslaControl
   def vehicle_data
     @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data").tap { |car_data|
       User.me.jarvis_cache.set(:car_data, car_data)
+      driving = !((car_data.dig(:drive_state, :shift_state) || "P") == "P")
+      if !driving
+        LocationCache.set(
+          [car_data.dig(:drive_state, :latitude), car_data.dig(:drive_state, :longitude)],
+          car_data.dig(:drive_state, :gps_as_of),
+        )
+      end
+      LocationCache.driving = driving
     }
   end
 

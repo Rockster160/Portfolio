@@ -1,4 +1,6 @@
 class AddressBook
+  include DistanceHelper
+
   def initialize(user)
     @user = user
   end
@@ -29,13 +31,8 @@ class AddressBook
     } || home&.address
   end
 
-  def distance(c1, c2)
-    # √[(x₂ - x₁)² + (y₂ - y₁)²]
-    Math.sqrt((c2[0] - c1[0])**2 + (c2[1] - c1[1])**2)
-  end
-
   def contact_by_loc(loc)
-    near(loc)
+    find_contact_near(loc)
   end
 
   def contact_by_name(name)
@@ -131,13 +128,13 @@ class AddressBook
   end
 
   # Find contact at [lat,lng]
-  def near(coord, near_threshold=0.001)
+  def find_contact_near(coord)
     return [] unless coord.compact.length == 2
 
     contacts.find { |details|
       next unless details.loc&.compact&.length == 2
 
-      distance(details.loc, coord) <= near_threshold
+      near?(details.loc, coord)
     }
   end
 

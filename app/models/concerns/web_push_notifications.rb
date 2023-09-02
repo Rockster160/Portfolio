@@ -23,6 +23,8 @@ class WebPushNotifications
       }
     )
     return "Push success"
+  rescue WebPush::Unauthorized => e
+    "Failed to push - (WebPush Error) [#{e.class}] #{e}"
   end
 
   def self.format_payload(payload)
