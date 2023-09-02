@@ -13,7 +13,7 @@ class LocationCache
       {
         location: last_location,
         action: bool ? :departed : :arrived,
-        timestamp: Timwe.current,
+        timestamp: Time.current,
       },
       scope: { user_id: User.me.id }
     )
