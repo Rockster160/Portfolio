@@ -11,30 +11,36 @@
         }
 
         let [homelat, homelng] = <%= current_user.address_book&.home&.loc || [] %>
+        console.log("Set defaults", homelat, homelng);
 
         let lat_field = document.getElementById("contact_lat")
         let lng_field = document.getElementById("contact_lng")
+        console.log("Set fields", lat_field, lng_field);
 
         let start_lat = parseFloat(lat_field.value || homelat || 0)
         let start_lng = parseFloat(lng_field.value || homelng || 0)
+        console.log("Set vals", start_lat, start_lng);
 
         var map = new google.maps.Map(document.getElementById("map"), {
           // map center should be home if not specified
           center: { lat: start_lat, lng: start_lng },
           zoom: 14
         });
+        console.log("Map started");
 
         var marker = new google.maps.Marker({
           map: map,
           draggable: true,
           position: { lat: start_lat, lng: start_lng }
         });
+        console.log("Marker Added");
 
         google.maps.event.addListener(marker, "dragend", function(event) {
           console.log("Drag done");
           lat_field.value = event.latLng.lat();
           lng_field.value = event.latLng.lng();
         });
+        console.log("Init complete");
       }
     </script>
   <% end %>
