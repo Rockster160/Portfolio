@@ -3,6 +3,7 @@
     <script src="https://maps.googleapis.com/maps/api/js?key=<%= ENV["PORTFOLIO_GMAPS_KEY"] %>&callback=initMap" async defer></script>
     <script type="text/javascript">
       function initMap() {
+        console.log("Init Map");
         if (!document.getElementById("contact_lng")) {
           // Delay if DOM isn't loaded yet
           console.log("Not ready yet, retrying...");
@@ -29,7 +30,8 @@
           position: { lat: start_lat, lng: start_lng }
         });
 
-        google.maps.event.addListener(marker, "dragend", function (event) {
+        google.maps.event.addListener(marker, "dragend", function(event) {
+          console.log("Drag done");
           lat_field.value = event.latLng.lat();
           lng_field.value = event.latLng.lng();
         });
