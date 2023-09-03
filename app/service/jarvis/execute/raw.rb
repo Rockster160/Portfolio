@@ -1,14 +1,14 @@
 class Jarvis::Execute::Raw < Jarvis::Execute::Executor
-  CASTABLE = [:bool, :str, :num]
+  CASTABLE = [:bool, :str, :text, :num]
   # TODO: cast date
 
   CASTABLE.each do |method|
     define_method(method) do
-      self.class.send(method, args)
+      self.class.send(method, args, @jil)
     end
   end
 
-  def self.bool(val)
+  def self.bool(val, jil=nil)
     case val
     when ::Array then val.first.try(:dig, :raw)
     when ::Hash then val[:raw]
@@ -18,18 +18,27 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
     end
   end
 
-  def self.str(val)
+  def self.text(val, jil=nil)
+    str(val, jil)
+  end
+
+  def self.str(val, jil=nil)
     case val
     when ::Array then (val.one? && val.first.try(:dig, :raw)) || val.to_json
     when ::Hash then val[:raw] || val.to_json
     else
       val.to_s
-    end
+    end.then { |solved_str|
+      solved_str.gsub(/#\{([\w\.:]*)\}/) do |found|
+        token = Regexp.last_match[1]
+        jil&.ctx&.dig(:vars, token) || ""
+      end
+    }
   rescue NoMethodError
     ""
   end
 
-  def self.num(val)
+  def self.num(val, jil=nil)
     casted = case val
     when ::Array then (val.one? && val.first.try(:dig, :raw)) || raise("Unable to cast <Array> to <Num>")
     when ::Hash then val[:raw] || raise("Unable to cast <Hash> to <Num>")

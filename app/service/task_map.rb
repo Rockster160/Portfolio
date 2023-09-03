@@ -510,7 +510,7 @@ class TaskMap
         { block: :str, name: :message },
       ],
       comment:    [
-        { return: :str },
+        { return: :nil },
         { block: :text },
       ],
       command:    [
