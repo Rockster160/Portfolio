@@ -94,6 +94,9 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
         when :"logic.break"
           loop_exit = true
           break [eval_block(arg)] # still evaling here so that it increments
+        when :"task.exit"
+          loop_exit = true
+          break [eval_block(arg)] # still evaling here so that it increments
         else
           eval_block(arg).tap { |arg_val|
             break arg_val if jil.ctx.delete(:next)
@@ -145,6 +148,9 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
           # Don't run any more steps in the block, but continue the loop
           break [eval_block(arg)] # still evaling here so that it increments
         when :"logic.break"
+          loop_exit = true
+          break [eval_block(arg)] # still evaling here so that it increments
+        when :"task.exit"
           loop_exit = true
           break [eval_block(arg)] # still evaling here so that it increments
         else
