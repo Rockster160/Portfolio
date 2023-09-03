@@ -6,6 +6,8 @@ class Jarvis::Execute::Text < Jarvis::Execute::Executor
   def match
     # TODO: Allow flags
     str, reg = args.first(2).map { |t| cast_str(eval_block(t)) }
+    return false if reg.blank?
+
     flags = args[2]
     str.match?(/#{reg}/)
   end
