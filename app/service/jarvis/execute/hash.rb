@@ -53,6 +53,7 @@ class Jarvis::Execute::Hash < Jarvis::Execute::Executor
       break if loop_exit || jil.ctx[:i] > Jarvis::Execute::MAX_ITERATIONS
 
       val = steps.map { |arg|
+        break [] if jil.ctx[:exit]
         # next and break only break out of one layer
         case arg[:type].try(:to_sym)
         when :"logic.next"
