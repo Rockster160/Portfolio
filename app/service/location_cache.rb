@@ -45,7 +45,7 @@ class LocationCache
 
     return if locations.length >= 3 && near?(locations.last[:loc], loc)
 
-    locations = locations.push({ loc: loc, at: at }).last(3)
+    locations = locations.push({ loc: loc, at: at, name: nearby_contact&.name }).last(3)
     User.me.jarvis_cache.set(:recent_locations, locations)
   end
 end
