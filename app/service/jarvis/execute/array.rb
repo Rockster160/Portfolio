@@ -6,13 +6,13 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
   def get
     arr, idx = evalargs
     arr = SafeJsonSerializer.load(arr)
-    arr[idx]
+    arr[idx.to_i] # to_i is a hack because for some reason we're not evaling the evalargs
   end
 
   def set
     arr, idx, val = evalargs
     arr = SafeJsonSerializer.load(arr)
-    arr[idx] = val
+    arr[idx.to_i] = val # to_i is a hack because for some reason we're not evaling the evalargs
     arr
   end
 
