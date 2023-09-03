@@ -218,6 +218,7 @@ class TeslaControl
   rescue RestClient::ExceptionWithResponse => e
     if e.response&.code.to_i >= 500
       expo_backoff(:update)
+      cached_vehicle_data
     else
       raise e
     end
