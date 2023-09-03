@@ -7,7 +7,7 @@ class Jarvis::Execute::Custom < Jarvis::Execute::Executor
     data = run_task.inputs.map(&:first).zip(evalargs).map { |k, v|
       type = task_input_data[k].each { |d| break d[:return] if d.is_a?(Hash) && d.key?(:return) }
       # If there is no `return` this should fail somehow?
-      [k, ::Jarvis::Execute::Cast.cast(v, type)]
+      [k, ::Jarvis::Execute::Cast.cast(v, type, jil: jil)]
     }.to_h
 
     custom_ctx, custom_task, custom_data = ::Jarvis::Execute.call_with_data(
@@ -25,7 +25,7 @@ class Jarvis::Execute::Custom < Jarvis::Execute::Executor
       raise custom_error
     else
       # Don't use last_result_val - it stores `true` as "t"
-      ::Jarvis::Execute::Cast.cast(custom_task.last_ctx[:last_val], run_task.output_type)
+      ::Jarvis::Execute::Cast.cast(custom_task.last_ctx[:last_val], run_task.output_type, jil: jil)
     end
   end
 end

@@ -1,9 +1,9 @@
 class Jarvis::Execute::Cast < Jarvis::Execute::Executor
-  def self.cast(val, to, force: false)
+  def self.cast(val, to, force: false, jil: nil)
     return val if to.to_sym == :any
 
     if ::Jarvis::Execute::Raw::CASTABLE.include?(to.to_sym)
-      return ::Jarvis::Execute::Raw.send(to.to_sym, val)
+      return ::Jarvis::Execute::Raw.send(to.to_sym, val, jil)
     elsif force
       case to.to_sym
       when :array

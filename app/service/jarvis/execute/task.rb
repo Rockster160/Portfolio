@@ -4,7 +4,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def print
-    jil.ctx[:msg] << evalargs.first
+    jil.ctx[:msg] << ::Jarvis::Execute::Cast.cast(evalargs.first, :str, force: true, jil: jil)
   end
 
   def comment

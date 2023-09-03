@@ -75,7 +75,7 @@
     @ctx[:vars][task_block[:token]] = (
       "Jarvis::Execute::#{klass.titleize.gsub(" ", "")}".constantize.new(self, task_block).send(method)
     ).then { |res|
-      ::Jarvis::Execute::Cast.cast(res, task_block[:returntype], force: true)
+      ::Jarvis::Execute::Cast.cast(res, task_block[:returntype], force: true, jil: self)
     }.tap { |res|
       ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token], res: res.as_json })
       @ctx[:last_val] = res

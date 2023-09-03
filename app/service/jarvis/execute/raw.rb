@@ -29,7 +29,7 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
     else
       val.to_s
     end.then { |solved_str|
-      solved_str.gsub(/#\{([\w\.:]*)\}/) do |found|
+      solved_str.gsub(/#\{\s*(.*?)\s*\}/) do |found|
         token = Regexp.last_match[1]
         jil&.ctx&.dig(:vars, token) || ""
       end
