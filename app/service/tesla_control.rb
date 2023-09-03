@@ -104,7 +104,7 @@ class TeslaControl
 
     success
   rescue RestClient::ExceptionWithResponse => e
-    if e.response&.code >= 500
+    if e.response&.code.to_i >= 500
       expo_backoff(:update)
     else
       raise e
@@ -216,7 +216,7 @@ class TeslaControl
       LocationCache.driving = driving
     }
   rescue RestClient::ExceptionWithResponse => e
-    if e.response&.code >= 500
+    if e.response&.code.to_i >= 500
       expo_backoff(:update)
     else
       raise e
@@ -267,7 +267,7 @@ class TeslaControl
   def command(cmd, params={})
     post_vehicle("command/#{cmd}", params)
   rescue RestClient::ExceptionWithResponse => e
-    if e.response&.code >= 500
+    if e.response&.code.to_i >= 500
       expo_backoff(cmd, params)
     else
       raise e
@@ -329,7 +329,7 @@ class TeslaControl
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response&.code == 408
     return refresh && retry if err.response&.code == 401
-    return expo_backoff(:update) if err.response&.code >= 500
+    return expo_backoff(:update) if err.response&.code.to_i >= 500
 
     raise err
   rescue JSON::ParserError => err
