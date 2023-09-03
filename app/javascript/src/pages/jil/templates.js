@@ -49,6 +49,7 @@ export let shorttype = function(type) {
   switch(type) {
     case "bool":     return "T|F"; break;
     case "str":      return "str"; break;
+    case "text":     return "text"; break;
     case "num":      return "#"; break;
     case "keyval":   return "k:v"; break;
     case "hash":     return "{}"; break;
@@ -91,6 +92,7 @@ export let tokenSelector = function(selected_option) {
 export let templates = {
   bool: () => `<label class="switch raw-input"><input type="checkbox" name="bool-{}"><span class="slider"></span></label>`,
   str:  () => `<input type="text" name="str-{}" placeholder="Hello, World!" class="raw-input">`,
+  text: () => `<textarea name="str-{}" rows="8" class="raw-input"></textarea>`,
   num:  () => `<input type="number" name="num-{}" placeholder="#" class="raw-input">`,
   date: () => `<input type="date" name="date-{}" class="raw-input">`,
 
@@ -165,27 +167,40 @@ export let templates = {
                               { span: { class: "select-name", content: data.label || "" } },
                             ]
                           } })
-                          children.push({ select: {
-                            id: `${existingdata.token}[${idx}]`,
-                            type: "select",
-                            class: `block-select ${data.optional ? "optional" : ""}`,
-                            unattached: true,
-                            blocktype: data.block,
-                            content: function() {
-                              let opts = []
-                              if (data.optional) { opts.push({ option: { value: "", content: `{None}` } }) }
-                              // bool str num allow raw entries
-                              if (fillitem.option != "input" && rawVals.indexOf(data.block) >= 0) {
-                                opts.push({ option: { value: "input", content: "input" } })
+                          if (data.block == "text") {
+                            children.push({ textarea: {
+                              id: `${existingdata.token}[${idx}]`,
+                              class: `raw-input ${data.optional ? "optional" : ""}`,
+                              unattached: true,
+                              blocktype: data.block,
+                              content: function() {
+                                return fillitem.raw || ""
                               }
-                              if (fillitem.option) {
-                                opts.push({ option: {
-                                  value: fillitem.option, selected: true, content: fillitem.option
-                                } })
+                            } })
+                          } else {
+                            children.push({ select: {
+                              id: `${existingdata.token}[${idx}]`,
+                              type: "select",
+                              class: `block-select ${data.optional ? "optional" : ""}`,
+                              unattached: true,
+                              blocktype: data.block,
+                              content: function() {
+                                let opts = []
+                                if (data.optional) { opts.push({ option: { value: "", content: `{None}` } }) }
+                                // bool str num allow raw entries
+                                if (fillitem.option != "input" && rawVals.indexOf(data.block) >= 0) {
+                                  opts.push({ option: { value: "input", content: "input" } })
+                                }
+                                if (fillitem.option) {
+                                  opts.push({ option: {
+                                    value: fillitem.option, selected: true, content: fillitem.option
+                                  } })
+                                }
+                                return opts
                               }
-                              return opts
-                            }
-                          } })
+                            } })
+                          }
+
                           if (fillitem.option == "input") {
                             let input = render(data.block)
                             let field = input.nodeName == "INPUT" ? input : input.querySelector("input")

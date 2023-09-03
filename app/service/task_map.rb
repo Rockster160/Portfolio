@@ -42,6 +42,10 @@ class TaskMap
         { block: :str },
         # { str: :value },
       ],
+      text:      [
+        { return: :str },
+        { block: :text },
+      ],
       # text:      [
         # { return: :str },
         # This should allow a multi-line text input field, but still act as a string otherwise
@@ -259,18 +263,18 @@ class TaskMap
       get:         [
         { return: :any, description: "Value of array at index" },
         { block: :array },
-        { block: :number, name: :index, default: 0 },
+        { block: :num, name: :index, default: 0 },
       ],
       set:         [
         { return: :array },
         { block: :array },
-        { block: :number, name: :index, default: 0 },
+        { block: :num, name: :index, default: 0 },
         { block: :any, name: :value },
       ],
       del:         [
         { return: :array, description: "Remove object at index of array" },
         { block: :array },
-        { block: :number, name: :index, default: 0 },
+        { block: :num, name: :index, default: 0 },
       ],
       length:      [
         { return: :num },
