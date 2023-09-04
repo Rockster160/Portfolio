@@ -162,7 +162,7 @@ class AddressBook
   end
 
   # Get address from [lat,lng]
-  def reverse_geocode(loc, get: :name)
+  def reverse_geocode(loc, get: :city)
     return "Herriman" unless Rails.env.production?
 
     nonnil_cache("reverse_geocode(#{loc.map { |l| l.round(2) }.join(",")},#{get})") do
@@ -172,7 +172,7 @@ class AddressBook
       json = JSON.parse(res.body, symbolize_names: true)
 
       case get
-      when :name
+      when :city
         json.dig(:results, 0, :address_components)&.find { |comp|
           comp[:types] == ["locality", "political"]
         }&.dig(:short_name)

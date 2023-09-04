@@ -12,7 +12,7 @@ class LocationCache
       :travel,
       {
         coord: last_location,
-        location: nearby_contact&.name,
+        location: location_name,
         action: bool ? :departed : :arrived,
         timestamp: Time.current,
       },
@@ -28,8 +28,16 @@ class LocationCache
   end
 
   def self.notify(bool)
-    location = nearby_contact&.name.presence || last_location[:loc]
+    location = location_name.presence || last_location[:loc]
     Jarvis.ping("#{bool ? 'Departing' : 'Arrived at'} #{location}")
+  end
+
+  def self.location_name
+    nearby_contact&.name || lookup_location_name
+  end
+
+  def self.lookup_location_name
+    User.me.address_book.reverse_geocode(last_location[:loc], get: :city)
   end
 
   def self.last_location
@@ -45,7 +53,7 @@ class LocationCache
 
     return if locations.length >= 3 && near?(locations.last[:loc], loc)
 
-    locations = locations.push({ loc: loc, at: at, name: nearby_contact&.name }).last(3)
+    locations = locations.push({ loc: loc, at: at, name: location_name }).last(3)
     User.me.jarvis_cache.set(:recent_locations, locations)
   end
 end
