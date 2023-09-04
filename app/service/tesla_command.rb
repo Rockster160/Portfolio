@@ -246,7 +246,7 @@
     return { action: action, location: place[:name] } if place.present?
 
     action = is_driving ? :Driving : :Stopped
-    city = address_book.reverse_geocode(loc. get: is_driving ? :city : :name) if loc.compact.length == 2
+    city = address_book.reverse_geocode(loc, get: is_driving ? :city : :name) if loc.compact.length == 2
     return { action: action, location: city } if city.present?
 
     { action: action, location: "<Unknown>" }
