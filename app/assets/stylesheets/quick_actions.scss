@@ -14,9 +14,11 @@
 html, body {
   background: darken($blue-d5, 5%);
   height: 100%;
-  overflow: hidden;
+  overflow: auto;
   color: $grey-light;
   font-family: terminess, monospace;
+  margin: 0;
+  padding: 10px;
 
   &, * { box-sizing: border-box; }
 }
@@ -51,6 +53,7 @@ i.emoji, .emoji-stack {
   justify-content: space-between;
   margin: 0 auto;
   width: 100%;
+  height: 100%;
   max-width: 675px;
 
   .widget-holder {
@@ -215,7 +218,6 @@ i.emoji, .emoji-stack {
   transition: top 0.3s ease, opacity 0.3s ease;
   width: calc(100% - 40px);
   height: calc(100% - 40px);
-  overflow: hidden;
   pointer-events: auto;
 
   .modal-content {
@@ -224,35 +226,39 @@ i.emoji, .emoji-stack {
     width: 100%;
     height: 100%;
     color: $text-color;
+    overflow: auto;
+  }
 
-    .close {
-      position: absolute;
-      top: 0; right: 0;
-      width: 35px; height: 35px;
-      color: $danger;
-      font-size: 25px;
-      line-height: 35px;
-      text-align: center;
+  .close {
+    z-index: 2;
+    position: absolute;
+    top: 0; right: 0;
+    width: 35px; height: 35px;
+    color: $danger;
+    font-size: 25px;
+    line-height: 35px;
+    text-align: center;
+  }
+
+  .status {
+    z-index: 2;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    border-radius: 5px;
+    background: red;
+    width: 5px;
+    height: 5px;
+    box-shadow: 0px 0px 3px 2px $grey-dark;
+
+    &.connected {
+      background: green;
     }
   }
 
   &.mini-widgets .modal-content {
     position: relative;
     padding: 30px;
-
-    .status {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      border-radius: 5px;
-      background: red;
-      width: 5px;
-      height: 5px;
-
-      &.connected {
-        background: green;
-      }
-    }
 
     .widget-wrapper {
       .widget-holder {
@@ -349,5 +355,13 @@ i.emoji, .emoji-stack {
     top: -280px;
     opacity: 0;
     pointer-events: none;
+  }
+}
+
+@media screen and (max-width: 550px) {
+  .widget-wrapper {
+    .widget-holder.empty {
+      display: none;
+    }
   }
 }
