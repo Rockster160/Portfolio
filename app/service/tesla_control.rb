@@ -104,11 +104,9 @@ class TeslaControl
 
     success
   rescue RestClient::ExceptionWithResponse => e
-    if e.response&.code.to_i >= 500
-      expo_backoff(:update)
-    else
-      raise e
-    end
+    expo_backoff(:update) if e.response&.code.to_i >= 500
+
+    raise e
   end
 
   def pop_boot(direction=:toggle)
@@ -215,6 +213,9 @@ class TeslaControl
       end
       LocationCache.driving = driving
     }
+  rescue RestClient::Exceptions::OpenTimeout => e
+    expo_backoff(:update)
+    cached_vehicle_data
   rescue RestClient::ExceptionWithResponse => e
     if e.response&.code.to_i >= 500
       expo_backoff(:update)
@@ -268,11 +269,9 @@ class TeslaControl
   def command(cmd, params={})
     post_vehicle("command/#{cmd}", params)
   rescue RestClient::ExceptionWithResponse => e
-    if e.response&.code.to_i >= 500
-      expo_backoff(cmd, params)
-    else
-      raise e
-    end
+    expo_backoff(cmd, params) if e.response&.code.to_i >= 500
+
+    raise e
   end
 
   def parse_to(val, truthy, falsy)
@@ -330,7 +329,7 @@ class TeslaControl
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response&.code == 408
     return refresh && retry if err.response&.code == 401
-    return expo_backoff(:update) if err.response&.code.to_i >= 500
+    expo_backoff(:update) if err.response&.code.to_i >= 500
 
     raise err
   rescue JSON::ParserError => err
@@ -349,6 +348,8 @@ class TeslaControl
 
     reset_counter
     JSON.parse(res.body, symbolize_names: true).dig(:response)
+  rescue RestClient::Exceptions::OpenTimeout: => err
+    return wake_up && retry
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry
   rescue RestClient::Forbidden => err
