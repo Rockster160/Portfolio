@@ -213,6 +213,9 @@ class TeslaControl
       end
       LocationCache.driving = driving
     }
+  rescue RestClient::GatewayTimeout => e
+    expo_backoff(:update)
+    cached_vehicle_data
   rescue RestClient::Exceptions::OpenTimeout => e
     expo_backoff(:update)
     cached_vehicle_data
@@ -348,10 +351,6 @@ class TeslaControl
 
     reset_counter
     JSON.parse(res.body, symbolize_names: true).dig(:response)
-  rescue RestClient::Exceptions::OpenTimeout: => err
-    return wake_up && retry
-  rescue RestClient::GatewayTimeout => err
-    return wake_up && retry
   rescue RestClient::Forbidden => err
     DataStorage[:tesla_forbidden] = true
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
