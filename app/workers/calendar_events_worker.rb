@@ -143,7 +143,7 @@ class CalendarEventsWorker
         new_events.push(
           uid: event[:uid] + "-home",
           type: :travel,
-          words: "Take me home",
+          words: "Take me Home",
           user_id: @user_id,
           scheduled_time: event[:end_time] - PRE_OFFSET,
         )
