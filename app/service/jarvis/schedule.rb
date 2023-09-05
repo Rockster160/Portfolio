@@ -14,9 +14,9 @@ module Jarvis::Schedule
       next if timestamp.blank?
       name = sched.is_a?(::JarvisTask) ? sched.name : (sched[:name].presence || sched[:command])
       next if name == "Check Car"
-      name = name.gsub(/(Remind me (to )?)/i, "*")
-      name = name.gsub(/(Take me (to )?)/i, "->")
-      name = name.gsub(/((Ping|Text|Tell|Message|SMS|Email) me (to )?)/i, "<")
+      name = name.gsub(/(Remind me (to )?)/i, "•")
+      name = name.gsub(/(Take me (to )?)/i, "→")
+      name = name.gsub(/((Ping|Text|Tell|Message|SMS|Email) me (to )?)/i, "🗣")
 
       {
         timestamp: timestamp,
