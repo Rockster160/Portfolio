@@ -90,7 +90,9 @@ class Jarvis
     end
 
     tasks.find_each do |task|
+      ::Jarvis.say("[CACHE][BEFORE] (#{User.me.jarvis_cache.reload.get(:DoPullups)}) [#{task.id}]#{task.name}")
       ::Jarvis::Execute.call(task, trigger_data)
+      ::Jarvis.say("[CACHE][AFTER] (#{User.me.jarvis_cache.reload.get(:DoPullups)}) [#{task.id}]#{task.name}")
     end
     ::BroadcastUpcomingWorker.perform_async
   end
