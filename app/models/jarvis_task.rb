@@ -32,6 +32,7 @@ class JarvisTask < ApplicationRecord
 
   before_save :set_next_cron
 
+  scope :fuzzy_search, ->(q) { where("tasks::text ILIKE ?", "%#{q}%") }
   scope :enabled, -> { where(enabled: true) }
 
   orderable sort_order: :desc, scope: ->(task) { task.user.jarvis_tasks }
