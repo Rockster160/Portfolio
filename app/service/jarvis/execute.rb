@@ -19,7 +19,6 @@
   end
 
   def call
-    ::Jarvis.say("[CACHE][BEFORE] (#{User.me.jarvis_cache.reload.get(:DoPullups)}) [#{task.id}]#{task.name}")
     @test_mode = data.delete(:test_mode)
     @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil, current_token: nil }
     @ctx.merge!(@data[:ctx] || {})
@@ -47,7 +46,6 @@
     sleep 0.2 if @test_mode
     ActionCable.server.broadcast("jil_#{@task.id}_channel", { done: true, output: @ctx[:msg].join("\n") })
     @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx, last_result_val: @ctx[:last_val])
-    ::Jarvis.say("[CACHE][AFTER] (#{User.me.jarvis_cache.reload.get(:DoPullups)}) [#{task.id}]#{task.name}")
     @ctx[:msg]#.join("\n")
   end
 
