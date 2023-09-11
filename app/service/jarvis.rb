@@ -89,10 +89,11 @@ class Jarvis
       tasks = scope.is_a?(Array) ? tasks.where(*scope.to_a) : tasks.where(scope.to_h)
     end
 
-    tasks.find_each do |task|
+    responses = tasks.find_each.map do |task|
       ::Jarvis::Execute.call(task, trigger_data)
     end
     ::BroadcastUpcomingWorker.perform_async
+    responses.last
   end
 
   def self.command(user, words)

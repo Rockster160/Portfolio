@@ -13,7 +13,7 @@ class WebhooksController < ApplicationController
   end
 
   def jil
-    ::Jarvis.execute_trigger(
+    res = ::Jarvis.execute_trigger(
       :webhook,
       params.to_unsafe_h.except(:controller, :action),
       scope: { user_id: current_user.id }.tap { |task_scope|
@@ -22,7 +22,7 @@ class WebhooksController < ApplicationController
       }
     )
 
-    head :ok
+    render json: { data: res }
   end
 
   def tesla_local
