@@ -18,6 +18,11 @@ class JarvisCache < ApplicationRecord
   end
 
   def set(key, val)
+    if key.to_s.to_sym == :DoPullups
+      Jarvis.ping("Changing Pullups!!! #{val}")
+      Jarvis.say("Changing Pullups!!! #{val}") 
+    end
+
     old_data = reload.data || {}
     old_data[key.to_s] = val
 
