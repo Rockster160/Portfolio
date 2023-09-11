@@ -93,7 +93,7 @@ class Jarvis
       ::Jarvis::Execute.call(task, trigger_data)
     end
     ::BroadcastUpcomingWorker.perform_async
-    responses.last
+    responses
   end
 
   def self.command(user, words)

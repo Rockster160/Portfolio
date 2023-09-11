@@ -22,7 +22,11 @@ class WebhooksController < ApplicationController
       }
     )
 
-    render json: { data: res }
+    if res.none?
+      render json: { error: "No webhooks found with that id" }
+    else
+      render json: { data: res }
+    end
   end
 
   def tesla_local
