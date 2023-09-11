@@ -18,7 +18,7 @@ class JarvisCache < ApplicationRecord
   end
 
   def set(key, val)
-    old_data = data || {}
+    old_data = reload.data || {}
     old_data[key.to_s] = val
 
     !!update(data: old_data)

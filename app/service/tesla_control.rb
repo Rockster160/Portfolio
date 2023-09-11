@@ -202,7 +202,7 @@ class TeslaControl
   end
 
   def vehicle_data
-    @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data").tap { |car_data|
+    @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data")&.tap { |car_data|
       User.me.jarvis_cache.set(:car_data, car_data)
       driving = !((car_data.dig(:drive_state, :shift_state) || "P") == "P")
       if !driving
