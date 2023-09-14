@@ -68,7 +68,7 @@ class User < ApplicationRecord
     return unless user.present? && user.authenticate(password)
 
     user
-  rescue PG::CharacterNotInRepertoire
+  rescue PG::CharacterNotInRepertoire, ArgumentError
     nil # Bad username passed
   end
 
