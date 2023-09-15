@@ -6,38 +6,41 @@ class LocationCache
   end
 
   def self.driving=(bool)
+    # Called after Set
     return if driving? == bool
+    departed = bool
 
     ::Jarvis.trigger(
       :travel,
       {
-        coord: last_location,
-        location: location_name,
-        action: bool ? :departed : :arrived,
+        coord: departed ? nil : recent_locations[-1], # If arrived, show current
+        from: recent_locations[departed ? -1 : -2], # If arrived, show previous, otherwise current
+        location: current_location_name, # Most recent stopped
+        action: departed ? :departed : :arrived,
         timestamp: Time.current,
       },
       scope: { user_id: User.me.id }
     )
-    notify(bool)
+    notify(departed)
 
-    User.me.jarvis_cache.set(:is_driving, bool)
+    User.me.jarvis_cache.set(:is_driving, departed)
   end
 
-  def self.nearby_contact
-    User.me.address_book.contact_by_loc(last_location[:loc])
+  def self.nearby_contact(loc=nil)
+    User.me.address_book.contact_by_loc(loc || last_location[:loc])
   end
 
   def self.notify(bool)
-    location = location_name.presence || last_location[:loc]
+    location = current_location_name.presence || last_location[:loc]
     Jarvis.ping("#{bool ? 'Departing' : 'Arrived at'} #{location}")
   end
 
-  def self.location_name
-    nearby_contact&.name || lookup_location_name
+  def self.current_location_name(loc=nil)
+    nearby_contact(loc)&.name || lookup_location_name(loc)
   end
 
-  def self.lookup_location_name
-    User.me.address_book.reverse_geocode(last_location[:loc], get: :city)
+  def self.lookup_location_name(loc=nil)
+    User.me.address_book.reverse_geocode(loc || last_location[:loc], get: :city)
   end
 
   def self.last_location
@@ -53,7 +56,7 @@ class LocationCache
 
     return if locations.length >= 3 && near?(locations.last[:loc], loc)
 
-    locations = locations.push({ loc: loc, at: at, name: location_name }).last(3)
+    locations = locations.push({ loc: loc, at: at, name: current_location_name(loc) }).last(3)
     User.me.jarvis_cache.set(:recent_locations, locations)
   end
 end
