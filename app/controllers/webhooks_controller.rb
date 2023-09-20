@@ -22,10 +22,13 @@ class WebhooksController < ApplicationController
       }
     )
 
+
     if res.none?
       render json: { error: "No webhooks found with that id" }
+    elsif res.many?
+      render json: { data: res[..-2] } # Remove "Success" from the end
     else
-      render json: { data: res }
+      render json: { data: res.first }
     end
   end
 
