@@ -42,6 +42,7 @@ class JarvisTask < ApplicationRecord
     :action_event,
     :tell,
     :list,
+    :log,
     :calendar,
     # :email,
     :webhook,
