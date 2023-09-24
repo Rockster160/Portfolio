@@ -32,6 +32,7 @@ class ActionEventsController < ApplicationController
   def pullups
     Time.use_zone(current_user.timezone) do
       @today = Time.current.to_date
+      goal = 1000
 
       if params[:start_date].present? && params[:end_date].present?
         @date = start_date = safeparse_time(params[:start_date]).to_date
@@ -49,12 +50,37 @@ class ActionEventsController < ApplicationController
       grouped_events = @events.group_by { |evt| evt.timestamp.to_date }
       @range_data = @range.each_with_object({}) { |date, obj| obj[date] = grouped_events[date] }
 
+      months = {}.tap { |month_hash|
+        current_date = @range.first
+        while current_date <= @range.last
+          month_hash[current_date.strftime("%Y-%m")] = {
+            goal: goal,
+            days: 1 + Time.days_in_month(current_date.month, current_date.year),
+          }
+          current_date = current_date.next_month
+        end
+      }
       @chart_data = {
         labels: @range_data.map { |date, evts| date.strftime("%a %-m/%-d/%y") },
-        datasets: [{
-          data: @range_data.map { |date, evts| evts&.sum { |evt| evt.notes.to_i } || 0 },
-          backgroundColor: "#0160FF",
-        }]
+        datasets: [
+          {
+            data: @range_data.map.with_index { |(date, evts), idx|
+              next if date > @today
+
+              month_data = months[date.strftime("%Y-%m")]
+              days_in_month = (month_data[:days] -= 1)
+              remaining_goal = (month_data[:goal] -= (evts&.sum { |evt| evt.notes.to_i } || 0))
+              remaining_goal / days_in_month
+            },
+            type: :line,
+            borderColor: "rgba(255, 160, 1, 0.5)",
+            backgroundColor: "rgba(255, 160, 1, 0.5)",
+          },
+          {
+            data: @range_data.map { |date, evts| evts&.sum { |evt| evt.notes.to_i } || 0 },
+            backgroundColor: "#0160FF",
+          },
+        ]
       }
 
       if @date == @today
@@ -63,7 +89,6 @@ class ActionEventsController < ApplicationController
         days_left = 0
       end
 
-      goal = 1000
       current = @events.where("notes LIKE '\d+'").sum("notes::integer")
       remaining = goal - current
       @stats = {
