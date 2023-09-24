@@ -81,6 +81,21 @@ class JarvisTask < ApplicationRecord
     keyval:   9,
   }, _prefix: :output #.output_any?
 
+  def duplicate
+    self.class.create!(
+      attributes.symbolize_keys.except(
+        :id,
+        :enabled,
+        :last_ctx,
+        :last_result,
+        :last_result_val,
+        :last_trigger_at,
+        :created_at,
+        :updated_at,
+      ).tap { |attrs| attrs[:name] = "#{attrs[:name]} (2)" }
+    )
+  end
+
   def execute
     ::Jarvis::Execute.call(self)
   end

@@ -44,6 +44,17 @@ class Jil::JarvisTasksController < ApplicationController
     end
   end
 
+  def duplicate
+    old_task = current_user.jarvis_tasks.find(params[:id])
+    @task = old_task.duplicate
+    ::BroadcastUpcomingWorker.perform_async
+
+    respond_to do |format|
+      format.html { redirect_to edit_jil_jarvis_task_path(@task) }
+      format.json { render json: { status: :found, url: edit_jil_jarvis_task_path(@task) } }
+    end
+  end
+
   def destroy
     @task = current_user.jarvis_tasks.find(params[:id])
 
