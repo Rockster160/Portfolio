@@ -70,7 +70,7 @@ class ActionEventsController < ApplicationController
               month_data = months[date.strftime("%Y-%m")]
               days_in_month = (month_data[:days] -= 1)
               remaining_goal = (month_data[:goal] -= (evts&.sum { |evt| evt.notes.to_i } || 0))
-              remaining_goal / days_in_month
+              remaining_goal / (days_in_month-1)
             },
             type: :line,
             borderColor: "rgba(255, 160, 1, 0.5)",
