@@ -55,7 +55,7 @@ class ActionEventsController < ApplicationController
         while current_date <= @range.last
           month_hash[current_date.strftime("%Y-%m")] = {
             goal: goal,
-            days: 1 + Time.days_in_month(current_date.month, current_date.year),
+            days: 1+Time.days_in_month(current_date.month, current_date.year),
           }
           current_date = current_date.next_month
         end
@@ -69,8 +69,11 @@ class ActionEventsController < ApplicationController
 
               month_data = months[date.strftime("%Y-%m")]
               days_in_month = (month_data[:days] -= 1)
-              remaining_goal = (month_data[:goal] -= (evts&.sum { |evt| evt.notes.to_i } || 0))
-              remaining_goal / (days_in_month-1)
+              remaining_goal = month_data[:goal]
+              month_data[:goal] -= (evts&.sum { |evt| evt.notes.to_i } || 0)
+
+              next remaining_goal if days_in_month.zero?
+              remaining_goal / days_in_month
             },
             type: :line,
             borderColor: "rgba(255, 160, 1, 0.5)",
@@ -89,13 +92,14 @@ class ActionEventsController < ApplicationController
         days_left = 0
       end
 
-      current = @events.where("notes LIKE '\d+'").sum("notes::integer")
-      remaining = goal - current
+      current = @events.where("notes ~ '\\d+'").sum("notes::integer")
+      total_goal = months.length*goal
+      total_remaining = total_goal - current
       @stats = {
-        remaining: remaining,
+        remaining: total_remaining,
         current: current,
-        goal: goal,
-        daily_need: days_left > 0 ? remaining / days_left.to_f : 0,
+        goal: total_goal,
+        daily_need: days_left > 0 ? total_remaining / days_left.to_f : 0,
       }
     end
   end
