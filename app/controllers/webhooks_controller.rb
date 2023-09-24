@@ -22,7 +22,6 @@ class WebhooksController < ApplicationController
       }
     )
 
-
     if res.none?
       render json: { error: "No webhooks found with that id" }
     elsif res.many?
