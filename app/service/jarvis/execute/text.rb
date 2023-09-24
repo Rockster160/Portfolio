@@ -8,8 +8,12 @@ class Jarvis::Execute::Text < Jarvis::Execute::Executor
     str, reg = args.first(2).map { |t| cast_str(eval_block(t)) }
     return str == reg if str.blank? || reg.blank?
 
-    flags = args[2]
-    str.match?(/#{reg}/)
+    if reg.starts_with?("/") && reg.match?(/\/\w*$/)
+      flags = args[2]
+      str.match?(/#{reg}/)
+    else
+      str.include?(reg)
+    end
   end
 
   def split
