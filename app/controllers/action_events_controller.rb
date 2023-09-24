@@ -87,7 +87,7 @@ class ActionEventsController < ApplicationController
       }
 
       if @date == @today
-        days_left = @date.end_of_month - @today + 1 # +1 to include today
+        days_left = @date.end_of_month - @today
       else
         days_left = 0
       end
