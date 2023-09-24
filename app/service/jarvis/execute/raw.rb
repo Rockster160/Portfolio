@@ -32,7 +32,11 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
       solved_str.gsub(/#\{\s*(.*?)\s*\}/) do |found|
         token = Regexp.last_match[1]
         jil&.ctx&.dig(:vars, token).tap { |a|
-          @ctx[:msg] << "#{token} becomes #{a}"
+          if a.nil?
+            jil.ctx[:msg] << "Unfound token (#{token})"
+          else
+            jil.ctx[:msg] << "#{token} becomes #{a}"
+          end
         }
       end
     }
