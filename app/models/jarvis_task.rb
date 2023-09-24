@@ -42,7 +42,6 @@ class JarvisTask < ApplicationRecord
     :action_event,
     :tell,
     :list,
-    :log,
     :calendar,
     # :email,
     :webhook,
@@ -68,7 +67,6 @@ class JarvisTask < ApplicationRecord
     function:          10,
     calendar:          11,
     travel:            12,
-    log:               13,
   }
 
   enum output_type: {
@@ -169,17 +167,6 @@ class JarvisTask < ApplicationRecord
         ["Item Added", [
           { return: :bool },
           "Item Added"
-        ]]
-      ]
-    elsif log?
-      [
-        ["Log Name", [
-          { return: :str },
-          "Log Name"
-        ]],
-        ["Log Notes", [
-          { return: :str },
-          "Log Notes"
         ]]
       ]
     elsif calendar?
