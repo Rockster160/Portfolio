@@ -212,18 +212,22 @@ class TeslaControl
         )
       end
       LocationCache.driving = driving
-    }
+    } || cached_vehicle_data
   rescue RestClient::GatewayTimeout => e
+    Jarvis.say("Tesla Gateway Timeout. Retrying...")
     expo_backoff(:update)
     cached_vehicle_data
   rescue RestClient::Exceptions::OpenTimeout => e
+    Jarvis.say("Tesla Open Timeout. Retrying...")
     expo_backoff(:update)
     cached_vehicle_data
   rescue RestClient::ExceptionWithResponse => e
     if e.response&.code.to_i >= 500
+      Jarvis.say("Tesla Error. Retrying...")
       expo_backoff(:update)
       cached_vehicle_data
     else
+      Jarvis.say("Tesla Error. No retry. (#{e.response.code}: #{e.response.message})")
       raise e
     end
   end
