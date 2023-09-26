@@ -135,8 +135,12 @@
       @response = "Finding car..."
       unless quick
         data = car.vehicle_data
-        loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
-        Jarvis.say("http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}", :sms)
+        if data.present?
+          loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
+          Jarvis.say("http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}", :sms)
+        else
+          Jarvis.say("Cannot find your car currently.", :sms)
+        end
       end
     else
       @response = "Not sure how to tell car: #{[cmd, opt].map(&:presence).compact.join('|')}"
