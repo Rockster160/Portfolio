@@ -232,7 +232,7 @@ class ListItem < ApplicationRecord
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
     ActionCable.server.broadcast "list_#{self.list_id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
 
-    JarvisTriggerWorker.perform_async(:list.to_s,
+    JarvisTriggerWorker.perform_async(:list,
       {
         input_vars: { "List Data": list.serialize, "Item Name": name, "Item Added": !deleted_at? }
       }.to_json,

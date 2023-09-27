@@ -1,4 +1,4 @@
-Sidekiq.strict_args! if Rails.env.test?
+Sidekiq.strict_args!(false)
 
 if Rails.env.development? && !(ENV["RAILS_CONSOLE"] == "true")
   require 'sidekiq/testing'

@@ -9,7 +9,7 @@ class Jarvis::Nest < Jarvis::Action
 
     response = NestCommand.command(parse_cmd)
     if Rails.env.production?
-      NestCommandWorker.perform_in(10.seconds, :update.to_s) # to_s because Sidekiq complains
+      NestCommandWorker.perform_in(10.seconds, :update)
     end
 
     return response.presence || "Sent to Nest"
