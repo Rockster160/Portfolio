@@ -70,6 +70,7 @@ module Jarvis::MatchTask
 
   def find_match(user, ostr, skip=[])
     return ::JarvisTask.none if user.blank?
+    return ::JarvisTask.none unless user.admin? # Block until input is sanitized
     # BIG TODO!
     # SANTIZE `str` - it is user input and can be executed against the db
     str = ostr.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish
@@ -96,12 +97,12 @@ module Jarvis::MatchTask
   end
 
   def exe_rx(st)
-    puts "\e[33m[LOGIT][RX] | SELECT #{st};\e[0m"
+    # puts "\e[33m[LOGIT][RX] | SELECT #{st};\e[0m"
     ActiveRecord::Base.connection.execute("SELECT #{st};").to_a.first.values.first
   end
 
   def exe_bool(st)
-    puts "\e[33m[LOGIT][BOOL] | SELECT (#{st})::boolean;\e[0m"
+    # puts "\e[33m[LOGIT][BOOL] | SELECT (#{st})::boolean;\e[0m"
     ActiveRecord::Base.connection.execute("SELECT (#{st})::boolean;").to_a.first.values.first
   end
 
