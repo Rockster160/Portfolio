@@ -6,10 +6,6 @@ export let render = function(key, data) {
   let raw = (templates[key] || (() => ""))(data)
   let div = document.createElement("div")
   div.innerHTML = raw.trim()
-  if (key == "text") {
-    debugger
-    // get number of lines inside the field and set row count to that
-  }
   return div.firstChild
 }
 
@@ -103,6 +99,8 @@ export let templates = {
   block: (key, existingdata) => {
     let schemaNode = document.querySelector(`[data-type="${key}"]`)
     if (!schemaNode) { return } // TODO: Better way to handle unknown schema
+    // Ideally, just render some kind of error block (with a delete button)
+    // The block should include the raw task data, so if/when it gets fixed, it will re-render correctly and be saved
     let [_, schema] = JSON.parse(schemaNode.getAttribute("data"))
 
     return jsonToElem({
@@ -144,6 +142,7 @@ export let templates = {
                   let items = []
                   let idx = 0
                   schema.filter(obj => !obj.return).forEach(function(data) {
+                    console.log(data);
                     let fillitem = filler[idx] || {}
                     if (data == "content") {
                       let tasks_data = []
@@ -172,9 +171,11 @@ export let templates = {
                             ]
                           } })
                           if (data.block == "text") {
+                            let linecount = (fillitem.raw?.match(/\n/g) || []).length + 1
                             children.push({ textarea: {
                               id: `${existingdata.token}[${idx}]`,
                               class: `raw-input ${data.optional ? "optional" : ""}`,
+                              rows: Math.max(linecount, 4),
                               unattached: true,
                               blocktype: data.block,
                               content: function() {
