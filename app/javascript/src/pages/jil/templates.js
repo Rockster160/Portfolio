@@ -142,7 +142,6 @@ export let templates = {
                   let items = []
                   let idx = 0
                   schema.filter(obj => !obj.return).forEach(function(data) {
-                    console.log(data);
                     let fillitem = filler[idx] || {}
                     if (data == "content") {
                       let tasks_data = []
