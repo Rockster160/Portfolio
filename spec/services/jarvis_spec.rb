@@ -354,6 +354,23 @@ RSpec.describe Jarvis do
     end
   end
 
+  context "with pings" do
+    actions = {
+      "Send me a ping saying go running" => "Go running",
+      "Ping me go do something" => "Go do something",
+      "Ping me" => "You asked me to text you, sir.",
+      "Ping me The garage was left open." => "The garage was left open.",
+    }
+
+    actions.each do |action, msg|
+      it "can #{action}" do
+        ::WebPushNotifications.send_to(@user, { title: @args })
+        expect(WebPushNotifications).to receive(:send_to).with(an_instance_of(User), {title: msg})
+        expect(jarvis(action)).to eq("Sending you a ping saying: #{msg}")
+      end
+    end
+  end
+
   context "with printer" do
     actions = {
       "turn my printer on" => ["Pre-heating your printer", :pre],

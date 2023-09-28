@@ -26,7 +26,7 @@ class Jarvis::Venmo < Jarvis::Action
   end
 
   def valid_words?
-    return false if @rx.match_any_words?(@msg, Jarvis.reserved_words - self.class.reserved_words)
+    return false if @rx.match_any_words?(@msg, @current_reserved_words)
 
     @rx.match_any_words?(@msg, :venmo)
     # Maybe other things like

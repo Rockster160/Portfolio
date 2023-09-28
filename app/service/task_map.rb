@@ -118,13 +118,13 @@ class TaskMap
         :content,
       ],
       and:        [
-        { return: :any }, # implicitly returns last val
+        { return: :bool }, # implicitly returns last val
         { block: :any },
         :AND,
         { block: :any },
       ],
       or:        [
-        { return: :any }, # implicitly returns first truthy val
+        { return: :bool }, # implicitly returns first truthy val
         { block: :any },
         :OR,
         { block: :any },

@@ -170,8 +170,9 @@ class Jarvis
   end
 
   def command
+    current_reserved_words = Jarvis.reserved_words.dup
     actions.lazy.map do |action_klass| # lazy map means stop at the first one that returns a truthy value
-      action_klass.attempt(@user, @words)
+      action_klass.attempt(@user, @words, current_reserved_words)
     end.compact_blank.first
   rescue Jarvis::Error => err
     err.message
