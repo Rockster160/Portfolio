@@ -6,6 +6,10 @@ export let render = function(key, data) {
   let raw = (templates[key] || (() => ""))(data)
   let div = document.createElement("div")
   div.innerHTML = raw.trim()
+  if (key == "text") {
+    debugger
+    // get number of lines inside the field and set row count to that
+  }
   return div.firstChild
 }
 

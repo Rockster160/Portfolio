@@ -131,6 +131,12 @@ $faded-compl: rgba($base-complementary, 0.6);
       }
     }
 
+    textarea {
+      white-space: nowrap;
+      overflow-x: auto;
+      font-size: 10px;
+    }
+
     &:not(.lists) {
       &:before {
         position: absolute;
