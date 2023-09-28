@@ -5,7 +5,9 @@
 <% end %>
 
 <%= render_modal(:config, "Config") do %>
-  <%= link_to "Duplicate", duplicate_jil_jarvis_task_path(@task), class: "btn pull-right", method: :post %>
+  <% if @task.persisted? %>
+    <%= link_to "Duplicate", duplicate_jil_jarvis_task_path(@task), class: "btn pull-right", method: :post %>
+  <% end %>
   <%= form_for [:jil, @task], html: { class: "basic" } do |f| %>
     <div data-watches-selector=".trigger-selector" data-watches-value="function">
       <p>Input format:</p>

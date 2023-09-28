@@ -124,6 +124,10 @@ class Jarvis
     say(msg, channel)
   end
 
+  def self.sms(msg, channel=:sms)
+    say(msg, channel)
+  end
+
   def self.send(data, channel=:ws)
     return unless data.present?
     return say(data, channel) if channel != :ws
