@@ -1,6 +1,11 @@
-class GarageCommand
-  def self.command(direction)
-    new.command(direction)
+module GarageCommand
+  module_function
+
+  def set(state)
+    state = state.to_sym
+    return unless state.in?([:open, :closed, :between])
+
+    User.me.jarvis_cache.set(:garage_state, state)
   end
 
   def command(dir_str)

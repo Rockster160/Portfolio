@@ -32,5 +32,6 @@ class GarageChannel < ApplicationCable::Channel
   # ActionCable.server.broadcast(:garage_channel, { msg: "getGarage" })
   def message(data)
     ActionCable.server.broadcast(:garage_channel, { data: data })
+    GarageCommand.set(data["garageState"]) # open|closed|between
   end
 end
