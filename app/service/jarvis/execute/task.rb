@@ -36,7 +36,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
       jid = Jarvis::Schedule.schedule(
         scheduled_time: timestamp,
         user_id: jil.task.user.id,
-        words: run_task.name,
+        words: "Run #{run_task.name}",
         type: :command,
         # vars: { i: jil.ctx[:i] }
       ).first
