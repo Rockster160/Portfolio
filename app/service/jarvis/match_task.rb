@@ -18,7 +18,7 @@ module Jarvis::MatchTask
   COMMON_WORDS = [:to, :my, :it, :I, :you, :the, :at, :on, :is, :me, :us, :we, :and]
   SPECIAL = ["?", "\\"]
 
-  def match_run(user, ostr, skip=[])
+  def match_run(user, ostr, skip=[], return_as: :str)
     task = user.jarvis_tasks.find_by(name: ostr)
     task ||= find_match(user, ostr, skip)
     return unless task.present?
@@ -57,20 +57,24 @@ module Jarvis::MatchTask
       success = simple_str.match(Regexp.new("^#{line_match}$", "i"))
       break success if success
     }
-    return match_run(user, ostr, skip + [task.id]) if md.blank?
+    return match_run(user, ostr, skip + [task.id], return_as: return_as) if md.blank?
 
     vars = { "Full Input" => ostr }
     vars.merge!(md.named_captures.symbolize_keys)
 
     ::Jarvis::Execute.call(task, input_vars: vars).then { |res|
-      res = Array.wrap(res).reverse.find { |item| item.present? && item != "Success" }
-      res || Jarvis::Text.affirmative
+      if return_as == :str
+        res = Array.wrap(res).reverse.find { |item| item.present? && item != "Success" }
+        res || Jarvis::Text.affirmative
+      else
+        task
+      end
     }
   end
 
   def find_match(user, ostr, skip=[])
-    return ::JarvisTask.none if user.blank?
-    return ::JarvisTask.none unless user.admin? # Block until input is sanitized
+    return if user.blank?
+    return unless user.admin? # Block until input is sanitized
     # BIG TODO!
     # SANTIZE `str` - it is user input and can be executed against the db
     str = ostr.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish
