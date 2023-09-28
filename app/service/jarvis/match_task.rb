@@ -19,7 +19,8 @@ module Jarvis::MatchTask
   SPECIAL = ["?", "\\"]
 
   def match_run(user, ostr, skip=[])
-    task = find_match(user, ostr, skip)
+    task = user.jarvis_tasks.where(name: ostr)
+    task ||= find_match(user, ostr, skip)
     return unless task.present?
 
     # TODO- Do NOT replace common words that are inside () and {}
