@@ -35,7 +35,7 @@ class LocalDataCalendarParser
   def parse_time(day, time)
     time.split(":").then { |h, m|
       _, h, m, mer = time.match(/(\d+):?(\d+)? ?((?:A|P)M)?/i)&.to_a
-      pm = mer.upcase == "PM" && h.to_i < 12
+      pm = mer&.upcase == "PM" && h.to_i < 12
       day.change(hour: h.to_i + (pm ? 12 : 0), min: m.to_i)
     }
   end
