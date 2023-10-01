@@ -8,7 +8,6 @@ class LocalDataCalendarParser
   def call(raw_calendar_lines=nil)
     raw_calendar_lines ||= JSON.parse(File.read("local_data.json")).deep_symbolize_keys[:calendar]
 
-    # evt = JSON.parse(File.read("local_data.json")).deep_symbolize_keys[:calendar].dig(:"Sep 30, 2023", 0)
     used_uids = []
     Time.use_zone(User.timezone) do
       # Add the current day always

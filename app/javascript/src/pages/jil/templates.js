@@ -124,12 +124,13 @@ export let templates = {
               if (existingdata.token) { elms.push({ span: { class: "token", content: existingdata.token } }) }
               schema.forEach(function(data, idx) {
                 if (data.return) {
+                  let returntype = existingdata?.returntype || data.return
                   elms.push({ span: {
                     class: "return",
-                    blocktype: data.return,
+                    blocktype: returntype,
                     content: [
                       { span: { class: "return-label", content: "returns" }},
-                      { span: { class: "return-type", content: data.return }}
+                      { span: { class: "return-type", content: returntype }}
                     ]
                   } })
                 }

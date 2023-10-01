@@ -20,6 +20,32 @@ $faded-compl: rgba($base-complementary, 0.6);
 }
 
 .ctr-jarvis_tasks.act-new, .ctr-jarvis_tasks.act-edit {
+  .modal.modal-wrapper {
+    .selectable {
+      width: 100%;
+      padding: 15px;
+      display: block;
+
+      transition: background 0.2s;
+      margin: 6px 0;
+      box-shadow: 1px 1px 3px $blue-d4;
+      border-radius: 5px;
+      padding: 15px 40px 15px 10px;
+      text-decoration: none;
+      border: 1px solid $blue-l5;
+      background: $blue-d5;
+      color: $grey-light;
+
+      &:hover {
+        background: $blue-d3;
+        cursor: pointer;
+      }
+      &.active {
+        border-color: $base-blue;
+        background: lighten($base-blue, 30%);
+      }
+    }
+  }
   .drawer-tree {
     position: fixed;
     top: 0;

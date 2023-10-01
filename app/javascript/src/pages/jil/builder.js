@@ -161,7 +161,7 @@ $(document).ready(function() {
       }))
 
       // Add tokens that aren't already in the list
-      available_tokens.forEach(function(token) {
+      available_tokens.reverse().forEach(function(token) {
         // Option is already there. Don't add it again.
         if (existing_options.indexOf(token) >= 0) { return }
 
@@ -289,6 +289,7 @@ $(document).ready(function() {
     scope.find("option[value='" + old_name + "']").val(new_name)
   }
 
+  let currentObject = undefined
   document.addEventListener("click", function(evt) {
     if ($(evt.target).closest("span.token").length > 0) {
       let wrapper = $(evt.target).closest("span.token")
@@ -303,6 +304,26 @@ $(document).ready(function() {
     if (evt.target.parentElement?.classList?.contains("delete")) {
       disableRunButton("delete")
       evt.target.closest(".list-item-container").remove()
+    }
+    if ($(evt.target).closest(".selectable").length > 0) {
+      let selected = $(evt.target).closest(".selectable")
+      let new_type = selected.attr("data-type")
+      $(".return-type-selectables .active").removeClass("active")
+      currentObject.parentElement.setAttribute("blocktype", new_type)
+      currentObject.textContent = new_type
+
+      resetDropdowns()
+
+      currentObject = undefined
+      hideModal("#return_type")
+    }
+    if (evt.target?.classList?.contains("return-type")) {
+      // Set return modal `active` class as the current value
+      let type = evt.target.textContent
+      currentObject = evt.target
+      $(".return-type-selectables .active").removeClass("active")
+      $(`.return-type-selectables .selectable:contains(${type})`).addClass("active")
+      showModal("#return_type")
     }
     if ($(evt.target).closest(".duplicate").length > 0) {
       disableRunButton("duplicate")
