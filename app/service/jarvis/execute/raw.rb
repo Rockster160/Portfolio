@@ -31,11 +31,14 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
     end.then { |solved_str|
       solved_str.gsub(/#\{\s*(.*?)\s*\}/) do |found|
         token = Regexp.last_match[1]
-        jil&.ctx&.dig(:vars, token).tap { |token_val|
-          if token_val.nil?
-            jil.ctx[:msg] << "Unfound token (#{token})"
-          end
+        vars = jil&.ctx&.dig(:vars) || {}
+        token_val = vars[token]
+        token_val ||= vars.find { |k, v|
+          token.downcase.gsub(/\:var$/, "") == k.downcase.gsub(/\:var$/, "")
         }
+        if token_val.nil?
+          jil.ctx[:msg] << "Unfound token (#{token})"
+        end
       end
     }
   rescue NoMethodError
