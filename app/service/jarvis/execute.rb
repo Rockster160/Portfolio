@@ -54,7 +54,6 @@
   end
 
   def eval_block(task_block)
-    puts "\e[33m[LOGIT] | #{task_block}\e[0m"
     if task_block.is_a?(::Hash) && task_block[:token].present?
       @ctx[:current_token] = task_block[:token]
       ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token] })
