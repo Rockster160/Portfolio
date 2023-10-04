@@ -169,7 +169,6 @@ $(document).ready(function() {
         option.textContent = token
         select.append(option)
       })
-      // TODO: Order tokens by reverse order of when they appear on the page
       // Mark invalid if no option selected
       // Check? Should not remove invalid class from an optional select that's chosen a
       //   non-existent token
@@ -287,6 +286,9 @@ $(document).ready(function() {
     scope.find(".token:contains('" + old_name + "')").text(new_name)
     scope.find("option[value='" + old_name + "']").text(new_name)
     scope.find("option[value='" + old_name + "']").val(new_name)
+    tokens.splice(tokens.indexOf(old_name), 1)
+    tokens.push(new_name)
+    resetDropdowns()
   }
 
   let currentObject = undefined
@@ -297,8 +299,8 @@ $(document).ready(function() {
       if (newname != null && newname.length > 2 && !tokens.includes(newname + ":var")) {
         renameToken(wrapper.closest(".tasks"), wrapper.text(), newname + ":var")
       } else {
-        if (newname.length <= 2) { console.log("Name not long enough"); }
-        if (tokens.includes(newname + ":var")) { console.log("Name already used."); }
+        if (newname.length <= 2) { alert("Name not long enough"); }
+        if (tokens.includes(newname + ":var")) { alert("Name already used."); }
       }
     }
     if (evt.target.parentElement?.classList?.contains("delete")) {
