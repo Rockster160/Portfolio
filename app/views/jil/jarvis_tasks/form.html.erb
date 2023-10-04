@@ -6,7 +6,7 @@
 
 <%= render_modal(:return_type, "Select Return Type") do %>
   <div class="return-type-selectables">
-    <% ::Jarvis::Execute::Raw::CASTABLE.each do |cast_type| %>
+    <% (::Jarvis::Execute::Raw::CASTABLE + [:array. :hash]).each do |cast_type| %>
       <% next if cast_type == :text %>
       <div class="selectable <%= :active if rand(3) == 0 %>" data-type="<%= cast_type %>">
         <%= cast_type %>
