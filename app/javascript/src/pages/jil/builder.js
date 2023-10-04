@@ -305,7 +305,10 @@ $(document).ready(function() {
     }
     if (evt.target.parentElement?.classList?.contains("delete")) {
       disableRunButton("delete")
-      evt.target.closest(".list-item-container").remove()
+      let container = evt.target.closest(".list-item-container")
+      let token_name = container.querySelector(".token").textContent
+      tokens.splice(tokens.indexOf(token_name), 1)
+      container.remove()
     }
     if ($(evt.target).closest(".selectable").length > 0) {
       let selected = $(evt.target).closest(".selectable")
