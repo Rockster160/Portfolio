@@ -11,6 +11,7 @@ class JarvisController < ApplicationController
       parsed_message
     end
 
+    msg = msg.gsub(/^\s*log log\b/i, "Log")
     response = Jarvis.command(current_user, msg)
     list, item = response&.split("\n")&.first(2)
     if item.blank?
