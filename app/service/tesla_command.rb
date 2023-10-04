@@ -234,7 +234,7 @@
       locked: true,
       drive: {
         action: ["Driving", "Near", "At", "Stopped"].sample,
-        location: address_book.contacts.pluck(:name).sample,
+        location: address_book.contacts.where.not(address: nil).pluck(:name).sample,
         speed: 0,
       },
       timestamp: Time.current.to_i

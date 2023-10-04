@@ -6,7 +6,7 @@ class AddressBook
   end
 
   def contacts
-    @contacts ||= @user.contacts.where.not(address: nil)
+    @contacts ||= @user.contacts
   end
 
   def home
@@ -129,7 +129,7 @@ class AddressBook
   def find_contact_near(coord)
     return [] unless coord.compact.length == 2
 
-    contacts.find { |details|
+    contacts.where.not(address: nil).find { |details|
       next unless details.loc&.compact&.length == 2
 
       near?(details.loc, coord)
