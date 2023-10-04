@@ -15,6 +15,21 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
     Jarvis.command(jil.task.user, evalargs.first)
   end
 
+  def request
+    http_method, url, headers, params = evalargs
+    json = ProxyRequest.execute(
+      method:  http_method,
+      url:     url,
+      headers: headers.to_h,
+      params:  params.to_h,
+    )
+    if json.is_a?(Hash)
+      json
+    else
+      { data: json.body }
+    end
+  end
+
   def exit
     jil.ctx[:exit] = true
     evalargs if args
@@ -70,10 +85,6 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
     ::BroadcastUpcomingWorker.perform_async
 
     jid
-  end
-
-  def request
-    raise NotImplementedError
   end
 
   def email

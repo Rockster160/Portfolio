@@ -155,7 +155,11 @@ export let templates = {
                       // Add the data as a `data-tasks` to get added in another loop
                       items.push({ div: { class: "tasks", "data-tasks": JSON.stringify(tasks_data) } })
                     } else if (String(data) === data) {
-                      items.push({ span: { content: data } })
+                      if (data == "br") {
+                        items.push({ br: {} })
+                      } else {
+                        items.push({ span: { content: data } })
+                      }
                       return // Skip incrementing the idx since this isn't a user input
                     } else if (data.block && data.block != "select") {
                       items.push({ span: {

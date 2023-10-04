@@ -544,14 +544,16 @@ class TaskMap
         { block: :date },
       ],
       # Inject/run JS on page + web scraping
-      # request: [
-      #   { return: :hash },
-      #   [:GET, :POST, :PATCH, :PUT, :DELETE],
-      #   { block: :str, name: :url },
-      #   { block: :str, name: :body, optional: true },
-      #   { block: :hash, name: :params, optional: true },
-      #   { block: :hash, name: :headers, optional: true },
-      # ],
+      request: [
+        { return: :hash },
+        [:GET, :POST, :PATCH, :PUT, :DELETE], :br,
+        :URL, :br,
+        { block: :str, name: :url }, :br,
+        :Headers,
+        :content, # { block: :hash, name: :headers, optional: true },
+        :Params,
+        :content, # { block: :hash, name: :params, optional: true },
+      ],
       # Send email from Jarvis - Admin only? - Or just require some kind of email setup/permissions
       # email: [
       #   { block: :str, name: :to }, # Allow multiple?

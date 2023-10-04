@@ -54,12 +54,24 @@
   end
 
   def eval_block(task_block)
+    puts "\e[33m[LOGIT] | #{task_block}\e[0m"
     if task_block.is_a?(::Hash) && task_block[:token].present?
       @ctx[:current_token] = task_block[:token]
       ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token] })
       sleep 0.2 if @test_mode
     end
-    return task_block.map { |sub_block| eval_block(sub_block) }.last if task_block.is_a?(::Array)
+    if task_block.is_a?(::Array)
+      if task_block.any? { |sub_block| sub_block.is_a?(::Hash) && sub_block[:returntype] == "keyval" }
+        return task_block.each_with_object({}) { |sub_block, obj|
+          k, v = eval_block(sub_block)
+          k, v = nil, k if v.nil?
+          k ||= sub_block[:token] || v
+          obj[k] = v
+        }
+      else
+        return task_block.map { |sub_block| eval_block(sub_block) }.last
+      end
+    end
     return task_block if [true, false, nil].include?(task_block)
     return task_block if task_block.class.in?([::String, ::Integer, ::Float])
     return raw_val(task_block) if task_block[:option] == "input"

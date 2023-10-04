@@ -195,7 +195,6 @@ $faded-compl: rgba($base-complementary, 0.6);
         }
         .item-name {
           & > span {
-            &:not(:first-child) { margin-left: 10px; }
             &:not(:last-child) { margin-right: 10px; }
           }
         }
