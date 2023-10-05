@@ -31,7 +31,7 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
       data: data,
       timestamp: timestamp,
     }.compact)
-    ::ActionEventBroadcastWorker.perform_async(event.id) if event.persisted?
-    event.id
+    ::ActionEventBroadcastWorker.perform_async(event.id) if event
+    event
   end
 end

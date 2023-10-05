@@ -493,12 +493,12 @@ class TaskMap
         { block: :date, label: "Date (Now)", optional: true },
       ],
       update: [
-        { return: :num },
+        { return: :bool },
         { block: :num, label: :ID },
         { block: :str, label: :Name, optional: true },
         { block: :str, label: :Notes, optional: true },
         { block: :hash, label: :Data, optional: true },
-        { block: :date, label: "Date (Now)", optional: true },
+        { block: :date, label: :Date, optional: true },
       ],
       # remove
     },
