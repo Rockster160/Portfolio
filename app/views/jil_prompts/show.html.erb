@@ -5,7 +5,7 @@
   <div class="skinny-container lists-index-container">
     <div class="lists-title instructions"><%= @prompt.question %></div>
     <div class="list-items survey-questions">
-      <% @prompt.options.each_with_index do |option, idx| %>
+      <% Array.wrap(@prompt.options).each_with_index do |option, idx| %>
         <% base_params = "prompt[response][]" %>
         <div class="list-item-container">
           <%=

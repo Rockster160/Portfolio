@@ -80,8 +80,8 @@ self.addEventListener("notificationclick", function(evt) {
   }).then(function(clientList) {
     for (var i = 0; i < clientList.length; i++) {
       var client = clientList[i]
-      if (client.url == "/" && "focus" in client) { return client.focus() }
+      if (client.url == "/" && "focus" in client) { client.focus() }
     }
-    if (clients.openWindow) { return data.url || clients.openWindow("/") }
+    if (clients.openWindow) { return clients.openWindow(data.url || "/") }
   }))
 })
