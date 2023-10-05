@@ -15,7 +15,7 @@
               name: "#{base_params}",
               value: option,
               class: "list-item-checkbox",
-              checked: @prompt.response.include?(option),
+              checked: @prompt.response&.include?(option),
             }
           %>
           <label for="<%= "#{base_params}#{idx}".gsub(/[^\w]/, "") %>" class="list-item">

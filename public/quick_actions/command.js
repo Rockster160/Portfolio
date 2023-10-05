@@ -49,9 +49,9 @@ modal.querySelector("input").addEventListener("keypress", function(evt) {
       // Do a full page cache reload
       return window.location.reload(true)
     }
-    if (input.value.toLowerCase().trim() == "request notifications") {
+    if (input.value.match(/(request|register) notifications/)) {
       // Register Notifications
-      addMessage("out", "Request notifications")
+      addMessage("out", input.value)
       input.value = ""
       registerNotifications().then(function() {
         console.log("Registering notifications");
