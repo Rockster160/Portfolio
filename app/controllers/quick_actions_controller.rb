@@ -9,6 +9,7 @@ class QuickActionsController < ::ActionController::Base
   private
 
   def redirect_to_login
+    session[:forwarding_url] = request.original_url
     redirect_to login_path if current_user.blank?
   end
 end

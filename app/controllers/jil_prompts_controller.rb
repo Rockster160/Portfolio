@@ -19,6 +19,7 @@ class JilPromptsController < ApplicationController
     @prompt = current_user.prompts.find_by(id: params[:id])
 
     return if @prompt.present?
+    session[:forwarding_url] = request.original_url
     redirect_to login_path, alert: "You do not have permission to view this prompt."
   end
 end

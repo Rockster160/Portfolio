@@ -15,6 +15,7 @@ module AuthHelper
 
   def authorize_user
     unless current_user.present?
+      session[:forwarding_url] = request.original_url
       create_guest_user
 
       flash.now[:notice] = "We've signed you up with a guest account!"
@@ -23,6 +24,7 @@ module AuthHelper
 
   def authorize_admin
     unless current_user.try(:admin?)
+      session[:forwarding_url] = request.original_url
       redirect_to login_path
     end
   end
