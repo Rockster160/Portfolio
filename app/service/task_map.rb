@@ -559,9 +559,9 @@ class TaskMap
         # question, options, data
         { block: :str, name: :question }, :br,
         "Options (Array)", :br,
-        :content, # Array
+        { block: :array },
         "Params (Hash)", :br,
-        :content, # Hash
+        { block: :hash },
         "Callback (Name)", :br,
         { block: :str, name: :task_name }
       ],
