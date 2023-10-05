@@ -554,6 +554,17 @@ class TaskMap
         :Params,
         :content, # { block: :hash, name: :params, optional: true },
       ],
+      prompt: [
+        { return: :bool },
+        # question, options, data
+        { block: :str, name: :question }, :br,
+        "Options (Array)", :br,
+        :content, # Array
+        "Params (Hash)", :br,
+        :content, # Hash
+        "Callback (Name)", :br,
+        { block: :str, name: :task_name }
+      ],
       # Send email from Jarvis - Admin only? - Or just require some kind of email setup/permissions
       # email: [
       #   { block: :str, name: :to }, # Allow multiple?

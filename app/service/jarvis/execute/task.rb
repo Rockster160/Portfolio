@@ -30,6 +30,24 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
     end
   end
 
+  def prompt
+    user = jil.task.user
+    question, options, data, task = evalargs
+    prompt = user.prompts.create(
+      question:    question,
+      options:     options,
+      params:      data,
+      # answer_type: "",
+      task_id:     user.jarvis_tasks.find_by!(name: name),
+    )
+    pushed = WebPushNotifications.send_to(user, {
+      title: question,
+      url: Rails.application.routes.url_helpers.jil_prompt_url(prompt)
+    })
+
+    pushed != "Push success"
+  end
+
   def exit
     jil.ctx[:exit] = true
     evalargs if args

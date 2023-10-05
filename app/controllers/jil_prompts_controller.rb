@@ -4,6 +4,7 @@ class JilPromptsController < ApplicationController
 
   def update
     @prompt.update(response: params.dig(:prompt, :response))
+    @prompt.task&.execute
 
     redirect_to @prompt
   end
