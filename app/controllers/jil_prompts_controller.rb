@@ -4,6 +4,7 @@ class JilPromptsController < ApplicationController
 
   def index
     @prompts = current_user.prompts.where(response: nil)
+    redirect_to @prompts.first if @prompts.one?
   end
 
   def update
