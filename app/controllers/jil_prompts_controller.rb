@@ -11,7 +11,7 @@ class JilPromptsController < ApplicationController
     @prompt.update(response: params.dig(:prompt, :response))
     @prompt.task&.execute(response: @prompt.response, params: @prompt.params)
 
-    redirect_to @prompt
+    redirect_to jarvis_path
   end
 
   private

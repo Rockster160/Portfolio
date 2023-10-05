@@ -8,6 +8,7 @@ class ActionEventBroadcastWorker
       ::Jarvis.trigger(
         :action_event,
         {
+          id: event.id,
           name: event.event_name,
           notes: event.notes,
           timestamp: event.timestamp,

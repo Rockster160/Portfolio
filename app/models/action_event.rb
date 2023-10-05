@@ -3,6 +3,7 @@
 # Table name: action_events
 #
 #  id            :integer          not null, primary key
+#  data          :jsonb
 #  event_name    :text
 #  notes         :text
 #  streak_length :integer
