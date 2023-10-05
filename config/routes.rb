@@ -19,6 +19,7 @@ Rails.application.routes.draw do
   resource :ping, only: :create
 
   resource :jarvis, only: :show, controller: :quick_actions
+  resources :jil_prompts, only: [:show, :update], path: :prompts
 
   scope module: :users do
     get :login,         controller: :sessions,      action: :new

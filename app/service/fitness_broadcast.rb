@@ -6,6 +6,7 @@ class FitnessBroadcast
       :Pullups,
       :Workout,
       :Z,
+      :"Z*",
       :Vitamins,
       :Fluox,
       :Escitalopram,

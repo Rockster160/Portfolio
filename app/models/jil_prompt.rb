@@ -13,7 +13,7 @@
 #  task_id     :bigint
 #  user_id     :bigint
 #
-class JilPrompts < ApplicationRecord
+class JilPrompt < ApplicationRecord
   belongs_to :user
   belongs_to :task, class_name: "JarvisTask"
 

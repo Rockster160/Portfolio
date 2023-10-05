@@ -29,6 +29,7 @@ class User < ApplicationRecord
   has_many :shared_recipes, through: :recipe_shares, source: :shared_to
   has_many :lists, through: :user_lists
   has_many :sent_emails, class_name: "Email", foreign_key: :sent_by_id, dependent: :destroy
+  has_many :prompts, class_name: "JilPrompt", dependent: :destroy
   has_many :action_events
   has_many :user_surveys
   has_many :user_survey_responses

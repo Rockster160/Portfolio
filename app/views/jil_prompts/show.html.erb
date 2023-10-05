@@ -1,0 +1,39 @@
+<%= meta_title @prompt.question, include_name: false %>
+<%= meta_description @prompt.question  %>
+
+<%= form_for @prompt, html: { class: "basic" } do |f| %>
+  <div class="skinny-container lists-index-container">
+    <div class="lists-title instructions"><%= @prompt.question %></div>
+    <div class="list-items survey-questions">
+      <% @prompt.options.each_with_index do |option, idx| %>
+        <% base_params = "prompt[response][]" %>
+        <div class="list-item-container">
+          <%=
+            content_tag :input, "", {
+              type: "checkbox",
+              id: "#{base_params}#{idx}".gsub(/[^\w]/, ""),
+              name: "#{base_params}",
+              value: option,
+              class: "list-item-checkbox",
+              checked: @prompt.response.include?(option),
+            }
+          %>
+          <label for="<%= "#{base_params}#{idx}".gsub(/[^\w]/, "") %>" class="list-item">
+            <div class="checkbox-wrapper"></div>
+            <div class="item-name">
+              <%= option %>
+            </div>
+          </label>
+        </div>
+      <% end %>
+    </div>
+  </div>
+  <div class="skinny-container">
+    <div class="text-center">
+      <%= f.submit "Submit", class: "wide" %>
+      <br>
+      <br>
+      <br>
+    </div>
+  </div>
+<% end %>
