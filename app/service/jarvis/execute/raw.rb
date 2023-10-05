@@ -10,8 +10,8 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
 
   def self.bool(val, jil=nil)
     case val
-    when ::Array then val.first.try(:dig, :raw)
-    when ::Hash then val[:raw]
+    when ::Array then bool(val.first.try(:dig, :raw))
+    when ::Hash then bool(val[:raw])
     when ::String then !val.match?(/^(0|f|false|falsy|no)$/i)
     else
       !!val
@@ -48,8 +48,8 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
 
   def self.num(val, jil=nil)
     casted = case val
-    when ::Array then (val.one? && val.first.try(:dig, :raw)) || raise("Unable to cast <Array> to <Num>")
-    when ::Hash then val[:raw] || raise("Unable to cast <Hash> to <Num>")
+    when ::Array then (val.one? && num(val.first.try(:dig, :raw))) || raise("Unable to cast <Array> to <Num>")
+    when ::Hash then val[:raw].present? ? num(val[:raw]) : raise("Unable to cast <Hash> to <Num>")
     when ::TrueClass then 1
     else
       val

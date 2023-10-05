@@ -49,7 +49,7 @@ modal.querySelector("input").addEventListener("keypress", function(evt) {
       // Do a full page cache reload
       return window.location.reload(true)
     }
-    if (input.value.match(/(request|register) notifications/)) {
+    if (input.value.match(/(request|register) notifications/i)) {
       // Register Notifications
       addMessage("out", input.value)
       input.value = ""

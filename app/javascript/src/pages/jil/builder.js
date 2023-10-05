@@ -309,6 +309,7 @@ $(document).ready(function() {
       let token_name = container.querySelector(".token").textContent
       tokens.splice(tokens.indexOf(token_name), 1)
       container.remove()
+      resetDropdowns()
     }
     if ($(evt.target).closest(".selectable").length > 0) {
       let selected = $(evt.target).closest(".selectable")

@@ -100,6 +100,6 @@
   end
 
   def raw_val(task_block)
-    task_block[:raw]
+    ::Jarvis::Execute::Cast.cast(task_block[:raw], :str, force: true, jil: self)
   end
 end
