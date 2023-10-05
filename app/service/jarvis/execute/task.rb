@@ -37,8 +37,8 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
       question:    question,
       options:     options,
       params:      data,
+      task:        user.jarvis_tasks.find_by!(name: task),
       # answer_type: "",
-      task_id:     user.jarvis_tasks.find_by!(name: task),
     )
     jil.ctx[:msg] += prompt.errors.full_messages unless prompt.persisted?
     pushed = WebPushNotifications.send_to(user, {
