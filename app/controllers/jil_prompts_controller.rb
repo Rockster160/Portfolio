@@ -1,6 +1,10 @@
 class JilPromptsController < ApplicationController
   before_action :authorize_user
-  before_action :set_prompt
+  before_action :set_prompt, except: :index
+
+  def index
+    @prompts = current_user.prompts.where(response: nil)
+  end
 
   def update
     @prompt.update(response: params.dig(:prompt, :response))

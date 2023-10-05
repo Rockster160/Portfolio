@@ -1,0 +1,26 @@
+<%= meta_title "Questions", include_name: false %>
+
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <a href="<%= account_path %>" class="btn">Account</a>
+  </div>
+  <div class="lists-title">Unanswered Questions</div>
+  <div class="lists">
+    <div class="list-field">
+      <%= text_field_tag "prompt[question]", "", class: "filterable", placeholder: "Search questions" %>
+    </div>
+
+    <% @prompts.each do |prompt| %>
+      <div class="list-item-container" data-list-id="<%= prompt.id %>">
+        <a href="<%= jil_prompt_path(prompt) %>" class="list-item">
+          <span class="item-name"><%= prompt.question %></span>
+        </a>
+        <div class="list-item-brief">
+          <div class="left-brief">
+            <%= prompt.params.to_s.squish %>
+          </div>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</div>

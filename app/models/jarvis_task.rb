@@ -38,6 +38,7 @@ class JarvisTask < ApplicationRecord
   orderable sort_order: :desc, scope: ->(task) { task.user.jarvis_tasks }
 
   AVAILABLE_TRIGGERS = [
+    :callable,
     :cron,
     :action_event,
     :tell,
@@ -55,6 +56,7 @@ class JarvisTask < ApplicationRecord
   ]
 
   enum trigger: {
+    callable:          14,
     cron:              0,
     action_event:      1,
     tell:              2,

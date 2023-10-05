@@ -104,7 +104,6 @@ class Jarvis
     ActionCable.server.broadcast(:jarvis_channel, { say: res, data: res_data }) if res.present? && user&.admin?
     return res if res_data.blank?
 
-    # ::BroadcastUpcomingWorker.perform_async - Is this needed?
     [res, res_data]
   end
 

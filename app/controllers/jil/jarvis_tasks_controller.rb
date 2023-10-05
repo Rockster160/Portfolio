@@ -11,7 +11,7 @@ class Jil::JarvisTasksController < ApplicationController
   end
 
   def new
-    @task = current_user.jarvis_tasks.new
+    @task = current_user.jarvis_tasks.callable.new
     @task.trigger = :function if params[:trigger] == "function"
 
     render :form
