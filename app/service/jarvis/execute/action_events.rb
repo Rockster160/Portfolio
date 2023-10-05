@@ -32,7 +32,7 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
       data: data,
       timestamp: timestamp,
     }.compact)
-    ::ActionEventBroadcastWorker.perform_async(event.id) if success
+    ::ActionEventBroadcastWorker.perform_async(event.id, false) if success
     success
   end
 end
