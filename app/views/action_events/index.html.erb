@@ -38,7 +38,11 @@
         <input data-update-url="<%= action_event_path(event) %>" name="event_name" value="<%= event.event_name %>" class="invisi-field" style="width: 100%;" type="text">
       </div>
       <div class="tcell">
-        <input data-update-url="<%= action_event_path(event) %>" name="notes" value="<%= event.notes %>" class="invisi-field" style="width: 100%;" type="text">
+        <% if event.notes.present? %>
+          <input data-update-url="<%= action_event_path(event) %>" name="notes" value="<%= event.notes %>" class="invisi-field" style="width: 100%;" type="text">
+        <% elsif event.data.present? %>
+          <span style="font-size: 12px;"><%= event.data %></span>
+        <% end %>
       </div>
       <div class="tcell">
         <input data-update-url="<%= action_event_path(event) %>" name="timestamp" value="<%= event.timestamp.in_time_zone("Mountain Time (US & Canada)").iso8601[0..-7] %>" class="invisi-field" style="width: 100%;" type="datetime-local">

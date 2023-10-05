@@ -5,21 +5,21 @@ class Jarvis::Execute::Hash < Jarvis::Execute::Executor
 
   def get
     hash, key = evalargs
-    hash = SafeJsonSerializer.load(hash)
-    hash.with_indifferent_access[key]
+    hash = SafeJsonSerializer.load(hash).with_indifferent_access
+    hash[key]
   end
 
   def set
     hash, key, val = evalargs
-    hash = SafeJsonSerializer.load(hash)
-    hash.with_indifferent_access[key] = val
+    hash = SafeJsonSerializer.load(hash).with_indifferent_access
+    hash[key] = val
     hash
   end
 
   def del
     hash, key = evalargs
-    hash = SafeJsonSerializer.load(hash)
-    hash.with_indifferent_access.delete(key)
+    hash = SafeJsonSerializer.load(hash).with_indifferent_access
+    hash.delete(key)
     hash
   end
 
