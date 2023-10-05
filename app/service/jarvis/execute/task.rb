@@ -38,7 +38,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
       options:     options,
       params:      data,
       # answer_type: "",
-      task_id:     user.jarvis_tasks.find_by!(name: name),
+      task_id:     user.jarvis_tasks.find_by!(name: task),
     )
     pushed = WebPushNotifications.send_to(user, {
       title: question,

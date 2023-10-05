@@ -98,8 +98,8 @@ class JarvisTask < ApplicationRecord
     )
   end
 
-  def execute
-    ::Jarvis::Execute.call(self)
+  def execute(data={})
+    ::Jarvis::Execute.call(self, data)
   end
 
   def name
