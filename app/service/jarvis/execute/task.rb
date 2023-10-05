@@ -40,6 +40,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
       # answer_type: "",
       task_id:     user.jarvis_tasks.find_by!(name: task),
     )
+    jil.ctx[:msg] += prompt.errors.full_messages unless prompt.persisted?
     pushed = WebPushNotifications.send_to(user, {
       title: question,
       url: Rails.application.routes.url_helpers.jil_prompt_url(prompt)
