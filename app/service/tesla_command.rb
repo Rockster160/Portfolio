@@ -38,6 +38,8 @@
     elsif cmd.to_i.to_s == cmd
       opt = cmd.to_i
       cmd = :temp
+    elsif cmd.match?(/\bcar\b/)
+      cmd = opt
     end
 
     case cmd.to_sym
