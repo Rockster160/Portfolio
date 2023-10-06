@@ -13,7 +13,7 @@ class Jarvis::Execute::Date < Jarvis::Execute::Executor
 
   def adjust
     pre, direction, amount = evalargs
-    pre.send(direction, amount.to_i)
+    pre.send(direction, amount.to_i.seconds)
   end
 
   def duration
