@@ -1,4 +1,6 @@
 class Jarvis::Execute::Cast < Jarvis::Execute::Executor
+  FORCE_CASTABLE = ::Jarvis::Execute::Raw::CASTABLE + [:array, :hash, :date]
+
   def self.cast(val, to, force: false, jil: nil)
     return val if to.to_sym == :any
 
@@ -10,6 +12,8 @@ class Jarvis::Execute::Cast < Jarvis::Execute::Executor
         return val.try(:to_a) || []
       when :hash
         return val.try(:to_h) || val.try(:to_json) || []
+      when :date
+        return val.to_datetime
       else
         return val
       end

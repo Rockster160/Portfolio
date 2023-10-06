@@ -90,16 +90,16 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def get_cache
-    str = evalargs
+    key = evalargs
 
-    user_cache.get(eval_block(str))
+    user_cache.get(eval_block(key))
   end
 
   def set_cache
-    str, val = evalargs
+    key, val = evalargs
 
     # TODO: Should NOT be able to set complex objects...
-    user_cache.set(eval_block(str), eval_block(val))
+    user_cache.set(eval_block(key), eval_block(val))
   end
 
   def user_cache

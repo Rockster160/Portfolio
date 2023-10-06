@@ -71,8 +71,9 @@
         return task_block.map { |sub_block| eval_block(sub_block) }.last
       end
     end
-    return task_block if [true, false, nil].include?(task_block)
-    return task_block if task_block.class.in?([::String, ::Integer, ::Float])
+    # return task_block if [true, false, nil].include?(task_block)
+    # return task_block if task_block.class.in?([::String, ::Integer, ::Float])
+    return task_block unless task_block.is_a?(::Hash)
     return raw_val(task_block) if task_block[:option] == "input"
     return lookup_option(task_block[:option]) if task_block[:option].present?
     @ctx[:i] += 1
