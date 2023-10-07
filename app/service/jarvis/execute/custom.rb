@@ -20,7 +20,7 @@ class Jarvis::Execute::Custom < Jarvis::Execute::Executor
 
     jil.ctx[:i] = run_task.last_ctx[:i] # Take the `i` back from the other task to continue counting
 
-    custom_error = custom_ctx[:msg].find { |msg| msg.include?("] Failed:") }
+    custom_error = custom_ctx[:msg].find { |msg| msg.to_s.include?("] Failed:") }
     if custom_error
       raise custom_error
     else
