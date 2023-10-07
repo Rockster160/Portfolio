@@ -258,7 +258,7 @@ RSpec.describe ::Jarvis::Execute do
       }
 
       it "runs the block 1000 times without error" do
-        expect(execute.last).to eq("Success")
+        expect(execute.last).to eq(999)
         expect(task.last_ctx[:i]).to eq(1000)
       end
     end
@@ -312,7 +312,7 @@ RSpec.describe ::Jarvis::Execute do
     }
 
     it "sets and gets a variable" do
-      expect(execute).to match_array(["This is my value!", "Success"])
+      expect(execute).to match_array(["This is my value!"])
     end
   end
 

@@ -64,8 +64,7 @@ module Jarvis::MatchTask
 
     ::Jarvis::Execute.call(task, input_vars: vars).then { |res|
       if return_as == :str
-        res = Array.wrap(res).reverse.find { |item| item.present? && item != "Success" }
-        res || Jarvis::Text.affirmative
+        res&.compact&.last || Jarvis::Text.affirmative
       else
         task
       end

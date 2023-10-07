@@ -33,7 +33,10 @@
     if @ctx[:i] > MAX_ITERATIONS
       raise StandardError, "Blocks exceed #{ActiveSupport::NumberHelper.number_to_delimited(MAX_ITERATIONS)} allowed."
     end
-    @ctx[:msg] << "Success"
+    if @ctx[:msg].none?
+      @ctx[:msg] << (@ctx[:last_val] || "Success")
+    end
+    @ctx[:msg]
     # Trigger success?
   rescue StandardError => e
     Rails.logger.error("\e[31m#{e.class}: #{e}\n#{e.backtrace.select{|l|l.include?("/app/")}.reverse.join("\n")}\e[0m")

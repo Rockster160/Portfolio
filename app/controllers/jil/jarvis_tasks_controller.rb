@@ -68,11 +68,11 @@ class Jil::JarvisTasksController < ApplicationController
 
   def run
     @task = current_user.jarvis_tasks.find(params[:id])
-    ::Jarvis::Execute.call(@task, { test_mode: true })
+    data = ::Jarvis::Execute.call(@task, { test_mode: params.fetch(:test_mode, true) })
     ::BroadcastUpcomingWorker.perform_async
 
     respond_to do |format|
-      format.json
+      format.json { render json: { response: data } }
     end
   end
 

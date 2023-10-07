@@ -123,6 +123,7 @@ Rails.application.routes.draw do
     get :/, action: :index, controller: :jarvis_tasks
     resources :jarvis_tasks, path: :tasks do
       get :config, on: :member, action: :configuration
+      get :run, on: :member
       post :run, on: :member
       post :duplicate, on: :member
     end
