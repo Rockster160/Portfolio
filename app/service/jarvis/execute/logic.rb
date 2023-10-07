@@ -7,11 +7,11 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
   end
 
   def logic_and
-    args.all? { |t| eval_block(t) }
+    args.all? { |t| eval_block(t).present? }
   end
 
   def logic_or
-    args.any? { |t| eval_block(t) }
+    args.any? { |t| eval_block(t).present? }
   end
 
   def logic_eq
