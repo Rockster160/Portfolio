@@ -33,9 +33,7 @@
     if @ctx[:i] > MAX_ITERATIONS
       raise StandardError, "Blocks exceed #{ActiveSupport::NumberHelper.number_to_delimited(MAX_ITERATIONS)} allowed."
     end
-    if @ctx[:msg].none?
-      @ctx[:msg] << (@ctx[:last_val] || "Success")
-    end
+    @ctx[:msg] << @ctx[:last_val] if @ctx[:msg].none?
     @ctx[:msg]
     # Trigger success?
   rescue StandardError => e

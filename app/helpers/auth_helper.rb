@@ -62,7 +62,7 @@ module AuthHelper
     sign_out
     session[:current_user_id] = user.id
     cookies.signed[:current_user_id] = user.id
-    current_user
+    @_current_user = user
   end
 
   def auth_from_headers
