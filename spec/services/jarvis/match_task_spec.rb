@@ -1,5 +1,10 @@
 RSpec.describe ::Jarvis::MatchTask do
-  let(:user) { User.create(id: 1, username: "Admin", role: :admin, password: :password, password_confirmation: :password) }
+  let(:user) {
+    User.find_or_create_by!(username: :rocco, role: :admin) { |u|
+      u.password = :password
+      u.password_confirmation = :password
+    }
+  }
   def find_match(str) = Jarvis::MatchTask.find_match(user, str)
   def match_run(str) = Jarvis::MatchTask.match_run(user, str)
 

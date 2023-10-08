@@ -24,8 +24,16 @@ module Jarvis::MatchTask
     return unless task.present?
 
     # TODO- Do NOT replace common words that are inside () and {}
-    simple_str = ostr.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish
-    task_matcher = task.input.gsub(rx.words(*COMMON_WORDS), "").gsub(/^ {2,}| {2,}| {2,}$/, " ")
+
+    simple_str = Tokenizer.protect(ostr) do |clean_str|
+      clean_str.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish
+    end
+    task_matcher = Tokenizer.protect(task.input) do |clean_str|
+      clean_str.gsub(rx.words(*COMMON_WORDS), "").gsub(/^ {2,}| {2,}| {2,}$/, " ")
+    end
+    # simple_str = ostr.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish
+    # task_matcher = task.input.gsub(rx.words(*COMMON_WORDS), "").gsub(/^ {2,}| {2,}| {2,}$/, " ")
+
     task_matcher.gsub!(/ ?((\{.*?\})|(\(.*?\)))/) { |found|
       match_many = false
       optional = found.squish.first == "("

@@ -6,6 +6,13 @@
 class Tokenizer
   attr_accessor :stored_strings, :token
 
+  def self.protect(str, *rxs, &block)
+    str = str.dup
+    tz = new(str)
+    rxs.each { |rx| tz.tokenize!(str, rx) }
+    tz.untokenize!(block.call(str))
+  end
+
   def initialize(full_str)
     @unwrap = nil
     @stored_strings = []
