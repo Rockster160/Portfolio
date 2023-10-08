@@ -11,7 +11,7 @@ class Jarvis::Execute::Cast < Jarvis::Execute::Executor
       when :array
         return val.try(:to_a) || []
       when :hash
-        return val.try(:to_h) || val.try(:to_json) || []
+        return val.try(:to_h) || val.try(:to_json) || {}
       when :date
         return val.to_datetime
       else
