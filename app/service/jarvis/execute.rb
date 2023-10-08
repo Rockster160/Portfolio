@@ -80,7 +80,7 @@
     @ctx[:i] += 1
     # Instead, this should raise an error so we don't have the weird off-by-one issue
     return if @ctx[:i] > MAX_ITERATIONS
-    return if task_block[:type].nil?
+    return task_block if task_block[:type].nil?
 
     klass, method = task_block[:type].split(".", 2)
     method = "logic_#{method}" if klass == "logic"
@@ -93,7 +93,8 @@
       ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token], res: res.as_json })
       @ctx[:last_val] = res
     }.tap { |res|
-      # binding.pry if task_block[:token] == "cat.eat.bed"
+      # binding.pry if @task.id == 43
+      # binding.pry if task_block[:token] == "funky.saloon.oak"
       # binding.pry if task_block[:type] == "task.print"
     }
   # rescue StandardError => e
