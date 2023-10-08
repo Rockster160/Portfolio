@@ -80,6 +80,10 @@
     @ctx[:i] += 1
     # Instead, this should raise an error so we don't have the weird off-by-one issue
     return if @ctx[:i] > MAX_ITERATIONS
+    # Empty block
+    if task_block.keys.sort == [:option, :selected].sort
+      return if task_block.values.all?(&:blank?)
+    end
     return task_block if task_block[:type].nil?
 
     klass, method = task_block[:type].split(".", 2)
