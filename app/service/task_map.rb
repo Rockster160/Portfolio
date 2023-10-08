@@ -201,9 +201,8 @@ class TaskMap
       replace: [
         { return: :str },
         { block: :str, name: :value },
+        { block: :str, name: :regex },
         { block: :str, name: :replace, optional: true }, # If not present, replace with empty/delete
-        { str: :regex }, # Should regex be an object, or just a text entry?
-        { multiple: :flags, checkboxes: [:g, :i, :u, :m] }
       ],
     },
     math: {
