@@ -40,7 +40,7 @@ class Jarvis::Execute::Text < Jarvis::Execute::Executor
 
   def replace
     original, rx, replace = evalargs
-    cast_str(original).gsub(matchable(rx), replace)
+    cast_str(original).gsub(matchable(rx), replace.to_s)
   end
 
   private
