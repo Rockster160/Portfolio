@@ -57,6 +57,7 @@ gem "rqrcode", "2.1.2"
 gem "sidekiq-unique-jobs"
 gem "ruby-openai"
 gem "webdrivers"
+gem "redcarpet"
 # Dependency
 gem "net-http", "0.3.2"
 gem "uri", "0.12.0"

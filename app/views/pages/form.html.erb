@@ -1,0 +1,29 @@
+<div class="skinny-container">
+  <div class="btn-container">
+    <a href="<%= pages_path %>" class="btn">&larr; All Pages</a>
+    <% if @page.persisted? %>
+      <a href="<%= page_path(@page) %>" class="btn pull-right">Cancel</a>
+    <% end %>
+  </div>
+  <%= form_for @page do |f| %>
+    <div class="form-title"><%= @page.persisted? ? :Edit : :New %> Page</div>
+
+    <%= render partial: 'layouts/error_container', locals: { resource: @page } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= f.label :title %>
+        <%= f.text_field :title %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :content %>
+        <%= f.text_area :content, rows: @page.content&.count("\n").to_i.then { |n| n.positive? ? n : 20 } %>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit %>
+    </div>
+  <% end %>
+</div>

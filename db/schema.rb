@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_10_05_144631) do
+ActiveRecord::Schema.define(version: 2023_10_09_222728) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -430,6 +430,15 @@ ActiveRecord::Schema.define(version: 2023_10_05_144631) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "pages", force: :cascade do |t|
+    t.string "title"
+    t.text "content"
+    t.bigint "user_id", null: false
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["user_id"], name: "index_pages_on_user_id"
+  end
+
   create_table "pghero_query_stats", force: :cascade do |t|
     t.text "database"
     t.text "user"
@@ -609,4 +618,5 @@ ActiveRecord::Schema.define(version: 2023_10_05_144631) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "pages", "users"
 end

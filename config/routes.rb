@@ -143,6 +143,7 @@ Rails.application.routes.draw do
   end
 
   resources :contacts
+  resources :pages
   resources :recipes, param: :friendly_id do
     post :export_to_list, on: :member
   end

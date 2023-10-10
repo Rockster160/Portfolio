@@ -20,6 +20,7 @@ class User < ApplicationRecord
   has_many :jarvis_tasks, dependent: :destroy
   has_many :bowling_leagues, dependent: :destroy
   has_many :climbs, dependent: :destroy
+  has_many :pages, dependent: :destroy
   has_many :contacts, dependent: :destroy
   has_many :user_lists, dependent: :destroy
   has_many :recipes, dependent: :destroy

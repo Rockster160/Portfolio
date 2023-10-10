@@ -1,0 +1,25 @@
+<%= meta_title "Pages", include_name: false %>
+
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <% if user_signed_in? %>
+      <a href="<%= account_path %>" class="btn">Account</a>
+      <a href="<%= new_page_path %>" class="btn pull-right">New Page +</a>
+    <% else %>
+      <a href="<%= login_path %>" class="btn">Sign In</a>
+    <% end %>
+  </div>
+  <div class="lists-title">Pages</div>
+  <div class="lists">
+    <div class="list-field">
+      <%= text_field_tag "page[name]", "", class: "filterable", placeholder: "Search Pages" %>
+    </div>
+    <% @pages.each do |page| %>
+      <div class="list-item-container" data-list-id="<%= page.id %>">
+        <a href="<%= page_path(page) %>" class="list-item">
+          <span class="item-name"><%= page.title %></span>
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>
