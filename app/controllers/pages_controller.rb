@@ -52,7 +52,8 @@ class PagesController < ApplicationController
 
   def page_params
     params.require(:page).permit(
-      :title,
+      :folder_id,
+      :name,
       :tag_strings,
       :content,
     )

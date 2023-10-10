@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_10_10_145942) do
+ActiveRecord::Schema.define(version: 2023_10_10_183529) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -272,6 +272,28 @@ ActiveRecord::Schema.define(version: 2023_10_10_145942) do
     t.datetime "updated_at"
   end
 
+  create_table "folder_tags", force: :cascade do |t|
+    t.bigint "folder_id"
+    t.bigint "tag_id"
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["folder_id"], name: "index_folder_tags_on_folder_id"
+    t.index ["tag_id"], name: "index_folder_tags_on_tag_id"
+  end
+
+  create_table "folders", force: :cascade do |t|
+    t.bigint "user_id"
+    t.bigint "folder_id"
+    t.text "name"
+    t.text "parameterized_name"
+    t.integer "sort_order"
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["folder_id"], name: "index_folders_on_folder_id"
+    t.index ["parameterized_name"], name: "index_folders_on_parameterized_name"
+    t.index ["user_id"], name: "index_folders_on_user_id"
+  end
+
   create_table "functions", id: :serial, force: :cascade do |t|
     t.text "title"
     t.text "arguments"
@@ -440,11 +462,15 @@ ActiveRecord::Schema.define(version: 2023_10_10_145942) do
   end
 
   create_table "pages", force: :cascade do |t|
-    t.string "title"
+    t.string "name"
     t.text "content"
     t.bigint "user_id", null: false
     t.datetime "created_at", precision: 6, null: false
     t.datetime "updated_at", precision: 6, null: false
+    t.bigint "folder_id"
+    t.text "parameterized_name"
+    t.integer "sort_order"
+    t.index ["folder_id"], name: "index_pages_on_folder_id"
     t.index ["user_id"], name: "index_pages_on_user_id"
   end
 

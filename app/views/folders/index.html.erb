@@ -1,0 +1,36 @@
+<%= meta_title "Folders", include_name: false %>
+
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <% if user_signed_in? %>
+      <a href="<%= account_path %>" class="btn">Account</a>
+      <a href="<%= new_page_path %>" class="btn pull-right">New Page +</a>
+      <span class="pull-right">&nbsp;</span>
+      <a href="<%= new_folder_path %>" class="btn pull-right">New Folder +</a>
+    <% else %>
+      <a href="<%= login_path %>" class="btn">Sign In</a>
+    <% end %>
+  </div>
+  <div class="lists-title">Folders</div>
+  <div class="lists">
+    <div class="list-field">
+      <%= text_field_tag "folder[name]", "", class: "filterable", placeholder: "Search Folders" %>
+    </div>
+    <% @folders.ordered.each do |folder| %>
+      <div class="list-item-container" data-list-id="<%= folder.id %>">
+        <a href="<%= folder_path(folder) %>" class="list-item">
+          <i class="fa fa-folder-open"></i>
+          <span class="item-name"><%= folder.name %></span>
+        </a>
+      </div>
+    <% end %>
+    <% @pages.ordered.each do |page| %>
+      <div class="list-item-container" data-list-id="<%= page.id %>">
+        <a href="<%= page_path(page) %>" class="list-item">
+          <i class="fa fa-file-text-o"></i>
+          <span class="item-name"><%= page.name %></span>
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>

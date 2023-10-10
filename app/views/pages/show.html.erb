@@ -1,9 +1,15 @@
 <div class="skinny-container">
   <div class="btn-container">
-    <a href="<%= pages_path %>" class="btn">&larr; All Pages</a>
-    <a href="<%= edit_page_path(@page) %>" class="btn pull-right">Edit</a>
+    <%= link_to "Edit", [:edit, @page], class: :btn %>
   </div>
-  <h1 style="text-align: center;"><%= @page.title %></h1>
+  <div class="breadcrumbs text-center">
+    <%= link_to :root, :folders %>
+    <% @page.breadcrumbs.reverse.each do |parent, idx| %>
+      &gt;
+      <%= link_to parent.name, parent %>
+    <% end %>
+  </div>
+  <h1 style="text-align: center;"><%= @page.name %></h1>
   <div class="tag-list">
     <% @page.tags.each do |tag| %>
       <span class="tag"><%= tag.name %></span>

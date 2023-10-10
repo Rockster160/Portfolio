@@ -1,12 +1,12 @@
 <div class="skinny-container">
   <div class="btn-container">
-    <%= link_to "Cancel", @page, class: :btn %>
+    <a href="<%= folders_path %>" class="btn">&larr; All Folders</a>
     <a data-clickit="input[type=submit]" class="btn pull-right">Save</a>
   </div>
-  <%= form_for @page do |f| %>
-    <div class="form-title"><%= @page.persisted? ? :Edit : :New %> Page</div>
+  <%= form_for @folder do |f| %>
+    <div class="form-title"><%= @folder.persisted? ? :Edit : :New %> Folder</div>
 
-    <%= render partial: "layouts/error_container", locals: { resource: @page } %>
+    <%= render partial: "layouts/error_container", locals: { resource: @folder } %>
 
     <%= f.hidden_field :folder_id, value: params[:folder] %>
     <div class="form-fields">
@@ -18,11 +18,6 @@
       <div class="form-field">
         <%= f.label :tag_strings, "Tags (Comma separated)" %>
         <%= f.text_field :tag_strings %>
-      </div>
-
-      <div class="form-field">
-        <%= f.label :content %>
-        <%= f.text_area :content, rows: @page.content&.count("\n").to_i.then { |n| n.positive? ? n : 20 } %>
       </div>
     </div>
 

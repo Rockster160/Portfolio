@@ -8,6 +8,7 @@ module MarkdownHelper
   def renderer
     @renderer ||= begin
       Redcarpet::Markdown.new(
+        # Redcarpet::Render::HTML.new(hard_wrap: true),
         RenderWithTargetBlank.new(hard_wrap: true),
         no_intra_emphasis: true,
         tables: true,
@@ -37,7 +38,8 @@ module MarkdownHelper
   end
 
   def postprocess(html)
-    html.then { |content| render_linked_pages(content) }
+    html
+      .then { |content| render_linked_pages(content) }
   end
 
   def fix_emphasis(content)
