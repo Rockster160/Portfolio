@@ -56,9 +56,9 @@ module MarkdownHelper
   def render_linked_pages(content)
     content.gsub(/\[(.*?)\]/) do |match|
       page_title = $1
-      page = current_user.pages.ilike(title: page_title).take
+      page = current_user.pages.ilike(name: page_title).take
       if page
-        link_to(page.title, page_path(page))
+        link_to(page.name, page_path(page))
       else
         match
       end
