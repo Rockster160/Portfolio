@@ -1,9 +1,7 @@
 <div class="skinny-container">
   <div class="btn-container">
     <a href="<%= pages_path %>" class="btn">&larr; All Pages</a>
-    <% if @page.persisted? %>
-      <a href="<%= page_path(@page) %>" class="btn pull-right">Cancel</a>
-    <% end %>
+    <a data-clickit="input[type=submit]" class="btn pull-right">Save</a>
   </div>
   <%= form_for @page do |f| %>
     <div class="form-title"><%= @page.persisted? ? :Edit : :New %> Page</div>
