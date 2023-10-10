@@ -17,6 +17,11 @@
       </div>
 
       <div class="form-field">
+        <%= f.label :tag_strings, "Tags (Comma separated)" %>
+        <%= f.text_field :tag_strings %>
+      </div>
+
+      <div class="form-field">
         <%= f.label :content %>
         <%= f.text_area :content, rows: @page.content&.count("\n").to_i.then { |n| n.positive? ? n : 20 } %>
       </div>

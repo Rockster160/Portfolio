@@ -53,6 +53,7 @@ class PagesController < ApplicationController
   def page_params
     params.require(:page).permit(
       :title,
+      :tag_strings,
       :content,
     )
   end

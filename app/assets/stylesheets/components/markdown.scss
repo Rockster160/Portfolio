@@ -1,0 +1,30 @@
+.ctr-pages {
+  .tag-list {
+    text-align: center;
+    
+    .tag {
+      display: inline-block;
+      margin: 3px;
+      padding: 3px 5px;
+      border-radius: 100px;
+      color: $base-blue;
+      background: white;
+    }
+  }
+
+  .markdown-container {
+    word-wrap: break-word;
+    font-family: Menlo, monospace;
+
+    pre code {
+      display: block;
+      white-space: pre;
+      width: 100%;
+    }
+
+    img {
+      width: 100%;
+    }
+  }
+
+}

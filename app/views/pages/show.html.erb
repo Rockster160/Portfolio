@@ -3,6 +3,14 @@
     <a href="<%= pages_path %>" class="btn">&larr; All Pages</a>
     <a href="<%= edit_page_path(@page) %>" class="btn pull-right">Edit</a>
   </div>
-  <h1><%= @page.title %></h1>
-  <div style=";"><%= render_md(@page.content) %></div>
+  <h1 style="text-align: center;"><%= @page.title %></h1>
+  <div class="tag-list">
+    <% @page.tags.each do |tag| %>
+      <span class="tag"><%= tag.name %></span>
+    <% end %>
+  </div>
+  <hr>
+  <div class="markdown-container">
+    <%= render_md(@page.content) %>
+  </div>
 </div>
