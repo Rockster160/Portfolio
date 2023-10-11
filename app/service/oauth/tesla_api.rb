@@ -8,11 +8,11 @@ class Oauth::TeslaAPI < Oauth::Base
     SCOPES: "openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds",
     REDIRECT_URI: "https://ardesian.com",
     STORAGE_KEY: :tesla_api,
-    AUTH_PARAMS = {
+    AUTH_PARAMS: {
       state: TeslaControl::STABLE_STATE,
       nonce: TeslaControl::CODE_VERIFIER,
     },
-    EXCHANGE_PARAMS = {
+    EXCHANGE_PARAMS: {
       audience: "https://fleet-api.prd.na.vn.cloud.tesla.com",
     },
   )
