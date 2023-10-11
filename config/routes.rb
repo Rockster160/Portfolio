@@ -146,7 +146,9 @@ Rails.application.routes.draw do
     resources :bowling_games, path: "/"
   end
 
-  resources :contacts
+  resources :contacts, except: :show do
+    resources :addresses, except: :show
+  end
   resources :folders
   resources :pages, except: :index
   resources :recipes, param: :friendly_id do

@@ -95,7 +95,7 @@
       address = opt[::Jarvis::Regex.address]&.squish.presence if opt.match?(::Jarvis::Regex.address)
       # If specify nearest, search based on car location.
       # Otherwise use the one in contacts and fallback to nearest to house
-      address ||= address_book.contact_by_name(original_opt)&.address
+      address ||= address_book.contact_by_name(original_opt)&.primary_address&.street
       address ||= address_book.nearest_address_from_name(original_opt)
 
       if address.present?

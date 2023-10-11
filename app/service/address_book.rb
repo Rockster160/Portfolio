@@ -9,8 +9,12 @@ class AddressBook
     @contacts ||= @user.contacts
   end
 
+  def addresses
+    @addresses ||= @user.addresses
+  end
+
   def home
-    contact_by_name("Home")
+    contact_by_name("Home")&.primary_address
   end
 
   def current_loc
@@ -22,17 +26,22 @@ class AddressBook
   def current_contact
     @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
       contact_by_loc([state[:latitude], state[:longitude]])
-    } || home
+    } || home.contact
   end
 
   def current_address
     @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
-      reverse_geocode([state[:latitude], state[:longitude]], get: :address)
-    } || home&.address
+      coord = [state[:latitude], state[:longitude]]
+      address_by_loc(coord)# || reverse_geocode(coord, get: :address)
+    } || home&.primary_address
   end
 
   def contact_by_loc(loc)
     find_contact_near(loc)
+  end
+
+  def address_by_loc(loc)
+    find_address_near(loc)
   end
 
   def contact_by_name(name)
@@ -69,7 +78,7 @@ class AddressBook
     return address if address.present?
 
     address ||= data[::Jarvis::Regex.address]&.squish.presence if data.match?(::Jarvis::Regex.address)
-    address ||= contact_by_name(data)&.address
+    address ||= contact_by_name(data)&.primary_address
     address ||= nearest_address_from_name(data)
   end
 
@@ -125,15 +134,20 @@ class AddressBook
     end
   end
 
-  # Find contact at [lat,lng]
-  def find_contact_near(coord)
-    return [] unless coord.compact.length == 2
+  # Find address at [lat,lng]
+  def find_address_near(coord)
+    return unless coord.compact.length == 2
 
-    contacts.where.not(address: nil).find { |details|
+    addresses.find { |details|
       next unless details.loc&.compact&.length == 2
 
       near?(details.loc, coord)
     }
+  end
+
+  # Find contact at [lat,lng]
+  def find_contact_near(coord)
+    find_address_near(coord)&.contact
   end
 
   def nonnil_cache(key, &block)

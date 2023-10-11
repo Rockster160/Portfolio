@@ -59,9 +59,6 @@ class ContactsController < ApplicationController
 
   def contact_params
     params.require(:contact).permit(
-      :address,
-      :lat,
-      :lng,
       :name,
       :nickname,
       :phone,

@@ -17,60 +17,49 @@
 #
 class Contact < ApplicationRecord
   belongs_to :user
+  has_many :addresses
 
   serialize :raw, SafeJsonSerializer
 
   validates_uniqueness_of :apple_contact_id, allow_nil: true
 
-  def loc
-    [lat, lng]
+  after_save :store_primary_address
+
+  def primary_address
+    addresses.find_by(primary: true) || addresses.first
   end
 
-  def lat=(val)
-    return super(nil) if val.to_i == 0
-    super(val)
-  end
-
-  def lng=(val)
-    return super(nil) if val.to_i == 0
-    super(val)
-  end
-
-  def loc=(*new_loc)
-    new_lat, new_lng = *Array.wrap(new_loc).flatten
-    self.lat = new_lat
-    self.lng = new_lng
-  end
-
-  def address=(new_address)
-    return if self.address == new_address
-
-    if new_address.present?
-      lat, lng = AddressBook.new(user).loc_from_address(new_address) || []
-      self.lat = lat
-      self.lng = lng
-    end
-
-    super(new_address)
+  def primary_address=(new_address)
+    @primary_address = new_address
   end
 
   def resync
     return if raw.blank?
 
-    address = raw[:addresses]&.first
     json = raw.deep_symbolize_keys
 
-    if lat.nil? && address.present?
-      lat, lng = AddressBook.new(user).loc_from_address(address) || []
+    raw[:addresses]&.each do |raw_address|
+      addresses.find_or_create_by(street: raw_address) do |addr|
+        addr.user = user
+        lat, lng = AddressBook.new(user).loc_from_address(raw_address) || []
+        addr.lat = lat
+        addr.lng = lng
+      end
     end
 
     update(
       name: json[:name]&.split(" ", 2)&.first, # Should include aliases and allow last names?
       phone: json[:phones]&.first&.dig(:value)&.gsub(/[^\d]/, "")&.last(10),
-      address: json[:addresses]&.first,
       nickname: json[:nickname],
-      lat: lat,
-      lng: lng,
+    )
+  end
+
+  def store_primary_address
+    # Basically just used for specs
+    addresses.find_or_initialize_by(street: @primary_address[:street]).update(
+      primary: true,
+      user: user,
+      loc: @primary_address[:loc],
     )
   end
 end

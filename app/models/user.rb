@@ -23,6 +23,7 @@ class User < ApplicationRecord
   has_many :folders, dependent: :destroy
   has_many :pages, dependent: :destroy
   has_many :contacts, dependent: :destroy
+  has_many :addresses, dependent: :destroy
   has_many :user_lists, dependent: :destroy
   has_many :recipes, dependent: :destroy
   has_many :recipe_favorites, class_name: "RecipeFavorite", foreign_key: :favorited_by_id
@@ -57,7 +58,7 @@ class User < ApplicationRecord
   delegate :sub_auth, to: :push_sub
 
   def self.me
-    @@me ||= admin.find(1)
+    @@me ||= admin.first
   end
 
   def self.auth_from_basic(basic_auth)

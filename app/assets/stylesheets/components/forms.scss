@@ -35,6 +35,23 @@ form:not(.basic) {
     margin: 20px auto;
   }
 
+  .sub-form {
+    position: relative;
+    margin: 10px;
+    box-shadow: 2px 2px 2px $grey-blue;
+    border: 1px solid $grey-blue;
+    border-radius: 6px;
+    background: $blue-l5;
+    padding: 10px;
+
+    .is-primary {
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      color: gold;
+    }
+  }
+
   .app-card-inner,
   .form-field {
     padding: 0 15px;
@@ -354,6 +371,11 @@ select {
 
     .app-card-title, .form-title {
       background: $blue-d3;
+    }
+
+
+    .sub-form {
+      background: $grey-dark;
     }
 
     .app-card-inner, .form-field {

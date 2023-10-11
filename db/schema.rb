@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_10_10_183529) do
+ActiveRecord::Schema.define(version: 2023_10_11_205553) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -53,6 +53,21 @@ ActiveRecord::Schema.define(version: 2023_10_10_183529) do
     t.bigint "blob_id", null: false
     t.string "variation_digest", null: false
     t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+  end
+
+  create_table "addresses", force: :cascade do |t|
+    t.bigint "user_id"
+    t.bigint "contact_id"
+    t.boolean "primary"
+    t.text "icon"
+    t.text "label"
+    t.text "street"
+    t.float "lat"
+    t.float "lng"
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["contact_id"], name: "index_addresses_on_contact_id"
+    t.index ["user_id"], name: "index_addresses_on_user_id"
   end
 
   create_table "avatar_clothes", id: :serial, force: :cascade do |t|

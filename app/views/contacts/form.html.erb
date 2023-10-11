@@ -1,57 +1,14 @@
-<% if @contact.address.present? %>
-  <% content_for(:head) do %>
-    <script src="https://maps.googleapis.com/maps/api/js?key=<%= ENV["PORTFOLIO_GMAPS_KEY"] %>&callback=initMap" async defer></script>
-    <script type="text/javascript">
-      function initMap() {
-        setTimeout(function() {
-          // Delay if DOM isn't loaded yet
-          if (!document.getElementById("contact_lng")) {
-            return setTimeout(initMap, 500)
-          }
-
-          let [homelat, homelng] = <%= current_user.address_book&.home&.loc || [] %>
-
-          let lat_field = document.getElementById("contact_lat")
-          let lng_field = document.getElementById("contact_lng")
-
-          let start_lat = parseFloat(lat_field.value || homelat || 0)
-          let start_lng = parseFloat(lng_field.value || homelng || 0)
-
-          var map = new google.maps.Map(document.getElementById("map"), {
-            center: { lat: start_lat, lng: start_lng },
-            zoom: 14
-          });
-
-          var marker = new google.maps.Marker({
-            map: map,
-            draggable: true,
-            position: { lat: start_lat, lng: start_lng }
-          });
-
-          google.maps.event.addListener(marker, "dragend", function(event) {
-            let c1 = [lat_field.value, lng_field.value]
-            let c2 = [event.latLng.lat(), event.latLng.lng()]
-
-            lat_field.value = event.latLng.lat();
-            lng_field.value = event.latLng.lng();
-
-            console.log(Math.sqrt((c2[0] - c1[0])**2 + (c2[1] - c1[1])**2))
-          });
-        }, 1000)
-      }
-    </script>
-  <% end %>
-<% end %>
-
 <div class="skinny-container">
   <div class="btn-container">
     <a href="<%= contacts_path %>" class="btn">&larr; All Contacts</a>
-    <a href="<%= logout_path %>" class="btn pull-right">Logout</a>
+    <% if @contact.persisted? %>
+      <%= link_to :Delete, @contact, method: :delete, class: "btn danger pull-right" %>
+    <% end %>
   </div>
   <%= form_for @contact do |f| %>
     <div class="form-title"><%= @contact.persisted? ? :Edit : :New %> Contact</div>
 
-    <%= render partial: 'layouts/error_container', locals: { resource: @contact } %>
+    <%= render partial: "layouts/error_container", locals: { resource: @contact } %>
 
     <div class="form-fields">
       <div class="form-field">
@@ -68,23 +25,26 @@
         <%= f.label :phone %>
         <%= f.phone_field :phone %>
       </div>
-
-      <div class="form-field">
-        <%= f.label :address %>
-        <%= f.text_area :address %>
-      </div>
-
-      <% if @contact.address.present? %>
-        <div class="form-field">
-          <div id="map" style="height: 300px;"></div>
-          <%= f.hidden_field :lat %>
-          <%= f.hidden_field :lng %>
-        </div>
-      <% end %>
     </div>
 
     <div class="form-submission">
       <%= f.submit %>
+    </div>
+
+    <% @contact.addresses.each do |address| %>
+      <div class="sub-form">
+        <% if address.primary? %>
+          <i class="fa fa-star is-primary"></i>
+        <% end %>
+        <div class="form-field">
+          <small><%= address.icon %> <%= address.label %></small>
+          <p><%= address.street %></p>
+          <%= link_to "Edit", [:edit, @contact, address], class: :btn %>
+        </div>
+      </div>
+    <% end %>
+    <div class="form-field">
+      <%= link_to "+ New Address", [:new, @contact, :address], class: :btn %>
     </div>
   <% end %>
 </div>

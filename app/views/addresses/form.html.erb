@@ -1,0 +1,120 @@
+<% content_for(:head) do %>
+  <script src="https://maps.googleapis.com/maps/api/js?key=<%= ENV["PORTFOLIO_GMAPS_KEY"] %>&callback=initMap" async defer></script>
+  <script type="text/javascript">
+    function initMap() {
+      setTimeout(async function() {
+        // Delay if DOM isn't loaded yet
+        if (!document.getElementById("gmaps_search")) {
+          return setTimeout(initMap, 500)
+        }
+
+        let [homelat, homelng] = <%= current_user.address_book&.home&.loc || [] %>
+
+        let lat_field = document.getElementById("address_lat")
+        let lng_field = document.getElementById("address_lng")
+
+        let start_lat = parseFloat(lat_field.value || homelat || 0)
+        let start_lng = parseFloat(lng_field.value || homelng || 0)
+
+        const { Map } = await google.maps.importLibrary("maps")
+        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker")
+        let geocoder = null
+        const map = new Map(document.getElementById("map"), {
+          center: { lat: start_lat, lng: start_lng },
+          zoom: 14,
+          mapId: "4504f8b37365c3d0",
+        })
+        const marker = new AdvancedMarkerElement({
+          map,
+          position: { lat: start_lat, lng: start_lng },
+          gmpDraggable: true,
+        })
+
+        google.maps.event.addListener(marker, "dragend", function(event) {
+          let c1 = [lat_field.value, lng_field.value]
+          let c2 = [event.latLng.lat(), event.latLng.lng()]
+
+          lat_field.value = event.latLng.lat()
+          lng_field.value = event.latLng.lng()
+
+          console.log(Math.sqrt((c2[0] - c1[0])**2 + (c2[1] - c1[1])**2))
+        })
+
+        document.getElementById("gmaps_search").addEventListener("click", function() {
+          geoLocate(document.getElementById("address_street").value)
+        })
+
+        let geoLocate = function(address) {
+          geocoder = geocoder || new google.maps.Geocoder()
+          geocoder.geocode({
+            address: address
+          }, function(results, status) {
+            if (status == google.maps.GeocoderStatus.OK) {
+              var latitude = results[0].geometry.location.lat()
+              var longitude = results[0].geometry.location.lng()
+              lat_field.value = latitude
+              lng_field.value = longitude
+              marker.position = { lat: latitude, lng: longitude }
+
+              map.panTo(new google.maps.LatLng(latitude, longitude))
+            } else {
+              console.log("error")
+              return false
+            }
+          })
+        }
+      }, 1000)
+    }
+  </script>
+<% end %>
+
+<div class="skinny-container">
+  <div class="btn-container">
+    <a href="<%= edit_contact_path(@contact) %>" class="btn">&larr; Contact</a>
+    <% if @address.persisted? %>
+      <%= link_to :Delete, [@contact, @address], method: :delete, class: "btn danger pull-right" %>
+    <% end %>
+  </div>
+  <%= form_for [@contact, @address] do |f| %>
+    <div class="form-title"><%= @address.persisted? ? :Edit : :New %> Contact</div>
+
+    <%= render partial: "layouts/error_container", locals: { resource: @address } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <div class="checkbox-wrapper">
+          <%= f.check_box :primary %>
+          <%= f.label :primary do %>
+            <div class="checkbox-placeholder"></div>
+             Primary?
+          <% end %>
+        </div>
+      </div>
+      <div class="form-field">
+        <%= f.label :label %>
+        <%= f.text_field :label %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :icon %>
+        <%= f.text_field :icon, style: "font-size: 48px" %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :street %>
+        <%= f.text_area :street %>
+      </div>
+
+      <div class="form-field">
+        <input type="button" name="submit" value="Search by Address" id="gmaps_search"/>
+        <div id="map" style="height: 400px;"></div>
+        <%= f.hidden_field :lat %>
+        <%= f.hidden_field :lng %>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit %>
+    </div>
+  <% end %>
+</div>
