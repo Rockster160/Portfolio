@@ -1,4 +1,4 @@
-class TeslaAPI < Oauth
+class Oauth::TeslaAPI < Oauth::Base
   constants(
     OAUTH_URL: "https://auth.tesla.com/oauth2/v3/authorize",
     EXCHANGE_URL: "https://auth.tesla.com/oauth2/v3/token",

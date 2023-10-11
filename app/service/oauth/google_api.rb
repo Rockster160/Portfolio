@@ -1,4 +1,4 @@
-# class GoogleAPI < Oauth
+class Oauth::GoogleAPI < Oauth::Base
 #   # OAUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 #   # TOKEN_URL = "https://oauth2.googleapis.com/token"
 #   # PROJECT_ID = ENV.fetch("PORTFOLIO_GCP_PROJECT_ID")
@@ -38,4 +38,4 @@
 #       end
 #     end
 #   end
-# end
+end

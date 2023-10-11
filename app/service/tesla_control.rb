@@ -15,6 +15,8 @@ class TeslaControl
   CODE_VERIFIER = DataStorage[:tesla_code_verifier] ||= rand(36**86).to_s(36)
   CODE_CHALLENGE = Base64.urlsafe_encode64(Digest::SHA256.digest(CODE_VERIFIER), padding: false)
 
+  # https://developer.tesla.com/docs/fleet-api?ruby#api-status
+
   def self.authorize
     # If this is still broken, try cleaning the challenge:
     # https://github.com/timdorr/tesla-api/discussions/689#discussioncomment-5013335
