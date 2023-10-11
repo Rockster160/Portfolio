@@ -1,6 +1,16 @@
-class Oauth
+class Oauth::Base
+  # CLIENT_ID
+  # REDIRECT_URI
+  # SCOPES
+  # OAUTH_URL
+  # EXCHANGE_URL
+  # CLIENT_ID
+  # CLIENT_SECRET
+  # REDIRECT_URI
+  # STORAGE_KEY
+
   def self.constants(hash)
-    hash.each { |ckey, cval| Oauth.const_set(ckey, cval) }
+    hash.each { |ckey, cval| Oauth::Base.const_set(ckey, cval) }
     # @constants = (@constants || {}).merge(hash)
   end
 
@@ -10,27 +20,30 @@ class Oauth
         response_type: :code,
         client_id: CLIENT_ID,
         redirect_uri: REDIRECT_URI,
-        scope: "https://www.googleapis.com/auth/calendar.events", #,https://www.googleapis.com/auth/calendar.settings.readonly #https://www.googleapis.com/auth/calendar
+        scope: Array.wrap(SCOPES).join(" "),
         access_type: :offline,
-      }
+      }.merge(AUTH_PARAMS)
 
       "#{OAUTH_URL}?#{params.to_query}"
     end
 
     def code=(code)
       auth(
-        grant_type: :authorization_code,
-        code: code
+        code,
+        {
+          grant_type: :authorization_code,
+        }.merge(EXCHANGE_PARAMS)
       )
 
       self
     end
 
     def auth(code, params={})
-      API.post(TOKEN_URL, {
+      API.post(EXCHANGE_URL, {
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
-        redirect_uri: REDIRECT_URI
+        redirect_uri: REDIRECT_URI,
+        scope: SCOPES,
       }.merge(params)).tap { |json|
         next if json.nil?
         puts "\e[36m[LOGIT] | #{json}\e[0m"

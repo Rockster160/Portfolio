@@ -52,6 +52,8 @@ Rails.application.routes.draw do
   get "webhooks/uptime" => "webhooks#uptime"
   post "webhooks/uptime" => "webhooks#uptime"
   post "webhooks/command" => "webhooks#command"
+  post "webhooks/auth" => "webhooks#auth"
+  post "webhooks/auth/:service" => "webhooks#auth"
   post "push_notification_subscribe" => "webhooks#push_notification_subscribe"
 
   get "dashboard" => "dashboard#show"

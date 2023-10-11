@@ -1,14 +1,18 @@
 class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :post_params, except: [:local_data, :report]
-  before_action :skip_without_user, only: [:jil, :command]
-  before_action :skip_without_admin, only: [:battery, :local_data, :report, :speak, :tesla_local]
+  before_action :none_unless_user, only: [:jil, :command]
+  before_action :none_unless_admin, only: [:battery, :local_data, :report, :speak, :tesla_local]
 
   def jenkins
     head :ok
   end
 
   def post
+    head :ok
+  end
+
+  def auth
     head :ok
   end
 
@@ -165,11 +169,11 @@ class WebhooksController < ApplicationController
 
   private
 
-  def skip_without_user
+  def none_unless_user
     head :no_content unless user_signed_in?
   end
 
-  def skip_without_admin
+  def none_unless_admin
     head :no_content unless user_signed_in? && current_user.admin?
   end
 
