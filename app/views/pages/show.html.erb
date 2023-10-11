@@ -1,6 +1,7 @@
 <div class="skinny-container">
   <div class="btn-container">
-    <%= link_to "Edit", [:edit, @page], class: :btn %>
+    <%= link_to "Back", @page.folder || :folders, class: :btn %>
+    <%= link_to "Edit", [:edit, @page], class: "btn pull-right" %>
   </div>
   <div class="breadcrumbs text-center">
     <%= link_to :root, :folders %>

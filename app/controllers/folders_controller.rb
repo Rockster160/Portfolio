@@ -2,11 +2,8 @@ class FoldersController < ApplicationController
   before_action :authorize_user, :set_folder
 
   def index
-    @folders = current_user.folders.order(:created_at)
-    @pages = current_user.pages.order(:created_at)
-  end
-
-  def show
+    @folders = current_user.folders.ordered.where(folder_id: nil)
+    @pages = current_user.pages.ordered.where(folder_id: nil)
   end
 
   def new

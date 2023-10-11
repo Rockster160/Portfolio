@@ -35,6 +35,7 @@ module MarkdownHelper
     markdown
       .then { |content| fix_emphasis(content) }
       .then { |content| leading_spaces(content) }
+      .then { |content| csv_to_table(content) }
   end
 
   def postprocess(html)
@@ -49,8 +50,23 @@ module MarkdownHelper
   end
 
   def leading_spaces(content)
-    # BUG: Should not convert inside of a code block
-    content.gsub(/^ +/) { |spaces| "&nbsp;" * spaces.length }
+    Tokenizer.protect(content, /```.*?```/m) do |text|
+      text.gsub(/^ +/) { |spaces| "&nbsp;" * spaces.length }
+    end
+  end
+
+  def csv_to_table(content)
+    content.gsub(/```csv(.*?)```/m) do |text|
+      begin
+        CSV.parse(text[7..-4].strip).map.with_index { |row, idx|
+            row.join(" | ").then { |str|
+              idx == 0 ? str + "\r\n" + row.map { "---" }.join(" | ") : str
+            }
+        }.join("\r\n")
+      rescue CSV::MalformedCSVError
+        text
+      end
+    end
   end
 
   def render_linked_pages(content)

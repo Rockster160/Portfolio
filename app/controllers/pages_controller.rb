@@ -1,10 +1,6 @@
 class PagesController < ApplicationController
   before_action :authorize_user, :set_page
 
-  def index
-    @pages = current_user.pages.order(:created_at)
-  end
-
   def show
   end
 
