@@ -129,7 +129,9 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :climbs
+  resources :climbs do
+    patch :mark, on: :collection
+  end
 
   namespace :bowling, as: nil do
     resources :bowlers, only: [:create] do
