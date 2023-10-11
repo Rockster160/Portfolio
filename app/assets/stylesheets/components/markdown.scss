@@ -15,12 +15,39 @@
   .markdown-container {
     word-wrap: break-word;
     font-family: Menlo, monospace;
+    * { box-sizing: border-box; }
 
+    ::-webkit-scrollbar {
+      height: 4px;
+      width: 4px;
+      background: $blue-d3;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: darken(lime, 25%);
+      border-radius: 1ex;
+      box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.75);
+
+      &:hover { background: darken(lime, 15%); }
+      &:active { background: darken(lime, 5%); }
+    }
+
+    ::-webkit-scrollbar-corner {
+      background: $blue-d4;
+    }
+
+    code {
+      display: inline-block;
+      vertical-align: middle;
+      white-space: pre;
+      overflow: auto;
+      background: $blue-d4;
+      border-radius: 5px;
+      padding: 2px 5px;
+    }
     pre code {
       display: block;
-      white-space: pre;
       width: 100%;
-      overflow: auto;
     }
 
     img {
