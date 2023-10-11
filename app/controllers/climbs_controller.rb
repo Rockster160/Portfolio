@@ -29,14 +29,12 @@ class ClimbsController < ApplicationController
   def mark
     Time.use_zone(current_user.timezone) {
       @climb = current_user.climbs.find_by(created_at: Time.current.all_day)
-      @climb ||= current_user.climbs.create(climb_params)
+      @climb ||= current_user.climbs.create(timestamp: Time.current)
 
-      @climb.update(data: [@climb.data, params[:v_count].compact_blank.join(" "))
+      @climb.update(data: [@climb.data, params[:v_index]].compact_blank.join(" "))
     }
 
-    respond_to do
-      format.json { render json: { score: @climb.data } }
-    end
+    render json: { score: @climb.score }
   end
 
   def update
