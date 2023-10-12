@@ -55,6 +55,7 @@ class Contact < ApplicationRecord
   end
 
   def store_primary_address
+    return unless @primary_address.present?
     # Basically just used for specs
     addresses.find_or_initialize_by(street: @primary_address[:street]).update(
       primary: true,
