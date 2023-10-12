@@ -231,6 +231,17 @@
           }
         }
       }
+      /* &.perfect-game {
+        border-color: green;
+        input[type=text] {
+          border-color: green;
+          color: green;
+
+          &.current {
+            border-color: purple;
+          }
+        }
+      } */
       &.missed-drink-frame {
         border-color: red;
         background-image: url("https://staticg.sportskeeda.com/editor/2022/08/2d25d-16594604976321-1920.jpg");
@@ -257,6 +268,19 @@
       &.drink-frame {
         background: gold;
         color: white;
+      }
+    }
+
+    &.perfect-game {
+      .bowling-cell {
+        background: gold;
+        color: white;
+        border-color: white;
+
+        input[type=text] {
+          border-color: white;
+          color: white;
+        }
       }
     }
 

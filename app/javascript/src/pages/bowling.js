@@ -861,6 +861,7 @@ $(document).ready(function() {
   }
 
   detectCleanStarts = function() {
+    $(".perfect-game").removeClass("perfect-game")
     $(".consec-start").removeClass("consec-start")
     $(".clean-start").removeClass("clean-start")
     $(".bowler").each(function() {
@@ -868,18 +869,20 @@ $(document).ready(function() {
       let frameNum = parseInt(bowler.attr("data-current-frame"))
       let currentVal = bowler.find(".frame[data-frame=" + frameNum + "] .shot[data-shot-idx=0]").val()
 
-      let consec = currentVal == "" || currentVal == "X", clean = true
+      let consec = !currentVal || currentVal == "" || currentVal == "X", clean = true
       for (var i=1; i<frameNum; i++) {
         if (consec || clean) {
-          let first = bowler.find(".frame[data-frame=" + i + "] .shot[data-shot-idx=0]").val()
-          let second = bowler.find(".frame[data-frame=" + i + "] .shot[data-shot-idx=1]").val()
+          let first = bowler.find(".frame[data-frame=" + i + "] .shot[data-shot-idx=0]").val() || null
+          let second = bowler.find(".frame[data-frame=" + i + "] .shot[data-shot-idx=1]").val() || null
           if (first != "X") { consec = false }
-          if (first != "X" && second != "/" && second != "X") { clean = false }
+          if (first && first != "X" && second != "/" && second != "X") { clean = false }
         }
       }
+      if (consec && frameNum == 11) { bowler.addClass("perfect-game") }
       if (consec || clean) {
         for (var i=1; i<frameNum; i++) {
           let frame = bowler.find(".frame[data-frame=" + i + "]")
+          if (consec && frameNum == 11) { frame.addClass("perfect-game") }
           if (consec) { frame.addClass("consec-start") }
           if (clean) { frame.addClass("clean-start") }
         }
