@@ -276,10 +276,14 @@
         background: gold;
         color: white;
         border-color: white;
+        border-width: 2px;
+        font-weight: bold;
 
         input[type=text] {
           border-color: white;
           color: white;
+          border-width: 2px;
+          font-weight: bold;
         }
       }
     }
