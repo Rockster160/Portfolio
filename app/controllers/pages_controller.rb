@@ -2,6 +2,12 @@ class PagesController < ApplicationController
   before_action :authorize_user, :set_page
 
   def show
+    respond_to do |format|
+      format.html
+      format.json {
+        render json: { id: @page.id, content: @page.content, timestamp: @page.updated_at.to_i }
+      }
+    end
   end
 
   def new
@@ -14,7 +20,12 @@ class PagesController < ApplicationController
     @page = current_user.pages.new(page_params)
 
     if @page.save
-      redirect_to @page
+      respond_to do |format|
+        format.html { redirect_to @page }
+        format.json {
+          render json: { id: @page.id, content: @page.content, timestamp: @page.updated_at.to_i }
+        }
+      end
     else
       render :form
     end
@@ -26,7 +37,12 @@ class PagesController < ApplicationController
 
   def update
     if @page.update(page_params)
-      redirect_to @page
+      respond_to do |format|
+        format.html { redirect_to @page }
+        format.json {
+          render json: { id: @page.id, content: @page.content, timestamp: @page.updated_at.to_i }
+        }
+      end
     else
       render :form
     end
@@ -52,6 +68,7 @@ class PagesController < ApplicationController
       :name,
       :tag_strings,
       :content,
+      :timestamp,
     )
   end
 end

@@ -151,6 +151,7 @@ Rails.application.routes.draw do
   end
   resources :folders
   resources :pages, except: :index
+  get "/pages", to: "folders#index"
   resources :recipes, param: :friendly_id do
     post :export_to_list, on: :member
   end

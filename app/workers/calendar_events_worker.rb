@@ -8,7 +8,7 @@ class CalendarEventsWorker
   def perform
     return if Rails.env.development?
 
-    @user_id = 1
+    @user_id = User.me.id
     coming_events = ::LocalDataCalendarParser.call.values.flatten # JarvisCache for @user_id
     sorted_events = coming_events.sort_by { |evt| evt[:start_time] || ::DateTime.new }
     schedulable_events = gather_events(sorted_events)
