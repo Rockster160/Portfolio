@@ -30,11 +30,20 @@ class Page < ApplicationRecord
     self.updated_at = Time.at(new_timestamp.to_i)
   end
 
+  def to_packet
+    {
+      id:        id,
+      timestamp: updated_at.to_i,
+      name:      parameterized_name,
+      folder:    folder&.parameterized_name,
+    }
+  end
+
   private
 
   def broadcast_timestamp
     return if @skip_broadcast
 
-    PageChannel.broadcast_to(user, { changes: [{ id: id, timestamp: updated_at.to_i }] })
+    PageChannel.broadcast_to(user, { changes: [to_packet] })
   end
 end

@@ -8,9 +8,11 @@ class PageChannel < ApplicationCable::Channel
 
   def request_timestamps(data)
     data = data.deep_symbolize_keys
-    changes = current_user.pages.where(id: data[:ids]).pluck(:id, :updated_at).map { |id, updated_at|
-      { id: id, timestamp: updated_at.to_i }
-    }
+    ids = data[:ids].select { |id| id.to_i.positive? }
+    folder_names = data[:ids].select { |name| name.to_i.zero? }.map(&:parameterize)
+    pages = current_user.pages.includes(:folder);nil
+    folders = pages.where(folders: { parameterized_name: folder_names });nil
+    changes = pages.where(id: ids).or(folders).map(&:to_packet)
     PageChannel.broadcast_to(current_user, { changes: changes })
   end
 end
