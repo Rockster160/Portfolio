@@ -4,9 +4,7 @@ class PagesController < ApplicationController
   def show
     respond_to do |format|
       format.html
-      format.json {
-        render json: { id: @page.id, content: @page.content, timestamp: @page.updated_at.to_i }
-      }
+      format.json { render json: @page.to_full_packet }
     end
   end
 
@@ -17,14 +15,13 @@ class PagesController < ApplicationController
   end
 
   def create
-    @page = current_user.pages.new(page_params)
+    @page = current_user.pages.new
+    @page.assign_attributes(page_params) # Separate from new to allow setting user
 
     if @page.save
       respond_to do |format|
         format.html { redirect_to @page }
-        format.json {
-          render json: { id: @page.id, content: @page.content, timestamp: @page.updated_at.to_i }
-        }
+        format.json { render json: @page.to_full_packet }
       end
     else
       render :form
@@ -39,9 +36,7 @@ class PagesController < ApplicationController
     if @page.update(page_params)
       respond_to do |format|
         format.html { redirect_to @page }
-        format.json {
-          render json: { id: @page.id, content: @page.content, timestamp: @page.updated_at.to_i }
-        }
+        format.json { render json: @page.to_full_packet }
       end
     else
       render :form
@@ -65,6 +60,7 @@ class PagesController < ApplicationController
   def page_params
     params.require(:page).permit(
       :folder_id,
+      :folder_name,
       :name,
       :tag_strings,
       :content,

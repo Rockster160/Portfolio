@@ -30,6 +30,15 @@ class Page < ApplicationRecord
     self.updated_at = Time.at(new_timestamp.to_i)
   end
 
+  def folder_name=(new_folder_name)
+    folder = user.folders.ilike(parameterized_name: new_folder_name.parameterize).take!
+    self.folder_id = folder.id
+  end
+
+  def to_full_packet
+    to_packet.merge(content: content)
+  end
+
   def to_packet
     {
       id:        id,

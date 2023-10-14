@@ -3,12 +3,17 @@
     <%= link_to "Cancel", @page, class: :btn %>
     <a data-clickit="input[type=submit]" class="btn pull-right">Save</a>
   </div>
+  <% if @page.persisted? %>
+    <div class="text-center">
+      <%= link_to "Delete", @page, class: "btn danger", method: :delete, data: { confirm: "Are you sure? This cannot be undone." } %>
+    </div>
+  <% end %>
   <%= form_for @page do |f| %>
     <div class="form-title"><%= @page.persisted? ? :Edit : :New %> Page</div>
 
     <%= render partial: "layouts/error_container", locals: { resource: @page } %>
 
-    <%= f.hidden_field :folder_id, value: params[:folder] %>
+    <%= f.hidden_field :folder_id, value: params[:folder] if params.key?(:folder) %>
     <div class="form-fields">
       <div class="form-field">
         <%= f.label :name %>
