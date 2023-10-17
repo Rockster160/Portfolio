@@ -93,7 +93,7 @@ class AddressBook
 
     from ||= current_loc
     # Should be stringified addresses
-    to, from = [to, from].map { |address| address_book.to_address(address) }
+    to, from = [to, from].map { |address| to_address(address) }
     nonnil_cache("traveltime_seconds(#{to},#{from})") {
       # ::Jarvis.say("Traveltime #{to},#{from}")
       params = {
