@@ -68,7 +68,7 @@ class AddressBook
     data = SafeJsonSerializer.load(data)
     address = data.first if data.is_a?(Array) && data.length == 1
     return data.street if data.is_a?(Address)
-    return data.primary_address if data.is_a?(Contact)
+    return data.primary_address&.street if data.is_a?(Contact)
 
     address = reverse_geocode(data, get: :address) if data.is_a?(Array) && data.length == 2
     data.tap { |str|

@@ -104,9 +104,6 @@ class CalendarEventsWorker
           event[:location],
           address_book.current_address&.street
         )
-        if traveltime.nil?
-          puts "from: #{event[:location]}\nto: #{address_book.current_address&.street}"
-        end
         # Show time to leave
         new_events.push(
           name: "TTL: #{distance_of_time_in_words(traveltime)}",
