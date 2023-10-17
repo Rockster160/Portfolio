@@ -75,10 +75,14 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     lines.push(Text.justify(...first_row))
 
     cell.data.devices?.forEach(function(device) {
-      let mode_color = device.current_mode == "cool" ? dash_colors.lblue : dash_colors.orange
+      let mode_color = switch (device.current_mode) {
+        case "cool": dash_colors.lblue; break;
+        case "heat": dash_colors.orange; break;
+        case "off": dash_colors.grey; break;
+      }
       let name = device.name + ":"
       let current = device.current_temp + "°"
-      let goal = Text.color(mode_color, "[" + (device.cool_set || device.heat_set) + "°]")
+      let goal = Text.color(mode_color, "[" + (device.cool_set || device.heat_set || "off") + "°]")
       let on = null
       if (device.status == "cooling") {
         on = Emoji.snowflake + Emoji.dash
