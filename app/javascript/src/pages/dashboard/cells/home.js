@@ -75,10 +75,11 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     lines.push(Text.justify(...first_row))
 
     cell.data.devices?.forEach(function(device) {
-      let mode_color = switch (device.current_mode) {
-        case "cool": dash_colors.lblue; break;
-        case "heat": dash_colors.orange; break;
-        case "off": dash_colors.grey; break;
+      let mode_color = dash_colors.grey
+      switch (device.current_mode) {
+        case "cool": mode_color = dash_colors.lblue; break;
+        case "heat": mode_color = dash_colors.orange; break;
+        case "off": mode_color = dash_colors.grey; break;
       }
       let name = device.name + ":"
       let current = device.current_temp + "°"
