@@ -67,6 +67,9 @@ class AddressBook
   def to_address(data)
     data = SafeJsonSerializer.load(data)
     address = data.first if data.is_a?(Array) && data.length == 1
+    return data.street if data.is_a?(Address)
+    return data.primary_address if data.is_a?(Contact)
+
     address = reverse_geocode(data, get: :address) if data.is_a?(Array) && data.length == 2
     data.tap { |str|
       next unless str.is_a?(String)
@@ -80,17 +83,19 @@ class AddressBook
     address ||= data[::Jarvis::Regex.address]&.squish.presence if data.match?(::Jarvis::Regex.address)
     address ||= contact_by_name(data)&.primary_address
     address ||= nearest_address_from_name(data)
+    address.gsub("\n", "") if address.is_a?(String)
+    SlackNotifier.notify("to_address is a #{data.class}") unless data.is_a?(String)
+    address
   end
 
   def traveltime_seconds(to, from=nil)
     return 2700 unless Rails.env.production?
 
     from ||= current_loc
+    # Should be stringified addresses
+    to, from = [to, from].map { |address| to_address(address) }
     nonnil_cache("traveltime_seconds(#{to},#{from})") {
       # ::Jarvis.say("Traveltime #{to},#{from}")
-      to, from = [to, from].map { |address| to_address(address) }
-      # Should be stringified addresses
-
       params = {
         destinations: to,
         origins: from,
