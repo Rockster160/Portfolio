@@ -6,7 +6,7 @@ class CalendarEventsWorker
   PRE_OFFSET = 10.minutes
 
   def perform
-    return if Rails.env.development?
+    # return if Rails.env.development?
 
     @user_id = User.me.id
     coming_events = ::LocalDataCalendarParser.call.values.flatten # JarvisCache for @user_id
@@ -104,6 +104,9 @@ class CalendarEventsWorker
           event[:location],
           address_book.current_address&.street
         )
+        if traveltime.nil?
+          puts "from: #{event[:location]}\nto: #{address_book.current_address&.street}"
+        end
         # Show time to leave
         new_events.push(
           name: "TTL: #{distance_of_time_in_words(traveltime)}",
