@@ -47,7 +47,7 @@ class ApplicationRecord < ActiveRecord::Base
     built = search_scope
     data = q.is_a?(Hash) ? q : SearchParser.call(
       q,
-      or: "OR:",
+      or: "OR",
       not: "!",
       contains: ":",
       not_contains: "!:",
@@ -55,7 +55,7 @@ class ApplicationRecord < ActiveRecord::Base
       exact: "::",
       similar: "~",
       aliases: {
-        ":": "="
+        ":": "=",
       }
     )
     #   ~   - similar? (95% text match?)
