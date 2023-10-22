@@ -14,7 +14,7 @@ class Jarvis::Execute::Math < Jarvis::Execute::Executor
     task_left, task_op, task_right = evalargs
     return unless task_op.in?(["+", "-", "*", "/", "%"])
 
-    cast_num(task_left).send(task_sign, cast_num(task_right))
+    cast_num(task_left).send(task_op, cast_num(task_right))
   end
 
   def single_op
