@@ -90,9 +90,6 @@ if (window.location.pathname == "/dashboard") {
       if (window.local_calendar_cell) {
         window.local_calendar_cell.commands.render.call(window.local_calendar_cell, data.calendar)
       }
-      if (window.local_reminders_cell) {
-        window.local_reminders_cell.commands.render.call(window.local_reminders_cell, data.reminders)
-      }
     },
     request: function() {
       return this.perform("request")
