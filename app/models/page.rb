@@ -17,7 +17,7 @@ class Page < ApplicationRecord
   include Orderable
   include Folderable
 
-  belongs_to :folder, optional: true
+  belongs_to :folder, optional: true, touch: true
   belongs_to :user
   has_many :page_tags
   has_many :tags, through: :page_tags

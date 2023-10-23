@@ -28,7 +28,7 @@
     <div class="list-field">
       <%= text_field_tag "folder[name]", "", class: "filterable", placeholder: "Search" %>
     </div>
-    <% @folder.folders.ordered.each do |folder| %>
+    <% @folder.folders.order(updated_at: :desc).each do |folder| %>
       <div class="list-item-container" data-list-id="<%= folder.id %>">
         <a href="<%= folder_path(folder) %>" class="list-item">
           <i class="fa fa-folder"></i>
@@ -36,7 +36,7 @@
         </a>
       </div>
     <% end %>
-    <% @folder.pages.ordered.each do |page| %>
+    <% @folder.pages.order(updated_at: :desc).each do |page| %>
       <div class="list-item-container" data-list-id="<%= page.id %>">
         <a href="<%= page_path(page) %>" class="list-item">
           <i class="fa fa-file-text-o"></i>
