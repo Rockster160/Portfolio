@@ -2,8 +2,12 @@ class FoldersController < ApplicationController
   before_action :authorize_user, :set_folder
 
   def index
-    @folders = current_user.folders.ordered.where(folder_id: nil)
-    @pages = current_user.pages.ordered.where(folder_id: nil)
+    @folders = current_user.folders.order(updated_at: :desc).where(folder_id: nil)
+    @pages = current_user.pages.order(updated_at: :desc).where(folder_id: nil)
+  end
+
+  def show
+    @readme = @folder.pages.ilike(parameterized_name: :readme).take
   end
 
   def new
