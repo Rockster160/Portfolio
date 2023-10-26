@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_10_11_205553) do
+ActiveRecord::Schema.define(version: 2023_10_26_223259) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -133,6 +133,8 @@ ActiveRecord::Schema.define(version: 2023_10_11_205553) do
     t.integer "high_series"
     t.integer "total_pins_offset"
     t.integer "total_games_offset"
+    t.string "usbc_number"
+    t.string "usbc_full_name"
     t.index ["league_id"], name: "index_bowlers_on_league_id"
   end
 
@@ -183,6 +185,7 @@ ActiveRecord::Schema.define(version: 2023_10_11_205553) do
     t.integer "team_size", default: 4
     t.integer "hdcp_base", default: 210
     t.float "hdcp_factor", default: 0.95
+    t.string "lanetalk_center_uuid"
     t.index ["user_id"], name: "index_bowling_leagues_on_user_id"
   end
 

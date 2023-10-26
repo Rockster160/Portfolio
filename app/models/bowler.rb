@@ -12,6 +12,8 @@
 #  total_pins         :integer
 #  total_pins_offset  :integer
 #  total_points       :integer
+#  usbc_full_name     :string
+#  usbc_number        :string
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
 #  league_id          :integer

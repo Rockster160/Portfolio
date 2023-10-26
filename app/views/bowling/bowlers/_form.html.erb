@@ -25,6 +25,16 @@
     </div>
   </div>
   <div class="flex-fields">
+    <div class="form-field">
+      <%= label_tag "#{bowler_params}usbc_number", "USBC Number" %>
+      <%= text_field_tag "#{bowler_params}usbc_number", bowler.usbc_number %>
+    </div>
+    <div class="form-field">
+      <%= label_tag "#{bowler_params}usbc_full_name", "USBC Full Name" %>
+      <%= text_field_tag "#{bowler_params}usbc_full_name", bowler.usbc_full_name %>
+    </div>
+  </div>
+  <div class="flex-fields">
     <small>High Game: <%= bowler.high_game || 0 %></small>
     <small>High Series: <%= bowler.high_series || 0 %></small>
     <small>Total Games: <%= bowler.total_games || 0 %></small>

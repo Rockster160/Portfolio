@@ -2,17 +2,18 @@
 #
 # Table name: bowling_leagues
 #
-#  id                 :integer          not null, primary key
-#  absent_calculation :text             default("AVG - 10")
-#  games_per_series   :integer          default(3)
-#  hdcp_base          :integer          default(210)
-#  hdcp_factor        :float            default(0.95)
-#  name               :text
-#  team_name          :text
-#  team_size          :integer          default(4)
-#  created_at         :datetime         not null
-#  updated_at         :datetime         not null
-#  user_id            :integer
+#  id                   :integer          not null, primary key
+#  absent_calculation   :text             default("AVG - 10")
+#  games_per_series     :integer          default(3)
+#  hdcp_base            :integer          default(210)
+#  hdcp_factor          :float            default(0.95)
+#  lanetalk_center_uuid :string
+#  name                 :text
+#  team_name            :text
+#  team_size            :integer          default(4)
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  user_id              :integer
 #
 
 class BowlingLeague < ApplicationRecord

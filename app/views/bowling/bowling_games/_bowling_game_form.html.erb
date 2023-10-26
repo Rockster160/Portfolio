@@ -62,6 +62,8 @@
           Name
         </span>
       <% end %>
+      <span class="hidden usbc-name"><%= bowler.usbc_full_name %></span>
+      <span class="hidden usbc-number"><%= bowler.usbc_number %></span>
     </span>
     <div class="prev-scores">
       <% (game.game_num - 1).times do |t| %>

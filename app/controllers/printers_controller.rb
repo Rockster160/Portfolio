@@ -7,7 +7,7 @@ class PrintersController < ApplicationController
     res = (
       if params[:args].present?
         PrinterAPI.send(params[:command], params[:args])
-      elsif params[:command].match?(/https:\/\/.*?\.ngrok.io/)
+      elsif params[:command].match?(/https:\/\/.*?\.ngrok/)
         PrinterAPI.update_ngrok(params[:command].squish)
       else
         PrinterAPI.send(params[:command])

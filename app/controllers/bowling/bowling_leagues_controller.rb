@@ -63,6 +63,7 @@ module Bowling
       params.require(:bowling_league).permit(
         :name,
         :team_name,
+        :lanetalk_center_uuid,
         :hdcp_base,
         :hdcp_factor,
         :absent_calculation,
@@ -73,6 +74,8 @@ module Bowling
           :id,
           :name,
           :position,
+          :usbc_number,
+          :usbc_full_name,
           :total_games_offset,
           :total_pins_offset,
         ]
