@@ -38,9 +38,11 @@ $(document).ready(function() {
     return false
   })
 
-  $(window).click(function(evt) {
-    if ($(evt.target).hasClass("modal")) {
-      hideModal(".modal.shown")
+  $(document).click(function(evt) {
+    if ($(".modal.shown").length > 0) {
+      if ($(evt.target).parents(".modal").length == 0) {
+        hideModal(".modal.shown")
+      }
     }
   })
   $("[data-onload-modal]").each(function() {
