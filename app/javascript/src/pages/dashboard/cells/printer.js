@@ -150,7 +150,7 @@ import { dash_colors } from "../vars"
           let printer_data = {}
 
           printer_data.msSinceEpoch = Time.msSinceEpoch()
-          printer_data.progress = (data.progress.printTime / data.job.estimatedPrintTime) * 100
+          printer_data.progress = data.progress.completion
           printer_data.timeLeft = data.progress.printTimeLeft * 1000
           printer_data.elapsedTime = data.progress.printTime * 1000
           printer_data.estimated = data.job.estimatedPrintTime * 1000
