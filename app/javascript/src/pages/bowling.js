@@ -108,6 +108,7 @@ $(document).ready(function() {
   })
   $(".lanetalk-toggle").click(function(evt) {
     useLaneTalk = !useLaneTalk
+    $(this).toggleClass("active", useLaneTalk)
 
     evt.preventDefault()
     return false
