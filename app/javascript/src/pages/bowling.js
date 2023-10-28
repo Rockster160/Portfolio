@@ -77,6 +77,7 @@ $(document).ready(function() {
   let currentScorePush = null
   var inProgress = false
   var lockTimer = false
+  var useLaneTalk = true
   var pin_knock = undefined
   var pinTimer = undefined
   var timer_duration = 1000
@@ -101,6 +102,12 @@ $(document).ready(function() {
   $(".pin-mode-toggle").click(function(evt) {
     pin_mode_show = !pin_mode_show
     resetPinMode()
+
+    evt.preventDefault()
+    return false
+  })
+  $(".lanetalk-toggle").click(function(evt) {
+    useLaneTalk = !useLaneTalk
 
     evt.preventDefault()
     return false
@@ -1282,8 +1289,6 @@ $(document).ready(function() {
       if (name) { bowler_mapping[name.toLowerCase()] = this }
     })
 
-    const socket = new WebSocket("wss://ws.lanetalk.com/ws")
-
     let genUUID = function() {
       return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
         const r = (Math.random() * 16) | 0;
@@ -1291,7 +1296,6 @@ $(document).ready(function() {
         return v.toString(16);
       })
     }
-    let send = function(json) { socket.send(JSON.stringify(json)) }
 
     let decToPins = function(integer) {
       if (integer === null) { return [] }
@@ -1351,41 +1355,45 @@ $(document).ready(function() {
       })
     }
 
-    socket.addEventListener("open", function(event) {
-      console.log("WebSocket connection opened:", event)
-      send({
-        id: genUUID(),
-        method: 0,
-        params: { api_key: lanetalk_api_key }
-      })
-    })
+    let connectWs = function() {
+      let socket = new WebSocket("wss://ws.lanetalk.com/ws")
+      let send = function(json) { socket.send(JSON.stringify(json)) }
 
-    socket.addEventListener("message", function(event) {
-      console.log("Received message:", event.data)
-      let json = JSON.parse(event.data)
-      let result = json.result || {}
-      if (result.result?.client) {
+      socket.addEventListener("open", function(event) {
         send({
           id: genUUID(),
-          method: 1,
-          params: { channel: `LiveScores:${center_id}` }
+          method: 0,
+          params: { api_key: lanetalk_api_key }
         })
-      } else if (Object.keys(result).length > 0) {
-        if (result.type == 5) {
-          updatePlayer(result.data)
-        } else {
-          json.result.publications[0].data.lanes.forEach(function(player) {
-            updatePlayer(player)
-          })
-        }
-      }
-    })
+      })
 
-    socket.addEventListener("close", function(event) {
-      console.log("WebSocket connection closed:", event)
-      // Implement your reconnect logic here
-      // reconnect()
-    })
+      socket.addEventListener("message", function(event) {
+        if (!useLaneTalk) { return }
+        let json = JSON.parse(event.data)
+        let result = json.result || {}
+        if (result.result?.client) {
+          send({
+            id: genUUID(),
+            method: 1,
+            params: { channel: `LiveScores:${center_id}` }
+          })
+        } else if (Object.keys(result).length > 0) {
+          if (result.type == 5) {
+            updatePlayer(result.data)
+          } else {
+            json.result.publications[0].data.lanes.forEach(function(player) {
+              updatePlayer(player)
+            })
+          }
+        }
+      })
+
+      socket.addEventListener("close", function(event) {
+        setTimeout(function() {
+          connectWs()
+        }, 5000)
+      })
+    }
   }
 
   setFrames() // Need this to set absent bowlers
