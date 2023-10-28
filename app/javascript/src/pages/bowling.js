@@ -1394,6 +1394,7 @@ $(document).ready(function() {
         }, 5000)
       })
     }
+    connectWs()
   }
 
   setFrames() // Need this to set absent bowlers
