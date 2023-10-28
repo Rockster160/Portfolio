@@ -25,7 +25,7 @@ $(document).ready(function() {
   })
 })
 $(document).ready(function() {
-  if ($(".ctr-bowling_leagues.act-edit, .ctr-bowling_leagues.act-new").length == 0) { return }
+  if ($(".ctr-bowling_leagues.act-new, .ctr-bowling_leagues.act-edit").length == 0) { return }
   $(".league-roster").sortable({
     handle: ".bowler-handle",
     update: function(evt, ui) { updateRoster() }
@@ -1269,6 +1269,126 @@ $(document).ready(function() {
   $(".shot").filter(function() {
     return !this.value
   }).first().addClass("current")
+
+  let laneTalk = function() {
+    let center_id = $(".league-data").attr("data-lanetalk-center-id")
+    let lanetalk_api_key = $(".league-data").attr("data-lanetalk-key")
+
+    if (!center_id || !lanetalk_api_key) { return }
+
+    let bowler_mapping = {}
+    $(".bowler").each(function() {
+      let name = $(this).find(".bowler-name .usbc-name").text()
+      if (name) { bowler_mapping[name.toLowerCase()] = this }
+    })
+
+    const socket = new WebSocket("wss://ws.lanetalk.com/ws")
+
+    let genUUID = function() {
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+        const r = (Math.random() * 16) | 0;
+        const v = c === "x" ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      })
+    }
+    let send = function(json) { socket.send(JSON.stringify(json)) }
+
+    let decToPins = function(integer) {
+      if (integer === null) { return [] }
+
+      let binary = integer.toString(2)
+      const zerosToAdd = Math.max(0, 10 - binary.length)
+      let binStr = "0".repeat(zerosToAdd) + binary
+      return binStr.split("").reverse().map(function(num, idx) {
+        if (num == "1") { return idx+1 }
+      }).filter(Boolean).sort()
+    }
+
+    let updatePlayer = function(player) {
+      // if (player.playerName != "JAKERZ") { return }
+      // let bowler = bowler_mapping["rocco nicholls"]
+
+      let current_game = parseInt(params.game)
+      if (parseInt(player.game) != current_game) { return }
+
+      let bowler = bowler_mapping[player.playerName.toLowerCase()]
+      if (!bowler) { return }
+
+      // Set lane number?
+
+      player.throws.forEach(function(toss_str, idx) {
+        let toss_value = toss_str
+        let throw_frame = Math.floor(idx / 2) + 1
+        let throw_idx = idx % 2
+        if (idx == 20) {
+          throw_frame = 10
+          throw_idx = 2
+        }
+        if (toss_value == "X") {
+          toss_value = 10
+        } else if (toss_value == "/") {
+          toss_value = 10 - (parseInt(player.throws[idx-1]) || 0)
+        }
+        let standing_pins = decToPins(player.pins[idx])
+
+        let frame = bowler.querySelector(`.bowling-cell[data-frame="${throw_frame}"]`)
+        let shot = frame.querySelector(`.shot[data-shot-idx="${throw_idx}"]`)
+        if (pinTimer && shot.hasClass(".current")) { return } // Do not update the current frame if currently touching
+
+        let throw_slot = frame.querySelector(`.fallen-pins[data-shot-idx="${throw_idx}"]`)
+        if (toss_value == "") {
+          throw_slot.value = null
+          shot.value = null
+          shot.setAttribute("data-score", null)
+        } else {
+          throw_slot.value = `[${standing_pins.join(",")}]`
+          shot.value = toss_str
+          shot.setAttribute("data-score", toss_value)
+        }
+
+        recalculateFrame($(shot))
+        moveToNextFrame()
+      })
+    }
+
+    socket.addEventListener("open", function(event) {
+      console.log("WebSocket connection opened:", event)
+      send({
+        id: genUUID(),
+        method: 0,
+        params: { api_key: lanetalk_api_key }
+      })
+    })
+
+    socket.addEventListener("message", function(event) {
+      console.log("Received message:", event.data)
+      let json = JSON.parse(event.data)
+      let result = json.result || {}
+      if (result.result?.client) {
+        send({
+          id: genUUID(),
+          method: 1,
+          params: { channel: `LiveScores:${center_id}` }
+        })
+      } else if (Object.keys(result).length > 0) {
+        if (result.type == 5) {
+          updatePlayer(result.data)
+        } else {
+          json.result.publications[0].data.lanes.forEach(function(player) {
+            updatePlayer(player)
+          })
+        }
+      }
+    })
+
+    socket.addEventListener("close", function(event) {
+      console.log("WebSocket connection closed:", event)
+      // Implement your reconnect logic here
+      // reconnect()
+    })
+  }
+
   setFrames() // Need this to set absent bowlers
   recalcScores()
+  laneTalk()
 })

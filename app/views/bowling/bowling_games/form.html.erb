@@ -63,6 +63,7 @@
 <%= form_for @set, html: { class: "basic bowling-game-form" } do |f| %>
   <%= f.hidden_field :league_id, value: @set.league_id || params[:league] %>
   <%= f.hidden_field :set_id, value: @set.id || params[:set] %>
+  <span class="hidden league-data" data-lanetalk-center-id="<%= @set.league.lanetalk_center_uuid %>" data-lanetalk-key="<%= ENV["PORTFOLIO_LANETALK_API_KEY"] if @set.league.lanetalk_center_uuid.present? %>"></span>
   <% @games.each_with_index do |game, idx| %>
     <%= render partial: "bowling_game_form", locals: { game: game, idx: idx } %>
   <% end %>
