@@ -77,7 +77,9 @@ $(document).ready(function() {
   let currentScorePush = null
   var inProgress = false
   var lockTimer = false
-  var useLaneTalk = true
+  let storedVal = sessionStorage.getItem("useLaneTalk")
+  var useLaneTalk = storedVal !== null ? storedVal == "true" : true
+  if (useLaneTalk) { $(".lanetalk-toggle").addClass("active") }
   var pin_knock = undefined
   var pinTimer = undefined
   var timer_duration = 1000
@@ -108,6 +110,7 @@ $(document).ready(function() {
   })
   $(".lanetalk-toggle").click(function(evt) {
     useLaneTalk = !useLaneTalk
+    sessionStorage.setItem("useLaneTalk", useLaneTalk)
     $(this).toggleClass("active", useLaneTalk)
 
     evt.preventDefault()
