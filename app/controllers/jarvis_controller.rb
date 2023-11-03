@@ -2,6 +2,21 @@ class JarvisController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def command
+    Array.wrap(params[:message]).map { |msg| handle_message(msg) }
+
+    if @responding_alexa
+      render json: alexa_response(@words)
+    else
+      render plain: @response
+    end
+  rescue StandardError => e
+    SlackNotifier.err(e)
+    render plain: "Unable to complete your request. Something went wrong."
+  end
+
+  private
+
+  def handle_message(msg)
     msg = case parsed_message
     when Hash
       @responding_alexa = true
@@ -12,27 +27,16 @@ class JarvisController < ApplicationController
     end
 
     msg = msg.gsub(/^\s*log log\b/i, "Log")
-    response = Jarvis.command(current_user, msg)
-    list, item = response&.split("\n")&.first(2)
+    @response = Jarvis.command(current_user, msg)
+    list, item = @response&.split("\n")&.first(2)
     if item.blank?
-      words = list
+      @words = list
     elsif msg.downcase.starts_with?("remove")
-      words = "Removed #{item} from #{list}"
+      @words = "Removed #{item} from #{list}"
     else
-      words = "Added #{item} to #{list}"
+      @words = "Added #{item} to #{list}"
     end
-
-    if @responding_alexa
-      render json: alexa_response(words)
-    else
-      render plain: response
-    end
-  rescue StandardError => e
-    SlackNotifier.err(e)
-    render plain: "Unable to complete your request. Something went wrong."
   end
-
-  private
 
   def parsed_message
     @parsed_message ||= begin
