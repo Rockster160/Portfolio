@@ -2,7 +2,13 @@ class JarvisController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def command
-    params[:message].split("|").each { |msg| handle_message(msg) if msg.squish.present? }
+    if parsed_message.is_a?(Hash)
+      handle_message(msg)
+    elsif parsed_message.is_a?(Array)
+      parsed_message.each { |msg| handle_message(msg) if msg.squish.present? }
+    else
+      handle_message(parsed_message)
+    end
 
     if @responding_alexa
       render json: alexa_response(@words)
@@ -17,13 +23,13 @@ class JarvisController < ApplicationController
   private
 
   def handle_message(msg)
-    msg = case parsed_message
+    msg = case msg
     when Hash
       @responding_alexa = true
-      slots = parsed_message&.dig(:request, :intent, :slots)
+      slots = msg&.dig(:request, :intent, :slots)
       [slots&.dig(:control, :value), slots&.dig(:device, :value)].compact.join(" ")
     else
-      parsed_message
+      msg
     end
 
     msg = msg.gsub(/^\s*log log\b/i, "Log")
@@ -41,7 +47,7 @@ class JarvisController < ApplicationController
   def parsed_message
     @parsed_message ||= begin
       return "" if params[:message].blank?
-      return params[:message] unless params[:message].include?("{")
+      return params[:message].split("|") unless params[:message].include?("{")
 
       JSON.parse(params[:message], symbolize_names: true)
     rescue JSON::ParserError
