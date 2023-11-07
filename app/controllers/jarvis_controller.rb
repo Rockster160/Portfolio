@@ -3,7 +3,7 @@ class JarvisController < ApplicationController
 
   def command
     if parsed_message.is_a?(Hash)
-      handle_message(msg)
+      handle_message(parsed_message)
     elsif parsed_message.is_a?(Array)
       parsed_message.each { |msg| handle_message(msg) if msg.squish.present? }
     else
