@@ -36,6 +36,8 @@ local_data.json
 address_book.json
 loadtime.json
 
+scripts/**/*
+
 /app/assets/builds/*
 !/app/assets/builds/.keep
 app/assets/config/manifest.js

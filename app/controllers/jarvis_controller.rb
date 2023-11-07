@@ -2,7 +2,7 @@ class JarvisController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def command
-    Array.wrap(params[:message]).map { |msg| handle_message(msg) }
+    Array.wrap(params[:message]).each { |msg| handle_message(msg) if msg.squish.present? }
 
     if @responding_alexa
       render json: alexa_response(@words)
