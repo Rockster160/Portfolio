@@ -1354,7 +1354,7 @@ $(document).ready(function() {
           shot.setAttribute("data-score", toss_value)
         }
 
-        recalculateFrame($(shot))
+        recountPins()
         moveToNextFrame()
       })
     }
