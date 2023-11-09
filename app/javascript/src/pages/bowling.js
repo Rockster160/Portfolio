@@ -428,7 +428,7 @@ $(document).ready(function() {
 
     var bowler = $(this).parents(".bowler")
 
-    bowler.find(".name").html(name)
+    bowler.find(".name .display-name").html(name)
     bowler.find(".bowler-options-name").html(name)
     bowler.find(".bowler-name-field").val(name)
     bowler.find(".bowler-sub-btn").attr("data-bowler-name", name)
@@ -574,11 +574,7 @@ $(document).ready(function() {
     }).toArray()
     var first_throw = (shotIndex(toss) == 0 || (shotIndex(toss) == 1 && currentTossAtIdx(0).attr("data-score") == 10))
 
-    if (first_throw && isSplit(pins)) {
-      toss.parents(".split-holder").addClass("split")
-    } else {
-      toss.parents(".split-holder").removeClass("split")
-    }
+    applyFrameModifiers(toss)
 
     // Store the pins that are still standing in the current throw
     toss.parents(".frame").find(".fallen-pins[data-shot-idx=" + toss.attr("data-shot-idx") + "]").val("[" + pins.join() + "]")
@@ -599,6 +595,19 @@ $(document).ready(function() {
 
     recalculateFrame(toss)
     calcScores()
+  }
+
+  applyFrameModifiers = function(toss) {
+    let first_throw = (shotIndex(toss) == 0 || (shotIndex(toss) == 1 && currentTossAtIdx(0).attr("data-score") == 10))
+    if (!first_throw) { return }
+
+    let frame = $(toss).parents(".frame")
+    let pins = JSON.parse(frame.find(`.fallen-pins[data-shot-idx='${toss.attr("data-shot-idx")}']`).val())
+    if (isSplit(pins)) {
+      toss.parents(".split-holder").addClass("split")
+    } else {
+      toss.parents(".split-holder").removeClass("split")
+    }
   }
 
   fillRandomScores = function() {
@@ -1289,7 +1298,8 @@ $(document).ready(function() {
 
     let bowler_mapping = {}
     $(".bowler").each(function() {
-      let name = $(this).find(".bowler-name .usbc-name").text()
+      let name = $(this).find(".bowler-name .usbc-name").text() || $(this).find(".bowler-name .display-name").text()
+
       if (name) { bowler_mapping[name.toLowerCase()] = this }
     })
 
@@ -1354,9 +1364,13 @@ $(document).ready(function() {
           shot.setAttribute("data-score", toss_value)
         }
 
+        applyFrameModifiers($(shot))
         recalculateFrame($(shot))
-        moveToNextFrame()
       })
+
+      if (pinTimer) { return }
+      calcScores()
+      moveToNextFrame()
     }
 
     let connectWs = function() {

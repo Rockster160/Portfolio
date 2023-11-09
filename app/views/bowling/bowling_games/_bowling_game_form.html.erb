@@ -55,13 +55,14 @@
     </span>
     <span class="name">
       <% if bowler.name.present? %>
-        <%= bowler.name %> <span class="absent-bowler <%= 'hidden' unless game.absent? %>">[A]</span>
+        <span class="display-name"><%= bowler.name %></span> <span class="absent-bowler <%= 'hidden' unless game.absent? %>">[A]</span>
       <% else %>
         <span class="edit-bowler-name btn">
           <i class="fa fa-pencil"></i>
           Name
         </span>
       <% end %>
+      <span class="hidden usbc-name"><%= bowler.usbc_full_name %></span>
       <span class="hidden usbc-name"><%= bowler.usbc_full_name %></span>
       <span class="hidden usbc-number"><%= bowler.usbc_number %></span>
     </span>
