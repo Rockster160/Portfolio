@@ -33,7 +33,7 @@ class AddressBook
     @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
       coord = [state[:latitude], state[:longitude]]
       address_by_loc(coord)# || reverse_geocode(coord, get: :address)
-    } || home&.address
+    } || home&.street
   end
 
   def contact_by_loc(loc)
