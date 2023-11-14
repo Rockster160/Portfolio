@@ -61,7 +61,9 @@ class ListItem < ApplicationRecord
     old_item = by_data(item_name)
 
     if old_item.present?
-      old_item.update({ name: item_name }.merge(deleted_at: nil, sort_order: nil))
+      if old_item.name != item_name || old_item.deleted_at? || old_item.sort_order != list.max_order
+        old_item.update({ name: item_name }.merge(deleted_at: nil, sort_order: nil))
+      end
       old_item
     else
       create(name: item_name)
@@ -96,6 +98,8 @@ class ListItem < ApplicationRecord
   end
 
   def soft_destroy
+    return if deleted?
+
     update(deleted_at: Time.current)
   end
 

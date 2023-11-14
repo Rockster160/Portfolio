@@ -102,6 +102,10 @@ class List < ApplicationRecord
     end
   end
 
+  def max_order
+    list_items.with_deleted.maximum(:sort_order).to_i + 1
+  end
+
   def add(item_name)
     list_items.add(item_name)
   end

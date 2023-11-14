@@ -211,6 +211,7 @@ class TeslaControl
       loc = [car_data.dig(:drive_state, :active_route_latitude), car_data.dig(:drive_state, :active_route_longitude)]
 
       User.me.jarvis_cache.set(:car_data, car_data)
+
       driving = !((car_data.dig(:drive_state, :shift_state) || "P") == "P")
       if !driving && loc.compact.present?
         LocationCache.set(
@@ -218,6 +219,21 @@ class TeslaControl
           car_data.dig(:drive_state, :timestamp),
         )
       end
+
+      if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
+        list = User.me.list_by_name(:TODO)
+        [:fl, :fr, :rl, :rr].each do |tire|
+          tirename = tire.to_s.split("").then { |dir, side|
+            [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
+          }.join(" ")
+          if car_data.dig(:vehicle_state, "tpms_soft_warning_#{tire}".to_sym)
+            list.add(tirename)
+          else
+            list.remove(tirename)
+          end
+        end
+      end
+      
       LocationCache.driving = driving
     } || cached_vehicle_data
   rescue RestClient::GatewayTimeout => e
