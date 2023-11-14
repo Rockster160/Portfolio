@@ -92,6 +92,7 @@ class AddressBook
     return 2700 unless Rails.env.production?
 
     from ||= current_loc
+    return if from.compact.blank?
     # Should be stringified addresses
     to, from = [to, from].map { |address| to_address(address) }
     nonnil_cache("traveltime_seconds(#{to},#{from})") {
@@ -114,6 +115,8 @@ class AddressBook
 
   def nearest_address_from_name(name, loc=nil)
     loc ||= current_loc
+    return if loc.compact.blank?
+
     nonnil_cache("nearest_address_from_name(#{name},#{loc.join(",")})") do
       # ::Jarvis.say("Nearest name #{name},#{loc.join(",")}")
       params = {
@@ -183,6 +186,7 @@ class AddressBook
   # Get address from [lat,lng]
   def reverse_geocode(loc, get: :city)
     return "Herriman" unless Rails.env.production?
+    return if loc.compact.blank?
 
     nonnil_cache("reverse_geocode(#{loc.map { |l| l.round(2) }.join(",")},#{get})") do
       # ::Jarvis.say("Reverse Geocoding #{loc.join(",")},#{get}")
