@@ -61,7 +61,7 @@ class ListItem < ApplicationRecord
     old_item = by_data(item_name)
 
     if old_item.present?
-      if old_item.name != item_name || old_item.deleted_at? || old_item.sort_order != list.max_order
+      if old_item.name != item_name || old_item.deleted_at? || old_item.sort_order != old_item.list.max_order
         old_item.update({ name: item_name }.merge(deleted_at: nil, sort_order: nil))
       end
       old_item
