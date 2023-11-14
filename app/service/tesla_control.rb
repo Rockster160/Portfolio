@@ -221,19 +221,19 @@ class TeslaControl
       end
 
       if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
-        list = User.me.list_by_name(:TODO)
+        list = User.me.list_by_name(:Chores)
         [:fl, :fr, :rl, :rr].each do |tire|
           tirename = tire.to_s.split("").then { |dir, side|
             [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
           }.join(" ")
           if car_data.dig(:vehicle_state, "tpms_soft_warning_#{tire}".to_sym)
-            list.add(tirename)
+            list.add("#{tirename} tire pressure low")
           else
-            list.remove(tirename)
+            list.remove("#{tirename} tire pressure low")
           end
         end
       end
-      
+
       LocationCache.driving = driving
     } || cached_vehicle_data
   rescue RestClient::GatewayTimeout => e
