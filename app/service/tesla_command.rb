@@ -262,6 +262,6 @@
     city = address_book.reverse_geocode(loc, get: is_driving ? :city : :name) if loc.compact.length == 2
     return { action: action, location: city } if city.present?
 
-    { action: action, location: "<Unknown>" }
+    { action: action, location: loc.compact.map { |v| v&.round(2) }&.join(",").presence || "<Unknown>" }
   end
 end
