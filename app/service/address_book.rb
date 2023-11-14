@@ -92,9 +92,10 @@ class AddressBook
     return 2700 unless Rails.env.production?
 
     from ||= current_loc
-    return if from.compact.blank?
     # Should be stringified addresses
     to, from = [to, from].map { |address| to_address(address) }
+    return if to.blank? || from.blank?
+
     nonnil_cache("traveltime_seconds(#{to},#{from})") {
       # ::Jarvis.say("Traveltime #{to},#{from}")
       params = {
