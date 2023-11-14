@@ -19,19 +19,19 @@ class AddressBook
 
   def current_loc
     @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
-      [state[:latitude], state[:longitude]]
+      [state[:active_route_latitude], state[:active_route_longitude]]
     } || home&.loc
   end
 
   def current_contact
     @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
-      contact_by_loc([state[:latitude], state[:longitude]])
+      contact_by_loc([state[:active_route_latitude], state[:active_route_longitude]])
     } || home&.contact
   end
 
   def current_address
     @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
-      coord = [state[:latitude], state[:longitude]]
+      coord = [state[:active_route_latitude], state[:active_route_longitude]]
       address_by_loc(coord)# || reverse_geocode(coord, get: :address)
     } || home
   end

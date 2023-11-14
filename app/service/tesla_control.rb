@@ -126,7 +126,10 @@ class TeslaControl
     return command(:window_control, command: :vent) if direction == :open
 
     data = vehicle_data
-    loc = [data.dig(:drive_state, :latitude), data.dig(:drive_state, :longitude)]
+    loc = [
+      data.dig(:drive_state, :active_route_latitude),
+      data.dig(:drive_state, :active_route_longitude),
+    ]
     windows = [:fd, :fp, :rd, :rp]
     is_open = windows.any? { |window| data.dig(:vehicle_state, "#{window}_window".to_sym).to_i > 0 }
     state = direction == :toggle && !is_open ? :vent : :close
@@ -205,14 +208,14 @@ class TeslaControl
 
   def vehicle_data
     @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data")&.tap { |car_data|
-      loc = [car_data.dig(:drive_state, :latitude), car_data.dig(:drive_state, :longitude)]
+      loc = [car_data.dig(:drive_state, :active_route_latitude), car_data.dig(:drive_state, :active_route_longitude)]
 
       User.me.jarvis_cache.set(:car_data, car_data)
       driving = !((car_data.dig(:drive_state, :shift_state) || "P") == "P")
       if !driving && loc.compact.present?
         LocationCache.set(
-          [car_data.dig(:drive_state, :latitude), car_data.dig(:drive_state, :longitude)],
-          car_data.dig(:drive_state, :gps_as_of),
+          loc,
+          car_data.dig(:drive_state, :timestamp),
         )
       end
       LocationCache.driving = driving
@@ -237,7 +240,10 @@ class TeslaControl
   end
 
   def loc
-    [vehicle_data.dig(:drive_state, :latitude), vehicle_data.dig(:drive_state, :longitude)]
+    [
+      vehicle_data.dig(:drive_state, :active_route_latitude),
+      vehicle_data.dig(:drive_state, :active_route_longitude),
+    ]
   end
 
   def vehicle_id
