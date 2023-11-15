@@ -25,6 +25,7 @@ jobs:
 
     - name: Install dependencies
       run: |
+        source /home/portfolio.env
         bundle install
         yarn install
 
