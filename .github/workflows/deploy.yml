@@ -1,0 +1,44 @@
+name: Deploy to Digital Ocean
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 3.0.0
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 16
+
+    - name: Install dependencies
+      run: |
+        bundle install
+        yarn install
+
+    - name: Database setup
+      run: |
+        RAILS_ENV=production bundle exec rails db:migrate
+
+    - name: Precompile assets
+      run: |
+        RAILS_ENV=production bundle exec rails assets:precompile
+
+    - name: Restart Puma and Sidekiq
+      run: |
+        ./kill_portfolio
+        bundle exec puma -p 3141 -e production --pidfile tmp/pids/puma &
+        bundle exec sidekiq -e production -p tmp/pids/sidekiq -L log/sidekiq.log -c 2 &
+        sleep 30
