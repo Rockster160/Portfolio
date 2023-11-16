@@ -602,7 +602,7 @@ $(document).ready(function() {
     if (!first_throw) { return }
 
     let frame = $(toss).parents(".frame")
-    let pins = JSON.parse(frame.find(`.fallen-pins[data-shot-idx='${toss.attr("data-shot-idx")}']`).val())
+    let pins = JSON.parse(frame.find(`.fallen-pins[data-shot-idx='${toss.attr("data-shot-idx")}']`).val() || "[]")
     if (isSplit(pins)) {
       toss.parents(".split-holder").addClass("split")
     } else {
