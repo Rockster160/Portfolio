@@ -6,7 +6,7 @@ class Jil::JarvisTasksController < ApplicationController
     if params[:trigger].present?
       @tasks = current_user.jarvis_tasks.order(last_trigger_at: :desc).where(trigger: params[:trigger])
     else
-      @tasks = current_user.jarvis_tasks.order(last_trigger_at: :desc).not_function
+      @tasks = current_user.jarvis_tasks.order(last_trigger_at: :desc)
     end
   end
 
