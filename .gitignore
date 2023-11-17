@@ -36,7 +36,8 @@ local_data.json
 address_book.json
 loadtime.json
 
-scripts/**/*
+/_scripts
+_scripts/**/*
 
 /app/assets/builds/*
 !/app/assets/builds/.keep

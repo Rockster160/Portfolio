@@ -28,12 +28,7 @@ class Oauth::Base
     end
 
     def code=(code)
-      auth(
-        code,
-        {
-          grant_type: :authorization_code,
-        }.merge(EXCHANGE_PARAMS)
-      )
+      auth(code, { grant_type: :authorization_code }.merge(EXCHANGE_PARAMS))
 
       self
     end
