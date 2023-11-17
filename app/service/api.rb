@@ -4,22 +4,22 @@ class API
 
   def self.get(uri, params={}, headers={})
     url = "#{uri}?#{params.to_query}"
-    puts "  \e[33mGET #{url}\e[0m"
+    pst "  \e[33mGET #{url}\e[0m"
     @res = RestClient.get(url)
     JSON.parse(@res.body, symbolize_names: true)
   rescue StandardError => e
-    puts "\e[31m  > #{e}\e[0m"
+    pst "\e[31m  > #{e}\e[0m"
     @res&.body
   end
 
   def self.post(uri, params={}, headers={})
     url = "#{uri}?#{params.to_query}"
-    puts "  \e[33mPOST #{url}\e[0m"
-    puts "  #{params.better.pretty.split("\n").join("\n  ")}"
+    pst "  \e[33mPOST #{url}\e[0m"
+    pst "  #{params.better.pretty.split("\n").join("\n  ")}"
     @res = RestClient.post(uri, params)
     JSON.parse(@res.body, symbolize_names: true)
   rescue StandardError => e
-    puts "\e[31m  > #{e}\e[0m"
+    pst "\e[31m  > #{e}\e[0m"
     @res&.body
   end
 
@@ -35,11 +35,21 @@ class API
     # Headers?
 
     url = "#{@base_url}/#{path}?#{param_string}"
-    puts "  \e[33mGET #{url}\e[0m"
+    pst "  \e[33mGET #{url}\e[0m"
     @res = RestClient.get(url)
     JSON.parse(@res.body, symbolize_names: true)
   rescue StandardError => e
-    puts "\e[31m  > #{e}\e[0m"
+    pst "\e[31m  > #{e}\e[0m"
     @res&.body
+  end
+
+  def self.pst(str)
+    return if Rails.env.production?
+
+    puts str
+  end
+
+  def pst(str)
+    self.class.pst(str)
   end
 end
