@@ -36,7 +36,7 @@
           <div class="left-brief">
             <% if task.last_trigger_at.present? %>
               <%= task.last_trigger_at.in_time_zone(current_user.timezone)&.to_formatted_s(:compact_week_month_time).gsub(":00 ", "") %>
-              (<%= distance_of_time_in_words(Time.current, task.last_trigger_at) + " ago" %>)
+              (<%= relative_time_in_words(task.last_trigger_at) %>)
             <% else %>
               --Never Run--
             <% end %>
@@ -44,7 +44,7 @@
           <div class="right-brief">
             <% if task.next_trigger_at.present? %>
               <%= task.next_trigger_at.in_time_zone(current_user.timezone)&.to_formatted_s(:compact_week_month_time).gsub(":00 ", "") %>
-              (<%= distance_of_time_in_words(Time.current, task.next_trigger_at) + " from now" %>)
+              (<%= relative_time_in_words(task.next_trigger_at) %>)
             <% end %>
           </div>
         </div>
