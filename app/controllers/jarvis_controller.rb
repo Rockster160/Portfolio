@@ -1,5 +1,6 @@
 class JarvisController < ApplicationController
   skip_before_action :verify_authenticity_token
+  before_action :authorize_admin
 
   def command
     if parsed_message.is_a?(Hash)
