@@ -52,14 +52,15 @@ import { dash_colors } from "../vars"
     lines.push(Text.center(printer_data.filename || "[Job not found]"))
 
     if (printer_data.filename) {
-      lines.push((printer_data.progress == 0 || printer_data.progress) ? Text.progressBar(printer_data.progress) : "")
-      lines.push(Text.center("c:" + timestampToDuration(printer_data.elapsedTime) + " / r:" + timestampToDuration(printer_data.timeLeft)))
-      lines.push(
-        Text.center(
-          "ETA: " + (printer_data.eta_ms ? Time.local(printer_data.eta_ms) : "??:??")
-          + " (est " + timestampToDuration(printer_data.estimated) + ")"
-        )
-      )
+      let progress_bar = (printer_data.progress == 0 || printer_data.progress) ? Text.progressBar(printer_data.progress) : ""
+      let elapsed = timestampToDuration(printer_data.elapsedTime)
+      let remaining = timestampToDuration(printer_data.timeLeft)
+      let eta = (printer_data.eta_ms ? Time.local(printer_data.eta_ms) : "??:??")
+      let estimated = timestampToDuration(printer_data.estimated)
+
+      lines.push(progress_bar)
+      lines.push(Text.center(elapsed + " / " + estimated))
+      lines.push(Text.center("ETA: " + eta + " (" + remaining + ")"))
     }
 
     cell.lines(lines)
