@@ -29,6 +29,16 @@ import { dash_colors } from "../vars"
     }
   }
 
+  let timestampToDuration = function(elapsedTime) {
+    let duration = Time.duration(elapsedTime)
+    let [h, m, s] =  duration.split(":").map(Number)
+    let parts = []
+    if (s > 0) { parts.push(`${s}s`) }
+    if (m > 0) { parts.push(`${m}m`) }
+    if (h > 0) { parts.push(`${h}h`) }
+    return parts.join("")
+  }
+
   var renderLines = function() {
     if (!cell) { return cell.lines("Loading...") }
     if (!cell.data.temps.tool || cell.data.fail) {
@@ -43,11 +53,11 @@ import { dash_colors } from "../vars"
 
     if (printer_data.filename) {
       lines.push((printer_data.progress == 0 || printer_data.progress) ? Text.progressBar(printer_data.progress) : "")
-      lines.push(Text.center(timestamp(printer_data.elapsedTime) + " / " + timestamp(printer_data.timeLeft)))
+      lines.push(Text.center("c" + timestamp(printer_data.elapsedTime) + " / " + timestamp(printer_data.timeLeft) + "r"))
       lines.push(
         Text.center(
           "ETA: " + (printer_data.eta_ms ? Time.local(printer_data.eta_ms) : "??:??")
-          + " (" + timestamp(printer_data.estimated) + ")"
+          + " (est " + timestampToDuration(printer_data.estimated) + ")"
         )
       )
     }
