@@ -53,7 +53,7 @@ import { dash_colors } from "../vars"
 
     if (printer_data.filename) {
       lines.push((printer_data.progress == 0 || printer_data.progress) ? Text.progressBar(printer_data.progress) : "")
-      lines.push(Text.center("c" + timestamp(printer_data.elapsedTime) + " / " + timestamp(printer_data.timeLeft) + "r"))
+      lines.push(Text.center("c" + timestampToDuration(printer_data.elapsedTime) + " / " + timestampToDuration(printer_data.timeLeft) + "r"))
       lines.push(
         Text.center(
           "ETA: " + (printer_data.eta_ms ? Time.local(printer_data.eta_ms) : "??:??")
