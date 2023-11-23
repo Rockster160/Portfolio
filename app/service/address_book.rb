@@ -17,23 +17,22 @@ class AddressBook
     contact_by_name("Home")&.primary_address
   end
 
-  def current_loc
+  def current_coord
     @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
-      [state[:active_route_latitude], state[:active_route_longitude]]
-    } || home&.loc
+      [state[:active_route_latitude], state[:active_route_longitude]].compact.presence
+    }
+  end
+
+  def current_loc
+    current_coord || home&.loc
   end
 
   def current_contact
-    @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
-      contact_by_loc([state[:active_route_latitude], state[:active_route_longitude]])
-    } || home&.contact
+    contact_by_loc(current_coord) || home&.contact
   end
 
   def current_address
-    @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
-      coord = [state[:active_route_latitude], state[:active_route_longitude]]
-      address_by_loc(coord)# || reverse_geocode(coord, get: :address)
-    } || home
+    address_by_loc(current_coord) || home
   end
 
   def contact_by_loc(loc)
@@ -46,6 +45,7 @@ class AddressBook
 
   def contact_by_name(name)
     name = name.to_s.downcase
+    return unless name.present?
     # Exact match (no casing)
     found = contacts.find_by("name ILIKE ?", name)
     found ||= contacts.find_by("nickname ILIKE ?", name)
@@ -80,7 +80,9 @@ class AddressBook
     }
     return address if address.present?
 
-    address ||= data[::Jarvis::Regex.address]&.squish.presence if data.match?(::Jarvis::Regex.address)
+    if data.is_a(String) && data.match?(::Jarvis::Regex.address)
+      address = data[::Jarvis::Regex.address]&.squish.presence
+    end
     address ||= contact_by_name(data)&.primary_address&.street
     address ||= nearest_address_from_name(data)
     address.gsub("\n", "") if address.is_a?(String)
@@ -116,7 +118,7 @@ class AddressBook
 
   def nearest_address_from_name(name, loc=nil)
     loc ||= current_loc
-    return if loc.compact.blank?
+    return if name.blank? || loc.compact.blank?
 
     nonnil_cache("nearest_address_from_name(#{name},#{loc.join(",")})") do
       # ::Jarvis.say("Nearest name #{name},#{loc.join(",")}")
