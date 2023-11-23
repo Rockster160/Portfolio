@@ -80,7 +80,7 @@ class AddressBook
     }
     return address if address.present?
 
-    if data.is_a(String) && data.match?(::Jarvis::Regex.address)
+    if data.is_a?(String) && data.match?(::Jarvis::Regex.address)
       address = data[::Jarvis::Regex.address]&.squish.presence
     end
     address ||= contact_by_name(data)&.primary_address&.street
