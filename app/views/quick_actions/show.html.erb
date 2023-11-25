@@ -43,20 +43,20 @@
   </div>
 
   <div class="widget-holder">
-    <div class="widget drugs">
+    <div class="widget widget-modal" data-log="drugs">
       <i class="emoji">💊</i>
     </div>
   </div>
 
   <div class="widget-holder">
-    <div class="widget events">
+    <div class="widget widget-modal" data-log="events">
       <i class="emoji ti ti-fa-paper_plane"></i>
     </div>
   </div>
 
   <div class="widget-holder">
-    <div class="widget contacts">
-      <i class="emoji">👤</i>
+    <div class="widget widget-modal" data-log="food">
+      <i class="emoji">🍕</i>
     </div>
   </div>
 
@@ -69,12 +69,15 @@
   </div>
 
   <a href="<%= jil_prompts_path %>" target="_blank" class="widget-holder">
-    <div class="widget care">
+    <div class="widget widget-modal" data-log="care">
       <i class="emoji">🪶</i>
     </div>
   </a>
 
-  <div class="widget-holder empty">
+  <div class="widget-holder">
+    <div class="widget widget-modal" data-log="contacts">
+      <i class="emoji">👤</i>
+    </div>
   </div>
 
   <div class="widget-holder">
@@ -108,7 +111,7 @@
     [
       ["🏠", :Home],
       ["🔨", :"Home Depot"],
-      ["🤸‍♀️", :"Lowe's Airsports"],
+      ["🤸‍♀️", :Airsports],
       ["🎳", :Bowling],
       ["🏬", :Costco],
       ["🐥", :CarWash],
@@ -129,32 +132,8 @@
 %>
 
 <%=
-  mini_widgets("events-modal") do
+  mini_widgets("food-modal") do
     [
-      [emoji("🔄"), :Reload, ".reload"],
-      ["💧", :Water],
-      ["🦷", :Teeth],
-
-      ["🚿", :Shower],
-      ["👕", :Laundry, "do laundry"],
-      [emoji_stack("💪", "❌"), :Done, "No more pullups today"],
-
-      [emoji("🏋️‍♂️"), :Workout, "log Workout {{What did you do?}}"],
-      ["5#{emoji("💪")}", :five_pulls, "log Pullups 5"],
-      ["##{emoji("💪")}", :enter_pulls, "log Pullups {{How many pullups?}}"],
-
-      [emoji("🖋"), :Custom, "log {{Log what?}}"],
-      ["🍕", :Food, "log Food {{What did you eat?}}"],
-      ["🧃", :Drink, "log Drink {{What did you drink?}}"],
-
-      ["Protein", :Protein, "log Drink Protein"],
-      ["🍍", :Pineapple, "log Drink Pineapple Juice"],
-      ["🥃", :Alcohol, "log Alcohol {{What did you drink?}}"],
-
-      [img(:can), :log_soda_dew, "log soda Mountain Dew"],
-      [img(:pepsi), :log_soda_pepsi, "log soda Pepsi"],
-      [img(:coke), :log_soda_coke, "log soda Coke"],
-
       *[:tropical, :peach, :arctic].map { |flavor|
         [
           img(:celsius),
@@ -172,6 +151,53 @@
           flavor.to_s.titleize
         ]
       },
+
+      [emoji("🖋"), :Custom, "log {{Log what?}}"],
+      ["🍕", :log_Food, "log Food {{What did you eat?}}"],
+      ["🧃", :log_Drink, "log Drink {{What did you drink?}}"],
+      ["Protein", :Protein, "log Drink Protein"],
+      ["🍍", :Pineapple, "log Drink Pineapple Juice"],
+      ["🥃", :Alcohol, "log Alcohol {{What did you drink?}}"],
+
+      [img(:can), :log_soda_dew, "log soda Mountain Dew"],
+      [img(:pepsi), :log_soda_pepsi, "log soda Pepsi"],
+      [img(:coke), :log_soda_coke, "log soda Coke"],
+      [emoji("🥚"), :scrambled_eggs, "log Food Scrambled Eggs x4 on Dave's Toast x2"],
+      [emoji("🍳"), :fried_eggs, "log Food Fried Eggs x3 on Dave's Toast x1"],
+      [emoji("🧋"), :choco_milk, "log Drink Chocolate Milk"],
+
+      [emoji_stack("🍆", "🥣"), :cereal_raisin_bran, "log Food Cereal Raisin Bran"],
+      [emoji_stack("🦖", "🥣"), :cereal_dyno_bytes, "log Food Cereal Dyno Bites"],
+      [emoji_stack("🍞", "🥣"), :cereal_cinna_toast, "log Food Cereal Cinnamon Toast Crunch"],
+      [emoji_stack("🍯", "🥣"), :cereal_honey_oats, "log Food Cereal Honey Oats"],
+
+      [emoji_stack("🥦", "🥩"), :steak_veggies, "log Food Steak and Veggies"],
+      [emoji_stack("🥦", "🐟"), :salmon_veggies, "log Food Salmon and Veggies"],
+
+      [emoji_stack("🍪", "🍦"), :shake_handles, "log Treat Handel's Cookie Dough Milkshake"],
+      [emoji_stack("🍓", "🍦"), :shake_costco, "log Treat Costco Strawberry Sundae"],
+    ]
+  end
+%>
+
+<%=
+  mini_widgets("events-modal") do
+    [
+      [emoji("🔄"), :Reload, ".reload"],
+      ["💧", :Water],
+      ["🦷", :Teeth],
+
+      ["🚿", :Shower],
+      ["👕", :Laundry, "do laundry"],
+      [emoji_stack("💪", "❌"), :Done, "No more pullups today"],
+
+      [emoji("🏋️‍♂️"), :Workout, "log Workout {{What did you do?}}"],
+      ["5#{emoji("💪")}", :five_pulls, "log Pullups 5"],
+      ["##{emoji("💪")}", :enter_pulls, "log Pullups {{How many pullups?}}"],
+
+      [emoji("🖋"), :Custom, "log {{Log what?}}"],
+      ["🍕", :log_Food_2, "log Food {{What did you eat?}}"],
+      ["🧃", :log_Drink_2, "log Drink {{What did you drink?}}"],
     ]
   end
 %>

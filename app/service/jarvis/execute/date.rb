@@ -23,6 +23,9 @@ class Jarvis::Execute::Date < Jarvis::Execute::Executor
     amount.to_f.send(dur)
   end
 
+  def format
+  end
+
   def piece
     time, piece = evalargs
     piece = piece.singularize.to_sym

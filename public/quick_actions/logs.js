@@ -3,21 +3,33 @@ import { Widget } from './widget.js';
 import { command } from './command.js';
 import { showModal } from './modal.js';
 
-export let events = new Widget("events", function() {
-  showModal("events-modal")
+document.querySelectorAll(".widget-modal").forEach((widget) => {
+  let log = widget.getAttribute("data-log")
+
+  new Widget(log, function() {
+    showModal(`${log}-modal`)
+  })
 })
 
-export let logs = new Widget("drugs", function() {
-  showModal("drugs-modal")
-})
 
-export let care = new Widget("care", function() {
-  showModal("care-modal")
-})
 
-export let contacts = new Widget("contacts", function() {
-  showModal("contacts-modal")
-})
+// export let events =
+//
+// export let logs = new Widget("drugs", function() {
+//   showModal("drugs-modal")
+// })
+//
+// export let care = new Widget("care", function() {
+//   showModal("care-modal")
+// })
+//
+// export let contacts = new Widget("contacts", function() {
+//   showModal("contacts-modal")
+// })
+//
+// export let contacts = new Widget("food", function() {
+//   showModal("food-modal")
+// })
 
 document.querySelectorAll(".mini-widget").forEach((widget) => {
   let id = widget.getAttribute("data-id")
