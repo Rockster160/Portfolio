@@ -11,26 +11,6 @@ document.querySelectorAll(".widget-modal").forEach((widget) => {
   })
 })
 
-
-
-// export let events =
-//
-// export let logs = new Widget("drugs", function() {
-//   showModal("drugs-modal")
-// })
-//
-// export let care = new Widget("care", function() {
-//   showModal("care-modal")
-// })
-//
-// export let contacts = new Widget("contacts", function() {
-//   showModal("contacts-modal")
-// })
-//
-// export let contacts = new Widget("food", function() {
-//   showModal("food-modal")
-// })
-
 document.querySelectorAll(".mini-widget").forEach((widget) => {
   let id = widget.getAttribute("data-id")
 
