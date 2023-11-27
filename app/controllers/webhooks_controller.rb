@@ -17,7 +17,7 @@ class WebhooksController < ApplicationController
       # ::Oauth::TeslaAPI.code = params[:code]
     end
 
-    head :ok
+    render json: params
   end
 
   def jil
