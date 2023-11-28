@@ -58,6 +58,7 @@ class LocationCache
   def self.set(loc, at=nil)
     at ||= (Time.current.to_f * 1000).round # Tesla sends ms since epoch instead of seconds
     locations = recent_locations
+    loc = loc.map(&:to_f)
 
     return if locations.length >= 3 && near?(locations.last[:loc], loc)
 
