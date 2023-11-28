@@ -309,7 +309,7 @@ i.emoji {
         display: flex;
         flex-direction: column-reverse;
         flex-grow: 1;
-        overflow: scroll;
+        overflow: auto;
 
         .message {
           margin: 5px 10px;

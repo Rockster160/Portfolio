@@ -43,8 +43,8 @@ class CreateJarvisPage < ActiveRecord::Migration[7.0]
           { logo: "💪❌", command: "No more pullups today" },
 
           { logo: "🏋️‍♂️", log: "Workout {{What did you do?}}" },
-          { logo: "5💪", log: "Pullups 5" },
-          { logo: "#💪", log: "Pullups {{How many pullups?}}" },
+          { logo: "💪", name: "5", log: "Pullups 5" },
+          { logo: "💪", name: "#", log: "Pullups {{How many pullups?}}" },
 
           { logo: "🖋", log: "{{Log what?}}" },
           { logo: "🍕", log: "Food {{What did you eat?}}" },
