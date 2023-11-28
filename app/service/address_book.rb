@@ -18,7 +18,7 @@ class AddressBook
   end
 
   def current_coord
-    @user.jarvis_cache&.data&.dig(:location)&.compact&.presence
+    LocationCache.last_coord
   end
 
   def current_loc
