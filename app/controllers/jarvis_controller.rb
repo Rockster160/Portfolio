@@ -32,7 +32,7 @@ class JarvisController < ApplicationController
         [slots&.dig(:control, :value), slots&.dig(:device, :value)].compact.join(" ")
       else
         handle_data(msg)
-        "Handling it. #{msg}"
+        return @words = "Handling it. #{msg}"
       end
     else
       msg
