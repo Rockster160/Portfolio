@@ -6,6 +6,7 @@ class SimpleWS {
     this.auth_socket = auth_socket
     let sock = this.auth_socket
     this.init_data = init_data
+    this.last_ping = 0
 
     sock.open = false
     // sock.reload = false
@@ -15,6 +16,7 @@ class SimpleWS {
     this.socket = new ReconnectingWebSocket(init_data.url)
 
     this.socket.onopen = function() {
+      console.log("Open!");
       sock.open = true
 
       if (init_data.authentication && typeof(init_data.authentication) === "function") {
@@ -29,20 +31,33 @@ class SimpleWS {
     }
 
     this.socket.onclose = function() {
+      console.log("Closed...");
       sock.open = false
       // sock.reload = true
       if (init_data.onclose && typeof(init_data.onclose) === "function") { init_data.onclose.call(sws) }
     }
 
     this.socket.onerror = function(msg, a, b, c) {
+      console.log(`[ERROR] ${msg} [${a},${b},${c}]`);
     }
 
     this.socket.onmessage = function(msg) {
+      this.last_ping = (new Date()).getTime()
       if (init_data.receive && typeof(init_data.receive) === "function") {
         // if (sock.should_flash) { sock.cell.flash() }
         init_data.receive.call(sws, msg)
       }
     }
+
+    setInterval(function() {
+      if ((new Date()).getTime() - me.last_ping > 5_000) {
+        if (sock.open) {
+          console.log("No ping found! Attempting to close to trigger reconnect...");
+          me.open = false
+          me.socket.close()
+        }
+      }
+    }, 10_000)
   }
 
   send(packet) {
