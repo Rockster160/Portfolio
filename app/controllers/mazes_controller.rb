@@ -1,4 +1,6 @@
 class MazesController < ApplicationController
+  skip_before_action :verify_authenticity_token
+
   def show
     @seed = (params[:seed] || rand(999999)).to_i
     srand(@seed)
