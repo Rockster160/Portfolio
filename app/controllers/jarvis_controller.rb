@@ -3,9 +3,7 @@ class JarvisController < ApplicationController
   before_action :authorize_admin
 
   def command
-    Jarvis.say("[Command Received]")
     if parsed_message.is_a?(Hash)
-      Jarvis.say("[Hash]")
       handle_message(parsed_message)
     elsif parsed_message.is_a?(Array)
       parsed_message.each { |msg| handle_message(msg) if msg.squish.present? }
@@ -33,7 +31,6 @@ class JarvisController < ApplicationController
         @responding_alexa = true
         [slots&.dig(:control, :value), slots&.dig(:device, :value)].compact.join(" ")
       else
-        Jarvis.say("[No Slot]")
         handle_data(msg)
         return @words = "Handling it. #{msg}"
       end
@@ -65,13 +62,8 @@ class JarvisController < ApplicationController
   end
 
   def handle_data(data)
-    Jarvis.say("Hnadling...")
-    data[:location]&.tap { |coord|
-      Jarvis.say("Coord: #{coord}")
-      LocationCache.set(coord.map(&:to_f)) }
-    data[:bluetooth_connected]&.tap { |bool|
-      Jarvis.say("Driving: #{bool}")
-      LocationCache.driving = bool }
+    data[:location]&.tap { |coord| LocationCache.set(coord.map(&:to_f)) }
+    data[:bluetooth_connected]&.tap { |bool| LocationCache.driving = bool }
   end
 
   def alexa_response(words)
