@@ -15,7 +15,7 @@
       <div class="mini-widgets widget-wrapper">
         <% widget[:buttons].each do |item| %>
           <% widget_id = "widget-#{SecureRandom.hex(4)}" %>
-          <% display = clean_md(item[:name] || item[:logo] || item[:log]) %>
+          <% display = clean_md(item[:logo] || item[:name] || item[:log]) %>
           <% cmd = "log #{item[:log]}" if item[:log].present? %>
           <% cmd ||= item[:command] %>
 
@@ -26,9 +26,9 @@
               <% elsif display.match?(/[\p{So}\p{Sk}\p{Sm}\p{Sc}\p{S}\p{C}]/) && !display.match?("<i") %>
                 <i class="emoji"><%= display.html_safe %></i>
               <% else %>
-                <%= display.html_safe %>
+                <%= mrkdwn(display) %>
               <% end %>
-              <% if item[:name].present? %>
+              <% if item[:name].present? && item[:name] != display %>
                 <span class="title"><%= item[:name] %></span>
               <% end %>
             </div>
