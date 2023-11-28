@@ -209,7 +209,8 @@ class TeslaControl
   def vehicle_data
     @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data")&.tap { |car_data|
       User.me.jarvis_cache.set(:car_data, car_data)
-      LocationCache.driving = !((car_data.dig(:drive_state, :shift_state) || "P") == "P")
+      # Disabling as it can cause inaccuracies when the bluetooth fails to send
+      # LocationCache.driving = !((car_data.dig(:drive_state, :shift_state) || "P") == "P")
 
       if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
         list = User.me.list_by_name(:Chores)
