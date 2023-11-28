@@ -62,7 +62,7 @@ class JarvisController < ApplicationController
   end
 
   def handle_data(data)
-
+    data[:location]&.tap { |coord| LocationCache.set(coord) }
   end
 
   def alexa_response(words)

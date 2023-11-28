@@ -136,13 +136,8 @@
     when :find
       @response = "Finding car..."
       unless quick
-        data = car.vehicle_data
-        if data.present?
-          loc = [data.dig(:drive_state, :active_route_latitude), data.dig(:drive_state, :active_route_longitude)]
-          Jarvis.say("http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}", :sms)
-        else
-          Jarvis.say("Cannot find your car currently.", :sms)
-        end
+        loc = LocationCache.last_coord
+        Jarvis.say("http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}", :sms)
       end
     else
       @response = "Not sure how to tell car: #{[cmd, opt].map(&:presence).compact.join('|')}"
@@ -203,8 +198,8 @@
       locked: data.dig(:vehicle_state, :locked),
       drive: drive_data(data).merge(speed: data.dig(:drive_state, :speed).to_i),
       loc: [
-        data.dig(:drive_state, :active_route_latitude),
-        data.dig(:drive_state, :active_route_longitude),
+        data.dig(:drive_state, :latitude),
+        data.dig(:drive_state, :longitude),
       ],
       timestamp: data.dig(:vehicle_config, :timestamp).to_i / 1000
     }
@@ -249,8 +244,8 @@
 
   def drive_data(data)
     loc = [
-      data.dig(:drive_state, :active_route_latitude),
-      data.dig(:drive_state, :active_route_longitude),
+      data.dig(:drive_state, :latitude),
+      data.dig(:drive_state, :longitude),
     ]
     is_driving = data.dig(:drive_state, :speed).to_i > 0
 
