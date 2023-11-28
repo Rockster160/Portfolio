@@ -49,6 +49,7 @@ class SimpleWS {
       }
     }
 
+    let me = this
     setInterval(function() {
       if ((new Date()).getTime() - me.last_ping > 5_000) {
         if (sock.open) {
