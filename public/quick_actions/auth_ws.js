@@ -42,20 +42,20 @@ class SimpleWS {
     }
 
     this.socket.onmessage = function(msg) {
-      this.last_ping = (new Date()).getTime()
+      sws.last_ping = (new Date()).getTime()
       if (init_data.receive && typeof(init_data.receive) === "function") {
         // if (sock.should_flash) { sock.cell.flash() }
         init_data.receive.call(sws, msg)
       }
     }
 
-    let me = this
     setInterval(function() {
-      if ((new Date()).getTime() - me.last_ping > 5_000) {
+      if ((new Date()).getTime() - sws.last_ping > 5_000) {
         if (sock.open) {
           console.log("No ping found! Attempting to close to trigger reconnect...");
-          me.open = false
-          me.socket.close()
+          sws.open = false
+          sws.socket.close()
+          sws.socket = new ReconnectingWebSocket(sws.init_data.url)
         }
       }
     }, 10_000)
