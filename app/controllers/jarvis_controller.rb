@@ -26,9 +26,14 @@ class JarvisController < ApplicationController
   def handle_message(msg)
     msg = case msg
     when Hash
-      @responding_alexa = true
       slots = msg&.dig(:request, :intent, :slots)
-      [slots&.dig(:control, :value), slots&.dig(:device, :value)].compact.join(" ")
+      if slots.present?
+        @responding_alexa = true
+        [slots&.dig(:control, :value), slots&.dig(:device, :value)].compact.join(" ")
+      else
+        handle_data(msg)
+        "Handling it. #{msg}"
+      end
     else
       msg
     end
@@ -54,6 +59,10 @@ class JarvisController < ApplicationController
     rescue JSON::ParserError
       params[:message]
     end
+  end
+
+  def handle_data(data)
+
   end
 
   def alexa_response(words)
