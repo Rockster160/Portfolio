@@ -37,6 +37,11 @@ document.querySelectorAll(".modal").forEach((modal) => {
   modal.addEventListener("transitionend", resizeModal)
 })
 
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Escape") {
+    document.querySelector(".modal.show")?.classList?.remove("show")
+  }
+})
 document.addEventListener("click", function(evt) {
   let x = evt.clientX, y = evt.clientY
   let w = window.outerWidth, h = window.outerHeight

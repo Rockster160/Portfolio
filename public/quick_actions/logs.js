@@ -4,10 +4,10 @@ import { command } from './command.js';
 import { showModal } from './modal.js';
 
 document.querySelectorAll(".widget-modal").forEach((widget) => {
-  let log = widget.getAttribute("data-log")
+  let log = widget.getAttribute("data-modal")
 
   new Widget(log, function() {
-    showModal(`${log}-modal`)
+    showModal(log)
   })
 })
 

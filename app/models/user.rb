@@ -36,10 +36,14 @@ class User < ApplicationRecord
   has_many :action_events
   has_many :user_surveys
   has_many :user_survey_responses
-  has_one :avatar
   has_one :push_sub, class_name: "UserPushSubscription", dependent: :destroy
   has_one :money_bucket
+  has_one :avatar, dependent: :destroy
+  def avatar; super() || build_avatar; end
+  has_one :jarvis_page, dependent: :destroy
+  def jarvis_page; super() || build_jarvis_page; end
   has_one :jarvis_cache, dependent: :destroy
+  def jarvis_cache; super() || build_jarvis_cache; end
 
   has_secure_password validations: false
 
@@ -129,7 +133,7 @@ class User < ApplicationRecord
   end
 
   def update_avatar(character)
-    (avatar || build_avatar).update_by_builder(character)
+    avatar.update_by_builder(character)
   end
 
   def owns_list?(list)

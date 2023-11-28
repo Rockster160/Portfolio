@@ -28,7 +28,7 @@ export class Widget {
   constructor(name, touch_callback) {
     let widget = this
     this.name = name
-    this.ele = document.querySelector(`.widget.${name}, .widget[data-log=${name}]`)
+    this.ele = document.querySelector(`.widget.${name}, .widget[data-modal=${name}]`)
     this.wrapper = this.ele.parentElement
     this.last_sync = 0
 

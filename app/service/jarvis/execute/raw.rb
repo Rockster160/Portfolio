@@ -103,6 +103,6 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def user_cache
-    @user_cache ||= user.jarvis_cache || user.create_jarvis_cache
+    @user_cache ||= user.jarvis_cache
   end
 end

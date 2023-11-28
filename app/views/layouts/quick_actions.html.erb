@@ -19,8 +19,8 @@
   <%= csrf_meta_tags %>
 </head>
 <body class="ctr-<%= controller_name %> act-<%= action_name %> <%= content_for :body_classes %>" data-sub-auth="<%= current_user&.sub_auth %>">
-  <%= yield :modals %>
   <%= yield %>
+  <%= yield :modals %>
   <%= yield :after_body %>
 </body>
 </html>

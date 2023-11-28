@@ -1,38 +1,40 @@
-<div class="modal mini-widgets" id="<%= id %>" tabindex="-1">
-  <div class="status"></div>
-  <div class="close">
-    <i class="ti ti-fa-close"></i>
-  </div>
-  <div class="modal-content">
-    <div class="mini-widgets widget-wrapper">
-      <% items.each do |display, item_id, cmd, title| %>
-        <% item_id ||= display.to_s %>
-        <% cmd ||= "log #{item_id}" %>
-        <% item_id = item_id&.to_s %>
-        <% cmd = cmd&.to_s %>
-        <% display = display&.to_s %>
-        <% title = title&.to_s %>
-
-        <% if display.blank? %>
-          <div class="widget-holder hidden"></div>
-          <% next %>
-        <% end %>
-
-        <div class="widget-holder">
-          <div class="widget mini-widget <%= item_id.parameterize %>" data-id="<%= item_id.parameterize %>" data-cmd="<%= cmd %>">
-            <% if display.match?(/^ti-/) %>
-              <i class="emoji ti <%= display %>"></i>
-            <% elsif display.match?(/\p{Emoji_Presentation}+/u) && !display.match?("<i") %>
-              <i class="emoji"><%= display.html_safe %></i>
-            <% else %>
-              <%= display.html_safe %>
-            <% end %>
-            <% if title.present? %>
-              <span class="title"><%= title %></span>
-            <% end %>
-          </div>
-        </div>
-      <% end %>
-    </div>
+<% modal_id = "modal-#{SecureRandom.hex(4)}" %>
+<div class="widget-holder">
+  <div class="widget widget-show widget-modal" data-modal="<%= modal_id %>">
+    <%= mrkdwn(widget[:name] || widget[:logo]) %>
   </div>
 </div>
+
+<% content_for :modals do %>
+  <div class="modal mini-widgets" id="<%= modal_id %>" tabindex="-1">
+    <div class="status"></div>
+    <div class="close">
+      <i class="ti ti-fa-close"></i>
+    </div>
+    <div class="modal-content">
+      <div class="mini-widgets widget-wrapper">
+        <% widget[:buttons].each do |item| %>
+          <% widget_id = "widget-#{SecureRandom.hex(4)}" %>
+          <% display = clean_md(item[:name] || item[:logo] || item[:log]) %>
+          <% cmd = "log #{item[:log]}" if item[:log].present? %>
+          <% cmd ||= item[:command] %>
+
+          <div class="widget-holder">
+            <div class="widget mini-widget <%= widget_id %>" data-id="<%= widget_id %>" data-cmd="<%= cmd %>">
+              <% if display.match?(/^ti-/) %>
+                <i class="emoji ti <%= display %>"></i>
+              <% elsif display.match?(/[\p{So}\p{Sk}\p{Sm}\p{Sc}\p{S}\p{C}]/) && !display.match?("<i") %>
+                <i class="emoji"><%= display.html_safe %></i>
+              <% else %>
+                <%= display.html_safe %>
+              <% end %>
+              <% if item[:name].present? %>
+                <span class="title"><%= item[:name] %></span>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </div>
+<% end %>
