@@ -3,7 +3,9 @@ class JarvisController < ApplicationController
   before_action :authorize_admin
 
   def command
+    Jarvis.say("[Command Received]")
     if parsed_message.is_a?(Hash)
+      Jarvis.say("[Hash]")
       handle_message(parsed_message)
     elsif parsed_message.is_a?(Array)
       parsed_message.each { |msg| handle_message(msg) if msg.squish.present? }
@@ -31,6 +33,7 @@ class JarvisController < ApplicationController
         @responding_alexa = true
         [slots&.dig(:control, :value), slots&.dig(:device, :value)].compact.join(" ")
       else
+        Jarvis.say("[No Slot]")
         handle_data(msg)
         return @words = "Handling it. #{msg}"
       end
