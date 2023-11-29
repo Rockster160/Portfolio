@@ -11,6 +11,17 @@
   100% { transform: rotate(360deg); }
 }
 
+@keyframes jiggle {
+  0% {
+    transform: rotate(-2deg);
+    animation-timing-function: ease-in;
+  }
+  50% {
+    transform: rotate(2.5deg);
+    animation-timing-function: ease-out;
+  }
+}
+
 html, body {
   background: darken($blue-d5, 5%);
   height: 100%;
@@ -24,6 +35,17 @@ html, body {
 }
 
 .hidden { display: none; }
+
+.settings {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+
+  i {
+    font-size: 32px;
+    cursor: pointer;
+  }
+}
 
 i.emoji {
   position: absolute;
@@ -61,6 +83,7 @@ i.emoji {
     align-items: center;
     justify-content: center;
     transition: box-shadow 0.2s;
+    background: darken($blue-d5, 5%);
     box-shadow: 1px 1px 3px 0 $grey-blue, inset 0 0 0 0 $grey-blue;
     border: 1px solid $grey-blue;
     border-radius: 8px;
@@ -189,6 +212,21 @@ i.emoji {
       box-shadow: none;
       border: none;
     }
+
+    // .draggable-source--is-dragging -- placeholder
+    // .draggable-mirror -- held item (ghost)
+    &.jiggle:not(&.draggable-mirror) {
+      cursor: grab;
+      animation: jiggle 0.3s alternate infinite;
+      &:nth-of-type(2n) { animation-delay: -0.75s; }
+      &:nth-of-type(3n) { animation-delay: -0.31s; }
+      &:nth-of-type(4n) { animation-delay: -0.67s; }
+      &:nth-of-type(5n) { animation-delay: -0.27s; }
+    }
+    &.draggable-source--is-dragging {
+      opacity: 0.3;
+    }
+    /* .draggable-mirror { cursor: grabbing; } */
   }
 }
 
@@ -261,6 +299,7 @@ i.emoji {
         margin: 8px;
         box-shadow: 1px 1px 3px 0 $grey-dark, inset 0 0 0 0 $grey-dark;
         border: 1px solid $grey-dark;
+        background: $grey-blue;
         width: 80px;
         height: 80px;
         position: relative;

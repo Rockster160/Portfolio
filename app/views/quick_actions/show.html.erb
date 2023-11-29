@@ -13,6 +13,10 @@
   <meta name="theme-color" content="#00102B">
 <% end %>
 
+<div class="settings">
+  <i class="ti ti-oct-gear settings-open"></i>
+</div>
+
 <div class="widget-wrapper">
   <% current_user.jarvis_page.blocks.each do |widget| %>
     <% if widget.key?(:type) %>

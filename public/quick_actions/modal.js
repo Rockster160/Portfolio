@@ -26,7 +26,7 @@ export function resizeModal() {
 
 window.addEventListener("resize", resizeModal)
 window.addEventListener("focusout", function() {
-  document.querySelector(".modal.show")?.classList?.remove("show")
+  // document.querySelector(".modal.show")?.classList?.remove("show")
   resizeModal()
 })
 document.querySelectorAll("input").forEach((input) => {
@@ -48,5 +48,19 @@ document.addEventListener("click", function(evt) {
 
   if (x < 30 || y < 30 || x > w-30 || y > h-30) {
     document.querySelector(".modal.show")?.classList?.remove("show")
+  }
+})
+
+window.addEventListener("mousedown", function(e) {
+  if (e.button == 2) {
+    if (document.querySelector(".modal.show")) {
+      document.querySelectorAll(".modal.show .widget-holder").forEach((item) => {
+        item.classList.toggle("jiggle")
+      })
+    } else {
+      document.querySelectorAll(".widget-wrapper > .widget-holder").forEach((item) => {
+        item.classList.toggle("jiggle")
+      })
+    }
   }
 })
