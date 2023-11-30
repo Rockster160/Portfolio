@@ -1333,8 +1333,8 @@ $(document).ready(function() {
     }
 
     let updatePlayer = function(player) {
-      console.log(`${player.lane} == ${parseInt($("lane-input").val())} (${player.lane == parseInt($("lane-input").val())})`);
-      if (player.lane != parseInt($("lane-input").val())) { return }
+      console.log(`${player.lane} == ${parseInt($(".lane-input").val())} (${player.lane == parseInt($(".lane-input").val())})`, player);
+      if (player.lane != parseInt($(".lane-input").val())) { return }
 
       let current_game = parseInt(params.game)
       if (parseInt(player.game) != current_game) { return }
