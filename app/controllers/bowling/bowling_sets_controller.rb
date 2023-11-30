@@ -38,6 +38,7 @@ module Bowling
         }
         if started_frame_9 && current_user.admin?
           Rails.cache.fetch("frame-9-start-car", expires_in: 1.hour) {
+            Jarvis.say("Starting car for 9th frame")
             Jarvis.command(current_user, "Take me home")
           }
         end
