@@ -1333,7 +1333,7 @@ $(document).ready(function() {
     }
 
     let updatePlayer = function(player) {
-      console.log(`${player.lane} == ${player.lane} (${player.lane == parseInt($("lane-input").val())})`);
+      console.log(`${player.lane} == ${parseInt($("lane-input").val())} (${player.lane == parseInt($("lane-input").val())})`);
       if (player.lane != parseInt($("lane-input").val())) { return }
 
       let current_game = parseInt(params.game)
