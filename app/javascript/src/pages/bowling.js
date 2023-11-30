@@ -1333,14 +1333,12 @@ $(document).ready(function() {
     }
 
     let updatePlayer = function(player) {
-      // laneNumber
-      // bowlerNumber
-      if (player.laneNumber != parseInt($("lane-input").val())) { return }
+      if (player.lane != parseInt($("lane-input").val())) { return }
 
       let current_game = parseInt(params.game)
       if (parseInt(player.game) != current_game) { return }
 
-      let bowler = bowler_mapping[parseInt(player.bowlerNumber)]
+      let bowler = bowler_mapping[parseInt(player.playerNumber)]
       if (!bowler) { return }
 
       player.throws.forEach(function(toss_str, idx) {
