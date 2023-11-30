@@ -1322,7 +1322,7 @@ $(document).ready(function() {
     }
 
     let decToPins = function(integer) {
-      if (integer === null) { return [] }
+      if (!integer) { return [] }
 
       let binary = integer.toString(2)
       const zerosToAdd = Math.max(0, 10 - binary.length)
