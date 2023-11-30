@@ -702,7 +702,16 @@ $(document).ready(function() {
     }
   })
 
+  $(document).keydown(function(evt) {
+    if (evt.target.classList.contains("lane-input") && evt.key == "Enter") {
+      $(evt.target).blur()
+      evt.preventDefault()
+      return false
+    }
+  })
+
   $(document).keyup(function(evt) {
+    if (evt.target.classList.contains("lane-input")) { return }
     if (/[0-9\/\+\-]/i.test(evt.key)) {
       var num = evt.key == "+" ? "X" : evt.key
       addScore(num)
@@ -1298,9 +1307,10 @@ $(document).ready(function() {
 
     let bowler_mapping = {}
     $(".bowler").each(function() {
-      let name = $(this).find(".bowler-name .usbc-name").text() || $(this).find(".bowler-name .display-name").text()
+      // let name = $(this).find(".bowler-name .usbc-name").text() || $(this).find(".bowler-name .display-name").text()
+      let order = $(this).attr("data-bowler")
 
-      if (name) { bowler_mapping[name.toLowerCase()] = this }
+      if (order) { bowler_mapping[parseInt(order)] = this }
     })
 
     let genUUID = function() {
@@ -1323,16 +1333,15 @@ $(document).ready(function() {
     }
 
     let updatePlayer = function(player) {
-      // if (player.playerName != "JAKERZ") { return }
-      // let bowler = bowler_mapping["rocco nicholls"]
+      // laneNumber
+      // bowlerNumber
+      if (player.laneNumber != parseInt($("lane-input").val())) { return }
 
       let current_game = parseInt(params.game)
       if (parseInt(player.game) != current_game) { return }
 
-      let bowler = bowler_mapping[player.playerName.toLowerCase()]
+      let bowler = bowler_mapping[parseInt(player.bowlerNumber)]
       if (!bowler) { return }
-
-      // Set lane number?
 
       player.throws.forEach(function(toss_str, idx) {
         let toss_value = toss_str

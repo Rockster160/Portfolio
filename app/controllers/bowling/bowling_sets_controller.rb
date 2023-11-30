@@ -77,6 +77,7 @@ module Bowling
     def bowling_params
       params.require(:bowling_set).permit(
         # :league_id, - Done before saving
+        :lane_number,
         games_attributes: [
           :id,
           :set_id,
@@ -101,7 +102,7 @@ module Bowling
           ]
         ]
       ).tap do |whitelist|
-        whitelist[:games_attributes] = whitelist[:games_attributes].map do |game_attributes|
+        whitelist[:games_attributes] = whitelist[:games_attributes]&.map do |game_attributes|
           game_attributes.tap do |game_whitelist|
             game_whitelist[:set_id] = game_whitelist[:set_id].presence || @set.id
             game_whitelist[:bowler_id] = game_whitelist[:bowler_id].presence || @league.bowlers.find_or_create_by(name: game_whitelist[:bowler_name]).id

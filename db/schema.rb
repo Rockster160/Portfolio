@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_10_26_223259) do
+ActiveRecord::Schema.define(version: 2023_11_30_150028) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -194,6 +194,7 @@ ActiveRecord::Schema.define(version: 2023_10_26_223259) do
     t.text "winner"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "lane_number"
     t.index ["league_id"], name: "index_bowling_sets_on_league_id"
   end
 
@@ -330,6 +331,14 @@ ActiveRecord::Schema.define(version: 2023_10_26_223259) do
     t.datetime "created_at", precision: 6, null: false
     t.datetime "updated_at", precision: 6, null: false
     t.index ["user_id"], name: "index_jarvis_caches_on_user_id"
+  end
+
+  create_table "jarvis_pages", force: :cascade do |t|
+    t.bigint "user_id"
+    t.jsonb "blocks"
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["user_id"], name: "index_jarvis_pages_on_user_id"
   end
 
   create_table "jarvis_tasks", force: :cascade do |t|

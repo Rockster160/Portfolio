@@ -99,6 +99,9 @@
       <div class="numpad-key lanetalk-toggle" data-modal="#lanetalk-config">
         <%= image_tag "bowling/lanetalk.png" %>
       </div>
+      <div class="numpad-key">
+        <%= f.text_field :lane_number, class: "lane-input" %>
+      </div>
       <div class="numpad-key new-bowler" data-edit>New Bowler</div>
       <div class="numpad-key card" data-modal="#card-hands">&#9824;</div>
       <div class="pin-mode-toggle pin-svg-wrapper numpad-key">
