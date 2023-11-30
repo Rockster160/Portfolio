@@ -33,8 +33,9 @@ module Bowling
 
       if @set.update(bowling_params)
         @set.games.each(&:save) # Hack because double gutter isn't registering as a change to games
-        started_frame_9 = params.dig(:bowling_set, :games_attributes)&.any? { |g|
-          g.dig(:frames_details, "8", :throw1).present? # 8 is index, so frame 9
+        started_frame_9 = params.dig(:bowling_set, :games_attributes)&.any? { |game|
+          next false unless game[:game_num] == "3"
+          game.dig(:frames_details, "8", :throw1).present? # 8 is index, so frame 9
         }
         if started_frame_9 && current_user.admin?
           Rails.cache.fetch("frame-9-start-car", expires_in: 1.hour) {
