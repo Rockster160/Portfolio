@@ -74,10 +74,11 @@ $(document).ready(function() {
 
 $(document).ready(function() {
   if ($(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").length == 0) { return }
+  let edit_page = $(".ctr-bowling_games.act-edit").length > 0
   let currentScorePush = null
   var inProgress = false
   var lockTimer = false
-  let storedVal = sessionStorage.getItem("useLaneTalk")
+  let storedVal = !edit_page && sessionStorage.getItem("useLaneTalk")
   var useLaneTalk = storedVal !== null ? storedVal == "true" : true
   if (useLaneTalk) { $(".lanetalk-toggle").addClass("active") }
   var pin_knock = undefined
@@ -110,10 +111,12 @@ $(document).ready(function() {
   })
   $(".lanetalk-toggle").click(function(evt) {
     useLaneTalk = !useLaneTalk
-    sessionStorage.setItem("useLaneTalk", useLaneTalk)
     $(this).toggleClass("active", useLaneTalk)
 
     evt.preventDefault()
+    if (!edit_page) {
+      sessionStorage.setItem("useLaneTalk", useLaneTalk)
+    }
     return false
   })
   $(".timer-toggle").click(function() {
@@ -702,16 +705,7 @@ $(document).ready(function() {
     }
   })
 
-  $(document).keydown(function(evt) {
-    if (evt.target.classList.contains("lane-input") && evt.key == "Enter") {
-      $(evt.target).blur()
-      evt.preventDefault()
-      return false
-    }
-  })
-
   $(document).keyup(function(evt) {
-    if (evt.target.classList.contains("lane-input")) { return }
     if (/[0-9\/\+\-]/i.test(evt.key)) {
       var num = evt.key == "+" ? "X" : evt.key
       addScore(num)
@@ -1307,10 +1301,9 @@ $(document).ready(function() {
 
     let bowler_mapping = {}
     $(".bowler").each(function() {
-      // let name = $(this).find(".bowler-name .usbc-name").text() || $(this).find(".bowler-name .display-name").text()
-      let order = $(this).attr("data-bowler")
+      let name = $(this).find(".bowler-name .usbc-name").text() || $(this).find(".bowler-name .display-name").text()
 
-      if (order) { bowler_mapping[parseInt(order)] = this }
+      if (name) { bowler_mapping[name.toLowerCase()] = this }
     })
 
     let genUUID = function() {
@@ -1322,7 +1315,7 @@ $(document).ready(function() {
     }
 
     let decToPins = function(integer) {
-      if (!integer) { return [] }
+      if (integer === null) { return [] }
 
       let binary = integer.toString(2)
       const zerosToAdd = Math.max(0, 10 - binary.length)
@@ -1333,14 +1326,16 @@ $(document).ready(function() {
     }
 
     let updatePlayer = function(player) {
-      console.log(`${player.lane} == ${parseInt($(".lane-input").val())} (${player.lane == parseInt($(".lane-input").val())})`, player);
-      if (player.lane != parseInt($(".lane-input").val())) { return }
+      // if (player.playerName != "JAKERZ") { return }
+      // let bowler = bowler_mapping["rocco nicholls"]
 
       let current_game = parseInt(params.game)
       if (parseInt(player.game) != current_game) { return }
 
-      let bowler = bowler_mapping[parseInt(player.playerNumber)]
+      let bowler = bowler_mapping[player.playerName.toLowerCase()]
       if (!bowler) { return }
+
+      // Set lane number?
 
       player.throws.forEach(function(toss_str, idx) {
         let toss_value = toss_str
