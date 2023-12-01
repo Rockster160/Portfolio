@@ -6,7 +6,8 @@ import { showModal } from './modal.js';
 document.querySelectorAll(".widget-modal").forEach((widget) => {
   let log = widget.getAttribute("data-modal")
 
-  new Widget(log, function() {
+  new Widget(log, function(evt) {
+    if (evt.target.classList.contains("delete-widget")) { return }
     showModal(log)
   })
 })

@@ -13,11 +13,7 @@
   <meta name="theme-color" content="#00102B">
 <% end %>
 
-<div class="settings">
-  <i class="ti ti-oct-gear settings-open"></i>
-</div>
-
-<div class="widget-wrapper">
+<div class="widget-wrapper main-wrapper">
   <% current_user.jarvis_page.blocks.each do |widget| %>
     <% if widget.key?(:type) %>
       <%= render partial: widget[:type] %>
@@ -28,3 +24,23 @@
     <% end %>
   <% end %>
 </div>
+
+<div class="settings">
+  <a href="#" class="btn" data-mode="add">Add</a>
+  <a href="#" class="btn" data-mode="move">Move</a>
+  <a href="#" class="btn" data-mode="delete">Delete</a>
+</div>
+
+<% content_for :modals do %>
+  <div class="modal" id="settings-modal" tabindex="-1">
+    <i class="ti ti-oct-gear settings-open" data-modal="settings-modal"></i>
+    <div class="close">
+      <i class="ti ti-fa-close"></i>
+    </div>
+    <div class="modal-content">
+      <div class="settings-wrapper">
+
+      </div>
+    </div>
+  </div>
+<% end %>

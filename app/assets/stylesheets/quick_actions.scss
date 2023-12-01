@@ -1,5 +1,6 @@
 @import "config/_variables";
 @import "config/terminess_font.scss";
+@import "components/forms";
 
 @keyframes blink {
   from { visibility: hidden; }
@@ -38,13 +39,18 @@ html, body {
 
 .settings {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 30px;
+  left: 30px;
 
   i {
     font-size: 32px;
     cursor: pointer;
   }
+}
+
+.settings-wrapper {
+  margin: 30px;
+  text-align: center;
 }
 
 i.emoji {
@@ -74,6 +80,17 @@ i.emoji {
   height: 100%;
   max-width: 675px;
 
+  .delete-widget {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba($danger, 0.2);
+    z-index: 1;
+    font-size: 32px;
+    padding: 10px;
+  }
   .widget-holder {
     align-self: center;
     margin: 10px;
