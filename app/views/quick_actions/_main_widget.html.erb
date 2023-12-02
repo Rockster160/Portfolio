@@ -2,14 +2,14 @@
   <a href="<%= widget[:page] %>" target="_blank" class="widget-holder">
     <div class="delete-widget hidden">❌</div>
     <div class="widget" data-logo="<%= widget[:logo] %>" data-name="<%= widget[:name] %>" data-page="<%= widget[:page] %>">
-      <%= mrkdwn(widget[:name] || widget[:logo]) %>
+      <%= widget[:display] || mrkdwn(widget[:name] || widget[:logo]) %>
     </div>
   </a>
 <% else %>
   <div class="widget-holder">
     <div class="delete-widget hidden">❌</div>
     <div class="widget widget-modal" data-modal="<%= modal_id %>" data-logo="<%= widget[:logo] %>" data-name="<%= widget[:name] %>" data-page="<%= widget[:page] %>">
-      <%= mrkdwn(widget[:name] || widget[:logo]) %>
+      <%= widget[:display] || mrkdwn(widget[:name] || widget[:logo]) %>
     </div>
   </div>
 <% end %>

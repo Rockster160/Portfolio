@@ -1,11 +1,13 @@
-class QuickActionsController < ::ActionController::Base
+class QuickActionsController < ApplicationController
   include AuthHelper
   include QuickActionsHelper
-  skip_before_action :verify_authenticity_token
-  helper_method :current_user, :user_signed_in?
+
   layout "quick_actions"
 
-  before_action :redirect_to_login
+  skip_before_action :verify_authenticity_token
+  before_action :authorize_user
+
+  helper_method :current_user, :user_signed_in?
 
   def show
     @page = current_user.jarvis_page
@@ -16,12 +18,5 @@ class QuickActionsController < ::ActionController::Base
     @page.update(blocks: params.permit!.to_h[:blocks])
 
     head :ok
-  end
-
-  private
-
-  def redirect_to_login
-    session[:forwarding_url] = request.original_url
-    redirect_to login_path if current_user.blank?
   end
 end

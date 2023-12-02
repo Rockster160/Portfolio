@@ -89,17 +89,19 @@ document.addEventListener("click", function(evt) {
     let hex = randomHex(4)
 
     let title = prompt("Title")
+    if (!title) { return }
     // if add == .command, .uptime, .tesla, .garage - add the specials
-    if (/\p{RGI_Emoji}/v.test(title)) {
-      title = `<i class="emoji">${title}</i>`
+    let display = title
+    if (/\p{RGI_Emoji}/v.test(display)) {
+      display = `<i class="emoji">${title}</i>`
     }
     if (mainWrapper) {
-      let data = { "{{widget_name}}": title, "{{modal_id}}": `modal-${hex}` }
+      let data = { "{{widget_name}}": title, "{{widget_display}}": display, "{{modal_id}}": `modal-${hex}` }
       addTemplateToWrapper(wrapper, data, "#template-main-widget")
       addTemplateToWrapper(body, data, "#template-modal")
     } else {
       let cmd = prompt("Command")
-      let data = { "{{item_name}}": title, "{{item_command}}": cmd }
+      let data = { "{{item_name}}": title, "{{item_display}}": display, "{{item_command}}": cmd }
       addTemplateToWrapper(wrapper, data, "#template-mini-widget")
     }
     return saveWidgets()

@@ -29,21 +29,7 @@
   <a href="#" class="btn" data-mode="delete">Delete</a>
 </div>
 
-<% content_for :modals do %>
-  <div class="modal" id="settings-modal" tabindex="-1">
-    <i class="ti ti-oct-gear settings-open" data-modal="settings-modal"></i>
-    <div class="close">
-      <i class="ti ti-fa-close"></i>
-    </div>
-    <div class="modal-content">
-      <div class="settings-wrapper">
-
-      </div>
-    </div>
-  </div>
-<% end %>
-
-<% local_data = { widget: { name: "{{widget_name}}" }, modal_id: "{{modal_id}}" } %>
+<% local_data = { widget: { name: "{{widget_name}}", display: "{{widget_display}}" }, modal_id: "{{modal_id}}" } %>
 <!-- Main Widget -->
 <template id="template-main-widget">
   <%= render partial: "main_widget", locals: local_data %>
@@ -54,5 +40,5 @@
 </template>
 <!-- Mini Widget -->
 <template id="template-mini-widget">
-  <%= render partial: "mini_widget", locals: { item: { name: "{{item_name}}", command: "{{item_command}}" } } %>
+  <%= render partial: "mini_widget", locals: { item: { name: "{{item_name}}", display: "{{item_display}}", command: "{{item_command}}" } } %>
 </template>
