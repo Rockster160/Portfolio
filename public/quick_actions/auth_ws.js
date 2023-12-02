@@ -51,7 +51,7 @@ class SimpleWS {
     }
 
     sws.socket.onerror = function(msg) {
-      console.log(`[ERROR] ${msg}`);
+      console.log("[ERROR]", msg);
     }
 
     sws.socket.onmessage = function(msg) {
