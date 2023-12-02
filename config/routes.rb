@@ -18,7 +18,7 @@ Rails.application.routes.draw do
   get "playground" => "index#playground"
   resource :ping, only: :create
 
-  resource :jarvis, only: :show, controller: :quick_actions
+  resource :jarvis, only: [:show, :update], controller: :quick_actions, as: :jarvis_page
   resources :jil_prompts, only: [:index, :show, :update], path: :prompts
 
   scope module: :users do

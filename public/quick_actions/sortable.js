@@ -141,20 +141,21 @@ let gatherWidgets = function() {
   let widgets = document.querySelectorAll(".main-wrapper > .widget-holder > .widget")
   return Array.from(widgets).map(item => {
     if (item.classList.contains("widget-modal")) {
-      let logo = item.textContent.trim()
-      let ti_emoji = item.querySelector("i.ti")
-      if (ti_emoji) { logo = Array.from(ti_emoji.classList).find(klass => klass.startsWith("ti-")) }
-      if (!logo) { debugger }
-      return { logo: logo, blocks: gatherBlocks(item) }
+      let logo = item.getAttribute("data-logo")
+      let name = item.getAttribute("data-name")
+      if (!logo) { console.log("[ERROR] Unknown item", item) }
+
+      return compactHash({ name: name, logo: logo, blocks: gatherBlocks(item) })
     } else {
       let type = Array.from(item.classList).filter(klass => klass != "widget")[0]
       if (type) { return { type: type } }
 
-      let logo = item.textContent.trim()
+      let logo = item.getAttribute("data-logo")
+      let name = item.getAttribute("data-name")
       if (item.parentElement.tagName == "A") {
-        return { logo: logo, page: item.parentElement.getAttribute("href") }
+        return compactHash({ name: name, logo: logo, page: item.parentElement.getAttribute("href") })
       } else {
-        console.log("[ERROR] Unknown object", item);
+        console.log("[ERROR] Unknown object", item)
       }
     }
   })
@@ -162,16 +163,17 @@ let gatherWidgets = function() {
 
 window.addEventListener("mousedown", function(e) {
   if (e.button == 2) {
-    console.log(gatherWidgets());
-    debugger
-    // if (document.querySelector(".modal.show")) {
-    //   document.querySelectorAll(".modal.show .widget-holder").forEach((item) => {
-    //     item.classList.toggle("jiggle")
-    //   })
-    // } else {
-    //   document.querySelectorAll(".widget-wrapper > .widget-holder").forEach((item) => {
-    //     item.classList.toggle("jiggle")
-    //   })
-    // }
+    let url = document.querySelector(".main-wrapper").getAttribute("data-update-url")
+    fetch(url, {
+      method: "PATCH",
+      body: JSON.stringify({ blocks: gatherWidgets() }),
+      headers: {
+        "Content-type": "application/json; charset=UTF-8"
+      }
+    }).then(function(res) {
+      if (res.ok) {
+        console.log("Updated");
+      }
+    })
   }
 })

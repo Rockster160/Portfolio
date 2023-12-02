@@ -1,14 +1,14 @@
 <% if widget.key?(:page) %>
   <a href="<%= widget[:page] %>" target="_blank" class="widget-holder">
     <div class="delete-widget hidden">❌</div>
-    <div class="widget">
+    <div class="widget" data-logo="<%= widget[:logo] %>" data-name="<%= widget[:name] %>">
       <%= mrkdwn(widget[:name] || widget[:logo]) %>
     </div>
   </a>
 <% else %>
   <div class="widget-holder">
     <div class="delete-widget hidden">❌</div>
-    <div class="widget widget-modal" data-modal="<%= modal_id %>">
+    <div class="widget widget-modal" data-modal="<%= modal_id %>" data-logo="<%= widget[:logo] %>" data-name="<%= widget[:name] %>">
       <%= mrkdwn(widget[:name] || widget[:logo]) %>
     </div>
   </div>

@@ -12,7 +12,7 @@ class CreateJarvisPage < ActiveRecord::Migration[7.0]
       { type: :garage },
       {
         logo: "💊",
-        buttons: [
+        blocks: [
           { name: "Vitamins", command: "log Vitamins" },
           { name: "D-AmphXR 20mg", command: "log D-AmphetamineXR 20mg" },
           { name: "D-Amph 20mg", command: "log D-Amphetamine 20mg" },
@@ -33,7 +33,7 @@ class CreateJarvisPage < ActiveRecord::Migration[7.0]
       },
       {
         logo: "[ico fa-paper_plane width: 32px;]",
-        buttons: [
+        blocks: [
           { logo: "🔄", page: ".reload" },
           { logo: "💧", command: "log Water" },
           { logo: "🦷", command: "log Teeth" },
@@ -53,7 +53,7 @@ class CreateJarvisPage < ActiveRecord::Migration[7.0]
       },
       {
         logo: "🍕",
-        buttons: [
+        blocks: [
           *[:tropical, :peach, :arctic].map { |flavor|
             {
               logo: "[img celsius]",
@@ -106,7 +106,7 @@ class CreateJarvisPage < ActiveRecord::Migration[7.0]
       },
       {
         logo: "👤",
-        buttons: [
+        blocks: [
           { logo: "🏠", name: "Home",       command: "Take me to Home" },
           { logo: "🔨", name: "Home Depot", command: "Take me to Home Depot" },
           { logo: "🤸‍♀️", name: "Airsports",  command: "Take me to Airsports" },

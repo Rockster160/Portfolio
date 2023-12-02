@@ -1,6 +1,5 @@
 <% hex ||= SecureRandom.hex(4) %>
 <% modal_id = "modal-#{hex}" %>
-
 <%= render partial: "main_widget", locals: { widget: widget, modal_id: modal_id } %>
 
 <% content_for :modals do %>
