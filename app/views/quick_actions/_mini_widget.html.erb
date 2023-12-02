@@ -1,11 +1,8 @@
-<% item_id = "widget-item-#{SecureRandom.hex(4)}" %>
-<% display = clean_md(item[:logo] || item[:name] || item[:log]) %>
-<% cmd = "log #{item[:log]}" if item[:log].present? %>
-<% cmd ||= item[:command] %>
+<% display = clean_md(item[:logo] || item[:name]) %>
 
 <div class="widget-holder">
   <div class="delete-widget hidden">❌</div>
-  <div class="widget mini-widget <%= item_id %>" data-id="<%= item_id %>" data-cmd="<%= cmd %>">
+  <div class="widget mini-widget" data-logo="<%= item[:logo] %>" data-name="<%= item[:name] %>" data-command="<%= item[:command] %>">
     <% if display.match?(/^ti-/) %>
       <i class="emoji ti <%= display %>"></i>
     <% elsif display.match?(/[\p{So}\p{Sk}\p{Sm}\p{Sc}\p{S}\p{C}]/) && !display.match?("<i") %>

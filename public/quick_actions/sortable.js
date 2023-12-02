@@ -42,6 +42,10 @@ let addTemplateToWrapper = function(wrapper, data, template_id) {
   wrapper.append(templateContent(null, temp))
 }
 
+let compactHash = function(hash) {
+  return Object.fromEntries(Object.entries(hash).filter(([_, value]) => value))
+}
+
 document.addEventListener("click", function(evt) {
   if (!evt.target.classList.contains("delete-widget")) { return }
 
@@ -57,7 +61,6 @@ document.addEventListener("click", function(evt) {
 
   let new_mode = modes.indexOf(new_mode_name)
   if (mode == new_mode) {
-    console.log("Toggle OFF!");
     new_mode = 0
     new_mode_name = modes[0]
   }
@@ -85,6 +88,7 @@ document.addEventListener("click", function(evt) {
     let hex = randomHex(4)
 
     let title = prompt("Title")
+    // if add == .command, .uptime, .tesla, .garage - add the specials
     if (/\p{RGI_Emoji}/v.test(title)) {
       title = `<i class="emoji">${title}</i>`
     }
@@ -120,18 +124,54 @@ document.addEventListener("click", function(evt) {
 // })
 // sortable.on("sortable:stop", () => console.log("sortable:stop"))
 
+let gatherBlocks = function(outer_widget) {
+  let modal_id = outer_widget.getAttribute("data-modal")
+  if (!modal_id) { return [] }
 
+  return Array.from(document.querySelectorAll(`#${modal_id} .widget`)).map(item => {
+    return compactHash({
+      logo: item.getAttribute("data-logo"),
+      name: item.getAttribute("data-name"),
+      command: item.getAttribute("data-command"),
+    })
+  })
+}
 
-// window.addEventListener("mousedown", function(e) {
-//   if (e.button == 2) {
-//     if (document.querySelector(".modal.show")) {
-//       document.querySelectorAll(".modal.show .widget-holder").forEach((item) => {
-//         item.classList.toggle("jiggle")
-//       })
-//     } else {
-//       document.querySelectorAll(".widget-wrapper > .widget-holder").forEach((item) => {
-//         item.classList.toggle("jiggle")
-//       })
-//     }
-//   }
-// })
+let gatherWidgets = function() {
+  let widgets = document.querySelectorAll(".main-wrapper > .widget-holder > .widget")
+  return Array.from(widgets).map(item => {
+    if (item.classList.contains("widget-modal")) {
+      let logo = item.textContent.trim()
+      let ti_emoji = item.querySelector("i.ti")
+      if (ti_emoji) { logo = Array.from(ti_emoji.classList).find(klass => klass.startsWith("ti-")) }
+      if (!logo) { debugger }
+      return { logo: logo, blocks: gatherBlocks(item) }
+    } else {
+      let type = Array.from(item.classList).filter(klass => klass != "widget")[0]
+      if (type) { return { type: type } }
+
+      let logo = item.textContent.trim()
+      if (item.parentElement.tagName == "A") {
+        return { logo: logo, page: item.parentElement.getAttribute("href") }
+      } else {
+        console.log("[ERROR] Unknown object", item);
+      }
+    }
+  })
+}
+
+window.addEventListener("mousedown", function(e) {
+  if (e.button == 2) {
+    console.log(gatherWidgets());
+    debugger
+    // if (document.querySelector(".modal.show")) {
+    //   document.querySelectorAll(".modal.show .widget-holder").forEach((item) => {
+    //     item.classList.toggle("jiggle")
+    //   })
+    // } else {
+    //   document.querySelectorAll(".widget-wrapper > .widget-holder").forEach((item) => {
+    //     item.classList.toggle("jiggle")
+    //   })
+    // }
+  }
+})

@@ -18,9 +18,7 @@
     <% if widget.key?(:type) %>
       <%= render partial: widget[:type] %>
     <% else %>
-      <% if widget.key?(:buttons) %>
-        <%= mini_widgets(widget) %>
-      <% end %>
+      <%= mini_widgets(widget) %>
     <% end %>
   <% end %>
 </div>

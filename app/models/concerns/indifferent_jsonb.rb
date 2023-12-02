@@ -7,7 +7,7 @@ module IndifferentJsonb
     def indifferent_jsonb(*columns)
       columns.each do |col|
         ivar_ref = "@indifferent_#{col}"
-        before_save { send("#{col}=", instance_variable_get(ivar_ref)) }
+        before_save { send("#{col}=", send(col)) }
 
         define_method(col) do
           ivar = instance_variable_get(ivar_ref)
@@ -29,9 +29,14 @@ module IndifferentJsonb
         end
 
         define_method("#{col}=") do |new_data|
-          merged_data = send(col).merge(JSON.parse(new_data&.to_json || "{}")).compact
+          new_json = JSON.parse(new_data&.to_json || "{}")
+
+          if new_data.is_a?(Hash)
+            new_json.reverse_merge!(send(col)).compact
+          end
+
           instance_variable_set(ivar_ref, nil) # reset ivar to re-pull next time
-          super(merged_data)
+          super(new_json)
         end
       end
     end
