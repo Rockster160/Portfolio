@@ -50,7 +50,7 @@ document.addEventListener("click", function(evt) {
     document.querySelector(".modal.show")?.classList?.remove("show")
   }
   let modalSelector = evt.target.classList.contains("widget-holder") ? evt.target.querySelector("[data-modal]") : evt.target
-  let modal_id = modalSelector.getAttribute("data-modal")
+  let modal_id = modalSelector?.getAttribute("data-modal")
   if (modal_id) {
     showModal(modal_id)
   }

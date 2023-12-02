@@ -74,15 +74,15 @@ document.addEventListener("click", function(evt) {
   })
 
   // TODO: Delete not working for specials (running their command)
+  let body = document.querySelector("body")
+  let mainWrapper = true
+  let wrapper = document.querySelector(".modal.mini-widgets.show .widget-wrapper")
+  if (wrapper) { mainWrapper = false }
+  wrapper = wrapper || document.querySelector(".main-wrapper.widget-wrapper")
 
   if (new_mode_name == "add") {
     mode = 0
-    let body = document.querySelector("body")
     let hex = randomHex(4)
-    let mainWrapper = true
-    let wrapper = document.querySelector(".modal.mini-widgets.show .widget-wrapper")
-    if (wrapper) { mainWrapper = false }
-    wrapper = wrapper || document.querySelector(".main-wrapper.widget-wrapper")
 
     let title = prompt("Title")
     if (/\p{RGI_Emoji}/v.test(title)) {
@@ -99,9 +99,9 @@ document.addEventListener("click", function(evt) {
     }
     return
   } else if (new_mode_name == "move") {
-    document.querySelectorAll(".widget-holder").forEach(item => item.classList.add("jiggle"))
+    wrapper.querySelectorAll(".widget-holder").forEach(item => item.classList.add("jiggle"))
   } else if (new_mode_name == "delete") {
-    document.querySelectorAll(".delete-widget").forEach(item => item.classList.remove("hidden"))
+    wrapper.querySelectorAll(".delete-widget").forEach(item => item.classList.remove("hidden"))
   }
 
   document.querySelectorAll(`[data-mode="${new_mode_name}"]`).forEach(item => {
