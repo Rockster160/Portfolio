@@ -1,8 +1,20 @@
+import { command } from './command.js';
 import Sortable from "https://cdn.jsdelivr.net/npm/@shopify/draggable/build/esm/Sortable/Sortable.mjs"
 
 const sortable = new Sortable(document.querySelectorAll(".widget-wrapper"), {
   draggable: ".widget-holder.jiggle",
 })
+
+// .draggable-source--is-dragging // -- placeholder
+// .draggable-mirror // -- held item (ghost)
+
+// sortable.on("sortable:start", () => console.log("sortable:start"))
+// sortable.on("sortable:sort", () => console.log("sortable:sort"))
+// sortable.on("sortable:sorted", function(e) {
+//   debugger
+//   console.log("sortable:sorted")
+// })
+// sortable.on("sortable:stop", () => console.log("sortable:stop"))
 
 let modes = ["use", "add", "move", "delete"]
 let mode = 0
@@ -116,17 +128,6 @@ document.addEventListener("click", function(evt) {
   })
 })
 
-// .draggable-source--is-dragging // -- placeholder
-// .draggable-mirror // -- held item (ghost)
-
-// sortable.on("sortable:start", () => console.log("sortable:start"))
-// sortable.on("sortable:sort", () => console.log("sortable:sort"))
-// sortable.on("sortable:sorted", function(e) {
-//   debugger
-//   console.log("sortable:sorted")
-// })
-// sortable.on("sortable:stop", () => console.log("sortable:stop"))
-
 let gatherBlocks = function(outer_widget) {
   let modal_id = outer_widget.getAttribute("data-modal")
   if (!modal_id) { return [] }
@@ -164,6 +165,7 @@ let gatherWidgets = function() {
 }
 
 let saveWidgets = function() {
+  command.refreshStatus()
   let url = document.querySelector(".main-wrapper").getAttribute("data-update-url")
   fetch(url, {
     method: "PATCH",
