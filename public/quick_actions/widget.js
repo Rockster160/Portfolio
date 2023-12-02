@@ -28,9 +28,11 @@ export class Widget {
   constructor(name, touch_callback) {
     let widget = this
     this.name = name
-    this.ele = document.querySelector(`.widget.${name}, .widget[data-log=${name}]`)
-    this.wrapper = this.ele.parentElement
+    this.ele = document.querySelector(`.widget.${name}, .widget[data-modal=${name}]`)
     this.last_sync = 0
+    this.wrapper = this.ele?.parentElement
+
+    if (!this.wrapper) { return }
 
     if (touch_callback && typeof(touch_callback) === "function") {
       this.wrapper.addEventListener("click", touch_callback)
@@ -55,18 +57,19 @@ export class Widget {
     this.updateTimestamp()
   }
   set loading(bool) {
-    this.wrapper.querySelector(".loading").classList.toggle("hidden", !bool)
+    this.wrapper?.querySelector(".loading")?.classList?.toggle("hidden", !bool)
   }
   set error(bool) {
-    this.wrapper.querySelector(".error").classList.toggle("hidden", !bool)
+    this.wrapper?.querySelector(".error")?.classList?.toggle("hidden", !bool)
   }
   set lines(new_lines) {
+    if (!this.wrapper) { return }
     this.wrapper.querySelector(".lines").innerHTML = new_lines.map(function(line) {
       return `<p>${line}</p>`
     }).join("")
   }
   updateTimestamp() {
-    if (!this.ele.querySelector(".last-sync")) { return }
+    if (!this.ele?.querySelector(".last-sync")) { return }
 
     this.ele.querySelector(".last-sync").textContent = timeAgo(this.#last_sync)
   }
@@ -76,9 +79,13 @@ export class Widget {
     return Math.round(((new Date()).getTime() - this.#last_sync) / 1000)
   }
   connected() {
+    if (!this.wrapper) { return }
+
     this.wrapper.querySelector(".disconnected").classList.add("hidden")
   }
   disconnected() {
+    if (!this.wrapper) { return }
+
     this.wrapper.querySelector(".disconnected").classList.remove("hidden")
   }
 }

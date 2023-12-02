@@ -1,3 +1,4 @@
+import "./quick_actions/sortable.js";
 import "./quick_actions/garage.js";
 import "./quick_actions/upcoming.js";
 import "./quick_actions/tesla.js";

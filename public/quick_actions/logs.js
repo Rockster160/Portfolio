@@ -1,34 +1,22 @@
-import { AuthWS } from './auth_ws.js';
-import { Widget } from './widget.js';
 import { command } from './command.js';
-import { showModal } from './modal.js';
 
-document.querySelectorAll(".widget-modal").forEach((widget) => {
-  let log = widget.getAttribute("data-log")
+document.addEventListener("click", function(evt) {
+  if (!evt.target.classList.contains("widget-holder")) { return }
+  let commander = evt.target.querySelector("[data-command]")
+  let cmd = commander?.getAttribute("data-command")
+  let page_cmd = commander?.getAttribute("data-page")
+  if (page_cmd == ".reload") {
+    return window.location.reload(true)
+  }
+  if (!cmd) { return }
 
-  new Widget(log, function() {
-    showModal(`${log}-modal`)
-  })
-})
+  if (cmd.includes("{{")) {
+    let req = cmd.match(/\{\{(.*?)\}\}/)[1].trim()
+    if (req.length == 0) { req = "What is the text?" }
+    let res = prompt(req).trim()
+    if (res.length == 0) { return }
+    cmd = cmd.replace(/\{\{(.*?)\}\}/, res)
+  }
 
-document.querySelectorAll(".mini-widget").forEach((widget) => {
-  let id = widget.getAttribute("data-id")
-
-  new Widget(id, function() {
-    let cmd = widget.getAttribute("data-cmd")
-
-    if (cmd == ".reload") {
-      return window.location.reload(true)
-    }
-
-    if (cmd.includes("{{")) {
-      let req = cmd.match(/\{\{(.*?)\}\}/)[1].trim()
-      if (req.length == 0) { req = "What is the text?" }
-      let res = prompt(req).trim()
-      if (res.length == 0) { return }
-      cmd = cmd.replace(/\{\{(.*?)\}\}/, res)
-    }
-
-    command.socket.send({ action: "command", words: cmd })
-  })
+  command.socket.send({ action: "command", words: cmd })
 })

@@ -13,217 +13,32 @@
   <meta name="theme-color" content="#00102B">
 <% end %>
 
-<div class="widget-wrapper">
-  <div class="widget-holder">
-    <div class="widget tesla">
-      <div class="lines">
-        <p></p>
-        <p></p>
-        <p>Loading...</p>
-      </div>
-      <span class="disconnected"></span>
-      <span class="last-sync">Never</span>
-      <span class="error hidden">[ERROR]</span>
-      <span class="refresh"><i class="ti ti-mdi-refresh"></i></span>
-      <span class="loading hidden"><i class="ti ti-mdi-loading"></i></span>
-    </div>
-  </div>
-
-  <div class="widget-holder">
-    <div class="widget garage">
-      <i class="ti ti-mdi-garage_open"></i>
-      <i class="ti ti-mdi-garage"></i>
-
-      <span class="disconnected"></span>
-      <span class="last-sync">Never</span>
-      <span class="error hidden">[ERROR]</span>
-      <span class="refresh"><i class="ti ti-mdi-refresh"></i></span>
-      <span class="loading hidden"><i class="ti ti-mdi-loading"></i></span>
-    </div>
-  </div>
-
-  <div class="widget-holder">
-    <div class="widget widget-modal" data-log="drugs">
-      <i class="emoji">💊</i>
-    </div>
-  </div>
-
-  <div class="widget-holder">
-    <div class="widget widget-modal" data-log="events">
-      <i class="emoji ti ti-fa-paper_plane"></i>
-    </div>
-  </div>
-
-  <div class="widget-holder">
-    <div class="widget widget-modal" data-log="food">
-      <i class="emoji">🍕</i>
-    </div>
-  </div>
-
-  <div class="widget-holder">
-    <div class="widget command">
-      Command
-
-      <span class="disconnected"></span>
-    </div>
-  </div>
-
-  <a href="<%= jil_prompts_path %>" target="_blank" class="widget-holder">
-    <div class="widget widget-modal" data-log="care">
-      <i class="emoji">🪶</i>
-    </div>
-  </a>
-
-  <div class="widget-holder">
-    <div class="widget widget-modal" data-log="contacts">
-      <i class="emoji">👤</i>
-    </div>
-  </div>
-
-  <div class="widget-holder">
-    <div class="widget upcoming">
-      <div class="lines" style="text-align: left;"></div>
-
-      <span class="disconnected"></span>
-      <span class="last-sync">Never</span>
-      <span class="loading hidden"><i class="ti ti-mdi-loading"></i></span>
-    </div>
-  </div>
+<div class="widget-wrapper main-wrapper" data-update-url="<%= jarvis_page_path %>">
+  <% @page.blocks.each do |widget| %>
+    <% if widget.key?(:type) %>
+      <%= render partial: widget[:type] %>
+    <% else %>
+      <%= mini_widgets(widget) %>
+    <% end %>
+  <% end %>
 </div>
 
-<div class="modal" id="command-modal" tabindex="-1">
-  <div class="status"></div>
-  <div class="close">
-    <i class="ti ti-fa-close"></i>
-  </div>
-  <div class="modal-content">
-    <div class="messages">
-      <div class="message in">What can I do for you?</div>
-    </div>
-    <div class="text-entry">
-      <input type="text" name="" value="">
-    </div>
-  </div>
+<div class="settings">
+  <a href="#" class="btn" data-mode="add">Add</a>
+  <a href="#" class="btn" data-mode="move">Move</a>
+  <a href="#" class="btn" data-mode="delete">Delete</a>
 </div>
 
-<%=
-  mini_widgets("contacts-modal") do
-    [
-      ["🏠", :Home],
-      ["🔨", :"Home Depot"],
-      ["🤸‍♀️", :Airsports],
-      ["🎳", :Bowling],
-      ["🏬", :Costco],
-      ["🐥", :CarWash],
-      ["📦", :ParkourUtah],
-      ["🏌️‍♂️", :Lighten],
-    ].then { |contact_names|
-      contacts = Contact.where.not(address: nil).where(name: contact_names.map(&:last)).to_a
-      contact_names.map { |line|
-        line.tap { line[1] = contacts.find { |c| c.name.to_s == line[1].to_s } }
-      }
-    }.map do |display, contact|
-      name = contact&.nickname || contact&.name
-      next if name.blank?
-
-      [display, name, "Take me to #{name}", name]
-    end
-  end
-%>
-
-<%=
-  mini_widgets("food-modal") do
-    [
-      *[:tropical, :peach, :arctic].map { |flavor|
-        [
-          img(:celsius),
-          "log_celsius_#{flavor.to_s.downcase}",
-          "log drink Celsius #{flavor.to_s.titleize} Vibe",
-          flavor.to_s.titleize
-        ]
-      },
-
-      *[:orange, :kiwi_guava, :wild_berry].map { |flavor|
-        [
-          img(:celsius),
-          "log_celsius_#{flavor.to_s.downcase}",
-          "log drink Celsius #{flavor.to_s.titleize}",
-          flavor.to_s.titleize
-        ]
-      },
-
-      [emoji("🖋"), :Custom, "log {{Log what?}}"],
-      ["🍕", :log_Food, "log Food {{What did you eat?}}"],
-      ["🧃", :log_Drink, "log Drink {{What did you drink?}}"],
-      ["Protein", :Protein, "log Drink Protein"],
-      ["🍍", :Pineapple, "log Drink Pineapple Juice"],
-      ["🥃", :Alcohol, "log Alcohol {{What did you drink?}}"],
-
-      [img(:can), :log_soda_dew, "log soda Mountain Dew"],
-      [img(:pepsi), :log_soda_pepsi, "log soda Pepsi"],
-      [img(:coke), :log_soda_coke, "log soda Coke"],
-      [emoji("🥚"), :scrambled_eggs, "log Food Scrambled Eggs x4 on Dave's Toast x2"],
-      [emoji("🍳"), :fried_eggs, "log Food Fried Eggs x3 on Dave's Toast x1"],
-      [emoji("🧋"), :choco_milk, "log Drink Chocolate Milk"],
-
-      [emoji_stack("🍆", "🥣"), :cereal_raisin_bran, "log Food Cereal Raisin Bran"],
-      [emoji_stack("🦖", "🥣"), :cereal_dyno_bytes, "log Food Cereal Dyno Bites"],
-      [emoji_stack("🍞", "🥣"), :cereal_cinna_toast, "log Food Cereal Cinnamon Toast Crunch"],
-      [emoji_stack("🍯", "🥣"), :cereal_honey_oats, "log Food Cereal Honey Oats"],
-
-      [emoji_stack("🥦", "🥩"), :steak_veggies, "log Food Steak and Veggies"],
-      [emoji_stack("🥦", "🐟"), :salmon_veggies, "log Food Salmon and Veggies"],
-      [emoji_stack("🍚", "🥩"), :steak_rice, "log Food Steak and Rice"],
-      [emoji_stack("🍚", "🐟"), :salmon_rice, "log Food Salmon and Rice"],
-
-      [emoji_stack("🍪", "🍦"), :shake_handles, "log Treat Handel's Cookie Dough Milkshake"],
-      [emoji_stack("🥣", "🍦"), :home_icecream, "log Treat Ice Cream and Caramel and Chocolate"],
-      [emoji_stack("🍓", "🍦"), :shake_costco, "log Treat Costco Strawberry Sundae"],
-    ]
-  end
-%>
-
-<%=
-  mini_widgets("events-modal") do
-    [
-      [emoji("🔄"), :Reload, ".reload"],
-      ["💧", :Water],
-      ["🦷", :Teeth],
-
-      ["🚿", :Shower],
-      ["👕", :Laundry, "do laundry"],
-      [emoji_stack("💪", "❌"), :Done, "No more pullups today"],
-
-      [emoji("🏋️‍♂️"), :Workout, "log Workout {{What did you do?}}"],
-      ["5#{emoji("💪")}", :five_pulls, "log Pullups 5"],
-      ["##{emoji("💪")}", :enter_pulls, "log Pullups {{How many pullups?}}"],
-
-      [emoji("🖋"), :Custom, "log {{Log what?}}"],
-      ["🍕", :log_Food_2, "log Food {{What did you eat?}}"],
-      ["🧃", :log_Drink_2, "log Drink {{What did you drink?}}"],
-    ]
-  end
-%>
-
-<%=
-  mini_widgets("drugs-modal") do
-    [
-      [:Vitamins],
-      ["D-AmphXR 20mg"],
-      ["D-Amph 20mg"],
-      ["Pristiq 25mg"],
-      ["AdderallXR 15mg"],
-      ["AdderallXR 20mg"],
-      ["Buspirone 20mg"],
-      ["Relaxium 1"],
-      ["Relaxium 2"],
-      ["NQ"],
-      ["NQ Half"],
-      ["Methyl 10mg"],
-      ["Methyl 20mg"],
-      ["Escital 20mg"],
-      ["X"],
-      ["Z", nil, "log Z {{}}"],
-    ]
-  end
-%>
+<% local_data = { widget: { name: "{{widget_name}}", display: "{{widget_display}}" }, modal_id: "{{modal_id}}" } %>
+<!-- Main Widget -->
+<template id="template-main-widget">
+  <%= render partial: "main_widget", locals: local_data %>
+</template>
+<!-- Modal -->
+<template id="template-modal">
+  <%= render partial: "mini_widget_modal", locals: local_data %>
+</template>
+<!-- Mini Widget -->
+<template id="template-mini-widget">
+  <%= render partial: "mini_widget", locals: { item: { name: "{{item_name}}", display: "{{item_display}}", command: "{{item_command}}" } } %>
+</template>

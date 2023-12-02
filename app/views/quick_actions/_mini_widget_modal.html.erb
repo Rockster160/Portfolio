@@ -1,0 +1,16 @@
+<div class="modal mini-widgets" id="<%= modal_id %>" tabindex="-1">
+  <div class="status"></div>
+  <div class="close"><i class="ti ti-fa-close"></i></div>
+  <div class="modal-content">
+    <div class="settings">
+      <a href="#" class="btn" data-mode="add">Add</a>
+      <a href="#" class="btn" data-mode="move">Move</a>
+      <a href="#" class="btn" data-mode="delete">Delete</a>
+    </div>
+    <div class="mini-widgets widget-wrapper">
+      <% widget[:blocks]&.each do |item| %>
+        <%= render partial: "mini_widget", locals: { item: item } %>
+      <% end %>
+    </div>
+  </div>
+</div>

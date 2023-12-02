@@ -26,7 +26,7 @@ export function resizeModal() {
 
 window.addEventListener("resize", resizeModal)
 window.addEventListener("focusout", function() {
-  document.querySelector(".modal.show")?.classList?.remove("show")
+  // document.querySelector(".modal.show")?.classList?.remove("show")
   resizeModal()
 })
 document.querySelectorAll("input").forEach((input) => {
@@ -37,11 +37,21 @@ document.querySelectorAll(".modal").forEach((modal) => {
   modal.addEventListener("transitionend", resizeModal)
 })
 
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Escape") {
+    document.querySelector(".modal.show")?.classList?.remove("show")
+  }
+})
 document.addEventListener("click", function(evt) {
   let x = evt.clientX, y = evt.clientY
   let w = window.outerWidth, h = window.outerHeight
 
   if (x < 30 || y < 30 || x > w-30 || y > h-30) {
     document.querySelector(".modal.show")?.classList?.remove("show")
+  }
+  let modalSelector = evt.target.classList.contains("widget-holder") ? evt.target.querySelector("[data-modal]") : evt.target
+  let modal_id = modalSelector?.getAttribute("data-modal")
+  if (modal_id) {
+    showModal(modal_id)
   }
 })
