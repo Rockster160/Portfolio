@@ -175,7 +175,6 @@ let saveWidgets = function() {
     }
   }).then(function(res) {
     if (res.ok) {
-      console.log("Updated");
     }
   })
 }
