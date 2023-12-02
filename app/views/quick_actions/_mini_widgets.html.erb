@@ -1,41 +1,8 @@
-<% modal_id = "modal-#{SecureRandom.hex(4)}" %>
-<div class="widget-holder">
-  <div class="delete-widget hidden">❌</div>
-  <div class="widget widget-modal" data-modal="<%= modal_id %>">
-    <%= mrkdwn(widget[:name] || widget[:logo]) %>
-  </div>
-</div>
+<% hex ||= SecureRandom.hex(4) %>
+<% modal_id = "modal-#{hex}" %>
+
+<%= render partial: "main_widget", locals: { widget: widget, modal_id: modal_id } %>
 
 <% content_for :modals do %>
-  <div class="modal mini-widgets" id="<%= modal_id %>" tabindex="-1">
-    <div class="status"></div>
-    <div class="close">
-      <i class="ti ti-fa-close"></i>
-    </div>
-    <div class="modal-content">
-      <div class="mini-widgets widget-wrapper">
-        <% widget[:buttons].each do |item| %>
-          <% widget_id = "widget-#{SecureRandom.hex(4)}" %>
-          <% display = clean_md(item[:logo] || item[:name] || item[:log]) %>
-          <% cmd = "log #{item[:log]}" if item[:log].present? %>
-          <% cmd ||= item[:command] %>
-
-          <div class="widget-holder">
-            <div class="widget mini-widget <%= widget_id %>" data-id="<%= widget_id %>" data-cmd="<%= cmd %>">
-              <% if display.match?(/^ti-/) %>
-                <i class="emoji ti <%= display %>"></i>
-              <% elsif display.match?(/[\p{So}\p{Sk}\p{Sm}\p{Sc}\p{S}\p{C}]/) && !display.match?("<i") %>
-                <i class="emoji"><%= display.html_safe %></i>
-              <% else %>
-                <%= mrkdwn(display) %>
-              <% end %>
-              <% if item[:name].present? && item[:name] != display %>
-                <span class="title"><%= item[:name] %></span>
-              <% end %>
-            </div>
-          </div>
-        <% end %>
-      </div>
-    </div>
-  </div>
+  <%= render partial: "mini_widget_modal", locals: { widget: widget, modal_id: modal_id } %>
 <% end %>

@@ -44,3 +44,17 @@
     </div>
   </div>
 <% end %>
+
+<% local_data = { widget: { name: "{{widget_name}}" }, modal_id: "{{modal_id}}" } %>
+<!-- Main Widget -->
+<template id="template-main-widget">
+  <%= render partial: "main_widget", locals: local_data %>
+</template>
+<!-- Modal -->
+<template id="template-modal">
+  <%= render partial: "mini_widget_modal", locals: local_data %>
+</template>
+<!-- Mini Widget -->
+<template id="template-mini-widget">
+  <%= render partial: "mini_widget", locals: { item: { name: "{{item_name}}", command: "{{item_command}}" } } %>
+</template>

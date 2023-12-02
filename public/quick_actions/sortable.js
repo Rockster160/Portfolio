@@ -7,6 +7,41 @@ const sortable = new Sortable(document.querySelectorAll(".widget-wrapper"), {
 let modes = ["use", "add", "move", "delete"]
 let mode = 0
 
+let templateContent = function(id, temp) {
+  let template = temp || document.querySelector(id)
+  let content = template.content.children
+
+  return content.length == 1 ? content[0] : content
+}
+
+let randomHex = function(bytes=8) {
+  // fill typed array with random numbers
+  // from 0..255 per entry
+  const array = new Uint8Array(bytes)
+  window.crypto.getRandomValues(array)
+
+  // wrap to array and convert numbers to hex
+  // then join to single string
+  return [...array].map(n => n.toString(16)).join("")
+}
+
+let replacePlaceholders = function(content, replacements) {
+  for (var placeholder in replacements) {
+    if (replacements.hasOwnProperty(placeholder)) {
+      var regex = new RegExp(placeholder, "g");
+      content = content.replace(regex, replacements[placeholder]);
+    }
+  }
+  return content;
+}
+
+let addTemplateToWrapper = function(wrapper, data, template_id) {
+  let template_content = templateContent(template_id)
+  let temp = document.createElement("template")
+  temp.innerHTML = replacePlaceholders(template_content.outerHTML, data)
+  wrapper.append(templateContent(null, temp))
+}
+
 document.addEventListener("click", function(evt) {
   if (!evt.target.classList.contains("delete-widget")) { return }
 
@@ -38,19 +73,40 @@ document.addEventListener("click", function(evt) {
     document.querySelectorAll(".delete-widget").forEach(item => item.classList.add("hidden"))
   })
 
-  document.querySelectorAll(`[data-mode="${new_mode_name}"]`).forEach(item => {
-    evt.target.text = "Done"
-  })
+  // TODO: Delete not working for specials (running their command)
 
   if (new_mode_name == "add") {
-    console.log("Pop new modal!");
+    mode = 0
+    let body = document.querySelector("body")
+    let hex = randomHex(4)
+    let mainWrapper = true
+    let wrapper = document.querySelector(".modal.mini-widgets.show .widget-wrapper")
+    if (wrapper) { mainWrapper = false }
+    wrapper = wrapper || document.querySelector(".main-wrapper.widget-wrapper")
+
+    let title = prompt("Title")
+    if (/\p{RGI_Emoji}/v.test(title)) {
+      title = `<i class="emoji">${title}</i>`
+    }
+    if (mainWrapper) {
+      let data = { "{{widget_name}}": title, "{{modal_id}}": `modal-${hex}` }
+      addTemplateToWrapper(wrapper, data, "#template-main-widget")
+      addTemplateToWrapper(body, data, "#template-modal")
+    } else {
+      let cmd = prompt("Command")
+      let data = { "{{item_name}}": title, "{{item_command}}": cmd }
+      addTemplateToWrapper(wrapper, data, "#template-mini-widget")
+    }
+    return
   } else if (new_mode_name == "move") {
     document.querySelectorAll(".widget-holder").forEach(item => item.classList.add("jiggle"))
   } else if (new_mode_name == "delete") {
     document.querySelectorAll(".delete-widget").forEach(item => item.classList.remove("hidden"))
-
-    console.log("Add Delete buttons!");
   }
+
+  document.querySelectorAll(`[data-mode="${new_mode_name}"]`).forEach(item => {
+    evt.target.text = "Done"
+  })
 })
 
 // .draggable-source--is-dragging // -- placeholder

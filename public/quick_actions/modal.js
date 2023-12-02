@@ -49,7 +49,8 @@ document.addEventListener("click", function(evt) {
   if (x < 30 || y < 30 || x > w-30 || y > h-30) {
     document.querySelector(".modal.show")?.classList?.remove("show")
   }
-  let modal_id = evt.target.getAttribute("data-modal")
+  let modalSelector = evt.target.classList.contains("widget-holder") ? evt.target.querySelector("[data-modal]") : evt.target
+  let modal_id = modalSelector.getAttribute("data-modal")
   if (modal_id) {
     showModal(modal_id)
   }
