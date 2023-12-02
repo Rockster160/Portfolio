@@ -26,7 +26,4 @@ module QuickActionsHelper
       .gsub(/\[img (.*?)\]/) { |f| emoji("<img src=\"./#{Regexp.last_match(1)}.png\"/>") }
       .html_safe
   end
-
-  def parse_blocks(blocks)
-  end
 end

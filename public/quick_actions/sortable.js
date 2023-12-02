@@ -63,6 +63,7 @@ document.addEventListener("click", function(evt) {
   if (mode == new_mode) {
     new_mode = 0
     new_mode_name = modes[0]
+    saveWidgets()
   }
   mode = new_mode
 
@@ -101,7 +102,7 @@ document.addEventListener("click", function(evt) {
       let data = { "{{item_name}}": title, "{{item_command}}": cmd }
       addTemplateToWrapper(wrapper, data, "#template-mini-widget")
     }
-    return
+    return saveWidgets()
   } else if (new_mode_name == "move") {
     wrapper.querySelectorAll(".widget-holder").forEach(item => item.classList.add("jiggle"))
   } else if (new_mode_name == "delete") {
@@ -132,6 +133,7 @@ let gatherBlocks = function(outer_widget) {
     return compactHash({
       logo: item.getAttribute("data-logo"),
       name: item.getAttribute("data-name"),
+      page: item.getAttribute("data-page"),
       command: item.getAttribute("data-command"),
     })
   })
@@ -143,37 +145,39 @@ let gatherWidgets = function() {
     if (item.classList.contains("widget-modal")) {
       let logo = item.getAttribute("data-logo")
       let name = item.getAttribute("data-name")
-      if (!logo) { console.log("[ERROR] Unknown item", item) }
+      let page = item.getAttribute("data-page")
 
-      return compactHash({ name: name, logo: logo, blocks: gatherBlocks(item) })
+      return compactHash({ name: name, logo: logo, page: page, blocks: gatherBlocks(item) })
     } else {
       let type = Array.from(item.classList).filter(klass => klass != "widget")[0]
       if (type) { return { type: type } }
 
       let logo = item.getAttribute("data-logo")
       let name = item.getAttribute("data-name")
-      if (item.parentElement.tagName == "A") {
-        return compactHash({ name: name, logo: logo, page: item.parentElement.getAttribute("href") })
-      } else {
-        console.log("[ERROR] Unknown object", item)
-      }
+      let page = item.getAttribute("data-page")
+
+      return compactHash({ name: name, logo: logo, page: page })
+    }
+  })
+}
+
+let saveWidgets = function() {
+  let url = document.querySelector(".main-wrapper").getAttribute("data-update-url")
+  fetch(url, {
+    method: "PATCH",
+    body: JSON.stringify({ blocks: gatherWidgets() }),
+    headers: {
+      "Content-type": "application/json; charset=UTF-8"
+    }
+  }).then(function(res) {
+    if (res.ok) {
+      console.log("Updated");
     }
   })
 }
 
 window.addEventListener("mousedown", function(e) {
   if (e.button == 2) {
-    let url = document.querySelector(".main-wrapper").getAttribute("data-update-url")
-    fetch(url, {
-      method: "PATCH",
-      body: JSON.stringify({ blocks: gatherWidgets() }),
-      headers: {
-        "Content-type": "application/json; charset=UTF-8"
-      }
-    }).then(function(res) {
-      if (res.ok) {
-        console.log("Updated");
-      }
-    })
+    saveWidgets()
   }
 })

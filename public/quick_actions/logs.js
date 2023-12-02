@@ -2,11 +2,13 @@ import { command } from './command.js';
 
 document.addEventListener("click", function(evt) {
   if (!evt.target.classList.contains("widget-holder")) { return }
-  let cmd = evt.target.querySelector("[data-command]")?.getAttribute("data-command")
-  if (!cmd) { return }
-  if (cmd == ".reload") {
+  let commander = evt.target.querySelector("[data-command]")
+  let cmd = commander?.getAttribute("data-command")
+  let page_cmd = commander?.getAttribute("data-page")
+  if (page_cmd == ".reload") {
     return window.location.reload(true)
   }
+  if (!cmd) { return }
 
   if (cmd.includes("{{")) {
     let req = cmd.match(/\{\{(.*?)\}\}/)[1].trim()
