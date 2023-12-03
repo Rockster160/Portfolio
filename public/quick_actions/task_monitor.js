@@ -3,7 +3,7 @@
 import { Time } from './time.js';
 import { AuthWS } from './auth_ws.js';
 
-class Monitor {
+export class Monitor {
   static #connected = false
   static #monitors = {}
 
@@ -56,7 +56,8 @@ class Monitor {
 
   setTime(new_timestamp) {
     let monitor = this
-    let sync = monitor.ele.querySelector(".last-sync")
+    let sync = monitor.ele?.querySelector(".last-sync")
+    if (!sync) { return }
     if (new_timestamp) { sync.setAttribute("data-timestamp", new_timestamp) }
 
     let timestamp = new_timestamp || parseInt(sync.getAttribute("data-timestamp"))

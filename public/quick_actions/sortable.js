@@ -1,3 +1,4 @@
+import { Monitor } from './task_monitor.js';
 import { command } from './command.js';
 import Sortable from "https://cdn.jsdelivr.net/npm/@shopify/draggable/build/esm/Sortable/Sortable.mjs"
 
@@ -14,7 +15,7 @@ const sortable = new Sortable(document.querySelectorAll(".widget-wrapper"), {
 //   debugger
 //   console.log("sortable:sorted")
 // })
-// sortable.on("sortable:stop", () => console.log("sortable:stop"))
+// sortable.on("sortable:stop", () => saveWidgets())
 
 let modes = ["use", "add", "move", "delete"]
 let mode = 0
@@ -47,7 +48,10 @@ let addTemplateToWrapper = function(wrapper, data, template_id) {
   let template_content = templateContent(template_id)
   let temp = document.createElement("template")
   temp.innerHTML = replacePlaceholders(template_content.outerHTML, data)
-  wrapper.append(templateContent(null, temp))
+  let replaced_content = templateContent(null, temp)
+  if (!data["{{modal_id}}"]) { replaced_content.removeAttribute("data-modal") }
+  if (!data["{{widget_command}}"]) { replaced_content.querySelector(".widget")?.removeAttribute("data-command") }
+  wrapper.append(replaced_content)
 }
 
 let compactHash = function(hash) {
@@ -105,12 +109,12 @@ document.addEventListener("click", function(evt) {
     }
     if (mainWrapper) {
       let data = { "{{widget_name}}": title, "{{widget_display}}": display, "{{modal_id}}": `modal-${hex}` }
-      addTemplateToWrapper(wrapper, data, "#template-main-widget")
+      addTemplateToWrapper(wrapper, data, "#template-widget")
       addTemplateToWrapper(body, data, "#template-modal")
     } else {
       let cmd = prompt("Command")
-      let data = { "{{item_name}}": title, "{{item_display}}": display, "{{item_command}}": cmd }
-      // addTemplateToWrapper(wrapper, data, "#template-mini-widget")
+      let data = { "{{widget_name}}": title, "{{widget_display}}": display, "{{widget_command}}": cmd }
+      addTemplateToWrapper(wrapper, data, "#template-widget")
     }
     return saveWidgets()
   } else if (new_mode_name == "move") {
@@ -124,44 +128,40 @@ document.addEventListener("click", function(evt) {
   })
 })
 
-let gatherBlocks = function(outer_widget) {
-  let modal_id = outer_widget.getAttribute("data-modal")
+let collectWidgetData = function(widget) {
+  let widget_data = {}
+  Array.from(widget.attributes).forEach(attr => {
+    if (attr.name.startsWith("data-")) {
+      widget_data[attr.name.replace("data-", "")] = attr.value
+    }
+  })
+  if (widget_data.type == "buttons") {
+    widget_data.buttons = gatherButtons(widget)
+  }
+
+  return compactHash(widget_data)
+}
+
+let gatherButtons = function(widget) {
+  let modal_id = widget.parentElement.getAttribute("data-modal")
   if (!modal_id) { return [] }
 
   return Array.from(document.querySelectorAll(`#${modal_id} .widget`)).map(item => {
-    return compactHash({
-      logo: item.getAttribute("data-logo"),
-      name: item.getAttribute("data-name"),
-      page: item.getAttribute("data-page"),
-      command: item.getAttribute("data-command"),
-    })
+    return collectWidgetData(item)
   })
 }
 
 let gatherWidgets = function() {
   let widgets = document.querySelectorAll(".main-wrapper > .widget-holder > .widget")
-  return Array.from(widgets).map(item => {
-    if (item.classList.contains("widget-modal")) {
-      let logo = item.getAttribute("data-logo")
-      let name = item.getAttribute("data-name")
-      let page = item.getAttribute("data-page")
-
-      return compactHash({ name: name, logo: logo, page: page, blocks: gatherBlocks(item) })
-    } else {
-      let type = Array.from(item.classList).filter(klass => klass != "widget")[0]
-      if (type) { return { type: type } }
-
-      let logo = item.getAttribute("data-logo")
-      let name = item.getAttribute("data-name")
-      let page = item.getAttribute("data-page")
-
-      return compactHash({ name: name, logo: logo, page: page })
-    }
+  return Array.from(widgets).map(widget => {
+    return collectWidgetData(widget)
   })
 }
 
 let saveWidgets = function() {
+  Monitor.updateStatus()
   command.refreshStatus()
+
   let url = document.querySelector(".main-wrapper").getAttribute("data-update-url")
   fetch(url, {
     method: "PATCH",

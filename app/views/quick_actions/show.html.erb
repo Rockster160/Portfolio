@@ -25,12 +25,12 @@
   <a href="#" class="btn" data-mode="delete">Delete</a>
 </div>
 
-<% locals_data = { widget_data: { name: "{{widget_name}}", display: "{{widget_display}}" }, modal_id: "{{modal_id}}" } %>
+<% placeholders = { name: "{{widget_name}}", display: "{{widget_display}}", command: "{{widget_command}}" } %>
 <!-- Main Widget -->
-<template id="template-main-widget">
-  <%= widget(locals_data) %>
+<template id="template-widget">
+  <%= widget(placeholders, modal: "{{modal_id}}") %>
 </template>
 <!-- Modal -->
 <template id="template-modal">
-  <%= render partial: "widget_modal", locals: locals_data %>
+  <%= render partial: "widget_modal", locals: { widget_data: placeholders, modal_id: "{{modal_id}}" } %>
 </template>
