@@ -1,8 +1,9 @@
 import { command } from './command.js';
 
 document.addEventListener("click", function(evt) {
-  if (!evt.target.classList.contains("widget-holder")) { return }
-  let commander = evt.target.querySelector("[data-command]")
+  let widget = evt.target.closest(".widget-holder")
+  if (!widget) { return }
+  let commander = widget.querySelector("[data-command]")
   let cmd = commander?.getAttribute("data-command")
   let page_cmd = commander?.getAttribute("data-page")
   if (page_cmd == ".reload") {
