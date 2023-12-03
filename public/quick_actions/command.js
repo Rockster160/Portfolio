@@ -16,7 +16,7 @@ function addMessage(direction, msg) {
     showFlash(msg)
   }
 
-  modal.querySelector(".messages").prepend(div)
+  modal?.querySelector(".messages")?.prepend(div)
 }
 
 export let command = new Widget("command", function() {

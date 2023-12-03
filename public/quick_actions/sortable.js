@@ -27,13 +27,9 @@ let templateContent = function(id, temp) {
 }
 
 let randomHex = function(bytes=8) {
-  // fill typed array with random numbers
-  // from 0..255 per entry
   const array = new Uint8Array(bytes)
   window.crypto.getRandomValues(array)
 
-  // wrap to array and convert numbers to hex
-  // then join to single string
   return [...array].map(n => n.toString(16)).join("")
 }
 

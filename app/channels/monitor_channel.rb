@@ -1,4 +1,12 @@
 class MonitorChannel < ApplicationCable::Channel
+  def self.started(task)
+    broadcast_to(
+      task.user,
+      id: task.id,
+      loading: true,
+    )
+  end
+
   def self.send_task(task)
     broadcast_to(
       task.user,
