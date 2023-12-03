@@ -307,7 +307,7 @@ i.emoji {
     }
   }
 
-  &.mini-widgets .modal-content {
+  &.widget-modal .modal-content {
     position: relative;
     padding: 30px;
 
@@ -320,6 +320,9 @@ i.emoji {
         width: 80px;
         height: 80px;
         position: relative;
+        color: $blue-d4;
+        font-size: 16px;
+        font-weight: bold;
 
         .widget {
         }
@@ -342,14 +345,6 @@ i.emoji {
           }
         }
       }
-    }
-  }
-
-  &#drugs-modal .modal-content {
-    .mini-widget {
-      color: $blue-d4;
-      font-size: 16px;
-      font-weight: bold;
     }
   }
 

@@ -88,7 +88,7 @@ document.addEventListener("click", function(evt) {
   // TODO: Delete not working for specials (running their command)
   let body = document.querySelector("body")
   let mainWrapper = true
-  let wrapper = document.querySelector(".modal.mini-widgets.show .widget-wrapper")
+  let wrapper = document.querySelector(".widget-modal.show .widget-wrapper")
   if (wrapper) { mainWrapper = false }
   wrapper = wrapper || document.querySelector(".main-wrapper.widget-wrapper")
 
@@ -110,7 +110,7 @@ document.addEventListener("click", function(evt) {
     } else {
       let cmd = prompt("Command")
       let data = { "{{item_name}}": title, "{{item_display}}": display, "{{item_command}}": cmd }
-      addTemplateToWrapper(wrapper, data, "#template-mini-widget")
+      // addTemplateToWrapper(wrapper, data, "#template-mini-widget")
     }
     return saveWidgets()
   } else if (new_mode_name == "move") {

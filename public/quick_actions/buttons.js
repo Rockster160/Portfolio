@@ -1,14 +1,14 @@
 import { command } from './command.js';
 
 document.addEventListener("click", function(evt) {
-  let widget = evt.target.closest(".widget-holder")
-  if (!widget) { return }
-  let commander = widget.querySelector("[data-command]")
-  let cmd = commander?.getAttribute("data-command")
-  let page_cmd = commander?.getAttribute("data-page")
-  if (page_cmd == ".reload") {
-    return window.location.reload(true)
-  }
+  let wrapper = evt.target.closest(".widget-holder")
+  if (!wrapper) { return }
+
+  let widget = wrapper.querySelector(".widget")
+  let page_cmd = widget.getAttribute("data-page")
+  if (page_cmd == ".reload") { return window.location.reload(true) }
+
+  let cmd = widget.getAttribute("data-command")
   if (!cmd) { return }
 
   if (cmd.includes("{{")) {

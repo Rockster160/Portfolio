@@ -3,5 +3,5 @@
 <%= widget(widget_data, modal: modal_id) %>
 
 <% content_for :modals do %>
-  <%= render partial: "mini_widget_modal", locals: { widget_data: widget_data, modal_id: modal_id } %>
+  <%= render partial: "widget_modal", locals: { widget_data: widget_data, modal_id: modal_id } %>
 <% end %>

@@ -1,23 +1,35 @@
 module QuickActionsHelper
   def widget(data, **extra_data, &block)
-    content_tag(:div, class: "widget-holder", data: extra_data) do
+    page_tag = data[:type]&.to_sym == :page
+    tag = page_tag ? :a : :div
+    wrapper_data = {
+      href: page_tag ? data[:page] : nil,
+      target: page_tag ? :_blank : nil,
+    }.compact
+
+    content_tag(tag, { class: "widget-holder", data: extra_data }.merge(wrapper_data)) do
       concat content_tag(:div, "❌", class: "delete-widget hidden")
       concat(content_tag(:div, class: :widget, data: data.except(:buttons)) do
-        block&.call || data[:display] || mrkdwn(data[:name] || data[:logo])
+        if block_given?
+          block.call
+        elsif data[:display].present?
+          data[:display]
+        elsif
+          concat mrkdwn(data[:logo])
+          concat content_tag(:span, class: data[:logo].present? ? :title : nil) { mrkdwn(data[:name]) }
+        end
       end)
     end
   end
 
   def img(filename)
-    emoji("<img src='/#{filename}.png'/>")
+    emoji("<img src='/#{filename}.png'/>".html_safe)
   end
 
-  def emoji(icon)
-    "<i class=\"emoji\">#{icon}</i>"
-  end
-
-  def emoji_stack(*icons)
-    "<div class=\"emoji-stack\">#{icons.map { |i| emoji(i) }.join("")}</div>"
+  def emoji(icon, extra_classes=nil, style: nil)
+    content_tag(:i, class: "emoji #{extra_classes}", style: style) do
+      icon
+    end
   end
 
   def clean_md(md)
@@ -26,9 +38,12 @@ module QuickActionsHelper
 
   def mrkdwn(md)
     md.to_s
-      .gsub(/([\p{So}\p{Sk}\p{Sm}\p{Sc}\p{S}\p{C}]+)/) { |f| "<i class=\"emoji\">#{Regexp.last_match(1)}</i>" }
-      .gsub(/\[ico (.*?)(( \w+: .*?;)*)\]/) { |f| "<i class=\"emoji ti ti-#{Regexp.last_match(1)}\" style=\"#{Regexp.last_match(2)}\"></i>" }
-      .gsub(/\[img (.*?)\]/) { |f| emoji("<img src=\"./#{Regexp.last_match(1)}.png\"/>") }
-      .html_safe
+      .gsub(/([\p{So}\p{Sk}\p{Sm}\p{Sc}\p{S}\p{C}]+)/) { |f|
+        emoji(Regexp.last_match(1))
+      }.gsub(/\[ico (.*?)(( \w+: .*?;)*)\]/) { |f|
+        emoji(nil, "ti ti-#{Regexp.last_match(1)}", style: Regexp.last_match(2))
+      }.gsub(/\[img (.*?)\]/) { |f|
+        img(Regexp.last_match(1))
+      }.html_safe
   end
 end

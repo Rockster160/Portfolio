@@ -12,7 +12,7 @@ function addMessage(direction, msg) {
   div.classList.add(direction)
   div.textContent = msg
 
-  if (direction == "in") {
+  if (direction == "in") { // && command modal is closed (don't show if open)
     showFlash(msg)
   }
 
