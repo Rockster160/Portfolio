@@ -8,8 +8,8 @@
       <a href="#" class="btn" data-mode="delete">Delete</a>
     </div>
     <div class="mini-widgets widget-wrapper">
-      <% widget[:blocks]&.each do |item| %>
-        <%= render partial: "mini_widget", locals: { item: item } %>
+      <% widget_data[:buttons]&.each do |item| %>
+        <%= widget(item) %>
       <% end %>
     </div>
   </div>

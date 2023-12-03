@@ -47,6 +47,7 @@
     sleep 0.2 if @test_mode
     ActionCable.server.broadcast("jil_#{@task.id}_channel", { done: true, output: @ctx[:msg].join("\n") })
     @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx, last_result_val: @ctx[:last_val])
+    MonitorChannel.send_task(@task) if @task.monitor?
     @ctx[:msg]#.join("\n")
   end
 

@@ -53,6 +53,7 @@ class JarvisTask < ApplicationRecord
     :function,
     :travel,
     :prompt_response,
+    :monitor,
   ]
 
   enum trigger: {
@@ -71,6 +72,7 @@ class JarvisTask < ApplicationRecord
     calendar:          11,
     travel:            12,
     prompt_response:   13,
+    monitor:           14,
   }
 
   enum output_type: {
@@ -197,6 +199,11 @@ class JarvisTask < ApplicationRecord
       [["WS Receive Data", [
         { return: :hash },
         "WS Receive Data"
+      ]]]
+    elsif monitor?
+      [["Executing?", [
+        { return: :bool },
+        "Executing?"
       ]]]
     end
   end

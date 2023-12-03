@@ -1,6 +1,11 @@
 module QuickActionsHelper
-  def mini_widgets(widget)
-    render partial: "mini_widgets", locals: { widget: widget }
+  def widget(data, **extra_data, &block)
+    content_tag(:div, class: "widget-holder", data: extra_data) do
+      concat content_tag(:div, "❌", class: "delete-widget hidden")
+      concat(content_tag(:div, class: :widget, data: data.except(:buttons)) do
+        block&.call || data[:display] || mrkdwn(data[:name] || data[:logo])
+      end)
+    end
   end
 
   def img(filename)

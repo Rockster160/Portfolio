@@ -14,12 +14,8 @@
 <% end %>
 
 <div class="widget-wrapper main-wrapper" data-update-url="<%= jarvis_page_path %>">
-  <% @page.blocks.each do |widget| %>
-    <% if widget.key?(:type) %>
-      <%= render partial: widget[:type] %>
-    <% else %>
-      <%= mini_widgets(widget) %>
-    <% end %>
+  <% @page.blocks.each do |widget_data| %>
+    <%= render partial: widget_data[:type], locals: { widget_data: widget_data } %>
   <% end %>
 </div>
 
@@ -29,14 +25,14 @@
   <a href="#" class="btn" data-mode="delete">Delete</a>
 </div>
 
-<% local_data = { widget: { name: "{{widget_name}}", display: "{{widget_display}}" }, modal_id: "{{modal_id}}" } %>
+<% locals_data = { widget_data: { name: "{{widget_name}}", display: "{{widget_display}}" }, modal_id: "{{modal_id}}" } %>
 <!-- Main Widget -->
 <template id="template-main-widget">
-  <%= render partial: "main_widget", locals: local_data %>
+  <%= widget(locals_data) %>
 </template>
 <!-- Modal -->
 <template id="template-modal">
-  <%= render partial: "mini_widget_modal", locals: local_data %>
+  <%= render partial: "mini_widget_modal", locals: locals_data %>
 </template>
 <!-- Mini Widget -->
 <template id="template-mini-widget">

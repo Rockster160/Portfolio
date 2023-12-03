@@ -5,14 +5,6 @@ export function hideModal(id) {
   document.querySelector(`#${id}`).classList.remove("show")
 }
 
-document.querySelectorAll(".close").forEach((close) => {
-  close.addEventListener("click", function(evt) {
-    const target = evt.target.closest(".modal")
-
-    target.classList.remove("show")
-  })
-})
-
 export function resizeModal() {
   if (!window.visualViewport) { return }
 
@@ -23,6 +15,14 @@ export function resizeModal() {
     if (modal) { modal.style.height = window.visualViewport.height - 40 + "px" }
   }, 600)
 }
+
+document.querySelectorAll(".close").forEach((close) => {
+  close.addEventListener("click", function(evt) {
+    const target = evt.target.closest(".modal")
+
+    target.classList.remove("show")
+  })
+})
 
 window.addEventListener("resize", resizeModal)
 window.addEventListener("focusout", function() {
@@ -49,8 +49,7 @@ document.addEventListener("click", function(evt) {
   if (x < 30 || y < 30 || x > w-30 || y > h-30) {
     document.querySelector(".modal.show")?.classList?.remove("show")
   }
-  let modalSelector = evt.target.classList.contains("widget-holder") ? evt.target.querySelector("[data-modal]") : evt.target
-  let modal_id = modalSelector?.getAttribute("data-modal")
+  let modal_id = evt.target.closest("[data-modal]")?.getAttribute("data-modal")
   if (modal_id) {
     showModal(modal_id)
   }
