@@ -278,6 +278,7 @@ i.emoji {
     height: 100%;
     color: $text-color;
     overflow: auto;
+    box-shadow: 1px 1px 4px 2px $grey-dark, inset 0 0 0 0 $grey-dark;
   }
 
   .close {
@@ -327,7 +328,7 @@ i.emoji {
         .widget {
         }
 
-        .title {
+        .subtitle {
           position: absolute;
           left: 0;
           right: 0;
@@ -344,6 +345,25 @@ i.emoji {
             border: none;
           }
         }
+      }
+    }
+  }
+
+  &#widget-form {
+    margin: 40px auto;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 100%;
+    width: 400px;
+    height: calc(100% - 80px);
+
+    form {
+      margin: 30px;
+      font-size: 28px;
+
+      select {
+        width: 100%;
       }
     }
   }

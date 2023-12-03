@@ -1,17 +1,21 @@
 export function showModal(id) {
-  document.querySelector(`#${id}`).classList.add("show")
+  document.querySelector(`#${id}`)?.classList?.add("show")
 }
 export function hideModal(id) {
-  document.querySelector(`#${id}`).classList.remove("show")
+  document.querySelector(`#${id}`)?.classList?.remove("show")
+}
+export function hideCurrentModal() {
+  let open_modals = document.querySelectorAll(".modal.show")
+  open_modals[open_modals.length -1]?.classList?.remove("show")
 }
 
 export function resizeModal() {
   if (!window.visualViewport) { return }
 
-  let modal = document.querySelector(".modal.show")
+  let modal = document.querySelector(".modal.show#command-modal")
   if (modal) { modal.style.height = window.visualViewport.height - 40 + "px" }
   setTimeout(function() {
-    let modal = document.querySelector(".modal.show")
+    let modal = document.querySelector(".modal.show#command-modal")
     if (modal) { modal.style.height = window.visualViewport.height - 40 + "px" }
   }, 600)
 }
@@ -39,7 +43,7 @@ document.querySelectorAll(".modal").forEach((modal) => {
 
 document.addEventListener("keydown", function(event) {
   if (event.key === "Escape") {
-    document.querySelector(".modal.show")?.classList?.remove("show")
+    hideCurrentModal()
   }
 })
 document.addEventListener("click", function(evt) {
@@ -47,7 +51,7 @@ document.addEventListener("click", function(evt) {
   let w = window.outerWidth, h = window.outerHeight
 
   if (x < 30 || y < 30 || x > w-30 || y > h-30) {
-    document.querySelector(".modal.show")?.classList?.remove("show")
+    hideCurrentModal()
   }
   let modal_id = evt.target.closest("[data-modal]")?.getAttribute("data-modal")
   if (modal_id) {

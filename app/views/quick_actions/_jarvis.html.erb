@@ -1,0 +1,25 @@
+<div class="widget-holder">
+  <div class="delete-widget hidden">❌</div>
+  <div class="widget command">
+    Command
+
+    <span class="disconnected"></span>
+  </div>
+</div>
+
+<% content_for :modals do %>
+  <div class="modal" id="command-modal" tabindex="-1">
+    <div class="status"></div>
+    <div class="close">
+      <i class="ti ti-fa-close"></i>
+    </div>
+    <div class="modal-content">
+      <div class="messages">
+        <div class="message in">What can I do for you?</div>
+      </div>
+      <div class="text-entry">
+        <input type="text" name="" value="">
+      </div>
+    </div>
+  </div>
+<% end %>

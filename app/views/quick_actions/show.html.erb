@@ -13,8 +13,9 @@
   <meta name="theme-color" content="#00102B">
 <% end %>
 
-<div class="widget-wrapper main-wrapper" data-update-url="<%= jarvis_page_path %>">
+<div class="widget-wrapper main-wrapper" data-update-url="<%= jarvis_page_path %>" data-widget-url="<%= render_widget_jarvis_page_path %>">
   <% @page.blocks.each do |widget_data| %>
+    <% next if widget_data[:type].blank? %>
     <%= render partial: widget_data[:type], locals: { widget_data: widget_data } %>
   <% end %>
 </div>
@@ -25,12 +26,63 @@
   <a href="#" class="btn" data-mode="delete">Delete</a>
 </div>
 
-<% placeholders = { name: "{{widget_name}}", display: "{{widget_display}}", command: "{{widget_command}}" } %>
-<!-- Main Widget -->
-<template id="template-widget">
-  <%= widget(placeholders, modal: "{{modal_id}}") %>
-</template>
-<!-- Modal -->
-<template id="template-modal">
-  <%= render partial: "widget_modal", locals: { widget_data: placeholders, modal_id: "{{modal_id}}" } %>
-</template>
+<% content_for :modals do %>
+  <div class="modal widget-form-modal" id="widget-form" tabindex="-1">
+    <div class="close"><i class="ti ti-fa-close"></i></div>
+    <div class="modal-content">
+      <form class="basic widget-form">
+        <label for="widget-type">*Type</label>
+        <select name="type" id="widget-type" required=true>
+          <option value="buttons">Buttons</option>
+          <option value="command">Command</option>
+          <option value="page">Open Page</option>
+          <option value="task">JIL Task</option>
+          <option value="jarvis">Text Jarvis</option>
+        </select>
+
+        <div data-watches-selector="#widget-type" data-watches-value="!task">
+          <label for="title">*Title</label>
+          <input type="text" name="title" id="title" required=true>
+
+          <label for="subtitle">SubTitle</label>
+          <input type="text" name="subtitle" id="subtitle" value="">
+        </div>
+
+        <div data-watches-selector="#widget-type" data-watches-value="command">
+          <label for="command">*Command</label>
+          <input type="text" name="command" id="command" required=true>
+        </div>
+
+        <div data-watches-selector="#widget-type" data-watches-value="page">
+          <label for="page">*URL</label>
+          <input type="text" name="page" id="page" required=true>
+        </div>
+
+        <div data-watches-selector="#widget-type" data-watches-value="task">
+          <label for="task-id">*Task ID</label>
+          <input type="text" name="task-id" id="task-id" required=true>
+
+          <label class="switch">
+            <%= check_box_tag "task-text-wrap", true, false %>
+            <span class="slider"></span>
+          </label>
+          <label for="task-text-wrap">Text Wrap</label> <br>
+
+          <label class="switch">
+            <%= check_box_tag "task-center-text", true, true %>
+            <span class="slider"></span>
+          </label>
+          <label for="task-center-text">Center Text</label> <br>
+
+          <label class="switch">
+            <%= check_box_tag "task-vert-center", true, true %>
+            <span class="slider"></span>
+          </label>
+          <label for="task-vert-center">Vert Center Text</label> <br>
+        </div>
+
+        <input type="submit" name="submit" value="Add">
+      </form>
+    </div>
+  </div>
+<% end %>

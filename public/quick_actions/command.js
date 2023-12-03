@@ -50,6 +50,7 @@ command.refreshStatus = function() {
 
 modal?.querySelector("input")?.addEventListener("keypress", function(evt) {
   if (evt.key == "Enter") {
+    console.log("Enter");
     let input = modal.querySelector("input")
 
     if (input.value.toLowerCase().trim() == "reload") {

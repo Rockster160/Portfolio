@@ -13,10 +13,12 @@ module QuickActionsHelper
         if block_given?
           block.call
         elsif data[:display].present?
-          data[:display]
+          data[:display] # Only used for a placeholder
         elsif
-          concat mrkdwn(data[:logo])
-          concat content_tag(:span, class: data[:logo].present? ? :title : nil) { mrkdwn(data[:name]) }
+          concat mrkdwn(data[:title])
+          if data[:subtitle].present?
+            concat(content_tag(:span, class: :subtitle) { mrkdwn(data[:subtitle]) })
+          end
         end
       end)
     end
