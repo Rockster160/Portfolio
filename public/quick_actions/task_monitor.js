@@ -50,8 +50,12 @@ export class Monitor {
     })
   }
 
-  set loading(bool) { this.ele.querySelector(".loading").classList.toggle("hidden", !bool) }
-  set content(lines) { this.ele.querySelector(".lines").textContent = lines }
+  set loading(bool) { this.ele?.querySelector(".loading")?.classList?.toggle("hidden", !bool) }
+  set content(lines) {
+    let my_lines = this.ele.querySelector(".lines")
+    if (!my_lines) { return }
+    my_lines.textContent = lines
+  }
   set timestamp(new_timestamp) { this.setTime(new_timestamp) }
 
   setTime(new_timestamp) {
