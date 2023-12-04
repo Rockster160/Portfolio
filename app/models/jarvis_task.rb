@@ -57,7 +57,6 @@ class JarvisTask < ApplicationRecord
   ]
 
   enum trigger: {
-    callable:          14,
     cron:              0,
     action_event:      1,
     tell:              2,
@@ -72,7 +71,8 @@ class JarvisTask < ApplicationRecord
     calendar:          11,
     travel:            12,
     prompt_response:   13,
-    monitor:           14,
+    callable:          14,
+    monitor:           15,
   }
 
   enum output_type: {
