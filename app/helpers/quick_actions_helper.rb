@@ -15,7 +15,7 @@ module QuickActionsHelper
         elsif data[:display].present?
           data[:display] # Only used for a placeholder
         elsif
-          concat mrkdwn(data[:title])
+          concat(content_tag(:span, class: :title) { mrkdwn(data[:title]) })
           if data[:subtitle].present?
             concat(content_tag(:span, class: :subtitle) { mrkdwn(data[:subtitle]) })
           end
