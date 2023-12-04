@@ -5,14 +5,14 @@ import { showModal, hideModal } from './modal.js';
 let modes = ["use", "add", "move", "delete"]
 let mode = 0
 
-let templateContent = function(id, temp) {
+export let templateContent = function(id, temp) {
   let template = temp || document.querySelector(id)
   let content = template.content.children
 
   return content.length == 1 ? content[0] : content
 }
 
-let htmlToNode = function(html) {
+export let htmlToNode = function(html) {
   let temp = document.createElement("template")
   temp.innerHTML = html
   return templateContent(null, temp)

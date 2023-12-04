@@ -1,7 +1,8 @@
-// Make sure new objects sync the status correctly
+// Make sure new Adding new Monitor sets the connected status correctly
 
 import { Time } from './time.js';
 import { AuthWS } from './auth_ws.js';
+import { toMd } from './md_render.js';
 
 export class Monitor {
   static #connected = false
@@ -54,7 +55,7 @@ export class Monitor {
   set content(lines) {
     let my_lines = this.ele?.querySelector(".lines")
     if (!my_lines) { return }
-    my_lines.textContent = lines
+    my_lines.innerHTML = lines
   }
   set timestamp(new_timestamp) { this.setTime(new_timestamp) }
 
@@ -87,7 +88,7 @@ Monitor.socket = new AuthWS("MonitorChannel", {
 
     monitor.loading = false
     monitor.timestamp = data.timestamp * 1000
-    monitor.content = data.result
+    monitor.content = toMd(data.result)
   },
   onopen: function() {
     console.log("MonitorChannel.onopen");

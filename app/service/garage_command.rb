@@ -5,7 +5,10 @@ module GarageCommand
     state = state.to_sym
     return unless state.in?([:open, :closed, :between])
 
-    User.me.jarvis_cache.set(:garage_state, state)
+    User.me.jarvis_cache.set(:garage_state, state) # deprecated
+    User.me.jarvis_cache.set(:garage, { state: state, timestamp: Time.current.to_i })
+    # Task #67 is the Garage Cell - Should just be using the Task Websocket
+    JarvisTask.find(67).execute
   end
 
   def command(dir_str)
