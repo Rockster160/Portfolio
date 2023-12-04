@@ -14,8 +14,14 @@ export class Widget {
     if (!this.wrapper) { return }
 
     if (touch_callback && typeof(touch_callback) === "function") {
-      this.wrapper.addEventListener("click", touch_callback)
-      this.wrapper.addEventListener("ontouchstart", touch_callback)
+      this.wrapper.addEventListener("click", function(evt) {
+        if (evt.cancelBubble) { return }
+        touch_callback(evt)
+      })
+      this.wrapper.addEventListener("ontouchstart", function(evt) {
+        if (evt.cancelBubble) { return }
+        touch_callback(evt)
+      })
     }
     let refresh_btn = this.wrapper.querySelector(".refresh")
     refresh_btn?.addEventListener("click", function(evt) {

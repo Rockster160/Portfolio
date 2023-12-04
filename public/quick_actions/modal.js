@@ -46,7 +46,10 @@ document.addEventListener("keydown", function(event) {
     hideCurrentModal()
   }
 })
+
 document.addEventListener("click", function(evt) {
+  if (evt.cancelBubble) { return }
+
   let x = evt.clientX, y = evt.clientY
   let w = window.outerWidth, h = window.outerHeight
 

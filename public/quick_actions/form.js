@@ -66,14 +66,6 @@ document.addEventListener("submit", function(evt) {
 })
 
 document.addEventListener("click", function(evt) {
-  if (!evt.target.classList.contains("delete-widget")) { return }
-
-  evt.preventDefault()
-  evt.stopPropagation()
-  evt.target.parentElement.remove()
-  return false
-})
-document.addEventListener("click", function(evt) {
   let mode_name = evt.target.getAttribute("data-mode")
   if (!mode_name) { return }
 

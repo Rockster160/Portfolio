@@ -1,3 +1,4 @@
+import "./quick_actions/listener.js";
 import "./quick_actions/form.js";
 import "./quick_actions/modal.js";
 import "./quick_actions/sortable.js";

@@ -1,6 +1,8 @@
 import { command } from './command.js';
 
 document.addEventListener("click", function(evt) {
+  if (evt.cancelBubble) { return }
+
   let wrapper = evt.target.closest(".widget-holder")
   if (!wrapper) { return }
 
