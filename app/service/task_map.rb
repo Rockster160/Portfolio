@@ -83,14 +83,14 @@ class TaskMap
       # ],
       # Vars exist only during the current running task
       get_var:      [
-        { return: :any },
+        { return: :str },
         { block: :str, name: :name },
       ],
       set_var:      [
-        { return: :any },
+        { return: :str },
         { block: :str, name: :name },
         :value,
-        { block: :any },
+        { block: :str },
       ],
       # Cache is permanent across all tasks
       get_cache:    [
