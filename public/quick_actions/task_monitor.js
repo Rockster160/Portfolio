@@ -52,7 +52,7 @@ export class Monitor {
 
   set loading(bool) { this.ele?.querySelector(".loading")?.classList?.toggle("hidden", !bool) }
   set content(lines) {
-    let my_lines = this.ele.querySelector(".lines")
+    let my_lines = this.ele?.querySelector(".lines")
     if (!my_lines) { return }
     my_lines.textContent = lines
   }
