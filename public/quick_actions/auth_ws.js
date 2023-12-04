@@ -17,10 +17,8 @@ class SimpleWS {
     setInterval(function() {
       if ((new Date()).getTime() - sws.last_ping > 5_000) {
         console.log("No ping found! Attempting to close to trigger reconnect...");
-        if (sock.open) {
-          sws.socket?.close()
-          sws.open = false
-        }
+        sws.socket?.close()
+        sws.open = false
         sws.setupSocket(sws.init_data.url)
       }
     }, 5_000)
