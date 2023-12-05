@@ -117,12 +117,10 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   def ws
     channel, data = evalargs
     # Broadcast.to(jil.task.user, channel, data)
-    SocketChannel.broadcast_to(
+    SocketChannel.send_to(
       jil.task.user,
-      {
-        id: jil.task.id,
-        channel_id: channel,
-      }.reverse_merge(data)
+      channel,
+      data,
     )
   end
 end

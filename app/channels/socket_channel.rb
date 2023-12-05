@@ -1,6 +1,10 @@
 class SocketChannel < ApplicationCable::Channel
+  def self.send_to(user, channel, data)
+    SocketChannel.broadcast_to("socket_#{user.id}_#{channel}", data)
+  end
+
   def subscribed
-    stream_for current_user, channel_id: params[:channel_id]
+    stream_for "socket_#{current_user.id}_#{params[:channel_id]}"
   end
 
   def receive(data)
