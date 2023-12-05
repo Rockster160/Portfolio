@@ -21,13 +21,16 @@ class MonitorChannel < ApplicationCable::Channel
   end
 
   def receive(data)
-    # data.deep_symbolize_keys!
-    return unless data["channel_name"].present?
+    data.deep_symbolize_keys!
+    return unless data[:channel_name].present?
 
     ::Jarvis.execute_trigger(
       :websocket,
       { input_vars: { "WS Receive Data" => data.reverse_merge(params) } },
-      scope: ["user_id = #{current_user.id} AND input ~* ? OR input = '*'", "\\m#{params["channel_name"]}\\M",]
+      scope: [
+        "user_id = #{current_user.id} AND (input ~* ? OR input = '*')",
+        "\\m#{data[:channel_name]}\\M"
+      ]
     )
   end
 
