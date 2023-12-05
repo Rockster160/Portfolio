@@ -1,3 +1,4 @@
+# Deprecated in favor of MonitorChannel(garage)
 class GarageChannel < ApplicationCable::Channel
   def subscribed
     stream_from "garage_channel"

@@ -116,6 +116,6 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
 
   def ws
     channel, data = evalargs
-    ActionCable.server.broadcast(channel, data)
+    Broadcast.to(jil.task.user, channel, data)
   end
 end

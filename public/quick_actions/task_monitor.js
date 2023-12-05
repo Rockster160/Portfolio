@@ -106,6 +106,9 @@ setInterval(function() {
 }, 1000)
 
 document.addEventListener("click", function(evt) {
+  evt.preventDefault()
+  evt.stopPropagation()
+
   let refreshBtn = evt.target.closest(".refresh")
   let monitor = Monitor.from(refreshBtn?.closest(".widget[data-type='monitor']"))
   if (monitor) { return monitor.refresh() }

@@ -1,3 +1,4 @@
+# Deprecated in favor of MonitorChannel(garage)
 module GarageCommand
   module_function
 

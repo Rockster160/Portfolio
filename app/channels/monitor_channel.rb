@@ -20,6 +20,20 @@ class MonitorChannel < ApplicationCable::Channel
     stream_for current_user
   end
 
+  def receive(data)
+    data.deep_symbolize_keys!
+    return unless data[:channel_name].present?
+
+    ::Jarvis.execute_trigger(
+      :websocket,
+      { input_vars: { "WS Receive Data" => data.reverse_merge(params) } },
+      scope: [
+        { user_id: current_user.id },
+        "input ~* ? OR input = '*'", "\\m#{params[:channel_name]}\\M",
+      ]
+    )
+  end
+
   def execute(data) # Runs task with executing:true
     task = current_user.jarvis_tasks.find(data["id"])
 

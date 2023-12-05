@@ -23,9 +23,6 @@ let emoji = function(icon, extraClasses = null, { style } = {}) {
   ele.className = `emoji ${extraClasses || ''}`
   if (style) {
     ele.setAttribute("style", style)
-    // Object.keys(style).forEach((key) => {
-    //   ele.style[key] = style[key]
-    // })
   }
 
   return ele.outerHTML

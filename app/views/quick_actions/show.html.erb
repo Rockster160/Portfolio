@@ -60,10 +60,10 @@
 
         <div data-watches-selector="#widget-type" data-watches-value="monitor">
           <label for="task-id">*Task ID</label>
-          <input type="text" name="task-id" id="task-id" required=true>
+          <input type="number" name="task-id" id="task-id" required=true>
 
           <label class="switch">
-            <%= check_box_tag "task-text-wrap", true, false %>
+            <%= check_box_tag "task-text-wrap", true, true %>
             <span class="slider"></span>
           </label>
           <label for="task-text-wrap">Text Wrap</label> <br>
