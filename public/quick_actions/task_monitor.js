@@ -129,3 +129,11 @@ document.addEventListener("click", function(evt) {
     return
   }
 })
+
+window.addEventListener("load", function() {
+  setTimeout(function() {
+    document.querySelectorAll(".widget[data-type='monitor'] .loading:not(.hidden)").forEach(item => {
+      Monitor.from(item.closest(".widget"))?.resync()
+    })
+  }, 500)
+})
