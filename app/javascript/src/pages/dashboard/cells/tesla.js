@@ -101,7 +101,8 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       lines.push("")
     }
 
-    let notify = cell.data.failed ? Text.color(dash_colors.orange, "[FAILED]") : ""
+    let notify = cell.data.sleeping ? Text.color(dash_colors.grey, "[sleep]") : ""
+    notify = cell.data.failed ? Text.color(dash_colors.orange, "[FAILED]") : ""
     notify = cell.data.forbidden ? Text.color(dash_colors.orange, "[AUTH]") : notify
     lines.push(Text.justify(notify, timeago(data.timestamp)))
 

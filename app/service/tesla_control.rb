@@ -208,7 +208,10 @@ class TeslaControl
 
   def vehicle_data
     @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data")&.tap { |car_data|
+      cached_vehicle_data.merge!(car_data) if car_data[:sleeping]
+
       User.me.jarvis_cache.set(:car_data, car_data)
+      break if car_data[:sleeping]
       # Disabling as it can cause inaccuracies when the bluetooth fails to send
       # LocationCache.driving = !((car_data.dig(:drive_state, :shift_state) || "P") == "P")
 
@@ -359,7 +362,7 @@ class TeslaControl
     SlackNotifier.notify("Failed to parse json from Tesla#wake_vehicle:\nCode: #{res.code}\n```#{res.body}```")
   end
 
-  def get(endpoint)
+  def get(endpoint, wake: false)
     raise "Should not GET in tests!" if Rails.env.test?
     raise TeslaError, "Currently Forbidden!" if DataStorage[:tesla_forbidden]
     raise "Cannot get without access token" if @access_token.blank?
@@ -376,7 +379,11 @@ class TeslaControl
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
     SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
   rescue RestClient::ExceptionWithResponse => err
-    return wake_up && retry if err.response&.code == 408
+    if wake
+      return { sleeping: true }
+    else
+      return wake_up && retry if err.response&.code == 408
+    end
     return refresh && retry if err.response&.code == 401
     raise err
   rescue JSON::ParserError => err
