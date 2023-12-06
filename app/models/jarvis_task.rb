@@ -88,7 +88,7 @@ class JarvisTask < ApplicationRecord
     keyval:   9,
   }, _prefix: :output #.output_any?
 
-  def self.find_by_uuid(uuid) = find_by!(uuid: id)
+  def self.find_by_uuid(uuid) = find_by!(uuid: uuid)
   def self.anyfind(id)
     case id.to_s
     when /^(\w+-)+\w+$/i then find_by_uuid(id)
