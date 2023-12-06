@@ -32,12 +32,12 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
 
   def prompt
     user = jil.task.user
-    question, options, data, task = evalargs
+    question, options, data, task_id = evalargs
     prompt = user.prompts.create(
       question:    question,
       options:     options,
       params:      data,
-      task:        user.jarvis_tasks.find_by!(name: task),
+      task:        user.jarvis_tasks.anyfind(task_id),
       # answer_type: "",
     )
     jil.ctx[:msg] += prompt.errors.full_messages unless prompt.persisted?
@@ -60,7 +60,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
 
   def run
     name, timestamp = evalargs
-    run_task = jil.task.user.jarvis_tasks.find_by!(name: name)
+    run_task = jil.task.user.jarvis_tasks.anyfind(name)
 
     if timestamp
       # TODO: The ctx[:i] will not be passed back- this can be used to bypass block limitations
@@ -90,7 +90,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def schedule
-    cmd, timestamp = evalargs
+    cmd, timestamp, data = evalargs
 
     # TODO: The ctx[:i] will not be passed- this can be used to bypass block limitations
     # Not sure how to work around this...

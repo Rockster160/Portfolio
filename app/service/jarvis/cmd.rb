@@ -15,7 +15,8 @@ class Jarvis::Cmd < Jarvis::Action
 
     return false unless tasks.any?
 
-    command = tasks.find_by("? ILIKE CONCAT('%', friendly_id, '%""')", simple_words)
+    command = tasks.find_by(uuid: simple_words)
+    command ||= tasks.find_by("? ILIKE CONCAT('%', friendly_id, '%""')", simple_words)
     command ||= tasks.find_by("? ILIKE CONCAT('%', REGEXP_REPLACE(friendly_id, '[^a-z]', '', 'i'), '%')", simple_words.gsub(/[^a-z]/i, ""))
 
     return false unless command.present?

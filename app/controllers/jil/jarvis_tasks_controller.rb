@@ -18,13 +18,13 @@ class Jil::JarvisTasksController < ApplicationController
   end
 
   def edit
-    @task = current_user.jarvis_tasks.find(params[:id])
+    @task = current_user.jarvis_tasks.anyfind(params[:id])
 
     render :form
   end
 
   def update
-    @task = current_user.jarvis_tasks.find(params[:id])
+    @task = current_user.jarvis_tasks.anyfind(params[:id])
     @task.update(task_params)
     ::BroadcastUpcomingWorker.perform_async
 
@@ -45,7 +45,7 @@ class Jil::JarvisTasksController < ApplicationController
   end
 
   def duplicate
-    old_task = current_user.jarvis_tasks.find(params[:id])
+    old_task = current_user.jarvis_tasks.anyfind(params[:id])
     @task = old_task.duplicate
     ::BroadcastUpcomingWorker.perform_async
 
@@ -56,7 +56,7 @@ class Jil::JarvisTasksController < ApplicationController
   end
 
   def destroy
-    @task = current_user.jarvis_tasks.find(params[:id])
+    @task = current_user.jarvis_tasks.anyfind(params[:id])
 
     if @task.destroy
       ::BroadcastUpcomingWorker.perform_async
@@ -67,7 +67,7 @@ class Jil::JarvisTasksController < ApplicationController
   end
 
   def run
-    @task = current_user.jarvis_tasks.find(params[:id])
+    @task = current_user.jarvis_tasks.anyfind(params[:id])
     data = ::Jarvis::Execute.call(@task, { test_mode: params.fetch(:test_mode, false) })
     ::BroadcastUpcomingWorker.perform_async
 

@@ -16,6 +16,7 @@
 #  sort_order      :integer
 #  tasks           :jsonb
 #  trigger         :integer          default("cron")
+#  uuid            :uuid
 #  created_at      :datetime         not null
 #  updated_at      :datetime         not null
 #  user_id         :bigint
@@ -86,6 +87,16 @@ class JarvisTask < ApplicationRecord
     hash:     8,
     keyval:   9,
   }, _prefix: :output #.output_any?
+
+  def self.find_by_uuid(uuid) = find_by!(uuid: id)
+  def self.anyfind(id)
+    case id.to_s
+    when /^(\w+-)+\w+$/i then find_by_uuid(id)
+    when /\d+/i then find(id)
+    else find_by!(name: id)
+    end
+  end
+  def to_param = uuid
 
   def duplicate
     self.class.create!(
