@@ -22,7 +22,7 @@ class QuickActionsController < ApplicationController
 
   def render_widget
     widget_hex = SecureRandom.hex(4)
-    widget_data = params.permit!.to_h
+    widget_data = params.permit!.to_h.except(:action, :controller)
     widget_html = render_to_string(
       partial: widget_data[:type],
       locals: { widget_data: widget_data, hex: widget_hex }

@@ -44,6 +44,7 @@ let addFormDataWidget = function(formdata) {
         clearForm()
         saveWidgets()
         hideModal("widget-form")
+        setTimeout(function() { Monitor.resyncAll() }, 500)
       }
     })
   })
@@ -98,7 +99,6 @@ document.addEventListener("click", function(evt) {
   wrapper = wrapper || document.querySelector(".main-wrapper.widget-wrapper")
 
   if (mode_name == "add") {
-    // Form modal should pop up
     showModal("widget-form")
     if (mainWrapper) {
       document.querySelector("select#widget-type").value = "buttons"
@@ -166,9 +166,3 @@ let saveWidgets = function() {
     }
   })
 }
-
-window.addEventListener("mousedown", function(e) {
-  if (e.button == 2) {
-    saveWidgets()
-  }
-})

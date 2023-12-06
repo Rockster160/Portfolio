@@ -539,6 +539,8 @@ class TaskMap
         { block: :str, name: :task_name },
         "When to run (Optional)",
         { block: :date, optional: true },
+        "With (Optional)",
+        { block: :any, optional: true },
       ],
       # find:       [
       #   { return: :task },

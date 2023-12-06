@@ -43,6 +43,9 @@ export class Monitor {
     })
   }
 
+  static resyncAll() { Monitor.allAction("resync") }
+  static refreshAll() { Monitor.allAction("refresh") }
+  static executeAll() { Monitor.allAction("execute") }
   static allAction(action) {
     document.querySelectorAll(".widget[data-type='monitor']").forEach(item => {
       let monitor = Monitor.find(item.getAttribute("data-task-id"))
@@ -93,7 +96,7 @@ Monitor.socket = new AuthWS("MonitorChannel", {
   onopen: function() {
     console.log("MonitorChannel.onopen");
     Monitor.connected = true
-    Monitor.allAction("resync")
+    Monitor.resyncAll()
   },
   onclose: function() {
     console.log("MonitorChannel.onclose");
@@ -106,14 +109,23 @@ setInterval(function() {
 }, 1000)
 
 document.addEventListener("click", function(evt) {
-  evt.preventDefault()
-  evt.stopPropagation()
+  if (evt.cancelBubble) { return }
 
   let refreshBtn = evt.target.closest(".refresh")
   let monitor = Monitor.from(refreshBtn?.closest(".widget[data-type='monitor']"))
-  if (monitor) { return monitor.refresh() }
+  if (monitor) {
+    evt.preventDefault()
+    evt.stopPropagation()
+    monitor.refresh()
+    return
+  }
 
   let wrapper = evt.target.closest(".widget-holder")
   monitor = Monitor.from(wrapper?.querySelector(".widget[data-type='monitor']"))
-  if (monitor) { return monitor.execute() }
+  if (monitor) {
+    evt.preventDefault()
+    evt.stopPropagation()
+    monitor.execute()
+    return
+  }
 })

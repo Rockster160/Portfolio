@@ -20,12 +20,10 @@ export function resizeModal() {
   }, 600)
 }
 
-document.querySelectorAll(".close").forEach((close) => {
-  close.addEventListener("click", function(evt) {
-    const target = evt.target.closest(".modal")
-
-    target.classList.remove("show")
-  })
+document.addEventListener("click", function(evt) {
+  if (evt.target.closest(".close")) {
+    evt.target.classList.closest(".modal").remove("show")
+  }
 })
 
 window.addEventListener("resize", resizeModal)
