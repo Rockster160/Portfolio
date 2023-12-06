@@ -2,7 +2,7 @@ class MonitorChannel < ApplicationCable::Channel
   def self.started(task)
     broadcast_to(
       task.user,
-      id: task.id,
+      id: task.uuid,
       loading: true,
     )
   end
@@ -10,7 +10,7 @@ class MonitorChannel < ApplicationCable::Channel
   def self.send_task(task)
     broadcast_to(
       task.user,
-      id: task.id,
+      id: task.uuid,
       result: task.last_result,
       timestamp: task.last_trigger_at.to_i,
     )
