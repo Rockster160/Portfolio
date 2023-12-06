@@ -34,6 +34,12 @@ class QuickActionsController < ApplicationController
           partial: "widget_modal",
           locals: { widget_data: widget_data, modal_id: "modal-#{widget_hex}" }
         )
+      # Command modal currently expects modal to be present on load
+      # when :jarvis
+      #   render_to_string(
+      #     partial: "widget_modal",
+      #     locals: { widget_data: widget_data, modal_id: "modal-#{widget_hex}" }
+      #   )
       end
     )
 

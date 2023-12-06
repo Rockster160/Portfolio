@@ -10,14 +10,13 @@ class Jarvis::Cmd < Jarvis::Action
 
   def valid_words?
     simple_words = @msg.downcase.squish
-    tasks = ::CommandProposal::Task.where.not("REGEXP_REPLACE(COALESCE(friendly_id, ''), '[^a-z]', '', 'i') = ''")
-    tasks = tasks.where(session_type: :function)
+    prop_tasks = ::CommandProposal::Task.where.not("REGEXP_REPLACE(COALESCE(friendly_id, ''), '[^a-z]', '', 'i') = ''")
+    prop_tasks = prop_tasks.where(session_type: :function)
 
-    return false unless tasks.any?
+    return false unless prop_tasks.any?
 
-    command = tasks.find_by(uuid: simple_words)
-    command ||= tasks.find_by("? ILIKE CONCAT('%', friendly_id, '%""')", simple_words)
-    command ||= tasks.find_by("? ILIKE CONCAT('%', REGEXP_REPLACE(friendly_id, '[^a-z]', '', 'i'), '%')", simple_words.gsub(/[^a-z]/i, ""))
+    command = prop_tasks.find_by("? ILIKE CONCAT('%', friendly_id, '%""')", simple_words)
+    command ||= prop_tasks.find_by("? ILIKE CONCAT('%', REGEXP_REPLACE(friendly_id, '[^a-z]', '', 'i'), '%')", simple_words.gsub(/[^a-z]/i, ""))
 
     return false unless command.present?
 
