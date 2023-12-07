@@ -36,6 +36,8 @@ class Jil::JarvisTasksController < ApplicationController
 
   def create
     @task = current_user.jarvis_tasks.create(task_params)
+    @task.reload # To get the UUID for redirecting
+
     ::BroadcastUpcomingWorker.perform_async
 
     respond_to do |format|

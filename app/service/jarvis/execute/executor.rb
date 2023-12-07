@@ -13,7 +13,7 @@ class Jarvis::Execute::Executor
   end
 
   def evalargs
-    args.map { |t| eval_block(t) }
+    args.map { |t| eval_block(t) }.then { |arr| arr.one? ? arr.first : arr }
   end
 
   def user

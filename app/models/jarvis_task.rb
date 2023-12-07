@@ -92,7 +92,7 @@ class JarvisTask < ApplicationRecord
   def self.anyfind(id)
     case id.to_s
     when /^(\w+-)+\w+$/i then find_by_uuid(id)
-    when /\d+/i then find(id)
+    when /^\d+$/i then find(id)
     else find_by!(name: id)
     end
   end

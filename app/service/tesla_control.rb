@@ -209,6 +209,7 @@ class TeslaControl
   def vehicle_data
     @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data")&.tap { |car_data|
       cached_vehicle_data.merge!(car_data) if car_data[:sleeping]
+      car_data[:sleeping] ||= false
 
       User.me.jarvis_cache.set(:car_data, car_data)
       break if car_data[:sleeping]

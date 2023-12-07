@@ -535,12 +535,25 @@ class TaskMap
       # ],
       run:        [
         { return: :any },
-        "Task Name",
-        { block: :str, name: :task_name },
+        "Task ID",
+        { block: :str, name: :task_id }, :br,
         "When to run (Optional)",
-        { block: :date, optional: true },
-        "With (Optional)",
-        { block: :any, optional: true },
+        { block: :date, optional: true },# :br,
+        # Hard to pass in data...
+        # "With (Optional)",
+        # { block: :any, optional: true }, :br,
+      ],
+      get:        [
+        { return: :hash },
+        "Task ID",
+        { block: :str, name: :task_id }, :br,
+      ],
+      enable:     [
+        { return: :bool },
+        "Task ID",
+        { block: :str, name: :task_id }, :br,
+        "Enable",
+        { block: :bool },
       ],
       # find:       [
       #   { return: :task },

@@ -4,7 +4,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def print
-    jil.ctx[:msg] << ::Jarvis::Execute::Cast.cast(evalargs.first, :str, force: true, jil: jil)
+    jil.ctx[:msg] << ::Jarvis::Execute::Cast.cast(evalargs, :str, force: true, jil: jil)
   end
 
   def comment
@@ -12,7 +12,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def command
-    Jarvis.command(jil.task.user, evalargs.first)
+    Jarvis.command(jil.task.user, evalargs)
   end
 
   def request
@@ -83,6 +83,30 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
 
       msg
     end
+  end
+
+  def get
+    task_id = evalargs
+    task = jil.task.user.jarvis_tasks.anyfind(task_id)
+
+    task.attributes.symbolize_keys.slice(
+      :uuid,
+      :name,
+      :trigger,
+      :output_type,
+      :cron,
+      :enabled,
+      :next_trigger_at,
+      :last_trigger_at,
+      :last_result_val,
+    )
+  end
+
+  def enable
+    task_id, bool = evalargs
+    task = jil.task.user.jarvis_tasks.anyfind(task_id)
+
+    task.update(enabled: !!bool)
   end
 
   def find
