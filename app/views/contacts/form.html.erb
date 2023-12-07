@@ -44,7 +44,7 @@
       </div>
     <% end %>
     <div class="form-field">
-      <%= link_to "+ New Address", [:new, @contact, :address], class: :btn %>
+      <%= link_to "+ New Address", [:new, @contact, :address], class: :btn if @contact.persisted? %>
     </div>
   <% end %>
 </div>
