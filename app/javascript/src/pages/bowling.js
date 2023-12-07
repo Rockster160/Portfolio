@@ -1301,9 +1301,11 @@ $(document).ready(function() {
 
     let bowler_mapping = {}
     $(".bowler").each(function() {
-      let name = $(this).find(".bowler-name .usbc-name").text() || $(this).find(".bowler-name .display-name").text()
+      // let name = $(this).find(".bowler-name .usbc-name").text() || $(this).find(".bowler-name .display-name").text()
+      // if (name) { bowler_mapping[name.toLowerCase()] = this }
+      let bowlerNum = this.getAttribute("data-bowler")
 
-      if (name) { bowler_mapping[name.toLowerCase()] = this }
+      if (bowlerNum) { bowler_mapping[parseInt(bowlerNum)] = this }
     })
 
     let genUUID = function() {
@@ -1315,7 +1317,7 @@ $(document).ready(function() {
     }
 
     let decToPins = function(integer) {
-      if (integer === null) { return [] }
+      if (!integer) { return [] }
 
       let binary = integer.toString(2)
       const zerosToAdd = Math.max(0, 10 - binary.length)
@@ -1326,16 +1328,15 @@ $(document).ready(function() {
     }
 
     let updatePlayer = function(player) {
-      // if (player.playerName != "JAKERZ") { return }
-      // let bowler = bowler_mapping["rocco nicholls"]
+      let lane = $(".lane-input").val()
+      if (player.lane != lane) { return }
 
-      let current_game = parseInt(params.game)
-      if (parseInt(player.game) != current_game) { return }
+      let current_game = parseInt(params.game || 1)
+      if (player.game != current_game) { return }
 
-      let bowler = bowler_mapping[player.playerName.toLowerCase()]
+      let bowler = bowler_mapping[player.playerNumber]
       if (!bowler) { return }
-
-      // Set lane number?
+      console.log(player);
 
       player.throws.forEach(function(toss_str, idx) {
         let toss_value = toss_str
