@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_12_06_060128) do
+ActiveRecord::Schema.define(version: 2023_12_08_192949) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -375,6 +375,18 @@ ActiveRecord::Schema.define(version: 2023_12_06_060128) do
     t.datetime "updated_at", precision: 6, null: false
     t.index ["task_id"], name: "index_jil_prompts_on_task_id"
     t.index ["user_id"], name: "index_jil_prompts_on_user_id"
+  end
+
+  create_table "jil_usages", force: :cascade do |t|
+    t.bigint "user_id"
+    t.integer "executions"
+    t.date "date"
+    t.integer "icount"
+    t.jsonb "data"
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["user_id", "date"], name: "index_jil_usages_on_user_id_and_date", unique: true
+    t.index ["user_id"], name: "index_jil_usages_on_user_id"
   end
 
   create_table "lines", id: :serial, force: :cascade do |t|

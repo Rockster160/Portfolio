@@ -33,6 +33,7 @@ class User < ApplicationRecord
   has_many :lists, through: :user_lists
   has_many :sent_emails, class_name: "Email", foreign_key: :sent_by_id, dependent: :destroy
   has_many :prompts, class_name: "JilPrompt", dependent: :destroy
+  has_many :daily_usages, class_name: "JilUsage", dependent: :destroy
   has_many :action_events
   has_many :user_surveys
   has_many :user_survey_responses
@@ -125,6 +126,12 @@ class User < ApplicationRecord
 
   def address_book
     @address_book ||= AddressBook.new(self)
+  end
+
+  def current_usage(date=Date.today)
+    daily_usages.find_or_create_by!(date: date)
+  rescue ActiveRecord::RecordNotUnique
+    retry
   end
 
   def update_with_password(new_attrs)

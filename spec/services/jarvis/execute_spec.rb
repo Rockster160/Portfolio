@@ -1,6 +1,6 @@
 RSpec.describe ::Jarvis::Execute do
   before { allow(SlackNotifier).to receive(:err) }
-  let(:user) { User.create(id: 1, role: :admin) }
+  let(:user) { User.create(id: 1, role: :admin, username: :admiin, password: :password, password_confirmation: :password) }
   let(:task) { JarvisTask.create(tasks: tasks, user: user) }
   let(:execute) { ::Jarvis::Execute.call(task) }
   let(:hello) { "Hello, World!" }
@@ -233,6 +233,13 @@ RSpec.describe ::Jarvis::Execute do
       it "runs the block 1000 times then errors out" do
         expect(execute.last).to include("Failed: Blocks exceed 1,000 allowed.")
         expect(task.last_ctx[:i]).to eq(1001) # 1001 because it only errors AFTER exceeding
+
+        expected_totals = { itotal: 1001, executions: 1 }
+        expect(task.user.current_usage.data[task.uuid].symbolize_keys).to eq(expected_totals)
+        # ::Jarvis::Execute.call(task)
+        calc_sums = { icount: 1001, executions: 1 }
+        expect(JilUsage.sum_totals_by_user(task.user, Date.today).symbolize_keys).to eq(calc_sums)
+        expect(JilUsage.sum_totals_by_task(task, Date.today).symbolize_keys).to eq(calc_sums)
       end
     end
 

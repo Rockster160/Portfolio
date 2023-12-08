@@ -32,6 +32,7 @@ class JarvisTask < ApplicationRecord
   belongs_to :user, required: true
 
   before_save :set_next_cron
+  after_create { reload } # Needed to retrieve the generated uuid on the current instance in memory
 
   scope :fuzzy_search, ->(q) { where("tasks::text ILIKE ?", "%#{q}%") }
   scope :enabled, -> { where(enabled: true) }
