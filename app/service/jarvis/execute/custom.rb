@@ -8,7 +8,7 @@ class Jarvis::Execute::Custom < Jarvis::Execute::Executor
     super(method, *method_args, &block) if run_task.blank?
 
     task_input_data = run_task.inputs.to_h
-    data = run_task.inputs.map(&:first).zip(evalargs).map { |k, v|
+    data = run_task.inputs.map(&:first).zip(Array.from(evalargs)).map { |k, v|
       type = task_input_data[k].each { |d| break d[:return] if d.is_a?(Hash) && d.key?(:return) }
       # If there is no `return` this should fail somehow?
       [k, ::Jarvis::Execute::Cast.cast(v, type, jil: jil)]

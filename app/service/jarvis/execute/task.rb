@@ -118,6 +118,8 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
 
     # TODO: The ctx[:i] will not be passed- this can be used to bypass block limitations
     # Not sure how to work around this...
+    # Maybe somehow pass a back reference to the id,
+    #   and use that to get the count for the new task as well as update the old task
     jid = Jarvis::Schedule.schedule(
       scheduled_time: timestamp,
       user_id: jil.task.user.id,

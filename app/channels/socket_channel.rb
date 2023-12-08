@@ -13,7 +13,7 @@ class SocketChannel < ApplicationCable::Channel
 
     ::Jarvis.execute_trigger(
       :websocket,
-      { input_vars: { "WS Receive Data" => data.reverse_merge(params) } },
+      { input_vars: { "WS Receive Data" => data.reverse_merge(params.except(:action)) } },
       scope: [
         "user_id = #{current_user.id} AND (input ~* ? OR input = '*')",
         "\\m#{params[:channel_id]}\\M"
