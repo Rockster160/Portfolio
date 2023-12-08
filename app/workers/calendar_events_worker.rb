@@ -59,6 +59,7 @@ class CalendarEventsWorker
       next if event[:start_time].blank? || event[:end_time].blank? # Skip all-day events
 
       event[:uid] = "unix:#{event[:start_time].to_i}:#{event[:uid]}"
+      nav_home = true
 
       # If notes starts with Jarvis, send to Jarvis as a message
       if event[:notes]&.match?(/^\s*jarvis[:,]? */i)
@@ -70,7 +71,7 @@ class CalendarEventsWorker
           user_id: @user_id,
           scheduled_time: event[:start_time],
         )
-      elsif event[:notes]&.match?(/^\s*j\s*$/i)
+      elsif event[:notes]&.match?(/^\s*j\s*$/i) # Just a J
         new_events.push(
           name: event[:name],
           uid: event[:uid] + "-notes",
@@ -79,6 +80,8 @@ class CalendarEventsWorker
           user_id: @user_id,
           scheduled_time: event[:start_time],
         )
+      elsif event[:notes]&.match?(/\bnonav\b/i)
+        nav_home = false
       end
 
       # Trigger a Calendar event for everything that comes through
@@ -143,13 +146,15 @@ class CalendarEventsWorker
         # Also time estimate should be from "current" location-
         #   guessed based on the last event left us at
         # Start car + navigate home 10 minutes prior to end-time
-        new_events.push(
-          uid: event[:uid] + "-home",
-          type: :travel,
-          words: "Take me Home",
-          user_id: @user_id,
-          scheduled_time: event[:end_time] - PRE_OFFSET,
-        )
+        if nav_home
+          new_events.push(
+            uid: event[:uid] + "-home",
+            type: :travel,
+            words: "Take me Home",
+            user_id: @user_id,
+            scheduled_time: event[:end_time] - PRE_OFFSET,
+          )
+        end
       end
     end
   end
