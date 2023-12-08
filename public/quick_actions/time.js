@@ -118,7 +118,7 @@ Time.local = function(ms_since_epoch) {
   hr = hr == 0 ? 12 : hr
   return hr + ":" + String(time.getMinutes()).padStart(2, "0") + " " + mz
 }
-Time.timeago = function(input) {
+Time.timeAgo = function(input) {
   const date = (input instanceof Date) ? input : new Date(input);
   if (date.getTime() == 0) { return "never" }
   const formatter = new Intl.RelativeTimeFormat('en');
