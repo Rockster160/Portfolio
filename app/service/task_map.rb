@@ -540,6 +540,8 @@ class TaskMap
         "When to run (Optional)",
         { block: :date, optional: true },# :br,
         # Hard to pass in data...
+        # app/workers/jarvis_worker.rb
+        # It's possible if we serialize the data
         # "With (Optional)",
         # { block: :any, optional: true }, :br,
       ],
