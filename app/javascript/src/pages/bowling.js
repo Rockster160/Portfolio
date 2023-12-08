@@ -706,6 +706,8 @@ $(document).ready(function() {
   })
 
   $(document).keyup(function(evt) {
+    if (evt.closest(".lane-input")) { return }
+
     if (/[0-9\/\+\-]/i.test(evt.key)) {
       var num = evt.key == "+" ? "X" : evt.key
       addScore(num)
