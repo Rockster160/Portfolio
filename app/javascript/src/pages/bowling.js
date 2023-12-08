@@ -706,7 +706,7 @@ $(document).ready(function() {
   })
 
   $(document).keyup(function(evt) {
-    if (evt.closest(".lane-input")) { return }
+    if (evt.target?.closest(".lane-input")) { return }
 
     if (/[0-9\/\+\-]/i.test(evt.key)) {
       var num = evt.key == "+" ? "X" : evt.key
@@ -1329,12 +1329,22 @@ $(document).ready(function() {
       }).filter(Boolean).sort()
     }
 
-    let updatePlayer = function(player) {
-      let lane = $(".lane-input").val()
-      if (player.lane != lane) { return }
+    let findCurrentLane = function(crossLane) {
+      let start_lane = parseInt($(".lane-input").val())
+      if (!start_lane) { return }
+      if (!crossLane) { return start_lane }
 
       let current_game = parseInt(params.game || 1)
+
+      return start_lane + (current_game % 2 == 0 ? 1 : -1)
+    }
+
+    let updatePlayer = function(player) {
+      let current_game = parseInt(params.game || 1)
       if (player.game != current_game) { return }
+
+      let lane = findCurrentLane(player.crossLane)
+      if (player.lane != lane) { return }
 
       let bowler = bowler_mapping[player.playerNumber]
       if (!bowler) { return }
@@ -1425,3 +1435,29 @@ $(document).ready(function() {
   recalcScores()
   laneTalk()
 })
+
+// {
+//   "result": {
+//     "channel": "LiveScores:2c211070-6bf9-11e8-8107-005056a558aa",
+//     "type": 5,
+//     "data": {
+//       "bowlingCenterUuid": "2c211070-6bf9-11e8-8107-005056a558aa",
+//       "lane": 22,
+//       "game": 2,
+//       "crossLane": false,
+//       "playerName": "Lisa Taylor",
+//       "playerNumber": 2,
+//       "playerHcp": 83,
+//       "teamName": "Flying Balls",
+//       "teamHcp": 193,
+//       "scoreCompletedGames": 167,
+//       "throws": [1, 3, 7, "/", 9, "-", 7, "-"],
+//       "pins": [511, 311, 52, 0, 512, 512, 11, 11],
+//       "scores": [4, 23, 32, 39],
+//       "speed": [3023, 3543, 3082, 3082, 3152, 3152, 3200, 2729],
+//       "belongsTo": null,
+//       "received": 1701995577,
+//       "maxScore": 210
+//     }
+//   }
+// }
