@@ -191,12 +191,13 @@ class TaskMap
       split:      [
         { return: :array },
         { block: :str },
+        :by,
         { block: :str, name: :split_by, optional: true }, # Empty means split by char
       ],
       format: [
         { return: :str },
         { block: :str },
-        [:lower, :upper, :capital, :pascal, :title, :snake, :camel, :base64]
+        [:lower, :upper, :squish, :capital, :pascal, :title, :snake, :camel, :base64]
       ],
       replace: [
         { return: :str },

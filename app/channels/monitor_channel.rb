@@ -41,13 +41,13 @@ class MonitorChannel < ApplicationCable::Channel
   def execute(data) # Runs task with executing:true
     task = current_user.jarvis_tasks.anyfind(data["id"])
 
-    ::Jarvis::Execute.call(task, input_vars: { "Executing?": true })
+    ::Jarvis::Execute.call(task, input_vars: { "Pressed": true })
   end
 
   def refresh(data) # Runs task with executing:false
     task = current_user.jarvis_tasks.anyfind(data["id"])
 
-    ::Jarvis::Execute.call(task, input_vars: { "Executing?": false })
+    ::Jarvis::Execute.call(task, input_vars: { "Pressed": false })
   end
 
   def resync(data) # Pulls most recent result without Running

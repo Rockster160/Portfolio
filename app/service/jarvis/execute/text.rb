@@ -29,6 +29,7 @@ class Jarvis::Execute::Text < Jarvis::Execute::Executor
     case cmd.to_sym
     when :lower   then str.downcase
     when :upper   then str.upcase
+    when :squish  then str.squish
     when :capital then str.capitalize
     when :pascal  then preformat.camelize(:upper)
     when :title   then str.titleize

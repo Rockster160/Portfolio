@@ -213,9 +213,9 @@ class JarvisTask < ApplicationRecord
         "WS Receive Data"
       ]]]
     elsif monitor?
-      [["Executing?", [
+      [["Pressed", [
         { return: :bool },
-        "Executing?"
+        "Pressed"
       ]]]
     end
   end
