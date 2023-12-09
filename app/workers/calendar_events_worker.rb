@@ -6,7 +6,7 @@ class CalendarEventsWorker
   PRE_OFFSET = 10.minutes
 
   def perform
-    # return if Rails.env.development?
+    return if Rails.env.development?
 
     @user_id = User.me.id
     coming_events = ::LocalDataCalendarParser.call.values.flatten # JarvisCache for @user_id
