@@ -17,6 +17,18 @@ class Jarvis::Execute::Text < Jarvis::Execute::Executor
     end
   end
 
+  def scan
+    str, reg = args.first(2).map { |t| cast_str(t) }
+    return "" if str.blank? || reg.blank?
+
+    reg = matchable(reg)
+    if reg.is_a?(Regexp)
+      str.scan(reg).flatten.first
+    else
+      str[reg]
+    end
+  end
+
   def split
     # TODO: Allow split by regex
     str, split_str = args.map { |t| cast_str(t) }

@@ -188,6 +188,11 @@ class TaskMap
         { block: :str }, # Should regex be an object, or just a text entry?
         # { multiple: [:g, :i, :u, :m], name: :flags }
       ],
+      scan:       [
+        { return: :str },
+        { block: :str, :Value }
+        { block: :str, label: :Regex }
+      ],
       split:      [
         { return: :array },
         { block: :str },
