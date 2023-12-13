@@ -1,4 +1,5 @@
 class PagesController < ApplicationController
+  skip_before_action :verify_authenticity_token
   before_action :authorize_user, :set_page
 
   def show

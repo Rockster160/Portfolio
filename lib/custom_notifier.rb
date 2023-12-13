@@ -13,7 +13,7 @@ module ExceptionNotifier
         env = options[:env]
         data = (env['exception_notifier.exception_data'] || {}).merge(options[:data] || {})
         kontroller = env['action_controller.instance']
-        request = "#{env['REQUEST_METHOD']} <#{env['REQUEST_URI']}>"
+        request = env['action_dispatch.request']
         if data[:current_user]
           text = "*#{data[:current_user].try(:username)}* experienced #{exception_name} while `#{env['REQUEST_METHOD']} <#{env['REQUEST_URI']}>`"
         else
@@ -21,12 +21,13 @@ module ExceptionNotifier
         end
         text += " was processed by `#{kontroller.controller_name}##{kontroller.action_name}`" if kontroller
         text += "\n"
-        if data[:params]
-          data[:params] = data[:params].permit!.to_h if data[:params].is_a?(::ActionController::Parameters)
+        params = data[:params] || request&.params
+        if params
+          params = params.permit!.to_h if params.is_a?(::ActionController::Parameters)
           begin
-            text += "```#{JSON.pretty_generate(data[:params])}```"
+            text += "```#{JSON.pretty_generate(params)}```"
           rescue StandardError
-            text += "```#{data[:params]}```"
+            text += "```#{params}```"
           end
           text += "\n"
         end
