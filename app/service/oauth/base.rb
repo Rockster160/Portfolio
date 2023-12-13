@@ -35,7 +35,7 @@ class Oauth::Base
 
     def auth(code, params={})
       # Should be given a user to pull the cache keys from
-      API.post(EXCHANGE_URL, {
+      Api.post(EXCHANGE_URL, {
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
         redirect_uri: REDIRECT_URI,

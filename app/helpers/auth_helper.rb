@@ -66,11 +66,15 @@ module AuthHelper
   end
 
   def auth_from_headers
-    basic_auth_raw = request.headers["HTTP_AUTHORIZATION"][6..-1] # Strip "Basic " from hash
-    return unless basic_auth_raw.present?
+    raw_auth = request.headers["HTTP_AUTHORIZATION"]
+    return unless raw_auth.present?
 
-    basic_auth_string = Base64.decode64(basic_auth_raw)
-    User.auth_from_basic(basic_auth_string)
+    if raw_auth.starts_with?("Basic ")
+      basic_auth_string = Base64.decode64(raw_auth[6..-1]) # Strip "Basic " from hash
+      User.auth_from_basic(basic_auth_string)
+    elsif raw_auth.starts_with?("Bearer ")
+      ApiKey.find_by(uuid: raw_auth[7..-1])&.user
+    end
   end
 
   def auth_from_session

@@ -14,7 +14,7 @@ class WebhooksController < ApplicationController
 
   def auth
     if params[:issuer] == "https://auth.tesla.com/oauth2/v3"
-      # ::Oauth::TeslaAPI.code = params[:code]
+      # ::Oauth::TeslaApi.code = params[:code]
     end
 
     head :ok
