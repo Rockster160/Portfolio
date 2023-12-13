@@ -190,7 +190,7 @@ class TaskMap
       ],
       scan:       [
         { return: :str },
-        { block: :str, :Value },
+        { block: :str, label: :Value },
         { block: :str, label: :Regex },
       ],
       split:      [
