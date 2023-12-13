@@ -75,10 +75,8 @@ module AuthHelper
     basic_auth_string = Base64.decode64(auth_string)
 
     if basic_auth_string.include?(":")
-      puts "\e[33m[LOGIT] | [AUTH]String found. Authing: [#{basic_auth_string}]\e[0m"
       User.auth_from_basic(basic_auth_string)
     else
-      puts "\e[33m[LOGIT] | [AUTH]API Key found. Authing: [#{auth_string}]\e[0m"
       ApiKey.find_by(key: auth_string)&.user
     end
   end
