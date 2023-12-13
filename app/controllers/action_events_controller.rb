@@ -199,6 +199,7 @@ class ActionEventsController < ApplicationController
       :event_name,
       :notes,
       :timestamp,
+      :data,
     ).tap do |whitelist|
       whitelist[:timestamp] = whitelist[:timestamp].presence || Time.current
     end

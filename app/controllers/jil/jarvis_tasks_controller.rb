@@ -72,9 +72,7 @@ class Jil::JarvisTasksController < ApplicationController
     data = ::Jarvis::Execute.call(@task, { test_mode: params.fetch(:test_mode, false) })
     ::BroadcastUpcomingWorker.perform_async
 
-    respond_to do |format|
-      format.json { render json: { response: data } }
-    end
+    render json: { response: data }
   end
 
   private
