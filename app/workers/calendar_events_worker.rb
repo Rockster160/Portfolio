@@ -71,7 +71,8 @@ class CalendarEventsWorker
           user_id: @user_id,
           scheduled_time: event[:start_time],
         )
-      elsif event[:notes]&.match?(/^\s*j\s*$/i) # Just a J
+      end
+      if event[:notes]&.match?(/^\s*j\s*$/i) # Just a J
         new_events.push(
           name: event[:name],
           uid: event[:uid] + "-notes",
@@ -80,9 +81,8 @@ class CalendarEventsWorker
           user_id: @user_id,
           scheduled_time: event[:start_time],
         )
-      elsif event[:notes]&.match?(/\bnonav\b/i)
-        nav_home = false
       end
+      nav_home = false if event[:notes]&.match?(/\bnonav\b/i)
 
       # Trigger a Calendar event for everything that comes through
       new_events.push(
@@ -103,7 +103,8 @@ class CalendarEventsWorker
 
       # If travelable - add TT and nav there and back
       if travelable_event?(event)
-        traveltime = address_book.traveltime_seconds(
+        traveltime = event[:notes]&.scan(/ttt (\d+)/i)&.flatten&.first
+        traveltime ||= address_book.traveltime_seconds(
           event[:location],
           address_book.current_address&.street
         )
