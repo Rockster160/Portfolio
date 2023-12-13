@@ -30,9 +30,9 @@ class Jarvis::Execute::Text < Jarvis::Execute::Executor
   end
 
   def split
-    # TODO: Allow split by regex
     str, split_str = args.map { |t| cast_str(t) }
-    str.split(split_str)
+
+    str.split(matchable(split_str))
   end
 
   def format
