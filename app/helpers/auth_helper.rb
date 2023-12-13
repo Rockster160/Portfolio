@@ -73,7 +73,7 @@ module AuthHelper
       basic_auth_string = Base64.decode64(raw_auth[6..-1]) # Strip "Basic " from hash
       User.auth_from_basic(basic_auth_string)
     elsif raw_auth.starts_with?("Bearer ")
-      ApiKey.find_by(uuid: raw_auth[7..-1])&.user
+      ApiKey.find_by(key: raw_auth[7..-1])&.user
     end
   end
 
