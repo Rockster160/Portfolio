@@ -22,7 +22,7 @@
 #  user_id         :bigint
 #
 
-# Scheduled for deletion: `cron` (Replaced by `input`)
+# Scheduled for removal: `cron` (Replaced by `input`)
 class JarvisTask < ApplicationRecord
   include Orderable
 

@@ -66,6 +66,7 @@ class User < ApplicationRecord
   def self.me
     @@me ||= admin.first
   end
+  def me? = id == 1
 
   def self.auth_from_basic(basic_auth)
     username, password = basic_auth.split(":", 2)
