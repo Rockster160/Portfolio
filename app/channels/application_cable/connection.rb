@@ -25,11 +25,17 @@ module ApplicationCable
       raw_auth = request.headers["HTTP_AUTHORIZATION"]
       return unless raw_auth.present?
 
-      if raw_auth.starts_with?("Basic ")
-        basic_auth_string = Base64.decode64(raw_auth[6..-1]) # Strip "Basic " from hash
+      # Had issues where some clients were mixing up bearer vs basic
+      # Just made this work for whatever prefix
+      type, auth_string = raw_auth.split(" ", 2)
+      basic_auth_string = Base64.decode64(auth_string)
+
+      if basic_auth_string.include?(":")
+        puts "\e[33m[LOGIT] | [WS]String found. Authing: [#{basic_auth_string}]\e[0m"
         User.auth_from_basic(basic_auth_string)
-      elsif raw_auth.starts_with?("Bearer ")
-        ApiKey.find_by(key: raw_auth[7..-1])&.user
+      else
+        puts "\e[33m[LOGIT] | [WS]API Key found. Authing: [#{auth_string}]\e[0m"
+        ApiKey.find_by(key: auth_string)&.user
       end
     end
 
