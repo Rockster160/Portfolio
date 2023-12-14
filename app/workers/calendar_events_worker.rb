@@ -103,7 +103,7 @@ class CalendarEventsWorker
 
       # If travelable - add TT and nav there and back
       if travelable_event?(event)
-        traveltime = event[:notes]&.scan(/ttt (\d+)/i)&.flatten&.first
+        traveltime = event[:notes]&.scan(/ttt (\d+)/i)&.flatten&.first&.to_i&.minutes
         traveltime ||= address_book.traveltime_seconds(
           event[:location],
           address_book.current_address&.street
