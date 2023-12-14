@@ -67,7 +67,9 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def hash
-    evalargs.each_with_object({}) do |(key, val), new_hash|
+    vals = evalargs
+    vals = vals.first.is_a?(Array) ? vals : [vals]
+    vals.each_with_object({}) do |(key, val), new_hash|
       new_hash[key] = val
     end
   rescue NoMethodError

@@ -586,7 +586,7 @@ class TaskMap
         :content, # { block: :hash, name: :params, optional: true },
       ],
       prompt: [
-        { return: :bool },
+        { return: :str },
         { block: :str, name: :question }, :br,
         "Options", { block: :array, optional: true }, :br,
         "Params", { block: :hash, optional: true }, :br,
