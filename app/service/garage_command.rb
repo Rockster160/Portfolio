@@ -18,7 +18,7 @@ module GarageCommand
     direction = :close if dir_str.match?(/(clos)/i)
     direction ||= :toggle
 
-    ActionCable.server.broadcast(:garage_channel, { msg: "#{direction}Garage" })
+    SocketChannel.send_to(User.me, :garage, { request: direction })
 
     case direction
     when :open then "Opening the garage"

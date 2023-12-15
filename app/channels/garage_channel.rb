@@ -5,15 +5,11 @@ class GarageChannel < ApplicationCable::Channel
   end
 
   def unsubscribed
-    ActionCable.server.broadcast(:garage_channel, { data: "refreshGarage" })
+    SocketChannel.send_to(User.me, :garage, { request: :get })
   end
 
   def request
-    if Rails.env.development?
-      Broadcast.ping(:garage, { data: { garageState: :closed } })
-    else
-      ActionCable.server.broadcast(:garage_channel, { msg: "getGarage" })
-    end
+    SocketChannel.send_to(User.me, :garage, { request: :get })
   end
 
   def control(data)
