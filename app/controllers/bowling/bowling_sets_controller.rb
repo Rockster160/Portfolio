@@ -112,6 +112,8 @@ module Bowling
           ]
         ]
       ).tap do |whitelist|
+        whitelist[:frames] = nil if whitelist[:absent]
+        whitelist[:frames_details] = nil if whitelist[:absent]
         whitelist[:games_attributes] = whitelist[:games_attributes]&.map do |game_attributes|
           game_attributes.tap do |game_whitelist|
             game_whitelist[:set_id] = game_whitelist[:set_id].presence || @set.id
