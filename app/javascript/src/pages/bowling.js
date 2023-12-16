@@ -1335,8 +1335,9 @@ $(document).ready(function() {
       if (!crossLane) { return start_lane }
 
       let current_game = parseInt(params.game || 1)
+      if (current_game % 2 == 1) { return start_lane }
 
-      return start_lane + (current_game % 2 == 0 ? 1 : -1)
+      return start_lane + (start_lane % 2 ? 1 : -1)
     }
 
     let updatePlayer = function(player) {
