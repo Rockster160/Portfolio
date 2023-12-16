@@ -30,7 +30,7 @@
       <% end %>
       <% set.league.games_per_series.times do |t| %>
         <% game = games[t] %>
-        <td class="text-right <%= "bowling-winner" if game&.game_point? %> <%= 'absent-game' if game&.absent? %>">
+        <td class="text-right <%= "bowling-winner" if game&.game_point? %> <%= "perfect-game" if game&.perfect_game? %> <%= 'absent-game' if game&.absent? %>">
           <span class="nowrap"><%= "&#9824; ".html_safe if game&.card_point? %><%= game&.score %></span>
         </td>
       <% end %>

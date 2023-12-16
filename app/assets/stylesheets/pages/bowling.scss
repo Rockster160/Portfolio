@@ -231,17 +231,6 @@
           }
         }
       }
-      /* &.perfect-game {
-        border-color: green;
-        input[type=text] {
-          border-color: green;
-          color: green;
-
-          &.current {
-            border-color: purple;
-          }
-        }
-      } */
       &.missed-drink-frame {
         border-color: red;
         background-image: url("https://staticg.sportskeeda.com/editor/2022/08/2d25d-16594604976321-1920.jpg");
@@ -274,14 +263,14 @@
     &.perfect-game {
       .bowling-cell {
         background: gold;
-        color: white;
-        border-color: white;
+        color: $base-blue;
+        border-color: $base-blue;
         border-width: 2px;
         font-weight: bold;
 
         input[type=text] {
-          border-color: white;
-          color: white;
+          border-color: $base-blue;
+          color: $base-blue;
           border-width: 2px;
           font-weight: bold;
         }
@@ -455,6 +444,27 @@
     background: rgba($blue-l4, 0.7);
     font-weight: bold;
     border-radius: 2px;
+  }
+
+  .perfect-game {
+    background: gold !important;
+    color: $base-blue !important;
+    font-weight: bold;
+    border-radius: 2px;
+    padding: 2px;
+
+      // background: gold;
+      // color: white;
+      // border-color: white;
+      // border-width: 2px;
+      // font-weight: bold;
+      //
+      // input[type=text] {
+      //   border-color: white;
+      //   color: white;
+      //   border-width: 2px;
+      //   font-weight: bold;
+      // }
   }
 
   tr.line-bot td {

@@ -70,7 +70,7 @@
       <% (game.game_num - 1).times do |t| %>
         <% prev_game = @set&.games&.find_by(bowler: bowler, game_num: t + 1) %>
         <% next if prev_game.nil? %>
-        <span class="prev-score nowrap <%= "bowling-winner" if prev_game.game_point? %>"><%= "&#9824; ".html_safe if prev_game.card_point? %><%= prev_game.score %><%= "|#{prev_game.total_score}" if prev_game.handicap&.positive? %></span>
+        <span class="prev-score nowrap <%= "bowling-winner" if prev_game.game_point? %> <%= "perfect-game" if prev_game.perfect_game? %>"><%= "&#9824; ".html_safe if prev_game.card_point? %><%= prev_game.score %><%= "|#{prev_game.total_score}" if prev_game.handicap&.positive? %></span>
       <% end %>
     </div>
   </div>

@@ -7,11 +7,11 @@
   <div class="bowling-cell"></div>
 
   <% games.order(:position).each_with_index do |game, row_idx| %>
-    <div class="bowling-cell box-align-text bowling-name">
+    <div class="bowling-cell box-align-text bowling-name <%= "perfect-game" if game.perfect_game? %>">
       <span class="nowrap"><%= "&#9824; ".html_safe if game.card_point? %><%= game.bowler.name %></span>
     </div>
     <% game.frame_details.each do |frame| %>
-      <div class="bowling-cell">
+      <div class="bowling-cell <%= "perfect-game" if game.perfect_game? %>">
         <div class="pin-detail">
           <% frame.pin_fall_details.each do |frame_details| %>
             <div class="dot-pin-chart">
@@ -32,8 +32,8 @@
         </div>
       </div>
     <% end %>
-    <div class="bowling-cell box-align-text"><%= game.score %></div>
-    <div class="bowling-cell box-align-text <%= "bowling-winner" if game.game_point? %> <%= 'absent-game' if game.absent? %>">
+    <div class="bowling-cell box-align-text <%= "perfect-game" if game.perfect_game? %>"><%= game.score %></div>
+    <div class="bowling-cell box-align-text <%= "perfect-game" if game.perfect_game? %> <%= "bowling-winner" if game.game_point? %> <%= 'absent-game' if game.absent? %>">
       <%= game.total_score %>
     </div>
   <% end %>

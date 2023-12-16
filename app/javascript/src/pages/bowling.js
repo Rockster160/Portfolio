@@ -886,7 +886,7 @@ $(document).ready(function() {
   }
 
   detectCleanStarts = function() {
-    $(".perfect-game").removeClass("perfect-game")
+    $(".perfect-game:not(.prev-score)").removeClass("perfect-game")
     $(".consec-start").removeClass("consec-start")
     $(".clean-start").removeClass("clean-start")
     $(".bowler").each(function() {
