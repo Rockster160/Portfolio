@@ -1314,10 +1314,15 @@ $(document).ready(function() {
   }).first().addClass("current")
 
   let laneTalk = function() {
+    console.log("laneTalk()");
     let center_id = $(".league-data").attr("data-lanetalk-center-id")
     let lanetalk_api_key = $(".league-data").attr("data-lanetalk-key")
 
-    if (!center_id || !lanetalk_api_key) { return }
+    if (!center_id || !lanetalk_api_key) {
+      if (!center_id) { console.log("Missing Center ID") }
+      if (!lanetalk_api_key) { console.log("Missing LaneTalk API Key") }
+      return
+    }
 
     let bowler_mapping = {}
     $(".bowler").each(function() {
@@ -1495,11 +1500,13 @@ $(document).ready(function() {
       moveToNextFrame()
     }
 
-    let connectWs = function() {
+    let connectLaneTalkWs = function() {
+      console.log("Connecting...");
       let socket = new WebSocket("wss://ws.lanetalk.com/ws")
       let send = function(json) { socket.send(JSON.stringify(json)) }
 
       socket.addEventListener("open", function(event) {
+        console.log("Open! Authorizing...");
         send({
           id: genUUID(),
           method: 0,
@@ -1508,7 +1515,10 @@ $(document).ready(function() {
       })
 
       socket.addEventListener("message", function(event) {
-        if (!useLaneTalk) { return }
+        if (!useLaneTalk) {
+          console.log("LaneTalk Disabled")
+          return
+        }
         let json = JSON.parse(event.data)
         let result = json.result || {}
         if (result.result?.client) {
@@ -1530,11 +1540,13 @@ $(document).ready(function() {
 
       socket.addEventListener("close", function(event) {
         setTimeout(function() {
-          connectWs()
+          connectLaneTalkWs()
         }, 5000)
       })
+      console.log("WS no errors");
     }
-    connectWs()
+    connectLaneTalkWs()
+    console.log("laneTalkDone");
   }
 
   setFrames() // Need this to set absent bowlers
