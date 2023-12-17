@@ -111,6 +111,14 @@ module BowlingScorer
     }.join("").match?(/10+1/)
   end
 
+  def game_to_throws(game) # LaneTalk style flat array of each throw
+    game.frame_details.map(&:rolls).map.with_index { |f,i|
+      i < 9 && f[0] == "X" ? ["X", ""] : f.compact # Convert non-10th strikes to [X, ""]
+    }.flatten.map { |n|
+      n == n.to_i.to_s ? n.to_i : n # Convert numbers to ints
+    }
+  end
+
   def score(frames)
     # Expects either an array of scores like "6/" or a long string of the same delimited with |
     frames = frames.split("|") if frames.is_a?(String)

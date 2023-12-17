@@ -666,6 +666,22 @@
       padding: 10px;
       overflow: hidden;
     }
+    .enemy-results {
+      grid-area: 2 / 2;
+      grid-column: span 2;
+      padding: 0;
+      overflow: hidden;
+
+      table {
+        font-size: 10px;
+
+        td {
+          text-align: right;
+          border-spacing: 0;
+          padding: 0 5px;
+        }
+      }
+    }
     .pin-all-toggle {
       grid-area: 1 / 1;
     }
