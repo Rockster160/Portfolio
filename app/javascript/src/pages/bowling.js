@@ -1314,6 +1314,7 @@ $(document).ready(function() {
   }).first().addClass("current")
 
   let laneTalk = function() {
+    console.log("laneTalk()");
     let center_id = $(".league-data").attr("data-lanetalk-center-id")
     let lanetalk_api_key = $(".league-data").attr("data-lanetalk-key")
 
@@ -1501,10 +1502,12 @@ $(document).ready(function() {
     }
 
     let connectLaneTalkWs = function() {
+      console.log("Connecting...");
       let socket = new WebSocket("wss://ws.lanetalk.com/ws")
       let send = function(json) { socket.send(JSON.stringify(json)) }
 
       socket.addEventListener("open", function(event) {
+        console.log("Open! Authorizing...");
         send({
           id: genUUID(),
           method: 0,
@@ -1513,7 +1516,10 @@ $(document).ready(function() {
       })
 
       socket.addEventListener("message", function(event) {
-        if (!useLaneTalk) { return }
+        if (!useLaneTalk) {
+          console.log("LaneTalk Disabled")
+          return
+        }
         let json = JSON.parse(event.data)
         let result = json.result || {}
         if (result.result?.client) {
@@ -1538,8 +1544,10 @@ $(document).ready(function() {
           connectLaneTalkWs()
         }, 5000)
       })
+      console.log("WS no errors");
     }
     connectLaneTalkWs()
+    console.log("laneTalkDone");
   }
 
   setFrames() // Need this to set absent bowlers
