@@ -38,11 +38,6 @@ if Rails.env.production?
     #   cron: every_5_minutes,
     # },
     {
-      name: "HourlyVenmoCheck",
-      class: "HourlyVenmoCheckWorker",
-      cron: every_hour,
-    },
-    {
       name: "DropLogTrackers",
       class: "DropLogTrackersWorker",
       cron: monthly_1st_at_midnight,
