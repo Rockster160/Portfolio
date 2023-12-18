@@ -100,7 +100,7 @@
         <%= image_tag "bowling/lanetalk.png" %>
       </div>
       <div class="numpad-key">
-        <%= f.text_field :lane_number, class: "lane-input" %>
+        <%= f.text_field :lane_number, class: "lane-input", value: f.object.lane_number || extract_lane_number %>
       </div>
       <div class="numpad-key new-bowler" data-edit>New Bowler</div>
       <div class="numpad-key card" data-modal="#card-hands">&#9824;</div>
