@@ -103,6 +103,7 @@ class JarvisTask < ApplicationRecord
     self.class.create!(
       attributes.symbolize_keys.except(
         :id,
+        :uuid,
         :enabled,
         :last_ctx,
         :last_result,
