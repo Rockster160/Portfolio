@@ -207,12 +207,12 @@ class TeslaControl
   end
 
   def vehicle_data
-    @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data")&.tap { |car_data|
+    @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data")&.tap { |car_data|
       cached_vehicle_data.merge!(car_data) if car_data[:sleeping]
       car_data[:sleeping] ||= false
 
       User.me.jarvis_cache.set(:car_data, car_data)
-      break if car_data[:sleeping]
+      break car_data if car_data[:sleeping]
       # Disabling as it can cause inaccuracies when the bluetooth fails to send
       # LocationCache.driving = !((car_data.dig(:drive_state, :shift_state) || "P") == "P")
 
