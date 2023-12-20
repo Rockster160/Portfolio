@@ -275,6 +275,7 @@ class TeslaControl
       raise TeslaError, "Timed out waiting to wake up" if Time.current.to_i - start > 35
 
       break true if wake_vehicle
+      Jarvis.say("Tesla sleeping... Wake up!")
       sleep(rand * 5)
     end
   end
