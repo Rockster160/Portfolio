@@ -58,7 +58,7 @@ class TaskMap
       keyval:     [
         { return: :keyval },
         { block: :str },
-        { block: :str },
+        { block: :any },
       ],
       hash:       [
         { return: :hash },
