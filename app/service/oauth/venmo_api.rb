@@ -5,7 +5,7 @@
 
 class Oauth::VenmoApi < Oauth::Base
   VENMO_BALANCE_ID = 1653332309442560599
-  constants(API_URL: "https://api.venmo.com/v1")
+  constants(api_url: "https://api.venmo.com/v1")
 
   include ActionView::Helpers::NumberHelper
 

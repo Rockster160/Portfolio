@@ -1,53 +1,57 @@
 class Oauth::Base
-  # CLIENT_ID
-  # REDIRECT_URI
-  # SCOPES
-  # OAUTH_URL
-  # EXCHANGE_URL
-  # CLIENT_ID
-  # CLIENT_SECRET
-  # REDIRECT_URI
-  # STORAGE_KEY
+  # oauth_url
+  # exchange_url
+  # client_id
+  # client_secret
+  # scopes
+  # redirect_uri
+  # storage_key
+  # auth_params
+  # exchange_params
 
   def self.key = name.split("::").last.underscore
-
   def self.defaults
     {
-      OAUTH_URL: "",
-      EXCHANGE_URL: "",
-      CLIENT_ID: nil,
-      CLIENT_SECRET: nil,
-      SCOPES: [],
-      REDIRECT_URI: "https://ardesian.com/webhooks/oauth/#{key}",
-      STORAGE_KEY: key,
-      AUTH_PARAMS: {},
-      EXCHANGE_PARAMS: {},
+      oauth_url: "",
+      exchange_url: "",
+      client_id: nil,
+      client_secret: nil,
+      scopes: [],
+      redirect_uri: "https://ardesian.com/webhooks/oauth/#{key}",
+      storage_key: key,
+      auth_params: {},
+      exchange_params: {},
     }
   end
 
   def self.constants(hash)
-    hash.reverse_merge(defaults).each { |ckey, cval| Oauth::Base.const_set(ckey, cval) }
-    # @constants = (@constants || {}).merge(hash)
+    @constants = hash
+  end
+  def self.preset_constants
+    (@constants || {}).reverse_merge(defaults)
   end
 
-  def initialize(user)
+  def initialize(user, overrides={})
+    self.class.preset_constants.merge(overrides).each do |key, val|
+      instance_variable_set("@#{key}", val)
+    end
     @user = user
   end
 
   def auth_url
     params = {
       response_type: :code,
-      client_id: CLIENT_ID,
-      redirect_uri: REDIRECT_URI,
-      scope: SCOPES,
+      client_id: @client_id,
+      redirect_uri: @redirect_uri,
+      scope: @scopes,
       access_type: :offline,
-    }.merge(AUTH_PARAMS).compact_blank
+    }.merge(@auth_params).compact_blank
 
-    "#{OAUTH_URL}?#{params.to_query}"
+    "#{@oauth_url}?#{params.to_query}"
   end
 
   def code=(code)
-    auth({ code: code, grant_type: :authorization_code }.merge(EXCHANGE_PARAMS)).compact_blank
+    auth({ code: code, grant_type: :authorization_code }.merge(@exchange_params)).compact_blank
 
     self
   end
@@ -58,24 +62,24 @@ class Oauth::Base
 
   def auth(code, params={})
     # Should be given a user to pull the cache keys from
-    Api.post(EXCHANGE_URL, {
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      redirect_uri: REDIRECT_URI,
-      scope: SCOPES,
+    Api.post(@exchange_url, {
+      client_id: @client_id,
+      client_secret: @client_secret,
+      redirect_uri: @redirect_uri,
+      scope: @scopes,
     }.merge(params)).tap { |json|
       next if json.nil?
       # puts "\e[36m[LOGIT] | #{json}\e[0m"
       cache.skip_save_set = true
       [:access_token, :refresh_token, :id_token].each do |token_name|
-        cache.dig_set(:oauth, STORAGE_KEY, token_name, json[token_name]) if json[token_name].present?
+        cache.dig_set(:oauth, @storage_key, token_name, json[token_name]) if json[token_name].present?
       end
       cache.skip_save_set = false
       cache.save
     }
   end
 
-  def url(path, base: API_URL)
+  def url(path, base: @api_url)
     return path if path.starts_with?("http")
 
     [base.to_s.sub(/\/$/, ""), path.to_s.sub(/^\//, "")].join("/")
@@ -89,8 +93,8 @@ class Oauth::Base
     Api.post(url(path), params, base_headers.merge(headers))
   end
 
-  def cache_set(key, val) = cache.dig_set(:oauth, STORAGE_KEY, key, val)
-  def cache_get(key) = cache.dig(:oauth, STORAGE_KEY, key)
+  def cache_set(key, val) = cache.dig_set(:oauth, @storage_key, key, val)
+  def cache_get(key) = cache.dig(:oauth, @storage_key, key)
   def access_token=(new_token)
     cache_set(:access_token, new_token)
   end

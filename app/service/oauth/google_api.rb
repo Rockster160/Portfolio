@@ -8,14 +8,14 @@ class Oauth::GoogleApi < Oauth::Base
 #   # REDIRECT_URI = "https://ardesian.com"
 #   # STORAGE_KEY = :google_api
 #   constants(
-#     OAUTH_URL: "https://accounts.google.com/o/oauth2/v2/auth",
-#     TOKEN_URL: "https://oauth2.googleapis.com/token",
-#     PROJECT_ID: ENV.fetch("PORTFOLIO_GCP_PROJECT_ID"),
-#     CLIENT_ID: ENV.fetch("PORTFOLIO_GCP_CLIENT_ID"),
-#     CLIENT_SECRET: ENV.fetch("PORTFOLIO_GCP_CLIENT_SECRET"),
-#     SCOPES: "https://www.googleapis.com/auth/calendar.events", #,https://www.googleapis.com/auth/calendar.settings.readonly #https://www.googleapis.com/auth/calendar
-#     REDIRECT_URI: "https://ardesian.com",
-#     STORAGE_KEY: :google_api,
+#     oauth_url: "https://accounts.google.com/o/oauth2/v2/auth",
+#     token_url: "https://oauth2.googleapis.com/token",
+#     project_id: ENV.fetch("PORTFOLIO_GCP_PROJECT_ID"),
+#     client_id: ENV.fetch("PORTFOLIO_GCP_CLIENT_ID"),
+#     client_secret: ENV.fetch("PORTFOLIO_GCP_CLIENT_SECRET"),
+#     scopes: "https://www.googleapis.com/auth/calendar.events", #,https://www.googleapis.com/auth/calendar.settings.readonly #https://www.googleapis.com/auth/calendar
+#     redirect_uri: "https://ardesian.com",
+#     storage_key: :google_api,
 #   )
 #
 #   def self.next10
