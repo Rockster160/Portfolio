@@ -3,12 +3,13 @@ class JilPromptsController < ApplicationController
   before_action :set_prompt, except: :index
 
   def index
-    @prompts = current_user.prompts.where(response: nil)
+    @prompts = current_user.prompts.unanswered
     redirect_to @prompts.first if @prompts.one?
   end
 
   def update
-    @prompt.update(response: params.dig(:prompt, :response) || [])
+    data = params.dig(:prompt, :response).permit!.to_h
+    @prompt.update(response: data)
     @prompt.task&.execute(response: @prompt.response, params: @prompt.params)
 
     redirect_to jarvis_path

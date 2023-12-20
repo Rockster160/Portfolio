@@ -43,10 +43,12 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
     )
     url = Rails.application.routes.url_helpers.jil_prompt_url(prompt)
     jil.ctx[:msg] += prompt.errors.full_messages unless prompt.persisted?
-    pushed = WebPushNotifications.send_to(user, {
-      title: question,
-      url: url
-    })
+    if Rails.env.production?
+      WebPushNotifications.send_to(user, {
+        title: question,
+        url: url
+      })
+    end
 
     url
   end

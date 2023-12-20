@@ -5,26 +5,32 @@
   <div class="skinny-container lists-index-container">
     <div class="lists-title instructions"><%= @prompt.question %></div>
     <div class="list-items survey-questions">
-      <% Array.wrap(@prompt.options).each_with_index do |option, idx| %>
-        <% base_params = "prompt[response][]" %>
-        <div class="list-item-container">
-          <%=
-            content_tag :input, "", {
-              type: "checkbox",
-              id: "#{base_params}#{idx}".gsub(/[^\w]/, ""),
-              name: "#{base_params}",
-              value: option,
-              class: "list-item-checkbox",
-              checked: @prompt.response&.include?(option),
-            }
-          %>
-          <label for="<%= "#{base_params}#{idx}".gsub(/[^\w]/, "") %>" class="list-item">
-            <div class="checkbox-wrapper"></div>
-            <div class="item-name">
-              <%= option %>
+      <% @prompt.options&.each do |option_key, option_val| %>
+        <% base_key = "prompt[response][#{option_key}]" %>
+        <% if option_val.is_a?(Array) %>
+          <% option_val.each_with_index do |option, idx| %>
+            <% base_params = "#{base_key}[]" %>
+            <% id = "#{base_params}#{idx}".gsub(/[^\w]/, "") %>
+            <div class="list-item-container">
+              <%=
+                content_tag :input, "", {
+                  type: "checkbox",
+                  id: id,
+                  name: "#{base_params}",
+                  value: option,
+                  class: "list-item-checkbox",
+                  checked: @prompt.response&.dig(option_key)&.include?(option),
+                }
+              %>
+              <label for="<%= id %>" class="list-item">
+                <div class="checkbox-wrapper"></div>
+                <div class="item-name">
+                  <%= option %>
+                </div>
+              </label>
             </div>
-          </label>
-        </div>
+          <% end %>
+        <% end %>
       <% end %>
     </div>
   </div>
