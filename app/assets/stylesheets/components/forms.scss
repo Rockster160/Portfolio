@@ -247,6 +247,10 @@ select {
   }
 }
 
+input[type=range] {
+  width: 100%;
+}
+
 @include bool-slider(60px);
 
 .checkbox-wrapper {
