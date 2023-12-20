@@ -11,7 +11,7 @@ class Jarvis::Execute::Text < Jarvis::Execute::Executor
     reg = matchable(reg)
     if reg.is_a?(Regexp)
       flags = args[2]
-      str.match?(matchable)
+      str.match?(reg)
     else
       str.include?(reg)
     end

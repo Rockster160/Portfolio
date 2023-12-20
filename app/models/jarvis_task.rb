@@ -209,10 +209,16 @@ class JarvisTask < ApplicationRecord
         "Event Data"
       ]]]
     elsif websocket?
-      [["WS Receive Data", [
-        { return: :hash },
-        "WS Receive Data"
-      ]]]
+      [
+        ["WS Receive Data", [
+          { return: :hash },
+          "WS Receive Data"
+        ]],
+        ["Connection State", [
+          { return: :str },
+          "Connection State"
+        ]]
+      ]
     elsif monitor?
       [["Pressed", [
         { return: :bool },

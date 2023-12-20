@@ -1,3 +1,4 @@
+import { Monitor } from "./monitor"
 import { Time } from "./_time"
 import { Text } from "../_text"
 import { ColorGenerator } from "./color_generator"
@@ -46,15 +47,18 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     let lines = []
     let first_row = []
     first_row.push(cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]      " : "        ")
+    if (cell.data?.garage?.timestamp < Time.ago(Time.hour)) {
+      console.log("Garage Expired");
+      cell.data.garage.state = "unknown" }
 
-    if ("open" in (cell.data?.garage || {})) {
-      if (cell.data.garage.open) {
+    if ("state" in (cell.data?.garage || {})) {
+      if (cell.data.garage.state == "open") {
         flash(false)
         first_row.push(Text.color(dash_colors.orange, "  [ico ti ti-mdi-garage_open]"))
-      } else if (cell.data.garage.closed) {
+      } else if (cell.data.garage.state == "closed") {
         flash(false)
         first_row.push(Text.color(dash_colors.green, "  [ico ti ti-mdi-garage]"))
-      } else {
+      } else if (cell.data.garage.state == "between") {
         flash(true)
         if (flash_on = !flash_on) {
           first_row.push(Text.color(dash_colors.yellow, "  [ico ti ti-mdi-garage_open]"))
@@ -64,6 +68,9 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         } else {
           first_row.push(Text.color(dash_colors.yellow, "    "))
         }
+      } else {
+        flash(false)
+        first_row.push(Text.color(dash_colors.grey, " [ico ti ti-mdi-garage]?"))
       }
     } else {
       flash(false)
@@ -140,14 +147,13 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
   let getGarage = function() {
     cell.recent_garage = false
-    cell.garage_socket.send({ action: "request" })
+    cell.garage_socket.send({ request: "get" })
 
     // If no response within 10 seconds, forget the current state
     clearTimeout(cell.garage_timeout)
     cell.garage_timeout = setTimeout(function() {
-      if (!cell.recent_garage && cell.data.garage.hasOwnProperty("open")) {
-        delete cell.data.garage.open
-      }
+      console.log("Timed out waiting for garage response");
+      cell.data.garage.state = "unknown"
       renderLines()
     }, Time.seconds(10))
   }
@@ -193,27 +199,45 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     )
     cell.device_battery_socket.send({ action: "request" })
 
-    cell.garage_socket = new CellWS(
-      cell,
-      Server.socket("GarageChannel", function(msg) {
-        this.flash()
-
-        if (msg.data == "refreshGarage") { getGarage() }
-
-        cell.data.garage = cell.data.garage || {}
-        if (msg.data?.garageState) {
-          cell.recent_garage = true
-          cell.data.garage.open = msg.data.garageState == "open"
-          cell.data.garage.closed = msg.data.garageState == "closed"
-          cell.data.garage.between = msg.data.garageState == "between"
-        }
-
+    cell.garage_socket = Monitor.subscribe("e46e2278-1f9a-4a1e-8cfe-962f666a6620", "garage", {
+      connected: function() {
+        console.log("socket Connected");
+        this.send({ request: "get" })
+        // can also set the arrow?
+        // this.send({ request: "open" })
+        // this.send({ request: "close" })
+        // this.send({ request: "toggle" })
+      },
+      disconnected: function() {
+        console.log("socket Disconnected");
+        cell.data.garage.state = "unknown"
         renderLines()
-      })
-    )
-    getGarage()
+      },
+      received: function(data) {
+        console.log("socket Received", data);
+        clearTimeout(cell.garage_timeout)
+        cell.flash()
+        if (data.loading) {
+
+        } else {
+          cell.data.garage.timestamp = data.timestamp * 1000
+          // Somewhere - need to do an hourly? check, if no received, go grey
+          let msg = data.result || ""
+          if (msg.includes("[ico mdi-garage font-size: 100px; color: green;]")) {
+            cell.data.garage.state = "closed"
+          } else if (msg.includes("yellow; animation: 1s infinite blink")) {
+            cell.data.garage.state = "between"
+          } else if (msg.includes("[ico mdi-garage_open font-size: 100px; color: orange;]")) {
+            cell.data.garage.state = "open"
+          } else {
+            cell.data.garage.state = "unknown"
+          }
+          renderLines()
+        }
+      },
+    })
     setInterval(function() {
-      getGarage()
+      renderLines()
     }, Time.hour())
 
     cell.nest_socket = new CellWS(
@@ -256,9 +280,11 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     data: {
       sound: true,
       device_battery: {},
+      garage: { state: "unknown", timestamp: 0 }
     },
     onload: subscribeWebsockets,
     reloader: function() {
+      getGarage()
       renderLines()
       // Update times? "1 minute ago", etc...
     },
@@ -266,13 +292,11 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       cell.amz_socket.reopen()
       cell.device_battery_socket.reopen()
       cell.nest_socket.reopen()
-      cell.garage_socket.reopen()
     },
     stopped: function() {
       cell.amz_socket.close()
       cell.device_battery_socket.close()
       cell.nest_socket.close()
-      cell.garage_socket.close()
     },
     commands: {
       quiet: function() {
@@ -297,7 +321,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       } else if (/^add\b/i.test(msg)) { // Add item to AMZ deliveries
         cell.amz_socket.send({ action: "change", add: msg })
       } else if (/\b(open|close|toggle|garage)\b/.test(msg)) { // open/close
-        cell.garage_socket.send({ action: "control", direction: msg })
+        cell.garage_socket.send({ request: msg.match(/\b(open|close|toggle)\b/)[0] })
       } else { // Assume AC control
         cell.nest_socket.send({ action: "command", settings: msg })
       }

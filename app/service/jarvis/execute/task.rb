@@ -146,11 +146,6 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
 
   def ws
     channel, data = evalargs
-    # Broadcast.to(jil.task.user, channel, data)
-    SocketChannel.send_to(
-      jil.task.user,
-      channel,
-      data,
-    )
+    SocketChannel.send_to(jil.task.user, channel, data)
   end
 end

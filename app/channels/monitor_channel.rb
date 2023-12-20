@@ -1,22 +1,4 @@
 class MonitorChannel < ApplicationCable::Channel
-  # NOTE: The below should be used to determine when a connection is lost
-  # Use this to figure if the garage loses connection.
-  # Can also do websocket triggers - include "connection:bool" as an argument
-  # after_subscribe :connection_monitor
-  # CONNECTION_TIMEOUT = 10.seconds
-  # CONNECTION_PING_INTERVAL = 5.seconds
-  # periodically every: CONNECTION_PING_INTERVAL do
-  #   @driver&.ping
-  #   if Time.now - @_last_request_at > @_timeout
-  #     connection.disconnect
-  #   end
-  # end
-  # def connection_monitor
-  #   @_last_request_at ||= Time.now
-  #   @_timeout = CONNECTION_TIMEOUT
-  #   @driver = connection.instance_variable_get('@websocket').possible?&.instance_variable_get('@driver')
-  #   @driver.on(:pong) { @_last_request_at = Time.now }
-  # end
   def self.started(task)
     broadcast_to(
       task.user,
@@ -30,12 +12,25 @@ class MonitorChannel < ApplicationCable::Channel
       task.user,
       id: task.uuid,
       result: task.last_result,
-      timestamp: task.last_trigger_at.to_i,
+      timestamp: task.last_ctx.dig(:vars, "timestamp:var").then { |ts|
+        break ts if ts.is_a?(Numeric) # If it's a number
+        break ts.to_f if ts.to_f > 0 # Or looks like a number
+      } || task.last_trigger_at.to_i,
     )
+    # This is VERY magic. If the task defines a "timestamp" variable, the monitor channel will
+    #   send that instead, allowing us to send
   end
 
   def subscribed
     stream_for current_user
+  end
+
+  def broadcast(data)
+    data.delete("action") # Action is `broadcast`
+    channel = data.delete("channel")
+    return unless current_user.present? && channel.present?
+
+    SocketChannel.send_to(current_user, channel, data)
   end
 
   def execute(data) # Runs task with executing:true
