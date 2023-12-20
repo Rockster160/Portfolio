@@ -1,22 +1,22 @@
 class SocketChannel < ApplicationCable::Channel
   # Trigger a disconnect when the pinging stops
-  # after_subscribe :connection_watcher
-  # CONNECTION_TIMEOUT = 10.seconds
-  # CONNECTION_PING_INTERVAL = 5.seconds
-  # periodically every: CONNECTION_PING_INTERVAL do
-  #   @driver&.ping
-  #   if Time.now - @_last_request_at > @_timeout
-  #     # close_connection
-  #     # self.disconnect
-  #     connection.close
-  #   end
-  # end
-  # def connection_watcher
-  #   @_last_request_at ||= Time.now
-  #   @_timeout = CONNECTION_TIMEOUT
-  #   @driver = connection.instance_variable_get("@websocket").possible?&.instance_variable_get("@driver")
-  #   @driver.on(:pong) { @_last_request_at = Time.now }
-  # end
+  after_subscribe :connection_watcher
+  CONNECTION_TIMEOUT = 10.seconds
+  CONNECTION_PING_INTERVAL = 3.seconds
+  periodically every: CONNECTION_PING_INTERVAL do
+    @driver&.ping
+    if Time.now - @_last_request_at > @_timeout
+      # close_connection
+      # self.disconnect
+      connection.close
+    end
+  end
+  def connection_watcher
+    @_last_request_at ||= Time.now
+    @_timeout = CONNECTION_TIMEOUT
+    @driver = connection.instance_variable_get("@websocket").possible?&.instance_variable_get("@driver")
+    @driver.on(:pong) { @_last_request_at = Time.now }
+  end
 
   def self.send_to(user, channel, data)
     SocketChannel.broadcast_to("socket_#{user.id}_#{channel}", data)
@@ -43,7 +43,6 @@ class SocketChannel < ApplicationCable::Channel
     return unless params[:channel_id].present?
 
     receive_data = data.reverse_merge(params).except(:action)
-    ::Jarvis.say("Socket: #{receive_data.inspect}")
 
     ::Jarvis.execute_trigger(
       :websocket,
