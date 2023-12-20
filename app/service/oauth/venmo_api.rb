@@ -7,6 +7,8 @@ class Oauth::VenmoApi < Oauth::Base
   VENMO_BALANCE_ID = 1653332309442560599
   constants(API_URL: "https://api.venmo.com/v1")
 
+  include ActionView::Helpers::NumberHelper
+
   # ========== Via Name ==========
   def send_by_name(name, amount, note)
     send_money(user_id_from_name(name), amount, note)
@@ -37,9 +39,9 @@ class Oauth::VenmoApi < Oauth::Base
   def charge_money(id, amount, note)
     return if id.blank?
     if amount.positive?
-      Jarvis.say("Paying #{id_to_name(id)} $#{amount} for #{note}")
+      Jarvis.say("Paying #{id_to_name(id)} #{amount_to_currency(amount)} for #{note}")
     else
-      Jarvis.say("Requesting $#{amount} from #{id_to_name(id)} for #{note}")
+      Jarvis.say("Requesting #{amount_to_currency(amount.abs)} from #{id_to_name(id)} for #{note}")
     end
 
     return unless Rails.env.production?
@@ -57,6 +59,10 @@ class Oauth::VenmoApi < Oauth::Base
   # ========== Helpers ==========
   def contact_mapping
     @contact_mapping ||= cache_get(:contact_mapping) || {}
+  end
+
+  def amount_to_currency(amount)
+    number_to_currency(amount).gsub(".00", "")
   end
 
   def id_to_name(id)

@@ -13,13 +13,7 @@ class Jarvis::Venmo < Jarvis::Action
 
     res = ::Oauth::VenmoApi.new(@user).charge_by_name(name, amount.to_f * (req.present? ? -1 : 1), note)
 
-    return false if from.blank? || amount.blank?
-
-    if req.present?
-      "Requesting $#{amount} from #{contact&.name || from} for #{note}"
-    else
-      "Sending $#{amount} to #{contact&.name || from} for #{note}"
-    end
+    Jarvis::Text.affirmative
   end
 
   def valid_words?
