@@ -383,11 +383,8 @@ class TeslaControl
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
     SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
   rescue RestClient::ExceptionWithResponse => err
-    if wake
-      return { sleeping: true }
-    else
-      return wake_up && retry if err.response&.code == 408
-    end
+    return { sleeping: true } if !wake && err.response&.code == 408
+    return wake_up && retry if err.response&.code == 408
     return refresh && retry if err.response&.code == 401
     raise err
   rescue JSON::ParserError => err
