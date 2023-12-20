@@ -10,9 +10,10 @@ class Jil::JarvisCachesController < ApplicationController
   def update
     @cache = current_user.jarvis_cache
 
-    if @cache.update(params[:cache])
-      # Probably should do a remote push
+    if @cache.update(data: params[:cache])
+      render json: {}, status: :ok
     else
+      render json: {}, status: :bad_request
     end
   end
 end

@@ -241,6 +241,7 @@
     function editorChange() {
       let json = unparse()
       document.getElementById("jsonOutput").textContent = JSON.stringify(json, null, 2)
+      push(json)
     }
 
     function rawChange() {
@@ -483,6 +484,24 @@
       editorChange()
 
       window.loaded = true
+    }
+
+    function push(json) {
+      if (!window.loaded) { return }
+      console.log("Pushing...", json)
+      fetch(window.location.href, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cache: json }),
+      }).then(function(res) {
+        res.json().then(function(json) {
+          if (res.ok) {
+            console.log("Success")
+          } else {
+            console.log("Failed: ", res, json)
+          }
+        })
+      })
     }
   </script>
 </body>
