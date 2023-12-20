@@ -42,7 +42,7 @@ class Oauth::Base
         scope: SCOPES,
       }.merge(params)).tap { |json|
         next if json.nil?
-        puts "\e[36m[LOGIT] | #{json}\e[0m"
+        # puts "\e[36m[LOGIT] | #{json}\e[0m"
         DataStorage["#{STORAGE_KEY}_access_token"] = json[:access_token] if json[:access_token].present?
         DataStorage["#{STORAGE_KEY}_refresh_token"] = json[:refresh_token] if json[:refresh_token].present?
       }

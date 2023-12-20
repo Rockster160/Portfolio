@@ -23,7 +23,7 @@ module Bowling
           render status: :created, json: game_data.merge({ redirect: new_bowling_game_path(series: @set, game: @set.games_complete + 1) })
         end
       else
-        puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
+        # puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
       end
     end
 
@@ -52,7 +52,7 @@ module Bowling
           render status: :created, json: game_data.merge({ redirect: new_bowling_game_path(series: @set, game: @set.games_complete + 1) })
         end
       else
-        puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
+        # puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
       end
     end
 

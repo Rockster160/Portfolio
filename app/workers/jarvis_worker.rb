@@ -19,7 +19,7 @@ class JarvisWorker
         )
       end
     else
-      puts "\e[35m[LOGIT] | What is it? parsed:[#{parsed.class}]#{parsed}\e[0m"
+      # puts "\e[35m[LOGIT] | What is it? parsed:[#{parsed.class}]#{parsed}\e[0m"
     end
 
     ::Jarvis::Schedule.cleanup
