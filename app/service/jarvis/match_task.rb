@@ -20,7 +20,7 @@ module Jarvis::MatchTask
 
   def match_run(user, ostr, skip=[], return_as: :str)
     begin
-      task = user.jarvis_tasks.anyfind(ostr)
+      task = user.jarvis_tasks.where.not(id: skip).anyfind(ostr)
     rescue ActiveRecord::RecordNotFound
       task = nil
     end
