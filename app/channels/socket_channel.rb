@@ -32,7 +32,6 @@ class SocketChannel < ApplicationCable::Channel
   end
 
   def receive(data)
-    puts "\e[33m[LOGIT] | #{data}\e[0m"
     trigger(data, :receive)
   end
 
