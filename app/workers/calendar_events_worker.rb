@@ -108,7 +108,7 @@ class CalendarEventsWorker
           event[:location],
           address_book.current_address&.street
         )
-        return unless traveltime.present?
+        next unless traveltime.present?
         # Show time to leave
         new_events.push(
           name: "TTL: #{distance_of_time_in_words(traveltime)}",
