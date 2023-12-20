@@ -10,6 +10,7 @@
 #
 class JarvisCache < ApplicationRecord
   serialize :data, SafeJsonSerializer
+  attr_accessor :skip_save_set
 
   belongs_to :user
 
@@ -25,7 +26,7 @@ class JarvisCache < ApplicationRecord
     old_data = reload.data || {}
     old_data[key.to_s] = val
 
-    !!update(data: old_data)
+    @skip_save_set ? val : !!update(data: old_data)
   end
 
   def dig_set(*steps, val)
@@ -40,6 +41,6 @@ class JarvisCache < ApplicationRecord
         hash[step] = val
       end
     }
-    save && val
+    @skip_save_set ? val : save
   end
 end

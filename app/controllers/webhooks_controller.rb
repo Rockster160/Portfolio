@@ -13,6 +13,8 @@ class WebhooksController < ApplicationController
   end
 
   def auth
+    # Find the Oauth for the issuer or other token, then find the current_user (maybe signed in?)
+    # ::Oauth::MyApi.new(current_user).code = params[:code]
     if params[:issuer] == "https://auth.tesla.com/oauth2/v3"
       # ::Oauth::TeslaApi.code = params[:code]
     end
