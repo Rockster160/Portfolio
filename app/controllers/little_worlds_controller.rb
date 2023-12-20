@@ -49,7 +49,7 @@ class LittleWorldsController < ApplicationController
     end
 
     session_avatar.update_by_builder(character)
-    current_user.avatar.update_by_builder(character) if should_save
+    current_user.update_avatar(character) if should_save
 
     respond_to { |format| format.json { render json: { json: character.to_json, html: character.to_html } } }
   end

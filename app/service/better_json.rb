@@ -46,7 +46,7 @@ module FancyRenderJson
 
     [
       "{",
-      *hash.map { |k, v| "#{INDENT}#{k.to_s.colorize(COLOR_MAP[:key])}: #{format(v, depth+1)}," },
+      *hash.map { |k, v| "#{INDENT}\"#{k.to_s.colorize(COLOR_MAP[:key])}\": #{format(v, depth+1)}," },
       "}"
     ].join("\n#{curdent}")
   end

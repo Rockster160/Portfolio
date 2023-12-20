@@ -23,7 +23,7 @@ module Bowling
           render status: :created, json: game_data.merge({ redirect: new_bowling_game_path(series: @set, game: @set.games_complete + 1) })
         end
       else
-        puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
+        # puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
       end
     end
 
@@ -33,6 +33,16 @@ module Bowling
 
       if @set.update(bowling_params)
         @set.games.each(&:save) # Hack because double gutter isn't registering as a change to games
+        started_frame_9 = params.dig(:bowling_set, :games_attributes)&.any? { |game|
+          next false unless game[:game_num] == "3"
+          game.dig(:frames_details, "8", :throw1).present? # 8 is index, so frame 9
+        }
+        if started_frame_9 && current_user.admin?
+          Rails.cache.fetch("frame-9-start-car", expires_in: 1.hour) {
+            Jarvis.say("Starting car for 9th frame")
+            Jarvis.command(current_user, "Take me home")
+          }
+        end
         if params[:throw_update].present?
           render status: :created, json: game_data
         elsif @set.complete?
@@ -42,7 +52,7 @@ module Bowling
           render status: :created, json: game_data.merge({ redirect: new_bowling_game_path(series: @set, game: @set.games_complete + 1) })
         end
       else
-        puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
+        # puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
       end
     end
 
@@ -77,6 +87,7 @@ module Bowling
     def bowling_params
       params.require(:bowling_set).permit(
         # :league_id, - Done before saving
+        :lane_number,
         games_attributes: [
           :id,
           :set_id,
@@ -101,7 +112,9 @@ module Bowling
           ]
         ]
       ).tap do |whitelist|
-        whitelist[:games_attributes] = whitelist[:games_attributes].map do |game_attributes|
+        whitelist[:frames] = nil if whitelist[:absent]
+        whitelist[:frames_details] = nil if whitelist[:absent]
+        whitelist[:games_attributes] = whitelist[:games_attributes]&.map do |game_attributes|
           game_attributes.tap do |game_whitelist|
             game_whitelist[:set_id] = game_whitelist[:set_id].presence || @set.id
             game_whitelist[:bowler_id] = game_whitelist[:bowler_id].presence || @league.bowlers.find_or_create_by(name: game_whitelist[:bowler_name]).id

@@ -19,6 +19,7 @@
   end
 
   def call
+    MonitorChannel.started(task) if task.monitor?
     @test_mode = data.delete(:test_mode)
     @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil, current_token: nil }
     @ctx.merge!(@data[:ctx] || {})
@@ -45,8 +46,10 @@
     @ctx[:msg]
   ensure
     sleep 0.2 if @test_mode
-    ActionCable.server.broadcast("jil_#{@task.id}_channel", { done: true, output: @ctx[:msg].join("\n") })
+    @task.user.current_usage.increment(@task, @ctx[:i])
+    ActionCable.server.broadcast("jil_#{@task.uuid}_channel", { done: true, output: @ctx[:msg].join("\n") })
     @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx, last_result_val: @ctx[:last_val])
+    MonitorChannel.send_task(@task) if @task.monitor?
     @ctx[:msg]#.join("\n")
   end
 
@@ -57,7 +60,7 @@
   def eval_block(task_block)
     if task_block.is_a?(::Hash) && task_block[:token].present?
       @ctx[:current_token] = task_block[:token]
-      ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token] })
+      ActionCable.server.broadcast("jil_#{@task.uuid}_channel", { token: task_block[:token] })
       sleep 0.2 if @test_mode
     end
     if task_block.is_a?(::Array)
@@ -94,7 +97,7 @@
     ).then { |res|
       ::Jarvis::Execute::Cast.cast(res, task_block[:returntype], force: true, jil: self)
     }.tap { |res|
-      ActionCable.server.broadcast("jil_#{@task.id}_channel", { token: task_block[:token], res: res.as_json })
+      ActionCable.server.broadcast("jil_#{@task.uuid}_channel", { token: task_block[:token], res: res.as_json })
       @ctx[:last_val] = res
     }.tap { |res|
       # binding.pry if @task.id == 43

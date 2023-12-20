@@ -17,7 +17,6 @@
 
 ActiveSupport::Inflector.inflections(:en) do |inflect|
   inflect.acronym "GPT"
-  inflect.acronym "API"
   inflect.irregular "cloth", "clothes"
   # inflect.plural /^(ox)$/i, "\1en"
   # inflect.singular /^(ox)en/i, "\1"

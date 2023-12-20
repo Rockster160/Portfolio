@@ -1,4 +1,4 @@
-class Oauth::GoogleAPI < Oauth::Base
+class Oauth::GoogleApi < Oauth::Base
   # BASE_URL="https://www.googleapis.com/calendar/v3"
 #   # OAUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 #   # TOKEN_URL = "https://oauth2.googleapis.com/token"

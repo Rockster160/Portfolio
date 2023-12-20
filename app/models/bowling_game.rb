@@ -43,6 +43,10 @@ class BowlingGame < ApplicationRecord
     sum(:score) + sum(:handicap)
   end
 
+  def perfect_game?
+    score == 300
+  end
+
   def league_id
     @new_attributes&.dig(:league_id) || set&.league_id || bowler&.league_id
   end

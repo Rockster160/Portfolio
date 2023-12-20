@@ -74,10 +74,11 @@ $(document).ready(function() {
 
 $(document).ready(function() {
   if ($(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").length == 0) { return }
+  let edit_page = $(".ctr-bowling_games.act-edit").length > 0
   let currentScorePush = null
   var inProgress = false
   var lockTimer = false
-  let storedVal = sessionStorage.getItem("useLaneTalk")
+  let storedVal = sessionStorage.getItem("useLaneTalk") // !edit_page &&
   var useLaneTalk = storedVal !== null ? storedVal == "true" : true
   if (useLaneTalk) { $(".lanetalk-toggle").addClass("active") }
   var pin_knock = undefined
@@ -110,10 +111,12 @@ $(document).ready(function() {
   })
   $(".lanetalk-toggle").click(function(evt) {
     useLaneTalk = !useLaneTalk
-    sessionStorage.setItem("useLaneTalk", useLaneTalk)
     $(this).toggleClass("active", useLaneTalk)
 
     evt.preventDefault()
+    if (!edit_page) {
+      sessionStorage.setItem("useLaneTalk", useLaneTalk)
+    }
     return false
   })
   $(".timer-toggle").click(function() {
@@ -412,6 +415,8 @@ $(document).ready(function() {
 
     showModal("#bowler-sub-list")
   }).on("click", ".new-bowler", function(evt) {
+    evt.preventDefault()
+    evt.stopPropagation()
     $(".sub-message").addClass("hidden")
     $(".bowler-select").removeClass("hidden")
     $(".bowler").each(function() {
@@ -610,6 +615,12 @@ $(document).ready(function() {
     }
   }
 
+  clearScores = function() {
+    $(".shot").each(function() { clearShot(this) })
+    calcScores()
+    pushScores()
+  }
+
   fillRandomScores = function() {
     var hold = should_check_stats
     should_check_stats = false
@@ -703,6 +714,8 @@ $(document).ready(function() {
   })
 
   $(document).keyup(function(evt) {
+    if (evt.target?.closest(".lane-input")) { return }
+
     if (/[0-9\/\+\-]/i.test(evt.key)) {
       var num = evt.key == "+" ? "X" : evt.key
       addScore(num)
@@ -881,7 +894,7 @@ $(document).ready(function() {
   }
 
   detectCleanStarts = function() {
-    $(".perfect-game").removeClass("perfect-game")
+    $(".perfect-game:not(.prev-score)").removeClass("perfect-game")
     $(".consec-start").removeClass("consec-start")
     $(".clean-start").removeClass("clean-start")
     $(".bowler").each(function() {
@@ -1057,10 +1070,13 @@ $(document).ready(function() {
     }
   }
 
+  // Dup?
+  clamp = (number, min, max) => Math.max(min, Math.min(number, max))
   minMax = function(a, b, c) {
     return [a, b, c].sort(function(x, y) { return x - y })[1]
   }
 
+  // Dup?
   scoreToVal = function(score, prev_score) {
     prev_score = parseInt(prev_score) || 0
     score = minMax(0, 10 - prev_score, textToScore(score))
@@ -1071,13 +1087,20 @@ $(document).ready(function() {
     if (score == "/") { return 10 - prev_score }
     return 0
   }
-
   textToScore = function(text) {
     if (text == "-") { return 0 }
     if (text == "/") { return 10 }
     if (text == "X") { return 10 }
 
     return text == "" || isNaN(text) ? 0 : parseInt(text)
+  }
+  scoreFromToss = function(tossIdx, tosses) {
+    const toss = tosses[tossIdx]
+    if (!toss) return 0
+    if (toss === "-") return 0
+    if (toss === "X") return 10
+    if (toss === "/") return 10 - scoreFromToss(tossIdx-1, tosses)
+    return parseInt(toss)
   }
 
   addTenthFrameScore = function(score, stay, toss) {
@@ -1294,13 +1317,17 @@ $(document).ready(function() {
     let center_id = $(".league-data").attr("data-lanetalk-center-id")
     let lanetalk_api_key = $(".league-data").attr("data-lanetalk-key")
 
-    if (!center_id || !lanetalk_api_key) { return }
+    if (!center_id || !lanetalk_api_key) {
+      if (!center_id) { console.log("Missing Center ID") }
+      if (!lanetalk_api_key) { console.log("Missing LaneTalk API Key") }
+      return
+    }
 
     let bowler_mapping = {}
     $(".bowler").each(function() {
-      let name = $(this).find(".bowler-name .usbc-name").text() || $(this).find(".bowler-name .display-name").text()
+      let bowlerNum = this.getAttribute("data-bowler")
 
-      if (name) { bowler_mapping[name.toLowerCase()] = this }
+      if (bowlerNum) { bowler_mapping[parseInt(bowlerNum)] = this }
     })
 
     let genUUID = function() {
@@ -1312,7 +1339,7 @@ $(document).ready(function() {
     }
 
     let decToPins = function(integer) {
-      if (integer === null) { return [] }
+      if (!integer) { return [] }
 
       let binary = integer.toString(2)
       const zerosToAdd = Math.max(0, 10 - binary.length)
@@ -1322,17 +1349,117 @@ $(document).ready(function() {
       }).filter(Boolean).sort()
     }
 
+    let findCurrentLane = function(start_lane) {
+      let current_game = parseInt(params.game || 1)
+
+      return (current_game % 2 == 1) ? start_lane : findPairLane(start_lane)
+    }
+
+    let findPairLane = function(start_lane) {
+      return start_lane + (start_lane % 2 ? 1 : -1)
+    }
+
+    function calculateBowlingScore(frames) {
+      // `frames` is a flattened array of every frame.
+      // Strikes should always be followed by an empty string (non-10th) to represent no second throw
+      // Use "X", "/", "-" for strike, spare, gutter
+      // Other values should be integers (not strings of numbers)
+      let totalScore = 0
+      for (let i=0; i<frames.length; i+=2) {
+        if (i >= 20) continue
+        let frameNum = clamp(Math.floor(i/2), 0, 9) + 1
+        let frame = [frames[i], frames[i+1], frames[i+2]].slice(0, frameNum < 10 ? 2 : 3)
+        frame.forEach((toss, idx) => {
+          let tossScore = scoreFromToss(idx, frame)
+          totalScore += tossScore
+
+          if (frameNum < 10) {
+            let nextFrame = frames.slice(i+2, i+4)
+            if (toss == "X" || toss == "/") { // Double next throw
+              totalScore += scoreFromToss(0, nextFrame)
+            }
+            if (toss == "X") { // Double following next throw
+              if (nextFrame[1] == "") { // Next is strike, so jump to following
+                nextFrame = frames.slice(i+4, i+6)
+                totalScore += scoreFromToss(0, nextFrame)
+              } else {
+                totalScore += scoreFromToss(1, nextFrame)
+              }
+            }
+          }
+        })
+      }
+      return totalScore
+    }
+
+    let updateEnemy = function(player) {
+      console.log("Enemy: ", player)
+      $("#enemy-scores-table").removeClass("hidden")
+      let table = $("#enemy-scores-table tbody")
+      let score = calculateBowlingScore(player.throws) // -- Won't include mid-frame
+      let enemy_vals = {
+        "enemy-num":   player.playerNumber,                // Num
+        "enemy-frame": player.scores.length,               // Frame
+        "enemy-now":   score,                              // Now
+        "enemy-hdcp":  Math.round(Math.random()*20),//player.playerHcp,                   // HDCP
+        "enemy-total": player.scoreCompletedGames + score, // Tot
+        "enemy-max":   player.maxScore,                    // Max
+      }
+      let row = table.find(`[data-player-num="${player.playerNumber}"]`)
+      if (row.length == 0) {
+        row = $("<tr>").attr("data-player-num", player.playerNumber).addClass("enemy")
+        Object.keys(enemy_vals).forEach(klass => row.append($("<td>").addClass(klass)))
+        table.append(row)
+        // reorder rows
+        let rows = table.find("tr.enemy").toArray()
+        rows.sort(function(a, b) {
+          let playerNumA = parseInt($(a).attr("data-player-num"))
+          let playerNumB = parseInt($(b).attr("data-player-num"))
+          return playerNumA - playerNumB
+        })
+        table.empty()
+        rows.forEach(item => table.append(item))
+      }
+      let total_row = table.find("#enemy-table-totals")
+      if (total_row.length == 0) {
+        total_row = $("<tr>").attr("id", "enemy-table-totals")
+        Object.keys(enemy_vals).forEach(klass => total_row.append($("<td>").addClass(`${klass}-total`)))
+        table.append(total_row)
+      }
+
+      let enemy_total = 0
+      let calc_totals = ["enemy-now", "enemy-total"]
+      for (const [klass, val] of Object.entries(enemy_vals)) {
+        row.find(`.${klass}`).text(val || 0)
+
+        if (calc_totals.indexOf(klass) < 0) { continue }
+        let sum = Array.from(table.find(`.${klass}`)).reduce((total, col) => total + parseFloat(col.textContent), 0)
+        if (klass == "enemy-now") { enemy_total = sum }
+        total_row.find(`.${klass}-total`).text(sum || 0)
+      }
+
+      let klass = "enemy-hdcp"
+      let sum = Array.from(table.find(`.${klass}`)).reduce((total, item) => total + parseFloat(item.textContent), 0)
+      total_row.find(`.${klass}-total`).text("+" + (sum + enemy_total))
+    }
+
     let updatePlayer = function(player) {
-      // if (player.playerName != "JAKERZ") { return }
-      // let bowler = bowler_mapping["rocco nicholls"]
+      player.crossLane = true
+      let current_game = parseInt(params.game || 1)
+      if (player.game != current_game) { return }
 
-      let current_game = parseInt(params.game)
-      if (parseInt(player.game) != current_game) { return }
+      let lane_input = parseInt($(".lane-input").val())
+      if (!lane_input) { return }
 
-      let bowler = bowler_mapping[player.playerName.toLowerCase()]
+      let current_lane = player.crossLane ? findCurrentLane(lane_input) : lane_input
+
+      if (player.lane != current_lane) {
+        let enemy = player.crossLane && current_lane == findPairLane(player.lane)
+        return enemy ? updateEnemy(player) : null
+      }
+      let bowler = bowler_mapping[player.playerNumber]
       if (!bowler) { return }
-
-      // Set lane number?
+      console.log(player);
 
       player.throws.forEach(function(toss_str, idx) {
         let toss_value = toss_str
@@ -1373,7 +1500,7 @@ $(document).ready(function() {
       moveToNextFrame()
     }
 
-    let connectWs = function() {
+    let connectLaneTalkWs = function() {
       let socket = new WebSocket("wss://ws.lanetalk.com/ws")
       let send = function(json) { socket.send(JSON.stringify(json)) }
 
@@ -1408,14 +1535,40 @@ $(document).ready(function() {
 
       socket.addEventListener("close", function(event) {
         setTimeout(function() {
-          connectWs()
+          connectLaneTalkWs()
         }, 5000)
       })
     }
-    connectWs()
+    connectLaneTalkWs()
   }
 
   setFrames() // Need this to set absent bowlers
   recalcScores()
   laneTalk()
 })
+
+// {
+//   "result": {
+//     "channel": "LiveScores:xxx-xxx-xxx-xxx",
+//     "type": 5,
+//     "data": {
+//       "bowlingCenterUuid": "xxx-xxx-xxx-xxx",
+//       "lane": 22,
+//       "game": 2,
+//       "crossLane": false,
+//       "playerName": "Lisa Taylor",
+//       "playerNumber": 2,
+//       "playerHcp": 83,
+//       "teamName": "Flying Balls",
+//       "teamHcp": 193,
+//       "scoreCompletedGames": 167,
+//       "throws": [1, 3, 7, "/", 9, "-", 7, "-"],
+//       "pins": [511, 311, 52, 0, 512, 512, 11, 11],
+//       "scores": [4, 23, 32, 39],
+//       "speed": [3023, 3543, 3082, 3082, 3152, 3152, 3200, 2729],
+//       "belongsTo": null,
+//       "received": 1701995577,
+//       "maxScore": 210
+//     }
+//   }
+// }

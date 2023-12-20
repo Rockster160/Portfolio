@@ -21,7 +21,7 @@ class LocationCache
       },
       scope: { user_id: User.me.id }
     )
-    # notify(departed)
+    notify(departed)
 
     User.me.jarvis_cache.set(:is_driving, departed)
   end
@@ -47,12 +47,18 @@ class LocationCache
     recent_locations.last
   end
 
+  def self.last_coord
+    recent_locations.last&.dig(:loc)
+  end
+
   def self.recent_locations
     User.me.jarvis_cache.get(:recent_locations) || []
   end
 
-  def self.set(loc, at)
+  def self.set(loc, at=nil)
+    at ||= (Time.current.to_f * 1000).round # Tesla sends ms since epoch instead of seconds
     locations = recent_locations
+    loc = loc.map(&:to_f)
 
     return if locations.length >= 3 && near?(locations.last[:loc], loc)
 

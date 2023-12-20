@@ -58,7 +58,7 @@ class TaskMap
       keyval:     [
         { return: :keyval },
         { block: :str },
-        { block: :str },
+        { block: :any },
       ],
       hash:       [
         { return: :hash },
@@ -83,14 +83,14 @@ class TaskMap
       # ],
       # Vars exist only during the current running task
       get_var:      [
-        { return: :any },
+        { return: :str },
         { block: :str, name: :name },
       ],
       set_var:      [
-        { return: :any },
+        { return: :str },
         { block: :str, name: :name },
         :value,
-        { block: :any },
+        { block: :str },
       ],
       # Cache is permanent across all tasks
       get_cache:    [
@@ -188,15 +188,21 @@ class TaskMap
         { block: :str }, # Should regex be an object, or just a text entry?
         # { multiple: [:g, :i, :u, :m], name: :flags }
       ],
+      scan:       [
+        { return: :str },
+        { block: :str, label: :Value },
+        { block: :str, label: :Regex },
+      ],
       split:      [
         { return: :array },
         { block: :str },
+        :by,
         { block: :str, name: :split_by, optional: true }, # Empty means split by char
       ],
       format: [
         { return: :str },
         { block: :str },
-        [:lower, :upper, :capital, :pascal, :title, :snake, :camel, :base64]
+        [:lower, :upper, :squish, :capital, :pascal, :title, :snake, :camel, :base64]
       ],
       replace: [
         { return: :str },
@@ -535,10 +541,27 @@ class TaskMap
       # ],
       run:        [
         { return: :any },
-        "Task Name",
-        { block: :str, name: :task_name },
+        "Task ID",
+        { block: :str, name: :task_id }, :br,
         "When to run (Optional)",
-        { block: :date, optional: true },
+        { block: :date, optional: true },# :br,
+        # Hard to pass in data...
+        # app/workers/jarvis_worker.rb
+        # It's possible if we serialize the data
+        # "With (Optional)",
+        # { block: :any, optional: true }, :br,
+      ],
+      get:        [
+        { return: :hash },
+        "Task ID",
+        { block: :str, name: :task_id }, :br,
+      ],
+      enable:     [
+        { return: :bool },
+        "Task ID",
+        { block: :str, name: :task_id }, :br,
+        "Enable",
+        { block: :bool },
       ],
       # find:       [
       #   { return: :task },
@@ -563,11 +586,11 @@ class TaskMap
         :content, # { block: :hash, name: :params, optional: true },
       ],
       prompt: [
-        { return: :bool },
+        { return: :str },
         { block: :str, name: :question }, :br,
-        "Options", { block: :array, optional: true }, :br,
-        "Params", { block: :hash, optional: true }, :br,
-        "Callback Task", { block: :str, name: :task_name }, :br,
+        "Options:", { block: :hash, optional: true }, :br,
+        "Params:", { block: :hash, optional: true }, :br,
+        "Callback Task:", { block: :str, name: :task_name }, :br,
       ],
       # Send email from Jarvis - Admin only? - Or just require some kind of email setup/permissions
       # email: [

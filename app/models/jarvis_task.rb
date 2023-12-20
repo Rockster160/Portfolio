@@ -16,12 +16,13 @@
 #  sort_order      :integer
 #  tasks           :jsonb
 #  trigger         :integer          default("cron")
+#  uuid            :uuid
 #  created_at      :datetime         not null
 #  updated_at      :datetime         not null
 #  user_id         :bigint
 #
 
-# Scheduled for deletion: `cron` (Replaced by `input`)
+# Scheduled for removal: `cron` (Replaced by `input`)
 class JarvisTask < ApplicationRecord
   include Orderable
 
@@ -31,6 +32,7 @@ class JarvisTask < ApplicationRecord
   belongs_to :user, required: true
 
   before_save :set_next_cron
+  after_create { reload } # Needed to retrieve the generated uuid on the current instance in memory
 
   scope :fuzzy_search, ->(q) { where("tasks::text ILIKE ?", "%#{q}%") }
   scope :enabled, -> { where(enabled: true) }
@@ -53,10 +55,10 @@ class JarvisTask < ApplicationRecord
     :function,
     :travel,
     :prompt_response,
+    :monitor,
   ]
 
   enum trigger: {
-    callable:          14,
     cron:              0,
     action_event:      1,
     tell:              2,
@@ -71,6 +73,8 @@ class JarvisTask < ApplicationRecord
     calendar:          11,
     travel:            12,
     prompt_response:   13,
+    callable:          14,
+    monitor:           15,
   }
 
   enum output_type: {
@@ -85,10 +89,21 @@ class JarvisTask < ApplicationRecord
     keyval:   9,
   }, _prefix: :output #.output_any?
 
+  def self.find_by_uuid(uuid) = find_by!(uuid: uuid)
+  def self.anyfind(id)
+    case id.to_s
+    when /^(\w+-)+\w+$/i then find_by_uuid(id)
+    when /^\d+$/i then find(id)
+    else find_by!(name: id)
+    end
+  end
+  def to_param = uuid
+
   def duplicate
     self.class.create!(
       attributes.symbolize_keys.except(
         :id,
+        :uuid,
         :enabled,
         :last_ctx,
         :last_result,
@@ -194,9 +209,20 @@ class JarvisTask < ApplicationRecord
         "Event Data"
       ]]]
     elsif websocket?
-      [["WS Receive Data", [
-        { return: :hash },
-        "WS Receive Data"
+      [
+        ["WS Receive Data", [
+          { return: :hash },
+          "WS Receive Data"
+        ]],
+        ["Connection State", [
+          { return: :str },
+          "Connection State"
+        ]]
+      ]
+    elsif monitor?
+      [["Pressed", [
+        { return: :bool },
+        "Pressed"
       ]]]
     end
   end

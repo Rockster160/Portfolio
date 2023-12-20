@@ -1,4 +1,5 @@
 class MazesController < ApplicationController
+  skip_before_action :verify_authenticity_token
 
   def show
     @seed = (params[:seed] || rand(999999)).to_i
@@ -11,10 +12,10 @@ class MazesController < ApplicationController
 
     options = {
       seed: @seed,
-      start_str: params[:start_str],
-      end_str: params[:end_str],
-      path: params[:path],
-      wall: params[:wall]
+      start_str: params[:start_str]&.first,
+      end_str: params[:end_str]&.first,
+      path: params[:path]&.first,
+      wall: params[:wall]&.first
     }
 
     @maze = Maze.new(width, height, options)
@@ -25,4 +26,7 @@ class MazesController < ApplicationController
     end
   end
 
+  def redirect
+    redirect_to maze_path(params.except(:action, :controller).permit!.compact_blank)
+  end
 end

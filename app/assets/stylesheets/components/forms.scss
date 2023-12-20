@@ -1,3 +1,5 @@
+@import "components/bool_slider";
+
 .app-card-container,
 .form,
 form:not(.basic) {
@@ -243,6 +245,10 @@ select {
     // color: $grey-med;
     // border-color: $grey-med-light;
   }
+}
+
+input[type=range] {
+  width: 100%;
 }
 
 @include bool-slider(60px);

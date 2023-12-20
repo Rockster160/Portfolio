@@ -25,8 +25,8 @@
       <% if league.bowlers.many? %>
         <td class="text-right"><%= number_with_delimiter(bowler.total_points) || "-" %></td>
       <% end %>
-      <td class="text-right"><%= number_with_delimiter(bowler.high_game) || "-" %></td>
-      <td class="text-right"><%= number_with_delimiter(bowler.high_series) || "-" %></td>
+      <td class="text-right <%= "perfect-game" if bowler.high_game == 300 %>"><%= number_with_delimiter(bowler.high_game) || "-" %></td>
+      <td class="text-right <%= "perfect-game" if bowler.high_series == 900 %>"><%= number_with_delimiter(bowler.high_series) || "-" %></td>
     </tr>
   <% end %>
 </table>

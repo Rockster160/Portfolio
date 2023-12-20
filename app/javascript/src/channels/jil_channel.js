@@ -2,11 +2,11 @@ import consumer from "./consumer"
 
 $(document).ready(function() {
   if ($(".ctr-jarvis_tasks.act-new, .ctr-jarvis_tasks.act-edit").length == 0) { return }
-  if (!window.location.pathname.match(/tasks\/([\d\w]+)/)) { return }
+  if (!window.location.pathname.match(/tasks\/([\d\w-]+)/)) { return }
 
   consumer.subscriptions.create({
     channel: "JilChannel",
-    id: window.location.pathname.match(/tasks\/([\d\w]+)/)[1],
+    id: window.location.pathname.match(/tasks\/([\d\w-]+)/)[1],
   },{
     received: function(data) {
       $("[token]").removeClass("task-running")

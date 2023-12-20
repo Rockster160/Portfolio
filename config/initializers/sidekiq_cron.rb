@@ -1,10 +1,11 @@
 return if ENV["RAILS_CONSOLE"] == "true"
 return if Rails.env.test?
 # Based on UTC time
+
 every_minute = "* * * * *"
 every_5_minutes = "*/5 * * * *"
 every_hour = "0 * * * *"
-every_6_hours = "0 */6 * * *"
+every_3_daylight_hours = "0 5-21/3 * * * MST"
 daily_9pm = "0 3 * * *"
 thursdays_at_noon = "0 18 * * 4"
 mondays_at_noon = "0 18 * * 1"
@@ -37,11 +38,6 @@ if Rails.env.production?
     #   cron: every_5_minutes,
     # },
     {
-      name: "HourlyVenmoCheck",
-      class: "HourlyVenmoCheckWorker",
-      cron: every_hour,
-    },
-    {
       name: "DropLogTrackers",
       class: "DropLogTrackersWorker",
       cron: monthly_1st_at_midnight,
@@ -52,7 +48,7 @@ elsif Rails.env.development?
     {
       name: "ReloadTeslaLocal",
       class: "ReloadTeslaLocalWorker",
-      cron: every_6_hours,
+      cron: every_3_daylight_hours,
     },
   ]
 end

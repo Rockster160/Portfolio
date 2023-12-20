@@ -1,4 +1,4 @@
-class Oauth::TeslaAPI < Oauth::Base
+class Oauth::TeslaApi < Oauth::Base
   constants(
     API_URL: "https://fleet-api.prd.na.vn.cloud.tesla.com/api/1/",
     OAUTH_URL: "https://auth.tesla.com/oauth2/v3/authorize",

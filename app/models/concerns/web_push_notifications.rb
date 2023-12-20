@@ -1,6 +1,7 @@
 # WebPushNotifications.send_to(User.me, { title: "Hello, World", body: "This is a message from Jarvis" })
 class WebPushNotifications
   def self.send_to(user, payload={})
+    return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
     return "Failed to push - user not found" unless user.present?
     push_sub = user.push_sub
     return "Failed to push - push_sub not set up" unless push_sub.pushable?

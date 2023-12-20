@@ -29,25 +29,25 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
   end
 
   def min
-    arr = evalargs.first
+    arr = evalargs
     arr = SafeJsonSerializer.load(arr)
     arr.min
   end
 
   def max
-    arr = evalargs.first
+    arr = evalargs
     arr = SafeJsonSerializer.load(arr)
     arr.max
   end
 
   def sample
-    arr = evalargs.first
+    arr = evalargs
     arr = SafeJsonSerializer.load(arr)
     arr.sample
   end
 
   def prepend
-    val, arr = evalargs.first
+    val, arr = evalargs
     arr = SafeJsonSerializer.load(arr)
     arr.prepend(val)
   end
@@ -59,13 +59,13 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
   end
 
   def length
-    arr = evalargs.first
+    arr = evalargs
     arr = SafeJsonSerializer.load(arr)
     arr.length
   end
 
   def sum
-    arr = evalargs.first
+    arr = evalargs
     arr = SafeJsonSerializer.load(arr)
     arr.sum
   end
@@ -174,7 +174,7 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
   end
 
   def any?
-    arr = evalargs.first
+    arr = evalargs
     arr = SafeJsonSerializer.load(arr)
     arr.any?
   end
@@ -184,7 +184,7 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
   end
 
   def all?
-    arr = evalargs.first
+    arr = evalargs
     arr = SafeJsonSerializer.load(arr)
     arr.all?
   end

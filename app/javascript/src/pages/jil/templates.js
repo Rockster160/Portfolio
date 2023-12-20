@@ -1,4 +1,4 @@
-export let rawVals = ["bool", "str", "num"]
+export let rawVals = ["bool", "str", "num", "any"]
 
 export let render = function(key, data) {
   if (!key) { return templates }
@@ -92,6 +92,7 @@ export let tokenSelector = function(selected_option) {
 export let templates = {
   bool: () => `<label class="switch raw-input"><input type="checkbox" name="bool-{}"><span class="slider"></span></label>`,
   str:  () => `<input type="text" name="str-{}" placeholder="Hello, World!" class="raw-input">`,
+  any:  () => `<input type="text" name="str-{}" placeholder="Hello, World!" class="raw-input">`,
   text: () => `<textarea name="str-{}" rows="8" class="raw-input"></textarea>`,
   num:  () => `<input type="number" name="num-{}" placeholder="#" class="raw-input">`,
   date: () => `<input type="date" name="date-{}" class="raw-input">`,
@@ -213,7 +214,6 @@ export let templates = {
                           if (fillitem.option == "input") {
                             let input = render(data.block)
                             let field = input.nodeName == "INPUT" ? input : input.querySelector("input")
-                            if (!field) { debugger }
                             switch (field.type) {
                               case "checkbox": field.checked = fillitem.raw; break;
                               default: field.value = (fillitem.raw || data.default || "")

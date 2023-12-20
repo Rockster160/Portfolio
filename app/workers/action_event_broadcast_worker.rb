@@ -3,6 +3,9 @@ class ActionEventBroadcastWorker
 
   def perform(event_id=nil, trigger=true)
     event = ::ActionEvent.find_by(id: event_id)
+    ::FitnessBroadcast.call(event)
+
+    return unless event.present?
 
     if event.present? && trigger
       ::Jarvis.trigger(
@@ -16,8 +19,10 @@ class ActionEventBroadcastWorker
         scope: { user_id: event.user_id }
       )
     end
-    ::UpdateActionStreak.perform_async(event_id) if event.present?
-    ::FitnessBroadcast.call(event)
-    ::RecentEventsBroadcast.call(event.user_id) if event.present?
+
+    ::UpdateActionStreak.perform_async(event_id)
+    return unless event.user&.me?
+
+    ::RecentEventsBroadcast.call(event.user_id)
   end
 end

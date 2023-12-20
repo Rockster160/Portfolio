@@ -127,8 +127,8 @@ class TeslaControl
 
     data = vehicle_data
     loc = [
-      data.dig(:drive_state, :active_route_latitude),
-      data.dig(:drive_state, :active_route_longitude),
+      data.dig(:drive_state, :latitude),
+      data.dig(:drive_state, :longitude),
     ]
     windows = [:fd, :fp, :rd, :rp]
     is_open = windows.any? { |window| data.dig(:vehicle_state, "#{window}_window".to_sym).to_i > 0 }
@@ -207,18 +207,16 @@ class TeslaControl
   end
 
   def vehicle_data
-    @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data")&.tap { |car_data|
-      loc = [car_data.dig(:drive_state, :active_route_latitude), car_data.dig(:drive_state, :active_route_longitude)]
+    @vehicle_data = cached_vehicle_data if Rails.env.development?
+    @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state")&.tap { |car_data|
+      cached_vehicle_data.merge!(car_data) if car_data[:sleeping]
+      car_data[:timestamp] = car_data.dig(:drive_state, :timestamp) # Bubble up
+      car_data[:sleeping] ||= false
 
       User.me.jarvis_cache.set(:car_data, car_data)
-
-      driving = !((car_data.dig(:drive_state, :shift_state) || "P") == "P")
-      if !driving && loc.compact.present?
-        LocationCache.set(
-          loc,
-          car_data.dig(:drive_state, :timestamp),
-        )
-      end
+      break car_data if car_data[:sleeping]
+      # Disabling as it can cause inaccuracies when the bluetooth fails to send
+      # LocationCache.driving = !((car_data.dig(:drive_state, :shift_state) || "P") == "P")
 
       if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
         list = User.me.list_by_name(:Chores)
@@ -233,8 +231,6 @@ class TeslaControl
           end
         end
       end
-
-      LocationCache.driving = driving
     } || cached_vehicle_data
   rescue RestClient::GatewayTimeout => e
     Jarvis.say("Tesla Gateway Timeout. Retrying...")
@@ -257,8 +253,8 @@ class TeslaControl
 
   def loc
     [
-      vehicle_data.dig(:drive_state, :active_route_latitude),
-      vehicle_data.dig(:drive_state, :active_route_longitude),
+      vehicle_data.dig(:drive_state, :latitude),
+      vehicle_data.dig(:drive_state, :longitude),
     ]
   end
 
@@ -279,6 +275,7 @@ class TeslaControl
       raise TeslaError, "Timed out waiting to wake up" if Time.current.to_i - start > 35
 
       break true if wake_vehicle
+      Jarvis.say("Tesla sleeping... Wake up!")
       sleep(rand * 5)
     end
   end
@@ -369,7 +366,7 @@ class TeslaControl
     SlackNotifier.notify("Failed to parse json from Tesla#wake_vehicle:\nCode: #{res.code}\n```#{res.body}```")
   end
 
-  def get(endpoint)
+  def get(endpoint, wake: false)
     raise "Should not GET in tests!" if Rails.env.test?
     raise TeslaError, "Currently Forbidden!" if DataStorage[:tesla_forbidden]
     raise "Cannot get without access token" if @access_token.blank?
@@ -386,7 +383,11 @@ class TeslaControl
     ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
     SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
   rescue RestClient::ExceptionWithResponse => err
-    return wake_up && retry if err.response&.code == 408
+    if wake
+      return { sleeping: true }
+    else
+      return wake_up && retry if err.response&.code == 408
+    end
     return refresh && retry if err.response&.code == 401
     raise err
   rescue JSON::ParserError => err

@@ -6,7 +6,7 @@ class CalendarEventsWorker
   PRE_OFFSET = 10.minutes
 
   def perform
-    # return if Rails.env.development?
+    return if Rails.env.development?
 
     @user_id = User.me.id
     coming_events = ::LocalDataCalendarParser.call.values.flatten # JarvisCache for @user_id
@@ -59,6 +59,7 @@ class CalendarEventsWorker
       next if event[:start_time].blank? || event[:end_time].blank? # Skip all-day events
 
       event[:uid] = "unix:#{event[:start_time].to_i}:#{event[:uid]}"
+      nav_home = true
 
       # If notes starts with Jarvis, send to Jarvis as a message
       if event[:notes]&.match?(/^\s*jarvis[:,]? */i)
@@ -70,7 +71,8 @@ class CalendarEventsWorker
           user_id: @user_id,
           scheduled_time: event[:start_time],
         )
-      elsif event[:notes]&.match?(/^\s*j\s*$/i)
+      end
+      if event[:notes]&.match?(/^\s*j\s*$/i) # Just a J
         new_events.push(
           name: event[:name],
           uid: event[:uid] + "-notes",
@@ -80,6 +82,7 @@ class CalendarEventsWorker
           scheduled_time: event[:start_time],
         )
       end
+      nav_home = false if event[:notes]&.match?(/\bnonav\b/i)
 
       # Trigger a Calendar event for everything that comes through
       new_events.push(
@@ -100,10 +103,12 @@ class CalendarEventsWorker
 
       # If travelable - add TT and nav there and back
       if travelable_event?(event)
-        traveltime = address_book.traveltime_seconds(
+        traveltime = event[:notes]&.scan(/ttt (\d+)/i)&.flatten&.first&.to_i&.minutes
+        traveltime ||= address_book.traveltime_seconds(
           event[:location],
           address_book.current_address&.street
         )
+        next unless traveltime.present?
         # Show time to leave
         new_events.push(
           name: "TTL: #{distance_of_time_in_words(traveltime)}",
@@ -143,13 +148,15 @@ class CalendarEventsWorker
         # Also time estimate should be from "current" location-
         #   guessed based on the last event left us at
         # Start car + navigate home 10 minutes prior to end-time
-        new_events.push(
-          uid: event[:uid] + "-home",
-          type: :travel,
-          words: "Take me Home",
-          user_id: @user_id,
-          scheduled_time: event[:end_time] - PRE_OFFSET,
-        )
+        if nav_home
+          new_events.push(
+            uid: event[:uid] + "-home",
+            type: :travel,
+            words: "Take me Home",
+            user_id: @user_id,
+            scheduled_time: event[:end_time] - PRE_OFFSET,
+          )
+        end
       end
     end
   end

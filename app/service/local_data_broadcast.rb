@@ -6,8 +6,6 @@ class LocalDataBroadcast
   end
 
   def call(data=nil)
-    return if Rails.env.development?
-
     data ||= JSON.parse(File.read("local_data.json")) if File.exists?("local_data.json")
     data ||= {}
     @data = data.deep_symbolize_keys
@@ -52,6 +50,13 @@ class LocalDataBroadcast
     end
   end
 
+  def ignore_list
+    [
+      "Rich's w/end",
+      "Doug Works",
+    ]
+  end
+
   def enrich_calendar(calendar_lines)
     today_str = Time.current.in_time_zone("Mountain Time (US & Canada)").strftime("%b %-d, %Y:")
     calendar_data = LocalDataCalendarParser.call
@@ -63,12 +68,12 @@ class LocalDataBroadcast
     calendar_colors = {
       "rocco11nicholls@gmail.com"   => lblue,
       "rocco.nicholls@workwave.com" => "#FF9500",
-      "Rae Sched"                   => "#6FFB62",
     }
 
     calendar_data.map { |date_str, events|
       lines = [date_str, "[hr]"]
       events.sort_by { |evt| evt[:start_time] || Time.current.beginning_of_day }.each do |event|
+        next if event[:name].in?(ignore_list)
         if event[:time_str].present?
           name = event[:name] || event[:uid]
           color = calendar_colors[event[:calendar]]

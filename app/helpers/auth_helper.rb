@@ -66,11 +66,19 @@ module AuthHelper
   end
 
   def auth_from_headers
-    basic_auth_raw = request.headers["HTTP_AUTHORIZATION"][6..-1] # Strip "Basic " from hash
-    return unless basic_auth_raw.present?
+    raw_auth = request.headers["HTTP_AUTHORIZATION"]
+    return unless raw_auth.present?
 
-    basic_auth_string = Base64.decode64(basic_auth_raw)
-    User.auth_from_basic(basic_auth_string)
+    # Had issues where some clients were mixing up bearer vs basic
+    # Just made this work for whatever prefix
+    type, auth_string = raw_auth.split(" ", 2)
+    basic_auth_string = Base64.decode64(auth_string)
+
+    if basic_auth_string.include?(":")
+      User.auth_from_basic(basic_auth_string)
+    else
+      ApiKey.find_by(key: auth_string)&.user
+    end
   end
 
   def auth_from_session

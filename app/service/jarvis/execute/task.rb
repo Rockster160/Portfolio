@@ -4,7 +4,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def print
-    jil.ctx[:msg] << ::Jarvis::Execute::Cast.cast(evalargs.first, :str, force: true, jil: jil)
+    jil.ctx[:msg] << ::Jarvis::Execute::Cast.cast(evalargs, :str, force: true, jil: jil)
   end
 
   def comment
@@ -12,7 +12,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
   end
 
   def command
-    Jarvis.command(jil.task.user, evalargs.first)
+    Jarvis.command(jil.task.user, evalargs)
   end
 
   def request
@@ -32,21 +32,25 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
 
   def prompt
     user = jil.task.user
-    question, options, data, task = evalargs
+    question, options, data, task_id = evalargs
+
     prompt = user.prompts.create(
       question:    question,
       options:     options,
       params:      data,
-      task:        user.jarvis_tasks.find_by!(name: task),
+      task:        user.jarvis_tasks.anyfind(task_id),
       # answer_type: "",
     )
+    url = Rails.application.routes.url_helpers.jil_prompt_url(prompt)
     jil.ctx[:msg] += prompt.errors.full_messages unless prompt.persisted?
-    pushed = WebPushNotifications.send_to(user, {
-      title: question,
-      url: Rails.application.routes.url_helpers.jil_prompt_url(prompt)
-    })
+    if Rails.env.production?
+      WebPushNotifications.send_to(user, {
+        title: question,
+        url: url
+      })
+    end
 
-    pushed != "Push success"
+    url
   end
 
   def exit
@@ -60,7 +64,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
 
   def run
     name, timestamp = evalargs
-    run_task = jil.task.user.jarvis_tasks.find_by!(name: name)
+    run_task = jil.task.user.jarvis_tasks.anyfind(name)
 
     if timestamp
       # TODO: The ctx[:i] will not be passed back- this can be used to bypass block limitations
@@ -85,15 +89,41 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
     end
   end
 
+  def get
+    task_id = evalargs
+    task = jil.task.user.jarvis_tasks.anyfind(task_id)
+
+    task.attributes.symbolize_keys.slice(
+      :uuid,
+      :name,
+      :trigger,
+      :output_type,
+      :cron,
+      :enabled,
+      :next_trigger_at,
+      :last_trigger_at,
+      :last_result_val,
+    )
+  end
+
+  def enable
+    task_id, bool = evalargs
+    task = jil.task.user.jarvis_tasks.anyfind(task_id)
+
+    task.update(enabled: !!bool)
+  end
+
   def find
     raise NotImplementedError
   end
 
   def schedule
-    cmd, timestamp = evalargs
+    cmd, timestamp, data = evalargs
 
     # TODO: The ctx[:i] will not be passed- this can be used to bypass block limitations
     # Not sure how to work around this...
+    # Maybe somehow pass a back reference to the id,
+    #   and use that to get the count for the new task as well as update the old task
     jid = Jarvis::Schedule.schedule(
       scheduled_time: timestamp,
       user_id: jil.task.user.id,
@@ -116,6 +146,6 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
 
   def ws
     channel, data = evalargs
-    ActionCable.server.broadcast(channel, data)
+    SocketChannel.send_to(jil.task.user, channel, data)
   end
 end

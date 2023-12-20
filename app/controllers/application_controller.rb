@@ -25,7 +25,10 @@ class ApplicationController < ActionController::Base
 
       if user_signed_in?
         current_user.see!
-        request.env['exception_notifier.exception_data'] = { current_user: current_user }
+        request.env['exception_notifier.exception_data'] = {
+          current_user: current_user,
+          params: params
+        }
       end
     end
   end

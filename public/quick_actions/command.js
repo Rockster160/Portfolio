@@ -12,11 +12,11 @@ function addMessage(direction, msg) {
   div.classList.add(direction)
   div.textContent = msg
 
-  if (direction == "in") {
+  if (direction == "in") { // && command modal is closed (don't show if open)
     showFlash(msg)
   }
 
-  modal.querySelector(".messages").prepend(div)
+  modal?.querySelector(".messages")?.prepend(div)
 }
 
 export let command = new Widget("command", function() {
@@ -28,20 +28,27 @@ command.socket = new AuthWS("JarvisChannel", {
     if (msg.say) { addMessage("in", msg.say) }
   },
   onopen: function() {
+    command.refreshStatus()
+  },
+  onclose: function() {
+    command.refreshStatus()
+  }
+})
+command.refreshStatus = function() {
+  if (command.socket.open) {
     command.connected()
     document.querySelectorAll(".status").forEach((item, i) => {
       item.classList.add("connected")
     })
-  },
-  onclose: function() {
+  } else {
     command.disconnected()
     document.querySelectorAll(".status").forEach((item, i) => {
       item.classList.remove("connected")
     })
   }
-})
+}
 
-modal.querySelector("input").addEventListener("keypress", function(evt) {
+modal?.querySelector("input")?.addEventListener("keypress", function(evt) {
   if (evt.key == "Enter") {
     let input = modal.querySelector("input")
 

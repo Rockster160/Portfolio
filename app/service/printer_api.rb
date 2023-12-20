@@ -1,4 +1,4 @@
-module PrinterAPI
+module PrinterApi
   module_function
 
   BASE_HEADERS = {

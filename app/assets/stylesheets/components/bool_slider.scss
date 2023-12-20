@@ -1,3 +1,8 @@
+// <label class="switch">
+//   <%= f.check_box :enabled %>
+//   <span class="slider"></span>
+// </label>
+
 @mixin bool-slider($width) {
   $padding: $width * 0.05;
   $height: ($width/3) + $padding; // 34
@@ -5,6 +10,7 @@
   $font-size: $width/5;
 
   .switch {
+    top: 4px;
     position: relative;
     display: inline-block;
     width: $width;

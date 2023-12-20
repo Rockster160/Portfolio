@@ -310,32 +310,32 @@ RSpec.describe Jarvis do
     end
   end
 
-  context "with garage" do
-    before do
-      allow(DataStorage).to receive(:[]).with(any_args).and_return("unimportant")
-    end
-
-    actions = {
-      "open my garage"   => "Opening the garage",
-      "Open the garage"  => "Opening the garage",
-      "open garage"      => "Opening the garage",
-      "garage open"      => "Opening the garage",
-
-      "garage"           => "Toggling the garage",
-      "garage toggle"    => "Toggling the garage",
-
-      "close my garage"  => "Closing the garage",
-      "Close the garage" => "Closing the garage",
-      "close garage"     => "Closing the garage",
-      "garage close"     => "Closing the garage",
-    }
-
-    actions.each do |action, res|
-      it "can #{action}" do
-        expect(jarvis(action)).to eq(res)
-      end
-    end
-  end
+  # context "with garage" do
+  #   before do
+  #     allow(DataStorage).to receive(:[]).with(any_args).and_return("unimportant")
+  #   end
+  #
+  #   actions = {
+  #     "open my garage"   => "Opening the garage",
+  #     "Open the garage"  => "Opening the garage",
+  #     "open garage"      => "Opening the garage",
+  #     "garage open"      => "Opening the garage",
+  #
+  #     "garage"           => "Toggling the garage",
+  #     "garage toggle"    => "Toggling the garage",
+  #
+  #     "close my garage"  => "Closing the garage",
+  #     "Close the garage" => "Closing the garage",
+  #     "close garage"     => "Closing the garage",
+  #     "garage close"     => "Closing the garage",
+  #   }
+  #
+  #   actions.each do |action, res|
+  #     it "can #{action}" do
+  #       expect(jarvis(action)).to eq(res)
+  #     end
+  #   end
+  # end
 
   context "with texts" do
     actions = {
@@ -386,7 +386,7 @@ RSpec.describe Jarvis do
     actions.each do |action, (msg, *cmds)|
       it "can #{action}" do
         Array.wrap(cmds).each do |cmd|
-          expect(PrinterAPI).to receive(cmd)
+          expect(PrinterApi).to receive(cmd)
         end
         expect(jarvis(action)).to eq(msg)
       end

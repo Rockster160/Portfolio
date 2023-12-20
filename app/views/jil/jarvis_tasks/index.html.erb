@@ -23,7 +23,7 @@
     <div class="important-list-items"></div>
 
     <% @tasks.each do |task| %>
-      <div class="list-item-container" data-list-id="<%= task.id %>">
+      <div class="list-item-container" data-list-id="<%= task.uuid %>">
         <div class="list-item-config">
           <%= content_tag :div, task.humanized_schedule, class: "category" %>
           <%= content_tag :div, :Disabled, class: "status disabled" if !task.enabled? %>

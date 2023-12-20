@@ -2,11 +2,12 @@
 #
 # Table name: bowling_sets
 #
-#  id         :integer          not null, primary key
-#  winner     :text
-#  created_at :datetime         not null
-#  updated_at :datetime         not null
-#  league_id  :integer
+#  id          :integer          not null, primary key
+#  lane_number :integer
+#  winner      :text
+#  created_at  :datetime         not null
+#  updated_at  :datetime         not null
+#  league_id   :integer
 #
 
 class BowlingSet < ApplicationRecord

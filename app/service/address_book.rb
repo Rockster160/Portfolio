@@ -18,9 +18,7 @@ class AddressBook
   end
 
   def current_coord
-    @user.jarvis_cache&.data&.dig(:car_data, :drive_state)&.then { |state|
-      [state[:active_route_latitude], state[:active_route_longitude]].compact.presence
-    }
+    LocationCache.last_coord
   end
 
   def current_loc

@@ -231,17 +231,6 @@
           }
         }
       }
-      /* &.perfect-game {
-        border-color: green;
-        input[type=text] {
-          border-color: green;
-          color: green;
-
-          &.current {
-            border-color: purple;
-          }
-        }
-      } */
       &.missed-drink-frame {
         border-color: red;
         background-image: url("https://staticg.sportskeeda.com/editor/2022/08/2d25d-16594604976321-1920.jpg");
@@ -274,14 +263,14 @@
     &.perfect-game {
       .bowling-cell {
         background: gold;
-        color: white;
-        border-color: white;
+        color: $base-blue;
+        border-color: $base-blue;
         border-width: 2px;
         font-weight: bold;
 
         input[type=text] {
-          border-color: white;
-          color: white;
+          border-color: $base-blue;
+          color: $base-blue;
           border-width: 2px;
           font-weight: bold;
         }
@@ -457,6 +446,27 @@
     border-radius: 2px;
   }
 
+  .perfect-game {
+    background: gold !important;
+    color: $base-blue !important;
+    font-weight: bold;
+    border-radius: 2px;
+    padding: 2px;
+
+      // background: gold;
+      // color: white;
+      // border-color: white;
+      // border-width: 2px;
+      // font-weight: bold;
+      //
+      // input[type=text] {
+      //   border-color: white;
+      //   color: white;
+      //   border-width: 2px;
+      //   font-weight: bold;
+      // }
+  }
+
   tr.line-bot td {
     border-bottom: 1px solid $grey-blue;
   }
@@ -614,6 +624,11 @@
         top: 1px;
         background: $blue-l20;
       }
+
+      .lane-input {
+        text-align: center;
+        height: 19px;
+      }
     }
     .new-bowler {
       grid-area: 2 / 3;
@@ -650,6 +665,22 @@
       grid-area: 2 / 1;
       padding: 10px;
       overflow: hidden;
+    }
+    .enemy-results {
+      grid-area: 2 / 2;
+      grid-column: span 2;
+      padding: 0;
+      overflow: hidden;
+
+      table {
+        font-size: 10px;
+
+        td {
+          text-align: right;
+          border-spacing: 0;
+          padding: 0 5px;
+        }
+      }
     }
     .pin-all-toggle {
       grid-area: 1 / 1;

@@ -73,7 +73,7 @@ class ActionEventsController < ApplicationController
               month_data[:goal] -= (evts&.sum { |evt| evt.notes.to_i } || 0)
 
               next remaining_goal if days_in_month.zero?
-              remaining_goal / days_in_month
+              (remaining_goal / days_in_month).clamp(0, goal)
             },
             type: :line,
             borderColor: "rgba(255, 160, 1, 0.5)",
@@ -199,6 +199,7 @@ class ActionEventsController < ApplicationController
       :event_name,
       :notes,
       :timestamp,
+      :data,
     ).tap do |whitelist|
       whitelist[:timestamp] = whitelist[:timestamp].presence || Time.current
     end

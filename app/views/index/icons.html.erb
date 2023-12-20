@@ -28,14 +28,13 @@
 
 <% content_for :after_body do %>
   <script type="text/javascript">
-    $(".emoji-quick-search").on("keyup", function() {
-      var search_text = $(this).val()
-      search_text = search_text.toLowerCase().replace(/[ \_\-\:\@]/, "")
+    document.querySelector(".emoji-quick-search").addEventListener("input", function() {
+      var search_text = this.value.toLowerCase().replace(/[ \_\-\:\@]/, "")
 
-      $(".icon-wrapper").each(function() {
-        var names = $(this).attr("data-searchable-by").toLowerCase().trim().split(" ")
+      document.querySelectorAll(".icon-wrapper").forEach(function(element) {
+        var names = element.getAttribute("data-searchable-by").toLowerCase().trim().split(" ")
 
-        var hasMatched = search_text.length == 0
+        var hasMatched = search_text.length === 0
         names.forEach(function(name) {
           if (hasMatched) { return }
 
@@ -47,10 +46,11 @@
 
           if (string_valid) { hasMatched = true }
         })
+
         if (hasMatched) {
-          $(this).removeClass("hidden")
+          element.classList.remove("hidden")
         } else {
-          $(this).addClass("hidden")
+          element.classList.add("hidden")
         }
       })
     })

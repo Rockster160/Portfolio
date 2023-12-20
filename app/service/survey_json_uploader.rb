@@ -59,7 +59,7 @@ class SurveyJsonUploader
 
     klass.create!(data.slice(*cols))
   rescue ActiveRecord::RecordInvalid => e
-    puts "\e[33m[LOGIT] | Error creating #{klass}: \nError: #{e.inspect}\n#{JSON.pretty_generate(data)}\e[0m"
+    # puts "\e[33m[LOGIT] | Error creating #{klass}: \nError: #{e.inspect}\n#{JSON.pretty_generate(data)}\e[0m"
   end
 
   def create_everything

@@ -1,0 +1,16 @@
+<div class="modal widget-modal" id="<%= modal_id %>" tabindex="-1">
+  <div class="status"></div>
+  <div class="close"><i class="ti ti-fa-close"></i></div>
+  <div class="modal-content">
+    <div class="settings">
+      <a href="#" class="btn" data-mode="add">Add</a>
+      <a href="#" class="btn" data-mode="move">Move</a>
+      <a href="#" class="btn" data-mode="delete">Delete</a>
+    </div>
+    <div class="widget-wrapper">
+      <% widget_data[:buttons]&.each do |item| %>
+        <%= widget(item) %>
+      <% end %>
+    </div>
+  </div>
+</div>

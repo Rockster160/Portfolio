@@ -17,7 +17,7 @@ module Bowling
           format.json { render json: { html: template } }
         end
       else
-        puts "\e[33m[LOGIT] | Error creating: \n#{@bowler.errors.full_messages}\e[0m"
+        # puts "\e[33m[LOGIT] | Error creating: \n#{@bowler.errors.full_messages}\e[0m"
       end
     end
 

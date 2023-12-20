@@ -18,7 +18,9 @@ Rails.application.routes.draw do
   get "playground" => "index#playground"
   resource :ping, only: :create
 
-  resource :jarvis, only: :show, controller: :quick_actions
+  resource :jarvis, only: [:show, :update], controller: :quick_actions, as: :jarvis_page do
+    get :render_widget
+  end
   resources :jil_prompts, only: [:index, :show, :update], path: :prompts
 
   scope module: :users do
@@ -123,6 +125,7 @@ Rails.application.routes.draw do
   resources :scheduled_tasks, path: :scheduled, param: :uid, only: [:index, :create, :update, :destroy]
   namespace :jil do
     get :/, action: :index, controller: :jarvis_tasks
+    resource :jarvis_cache, path: :cache
     resources :jarvis_tasks, path: :tasks do
       get :config, on: :member, action: :configuration
       get :run, on: :member
@@ -158,6 +161,7 @@ Rails.application.routes.draw do
 
   resource :maze, only: [ :show ] do
     collection do
+      post "/", action: :redirect
       get ".txt", action: "show"
       get ":seed", action: "show"
       get ":seed.txt", action: "show"

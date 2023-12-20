@@ -11,16 +11,28 @@ class Jarvis::Execute::Text < Jarvis::Execute::Executor
     reg = matchable(reg)
     if reg.is_a?(Regexp)
       flags = args[2]
-      str.match?(matchable)
+      str.match?(reg)
     else
       str.include?(reg)
     end
   end
 
+  def scan
+    str, reg = args.first(2).map { |t| cast_str(t) }
+    return "" if str.blank? || reg.blank?
+
+    reg = matchable(reg)
+    if reg.is_a?(Regexp)
+      str.scan(reg).flatten.first
+    else
+      str[reg]
+    end
+  end
+
   def split
-    # TODO: Allow split by regex
     str, split_str = args.map { |t| cast_str(t) }
-    str.split(split_str)
+
+    str.split(matchable(split_str))
   end
 
   def format
@@ -29,6 +41,7 @@ class Jarvis::Execute::Text < Jarvis::Execute::Executor
     case cmd.to_sym
     when :lower   then str.downcase
     when :upper   then str.upcase
+    when :squish  then str.squish
     when :capital then str.capitalize
     when :pascal  then preformat.camelize(:upper)
     when :title   then str.titleize

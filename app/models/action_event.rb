@@ -32,10 +32,10 @@ class ActionEvent < ApplicationRecord
   end
 
   def self.serialize
-    all.as_json(only: [:event_name, :notes, :timestamp])
+    all.as_json(only: [:event_name, :notes, :timestamp, :data])
   end
 
   def serialize
-    as_json(only: [:event_name, :notes, :timestamp])
+    as_json(only: [:event_name, :notes, :timestamp, :data])
   end
 end

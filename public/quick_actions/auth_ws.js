@@ -6,15 +6,32 @@ class SimpleWS {
     this.auth_socket = auth_socket
     let sock = this.auth_socket
     this.init_data = init_data
+    this.last_ping = 0
 
     sock.open = false
     // sock.reload = false
     sock.presend = init_data.presend
 
     if (!init_data.url) { return }
-    this.socket = new ReconnectingWebSocket(init_data.url)
+    sws.setupSocket(init_data.url)
+    setInterval(function() {
+      if ((new Date()).getTime() - sws.last_ping > 5_000) {
+        console.log("No ping found! Attempting to close to trigger reconnect...");
+        sws.socket?.close()
+        sws.open = false
+        sws.setupSocket(sws.init_data.url)
+      }
+    }, 5_000)
+  }
 
-    this.socket.onopen = function() {
+  setupSocket(url) {
+    let sws = this
+    let init_data = sws.init_data
+    let sock = sws.auth_socket
+    sws.socket = new ReconnectingWebSocket(url)
+
+    sws.socket.onopen = function() {
+      console.log("Open!");
       sock.open = true
 
       if (init_data.authentication && typeof(init_data.authentication) === "function") {
@@ -22,22 +39,21 @@ class SimpleWS {
       }
 
       if (init_data.onopen && typeof(init_data.onopen) === "function") { init_data.onopen.call(sws) }
-      // if (sock.reload) {
-      //   // sock.cell.reload()
-      //   sock.reload = false
-      // }
     }
 
-    this.socket.onclose = function() {
+    sws.socket.onclose = function() {
+      console.log("Closed...");
       sock.open = false
       // sock.reload = true
       if (init_data.onclose && typeof(init_data.onclose) === "function") { init_data.onclose.call(sws) }
     }
 
-    this.socket.onerror = function(msg, a, b, c) {
+    sws.socket.onerror = function(msg) {
+      console.log("[ERROR]", msg);
     }
 
-    this.socket.onmessage = function(msg) {
+    sws.socket.onmessage = function(msg) {
+      sws.last_ping = (new Date()).getTime()
       if (init_data.receive && typeof(init_data.receive) === "function") {
         // if (sock.should_flash) { sock.cell.flash() }
         init_data.receive.call(sws, msg)

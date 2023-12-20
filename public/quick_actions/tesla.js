@@ -91,122 +91,124 @@ export let tesla = new Widget("tesla", function() {
     tesla.socket.send({ action: "command", command: "off", params: {} })
   }
 })
-tesla.socket = new AuthWS("TeslaChannel", {
-  onmessage: function(msg) {
-    tesla.loading = msg.loading
-    if (msg.failed) {
-      tesla.error = true
-      return
-    } else {
-      tesla.error = false
-    }
+if (tesla.wrapper) {
+  tesla.socket = new AuthWS("TeslaChannel", {
+    onmessage: function(msg) {
+      tesla.loading = msg.loading
+      if (msg.failed) {
+        tesla.error = true
+        return
+      } else {
+        tesla.error = false
+      }
 
-    if ("climate" in msg) {
-      tesla.data = msg
-    } else {
-      return
-    }
-    let lines = [], data = msg
+      if ("climate" in msg) {
+        tesla.data = msg
+      } else {
+        return
+      }
+      let lines = [], data = msg
 
-    // Line 1 - Blank
-    lines.push("")
-
-    // Line 2 - Status (temp, charge, miles)
-    let status_pieces = []
-    if (data.climate?.current) {
-      status_pieces.push(shiftTempToColor(data.climate.current))
-    } else {
-      status_pieces.push("?°")
-    }
-    let color = data.charge ? energyMap.scale(parseInt(data.charge)) : "undefined"
-    status_pieces.push(span((data.charge || "?") + "%", `color: ${color}`))
-    status_pieces.push(span((data.miles || "?") + "m", `color: ${color}`))
-    lines.push(status_pieces.join(" | "))
-
-    // Line 3 - Charging state
-    if (data.charging?.active && data.charging.eta > 0 && data.charging.speed > 0 && !(data.drive?.speed > 0)) {
-      let charging_text = "Full: " + data.charging.eta + "min | " + ico("weather-lightning") + data.charging.speed + "mph"
-      lines.push(span(charging_text, "color: yellow;"))
-    } else if ("charging" in data && !data.charging || data.charging.state == "Disconnected") {
-      // Only show at home
-      lines.push(span("[NOT CHARGING]", "color: red;"))
-    } else {
+      // Line 1 - Blank
       lines.push("")
-    }
 
-    // Line 4 - Blank
-    lines.push("")
+      // Line 2 - Status (temp, charge, miles)
+      let status_pieces = []
+      if (data.climate?.current) {
+        status_pieces.push(shiftTempToColor(data.climate.current))
+      } else {
+        status_pieces.push("?°")
+      }
+      let color = data.charge ? energyMap.scale(parseInt(data.charge)) : "undefined"
+      status_pieces.push(span((data.charge || "?") + "%", `color: ${color}`))
+      status_pieces.push(span((data.miles || "?") + "m", `color: ${color}`))
+      lines.push(status_pieces.join(" | "))
 
-    // Line 5 - Open (Doors, windows, trunk, etc)
-    if (data.open) {
-      let opens = []
-      if (data.open.ft > 0)        { opens.push("Frunk") }
-      if (data.open.df > 0)        { opens.push("FDD") }
-      if (data.open.fd_window > 0) { opens.push("FDW") }
-      if (data.open.pf > 0)        { opens.push("FPD") }
-      if (data.open.fp_window > 0) { opens.push("FPW") }
-      if (data.open.dr > 0)        { opens.push("RDD") }
-      if (data.open.rd_window > 0) { opens.push("RDW") }
-      if (data.open.pr > 0)        { opens.push("RPD") }
-      if (data.open.rp_window > 0) { opens.push("RPW") }
-      if (data.open.rt > 0)        { opens.push("Trunk") }
-      if (opens.length > 0) {
-        lines.push("Open: " + opens.join(","))
+      // Line 3 - Charging state
+      if (data.charging?.active && data.charging.eta > 0 && data.charging.speed > 0 && !(data.drive?.speed > 0)) {
+        let charging_text = "Full: " + data.charging.eta + "min | " + ico("weather-lightning") + data.charging.speed + "mph"
+        lines.push(span(charging_text, "color: yellow;"))
+      } else if ("charging" in data && !data.charging || data.charging.state == "Disconnected") {
+        // Only show at home
+        lines.push(span("[NOT CHARGING]", "color: red;"))
       } else {
         lines.push("")
       }
-    } else {
+
+      // Line 4 - Blank
       lines.push("")
-    }
 
-    // Line 6 - Blank
-    lines.push("")
+      // Line 5 - Open (Doors, windows, trunk, etc)
+      if (data.open) {
+        let opens = []
+        if (data.open.ft > 0)        { opens.push("Frunk") }
+        if (data.open.df > 0)        { opens.push("FDD") }
+        if (data.open.fd_window > 0) { opens.push("FDW") }
+        if (data.open.pf > 0)        { opens.push("FPD") }
+        if (data.open.fp_window > 0) { opens.push("FPW") }
+        if (data.open.dr > 0)        { opens.push("RDD") }
+        if (data.open.rd_window > 0) { opens.push("RDW") }
+        if (data.open.pr > 0)        { opens.push("RPD") }
+        if (data.open.rp_window > 0) { opens.push("RPW") }
+        if (data.open.rt > 0)        { opens.push("Trunk") }
+        if (opens.length > 0) {
+          lines.push("Open: " + opens.join(","))
+        } else {
+          lines.push("")
+        }
+      } else {
+        lines.push("")
+      }
 
-    // Line 7 - Climate
-    if (data.climate?.on) {
-      let climate_text = "Climate: " //ico("mdi-fan ti-spin") - Not centered, so looks weird
-      climate_text += span("[ON] ", "color: green;")
-      climate_text += shiftTempToColor(data.climate.set)
-      lines.push(climate_text)
-    } else {
-      lines.push(span("[OFF]", "color: grey;"))
-    }
-
-    // Line 8 - Locked / Location
-    if (data.drive) {
-      let lock = data.locked ? ico("fa-lock") : ico("fa-unlock")
-      let drive_text = lock
-
-      drive_text += ico("oct-location") + data.drive.location
-      if (data.drive.speed > 0) { drive_text += ico("mdi-speedometer") + data.drive.speed + "mph" }
-      lines.push(span(drive_text, "color: grey;"))
-    } else {
+      // Line 6 - Blank
       lines.push("")
-    }
 
-    tesla.lines = lines
-    tesla.last_sync = data.timestamp * 1000
-  },
-  onopen: function() {
-    tesla.connected()
-    tesla.socket.send({ action: "request" })
-  },
-  onclose: function() {
-    tesla.disconnected()
+      // Line 7 - Climate
+      if (data.climate?.on) {
+        let climate_text = "Climate: " //ico("mdi-fan ti-spin") - Not centered, so looks weird
+        climate_text += span("[ON] ", "color: green;")
+        climate_text += shiftTempToColor(data.climate.set)
+        lines.push(climate_text)
+      } else {
+        lines.push(span("[OFF]", "color: grey;"))
+      }
+
+      // Line 8 - Locked / Location
+      if (data.drive) {
+        let lock = data.locked ? ico("fa-lock") : ico("fa-unlock")
+        let drive_text = lock
+
+        drive_text += ico("oct-location") + data.drive.location
+        if (data.drive.speed > 0) { drive_text += ico("mdi-speedometer") + data.drive.speed + "mph" }
+        lines.push(span(drive_text, "color: grey;"))
+      } else {
+        lines.push("")
+      }
+
+      tesla.lines = lines
+      tesla.last_sync = data.timestamp * 1000
+    },
+    onopen: function() {
+      tesla.connected()
+      tesla.socket.send({ action: "request" })
+    },
+    onclose: function() {
+      tesla.disconnected()
+    }
+  })
+  tesla.refresh = function() {
+    tesla.loading = true
+    tesla.socket.send({ action: "command", command: "reload", params: {} })
   }
-})
-tesla.refresh = function() {
-  tesla.loading = true
-  tesla.socket.send({ action: "command", command: "reload", params: {} })
-}
 
-tesla.socket.send({ action: "request" })
-// let tryAgain = function() {
-//   setTimeout(function() {
-//     if (tesla?.data && "climate" in tesla.data) { return }
-//
-//     tesla.socket.send({ action: "request" })
-//     tryAgain()
-//   }, 3000)
-// }
-// tryAgain()
+  tesla.socket.send({ action: "request" })
+  // let tryAgain = function() {
+  //   setTimeout(function() {
+  //     if (tesla?.data && "climate" in tesla.data) { return }
+  //
+  //     tesla.socket.send({ action: "request" })
+  //     tryAgain()
+  //   }, 3000)
+  // }
+  // tryAgain()
+}

@@ -17,6 +17,8 @@ class JilPrompt < ApplicationRecord
   belongs_to :user
   belongs_to :task, class_name: "JarvisTask"
 
+  scope :unanswered, -> { where(response: nil) }
+
   enum answer_type: {
     single: 0,
     many:   1,

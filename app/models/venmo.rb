@@ -63,10 +63,15 @@ class Venmo < ApplicationRecord
       client_id: 3191,
       client_secret: ENV["PORTFOLIO_VENMO_SECRET"]
     }.merge(extra_params))
+    response.deep_symbolize_keys!
+    if response[:error].present?
+      Jarvis.ping("Venmo Post Error: #{response}")
+      return false
+    end
     venmo_params = {}
-    venmo_params[:expires_at] = DateTime.current + response["expires_in"].to_i.seconds if response["expires_in"].present?
-    venmo_params[:refresh_token] = response["refresh_token"] if response["refresh_token"].present?
-    venmo_params[:access_token] = response["access_token"] if response["access_token"].present?
+    venmo_params[:expires_at] = DateTime.current + response[:expires_in].to_i.seconds if response[:expires_in].present?
+    venmo_params[:refresh_token] = response[:refresh_token] if response[:refresh_token].present?
+    venmo_params[:access_token] = response[:access_token] if response[:access_token].present?
     update(venmo_params)
   end
 

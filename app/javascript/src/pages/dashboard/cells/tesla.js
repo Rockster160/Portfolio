@@ -5,34 +5,6 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
 (function() {
   let cell = undefined
 
-  let timeago = function(epoch_s) {
-    if (!epoch_s) { return "" }
-    let distance_seconds = ((new Date()).getTime() / 1000) - Math.abs(epoch_s)
-    if (distance_seconds < 60) { return "just now" }
-
-    let minutes = distance_seconds / 60
-    if (minutes < 2) { return "1 minute ago" }
-    if (minutes <= 120) { return Math.round(minutes) + " minutes ago" }
-
-    let hours = minutes / 60
-    if (hours < 2) { return "1 hour ago" }
-    if (hours <= 50) { return Math.round(hours) + " hours ago" }
-
-    let days = hours / 24
-    if (days < 2) { return "1 day ago" }
-    if (days <= 50) { return Math.round(days) + " days ago" }
-
-    let weeks = days / 7
-    if (weeks < 2) { return "1 week ago" }
-    if (weeks <= 5) { return Math.round(weeks) + " weeks ago" }
-
-    let months = weeks / 4
-    if (months < 2) { return "1 month ago" }
-    if (months <= 5) { return Math.round(months) + " months ago" }
-
-    return "forever ago"
-  }
-
   let renderLines = function() {
     let lines = [], data = cell.data.car
     let topchar = cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "  "
@@ -102,13 +74,14 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     }
 
     let notify = cell.data.failed ? Text.color(dash_colors.orange, "[FAILED]") : ""
+    notify = cell.data.sleeping ? Text.color(dash_colors.grey, "[sleep]") : ""
     notify = cell.data.forbidden ? Text.color(dash_colors.orange, "[AUTH]") : notify
-    lines.push(Text.justify(notify, timeago(data.timestamp)))
+    lines.push(Text.justify(notify, Time.timeago(data.timestamp * 1000)))
 
     cell.lines(lines)
   }
 
-  let constrain = function(min, max, val) {
+  let clamp = function(min, max, val) {
     return [min, max, val].sort(function(a, b) { return a - b })[1]
   }
 
@@ -126,7 +99,6 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     refreshInterval: Time.minute(),
     reloader: function() { renderLines() },
     onload: function() {
-      setTimeout(function() { renderLines() }, 1000)
       this.data.refresh_timer = undefined
       this.data.loading = true
       this.data.car = {}
@@ -140,25 +112,8 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       renderLines()
     },
     socket: Server.socket("TeslaChannel", function(msg) {
-      if (msg.forbidden) { this.data.forbidden = true }
-      if (msg.status == "forbidden") {
-        this.data.loading = false
-        this.data.forbidden = true
-        if (cell?.data?.refresh_timer) {
-          clearTimeout(cell.data.refresh_timer)
-        }
-        renderLines()
-        return
-      } else if (msg.failed) {
-        this.data.loading = false
-        this.data.failed = true
-        resetTimeout(Time.minutes(30))
-        renderLines()
-        return
-      } else {
-        this.data.forbidden = msg.forbidden || false
-        this.data.failed = false
-      }
+      this.data.sleeping = msg.sleeping
+      this.data.forbidden = msg.forbidden
       if (msg.loading) {
         this.data.loading = true
         renderLines()
@@ -170,9 +125,9 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
 
       let refresh_next
       if (this.data.car.climate?.on || this.data.car.drive?.action == "driving") {
-        refresh_next = Time.minute()
+        refresh_next = Time.minute(5)
       } else if (this.data.car.charging?.active) {
-        let eta_minutes = constrain(parseInt(this.data.car.charging.eta) || 5, 1, 5)
+        let eta_minutes = clamp(parseInt(this.data.car.charging.eta) || 10, 1, 10)
         refresh_next = Time.minutes(eta_minutes)
       } else if (Time.now().getHours() < 7 || Time.now().getHours() > 22) { // 10pm-7am
         // Every 3 hours during night, every 1 hour during day

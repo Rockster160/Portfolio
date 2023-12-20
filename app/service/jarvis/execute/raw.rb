@@ -67,8 +67,10 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def hash
-    evalargs.each_with_object({}) do |(key, val), new_hash|
-      new_hash[key] = val
+    vals = evalargs
+    vals = vals.first.is_a?(Array) ? vals : [vals]
+    vals.each_with_object({}) do |(key, val), new_hash|
+      new_hash[key] = val if key.present?
     end
   rescue NoMethodError
     {}
@@ -103,6 +105,6 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def user_cache
-    @user_cache ||= user.jarvis_cache || user.create_jarvis_cache
+    @user_cache ||= user.jarvis_cache
   end
 end

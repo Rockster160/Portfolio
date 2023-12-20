@@ -99,6 +99,9 @@
       <div class="numpad-key lanetalk-toggle" data-modal="#lanetalk-config">
         <%= image_tag "bowling/lanetalk.png" %>
       </div>
+      <div class="numpad-key">
+        <%= f.text_field :lane_number, class: "lane-input", value: f.object.lane_number || extract_lane_number %>
+      </div>
       <div class="numpad-key new-bowler" data-edit>New Bowler</div>
       <div class="numpad-key card" data-modal="#card-hands">&#9824;</div>
       <div class="pin-mode-toggle pin-svg-wrapper numpad-key">
@@ -111,6 +114,7 @@
     <div class="bowling-keypad-entry">
       <div class="numpad-key pin-all-toggle fall pin-svg-wrapper" data-pins-show=show><%= svg "bowling/pin" %></div>
       <div class="stats-holder" data-pins-show=show data-stats-url="<%= throw_stats_bowlers_path(league_id: @league.id) %>"></div>
+      <div class="enemy-results"><%= render partial: "enemy_results" %></div>
       <div class="numpad-key pocket-close" data-pins-show=show>PX</div>
       <div class="numpad-key brooklyn-close" data-pins-show=show>BX</div>
       <div class="numpad-key pocket-toggle" data-pins-show=show>P</div>

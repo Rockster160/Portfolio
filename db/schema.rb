@@ -10,11 +10,12 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_10_26_223259) do
+ActiveRecord::Schema.define(version: 2023_12_20_002855) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
+  enable_extension "uuid-ossp"
 
   create_table "action_events", id: :serial, force: :cascade do |t|
     t.text "event_name"
@@ -68,6 +69,15 @@ ActiveRecord::Schema.define(version: 2023_10_26_223259) do
     t.datetime "updated_at", precision: 6, null: false
     t.index ["contact_id"], name: "index_addresses_on_contact_id"
     t.index ["user_id"], name: "index_addresses_on_user_id"
+  end
+
+  create_table "api_keys", force: :cascade do |t|
+    t.bigint "user_id"
+    t.text "name"
+    t.text "key"
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["user_id"], name: "index_api_keys_on_user_id"
   end
 
   create_table "avatar_clothes", id: :serial, force: :cascade do |t|
@@ -194,6 +204,7 @@ ActiveRecord::Schema.define(version: 2023_10_26_223259) do
     t.text "winner"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "lane_number"
     t.index ["league_id"], name: "index_bowling_sets_on_league_id"
   end
 
@@ -332,6 +343,14 @@ ActiveRecord::Schema.define(version: 2023_10_26_223259) do
     t.index ["user_id"], name: "index_jarvis_caches_on_user_id"
   end
 
+  create_table "jarvis_pages", force: :cascade do |t|
+    t.bigint "user_id"
+    t.jsonb "blocks"
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["user_id"], name: "index_jarvis_pages_on_user_id"
+  end
+
   create_table "jarvis_tasks", force: :cascade do |t|
     t.bigint "user_id"
     t.text "name"
@@ -349,6 +368,7 @@ ActiveRecord::Schema.define(version: 2023_10_26_223259) do
     t.integer "sort_order"
     t.text "last_result_val"
     t.boolean "enabled", default: true
+    t.uuid "uuid", default: -> { "uuid_generate_v4()" }
     t.index ["user_id"], name: "index_jarvis_tasks_on_user_id"
   end
 
@@ -364,6 +384,18 @@ ActiveRecord::Schema.define(version: 2023_10_26_223259) do
     t.datetime "updated_at", precision: 6, null: false
     t.index ["task_id"], name: "index_jil_prompts_on_task_id"
     t.index ["user_id"], name: "index_jil_prompts_on_user_id"
+  end
+
+  create_table "jil_usages", force: :cascade do |t|
+    t.bigint "user_id"
+    t.integer "executions"
+    t.date "date"
+    t.integer "icount"
+    t.jsonb "data"
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["user_id", "date"], name: "index_jil_usages_on_user_id_and_date", unique: true
+    t.index ["user_id"], name: "index_jil_usages_on_user_id"
   end
 
   create_table "lines", id: :serial, force: :cascade do |t|

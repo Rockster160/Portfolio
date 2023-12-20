@@ -7,6 +7,7 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
       .ilike(event_name: search)
       .limit(limit.presence || 1000)
       .where(timestamp: since..)
+      .serialize
   end
 
   def add

@@ -17,6 +17,7 @@
 class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 
+  has_many :api_keys, dependent: :destroy
   has_many :jarvis_tasks, dependent: :destroy
   has_many :bowling_leagues, dependent: :destroy
   has_many :climbs, dependent: :destroy
@@ -33,13 +34,18 @@ class User < ApplicationRecord
   has_many :lists, through: :user_lists
   has_many :sent_emails, class_name: "Email", foreign_key: :sent_by_id, dependent: :destroy
   has_many :prompts, class_name: "JilPrompt", dependent: :destroy
+  has_many :daily_usages, class_name: "JilUsage", dependent: :destroy
   has_many :action_events
   has_many :user_surveys
   has_many :user_survey_responses
-  has_one :avatar
   has_one :push_sub, class_name: "UserPushSubscription", dependent: :destroy
   has_one :money_bucket
+  has_one :avatar, dependent: :destroy
+  def avatar; super() || build_avatar; end
+  has_one :jarvis_page, dependent: :destroy
+  def jarvis_page; super() || build_jarvis_page; end
   has_one :jarvis_cache, dependent: :destroy
+  def jarvis_cache; super() || build_jarvis_cache; end
 
   has_secure_password validations: false
 
@@ -60,6 +66,7 @@ class User < ApplicationRecord
   def self.me
     @@me ||= admin.first
   end
+  def me? = id == 1
 
   def self.auth_from_basic(basic_auth)
     username, password = basic_auth.split(":", 2)
@@ -123,13 +130,19 @@ class User < ApplicationRecord
     @address_book ||= AddressBook.new(self)
   end
 
+  def current_usage(date=Date.today)
+    daily_usages.find_or_create_by!(date: date)
+  rescue ActiveRecord::RecordNotUnique
+    retry
+  end
+
   def update_with_password(new_attrs)
     should_require_current_password = !guest?
     update(new_attrs)
   end
 
   def update_avatar(character)
-    (avatar || build_avatar).update_by_builder(character)
+    avatar.update_by_builder(character)
   end
 
   def owns_list?(list)

@@ -33,18 +33,19 @@ class Oauth::Base
       self
     end
 
-    def auth(params={})
-      API.post(EXCHANGE_URL, {
+    def auth(code, params={})
+      # Should be given a user to pull the cache keys from
+      Api.post(EXCHANGE_URL, {
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
         redirect_uri: REDIRECT_URI,
         scope: SCOPES,
       }.merge(params)).tap { |json|
-        next if json.blank?
-
-        self.access_token = json[:access_token] if json[:access_token].present?
-        self.refresh_token = json[:refresh_token] if json[:refresh_token].present?
-        self.id_token = json[:id_token] if json[:id_token].present?
+        next if json.nil?
+        # puts "\e[36m[LOGIT] | #{json}\e[0m"
+        DataStorage["#{STORAGE_KEY}_access_token"] = json[:access_token] if json[:access_token].present?
+        DataStorage["#{STORAGE_KEY}_refresh_token"] = json[:refresh_token] if json[:refresh_token].present?
+        DataStorage["#{STORAGE_KEY}_id_token"] = json[:id_token] if json[:id_token].present?
       }
     end
 

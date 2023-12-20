@@ -1,5 +1,6 @@
 @import "config/_variables";
 @import "config/terminess_font.scss";
+@import "components/forms";
 
 @keyframes blink {
   from { visibility: hidden; }
@@ -9,6 +10,17 @@
 
 @keyframes spin {
   100% { transform: rotate(360deg); }
+}
+
+@keyframes jiggle {
+  0% {
+    transform: rotate(-2deg);
+    animation-timing-function: ease-in;
+  }
+  50% {
+    transform: rotate(2.5deg);
+    animation-timing-function: ease-out;
+  }
 }
 
 html, body {
@@ -25,25 +37,37 @@ html, body {
 
 .hidden { display: none; }
 
-i.emoji, .emoji-stack {
-  font-size: 64px;
-  font-style: normal;
-  white-space: nowrap;
+.settings {
+  position: absolute;
+  top: 30px;
+  left: 30px;
 
-  img {
-    height: 48px;
+  i {
+    font-size: 32px;
+    cursor: pointer;
   }
 }
 
-.emoji-stack {
-  position: relative;
-  width: 64px;
-  height: 64px;
-  line-height: 64px;
+.settings-wrapper {
+  margin: 30px;
+  text-align: center;
+}
 
-  .emoji {
+.title i.emoji {
+  position: absolute;
+  font-size: 64px;
+  font-style: normal;
+  white-space: nowrap;
+  letter-spacing: -64px;
+  line-height: 0;
+  left: calc(50% - 32px);
+  text-align: center;
+
+  img {
     position: absolute;
-    left: 0;
+    height: 48px;
+    margin-left: 8px; // (48 - 32)/2
+    margin-top: -20px; // min-widget height / 4 (emoji is centered)
   }
 }
 
@@ -56,6 +80,17 @@ i.emoji, .emoji-stack {
   height: 100%;
   max-width: 675px;
 
+  .delete-widget {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba($danger, 0.2);
+    z-index: 1;
+    font-size: 32px;
+    padding: 10px;
+  }
   .widget-holder {
     align-self: center;
     margin: 10px;
@@ -65,6 +100,7 @@ i.emoji, .emoji-stack {
     align-items: center;
     justify-content: center;
     transition: box-shadow 0.2s;
+    background: darken($blue-d5, 5%);
     box-shadow: 1px 1px 3px 0 $grey-blue, inset 0 0 0 0 $grey-blue;
     border: 1px solid $grey-blue;
     border-radius: 8px;
@@ -89,46 +125,6 @@ i.emoji, .emoji-stack {
           line-height: 15px;
           text-overflow: ellipsis;
           white-space: nowrap;
-        }
-      }
-
-      &.garage {
-        font-size: 100px;
-
-        .ti-mdi-garage_open { display: none; visibility: hidden; }
-        .ti-mdi-garage { display: none; visibility: hidden; }
-
-        &.open {
-          color: orange;
-
-          .ti-mdi-garage_open {
-            display: inline-block;
-            visibility: visible;
-          }
-        }
-        &.between {
-          color: yellow;
-
-          .ti-mdi-garage_open {
-            display: inline-block;
-            animation: 1s infinite blink;
-          }
-        }
-        &.closed {
-          color: green;
-
-          .ti-mdi-garage {
-            display: inline-block;
-            visibility: visible;
-          }
-        }
-        &:not(.open, .between, .closed) {
-          color: grey;
-
-          .ti-mdi-garage {
-            display: inline-block;
-            visibility: visible;
-          }
         }
       }
 
@@ -170,7 +166,7 @@ i.emoji, .emoji-stack {
         position: absolute;
         top: 0; right: 0;
         padding: 5px;
-        width: 25px; height: 25px;
+        width: 30px; height: 30px;
 
         color: $grey-light;
         font-size: 24px;
@@ -193,6 +189,21 @@ i.emoji, .emoji-stack {
       box-shadow: none;
       border: none;
     }
+
+    // .draggable-source--is-dragging -- placeholder
+    // .draggable-mirror -- held item (ghost)
+    &.jiggle:not(&.draggable-mirror) {
+      cursor: grab;
+      animation: jiggle 0.3s alternate infinite;
+      &:nth-of-type(2n) { animation-delay: -0.75s; }
+      &:nth-of-type(3n) { animation-delay: -0.31s; }
+      &:nth-of-type(4n) { animation-delay: -0.67s; }
+      &:nth-of-type(5n) { animation-delay: -0.27s; }
+    }
+    &.draggable-source--is-dragging {
+      opacity: 0.3;
+    }
+    /* .draggable-mirror { cursor: grabbing; } */
   }
 }
 
@@ -227,6 +238,7 @@ i.emoji, .emoji-stack {
     height: 100%;
     color: $text-color;
     overflow: auto;
+    box-shadow: 1px 1px 4px 2px $grey-dark, inset 0 0 0 0 $grey-dark;
   }
 
   .close {
@@ -256,7 +268,7 @@ i.emoji, .emoji-stack {
     }
   }
 
-  &.mini-widgets .modal-content {
+  &.widget-modal .modal-content {
     position: relative;
     padding: 30px;
 
@@ -265,14 +277,18 @@ i.emoji, .emoji-stack {
         margin: 8px;
         box-shadow: 1px 1px 3px 0 $grey-dark, inset 0 0 0 0 $grey-dark;
         border: 1px solid $grey-dark;
+        background: $grey-blue;
         width: 80px;
         height: 80px;
         position: relative;
+        color: $blue-d4;
+        font-size: 16px;
+        font-weight: bold;
 
         .widget {
         }
 
-        .title {
+        .subtitle {
           position: absolute;
           left: 0;
           right: 0;
@@ -293,11 +309,22 @@ i.emoji, .emoji-stack {
     }
   }
 
-  &#drugs-modal .modal-content {
-    .mini-widget {
-      color: $blue-d4;
-      font-size: 16px;
-      font-weight: bold;
+  &#widget-form {
+    margin: 40px auto;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 100%;
+    width: 400px;
+    height: calc(100% - 80px);
+
+    form {
+      margin: 30px;
+      font-size: 28px;
+
+      select {
+        width: 100%;
+      }
     }
   }
 
@@ -313,7 +340,7 @@ i.emoji, .emoji-stack {
         display: flex;
         flex-direction: column-reverse;
         flex-grow: 1;
-        overflow: scroll;
+        overflow: auto;
 
         .message {
           margin: 5px 10px;
