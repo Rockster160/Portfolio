@@ -43,6 +43,7 @@ class Oauth::Base
       }.merge(params)).tap { |json|
         next if json.nil?
         # puts "\e[36m[LOGIT] | #{json}\e[0m"
+        current_user.jarvis_cache
         DataStorage["#{STORAGE_KEY}_access_token"] = json[:access_token] if json[:access_token].present?
         DataStorage["#{STORAGE_KEY}_refresh_token"] = json[:refresh_token] if json[:refresh_token].present?
         DataStorage["#{STORAGE_KEY}_id_token"] = json[:id_token] if json[:id_token].present?
