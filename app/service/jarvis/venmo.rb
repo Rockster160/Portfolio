@@ -11,9 +11,7 @@ class Jarvis::Venmo < Jarvis::Action
       return "Failed to Venmo- please provide a note to include in the request."
     end
 
-    res = ::Oauth::VenmoApi.new(@user).charge_by_name(name, amount.to_f * (req.present? ? -1 : 1), note)
-
-    Jarvis::Text.affirmative
+    ::Oauth::VenmoApi.new(@user).charge_by_name(name, amount.to_f * (req.present? ? -1 : 1), note)
   end
 
   def valid_words?

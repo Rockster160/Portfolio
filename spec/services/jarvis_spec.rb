@@ -20,6 +20,8 @@ RSpec.describe Jarvis do
       u.password_confirmation = :password
     }
     @admin.contacts.create(JSON.parse(File.read("address_book.json"), symbolize_names: true))
+    contact_id = @admin.contacts.find_by(name: "Brendan").id
+    @admin.jarvis_cache.dig_set(:oauth, :venmo_api, :contact_mapping, contact_id.to_s, "brendanvenmoid")
     @default_list = @admin.lists.find_or_create_by(name: "TODO")
     @other_list = @admin.lists.find_or_create_by(name: "Home Depot")
     @user = @admin
@@ -444,26 +446,21 @@ RSpec.describe Jarvis do
   context "with Venmo" do
     context "sending money" do
       specify {
-        expect(::Venmo).to receive(:charge).with("8013497798", 10.0, "🐱")
-        expect(jarvis("venmo B $10 for 🐱")).to eq("Sending $10 to Brendan for 🐱")
+        expect(jarvis("venmo B $10 for 🐱")).to eq("Paying Brendan $10 for 🐱")
       }
       specify {
-        expect(::Venmo).to receive(:charge).with("8013497798", 10.47, "bowling and pizza")
-        expect(jarvis("Venmo B $10.47 bowling and pizza")).to eq("Sending $10.47 to Brendan for bowling and pizza")
+        expect(jarvis("Venmo B $10.47 bowling and pizza")).to eq("Paying Brendan $10.47 for bowling and pizza")
       }
       specify {
-        expect(::Venmo).to receive(:charge).with("8013497798", 10.47, "🎳 and 🍕")
-        expect(jarvis("Venmo B $10.47 🎳 and 🍕")).to eq("Sending $10.47 to Brendan for 🎳 and 🍕")
+        expect(jarvis("Venmo B $10.47 🎳 and 🍕")).to eq("Paying Brendan $10.47 for 🎳 and 🍕")
       }
       specify {
-        expect(::Venmo).to receive(:charge).with("8013497798", 10.47, "🎳🍕🐱 food")
-        expect(jarvis("Venmo B $10.47 🎳🍕🐱 food")).to eq("Sending $10.47 to Brendan for 🎳🍕🐱 food")
+        expect(jarvis("Venmo B $10.47 🎳🍕🐱 food")).to eq("Paying Brendan $10.47 for 🎳🍕🐱 food")
       }
     end
 
     context "requesting money" do
       specify {
-        expect(::Venmo).to receive(:charge).with("8013497798", -10.0, "🐱")
         expect(jarvis("venmo request B $10 🐱")).to eq("Requesting $10 from Brendan for 🐱")
       }
     end

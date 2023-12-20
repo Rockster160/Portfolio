@@ -38,27 +38,33 @@ class Oauth::VenmoApi < Oauth::Base
   def request_money(id, amount, note) = charge_money(id, -(amount.abs), note)
   def charge_money(id, amount, note)
     return if id.blank?
-    if amount.positive?
-      Jarvis.say("Paying #{id_to_name(id)} #{amount_to_currency(amount)} for #{note}")
-    else
-      Jarvis.say("Requesting #{amount_to_currency(amount.abs)} from #{id_to_name(id)} for #{note}")
+
+    if Rails.env.production?
+      post(:payments, {
+        user_id: id,
+        note: note,
+        amount: amount,
+        metadata: { quasi_cash_disclaimer_viewed: true },
+        audience: :public,
+      }.tap { |params|
+        params[:funding_source_id] = VENMO_BALANCE_ID if amount.positive?
+      })
     end
 
-    return unless Rails.env.production?
-    post(:payments, {
-      user_id: id,
-      note: note,
-      amount: amount,
-      metadata: { quasi_cash_disclaimer_viewed: true },
-      audience: :public,
-    }.tap { |params|
-      params[:funding_source_id] = VENMO_BALANCE_ID if amount.positive?
-    })
+    message(id, amount, note)
   end
 
   # ========== Helpers ==========
   def contact_mapping
     @contact_mapping ||= cache_get(:contact_mapping) || {}
+  end
+
+  def message(id, amount, note)
+    if amount.positive?
+      "Paying #{id_to_name(id)} #{amount_to_currency(amount)} for #{note}"
+    else
+      "Requesting #{amount_to_currency(amount.abs)} from #{id_to_name(id)} for #{note}"
+    end
   end
 
   def amount_to_currency(amount)
