@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2023_12_20_002855) do
+ActiveRecord::Schema.define(version: 2023_12_20_223721) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
@@ -696,15 +696,6 @@ ActiveRecord::Schema.define(version: 2023_12_20_002855) do
     t.integer "role", default: 0
     t.boolean "dark_mode"
     t.string "email"
-  end
-
-  create_table "venmos", id: :serial, force: :cascade do |t|
-    t.string "access_code", limit: 255
-    t.string "access_token", limit: 255
-    t.string "refresh_token", limit: 255
-    t.datetime "expires_at"
-    t.datetime "created_at"
-    t.datetime "updated_at"
   end
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"

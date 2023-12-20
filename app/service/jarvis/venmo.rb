@@ -6,17 +6,14 @@ class Jarvis::Venmo < Jarvis::Action
     raise Jarvis::Error.not_allowed unless @user&.admin?
 
     _, req, name, amount, note = parse_data
-    contact = @user.address_book.contact_by_name(name)
-    from = contact&.phone || name
-
-    return false if from.blank? || amount.blank?
 
     if note.blank?
       return "Failed to Venmo- please provide a note to include in the request."
     end
 
-    ::Venmo.charge(from.gsub(/[^\d]/, "").last(10), amount.to_f * (req.present? ? -1 : 1), note)
-    # Make sure the charge succeeds?
+    res = ::Oauth::VenmoApi.new(@user).charge_by_name(name, amount.to_f * (req.present? ? -1 : 1), note)
+
+    return false if from.blank? || amount.blank?
 
     if req.present?
       "Requesting $#{amount} from #{contact&.name || from} for #{note}"

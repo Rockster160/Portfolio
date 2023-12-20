@@ -169,12 +169,6 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :venmos, only: [:index], path: "venmo" do
-    collection do
-      get "auth"
-    end
-  end
-
   require "sidekiq/web"
   # constraints ->(req) { binding.pry } do
   constraints RoleConstraint.new(:admin) do

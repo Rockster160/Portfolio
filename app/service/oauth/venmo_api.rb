@@ -36,7 +36,13 @@ class Oauth::VenmoApi < Oauth::Base
   def request_money(id, amount, note) = charge_money(id, -(amount.abs), note)
   def charge_money(id, amount, note)
     return if id.blank?
+    if amount.positive?
+      Jarvis.say("Paying #{id_to_name(id)} $#{amount} for #{note}")
+    else
+      Jarvis.say("Requesting $#{amount} from #{id_to_name(id)} for #{note}")
+    end
 
+    return unless Rails.env.production?
     post(:payments, {
       user_id: id,
       note: note,
@@ -51,6 +57,11 @@ class Oauth::VenmoApi < Oauth::Base
   # ========== Helpers ==========
   def contact_mapping
     @contact_mapping ||= cache_get(:contact_mapping) || {}
+  end
+
+  def id_to_name(id)
+    contact_id = contact_mapping.key(id)
+    Contact.find(contact_id).name
   end
 
   def contact_by_name(name)
