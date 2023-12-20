@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>JSON Editor</title>
+    <style media="screen">
+      html, body {
+        --hint-blue: #7393B3;
+        --remove-size: 0.5rem;
+
+        background-color: #1F1F1F;
+        color: #D1D1D1;
+      }
+
+      .flex-wrapper {
+        display: flex;
+        flex-direction: row;
+        width: 100%;
+        align-items: stretch;
+        justify-content: flex-start;
+
+        & > * {
+          flex: 1;
+          overflow: auto;
+        }
+      }
+
+      ul.block, ul.block li {
+        position: relative;
+        margin: 0;
+        margin-top: 2px;
+        margin-bottom: 2px;
+        padding: 0;
+        list-style: none;
+        white-space: nowrap;
+      }
+      ul.block li {
+        margin-left: 30px;
+      }
+      ul.block::after {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 2px;
+        border-left: 2px dotted var(--hint-blue);
+        width: 2px;
+        content: "";
+      }
+
+      button {
+        border-radius: 4px;
+        background-color: var(--hint-blue);
+      }
+
+      .text-like {
+        appearance: textfield;
+        display: inline-block;
+        box-sizing: border-box;
+        margin: 0;
+        outline: none;
+        border: 1px solid #ccc;
+        border-radius: 2px;
+        background-color: white;
+        padding: 2px 5px;
+
+        width: auto;
+        min-width: 50px;
+        max-width: 400px;
+        min-height: 1.2rem;
+        max-height: 10rem;
+
+        overflow: auto;
+        color: initial;
+        font-family: Arial;
+        font-size: 14px;
+        line-height: normal;
+        white-space: nowrap;
+
+        &::-webkit-scrollbar {
+          width: 5px;
+          height: 5px;
+        }
+        &::-webkit-scrollbar-track {
+          background: #f1f1f1;
+        }
+        &::-webkit-scrollbar-thumb {
+          background: #888;
+        }
+        &::-webkit-scrollbar-thumb:hover {
+          background: #555;
+        }
+      }
+
+      .type-wrapper {
+        position: relative;
+        vertical-align: top;
+
+        & input[type=checkbox] {
+          width: 1.2rem;
+          height: 1.2rem;
+        }
+        & input[data-type="null"] {
+          width: 3ch;
+        }
+      }
+
+      .remove {
+        display: inline-block;
+        position: absolute;
+        left: calc(var(--remove-size) * -1.4);
+
+        margin-top: 0.3rem;
+        border: calc(var(--remove-size) * 0.2) groove pink;
+        border-radius: calc(var(--remove-size) * 0.3);
+        background: red;
+        width: var(--remove-size);
+        height: var(--remove-size);
+        color: white;
+        font-size: calc(var(--remove-size) * 0.8);
+        text-align: center;
+
+        &:before, &:after {
+          position: absolute;
+
+          top: 50%;
+          left: 0;
+          background-color: #000;
+          width: 100%;
+          height: calc(var(--remove-size) * 0.1);
+          content: "";
+        }
+
+        &:before {
+          transform: rotate(45deg);
+        }
+
+        &:after {
+          transform: rotate(-45deg);
+        }
+      }
+  </style>
+</head>
+<body>
+  <div class="flex-wrapper">
+    <div id="jsonEditor" class="flex-section"></div>
+    <pre contenteditable=true id="jsonOutput" class="flex-section"><%= @cache.data.to_json %></pre>
+  </div>
+
+  <template id="buttons">
+    <button type="button" name="add" data-type-add="string">str</button>
+    <button type="button" name="add" data-type-add="number">1</button>
+    <button type="button" name="add" data-type-add="bool">T</button>
+    <button type="button" name="add" data-type-add="array">[]</button>
+    <button type="button" name="add" data-type-add="hash">{}</button>
+    <button type="button" name="add" data-type-add="null">na</button>
+  </template>
+  <template id="remove">
+    <span class="remove"></span>
+  </template>
+  <template id="key">
+    <span class="type-wrapper" data-wrapping="key">
+      <input data-type="key" class="text-like" type="text" placeholder="Key">
+      <span class="colon">:</span>
+    </span>
+  </template>
+  <template id="string">
+    <span class="type-wrapper" data-wrapping="string">
+      <div data-type="string" contenteditable="true" class="text-like" placeholder="Value"></div>
+    </span>
+  </template>
+  <template id="null">
+    <span class="type-wrapper" data-wrapping="null">
+      <input data-type="null" type="text" value="null" readonly="true" disabled="true" width="3ch">
+    </span>
+  </template>
+  <template id="number">
+    <span class="type-wrapper" data-wrapping="number">
+      <input data-type="number" class="text-like" type="number" placeholder="Value (Number)">
+    </span>
+  </template>
+  <template id="bool">
+    <span class="type-wrapper" data-wrapping="bool">
+      <input data-type="bool" type="checkbox" value="true">
+    </span>
+  </template>
+  <template id="array">
+    <span class="type-wrapper" data-wrapping="array">
+      <span class="buttons"><span class="opener">[</span> {{ buttons }}</span>
+      <ul data-type="array" class="array block">
+      </ul>
+      <span class="closer">]</span>
+    </span>
+  </template>
+  <template id="hash">
+    <span class="type-wrapper" data-wrapping="hash">
+      <span class="buttons"><span class="opener">{</span> {{ buttons }}</span>
+      <ul data-type="hash" class="hash block">
+      </ul>
+      <span class="closer">}</span>
+    </span>
+  </template>
+  <script type="text/javascript">
+    window.loaded = false
+
+    document.addEventListener("click", function(evt) {
+      let btn = evt.target
+      if (btn.name === "add") {
+        let wrapper = btn.closest(".type-wrapper").querySelector(".block")
+        let type = btn.getAttribute("data-type-add")
+
+        let li = injectTemplate(wrapper, type)
+        editorChange()
+      } else if (btn.classList.contains("remove")) {
+        let parent = btn.parentElement
+        if (parent.classList.contains("buttons")) { // Hash/Array
+          parent.closest(".type-wrapper").parentElement.remove()
+        } else {
+          parent.remove()
+        }
+        resizeAll(parent.closest(".type-wrapper"))
+        editorChange()
+        emptyCheck()
+      }
+    })
+
+    document.addEventListener("input", function(evt) {
+      let target = evt.target
+      if (target.classList.contains("text-like")) {
+        resizeInput(target)
+      }
+    })
+
+    function resizeAll(wrapper) {
+      if (wrapper) {
+        wrapper.querySelectorAll(":scope > li > .type-wrapper > .text-like").forEach(item => resizeInput(item))
+      } else {
+        document.querySelectorAll(".text-like").forEach(item => resizeInput(item))
+      }
+    }
+
+    function editorChange() {
+      let json = unparse()
+      document.getElementById("jsonOutput").textContent = JSON.stringify(json, null, 2)
+    }
+
+    function rawChange() {
+      parse()
+      resizeAll()
+    }
+
+    document.addEventListener("focusout", function(evt) {
+      let section_id = evt.target.closest(".flex-section").id
+      if (section_id == "jsonEditor") {
+        editorChange()
+      } else if (section_id == "jsonOutput") {
+        rawChange()
+      }
+    })
+    document.addEventListener("change", function(evt) {
+      if (evt.target.type == "checkbox") {
+        editorChange()
+      }
+    })
+
+    function replaceTemplates(element) {
+      let htmlBefore, htmlAfter
+      do {
+        htmlBefore = element.innerHTML || ""
+        element.innerHTML = htmlBefore.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key) => {
+          const template = document.getElementById(key)
+          return template ? template.innerHTML : ""
+        })
+        htmlAfter = element.innerHTML
+      } while (htmlBefore !== htmlAfter)
+    }
+
+    function asNode(html) {
+      const temp = document.createElement("div")
+      temp.innerHTML = html.trim()
+      return temp.firstChild
+    }
+
+    function templateFrom(type) {
+      const template = document.getElementById(type)
+      if (!template) return ""
+
+      const clone = template.content.cloneNode(true)
+      const div = document.createElement("div")
+      div.appendChild(clone)
+      replaceTemplates(div)
+
+      return div.innerHTML
+    }
+
+    function injectTemplate(wrapper, type, key_val) {
+      const template = document.getElementById(type)
+      if (!template) { return }
+
+      const li = document.createElement("li")
+      li.innerHTML = template.innerHTML
+      replaceTemplates(li)
+
+      li.prepend(asNode(templateFrom("remove")))
+      if (wrapper.getAttribute("data-type") == "hash") {
+        let key_node = asNode(templateFrom("key"))
+        if (key_val) { key_node.querySelector("input").value = key_val }
+        li.prepend(key_node)
+      }
+
+      if (wrapper.id == "jsonEditor") {
+        wrapper.innerHTML = li.innerHTML
+        resizeAll(wrapper)
+        return wrapper
+      } else {
+        wrapper.appendChild(li)
+        resizeAll(wrapper)
+        return li
+      }
+    }
+
+    function resizeInput(input) {
+      let wrapper = input.closest(".block")
+      let base_selector = ":scope > li > span.type-wrapper"
+      let key_selector = "[data-type='key']"
+      let field_selector = `.text-like:not([data-type='key'])`
+
+      let siblings
+      if (input.getAttribute("data-type") == "key") {
+        siblings = wrapper.querySelectorAll(`${base_selector} > ${key_selector}`)
+      } else {
+        siblings = wrapper.querySelectorAll(`${base_selector} > ${field_selector}`)
+      }
+
+      let width = 0
+      let ch = 8 // Magic based on px size
+      siblings.forEach(item => {
+        if (item.tagName == "DIV") {
+          // Reset scroll styles
+          item.style.width = "0px"
+          item.style.width = "auto"
+        }
+        let item_width = item.tagName == "DIV" ? item.scrollWidth : ((item.value.length+2)*ch)
+        if (item_width > width) { width = item_width }
+      })
+
+      siblings.forEach(item => {
+        if (item.tagName == "DIV") {
+          item.style.width = `${width+2}px`
+        } else {
+          item.style.width = `${width+3}px`
+        }
+      })
+    }
+
+    function topHash() {
+      return templateFrom("hash")
+    }
+
+    function generateElementsFromJSON(obj, parent, parent_key) {
+      let node
+      if (Array.isArray(obj)) {
+        node = injectTemplate(parent, "array", parent_key).querySelector(".block")
+        obj.forEach(item => {
+          generateElementsFromJSON(item, node)
+        })
+      } else if (typeof obj === "object" && obj !== null) {
+        node = injectTemplate(parent, "hash", parent_key).querySelector(".block")
+        for (const [key, value] of Object.entries(obj)) {
+          generateElementsFromJSON(value, node, key)
+        }
+      } else if (((typeof obj === "boolean") || (obj instanceof Boolean))) {
+        node = injectTemplate(parent, "bool", parent_key).querySelector(`[data-type="bool"]`)
+        node.checked = obj
+      } else if (typeof obj === "number") {
+        node = injectTemplate(parent, "number", parent_key).querySelector(`[data-type="number"]`)
+        node.value = obj
+        resizeInput(node)
+      } else if (obj === null) {
+        injectTemplate(parent, "null", parent_key)
+      } else {
+        node = injectTemplate(parent, "string", parent_key).querySelector(`[data-type="string"]`)
+        node.textContent = obj
+        resizeInput(node)
+      }
+    }
+
+    function parse(code) {
+      const editor = document.getElementById("jsonEditor")
+      code = code || document.getElementById("jsonOutput").textContent
+
+      if (code) {
+        try {
+          const jsonObject = JSON.parse(code)
+          editor.innerHTML = "" // Fresh start, only if json was valid
+          generateElementsFromJSON(jsonObject, editor)
+        } catch (e) {
+          console.error("Invalid JSON: ", e)
+          // TODO: Show an alert on the jsonOutput
+        }
+      }
+      emptyCheck()
+    }
+
+    function valueFromWrapping(el) { // el[data-wrapping]
+      let el_input = el.querySelector("[data-type]")
+      const cases = {
+        key:     () => el_input.value,
+        string:  () => el_input.textContent,
+        null:    () => null,
+        bool:    () => el_input.checked,
+        number:  () => el_input.valueAsNumber,
+        array:   () => unparse(el, []),
+        hash:    () => unparse(el, {}),
+      }
+
+      return cases[el.getAttribute("data-wrapping")]()
+    }
+
+    function unparse(wrapper, object) {
+      if (!wrapper) { return unparse(document.querySelector("#jsonEditor > .type-wrapper"), {}) }
+
+      let type = wrapper.getAttribute("data-wrapping")
+      let nodes = Array.from(wrapper.querySelectorAll(":scope > ul > li"))
+      const cases = {
+        array:   () => {
+          nodes.forEach(item => {
+            let val = valueFromWrapping(item.querySelector(":scope > [data-wrapping]"))
+
+            object.push(val)
+          })
+        },
+        hash:    () => {
+          nodes.forEach(item => {
+            let key = valueFromWrapping(item.querySelector(":scope > [data-wrapping='key']"))
+            let val = valueFromWrapping(item.querySelector(":scope > [data-wrapping]:not([data-wrapping='key'])"))
+
+            object[key] = val
+          })
+        },
+      }
+      cases[wrapper.getAttribute("data-wrapping")]()
+
+      return object
+    }
+
+    function emptyCheck() {
+      if (document.querySelector("ul.block")) { return }
+
+      document.getElementById("jsonEditor").innerHTML = topHash()
+    }
+
+    // Unused, but helpful for debugging
+    function deepMatch(obj1, obj2) {
+      if (typeof obj1 !== "object" || typeof obj2 !== "object") { return obj1 === obj2 }
+      if (!obj1 || !obj2) { return obj1 === obj2 }
+      if (Array.isArray(obj1) || Array.isArray(obj2)) {
+        for (let i = 0; i < obj1.length; i++) {
+          if (!deepMatch(obj1[i], obj2[i])) { return false }
+        }
+      }
+
+      const keys1  = Object.keys(obj1)
+      const keys2 = Object.keys(obj2)
+      if (keys1.length !== keys2.length) { return false }
+
+      for (const key of keys1) {
+        if (!keys2.includes(key)) { return false }
+        if (!deepMatch(obj1[key], obj2[key])) { return false }
+      }
+
+      return true
+    }
+
+    window.oncontextmenu = function(evt) {
+      evt.preventDefault()
+      editorChange()
+    }
+
+    window.onload = function() {
+      parse()
+      resizeAll()
+      emptyCheck()
+      editorChange()
+
+      window.loaded = true
+    }
+  </script>
+</body>
+</html>
