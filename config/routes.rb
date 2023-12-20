@@ -56,6 +56,7 @@ Rails.application.routes.draw do
   post "webhooks/command" => "webhooks#command"
   get "webhooks/auth" => "webhooks#auth"
   get "webhooks/auth/:service" => "webhooks#auth"
+  get "webhooks/oauth/:service" => "webhooks#auth"
   post "push_notification_subscribe" => "webhooks#push_notification_subscribe"
 
   get "dashboard" => "dashboard#show"

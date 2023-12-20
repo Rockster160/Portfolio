@@ -6,10 +6,12 @@ class Api
     url = [uri, params.presence&.to_query].compact.join("?")
     pst "  \e[33mGET #{url}\e[0m"
     output(:Headers, headers)
-    res = RestClient.get(url)
+    res = RestClient::Request.execute(method: :get, url: url, headers: headers)
+    output("Response Headers", res.headers)
     JSON.parse(res.body, symbolize_names: true).tap { |json| output(:Response, json) }
-  rescue RestClient::ExceptionWithResponse => e
-    pst "\e[31m  > #{e} [#{e.http_body}](#{e.message})\e[0m"
+  rescue RestClient::ExceptionWithResponse => res_exc
+    pst "\e[31m  > #{res_exc} [#{res_exc.http_body}](#{res_exc.message})\e[0m"
+    res_exc
   rescue StandardError => e
     pst "\e[31m  [ERROR]> #{e.message}\e[0m"
   ensure
@@ -24,9 +26,11 @@ class Api
     output(:Headers, headers)
     params = params.to_json if params.is_a?(Hash) && headers[:content_type] == "application/json"
     res = RestClient.post(url, params, headers)
+    output("Response Headers", res.headers)
     JSON.parse(res.body, symbolize_names: true).tap { |json| output(:Response, json) }
-  rescue RestClient::ExceptionWithResponse => e
-    pst "\e[31m  > #{e} [#{e.http_body}](#{e.message})\e[0m"
+  rescue RestClient::ExceptionWithResponse => res_exc
+    pst "\e[31m  > #{res_exc} [#{res_exc.http_body}](#{res_exc.message})\e[0m"
+    res_exc
   rescue StandardError => e
     pst "\e[31m  [ERROR]> #{e.message}\e[0m"
   ensure

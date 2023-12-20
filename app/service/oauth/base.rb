@@ -9,8 +9,24 @@ class Oauth::Base
   # REDIRECT_URI
   # STORAGE_KEY
 
+  def self.key = name.split("::").last.underscore
+
+  def self.defaults
+    {
+      OAUTH_URL: "",
+      EXCHANGE_URL: "",
+      CLIENT_ID: nil,
+      CLIENT_SECRET: nil,
+      SCOPES: [],
+      REDIRECT_URI: "https://ardesian.com/webhooks/oauth/#{key}",
+      STORAGE_KEY: key,
+      AUTH_PARAMS: {},
+      EXCHANGE_PARAMS: {},
+    }
+  end
+
   def self.constants(hash)
-    hash.each { |ckey, cval| Oauth::Base.const_set(ckey, cval) }
+    hash.reverse_merge(defaults).each { |ckey, cval| Oauth::Base.const_set(ckey, cval) }
     # @constants = (@constants || {}).merge(hash)
   end
 
@@ -25,19 +41,19 @@ class Oauth::Base
       redirect_uri: REDIRECT_URI,
       scope: SCOPES,
       access_type: :offline,
-    }.merge(AUTH_PARAMS)
+    }.merge(AUTH_PARAMS).compact_blank
 
     "#{OAUTH_URL}?#{params.to_query}"
   end
 
   def code=(code)
-    auth({ code: code, grant_type: :authorization_code }.merge(EXCHANGE_PARAMS))
+    auth({ code: code, grant_type: :authorization_code }.merge(EXCHANGE_PARAMS)).compact_blank
 
     self
   end
 
   def cache
-    @cache ||= @user.cache
+    @cache ||= @user.jarvis_cache
   end
 
   def auth(code, params={})
@@ -60,6 +76,8 @@ class Oauth::Base
   end
 
   def url(path, base: API_URL)
+    return path if path.starts_with?("http")
+
     [base.to_s.sub(/\/$/, ""), path.to_s.sub(/^\//, "")].join("/")
   end
 
@@ -68,15 +86,23 @@ class Oauth::Base
   end
 
   def post(path, params={}, headers={})
-    Api.get(url(path), params, base_headers.merge(headers))
+    Api.post(url(path), params, base_headers.merge(headers))
   end
 
-  def access_token=(new_token) = cache.dig_set(:oauth, STORAGE_KEY, :access_token, new_token)
-  def refresh_token=(new_token) = cache.dig_set(:oauth, STORAGE_KEY, :refresh_token, new_token)
-  def id_token=(new_token) = cache.dig_set(:oauth, STORAGE_KEY, :id_token, new_token)
-  def access_token = cache.dig(:oauth, STORAGE_KEY, :access_token)
-  def refresh_token = cache.dig(:oauth, STORAGE_KEY, :refresh_token)
-  def id_token = cache.dig(:oauth, STORAGE_KEY, :id_token)
+  def cache_set(key, val) = cache.dig_set(:oauth, STORAGE_KEY, key, val)
+  def cache_get(key) = cache.dig(:oauth, STORAGE_KEY, key)
+  def access_token=(new_token)
+    cache_set(:access_token, new_token)
+  end
+  def refresh_token=(new_token)
+    cache_set(:refresh_token, new_token)
+  end
+  def id_token=(new_token)
+    cache_set(:id_token, new_token)
+  end
+  def access_token = cache_get(:access_token)
+  def refresh_token = cache_get(:refresh_token)
+  def id_token = cache_get(:id_token)
 
   # should have refresh_get, refresh_post
 
@@ -91,8 +117,8 @@ class Oauth::Base
 
   def base_headers
     {
-      content_type: "application/json",
-      Authorization: "Bearer #{access_token}"
-    }
+      "Content-Type": "application/json",
+      "Authorization": access_token.present? ? "Bearer #{access_token}" : nil
+    }.compact_blank
   end
 end
