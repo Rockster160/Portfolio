@@ -88,8 +88,8 @@ module Jarvis::MatchTask
 
     name_regex = replaces(
       "\\m(#{COMMON_WORDS.join("|")})\\M" => "",
-      " *\\(.*\\) *" => "%", # This should probably verify to only apply if the nested regex matches
-      " *\\{.*\\} *" => "%", # This should probably verify to only apply if the nested regex matches
+      " *\\(.*\\) *" => "%", # () This should probably verify to only apply if the nested regex matches
+      " *\\{.*\\} *" => "%", # {} This should probably verify to only apply if the nested regex matches
       # "\\n" => "\n",
       " {2,}" => " ",
       "\\% *\\%" => "%",

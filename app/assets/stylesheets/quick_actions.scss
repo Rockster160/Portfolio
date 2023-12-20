@@ -128,46 +128,6 @@ html, body {
         }
       }
 
-      &.garage {
-        font-size: 100px;
-
-        .ti-mdi-garage_open { display: none; visibility: hidden; }
-        .ti-mdi-garage { display: none; visibility: hidden; }
-
-        &.open {
-          color: orange;
-
-          .ti-mdi-garage_open {
-            display: inline-block;
-            visibility: visible;
-          }
-        }
-        &.between {
-          color: yellow;
-
-          .ti-mdi-garage_open {
-            display: inline-block;
-            animation: 1s infinite blink;
-          }
-        }
-        &.closed {
-          color: green;
-
-          .ti-mdi-garage {
-            display: inline-block;
-            visibility: visible;
-          }
-        }
-        &:not(.open, .between, .closed) {
-          color: grey;
-
-          .ti-mdi-garage {
-            display: inline-block;
-            visibility: visible;
-          }
-        }
-      }
-
       .loading {
         position: absolute;
         top: 2.4px; left: 3.7px;
