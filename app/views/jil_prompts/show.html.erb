@@ -15,6 +15,7 @@
             content_tag(
               :input,
               @prompt.response&.dig(option_key),
+              value: @prompt.response&.dig(option_key) || -1,
               type: :range,
               name: base_key,
               min: 0,
