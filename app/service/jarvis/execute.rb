@@ -26,7 +26,6 @@
     task.update(last_trigger_at: Time.current)
 
     task.tasks&.each_with_index do |task_block, idx|
-      next if task_block[:comment]
       break if @ctx[:i] >= MAX_ITERATIONS
       break if @ctx[:exit]
 
@@ -59,6 +58,7 @@
   end
 
   def eval_block(task_block)
+    return if task_block.is_a?(::Hash) && task_block[:comment]
     if task_block.is_a?(::Hash) && task_block[:token].present?
       @ctx[:current_token] = task_block[:token]
       ActionCable.server.broadcast("jil_#{@task.uuid}_channel", { token: task_block[:token] })
