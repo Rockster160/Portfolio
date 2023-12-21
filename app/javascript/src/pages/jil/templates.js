@@ -113,7 +113,7 @@ export let templates = {
             content: [{ i: "fa fa-ellipsis-v" }]
           } },
           { span: {
-            class: "list-item nohover",
+            class: `list-item nohover ${existingdata.comment ? 'comment' : ''}`,
             token: existingdata.token,
             data: schemaNode.getAttribute("data"),
             content: function() {

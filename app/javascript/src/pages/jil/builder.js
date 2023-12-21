@@ -131,6 +131,8 @@ $(document).ready(function() {
       select.removeClass("invalid")
 
       let available_tokens = usedtokens.filter(function(tokendata) {
+        // Commented lines are not available
+        if (tokendata.item.classList.contains("comment")) { return }
         // Token hasn't been executed yet. Not available for use
         if (token_names.indexOf(thisToken) <= tokendata.idx) { return }
         // Token is an ancestor - hasn't been executed yet
@@ -259,6 +261,7 @@ $(document).ready(function() {
       returntype: listItem.querySelector(":scope > .return").getAttribute("blocktype"),
       type: listItem.querySelector(":scope > .type").innerText,
       token: listItem.querySelector(":scope > .token").innerText,
+      comment: listItem.classList.contains("comment"),
       data: Array.from(listItem.querySelectorAll(":scope > .item-name > .select-wrapper, :scope > .item-name > .tasks")).map(function(block) {
         if (block.classList.contains("tasks")) {
           return collectBlocksFromList(block)
@@ -348,6 +351,16 @@ $(document).ready(function() {
       initInteractivity()
     }
   })
+
+  window.oncontextmenu = function(evt) {
+    if (evt.target.classList.contains("list-item")) {
+      evt.preventDefault()
+      evt.stopPropagation()
+      $(evt.target).toggleClass("comment")
+      resetDropdowns()
+      return false
+    }
+  }
 
   $(document).on("keyup search", "input.filter-drawer-tree", function() {
     let wrapper = $(".drawer-tree .lists")

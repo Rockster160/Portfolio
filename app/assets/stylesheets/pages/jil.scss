@@ -194,6 +194,14 @@ $faded-compl: rgba($base-complementary, 0.6);
         padding-right: 10px;
         min-height: 50px;
 
+        &.comment {
+          background: grey;
+
+          select, input, textarea {
+            background-color: $grey-blue;
+            color: darkgrey;
+          }
+        }
         &.task-running, &.task-starting {
           background: $base-complementary;
         }

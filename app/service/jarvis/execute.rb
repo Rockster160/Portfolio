@@ -26,6 +26,7 @@
     task.update(last_trigger_at: Time.current)
 
     task.tasks&.each_with_index do |task_block, idx|
+      next if task_block[:comment]
       break if @ctx[:i] >= MAX_ITERATIONS
       break if @ctx[:exit]
 
