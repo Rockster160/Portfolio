@@ -206,10 +206,10 @@ class TeslaControl
     User.me.jarvis_cache.get(:car_data)
   end
 
-  def vehicle_data
+  def vehicle_data(wake: false)
     @vehicle_data = cached_vehicle_data if Rails.env.development?
-    @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state")&.tap { |car_data|
-      cached_vehicle_data.merge!(car_data) if car_data[:sleeping]
+    @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |car_data|
+      car_data = cached_vehicle_data.merge(car_data) if car_data[:sleeping]
       car_data[:timestamp] = car_data.dig(:drive_state, :timestamp) # Bubble up
       car_data[:sleeping] ||= false
 
