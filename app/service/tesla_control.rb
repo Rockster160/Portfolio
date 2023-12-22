@@ -95,6 +95,11 @@ class TeslaControl
   end
 
   def refresh
+    if Rails.env.production? # IP Banned from refreshing for some reason?
+      DataStorage[:tesla_forbidden] = true
+      ActionCable.server.broadcast(:tesla_channel, { status: :forbidden })
+      return
+    end
     raise "Cannot refresh without refresh token" if @refresh_token.blank?
 
     success = auth(
