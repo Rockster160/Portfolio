@@ -7,15 +7,15 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
   end
 
   def logic_and
-    args.all? { |t| eval_block(t).present? }
+    evalargs.all? { |t| eval_block(t).present? }
   end
 
   def logic_or
-    args.any? { |t| eval_block(t).present? }
+    evalargs.any? { |t| eval_block(t).present? }
   end
 
   def logic_eq
-    args.inject(:==)
+    evalargs.inject(:==)
   end
 
   def logic_not
@@ -36,16 +36,16 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
 
   def logic_next
     jil.ctx[:next] = true
-    args # No-op - just return what's put in
+    evalargs # No-op - just return what's put in
   end
   def logic_break
     jil.ctx[:break] = true
-    args # No-op - just return what's put in
+    evalargs # No-op - just return what's put in
   end
 
   def logic_exit
     jil.ctx[:exit] = true
-    jil.ctx[:msg] << (eval_block(args) || "Exit")
+    jil.ctx[:msg] << (evalargs || "Exit")
   end
 
   def logic_map
