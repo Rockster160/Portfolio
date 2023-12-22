@@ -99,10 +99,24 @@ export let templates = {
 
   block: (key, existingdata) => {
     let schemaNode = document.querySelector(`[data-type="${key}"]`)
-    if (!schemaNode) { return } // TODO: Better way to handle unknown schema
+    let schemaData = schemaNode?.getAttribute("data")
+    let invalid = false
+    console.log(schemaData);
+    if (!schemaData) {
+      console.log("Unknown: ", key, existingdata);
+      invalid = true
+      schemaData = JSON.stringify([key, [
+        {return: existingdata.returntype},
+        `Block type not found: &lt;${key}&gt;`,
+        ...existingdata.data.map(item => {
+          return { block: "str" }
+        })
+      ]])
+    }
     // Ideally, just render some kind of error block (with a delete button)
     // The block should include the raw task data, so if/when it gets fixed, it will re-render correctly and be saved
-    let [_, schema] = JSON.parse(schemaNode.getAttribute("data"))
+    let [_, schema] = JSON.parse(schemaData)
+    console.log(schema);
 
     return jsonToElem({
       div: {
@@ -113,9 +127,9 @@ export let templates = {
             content: [{ i: "fa fa-ellipsis-v" }]
           } },
           { span: {
-            class: `list-item nohover ${existingdata.comment ? 'comment' : ''}`,
+            class: `list-item nohover ${existingdata.comment ? 'comment' : ''} ${invalid ? 'invalid' : ''}`,
             token: existingdata.token,
-            data: schemaNode.getAttribute("data"),
+            data: schemaData,
             content: function() {
               let elms = []
 

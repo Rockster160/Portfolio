@@ -202,6 +202,14 @@ $faded-compl: rgba($base-complementary, 0.6);
             color: darkgrey;
           }
         }
+        &.invalid {
+          background: $danger;
+
+          select, input, textarea {
+            background-color: $grey-blue;
+            color: darkgrey;
+          }
+        }
         &.task-running, &.task-starting {
           background: $base-complementary;
         }
