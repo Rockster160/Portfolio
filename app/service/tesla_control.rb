@@ -276,11 +276,11 @@ class TeslaControl
     start = Time.current.to_i
 
     loop do
-      raise TeslaError, "Timed out waiting to wake up" if Time.current.to_i - start > 35
+      Jarvis.say("BluZoro is too asleep to wake up, sir.") if Time.current.to_i - start > 60
+      raise TeslaError, "Timed out waiting to wake up" if Time.current.to_i - start > 60
 
       break true if wake_vehicle
-      Jarvis.say("Tesla sleeping... Wake up!")
-      sleep(rand * 5)
+      sleep(rand * 10)
     end
   end
 
