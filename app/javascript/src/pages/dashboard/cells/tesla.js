@@ -151,6 +151,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
         renderLines()
         cell.ws.send({ action: "command", command: cmd, params: params })
       },
+      reload: function() { cell.commands.run("full_reload") },
       update: function() { cell.commands.run("update") },
       on: function() { cell.commands.run("on") },
       off: function() { cell.commands.run("off") },

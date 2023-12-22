@@ -55,7 +55,7 @@ class TeslaControl
     DataStorage[:tesla_refresh_token] = refresh
     DataStorage[:tesla_forbidden] = false
 
-    TeslaCommand.quick_command(:reload)
+    TeslaCommand.quick_command(:full_reload)
   end
 
   def self.local

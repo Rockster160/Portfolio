@@ -1,6 +1,7 @@
 class ReloadTeslaLocalWorker
   include Sidekiq::Worker
   sidekiq_options retry: false
+  queue_as :local_tesla
 
   def perform
     Time.use_zone(User.timezone) {

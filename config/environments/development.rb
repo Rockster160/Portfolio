@@ -83,6 +83,15 @@ Rails.application.configure do
   # Run ActiveJobs inline- this is mostly a fix for the CommandProposal to work properly
   #   since it uses multiple threads which jams up the single process in development
   config.active_job.queue_adapter = :inline
+  # ActiveJob options to allow for custom queues
+  config.active_job.queue_name_prefix = Rails.env
+  config.active_job.queue_name_delimiter = "."
+  config.active_job.default_queue_name = "default"
+  config.active_job.custom_queues = {
+    critical: 1,       # Custom queue with a priority of 1
+    tesla_local: 5     # Custom queue with a priority of 5
+  }
+
   config.hosts = nil
   config.serve_static_assets = false
 end
