@@ -55,7 +55,7 @@ class TeslaControl
     DataStorage[:tesla_refresh_token] = refresh
     DataStorage[:tesla_forbidden] = false
 
-    TeslaCommand.quick_command(:full_reload)
+    TeslaCommand.command(:full_reload)
   end
 
   def self.local
@@ -216,7 +216,6 @@ class TeslaControl
     @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |car_data|
       car_data = cached_vehicle_data.merge(car_data) if car_data[:sleeping]
       car_data[:timestamp] = car_data.dig(:drive_state, :timestamp) # Bubble up
-      car_data[:sleeping] ||= false
 
       User.me.jarvis_cache.set(:car_data, car_data)
       break car_data if car_data[:sleeping]

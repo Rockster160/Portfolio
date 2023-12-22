@@ -36,23 +36,23 @@
           y: 1,
         },
 
-        notes: { x: 1, y: 2, w: 2 },
+        home: {
+          x: 1, y: 2,
+          google_api_url: "<%= GoogleNestControl.code_url %>",
+        },
+        tesla: { x: 2, y: 2 },
         uptime: {
           x: 3, y: 2,
           uptime_apikey: "<%= ENV.fetch("UPTIME_APIKEY") %>",
         },
-        home: {
+        github: {
           x: 4, y: 2,
-          google_api_url: "<%= GoogleNestControl.code_url %>",
+          github_apikey: "<%= ENV.fetch("GITHUB_APIKEY") %>"
         },
 
         calendar: { x: 1, y: 3, h: 3 },
         chores: { x: 2, y: 3 },
-        github: {
-          x: 3, y: 3,
-          github_apikey: "<%= ENV.fetch("GITHUB_APIKEY") %>"
-        },
-        tesla: { x: 4, y: 3 },
+        notes: { x: 3, y: 3, w: 2 },
 
         todo: { x: 2, y: 4 },
         shopping: { x: 3, y: 4 },

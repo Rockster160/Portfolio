@@ -38,14 +38,14 @@
     end
 
     case cmd.to_sym
+    when :full_reload
+      ActionCable.server.broadcast(:tesla_channel, format_data(car.vehicle_data(wake: true))) unless quick
+      @response = "Updating car cell"
+      return @response
     when :request
       ActionCable.server.broadcast(:tesla_channel, format_data(Tesla.new.cached_vehicle_data))
     when :update, :reload
       ActionCable.server.broadcast(:tesla_channel, format_data(car.vehicle_data)) unless quick
-      @response = "Updating car cell"
-      return @response
-    when :full_reload
-      ActionCable.server.broadcast(:tesla_channel, format_data(car.vehicle_data(wake: true))) unless quick
       @response = "Updating car cell"
       return @response
     when :off, :stop
