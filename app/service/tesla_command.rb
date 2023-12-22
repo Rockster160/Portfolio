@@ -1,17 +1,19 @@
- class TeslaCommand
-   include ActionView::Helpers::DateHelper
-   TEMP_MIN = 59
-   TEMP_MAX = 82
+module TeslaCommand
+  module_function
+  extend ActionView::Helpers::DateHelper
 
-  def self.command(cmd, opt=nil, quick=false)
-    new.command(cmd, opt, quick)
-  end
+  TEMP_MIN = 59
+  TEMP_MAX = 82
 
-  def self.quick_command(cmd, opt=nil)
+  def quick_command(cmd, opt=nil)
     return "Currently forbidden" if DataStorage[:tesla_forbidden]
 
     TeslaCommandWorker.perform_async(cmd.to_s, opt&.to_s)
     command(cmd, opt, true)
+  end
+
+  def broadcast(car_data)
+    ActionCable.server.broadcast(:tesla_channel, format_data(car_data))
   end
 
   def address_book
@@ -19,7 +21,7 @@
   end
 
   def command(original_cmd, original_opt=nil, quick=false)
-    ActionCable.server.broadcast(:tesla_channel, { loading: true })
+    broadcast(loading: true)
     car = Tesla.new unless quick
 
     cmd = original_cmd.to_s.downcase.squish
@@ -39,13 +41,13 @@
 
     case cmd.to_sym
     when :reload # Wake up car and get current data
-      ActionCable.server.broadcast(:tesla_channel, format_data(car.vehicle_data(wake: true))) unless quick
+      broadcast(car.vehicle_data(wake: true)) unless quick
       @response = "Updating car cell"
       return @response
     when :request # Get cached car data
-      ActionCable.server.broadcast(:tesla_channel, format_data(Tesla.new.cached_vehicle_data))
+      broadcast(Tesla.new.cached_vehicle_data)
     when :update # Get current data, but do not wake up
-      ActionCable.server.broadcast(:tesla_channel, format_data(car.vehicle_data)) unless quick
+      broadcast(car.vehicle_data) unless quick
       @response = "Updating car cell"
       return @response
     when :off, :stop
@@ -135,7 +137,7 @@
     when :find
       @response = "Finding car..."
       unless quick
-        loc = LocationCache.last_coord
+        loc = LocationCache.last_coord # This uses phone location now...
         Jarvis.say("http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}", :sms)
       end
     else
@@ -146,13 +148,13 @@
     @response
   rescue TeslaError => e
     if e.message.match?(/forbidden/i)
-      ActionCable.server.broadcast(:tesla_channel, format_data(Tesla.new.cached_vehicle_data))
+      broadcast(Tesla.new.cached_vehicle_data)
     else
-      ActionCable.server.broadcast(:tesla_channel, { failed: true })
+      broadcast(failed: true)
     end
     "Tesla #{e.message}"
   rescue StandardError => e
-    ActionCable.server.broadcast(:tesla_channel, { failed: true })
+    broadcast(failed: true)
     backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
     SlackNotifier.notify("Failed to command: #{e.inspect}\n#{backtrace}")
     raise e # Re-raise to stop worker from sleeping and attempting to re-get
@@ -166,9 +168,11 @@
 
   def format_data(data)
     return {} if data.blank?
+    return data if data[:charge_state].blank?
 
     {
       forbidden: DataStorage[:tesla_forbidden],
+      sleeping: !!data[:sleeping],
       charge: data.dig(:charge_state, :battery_level),
       miles: data.dig(:charge_state, :battery_range)&.floor,
       charging: {
