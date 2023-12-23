@@ -274,7 +274,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
   cell = Cell.register({
     title: "Home",
-    refreshInterval: Time.minute(),
+    refreshInterval: Time.hour(),
     wrap: false,
     flash: false,
     data: {
