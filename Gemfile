@@ -14,7 +14,6 @@ gem "bootsnap", "1.12.0"
 gem "jsbundling-rails", "1.0.2"
 
 gem "sprockets-rails", "3.4.2"
-gem "dotenv-rails", "2.7.6"
 gem "puma", "5.6.4"
 gem "redis", "4.6.0"
 gem "redis-namespace", "1.8.2"
@@ -58,6 +57,7 @@ gem "sidekiq-unique-jobs"
 gem "ruby-openai"
 gem "webdrivers"
 gem "redcarpet"
+gem "capistrano"
 # Dependency
 gem "net-http", "0.3.2"
 gem "uri", "0.12.0"
@@ -68,6 +68,7 @@ gem "command_proposal", git: "https://github.com/Rockster160/command_proposal.gi
 # gem "command_proposal", "1.0.19"
 
 group :development, :test do
+  gem "dotenv-rails", "2.7.6"
   gem "spring", "4.0.0"
   gem "annotate", "3.2.0"
   gem "listen", "3.7.1"
