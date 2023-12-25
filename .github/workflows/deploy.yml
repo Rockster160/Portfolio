@@ -13,6 +13,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
+    - name: Add SSH Key
+      env:
+        SSH_KEY: /tmp/ssh_key
+      run: |
+        mkdir -p /home/runner/.ssh # /home/runner is the Github Action directory
+        ssh-keyscan 138.68.3.152 >> /home/runner/.ssh/known_hosts
+        echo "${{ secrets.PORTFOLIO_DEPLOY_SSH_KEY }}" > /home/runner/.ssh/github_actions
+        chmod 600 /home/runner/.ssh/github_actions
+        ssh-agent -a $SSH_KEY > /dev/null
+        ssh-add /home/runner/.ssh/github_actions
+
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
       with:
