@@ -9,7 +9,7 @@
 #  updated_at :datetime         not null
 #
 class DataStorage < ApplicationRecord
-  serialize :data, SafeJsonSerializer
+  serialize :data, coder: ::SafeJsonSerializer
 
   def self.[](key)
     get(key)

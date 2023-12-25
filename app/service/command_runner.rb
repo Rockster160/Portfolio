@@ -2,22 +2,22 @@ class CommandRunner
   include ActionView::Helpers::DateHelper
 
   def self.run(user, task, msg)
-    # Pulled from Command Proposal to bypass async
-    previous_iteration = task.current_iteration
-    task.user = user # Sets the task user to assign as the requester
-    # Creates a new iteration with the same code so we don't lose results
-    task.update(code: task.code, skip_approval: true)
-    current_iteration = task.iterations.last
-    params = args_from_msg(msg) || {}
-    params.merge!(previous_iteration.attributes.slice("approved_at", "approver_id"))
-    params.merge!(status: :approved)
-    current_iteration.update(params.merge(requester: user))
-
-    ran = ::CommandProposal::Services::Runner.execute(task.friendly_id)
-
-    ran&.result.presence || "No result"
-  rescue CommandProposal::Error => e
-    e.message
+  #   # Pulled from Command Proposal to bypass async
+  #   previous_iteration = task.current_iteration
+  #   task.user = user # Sets the task user to assign as the requester
+  #   # Creates a new iteration with the same code so we don't lose results
+  #   task.update(code: task.code, skip_approval: true)
+  #   current_iteration = task.iterations.last
+  #   params = args_from_msg(msg) || {}
+  #   params.merge!(previous_iteration.attributes.slice("approved_at", "approver_id"))
+  #   params.merge!(status: :approved)
+  #   current_iteration.update(params.merge(requester: user))
+  #
+  #   ran = ::CommandProposal::Services::Runner.execute(task.friendly_id)
+  #
+  #   ran&.result.presence || "No result"
+  # rescue CommandProposal::Error => e
+  #   e.message
   end
 
   def self.args_from_msg(msg)

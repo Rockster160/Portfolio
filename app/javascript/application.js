@@ -12,7 +12,7 @@
 //
 //= require jquery_ujs
 //= require underscore
-//= require command_proposal
+// require command_proposal
 //= require gmaps/google
 
 // import "*"

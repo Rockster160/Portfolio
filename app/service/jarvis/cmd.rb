@@ -10,7 +10,7 @@ class Jarvis::Cmd < Jarvis::Action
 
   def valid_words?
     simple_words = @msg.downcase.squish
-    prop_tasks = ::CommandProposal::Task.where.not("REGEXP_REPLACE(COALESCE(friendly_id, ''), '[^a-z]', '', 'i') = ''")
+    # prop_tasks = ::CommandProposal::Task.where.not("REGEXP_REPLACE(COALESCE(friendly_id, ''), '[^a-z]', '', 'i') = ''")
     prop_tasks = prop_tasks.where(session_type: :function)
 
     return false unless prop_tasks.any?

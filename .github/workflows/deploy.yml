@@ -16,7 +16,7 @@ jobs:
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
       with:
-        ruby-version: 3.0.0
+        ruby-version: 3.2.2
 
     - name: Install dependencies
       run: |
@@ -27,4 +27,4 @@ jobs:
       run: |
         bundle exec cap production deploy
       env:
-        SSH_PRIVATE_KEY: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        SSH_PRIVATE_KEY: ${{ secrets.PORTFOLIO_DEPLOY_SSH_KEY }}

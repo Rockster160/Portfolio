@@ -9,7 +9,7 @@
 #  user_id    :bigint
 #
 class JarvisCache < ApplicationRecord
-  serialize :data, SafeJsonSerializer
+  serialize :data, coder: ::SafeJsonSerializer
   attr_accessor :skip_save_set
 
   belongs_to :user

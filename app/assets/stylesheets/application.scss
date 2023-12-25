@@ -11,9 +11,9 @@
  * file per style scope.
 *
 *= require jquery-ui
-*= require command_proposal
 *= require_self
 */
+// require command_proposal
 
 @import "font-awesome";
 @import 'config/*';

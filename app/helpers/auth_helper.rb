@@ -72,7 +72,7 @@ module AuthHelper
     # Had issues where some clients were mixing up bearer vs basic
     # Just made this work for whatever prefix
     type, auth_string = raw_auth.split(" ", 2)
-    basic_auth_string = Base64.decode64(auth_string)
+    basic_auth_string = Base64.decode64(auth_string.to_s)
 
     if basic_auth_string.include?(":")
       User.auth_from_basic(basic_auth_string)

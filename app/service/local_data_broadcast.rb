@@ -6,7 +6,7 @@ class LocalDataBroadcast
   end
 
   def call(data=nil)
-    data ||= JSON.parse(File.read("local_data.json")) if File.exists?("local_data.json")
+    data ||= JSON.parse(File.read("local_data.json")) if File.exist?("local_data.json")
     data ||= {}
     @data = data.deep_symbolize_keys
     @user = User.me

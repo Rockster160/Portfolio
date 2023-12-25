@@ -11,13 +11,13 @@ class FunctionsController < ApplicationController
   end
 
   def run
-    iteration = ::CommandProposal::Services::Runner.command(
-      params[:function_id],
-      current_user,
-      params.except(:action, :controller, :function_id)
-    )
+    # iteration = ::CommandProposal::Services::Runner.command(
+    #   params[:function_id],
+    #   current_user,
+    #   params.except(:action, :controller, :function_id)
+    # )
 
-    render json: iteration.result
+    # render json: iteration.result
   end
 
   def new

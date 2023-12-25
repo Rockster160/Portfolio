@@ -1,5 +1,5 @@
 Rails.application.routes.draw do
-  mount ::CommandProposal::Engine => "/commands"
+  # mount ::CommandProposal::Engine => "/commands"
 
   get "/blockly" => "index#blockly"
   get "/icons" => "index#icons"

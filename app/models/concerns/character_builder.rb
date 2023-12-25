@@ -246,7 +246,7 @@ class CharacterBuilder
   def path_for_component(component)
     gender, placement, garment, color = component[:gender], component[:placement], component[:garment], component[:color]
     path = [gender, placement, garment, color].compact.join("/")
-    return unless File.exists?("app/assets/images/rpg/#{path}.png")
+    return unless File.exist?("app/assets/images/rpg/#{path}.png")
     ActionController::Base.helpers.asset_path("rpg/#{path}.png")
   end
 

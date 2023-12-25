@@ -24,6 +24,9 @@
         tesla: {},
         jarvis: { w: 2 },
         calendar: { h: 3 },
+        brokerlogger: {
+          // broker_auth: "<%= ENV.fetch("BROKER_AUTH") %>"
+        },
       })
     <% else %>
       Cell.loadConfig({
@@ -67,10 +70,10 @@
         upcoming: { x: 4, y: 5 },
 
         timers: { x: 1, y: 6 },
-        brokerlogger: {
-          x: 2, y: 6,
-          broker_auth: "<%= ENV.fetch("BROKER_AUTH") %>"
-        },
+        // brokerlogger: {
+        //   x: 2, y: 6,
+        //   broker_auth: "<%= ENV.fetch("BROKER_AUTH") %>"
+        // },
         // js: { x: 2, y: 6 },
         jarvis: { x: 3, y: 6, w: 2 },
       })

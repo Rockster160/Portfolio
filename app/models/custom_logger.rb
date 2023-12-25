@@ -7,7 +7,7 @@ class CustomLogger
     end
 
     def log_blip!(with_color="\e[0m")
-      File.open("log/custom_logger.txt", "a+") { |f| f << "#{with_color}.\e[0m" }
+      # File.open("log/custom_logger.txt", "a+") { |f| f << "#{with_color}.\e[0m" }
     end
 
     def log(message, user=nil, request=nil)
@@ -38,7 +38,7 @@ class CustomLogger
         )
       end
       Rails.logger.info "\nCustomLogger: #{message_to_log}\n\n"
-      File.open("log/custom_logger.txt", "a+") { |f| f << message_to_log }
+      # File.open("log/custom_logger.txt", "a+") { |f| f << message_to_log }
     end
 
     def trackable?(request)
