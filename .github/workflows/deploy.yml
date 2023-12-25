@@ -15,13 +15,13 @@ jobs:
 
     - name: Add SSH Key
       env:
-        SSH_KEY: /tmp/ssh_key
+        SSH_PRIVATE_KEY: /tmp/ssh_key
       run: |
         mkdir -p /home/runner/.ssh # /home/runner is the Github Action directory
         ssh-keyscan 138.68.3.152 >> /home/runner/.ssh/known_hosts
         echo "${{ secrets.PORTFOLIO_DEPLOY_SSH_KEY }}" > /home/runner/.ssh/github_actions
         chmod 600 /home/runner/.ssh/github_actions
-        ssh-agent -a $SSH_KEY > /dev/null
+        ssh-agent -a $SSH_PRIVATE_KEY > /dev/null
         ssh-add /home/runner/.ssh/github_actions
 
     - name: Set up Ruby
@@ -38,4 +38,4 @@ jobs:
       run: |
         bundle exec cap production deploy
       env:
-        SSH_PRIVATE_KEY: ${{ secrets.PORTFOLIO_DEPLOY_SSH_KEY }}
+        SSH_PRIVATE_KEY: /tmp/ssh_key
