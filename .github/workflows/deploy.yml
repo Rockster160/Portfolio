@@ -17,6 +17,7 @@ jobs:
       env:
         SSH_PRIVATE_KEY: /tmp/ssh_key
       run: |
+        eval `ssh-agent -s` # Manually start ssh-agent
         mkdir -p /home/runner/.ssh # /home/runner is the Github Action directory
         ssh-keyscan 138.68.3.152 >> /home/runner/.ssh/known_hosts
         echo "${{ secrets.PORTFOLIO_DEPLOY_SSH_KEY }}" > /home/runner/.ssh/github_actions
