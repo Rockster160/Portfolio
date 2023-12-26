@@ -6,7 +6,7 @@ class LocalDataCalendarParser
   end
 
   def call(raw_calendar_lines=nil)
-    raw_calendar_lines ||= JSON.parse(File.read("local_data.json")).deep_symbolize_keys[:calendar]
+    raw_calendar_lines ||= Rails.cache.fetch("local_data") { {} }.deep_symbolize_keys[:calendar]
 
     used_uids = []
     Time.use_zone(User.timezone) do

@@ -95,8 +95,8 @@ class WebhooksController < ApplicationController
 
   def local_data
     data = params[:local_data].to_unsafe_h
-    json = File.exist?("local_data.json") ? JSON.parse(File.read("local_data.json")) : {}
-    File.write("local_data.json", json.merge(data).to_json)
+    json = Rails.cache.fetch("local_data") { {} }
+    Rails.cache.write("local_data", json.merge(data))
     LocalDataBroadcast.call(data)
 
     head :created

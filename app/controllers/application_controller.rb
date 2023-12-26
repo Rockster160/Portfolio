@@ -4,7 +4,7 @@ class ApplicationController < ActionController::Base
   # For APIs, you may want to use :null_session instead.
   protect_from_forgery with: :exception, if: -> { current_user&.id != 1 } # Hack- skip CSRF if it's me
   helper_method :current_user, :user_signed_in?, :guest_account?
-  before_action :see_current_user, :logit
+  before_action :see_current_user
   before_action :show_guest_banner, if: :guest_account?
   prepend_before_action :block_banned_ip
 
@@ -37,13 +37,6 @@ class ApplicationController < ActionController::Base
     "#{params[:controller]}##{params[:action]}"
   end
 
-  def logit
-    @logged_it = true
-    return CustomLogger.log_blip! if params[:checker]
-
-    CustomLogger.log_request(request, current_user)
-  end
-
   def previous_url(fallback=nil)
     session[:forwarding_url] || fallback || lists_path
   end
@@ -57,7 +50,6 @@ class ApplicationController < ActionController::Base
   end
 
   def ban_spam_ip(exception)
-    logit unless @logged_it
     if !ip_whitelisted? && current_ip_spamming?
       BannedIp.find_or_create_by(ip: current_ip)
       SlackNotifier.notify("Banned: #{current_ip}")
