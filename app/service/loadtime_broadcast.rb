@@ -4,7 +4,7 @@ module LoadtimeBroadcast
   def call(data=nil)
     if data.present?
       data = loadtime_data.merge(data)
-      File.write("loadtime.json", data.to_json)
+      Rails.cache.write("loadtime", data)
     else
       data = loadtime_data
     end
@@ -16,7 +16,7 @@ module LoadtimeBroadcast
 
   def loadtime_data
     @loadtime_data = begin
-      JSON.parse(File.read("loadtime.json") || "{}")
+      Rails.cache.fetch("loadtime") { {} }
     rescue
       {}
     end

@@ -35,7 +35,6 @@ set :rbenv_ruby, "3.2.2"
 set :rbenv_ruby_dir, "/home/rocco/.rbenv/versions/3.2.2"
 set :rbenv_custom_path, "/home/rocco/.rbenv"
 
-
 # Default branch is :master
 # ask :branch, `git rev-parse --abbrev-ref HEAD`.chomp
 
