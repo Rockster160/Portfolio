@@ -1,6 +1,4 @@
 Rails.application.routes.draw do
-  # mount ::CommandProposal::Engine => "/commands"
-
   get "/blockly" => "index#blockly"
   get "/icons" => "index#icons"
 
@@ -32,10 +30,6 @@ Rails.application.routes.draw do
     post :register,     controller: :registrations, action: :create
     patch :register,    controller: :registrations, action: :create
     post :guest_signup, controller: :registrations, action: :guest_signup
-  end
-
-  resources :functions do
-    post :run
   end
 
   resource :money_buckets, path: "/bucket"

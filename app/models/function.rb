@@ -14,6 +14,7 @@
 #  updated_at       :datetime         not null
 #
 
+# deprecated - Delete me when table gets dropped
 class Function < ApplicationRecord
   def self.lookup(identifier)
     if identifier.to_s.to_i.to_s == identifier
@@ -24,7 +25,7 @@ class Function < ApplicationRecord
   end
 
   def run
-    RunFunction.run(self.id)
+    # RunFunction.run(self.id)
   end
 
   def split_args

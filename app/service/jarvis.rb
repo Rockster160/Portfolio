@@ -153,7 +153,6 @@ class Jarvis
       Jarvis::Printer,        # -- integration
       Jarvis::Nest,           # -- integration
       Jarvis::Tesla,          # -- integration
-      Jarvis::Cmd,            # √
       Jarvis::Sms,            # √
       Jarvis::Venmo,          # -- integration
       Jarvis::Talk,           # √

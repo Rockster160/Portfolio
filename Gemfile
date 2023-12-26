@@ -59,18 +59,11 @@ gem "ruby-openai"
 gem "webdrivers"
 gem "redcarpet"
 # Dependency
-# gem "net-http", "0.3.2"
-# gem "uri", "0.13.0"
-# gem "pathname", "0.2.1"
 # > cap dependencies
 # == Used for ssh keys using capistrano
 gem "ed25519"
 gem "bcrypt_pbkdf"
 # / cap dependencies
-
-# gem "command_proposal", path: "../command_proposal"
-# gem "command_proposal", git: "https://github.com/Rockster160/command_proposal.git"
-# gem "command_proposal", "1.0.19"
 
 group :development, :test do
   gem "capistrano",         require: false
