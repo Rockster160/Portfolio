@@ -4,8 +4,7 @@ namespace :sidekiq do
     on roles(:app) do
       within release_path do
         with rails_env: fetch(:stage) do
-          # puts "\e[35m[LOGIT] | DOING start\e[0m"
-          # execute "sudo /bin/systemctl start sidekiq.service"
+          execute "sudo /bin/systemctl start sidekiq"
         end
       end
     end
@@ -16,8 +15,7 @@ namespace :sidekiq do
     on roles(:app) do
       within release_path do
         with rails_env: fetch(:stage) do
-          # puts "\e[35m[LOGIT] | DOING stop\e[0m"
-          # execute "sudo /bin/systemctl stop sidekiq.service"
+          execute "sudo /bin/systemctl stop sidekiq"
         end
       end
     end
@@ -28,8 +26,7 @@ namespace :sidekiq do
     on roles(:app) do
       within release_path do
         with rails_env: fetch(:stage) do
-          # puts "\e[35m[LOGIT] | DOING restart\e[0m"
-          # execute "sudo /bin/systemctl restart sidekiq.service"
+          execute "sudo /bin/systemctl restart sidekiq"
         end
       end
     end

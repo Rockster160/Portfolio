@@ -4,6 +4,8 @@ lock "~> 3.18.0"
 set :application, "portfolio"
 set :repo_url, "https://github.com/Rockster160/portfolio.git"
 set :user, :deploy
+set :group, :deploy
+set :runner, :deploy
 
 set :db_user, "rails"
 
@@ -12,7 +14,6 @@ set :db_user, "rails"
 set :puma_threads,    [4, 16]
 set :puma_workers,    0
 # set RBENV_ROOT, /home/rocco/.rbenv
-
 set :pty,             true
 set :use_sudo,        false
 set :deploy_via,      :remote_cache
