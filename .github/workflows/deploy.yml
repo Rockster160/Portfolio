@@ -37,7 +37,7 @@ jobs:
 
     - name: Deploy to Digital Ocean
       run: |
-        ssh-add
+        ssh-add /home/runner/.ssh/github_actions
         bundle exec cap production deploy
       env:
         SSH_PRIVATE_KEY: /tmp/ssh_key
