@@ -17,14 +17,10 @@ import { Text } from "../_text"
       this.ws.send({ action: "request" })
     },
     command: function(text) {
-      if (/^\d+/.test(text)) {
-        Server.post("/functions/pullups_counter/run", { count: text })
-      } else {
-        var [name, ...notes] = text.split(" ")
-        name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
-        notes = notes.join(" ")
-        Server.post("/action_events", { event_name: name, notes: notes })
-      }
+      var [name, ...notes] = text.split(" ")
+      name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
+      notes = notes.join(" ")
+      Server.post("/action_events", { event_name: name, notes: notes })
     },
   })
 })()

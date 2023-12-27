@@ -116,7 +116,9 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
     return vals
   end
   def each
-    map.count
+    arr, steps = args
+    map
+    steps.count
   end
 
   # def sort
