@@ -4,18 +4,12 @@ class SafeJsonSerializer
   end
 
   def self.load(str)
+    start_str = str.dup
     safe_str = str.then { |s| next s if s.nil? || s.is_a?(String); s.to_json }
-    safe_str.present? ? JSON.parse(safe_str, object_class: BetterJson) : str
+    json = safe_str.present? ? JSON.parse(safe_str, object_class: BetterJson) : str
 
-    # start_str = str.dup
-    # safe_str = str.then { |s| next s if s.nil? || s.is_a?(String); s.to_json }
-    #
-    # return str unless safe_str.present?
-    #
-    # json = JSON.parse(safe_str, object_class: BetterJson)
-    # return json if json.is_a?(Hash) || json.is_a?(Array)
-    #
-    # start_str == json ? SafeJsonSerializer.load(json) : json
+    return json if json.is_a?(BetterJson)
+    start_str == json ? json : SafeJsonSerializer.load(json)
   rescue JSON::ParserError
     str
   end
