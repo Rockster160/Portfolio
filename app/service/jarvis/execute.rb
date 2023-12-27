@@ -45,7 +45,7 @@
     SlackNotifier.err(e, "Jil Error[#{task.name}]")
     @ctx[:msg]
   ensure
-    sleep 0.2 if @test_mode
+    # sleep 0.2 if @test_mode
     @task.user.current_usage.increment(@task, @ctx[:i])
     ActionCable.server.broadcast("jil_#{@task.uuid}_channel", { done: true, output: @ctx[:msg].join("\n") })
     @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx, last_result_val: @ctx[:last_val])
@@ -62,7 +62,7 @@
     if task_block.is_a?(::Hash) && task_block[:token].present?
       @ctx[:current_token] = task_block[:token]
       ActionCable.server.broadcast("jil_#{@task.uuid}_channel", { token: task_block[:token] })
-      sleep 0.2 if @test_mode
+      # sleep 0.2 if @test_mode
     end
     if task_block.is_a?(::Array)
       if task_block.any? { |sub_block| sub_block.is_a?(::Hash) && sub_block[:returntype] == "keyval" }

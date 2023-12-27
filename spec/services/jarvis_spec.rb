@@ -84,8 +84,8 @@ RSpec.describe Jarvis do
     let(:tesla_control) { double("TeslaControl", vehicle_id: 1, vehicle_data: {}) }
 
     before do
-      allow(DataStorage).to receive(:[]).with(any_args).and_return("unimportant")
-      allow(DataStorage).to receive(:[]).with(:tesla_forbidden).and_return(false)
+      # allow(DataStorage).to receive(:[]).and_call_original
+      allow(DataStorage).to receive_message_chain(:[], :call).with(:tesla_forbidden).and_return(false)
       allow(TeslaControl).to receive(:new).and_return(tesla_control)
     end
 

@@ -372,13 +372,13 @@ class TaskMap
       get: [
         { return: :any },
         { block: :hash },
-        { block: :str, name: :key },
+        { block: :str, label: :Key },
       ],
       set: [
         { return: :hash },
-        { block: :hash },
-        { block: :str, name: :key },
-        { block: :any, name: :value },
+        { block: :hash, label: :Hash },
+        { block: :str, label: :Key },
+        { block: :any, label: :Value },
       ],
       del: [
         { return: :hash },

@@ -39,7 +39,7 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
         if token_val.nil?
           jil.ctx[:msg] << "Unfound token (#{token})"
         end
-        token_val
+        str(token_val)
       end
     }
   rescue NoMethodError
@@ -77,7 +77,7 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def array
-    evalargs
+    Array.wrap(evalargs)
   rescue NoMethodError
     []
   end
