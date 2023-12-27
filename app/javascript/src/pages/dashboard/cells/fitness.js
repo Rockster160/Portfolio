@@ -9,6 +9,7 @@ import { Text } from "../_text"
       var lines = msg.fitness_data.split("\n")
       lines[0] = Text.center(lines[0])
       this.text(lines.join("\n"))
+      this.flash()
     }),
     refreshInterval: Time.msUntilNextDay() + Time.seconds(5),
     reloader: function() {
