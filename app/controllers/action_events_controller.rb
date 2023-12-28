@@ -151,7 +151,7 @@ class ActionEventsController < ApplicationController
     # / streak info
 
     ActionEventBroadcastWorker.perform_async
-    ::RecentEventsBroadcast.call(event.user_id) if event.present?
+    ::RecentEventsBroadcast.call if event.present?
     redirect_to action_events_path
   end
 
