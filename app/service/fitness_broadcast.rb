@@ -76,7 +76,7 @@ class FitnessBroadcast
     names = [
       "Buspirone",
       "Vitamins",
-    ].map { |name| "name::#{name}" }
+    ].map { |name| "name::#{name}" }.join(" ")
     row("💊", "OR(#{names})", want)
   end
 
