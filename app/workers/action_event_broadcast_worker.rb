@@ -21,6 +21,6 @@ class ActionEventBroadcastWorker
     return unless event.user&.me?
 
     ::FitnessBroadcast.broadcast
-    ::RecentEventsBroadcast.call(event.user_id)
+    ::RecentEventsBroadcast.call
   end
 end
