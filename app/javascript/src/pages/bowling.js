@@ -1,5 +1,6 @@
 import { Spinner } from "./spinner"
 
+
 $(document).ready(function() {
   if ($(".ctr-bowling_leagues.act-tms").length == 0) { return }
   var calcAvgChange = function(bowler, new_val) {
