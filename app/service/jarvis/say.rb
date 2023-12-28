@@ -9,7 +9,7 @@ class Jarvis::Say < Jarvis::Action
 
     parse_text_words
 
-    Jarvis.say(@args)
+    # Jarvis.say(@args) # Don't need to run this because the return here outputs to the same place
     @args
   end
 
