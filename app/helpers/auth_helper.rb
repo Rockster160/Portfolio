@@ -79,6 +79,8 @@ module AuthHelper
     else
       ApiKey.find_by(key: auth_string)&.user
     end
+  rescue ActiveRecord::StatementInvalid # Sometimes decoding the auth string can result in weirdness
+    ApiKey.find_by(key: auth_string)&.user
   end
 
   def auth_from_session

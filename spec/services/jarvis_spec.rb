@@ -42,6 +42,10 @@ RSpec.describe Jarvis do
       expect(jarvis("Do my homework")).to eq("I don't know how to do your homework, sir.")
       expect(Jarvis::Text::IM_HERE_QUESTION_RESPONSES.map { |r| Jarvis::Text.decorate(r) }).to include(jarvis("You there?"))
     end
+
+    it "says hi" do
+      expect(jarvis("say hi")).to eq("hi")
+    end
   end
 
   context "with lists" do

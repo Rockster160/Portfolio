@@ -144,6 +144,7 @@ class Jarvis
     # @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/^(what|where|when|why|is|how|are)\s+(about|is|are|were|did|have|it)\b/)
     [
       Jarvis::Trigger,        # √
+      Jarvis::Say,            # √
       Jarvis::Log,            # √
       Jarvis::ScheduleParser, # √
       Jarvis::Bedtime,        # -- integration

@@ -69,7 +69,13 @@ class Jil::JarvisTasksController < ApplicationController
 
   def run
     @task = current_user.jarvis_tasks.anyfind(params[:id])
-    data = ::Jarvis::Execute.call(@task, { test_mode: params.fetch(:test_mode, false) })
+    data = ::Jarvis::Execute.call(
+      @task,
+      {
+        test_mode: params.fetch(:test_mode, false),
+        input_vars: params.except(:id, :action, :controller, :test_mode)
+      }
+    )
     ::BroadcastUpcomingWorker.perform_async
 
     render json: { response: data }
