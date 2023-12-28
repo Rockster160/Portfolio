@@ -91,6 +91,7 @@ import { dash_colors } from "../vars"
         let json = data.result ? JSON.parse(data.result) : {}
         if (json.deploy == "start") {
           let timer = new Timer({ name: currentTime() })
+          timer.start.minutes += 2
           timer.start.seconds += 30
           timer.go()
           cell.data.deploy_timers.unshift(timer)
