@@ -73,7 +73,7 @@ class Jil::JarvisTasksController < ApplicationController
       @task,
       {
         test_mode: params.fetch(:test_mode, false),
-        input_vars: params.except(:id, :action, :controller, :test_mode)
+        **params.except(:id, :action, :controller, :test_mode)
       }
     )
     ::BroadcastUpcomingWorker.perform_async
