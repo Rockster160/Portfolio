@@ -1,10 +1,12 @@
 import { Time } from "./_time"
 import { Text } from "../_text"
+import { Timer } from "./timers"
 import { dash_colors } from "../vars"
 
 (function() {
   var cell = undefined
   let gitGet = async function(url) {
+    if (!cell.config.github_apikey) { return }
     let res = await fetch(url, {
       method: "GET",
       headers: {
@@ -57,6 +59,7 @@ import { dash_colors } from "../vars"
     cell.data.prs = await gitSearch("is:open is:pr assignee:Rockster160")
 
     render(cell)
+    cell.flash()
   }
 
   let renderLine = function(status, id, title) {
@@ -67,29 +70,71 @@ import { dash_colors } from "../vars"
     ].filter(i => i).join(" ")
   }
 
+  let currentTime = function() {
+    const now = new Date()
+    let hours = now.getHours()
+    const minutes = now.getMinutes()
+    const ampm = hours >= 12 ? "pm" : "am"
+    hours = hours % 12 || 12
+
+    const formattedHours = String(hours).padStart(2, "0")
+    const formattedMinutes = String(minutes).padStart(2, "0")
+
+    return `${formattedHours}:${formattedMinutes}${ampm}`
+  }
+
+  let deployMonitor = function() {
+    setInterval(function() { render(cell) }, 1000)
+    Monitor.subscribe("e7a6570c-3d6d-434b-bcd6-568a41fb6b02", "deploy", {
+      received: function(data) {
+        cell.flash()
+        let json = data.result ? JSON.parse(data.result) : {}
+        if (json.deploy == "start") {
+          let timer = new Timer({ name: currentTime() })
+          timer.start.seconds += 30
+          timer.go()
+          cell.data.deploy_timers.unshift(timer)
+          cell.data.deploy_timers = cell.data.deploy_timers.slice(0, 5)
+          localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
+        }
+        if (json.deploy == "finish") {
+          cell.data.deploy_timers.forEach(item => {
+            item.complete(true)
+          })
+          localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
+        }
+        render(cell)
+      },
+    })
+  }
+
   var render = function(cell) {
     var lines = []
-    if (cell.data.pending_review.length > 0) {
+    if (cell.data.pending_review?.length > 0) {
       lines.push("-- Pending Review:")
       cell.data.pending_review.forEach(function(review) {
         lines.push(renderLine(review.status, review.id, review.title))
       })
     }
-    if (cell.data.issues.length > 0) {
+    if (cell.data.issues?.length > 0) {
       lines.push("-- Issues:")
       cell.data.issues.forEach(function(issue) {
         lines.push(renderLine(issue.status, issue.id, issue.title))
       })
     }
-    if (cell.data.prs.length > 0) {
+    if (cell.data.prs?.length > 0) {
       lines.push("-- My PRs:")
       cell.data.prs.forEach(function(pr) {
         lines.push(renderLine(pr.status, pr.id, pr.title))
       })
     }
+    if (cell.data.deploy_timers?.length) {
+      cell.data.deploy_timers.forEach(deploy => {
+        lines.push(deploy.render())
+      })
+    }
 
     cell.lines(lines)
-    cell.flash()
   }
 
   cell = Cell.register({
@@ -97,6 +142,13 @@ import { dash_colors } from "../vars"
     refreshInterval: Time.minutes(5),
     flash: false,
     wrap: false,
+    data: {
+      deploy_timers: [],
+    },
+    onload: function() {
+      deployMonitor()
+      this.data.deploy_timers = Timer.loadFromJSON(JSON.parse(localStorage.getItem("deploy_timers") || "[]"))
+    },
     reloader: function() {
       getLines(this)
     },

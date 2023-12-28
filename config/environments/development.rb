@@ -94,4 +94,6 @@ Rails.application.configure do
 
   config.hosts = nil
   config.serve_static_assets = false
+  config.assets.debug = true
+  config.assets.digest = false
 end

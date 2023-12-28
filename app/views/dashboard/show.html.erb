@@ -21,6 +21,8 @@
 
     <% if Rails.env.development? %>
       Cell.loadConfig({
+        timers: {},
+        github: {},
         fitness: {},
         jarvis: { w: 2 },
         calendar: { h: 3 },

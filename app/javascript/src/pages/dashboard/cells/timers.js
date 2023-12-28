@@ -2,85 +2,67 @@ import { Text } from "../_text"
 import { Time } from "./_time"
 import { dash_colors, beep } from "../vars"
 
-(function() {
-  var cell = undefined, cell_width = 32, cell_height = 9
-  function blankCanvas() {
-    return Array.from({ length: cell_height }, function() {
-      return Array.from({ length: cell_width }, function() { return " " }).join("")
-    })
-  }
+let cell_width = 32, cell_height = 9
 
-  Timer = function(obj) {
-    obj = obj || {}
+export class Timer {
+  constructor(obj = {}) {
     this.completed = obj.completed || false
     this.acknowledged = obj.acknowledged || false
     this.start = obj.start || {
       seconds: 0,
       minutes: 0,
-      hours:   0,
-      days:    0,
+      hours: 0,
+      days: 0,
     }
-    // this.seconds = obj.seconds || 0
-    // this.minutes = obj.minutes || 0
-    // this.hours = obj.hours || 0
-    // this.days = obj.days || 0
     this.left_ms = obj.left_ms || 0
     this.total_ms = obj.total_ms || 0
     this.left = obj.left || {
       seconds: 0,
       minutes: 0,
-      hours:   0,
-      days:    0,
+      hours: 0,
+      days: 0,
     }
     this.end_time = obj.end_time || undefined
     this.name = obj.name || undefined
   }
-  Timer.loadFromJSON = function(timers_array) {
-    return timers_array.map(function(timer_data) {
-      return new Timer(timer_data)
-    })
+
+  static loadFromJSON(timers_array) {
+    return timers_array.map((timer_data) => new Timer(timer_data))
   }
-  Timer.save = function() {
-    // Only save the last 10?
-    // Sort/order by finish time?
-    // Reset timers
-    // Remove timers?
-    localStorage.setItem("timers", JSON.stringify(cell.data.timers))
-  }
-  Timer.prototype.notify = function() {
+
+  notify() {
     return this.completed && !this.acknowledged
   }
-  Timer.prototype.complete = function() {
+
+  complete(acknowledge) {
+    this.left_ms = 0
+    this.left = {
+      seconds: 0,
+      minutes: 0,
+      hours: 0,
+      days: 0,
+    }
     this.completed = true
-    this.acknowledged = false
+    this.acknowledged = !!acknowledge
   }
-  Timer.prototype.save = function() {
-    var ms = 0
+
+  go() {
+    let ms = 0
     ms += this.start.seconds * Time.seconds()
     ms += this.start.minutes * Time.minutes()
     ms += this.start.hours * Time.hours()
     ms += this.start.days * Time.days()
     this.total_ms = ms
     this.end_time = ms + Time.msSinceEpoch()
-    if (ms == 0) { return }
-
-    cell.data.timers.unshift(this)
-    Timer.save()
   }
-  Timer.prototype.tick = function() {
-    if (this.completed) { return }
+
+  tick() {
+    if (this.completed) return
 
     this.left_ms = this.end_time - Time.msSinceEpoch()
     this.left_ms = this.left_ms <= 0 ? 0 : this.left_ms
-    var left = this.end_time - Time.msSinceEpoch() + Time.second() // Add a second to floor final second
+    let left = this.end_time - Time.msSinceEpoch() + Time.second() // Add a second to floor final second
     if (left <= 0) {
-      this.left = {
-        seconds: 0,
-        minutes: 0,
-        hours: 0,
-        days: 0,
-      }
-
       return this.complete()
     }
 
@@ -96,33 +78,61 @@ import { dash_colors, beep } from "../vars"
     this.left.seconds = Math.floor(left / Time.seconds())
     left = left % Time.seconds()
   }
-  Timer.prototype.human = function() {
-    return [[this.start.days, "d"], [this.start.hours, "h"], [this.start.minutes, "m"], [this.start.seconds, "s"]].map(function(chunk) {
-      if (chunk[0] == 0) { return null }
-      return chunk.join("")
-    }).filter(function(str) { return str }).join(" ")
-  }
-  Timer.prototype.remaining = function() {
-    var show_rest = false
-    return [this.left.days, this.left.hours, this.left.minutes, this.left.seconds].map(function(dur, idx) {
-      if (dur > 0) { show_rest = true }
-      if (idx >= 3) { show_rest = true } // Always show seconds
-      return show_rest ? String(dur).padStart(2, "0") : null
-    }).filter(function(str) { return str }).join(":")
-  }
-  Timer.prototype.render = function() {
-    this.tick()
-    var name = this.name ? this.name + ":" : ""
-    var timer = this.remaining() + " / " + this.human()
-    var text = Text.justify("  " + Text.trunc(name, cell_width - 5 - timer.length), timer + "   ")
-    var fill = (this.total_ms - this.left_ms) / this.total_ms
 
-    var fill_cells = Math.round((cell_width - 2) * fill)
-    var color = this.acknowledged ? dash_colors.green : dash_colors.yellow
-    var filled = Text.bgColor(color, text.slice(0, fill_cells))
-    var empty = Text.bgColor(dash_colors.grey, text.slice(fill_cells, -2))
+  human() {
+    return [
+      [this.start.days, "d"],
+      [this.start.hours, "h"],
+      [this.start.minutes, "m"],
+      [this.start.seconds, "s"],
+    ].map(chunk => {
+      if (chunk[0] === 0) return null
+      return chunk.join("")
+    }).filter((str) => str).join(" ")
+  }
+
+  remaining() {
+    let show_rest = false
+    return [
+      this.left.days,
+      this.left.hours,
+      this.left.minutes,
+      this.left.seconds,
+    ]
+    .map((dur, idx) => {
+      if (dur > 0) show_rest = true
+      if (idx >= 3) show_rest = true // Always show seconds
+      return show_rest ? String(dur).padStart(2, "0") : null
+    })
+    .filter((str) => str)
+    .join(":")
+  }
+
+  render() {
+    this.tick()
+    const name = this.name ? this.name + ":" : ""
+    const timer = this.remaining() + " / " + this.human()
+    const text = Text.justify(
+      "  " + Text.trunc(name, cell_width - 5 - timer.length),
+      timer + "   "
+    )
+    const fill = (this.total_ms - this.left_ms) / this.total_ms
+
+    const fill_cells = Math.round((cell_width - 2) * fill)
+    const color = this.acknowledged ? dash_colors.green : dash_colors.yellow
+    const filled = Text.bgColor(color, text.slice(0, fill_cells))
+    const empty = Text.bgColor(dash_colors.grey, text.slice(fill_cells, -2))
 
     return " " + filled + empty + " "
+  }
+}
+
+(function() {
+  var cell = undefined
+  function blankCanvas() {
+    return Array.from({ length: cell_height }, function() {
+      return Array.from({ length: cell_width }, function() { return " " }).join("")
+    })
   }
 
   cell = Cell.register({
@@ -153,7 +163,9 @@ import { dash_colors, beep } from "../vars"
         }
       })
 
-      if (should_save) { Timer.save() }
+      if (should_save) {
+        localStorage.setItem("timers", JSON.stringify(cell.data.timers))
+      }
     },
     onload: function() {
       this.data.timers = Timer.loadFromJSON(JSON.parse(localStorage.getItem("timers") || "[]"))
@@ -206,7 +218,9 @@ import { dash_colors, beep } from "../vars"
       }).join(" ").trim()
       if (name.length > 0) { new_timer.name = name }
 
-      new_timer.save(this)
+      new_timer.go()
+      cell.data.timers.unshift(new_timer)
+      localStorage.setItem("timers", JSON.stringify(cell.data.timers))
     },
   })
 })()

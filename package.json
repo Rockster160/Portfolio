@@ -7,6 +7,7 @@
   "license": "MIT",
   "scripts": {
     "build": "node esbuild.config.js",
+    "watch:js": "node esbuild.config.js --watch",
     "build:css": "sass .app/assets/stylesheets/application.css --no-source-map --load-path=node_modules"
   },
   "dependencies": {
