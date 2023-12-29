@@ -405,7 +405,11 @@
         text-align: center;
       }
     }
-    &.absent, &.skip {
+
+    &:has(.absent-checkbox:not(:checked)) .absent-bowler { display: none; }
+    &:has(.card-point-field:not([value='true'])) .card-point { display: none; }
+    &:has(.skip-checkbox:not(:checked)) .skip-bowler { display: none; }
+    &:has(.absent-checkbox:checked), &:has(.skip-checkbox:checked) {
       .frame .shot {
         background: $grey-light;
       }
