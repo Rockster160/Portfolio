@@ -3,7 +3,7 @@ import Spinner from "../spinner"
 
 export default class PinTimer extends Reactive {
   constructor() {
-    super()
+    super() // Element is added dynamically
     this.pinTimer = undefined // The timer for auto-moving to next frame - corresponds to spinner
     this.timerDuration = 1000 // MS it takes after releasing the pin before moving to next frame
     this.spinner = new Spinner({
@@ -39,7 +39,7 @@ export default class PinTimer extends Reactive {
     self.pinTimer = setTimeout(function() {
       self.pinTimer = clearTimeout(self.pinTimer)
       if (self.timerActive) {
-        game.nextFrame()
+        game.nextShot()
       }
     }, self.timerDuration)
   }

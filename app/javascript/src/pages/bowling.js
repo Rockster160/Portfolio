@@ -1,5 +1,3 @@
-// import { Spinner } from "./spinner"
-//
 // $(document).ready(function() {
 //   if ($(".ctr-bowling_leagues.act-tms").length == 0) { return }
 //   var calcAvgChange = function(bowler, new_val) {
@@ -145,20 +143,6 @@
 //     } else {
 //       moveToNextFrame()
 //     }
-//   })
-//   $(".pin-wrapper").on("pin:change", function() {
-//     var shot_idx = parseInt($(".shot.current").attr("data-shot-idx"))
-//     $(".shot.current").parents(".frame").find(".shot").filter(function() {
-//       var next = parseInt($(this).attr("data-shot-idx")) > shot_idx
-//       if (!next) { return false }
-//
-//       return fallenPinsForShot(this).val() == ""
-//     }).each(function() {
-//       clearShot(this)
-//     })
-//
-//     recountPins()
-//     resetPinTimer()
 //   })
 //
 //   swap = function($ele1, $ele2) {

@@ -1,10 +1,10 @@
 import Reactive from "./reactive"
+import Frame from "./frame"
 
 export default class Bowler extends Reactive {
   static bowlers = []
   constructor(element) {
     super(element)
-    this.element = element
     this.server_id = parseInt(element.getAttribute("data-bowler-id"))
 
     // prev games? (score, point, card)
@@ -28,6 +28,8 @@ export default class Bowler extends Reactive {
     this.accessor("absent", ".absent-checkbox", "checked")
     this.accessor("skip", ".skip-checkbox", "checked")
     this.accessor("cardPoint", ".card-point-field", "value")
+
+    this.frames = Frame.fullGame(this)
 
     Bowler.bowlers.push(this)
   }

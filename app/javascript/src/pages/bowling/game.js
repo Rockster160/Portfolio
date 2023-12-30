@@ -1,12 +1,13 @@
 import Reactive from "./reactive"
-import BowlingCalculator from "./calculator"
+import Bowler from "./bowler"
 import Pins from "./pins"
 import PinTimer from "./pin_timer"
+import Scoring from "./scoring"
+import FrameNavigation from "./frame_navigation"
 
 export default class Game extends Reactive {
   constructor(element) {
     super(element)
-    this.element = element
 
     this.editing_game = !!document.querySelector(".ctr-bowling_games.act-edit")
 
@@ -36,9 +37,9 @@ export default class Game extends Reactive {
       document.querySelectorAll("[data-edit=show]").forEach(item => item.classList.toggle("hidden", !value))
       document.querySelectorAll("[data-edit=hide]").forEach(item => item.classList.toggle("hidden", value))
     })
-    this.bool("pinAll", function(value) {
-      this.element.querySelector(".pin-all-toggle").classList.toggle("fall", value)
-      this.pins.toggleAll(!value)
+    this.bool("defaultPinStanding", function(value) {
+      this.element.querySelector(".pin-all-toggle").classList.toggle("fall", !value)
+      this.pins.noBroadcast(() => this.pins.toggleAll(value))
     })
 
     let storedVal = sessionStorage.getItem("useLaneTalk") // !edit_page &&
@@ -47,12 +48,13 @@ export default class Game extends Reactive {
     this.editBowler = false
 
     this.pinMode = true
-    this.pinWrapper = new Pins()
+    this.pins = new Pins()
     this.pinTimer = new PinTimer()
 
-    this.pinAll = true
+    this.defaultPinStanding = false
 
-    this.calculator = BowlingCalculator
+    this.bowlers = Array.from(document.querySelectorAll(".bowler")).map(bowler => new Bowler(bowler))
+    this.scoring = new Scoring(this.bowlers)
 
     // calculate score
     // able to be given a string like "X 9/ 5"...
@@ -60,6 +62,9 @@ export default class Game extends Reactive {
     // get score
     // get handicap (bowler)
   }
+
+  get currentFrame() { return FrameNavigation.currentFrame }
+  get currentShot() { return FrameNavigation.currentShot }
 
   get gameNum() { return this._game_num }
   set gameNum(num) {
@@ -69,12 +74,17 @@ export default class Game extends Reactive {
     })
   }
 
-  get pins() { return this.pinWrapper }
-  set pins(standing) {
-    this.pinWrapper.standing = standing
+  start() {
+    this.pinTimer.addTo(".timer-toggle")
+    // set absent/skipped bowler
+    this.nextShot() // Set the first frame
   }
 
-  nextFrame() {
-    console.log("Next Frame");
+  getBowlerFrames(frameNum) {
+    return this.bowlers.map(bowler => bowler.frames[frameNum])
+  }
+
+  nextShot() {
+    FrameNavigation.nextShot()
   }
 }
