@@ -91,10 +91,11 @@ export default class Game extends Reactive {
 
   nextShot(save_current) {
     if (save_current) {
-      this.currentShot.standingPins = this.pins.standing
+      this.currentShot?.element?.dispatchEvent(new CustomEvent("pin:change", { bubbles: true }))
     }
 
     FrameNavigation.nextShot()
+    this.pinTimer.clear()
     if (!this.currentShot) { this.finish() }
   }
 }

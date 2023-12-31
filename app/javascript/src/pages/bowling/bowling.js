@@ -11,15 +11,15 @@ window.onload = function() {
     buttons()
     events()
 
-    game.bowlers.forEach(bowler => {
-      bowler?.frames?.forEach(frame => {
-        if (frame && !frame.isLastFrame) {
-          frame.fillRandom()
-          applyFrameModifiers(frame)
-        }
-      })
-    })
-    game.filled = true
+    // game.bowlers.forEach(bowler => {
+    //   bowler?.frames?.forEach(frame => {
+    //     if (frame && !frame.isLastFrame) {
+    //       frame.fillRandom()
+    //       applyFrameModifiers(frame)
+    //     }
+    //   })
+    // })
+    // game.filled = true
 
     game.nextShot()
   }

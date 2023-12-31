@@ -3,7 +3,7 @@ import applyFrameModifiers from "./frame_modifiers"
 
 // resetPinTimer → game.pinTimer.reset()
 export function events() {
-  onEvent("pin:change", ".pin-wrapper:not(.fallen-before)", function() {
+  onEvent("pin:change", function() {
     game.currentShot.standingPins = game.pins.standing
     game.pinTimer.reset()
 
