@@ -10,20 +10,15 @@ export function buttons() {
   onEvent("click", ".pin-all-toggle", function() { game.defaultPinStandingToggle() })
   onEvent("click", ".brooklyn-toggle", function() { game.strikePoint = "brooklyn" })
   onEvent("click", ".pocket-toggle", function() { game.strikePoint = "pocket" })
-  onEvent("click", ".next-frame", function() { game.nextShot(true) })
-  onEvent("click", ".close-frame", function() {
-    game.pins.knockAll()
-    game.nextShot(true)
-  })
+  onEvent("click", ".next-frame", function() { finishFrame(false) })
+  onEvent("click", ".close-frame", function() { finishFrame(true) })
   onEvent("click", ".pocket-close", function() {
     game.strikePoint = "pocket"
-    game.pins.knockAll()
-    game.nextShot(true)
+    finishFrame(true)
   })
   onEvent("click", ".brooklyn-close", function() {
     game.strikePoint = "brooklyn"
-    game.pins.knockAll()
-    game.nextShot(true)
+    finishFrame(true)
   })
   onEvent("click", ".shot", function() {
     let shotNum = parseInt(this.getAttribute("data-shot-idx"))+1
@@ -32,6 +27,16 @@ export function buttons() {
 
     game.currentShot = game.bowlers[bowlerNum].frames[frameNum].shots[shotNum]
   })
+
+  let finishFrame = function(knock_rest) {
+    let frame = game.currentFrame
+    if (knock_rest) { game.pins.knockAll() }
+
+    game.nextShot(true)
+    // We skip callbacks, so pins don't get "knocked" to apply frame modifiers
+    // grab the current frame before nextShot since it changes the frame
+    applyFrameModifiers(frame)
+  }
 
   // ==================== Pin Interactions ====================
   let pinKnocking = undefined // Means we are currently knocking pins down when true or standing when false

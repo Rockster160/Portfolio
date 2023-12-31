@@ -11,7 +11,7 @@ export default class Frame extends Reactive {
 
   constructor(bowler, frameNum) {
     super(bowler.element.querySelector(`.frame[data-frame="${frameNum}"]`))
-    this.bowler = bowler // Do we need this?
+    this.bowler = bowler
     this.frameNum = frameNum
 
     this.firstShot = new Shot(this, 1)
@@ -27,6 +27,13 @@ export default class Frame extends Reactive {
   }
 
   resetStrikePoint() { this.strikePoint = this.strikePoint }
+
+  get siblings() {
+    return game.bowlers.map(bowler => bowler && bowler.frames[this.frameNum]).filter(Boolean)
+  }
+  get activeSiblings() {
+    return this.siblings.filter(sibling => !sibling.bowler.absent && !sibling.bowler.skip)
+  }
 
   get shots() {
     if (this.isLastFrame) {
@@ -51,20 +58,38 @@ export default class Frame extends Reactive {
     return this.firstShot
   }
 
-  get isLastFrame() { return this.frameNum == 10 }
+  fillRandom() {
+    while (!this.complete) {
+      if (Math.random() < 0.05) {
+        this.currentShot().score = "-"
+      } else if (Math.random() < 0.3) {
+        // Keep 3/10 pins, on average
+        this.currentShot().standingPins = game.pins.allPins.filter(pinNum => Math.random() < 3/10)
+      } else if (Math.random() < 0.5) {
+        this.currentShot().score = "/"
+      } else {
+        this.currentShot().score = "X"
+      }
+    }
+  }
 
-  finished() {
+  get isLastFrame() { return this.frameNum == 10 }
+  get isClosed() { return this.firstShot.knockedAll || this.secondShot.knockedAll }
+  get incomplete() { return !this.complete }
+  get complete() {
     if (this.firstShot.incomplete) { return false }
     if (!this.isLastFrame) {
       return this.firstShot.knockedAll || this.secondShot.complete
     }
     // 10th frame logic
+    // Always a second shot
+    if (this.secondShot.incomplete) { return false }
     // If 3rd is complete, then we're done
     if (this.thirdShot.complete) { return true }
     // If 1st is strike, there will be a 3rd, so we're not done
     if (this.firstShot.knockedAll) { return false }
     // If 2nd is closed, there will be a 3rd, so we're not done
-    return this.secondShot.knockedAll
+    return !this.secondShot.knockedAll
   }
 }
 
@@ -87,6 +112,8 @@ class Shot extends Reactive {
     this.remaining_pins_element.value = ""
   }
 
+  set score(val) { this.standingPins = game.pins.pinsFromInput(val) }
+
   get incomplete() { return !this.complete }
   get knockedAll() { return this._knocked_all }
 
@@ -95,9 +122,12 @@ class Shot extends Reactive {
 
   get fallenPins() { return this._fallen_pins }
   set fallenPins(fallen_pins) {
+    this.complete = true
+
     let prevShot = this.prevShot()
     if (prevShot) {
       if (prevShot.incomplete) { prevShot.fallenPins = [] }
+      if (prevShot.knockedAll) { return this.clear() }
       // Do not allow setting fallen pins to pins that were already fallen in the last shot
       let prev_standing_pins = prevShot.standingPins
       let newlyFallenPins = fallen_pins.filter(pin => prev_standing_pins.includes(pin))
@@ -105,7 +135,6 @@ class Shot extends Reactive {
     }
     this._fallen_pins = fallen_pins
 
-    this.complete = true
     let standing_pins = game.pins.invert(fallen_pins)
     this.remaining_pins_element.value = `[${standing_pins.join()}]`
     this.pinFallCount = fallen_pins.length
@@ -120,11 +149,7 @@ class Shot extends Reactive {
     } else if (this.shotNum == 2 && !this.frame.isLastFrame) {
       if (this.knockedAll) { str = "/" }
     } else if (this.shotNum == 2) { // 10th frame
-      if (this.frame.firstShot.knockedAll) {
-        str = "X"
-      } else if (this.knockedAll) {
-        str = "/"
-      }
+      if (this.knockedAll) { str = this.frame.firstShot.knockedAll ? "X" : "/" }
     } else if (this.shotNum == 3) {
       if (this.frame.secondShot.knockedAll) {
         if (this.knockedAll) { str = "X" }
@@ -138,20 +163,21 @@ class Shot extends Reactive {
     this.checkSplit()
 
     // Knock next shot pins over if knocked here
-    // TODO: Add 10th frame logic
-    if (this.frame.isLastFrame) { return } // This will have weird behavior on the 10th frame
-    if (this.shotNum == 2) { return } // 10th is skipped, so 2nd shot is last, so no need to check
-    // Remove the 2 above checks after 10th frame logic is added
-
-    let nextShot = this.frame.secondShot
-    if (nextShot.incomplete) { return } // If it's not filled in, don't do anything
-    // Remove all of the fallen pins from the next shot, if present
-    nextShot.fallenPins = nextShot.fallenPins.filter(pin => !fallen_pins.includes(pin))
+    let nextShot = {
+      1: () => this.frame.secondShot,
+      2: () => this.frame.thirdShot,
+    }[this.shotNum]?.call()
+    if (!nextShot?.complete) { return } // If it's not filled in, don't do anything
+    // Reset knocked pins, which includes filtering the allowed ones.
+    if (this.shotNum == 2 && !this.frame.firstShot.knockedAll && !this.knockAll) {
+      return nextShot.clear()
+    }
+    nextShot.fallenPins = nextShot.fallenPins
   }
 
   checkSplit() {
-    if (!this.prevShot()) { return }
-    
+    if (this.prevShot()) { return }
+
     let isSplit = game.pins.checkSplit(this.standingPins)
     this.element.closest(".split-holder").classList.toggle("split", isSplit)
   }
@@ -163,11 +189,7 @@ class Shot extends Reactive {
     if (this.shotNum == 2) {
       return this.frame.firstShot.knockedAll ? null : this.frame.firstShot
     } else if (this.shotNum == 3) {
-      if (this.frame.firstShot.knockedAll) { // 1st closed
-        return this.frame.secondShot.knockedAll ? null : this.frame.secondShot
-      } else { // 1st open
-        return this.frame.secondShot
-      }
+      return this.frame.secondShot.knockedAll ? null : this.frame.secondShot
     }
   }
 }

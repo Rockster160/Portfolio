@@ -4,14 +4,15 @@ export default class FrameNavigation {
 
   static get currentShot() {
     if (this._current_shot) { return this._current_shot }
-    return this._current_shot = this.currentFrame.currentShot()
+    return this._current_shot = this.currentFrame?.currentShot()
   }
   static set currentShot(shot) {
     this._current_shot = shot
-    this._current_frame = shot.frame
+    this._current_frame = shot?.frame
     document.querySelectorAll(".shot.current").forEach(item => item.classList.remove("current"))
-    this.currentShot.element.classList.add("current")
+    if (!shot) { return }
 
+    shot.element.classList.add("current")
     game.pins.noBroadcast(() => {
       // Update fallen pins and strike point
       shot.frame.resetStrikePoint()
@@ -30,14 +31,14 @@ export default class FrameNavigation {
   }
 
   static get currentFrame() { return this._current_frame }
-  static set currentFrame(frame) { this.currentShot = frame.currentShot() }
+  static set currentFrame(frame) { this.currentShot = frame?.currentShot() }
 
   static earliestUnfinishedFrame() {
     for (let i=1; i<=10; i++) {
       for (const bowler of game.bowlers) {
         if (bowler) {
           let frame = bowler.frames[i]
-          if (!frame.finished()) { return frame }
+          if (frame.incomplete) { return frame }
         }
       }
     }

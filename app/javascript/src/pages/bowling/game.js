@@ -61,6 +61,7 @@ export default class Game extends Reactive {
     //   Also GET a string of those scores
     // get score
     // get handicap (bowler)
+    this.filled = false
   }
 
   get strikePoint() { return FrameNavigation.currentFrame.strikePoint }
@@ -83,6 +84,10 @@ export default class Game extends Reactive {
     // set absent/skipped bowler
     this.nextShot() // Set the first frame
   }
+  finish() {
+    console.log("Game complete");
+    // Show End Game button
+  }
 
   nextShot(save_current) {
     if (save_current) {
@@ -90,5 +95,6 @@ export default class Game extends Reactive {
     }
 
     FrameNavigation.nextShot()
+    if (!this.currentShot) { this.finish() }
   }
 }

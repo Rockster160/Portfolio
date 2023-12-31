@@ -51,7 +51,7 @@
 <div class="bowling-table bowling-header">
   <div class="bowling-cell">Game <%= game_num %></div>
   <% 10.times do |t| %>
-    <div class="bowling-cell"><%= t + 1 %></div>
+    <div class="bowling-cell" data-frame="<%= t + 1 %>"><%= t + 1 %></div>
   <% end %>
   <div class="bowling-cell">Total</div>
 </div>

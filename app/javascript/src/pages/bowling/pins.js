@@ -85,6 +85,10 @@ export default class Pins {
       return standing_pins.map(int => parseInt(int))
     } else if (typeof standing_pins == "number") {
       return this.pinsFromInput(this.decToPins(standing_pins))
+    } else if (standing_pins == "X" || standing_pins == "/") {
+      return []
+    } else if (standing_pins == "-") {
+      return this.allPins
     } else {
       console.log("Unknown Pin Type: ", typeof standing_pins, standing_pins);
     }
