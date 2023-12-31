@@ -53,8 +53,8 @@ export default class Game extends Reactive {
 
     this.defaultPinStanding = false
 
-    this.bowlers = Array.from(document.querySelectorAll(".bowler")).map(bowler => new Bowler(bowler))
-    this.scoring = new Scoring(this.bowlers)
+    this.bowlers = Bowler.get()
+    // this.scoring = new Scoring(this.bowlers)
 
     // calculate score
     // able to be given a string like "X 9/ 5"...
@@ -63,14 +63,18 @@ export default class Game extends Reactive {
     // get handicap (bowler)
   }
 
+  get strikePoint() { return FrameNavigation.currentFrame.strikePoint }
+  set strikePoint(strike_point) { FrameNavigation.currentFrame.strikePoint = strike_point }
+
   get currentFrame() { return FrameNavigation.currentFrame }
   get currentShot() { return FrameNavigation.currentShot }
+  set currentShot(shot) { return FrameNavigation.currentShot = shot }
 
   get gameNum() { return this._game_num }
   set gameNum(num) {
     this._game_num = num
     this.bowlers.forEach(bowler => {
-      bowler.element.querySelector(".bowler-game-number").value = num
+      if (bowler) { bowler.element.querySelector(".bowler-game-number").value = num }
     })
   }
 
@@ -80,11 +84,11 @@ export default class Game extends Reactive {
     this.nextShot() // Set the first frame
   }
 
-  getBowlerFrames(frameNum) {
-    return this.bowlers.map(bowler => bowler.frames[frameNum])
-  }
+  nextShot(save_current) {
+    if (save_current) {
+      this.currentShot.standingPins = this.pins.standing
+    }
 
-  nextShot() {
     FrameNavigation.nextShot()
   }
 }

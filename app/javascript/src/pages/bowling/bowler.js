@@ -2,7 +2,6 @@ import Reactive from "./reactive"
 import Frame from "./frame"
 
 export default class Bowler extends Reactive {
-  static bowlers = []
   constructor(element) {
     super(element)
     this.server_id = parseInt(element.getAttribute("data-bowler-id"))
@@ -30,12 +29,16 @@ export default class Bowler extends Reactive {
     this.accessor("cardPoint", ".card-point-field", "value")
 
     this.frames = Frame.fullGame(this)
+  }
 
-    Bowler.bowlers.push(this)
+  static get() {
+    let bowlers = Array.from(document.querySelectorAll(".bowler")).map(bowler => new Bowler(bowler))
+    bowlers.unshift(null) // Add empty space at the beginning of the array to align num to idx
+    return bowlers
   }
 
   static byName = function(name) {
     let clean = name.trim().toLowerCase()
-    return Bowler.bowlers.find(bowler => bowler.bowlerName.trim().toLowerCase() == clean)
+    return Bowler.bowlers.find(bowler => bowler && bowler.bowlerName.trim().toLowerCase() == clean)
   }
 }

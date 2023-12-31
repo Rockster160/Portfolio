@@ -8,6 +8,30 @@ export function buttons() {
   onEvent("click", ".bowling-edit", function() { game.editBowlerToggle() })
   onEvent("click", ".timer-toggle", function() { game.pinTimer.timerActiveToggle() })
   onEvent("click", ".pin-all-toggle", function() { game.defaultPinStandingToggle() })
+  onEvent("click", ".brooklyn-toggle", function() { game.strikePoint = "brooklyn" })
+  onEvent("click", ".pocket-toggle", function() { game.strikePoint = "pocket" })
+  onEvent("click", ".next-frame", function() { game.nextShot(true) })
+  onEvent("click", ".close-frame", function() {
+    game.pins.knockAll()
+    game.nextShot(true)
+  })
+  onEvent("click", ".pocket-close", function() {
+    game.strikePoint = "pocket"
+    game.pins.knockAll()
+    game.nextShot(true)
+  })
+  onEvent("click", ".brooklyn-close", function() {
+    game.strikePoint = "brooklyn"
+    game.pins.knockAll()
+    game.nextShot(true)
+  })
+  onEvent("click", ".shot", function() {
+    let shotNum = parseInt(this.getAttribute("data-shot-idx"))+1
+    let frameNum = parseInt(this.closest(".frame").getAttribute("data-frame"))
+    let bowlerNum = parseInt(this.closest(".bowler").getAttribute("data-bowler"))
+
+    game.currentShot = game.bowlers[bowlerNum].frames[frameNum].shots[shotNum]
+  })
 
   // ==================== Pin Interactions ====================
   let pinKnocking = undefined // Means we are currently knocking pins down when true or standing when false
@@ -23,14 +47,14 @@ export function buttons() {
     if (evt.target.closest(".numpad-key")) { return }
 
     evt.preventDefault()
-    let pin = evt.target.closest(".pin")
+    let pin = evt.target.closest(".pin-wrapper:not(.fallen-before)")
     if (pin) {
       if (evt.type == "touchstart") {
         // Only freeze timer for touch events, wait for the drag to finish to release
         game.pinTimer.freezeTimer = true
       }
 
-      let pinNum = parseInt(pin.closest(".pin-wrapper").getAttribute("data-pin-num"))
+      let pinNum = parseInt(pin.getAttribute("data-pin-num"))
       pinKnocking = game.pins.checkStanding(pinNum)
       game.pins.toggle(pinNum, !pinKnocking)
     }
@@ -52,16 +76,16 @@ export function buttons() {
       return
     }
     // Left click IS held
-    let pin = evt.target.closest(".pin")
+    let pin = evt.target.closest(".pin-wrapper:not(.fallen-before)")
     if (pin && !game.pinTimer.freezeTimer) {
       // If we're clicking/dragging
       game.pinTimer.freezeTimer = true
     }
 
     // If hovering over a pin
-    if (document.querySelector(".pin:hover")) {
+    if (document.querySelector(".pin-wrapper:not(.fallen-before):hover")) {
       evt.preventDefault()
-      let pinWrapper = document.querySelector(".pin:hover").closest(".pin-wrapper:not(.fallen-before)")
+      let pinWrapper = document.querySelector(".pin:hover").closest(".pin-wrapper")
       if (!pinWrapper) { return } // Pin was fallen-before, so can't toggle it
 
       let pinNum = parseInt(pinWrapper.getAttribute("data-pin-num"))

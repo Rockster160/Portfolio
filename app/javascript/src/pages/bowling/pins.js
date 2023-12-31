@@ -19,7 +19,7 @@ export default class Pins {
 
   get standing() { return this._current_standing }
   set standing(standing_pins) {
-    let pins = this.pinsFromInput(standing_pins)
+    let pins = this.pinsFromInput(standing_pins) || []
     this._current_standing = pins
 
     this.allPins.forEach(pinNum => this.toggle(pinNum, pins.includes(pinNum)))
@@ -46,19 +46,22 @@ export default class Pins {
 
   toggleAll(direction) { this.allPins.forEach(pinNum => this.toggle(pinNum, direction)) }
   toggle(pinNum, force_direction) {
-    let standing = typeof force_direction == "boolean" ? force_direction : !this._current_standing.includes(pinNum)
+    let standing = typeof force_direction == "boolean" ? force_direction : !this.checkStanding(pinNum)
 
+    let changed = false
     let pin = this.pinEles[pinNum]
     if (standing) {
-      if (this.checkStanding(pinNum)) { return } // Already standing
-      this._current_standing.push(pinNum)
+      if (!this.checkStanding(pinNum)) {
+        changed = true
+        this._current_standing.push(pinNum)
+      }
       pin.classList.remove("fallen")
     } else {
-      if (!this.checkStanding(pinNum)) { return } // Already fallen
+      if (this.checkStanding(pinNum)) { changed = true }
       this._current_standing = this._current_standing.filter(standingPin => standingPin != pinNum)
       pin.classList.add("fallen")
     }
-    if (this.broadcast) {
+    if (changed && this.broadcast) {
       pin.dispatchEvent(new CustomEvent("pin:change", { bubbles: true, detail: { pin: pinNum } }))
     }
   }

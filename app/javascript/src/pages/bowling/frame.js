@@ -14,8 +14,6 @@ export default class Frame extends Reactive {
     this.bowler = bowler // Do we need this?
     this.frameNum = frameNum
 
-    this._strike_point = undefined
-
     this.firstShot = new Shot(this, 1)
     this.secondShot = new Shot(this, 2)
     if (frameNum == 10) {
@@ -23,10 +21,19 @@ export default class Frame extends Reactive {
     }
 
     this.accessor("strikePoint", ".strike-point", "value", function(val) {
-      // TODO: Highlight buttons
-      // brooklyn
-      // pocket
+      document.querySelector(".pocket-toggle").classList.toggle("active", val == "pocket")
+      document.querySelector(".brooklyn-toggle").classList.toggle("active", val == "brooklyn")
     })
+  }
+
+  resetStrikePoint() { this.strikePoint = this.strikePoint }
+
+  get shots() {
+    if (this.isLastFrame) {
+      return [null, this.firstShot, this.secondShot, this.thirdShot]
+    } else {
+      return [null, this.firstShot, this.secondShot]
+    }
   }
 
   currentShot() {
@@ -90,6 +97,7 @@ class Shot extends Reactive {
   set fallenPins(fallen_pins) {
     let prevShot = this.prevShot()
     if (prevShot) {
+      if (prevShot.incomplete) { prevShot.fallenPins = [] }
       // Do not allow setting fallen pins to pins that were already fallen in the last shot
       let prev_standing_pins = prevShot.standingPins
       let newlyFallenPins = fallen_pins.filter(pin => prev_standing_pins.includes(pin))
@@ -104,10 +112,6 @@ class Shot extends Reactive {
     this._knocked_all = this.pinFallCount == 10
     let prevCount = prevShot?.pinFallCount || 0
     let str = this.pinFallCount - prevCount
-    if (str < 0) {
-      console.log(str, this.pinFallCount, prevCount, fallen_pins);
-      debugger
-    }
 
     if (str == 0) {
       str = "-"
