@@ -25,6 +25,7 @@ window.onload = function() {
   }
 }
 // ===== Todo:
+// Test interactions on iPad
 // Save scores!
 // Show Stats
 // Add / Sub bowlers

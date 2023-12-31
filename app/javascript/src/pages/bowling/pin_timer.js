@@ -16,15 +16,20 @@ export default class PinTimer extends Reactive {
     this.bool("freezeTimer", function(value) { // Don't do the countdown/auto-next frame while we're dragging
       this.reset()
     })
+    this.freezeTimer = false
+
     this.bool("timerActive", function(value) { // The actual timer toggle
       this.element?.classList?.toggle("active", value)
       if (!value) { this.reset() }
     })
-    this.freezeTimer = false
     this.timerActive = true
   }
 
-  clear() {
+  freeze() { if (!this.freezeTimer) { this.freezeTimer = true } }
+  unfreeze() { if (this.freezeTimer) { this.freezeTimer = false } }
+
+  clear(freeze) {
+    if (freeze) { this.freezeTimer = true }
     this.pinTimer = clearTimeout(this.pinTimer)
     this.spinner.reset()
   }

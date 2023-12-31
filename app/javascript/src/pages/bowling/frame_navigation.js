@@ -7,6 +7,7 @@ export default class FrameNavigation {
     return this._current_shot = this.currentFrame?.currentShot()
   }
   static set currentShot(shot) {
+    game.pinTimer.clear(true)
     this._current_shot = shot
     this._current_frame = shot?.frame
     document.querySelectorAll(".shot.current").forEach(item => item.classList.remove("current"))
@@ -45,6 +46,10 @@ export default class FrameNavigation {
   }
 
   static nextShot() {
-    this.currentFrame = this.earliestUnfinishedFrame()
+    if (this.currentFrame?.incomplete) {
+      this.currentFrame = this.currentFrame // Reset current frame, which will go to incomplete shot
+    } else {
+      this.currentFrame = this.earliestUnfinishedFrame()
+    }
   }
 }

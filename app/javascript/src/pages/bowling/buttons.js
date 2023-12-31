@@ -52,14 +52,11 @@ export function buttons() {
   onEvent("mousedown touchstart", ":not(input, label)", function(evt) {
     if (evt.target.closest(".numpad-key")) { return }
 
-    evt.preventDefault()
+    evt.preventDefault() // Disable screen drag/zoom events when tapping
     let pin = evt.target.closest(".pin-wrapper:not(.fallen-before)")
     if (pin) {
-      if (evt.type == "touchstart") {
-        // Only freeze timer for touch events, wait for the drag to finish to release
-        game.pinTimer.freezeTimer = true
-      }
-
+      // When a drag starts, freeze the timer so it doesn't move frames while knocking
+      game.pinTimer.freeze()
       let pinNum = parseInt(pin.getAttribute("data-pin-num"))
       pinKnocking = game.pins.checkStanding(pinNum)
       game.pins.toggle(pinNum, !pinKnocking)
@@ -68,40 +65,28 @@ export function buttons() {
   })
   // On release, unfreeze the timer
   onEvent("touchend mouseup", function() {
-    if (game.pinTimer.freezeTimer) { game.pinTimer.freezeTimer = false }
+    game.pinTimer.unfreeze()
     pinKnocking = undefined
-  })
-  // Disable touchends on pins?
-  onEvent("touchend", ".pin", function(evt) {
-    evt.preventDefault()
   })
   onEvent("mousemove", function(evt) {
     if (!game) { return }
-    if (evt.which != 1) { // Left mouse is NOT held
-      if (game.pinTimer.freezeTimer) { game.pinTimer.freezeTimer = false }
-      return
-    }
-    // Left click IS held
-    let pin = evt.target.closest(".pin-wrapper:not(.fallen-before)")
-    if (pin && !game.pinTimer.freezeTimer) {
-      // If we're clicking/dragging
-      game.pinTimer.freezeTimer = true
-    }
+    if (evt.which != 1) { return } // Left mouse is NOT held
 
-    // If hovering over a pin
+    // Left click IS held
+    // If hovering/dragging over a pin
     if (document.querySelector(".pin-wrapper:not(.fallen-before):hover")) {
-      evt.preventDefault()
+      // evt.preventDefault()
+      game.pinTimer.freeze()
+
       let pinWrapper = document.querySelector(".pin:hover").closest(".pin-wrapper")
       if (!pinWrapper) { return } // Pin was fallen-before, so can't toggle it
 
-      let pinNum = parseInt(pinWrapper.getAttribute("data-pin-num"))
-      if (pinKnocking == undefined) {
-        // Set direction to the first pin hit
+      if (pinKnocking == undefined) { // undefined is when we haven't clicked a pin yet
         pinKnocking = !pinWrapper.classList.contains("fallen")
-      } else {
-        // Toggle the pin the direction the first pin clicked was
-        game.pins.toggle(pinNum, !pinKnocking)
       }
+      // Toggle the pin the direction the first pin clicked was
+      let pinNum = parseInt(pinWrapper.getAttribute("data-pin-num"))
+      game.pins.toggle(pinNum, !pinKnocking)
     }
   })
   // Is this needed? Maybe for the ipad?

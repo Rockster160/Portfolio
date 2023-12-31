@@ -101,7 +101,6 @@ export default class Game extends Reactive {
     if (save_current) { this.triggerChange(true) }
 
     FrameNavigation.nextShot()
-    this.pinTimer.clear()
     if (!this.currentShot) { this.finish() }
   }
 }
