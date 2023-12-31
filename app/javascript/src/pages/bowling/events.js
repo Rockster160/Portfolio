@@ -1,3 +1,6 @@
+// Show totals
+// buggy, closed streak, perfect streak, split
+
 // resetPinTimer → game.pinTimer.reset()
 export function events() {
   onEvent("pin:change", ".pin-wrapper:not(.fallen-before)", function() {

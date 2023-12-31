@@ -135,6 +135,8 @@ class Shot extends Reactive {
 
     this.element.value = str
     this.remaining_pins_element.value = `[${this.standingPins.join()}]`
+    this.checkSplit()
+
     // Knock next shot pins over if knocked here
     // TODO: Add 10th frame logic
     if (this.frame.isLastFrame) { return } // This will have weird behavior on the 10th frame
@@ -145,6 +147,13 @@ class Shot extends Reactive {
     if (nextShot.incomplete) { return } // If it's not filled in, don't do anything
     // Remove all of the fallen pins from the next shot, if present
     nextShot.fallenPins = nextShot.fallenPins.filter(pin => !fallen_pins.includes(pin))
+  }
+
+  checkSplit() {
+    if (!this.prevShot()) { return }
+    
+    let isSplit = game.pins.checkSplit(this.standingPins)
+    this.element.closest(".split-holder").classList.toggle("split", isSplit)
   }
 
   prevShot() {

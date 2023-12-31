@@ -29,10 +29,10 @@ export default class Reactive {
         if (selector) {
           let ele = evt.target.closest(selector)
           if (ele) {
-console.log("Call setter with getter as change callback");
+console.log("Call self setter with getter as change callback");
             self[propName] = self[propName] } // Call the setter with the getter
         } else {
-console.log("Call setter with getter as change callback");
+console.log("Call ele setter with getter as change callback");
           self[propName] = self[propName] // Call the setter with the getter
         }
       })
