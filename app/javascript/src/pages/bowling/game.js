@@ -54,13 +54,7 @@ export default class Game extends Reactive {
     this.defaultPinStanding = false
 
     this.bowlers = Bowler.get()
-    // this.scoring = new Scoring(this.bowlers)
 
-    // calculate score
-    // able to be given a string like "X 9/ 5"...
-    //   Also GET a string of those scores
-    // get score
-    // get handicap (bowler)
     this.filled = false
   }
 
@@ -89,10 +83,22 @@ export default class Game extends Reactive {
     // Show End Game button
   }
 
-  nextShot(save_current) {
-    if (save_current) {
-      this.currentShot?.element?.dispatchEvent(new CustomEvent("pin:change", { bubbles: true }))
+  clearShot() {
+    FrameNavigation.currentShot.clear()
+    FrameNavigation.currentShot = FrameNavigation.currentShot // Reset pins by resetting shot
+
+    this.triggerChange(false)
+  }
+
+  triggerChange(include_pin) {
+    if (include_pin) {
+      document.dispatchEvent(new CustomEvent("pin:change", { bubbles: true }))
     }
+    document.dispatchEvent(new CustomEvent("frame:change", { bubbles: true }))
+  }
+
+  nextShot(save_current) {
+    if (save_current) { this.triggerChange(true) }
 
     FrameNavigation.nextShot()
     this.pinTimer.clear()

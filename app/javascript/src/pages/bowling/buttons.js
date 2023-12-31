@@ -3,11 +3,12 @@ import { onEvent } from "./events"
 export function buttons() {
 
   // ==================== Button Toggles ====================
+  onEvent("click", ".backspace", function() { game.clearShot() })
+  onEvent("click", ".timer-toggle", function() { game.pinTimer.timerActiveToggle() })
+  onEvent("click", ".bowling-edit", function() { game.editBowlerToggle() })
+  onEvent("click", ".pin-all-toggle", function() { game.defaultPinStandingToggle() })
   onEvent("click", ".lanetalk-toggle", function() { game.laneTalkToggle() })
   onEvent("click", ".pin-mode-toggle", function() { game.pinModeToggle() })
-  onEvent("click", ".bowling-edit", function() { game.editBowlerToggle() })
-  onEvent("click", ".timer-toggle", function() { game.pinTimer.timerActiveToggle() })
-  onEvent("click", ".pin-all-toggle", function() { game.defaultPinStandingToggle() })
   onEvent("click", ".brooklyn-toggle", function() { game.strikePoint = "brooklyn" })
   onEvent("click", ".pocket-toggle", function() { game.strikePoint = "pocket" })
   onEvent("click", ".next-frame", function() { finishFrame(false) })

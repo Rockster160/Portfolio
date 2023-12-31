@@ -15,7 +15,7 @@ let checkBuggy = function(frame) {
   let removeBuggy = () => siblings.forEach(sibling => toggleClass(sibling, buggyClass, false))
 
   if (siblings.length < 3) { return removeBuggy() }
-  if (siblings.find(sibling => !sibling.complete)) { return removeBuggy() }
+  if (siblings.find(sibling => !sibling.firstShot.complete)) { return removeBuggy() }
 
   let strikeSiblings = siblings.filter(sibling => sibling.firstShot.knockedAll)
   if (siblings.length - 1 == strikeSiblings.length) {
@@ -37,8 +37,7 @@ let checkDrinkFrame = function(frame) {
   if (siblings.length < 3) { return removeDrink() }
   if (siblings.find(sibling => !sibling.firstShot.complete)) { return removeDrink() }
 
-  let strikeSiblings = siblings.filter(sibling => sibling.firstShot.knockedAll)
-  if (siblings.length == strikeSiblings.length) {
+  if (siblings && siblings.every(sibling => sibling.firstShot.knockedAll)) {
     header.classList.toggle(drinkClass, true)
     siblings.forEach(sibling => toggleClass(sibling, drinkClass, true))
   } else {
@@ -52,8 +51,9 @@ let checkClosedStreak = function(frame) {
   let frames = bowler.frames
   let removeClosed = () => frames.forEach(fr => toggleClass(fr, closedClass, false))
 
+  if (frame.incomplete) { return toggleClass(frame, closedClass, false) }
   let complete = frames.filter(fr => fr?.complete)
-  if (complete.every(fr => fr.isClosed)) {
+  if (complete && complete.every(fr => fr.isClosed)) {
     complete.forEach(fr => toggleClass(fr, closedClass, true))
   } else {
     removeClosed()
@@ -61,16 +61,17 @@ let checkClosedStreak = function(frame) {
 }
 
 let checkPerfectStreak = function(frame) {
-  let closedClass = "consec-start"
+  let consecClass = "consec-start"
   let bowler = frame.bowler
   let frames = bowler.frames
   frame.bowler.element.classList.toggle("perfect-game", false)
-  let removeClosed = () => frames.forEach(fr => toggleClass(fr, closedClass, false))
+  let removeClosed = () => frames.forEach(fr => toggleClass(fr, consecClass, false))
   let strikeFrame = (fr) => fr.shots.every(shot => !shot?.complete || shot.knockedAll)
 
+  if (frame.incomplete) { return toggleClass(frame, consecClass, false) }
   let complete = frames.filter(fr => fr?.firstShot?.complete)
-  if (complete.every(strikeFrame)) {
-    complete.forEach(fr => toggleClass(fr, closedClass, true))
+  if (complete && complete.every(strikeFrame)) {
+    complete.forEach(fr => toggleClass(fr, consecClass, true))
     if (complete.length == 10 && complete[9].complete) {
       frame.bowler.element.classList.toggle("perfect-game", true)
     }

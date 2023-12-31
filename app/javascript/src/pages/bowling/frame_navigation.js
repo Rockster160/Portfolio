@@ -21,7 +21,7 @@ export default class FrameNavigation {
       if (shot.complete) {
         game.pins.standing = shot.standingPins
       } else {
-        if (prevShot) { // 2nd shot always sets pins to standing
+        if (prevShot) { // 2nd shot always sets pins to standing for usability
           game.pins.standAll()
         } else {
           game.defaultPinStanding ? game.pins.standAll() : game.pins.knockAll()
@@ -36,7 +36,7 @@ export default class FrameNavigation {
   static earliestUnfinishedFrame() {
     for (let i=1; i<=10; i++) {
       for (const bowler of game.bowlers) {
-        if (bowler) {
+        if (bowler?.active) {
           let frame = bowler.frames[i]
           if (frame.incomplete) { return frame }
         }

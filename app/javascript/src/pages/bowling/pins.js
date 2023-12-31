@@ -62,7 +62,7 @@ export default class Pins {
       pin.classList.add("fallen")
     }
     if (changed && this.broadcast) {
-      pin.dispatchEvent(new CustomEvent("pin:change", { bubbles: true, detail: { pin: pinNum } }))
+      game.triggerChange(true)
     }
   }
 

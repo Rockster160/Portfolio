@@ -41,4 +41,6 @@ export default class Bowler extends Reactive {
     let clean = name.trim().toLowerCase()
     return Bowler.bowlers.find(bowler => bowler && bowler.bowlerName.trim().toLowerCase() == clean)
   }
+
+  get active() { return !this.absent && !this.skip }
 }

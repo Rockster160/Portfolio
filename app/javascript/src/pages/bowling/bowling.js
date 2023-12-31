@@ -30,6 +30,7 @@ window.onload = function() {
 // Add / Sub bowlers
 // Edit names?
 // Absent / Skip are broken
+// Need to rememeber absent/skip on next game and pre-apply it
 // Add subs
 // Lane talk
 // Card Point

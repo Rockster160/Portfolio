@@ -70,81 +70,6 @@
 //   })
 // })
 //
-// $(document).ready(function() {
-//   if ($(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").length == 0) { return }
-//   let currentScorePush = null
-//   var inProgress = false
-//   var should_check_stats = true
-//
-//   resetStrikePoint = function() {
-//     $(".pocket-toggle, .brooklyn-toggle").removeClass("active")
-//     var shot = $(".shot.current")
-//     var strike_point = shot.parents(".frame").find(".strike-point").val()
-//
-//     strikePoint(strike_point)
-//   }
-//
-//   strikePoint = function(direction) {
-//     $(".pocket-toggle, .brooklyn-toggle").removeClass("active")
-//
-//     if (direction == "pocket") {
-//       $(".shot.current").parents(".frame").find(".strike-point").val("pocket")
-//       $(".pocket-toggle").addClass("active")
-//     } else if (direction == "brooklyn") {
-//       $(".shot.current").parents(".frame").find(".strike-point").val("brooklyn")
-//       $(".brooklyn-toggle").addClass("active")
-//     } else {
-//       $(".shot.current").parents(".frame").find(".strike-point").val("")
-//     }
-//   }
-//   $(".pocket-toggle").click(function() {
-//     var prev_val = $(".shot.current").parents(".frame").find(".strike-point").val()
-//     strikePoint(prev_val == "pocket" ? null : "pocket")
-//   })
-//   $(".brooklyn-toggle").click(function() {
-//     var prev_val = $(".shot.current").parents(".frame").find(".strike-point").val()
-//     strikePoint(prev_val == "brooklyn" ? null : "brooklyn")
-//   })
-//   $(".close-frame, .pocket-close, .brooklyn-close").on("click", function() {
-//     if (pinTimer && parseInt($(".shot.current").attr("data-shot-idx")) == 0) {
-//       $(".next-frame").click()
-//     }
-//
-//     $(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
-//     if ($(this).hasClass("pocket-close")) { strikePoint("pocket") }
-//     if ($(this).hasClass("brooklyn-close")) { strikePoint("brooklyn") }
-//
-//     addScore("X")
-//   })
-//   $(".next-frame").on("click", function(evt) {
-//     recountPins()
-//     var toss = $(".shot.current")
-//     var shot_idx = parseInt(toss.attr("data-shot-idx"))
-//     var nextShot = toss.parents(".frame").find(".shot").filter(function() {
-//       return parseInt($(this).attr("data-shot-idx")) > shot_idx
-//     })
-//
-//     recalculateFrame(toss)
-//
-//     if (toss.parents(".frame").attr("data-frame") == "10") {
-//       if (shot_idx == 0) {
-//         moveToThrow(nextShot.first())
-//       } else if (shot_idx == 1) {
-//         if (currentTossAtIdx(0).val() == "X") {
-//           moveToThrow(nextShot.first())
-//         } else {
-//           moveToNextFrame()
-//         }
-//       } else if (shot_idx == 2) {
-//         moveToNextFrame()
-//       }
-//     } else if (nextShot.length > 0 && toss.val() != "X") {
-//       moveToThrow(nextShot.first())
-//     } else {
-//       moveToNextFrame()
-//     }
-//   })
-//
 //   swap = function($ele1, $ele2) {
 //     var temp = $("<div>")
 //
@@ -152,6 +77,12 @@
 //     $ele2.before($ele1)
 //     temp.before($ele2).remove()
 //   }
+//
+// $(document).ready(function() {
+//   if ($(".ctr-bowling_games.act-new, .ctr-bowling_games.act-edit").length == 0) { return }
+//   let currentScorePush = null
+//   var inProgress = false
+//   var should_check_stats = true
 //
 //   clearShot = function(shot) {
 //     shot = $(shot)

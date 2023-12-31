@@ -27,6 +27,9 @@ export default class Frame extends Reactive {
   }
 
   resetStrikePoint() { this.strikePoint = this.strikePoint }
+  clear() {
+    this.shots.forEach(shot => shot?.clear())
+  }
 
   get siblings() {
     return game.bowlers.map(bowler => bowler && bowler.frames[this.frameNum]).filter(Boolean)
@@ -110,6 +113,7 @@ class Shot extends Reactive {
     this._knocked_all = false
     this.element.value = ""
     this.remaining_pins_element.value = ""
+    this.nextShot()?.clear()
   }
 
   set score(val) { this.standingPins = game.pins.pinsFromInput(val) }
@@ -162,16 +166,14 @@ class Shot extends Reactive {
     this.remaining_pins_element.value = `[${this.standingPins.join()}]`
     this.checkSplit()
 
-    // Knock next shot pins over if knocked here
-    let nextShot = {
-      1: () => this.frame.secondShot,
-      2: () => this.frame.thirdShot,
-    }[this.shotNum]?.call()
+    // Knock next shot pins over if editing
+    let nextShot = this.nextShot()
     if (!nextShot?.complete) { return } // If it's not filled in, don't do anything
-    // Reset knocked pins, which includes filtering the allowed ones.
+    // First and second are open, so no 3rd frame. Clear it and move to next bowler.
     if (this.shotNum == 2 && !this.frame.firstShot.knockedAll && !this.knockAll) {
       return nextShot.clear()
     }
+    // Reset knocked pins, which includes filtering the allowed ones.
     nextShot.fallenPins = nextShot.fallenPins
   }
 
@@ -180,6 +182,13 @@ class Shot extends Reactive {
 
     let isSplit = game.pins.checkSplit(this.standingPins)
     this.element.closest(".split-holder").classList.toggle("split", isSplit)
+  }
+
+  nextShot() {
+    return {
+      1: () => this.frame.secondShot,
+      2: () => this.frame.thirdShot,
+    }[this.shotNum]?.call()
   }
 
   prevShot() {
