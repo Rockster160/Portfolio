@@ -11,7 +11,11 @@ export default class FrameNavigation {
     this._current_shot = shot
     this._current_frame = shot?.frame
     document.querySelectorAll(".shot.current").forEach(item => item.classList.remove("current"))
-    if (!shot) { return }
+    if (!shot) {
+      game.pins.fallenBefore = []
+      game.defaultPinStanding ? game.pins.standAll() : game.pins.knockAll()
+      return
+    }
 
     shot.element.classList.add("current")
     game.pins.noBroadcast(() => {
