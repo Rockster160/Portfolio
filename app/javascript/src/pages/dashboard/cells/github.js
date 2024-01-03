@@ -88,8 +88,11 @@ import { dash_colors } from "../vars"
     Monitor.subscribe("e7a6570c-3d6d-434b-bcd6-568a41fb6b02", "deploy", {
       received: function(data) {
         cell.flash()
+        console.log("Github received: ", data);
         let json = data.result ? JSON.parse(data.result) : {}
+        console.log("Github data: ", json);
         if (json.deploy == "start") {
+          console.log("Deploy start");
           let timer = new Timer({ name: currentTime() })
           timer.start.minutes += 2
           timer.start.seconds += 30
@@ -99,6 +102,7 @@ import { dash_colors } from "../vars"
           localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
         }
         if (json.deploy == "finish") {
+          console.log("Deploy finish");
           cell.data.deploy_timers.forEach(item => {
             item.complete(true)
           })
@@ -129,6 +133,7 @@ import { dash_colors } from "../vars"
         lines.push(renderLine(pr.status, pr.id, pr.title))
       })
     }
+    lines.push("-- Deploys:")
     if (cell.data.deploy_timers?.length) {
       cell.data.deploy_timers.forEach(deploy => {
         lines.push(deploy.render())
