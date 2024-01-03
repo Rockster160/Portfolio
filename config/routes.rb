@@ -119,8 +119,8 @@ Rails.application.routes.draw do
   resources :jarvis_tasks, path: :tasks
   resources :scheduled_tasks, path: :scheduled, param: :uid, only: [:index, :create, :update, :destroy]
   namespace :jil do
-    get "/:uuid", action: :show, controller: :jarvis_tasks
     get :/, action: :index, controller: :jarvis_tasks
+    get "/:id", action: :show, controller: :jarvis_tasks
     resource :jarvis_cache, path: :cache
     resources :jarvis_tasks, path: :tasks do
       get :config, on: :member, action: :configuration
