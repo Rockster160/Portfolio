@@ -39,6 +39,11 @@ window.onload = function() {
 // Frame Scores
 // Score button interface (no pins)
 // Delete score/frame button
+// Add button somewhere to remove a bowler
+// Add button somewhere to clear a score
+// Add ability to dump in scores from the console to pre-load them
+// Make sure Num keys work! + Backspace, /, X, etc
+// Arrow keys should be able to go between shots/frames/bowlers
 
 
 // ===== Tests:

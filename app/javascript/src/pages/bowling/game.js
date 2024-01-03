@@ -12,13 +12,13 @@ export default class Game extends Reactive {
     this.editing_game = !!document.querySelector(".ctr-bowling_games.act-edit")
 
     this._game_num = params.game ? parseInt(params.game) : 1
-    this.accessor("leagueId", "#game_league_id", "value")
-    this.accessor("setId", "#game_set_id", "value")
+    this.elementAccessor("leagueId", "#game_league_id", "value")
+    this.elementAccessor("setId", "#game_set_id", "value")
 
-    this.accessor("laneTalkCenterUUID", ".league-data", "data-lanetalk-center-id")
-    this.accessor("laneTalkApiKey", ".league-data", "data-lanetalk-key")
+    this.elementAccessor("laneTalkCenterUUID", ".league-data", "data-lanetalk-center-id")
+    this.elementAccessor("laneTalkApiKey", ".league-data", "data-lanetalk-key")
 
-    this.accessor("lane", ".lane-input", "value")
+    this.elementAccessor("lane", ".lane-input", "value")
 
     this.bool("crossLane")
     this.bool("pinMode", function(value) {

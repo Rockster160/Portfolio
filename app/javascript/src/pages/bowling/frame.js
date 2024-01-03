@@ -1,4 +1,5 @@
 import Reactive from "./reactive"
+import Scoring from "./scoring"
 
 export default class Frame extends Reactive {
   static fullGame(bowler) {
@@ -13,6 +14,7 @@ export default class Frame extends Reactive {
     super(bowler.element.querySelector(`.frame[data-frame="${frameNum}"]`))
     this.bowler = bowler
     this.frameNum = frameNum
+    this._score = undefined
 
     this.firstShot = new Shot(this, 1)
     this.secondShot = new Shot(this, 2)
@@ -20,10 +22,20 @@ export default class Frame extends Reactive {
       this.thirdShot = new Shot(this, 3)
     }
 
-    this.accessor("strikePoint", ".strike-point", "value", function(val) {
+    this.elementAccessor("strikePoint", ".strike-point", "value", function(val) {
       document.querySelector(".pocket-toggle").classList.toggle("active", val == "pocket")
       document.querySelector(".brooklyn-toggle").classList.toggle("active", val == "brooklyn")
     })
+  }
+
+  get score() { return this._score }
+  set score(val) {
+    this._score = val
+    this.element.querySelector(".score").innerText = val
+  }
+
+  updateScores() {
+    Scoring.updateBowler(this.bowler)
   }
 
   resetStrikePoint() { this.strikePoint = this.strikePoint }
@@ -62,15 +74,17 @@ export default class Frame extends Reactive {
   }
 
   fillRandom() {
+    let avg = this.bowler?.average || 200
+    let ratio = (rate) => Math.random() < ((avg/2) * (1/rate))
     while (!this.complete) {
-      if (Math.random() < 0.05) {
+      if (ratio(1/1000)) { // 200avg gutters 1/1000 throws
         this.currentShot().score = "-"
-      } else if (Math.random() < 0.3) {
+      } else if (ratio(3/10)) { // 200avg opens 3 frames a game
         // Keep 3/10 pins, on average
-        this.currentShot().standingPins = game.pins.allPins.filter(pinNum => Math.random() < 3/10)
-      } else if (Math.random() < 0.5) {
+        this.currentShot().standingPins = game.pins.allPins.filter(pinNum => ratio(3/10))
+      } else if (ratio(1/2)) { // 200avg spare/strikes half the time
         this.currentShot().score = "/"
-      } else {
+      } else { // Fallback after the spare - default to strike
         this.currentShot().score = "X"
       }
     }
@@ -108,6 +122,7 @@ class Shot extends Reactive {
 
   clear() {
     this.complete = false
+    this.value = undefined
     this.pinFallCount = undefined
     this._fallen_pins = undefined
     this._knocked_all = false
@@ -116,6 +131,7 @@ class Shot extends Reactive {
     this.nextShot()?.clear()
   }
 
+  get score() { return this.value || "" }
   set score(val) { this.standingPins = game.pins.pinsFromInput(val) }
 
   get incomplete() { return !this.complete }
@@ -162,9 +178,11 @@ class Shot extends Reactive {
       }
     }
 
-    this.element.value = str
+    this.value = str
+    this.element.value = this.value
     this.remaining_pins_element.value = `[${this.standingPins.join()}]`
     this.checkSplit()
+    this.frame.updateScores()
 
     // Knock next shot pins over if editing
     let nextShot = this.nextShot()

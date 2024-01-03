@@ -3,7 +3,11 @@ export default class Reactive {
     this.element = element
   }
 
-  accessor(propName, selector, attr, callback) {
+  // elementAccessor() {
+  //
+  // }
+
+  elementAccessor(propName, selector, attr, callback) {
     // Fix arg positioning
     // accessor("myAccessor", fn())
     if (selector && typeof(selector) === "function") {

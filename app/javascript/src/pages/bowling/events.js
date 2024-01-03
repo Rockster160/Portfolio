@@ -1,17 +1,9 @@
 import applyFrameModifiers from "./frame_modifiers"
-// Show totals
-
-// On shot click, reset timer
-
 
 // resetPinTimer → game.pinTimer.reset()
 export function events() {
   onEvent("pin:change", function() {
     game.currentShot.standingPins = game.pins.standing
-    game.pinTimer.reset()
-    // addScore(pins.length - next_pins.length, true, next_shot)
-    // recalculateFrame(toss)
-    // calcScores()
   })
   onEvent("frame:change", function() {
     applyFrameModifiers(game.currentFrame)
