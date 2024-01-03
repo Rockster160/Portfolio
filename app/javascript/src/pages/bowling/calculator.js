@@ -23,8 +23,9 @@ export default class BowlingCalculator {
           return frame[idx-1] == "X" || frame[idx-1] === undefined ? "" : "/"
         } else { // 10th
           // Can always return X because the 10th doesn't do any future calcs
-          if (idx < 2) { return "X" } // First 2 shots
+          if (idx == 0) { return "X" }
           let closedBefore = frame[idx-1] == "X" || frame[idx-1] == "/" || !frame[idx-1]
+          if (idx == 1) { return closedBefore ? "X" : "/" }
           return closedBefore ? "X" : null
         }
       })

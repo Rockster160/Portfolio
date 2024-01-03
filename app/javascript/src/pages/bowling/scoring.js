@@ -7,16 +7,15 @@ export default class Scoring {
   }
 
   static updateBowler(bowler) {
+    if (!bowler?.frames) { return }
     let shot_scores = this.bowlerScores(bowler)
     let scoring = BowlingCalculator.score(shot_scores)
-    // return {
-    //   frames: frameTotals,
-    //   total: totalScore,
-    //   max: maxScore,
-    // }
     scoring.frames.forEach((frameScore, idx) => {
-      bowler.frames[idx+1].score = frameScore
+      bowler.frames[idx+1].display = frameScore
     })
+    for (let i=scoring.frames?.length || []; i<10; i++) {
+      bowler.frames[i+1].display = ""
+    }
     bowler.currentScore = scoring.total
     bowler.maxScore = scoring.max
   }

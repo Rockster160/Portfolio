@@ -28,8 +28,8 @@ export default class Frame extends Reactive {
     })
   }
 
-  get score() { return this._score }
-  set score(val) {
+  get display() { return this._score }
+  set display(val) {
     this._score = val
     this.element.querySelector(".score").innerText = val
   }
@@ -74,8 +74,8 @@ export default class Frame extends Reactive {
   }
 
   fillRandom() {
-    let avg = this.bowler?.average || 200
-    let ratio = (rate) => Math.random() < ((avg/2) * (1/rate))
+    // let avg = this.bowler?.average || 200
+    let ratio = (rate) => Math.random() < rate
     while (!this.complete) {
       if (ratio(1/1000)) { // 200avg gutters 1/1000 throws
         this.currentShot().score = "-"
@@ -129,6 +129,7 @@ class Shot extends Reactive {
     this.element.value = ""
     this.remaining_pins_element.value = ""
     this.nextShot()?.clear()
+    this.frame.updateScores()
   }
 
   get score() { return this.value || "" }
