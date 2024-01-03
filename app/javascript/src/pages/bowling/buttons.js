@@ -49,9 +49,7 @@ export function buttons() {
     }
   }
   // On click/tap, toggle a pin, track the toggle direction, and start the timer
-  onEvent("mousedown touchstart", ":not(input, label)", function(evt) {
-    if (evt.target.closest(".numpad-key")) { return }
-
+  onEvent("mousedown touchstart", ".pin-wrapper:not(.fallen-before)", function(evt) {
     evt.preventDefault() // Disable screen drag/zoom events when tapping
     let pin = evt.target.closest(".pin-wrapper:not(.fallen-before)")
     if (pin) {
@@ -65,8 +63,10 @@ export function buttons() {
   })
   // On release, unfreeze the timer
   onEvent("touchend mouseup", function() {
-    game.pinTimer.unfreeze()
-    pinKnocking = undefined
+    if (pinKnocking !== undefined) {
+      game.pinTimer.unfreeze()
+      pinKnocking = undefined
+    }
   })
   onEvent("mousemove", function(evt) {
     if (!game) { return }

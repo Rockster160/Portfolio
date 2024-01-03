@@ -24,6 +24,11 @@ window.onload = function() {
     game.nextShot()
   }
 }
+
+// TODO: Need to update score on frame delete and change as well
+// Last frame scoring doesn't seem quite right.
+//   When setting "9" as the first score, the max score changes even after striking out
+//   Just seems wonky in general - check it out.
 // ===== Todo:
 // Test interactions on iPad
 // Save scores!

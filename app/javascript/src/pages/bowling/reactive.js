@@ -3,83 +3,78 @@ export default class Reactive {
     this.element = element
   }
 
-  // elementAccessor() {
-  //
-  // }
+  bool(boolname, callback) {
+    this.accessor(boolname, callback)
+    this[`${boolname}Toggle`] = () => { this[boolname] = !this[boolname] }
+  }
 
-  elementAccessor(propName, selector, attr, callback) {
-    // Fix arg positioning
-    // accessor("myAccessor", fn())
-    if (selector && typeof(selector) === "function") {
-      callback = selector
-      selector = undefined
-      attr = undefined
-    }
-    // accessor("myAccessor", ".selector", fn())
-    if (attr && typeof(attr) === "function") {
-      callback = attr
-      attr = undefined
-    }
-    // accessor("myAccessor", "data-value", fn())
-    if (!attr) {
-      attr = selector
-      selector = undefined
-    }
-
-    // Add page listeners to trigger the "set" callback on changes
-    let self = this
-    Array.from(["change"]).forEach(event => {
-      document.addEventListener(event, function(evt) {
-        if (selector) {
-          let ele = evt.target.closest(selector)
-          if (ele) {
-console.log("Call self setter with getter as change callback");
-            self[propName] = self[propName] } // Call the setter with the getter
-        } else {
-console.log("Call ele setter with getter as change callback");
-          self[propName] = self[propName] // Call the setter with the getter
-        }
-      })
-    })
-
+  accessor(propName, callback) {
+    let snake = propName.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
     // The below stops the getter from being redefined every time a new instance is created
     let getter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(this), propName)
     if (getter && typeof getter.get === "function") { return }
 
     Object.defineProperty(this.constructor.prototype, propName, {
-      get() {
-        let ele = selector ? this.element.querySelector(selector) : this.element
-        if (ele.tagName == "INPUT" || ele.hasAttribute(attr)) {
-          return ele.getAttribute(attr)
-        } else {
-          return ele.innerText
-        }
-      },
-      set(value) {
-        let eles = selector ? this.element.querySelectorAll(selector) : [this.element]
-        eles.forEach(ele => {
-          if (ele.tagName == "INPUT" || ele.hasAttribute(attr)) {
-            ele.setAttribute(attr, value)
-            if (ele.type == "checkbox" && !value) { ele.removeAttribute("checked") }
-          } else {
-            ele.innerText = value
-          }
-        })
-
-        if (callback && typeof(callback) === "function") { callback.call(this, value) }
-      },
-    })
-  }
-
-  bool(boolname, callback) {
-    let snake = boolname.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
-    Object.defineProperty(this.constructor.prototype, boolname, {
-      get() { return !!this[snake] },
+      get() { return this[snake] },
       set(value) {
         this[snake] = value
         if (callback && typeof(callback) === "function") { callback.call(this, value) }
       },
     })
-    this[`${boolname}Toggle`] = () => { this[boolname] = !this[boolname] }
+  }
+
+  elementAccessor(propName, selector, attr, callback) {
+    // Fix arg positioning
+    // accessor("myAccessor", ".selector", fn())
+    if (attr && typeof(attr) === "function") {
+      callback = attr
+      attr = undefined
+    }
+
+    let getEleVal = function() {
+      let ele = selector === null ? this.element : this.element.querySelector(selector)
+      ele = ele || this.element || document
+
+      if (attr === undefined) {
+        return ele.tagName == "INPUT" ? ele.value : ele.innerText
+      } else if (attr === "value") {
+        return ele.tagName == "INPUT" ? ele.value : ele.getAttribute(attr)
+      } else {
+        return ele.getAttribute(attr)
+      }
+    }
+    let setEleVal = function(value) {
+      let eles = selector === null ? [this.element] : this.element.querySelectorAll(selector)
+      eles.forEach(ele => {
+        if (attr === undefined || attr === "value") {
+          if (ele.tagName == "INPUT") {
+            ele.value = value
+          } else {
+            attr === "value" ? ele.setAttribute(attr, value) : ele.innerText = value
+          }
+        } else {
+          ele.setAttribute(attr, value)
+        }
+      })
+
+      if (callback && typeof(callback) === "function") { callback.call(this, value) }
+    }
+
+    // Add page listeners to trigger the "set" callback on changes
+    let self = this
+    this.element.addEventListener("change", function(evt) {
+      if (!evt.target.closest(selector)) { return }
+
+      setEleVal.call(self, getEleVal.call(self))
+      // self[propName] = self[propName] // Call the setter with the getter
+    })
+
+    let getter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(this), propName)
+    if (getter && typeof getter.get === "function") { return }
+
+    Object.defineProperty(this.constructor.prototype, propName, {
+      get() { return getEleVal.call(this) },
+      set(value) { setEleVal.call(this, value) },
+    })
   }
 }

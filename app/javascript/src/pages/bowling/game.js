@@ -18,7 +18,9 @@ export default class Game extends Reactive {
     this.elementAccessor("laneTalkCenterUUID", ".league-data", "data-lanetalk-center-id")
     this.elementAccessor("laneTalkApiKey", ".league-data", "data-lanetalk-key")
 
-    this.elementAccessor("lane", ".lane-input", "value")
+    this.elementAccessor("lane", ".lane-input", "value", function(val) {
+      console.log(`Setting Lane to ${val}`)
+    })
 
     this.bool("crossLane")
     this.bool("pinMode", function(value) {
