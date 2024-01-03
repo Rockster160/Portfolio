@@ -34,7 +34,7 @@
     if @ctx[:i] > MAX_ITERATIONS
       raise StandardError, "Blocks exceed #{ActiveSupport::NumberHelper.number_to_delimited(MAX_ITERATIONS)} allowed."
     end
-    @ctx[:msg] << @ctx[:last_val] if @ctx[:msg].none?
+    @ctx[:msg] << Jarvis::Execute::Raw.str(@ctx[:last_val]) if @ctx[:msg].none?
     @ctx[:msg]
     # Trigger success?
   rescue StandardError => e

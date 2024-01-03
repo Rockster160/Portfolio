@@ -21,8 +21,10 @@
 
     <% if Rails.env.development? %>
       Cell.loadConfig({
-        timers: {},
-        github: {},
+        home: {},
+        github: {
+          deploy_uuid: "<%= JarvisTask.anyfind("Deploying...")&.uuid %>"
+        },
         fitness: {},
         jarvis: { w: 2 },
         calendar: { h: 3 },
@@ -49,6 +51,7 @@
         },
         github: {
           x: 4, y: 2,
+          deploy_uuid: "<%= JarvisTask.anyfind("Deploying...")&.uuid %>",
           github_apikey: "<%= ENV.fetch("GITHUB_APIKEY") %>"
         },
 

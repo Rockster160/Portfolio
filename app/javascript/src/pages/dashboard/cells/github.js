@@ -85,7 +85,7 @@ import { dash_colors } from "../vars"
 
   let deployMonitor = function() {
     setInterval(function() { render(cell) }, 1000)
-    Monitor.subscribe("e7a6570c-3d6d-434b-bcd6-568a41fb6b02", "deploy", {
+    Monitor.subscribe(cell.config.deploy_uuid, {
       received: function(data) {
         cell.flash()
         console.log("Github received: ", data);

@@ -18,7 +18,7 @@ class MonitorChannel < ApplicationCable::Channel
       } || task.last_trigger_at.to_i,
     )
     # This is VERY magic. If the task defines a "timestamp" variable, the monitor channel will
-    #   send that instead, allowing us to send
+    #   send that instead, allowing us to set the timestamp on the cell
   end
 
   def subscribed
@@ -26,6 +26,10 @@ class MonitorChannel < ApplicationCable::Channel
   end
 
   def broadcast(data)
+    # Don't think this is used anymore...
+    # But maybe we SHOULD use this as the receiver for when buttons are clicked
+    # Could also be used by JS for `socket.send({data})`
+    Jarvis.say("Broadcasting: #{data}")
     data.delete("action") # Action is `broadcast`
     channel = data.delete("channel")
     return unless current_user.present? && channel.present?

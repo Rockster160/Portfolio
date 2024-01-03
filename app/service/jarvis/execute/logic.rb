@@ -45,7 +45,7 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
 
   def logic_exit
     jil.ctx[:exit] = true
-    jil.ctx[:msg] << (evalargs || "Exit")
+    jil.ctx[:msg] << ::Jarvis::Execute::Raw.str(evalargs || "Exit")
   end
 
   def logic_map
