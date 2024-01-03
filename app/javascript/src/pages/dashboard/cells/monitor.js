@@ -84,7 +84,6 @@ Monitor.socket = consumer.subscriptions.create({
     Monitor.all().forEach(item => item.disconnected())
   },
   received: function(data) {
-    console.log("MonitorChannel.received", data);
     Monitor.byUUID(data.id).forEach(item => item.received(data))
   },
 })

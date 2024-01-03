@@ -214,7 +214,6 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         renderLines()
       },
       received: function(data) {
-        console.log("socket Received", data);
         clearTimeout(cell.garage_timeout)
         cell.flash()
         if (data.loading) {
