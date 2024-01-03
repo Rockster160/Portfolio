@@ -120,7 +120,6 @@ Rails.application.routes.draw do
   resources :scheduled_tasks, path: :scheduled, param: :uid, only: [:index, :create, :update, :destroy]
   namespace :jil do
     get :/, action: :index, controller: :jarvis_tasks
-    get "/:id", action: :show, controller: :jarvis_tasks
     resource :jarvis_cache, path: :cache
     resources :jarvis_tasks, path: :tasks do
       get :config, on: :member, action: :configuration
@@ -128,6 +127,8 @@ Rails.application.routes.draw do
       post :run, on: :member
       post :duplicate, on: :member
     end
+    # Must be last because of the wildcard
+    get "/:id", action: :show, controller: :jarvis_tasks
   end
 
   resources :climbs do

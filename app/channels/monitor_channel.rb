@@ -26,10 +26,7 @@ class MonitorChannel < ApplicationCable::Channel
   end
 
   def broadcast(data)
-    # Don't think this is used anymore...
-    # But maybe we SHOULD use this as the receiver for when buttons are clicked
-    # Could also be used by JS for `socket.send({data})`
-    Jarvis.say("Broadcasting: #{data}")
+    # This sends messages from Monitor JS to Socket listeners
     data.delete("action") # Action is `broadcast`
     channel = data.delete("channel")
     return unless current_user.present? && channel.present?
