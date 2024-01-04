@@ -1,7 +1,7 @@
 import { Time } from "./_time"
 import { Text } from "../_text"
 import { Timer } from "./timers"
-import { dash_colors } from "../vars"
+import { dash_colors, beeps } from "../vars"
 
 (function() {
   var cell = undefined
@@ -88,11 +88,8 @@ import { dash_colors } from "../vars"
     Monitor.subscribe(cell.config.deploy_uuid, {
       received: function(data) {
         cell.flash()
-        console.log("Github received: ", data);
         let json = data.result ? JSON.parse(data.result) : {}
-        console.log("Github data: ", json);
         if (json.deploy == "start") {
-          console.log("Deploy start");
           let timer = new Timer({ name: currentTime() })
           timer.start.minutes += 2
           timer.start.seconds += 30
@@ -102,15 +99,23 @@ import { dash_colors } from "../vars"
           localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
         }
         if (json.deploy == "finish") {
-          console.log("Deploy finish");
           cell.data.deploy_timers.forEach(item => {
             item.complete(true)
           })
           localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
+          victoryBeep()
         }
         render(cell)
       },
     })
+  }
+
+  let victoryBeep = function() {
+    beeps([
+      [100, 1000, 0.1, "sine"], // Short and high-pitched
+      [150,  800, 0.2, "sine"], // Slightly longer and lower-pitched
+      [300, 1200, 0.4, "sine"], // Even longer and higher-pitched
+    ])
   }
 
   var render = function(cell) {
