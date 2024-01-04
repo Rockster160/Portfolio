@@ -48,6 +48,8 @@ class MonitorChannel < ApplicationCable::Channel
 
   def resync(data) # Pulls most recent result without Running
     task = current_user.jarvis_tasks.anyfind(data["id"])
+    Rails.logger.debug("[ROCCOLOGGER] #{task}")
+    Rails.logger.debug("[ROCCOLOGGER] #{task.last_result}")
 
     MonitorChannel.send_task(task)
   end
