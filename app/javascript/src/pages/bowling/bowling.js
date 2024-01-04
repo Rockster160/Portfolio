@@ -34,6 +34,7 @@ window.onload = function() {
 // Save scores!
 // Show Stats
 // Edit names/bowlers (including average/hdcp?)
+// Reorder bowlers via drag & drop (after clicking the edit btn)
 // Absent / Skip
 //   * Should remember the status on the next game
 // Add subs
