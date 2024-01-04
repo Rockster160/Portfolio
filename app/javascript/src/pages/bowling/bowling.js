@@ -46,6 +46,8 @@ window.onload = function() {
 // Add ability to dump in scores from the console to pre-load them
 // Make sure Num keys work! + Backspace, /, X, etc
 // Arrow keys should be able to go between shots/frames/bowlers
+// Team total scores
+// Enemy Scores
 
 
 // ===== Tests:

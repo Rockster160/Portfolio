@@ -11,6 +11,8 @@ export default class Bowler extends Reactive {
     this.elementAccessor("absentScore", null, "data-absent-score")
     this.elementAccessor("bowlerNum", null, "data-bowler", function(value) {
       this.element.querySelector(".game-position").value = value
+      // Also need to reorder game.bowlers
+      // Also need to actually reorder the bowler rows rather than just updating the position
     })
     this.elementAccessor("hdcp", ".bowler-handicap", "value", function(value) {
       this.element.querySelectorAll(".hdcp-val").forEach(item => item.innerText = value)
@@ -47,4 +49,7 @@ export default class Bowler extends Reactive {
   }
 
   get active() { return !this.absent && !this.skip }
+
+  get num() { return parseInt(this.bowlerNum) }
+  set num(val) { return this.bowlerNum = val }
 }

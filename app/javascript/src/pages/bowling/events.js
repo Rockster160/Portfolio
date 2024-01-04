@@ -18,14 +18,66 @@ export function onEvent(events, selector, callback) {
     selector = null
   }
 
-  events.split(" ").forEach(event => {
-    document.addEventListener(event, function(evt) {
+  events.split(" ").forEach(eventName => {
+    document.addEventListener(eventName, function(evt) {
       if (selector) {
-        let ele = evt.target.closest(selector)
-        if (ele) { callback.call(ele, evt) }
+        let ele = evt.target
+        if (ele && ele.matches(selector)) { callback.call(ele, evt) }
       } else {
-        callback.call(this, evt)
+        callback.call(window, evt)
       }
     })
+  })
+}
+
+export function onKey(key, selector, keycallback) {
+  if (selector && typeof selector == "function") {
+    keycallback = selector
+    selector = null
+  }
+
+  onEvent("keyup keydown keypress", selector, function(evt) {
+    if (key.split(" ").includes(evt.key)) {
+      keycallback.call(this, evt)
+    }
+  })
+}
+
+export function onKeyUp(key, selector, keycallback) {
+  if (selector && typeof selector == "function") {
+    keycallback = selector
+    selector = null
+  }
+
+  onEvent("keyup", selector, function(evt) {
+    if (key.split(" ").includes(evt.key)) {
+      keycallback.call(this, evt)
+    }
+  })
+}
+
+export function onKeyDown(key, selector, keycallback) {
+  if (selector && typeof selector == "function") {
+    keycallback = selector
+    selector = null
+  }
+
+  onEvent("keydown", selector, function(evt) {
+    if (key.split(" ").includes(evt.key)) {
+      keycallback.call(this, evt)
+    }
+  })
+}
+
+export function onKeyPress(key, selector, keycallback) {
+  if (selector && typeof selector == "function") {
+    keycallback = selector
+    selector = null
+  }
+
+  onEvent("keypress", selector, function(evt) {
+    if (key.split(" ").includes(evt.key)) {
+      keycallback.call(this, evt)
+    }
   })
 }

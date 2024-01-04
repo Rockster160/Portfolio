@@ -1,7 +1,6 @@
-import { onEvent } from "./events"
+import { onEvent, onKeyDown } from "./events"
 
 export function buttons() {
-
   // ==================== Button Toggles ====================
   onEvent("click", ".backspace", function() { game.clearShot() })
   onEvent("click", ".timer-toggle", function() { game.pinTimer.timerActiveToggle() })
@@ -38,6 +37,65 @@ export function buttons() {
     // grab the current frame before nextShot since it changes the frame
     applyFrameModifiers(frame)
   }
+
+  // ==================== Key Press ====================
+  onKeyDown("Backspace Delete", ":not(input)", function() {
+    game.clearShot()
+  })
+  onKeyDown("ArrowUp", ":not(input)", function() {
+    // same shot on prev bowler (wrapping)
+    let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
+    if (bowler) {
+      let newBowlerNum = bowler.num - 1
+      let newBowler = game.bowlers[newBowlerNum]
+      newBowler = newBowler || game.bowlers[game.bowlers.length-1]
+      game.currentShot = newBowler.frames[frame.frameNum].shots[shot.shotNum]
+    }
+  })
+  onKeyDown("ArrowDown", ":not(input)", function() {
+    // same shot on next bowler (wrapping)
+    let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
+    if (bowler) {
+      let newBowlerNum = bowler.num + 1
+      let newBowler = game.bowlers[newBowlerNum]
+      newBowler = newBowler || game.bowlers[1]
+      game.currentShot = newBowler.frames[frame.frameNum].shots[shot.shotNum]
+    }
+  })
+  onKeyDown("ArrowLeft", ":not(input)", function() {
+    // prev shot on current bowler (wrapping)
+    let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
+    if (bowler) {
+      let newFrame = frame
+      let newShot = newFrame.shots[shot.shotNum - 1]
+      if (!newShot) {
+        newFrame = bowler.frames[newFrame.frameNum - 1]
+        if (!newFrame) { newFrame = bowler.frames[10] }
+        newShot = newFrame.shots[newFrame.shots.length - 1]
+      }
+      game.currentShot = bowler.frames[newFrame.frameNum].shots[newShot.shotNum]
+    }
+  })
+  onKeyDown("ArrowRight", ":not(input)", function() {
+    let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
+    if (bowler) {
+      let newFrame = frame
+      let newShot = newFrame.shots[shot.shotNum + 1]
+      if (!newShot) {
+        newFrame = bowler.frames[newFrame.frameNum + 1]
+        if (!newFrame) { newFrame = bowler.frames[1] }
+        newShot = newFrame.shots[1]
+      }
+      game.currentShot = bowler.frames[newFrame.frameNum].shots[newShot.shotNum]
+    }
+  })
+  onKeyDown("1 2 3 4 5 6 7 8 9 0 / x X * -", ":not(input)", function(evt) {
+    // Ignore pin counts, just set the shot to this number
+    // Shot should allow it and do the same parsing (if 9 hit twice, the second shot only allows 1)
+    // strike/spare: x X * /
+    // gutter: - 0
+    console.log("num", evt.key);
+  })
 
   // ==================== Pin Interactions ====================
   let pinKnocking = undefined // Means we are currently knocking pins down when true or standing when false
