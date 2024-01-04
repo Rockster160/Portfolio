@@ -84,19 +84,6 @@
 //   var inProgress = false
 //   var should_check_stats = true
 //
-//   clearShot = function(shot) {
-//     shot = $(shot)
-//     shot.val("").removeAttr("data-score")
-//     shot.parents(".split-holder").removeClass("split")
-//     fallenPinsForShot(shot).val("")
-//     shot.parents(".frame").find(".score").text("")
-//   }
-//
-//   fallenPinsForShot = function(shot) {
-//     shot = $(shot)
-//     return shot.parents(".frame").find(".fallen-pins[data-shot-idx=" + shot.attr("data-shot-idx") + "]")
-//   }
-//
 //   resetBowlerOrder = function() {
 //     $(".bowler").each(function(idx) {
 //       $(this).attr("data-bowler", idx + 1)

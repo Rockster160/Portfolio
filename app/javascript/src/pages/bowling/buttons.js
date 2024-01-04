@@ -42,6 +42,9 @@ export function buttons() {
   onKeyDown("Backspace Delete", ":not(input)", function() {
     game.clearShot()
   })
+  onKeyDown("Enter", ":not(input)", function() {
+    finishFrame(false)
+  })
   onKeyDown("ArrowUp", ":not(input)", function() {
     // same shot on prev bowler (wrapping)
     let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
@@ -90,11 +93,26 @@ export function buttons() {
     }
   })
   onKeyDown("1 2 3 4 5 6 7 8 9 0 / x X * -", ":not(input)", function(evt) {
-    // Ignore pin counts, just set the shot to this number
-    // Shot should allow it and do the same parsing (if 9 hit twice, the second shot only allows 1)
-    // strike/spare: x X * /
-    // gutter: - 0
-    console.log("num", evt.key);
+    if (/\d/.test(evt.key)) {
+      if (game.pinMode) {
+        let key = parseInt(evt.key)
+        key = key == 0 ? 10 : key
+        game.pins.toggle(key)
+        return
+      } else {
+        // pinMode: off - nums set the count of fallen pins
+      }
+    }
+    if (evt.key == "-") {
+      game.pins.standAll()
+      finishFrame(false)
+      return
+    }
+    if (/[x\/\*]/i.test(evt.key)) {
+      finishFrame(true)
+      return
+    }
+    console.log("num", evt.key)
   })
 
   // ==================== Pin Interactions ====================

@@ -26,28 +26,40 @@ window.onload = function() {
   }
 }
 
-// ===== Todo:
+// ===== BUG:
+// Clicking on an icon rather than button does not triggle the button to click
+
+// ===== Todo: (Don't delete, just check)
 // Test interactions on iPad
 // Save scores!
 // Show Stats
-// Add / Sub bowlers
-// Edit names?
-// Absent / Skip are broken
-// Need to rememeber absent/skip on next game and pre-apply it
+// Edit names/bowlers (including average/hdcp?)
+// Absent / Skip
+//   * Should remember the status on the next game
 // Add subs
+//   * New Sub bowler (with JUST average OR hdcp)
+//   * Existing Sub bowler
+// Add/Remove bowlers from lane
 // Lane talk
+//   * Auto pull in lane from cache
 // Card Point
-// Total Scores
-// Frame Scores
+//   * Tap on bowler name
 // Score button interface (no pins)
-// Delete score/frame button
+//   * Num keys should also work
 // Add button somewhere to remove a bowler
-// Add button somewhere to clear a score
+// Add button somewhere to clear an entire bowler scores
 // Add ability to dump in scores from the console to pre-load them
-// Make sure Num keys work! + Backspace, /, X, etc
-// Arrow keys should be able to go between shots/frames/bowlers
 // Team total scores
 // Enemy Scores
+//   * Need a better place for these that don't mess up the page layout.
+//   * Enemy chart should show comparison totals (+- points)
+// Live submit- don't reload page until results are saved
+//√ Make sure Num keys work! + Backspace, /, X, etc
+//√ Total Score
+//√ Max Score
+//√ Frame Scores
+//√ Delete score/frame button
+//√ Arrow keys should be able to go between shots/frames/bowlers
 
 
 // ===== Tests:
