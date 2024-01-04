@@ -36,8 +36,13 @@ class MonitorChannel < ApplicationCable::Channel
 
   def execute(data) # Runs task with executing:true
     task = current_user.jarvis_tasks.anyfind(data["id"])
+    Rails.logger.debug("[ROCCOLOGIT BEFORE] #{task}")
+    Rails.logger.debug("[ROCCOLOGIT BEFORE] #{task.last_result}")
 
     ::Jarvis::Execute.call(task, input_vars: { "Pressed": true })
+    task = task.reload
+    Rails.logger.debug("[ROCCOLOGIT AFTER] #{task}")
+    Rails.logger.debug("[ROCCOLOGIT AFTER] #{task.last_result}")
   end
 
   def refresh(data) # Runs task with executing:false
@@ -48,8 +53,6 @@ class MonitorChannel < ApplicationCable::Channel
 
   def resync(data) # Pulls most recent result without Running
     task = current_user.jarvis_tasks.anyfind(data["id"])
-    Rails.logger.debug("[ROCCOLOGGER] #{task}")
-    Rails.logger.debug("[ROCCOLOGGER] #{task.last_result}")
 
     MonitorChannel.send_task(task)
   end
