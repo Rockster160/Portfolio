@@ -2,12 +2,11 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
   def get
     search, limit, since = evalargs
     since ||= Date.new
-    limit = limit.is_a?(Numeric) ? limit : limit.to_i
 
     user.action_events
       .order(timestamp: :desc)
       .query(search)
-      .limit(limit.clamp(1, 1000))
+      .limit(limit.to_i.clamp(1, 1000))
       .where(timestamp: since..)
       .serialize
   end
