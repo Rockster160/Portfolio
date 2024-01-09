@@ -3,6 +3,7 @@
 
 <%= form_for @prompt, html: { class: "basic" } do |f| %>
   <div class="skinny-container lists-index-container">
+  <div class="text-right"><%= link_to "Skip", @prompt, method: :delete, class: "btn danger" %></div>
     <div class="lists-title instructions"><%= @prompt.question %></div>
     <div class="list-items survey-questions">
       <% @prompt.options&.each do |option_key, option_val| %>
