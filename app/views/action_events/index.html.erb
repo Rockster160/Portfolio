@@ -3,7 +3,7 @@
 <% end %>
 
 <%= form_for ActionEvent.new do |f| %>
-  <%= f.text_field :event_name, placeholder: :event_name %>
+  <%= f.text_field :name, placeholder: :name %>
   <%= f.text_field :notes, placeholder: :notes %>
   <% Time.use_zone(User.timezone) do %>
     <% f.object.timestamp ||= Time.current %>
@@ -36,7 +36,7 @@
     <div class="trow live-edit-events">
       <%= link_to "X", action_event_path(event), method: :delete, class: "tcell text-center" %>
       <div class="tcell">
-        <input data-update-url="<%= action_event_path(event) %>" name="event_name" value="<%= event.event_name %>" class="invisi-field" style="width: 100%;" type="text">
+        <input data-update-url="<%= action_event_path(event) %>" name="name" value="<%= event.name %>" class="invisi-field" style="width: 100%;" type="text">
       </div>
       <div class="tcell">
         <input data-update-url="<%= action_event_path(event) %>" name="notes" value="<%= event.notes %>" class="invisi-field" style="width: 100%;" type="text">

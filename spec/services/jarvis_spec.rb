@@ -402,30 +402,30 @@ RSpec.describe Jarvis do
   context "with action events" do
     it "can add action events" do
       expect(jarvis("log thing")).to eq("Logged Thing")
-      expect(@admin.action_events.pluck(:event_name)).to include("Thing")
+      expect(@admin.action_events.pluck(:name)).to include("Thing")
     end
 
     it "can add action events with note" do
       expect(jarvis("log thing sup")).to eq("Logged Thing (sup)")
-      expect(@admin.action_events.pluck(:event_name)).to include("Thing")
+      expect(@admin.action_events.pluck(:name)).to include("Thing")
       expect(@admin.action_events.pluck(:notes)).to include("sup")
     end
 
     it "can add action events with time" do
       expect(jarvis("Log thing at 4:52")).to eq("Logged Thing [Today 4:52 AM]")
-      expect(@admin.action_events.pluck(:event_name)).to include("Thing")
+      expect(@admin.action_events.pluck(:name)).to include("Thing")
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 4, 52))
     end
 
     it "can add action events with relative time" do
       expect(jarvis("Log thing 10 minutes ago.")).to eq("Logged Thing [Today 5:35 AM]")
-      expect(@admin.action_events.pluck(:event_name)).to include("Thing")
+      expect(@admin.action_events.pluck(:name)).to include("Thing")
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 5, 35))
     end
 
     it "can add action events with note and time" do
       expect(jarvis("log thing sup at 4:52.")).to eq("Logged Thing (sup) [Today 4:52 AM]")
-      expect(@admin.action_events.pluck(:event_name)).to include("Thing")
+      expect(@admin.action_events.pluck(:name)).to include("Thing")
       expect(@admin.action_events.pluck(:notes)).to include("sup")
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 4, 52))
     end

@@ -10,7 +10,7 @@ class ActionEventBroadcastWorker
         :action_event,
         {
           id: event.id,
-          name: event.event_name,
+          name: event.name,
           notes: event.notes,
           timestamp: event.timestamp,
         },
@@ -18,7 +18,7 @@ class ActionEventBroadcastWorker
       )
     end
 
-    return unless event.user&.me?
+    return unless event&.user&.me?
 
     ::FitnessBroadcast.broadcast
     ::RecentEventsBroadcast.call

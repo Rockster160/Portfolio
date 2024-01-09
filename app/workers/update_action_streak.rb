@@ -5,7 +5,7 @@ class UpdateActionStreak
     event = ActionEvent.find(event_id)
     matching_events = ActionEvent
       .where(user_id: event.user_id)
-      .ilike(event_name: event.event_name)
+      .ilike(name: event.name)
       .where.not(id: event.id)
     previous = matching_events.where("timestamp < ?", event.timestamp).order(:timestamp).last
 

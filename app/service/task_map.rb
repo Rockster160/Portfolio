@@ -487,7 +487,7 @@ class TaskMap
       get: [
         { return: :array },
         { block: :str, label: :Search, optional: true },
-        { block: :num, label: :Limit, optional: true },
+        { block: :num, label: :Limit, optional: true  },
         { block: :date, label: :Since, optional: true },
         { block: :select, values: [:DESC, :ASC], label: :Order },
       ],
