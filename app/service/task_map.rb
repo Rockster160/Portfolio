@@ -489,6 +489,7 @@ class TaskMap
         { block: :str, label: :Search, optional: true },
         { block: :num, label: :Limit, optional: true },
         { block: :date, label: :Since, optional: true },
+        { block: :select, values: [:DESC, :ASC], label: :Order },
       ],
       add: [
         { return: :num },
