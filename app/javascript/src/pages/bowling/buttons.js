@@ -39,13 +39,13 @@ export function buttons() {
   }
 
   // ==================== Key Press ====================
-  onKeyDown("Backspace Delete", ":not(input)", function() {
+  onKeyDown("Backspace Delete", ":not(input), .shot", function() {
     game.clearShot()
   })
-  onKeyDown("Enter", ":not(input)", function() {
+  onKeyDown("Enter", ":not(input), .shot", function() {
     finishFrame(false)
   })
-  onKeyDown("ArrowUp", ":not(input)", function() {
+  onKeyDown("ArrowUp", ":not(input), .shot", function() {
     // same shot on prev bowler (wrapping)
     let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
     if (bowler) {
@@ -55,7 +55,7 @@ export function buttons() {
       game.currentShot = newBowler.frames[frame.frameNum].shots[shot.shotNum]
     }
   })
-  onKeyDown("ArrowDown", ":not(input)", function() {
+  onKeyDown("ArrowDown", ":not(input), .shot", function() {
     // same shot on next bowler (wrapping)
     let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
     if (bowler) {
@@ -65,7 +65,7 @@ export function buttons() {
       game.currentShot = newBowler.frames[frame.frameNum].shots[shot.shotNum]
     }
   })
-  onKeyDown("ArrowLeft", ":not(input)", function() {
+  onKeyDown("ArrowLeft", ":not(input), .shot", function() {
     // prev shot on current bowler (wrapping)
     let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
     if (bowler) {
@@ -79,7 +79,7 @@ export function buttons() {
       game.currentShot = bowler.frames[newFrame.frameNum].shots[newShot.shotNum]
     }
   })
-  onKeyDown("ArrowRight", ":not(input)", function() {
+  onKeyDown("ArrowRight", ":not(input), .shot", function() {
     let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
     if (bowler) {
       let newFrame = frame
@@ -92,7 +92,7 @@ export function buttons() {
       game.currentShot = bowler.frames[newFrame.frameNum].shots[newShot.shotNum]
     }
   })
-  onKeyDown("1 2 3 4 5 6 7 8 9 0 / x X * -", ":not(input)", function(evt) {
+  onKeyDown("1 2 3 4 5 6 7 8 9 0 / x X * -", ":not(input), .shot", function(evt) {
     if (/\d/.test(evt.key)) {
       if (game.pinMode) {
         let key = parseInt(evt.key)
