@@ -486,9 +486,9 @@ class TaskMap
     action_events: {
       get: [
         { return: :array },
-        { block: :str, label: :Search },
-        { block: :num, label: :Limit },
-        { block: :date, label: :Since },
+        { block: :str, label: :Search, optional: true },
+        { block: :num, label: :Limit, optional: true },
+        { block: :date, label: :Since, optional: true },
       ],
       add: [
         { return: :num },
