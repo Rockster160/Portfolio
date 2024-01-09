@@ -2,6 +2,7 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
   def get
     search, limit, since, order = evalargs
     since ||= Date.new
+    limit = limit.presence || 1000
 
     user.action_events
       .order(timestamp: order.presence || :desc)
