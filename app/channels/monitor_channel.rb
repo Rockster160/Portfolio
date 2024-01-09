@@ -19,6 +19,11 @@ class MonitorChannel < ApplicationCable::Channel
     )
     # This is VERY magic. If the task defines a "timestamp" variable, the monitor channel will
     #   send that instead, allowing us to send
+
+    # Other magic variables:
+    #   timestamp:false -- hides timestamp
+    #   refresh:false -- hides reload indicator
+    # Do we want to be able to disable clicks, too?
   end
 
   def subscribed

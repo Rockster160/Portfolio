@@ -89,6 +89,8 @@ export default class Pins {
       return []
     } else if (standing_pins == "-") {
       return this.allPins
+    } else if (standing_pins === undefined || standing_pins === null) {
+      return game.defaultPinStanding ? this.allPins : []
     } else {
       console.log("Unknown Pin Type: ", typeof standing_pins, standing_pins);
     }

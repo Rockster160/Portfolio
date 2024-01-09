@@ -27,12 +27,13 @@ window.onload = function() {
 }
 
 // ===== BUG:
-// Clicking on an icon rather than button does not triggle the button to click
+// Clicking on an icon rather than button does not trigger the button to click
+// "Enter" on a frame should NOT submit!!!
+// :focus on shots should hide the browser outline
 
 // ===== Todo: (Don't delete, just check)
 // Test interactions on iPad
 // Save scores!
-// Show Stats
 // Edit names/bowlers (including average/hdcp?)
 // Reorder bowlers via drag & drop (after clicking the edit btn)
 // Absent / Skip
@@ -55,6 +56,7 @@ window.onload = function() {
 //   * Need a better place for these that don't mess up the page layout.
 //   * Enemy chart should show comparison totals (+- points)
 // Live submit- don't reload page until results are saved
+// √ Show Stats
 //√ Make sure Num keys work! + Backspace, /, X, etc
 //√ Total Score
 //√ Max Score

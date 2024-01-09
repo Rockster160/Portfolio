@@ -4,7 +4,7 @@ import Frame from "./frame"
 export default class Bowler extends Reactive {
   constructor(element) {
     super(element)
-    this.server_id = parseInt(element.getAttribute("data-bowler-id"))
+    this.serverId = parseInt(element.getAttribute("data-bowler-id"))
 
     // prev games? (score, point, card)
     this.elementAccessor("currentFrame", null, "data-current-frame")

@@ -49,6 +49,7 @@ export default class Game extends Reactive {
     this.laneTalk = useLaneTalk
     this.editBowler = false
 
+    this.checkStats = true
     this.pinMode = true
     this.pins = new Pins()
     this.pinTimer = new PinTimer()

@@ -33,6 +33,7 @@ export default class FrameNavigation {
         }
       }
     })
+    document.dispatchEvent(new CustomEvent("frame:move", { bubbles: true }))
   }
 
   static get currentFrame() { return this._current_frame }

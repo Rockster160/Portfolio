@@ -138,10 +138,20 @@ class Shot extends Reactive {
   get incomplete() { return !this.complete }
   get knockedAll() { return this._knocked_all }
 
-  get standingPins() { return game.pins.invert(this.fallenPins) }
+  get standingPins() {
+    let standing = game.pins.invert(this.fallenPins)
+
+    let prevShot = this.prevShot()
+    if (prevShot) {
+      let prev_fallen_pins = prevShot.fallenPins
+      standing = standing.filter(pin => !prev_fallen_pins.includes(pin))
+    }
+
+    return standing
+  }
   set standingPins(standing_pins) { this.fallenPins = game.pins.invert(standing_pins) }
 
-  get fallenPins() { return this._fallen_pins }
+  get fallenPins() { return this._fallen_pins || [] }
   set fallenPins(fallen_pins) {
     this.complete = true
 
