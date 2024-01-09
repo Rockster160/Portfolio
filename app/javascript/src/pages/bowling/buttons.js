@@ -2,17 +2,17 @@ import { onEvent, onKeyDown } from "./events"
 
 export function buttons() {
   // ==================== Button Toggles ====================
-  onEvent("click", ".backspace", function() { game.clearShot() })
-  onEvent("click", ".timer-toggle", function() { game.pinTimer.timerActiveToggle() })
-  onEvent("click", ".bowling-edit", function() { game.editBowlerToggle() })
-  onEvent("click", ".pin-all-toggle", function() { game.defaultPinStandingToggle() })
-  onEvent("click", ".lanetalk-toggle", function() { game.laneTalkToggle() })
-  onEvent("click", ".pin-mode-toggle", function() { game.pinModeToggle() })
-  onEvent("click", ".brooklyn-toggle", function() { game.strikePoint = "brooklyn" })
-  onEvent("click", ".pocket-toggle", function() { game.strikePoint = "pocket" })
-  onEvent("click", ".next-frame", function() { finishFrame(false) })
-  onEvent("click", ".close-frame", function() { finishFrame(true) })
-  onEvent("click", ".pocket-close", function() {
+  onEvent("click", ".backspace &>", function() { game.clearShot() })
+  onEvent("click", ".timer-toggle &>", function() { game.pinTimer.timerActiveToggle() })
+  onEvent("click", ".bowling-edit &>", function() { game.editBowlerToggle() })
+  onEvent("click", ".pin-all-toggle &>", function() { game.defaultPinStandingToggle() })
+  onEvent("click", ".lanetalk-toggle &>", function() { game.laneTalkToggle() })
+  onEvent("click", ".pin-mode-toggle &>", function() { game.pinModeToggle() })
+  onEvent("click", ".brooklyn-toggle &>", function() { game.strikePoint = "brooklyn" })
+  onEvent("click", ".pocket-toggle &>", function() { game.strikePoint = "pocket" })
+  onEvent("click", ".next-frame &>", function() { finishFrame(false) })
+  onEvent("click", ".close-frame &>", function() { finishFrame(true) })
+  onEvent("click", ".pocket-close &>", function() {
     game.strikePoint = "pocket"
     finishFrame(true)
   })
@@ -26,6 +26,10 @@ export function buttons() {
     let bowlerNum = parseInt(this.closest(".bowler").getAttribute("data-bowler"))
 
     game.currentShot = game.bowlers[bowlerNum].frames[frameNum].shots[shotNum]
+  })
+  onEvent("submit", function(evt) {
+    evt.preventDefault()
+    console.log("submit")
   })
 
   let finishFrame = function(knock_rest) {

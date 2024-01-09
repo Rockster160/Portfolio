@@ -27,9 +27,6 @@ window.onload = function() {
 }
 
 // ===== BUG:
-// Clicking on an icon rather than button does not trigger the button to click
-// "Enter" on a frame should NOT submit!!!
-// :focus on shots should hide the browser outline
 
 // ===== Todo: (Don't delete, just check)
 // Test interactions on iPad
