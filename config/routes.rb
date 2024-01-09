@@ -19,7 +19,7 @@ Rails.application.routes.draw do
   resource :jarvis, only: [:show, :update], controller: :quick_actions, as: :jarvis_page do
     get :render_widget
   end
-  resources :jil_prompts, only: [:index, :show, :update], path: :prompts
+  resources :jil_prompts, only: [:index, :show, :update, :destroy], path: :prompts
 
   scope module: :users do
     get :login,         controller: :sessions,      action: :new

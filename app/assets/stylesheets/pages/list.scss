@@ -21,6 +21,10 @@ html, body {
     color: $text-color;
     user-select: none;
 
+    .danger {
+      color: $danger;
+    }
+
     .list-item-handle {
       display: flex;
       position: absolute;
