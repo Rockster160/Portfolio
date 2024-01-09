@@ -21,7 +21,7 @@ class Email < ApplicationRecord
   attr_accessor :skip_validations, :from_user, :from_domain, :skip_notify, :tempfiles
   belongs_to :sent_by, class_name: "User", optional: true
 
-  serialize :attachments, JsonWrapper
+  serialize :attachments, coder: JsonWrapper
 
   scope :not_archived, -> { where(deleted_at: nil) }
   scope :archived,     -> { where.not(deleted_at: nil) }

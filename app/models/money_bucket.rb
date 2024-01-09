@@ -12,7 +12,7 @@ require "json_wrapper"
 class MoneyBucket < ApplicationRecord
   belongs_to :user
 
-  serialize :bucket_json, JsonWrapper
+  serialize :bucket_json, coder: JsonWrapper
 
   attr_accessor :deposit, :withdraw, :deposit_errors
 
