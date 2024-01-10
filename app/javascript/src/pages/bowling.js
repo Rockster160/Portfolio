@@ -1419,7 +1419,7 @@ $(document).ready(function() {
           return playerNumA - playerNumB
         })
         table.empty()
-        rows.forEach(item => table.append(item))
+        // rows.forEach(item => table.append(item))
       }
       let total_row = table.find("#enemy-table-totals")
       if (total_row.length == 0) {
