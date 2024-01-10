@@ -39,6 +39,9 @@ export default class FrameNavigation {
   static get currentFrame() { return this._current_frame }
   static set currentFrame(frame) { this.currentShot = frame?.currentShot() }
 
+  static get currentBowler() { return this._current_frame?.bowler }
+  static set currentBowler(bowler) { this.currentFrame = bowler?.frames.find(f => f?.incomplete) }
+
   static earliestUnfinishedFrame() {
     for (let i=1; i<=10; i++) {
       for (const bowler of game.bowlers) {
@@ -51,7 +54,7 @@ export default class FrameNavigation {
   }
 
   static nextShot() {
-    if (this.currentFrame?.incomplete) {
+    if (this.currentBowler?.active && this.currentFrame?.incomplete) {
       this.currentFrame = this.currentFrame // Reset current frame, which will go to incomplete shot
     } else {
       this.currentFrame = this.earliestUnfinishedFrame()

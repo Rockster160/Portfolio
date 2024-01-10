@@ -2,21 +2,21 @@ import { onEvent, onKeyDown } from "./events"
 
 export function buttons() {
   // ==================== Button Toggles ====================
-  onEvent("click", ".backspace &>", function() { game.clearShot() })
-  onEvent("click", ".timer-toggle &>", function() { game.pinTimer.timerActiveToggle() })
-  onEvent("click", ".bowling-edit &>", function() { game.editBowlerToggle() })
-  onEvent("click", ".pin-all-toggle &>", function() { game.defaultPinStandingToggle() })
-  onEvent("click", ".lanetalk-toggle &>", function() { game.laneTalkToggle() })
-  onEvent("click", ".pin-mode-toggle &>", function() { game.pinModeToggle() })
-  onEvent("click", ".brooklyn-toggle &>", function() { game.strikePoint = "brooklyn" })
-  onEvent("click", ".pocket-toggle &>", function() { game.strikePoint = "pocket" })
-  onEvent("click", ".next-frame &>", function() { finishFrame(false) })
-  onEvent("click", ".close-frame &>", function() { finishFrame(true) })
-  onEvent("click", ".pocket-close &>", function() {
+  onEvent("click", ".backspace &>", () => game.clearShot())
+  onEvent("click", ".timer-toggle &>", () => game.pinTimer.timerActiveToggle())
+  onEvent("click", ".bowling-edit &>", () => game.editBowlerToggle())
+  onEvent("click", ".pin-all-toggle &>", () => game.defaultPinStandingToggle())
+  onEvent("click", ".lanetalk-toggle &>", () => game.laneTalkToggle())
+  onEvent("click", ".pin-mode-toggle &>", () => game.pinModeToggle())
+  onEvent("click", ".brooklyn-toggle &>", () => game.strikePoint = "brooklyn")
+  onEvent("click", ".pocket-toggle &>", () => game.strikePoint = "pocket")
+  onEvent("click", ".next-frame &>", () => finishFrame(false))
+  onEvent("click", ".close-frame &>", () => finishFrame(true))
+  onEvent("click", ".pocket-close &>", () => {
     game.strikePoint = "pocket"
     finishFrame(true)
   })
-  onEvent("click", ".brooklyn-close", function() {
+  onEvent("click", ".brooklyn-close", () => {
     game.strikePoint = "brooklyn"
     finishFrame(true)
   })
@@ -24,8 +24,16 @@ export function buttons() {
     let shotNum = parseInt(this.getAttribute("data-shot-idx"))+1
     let frameNum = parseInt(this.closest(".frame").getAttribute("data-frame"))
     let bowlerNum = parseInt(this.closest(".bowler").getAttribute("data-bowler"))
+    let bowler = game.bowlers[bowlerNum]
 
-    game.currentShot = game.bowlers[bowlerNum].frames[frameNum].shots[shotNum]
+    if (!bowler.active) { return }
+
+    game.currentShot = bowler.frames[frameNum].shots[shotNum]
+  })
+  onEvent("change", ".absent-checkbox, .skip-checkbox", function() {
+    if (game.currentBowler?.active) { return }
+
+    game.nextShot()
   })
   onEvent("submit", function(evt) {
     evt.preventDefault()

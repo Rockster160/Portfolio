@@ -64,6 +64,7 @@ export default class Game extends Reactive {
   get strikePoint() { return FrameNavigation.currentFrame.strikePoint }
   set strikePoint(strike_point) { FrameNavigation.currentFrame.strikePoint = strike_point }
 
+  get currentBowler() { return FrameNavigation.currentBowler }
   get currentFrame() { return FrameNavigation.currentFrame }
   get currentShot() { return FrameNavigation.currentShot }
   set currentShot(shot) { return FrameNavigation.currentShot = shot }

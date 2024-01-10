@@ -40,7 +40,7 @@ export default class Reactive {
       } else if (attr === "value") {
         return ele.tagName == "INPUT" ? ele.value : ele.getAttribute(attr)
       } else {
-        return ele.getAttribute(attr)
+        return ele.tagName == "INPUT" ? ele[attr] : ele.getAttribute(attr)
       }
     }
     let setEleVal = function(value) {
@@ -53,7 +53,11 @@ export default class Reactive {
             attr === "value" ? ele.setAttribute(attr, value) : ele.innerText = value
           }
         } else {
-          ele.setAttribute(attr, value)
+          if (ele.tagName == "INPUT") {
+            ele[attr] = value
+          } else {
+            ele.setAttribute(attr, value)
+          }
         }
       })
 
