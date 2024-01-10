@@ -33,8 +33,6 @@ window.onload = function() {
 // Save scores!
 // Edit names/bowlers (including average/hdcp?)
 // Reorder bowlers via drag & drop (after clicking the edit btn)
-// Absent / Skip
-//   * Should remember the status on the next game
 // Add subs
 //   * New Sub bowler (with JUST average OR hdcp)
 //   * Existing Sub bowler
@@ -53,7 +51,9 @@ window.onload = function() {
 //   * Need a better place for these that don't mess up the page layout.
 //   * Enemy chart should show comparison totals (+- points)
 // Live submit- don't reload page until results are saved
-// √ Show Stats
+//√ Absent / Skip
+//  * Should remember the status on the next game
+//√ Show Stats
 //√ Make sure Num keys work! + Backspace, /, X, etc
 //√ Total Score
 //√ Max Score
