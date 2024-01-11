@@ -8,9 +8,8 @@ export class Monitor {
   static #connected = false
   static #monitors = {}
 
-  constructor(id, ele) {
+  constructor(id) {
     this.id = id
-    this.ele = ele || Monitor.findEle(id)
 
     Monitor.#monitors[id] = this
   }
@@ -54,9 +53,17 @@ export class Monitor {
     })
   }
 
-  set loading(bool) { this.ele?.querySelector(".loading")?.classList?.toggle("hidden", !bool) }
+  get element() {
+    return this.ele || Monitor.findEle(this.id)
+  }
+
+  set loading(bool) { this.element?.querySelector(".loading")?.classList?.toggle("hidden", !bool) }
+  set error(bool) {
+    this.element?.setAttribute("data-error", "true")
+    this.element?.querySelectorAll(".refresh, .last-sync, .disconnected, .loading")?.forEach(item => item.remove())
+  }
   set content(lines) {
-    let my_lines = this.ele?.querySelector(".lines")
+    let my_lines = this.element?.querySelector(".lines")
     if (!my_lines) { return }
     my_lines.innerHTML = lines
   }
@@ -88,6 +95,11 @@ Monitor.socket = new AuthWS("MonitorChannel", {
     let monitor = Monitor.find(data.id)
     if (!monitor) { return }
     if (data.loading) { return monitor.loading = true }
+    if (data.error) {
+      // data.result is set by the server
+      monitor.content = toMd(data.result)
+      return monitor.error = true
+    }
 
     monitor.loading = false
     monitor.timestamp = data.timestamp * 1000

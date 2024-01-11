@@ -64,18 +64,21 @@
           <input type="text" autocomplete="false" name="task-id" id="task-id" required=true>
 
           <label class="switch">
+            <input type="hidden" name="task-text-wrap" value="false">
             <%= check_box_tag "task-text-wrap", true, true %>
             <span class="slider"></span>
           </label>
           <label for="task-text-wrap">Text Wrap</label> <br>
 
           <label class="switch">
+            <input type="hidden" name="task-center-text" value="false">
             <%= check_box_tag "task-center-text", true, true %>
             <span class="slider"></span>
           </label>
           <label for="task-center-text">Center Text</label> <br>
 
           <label class="switch">
+            <input type="hidden" name="task-vert-center" value="false">
             <%= check_box_tag "task-vert-center", true, true %>
             <span class="slider"></span>
           </label>
