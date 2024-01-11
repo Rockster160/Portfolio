@@ -1,5 +1,6 @@
 module QuickActionsHelper
   def widget(data, **extra_data, &block)
+    data[:type] ||= :command
     page_tag = data[:type]&.to_sym == :page
     tag = page_tag ? :a : :div
     wrapper_data = {
@@ -8,7 +9,8 @@ module QuickActionsHelper
     }.compact
 
     content_tag(tag, { class: "widget-holder", data: extra_data }.merge(wrapper_data)) do
-      concat content_tag(:div, "❌", class: "delete-widget hidden")
+      concat content_tag(:div, "❌", class: "widget-overlay-btn delete-widget hidden")
+      concat content_tag(:div, "✎", class: "widget-overlay-btn edit-widget hidden")
       concat(content_tag(:div, class: :widget, data: data.except(:buttons)) do
         if block_given?
           block.call

@@ -80,7 +80,7 @@ html, body {
   height: 100%;
   max-width: 675px;
 
-  .delete-widget {
+  .delete-widget, .edit-widget {
     position: absolute;
     top: 0;
     left: 0;
@@ -90,6 +90,10 @@ html, body {
     z-index: 1;
     font-size: 32px;
     padding: 10px;
+    text-decoration: none;
+    color: $grey-light;
+
+    &.edit-widget { background: rgba($base-blue, 0.2); }
   }
   .widget-holder {
     align-self: center;
@@ -230,6 +234,7 @@ html, body {
   width: calc(100% - 40px);
   height: calc(100% - 40px);
   pointer-events: auto;
+  z-index: 10;
 
   .modal-content {
     border-radius: 12px;
