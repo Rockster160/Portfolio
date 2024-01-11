@@ -41,13 +41,13 @@ export function buttons() {
   })
 
   let finishFrame = function(knock_rest) {
-    let frame = game.currentFrame
+    // let frame = game.currentFrame
     if (knock_rest) { game.pins.knockAll() }
 
     game.nextShot(true)
     // We skip callbacks, so pins don't get "knocked" to apply frame modifiers
     // grab the current frame before nextShot since it changes the frame
-    applyFrameModifiers(frame)
+    // applyFrameModifiers(frame)
   }
 
   // ==================== Key Press ====================

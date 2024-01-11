@@ -1,5 +1,7 @@
 import Reactive from "./reactive"
 import Scoring from "./scoring"
+import applyFrameModifiers from "./frame_modifiers"
+import { trigger } from "./events"
 
 export default class Frame extends Reactive {
   static fullGame(bowler) {
@@ -34,17 +36,21 @@ export default class Frame extends Reactive {
     this.element.querySelector(".score").innerText = val
   }
 
-  updateScores() {
-    Scoring.updateBowler(this.bowler)
+  eachShot(callback) { this.shots.forEach(item => item ? callback(item) : null) }
+
+  updateScores(skip_bowler) {
+    if (!game.initialized) { return }
+    if (!skip_bowler) { Scoring.updateBowler(this.bowler) }
+    applyFrameModifiers(this)
   }
 
   resetStrikePoint() { this.strikePoint = this.strikePoint }
   clear() {
-    this.shots.forEach(shot => shot?.clear())
+    this.eachShot(shot => shot.clear(true))
   }
 
   get siblings() {
-    return game.bowlers.map(bowler => bowler && bowler.frames[this.frameNum]).filter(Boolean)
+    return game.bowlers.map(bowler => bowler && bowler.frames[this.frameNum]).filter(Boolean) || []
   }
   get activeSiblings() {
     return this.siblings.filter(sibling => !sibling.bowler.absent && !sibling.bowler.skip)
@@ -108,6 +114,11 @@ export default class Frame extends Reactive {
     // If 2nd is closed, there will be a 3rd, so we're not done
     return !this.secondShot.knockedAll
   }
+  get started() { return this.shots.some(shot => shot?.complete) }
+
+  valueOf() {
+    return `bowlers[${this.bowler.serverId}][${this.frameNum}]`
+  }
 }
 
 class Shot extends Reactive {
@@ -117,18 +128,24 @@ class Shot extends Reactive {
     this.shotNum = shot_num
     this.frame = frame
 
-    this.clear()
+    this.clear(false)
   }
 
-  clear() {
+  clear(reset) {
     this.complete = false
     this.value = undefined
     this.pinFallCount = undefined
     this._fallen_pins = undefined
     this._knocked_all = false
-    this.element.value = ""
-    this.remaining_pins_element.value = ""
-    this.nextShot()?.clear()
+    if (reset) {
+      this.element.value = ""
+      this.remaining_pins_element.value = ""
+    } else {
+      if (this.remaining_pins_element.value) {
+        this.score = this.remaining_pins_element.value
+      }
+    }
+    this.nextShot()?.clear(reset)
     this.frame.updateScores()
   }
 
@@ -158,12 +175,13 @@ class Shot extends Reactive {
     let prevShot = this.prevShot()
     if (prevShot) {
       if (prevShot.incomplete) { prevShot.fallenPins = [] }
-      if (prevShot.knockedAll) { return this.clear() }
+      if (prevShot.knockedAll) { return this.clear(true) }
       // Do not allow setting fallen pins to pins that were already fallen in the last shot
       let prev_standing_pins = prevShot.standingPins
       let newlyFallenPins = fallen_pins.filter(pin => prev_standing_pins.includes(pin))
       fallen_pins = [...newlyFallenPins, ...prevShot.fallenPins]
     }
+    if (fallen_pins == this._fallen_pins) { return }
     this._fallen_pins = fallen_pins
 
     let standing_pins = game.pins.invert(fallen_pins)
@@ -194,13 +212,14 @@ class Shot extends Reactive {
     this.remaining_pins_element.value = `[${this.standingPins.join()}]`
     this.checkSplit()
     this.frame.updateScores()
+    trigger("shot:change", { shot: this })
 
     // Knock next shot pins over if editing
     let nextShot = this.nextShot()
     if (!nextShot?.complete) { return } // If it's not filled in, don't do anything
     // First and second are open, so no 3rd frame. Clear it and move to next bowler.
     if (this.shotNum == 2 && !this.frame.firstShot.knockedAll && !this.knockAll) {
-      return nextShot.clear()
+      return nextShot.clear(true)
     }
     // Reset knocked pins, which includes filtering the allowed ones.
     nextShot.fallenPins = nextShot.fallenPins
@@ -229,5 +248,9 @@ class Shot extends Reactive {
     } else if (this.shotNum == 3) {
       return this.frame.secondShot.knockedAll ? null : this.frame.secondShot
     }
+  }
+
+  valueOf() {
+    return `bowlers[${this.bowler.serverId}][${this.frame.frameNum}][${this.shotNum}]`
   }
 }

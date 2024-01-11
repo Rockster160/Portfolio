@@ -5,13 +5,13 @@ import { events } from "./events"
 
 window.onload = function() {
   if (document.querySelector(".bowling-game-form")) {
-    window.game = new Game(document.querySelector(".bowling-game-form"))
+    new Game(document.querySelector(".bowling-game-form"))
 
-    game.start()
     buttons()
     events()
+    game.start()
 
-    // game.bowlers.forEach(bowler => {
+    // game.eachBowler(bowler => {
     //   bowler?.frames?.forEach(frame => {
     //     if (frame && !frame.isLastFrame) {
     //       // frame.fillRandom()
@@ -20,7 +20,6 @@ window.onload = function() {
     //     }
     //   })
     // })
-    // game.filled = true
 
     game.nextShot()
   }

@@ -1,9 +1,6 @@
-import LoadingIndicator from "./loading_indicator"
+import Rest from "./rest"
 
 export default class LiveStats {
-  constructor() {
-  }
-
   static get element() {
     return document.querySelector(".stats-holder")
   }
@@ -19,25 +16,7 @@ export default class LiveStats {
   }
 
   static loading(bool) {
-    this.html = bool || bool === undefined ? LoadingIndicator.html : ""
-  }
-
-  static encodeGetUrlParams(url, params) {
-    const queryString = Object.keys(params).map(key => {
-      const value = params[key]
-      if (Array.isArray(value)) {
-        return value.map(item => `${encodeURIComponent(key)}[]=${encodeURIComponent(item)}`).join("&")
-      } else if (value === undefined || value === null) {
-        return
-      } else if (typeof value === "object") {
-        return this.encodeGetUrlParams("", { [key]: value }).substr(1)
-      } else {
-        return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
-      }
-    }).join("&")
-
-    const separator = url.includes("?") ? "&" : "?"
-    return `${url}${separator}${queryString}`
+    this.html = bool || bool === undefined ? "<i class=\"fa fa-spinner fa-spin\"></i>" : ""
   }
 
   static async getBowlerData(bowler, pins) {
@@ -48,21 +27,14 @@ export default class LiveStats {
       pins: pins === undefined ? null : `[${pins.join(",")}]`,
     }
 
-    return await fetch(this.encodeGetUrlParams(this.url, params), {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    }).then(function(res) {
-      res.json().then(function(json) {
-        if (res.ok) {
-          stats.loading(false)
-          if (!json.stats.total) { return }
+    Rest.get(this.url, params, (json) => {
+      this.loading(false)
+      if (!json.stats.total) { return }
 
-          var nums = json.stats.spare + " / " + json.stats.total
-          var ratio = Math.round((json.stats.spare / json.stats.total) * 100)
+      var nums = json.stats.spare + " / " + json.stats.total
+      var ratio = Math.round((json.stats.spare / json.stats.total) * 100)
 
-          stats.html = `${ratio}%</br>${nums}`
-        }
-      })
+      this.html = `${ratio}%</br>${nums}`
     })
   }
 

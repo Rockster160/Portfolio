@@ -48,6 +48,8 @@ export default class Bowler extends Reactive {
     return Bowler.bowlers.find(bowler => bowler && bowler.bowlerName.trim().toLowerCase() == clean)
   }
 
+  eachFrame(callback) { this.frames.forEach(item => item ? callback(item) : null) }
+
   get active() { return !this.absent && !this.skip }
 
   get num() { return parseInt(this.bowlerNum) }

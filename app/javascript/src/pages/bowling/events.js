@@ -1,19 +1,29 @@
-import applyFrameModifiers from "./frame_modifiers"
-import LiveStats from "./live_stats"
-
 // resetPinTimer → game.pinTimer.reset()
 export function events() {
-  onEvent("pin:change", function() {
+  onEvent("pin:change", function(evt) {
+    console.log("pin change", evt.detail);
     if (game.currentShot) {
       game.currentShot.standingPins = game.pins.standing
     }
   })
-  onEvent("frame:change", function() {
-    applyFrameModifiers(game.currentFrame)
+  onEvent("shot:change", function(evt) {
+    const { shot } = evt.detail
+    console.log(`shot changed`, shot);
   })
-  onEvent("frame:move", function() {
-    LiveStats.generate()
+  onEvent("frame:move", function(evt) {
+    const { previousShot, currentShot } = evt.detail
+    console.log(`frame move`, currentShot, previousShot);
+
+    game.showStats()
+    game.saveScores()
   })
+}
+
+export function trigger(evtName, detail) {
+  document.dispatchEvent(new CustomEvent(evtName, {
+    bubbles: true,
+    detail: detail
+  }))
 }
 
 export function onEvent(events, selector, callback) {

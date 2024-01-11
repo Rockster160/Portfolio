@@ -1,3 +1,5 @@
+import { trigger } from "./events"
+
 export default class FrameNavigation {
   static _current_frame = undefined
   static _current_shot = undefined
@@ -7,6 +9,7 @@ export default class FrameNavigation {
     return this._current_shot = this.currentFrame?.currentShot()
   }
   static set currentShot(shot) {
+    let previous_shot = this._current_shot
     game.pinTimer.clear(true)
     this._current_shot = shot
     this._current_frame = shot?.frame
@@ -33,7 +36,12 @@ export default class FrameNavigation {
         }
       }
     })
-    document.dispatchEvent(new CustomEvent("frame:move", { bubbles: true }))
+    if (previous_shot != this._current_shot) {
+      trigger("frame:move", {
+        previousShot: previous_shot,
+        currentShot: this._current_shot
+      })
+    }
   }
 
   static get currentFrame() { return this._current_frame }

@@ -4,10 +4,12 @@ import Pins from "./pins"
 import PinTimer from "./pin_timer"
 import Scoring from "./scoring"
 import FrameNavigation from "./frame_navigation"
+import { trigger } from "./events"
 
 export default class Game extends Reactive {
   constructor(element) {
     super(element)
+    window.game = this
 
     this.editing_game = !!document.querySelector(".ctr-bowling_games.act-edit")
 
@@ -58,7 +60,7 @@ export default class Game extends Reactive {
 
     this.bowlers = Bowler.get()
 
-    this.filled = false
+    this.initialized = true
   }
 
   get strikePoint() { return FrameNavigation.currentFrame.strikePoint }
@@ -72,15 +74,23 @@ export default class Game extends Reactive {
   get gameNum() { return this._game_num }
   set gameNum(num) {
     this._game_num = num
-    this.bowlers.forEach(bowler => {
+    this.eachBowler(bowler => {
       if (bowler) { bowler.element.querySelector(".bowler-game-number").value = num }
     })
   }
+
+  eachBowler(callback) { this.bowlers.forEach(item => item ? callback(item) : null) }
 
   start() {
     this.pinTimer.addTo(".timer-toggle")
     // set absent/skipped bowler
     this.nextShot() // Set the first frame
+    this.eachBowler(bowler => {
+      bowler.eachFrame(frame => {
+        if (frame.started) { frame.updateScores(true) }
+      })
+      Scoring.updateBowler(bowler)
+    })
   }
   finish() {
     console.log("Game complete");
@@ -88,21 +98,22 @@ export default class Game extends Reactive {
   }
 
   clearShot() {
-    FrameNavigation.currentShot.clear()
+    FrameNavigation.currentShot.clear(true)
     FrameNavigation.currentShot = FrameNavigation.currentShot // Reset pins by resetting shot
-
-    this.triggerChange(false)
   }
 
-  triggerChange(include_pin) {
-    if (include_pin) {
-      document.dispatchEvent(new CustomEvent("pin:change", { bubbles: true }))
-    }
-    document.dispatchEvent(new CustomEvent("frame:change", { bubbles: true }))
+  showStats() {
+    Scoring.generateStats()
+  }
+
+  saveScores() {
+    Scoring.submit(() => {
+      console.log("Updated!");
+    })
   }
 
   nextShot(save_current) {
-    if (save_current) { this.triggerChange(true) }
+    if (save_current) { trigger("pin:change") }
 
     FrameNavigation.nextShot()
     if (!this.currentShot) { this.finish() }

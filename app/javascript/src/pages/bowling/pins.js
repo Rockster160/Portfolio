@@ -1,3 +1,5 @@
+import { trigger } from "./events"
+
 export default class Pins {
   constructor() {
     this.pinEles = this.allPins.map(pinNum => {
@@ -62,7 +64,7 @@ export default class Pins {
       pin.classList.add("fallen")
     }
     if (changed && this.broadcast) {
-      game.triggerChange(true)
+      trigger("pin:change", { pinNum: pinNum, standing: standing })
     }
   }
 
@@ -81,6 +83,9 @@ export default class Pins {
   }
 
   pinsFromInput(standing_pins) {
+    if (typeof standing_pins == "string") {
+      if (standing_pins[0] == "[") { standing_pins = JSON.parse(standing_pins) }
+    }
     if (Array.isArray(standing_pins)) {
       return standing_pins.map(int => parseInt(int))
     } else if (typeof standing_pins == "number") {

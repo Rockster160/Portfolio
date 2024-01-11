@@ -1,4 +1,6 @@
 import BowlingCalculator from "./calculator"
+import LiveStats from "./live_stats"
+import Rest from "./rest"
 
 export default class Scoring {
   constructor(bowlers) {
@@ -22,8 +24,7 @@ export default class Scoring {
 
   static bowlerScores(bowler) {
     let scores = []
-    bowler.frames.forEach(frame => {
-      if (!frame) { return }
+    bowler.eachFrame(frame => {
       let frameIdx = frame.frameNum - 1
       if (frame.complete || frame.firstShot.complete) {
         scores[frameIdx*2] = frame.firstShot.score || ""
@@ -38,5 +39,14 @@ export default class Scoring {
       }
     })
     return scores
+  }
+
+  static generateStats() {
+    LiveStats.generate()
+  }
+
+  static submit(callback) {
+    let form = document.querySelector("form.bowling-game-form")
+    Rest.patch(form.action, new FormData(form), callback)
   }
 }
