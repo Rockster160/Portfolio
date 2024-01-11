@@ -10,6 +10,7 @@ export default class Scoring {
 
   static updateBowler(bowler) {
     if (!bowler?.frames) { return }
+
     let shot_scores = this.bowlerScores(bowler)
     let scoring = BowlingCalculator.score(shot_scores)
     scoring.frames.forEach((frameScore, idx) => {
@@ -20,6 +21,32 @@ export default class Scoring {
     }
     bowler.currentScore = scoring.total
     bowler.maxScore = scoring.max
+
+    this.updateTotals()
+  }
+
+  static updateTotals() {
+    let teamTotal = 0
+    let teamHdcp = 0
+
+    let frameNum = game.earliestFrame()?.frameNum || 10
+    game.eachBowler(bowler => {
+      // parseInt should happen in the accessor somehow
+      if (bowler.active) {
+        teamTotal += parseInt(bowler.currentScore)
+        teamHdcp += parseInt(bowler.hdcp)
+      } else {
+        let absentMax = parseInt(bowler.absentScore) || 0
+        let absentFrameAvg = Math.floor(absentMax / 10)
+        let currentAbsentScore = absentFrameAvg * frameNum
+
+        teamTotal += parseInt(currentAbsentScore)
+        teamHdcp += parseInt(bowler.hdcp)
+      }
+    })
+
+    let totalText = teamHdcp > 0 ? `${teamTotal} | ${teamTotal + teamHdcp}` : `${teamTotal}`
+    document.querySelector(".team-total").innerText = totalText
   }
 
   static bowlerScores(bowler) {

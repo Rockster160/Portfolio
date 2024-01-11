@@ -95,6 +95,22 @@ export default class Game extends Reactive {
   finish() {
     console.log("Game complete");
     // Show End Game button
+    // $(".bowling-form-btn").removeClass("hidden")
+  }
+
+  fillRandomUntil(end_frame, fill_with) {
+    end_frame = end_frame || 10
+    this.eachBowler(bowler => {
+      bowler.eachFrame(frame => {
+        if (frame.frameNum <= end_frame) {
+          if (fill_with) {
+            frame.firstShot.score = fill_with
+          } else {
+            frame.fillRandom()
+          }
+        }
+      })
+    })
   }
 
   clearShot() {
@@ -110,6 +126,10 @@ export default class Game extends Reactive {
     Scoring.submit(() => {
       console.log("Updated!");
     })
+  }
+
+  earliestFrame() {
+    return FrameNavigation.earliestUnfinishedFrame()
   }
 
   nextShot(save_current) {

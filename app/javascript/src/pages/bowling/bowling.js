@@ -11,25 +11,22 @@ window.onload = function() {
     events()
     game.start()
 
-    // game.eachBowler(bowler => {
-    //   bowler?.frames?.forEach(frame => {
-    //     if (frame && !frame.isLastFrame) {
-    //       // frame.fillRandom()
-    //       frame.firstShot.score = "X"
-    //       applyFrameModifiers(frame)
-    //     }
-    //   })
-    // })
+    // game.fillRandomUntil(9)
+    // game.fillRandomUntil(9, "X")
 
     game.nextShot()
   }
 }
 
+// ===== NOTE:
+// Maybe have a button next to pin fall (between it and "End Game") that opens a modal that shows enemy scores
+// Absent bowler should not send scores...
+
 // ===== BUG:
 
 // ===== Todo: (Don't delete, just check)
+// Warn before leaving page if any changes have been made
 // Test interactions on iPad
-// Save scores!
 // Edit names/bowlers (including average/hdcp?)
 // Reorder bowlers via drag & drop (after clicking the edit btn)
 // Add subs
@@ -50,6 +47,8 @@ window.onload = function() {
 //   * Need a better place for these that don't mess up the page layout.
 //   * Enemy chart should show comparison totals (+- points)
 // Live submit- don't reload page until results are saved
+//√ Show total &+ hdcp under max column
+//√ Save scores!
 //√ Absent / Skip
 //  * Should remember the status on the next game
 //√ Show Stats
