@@ -139,7 +139,13 @@ let submitWidgetForm = function(formdata) {
           let holder = currentWidget.parentElement
           let newNode = htmlToNode(json.html)
 
-          newNode.setAttribute("data-modal", modal_id)
+          if (modal_id && json.modal) { // Old modal existed, keep using that one
+            newNode.setAttribute("data-modal", modal_id)
+          } else if (json.modal) { // No previous modal
+            document.querySelector(".modal").after(htmlToNode(json.modal))
+          } else if (modal_id) { // Old modal existed, but no new modal- remove the old one
+            document.querySelector(`.modal#${modal_id}`)?.remove()
+          }
           holder.replaceWith(newNode)
           currentWidget = null
         } else {
