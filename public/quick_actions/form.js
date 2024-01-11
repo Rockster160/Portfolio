@@ -2,8 +2,6 @@ import { Monitor } from './task_monitor.js';
 import { command } from './command.js';
 import { showModal, hideModal } from './modal.js';
 
-let modes = ["use", "add", "edit", "move", "delete"]
-let mode = 0
 let currentWidget = null
 
 export let templateContent = function(id, temp) {
@@ -17,6 +15,75 @@ export let htmlToNode = function(html) {
   let temp = document.createElement("template")
   temp.innerHTML = html
   return templateContent(null, temp)
+}
+
+class Mode {
+  static modes = ["use", "add", "edit", "move", "delete"]
+  static _current_mode = 0
+  static defaultMode = this.modes[0]
+
+  static get current() { return this.modes[this._current_mode] }
+  static set current(new_mode) {
+    this.resetButtons()
+
+    // Reset mode to default state since the currently active one was clicked again
+    if (this.current == new_mode && new_mode != this.defaultMode) {
+      this.reset()
+      saveFullWidgets() // Save changes
+      return
+    }
+
+    this._current_mode = this.modes.indexOf(new_mode)
+    this.updateDOM()
+  }
+
+  static reset() {
+    this.current = this.defaultMode
+  }
+
+  static resetButtons() {
+    document.querySelectorAll("[data-mode]").forEach(item => {
+      item.classList.remove("active")
+      let item_mode = item.getAttribute("data-mode")
+      let capital_mode = item_mode.charAt(0).toUpperCase() + item_mode.slice(1)
+      item.text = capital_mode
+
+      document.querySelectorAll(".jiggle").forEach(item => item.classList.remove("jiggle"))
+      document.querySelectorAll(".delete-widget").forEach(item => item.classList.add("hidden"))
+      document.querySelectorAll(".edit-widget").forEach(item => item.classList.add("hidden"))
+    })
+  }
+
+  static updateDOM() {
+    let mode_name = this.current
+    // TODO: Delete not working for specials (running their command)
+    let body = document.querySelector("body")
+    let mainWrapper = true
+    let wrapper = document.querySelector(".widget-modal.show .widget-wrapper")
+    if (wrapper) { mainWrapper = false }
+    wrapper = wrapper || document.querySelector(".main-wrapper.widget-wrapper")
+
+    if (mode_name == "add") {
+      showForm()
+      if (mainWrapper) {
+        document.querySelector("select#widget-type").value = "buttons"
+      } else {
+        document.querySelector("select#widget-type").value = "command"
+      }
+      document.querySelector("select#widget-type").dispatchEvent(new Event("change"))
+
+      Mode.reset()
+      return
+    } else if (mode_name == "move") {
+      wrapper.querySelectorAll(".widget-holder").forEach(item => item.classList.add("jiggle"))
+    } else if (mode_name == "delete") {
+      wrapper.querySelectorAll(".delete-widget").forEach(item => item.classList.remove("hidden"))
+    } else if (mode_name == "edit") {
+      wrapper.querySelectorAll(".edit-widget").forEach(item => item.classList.remove("hidden"))
+    }
+
+    document.querySelectorAll(`[data-mode="${mode_name}"]`).forEach(item => item.text = "Done")
+  }
 }
 
 let attr = (attrKey) => currentWidget?.getAttribute(`data-${attrKey}`) || ""
@@ -82,6 +149,7 @@ let submitWidgetForm = function(formdata) {
         hideModal("widget-form")
         saveFullWidgets()
         currentWidget = null
+        Mode.reset()
         setTimeout(function() { Monitor.resyncAll() }, 500)
       }
     })
@@ -121,57 +189,7 @@ document.addEventListener("click", function(evt) {
   let mode_name = evt.target.getAttribute("data-mode")
   if (!mode_name) { return }
 
-  // Reset buttons to original state and stop jiggle/delete states
-  document.querySelectorAll("[data-mode]").forEach(item => {
-    item.classList.remove("active")
-    let item_mode = item.getAttribute("data-mode")
-    let capital_mode = item_mode.charAt(0).toUpperCase() + item_mode.slice(1)
-    item.text = capital_mode
-
-    document.querySelectorAll(".jiggle").forEach(item => item.classList.remove("jiggle"))
-    document.querySelectorAll(".delete-widget").forEach(item => item.classList.add("hidden"))
-    document.querySelectorAll(".edit-widget").forEach(item => item.classList.add("hidden"))
-  })
-
-  let new_mode = modes.indexOf(mode_name)
-  if (mode == new_mode) {
-    // Reset mode to default state since the currently active one was clicked again
-    mode = 0
-    mode_name = modes[0]
-    saveFullWidgets() // Save changes
-  } else {
-    mode = new_mode
-  }
-
-  // TODO: Delete not working for specials (running their command)
-  let body = document.querySelector("body")
-  let mainWrapper = true
-  let wrapper = document.querySelector(".widget-modal.show .widget-wrapper")
-  if (wrapper) { mainWrapper = false }
-  wrapper = wrapper || document.querySelector(".main-wrapper.widget-wrapper")
-
-  if (mode_name == "add") {
-    showForm()
-    if (mainWrapper) {
-      document.querySelector("select#widget-type").value = "buttons"
-    } else {
-      document.querySelector("select#widget-type").value = "command"
-    }
-    document.querySelector("select#widget-type").dispatchEvent(new Event("change"))
-
-    mode = 0
-    return
-  } else if (mode_name == "move") {
-    wrapper.querySelectorAll(".widget-holder").forEach(item => item.classList.add("jiggle"))
-  } else if (mode_name == "delete") {
-    wrapper.querySelectorAll(".delete-widget").forEach(item => item.classList.remove("hidden"))
-  } else if (mode_name == "edit") {
-    wrapper.querySelectorAll(".edit-widget").forEach(item => item.classList.remove("hidden"))
-  }
-
-  document.querySelectorAll(`[data-mode="${mode_name}"]`).forEach(item => {
-    evt.target.text = "Done"
-  })
+  Mode.current = mode_name
 })
 
 let collectWidgetData = function(widget) {
