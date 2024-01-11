@@ -135,20 +135,21 @@ let submitWidgetForm = function(formdata) {
     res.json().then(function(json) {
       if (res.ok) {
         if (currentWidget) {
-          if (json.modal) {
-            let modalId = currentWidget.closest(".widget-holder").getAttribute("data-modal")
-            document.querySelector(`.modal#${modalId}`).remove()
-          }
-          currentWidget.closest(".widget-holder").outerHTML = json.html
+          let modal_id = currentWidget.parentElement.getAttribute("data-modal")
+          let holder = currentWidget.parentElement
+          let newNode = htmlToNode(json.html)
+
+          newNode.setAttribute("data-modal", modal_id)
+          holder.replaceWith(newNode)
+          currentWidget = null
         } else {
+          if (json.modal) {
+            document.querySelector(".modal").after(htmlToNode(json.modal))
+          }
           wrapper.append(htmlToNode(json.html))
-        }
-        if (json.modal) {
-          document.querySelector(".modal").after(htmlToNode(json.modal))
         }
         hideModal("widget-form")
         saveFullWidgets()
-        currentWidget = null
         Mode.reset()
         setTimeout(function() { Monitor.resyncAll() }, 500)
       }
@@ -177,7 +178,7 @@ document.addEventListener("click", function(evt) {
     let holder = evt.target.closest(".widget-holder")
     let modalId = holder.getAttribute("data-modal")
 
-    document.querySelector(`.modal#${modalId}`).remove()
+    document.querySelector(`.modal#${modalId}`)?.remove()
     holder.remove()
   }
   if (evt.target.matches(".edit-widget")) {
