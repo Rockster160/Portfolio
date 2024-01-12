@@ -28,7 +28,14 @@ class MonitorChannel < ApplicationCable::Channel
     )
     # This is VERY magic. If the task defines a "timestamp" variable, the monitor channel will
     #   send that instead, allowing us to set the timestamp on the cell
-    # Other magic variables: `error` - What should it do?
+    # Magic variables:
+    #   timestamp: datetime|numeric -- Shows "x minutes ago" according to this timestamp
+    #   timestamp:false -- hides timestamp
+    #   refresh:false -- hides reload indicator
+    #   `error` - What should it do?
+    #   `blip: str?` Shows a red notification blip at the top right with the string of text.
+    #     * Max allow to be like 30px oval ish wide (3-4 chars), if more text, just overflow it
+    #     * Maybe allow `true` to just show a blank blip
   end
 
   def subscribed
