@@ -53,6 +53,9 @@ html, body {
   text-align: center;
 }
 
+i.emoji {
+  font-style: normal;
+}
 .title i.emoji {
   position: absolute;
   left: calc(50% - 32px);
