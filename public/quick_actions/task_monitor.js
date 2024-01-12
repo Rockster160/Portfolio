@@ -71,7 +71,7 @@ export class Monitor {
 
   setTime(new_timestamp) {
     let monitor = this
-    let sync = monitor.ele?.querySelector(".last-sync")
+    let sync = monitor.element?.querySelector(".last-sync")
     if (!sync) { return }
     if (new_timestamp) { sync.setAttribute("data-timestamp", new_timestamp) }
 
