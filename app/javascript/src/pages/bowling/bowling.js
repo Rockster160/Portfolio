@@ -19,6 +19,12 @@ window.onload = function() {
   }
 }
 
+window.onbeforeunload = function(evt) {
+  if (game.saved) { return undefined }
+
+  return "onbeforeunload"
+}
+
 // ===== NOTE:
 // Maybe have a button next to pin fall (between it and "End Game") that opens a modal that shows enemy scores
 // Absent bowler should not send scores...
@@ -26,9 +32,6 @@ window.onload = function() {
 // ===== BUG:
 
 // ===== Todo: (Don't delete, just check)
-// Save when "Done editing" bowlers
-// Save when changing lane
-// Warn before leaving page if any changes have been made
 // Test interactions on iPad
 // Edit names/bowlers (including average/hdcp?)
 // Previous Game Scores
@@ -49,7 +52,10 @@ window.onload = function() {
 // Enemy Scores
 //   * Need a better place for these that don't mess up the page layout.
 //   * Enemy chart should show comparison totals (+- points)
-// √ Card Point
+//√  Save when "Done editing" bowlers
+//√ Save when changing lane
+//√ Warn before leaving page if any changes have been made
+//√ Card Point
 //√ Show total &+ hdcp under max column
 //√ Save scores!
 //√ Absent / Skip

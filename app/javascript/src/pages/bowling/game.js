@@ -12,7 +12,9 @@ export default class Game extends Reactive {
     window.game = this
 
     this.editing_game = !!document.querySelector(".ctr-bowling_games.act-edit")
-    this.inProgress = true
+    this.bool("saved", function(val) {
+      console.log(val ? "Saved!" : "Not saved...");
+    })
 
     this._game_num = params.game ? parseInt(params.game) : 1
     this.elementAccessor("leagueId", "#game_league_id", "value")
@@ -22,7 +24,7 @@ export default class Game extends Reactive {
     this.elementAccessor("laneTalkApiKey", ".league-data", "data-lanetalk-key")
 
     this.elementAccessor("lane", ".lane-input", "value", function(val) {
-      console.log(`Setting Lane to ${val}`)
+      this.saveScores()
     })
 
     this.bool("crossLane")
@@ -41,6 +43,7 @@ export default class Game extends Reactive {
     this.bool("editBowler", function(value) {
       document.querySelectorAll("[data-edit=show]").forEach(item => item.classList.toggle("hidden", !value))
       document.querySelectorAll("[data-edit=hide]").forEach(item => item.classList.toggle("hidden", value))
+      if (!value) { this.saveScores() }
     })
     this.bool("defaultPinStanding", function(value) {
       this.element.querySelector(".pin-all-toggle").classList.toggle("fall", !value)
@@ -126,7 +129,6 @@ export default class Game extends Reactive {
     })
   }
   finish() {
-    this.inProgress = false
     console.log("Game complete");
     // Show End Game button
     // $(".bowling-form-btn").removeClass("hidden")
@@ -159,6 +161,7 @@ export default class Game extends Reactive {
   saveScores() {
     Scoring.submit(() => {
       console.log("Updated!");
+      game.saved = true
     })
   }
 

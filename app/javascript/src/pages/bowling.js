@@ -11,14 +11,6 @@
 //     })
 //   }
 //
-//   window.onbeforeunload = function(evt) {
-//     if (!inProgress) {
-//       return undefined
-//     }
-//
-//     return "onbeforeunload"
-//   }
-//
 //   $(document).on("modal.shown", function() {
 //     $(".shot.current").removeClass("current")
 //   }).on("modal.hidden", function() {
