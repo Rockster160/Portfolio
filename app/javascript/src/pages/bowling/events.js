@@ -2,6 +2,7 @@
 export function events() {
   onEvent("pin:change", function(evt) {
     console.log("pin change", evt.detail);
+    game.inProgress = true
     if (game.currentShot) {
       game.currentShot.standingPins = game.pins.standing
     }

@@ -8,14 +8,18 @@ export default class Reactive {
     this[`${boolname}Toggle`] = () => { this[boolname] = !this[boolname] }
   }
 
+  static parse(val) {
+    return JSON.parse(val || null)
+  }
+
   accessor(propName, callback) {
-    let snake = propName.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
+    let snake = "_" + propName.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
     // The below stops the getter from being redefined every time a new instance is created
     let getter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(this), propName)
     if (getter && typeof getter.get === "function") { return }
 
     Object.defineProperty(this.constructor.prototype, propName, {
-      get() { return this[snake] },
+      get() { return Reactive.parse(this[snake]) },
       set(value) {
         this[snake] = value
         if (callback && typeof(callback) === "function") { callback.call(this, value) }
@@ -36,11 +40,11 @@ export default class Reactive {
       ele = ele || this.element || document
 
       if (attr === undefined) {
-        return ele.tagName == "INPUT" ? ele.value : ele.innerText
+        return Reactive.parse(ele.tagName == "INPUT" ? ele.value : ele.innerText)
       } else if (attr === "value") {
-        return ele.tagName == "INPUT" ? ele.value : ele.getAttribute(attr)
+        return Reactive.parse(ele.tagName == "INPUT" ? ele.value : ele.getAttribute(attr))
       } else {
-        return ele.tagName == "INPUT" ? ele[attr] : ele.getAttribute(attr)
+        return Reactive.parse(ele.tagName == "INPUT" ? ele[attr] : ele.getAttribute(attr))
       }
     }
     let setEleVal = function(value) {
@@ -77,7 +81,7 @@ export default class Reactive {
     if (getter && typeof getter.get === "function") { return }
 
     Object.defineProperty(this.constructor.prototype, propName, {
-      get() { return getEleVal.call(this) },
+      get() { return Reactive.parse(getEleVal.call(this)) },
       set(value) { setEleVal.call(this, value) },
     })
   }

@@ -2,6 +2,16 @@ import { onEvent, onKeyDown } from "./events"
 
 export function buttons() {
   // ==================== Button Toggles ====================
+  onEvent("click", ".bowler-name", (evt) => {
+    let bowler = game.bowlerFrom(evt.target)
+    game.eachBowler(other => {
+      if (other.bowlerNum == bowler.bowlerNum) {
+        bowler.cardPoint = !bowler.cardPoint
+      } else {
+        other.cardPoint = false
+      }
+    })
+  })
   onEvent("click", ".backspace &>", () => game.clearShot())
   onEvent("click", ".timer-toggle &>", () => game.pinTimer.timerActiveToggle())
   onEvent("click", ".bowling-edit &>", () => game.editBowlerToggle())

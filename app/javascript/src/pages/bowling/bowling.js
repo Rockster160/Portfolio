@@ -28,6 +28,7 @@ window.onload = function() {
 // Warn before leaving page if any changes have been made
 // Test interactions on iPad
 // Edit names/bowlers (including average/hdcp?)
+// Previous Game Scores
 // Reorder bowlers via drag & drop (after clicking the edit btn)
 // Add subs
 //   * New Sub bowler (with JUST average OR hdcp)

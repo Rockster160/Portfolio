@@ -5,15 +5,11 @@ export default class Bowler extends Reactive {
   constructor(element) {
     super(element)
     this.serverId = parseInt(element.getAttribute("data-bowler-id"))
+    this.bowlerNum = parseInt(element.getAttribute("data-bowler"))
 
     // prev games? (score, point, card)
     this.elementAccessor("currentFrame", null, "data-current-frame")
     this.elementAccessor("absentScore", null, "data-absent-score")
-    this.elementAccessor("bowlerNum", null, "data-bowler", function(value) {
-      this.element.querySelector(".game-position").value = value
-      // Also need to reorder game.bowlers
-      // Also need to actually reorder the bowler rows rather than just updating the position
-    })
     this.elementAccessor("hdcp", ".bowler-handicap", "value", function(value) {
       this.element.querySelectorAll(".hdcp-val").forEach(item => item.innerText = value)
       this.element.querySelectorAll(".hdcp").forEach(item => item.innerText = value)

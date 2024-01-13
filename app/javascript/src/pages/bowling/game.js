@@ -12,6 +12,7 @@ export default class Game extends Reactive {
     window.game = this
 
     this.editing_game = !!document.querySelector(".ctr-bowling_games.act-edit")
+    this.inProgress = true
 
     this._game_num = params.game ? parseInt(params.game) : 1
     this.elementAccessor("leagueId", "#game_league_id", "value")
@@ -79,6 +80,10 @@ export default class Game extends Reactive {
     })
   }
 
+  bowlerFrom(ele) {
+    return this.bowlers[parseInt(ele.closest(".bowler").getAttribute("data-bowler"))]
+  }
+
   eachBowler(callback) { this.bowlers.forEach(item => item ? callback(item) : null) }
 
   start() {
@@ -93,6 +98,7 @@ export default class Game extends Reactive {
     })
   }
   finish() {
+    this.inProgress = false
     console.log("Game complete");
     // Show End Game button
     // $(".bowling-form-btn").removeClass("hidden")
