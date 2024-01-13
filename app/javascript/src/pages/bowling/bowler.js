@@ -5,11 +5,15 @@ export default class Bowler extends Reactive {
   constructor(element) {
     super(element)
     this.serverId = parseInt(element.getAttribute("data-bowler-id"))
-    this.bowlerNum = parseInt(element.getAttribute("data-bowler"))
+    this.id = Math.floor(Math.random() * 16777215).toString(16)
 
     // prev games? (score, point, card)
     this.elementAccessor("currentFrame", null, "data-current-frame")
     this.elementAccessor("absentScore", null, "data-absent-score")
+    this.elementAccessor("bowlerNum", null, "data-bowler", function(value) {
+      this.element.querySelector(".game-position").value = value
+      game.resortBowlers(this)
+    })
     this.elementAccessor("hdcp", ".bowler-handicap", "value", function(value) {
       this.element.querySelectorAll(".hdcp-val").forEach(item => item.innerText = value)
       this.element.querySelectorAll(".hdcp").forEach(item => item.innerText = value)
@@ -50,4 +54,6 @@ export default class Bowler extends Reactive {
 
   get num() { return parseInt(this.bowlerNum) }
   set num(val) { return this.bowlerNum = val }
+
+  valueOf() { return this.id }
 }

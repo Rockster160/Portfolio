@@ -84,6 +84,34 @@ export default class Game extends Reactive {
     return this.bowlers[parseInt(ele.closest(".bowler").getAttribute("data-bowler"))]
   }
 
+  resortBowlers(bowler) {
+    // Avoid unnecessary sorting
+    if (bowler == game.bowlers[bowler.bowlerNum]) { return }
+    // Only re-order and organize elements once
+    if (this.sorting) { return }
+    this.sorting = true
+    // Swap conflicts
+    let oldNum = game.bowlers.indexOf(bowler)
+    this.eachBowler(other => {
+      if (bowler != other && bowler.bowlerNum == other.bowlerNum) { other.bowlerNum = oldNum }
+    })
+    // Re-sort
+    this.bowlers.sort((a, b) => {
+      if (a === null) { return -1 }
+      if (b === null) { return 1 }
+      return a.bowlerNum - b.bowlerNum
+    })
+    // Reset Nums to proper idx
+    this.bowlers.forEach((other, idx) => {
+      if (other && other.bowlerNum != idx) { other.bowlerNum = idx }
+    })
+    // Move elements
+    this.bowlers.toReversed().forEach(other => {
+      if (other) { this.element.insertBefore(other.element, this.element.firstChild) }
+    })
+    this.sorting = false
+  }
+
   eachBowler(callback) { this.bowlers.forEach(item => item ? callback(item) : null) }
 
   start() {

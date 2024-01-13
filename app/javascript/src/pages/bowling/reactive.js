@@ -9,7 +9,11 @@ export default class Reactive {
   }
 
   static parse(val) {
-    return JSON.parse(val || null)
+    try {
+      return JSON.parse(val)
+    } catch (e) {
+      return val || null
+    }
   }
 
   accessor(propName, callback) {

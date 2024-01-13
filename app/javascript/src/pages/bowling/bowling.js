@@ -10,6 +10,7 @@ window.onload = function() {
     buttons()
     events()
     game.start()
+    game.eachBowler(bowler => window[bowler.bowlerName.trim().toLowerCase()] = bowler)
 
     // game.fillRandomUntil(9)
     // game.fillRandomUntil(9, "X")
@@ -25,6 +26,8 @@ window.onload = function() {
 // ===== BUG:
 
 // ===== Todo: (Don't delete, just check)
+// Save when "Done editing" bowlers
+// Save when changing lane
 // Warn before leaving page if any changes have been made
 // Test interactions on iPad
 // Edit names/bowlers (including average/hdcp?)
@@ -36,18 +39,17 @@ window.onload = function() {
 // Add/Remove bowlers from lane
 // Lane talk
 //   * Auto pull in lane from cache
-// Card Point
-//   * Tap on bowler name
 // Score button interface (no pins)
 //   * Num keys should also work
 // Add button somewhere to remove a bowler
 // Add button somewhere to clear an entire bowler scores
 // Add ability to dump in scores from the console to pre-load them
 // Team total scores
+// Live submit- don't reload page until results are saved
 // Enemy Scores
 //   * Need a better place for these that don't mess up the page layout.
 //   * Enemy chart should show comparison totals (+- points)
-// Live submit- don't reload page until results are saved
+// √ Card Point
 //√ Show total &+ hdcp under max column
 //√ Save scores!
 //√ Absent / Skip
