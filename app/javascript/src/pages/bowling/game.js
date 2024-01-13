@@ -4,6 +4,7 @@ import Pins from "./pins"
 import PinTimer from "./pin_timer"
 import Scoring from "./scoring"
 import FrameNavigation from "./frame_navigation"
+import Rest from "./rest"
 import { trigger } from "./events"
 
 export default class Game extends Reactive {
@@ -13,7 +14,7 @@ export default class Game extends Reactive {
 
     this.editing_game = !!document.querySelector(".ctr-bowling_games.act-edit")
     this.bool("saved", function(val) {
-      console.log(val ? "Saved!" : "Not saved...");
+      console.log(val ? "Saved!" : "Changes made...");
     })
 
     this._game_num = params.game ? parseInt(params.game) : 1
@@ -83,6 +84,8 @@ export default class Game extends Reactive {
     })
   }
 
+  get finishBtn() { return this.element.querySelector(".bowling-form-btn") }
+
   bowlerFrom(ele) {
     return this.bowlers[parseInt(ele.closest(".bowler").getAttribute("data-bowler"))]
   }
@@ -129,9 +132,38 @@ export default class Game extends Reactive {
     })
   }
   finish() {
-    console.log("Game complete");
-    // Show End Game button
-    // $(".bowling-form-btn").removeClass("hidden")
+    this.saveScores()
+    this.finishBtn.classList.remove("hidden")
+  }
+
+  saveScores() { game.save("PATCH") }
+  save(method, callback) {
+    if (!this.initialized) { return }
+    if (method && typeof method === "function") { [callback, method] = [method, null] }
+    let form = this.element
+    Rest.request(method || form.method, form.action, new FormData(form), (data) => {
+      this.saved = true
+      if (callback && typeof callback === "function") { callback(data) }
+    })
+  }
+
+  nextGame() {
+    if (!this.saved) {
+      if (!confirm("The game is has unsaved changes. Are you sure you want to continue?")) {
+        return false
+      }
+    }
+    if (!this.bowlers.find(bowler => bowler?.cardPoint)) {
+      if (!confirm("You did not enter a winner for cards. Are you sure you want to continue?")) {
+        return false
+      }
+    }
+    this.finishBtn.value = "Saving..."
+    this.save(function(data) {
+      window.location.href = data.redirect
+    })
+    // TODO: Detect failed submission somehow
+    // this.finishBtn.value = "Try Again"
   }
 
   fillRandomUntil(end_frame, fill_with) {
@@ -156,13 +188,6 @@ export default class Game extends Reactive {
 
   showStats() {
     Scoring.generateStats()
-  }
-
-  saveScores() {
-    Scoring.submit(() => {
-      console.log("Updated!");
-      game.saved = true
-    })
   }
 
   earliestFrame() {

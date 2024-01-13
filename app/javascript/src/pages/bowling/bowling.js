@@ -34,7 +34,6 @@ window.onbeforeunload = function(evt) {
 // ===== Todo: (Don't delete, just check)
 // Test interactions on iPad
 // Edit names/bowlers (including average/hdcp?)
-// Previous Game Scores
 // Reorder bowlers via drag & drop (after clicking the edit btn)
 // Add subs
 //   * New Sub bowler (with JUST average OR hdcp)
@@ -46,13 +45,13 @@ window.onbeforeunload = function(evt) {
 //   * Num keys should also work
 // Add button somewhere to remove a bowler
 // Add button somewhere to clear an entire bowler scores
-// Add ability to dump in scores from the console to pre-load them
 // Team total scores
-// Live submit- don't reload page until results are saved
 // Enemy Scores
 //   * Need a better place for these that don't mess up the page layout.
 //   * Enemy chart should show comparison totals (+- points)
-//√  Save when "Done editing" bowlers
+//√ Live submit- don't reload page until results are saved
+//√ Previous Game Scores
+//√ Save when "Done editing" bowlers
 //√ Save when changing lane
 //√ Warn before leaving page if any changes have been made
 //√ Card Point

@@ -45,26 +45,24 @@ export function buttons() {
 
     game.nextShot()
   })
-  onEvent("submit", function(evt) {
+  onEvent("submit", ".bowling-game-form", function(evt) {
     evt.preventDefault()
-    console.log("submit")
+    return game.nextGame()
   })
 
   let finishFrame = function(knock_rest) {
-    // let frame = game.currentFrame
     if (knock_rest) { game.pins.knockAll() }
 
     game.nextShot(true)
-    // We skip callbacks, so pins don't get "knocked" to apply frame modifiers
-    // grab the current frame before nextShot since it changes the frame
-    // applyFrameModifiers(frame)
   }
 
   // ==================== Key Press ====================
   onKeyDown("Backspace Delete", ":not(input), .shot", function() {
     game.clearShot()
   })
-  onKeyDown("Enter", ":not(input), .shot", function() {
+  onKeyDown("Enter", ":not(input), .shot", function(evt) {
+    evt.preventDefault()
+    evt.stopPropagation()
     finishFrame(false)
   })
   onKeyDown("ArrowUp", ":not(input), .shot", function() {

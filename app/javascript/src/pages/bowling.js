@@ -4,13 +4,6 @@
 //   var inProgress = false
 //   var should_check_stats = true
 //
-//   resetBowlerOrder = function() {
-//     $(".bowler").each(function(idx) {
-//       $(this).attr("data-bowler", idx + 1)
-//       $(this).find(".game-position").val(idx + 1)
-//     })
-//   }
-//
 //   $(document).on("modal.shown", function() {
 //     $(".shot.current").removeClass("current")
 //   }).on("modal.hidden", function() {
@@ -40,7 +33,6 @@
 //         $(in_bowler).insertBefore(".bowler-placeholder")
 //       }
 //       resetEdits()
-//       resetBowlerOrder()
 //       calcScores()
 //     })
 //   })
@@ -59,7 +51,6 @@
 //       $(in_bowler).insertBefore(".bowler-placeholder")
 //     }
 //     resetEdits()
-//     resetBowlerOrder()
 //     calcScores()
 //   })
 //
@@ -124,34 +115,6 @@
 //     }
 //   })
 //
-//   $("form.bowling-game-form").submit(function(evt) {
-//     evt.preventDefault()
-//
-//     if (inProgress) {
-//       if (!confirm("The game is not complete. Are you sure you want to continue?")) {
-//         return false
-//       }
-//     }
-//     if ($(".card-point").length == 0 && $(".bowler").length > 1) {
-//       if (!confirm("You did not enter a winner for cards. Are you sure you want to continue?")) {
-//         return false
-//       }
-//     }
-//
-//     $(".bowling-form-btn").val("Saving...")
-//
-//     var form = $(this)
-//     $.ajax({
-//       type: form.attr("method"),
-//       url: form.attr("action"),
-//       data: form.serialize()
-//     }).done(function(data) {
-//       window.location.href = data.redirect
-//     }).fail(function() {
-//       $(".bowling-form-btn").html("Try Again")
-//     })
-//   })
-//
 //   $(".bowling-input .numpad-key.entry").click(function() {
 //     $(".pin-wrapper").removeClass("fallen").removeClass("fallen-before")
 //     $(".shot.current").parents(".frame").find(".fallen-pins").val("")
@@ -160,19 +123,6 @@
 //
 //   $(".bowling-cell.total .remove").click(function() {
 //     $(this).parents(".bowling-table").remove()
-//   })
-//
-//   $(document).on("click", ".bowler-name", function() {
-//     if ($(this).find(".card-point").length > 0) {
-//       $(".card-point-field").val(false)
-//       $(".card-point").remove()
-//     } else {
-//       $(".card-point-field").val(false)
-//       $(".card-point").remove()
-//       var card = $("<div>").addClass("card-point").text("+1")
-//       $(this).append(card)
-//       $(this).parent().find(".card-point-field").val(true)
-//     }
 //   })
 //
 //   let laneTalk = function() {

@@ -71,9 +71,4 @@ export default class Scoring {
   static generateStats() {
     LiveStats.generate()
   }
-
-  static submit(callback) {
-    let form = document.querySelector("form.bowling-game-form")
-    Rest.patch(form.action, new FormData(form), callback)
-  }
 }
