@@ -51,6 +51,7 @@ class BowlingGame < ApplicationRecord
     @new_attributes&.dig(:league_id) || set&.league_id || bowler&.league_id
   end
 
+  def score = super().to_i
   def total_score
     score.to_i + handicap.to_i
   end
