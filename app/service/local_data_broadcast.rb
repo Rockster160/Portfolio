@@ -6,7 +6,7 @@ class LocalDataBroadcast
   end
 
   def call(data=nil)
-    data ||= Rails.cache.fetch("local_data") { {} }
+    data ||= DataStorage[:local_data] || {}
     @data = data.deep_symbolize_keys
     @user = User.me
 
