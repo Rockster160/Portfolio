@@ -286,9 +286,18 @@
       justify-content: space-around;
       padding: 2px;
       font-size: 10px;
+
+      @at-root .bowling-header .prev-scores {
+        bottom: auto;
+        top: 0;
+      }
     }
     .team-total {
       padding: 3px;
+
+      .enemy-totals {
+        color: salmon;
+      }
     }
 
     .bowler-options {
@@ -670,22 +679,22 @@
       padding: 10px;
       overflow: hidden;
     }
-    .enemy-results {
-      grid-area: 2 / 2;
-      grid-column: span 2;
-      padding: 0;
-      overflow: hidden;
-
-      table {
-        font-size: 10px;
-
-        td {
-          text-align: right;
-          border-spacing: 0;
-          padding: 0 5px;
-        }
-      }
-    }
+    // .enemy-results {
+    //   grid-area: 2 / 2;
+    //   grid-column: span 2;
+    //   padding: 0;
+    //   overflow: hidden;
+    //
+    //   table {
+    //     font-size: 10px;
+    //
+    //     td {
+    //       text-align: right;
+    //       border-spacing: 0;
+    //       padding: 0 5px;
+    //     }
+    //   }
+    // }
     .pin-all-toggle {
       grid-area: 1 / 1;
     }

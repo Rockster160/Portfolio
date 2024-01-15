@@ -46,7 +46,10 @@ export default class Scoring {
     })
 
     let totalText = teamHdcp > 0 ? `${teamTotal} | ${teamTotal + teamHdcp}` : `${teamTotal}`
-    document.querySelector(".team-total").innerText = totalText
+    document.querySelector(".team-total").innerHTML = totalText
+    // TODO: The below is working, just need to properly get the enemy totals
+    // let enemyTotals = `<span class="enemy-totals">${totalText}</span>`
+    // document.querySelector(".team-total").innerHTML += `<br>${enemyTotals}`
   }
 
   static bowlerScores(bowler) {
