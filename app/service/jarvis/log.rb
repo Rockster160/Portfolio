@@ -20,14 +20,14 @@ class Jarvis::Log < Jarvis::Action
     new_words = @msg.sub(Regexp.new("(?:\b(?:at)\b)? ?#{time_str}", :i), "") if extracted_time
     new_words = (new_words || @msg).gsub(/^log ?/i, "")
     @evt[:timestamp] = extracted_time
-    @evt[:event_name], @evt[:notes] = new_words.gsub(/[.?!]$/i, "").squish.split(" ", 2)
+    @evt[:name], @evt[:notes] = new_words.gsub(/[.?!]$/i, "").squish.split(" ", 2)
     # Stupid Alexa tries to expand mg to milligrams
     @evt[:notes] = @evt[:notes]&.gsub(" milligrams", "mg")
   end
 
   def create_event
     @evt_data = {
-      event_name: @evt[:event_name].tap { |n| n[0] = n[0].upcase },
+      name: @evt[:name].tap { |n| n[0] = n[0].upcase },
       notes: @evt[:notes].presence,
       timestamp: @evt[:timestamp].presence,
       user_id: @user.id,
@@ -39,7 +39,7 @@ class Jarvis::Log < Jarvis::Action
   def broadcast_event
     ActionEventBroadcastWorker.perform_async(@event.id)
 
-    evt_words = ["Logged #{@event.event_name}"]
+    evt_words = ["Logged #{@event.name}"]
     evt_words << "(#{@event.notes})" if @evt_data[:notes].present?
 
     if @evt_data[:timestamp].present?

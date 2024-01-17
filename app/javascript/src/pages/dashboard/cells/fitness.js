@@ -21,7 +21,7 @@ import { Text } from "../_text"
       var [name, ...notes] = text.split(" ")
       name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
       notes = notes.join(" ")
-      Server.post("/action_events", { event_name: name, notes: notes })
+      Server.post("/action_events", { name: name, notes: notes })
     },
   })
 })()

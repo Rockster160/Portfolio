@@ -2,6 +2,11 @@ class Jil::JarvisTasksController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user
 
+  def show
+    @task = current_user.jarvis_tasks.anyfind(params[:id])
+    redirect_to edit_jil_jarvis_task_path(@task)
+  end
+
   def index
     if params[:trigger].present?
       @tasks = current_user.jarvis_tasks.order(last_trigger_at: :desc).where(trigger: params[:trigger])

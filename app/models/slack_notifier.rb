@@ -8,7 +8,7 @@ class SlackNotifier
   def self.err(exception, message="Error: ", channel: '#portfolio', username: 'Portfolio-Bot', icon_emoji: ':blackmage:', attachments: [])
     SlackNotifier.notify(
       "#{message}\n*#{exception}*\n#{exception.message}\n" \
-      "```#{exception.backtrace.select { |l| l.include?("/app/") }.reverse.join("\n")}```"
+      "```#{exception.backtrace.select { |l| l.include?("/app/") }.join("\n")}```"
     )
   end
 end

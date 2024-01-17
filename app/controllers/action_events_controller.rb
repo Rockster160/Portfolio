@@ -43,7 +43,7 @@ class ActionEventsController < ApplicationController
         @range = @date.then { |t| t.beginning_of_month..t.end_of_month }
       end
 
-      @events = current_user.action_events.where(event_name: "Pullups").order(timestamp: :asc)
+      @events = current_user.action_events.where(name: "Pullups").order(timestamp: :asc)
       @events = @events.query(params[:q]) if params[:q].present?
       @events = @events.where(timestamp: @range.min.beginning_of_day..@range.max.end_of_day)
 
@@ -144,7 +144,7 @@ class ActionEventsController < ApplicationController
     # Reset following event streak info
     matching_events = ActionEvent
       .where(user_id: event.user_id)
-      .ilike(event_name: event.event_name)
+      .ilike(name: event.name)
       .where.not(id: event.id)
     following = matching_events.where("timestamp > ?", event.timestamp).order(:timestamp).first
     UpdateActionStreak.perform_async(following.id) if following.present?
@@ -191,12 +191,12 @@ class ActionEventsController < ApplicationController
   end
 
   def raw_event_params
-    params.to_unsafe_h.slice(:event_name, :timestamp, :notes)
+    params.to_unsafe_h.slice(:name, :timestamp, :notes)
   end
 
   def form_event_params
     params.require(:action_event).permit(
-      :event_name,
+      :name,
       :notes,
       :timestamp,
       :data,

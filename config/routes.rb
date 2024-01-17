@@ -19,7 +19,7 @@ Rails.application.routes.draw do
   resource :jarvis, only: [:show, :update], controller: :quick_actions, as: :jarvis_page do
     get :render_widget
   end
-  resources :jil_prompts, only: [:index, :show, :update], path: :prompts
+  resources :jil_prompts, only: [:index, :show, :update, :destroy], path: :prompts
 
   scope module: :users do
     get :login,         controller: :sessions,      action: :new
@@ -127,6 +127,8 @@ Rails.application.routes.draw do
       post :run, on: :member
       post :duplicate, on: :member
     end
+    # Must be last because of the wildcard
+    get "/:id", action: :show, controller: :jarvis_tasks
   end
 
   resources :climbs do

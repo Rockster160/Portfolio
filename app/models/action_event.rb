@@ -4,7 +4,7 @@
 #
 #  id            :integer          not null, primary key
 #  data          :jsonb
-#  event_name    :text
+#  name          :text
 #  notes         :text
 #  streak_length :integer
 #  timestamp     :datetime
@@ -16,14 +16,11 @@
 class ActionEvent < ApplicationRecord
   belongs_to :user
 
-  validates :event_name, presence: true
+  validates :name, presence: true
 
   before_save { self.timestamp ||= Time.current }
 
-  search_terms(
-    :notes,
-    name: :event_name,
-  )
+  search_terms :name, :notes
 
   def timestamp=(str_stamp)
     return if str_stamp.blank?
@@ -32,10 +29,10 @@ class ActionEvent < ApplicationRecord
   end
 
   def self.serialize
-    all.as_json(only: [:event_name, :notes, :timestamp, :data])
+    all.as_json(only: [:id, :name, :notes, :timestamp, :data])
   end
 
   def serialize
-    as_json(only: [:event_name, :notes, :timestamp, :data])
+    as_json(only: [:id, :name, :notes, :timestamp, :data])
   end
 end

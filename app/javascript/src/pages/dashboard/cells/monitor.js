@@ -2,35 +2,30 @@ import consumer from "./../../../channels/consumer"
 // import { Time } from './time.js';
 // import { toMd } from './md_render.js';
 
-// let socket = Monitor.subscribe(uuid, channel, { // Does NOT open a new channel, just subscribes to the listener
+// let socket = Monitor.subscribe(uuid, { // Does NOT open a new channel, just subscribes to the listener
 //   connected: function() {},
 //   disconnected: function() {},
 //   received: function(data) {},
 // })
-// socket.send({ foo: bar }) // Uses initial channel
+// socket.send({ foo: bar }) // Sends to current Monitor, triggering the event
 
 export class Monitor {
   static #connected = false
   static #monitors = {}
 
-  constructor(uuid, channel, callbacks) {
-    console.log("New", uuid, channel, callbacks);
+  constructor(uuid, callbacks) {
     this.uuid = uuid
-    this.channel = channel
     this.callbacks = callbacks || {}
 
     Monitor.#monitors[uuid] = Monitor.#monitors[uuid] || []
     Monitor.#monitors[uuid].push(this)
   }
 
-  static subscribe(uuid, channel, callbacks) {
-    console.log("Subscribe");
-    let monitor = new Monitor(uuid, channel, callbacks)
+  static subscribe(uuid, callbacks) {
+    let monitor = new Monitor(uuid, callbacks)
     if (Monitor.#connected) {
-      console.log(".connected");
       monitor.connected()
     } else {
-      console.log(".disconnected");
       monitor.disconnected()
     }
 
@@ -38,7 +33,6 @@ export class Monitor {
   }
 
   send(data) {
-    data.channel = this.channel
     console.log("send", data);
     Monitor.socket.perform("broadcast", data)
   }
@@ -54,17 +48,14 @@ export class Monitor {
   }
 
   connected() {
-    console.log("monitor.connected");
     let callback = this.callbacks.connected
     if (callback && typeof(callback) === "function") { callback.call(this) }
   }
   disconnected() {
-    console.log("monitor.disconnected");
     let callback = this.callbacks.disconnected
     if (callback && typeof(callback) === "function") { callback.call(this) }
   }
   received(data) {
-    console.log("monitor.received");
     let callback = this.callbacks.received
     if (callback && typeof(callback) === "function") { callback.call(this, data) }
   }
@@ -84,7 +75,6 @@ Monitor.socket = consumer.subscriptions.create({
     Monitor.all().forEach(item => item.disconnected())
   },
   received: function(data) {
-    console.log("MonitorChannel.received", data);
     Monitor.byUUID(data.id).forEach(item => item.received(data))
   },
 })

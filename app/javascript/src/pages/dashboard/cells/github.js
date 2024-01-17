@@ -1,7 +1,7 @@
 import { Time } from "./_time"
 import { Text } from "../_text"
 import { Timer } from "./timers"
-import { dash_colors } from "../vars"
+import { dash_colors, beeps } from "../vars"
 
 (function() {
   var cell = undefined
@@ -85,7 +85,7 @@ import { dash_colors } from "../vars"
 
   let deployMonitor = function() {
     setInterval(function() { render(cell) }, 1000)
-    Monitor.subscribe("e7a6570c-3d6d-434b-bcd6-568a41fb6b02", "deploy", {
+    Monitor.subscribe(cell.config.deploy_uuid, {
       received: function(data) {
         cell.flash()
         let json = data.result ? JSON.parse(data.result) : {}
@@ -103,10 +103,19 @@ import { dash_colors } from "../vars"
             item.complete(true)
           })
           localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
+          victoryBeep()
         }
         render(cell)
       },
     })
+  }
+
+  let victoryBeep = function() {
+    beeps([
+      [100, 1000, 0.1, "sine"], // Short and high-pitched
+      [150,  800, 0.2, "sine"], // Slightly longer and lower-pitched
+      [300, 1200, 0.4, "sine"], // Even longer and higher-pitched
+    ])
   }
 
   var render = function(cell) {
@@ -129,6 +138,7 @@ import { dash_colors } from "../vars"
         lines.push(renderLine(pr.status, pr.id, pr.title))
       })
     }
+    lines.push("-- Deploys:")
     if (cell.data.deploy_timers?.length) {
       cell.data.deploy_timers.forEach(deploy => {
         lines.push(deploy.render())

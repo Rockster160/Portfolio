@@ -74,3 +74,17 @@ export let beep = function(duration, frequency, volume, type, callback) {
   oscillator.start(audioCtx.currentTime)
   oscillator.stop(audioCtx.currentTime + ((duration || 500) / 1000))
 }
+
+export let beeps = function(beepsArray) {
+  let currentIndex = 0
+
+  function playNextBeep() {
+    if (currentIndex < beepsArray.length) {
+      const [duration, frequency, volume, type] = beepsArray[currentIndex]
+      beep(duration, frequency, volume, type, playNextBeep)
+      currentIndex++
+    }
+  }
+
+  playNextBeep()
+}

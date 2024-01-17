@@ -22,7 +22,10 @@ export function resizeModal() {
 
 document.addEventListener("click", function(evt) {
   if (evt.target.closest(".close")) {
-    evt.target.classList.closest(".modal").remove("show")
+    evt.target.closest(".modal").classList.remove("show")
+  }
+  if (evt.target.tagName == "BODY") {
+    hideCurrentModal()
   }
 })
 

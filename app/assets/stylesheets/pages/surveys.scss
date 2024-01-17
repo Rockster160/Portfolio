@@ -6,8 +6,22 @@
     }
     input[type=checkbox]:checked + label, input[type=radio]:checked + label {
       transition: color, background 0.3s;
-      background: $base-blue;;
+      background: $base-blue;
       color: $blue-l5;
+    }
+  }
+
+  .centered-options {
+    display: flex;
+
+    span:nth-of-type(1) {
+      text-align: right;
+    }
+    span:nth-of-type(1), span:nth-of-type(3) {
+      flex: 1;
+    }
+    span:nth-of-type(2) {
+      padding: 0 5px;
     }
   }
 }

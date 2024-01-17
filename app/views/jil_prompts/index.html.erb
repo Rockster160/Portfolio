@@ -12,6 +12,11 @@
 
     <% @prompts.each do |prompt| %>
       <div class="list-item-container" data-list-id="<%= prompt.id %>">
+        <div class="list-item-access">
+          <%= link_to jil_prompt_path(prompt), method: :delete, class: "category-btn danger" do %>
+            <i class="fa fa-trash-o"></i>
+          <% end %>
+        </div>
         <a href="<%= jil_prompt_path(prompt) %>" class="list-item">
           <span class="item-name"><%= prompt.question %></span>
         </a>

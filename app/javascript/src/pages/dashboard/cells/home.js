@@ -147,7 +147,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
   let getGarage = function() {
     cell.recent_garage = false
-    cell.garage_socket.send({ request: "get" })
+    cell.garage_socket.send({ channel: "garage", request: "get" })
 
     // If no response within 10 seconds, forget the current state
     clearTimeout(cell.garage_timeout)
@@ -199,7 +199,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     )
     cell.device_battery_socket.send({ action: "request" })
 
-    cell.garage_socket = Monitor.subscribe("e46e2278-1f9a-4a1e-8cfe-962f666a6620", "garage", {
+    cell.garage_socket = Monitor.subscribe("e46e2278-1f9a-4a1e-8cfe-962f666a6620", {
       connected: function() {
         console.log("socket Connected");
         this.send({ request: "get" })
@@ -214,7 +214,6 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         renderLines()
       },
       received: function(data) {
-        console.log("socket Received", data);
         clearTimeout(cell.garage_timeout)
         cell.flash()
         if (data.loading) {
@@ -321,7 +320,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       } else if (/^add\b/i.test(msg)) { // Add item to AMZ deliveries
         cell.amz_socket.send({ action: "change", add: msg })
       } else if (/\b(open|close|toggle|garage)\b/.test(msg)) { // open/close
-        cell.garage_socket.send({ request: msg.match(/\b(open|close|toggle)\b/)[0] })
+        cell.garage_socket.send({ channel: "garage", request: msg.match(/\b(open|close|toggle)\b/)[0] })
       } else { // Assume AC control
         cell.nest_socket.send({ action: "command", settings: msg })
       }

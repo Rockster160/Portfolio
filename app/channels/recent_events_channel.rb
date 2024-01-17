@@ -8,7 +8,7 @@ class RecentEventsChannel < ApplicationCable::Channel
     data = data.deep_symbolize_keys!
 
     event = current_user.action_events.create!(
-      data.slice(:event_name, :notes, :timestamp)
+      data.slice(:name, :notes, :timestamp)
     )
     ActionEventBroadcastWorker.perform_async(event.id)
   end

@@ -39,7 +39,7 @@ class FitnessBroadcast
   end
 
   def pullups
-    pulls = @user.action_events.where(event_name: "Pullups").where("notes ~ '^\\d+$'")
+    pulls = @user.action_events.where(name: "Pullups").where("notes ~ '^\\d+$'")
 
     month_goal = 1_000
     current_yday = today.yday

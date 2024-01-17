@@ -4,14 +4,14 @@ import { Time } from "./_time"
 (function() {
   var renderEvents = function(cell, events) {
     cell.lines(events.map(function(item) {
-      if (cell.data.quiet && item.event_name.length == 1) { return }
+      if (cell.data.quiet && item.name.length == 1) { return }
 
       var timestamp = Time.at(Date.parse(item.timestamp))
       var h = timestamp.getHours()
       var time = (h > 12 ? h - 12 : h) + ":" + String(timestamp.getMinutes()).padStart(2, "0")
       var notes = item.notes ? " (" + item.notes + ")" : ""
 
-      return Text.justify(item.event_name + notes, time || "")
+      return Text.justify(item.name + notes, time || "")
     }).filter(function(line) { return line && line.length > 0 }))
   }
 
@@ -42,12 +42,12 @@ import { Time } from "./_time"
         Server.post("/functions/pullups_counter/run", { count: text })
       } else if (/^\s*Wordle \d+ (\d|X)\/6/.test(text)) {
         let num = text.match(/^\s*Wordle \d+ (\d|X)\/6/)[1]
-        Server.post("/action_events", { event_name: "Wordle", notes: num })
+        Server.post("/action_events", { name: "Wordle", notes: num })
       } else {
         var [name, ...notes] = text.split(" ")
         name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
         notes = notes.join(" ")
-        Server.post("/action_events", { event_name: name, notes: notes })
+        Server.post("/action_events", { name: name, notes: notes })
       }
     },
   })
