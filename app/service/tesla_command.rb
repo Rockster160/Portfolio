@@ -21,6 +21,8 @@ module TeslaCommand
   end
 
   def command(original_cmd, original_opt=nil, quick=false)
+    return if !Rails.env.production? && !quick
+
     broadcast(loading: true)
     car = Tesla.new unless quick
 

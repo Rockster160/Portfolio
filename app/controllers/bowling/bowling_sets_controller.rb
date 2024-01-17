@@ -38,10 +38,11 @@ module Bowling
           game.dig(:frames_details, "8", :throw1).present? # 8 is index, so frame 9
         }
         if started_frame_9 && current_user.admin?
-          Rails.cache.fetch("frame-9-start-car", expires_in: 1.hour) {
+          if !User.me.jarvis_cache.get(:bowlingCarStarted)
+            User.me.jarvis_cache.set(:bowlingCarStarted, true)
             Jarvis.say("Starting car for 9th frame")
             Jarvis.command(current_user, "Take me home")
-          }
+          end
         end
         if params[:throw_update].present?
           render status: :created, json: game_data
