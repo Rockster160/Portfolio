@@ -14,7 +14,20 @@ module Bowling
         }
 
         respond_to do |format|
-          format.json { render json: { html: template } }
+          format.json {
+            render json: {
+              html: template,
+              bowler: {
+                id: @bowler.id,
+                name: @bowler.name,
+                average: @bowler.average,
+                handicap: @bowler.handicap,
+                absent_score: @bowler.absent_score,
+                usbc_name: @bowler.usbc_full_name,
+                usbc_number: @bowler.usbc_number,
+              }
+            }
+          }
         end
       else
         # puts "\e[33m[LOGIT] | Error creating: \n#{@bowler.errors.full_messages}\e[0m"

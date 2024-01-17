@@ -4,6 +4,8 @@
 
 <% game ||= BowlingGame.new(game_num: params[:game] || 1) %>
 <% idx ||= 0 %>
+<% template ||= false %>
+<% hex = template ? "{{id}}" : SecureRandom.hex(4) %>
 <% bowler ||= game.bowler || Bowler.new %>
 <% bowler_set = @set&.bowler_sets&.find_by(bowler: bowler) %>
 
@@ -28,10 +30,10 @@
         <small>HDCP:</small> <span class="hdcp-val"><%= hdcp %></span>
       <% end %>
       <div class="presence-options">
-        <%= check_box_tag "#{set_params}absent", true, game.absent?, id: "absent-#{idx}", class: "absent-checkbox" %>
-        <%= label_tag "#{set_params}absent", "Absent?", for: "absent-#{idx}" %> <br>
-        <%= check_box_tag "#{set_params}skip", true, false, id: "skip-#{idx}", class: "skip-checkbox" %>
-        <%= label_tag "#{set_params}skip", "Skip?", for: "skip-#{idx}" %>
+        <%= check_box_tag "#{set_params}absent", true, game.absent?, id: "absent-#{hex}", class: "absent-checkbox" %>
+        <%= label_tag "#{set_params}absent", "Absent?", for: "absent-#{hex}" %> <br>
+        <%= check_box_tag "#{set_params}skip", true, false, id: "skip-#{hex}", class: "skip-checkbox" %>
+        <%= label_tag "#{set_params}skip", "Skip?", for: "skip-#{hex}" %>
       </div>
     </span>
     <div class="actions">

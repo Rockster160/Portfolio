@@ -34,23 +34,24 @@ window.onbeforeunload = function(evt) {
 // ===== BUG:
 
 // ===== TODO: (Don't delete, just check)
+// Lane talk
 // Test interactions on iPad
-// Edit name, avg, hdcp
-// Reorder bowlers via drag & drop (after clicking the edit btn)
-// Add new bowler with name, avg, hdcp
 // Add subs
 //   * New Sub bowler (with JUST average OR hdcp)
 //   * Existing Sub bowler
-// Remove bowlers from lane
-// Lane talk
-//   * Auto pull in lane from cache
+// BEFORE USE
+// Edit name, avg, hdcp
+// Somehow re-order bowlers
+//√ Remove bowlers from lane
+//   * Needs to delete the bowler from the current game on the BE
 // Score button interface (no pins)
 //   * Num keys should also work
-// Add button somewhere to remove a bowler
-// Add button somewhere to clear an entire bowler scores
+// Add button somewhere to clear an entire bowler's scores
 // Enemy Scores
 //   * Need a better place for these that don't mess up the page layout.
 //   * Enemy chart should show comparison totals (+- points)
+
+//√ Add new bowler with name, avg, hdcp
 //√ Add existing bowler
 //√ Team total scores
 //√ Live submit- don't reload page until results are saved
@@ -62,7 +63,7 @@ window.onbeforeunload = function(evt) {
 //√ Show total &+ hdcp under max column
 //√ Save scores!
 //√ Absent / Skip
-//  * Should remember the status on the next game
+//√ * Should remember the status on the next game
 //√ Show Stats
 //√ Make sure Num keys work! + Backspace, /, X, etc
 //√ Total Score

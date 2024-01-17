@@ -31,17 +31,23 @@ export default class Rest {
     }
 
     console.log(`REQUEST:${id}`);
-    return fetch(url, fetchOpts).then(function(res) {
-      Rest.controllers[id] = null
-      if (!res.ok) { throw new Error("Request failed", res) }
+    try {
+      return fetch(url, fetchOpts).then(function(res) {
+        Rest.controllers[id] = null
+        if (!res.ok) { throw new Error("Request failed", res) }
 
-      const contentType = res.headers.get("Content-Type")
-      if (contentType && contentType.includes("application/json")) {
-        return res.json()
-      } else {
-        return res.text()
-      }
-    }, err => console.error("Error:", err))
+        const contentType = res.headers.get("Content-Type")
+        if (contentType && contentType.includes("application/json")) {
+          return res.json()
+        } else {
+          return res.text()
+        }
+      }, err => {
+        // return Promise.resolve(null)
+      })
+    } catch (e) {
+      // Promise.resolve(null)
+    }
   }
 
   static get(url, params) {

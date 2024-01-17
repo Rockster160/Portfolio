@@ -29,7 +29,7 @@ export default class LiveStats {
 
     Rest.get(this.url, params).then(json => {
       this.loading(false)
-      if (!json.stats.total) { return }
+      if (!json?.stats?.total) { return }
 
       var nums = json.stats.spare + " / " + json.stats.total
       var ratio = Math.round((json.stats.spare / json.stats.total) * 100)

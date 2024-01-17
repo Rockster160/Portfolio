@@ -51,7 +51,7 @@
 </div>
 
 <template id="bowling-game-template">
-  <%= render partial: "bowling_game_form" %>
+  <%= render partial: "bowling_game_form", locals: { template: true } %>
 </template>
 
 <%= form_for @set, html: { class: "basic bowling-game-form" } do |f| %>

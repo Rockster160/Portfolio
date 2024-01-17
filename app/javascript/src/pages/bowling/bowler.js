@@ -2,15 +2,15 @@ import Reactive from "./reactive"
 import Frame from "./frame"
 
 export default class Bowler extends Reactive {
-  constructor(element) {
+  constructor(element, js_id) {
     super(element)
-    this.id = Math.floor(Math.random() * 16777215).toString(16)
+    this.id = js_id || Bowler.genId()
 
     // prev games? (score, point, card)
     this.elementAccessor("serverId", null, "data-bowler-id", function(value) {
       this.element.querySelector(".bowler-id-field").value = value
     })
-    this.elementAccessor("currentFrame", null, "data-current-frame")
+    this.elementAccessor("currentFrameNum", null, "data-current-frame")
     this.elementAccessor("absentScore", null, "data-absent-score")
     this.elementAccessor("bowlerNum", null, "data-bowler", function(value) {
       this.element.querySelector(".game-position").value = value
@@ -40,6 +40,8 @@ export default class Bowler extends Reactive {
     this.frames = Frame.fullGame(this)
     this.initialized = true
   }
+
+  static genId() { return Math.floor(Math.random() * 16777215).toString(16) }
 
   static get() {
     let bowlers = Array.from(document.querySelectorAll(".bowler")).map(bowler => new Bowler(bowler))

@@ -1,4 +1,5 @@
 import { onEvent, onKeyDown } from "./events"
+import Rest from "./rest"
 
 export function panel() {
   let editingBowler = null
@@ -43,24 +44,36 @@ export function panel() {
     }
 
     hideModal("#bowler-sub-list")
-    game.skipSaveAfterEdit = true
-    game.editBowler = false
+    game.editBowler = true
+  })
+  onEvent("submit", ".bowling-game-form", function(evt) {
+    evt.preventDefault()
+    return game.nextGame()
+  })
+  onEvent("submit", ".add-new-bowler", function(evt) {
+    evt.preventDefault()
+    let form = evt.target
+    Rest.submit(form).then(json => {
+      let json_bowler = json.bowler
+      let bowler_data = {
+        serverId:    json_bowler.id,
+        bowlerName:  json_bowler.name,
+        avg:         json_bowler.average,
+        hdcp:        json_bowler.handicap,
+        absentScore: json_bowler.absent_score,
+        usbcName:    json_bowler.usbc_name,
+        usbcNumber:  json_bowler.usbc_number,
+      }
+      game.addBowler(bowler_data)
 
-    // bowling-game-template
-    // var out_bowler_id = $(".sub-out-name").attr("data-bowler-id")
-    // var in_bowler_id = $(this).attr("data-bowler-id")
-    //
-    // var in_bowler = $($("#game-sub-list").get(0).content).find(".bowler[data-bowler-id=" + in_bowler_id + "]")
-    // var out_bowler = $(".bowler[data-bowler-id=" + out_bowler_id + "]")
-    //
-    // hideModal("#bowler-sub-list")
-    // if (out_bowler.length > 0) {
-    //   swap(in_bowler, out_bowler)
-    // } else {
-    //   $(in_bowler).insertBefore(".bowler-placeholder")
-    // }
-    // resetEdits()
-    // calcScores()
+      hideModal("#bowler-sub-list")
+      form.querySelector("#bowler_name").value = ""
+      form.querySelector("#bowler_total_games_offset").value = ""
+      form.querySelector("#bowler_total_pins_offset").value = ""
+      form.querySelector("input[type='submit']").removeAttribute("disabled")
+
+      game.editBowler = true
+    })
   })
 
   let gatherData = function(wrapper) {
@@ -80,7 +93,7 @@ export function panel() {
     game.eachBowler(bowler => {
       let selector = `.bowler-select[data-bowler-id="${bowler.serverId}"]`
       let ele = document.querySelector(selector)
-      if (!ele) { debugger}
+      if (!ele) { return } // New bowlers don't need to show up in this
       ele.classList.add("hidden")
     })
   }

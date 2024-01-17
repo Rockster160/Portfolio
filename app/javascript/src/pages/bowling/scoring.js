@@ -11,14 +11,22 @@ export default class Scoring {
   static updateBowler(bowler) {
     if (!bowler?.frames) { return }
 
-    let shot_scores = this.bowlerScores(bowler)
-    let scoring = BowlingCalculator.score(shot_scores)
+    let scoring
+    if (bowler.absent) {
+      let frameNum = game.earliestFrame()?.frameNum || 10
+      scoring = BowlingCalculator.absentScore(bowler.absentScore, frameNum)
+    } else {
+      let shot_scores = this.bowlerScores(bowler)
+      scoring = BowlingCalculator.score(shot_scores)
+    }
+
     scoring.frames.forEach((frameScore, idx) => {
       bowler.frames[idx+1].display = frameScore
     })
     for (let i=scoring.frames?.length || []; i<10; i++) {
       bowler.frames[i+1].display = ""
     }
+    bowler.currentFrameNum = scoring.frames?.length || 1
     bowler.currentScore = scoring.total
     bowler.maxScore = scoring.max
 
@@ -31,18 +39,11 @@ export default class Scoring {
 
     let frameNum = game.earliestFrame()?.frameNum || 10
     game.eachBowler(bowler => {
+      // Absent bowlers don't have their scores updated since they get skipped
+      if (bowler.absent && bowler.currentFrameNum < frameNum) { this.updateBowler(bowler) }
       // parseInt should happen in the accessor somehow
-      if (bowler.active) {
-        teamTotal += parseInt(bowler.currentScore)
-        teamHdcp += parseInt(bowler.hdcp)
-      } else {
-        let absentMax = parseInt(bowler.absentScore) || 0
-        let absentFrameAvg = Math.floor(absentMax / 10)
-        let currentAbsentScore = absentFrameAvg * frameNum
-
-        teamTotal += parseInt(currentAbsentScore)
-        teamHdcp += parseInt(bowler.hdcp)
-      }
+      teamTotal += parseInt(bowler.currentScore)
+      teamHdcp += parseInt(bowler.hdcp)
     })
 
     let totalText = teamHdcp > 0 ? `${teamTotal} | ${teamTotal + teamHdcp}` : `${teamTotal}`

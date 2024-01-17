@@ -40,10 +40,6 @@ export function buttons() {
 
     game.currentShot = bowler.frames[frameNum].shots[shotNum]
   })
-  onEvent("submit", ".bowling-game-form", function(evt) {
-    evt.preventDefault()
-    return game.nextGame()
-  })
 
   let finishFrame = function(knock_rest) {
     if (knock_rest) { game.pins.knockAll() }

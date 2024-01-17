@@ -128,6 +128,10 @@ class Shot extends Reactive {
     this.shotNum = shot_num
     this.frame = frame
 
+    this.bool("isSplit", function(val) {
+      this.element.closest(".split-holder").classList.toggle("split", val)
+    })
+
     this.clear(false)
   }
 
@@ -145,6 +149,8 @@ class Shot extends Reactive {
         this.score = this.remaining_pins_element.value
       }
     }
+    this.isSplit = false
+    this.checkSplit()
     this.nextShot()?.clear(reset)
     this.frame.updateScores()
   }
@@ -228,8 +234,7 @@ class Shot extends Reactive {
   checkSplit() {
     if (this.prevShot()) { return }
 
-    let isSplit = game.pins.checkSplit(this.standingPins)
-    this.element.closest(".split-holder").classList.toggle("split", isSplit)
+    this.isSplit = game.pins.checkSplit(this.standingPins)
   }
 
   nextShot() {

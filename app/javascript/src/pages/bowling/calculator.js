@@ -94,4 +94,21 @@ export default class BowlingCalculator {
       return acc
     }, [])
   }
+
+  static absentScore(absentMax, frameNum) {
+    absentMax = parseInt(absentMax) || 0
+    let absentFrameAvg = Math.floor(absentMax / 10)
+    let currentAbsentScore = absentFrameAvg * frameNum
+    let frames = Array.from({ length: frameNum }, (_, idx) => (idx+1) * absentFrameAvg)
+    if (frameNum == 10) {
+      frame[9] = absentMax
+      currentAbsentScore = absentMax
+    }
+
+    return {
+      frames: frames,
+      total: currentAbsentScore,
+      max: absentMax,
+    }
+  }
 }

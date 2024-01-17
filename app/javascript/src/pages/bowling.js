@@ -10,33 +10,6 @@
 //     gotoNextFrame()
 //   })
 //
-//   $(document).on("submit", ".add-new-bowler", function(evt) {
-//     evt.preventDefault()
-//
-//     var form = $(this)
-//     var url = form.attr("action")
-//
-//     $.post(url, form.serialize()).done(function(data, status, xhr) {
-//       var in_bowler = $(data.html)
-//       var out_bowler_id = $(".sub-out-name").attr("data-bowler-id")
-//       var out_bowler = $(".bowler[data-bowler-id=" + out_bowler_id + "]")
-//
-//       $("#bowler_name").val("")
-//       $("#bowler_total_games_offset").val("")
-//       $("#bowler_total_pins_offset").val("")
-//
-//       $($("#game-sub-list").get(0).content).append(in_bowler)
-//       hideModal("#bowler-sub-list")
-//       if (out_bowler.length > 0) {
-//         swap(in_bowler, out_bowler)
-//       } else {
-//         $(in_bowler).insertBefore(".bowler-placeholder")
-//       }
-//       resetEdits()
-//       calcScores()
-//     })
-//   })
-//
 //
 //   }).on("click", ".edit-bowler-name", function(evt) {
 //     evt.preventDefault()

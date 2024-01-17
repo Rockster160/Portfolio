@@ -88,12 +88,18 @@ export default class Game extends Reactive {
   get finishBtn() { return this.element.querySelector(".bowling-form-btn") }
 
   addBowler(data) {
+    let bowler_id = Bowler.genId()
     let template = document.querySelector("#bowling-game-template")
-    let clone = template.content.cloneNode(true)
+
+    let templateHTML = template.innerHTML.replace(/{{id}}/g, bowler_id)
+    let tempTemplate = document.createElement("template")
+    tempTemplate.innerHTML = templateHTML
+
+    let clone = tempTemplate.content.cloneNode(true)
     let placeholder = this.element.querySelector(".bowler-placeholder")
     this.element.insertBefore(clone, placeholder)
     let element = lastSelector(document, ".bowler")
-    let bowler = new Bowler(element)
+    let bowler = new Bowler(element, bowler_id)
     this.bowlers.push(bowler)
 
     for (const [key, value] of Object.entries(data)) {
@@ -210,16 +216,19 @@ export default class Game extends Reactive {
   fillRandomUntil(end_frame, fill_with) {
     end_frame = end_frame || 10
     this.eachBowler(bowler => {
-      bowler.eachFrame(frame => {
-        if (frame.frameNum <= end_frame) {
-          if (fill_with) {
-            frame.firstShot.score = fill_with
-          } else {
-            frame.fillRandom()
+      if (bowler.active) {
+        bowler.eachFrame(frame => {
+          if (frame.frameNum <= end_frame) {
+            if (fill_with) {
+              frame.firstShot.score = fill_with
+            } else {
+              frame.fillRandom()
+            }
           }
-        }
-      })
+        })
+      }
     })
+    this.nextShot()
   }
 
   clearShot() {
