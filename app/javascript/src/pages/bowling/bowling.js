@@ -35,12 +35,13 @@ window.onbeforeunload = function(evt) {
 
 // ===== TODO: (Don't delete, just check)
 // Test interactions on iPad
-// Edit names/bowlers (including average/hdcp?)
+// Edit name, avg, hdcp
 // Reorder bowlers via drag & drop (after clicking the edit btn)
+// Add new bowler with name, avg, hdcp
 // Add subs
 //   * New Sub bowler (with JUST average OR hdcp)
 //   * Existing Sub bowler
-// Add/Remove bowlers from lane
+// Remove bowlers from lane
 // Lane talk
 //   * Auto pull in lane from cache
 // Score button interface (no pins)
@@ -50,6 +51,7 @@ window.onbeforeunload = function(evt) {
 // Enemy Scores
 //   * Need a better place for these that don't mess up the page layout.
 //   * Enemy chart should show comparison totals (+- points)
+//√ Add existing bowler
 //√ Team total scores
 //√ Live submit- don't reload page until results are saved
 //√ Previous Game Scores
