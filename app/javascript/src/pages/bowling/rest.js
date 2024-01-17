@@ -1,47 +1,59 @@
 export default class Rest {
   static controllers = {}
 
-  static abort(method) { this.controllers[method]?.abort() }
+  static abort(id) { try { Rest.controllers[id]?.abort() } catch (e) {} }
 
-  static async request(method, url, params, callback) {
-    if (params && typeof(params) === "function") {
-      callback = params
-      params = undefined
-    }
+  static submit(form, opts) {
+    opts = opts || {}
 
-    this.abort(method)
-    this.controllers[method] = new AbortController()
+    let method = opts.method || form.method
+    let url = opts.url || form.action
+    let params = opts.params || new FormData(form)
+
+    return this.request(method, url, params)
+  }
+
+  static request(method, url, params, opts) {
+    opts = opts || {}
+
+    let id = `${method}:${url}`
+    this.abort(id)
+    Rest.controllers[id] = new AbortController()
+
     let fetchOpts = {
-      signal: this.controllers[method].signal,
+      signal: Rest.controllers[id].signal,
       method: method,
-      // headers: { "Content-Type": "application/json" },
     }
-    if (method == "GET") {
+    if (method.toUpperCase() == "GET") {
       if (params) { url = this.encodeUrlParams(url, params) }
     } else {
       if (params) { fetchOpts.body = params }
     }
-    console.log(`${method}: ${url}`);
-    await fetch(url, fetchOpts).then((res) => {
-      if (res.ok) {
-        res.json().then((json) => {
-          if (callback && typeof callback === "function") { callback(json) }
-        })
+
+    console.log(`REQUEST:${id}`);
+    return fetch(url, fetchOpts).then(function(res) {
+      Rest.controllers[id] = null
+      if (!res.ok) { throw new Error("Request failed", res) }
+
+      const contentType = res.headers.get("Content-Type")
+      if (contentType && contentType.includes("application/json")) {
+        return res.json()
+      } else {
+        return res.text()
       }
-      this.controllers[method] = null
-    }).catch((e) => {})
+    }, err => console.error("Error:", err))
   }
 
-  static async get(url, params, callback) {
-    await this.request("GET", url, params, callback)
+  static get(url, params) {
+    return this.request("GET", url, params)
   }
 
-  static async post(url, params, callback) {
-    await this.request("POST", url, params, callback)
+  static post(url, params) {
+    return this.request("POST", url, params)
   }
 
-  static async patch(url, params, callback) {
-    await this.request("PATCH", url, params, callback)
+  static patch(url, params) {
+    return this.request("PATCH", url, params)
   }
 
   static encodeUrlParams(url, params) {

@@ -143,6 +143,19 @@ export default class Game extends Reactive {
     this.saveScores()
   }
 
+  syncServerBowlers(data) {
+    game.eachBowler(bowler => {
+      if (!bowler.serverId) {
+        data.bowlers?.forEach(bowler_data => {
+          if (bowler_data.name == bowler.bowlerName) {
+            bowler.serverId = bowler_data.id
+            console.log(`Set ${bowler.bowlerName} to ${bowler.serverId}`);
+          }
+        })
+      }
+    })
+  }
+
   eachBowler(callback) { this.bowlers.forEach(item => item ? callback(item) : null) }
 
   start() {
@@ -167,20 +180,11 @@ export default class Game extends Reactive {
     if (method && typeof method === "function") { [callback, method] = [method, null] }
     let form = this.element
 
-    Rest.request(method || form.method, form.action, new FormData(form), (data) => {
-      console.log(data);
-      game.eachBowler(bowler => {
-        if (!bowler.serverId) {
-          data.bowlers?.forEach(bowler_data => {
-            if (bowler_data.name == bowler.bowlerName) {
-              bowler.serverId = bowler_data.id
-              console.log(`Set ${bowler.bowlerName} to ${bowler.serverId}`);
-            }
-          })
-        }
-      })
+    Rest.submit(form, { method: method }).then(json => {
+      console.log(json);
+      this.syncServerBowlers(json)
       this.saved = true
-      if (callback && typeof callback === "function") { callback(data) }
+      if (callback && typeof callback === "function") { callback(json) }
     })
   }
 

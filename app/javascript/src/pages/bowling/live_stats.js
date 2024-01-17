@@ -27,7 +27,7 @@ export default class LiveStats {
       pins: pins === undefined ? null : `[${pins.join(",")}]`,
     }
 
-    Rest.get(this.url, params, (json) => {
+    Rest.get(this.url, params).then(json => {
       this.loading(false)
       if (!json.stats.total) { return }
 
