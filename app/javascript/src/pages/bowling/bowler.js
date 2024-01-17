@@ -4,10 +4,12 @@ import Frame from "./frame"
 export default class Bowler extends Reactive {
   constructor(element) {
     super(element)
-    this.serverId = parseInt(element.getAttribute("data-bowler-id"))
     this.id = Math.floor(Math.random() * 16777215).toString(16)
 
     // prev games? (score, point, card)
+    this.elementAccessor("serverId", null, "data-bowler-id", function(value) {
+      this.element.querySelector(".bowler-id-field").value = value
+    })
     this.elementAccessor("currentFrame", null, "data-current-frame")
     this.elementAccessor("absentScore", null, "data-absent-score")
     this.elementAccessor("bowlerNum", null, "data-bowler", function(value) {
@@ -27,6 +29,7 @@ export default class Bowler extends Reactive {
     this.elementAccessor("bowlerName", ".bowler-name-field", "value", function(value) {
       this.element.querySelector(".bowler-name .name .display-name").innerText = value
       this.element.querySelector(".bowler-options .details .bowler-options-name").innerText = value
+      this.element.querySelector(".bowler-options .bowler-sub-btn")?.setAttribute("data-bowler-name", value)
     })
     this.elementAccessor("absent", ".absent-checkbox", "checked")
     this.elementAccessor("skip", ".skip-checkbox", "checked")
@@ -35,6 +38,7 @@ export default class Bowler extends Reactive {
     this.elementAccessor("maxScore", ".total .max")
 
     this.frames = Frame.fullGame(this)
+    this.initialized = true
   }
 
   static get() {
@@ -55,5 +59,11 @@ export default class Bowler extends Reactive {
   get num() { return parseInt(this.bowlerNum) }
   set num(val) { return this.bowlerNum = val }
 
-  valueOf() { return this.id }
+  remove() {
+    game.bowlers = game.bowlers.filter(bowler => !bowler || bowler.id != this.id)
+    this.element.remove()
+    game.resetBowlers()
+  }
+
+  valueOf() { return `bowlers[${this.id}]` }
 }

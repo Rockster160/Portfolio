@@ -39,7 +39,7 @@ export default class Frame extends Reactive {
   eachShot(callback) { this.shots.forEach(item => item ? callback(item) : null) }
 
   updateScores(skip_bowler) {
-    if (!game.initialized) { return }
+    if (!game.initialized || !this.bowler.initialized) { return }
     if (!skip_bowler) { Scoring.updateBowler(this.bowler) }
     applyFrameModifiers(this)
   }
@@ -117,7 +117,7 @@ export default class Frame extends Reactive {
   get started() { return this.shots.some(shot => shot?.complete) }
 
   valueOf() {
-    return `bowlers[${this.bowler.serverId}][${this.frameNum}]`
+    return `bowlers[${this.bowler.id}][${this.frameNum}]`
   }
 }
 
@@ -251,6 +251,6 @@ class Shot extends Reactive {
   }
 
   valueOf() {
-    return `bowlers[${this.bowler.serverId}][${this.frame.frameNum}][${this.shotNum}]`
+    return `bowlers[${this.bowler.id}][${this.frame.frameNum}][${this.shotNum}]`
   }
 }

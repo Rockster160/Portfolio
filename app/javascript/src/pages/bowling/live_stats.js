@@ -23,7 +23,7 @@ export default class LiveStats {
     let stats = this
     let params = {
       league_id: game.leagueId,
-      bowler_id: bowler.serverId,
+      bowler_id: parseInt(bowler.serverId),
       pins: pins === undefined ? null : `[${pins.join(",")}]`,
     }
 

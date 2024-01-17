@@ -37,45 +37,7 @@
 //     })
 //   })
 //
-//   $(document).on("click", ".bowler-select", function(evt) {
-//     var out_bowler_id = $(".sub-out-name").attr("data-bowler-id")
-//     var in_bowler_id = $(this).attr("data-bowler-id")
 //
-//     var in_bowler = $($("#game-sub-list").get(0).content).find(".bowler[data-bowler-id=" + in_bowler_id + "]")
-//     var out_bowler = $(".bowler[data-bowler-id=" + out_bowler_id + "]")
-//
-//     hideModal("#bowler-sub-list")
-//     if (out_bowler.length > 0) {
-//       swap(in_bowler, out_bowler)
-//     } else {
-//       $(in_bowler).insertBefore(".bowler-placeholder")
-//     }
-//     resetEdits()
-//     calcScores()
-//   })
-//
-//   $(document).on("click", ".bowler-sub-btn", function(evt) {
-//     var name = $(this).attr("data-bowler-name")
-//     $(".sub-out-name").text(name).attr("data-bowler-id", $(this).attr("data-bowler-id"))
-//     $(".sub-message").removeClass("hidden")
-//
-//     $(".bowler-select").removeClass("hidden")
-//     $(".bowler").each(function() {
-//       $(".bowler-select[data-bowler-id=" + $(this).attr("data-bowler-id") + "]").addClass("hidden")
-//     })
-//
-//     showModal("#bowler-sub-list")
-//   }).on("click", ".new-bowler", function(evt) {
-//     evt.preventDefault()
-//     evt.stopPropagation()
-//     $(".sub-message").addClass("hidden")
-//     $(".bowler-select").removeClass("hidden")
-//     $(".bowler").each(function() {
-//       if (!$(this).attr("data-bowler-id")) { return }
-//       $(".bowler-select[data-bowler-id=" + $(this).attr("data-bowler-id") + "]").addClass("hidden")
-//     })
-//
-//     showModal("#bowler-sub-list")
 //   }).on("click", ".edit-bowler-name", function(evt) {
 //     evt.preventDefault()
 //     evt.stopPropagation()

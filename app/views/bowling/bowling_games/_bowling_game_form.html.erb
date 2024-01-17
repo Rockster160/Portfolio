@@ -12,7 +12,7 @@
 <div class="bowling-table bowler" data-absent-score="<%= bowler_set&.absent_score || bowler.absent_score %>" data-bowler="<%= idx + 1 %>" data-current-frame="1" data-bowler-id="<%= bowler.id %>">
   <%= hidden_field_tag "#{set_params}id", game.id %>
   <%= hidden_field_tag "#{set_params}bowler_name", bowler.name, class: "bowler-name-field" %>
-  <%= hidden_field_tag "#{set_params}bowler_id", bowler.id %>
+  <%= hidden_field_tag "#{set_params}bowler_id", bowler.id, class: "bowler-id-field" %>
   <%= hidden_field_tag "#{set_params}card_point", game.card_point, class: "card-point-field" %>
   <%= hidden_field_tag "#{set_params}game_num", game.game_num, class: "bowler-game-number" %>
   <%= hidden_field_tag "#{set_params}handicap", game.handicap, class: "bowler-handicap" %>
@@ -44,22 +44,20 @@
   <div class="bowling-cell bowler-name">
     <div class="card-point">+1</div>
     <span class="avg">
-      <% if (avg = bowler_set&.starting_avg || bowler.average)&.positive? %>
-        <span class="avg-label">AVG:</span> <span class="avg-val"><%= avg %></span>
-      <% end %>
-      <% if (hdcp = bowler_set&.handicap || bowler.handicap)&.positive? %>
-        <span class="avg-label">HDCP:</span> <span class="hdcp-val"><%= hdcp %></span>
-      <% end %>
+      <% avg = bowler_set&.starting_avg || bowler.average %>
+      <span class="avg-label">AVG:</span> <span class="avg-val"><%= avg || "N/A" %></span>
+      <% hdcp = bowler_set&.handicap || bowler.handicap %>
+      <span class="avg-label">HDCP:</span> <span class="hdcp-val"><%= hdcp || "N/A" %></span>
     </span>
     <span class="name">
-      <% if bowler.name.present? %>
-        <span class="display-name"><%= bowler.name %></span> <span class="absent-bowler">[A]</span>  <span class="skip-bowler">[S]</span>
-      <% else %>
-        <span class="edit-bowler-name btn">
-          <i class="fa fa-pencil"></i>
-          Name
-        </span>
-      <% end %>
+      <span class="display-name">
+        <% if bowler.name.present? %>
+          <%= bowler.name %>
+        <% else %>
+          <span class="edit-bowler-name btn"><i class="fa fa-pencil"></i> Name</span>
+        <% end %>
+      </span>
+      <span class="absent-bowler">[A]</span>  <span class="skip-bowler">[S]</span>
       <span class="hidden usbc-name"><%= bowler.usbc_full_name %></span>
       <span class="hidden usbc-number"><%= bowler.usbc_number %></span>
     </span>

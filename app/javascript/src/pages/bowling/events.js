@@ -27,6 +27,12 @@ export function trigger(evtName, detail) {
   }))
 }
 
+export function lastSelector(wrapper, selector) {
+  let lastItem = null
+  wrapper.querySelectorAll(selector).forEach(item => lastItem = item)
+  return lastItem
+}
+
 export function onEvent(events, selector, callback) {
   if (selector && typeof selector == "function") {
     callback = selector

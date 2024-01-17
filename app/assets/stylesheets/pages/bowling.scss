@@ -85,10 +85,13 @@
     background: $blue-l5;
     padding: 10px;
 
-    &.bowler-select:hover {
-      transition: background 0.3s;
-      cursor: pointer;
-      background: $blue-l4;
+    &.bowler-select {
+      .bowler-data { display: none; }
+      &:hover {
+        transition: background 0.3s;
+        cursor: pointer;
+        background: $blue-l4;
+      }
     }
   }
 

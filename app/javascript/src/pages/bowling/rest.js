@@ -21,7 +21,7 @@ export default class Rest {
     } else {
       if (params) { fetchOpts.body = params }
     }
-
+    console.log(`${method}: ${url}`);
     await fetch(url, fetchOpts).then((res) => {
       if (res.ok) {
         res.json().then((json) => {

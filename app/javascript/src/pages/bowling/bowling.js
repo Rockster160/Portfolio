@@ -2,15 +2,17 @@ import Bowler from "./bowler"
 import Game from "./game"
 import { buttons } from "./buttons"
 import { events } from "./events"
+import { panel } from "./panel"
 
 window.onload = function() {
   if (document.querySelector(".bowling-game-form")) {
     new Game(document.querySelector(".bowling-game-form"))
 
-    buttons()
-    events()
+    buttons() // Event listeners for buttons and key presses
+    events() // Helpers for events, also game state event callbacks
+    panel() // Event listeners for sub menus and changing the bowler order and scores and such
     game.start()
-    game.eachBowler(bowler => window[bowler.bowlerName.trim().toLowerCase()] = bowler)
+    game.eachBowler(bowler => window[(bowler.bowlerName || "noname").trim().toLowerCase()] = bowler)
 
     // game.fillRandomUntil(9)
     // game.fillRandomUntil(9, "X")
@@ -31,7 +33,7 @@ window.onbeforeunload = function(evt) {
 
 // ===== BUG:
 
-// ===== Todo: (Don't delete, just check)
+// ===== TODO: (Don't delete, just check)
 // Test interactions on iPad
 // Edit names/bowlers (including average/hdcp?)
 // Reorder bowlers via drag & drop (after clicking the edit btn)
@@ -45,10 +47,10 @@ window.onbeforeunload = function(evt) {
 //   * Num keys should also work
 // Add button somewhere to remove a bowler
 // Add button somewhere to clear an entire bowler scores
-// Team total scores
 // Enemy Scores
 //   * Need a better place for these that don't mess up the page layout.
 //   * Enemy chart should show comparison totals (+- points)
+//√ Team total scores
 //√ Live submit- don't reload page until results are saved
 //√ Previous Game Scores
 //√ Save when "Done editing" bowlers

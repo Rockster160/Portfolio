@@ -5,7 +5,7 @@ import PinTimer from "./pin_timer"
 import Scoring from "./scoring"
 import FrameNavigation from "./frame_navigation"
 import Rest from "./rest"
-import { trigger } from "./events"
+import { trigger, lastSelector } from "./events"
 
 export default class Game extends Reactive {
   constructor(element) {
@@ -44,7 +44,8 @@ export default class Game extends Reactive {
     this.bool("editBowler", function(value) {
       document.querySelectorAll("[data-edit=show]").forEach(item => item.classList.toggle("hidden", !value))
       document.querySelectorAll("[data-edit=hide]").forEach(item => item.classList.toggle("hidden", value))
-      if (!value) { this.saveScores() }
+      if (!value && !this.skipSaveAfterEdit) { this.saveScores() }
+      this.skipSaveAfterEdit = false
     })
     this.bool("defaultPinStanding", function(value) {
       this.element.querySelector(".pin-all-toggle").classList.toggle("fall", !value)
@@ -86,6 +87,24 @@ export default class Game extends Reactive {
 
   get finishBtn() { return this.element.querySelector(".bowling-form-btn") }
 
+  addBowler(data) {
+    let template = document.querySelector("#bowling-game-template")
+    let clone = template.content.cloneNode(true)
+    let placeholder = this.element.querySelector(".bowler-placeholder")
+    this.element.insertBefore(clone, placeholder)
+    let element = lastSelector(document, ".bowler")
+    let bowler = new Bowler(element)
+    this.bowlers.push(bowler)
+
+    for (const [key, value] of Object.entries(data)) {
+      if (key != "bowlerNum") {
+        if (value) { bowler[key] = value }
+      }
+    }
+    bowler.bowlerNum = data.bowlerNum || this.bowlers.length // Triggers resort and save
+    return bowler
+  }
+
   bowlerFrom(ele) {
     return this.bowlers[parseInt(ele.closest(".bowler").getAttribute("data-bowler"))]
   }
@@ -101,7 +120,11 @@ export default class Game extends Reactive {
     this.eachBowler(other => {
       if (bowler != other && bowler.bowlerNum == other.bowlerNum) { other.bowlerNum = oldNum }
     })
-    // Re-sort
+    this.resetBowlers()
+    this.sorting = false
+  }
+
+  resetBowlers() {
     this.bowlers.sort((a, b) => {
       if (a === null) { return -1 }
       if (b === null) { return 1 }
@@ -115,7 +138,9 @@ export default class Game extends Reactive {
     this.bowlers.toReversed().forEach(other => {
       if (other) { this.element.insertBefore(other.element, this.element.firstChild) }
     })
-    this.sorting = false
+
+    Scoring.updateTotals()
+    this.saveScores()
   }
 
   eachBowler(callback) { this.bowlers.forEach(item => item ? callback(item) : null) }
@@ -141,7 +166,19 @@ export default class Game extends Reactive {
     if (!this.initialized) { return }
     if (method && typeof method === "function") { [callback, method] = [method, null] }
     let form = this.element
+
     Rest.request(method || form.method, form.action, new FormData(form), (data) => {
+      console.log(data);
+      game.eachBowler(bowler => {
+        if (!bowler.serverId) {
+          data.bowlers?.forEach(bowler_data => {
+            if (bowler_data.name == bowler.bowlerName) {
+              bowler.serverId = bowler_data.id
+              console.log(`Set ${bowler.bowlerName} to ${bowler.serverId}`);
+            }
+          })
+        }
+      })
       this.saved = true
       if (callback && typeof callback === "function") { callback(data) }
     })

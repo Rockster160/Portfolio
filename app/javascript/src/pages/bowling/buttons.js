@@ -40,11 +40,6 @@ export function buttons() {
 
     game.currentShot = bowler.frames[frameNum].shots[shotNum]
   })
-  onEvent("change", ".absent-checkbox, .skip-checkbox", function() {
-    if (game.currentBowler?.active) { return }
-
-    game.nextShot()
-  })
   onEvent("submit", ".bowling-game-form", function(evt) {
     evt.preventDefault()
     return game.nextGame()

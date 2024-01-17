@@ -69,7 +69,14 @@ module Bowling
     private
 
     def game_data
-      { league_id: @league.id, set_id: @set.id, game_num: params[:game] || 1 }
+      {
+        league_id: @league.id,
+        set_id: @set.id,
+        game_num: params[:game] || 1,
+        bowlers: @set.ordered_bowlers.map { |bowler|
+          { id: bowler.id, name: bowler.name }
+        }
+      }
     end
 
     def user_sets
