@@ -101,7 +101,7 @@ export default class BowlingCalculator {
     let currentAbsentScore = absentFrameAvg * frameNum
     let frames = Array.from({ length: frameNum }, (_, idx) => (idx+1) * absentFrameAvg)
     if (frameNum == 10) {
-      frame[9] = absentMax
+      frames[9] = absentMax
       currentAbsentScore = absentMax
     }
 

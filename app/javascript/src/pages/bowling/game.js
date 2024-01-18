@@ -110,16 +110,29 @@ export default class Game extends Reactive {
     bowler.bowlerNum = data.bowlerNum || this.bowlers.length // Triggers resort and save
     return bowler
   }
+  removeBowler(bowler) {
+    if (bowler.serverId) {
+      Rest.delete(this.element.action + `/bowler/${bowler.serverId}`, { game_num: game.gameNum }).then(res => {
+        this.bowlers = this.bowlers.filter(other => !other || other.id != bowler.id)
+        bowler.element.remove()
+        this.resetBowlers()
+      })
+    } else {
+      this.bowlers = this.bowlers.filter(other => !other || other.id != bowler.id)
+      bowler.element.remove()
+      this.resetBowlers()
+    }
+  }
 
   bowlerFrom(ele) {
     return this.bowlers[parseInt(ele.closest(".bowler").getAttribute("data-bowler"))]
   }
 
   resortBowlers(bowler) {
+    // Only re-order and organize elements once - this can potentially call itself
+    if (this.sorting) { return }
     // Avoid unnecessary sorting
     if (bowler == game.bowlers[bowler.bowlerNum]) { return }
-    // Only re-order and organize elements once
-    if (this.sorting) { return }
     this.sorting = true
     // Swap conflicts
     let oldNum = game.bowlers.indexOf(bowler)
@@ -151,14 +164,15 @@ export default class Game extends Reactive {
 
   syncServerBowlers(data) {
     game.eachBowler(bowler => {
-      if (!bowler.serverId) {
-        data.bowlers?.forEach(bowler_data => {
-          if (bowler_data.name == bowler.bowlerName) {
-            bowler.serverId = bowler_data.id
-            console.log(`Set ${bowler.bowlerName} to ${bowler.serverId}`);
-          }
-        })
-      }
+      data?.bowlers?.forEach(bowler_data => {
+        if (!bowler.serverId && bowler_data.name == bowler.bowlerName) {
+          bowler.serverId = bowler_data.id
+          console.log(`Set ${bowler.bowlerName} to ${bowler.serverId}`);
+        }
+        if (bowler.serverId == bowler_data.id) {
+          bowler.bowlerGameId = bowler_data.bowler_game_id
+        }
+      })
     })
   }
 
@@ -188,9 +202,11 @@ export default class Game extends Reactive {
 
     Rest.submit(form, { method: method }).then(json => {
       console.log(json);
-      this.syncServerBowlers(json)
-      this.saved = true
-      if (callback && typeof callback === "function") { callback(json) }
+      if (json) {
+        this.syncServerBowlers(json)
+        this.saved = true
+        if (callback && typeof callback === "function") { callback(json) }
+      }
     })
   }
 

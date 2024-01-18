@@ -67,6 +67,17 @@ module Bowling
       end
     end
 
+    def remove_bowler
+      game = @set.games.find_by!(bowler_id: params[:bowler_id], game_num: params[:game_num])
+      if game.destroy
+        # NOTE: This doesn't currently reset the bowler's scores.
+        # If a bowler is removed from an old game, it will mess up future averages
+        render status: :accepted, json: {}
+      else
+        render status: :bad_request, json: {}
+      end
+    end
+
     private
 
     def game_data
@@ -74,8 +85,8 @@ module Bowling
         league_id: @league.id,
         set_id: @set.id,
         game_num: params[:game] || 1,
-        bowlers: @set.ordered_bowlers.map { |bowler|
-          { id: bowler.id, name: bowler.name }
+        bowlers: @set.games.joins(:bowler).map { |game|
+          { id: game.bowler.id, name: game.bowler.name, bowler_game_id: game.id }
         }
       }
     end

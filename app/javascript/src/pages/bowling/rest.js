@@ -16,7 +16,7 @@ export default class Rest {
   static request(method, url, params, opts) {
     opts = opts || {}
 
-    let id = `${method}:${url}`
+    let id = `${method} ${url}`
     this.abort(id)
     Rest.controllers[id] = new AbortController()
 
@@ -24,13 +24,13 @@ export default class Rest {
       signal: Rest.controllers[id].signal,
       method: method,
     }
-    if (method.toUpperCase() == "GET") {
+    if (method.toUpperCase() == "GET" || method.toUpperCase() == "DELETE") {
       if (params) { url = this.encodeUrlParams(url, params) }
     } else {
       if (params) { fetchOpts.body = params }
     }
 
-    console.log(`REQUEST:${id}`);
+    console.log(id, params);
     try {
       return fetch(url, fetchOpts).then(function(res) {
         Rest.controllers[id] = null
@@ -60,6 +60,10 @@ export default class Rest {
 
   static patch(url, params) {
     return this.request("PATCH", url, params)
+  }
+
+  static delete(url, params) {
+    return this.request("DELETE", url, params)
   }
 
   static encodeUrlParams(url, params) {

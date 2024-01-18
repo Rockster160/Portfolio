@@ -12,7 +12,7 @@
 <% set_params = "bowling_set[games_attributes][]" %>
 
 <div class="bowling-table bowler" data-absent-score="<%= bowler_set&.absent_score || bowler.absent_score %>" data-bowler="<%= idx + 1 %>" data-current-frame="1" data-bowler-id="<%= bowler.id %>">
-  <%= hidden_field_tag "#{set_params}id", game.id %>
+  <%= hidden_field_tag "#{set_params}id", game.id, class: "bowler-game-id" %>
   <%= hidden_field_tag "#{set_params}bowler_name", bowler.name, class: "bowler-name-field" %>
   <%= hidden_field_tag "#{set_params}bowler_id", bowler.id, class: "bowler-id-field" %>
   <%= hidden_field_tag "#{set_params}card_point", game.card_point, class: "card-point-field" %>
@@ -37,9 +37,7 @@
       </div>
     </span>
     <div class="actions">
-      <% if bowler.persisted? %>
-        <div class="btn bowler-sub-btn" data-bowler-name="<%= bowler.name %>" data-bowler-id="<%= bowler.id %>">Sub</div>
-      <% end %>
+      <div class="btn bowler-sub-btn">Sub</div>
       <!-- <i class="fa fa-arrows"></i> -->
     </div>
   </div>
@@ -67,7 +65,7 @@
       <% (game.game_num - 1).times do |t| %>
         <% prev_game = @set&.games&.find_by(bowler: bowler, game_num: t + 1) %>
         <% next if prev_game.nil? %>
-        <span class="prev-score nowrap <%= "bowling-winner" if prev_game.game_point? %> <%= "perfect-game" if prev_game.perfect_game? %>"><%= "&#9824; ".html_safe if prev_game.card_point? %><%= prev_game.score %><%= "|#{prev_game.total_score}" if prev_game.handicap&.positive? %></span>
+        <span class="prev-score nowrap <%= "bowling-winner" if prev_game.game_point? %> <%= "perfect-game" if prev_game.perfect_game? %> <%= "absent-game" if prev_game.absent? %>"><%= "&#9824; ".html_safe if prev_game.card_point? %><%= prev_game.score %><%= "|#{prev_game.total_score}" if prev_game.handicap&.positive? %></span>
       <% end %>
     </div>
   </div>

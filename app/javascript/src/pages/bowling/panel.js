@@ -16,20 +16,20 @@ export function panel() {
 
     game.nextShot()
   })
-  onEvent("click", ".bowling-cell .remove", (evt) => game.bowlerFrom(evt.target).remove())
+  onEvent("click", ".bowling-cell .remove", (evt) => game.removeBowler(game.bowlerFrom(evt.target)))
   onEvent("click", ".new-bowler", (evt) => {
     showBowlerModal(evt)
 
     showModal("#bowler-sub-list")
   })
-  onEvent("click", ".bowler-sub-bowler", (evt) => {
+  onEvent("click", ".bowler-sub-btn", (evt) => {
     showBowlerModal(evt)
-    document.querySelector(".sub-message").classList.remove("hidden")
 
     editingBowler = game.bowlerFrom(evt.target)
     let nameEle = document.querySelector(".sub-out-name")
-    nameEle.text = editingBowler.name
+    nameEle.text = editingBowler.bowlerName
     nameEle.setAttribute("data-bowler-id", editingBowler.serverId)
+    document.querySelector(".sub-message").classList.remove("hidden")
 
     showModal("#bowler-sub-list")
   })
@@ -39,7 +39,7 @@ export function panel() {
     if (editingBowler) { bowlerData.bowlerNum = editingBowler.bowlerNum }
     let bowler = game.addBowler(bowlerData)
     if (editingBowler) {
-      editingBowler.remove()
+      game.removeBowler(editingBowler)
       editingBowler = null
     }
 
@@ -56,13 +56,14 @@ export function panel() {
     Rest.submit(form).then(json => {
       let json_bowler = json.bowler
       let bowler_data = {
-        serverId:    json_bowler.id,
-        bowlerName:  json_bowler.name,
-        avg:         json_bowler.average,
-        hdcp:        json_bowler.handicap,
-        absentScore: json_bowler.absent_score,
-        usbcName:    json_bowler.usbc_name,
-        usbcNumber:  json_bowler.usbc_number,
+        serverId:     json_bowler.id,
+        bowlerName:   json_bowler.name,
+        bowlerGameId: json_bowler.game_id,
+        avg:          json_bowler.average,
+        hdcp:         json_bowler.handicap,
+        absentScore:  json_bowler.absent_score,
+        usbcName:     json_bowler.usbc_name,
+        usbcNumber:   json_bowler.usbc_number,
       }
       game.addBowler(bowler_data)
 

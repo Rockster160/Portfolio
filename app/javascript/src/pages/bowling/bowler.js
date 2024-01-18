@@ -13,7 +13,7 @@ export default class Bowler extends Reactive {
     this.elementAccessor("currentFrameNum", null, "data-current-frame")
     this.elementAccessor("absentScore", null, "data-absent-score")
     this.elementAccessor("bowlerNum", null, "data-bowler", function(value) {
-      this.element.querySelector(".game-position").value = value
+      this.element.querySelector(".game-position").value = parseInt(value)-1 // index based
       game.resortBowlers(this)
     })
     this.elementAccessor("hdcp", ".bowler-handicap", "value", function(value) {
@@ -26,6 +26,7 @@ export default class Bowler extends Reactive {
     })
     this.elementAccessor("usbcName", ".usbc-name")
     this.elementAccessor("usbcNumber", ".usbc-number")
+    this.elementAccessor("bowlerGameId", ".bowler-game-id", "value")
     this.elementAccessor("bowlerName", ".bowler-name-field", "value", function(value) {
       this.element.querySelector(".bowler-name .name .display-name").innerText = value
       this.element.querySelector(".bowler-options .details .bowler-options-name").innerText = value
@@ -60,12 +61,6 @@ export default class Bowler extends Reactive {
 
   get num() { return parseInt(this.bowlerNum) }
   set num(val) { return this.bowlerNum = val }
-
-  remove() {
-    game.bowlers = game.bowlers.filter(bowler => !bowler || bowler.id != this.id)
-    this.element.remove()
-    game.resetBowlers()
-  }
 
   valueOf() { return `bowlers[${this.id}]` }
 }

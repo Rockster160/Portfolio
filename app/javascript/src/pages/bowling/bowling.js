@@ -32,13 +32,13 @@ window.onbeforeunload = function(evt) {
 // Absent bowler should not send scores...
 
 // ===== BUG:
+// When a bowler is absent the 1st game then present the 2nd, 2nd (and 3rd) games are marked and pre-set as absent
+// * Also applies for deleting a bowler- likely a BE issue
 
 // ===== TODO: (Don't delete, just check)
+// REMEMBER! to replace other page JS (jQuery) so index and league updates still work
 // Lane talk
 // Test interactions on iPad
-// Add subs
-//   * New Sub bowler (with JUST average OR hdcp)
-//   * Existing Sub bowler
 // BEFORE USE
 // Edit name, avg, hdcp
 // Somehow re-order bowlers
@@ -51,6 +51,9 @@ window.onbeforeunload = function(evt) {
 //   * Need a better place for these that don't mess up the page layout.
 //   * Enemy chart should show comparison totals (+- points)
 
+//√ Add subs
+//√   * New Sub bowler (with JUST average OR hdcp)
+//√   * Existing Sub bowler
 //√ Add new bowler with name, avg, hdcp
 //√ Add existing bowler
 //√ Team total scores
