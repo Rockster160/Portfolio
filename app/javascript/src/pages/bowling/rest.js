@@ -30,7 +30,7 @@ export default class Rest {
       if (params) { fetchOpts.body = params }
     }
 
-    console.log(id, params);
+    // console.log(id, params);
     try {
       return fetch(url, fetchOpts).then(function(res) {
         Rest.controllers[id] = null

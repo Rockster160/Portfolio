@@ -16,7 +16,7 @@ export function buttons() {
   onEvent("click", ".timer-toggle &>", () => game.pinTimer.timerActiveToggle())
   onEvent("click", ".bowling-edit &>", () => game.editBowlerToggle())
   onEvent("click", ".pin-all-toggle &>", () => game.defaultPinStandingToggle())
-  onEvent("click", ".lanetalk-toggle &>", () => game.laneTalkToggle())
+  onEvent("click", ".lanetalk-toggle &>", () => game.laneTalkEnabledToggle())
   onEvent("click", ".pin-mode-toggle &>", () => game.pinModeToggle())
   onEvent("click", ".brooklyn-toggle &>", () => game.strikePoint = "brooklyn")
   onEvent("click", ".pocket-toggle &>", () => game.strikePoint = "pocket")

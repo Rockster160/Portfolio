@@ -28,6 +28,7 @@ export default class Scoring {
     }
     bowler.currentFrameNum = scoring.frames?.length || 1
     bowler.currentScore = scoring.total
+    bowler.currentScoreHdcp = scoring.total + bowler.hdcp
     bowler.maxScore = scoring.max
 
     this.updateTotals()

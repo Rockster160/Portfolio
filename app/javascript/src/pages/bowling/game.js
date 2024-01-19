@@ -1,5 +1,6 @@
 import Reactive from "./reactive"
 import Bowler from "./bowler"
+import LaneTalk from "./lane_talk"
 import Pins from "./pins"
 import PinTimer from "./pin_timer"
 import Scoring from "./scoring"
@@ -14,7 +15,7 @@ export default class Game extends Reactive {
 
     this.editing_game = !!document.querySelector(".ctr-bowling_games.act-edit")
     this.bool("saved", function(val) {
-      console.log(val ? "Saved!" : "Changes made...");
+      // console.log(val ? "Saved!" : "Changes made...");
     })
 
     this._game_num = params.game ? parseInt(params.game) : 1
@@ -25,10 +26,10 @@ export default class Game extends Reactive {
     this.elementAccessor("laneTalkApiKey", ".league-data", "data-lanetalk-key")
 
     this.elementAccessor("lane", ".lane-input", "value", function(val) {
+      this.laneTalk.startLane = val
       this.saveScores()
     })
 
-    this.bool("crossLane")
     this.bool("pinMode", function(value) {
       this.element.querySelectorAll("[data-pins-show=show]").forEach(item => {
         item.classList.toggle("hidden", !value)
@@ -37,9 +38,11 @@ export default class Game extends Reactive {
         item.classList.toggle("hidden", value)
       })
     })
-    this.bool("laneTalk", function(value) {
+    this.bool("crossLane")
+    this.bool("laneTalkEnabled", function(value) {
       this.element.querySelector(".lanetalk-toggle").classList.toggle("active", value)
       sessionStorage.setItem("useLaneTalk", value)
+      this.laneTalk.enabled = value
     })
     this.bool("editBowler", function(value) {
       document.querySelectorAll("[data-edit=show]").forEach(item => item.classList.toggle("hidden", !value))
@@ -52,19 +55,20 @@ export default class Game extends Reactive {
       this.pins.noBroadcast(() => this.pins.toggleAll(value))
     })
 
-    let storedVal = sessionStorage.getItem("useLaneTalk") // !edit_page &&
-    let useLaneTalk = storedVal !== null ? storedVal == "true" : true
-    this.laneTalk = useLaneTalk
-    this.editBowler = false
-
-    this.checkStats = true
-    this.pinMode = true
     this.pins = new Pins()
     this.pinTimer = new PinTimer()
 
+    this.editBowler = false
     this.defaultPinStanding = false
+    this.pinMode = true
+    this.checkStats = true
 
     this.bowlers = Bowler.get()
+
+    this.laneTalk = new LaneTalk(this.lane, this.laneTalkEnabled)
+    let storedVal = sessionStorage.getItem("useLaneTalk") // !edit_page &&
+    let useLaneTalk = storedVal !== null ? storedVal == "true" : true
+    this.laneTalkEnabled = useLaneTalk
 
     this.initialized = true
   }
@@ -201,7 +205,7 @@ export default class Game extends Reactive {
     let form = this.element
 
     Rest.submit(form, { method: method }).then(json => {
-      console.log(json);
+      // console.log(json);
       if (json) {
         this.syncServerBowlers(json)
         this.saved = true
@@ -245,6 +249,15 @@ export default class Game extends Reactive {
       }
     })
     this.nextShot()
+  }
+
+  clearAll() {
+    this.eachBowler(bowler => this.clearBowler(bowler))
+  }
+
+  clearBowler(bowler) {
+    bowler.shots.forEach(shot => shot.clear(true))
+    FrameNavigation.toEarliestShot()
   }
 
   clearShot() {

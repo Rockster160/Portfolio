@@ -61,6 +61,10 @@ export default class FrameNavigation {
     }
   }
 
+  static toEarliestShot() {
+    this.currentFrame = this.earliestUnfinishedFrame()
+  }
+
   static nextShot() {
     if (this.currentBowler?.active && this.currentFrame?.incomplete) {
       this.currentFrame = this.currentFrame // Reset current frame, which will go to incomplete shot

@@ -25,6 +25,8 @@ export default class PinTimer extends Reactive {
     this.timerActive = true
   }
 
+  running() { return !!this.pinTimer }
+
   freeze() { if (!this.freezeTimer) { this.freezeTimer = true } }
   unfreeze() { if (this.freezeTimer) { this.freezeTimer = false } }
 

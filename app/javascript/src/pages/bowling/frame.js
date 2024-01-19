@@ -124,6 +124,7 @@ export default class Frame extends Reactive {
 class Shot extends Reactive {
   constructor(frame, shot_num) {
     super(frame.element.querySelector(`.shot[data-shot-idx="${shot_num-1}"]`))
+    this.bowler = frame.bowler
     this.remaining_pins_element = frame.element.querySelector(`.fallen-pins[data-shot-idx="${shot_num-1}"]`)
     this.shotNum = shot_num
     this.frame = frame
@@ -155,7 +156,7 @@ class Shot extends Reactive {
     this.frame.updateScores()
   }
 
-  get score() { return this.value || "" }
+  get score() { return this.value }
   set score(val) { this.standingPins = game.pins.pinsFromInput(val) }
 
   get incomplete() { return !this.complete }

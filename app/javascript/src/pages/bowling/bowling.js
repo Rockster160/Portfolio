@@ -22,7 +22,7 @@ window.onload = function() {
 }
 
 window.onbeforeunload = function(evt) {
-  if (game.saved) { return undefined }
+  if (!game || game.saved) { return undefined }
 
   return "onbeforeunload"
 }
@@ -32,6 +32,7 @@ window.onbeforeunload = function(evt) {
 // Absent bowler should not send scores...
 
 // ===== BUG:
+// Lane talk
 // When a bowler is absent the 1st game then present the 2nd, 2nd (and 3rd) games are marked and pre-set as absent
 // * Also applies for deleting a bowler- likely a BE issue
 
@@ -39,18 +40,21 @@ window.onbeforeunload = function(evt) {
 // REMEMBER! to replace other page JS (jQuery) so index and league updates still work
 // Lane talk
 // Test interactions on iPad
-// BEFORE USE
+// ^^ BEFORE PROD ^^
 // Edit name, avg, hdcp
 // Somehow re-order bowlers
-//√ Remove bowlers from lane
-//   * Needs to delete the bowler from the current game on the BE
 // Score button interface (no pins)
 //   * Num keys should also work
 // Add button somewhere to clear an entire bowler's scores
 // Enemy Scores
 //   * Need a better place for these that don't mess up the page layout.
 //   * Enemy chart should show comparison totals (+- points)
+// Fully hide bottom pin section to show enemy scores instead - still show stats? Also have button to toggle between that view and pin entry view
+// Maybe show projections? Get average per frame and then multiply by frames left
+// Full track enemy scores to properly display the frame by frame
 
+//√ Remove bowlers from lane
+//√   * Needs to delete the bowler from the current game on the BE
 //√ Add subs
 //√   * New Sub bowler (with JUST average OR hdcp)
 //√   * Existing Sub bowler

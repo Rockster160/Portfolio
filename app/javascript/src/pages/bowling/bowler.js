@@ -36,6 +36,7 @@ export default class Bowler extends Reactive {
     this.elementAccessor("skip", ".skip-checkbox", "checked")
     this.elementAccessor("cardPoint", ".card-point-field", "value")
     this.elementAccessor("currentScore", ".total .score")
+    this.elementAccessor("currentScoreHdcp", ".total .hdcp")
     this.elementAccessor("maxScore", ".total .max")
 
     this.frames = Frame.fullGame(this)
@@ -61,6 +62,12 @@ export default class Bowler extends Reactive {
 
   get num() { return parseInt(this.bowlerNum) }
   set num(val) { return this.bowlerNum = val }
+
+  get shots() {
+    let list = []
+    this.eachFrame(frame => list.push(...frame.shots.filter(Boolean)))
+    return list
+  }
 
   valueOf() { return `bowlers[${this.id}]` }
 }
