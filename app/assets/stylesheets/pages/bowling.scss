@@ -653,7 +653,11 @@
     .crosslane-toggle {
       grid-area: 2 / 3;
     }
+    .lane-input-btn {
+      grid-area: 2 / 2;
+    }
     .lanetalk-toggle {
+      grid-area: 2 / 1;
       position: relative;
       text-align: center;
 

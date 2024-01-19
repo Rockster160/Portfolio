@@ -119,7 +119,7 @@ export default class LaneTalk {
   }
 
   updateEnemy(player) {
-    console.log("Enemy", player)
+    // console.log("Enemy", player)
     // playerName
     // playerHcp
     // teamName

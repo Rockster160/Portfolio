@@ -57,43 +57,6 @@
 //   })
 //
 //
-//   swap = function($ele1, $ele2) {
-//     var temp = $("<div>")
-//
-//     $ele1.before(temp)
-//     $ele2.before($ele1)
-//     temp.before($ele2).remove()
-//   }
-//
-// // {
-// //   "result": {
-// //     "channel": "LiveScores:xxx-xxx-xxx-xxx",
-// //     "type": 5,
-// //     "data": {
-// //       "bowlingCenterUuid": "xxx-xxx-xxx-xxx",
-// //       "lane": 22,
-// //       "game": 2,
-// //       "crossLane": false,
-// //       "playerName": "Lisa Taylor",
-// //       "playerNumber": 2,
-// //       "playerHcp": 83,
-// //       "teamName": "Flying Balls",
-// //       "teamHcp": 193,
-// //       "scoreCompletedGames": 167,
-// //       "throws": [1, 3, 7, "/", 9, "-", 7, "-"],
-// //       "pins": [511, 311, 52, 0, 512, 512, 11, 11],
-// //       "scores": [4, 23, 32, 39],
-// //       "speed": [3023, 3543, 3082, 3082, 3152, 3152, 3200, 2729],
-// //       "belongsTo": null,
-// //       "received": 1701995577,
-// //       "maxScore": 210
-// //     }
-// //   }
-// // }
-
-
-
-
 
 
 
