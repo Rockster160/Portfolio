@@ -32,13 +32,11 @@ window.onbeforeunload = function(evt) {
 // Absent bowler should not send scores...
 
 // ===== BUG:
-// Lane talk
 // When a bowler is absent the 1st game then present the 2nd, 2nd (and 3rd) games are marked and pre-set as absent
 // * Also applies for deleting a bowler- likely a BE issue
 
 // ===== TODO: (Don't delete, just check)
 // REMEMBER! to replace other page JS (jQuery) so index and league updates still work
-// Lane talk
 // Test interactions on iPad
 // ^^ BEFORE PROD ^^
 // Edit name, avg, hdcp
@@ -53,6 +51,7 @@ window.onbeforeunload = function(evt) {
 // Maybe show projections? Get average per frame and then multiply by frames left
 // Full track enemy scores to properly display the frame by frame
 
+//√ Lane talk
 //√ Remove bowlers from lane
 //√   * Needs to delete the bowler from the current game on the BE
 //√ Add subs

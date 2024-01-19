@@ -90,8 +90,11 @@
         <i class="fa fa-pencil" data-edit=hide></i>
         <i class="fa fa-check" data-edit="show"></i>
       </div>
-      <div class="numpad-key lanetalk-toggle"> <!-- data-modal="#lanetalk-config" -->
+      <div class="numpad-key lanetalk-toggle">
         <%= image_tag "bowling/lanetalk.png" %>
+      </div>
+      <div class="numpad-key crosslane-toggle">
+        <i class="fa fa-random fa-rotate-270"></i>
       </div>
       <div class="numpad-key">
         <%= f.text_field :lane_number, class: "lane-input", value: f.object.lane_number || current_user.jarvis_cache.get(:next_bowling_lane) %>

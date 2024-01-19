@@ -38,7 +38,11 @@ export default class Game extends Reactive {
         item.classList.toggle("hidden", value)
       })
     })
-    this.bool("crossLane")
+    this.bool("crossLane", function(value) {
+      this.element.querySelector(".crosslane-toggle").classList.toggle("active", value)
+      sessionStorage.setItem("useCrossLane", value)
+      this.laneTalk.crossLane = value
+    })
     this.bool("laneTalkEnabled", function(value) {
       this.element.querySelector(".lanetalk-toggle").classList.toggle("active", value)
       sessionStorage.setItem("useLaneTalk", value)
@@ -69,6 +73,10 @@ export default class Game extends Reactive {
     let storedVal = sessionStorage.getItem("useLaneTalk") // !edit_page &&
     let useLaneTalk = storedVal !== null ? storedVal == "true" : true
     this.laneTalkEnabled = useLaneTalk
+
+    let storedCrossLane = sessionStorage.getItem("useCrossLane")
+    let useCrossLane = storedCrossLane !== null ? storedCrossLane == "true" : true
+    this.crossLane = useCrossLane
 
     this.initialized = true
   }

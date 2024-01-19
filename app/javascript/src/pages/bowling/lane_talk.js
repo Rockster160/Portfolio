@@ -3,6 +3,7 @@ export default class LaneTalk {
     this.startLane = start_lane
     this.uuid = this.genUUID()
     this.currentGame = game.gameNum
+    this.crossLane = game.crossLane
     this.centerId = document.querySelector(".league-data").getAttribute("data-lanetalk-center-id")
     this.apiKey = document.querySelector(".league-data").getAttribute("data-lanetalk-key")
 
@@ -99,17 +100,11 @@ export default class LaneTalk {
     if (player.game != this.currentGame) { return }
     if (player.lane == this.siblingLane) { return this.updateEnemy(player) }
     if (player.lane != this.currentLane) { return }
-    console.log("Player", player);
+    console.log("Player", player)
 
     let bowler = game.bowlers[player.playerNumber]
-    if (!bowler) { return console.log("No bowler", player); }
+    if (!bowler) { return console.log("No bowler", player) }
 
-    // crossLane
-    // playerName
-    // playerNumber
-    // playerHcp
-    // teamName
-    // teamHcp
     bowler.shots.forEach((shot, idx) => {
       let binaryPinCount = player.pins[idx]
       if (typeof binaryPinCount == "number") {
@@ -124,7 +119,11 @@ export default class LaneTalk {
   }
 
   updateEnemy(player) {
-    console.log("Enemy", player);
+    console.log("Enemy", player)
+    // playerName
+    // playerHcp
+    // teamName
+    // teamHcp
   }
 
   send(json) {
@@ -148,6 +147,7 @@ export default class LaneTalk {
 
   findSiblingLane(start_lane) { return start_lane + (start_lane % 2 ? 1 : -1) }
   findCurrentLane(start_lane) {
+    if (!this.crossLane) { return start_lane }
     return (game.gameNum % 2 == 1) ? start_lane : this.findSiblingLane(start_lane)
   }
 }
