@@ -32,7 +32,6 @@ module Bowling
       @set.league_id ||= @league.id
 
       if @set.update(bowling_params)
-        @set.games.each(&:save) # Hack because double gutter isn't registering as a change to games
         started_frame_9 = params.dig(:bowling_set, :games_attributes)&.any? { |game|
           next false unless game[:game_num] == "3"
           game.dig(:frames_details, "8", :throw1).present? # 8 is index, so frame 9
@@ -67,10 +66,28 @@ module Bowling
       end
     end
 
+    def remove_bowler
+      game = @set.games.find_by!(bowler_id: params[:bowler_id], game_num: params[:game_num])
+      if game.destroy
+        # NOTE: This doesn't currently reset the bowler's scores.
+        # If a bowler is removed from an old game, it will mess up future averages
+        render status: :accepted, json: {}
+      else
+        render status: :bad_request, json: {}
+      end
+    end
+
     private
 
     def game_data
-      { league_id: @league.id, set_id: @set.id, game_num: params[:game] || 1 }
+      {
+        league_id: @league.id,
+        set_id: @set.id,
+        game_num: params[:game] || 1,
+        bowlers: @set.games.joins(:bowler).map { |game|
+          { id: game.bowler.id, name: game.bowler.name, bowler_game_id: game.id }
+        }
+      }
     end
 
     def user_sets

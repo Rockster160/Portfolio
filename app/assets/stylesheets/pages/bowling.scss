@@ -85,10 +85,13 @@
     background: $blue-l5;
     padding: 10px;
 
-    &.bowler-select:hover {
-      transition: background 0.3s;
-      cursor: pointer;
-      background: $blue-l4;
+    &.bowler-select {
+      .bowler-data { display: none; }
+      &:hover {
+        transition: background 0.3s;
+        cursor: pointer;
+        background: $blue-l4;
+      }
     }
   }
 
@@ -286,9 +289,18 @@
       justify-content: space-around;
       padding: 2px;
       font-size: 10px;
+
+      @at-root .bowling-header .prev-scores {
+        bottom: auto;
+        top: 0;
+      }
     }
     .team-total {
       padding: 3px;
+
+      .enemy-totals {
+        color: salmon;
+      }
     }
 
     .bowler-options {
@@ -372,7 +384,7 @@
 
         text-align: center;
 
-        &.active {
+        &.active, &:focus {
           outline: none;
         }
 
@@ -405,7 +417,11 @@
         text-align: center;
       }
     }
-    &.absent, &.skip {
+
+    &:has(.absent-checkbox:not(:checked)) .absent-bowler { display: none; }
+    &:has(.card-point-field:not([value='true'])) .card-point { display: none; }
+    &:has(.skip-checkbox:not(:checked)) .skip-bowler { display: none; }
+    &:has(.absent-checkbox:checked), &:has(.skip-checkbox:checked) {
       .frame .shot {
         background: $grey-light;
       }
@@ -428,7 +444,7 @@
       .hdcp {
         font-size: 10px;
       }
-      .max {
+      .max-wrapper {
         display: block;
         font-size: 10px;
         text-align: center;
@@ -634,7 +650,14 @@
       grid-area: 2 / 3;
       font-size: 15px;
     }
+    .crosslane-toggle {
+      grid-area: 2 / 3;
+    }
+    .lane-input-btn {
+      grid-area: 2 / 2;
+    }
     .lanetalk-toggle {
+      grid-area: 2 / 1;
       position: relative;
       text-align: center;
 
@@ -666,22 +689,22 @@
       padding: 10px;
       overflow: hidden;
     }
-    .enemy-results {
-      grid-area: 2 / 2;
-      grid-column: span 2;
-      padding: 0;
-      overflow: hidden;
-
-      table {
-        font-size: 10px;
-
-        td {
-          text-align: right;
-          border-spacing: 0;
-          padding: 0 5px;
-        }
-      }
-    }
+    // .enemy-results {
+    //   grid-area: 2 / 2;
+    //   grid-column: span 2;
+    //   padding: 0;
+    //   overflow: hidden;
+    //
+    //   table {
+    //     font-size: 10px;
+    //
+    //     td {
+    //       text-align: right;
+    //       border-spacing: 0;
+    //       padding: 0 5px;
+    //     }
+    //   }
+    // }
     .pin-all-toggle {
       grid-area: 1 / 1;
     }

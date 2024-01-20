@@ -142,7 +142,9 @@ Rails.application.routes.draw do
     resources :bowling_leagues, path: :leagues do
       get :tms, on: :member
     end
-    resources :bowling_sets, path: :series
+    resources :bowling_sets, path: :series do
+      delete "bowler/:bowler_id", on: :member, action: :remove_bowler
+    end
     resources :bowling_games, path: "/"
   end
 

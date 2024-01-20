@@ -23,6 +23,13 @@
   </span>
   <% @league.bowlers.ordered.each do |bowler| %>
     <div class="bowler-select bowler-form" data-bowler-id="<%= bowler.id %>">
+      <input name="serverId" value="<%= bowler.id %>" class="bowler-data" type="hidden" disabled>
+      <input name="bowlerName" value="<%= bowler.name %>" class="bowler-data" type="hidden" disabled>
+      <input name="avg" value="<%= bowler.average %>" class="bowler-data" type="hidden" disabled>
+      <input name="hdcp" value="<%= bowler.handicap %>" class="bowler-data" type="hidden" disabled>
+      <input name="absentScore" value="<%= bowler.absent_score %>" class="bowler-data" type="hidden" disabled>
+      <input name="usbcName" value="<%= bowler.usbc_full_name %>" class="bowler-data" type="hidden" disabled>
+      <input name="usbcNumber" value="<%= bowler.usbc_number %>" class="bowler-data" type="hidden" disabled>
       <b><%= bowler.name %></b><br>
       <% if bowler.average&.positive? %>
         <small>AVG:</small> <%= bowler.average %>
@@ -35,34 +42,21 @@
   <%= render partial: "bowling/bowlers/sub_form", locals: { game_num: game_num } %>
 <% end %>
 
-<template id="game-sub-list">
-  <% @league.bowlers.ordered.offset(@league.team_size).each do |bowler| %>
-    <% game = bowler.games.new(
-      set_id:       @set.id,
-      position:     bowler.position,
-      game_num:     game_num,
-      handicap:     bowler.handicap,
-      absent_score: bowler.absent_score,
-    ) %>
-    <%= render partial: "bowling_game_form", locals: { game: game, idx: bowler.position } %>
-  <% end %>
-</template>
-
 <div class="bowling-table bowling-header">
   <div class="bowling-cell">Game <%= game_num %></div>
   <% 10.times do |t| %>
-    <div class="bowling-cell"><%= t + 1 %></div>
+    <div class="bowling-cell" data-frame="<%= t + 1 %>"><%= t + 1 %></div>
   <% end %>
   <div class="bowling-cell">Total</div>
 </div>
 
 <template id="bowling-game-template">
-  <%= render partial: "bowling_game_form" %>
+  <%= render partial: "bowling_game_form", locals: { template: true } %>
 </template>
 
 <%= form_for @set, html: { class: "basic bowling-game-form" } do |f| %>
-  <%= f.hidden_field :league_id, value: @set.league_id || params[:league] %>
-  <%= f.hidden_field :set_id, value: @set.id || params[:set] %>
+  <%= f.hidden_field :league_id, value: @set.league_id || params[:league], id: "game_league_id" %>
+  <%= f.hidden_field :set_id, value: @set.id || params[:set], id: "game_set_id" %>
   <span class="hidden league-data" data-lanetalk-center-id="<%= @set.league.lanetalk_center_uuid %>" data-lanetalk-key="<%= ENV["PORTFOLIO_LANETALK_API_KEY"] if @set.league.lanetalk_center_uuid.present? %>"></span>
   <% @games.each_with_index do |game, idx| %>
     <%= render partial: "bowling_game_form", locals: { game: game, idx: idx } %>
@@ -92,17 +86,20 @@
   </div> -->
   <div class="bowling-input">
     <div class="bowling-keypad-entry">
-      <%= link_to "", class: "bowling-edit numpad-key" do %>
+      <div class="bowling-edit numpad-key">
         <i class="fa fa-pencil" data-edit=hide></i>
-        <i class="fa fa-check" data-edit></i>
-      <% end %>
-      <div class="numpad-key lanetalk-toggle" data-modal="#lanetalk-config">
+        <i class="fa fa-check" data-edit="show"></i>
+      </div>
+      <div class="numpad-key lanetalk-toggle">
         <%= image_tag "bowling/lanetalk.png" %>
       </div>
-      <div class="numpad-key">
+      <div class="numpad-key crosslane-toggle">
+        <i class="fa fa-random fa-rotate-270"></i>
+      </div>
+      <div class="numpad-key lane-input-btn">
         <%= f.text_field :lane_number, class: "lane-input", value: f.object.lane_number || current_user.jarvis_cache.get(:next_bowling_lane) %>
       </div>
-      <div class="numpad-key new-bowler" data-edit>New Bowler</div>
+      <div class="numpad-key new-bowler" data-edit="show">New Bowler</div>
       <div class="numpad-key card" data-modal="#card-hands">&#9824;</div>
       <div class="pin-mode-toggle pin-svg-wrapper numpad-key">
         <%= svg "bowling/pin" %> / <i class="fa fa-hashtag"></i>

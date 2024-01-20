@@ -1,4 +1,4 @@
-export function Spinner(opts) {
+export default function Spinner(opts) {
   opts = opts || {}
   this.width = opts.size || 100
   this.height = opts.size || 100

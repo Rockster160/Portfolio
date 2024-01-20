@@ -20,6 +20,7 @@
 #
 
 class Bowler < ApplicationRecord
+  attr_accessor :temp_id
   belongs_to :league, class_name: "BowlingLeague", foreign_key: :league_id, inverse_of: :bowlers
   has_many :bowler_sets, dependent: :destroy
   has_many :sets, through: :bowler_sets

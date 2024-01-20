@@ -4,65 +4,60 @@
 
 <% game ||= BowlingGame.new(game_num: params[:game] || 1) %>
 <% idx ||= 0 %>
+<% template ||= false %>
+<% hex = template ? "{{id}}" : SecureRandom.hex(4) %>
 <% bowler ||= game.bowler || Bowler.new %>
 <% bowler_set = @set&.bowler_sets&.find_by(bowler: bowler) %>
 
 <% set_params = "bowling_set[games_attributes][]" %>
 
-<div class="bowling-table bowler <%= 'absent' if game.absent? %>" data-absent-score="<%= bowler_set&.absent_score || bowler.absent_score %>" data-bowler="<%= idx + 1 %>" data-current-frame="1" data-bowler-id="<%= bowler.id %>">
-  <%= hidden_field_tag "#{set_params}id", game.id %>
-  <%= hidden_field_tag "#{set_params}bowler_name", nil, class: "bowler-name-field" %>
-  <%= hidden_field_tag "#{set_params}bowler_id", bowler.id %>
+<div class="bowling-table bowler" data-absent-score="<%= bowler_set&.absent_score || bowler.absent_score %>" data-bowler="<%= idx + 1 %>" data-current-frame="1" data-bowler-id="<%= bowler.id %>">
+  <%= hidden_field_tag "#{set_params}id", game.id, class: "bowler-game-id" %>
+  <%= hidden_field_tag "#{set_params}bowler_name", bowler.name, class: "bowler-name-field" %>
+  <%= hidden_field_tag "#{set_params}bowler_id", bowler.id, class: "bowler-id-field" %>
   <%= hidden_field_tag "#{set_params}card_point", game.card_point, class: "card-point-field" %>
-  <%= hidden_field_tag "#{set_params}game_num", game.game_num %>
-  <%= hidden_field_tag "#{set_params}handicap", game.handicap %>
+  <%= hidden_field_tag "#{set_params}game_num", game.game_num, class: "bowler-game-number" %>
+  <%= hidden_field_tag "#{set_params}handicap", game.handicap, class: "bowler-handicap" %>
   <%= hidden_field_tag "#{set_params}position", game.position || idx, class: "game-position" %>
 
-  <div class="bowler-options hidden" data-edit>
+  <div class="bowler-options hidden" data-edit="show">
     <span class="details">
       <b class="bowler-options-name"><%= bowler.name %></b>
       <% if (avg = bowler_set&.starting_avg || bowler.average)&.positive? %>
-        <small>AVG:</small> <%= avg %>
+        <small>AVG:</small> <span class="avg-val"><%= avg %></span>
       <% end %>
       <% if (hdcp = bowler_set&.handicap || bowler.handicap)&.positive? %>
-        <small>HDCP:</small> <%= hdcp %>
+        <small>HDCP:</small> <span class="hdcp-val"><%= hdcp %></span>
       <% end %>
       <div class="presence-options">
-        <%= check_box_tag "#{set_params}absent", true, game.absent?, id: "absent-#{idx}", class: "absent-checkbox" %>
-        <%= label_tag "#{set_params}absent", "Absent?", for: "absent-#{idx}" %> <br>
-        <%= check_box_tag "#{set_params}skip", true, false, id: "skip-#{idx}", class: "skip-checkbox" %>
-        <%= label_tag "#{set_params}skip", "Skip?", for: "skip-#{idx}" %>
+        <%= check_box_tag "#{set_params}absent", true, game.absent?, id: "absent-#{hex}", class: "absent-checkbox" %>
+        <%= label_tag "#{set_params}absent", "Absent?", for: "absent-#{hex}" %> <br>
+        <%= check_box_tag "#{set_params}skip", true, false, id: "skip-#{hex}", class: "skip-checkbox" %>
+        <%= label_tag "#{set_params}skip", "Skip?", for: "skip-#{hex}" %>
       </div>
     </span>
     <div class="actions">
-      <% if bowler.persisted? %>
-        <div class="btn bowler-sub-btn" data-bowler-name="<%= bowler.name %>" data-bowler-id="<%= bowler.id %>">Sub</div>
-      <% end %>
+      <div class="btn bowler-sub-btn">Sub</div>
       <!-- <i class="fa fa-arrows"></i> -->
     </div>
   </div>
   <div class="bowling-cell bowler-name">
-    <% if game.card_point? %>
-      <div class="card-point">+1</div>
-    <% end %>
+    <div class="card-point">+1</div>
     <span class="avg">
-      <% if (avg = bowler_set&.starting_avg || bowler.average)&.positive? %>
-        <span class="avg-label">AVG:</span> <%= avg %>
-      <% end %>
-      <% if (hdcp = bowler_set&.handicap || bowler.handicap)&.positive? %>
-        <span class="avg-label">HDCP:</span> <%= hdcp %>
-      <% end %>
+      <% avg = bowler_set&.starting_avg || bowler.average %>
+      <span class="avg-label">AVG:</span> <span class="avg-val"><%= avg || "N/A" %></span>
+      <% hdcp = bowler_set&.handicap || bowler.handicap %>
+      <span class="avg-label">HDCP:</span> <span class="hdcp-val"><%= hdcp || "N/A" %></span>
     </span>
     <span class="name">
-      <% if bowler.name.present? %>
-        <span class="display-name"><%= bowler.name %></span> <span class="absent-bowler <%= 'hidden' unless game.absent? %>">[A]</span>
-      <% else %>
-        <span class="edit-bowler-name btn">
-          <i class="fa fa-pencil"></i>
-          Name
-        </span>
-      <% end %>
-      <span class="hidden usbc-name"><%= bowler.usbc_full_name %></span>
+      <span class="display-name">
+        <% if bowler.name.present? %>
+          <%= bowler.name %>
+        <% else %>
+          <span class="edit-bowler-name btn"><i class="fa fa-pencil"></i> Name</span>
+        <% end %>
+      </span>
+      <span class="absent-bowler">[A]</span>  <span class="skip-bowler">[S]</span>
       <span class="hidden usbc-name"><%= bowler.usbc_full_name %></span>
       <span class="hidden usbc-number"><%= bowler.usbc_number %></span>
     </span>
@@ -70,7 +65,7 @@
       <% (game.game_num - 1).times do |t| %>
         <% prev_game = @set&.games&.find_by(bowler: bowler, game_num: t + 1) %>
         <% next if prev_game.nil? %>
-        <span class="prev-score nowrap <%= "bowling-winner" if prev_game.game_point? %> <%= "perfect-game" if prev_game.perfect_game? %>"><%= "&#9824; ".html_safe if prev_game.card_point? %><%= prev_game.score %><%= "|#{prev_game.total_score}" if prev_game.handicap&.positive? %></span>
+        <span class="prev-score nowrap <%= "bowling-winner" if prev_game.game_point? %> <%= "perfect-game" if prev_game.perfect_game? %> <%= "absent-game" if prev_game.absent? %>"><%= "&#9824; ".html_safe if prev_game.card_point? %><%= prev_game.score %><%= "|#{prev_game.total_score}" if prev_game.handicap&.positive? %></span>
       <% end %>
     </div>
   </div>
@@ -93,9 +88,9 @@
     </div>
   <% end %>
   <div class="bowling-cell total">
-    <span class="remove hidden" data-edit>X</span>
+    <span class="remove hidden" data-edit="show">X</span>
     <input type="text" name="<%= set_params %>score" value="<%= game.score %>" class="basic score" readonly="true" tabindex="-1">
     <div class="hdcp" data-base="<%= game.handicap %>"><%= game.handicap %></div>
-    <div class="max"></div>
+    <div class="max-wrapper">(max: <span class="max">300</span>)</div>
   </div>
 </div>

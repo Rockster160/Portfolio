@@ -25,6 +25,8 @@ class BowlingGame < ApplicationRecord
   belongs_to :bowler, inverse_of: :games
   has_many :new_frames, class_name: "BowlingFrame"
 
+  validates :bowler_id, uniqueness: { scope: [:game_num, :set_id] }
+
   after_save {
     bowler.update(name: bowler_name) if bowler_name.present? && bowler&.name != bowler_name
     save_cached_details
@@ -51,6 +53,7 @@ class BowlingGame < ApplicationRecord
     @new_attributes&.dig(:league_id) || set&.league_id || bowler&.league_id
   end
 
+  def score = super().to_i
   def total_score
     score.to_i + handicap.to_i
   end
