@@ -137,7 +137,7 @@ export function buttons() {
     }
   }
   // On click/tap, toggle a pin, track the toggle direction, and start the timer
-  onEvent("mousedown touchstart", ".pin-wrapper:not(.fallen-before)", function(evt) {
+  onEvent("mousedown touchstart", function(evt) {
     evt.preventDefault() // Disable screen drag/zoom events when tapping
     let pin = evt.target.closest(".pin-wrapper:not(.fallen-before)")
     if (pin) {
@@ -150,7 +150,7 @@ export function buttons() {
     return false
   })
   // On release, unfreeze the timer
-  onEvent("touchend mouseup", function() {
+  onEvent("mouseup touchend", function() {
     if (pinKnocking !== undefined) {
       game.pinTimer.unfreeze()
       pinKnocking = undefined
@@ -159,11 +159,11 @@ export function buttons() {
   onEvent("mousemove", function(evt) {
     if (!game) { return }
     if (evt.which != 1) { return } // Left mouse is NOT held
-
     // Left click IS held
+
     // If hovering/dragging over a pin
     if (document.querySelector(".pin-wrapper:not(.fallen-before):hover")) {
-      // evt.preventDefault()
+      evt.preventDefault()
       game.pinTimer.freeze()
 
       let pinWrapper = document.querySelector(".pin:hover").closest(".pin-wrapper")
@@ -177,22 +177,24 @@ export function buttons() {
       game.pins.toggle(pinNum, !pinKnocking)
     }
   })
-  // Is this needed? Maybe for the ipad?
-  //   $(".bowling-keypad-entry").on("mousemove, touchmove", function(evt) {
-  //     evt.preventDefault()
-  //     var xPos = evt.originalEvent.touches[0].pageX
-  //     var yPos = evt.originalEvent.touches[0].pageY
-  //
-  //     var $target = $(document.elementFromPoint(xPos, yPos))
-  //     if (!$target.hasClass("pin")) { return }
-  //
-  //     if (pin_knock == undefined) {
-  //       pin_knock = !$target.parents(".pin-wrapper:not(.fallen-before)").hasClass("fallen")
-  //     } else if (pin_knock) {
-  //       $target.parents(".pin-wrapper:not(.fallen-before)").addClass("fallen").trigger("pin:change")
-  //     } else {
-  //       $target.parents(".pin-wrapper:not(.fallen-before)").removeClass("fallen").trigger("pin:change")
-  //     }
-  //     return false
-  //   })
+  onEvent("touchmove", function(evt) {
+    if (!game) { return }
+    if (evt.which == 1) { return } // Left mouse IS held (This is a drag, not click)
+    evt.preventDefault()
+
+    let xPos = evt.touches[0].pageX
+    let yPos = evt.touches[0].pageY
+    let pinWrapper = document.elementFromPoint(xPos, yPos).closest(".pin-wrapper")
+
+    if (!pinWrapper) { return }
+    if (pinWrapper.matches(".fallen-before")) { return }
+
+    game.pinTimer.freeze()
+    if (pinKnocking == undefined) { // undefined is when we haven't clicked a pin yet
+      pinKnocking = !pinWrapper.classList.contains("fallen")
+    }
+
+    let pinNum = parseInt(pinWrapper.getAttribute("data-pin-num"))
+    game.pins.toggle(pinNum, !pinKnocking)
+  })
 }
