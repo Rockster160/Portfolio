@@ -67,7 +67,7 @@ export default class Game extends Reactive {
     this.pinMode = true
     this.checkStats = true
 
-    this.getBowlers()
+    this.bowlers = Bowler.get()
 
     this.laneTalk = new LaneTalk(this.lane, this.laneTalkEnabled)
     let storedVal = sessionStorage.getItem("useLaneTalk") // !edit_page &&
@@ -79,6 +79,9 @@ export default class Game extends Reactive {
     this.crossLane = useCrossLane
 
     this.initialized = true
+
+    // Mobile seems to wipe the DOM. Need to reset the data because of this.
+    setTimeout(function() { this.resyncElements() }, 5000)
   }
 
   get strikePoint() { return FrameNavigation.currentFrame.strikePoint }
@@ -155,10 +158,17 @@ export default class Game extends Reactive {
     this.sorting = false
   }
 
-  getBowlers() {
-    console.log("Getting bowlers");
-    this.bowlers = Bowler.get() }
+  resyncElements() {
+    if (this.bowlers[1] && this.bowlers[1].element.parentElement) { return console.log("Elements happy"); }
+    console.log("Resyncing Elements");
+
+    this.bowlers = Bowler.get()
+    this.pins = new Pins()
+    this.pinTimer = new PinTimer()
+  }
   resetBowlers() {
+    this.resyncElements()
+
     this.bowlers.sort((a, b) => {
       if (a === null) { return -1 }
       if (b === null) { return 1 }
@@ -173,8 +183,7 @@ export default class Game extends Reactive {
       if (other) { this.element.insertBefore(other.element, this.element.firstChild) }
     })
 
-    this.getBowlers()
-
+    this.resyncElements()
     Scoring.updateTotals()
     this.saveScores()
   }

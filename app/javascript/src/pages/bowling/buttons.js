@@ -163,7 +163,7 @@ export function buttons() {
     // console.log("mousemove mouseover →", evt.type);
     // if (evt.type == "mouseover") { console.log("mouseover →", evt.which, evt.key, evt) }
 
-    if (evt.which != 1) { return } // return unless holding left click/1 finger
+    if (evt.which != 1) { return } // return unless holding left click
     if (!game) { return }
     // if (evt.type == "mouseover") { console.log("mouseover (clicking) →", evt) }
 
@@ -186,7 +186,7 @@ export function buttons() {
   })
   onEvent("touchmove", function(evt) {
     // console.log("touchmove →", evt.type, evt);
-    if (evt.which == 1) { return } // Return if clicking (this is the touch/drag)
+    if (evt.which == 1) { return } // Return if clicking (this is the touch/drag, not click)
     if (!game) { return }
     evt.preventDefault()
 

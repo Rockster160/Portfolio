@@ -90,21 +90,21 @@
         <i class="fa fa-pencil" data-edit=hide></i>
         <i class="fa fa-check" data-edit="show"></i>
       </div>
-      <div class="numpad-key lanetalk-toggle">
+      <div class="numpad-key lanetalk-toggle" data-edit=hide>
         <%= image_tag "bowling/lanetalk.png" %>
       </div>
-      <div class="numpad-key crosslane-toggle">
+      <div class="numpad-key crosslane-toggle" data-edit=hide>
         <i class="fa fa-random fa-rotate-270"></i>
       </div>
       <div class="numpad-key lane-input-btn">
         <%= f.text_field :lane_number, class: "lane-input", value: f.object.lane_number || current_user.jarvis_cache.get(:next_bowling_lane) %>
       </div>
       <div class="numpad-key new-bowler" data-edit="show">New Bowler</div>
-      <div class="numpad-key card" data-modal="#card-hands">&#9824;</div>
-      <div class="pin-mode-toggle pin-svg-wrapper numpad-key">
+      <div class="numpad-key card" data-modal="#card-hands" data-edit=hide>&#9824;</div>
+      <div class="pin-mode-toggle pin-svg-wrapper numpad-key" data-edit=hide>
         <%= svg "bowling/pin" %> / <i class="fa fa-hashtag"></i>
       </div>
-      <div class="numpad-key backspace"><i class="fa fa-trash-o"></i></div>
+      <div class="numpad-key backspace" data-edit=hide><i class="fa fa-trash-o"></i></div>
       <div class="numpad-key timer-toggle active" data-pins-show=show><i class="fa fa-history"></i></div>
     </div>
 
