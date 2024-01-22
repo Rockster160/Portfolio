@@ -36,6 +36,10 @@ window.onbeforeunload = function(evt) {
 // * Also applies for deleting a bowler- likely a BE issue
 
 // ===== TODO: (Don't delete, just check)
+// "admin" interface - opens a modal with a few buttons that trigger different things
+//   * Clear All Scores
+//   * Resync Elements
+//   * Maybe even just have a full modal that opens a JS console (and maybe shows some basic commands to remember `game.resyncElements()`, `game.clearAll()`)
 // Test interactions on iPad
 // ^^ BEFORE PROD ^^
 // Edit name, avg, hdcp

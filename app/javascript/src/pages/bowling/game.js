@@ -81,7 +81,7 @@ export default class Game extends Reactive {
     this.initialized = true
 
     // Mobile seems to wipe the DOM. Need to reset the data because of this.
-    setTimeout(function() { this.resyncElements() }, 5000)
+    setTimeout(function() { game.resyncElements() }, 2000)
   }
 
   get strikePoint() { return FrameNavigation.currentFrame.strikePoint }
