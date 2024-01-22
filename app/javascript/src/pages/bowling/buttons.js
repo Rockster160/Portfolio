@@ -31,7 +31,7 @@ export function buttons() {
     game.strikePoint = "brooklyn"
     finishFrame(true)
   })
-  onEvent("click", ".shot", function() {
+  onEvent("click", ".shot", function(evt) {
     let shotNum = parseInt(this.getAttribute("data-shot-idx"))+1
     let frameNum = parseInt(this.closest(".frame").getAttribute("data-frame"))
     let bowlerNum = parseInt(this.closest(".bowler").getAttribute("data-bowler"))
@@ -49,7 +49,7 @@ export function buttons() {
   }
 
   // ==================== Key Press ====================
-  onKeyDown("Backspace Delete", ":not(input), .shot", function() {
+  onKeyDown("Backspace Delete", ":not(input), .shot", function(evt) {
     game.clearShot()
   })
   onKeyDown("Enter", ":not(input), .shot", function(evt) {
@@ -57,7 +57,7 @@ export function buttons() {
     evt.stopPropagation()
     finishFrame(false)
   })
-  onKeyDown("ArrowUp", ":not(input), .shot", function() {
+  onKeyDown("ArrowUp", ":not(input), .shot", function(evt) {
     // same shot on prev bowler (wrapping)
     let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
     if (bowler) {
@@ -67,7 +67,7 @@ export function buttons() {
       game.currentShot = newBowler.frames[frame.frameNum].shots[shot.shotNum]
     }
   })
-  onKeyDown("ArrowDown", ":not(input), .shot", function() {
+  onKeyDown("ArrowDown", ":not(input), .shot", function(evt) {
     // same shot on next bowler (wrapping)
     let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
     if (bowler) {
@@ -77,7 +77,7 @@ export function buttons() {
       game.currentShot = newBowler.frames[frame.frameNum].shots[shot.shotNum]
     }
   })
-  onKeyDown("ArrowLeft", ":not(input), .shot", function() {
+  onKeyDown("ArrowLeft", ":not(input), .shot", function(evt) {
     // prev shot on current bowler (wrapping)
     let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
     if (bowler) {
@@ -91,7 +91,7 @@ export function buttons() {
       game.currentShot = bowler.frames[newFrame.frameNum].shots[newShot.shotNum]
     }
   })
-  onKeyDown("ArrowRight", ":not(input), .shot", function() {
+  onKeyDown("ArrowRight", ":not(input), .shot", function(evt) {
     let shot = game.currentShot, frame = shot?.frame, bowler = frame?.bowler
     if (bowler) {
       let newFrame = frame
@@ -151,7 +151,7 @@ export function buttons() {
     return false
   })
   // On release, unfreeze the timer
-  onEvent("mouseup touchend", function() {
+  onEvent("mouseup touchend", function(evt) {
     console.log("mouseup touchend →", evt.type);
     if (pinKnocking !== undefined) {
       game.pinTimer.unfreeze()
@@ -185,7 +185,7 @@ export function buttons() {
     }
   })
   onEvent("touchmove", function(evt) {
-    console.log("touchmove →", evt.type);
+    console.log("touchmove →", evt.type, evt);
     if (evt.which == 1) { return } // Return if clicking (this is the touch/drag)
     if (!game) { return }
     evt.preventDefault()
