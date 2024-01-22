@@ -3,7 +3,7 @@ class JilPromptsController < ApplicationController
   before_action :set_prompt, except: :index
 
   def index
-    @prompts = current_user.prompts.unanswered
+    @prompts = current_user.prompts.unanswered.order(created_at: :desc)
     redirect_to @prompts.first if @prompts.one?
   end
 
