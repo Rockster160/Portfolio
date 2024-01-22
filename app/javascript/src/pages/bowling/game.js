@@ -67,7 +67,7 @@ export default class Game extends Reactive {
     this.pinMode = true
     this.checkStats = true
 
-    this.bowlers = Bowler.get()
+    this.getBowlers()
 
     this.laneTalk = new LaneTalk(this.lane, this.laneTalkEnabled)
     let storedVal = sessionStorage.getItem("useLaneTalk") // !edit_page &&
@@ -155,6 +155,9 @@ export default class Game extends Reactive {
     this.sorting = false
   }
 
+  getBowlers() {
+    console.log("Getting bowlers");
+    this.bowlers = Bowler.get() }
   resetBowlers() {
     this.bowlers.sort((a, b) => {
       if (a === null) { return -1 }
@@ -169,6 +172,8 @@ export default class Game extends Reactive {
     this.bowlers.toReversed().forEach(other => {
       if (other) { this.element.insertBefore(other.element, this.element.firstChild) }
     })
+
+    this.getBowlers()
 
     Scoring.updateTotals()
     this.saveScores()

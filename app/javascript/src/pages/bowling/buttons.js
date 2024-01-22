@@ -138,7 +138,7 @@ export function buttons() {
   }
   // On click/tap, toggle a pin, track the toggle direction, and start the timer
   onEvent("mousedown touchstart", function(evt) {
-    console.log("mousedown touchstart →", evt.type);
+    // console.log("mousedown touchstart →", evt.type);
     evt.preventDefault() // Disable screen drag/zoom events when tapping
     let pin = evt.target.closest(".pin-wrapper:not(.fallen-before)")
     if (pin) {
@@ -152,7 +152,7 @@ export function buttons() {
   })
   // On release, unfreeze the timer
   onEvent("mouseup touchend", function(evt) {
-    console.log("mouseup touchend →", evt.type);
+    // console.log("mouseup touchend →", evt.type);
     if (pinKnocking !== undefined) {
       game.pinTimer.unfreeze()
       pinKnocking = undefined
@@ -160,16 +160,16 @@ export function buttons() {
   })
   // mouseover is a mobile Safari fix since it doesn't trigger `mousemove` or `touchmove`
   onEvent("mousemove mouseover", function(evt) {
-    console.log("mousemove mouseover →", evt.type);
-    if (evt.type == "mouseover") { console.log("mouseover →", evt.which, evt.key, evt) }
+    // console.log("mousemove mouseover →", evt.type);
+    // if (evt.type == "mouseover") { console.log("mouseover →", evt.which, evt.key, evt) }
 
     if (evt.which != 1) { return } // return unless holding left click/1 finger
     if (!game) { return }
-    if (evt.type == "mouseover") { console.log("mouseover (clicking) →", evt) }
+    // if (evt.type == "mouseover") { console.log("mouseover (clicking) →", evt) }
 
     // If hovering/dragging over a pin
     if (document.querySelector(".pin-wrapper:not(.fallen-before):hover")) {
-      if (evt.type == "mouseover") { console.log("mouseover pin-wrapper", evt) }
+      // if (evt.type == "mouseover") { console.log("mouseover pin-wrapper", evt) }
       evt.preventDefault()
       game.pinTimer.freeze()
 
@@ -185,7 +185,7 @@ export function buttons() {
     }
   })
   onEvent("touchmove", function(evt) {
-    console.log("touchmove →", evt.type, evt);
+    // console.log("touchmove →", evt.type, evt);
     if (evt.which == 1) { return } // Return if clicking (this is the touch/drag)
     if (!game) { return }
     evt.preventDefault()

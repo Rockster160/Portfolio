@@ -15,6 +15,7 @@ export function events() {
     const { previousShot, currentShot } = evt.detail
     // console.log(`frame move`, currentShot, previousShot);
 
+    if (game.currentShot && !game.currentShot.element.parentElement) { game.getBowlers() }
     game.showStats()
     game.saveScores()
   })
