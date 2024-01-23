@@ -53,6 +53,7 @@ export default class PinTimer extends Reactive {
 
   addTo(selector) {
     this.element = document.querySelector(selector)
+    this.element.querySelectorAll("svg").forEach(item => item.remove())
     this.element.append(this.spinner.element)
   }
 }
