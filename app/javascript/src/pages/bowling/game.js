@@ -166,6 +166,7 @@ export default class Game extends Reactive {
     this.pins = new Pins()
     this.pinTimer = new PinTimer()
     this.pinTimer.addTo(".timer-toggle")
+    game.nextShot()
   }
   resetBowlers() {
     this.resyncElements()
