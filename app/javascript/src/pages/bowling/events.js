@@ -1,7 +1,6 @@
 // resetPinTimer → game.pinTimer.reset()
 export function events() {
   onEvent("pin:change", function(evt) {
-    // console.log("pin change", evt.detail);
     game.saved = false
     if (game.currentShot) {
       game.currentShot.standingPins = game.pins.standing
@@ -9,11 +8,9 @@ export function events() {
   })
   onEvent("shot:change", function(evt) {
     const { shot } = evt.detail
-    // console.log(`shot changed`, shot);
   })
   onEvent("frame:move", function(evt) {
     const { previousShot, currentShot } = evt.detail
-    // console.log(`frame move`, currentShot, previousShot);
 
     game.resyncElements()
     game.showStats()

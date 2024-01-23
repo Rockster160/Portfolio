@@ -40,8 +40,6 @@ window.onbeforeunload = function(evt) {
 //   * Clear All Scores
 //   * Resync Elements
 //   * Maybe even just have a full modal that opens a JS console (and maybe shows some basic commands to remember `game.resyncElements()`, `game.clearAll()`)
-// Test interactions on iPad
-// ^^ BEFORE PROD ^^
 // Edit name, avg, hdcp
 // Somehow re-order bowlers
 // Score button interface (no pins)
@@ -54,6 +52,7 @@ window.onbeforeunload = function(evt) {
 // Maybe show projections? Get average per frame and then multiply by frames left
 // Full track enemy scores to properly display the frame by frame
 
+//√ Test interactions on iPad
 //√ REMEMBER! to replace other page JS (jQuery) so index and league updates still work
 //√ Lane talk
 //√ Remove bowlers from lane

@@ -23,7 +23,7 @@ class BowlingGame < ApplicationRecord
 
   belongs_to :set, class_name: "BowlingSet", inverse_of: :games
   belongs_to :bowler, inverse_of: :games
-  has_many :new_frames, class_name: "BowlingFrame"
+  has_many :new_frames, class_name: "BowlingFrame", dependent: :destroy
 
   validates :bowler_id, uniqueness: { scope: [:game_num, :set_id] }
 
