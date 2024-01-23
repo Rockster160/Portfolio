@@ -159,6 +159,9 @@ export default class Game extends Reactive {
   }
 
   resyncElements() {
+    // For some wild reason, mobile browsers are losing the connection between the elements and the
+    //   DOM. This resync checks if the disconnection occurred, and if so, rebuilds the connection
+    //   and resets everything. It might be jarring, but hopefully it doesn't happen more than once.
     if (this.bowlers[1] && this.bowlers[1].element.parentElement) { return console.log("Elements happy"); }
     console.log("Resyncing Elements");
 
@@ -166,7 +169,7 @@ export default class Game extends Reactive {
     this.pins = new Pins()
     this.pinTimer = new PinTimer()
     this.pinTimer.addTo(".timer-toggle")
-    game.nextShot()
+    FrameNavigation.toEarliestShot()
   }
   resetBowlers() {
     this.resyncElements()

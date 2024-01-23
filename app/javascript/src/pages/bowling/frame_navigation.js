@@ -69,7 +69,7 @@ export default class FrameNavigation {
     if (this.currentBowler?.active && this.currentFrame?.incomplete) {
       this.currentFrame = this.currentFrame // Reset current frame, which will go to incomplete shot
     } else {
-      this.currentFrame = this.earliestUnfinishedFrame()
+      this.toEarliestShot()
     }
   }
 }
