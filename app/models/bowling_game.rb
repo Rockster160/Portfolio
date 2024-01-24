@@ -88,6 +88,14 @@ class BowlingGame < ApplicationRecord
     end
   end
 
+  def rolls_string
+    frame_details.map(&:rolls).flatten.map { |r| r.nil? ? " " : r }.join("")
+  end
+
+  def output
+    "(id:#{id})[#{game_num}]: #{rolls_string} #{score}"
+  end
+
   private
 
   def save_cached_details

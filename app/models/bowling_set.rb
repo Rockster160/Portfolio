@@ -107,8 +107,14 @@ class BowlingSet < ApplicationRecord
     }
   end
 
+  def bowler_by_name(name)
+    league.bowlers.find_or_create_by(name: name)
+  end
+
   def games_attributes=(attributes)
     attributes.each do |game_attrs|
+      game_attrs[:set_id] = game_attrs[:set_id].presence || id
+      game_attrs[:bowler_id] = game_attrs[:bowler_id].presence || bowler_by_name(game_attrs[:bowler_name]).id
       game ||= self.games.find_by(game_attrs.slice(:id))
       game ||= self.games.find_or_initialize_by(game_attrs.slice(:bowler_id, :game_num))
       game.update(game_attrs)

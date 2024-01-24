@@ -38,7 +38,7 @@ class BowlingFrame < ApplicationRecord
     roll2 = "/" if throw1.to_i < 10 && throw1.to_i + throw2.to_i == 10
     roll3 = "/" if roll1 == "X" && throw2.to_i < 10 && throw2.to_i + throw3.to_i == 10
 
-    [roll1, roll2, roll3]
+    tenth? ? [roll1, roll2, roll3] : [roll1, roll2]
   end
 
   def tenth?

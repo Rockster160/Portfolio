@@ -67,7 +67,7 @@ module Bowling
     end
 
     def remove_bowler
-      game = @set.games.find_by!(bowler_id: params[:bowler_id], game_num: params[:game_num])
+      game = @set.games.find_by!(bowler_id: params[:bowler_id], game_num: game_num)
       if game.destroy
         # NOTE: This doesn't currently reset the bowler's scores.
         # If a bowler is removed from an old game, it will mess up future averages
@@ -79,12 +79,19 @@ module Bowling
 
     private
 
+    def game_num
+      return params[:game].to_i if params[:game].present?
+      return params[:game_num].to_i if params[:game_num].present?
+
+      (params.dig(:bowling_set, :games_attributes, 0, :game_num).presence || 1).to_i
+    end
+
     def game_data
       {
         league_id: @league.id,
         set_id: @set.id,
-        game_num: params[:game] || 1,
-        bowlers: @set.games.joins(:bowler).map { |game|
+        game_num: game_num,
+        bowlers: @set.games_for_display(game_num).joins(:bowler).map { |game|
           { id: game.bowler.id, name: game.bowler.name, bowler_game_id: game.id }
         }
       }
@@ -132,13 +139,6 @@ module Bowling
       ).tap do |whitelist|
         whitelist[:frames] = nil if whitelist[:absent]
         whitelist[:frames_details] = nil if whitelist[:absent]
-        whitelist[:games_attributes] = whitelist[:games_attributes]&.map do |game_attributes|
-          game_attributes.tap do |game_whitelist|
-            game_whitelist[:set_id] = game_whitelist[:set_id].presence || @set.id
-            game_whitelist[:bowler_id] = game_whitelist[:bowler_id].presence || @league.bowlers.find_or_create_by(name: game_whitelist[:bowler_name]).id
-            game_whitelist[:id] = game_whitelist[:id].presence || @set.games.find_by(bowler_id: game_whitelist[:bowler_id], game_num: game_whitelist[:game_num])&.id
-          end
-        end
       end
     end
 
