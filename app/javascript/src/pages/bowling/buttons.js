@@ -128,6 +128,22 @@ export function buttons() {
   })
 
   // ==================== Pin Interactions ====================
+  // When clicking on inputs, do not run the rest of the pin tracking.
+  onEvent("mousedown touchstart", function(evt) {
+    if (evt.target.tagName == "INPUT") {
+      evt.stopPropagation()
+    } else {
+      document.activeElement.blur()
+    }
+  })
+  // Do not submit when clicking enter on inputs
+  onEvent("keydown", "input", function(evt) {
+    if (evt.key == "Enter") {
+      evt.preventDefault()
+      evt.target.blur()
+    }
+  })
+
   let pinKnocking = undefined // Means we are currently knocking pins down when true or standing when false
 
   // Disable holding for right click on mobile
@@ -137,63 +153,10 @@ export function buttons() {
     }
   }
   // On click/tap, toggle a pin, track the toggle direction, and start the timer
-  onEvent("mousedown touchstart", function(evt) {
-    // console.log("mousedown touchstart →", evt.type);
-    evt.preventDefault() // Disable screen drag/zoom events when tapping
-    let pin = evt.target.closest(".pin-wrapper:not(.fallen-before)")
-    if (pin) {
-      // When a drag starts, freeze the timer so it doesn't move frames while knocking
-      game.pinTimer.freeze()
-      let pinNum = parseInt(pin.getAttribute("data-pin-num"))
-      pinKnocking = game.pins.checkStanding(pinNum)
-      game.pins.toggle(pinNum, !pinKnocking)
-    }
-    return false
-  })
-  // On release, unfreeze the timer
-  onEvent("mouseup touchend", function(evt) {
-    // console.log("mouseup touchend →", evt.type);
-    if (pinKnocking !== undefined) {
-      game.pinTimer.unfreeze()
-      pinKnocking = undefined
-    }
-  })
-  // mouseover is a mobile Safari fix since it doesn't trigger `mousemove` or `touchmove`
-  onEvent("mousemove mouseover", function(evt) {
-    // console.log("mousemove mouseover →", evt.type);
-    // if (evt.type == "mouseover") { console.log("mouseover →", evt.which, evt.key, evt) }
-
-    if (evt.which != 1) { return } // return unless holding left click
+  let mouseDownEvt = function(xPos, yPos) {
     if (!game) { return }
-    // if (evt.type == "mouseover") { console.log("mouseover (clicking) →", evt) }
 
-    // If hovering/dragging over a pin
-    if (document.querySelector(".pin-wrapper:not(.fallen-before):hover")) {
-      // if (evt.type == "mouseover") { console.log("mouseover pin-wrapper", evt) }
-      evt.preventDefault()
-      game.pinTimer.freeze()
-
-      let pinWrapper = document.querySelector(".pin:hover").closest(".pin-wrapper")
-      if (!pinWrapper) { return } // Pin was fallen-before, so can't toggle it
-
-      if (pinKnocking == undefined) { // undefined is when we haven't clicked a pin yet
-        pinKnocking = !pinWrapper.classList.contains("fallen")
-      }
-      // Toggle the pin the direction the first pin clicked was
-      let pinNum = parseInt(pinWrapper.getAttribute("data-pin-num"))
-      game.pins.toggle(pinNum, !pinKnocking)
-    }
-  })
-  onEvent("touchmove", function(evt) {
-    // console.log("touchmove →", evt.type, evt);
-    if (evt.which == 1) { return } // Return if clicking (this is the touch/drag, not click)
-    if (!game) { return }
-    evt.preventDefault()
-
-    let xPos = evt.touches[0].pageX
-    let yPos = evt.touches[0].pageY
     let pinWrapper = document.elementFromPoint(xPos, yPos).closest(".pin-wrapper")
-
     if (!pinWrapper) { return }
     if (pinWrapper.matches(".fallen-before")) { return }
 
@@ -201,8 +164,35 @@ export function buttons() {
     if (pinKnocking == undefined) { // undefined is when we haven't clicked a pin yet
       pinKnocking = !pinWrapper.classList.contains("fallen")
     }
-
+    // Toggle the pin the direction the first pin clicked was
     let pinNum = parseInt(pinWrapper.getAttribute("data-pin-num"))
     game.pins.toggle(pinNum, !pinKnocking)
+  }
+  // Stop select from highlighting text and/or zooming
+  onEvent("mousedown touchstart selectstart", function(evt) {
+    if (evt.target.tagName == "INPUT") { return }
+
+    evt.preventDefault()
+  })
+  // mouseover is a mobile Safari fix since it doesn't trigger `mousemove` or `touchmove`
+  onEvent("mousedown mousemove mouseover", function(evt) {
+    if (evt.target.tagName == "INPUT") { return }
+    if (evt.which != 1) { return } // return unless holding left click
+
+    mouseDownEvt(evt.clientX, evt.clientY)
+  })
+  onEvent("touchstart touchmove", function(evt) {
+    if (evt.target.tagName == "INPUT") { return }
+    if (evt.which == 1) { return } // Return if clicking (this is the touch/drag, not click)
+
+    mouseDownEvt(evt.touches[0].pageX, evt.touches[0].pageY)
+  })
+  // On release, unfreeze the timer
+  onEvent("mouseup touchend", function(evt) {
+    if (evt.target.tagName == "INPUT") { return }
+    if (pinKnocking !== undefined) {
+      game.pinTimer.unfreeze()
+      pinKnocking = undefined
+    }
   })
 }

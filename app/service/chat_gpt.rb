@@ -41,4 +41,15 @@ module ChatGPT
     ]
     # ["111-3842886-2135464", "2023-07-25T22:00:00-0600"]
   end
+
+  def calorie_check(item)
+    prompt = (
+      "Please respond only with the number of calories." \
+      "Take your best guess at the calorie count for the provided dish." \
+      "Assume a single serving unless there are multipliers in the text"
+    )
+
+    res = ask("#{prompt}: #{item}")
+    
+  end
 end

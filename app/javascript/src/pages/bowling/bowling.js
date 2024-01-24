@@ -32,8 +32,17 @@ window.onbeforeunload = function(evt) {
 // Absent bowler should not send scores...
 
 // ===== BUG:
+// 3rd game gets lost!!
+//  * Games sometimes not submitting scores for some reason?
+// iPad can't input/modify Lane
 // When a bowler is absent the 1st game then present the 2nd, 2nd (and 3rd) games are marked and pre-set as absent
-// * Also applies for deleting a bowler- likely a BE issue
+//   * Also applies for deleting a bowler- likely a BE issue
+// Tapping doesn’t work (double triggers pin)
+// Stop double clicks- highlights and zoom
+// Stop text highlighting
+// Empty bowler (new game new league) raising errors
+// "New Bowler" on empty game did not open the modal
+// New game should have an empty bowler added by default - game should not allow 0 bowlers- add a blank one if there aren't any.
 
 // ===== TODO: (Don't delete, just check)
 // "admin" interface - opens a modal with a few buttons that trigger different things
