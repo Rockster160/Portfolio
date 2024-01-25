@@ -3,8 +3,8 @@ export default class Reactive {
     this.element = element
   }
 
-  bool(boolname, callback) {
-    this.accessor(boolname, callback)
+  bool(boolname, default_val, callback) {
+    this.accessor(boolname, default_val, callback)
     this[`${boolname}Toggle`] = () => { this[boolname] = !this[boolname] }
   }
 
@@ -16,8 +16,14 @@ export default class Reactive {
     }
   }
 
-  accessor(propName, callback) {
+  accessor(propName, default_val, callback) {
+    if (default_val && typeof(default_val) === "function") {
+      callback = default_val
+      default_val = undefined
+    }
+
     let snake = "_" + propName.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
+    if (!default_val === undefined) { this[snake] = default_val }
     // The below stops the getter from being redefined every time a new instance is created
     let getter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(this), propName)
     if (getter && typeof getter.get === "function") { return }
@@ -33,7 +39,7 @@ export default class Reactive {
 
   elementAccessor(propName, selector, attr, callback) {
     // Fix arg positioning
-    // accessor("myAccessor", ".selector", fn())
+    // elementAccessor("myAccessor", ".selector", fn())
     if (attr && typeof(attr) === "function") {
       callback = attr
       attr = undefined
@@ -77,8 +83,7 @@ export default class Reactive {
     this.element.addEventListener("change", function(evt) {
       if (!evt.target.closest(selector)) { return }
 
-      setEleVal.call(self, getEleVal.call(self))
-      // self[propName] = self[propName] // Call the setter with the getter
+      setEleVal.call(self, getEleVal.call(self)) // Call the setter with the getter
     })
 
     let getter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(this), propName)

@@ -41,7 +41,7 @@ export default class Game extends Reactive {
     this.bool("crossLane", function(value) {
       this.element.querySelector(".crosslane-toggle").classList.toggle("active", value)
       sessionStorage.setItem("useCrossLane", value)
-      this.laneTalk.crossLane = value
+      if (this.laneTalk) { this.laneTalk.crossLane = value }
     })
     this.bool("laneTalkEnabled", function(value) {
       this.element.querySelector(".lanetalk-toggle").classList.toggle("active", value)
@@ -69,14 +69,14 @@ export default class Game extends Reactive {
 
     this.bowlers = Bowler.get()
 
+    let storedCrossLane = sessionStorage.getItem("useCrossLane")
+    let useCrossLane = storedCrossLane !== null ? storedCrossLane == "true" : true
+    this.crossLane = useCrossLane
+
     this.laneTalk = new LaneTalk(this.lane, this.laneTalkEnabled)
     let storedVal = sessionStorage.getItem("useLaneTalk") // !edit_page &&
     let useLaneTalk = storedVal !== null ? storedVal == "true" : true
     this.laneTalkEnabled = useLaneTalk
-
-    let storedCrossLane = sessionStorage.getItem("useCrossLane")
-    let useCrossLane = storedCrossLane !== null ? storedCrossLane == "true" : true
-    this.crossLane = useCrossLane
 
     this.initialized = true
 
@@ -95,9 +95,7 @@ export default class Game extends Reactive {
   get gameNum() { return this._game_num }
   set gameNum(num) {
     this._game_num = num
-    this.eachBowler(bowler => {
-      if (bowler) { bowler.element.querySelector(".bowler-game-number").value = num }
-    })
+    this.eachBowler(bowler => bowler.element.querySelector(".bowler-game-number").value = num)
   }
 
   get finishBtn() { return this.element.querySelector(".bowling-form-btn") }
