@@ -25,6 +25,8 @@ class BowlingSet < ApplicationRecord
   has_many :bowlers, through: :games
   has_many :frames, through: :games, source: :new_frames
 
+  accepts_nested_attributes_for :games
+
   def ordered_bowlers
     Bowler.joins(:games)
       .select("bowlers.*, MAX(bowling_games.position) as game_pos")
@@ -112,13 +114,18 @@ class BowlingSet < ApplicationRecord
   end
 
   def games_attributes=(attributes)
-    attributes.each do |game_attrs|
-      game_attrs[:set_id] = game_attrs[:set_id].presence || id
-      game_attrs[:bowler_id] = game_attrs[:bowler_id].presence || bowler_by_name(game_attrs[:bowler_name]).id
-      game ||= self.games.find_by(game_attrs.slice(:id))
-      game ||= self.games.find_or_initialize_by(game_attrs.slice(:bowler_id, :game_num))
-      game.update(game_attrs)
+    if persisted?
+      attributes.each do |game_attrs|
+        game_attrs[:set_id] = game_attrs[:set_id].presence || id
+        game_attrs[:bowler_id] = game_attrs[:bowler_id].presence || bowler_by_name(game_attrs[:bowler_name]).id
+        game ||= self.games.find_by(game_attrs.slice(:id))
+        game ||= self.games.find_or_initialize_by(game_attrs.slice(:bowler_id, :game_num))
+        game_attrs.delete(:id) unless game_attrs[:id].present?
+        game.update(game_attrs)
+      end
+      self.games.reload
+    else
+      super(attributes)
     end
-    self.games.reload
   end
 end
