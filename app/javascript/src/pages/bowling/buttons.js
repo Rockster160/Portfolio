@@ -130,6 +130,8 @@ export function buttons() {
   // ==================== Pin Interactions ====================
   // When clicking on inputs, do not run the rest of the pin tracking.
   onEvent("mousedown touchstart", function(evt) {
+    if (touchInterface && evt.type == "mousedown") { return }
+
     if (evt.target.tagName == "INPUT") {
       evt.stopPropagation()
     } else {
@@ -145,6 +147,7 @@ export function buttons() {
   })
 
   let pinKnocking = undefined // Means we are currently knocking pins down when true or standing when false
+  let touchInterface = false
 
   // Disable holding for right click on mobile
   window.oncontextmenu = function(evt) {
@@ -170,18 +173,22 @@ export function buttons() {
   }
   // Stop select from highlighting text and/or zooming
   onEvent("mousedown touchstart selectstart", function(evt) {
+    if (evt.type == "touchstart") { touchInterface = true }
+    if (touchInterface && evt.type == "mousedown") { return }
     if (evt.target.tagName == "INPUT") { return }
 
     evt.preventDefault()
   })
   // mouseover is a mobile Safari fix since it doesn't trigger `mousemove` or `touchmove`
   onEvent("mousedown mousemove mouseover", function(evt) {
+    if (touchInterface) { return } // Don't trigger mouse events if on a touch screen
     if (evt.target.tagName == "INPUT") { return }
     if (evt.which != 1) { return } // return unless holding left click
 
     mouseDownEvt(evt.clientX, evt.clientY)
   })
   onEvent("touchstart touchmove", function(evt) {
+    touchInterface = true
     if (evt.target.tagName == "INPUT") { return }
     if (evt.which == 1) { return } // Return if clicking (this is the touch/drag, not click)
 
@@ -189,6 +196,7 @@ export function buttons() {
   })
   // On release, unfreeze the timer
   onEvent("mouseup touchend", function(evt) {
+    if (touchInterface && evt.type == "mouseup") { return }
     if (evt.target.tagName == "INPUT") { return }
     if (pinKnocking !== undefined) {
       game.pinTimer.unfreeze()
