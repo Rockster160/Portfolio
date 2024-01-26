@@ -36,15 +36,17 @@ async function requestNotificationPermission() {
 
 export async function registerNotifications() {
   if (checkPushAPI()) {
-    // console.log("[Push API] Support!")
+    console.log("[Push API] Support!")
 
     var permissionGranted = await requestNotificationPermission()
     if (permissionGranted) {
       // console.log("[Push API] Permission Granted!")
       var registration = await registerServiceWorker()
       // if (registration) { console.log("[Push API] Registered!") }
-      // console.log("[Push API] registration", registration)
+      console.log("[Push API] registration", registration)
       if (!registration) { return console.log("[Push API] Failed to Register") }
+    } else {
+      console.log("[Push API] Permission rejected")
     }
   } else {
     console.log("[Push API] Unsupported Browser")
