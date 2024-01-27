@@ -321,15 +321,15 @@ class TaskMap
         { block: :array },
         { block: :any },
       ],
-      # sort:        [ # - Fail for incompatible types
-      #   { return: :array },
-      #   { block: :array },
-      #   [:asc, :desc, :random]
-      # ],
+      sort:        [
+        { return: :array },
+        { block: :array },
+        [:reverse, :asc, :desc, :random]
+      ],
       # sort_by:     [
       #   { return: :array },
       #   { block: :array },
-      #   :content, # last value from content is used to sort asc
+      #   :content,
       # ],
       find:        [
         { return: :any, description: "First truthy value from array" },

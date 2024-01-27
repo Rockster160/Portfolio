@@ -121,17 +121,20 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
     steps.count
   end
 
-  # def sort
-  # - Fail for incompatible types
-  #   { return: :array },
-  #   { block: :array },
-  #   [:asc, :desc, :random]
-  # end
+  def sort
+    arr, order = evalargs
+    case order.to_s.to_sym
+    when :reverse then arr.reverse
+    when :asc then arr.sort
+    when :desc then arr.sort.reverse
+    when :random then arr.shuffle
+    end
+  end
 
   # def sort_by
-  #   { return: :array },
-  #   { block: :array },
-  #   :content, # last value from content is used to sort asc
+  #   # { return: :array },
+  #   # { block: :array },
+  #   # :content, # last value from content is used to sort asc
   # end
 
   def find
