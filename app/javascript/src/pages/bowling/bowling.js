@@ -32,9 +32,6 @@ window.onbeforeunload = function(evt) {
 // Absent bowler should not send scores...
 
 // ===== BUG:
-// Tapping doesn’t work (double triggers pin)
-// Stop double clicks- highlights and zoom
-// Stop text highlighting
 // When a bowler is absent the 1st game then present the 2nd, 2nd (and 3rd) games are marked and pre-set as absent
 //   * Also applies for deleting a bowler- likely a BE issue
 // Empty bowler (new game new league) raising errors

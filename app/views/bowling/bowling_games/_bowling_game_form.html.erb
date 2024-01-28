@@ -22,16 +22,26 @@
 
   <div class="bowler-options hidden" data-edit="show">
     <span class="details">
-      <b class="bowler-options-name"><%= bowler.name %></b>
-      <% if (avg = bowler_set&.starting_avg || bowler.average)&.positive? %>
-        <small>AVG:</small> <span class="avg-val"><%= avg %></span>
-      <% end %>
-      <% if (hdcp = bowler_set&.handicap || bowler.handicap)&.positive? %>
-        <small>HDCP:</small> <span class="hdcp-val"><%= hdcp %></span>
-      <% end %>
+      <span class="bowler-option" data-bowler-option="name">
+        <span class="option-label"><%= i :pencil %> Name:</span>
+        <span class="option-value"><%= bowler.name %></span>
+      </span>
+      <span class="bowler-option" data-bowler-option="avg">
+        <span class="option-label"><%= i :pencil %> AVG:</span>
+        <% avg = bowler_set&.starting_avg || bowler.average %>
+        <span class="option-value"><%= avg %></span>
+      </span>
+      <span class="bowler-option" data-bowler-option="hdcp">
+        <span class="option-label"><%= i :pencil %> HDCP:</span>
+        <% hdcp = bowler_set&.handicap || bowler.handicap %>
+        <span class="option-value"><%= hdcp %></span>
+      </span>
+
       <div class="presence-options">
+        <%= hidden_field_tag "#{set_params}absent", false %>
         <%= check_box_tag "#{set_params}absent", true, game.absent?, id: "absent-#{hex}", class: "absent-checkbox" %>
         <%= label_tag "#{set_params}absent", "Absent?", for: "absent-#{hex}" %> <br>
+        <%= hidden_field_tag "#{set_params}skip", false %>
         <%= check_box_tag "#{set_params}skip", true, false, id: "skip-#{hex}", class: "skip-checkbox" %>
         <%= label_tag "#{set_params}skip", "Skip?", for: "skip-#{hex}" %>
       </div>

@@ -103,6 +103,7 @@ export default class LaneTalk {
 
     let bowler = game.bowlers[player.playerNumber]
     if (!bowler) { return console.log("No bowler", player) }
+    if (!bowler.active) { return console.log("Bowler Absent") }
 
     bowler.shots.forEach((shot, idx) => {
       let binaryPinCount = player.pins[idx]

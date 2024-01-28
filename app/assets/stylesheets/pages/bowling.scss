@@ -328,6 +328,19 @@
           font-size: 10px;
         }
       }
+
+      .details .bowler-option {
+        cursor: pointer;
+        text-decoration: underline;
+        margin-right: 2px;
+
+        .option-label {
+          font-size: 8px;
+        }
+        .option-value {
+          font-weight: bold;
+        }
+      }
     }
     .bowler-name {
       display: grid;

@@ -36,6 +36,10 @@ module ApplicationHelper
     distance_of_time_in_words(Time.current, time) + (time.future? ? " from now" : " ago")
   end
 
+  def i(type)
+    "<i class=\"fa fa-#{type}\"></i>".html_safe
+  end
+
   def svg(svg_path, options={})
     Rails.cache.fetch("#{svg_path}.#{options.to_json}") do
       options[:nocomment] = true if options[:nocomment].nil?

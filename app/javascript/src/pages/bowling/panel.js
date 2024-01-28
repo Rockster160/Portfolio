@@ -46,6 +46,26 @@ export function panel() {
     hideModal("#bowler-sub-list")
     game.editBowler = true
   })
+  onEvent("click", ".bowler-option", (evt) => {
+    let opt = evt.target
+    editingBowler = game.bowlerFrom(evt.target)
+
+    let label = opt.getAttribute("data-bowler-option")
+    let value = opt.querySelector(".option-value").innerText
+    let newVal = window.prompt(`Enter new ${label}`, value)
+
+    if (newVal) {
+      if (label == "name") {
+        editingBowler.bowlerName = newVal
+      } else if (label == "avg") {
+        editingBowler.avg = newVal
+      } else if (label == "hdcp") {
+        editingBowler.hdcp = newVal
+      }
+    }
+
+    editingBowler = null
+  })
   onEvent("submit", ".bowling-game-form", function(evt) {
     evt.preventDefault()
     return game.nextGame()
