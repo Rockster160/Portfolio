@@ -9,6 +9,7 @@ class JarvisScheduleWorker
 
     crons.find_each do |task|
       ::Jarvis.command(task.user, task.command) # These are run inline
+      task.update(last_trigger_at: Time.current) # Reschedules next_trigger_at
       # JarvisWorker.perform_async(task.user_id, task.command)
     end
     tasks.find_each do |task|

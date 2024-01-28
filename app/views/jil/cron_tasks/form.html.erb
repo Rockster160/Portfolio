@@ -3,6 +3,9 @@
 <div class="skinny-container">
   <div class="btn-container">
     <%= link_to "← Tasks", jil_cron_tasks_path, class: :btn %>
+    <% if @task.persisted? %>
+      <%= link_to :Delete, [:jil, @task], method: :delete, class: "btn danger pull-right", data: { confirm: "Are you sure? This cannot be undone." } %>
+    <% end %>
   </div>
   <%= form_for [:jil, @task] do |f| %>
     <div class="form-title"><%= @task.persisted? ? :Edit : :New %> Task</div>
@@ -12,15 +15,15 @@
     <div class="form-fields">
       <div class="form-field">
         <%= f.label :name %>
-        <%= f.text_field :name %>
+        <%= f.text_field :name, autocomplete: false %>
       </div>
       <div class="form-field">
         <%= f.label :cron, "Cron (min hr day month wday)" %>
-        <%= f.text_field :cron %>
+        <%= f.text_field :cron, autocomplete: false %>
       </div>
       <div class="form-field">
         <%= f.label :command %>
-        <%= f.text_field :command %>
+        <%= f.text_field :command, autocomplete: false %>
       </div>
 
       <div class="form-field">
