@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_01_09_011308) do
+ActiveRecord::Schema[7.1].define(version: 2024_01_28_203606) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -266,6 +266,19 @@ ActiveRecord::Schema[7.1].define(version: 2024_01_09_011308) do
     t.jsonb "raw"
     t.text "apple_contact_id"
     t.index ["user_id"], name: "index_contacts_on_user_id"
+  end
+
+  create_table "cron_tasks", force: :cascade do |t|
+    t.bigint "user_id"
+    t.text "name"
+    t.text "cron"
+    t.text "command"
+    t.boolean "enabled", default: true
+    t.datetime "last_trigger_at"
+    t.datetime "next_trigger_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_cron_tasks_on_user_id"
   end
 
   create_table "data_storages", force: :cascade do |t|

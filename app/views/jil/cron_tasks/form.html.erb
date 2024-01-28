@@ -1,0 +1,41 @@
+<%= meta_title @task.name.presence || "Blank Task", include_name: false %>
+
+<div class="skinny-container">
+  <div class="btn-container">
+    <%= link_to "← Tasks", jil_cron_tasks_path, class: :btn %>
+  </div>
+  <%= form_for [:jil, @task] do |f| %>
+    <div class="form-title"><%= @task.persisted? ? :Edit : :New %> Task</div>
+
+    <%= render partial: "layouts/error_container", locals: { resource: @task } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= f.label :name %>
+        <%= f.text_field :name %>
+      </div>
+      <div class="form-field">
+        <%= f.label :cron, "Cron (min hr day month wday)" %>
+        <%= f.text_field :cron %>
+      </div>
+      <div class="form-field">
+        <%= f.label :command %>
+        <%= f.text_field :command %>
+      </div>
+
+      <div class="form-field">
+        <div class="checkbox-wrapper">
+          <%= f.check_box :enabled %>
+          <%= f.label :enabled do %>
+            <div class="checkbox-placeholder"></div>
+            Enabled
+          <% end %>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit %>
+    </div>
+  <% end %>
+</div>

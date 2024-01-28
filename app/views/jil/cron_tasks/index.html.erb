@@ -1,36 +1,24 @@
-<% name = params[:trigger] == "function" ? "Function" : "Task" %>
-<%= meta_title "My #{name.pluralize}", include_name: false %>
+<%= meta_title "Cron Tasks", include_name: false %>
 
 <div class="skinny-container lists-index-container">
   <div class="btn-container">
     <a href="<%= account_path %>" class="btn">Account</a>
-    <% if params[:trigger] == "function" %>
-      <a href="<%= new_jil_jarvis_task_path(trigger: :function) %>" class="btn pull-right">New Function +</a>
-    <% else %>
-      <a href="<%= new_jil_jarvis_task_path %>" class="btn pull-right">New Task +</a>
-    <% end %>
+    <a href="<%= new_jil_cron_task_path %>" class="btn pull-right">New Task +</a>
   </div>
-  <div class="lists-title">My <%= name.pluralize %></div>
-  <% if params[:trigger] == "function" %>
-    <%= link_to "Tasks", jil_path, class: "btn pull-right" %>
-  <% else %>
-    <%= link_to "Custom Functions", jil_path(trigger: :function), class: "btn pull-right" %>
-  <% end %>
+  <div class="lists-title">Cron Tasks</div>
   <div class="lists">
     <div class="list-field">
-      <%= text_field_tag "task[name]", "", class: "filterable", placeholder: "Search #{name.downcase}s" %>
+      <%= text_field_tag "task[name]", "", class: "filterable", placeholder: "Search Tasks" %>
     </div>
     <div class="important-list-items"></div>
-
     <% @tasks.each do |task| %>
-      <div class="list-item-container" data-list-id="<%= task.uuid %>">
+      <div class="list-item-container" data-list-id="<%= task.id %>">
         <div class="list-item-config">
-          <%= content_tag :div, task.humanized_schedule, class: "category" %>
+          <%= content_tag :div, task.cron, class: "category" %>
           <%= content_tag :div, :Disabled, class: "status disabled" if !task.enabled? %>
         </div>
-        <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>
-        <a href="<%= edit_jil_jarvis_task_path(task) %>" class="list-item">
-          <span class="item-name"><%= task.name.titleize %></span>
+        <a href="<%= edit_jil_cron_task_path(task) %>" class="list-item">
+          <span class="item-name"><%= task.name %></span>
           <div class="list-item-brief">
             <div class="left-brief">
               <% if task.last_trigger_at.present? %>

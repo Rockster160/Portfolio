@@ -19,6 +19,7 @@ class User < ApplicationRecord
 
   has_many :api_keys, dependent: :destroy
   has_many :jarvis_tasks, dependent: :destroy
+  has_many :cron_tasks, dependent: :destroy
   has_many :bowling_leagues, dependent: :destroy
   has_many :climbs, dependent: :destroy
   has_many :folders, dependent: :destroy

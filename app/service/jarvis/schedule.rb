@@ -3,16 +3,16 @@ module Jarvis::Schedule
 
   def upcoming
     # Should be per User!
-    [*::JarvisTask.enabled.cron, *::Jarvis::Schedule.get_events].map { |sched|
+    [*::JarvisTask.enabled.cron, *::CronTask.enabled, *::Jarvis::Schedule.get_events].map { |sched|
       timestamp = (
-        if sched.is_a?(::JarvisTask)
+        if sched.is_a?(::JarvisTask) || sched.is_a?(::CronTask)
           sched.next_trigger_at&.in_time_zone(::User.timezone)
         else
           ::Jarvis::Times.safe_date_parse(sched[:scheduled_time])
         end
       )
       next if timestamp.blank?
-      name = sched.is_a?(::JarvisTask) ? sched.name : (sched[:name].presence || sched[:command])
+      name = sched.try(:name) || sched[:name].presence || sched[:command]
       next if name == "Check Car"
       name = name.gsub(/(Remind me (to )?)/i, "•")
       name = name.gsub(/(Take me (to )?)/i, "→")
@@ -21,7 +21,7 @@ module Jarvis::Schedule
       {
         timestamp: timestamp,
         name: name,
-        recurring: sched.is_a?(::JarvisTask) && sched.input
+        recurring: (sched.is_a?(::JarvisTask) && sched.input) || sched.is_a?(::CronTask)
       }
     }.compact.sort_by { |sched| sched[:timestamp] }
   end
