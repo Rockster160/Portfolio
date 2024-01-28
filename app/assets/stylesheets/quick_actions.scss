@@ -200,6 +200,22 @@ i.emoji {
         color: $grey-light;
         font-size: 12px;
       }
+      .blip {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+
+        border-radius: 16px;
+        background: red;
+        min-width: 16px;
+        max-width: 40px;
+        height: 16px;
+        color: $grey-light;
+        font-size: 12px;
+        line-height: 16px;
+        text-align: center;
+        overflow: hidden;
+      }
     }
 
     &:active, &:hover {

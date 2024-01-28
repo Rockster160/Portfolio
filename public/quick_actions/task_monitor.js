@@ -68,6 +68,16 @@ export class Monitor {
     my_lines.innerHTML = lines
   }
   set timestamp(new_timestamp) { this.setTime(new_timestamp) }
+  set blip(new_blip) {
+    if (!this.element) { return }
+    this.element.querySelector(".blip")?.remove()
+    if (new_blip) {
+      let span = document.createElement("span")
+      span.classList.add("blip")
+      span.textContent = new_blip
+      this.element.appendChild(span)
+    }
+  }
 
   setTime(new_timestamp) {
     let monitor = this
@@ -102,6 +112,7 @@ Monitor.socket = new AuthWS("MonitorChannel", {
     }
 
     monitor.loading = false
+    monitor.blip = data.blip
     monitor.timestamp = data.timestamp * 1000
     monitor.content = toMd(data.result)
   },

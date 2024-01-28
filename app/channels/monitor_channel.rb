@@ -17,15 +17,20 @@ class MonitorChannel < ApplicationCable::Channel
   end
 
   def self.send_task(task)
-    broadcast_to(
-      task.user,
+    data = {
       id: task.uuid,
       result: task.last_result,
       timestamp: task.last_ctx.dig(:vars, "timestamp:var").then { |ts|
         break ts if ts.is_a?(Numeric) # If it's a number
         break ts.to_f if ts.to_f > 0 # Or looks like a number
       } || task.last_trigger_at.to_i,
-    )
+    }
+    task.last_ctx.dig(:vars, "blip:var")&.then { |blip|
+      break unless blip.present?
+      data[:blip] = blip.to_s.first(3)
+    }
+
+    broadcast_to(task.user, data)
     # This is VERY magic. If the task defines a "timestamp" variable, the monitor channel will
     #   send that instead, allowing us to set the timestamp on the cell
     # Magic variables:
