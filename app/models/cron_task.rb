@@ -20,9 +20,17 @@ class CronTask < ApplicationRecord
 
   scope :enabled, -> { where(enabled: true) }
 
+  def disabled?
+    !enabled?
+  end
+
   private
 
   def set_next_cron
-    self.next_trigger_at = ::CronParse.next(cron)
+    if enabled?
+      self.next_trigger_at = ::CronParse.next(cron)
+    else
+      self.next_trigger_at = nil
+    end
   end
 end

@@ -8,7 +8,7 @@ class Jil::CronTasksController < ApplicationController
   end
 
   def index
-    @tasks = current_user.cron_tasks.order(:next_trigger_at)
+    @tasks = current_user.cron_tasks.order(enabled: :desc, next_trigger_at: :asc, last_trigger_at: :desc)
   end
 
   def new
