@@ -515,6 +515,36 @@ class TaskMap
         { block: :str }
       ]
     },
+    prompt: {
+      text: [
+        { return: :hash },
+        { block: :str },
+        "Default:", { block: :str, optional: true },
+      ],
+      scale: [
+        { return: :hash },
+        { block: :str },
+        "Max:", { block: :num, default: 100 },
+        "Default:", { block: :num, optional: true },
+      ],
+      checkbox: [
+        { return: :hash },
+        { block: :str },
+        "Default:", { block: :bool, default: false },
+      ],
+      choices: [
+        { return: :hash },
+        { block: :str },
+        "Choices:", :content,
+      ],
+      survey: [
+        { return: :str },
+        { block: :str, name: :question }, :br,
+        "Params:", { block: :hash, optional: true }, :br,
+        "Callback Task:", { block: :str, name: :task_name }, :br,
+        "Questions:", :content,
+      ],
+    },
     task: {
       input_data: [
         { return: :hash },
@@ -585,13 +615,6 @@ class TaskMap
         :content, # { block: :hash, name: :headers, optional: true },
         :Params,
         :content, # { block: :hash, name: :params, optional: true },
-      ],
-      prompt: [
-        { return: :str },
-        { block: :str, name: :question }, :br,
-        "Options:", { block: :hash, optional: true }, :br,
-        "Params:", { block: :hash, optional: true }, :br,
-        "Callback Task:", { block: :str, name: :task_name }, :br,
       ],
       # Send email from Jarvis - Admin only? - Or just require some kind of email setup/permissions
       # email: [
