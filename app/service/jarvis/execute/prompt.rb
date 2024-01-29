@@ -39,9 +39,10 @@ class Jarvis::Execute::Prompt < Jarvis::Execute::Executor
   def survey
     user = jil.task.user
     prompt, data, task_id, questions = args
+    q = eval_block(prompt)
 
     prompt = user.prompts.create(
-      question:    eval_block(prompt),
+      question:    q,
       params:      eval_block(data),
       task:        user.jarvis_tasks.anyfind(eval_block(task_id)),
       options:     questions.map { |q| eval_block(q) },
@@ -51,7 +52,7 @@ class Jarvis::Execute::Prompt < Jarvis::Execute::Executor
     jil.ctx[:msg] += prompt.errors.full_messages unless prompt.persisted?
     if Rails.env.production?
       WebPushNotifications.send_to(user, {
-        title: question,
+        title: q,
         url: url
       })
     end
