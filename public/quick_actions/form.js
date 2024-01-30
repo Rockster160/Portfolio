@@ -103,12 +103,10 @@ let showForm = function(widget) {
     for (const [key, value] of Object.entries(currentWidget.dataset)) {
       let hyphen = key.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase()
       // Set [type=text] values
-      let input = form.querySelector(`input[type='text']#${hyphen}`)
-      if (input) { input.value = value }
+      let input = form.querySelectorAll(`input[type='text'][name='${hyphen}']`).forEach(item => item.value = value)
 
       // Set [type=checkbox] values
-      let checkbox = form.querySelector(`input[type='checkbox']#${hyphen}`)
-      if (checkbox) { checkbox.checked = value == "true" }
+      let checkbox = form.querySelectorAll(`input[type='checkbox'][name='${hyphen}']`).forEach(item => item.checked = value == "true")
     }
 
     form.querySelector("input[type='submit']").value = "Update"

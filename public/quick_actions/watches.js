@@ -17,8 +17,9 @@ let hideWatcher = function(watcher) {
 }
 
 document.querySelectorAll("[data-watches-selector]").forEach(function(element) {
-  var watcher = element,
-    watching = document.querySelector(watcher.getAttribute("data-watches-selector"))
+  let watcher = element
+  let selector = watcher.getAttribute("data-watches-selector")
+  let watching = document.querySelector(selector)
 
   let reactToChange = function() {
     let val = watcher.getAttribute("data-watches-value")
@@ -32,8 +33,7 @@ document.querySelectorAll("[data-watches-selector]").forEach(function(element) {
       showWatcher(watcher)
     } else if (
       watcher.getAttribute("data-watches-radio") &&
-      document.querySelector(watcher.getAttribute("data-watches-selector") + ":checked")?.value ==
-        watcher.getAttribute("data-watches-radio")
+      document.querySelector(`${selector}:checked`)?.value == watcher.getAttribute("data-watches-radio")
     ) {
       showWatcher(watcher)
     } else {

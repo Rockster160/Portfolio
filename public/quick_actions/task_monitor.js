@@ -24,7 +24,7 @@ export class Monitor {
     return Monitor.#monitors[id]
   }
   static findEle(id) {
-    return document.querySelector(`.widget[data-type='monitor'][data-task-id='${id}']`)
+    return document.querySelector(`.widget[data-task-id='${id}']`)
   }
   static from(ele) {
     return Monitor.find(ele?.getAttribute("data-task-id"))
@@ -135,7 +135,7 @@ document.addEventListener("click", function(evt) {
   if (evt.cancelBubble) { return }
 
   let refreshBtn = evt.target.closest(".refresh")
-  let monitor = Monitor.from(refreshBtn?.closest(".widget[data-type='monitor']"))
+  let monitor = Monitor.from(refreshBtn?.closest(".widget[data-task-id]"))
   if (monitor) {
     evt.preventDefault()
     evt.stopPropagation()
@@ -144,7 +144,7 @@ document.addEventListener("click", function(evt) {
   }
 
   let wrapper = evt.target.closest(".widget-holder")
-  monitor = Monitor.from(wrapper?.querySelector(".widget[data-type='monitor']"))
+  monitor = Monitor.from(wrapper?.querySelector(".widget[data-task-id]"))
   if (monitor) {
     evt.preventDefault()
     evt.stopPropagation()
@@ -155,7 +155,7 @@ document.addEventListener("click", function(evt) {
 
 window.addEventListener("load", function() {
   setTimeout(function() {
-    document.querySelectorAll(".widget[data-type='monitor'] .loading:not(.hidden)").forEach(item => {
+    document.querySelectorAll(".widget[data-task-id] .loading:not(.hidden)").forEach(item => {
       Monitor.from(item.closest(".widget"))?.resync()
     })
   }, 500)
