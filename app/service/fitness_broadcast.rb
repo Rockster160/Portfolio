@@ -74,6 +74,7 @@ class FitnessBroadcast
 
   def drugs
     names = [
+      "BupropionXL",
       "Buspirone",
       "Vitamins",
     ].map { |name| "name::#{name}" }.join(" ")
