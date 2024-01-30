@@ -13,25 +13,27 @@ export class Widget {
 
     if (!this.wrapper) { return }
 
-    if (touch_callback && typeof(touch_callback) === "function") {
-      this.wrapper.addEventListener("click", function(evt) {
-        if (evt.cancelBubble) { return }
-        touch_callback(evt)
+    if (this.ele.getAttribute("data-type") == "monitor") {
+      if (touch_callback && typeof(touch_callback) === "function") {
+        this.wrapper.addEventListener("click", function(evt) {
+          if (evt.cancelBubble) { return }
+          touch_callback(evt)
+        })
+        this.wrapper.addEventListener("ontouchstart", function(evt) {
+          if (evt.cancelBubble) { return }
+          touch_callback(evt)
+        })
+      }
+      let refresh_btn = this.wrapper.querySelector(".refresh")
+      refresh_btn?.addEventListener("click", function(evt) {
+        evt.stopPropagation()
+        widget.refresh()
       })
-      this.wrapper.addEventListener("ontouchstart", function(evt) {
-        if (evt.cancelBubble) { return }
-        touch_callback(evt)
+      refresh_btn?.addEventListener("ontouchstart", function(evt) {
+        evt.stopPropagation()
+        widget.refresh()
       })
     }
-    let refresh_btn = this.wrapper.querySelector(".refresh")
-    refresh_btn?.addEventListener("click", function(evt) {
-      evt.stopPropagation()
-      widget.refresh()
-    })
-    refresh_btn?.addEventListener("ontouchstart", function(evt) {
-      evt.stopPropagation()
-      widget.refresh()
-    })
 
     widgets[name] = this
   }
