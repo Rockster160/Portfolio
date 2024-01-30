@@ -19,4 +19,8 @@ class Jarvis::Execute::Executor
   def user
     @user ||= jil.task.user
   end
+
+  def current_user
+    user
+  end
 end

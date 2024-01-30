@@ -516,6 +516,30 @@ class TaskMap
       ]
     },
     prompt: {
+      index: [
+        { return: :array },
+        "Limit: ", { block: :num, default: 50 }, :br,
+        "Include Complete: ", { block: :bool, default: false }
+      ],
+      destroy: [
+        { return: :bool },
+        { block: :num },
+      ],
+      edit: [
+        { return: :hash },
+        { block: :num },
+        { block: :str, name: :question }, :br,
+        "Params:", { block: :hash, optional: true }, :br,
+        "Callback Task:", { block: :str, name: :task_name }, :br,
+        "Questions:", :content,
+      ],
+      survey: [
+        { return: :hash },
+        { block: :str, name: :question }, :br,
+        "Params:", { block: :hash, optional: true }, :br,
+        "Callback Task:", { block: :str, name: :task_name }, :br,
+        "Questions:", :content,
+      ],
       text: [
         { return: :hash },
         { block: :str },
@@ -536,13 +560,6 @@ class TaskMap
         { return: :hash },
         { block: :str },
         "Choices:", :content,
-      ],
-      survey: [
-        { return: :str },
-        { block: :str, name: :question }, :br,
-        "Params:", { block: :hash, optional: true }, :br,
-        "Callback Task:", { block: :str, name: :task_name }, :br,
-        "Questions:", :content,
       ],
     },
     task: {

@@ -23,4 +23,19 @@ class JilPrompt < ApplicationRecord
     single: 0,
     many:   1,
   }
+
+  def self.serialize
+    all.map(&:serialize)
+  end
+
+  def serialize
+    {
+      id: id,
+      question: question,
+      params: params,
+      options: options,
+      task: task&.uuid,
+      url: Rails.application.routes.url_helpers.jil_prompt_url(self)
+    }
+  end
 end
