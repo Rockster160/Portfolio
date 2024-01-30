@@ -17,15 +17,16 @@ class MonitorChannel < ApplicationCable::Channel
   end
 
   def self.send_task(task)
+    ctx = ->(name) { task.last_ctx.dig(:vars, name) || task.last_ctx.dig(:vars, "#{name}:var") }
     data = {
       id: task.uuid,
       result: task.last_result,
-      timestamp: task.last_ctx.dig(:vars, "timestamp:var").then { |ts|
+      timestamp: ctx[:timestamp].then { |ts|
         break ts if ts.is_a?(Numeric) # If it's a number
         break ts.to_f if ts.to_f > 0 # Or looks like a number
       } || task.last_trigger_at.to_i,
     }
-    task.last_ctx.dig(:vars, "blip:var")&.then { |blip|
+    ctx[:blip]&.then { |blip|
       break unless blip.present?
       data[:blip] = blip.to_s.first(3)
     }
