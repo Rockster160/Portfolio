@@ -101,9 +101,9 @@ export let templates = {
     let schemaNode = document.querySelector(`[data-type="${key}"]`)
     let schemaData = schemaNode?.getAttribute("data")
     let invalid = false
-    console.log(schemaData);
+    // console.log(schemaData);
     if (!schemaData) {
-      console.log("Unknown: ", key, existingdata);
+      // console.log("Unknown: ", key, existingdata);
       invalid = true
       schemaData = JSON.stringify([key, [
         {return: existingdata.returntype},
