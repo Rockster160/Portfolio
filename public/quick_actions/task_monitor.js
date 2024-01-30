@@ -135,7 +135,7 @@ document.addEventListener("click", function(evt) {
   if (evt.cancelBubble) { return }
 
   let refreshBtn = evt.target.closest(".refresh")
-  let monitor = Monitor.from(refreshBtn?.closest(".widget[data-task-id]"))
+  let monitor = Monitor.from(refreshBtn?.closest(".widget[data-type='monitor']"))
   if (monitor) {
     evt.preventDefault()
     evt.stopPropagation()
@@ -144,7 +144,7 @@ document.addEventListener("click", function(evt) {
   }
 
   let wrapper = evt.target.closest(".widget-holder")
-  monitor = Monitor.from(wrapper?.querySelector(".widget[data-task-id]"))
+  monitor = Monitor.from(wrapper?.querySelector(".widget[data-type='monitor']"))
   if (monitor) {
     evt.preventDefault()
     evt.stopPropagation()
