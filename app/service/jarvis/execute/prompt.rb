@@ -3,7 +3,8 @@ class Jarvis::Execute::Prompt < Jarvis::Execute::Executor
     limit, include_complete = evalargs
 
     prompts = current_user.prompts
-    prompts = prompts.unanswered unless include_complete
+    # FIXME: include_complete is coming back as a string?
+    prompts = prompts.unanswered if !include_complete || include_complete == "false"
 
     prompts.limit(limit.to_i.clamp(0, 50)).serialize
   end
