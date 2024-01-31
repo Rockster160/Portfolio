@@ -30,6 +30,11 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
     end
   end
 
+  def exit
+    jil.ctx[:exit] = true
+    nil
+  end
+
   def return_data
     (jil.ctx[:return] = evalargs).tap { jil.ctx[:exit] = true }
   end

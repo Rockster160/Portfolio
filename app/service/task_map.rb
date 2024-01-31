@@ -595,6 +595,9 @@ class TaskMap
         # "With (Optional)",
         # { block: :any, optional: true }, :br,
       ],
+      exit:       [
+        { return: :nil }
+      ],
       get:        [
         { return: :hash },
         "Task ID",
