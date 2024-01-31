@@ -54,7 +54,7 @@ class JarvisTask < ApplicationRecord
     # :failed_task,
     :function,
     :travel,
-    :prompt_response,
+    :prompt,
     :monitor,
   ]
 
@@ -72,7 +72,7 @@ class JarvisTask < ApplicationRecord
     function:          10,
     calendar:          11,
     travel:            12,
-    prompt_response:   13,
+    prompt:            13,
     callable:          14,
     monitor:           15,
   }
