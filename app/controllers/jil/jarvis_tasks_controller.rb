@@ -83,7 +83,14 @@ class Jil::JarvisTasksController < ApplicationController
     )
     ::BroadcastUpcomingWorker.perform_async
 
-    render json: { response: data }
+    if @task.uuid == "c96939ac-9dc1-4dab-9200-143ac699d5d6"
+      # Saya Protein Tracker
+      # Backfilling to an older format where the response was an array of strings.
+      # Hardcoding since the integration is out of my hands.
+      render json: { response: [@task.return_val] }
+    else
+      render json: { response: @task.return_val }
+    end
   end
 
   private

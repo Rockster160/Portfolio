@@ -7,12 +7,12 @@
 #  enabled         :boolean          default(TRUE)
 #  input           :text
 #  last_ctx        :jsonb
-#  last_result     :text
-#  last_result_val :text
 #  last_trigger_at :datetime
 #  name            :text
 #  next_trigger_at :datetime
+#  output_text     :text
 #  output_type     :integer          default("any")
+#  return_data     :jsonb
 #  sort_order      :integer
 #  tasks           :jsonb
 #  trigger         :integer          default("cron")
@@ -28,6 +28,7 @@ class JarvisTask < ApplicationRecord
 
   serialize :tasks, coder: ::SafeJsonSerializer
   serialize :last_ctx, coder: ::SafeJsonSerializer
+  serialize :return_data, coder: ::SafeJsonSerializer
 
   belongs_to :user, required: true
 
@@ -99,6 +100,27 @@ class JarvisTask < ApplicationRecord
   end
   def to_param = uuid
 
+  def return_val=(new_val)
+    self.return_data = { data: new_val }
+  end
+  def return_val
+    return_data&.dig(:data)
+  end
+
+  def serialize
+    attributes.symbolize_keys.slice(
+      :uuid,
+      :name,
+      :trigger,
+      :output_type,
+      :output_text,
+      :cron,
+      :enabled,
+      :next_trigger_at,
+      :last_trigger_at,
+    ).merge(return_val: return_val)
+  end
+
   def duplicate
     self.class.create!(
       attributes.symbolize_keys.except(
@@ -106,9 +128,9 @@ class JarvisTask < ApplicationRecord
         :uuid,
         :enabled,
         :last_ctx,
-        :last_result,
-        :last_result_val,
         :last_trigger_at,
+        :output_text,
+        :return_data,
         :created_at,
         :updated_at,
       ).tap { |attrs| attrs[:name] = "#{attrs[:name]} (2)" }

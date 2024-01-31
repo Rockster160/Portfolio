@@ -20,7 +20,7 @@ class MonitorChannel < ApplicationCable::Channel
     ctx = ->(name) { task.last_ctx.dig(:vars, name) || task.last_ctx.dig(:vars, "#{name}:var") }
     data = {
       id: task.uuid,
-      result: task.last_result,
+      result: task.return_val,
       timestamp: ctx[:timestamp].then { |ts|
         break ts if ts.is_a?(Numeric) # If it's a number
         break ts.to_f if ts.to_f > 0 # Or looks like a number

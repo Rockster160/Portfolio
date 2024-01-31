@@ -567,6 +567,10 @@ class TaskMap
         { return: :hash },
         "Task Input Data"
       ],
+      return_data: [
+        { return: :any },
+        { block: :any, optional: true },
+      ],
       print:      [
         { return: :str },
         { block: :str, name: :message },
@@ -579,14 +583,6 @@ class TaskMap
         { return: :str },
         { block: :str, name: :message },
       ],
-      exit:       [ # Stop current task entirely - successfully
-        { return: :any },
-        { block: :any, optional: true, name: :reason },
-      ],
-      # fail:       [ # Stop current task entirely - as a failure
-      #   { return: :any },
-      #   { block: :any, optional: true, name: :reason },
-      # ],
       run:        [
         { return: :any },
         "Task ID",

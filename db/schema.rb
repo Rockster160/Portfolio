@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_01_28_203606) do
+ActiveRecord::Schema[7.1].define(version: 2024_01_31_013500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -368,7 +368,6 @@ ActiveRecord::Schema[7.1].define(version: 2024_01_28_203606) do
     t.text "name"
     t.text "cron"
     t.integer "trigger", default: 0
-    t.text "last_result"
     t.jsonb "last_ctx"
     t.datetime "last_trigger_at"
     t.datetime "next_trigger_at"
@@ -378,9 +377,10 @@ ActiveRecord::Schema[7.1].define(version: 2024_01_28_203606) do
     t.text "input"
     t.integer "output_type", default: 1
     t.integer "sort_order"
-    t.text "last_result_val"
     t.boolean "enabled", default: true
     t.uuid "uuid", default: -> { "uuid_generate_v4()" }
+    t.jsonb "return_data", default: "{\"data\":null}"
+    t.text "output_text"
     t.index ["user_id"], name: "index_jarvis_tasks_on_user_id"
   end
 

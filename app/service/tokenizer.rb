@@ -7,6 +7,7 @@ class Tokenizer
   attr_accessor :stored_strings, :token
 
   def self.protect(str, *rxs, &block)
+    return str if str.blank?
     str = str.dup
     tz = new(str)
     rxs.each { |rx| tz.tokenize!(str, rx) }

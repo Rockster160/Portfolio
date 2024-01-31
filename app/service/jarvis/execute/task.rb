@@ -30,9 +30,8 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
     end
   end
 
-  def exit
-    jil.ctx[:exit] = true
-    evalargs if args
+  def return_data
+    (jil.ctx[:return] = evalargs).tap { jil.ctx[:exit] = true }
   end
 
   def fail
@@ -70,17 +69,7 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
     task_id = evalargs
     task = jil.task.user.jarvis_tasks.anyfind(task_id)
 
-    task.attributes.symbolize_keys.slice(
-      :uuid,
-      :name,
-      :trigger,
-      :output_type,
-      :cron,
-      :enabled,
-      :next_trigger_at,
-      :last_trigger_at,
-      :last_result_val,
-    )
+    task.serialize
   end
 
   def enable

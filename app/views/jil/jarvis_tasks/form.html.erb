@@ -163,7 +163,8 @@ Choose date:
 <div class="jil-console">
   <code>
     <% if @task.last_trigger_at? %>
-      [<%= @task.last_trigger_at.in_time_zone(User.timezone).to_formatted_s(:short_with_time) %>] <%= @task.last_result %>
+      [<%= @task.last_trigger_at.in_time_zone(User.timezone).to_formatted_s(:short_with_time) %>] <%= @task.output_text %>
+      <%= @task.return_val %>
     <% end %>
   </code>
 </div>

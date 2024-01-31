@@ -26,6 +26,16 @@ module Jarvis::MatchTask
     end
     task ||= find_match(user, ostr, skip)
     return unless task.present?
+    if task.input.blank?
+      # This is so ugly, but a hack to get UUID passing to work
+      return ::Jarvis::Execute.call(task).then { |res|
+        if return_as == :str
+          res&.compact&.last || Jarvis::Text.affirmative
+        else
+          task
+        end
+      }
+    end
 
     simple_str = Tokenizer.protect(ostr, /\([^\)]*\)/, /\{[^\}]*\}/) do |clean_str|
       clean_str.gsub(rx.words(*COMMON_WORDS), "").gsub(/[^\w ]/, "").squish

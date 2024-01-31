@@ -19,13 +19,13 @@
   end
 
   def call
-    MonitorChannel.started(task) if task.monitor?
+    MonitorChannel.started(@task)
     @test_mode = data.delete(:test_mode)
     @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil, current_token: nil }
     @ctx.merge!(@data[:ctx] || {})
-    task.update(last_trigger_at: Time.current)
+    @task.update(last_trigger_at: Time.current)
 
-    task.tasks&.each_with_index do |task_block, idx|
+    @task.tasks&.each_with_index do |task_block, idx|
       break if @ctx[:i] >= MAX_ITERATIONS
       break if @ctx[:exit]
 
@@ -34,23 +34,23 @@
     if @ctx[:i] > MAX_ITERATIONS
       raise StandardError, "Blocks exceed #{ActiveSupport::NumberHelper.number_to_delimited(MAX_ITERATIONS)} allowed."
     end
-    @ctx[:msg] << Jarvis::Execute::Raw.str(@ctx[:last_val]) if @ctx[:msg].none?
-    @ctx[:msg]
-    # Trigger success?
+    @ctx[:msg] # Ensure does NOT return the last value
   rescue StandardError => e
     Rails.logger.error("\e[31m#{e.class}: #{e}\n#{e.backtrace.select{|l|l.include?("/app/")}.reverse.join("\n")}\e[0m")
     @ctx[:msg] << "[#{@ctx[:current_token]}] Failed: #{e.try(:message) || e.try(:body) || e}"
     # Jil should have an interface / logger that displays all recent task runs and failure messages
-    # trigger fail unless task has a fail trigger
-    SlackNotifier.err(e, "Jil Error[#{task.name}]")
-    @ctx[:msg]
+    SlackNotifier.err(e, "#{"[DEV] " unless Rails.env.production?}Jil Error[#{@task.name}]")
   ensure
     # sleep 0.2 if @test_mode
     @task.user.current_usage.increment(@task, @ctx[:i])
-    ActionCable.server.broadcast("jil_#{@task.uuid}_channel", { done: true, output: @ctx[:msg].join("\n") })
-    @task.update(last_result: @ctx[:msg].join("\n"), last_ctx: @ctx, last_result_val: @ctx[:last_val])
-    MonitorChannel.send_task(@task) if @task.monitor?
-    @ctx[:msg]#.join("\n")
+    ActionCable.server.broadcast("jil_#{@task.uuid}_channel", { done: true, output: "#{@ctx[:return]}\n#{@ctx[:msg].join("\n")}" })
+    @task.update(
+      last_ctx: @ctx,
+      return_val: @ctx[:return],
+      output_text: @ctx[:msg].join("\n"),
+    )
+    MonitorChannel.send_task(@task)
+    # Ensure does NOT return the last value
   end
 
   def lookup_option(option)
@@ -98,9 +98,9 @@
     ).then { |res|
       ::Jarvis::Execute::Cast.cast(res, task_block[:returntype], force: true, jil: self)
     }.tap { |res|
+      # Re-set the return value here since it doesn't get cast inside the initial run
+      @ctx[:return] = res if task_block[:type] == "task.return_data"
       ActionCable.server.broadcast("jil_#{@task.uuid}_channel", { token: task_block[:token], res: res.as_json })
-      @ctx[:last_val] = res
-    }.tap { |res|
       # binding.pry if @task.id == 43
       # binding.pry if task_block[:token] == "funky.saloon.oak"
       # binding.pry if task_block[:type] == "task.print"
