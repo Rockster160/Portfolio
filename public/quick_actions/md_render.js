@@ -1,6 +1,7 @@
 import { htmlToNode } from "./form.js"
 
 export let toMd = function(text) {
+  if (!text) { return text }
   return text
   .replace(/([\p{So}\p{Sk}\p{Sm}\p{Sc}\p{S}\p{C}]+)/gu, (match) => {
     return emoji(match)

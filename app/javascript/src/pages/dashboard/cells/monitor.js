@@ -1,6 +1,4 @@
 import consumer from "./../../../channels/consumer"
-// import { Time } from './time.js';
-// import { toMd } from './md_render.js';
 
 // let socket = Monitor.subscribe(uuid, { // Does NOT open a new channel, just subscribes to the listener
 //   connected: function() {},
