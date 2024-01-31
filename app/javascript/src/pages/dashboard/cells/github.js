@@ -88,7 +88,7 @@ import { dash_colors, beeps } from "../vars"
     Monitor.subscribe(cell.config.deploy_uuid, {
       received: function(data) {
         cell.flash()
-        let json = data.result
+        let json = data.result || {}
         if (json.deploy == "start") {
           let timer = new Timer({ name: currentTime() })
           timer.start.minutes += 2
