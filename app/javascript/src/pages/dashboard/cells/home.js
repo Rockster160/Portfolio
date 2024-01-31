@@ -152,6 +152,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     // If no response within 10 seconds, forget the current state
     clearTimeout(cell.garage_timeout)
     cell.garage_timeout = setTimeout(function() {
+      cell.garage_socket.send({ channel: "garage", request: "get" })
       console.log("Timed out waiting for garage response");
       cell.data.garage.state = "unknown"
       renderLines()
@@ -202,7 +203,9 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     cell.garage_socket = Monitor.subscribe("e46e2278-1f9a-4a1e-8cfe-962f666a6620", {
       connected: function() {
         console.log("socket Connected");
-        this.send({ request: "get" })
+        setTimeout(function() {
+          cell.garage_socket.send({ request: "get" })
+        }, 1000)
         // can also set the arrow?
         // this.send({ request: "open" })
         // this.send({ request: "close" })
