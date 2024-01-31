@@ -78,7 +78,7 @@ class Jil::JarvisTasksController < ApplicationController
       @task,
       {
         test_mode: params.fetch(:test_mode, false),
-        **params.permit!.to_h.except(:id, :action, :controller, :test_mode)
+        **params.permit!.to_h.except(:id, :action, :controller, :test_mode, :jarvis_task)
       }
     )
     ::BroadcastUpcomingWorker.perform_async
