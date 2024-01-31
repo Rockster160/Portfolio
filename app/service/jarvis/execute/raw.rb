@@ -24,8 +24,8 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
 
   def self.str(val, jil=nil)
     case val
-    when ::Array then str((val.one? && val.first.try(:dig, :raw)) || val.to_json)
-    when ::Hash then str(val[:raw] || val.to_json)
+    when ::Array then str((val.one? && val.first.try(:dig, :raw)) || val.to_json, jil)
+    when ::Hash then str(val[:raw] || val.to_json, jil)
     else
       val.to_s
     end.then { |solved_str|
@@ -39,7 +39,7 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
         if token_val.nil?
           jil.ctx[:msg] << "Unfound token (#{token})"
         end
-        str(token_val)
+        str(token_val, jil)
       end
     }
   rescue NoMethodError

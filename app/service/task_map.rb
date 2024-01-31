@@ -596,7 +596,8 @@ class TaskMap
         # { block: :any, optional: true }, :br,
       ],
       exit:       [
-        { return: :nil }
+        { return: :nil },
+        "Exit"
       ],
       get:        [
         { return: :hash },
