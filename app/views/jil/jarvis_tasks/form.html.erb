@@ -81,38 +81,29 @@ Choose date:
     </div>
     <div class="lists">
       <%# Accordion groups, search should filter by group %>
+      <h3 data-group="task">Fn</h3>
+      <% [:input_data, :return_data].each do |op| %>
+        <% data = TaskMap::TASKS[:task][op] %>
+        <%= render partial: "sidebar_cell", locals: { task_group: :task, op: op, data: data } %>
+      <% end %>
       <% if @task.inputs.present? %>
         <% task_group = :input %>
         <h3 data-group="<%= task_group %>"><%= task_group.to_s.titleize %></h3>
         <% @task.inputs.each do |op, data| %>
-          <div class="list-item-container" data-group="<%= task_group %>">
-            <span class="list-item" data-type="<%= "#{task_group}.#{op}" %>" data="<%= ["#{task_group}.#{op}", data].to_json %>">
-              <span class="item-name"><%= op.to_s.titleize %></span>
-              <i class="fa fa-ellipsis-v handle"></i>
-            </span>
-          </div>
+          <%= render partial: "sidebar_cell", locals: { task_group: task_group, op: op, data: data } %>
         <% end %>
       <% end %>
       <% task_group = :custom %>
       <h3 data-group="<%= task_group %>"><%= task_group.to_s.titleize %></h3>
       <% current_user.jarvis_tasks.function.each do |fn| %>
         <% op, data = fn.to_op_data %>
-        <div class="list-item-container" data-group="<%= task_group %>">
-          <span class="list-item" data-type="<%= "#{task_group}.#{op}" %>" data="<%= ["#{task_group}.#{op}", data].to_json %>">
-            <span class="item-name"><%= op.to_s.titleize %></span>
-            <i class="fa fa-ellipsis-v handle"></i>
-          </span>
-        </div>
+        <%= render partial: "sidebar_cell", locals: { task_group: task_group, op: op, data: data } %>
       <% end %>
       <% TaskMap::TASKS.each do |task_group, group_items| %>
         <h3 data-group="<%= task_group %>"><%= task_group.to_s.titleize %></h3>
         <% group_items.each do |op, data| %>
-          <div class="list-item-container" data-group="<%= task_group %>">
-            <span class="list-item" data-type="<%= "#{task_group}.#{op}" %>" data="<%= ["#{task_group}.#{op}", data].to_json %>">
-              <span class="item-name"><%= op.to_s.titleize %></span>
-              <i class="fa fa-ellipsis-v handle"></i>
-            </span>
-          </div>
+          <% next if task_group == :task && (op == :input_data || op == :return_data) %>
+          <%= render partial: "sidebar_cell", locals: { task_group: task_group, op: op, data: data } %>
         <% end %>
       <% end %>
     </div>

@@ -565,7 +565,7 @@ class TaskMap
     task: {
       input_data: [
         { return: :hash },
-        "Task Input Data"
+        "Input Data"
       ],
       return_data: [
         { return: :any },

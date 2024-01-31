@@ -1,0 +1,6 @@
+<div class="list-item-container" data-group="<%= task_group %>">
+  <span class="list-item" data-type="<%= "#{task_group}.#{op}" %>" data="<%= ["#{task_group}.#{op}", data].to_json %>">
+    <span class="item-name"><%= op.to_s.titleize %></span>
+    <i class="fa fa-ellipsis-v handle"></i>
+  </span>
+</div>
