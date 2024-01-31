@@ -87,9 +87,8 @@ import { dash_colors, beeps } from "../vars"
     setInterval(function() { render(cell) }, 1000)
     Monitor.subscribe(cell.config.deploy_uuid, {
       received: function(data) {
-        console.log("github received", data);
         cell.flash()
-        let json = data.result ? JSON.parse(data.result) : {}
+        let json = data.result
         if (json.deploy == "start") {
           let timer = new Timer({ name: currentTime() })
           timer.start.minutes += 2
