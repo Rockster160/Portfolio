@@ -11,9 +11,8 @@
   <div class="league-set-pins">
     <% @set.games_complete.times do |t| %>
       <div class="league-game-pins">
-        <%= link_to edit_bowling_game_path(@set, game: t + 1) do %>
-          <i class="fa fa-pencil"></i>
-        <% end %>
+        <%= link_to edit_bowling_game_path(@set, game: t + 1) do %><i class="fa fa-pencil"></i><% end %>
+        Game #<%= t+1 %>
         <%= render partial: "bowling/bowling_games/small_detail", locals: { games: @set.games_for_display(t + 1) } %>
       </div>
     <% end %>
@@ -22,9 +21,8 @@
   <div class="league-set">
     <% @set.games_complete.times do |t| %>
       <div class="league-game">
-        <%= link_to edit_bowling_game_path(@set, game: t + 1) do %>
-          <i class="fa fa-pencil"></i>
-        <% end %>
+        <%= link_to edit_bowling_game_path(@set, game: t + 1) do %><i class="fa fa-pencil"></i><% end %>
+        Game #<%= t+1 %>
         <%= render partial: "bowling/bowling_games/small_show", locals: { games: @set.games_for_display(t + 1) } %>
       </div>
     <% end %>
