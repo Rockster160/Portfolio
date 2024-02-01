@@ -21,7 +21,7 @@ class LocationCache
       },
       scope: { user_id: User.me.id }
     )
-    notify(departed)
+    # notify(departed)
 
     User.me.jarvis_cache.set(:is_driving, departed)
   end
