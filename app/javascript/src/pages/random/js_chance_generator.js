@@ -26,9 +26,8 @@ category
   [verb]
   [adjective]
 
-food // 6
+food // 5
   apple
-  bisquit
   carrot
   danish
   eclair
@@ -54,11 +53,10 @@ object // 10
   oak
   cable
 
-place // 6
+place // 5
   saloon
   bed
   car
-  desert
   ocean
   town
 
