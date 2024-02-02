@@ -21,18 +21,12 @@ class LocationCache
       },
       scope: { user_id: User.me.id }
     )
-    # notify(departed)
 
     User.me.jarvis_cache.set(:is_driving, departed)
   end
 
   def self.nearby_contact(loc=nil)
     User.me.address_book.contact_by_loc(loc || last_location[:loc])
-  end
-
-  def self.notify(bool)
-    location = current_location_name.presence || last_location[:loc]
-    Jarvis.ping("#{bool ? 'Departing' : 'Arrived at'} #{location}")
   end
 
   def self.current_location_name(loc=nil)
