@@ -3,7 +3,6 @@ RSpec.describe SearchBreaker do
 
   subject { SearchBreaker.call(q, delims) }
 
-
   let(:delims) {
     {
       or: "OR",
@@ -102,6 +101,57 @@ RSpec.describe SearchBreaker do
 
     it "breaks into expected hash" do
       expect(subject).to eq(expected)
+    end
+  end
+
+  context "when checking if a string matches the given data" do
+    let(:q) { "event:data:custom:nested_key:fuzzy_val" }
+
+    def matcher?(str, data)
+      SearchBreakMatcher.call(str, data)
+    end
+
+    context "with a nested exact matcher" do
+      let(:q) { "event:name::food" }
+
+      it "returns correctly" do
+        expect(matcher?(q, { event: { name: "foo" } })).to be(false)
+        expect(matcher?(q, { event: { name: "food" } })).to be(true)
+        expect(matcher?(q, { event: "food" })).to be(false)
+      end
+    end
+
+    context "with an exact matcher of a nested value" do
+      let(:q) { "event::workout" }
+
+      it "returns correctly" do
+        # expect(matcher?(q, { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(false)
+        # expect(matcher?(q, { event: { name: "workout", notes: "Beat Saber" } })).to be(true)
+      end
+    end
+
+    context "with a single top level str" do
+      let(:q) { "travel" }
+
+      it "returns correctly" do
+        # expect(matcher?(q, { name: "hardworkout", notes: "Beat Saber" })).to be(false)
+        # expect(matcher?(q, { event: { name: "Life", notes: "Traveled to Rome" } })).to be(true)
+        # expect(matcher?(q, { travel: { action: "departed", location: "Home" })).to be(true)
+      end
+    end
+
+    context "with complex, nested data" do
+      let(:data) {
+        { event: { data: { custom: { nested_key: "fuzzy_val thing" } } } }
+      }
+
+      it "returns correctly" do
+        # expect(matcher?("event:data:custom:nested_key:fuzzy_val", data)).to be(true)
+        # expect(matcher?("event:data::nested_key:fuzzy_val", data)).to be(true)
+        # expect(matcher?("event:data:fuzzy_val", data)).to be(true)
+        # expect(matcher?("event:datam:fuzzy_val", data)).to be(false)
+        # expect(matcher?("event:data:OR(fuzzy something)", data)).to be(true)
+      end
     end
   end
 end

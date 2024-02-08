@@ -171,7 +171,7 @@ class GoogleNestControl
       key:      device_data.dig(:name),
       name:     device_data.dig(:parentRelations, 0, :displayName),
       humidity: device_data.dig(:traits, :"sdm.devices.traits.Humidity", :ambientHumidityPercent).to_i,
-      current_mode: device_data.dig(:traits, :"sdm.devices.traits.ThermostatMode", :mode).downcase&.to_sym,
+      current_mode: device_data.dig(:traits, :"sdm.devices.traits.ThermostatMode", :mode)&.downcase&.to_sym,
       current_temp: c_to_f(device_data.dig(:traits, :"sdm.devices.traits.Temperature", :ambientTemperatureCelsius)),
       hvac:     device_data.dig(:traits, :"sdm.devices.traits.ThermostatHvac", :status) == "ON",
       heat_set: c_to_f(device_data.dig(:traits, :"sdm.devices.traits.ThermostatTemperatureSetpoint", :heatCelsius)),
