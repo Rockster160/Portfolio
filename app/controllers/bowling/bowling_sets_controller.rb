@@ -32,7 +32,7 @@ module Bowling
       @set.league_id ||= @league.id
 
       if @set.update(bowling_params)
-        started_frame_9 = params.dig(:bowling_set, :games_attributes)&.any? { |game|
+        started_frame_9 = params.dig(:bowling_set, :games_attributes).values&.any? { |game|
           next false unless game[:game_num] == "3"
           game.dig(:frames_details, "8", :throw1).present? # 8 is index, so frame 9
         }
@@ -40,7 +40,7 @@ module Bowling
           if !User.me.jarvis_cache.get(:bowlingCarStarted)
             User.me.jarvis_cache.set(:bowlingCarStarted, true)
             Jarvis.say("Starting car for 9th frame")
-            Jarvis.command(current_user, "Take me home")
+            Jarvis.command(current_user, "Take me home") if Rails.env.production?
           end
         end
         if params[:throw_update].present?
@@ -82,8 +82,9 @@ module Bowling
     def game_num
       return params[:game].to_i if params[:game].present?
       return params[:game_num].to_i if params[:game_num].present?
+      game = params.dig(:bowling_set, :games_attributes)&.values&.first || {}
 
-      (params.dig(:bowling_set, :games_attributes, 0, :game_num).presence || 1).to_i
+      (game[:game_num].presence || 1).to_i
     end
 
     def game_data
@@ -113,33 +114,33 @@ module Bowling
       params.require(:bowling_set).permit(
         # :league_id, - Done before saving
         :lane_number,
-        games_attributes: [
-          :id,
-          :set_id,
-          :absent,
-          :bowler_id,
-          :bowler_name,
-          :game_num,
-          :handicap,
-          :position,
-          :card_point,
-          :score,
-          frames: 10.times.map { |idx| { idx.to_s.to_sym => [] } },
-          frames_details: [
-            :frame_num,
-            :throw1,
-            :throw2,
-            :throw3,
-            :throw1_remaining,
-            :throw2_remaining,
-            :throw3_remaining,
-            :strike_point,
-          ]
-        ]
-      ).tap do |whitelist|
-        whitelist[:frames] = nil if whitelist[:absent]
-        whitelist[:frames_details] = nil if whitelist[:absent]
-      end
+      ).merge({
+        games_attributes: (
+          params.dig(:bowling_set, :games_attributes).values.map { |g| g.permit(
+            :id,
+            :set_id,
+            :absent,
+            :bowler_id,
+            :bowler_name,
+            :game_num,
+            :handicap,
+            :position,
+            :card_point,
+            :score,
+            frames: 10.times.map { |idx| { idx.to_s.to_sym => [] } },
+            frames_details: [
+              :frame_num,
+              :throw1,
+              :throw2,
+              :throw3,
+              :throw1_remaining,
+              :throw2_remaining,
+              :throw3_remaining,
+              :strike_point,
+            ]
+          )}
+        )
+      })
     end
 
     def find_or_create_league

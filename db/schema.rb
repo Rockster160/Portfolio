@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_01_31_013500) do
+ActiveRecord::Schema[7.1].define(version: 2024_02_08_051555) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -179,6 +179,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_01_31_013500) do
     t.datetime "updated_at", precision: nil, null: false
     t.boolean "absent"
     t.jsonb "frame_details"
+    t.boolean "completed", default: false
     t.index ["bowler_id"], name: "index_bowling_games_on_bowler_id"
     t.index ["set_id"], name: "index_bowling_games_on_set_id"
   end

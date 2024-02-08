@@ -5,6 +5,7 @@
 #  id            :integer          not null, primary key
 #  absent        :boolean
 #  card_point    :boolean          default(FALSE)
+#  completed     :boolean          default(FALSE)
 #  frame_details :jsonb
 #  frames        :text
 #  game_num      :integer
@@ -105,6 +106,13 @@ class BowlingGame < ApplicationRecord
       db_frame = new_frames.find_or_initialize_by(frame_num: frame_attrs[:frame_num])
 
       db_frame.update!(frame_attrs)
+    end
+    new_frames.reload
+    if !completed? && (absent? || (new_frames.length == 10 && new_frames.all?(&:complete?)))
+      CustomLog.log("(#{id}) Complete!")
+      update(completed: true)
+    elsif !completed?
+      CustomLog.log("(#{id}) Incomplete! #{new_frames.map {|f| [f.id, f.complete?, f.rolls]} }")
     end
   end
 end

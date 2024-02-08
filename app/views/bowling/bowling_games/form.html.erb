@@ -55,6 +55,7 @@
 </template>
 
 <%= form_for @set, html: { class: "basic bowling-game-form" } do |f| %>
+  <%= hidden_field_tag :game, params[:game] || @games.first&.game_num %>
   <%= f.hidden_field :league_id, value: @set.league_id || params[:league], id: "game_league_id" %>
   <%= f.hidden_field :set_id, value: @set.id || params[:set], id: "game_set_id" %>
   <span class="hidden league-data" data-lanetalk-center-id="<%= @set.league.lanetalk_center_uuid %>" data-lanetalk-key="<%= ENV["PORTFOLIO_LANETALK_API_KEY"] if @set.league.lanetalk_center_uuid.present? %>"></span>

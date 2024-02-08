@@ -12,6 +12,7 @@
 
 class BowlingSet < ApplicationRecord
   belongs_to :league, class_name: "BowlingLeague", touch: true
+  attr_accessor :stored_games
 
   has_many :bowler_sets,
     foreign_key: :set_id,
@@ -26,6 +27,8 @@ class BowlingSet < ApplicationRecord
   has_many :frames, through: :games, source: :new_frames
 
   accepts_nested_attributes_for :games
+
+  after_save :set_stored_games
 
   def ordered_bowlers
     Bowler.joins(:games)
@@ -118,18 +121,22 @@ class BowlingSet < ApplicationRecord
   end
 
   def games_attributes=(attributes)
-    if persisted?
-      attributes.each do |game_attrs|
-        game_attrs[:set_id] = game_attrs[:set_id].presence || id
-        game_attrs[:bowler_id] = game_attrs[:bowler_id].presence || bowler_by_name(game_attrs[:bowler_name]).id
-        game ||= self.games.find_by(game_attrs.slice(:id))
-        game ||= self.games.find_or_initialize_by(game_attrs.slice(:bowler_id, :game_num))
-        game_attrs.delete(:id) unless game_attrs[:id].present?
-        game.update(game_attrs)
-      end
-      self.games.reload
-    else
-      super(attributes)
+    @stored_games = attributes
+  end
+
+  private
+
+  def set_stored_games
+    return if @stored_games.blank?
+
+    @stored_games.each do |game_attrs|
+      game_attrs.delete(:id) unless game_attrs[:id].present?
+      game_attrs[:set_id] = game_attrs[:set_id].presence || id
+      game_attrs[:bowler_id] = game_attrs[:bowler_id].presence || bowler_by_name(game_attrs[:bowler_name]).id
+      game ||= self.games.find_by(game_attrs.slice(:id)) if game_attrs[:id].present?
+      game ||= self.games.find_or_initialize_by(game_attrs.slice(:bowler_id, :game_num))
+      game.update(game_attrs)
     end
+    self.games.reload
   end
 end

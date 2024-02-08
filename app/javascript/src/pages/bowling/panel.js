@@ -35,6 +35,7 @@ export function panel() {
   })
 
   onEvent("click", ".bowler-form.bowler-select", (evt) => {
+    game.skip_save = true
     let bowlerData = gatherData(evt.target)
     if (editingBowler) { bowlerData.bowlerNum = editingBowler.bowlerNum }
     let bowler = game.addBowler(bowlerData)
@@ -45,6 +46,8 @@ export function panel() {
 
     hideModal("#bowler-sub-list")
     game.editBowler = true
+    game.skip_save = false
+    // We trigger a save after closing the panel, so no need to push game changes while it's open.
   })
   onEvent("click", ".bowler-option", (evt) => {
     let opt = evt.target

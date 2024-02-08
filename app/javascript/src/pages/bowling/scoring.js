@@ -1,6 +1,5 @@
 import BowlingCalculator from "./calculator"
 import LiveStats from "./live_stats"
-import Rest from "./rest"
 
 export default class Scoring {
   constructor(bowlers) {

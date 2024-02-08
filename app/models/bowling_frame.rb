@@ -31,6 +31,10 @@ class BowlingFrame < ApplicationRecord
     brooklyn: 1,
   }
 
+  def complete?
+    rolls.none?(&:nil?) || rolls.include?("X")
+  end
+
   def rolls
     roll1, roll2, roll3 = [throw1, throw2, throw3].map { |roll|
       roll.to_s.gsub("10", "X").gsub("0", "-").presence

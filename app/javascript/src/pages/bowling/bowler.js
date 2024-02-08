@@ -45,7 +45,7 @@ export default class Bowler extends Reactive {
     this.initialized = true
   }
 
-  static genId() { return Math.floor(Math.random() * 16777215).toString(16) }
+  static genId() { return "a" + Math.floor(Math.random() * 16777215).toString(16) }
 
   static get() {
     let bowlers = Array.from(document.querySelectorAll(".bowler")).map(bowler => new Bowler(bowler))

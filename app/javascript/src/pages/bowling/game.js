@@ -79,6 +79,7 @@ export default class Game extends Reactive {
     this.laneTalkEnabled = useLaneTalk
 
     this.initialized = true
+    this.skip_save = false
 
     // Mobile seems to wipe the DOM. Need to reset the data because of this.
     setTimeout(function() { game.resyncElements() }, 2000)
@@ -225,6 +226,7 @@ export default class Game extends Reactive {
 
   saveScores() { game.save("PATCH") }
   save(method, callback) {
+    if (this.skip_save) { return }
     if (!this.initialized) { return }
     if (method && typeof method === "function") { [callback, method] = [method, null] }
     let form = this.element

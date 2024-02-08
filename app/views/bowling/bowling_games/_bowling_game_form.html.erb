@@ -9,7 +9,7 @@
 <% bowler ||= game.bowler || Bowler.new %>
 <% bowler_set = @set&.bowler_sets&.find_by(bowler: bowler) %>
 
-<% set_params = "bowling_set[games_attributes][]" %>
+<% set_params = "bowling_set[games_attributes][#{hex}]" %>
 
 <div class="bowling-table bowler" data-absent-score="<%= bowler_set&.absent_score || bowler.absent_score %>" data-bowler="<%= idx + 1 %>" data-current-frame="1" data-bowler-id="<%= bowler.id %>">
   <%= hidden_field_tag "#{set_params}id", game.id, class: "bowler-game-id" %>
