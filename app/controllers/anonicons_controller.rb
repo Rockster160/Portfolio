@@ -3,14 +3,14 @@ class AnoniconsController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :set_anonicon
 
+  rescue_from NoMethodError, with: :blank_response
+
   def index
     render partial: "show" if request.xhr?
   end
 
   def show
     inline_response
-  rescue NoMethodError
-    send_data "", type: "image/png", disposition: "inline", stream: true
   end
 
   private
@@ -25,4 +25,7 @@ class AnoniconsController < ApplicationController
     @anonicon = Anonicon.generate(@anonicon_source)
   end
 
+  def blank_response
+    send_data "", type: "image/png", disposition: "inline", stream: true
+  end
 end
