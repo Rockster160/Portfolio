@@ -40,8 +40,10 @@ class NestCommand
     if e.message == "400 Bad Request"
       RefreshNestMessageWorker.perform_async
     else
-      backtrace = e.backtrace&.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n")
-      SlackNotifier.notify("Failed to set Nest: #{e.inspect}\n#{backtrace}")
+      backtrace = e.backtrace.map { |l|
+        l.include?("/app/") ? l.gsub("`", "'").gsub(/^.*\/app\//, "") : nil
+      }.compact.join("\n").truncate(2000)
+      SlackNotifier.notify("Failed to set Nest: #{e.inspect}\n```\n#{backtrace}\n```")
     end
   end
 

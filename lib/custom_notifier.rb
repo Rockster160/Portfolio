@@ -25,9 +25,10 @@ module ExceptionNotifier
         if params
           params = params.permit!.to_h if params.is_a?(::ActionController::Parameters)
           begin
-            text += "```#{JSON.pretty_generate(params)}```"
+            text += "```\n#{JSON.pretty_generate(params)}\n```"
           rescue StandardError
-            text += "```#{params}```"
+            str = "#{params}".truncate(2000)
+            text += "```\n#{str}\n```"
           end
           text += "\n"
         end
@@ -37,7 +38,9 @@ module ExceptionNotifier
       fields = [{ title: 'Exception', value: clean_message }]
 
       if exception.backtrace
-        fields.push({ title: 'Focused Backtrace', value: exception.backtrace.map {|l|l.include?('app') ? l.gsub("`", "'") : nil}.compact.join("\n") })
+        fields.push({ title: 'Focused Backtrace', value: exception.backtrace.map { |l|
+          l.include?("/app/") ? l.gsub("`", "'").gsub(/^.*\/app\//, "") : nil
+        }.compact.join("\n") })
       end
 
       exception_message = fields.map { |h| "*#{h[:title]}*\n#{h[:value]}" }.join("\n\n")

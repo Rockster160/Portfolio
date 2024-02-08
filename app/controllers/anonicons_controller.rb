@@ -9,6 +9,8 @@ class AnoniconsController < ApplicationController
 
   def show
     inline_response
+  rescue NoMethodError
+    send_data "", type: "image/png", disposition: "inline", stream: true
   end
 
   private

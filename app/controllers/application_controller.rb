@@ -8,7 +8,12 @@ class ApplicationController < ActionController::Base
   before_action :show_guest_banner, if: :guest_account?
   prepend_before_action :block_banned_ip
 
-  rescue_from ::ActionController::InvalidAuthenticityToken, with: :ban_spam_ip
+  if Rails.env.production?
+    rescue_from ::ActionController::InvalidAuthenticityToken, with: :ban_spam_ip
+    rescue_from ::ActionController::UnknownHttpMethod, with: :under_rug
+    rescue_from ::ActionDispatch::Http::MimeNegotiation::InvalidType, with: :under_rug
+    rescue_from ::ActionController::ParameterMissing, with: :under_rug
+  end
 
   def flash_message
     flash.now[params[:flash_type].to_sym] = params[:message]
@@ -56,6 +61,10 @@ class ApplicationController < ActionController::Base
     end
 
     raise exception
+  end
+
+  def under_rug
+    head :unauthorized
   end
 
   def block_banned_ip
