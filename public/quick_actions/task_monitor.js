@@ -37,7 +37,7 @@ export class Monitor {
   }
 
   static updateStatus() {
-    document.querySelectorAll(".widget[data-type='monitor'] .disconnected").forEach(item => {
+    document.querySelectorAll(".widget[data-task-id] .disconnected").forEach(item => {
       item.classList.toggle("hidden", Monitor.connected)
     })
   }
@@ -46,7 +46,7 @@ export class Monitor {
   static refreshAll() { Monitor.allAction("refresh") }
   static executeAll() { Monitor.allAction("execute") }
   static allAction(action) {
-    document.querySelectorAll(".widget[data-type='monitor']").forEach(item => {
+    document.querySelectorAll(".widget[data-task-id]").forEach(item => {
       let monitor = Monitor.find(item.getAttribute("data-task-id"))
       monitor.loading = true
       monitor.do(action)
@@ -153,6 +153,7 @@ document.addEventListener("click", function(evt) {
   }
 })
 
+window.Monitor = Monitor
 window.addEventListener("load", function() {
   setTimeout(function() {
     document.querySelectorAll(".widget[data-task-id] .loading:not(.hidden)").forEach(item => {
