@@ -206,7 +206,8 @@ i.emoji {
         right: -5px;
 
         border-radius: 16px;
-        background: red;
+        font-weight: bold;
+        background: $danger;
         min-width: 16px;
         max-width: 40px;
         height: 16px;
