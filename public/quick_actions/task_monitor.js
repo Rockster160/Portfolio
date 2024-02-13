@@ -48,8 +48,10 @@ export class Monitor {
   static allAction(action) {
     document.querySelectorAll(".widget[data-task-id]").forEach(item => {
       let monitor = Monitor.find(item.getAttribute("data-task-id"))
-      monitor.loading = true
-      monitor.do(action)
+      if (monitor) {
+        monitor.loading = true
+        monitor.do(action)
+      }
     })
   }
 

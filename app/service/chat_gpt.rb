@@ -31,13 +31,13 @@ module ChatGPT
     now = Time.current.in_time_zone(User.timezone)
     res = ask(
       "Assuming today is #{now}, respond with nothing but the order id and the" \
-      " expected delivery timestamp formatted in iso8601 from the following email: #{email_text}"
+      " expected delivery timestamp formatted in iso8601 from the following email:\n#{email_text}"
     )
 
     # "Order ID: 111-3842886-2135464\nExpected Delivery Timestamp: 2023-07-25T22:00:00-0600"
     [
-      res.match(/Order ID: ([\d\-]+)/).to_a[1],
-      res.match(/Expected Delivery Timestamp: (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-\d{4})/).to_a[1],
+      res.match(/(\d{3}-\d{7}-\d{7})/).to_a[1],
+      res.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-\d{4})/).to_a[1],
     ]
     # ["111-3842886-2135464", "2023-07-25T22:00:00-0600"]
   end
@@ -50,6 +50,6 @@ module ChatGPT
     )
 
     res = ask("#{prompt}: #{item}")
-    
+    res[/\d+/]
   end
 end

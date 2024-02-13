@@ -26,7 +26,7 @@ class FitnessBroadcast
 
   def fitness_data
     [
-      pullups,
+      # pullups,
       days,
       wordle,
       drugs,

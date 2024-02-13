@@ -30,7 +30,7 @@ class AmazonEmailParser
     if order.blank? || time.blank?
       raise(
         AmazonEmailParserError,
-        "Invalid response from GPT: [#{order.inspect}, #{time.inspect}]\n#{ChatGPT.last_chat_data}"
+        "Invalid response from GPT: [#{order.inspect}, #{time.inspect}]\n>>> #{@email.text_body.truncate(2000)}\n#{ChatGPT.last_chat_data}"
       )
     end
 
