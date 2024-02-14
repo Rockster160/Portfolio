@@ -101,22 +101,26 @@ class Jarvis
 
     res, res_data = new(user, words).command
 
-    ActionCable.server.broadcast(:jarvis_channel, { say: res, data: res_data }) if res.present? && user&.admin?
+    JarvisChannel.broadcast_to(user, { say: res, data: res_data }) if res.present?
     return res if res_data.blank?
 
     [res, res_data]
   end
 
-  def self.say(msg, channel=:ws)
+  def self.broadcast(user, msg, channel=:ws)
     return unless msg.present?
 
     case channel
-    when :ping then ::WebPushNotifications.send_to(User.me, { title: msg })
-    when :sms then SmsWorker.perform_async(MY_NUMBER, msg)
-    when :ws then ActionCable.server.broadcast(:jarvis_channel, { say: msg })
+    when :ping then ::WebPushNotifications.send_to(user, { title: msg })
+    when :sms then SmsWorker.perform_async(user.phone, msg)
+    when :ws then JarvisChannel.broadcast_to(user, { say: msg })
     else
       msg
     end
+  end
+
+  def self.say(msg, channel=:ws)
+    broadcast(User.me, msg, channel)
   end
 
   def self.ping(msg, channel=:ping)

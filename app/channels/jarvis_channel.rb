@@ -1,6 +1,6 @@
 class JarvisChannel < ApplicationCable::Channel
   def subscribed
-    stream_from "jarvis_channel"
+    stream_for current_user
   end
 
   def command(data)
