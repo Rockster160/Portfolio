@@ -24,6 +24,7 @@ ignore-*
 /log/*
 /tmp
 backup*
+*.log
 
 # Ignore deploy scripts on the server side
 console_portfolio

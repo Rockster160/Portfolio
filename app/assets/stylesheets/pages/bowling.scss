@@ -643,12 +643,15 @@
       display: grid;
       position: relative;
       grid-template-columns: repeat(3, 100px);
-      grid-template-rows: repeat(4, 1fr);
+      grid-template-rows: repeat(4, 60px);
       justify-content: center;
       width: auto;
     }
     .numpad-key {
       @extend .bowling-btn;
+      padding: 0;
+      height: 60px;
+      line-height: 60px;
 
       &:active {
         top: 1px;
@@ -700,8 +703,9 @@
     }
     .stats-holder {
       grid-area: 2 / 1;
-      padding: 10px;
-      overflow: hidden;
+      padding: 10px 0;
+      overflow: show;
+      white-space: nowrap;
     }
     // .enemy-results {
     //   grid-area: 2 / 2;
