@@ -23,7 +23,7 @@ class Jarvis::Execute::Lists < Jarvis::Execute::Executor
   def get
     list = evalargs
 
-    list_by(name: list).serialize
+    list_by(name: list)&.serialize
   end
 
   private
