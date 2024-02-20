@@ -201,6 +201,7 @@ class ActionEventsController < ApplicationController
       :timestamp,
       :data,
     ).tap do |whitelist|
+      whitelist[:name] ||= params[:event_name].presence || params.dig(:action_event, :event_name)
       whitelist[:timestamp] = whitelist[:timestamp].presence || Time.current
     end
   end
