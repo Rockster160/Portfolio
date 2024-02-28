@@ -21,8 +21,8 @@ class AmazonEmailParser
       date_str = date.iso8601 if date.present?
       save(date_str.presence || "[ERROR]")
     end
-  rescue StandardError => e
-    gpt_parse
+  # rescue StandardError => e
+  #   gpt_parse
   end
 
   def gpt_parse

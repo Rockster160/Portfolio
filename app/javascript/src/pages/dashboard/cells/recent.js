@@ -18,6 +18,9 @@ import { Time } from "./_time"
   Cell.register({
     title: "Recent",
     text: "Loading...",
+    data: {
+      quiet: true,
+    },
     commands: {
       quiet: function() {
         this.data.quiet = !this.data.quiet
