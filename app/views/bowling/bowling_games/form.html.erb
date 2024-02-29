@@ -94,7 +94,7 @@
         <i class="fa fa-random fa-rotate-270"></i>
       </div>
       <div class="numpad-key lane-input-btn" data-edit=hide>
-        <%= f.text_field :lane_number, class: "lane-input", value: f.object.lane_number || current_user.jarvis_cache.get(:next_bowling_lane) %>
+        <%= f.text_field :lane_number, class: "lane-input", value: f.object.lane_number.to_i > 0 ? f.object.lane_number : current_user.jarvis_cache.get(:next_bowling_lane) %>
       </div>
       <div class="numpad-key new-bowler" data-edit=show>New Bowler</div>
       <div class="numpad-key card" data-modal="#card-hands" data-edit=hide>&#9824;</div>
