@@ -35,7 +35,7 @@ class ListItem < ApplicationRecord
   scope :unimportant, -> { where.not(important: true) }
 
   def self.by_formatted_name(name)
-    find_by(formatted_name: name.to_s.downcase.gsub(/[^a-z0-9]/i, ""))
+    find_by(formatted_name: name.to_s.downcase.gsub(/[ '",.]/i, ""))
   end
 
   def self.by_name_then_update(params)
