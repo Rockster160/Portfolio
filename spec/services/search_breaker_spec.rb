@@ -125,8 +125,8 @@ RSpec.describe SearchBreaker do
       let(:q) { "event::workout" }
 
       it "returns correctly" do
-        # expect(matcher?(q, { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(false)
-        # expect(matcher?(q, { event: { name: "workout", notes: "Beat Saber" } })).to be(true)
+        expect(matcher?(q, { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(false)
+        expect(matcher?(q, { event: { name: "workout", notes: "Beat Saber" } })).to be(true)
       end
     end
 
@@ -134,9 +134,9 @@ RSpec.describe SearchBreaker do
       let(:q) { "travel" }
 
       it "returns correctly" do
-        # expect(matcher?(q, { name: "hardworkout", notes: "Beat Saber" })).to be(false)
-        # expect(matcher?(q, { event: { name: "Life", notes: "Traveled to Rome" } })).to be(true)
-        # expect(matcher?(q, { travel: { action: "departed", location: "Home" })).to be(true)
+        expect(matcher?(q, { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(false)
+        expect(matcher?(q, { event: { name: "Life", notes: "Traveled to Rome" } })).to be(true)
+        expect(matcher?(q, { travel: { action: "departed", location: "Home" } })).to be(true)
       end
     end
 
@@ -146,10 +146,10 @@ RSpec.describe SearchBreaker do
       }
 
       it "returns correctly" do
-        # expect(matcher?("event:data:custom:nested_key:fuzzy_val", data)).to be(true)
-        # expect(matcher?("event:data::nested_key:fuzzy_val", data)).to be(true)
-        # expect(matcher?("event:data:fuzzy_val", data)).to be(true)
-        # expect(matcher?("event:datam:fuzzy_val", data)).to be(false)
+        expect(matcher?("event:data:custom:nested_key:fuzzy_val", data)).to be(true)
+        expect(matcher?("event:data::nested_key:fuzzy_val", data)).to be(true)
+        expect(matcher?("event:data:fuzzy_val", data)).to be(true)
+        expect(matcher?("event:datam:fuzzy_val", data)).to be(false)
         # expect(matcher?("event:data:OR(fuzzy something)", data)).to be(true)
       end
     end
