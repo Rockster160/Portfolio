@@ -35,6 +35,7 @@ class FitnessBroadcast
       workout,
       teeth,
       shower,
+      calories,
     ]
   end
 
@@ -76,6 +77,7 @@ class FitnessBroadcast
     names = [
       "BupropionXL",
       "Buspirone",
+      "Fluoxetine",
       "Vitamins",
     ].map { |name| "name::#{name}" }.join(" ")
     row("💊", "OR(#{names})", want)
@@ -99,6 +101,22 @@ class FitnessBroadcast
 
   def shower
     row("🚿", "name::Shower", want)
+  end
+
+  def calories
+    calorie_event_names = ["food", "soda", "drink", "alcohol", "treat", "snack", "workout", "z"]
+    cal_query = calorie_event_names.map { |n| "name::#{n}" }.join(" ")
+    "🔥 " + dates do |date|
+      cal_events = query(cal_query, date)
+      total = -1800
+      cal_events.each do |event|
+        calories = calorie.data["Calories"].to_i
+        calories = -100 if event.name == "Z"
+        calories *= -1 if event.name == "Workout"
+        total += calories
+      end
+      total < 0 ? colorize(:✓, :green) : colorize(:𐄂, :red)
+    end
   end
 
   def need(num=1)
@@ -134,7 +152,7 @@ class FitnessBroadcast
   end
 
   def status(date, q, color_map)
-    count = events.query(q).where(timestamp: allday(date)).count
+    count = query(q, date).count
     icon = count == 0 ? "-" : count
     color_map[:icons].each do |ico, range|
       icon = ico if range.is_a?(Integer) && count == range
@@ -147,6 +165,15 @@ class FitnessBroadcast
       color_name = col if range.is_a?(Integer) && count == range
       color_name = col if range.is_a?(Range) && count.in?(range)
     end
+
+    colorize(icon, color_name)
+  end
+
+  def query(q, date)
+    events.query(q).where(timestamp: allday(date))
+  end
+
+  def colorize(str, color_name)
     color = {
       green: "#148F14",
       orange: "#FFA001",
@@ -154,7 +181,7 @@ class FitnessBroadcast
       red: "#F81414",
     }[color_name] || color_name
 
-    "[color #{color}]#{icon.to_s.rjust(3)}[/color]"
+    "[color #{color}]#{str.to_s.rjust(3)}[/color]"
   end
 
   def dates(ico="", &block)
