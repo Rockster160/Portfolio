@@ -107,10 +107,10 @@ class FitnessBroadcast
     calorie_event_names = ["food", "soda", "drink", "alcohol", "treat", "snack", "workout", "z"]
     cal_query = calorie_event_names.map { |n| "name::#{n}" }.join(" ")
     "🔥 " + dates do |date|
-      cal_events = query(cal_query, date)
+      cal_events = query("OR(#{cal_query})", date)
       total = -1800
       cal_events.each do |event|
-        calories = calorie.data["Calories"].to_i
+        calories = event.data&.dig("Calories").to_i
         calories = -100 if event.name == "Z"
         calories *= -1 if event.name == "Workout"
         total += calories
