@@ -124,7 +124,7 @@ class FitnessBroadcast
       green: num..,
       orange: num >= 2 ? (1...num) : nil,
       red: 0,
-      icons: { ✓: num, 𐄂: 0 }
+      icons: { ✓: num.., 𐄂: 0 }
     }.compact_blank
   end
 

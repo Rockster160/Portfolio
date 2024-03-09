@@ -46,7 +46,7 @@ module MarkdownHelper
   def fix_emphasis(content)
     # Stupid standard markdown does *italics* and **bold** and _italics_ and __bold__
     # This fixes it so that it is *bold* and _italics_ and **bold** and __italics__
-    content.gsub(/__\b|\b__/, "_").gsub(/(\s)\*\b|\b\*(\s)/, '\1**\2')
+    content.gsub(/(^|\s)__(\S)|(\S)__(\s|$)/, '\1\3_\2\4').gsub(/(^|\s)\*(\S)|(\S)\*(\s|$)/, '\1\3**\2\4')
   end
 
   def leading_spaces(content)
