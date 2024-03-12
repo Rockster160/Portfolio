@@ -14,36 +14,17 @@ class AmazonEmailParser
     if @email.html_body.include?("Your package has been delivered!")
       save("[DELIVERED]")
     else
-      date_str = arrival_date_str
-      raise AmazonEmailParserError, "Failed to parse arrival_date_str" if date_str.blank?
-      # Remove times from string
-      date = Date.parse(date_str&.gsub(/,? ?\d+ ?(a|p)\.?m\.?\.?/i, ""))
-      date_str = date.iso8601 if date.present?
-      save(date_str.presence || "[ERROR]")
+      save
     end
-  # rescue StandardError => e
-  #   gpt_parse
-  end
-
-  def gpt_parse
-    order, time = ChatGPT.order_with_timestamp(@email.text_body) if @email.text_body.present?
-    if order.blank? || time.blank?
-      raise(
-        AmazonEmailParserError,
-        "Invalid response from GPT: [#{order.inspect}, #{time.inspect}]\n>>> #{@email.text_body.truncate(2000)}\n#{ChatGPT.last_chat_data}"
-      )
-    end
-
-    @order_id = "##{order}"
-    save(Date.parse(time).iso8601)
   rescue StandardError => e
     SlackNotifier.err(e, "Error parsing Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
   end
 
-  def save(timestamp_str)
+  def save(timestamp_str=nil)
     data_store = (DataStorage[:amazon_deliveries] || {}).with_indifferent_access
     order = data_store[order_id] || {}
-    order[:delivery] = timestamp_str
+    order[:delivery] = timestamp_str || arrival_date
+    extract_name&.tap { |name| order[:name] = name } if order[:name].blank?
     data_store[order_id] = order
     DataStorage[:amazon_deliveries] = data_store
 
@@ -52,32 +33,28 @@ class AmazonEmailParser
   end
 
   def order_id
-    @order_id ||= @email.html_body[/\#\d{3}-\d{7}-\d{7}/]
+    @order_id ||= @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/]
   end
 
-  def arrival_date_str
-    if @email.html_body.include?("your package will arrive")
-      # shipment-tracking@amazon.com
-      msg = @doc.at_css("tbody div:contains('your package will arrive')")
-      msg ||= @doc.at_css("tbody div:contains('is arriving earlier than we previously expected')")
+  def arrival_date
+    months = Regexp.new(Date::MONTHNAMES.compact.join("|"))
+    date_regexp = /(#{months}) \d{1,2}/
+    date_str = @email.html_body[date_regexp] || arrival_date_str
+    date = @email.html_body["Today"] if date_str.nil?
+    date || Date.parse(date_str)&.iso8601
+  rescue
+    "[ERROR]"
+  end
 
-      date = msg&.ancestors("tbody")&.first&.css(".arrivalDate")&.first&.text&.squish
-      date ||= msg&.ancestors("tbody")&.first&.css("td")&.last&.text&.squish
-    elsif @email.html_body.include?("Arriving:")
-      # auto-confirm@amazon.com
-      @doc.at_css("span:contains('Arriving:')")&.parent&.at_css("b font")&.text&.squish
-    elsif @email.html_body.include?("Now expected")
-      # order-update@amazon.com
-      @doc.at_css("span:contains('Now expected')")&.text.to_s[/Now expected \w+ \d+/].to_s[/\w+ \d+$/]
-    # elsif @email.html_body.include?("Now arriving tomorrow by")
-    #   # order-update@amazon.com
-    #   hour = @doc.at_css("span:contains('Now arriving tomorrow by')")&.text.to_s[/Now arriving tomorrow by \d+ \w+/].to_s[/\d+ \w+$/]
-    #   1.day.from_now
-    elsif @email.html_body.include?("New estimated delivery date:")
-      # order-update@amazon.com
-      @doc.at_css("span:contains('New estimated delivery date:')")&.parent&.at_css("b")&.text.to_s
-    else
-      nil
-    end
+  def extract_name
+    @doc.at_css(".rio_black_href")&.text&.squish.to_s.delete(".").presence
+    # url = @doc.at_css(".rio_total_info_card").to_s[/\"https:\/\/www\.amazon\.com\/gp\/.*?\"/].to_s[1..-2]
+    # /http%3A%2F%2Fwww.amazon.com%2Fdp%\w*%2Fref%3D\w*/
+    # # https://www.amazon.com/dp/B01LP0V4JY/ref=pe_386300_440135490_TE_simp_item_image?th=1
+    # # https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240312040919092d4cb729ab46ccbae7c3549b50p0na&R=U0YHAXB6XMBU&T=C&U=http%3A%2F%2Fwww.amazon.com%2Fdp%2FB01LP0V4JY%2Fref%3Dpe_386300_440135490_TE_simp_item_image&H=AZGK110P29ZNXGETGJLO6NST2D8A&ref_=pe_386300_440135490_TE_simp_item_image
+    # # http%3A%2F%2Fwww.amazon.com%2Fdp%2FB01LP0V4JY%2Fref%3Dpe_386300_440135490_TE_simp_item_image&
+    # return unless url.present?
+    #
+    # ::RestClient.get(url)
   end
 end
