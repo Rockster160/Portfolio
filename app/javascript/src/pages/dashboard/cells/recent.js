@@ -43,8 +43,8 @@ import { Time } from "./_time"
     command: function(text) {
       if (/^\d+/.test(text)) {
         Server.post("/functions/pullups_counter/run", { count: text })
-      } else if (/^\s*Wordle \d+ (\d|X)\/6/.test(text)) {
-        let num = text.match(/^\s*Wordle \d+ (\d|X)\/6/)[1]
+      } else if (/^\s*Wordle [\d,]+.*?(\d|X)\/6/.test(text)) {
+        let num = text.match(/^\s*Wordle [\d,]+.*?(\d|X)\/6/)[1]
         Server.post("/action_events", { name: "Wordle", notes: num })
       } else {
         var [name, ...notes] = text.split(" ")
