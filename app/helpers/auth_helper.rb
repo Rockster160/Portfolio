@@ -77,10 +77,10 @@ module AuthHelper
     if basic_auth_string.include?(":")
       User.auth_from_basic(basic_auth_string)
     else
-      ApiKey.find_by(key: auth_string)&.user
+      ApiKey.find_by(key: auth_string)&.tap(&:use!)&.user
     end
   rescue ActiveRecord::StatementInvalid # Sometimes decoding the auth string can result in weirdness
-    ApiKey.find_by(key: auth_string)&.user
+    ApiKey.find_by(key: auth_string)&.tap(&:use!)&.user
   end
 
   def auth_from_session

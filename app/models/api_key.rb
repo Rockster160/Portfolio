@@ -17,4 +17,8 @@ class ApiKey < ApplicationRecord
   after_initialize { self.key ||= SecureRandom.hex.upcase }
 
   def disabled? = !enabled?
+
+  def use!(time=Time.current)
+    update(last_used_at: time)
+  end
 end
