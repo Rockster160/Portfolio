@@ -5,7 +5,7 @@
 #  id           :bigint           not null, primary key
 #  enabled      :boolean          default(TRUE)
 #  key          :text
-#  last_used_at :datetime         not null
+#  last_used_at :datetime
 #  name         :text
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
