@@ -48,6 +48,10 @@ class ApiKeysController < ApplicationController
   private
 
   def api_key_params
-    params.require(:api_key).permit(:name)
+    params.require(:api_key).permit(
+      :name,
+    ).tap { |whitelist|
+      whitelist.permit(:key) unless @api_key.persisted?
+    }
   end
 end
