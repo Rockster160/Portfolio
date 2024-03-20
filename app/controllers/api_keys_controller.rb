@@ -1,6 +1,6 @@
 class ApiKeysController < ApplicationController
   def index
-    @api_keys = current_user.api_keys.order(last_used_at: :desc)
+    @api_keys = current_user.api_keys.order(last_used_at: :desc, created_at: :desc)
   end
 
   def new
@@ -51,7 +51,9 @@ class ApiKeysController < ApplicationController
     params.require(:api_key).permit(
       :name,
     ).tap { |whitelist|
-      whitelist.permit(:key) unless @api_key.persisted?
+      params.dig(:api_key, :key).presence&.tap { |key|
+        whitelist[:key] = key unless @api_key.persisted?
+      }
     }
   end
 end
