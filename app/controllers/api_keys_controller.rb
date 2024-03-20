@@ -1,6 +1,6 @@
 class ApiKeysController < ApplicationController
   def index
-    @api_keys = current_user.api_keys.order(last_used_at: :desc, created_at: :desc)
+    @api_keys = current_user.api_keys.order("last_used_at DESC NULLS LAST, created_at DESC")
   end
 
   def new
