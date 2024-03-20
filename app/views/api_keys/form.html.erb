@@ -1,0 +1,31 @@
+<div class="skinny-container">
+  <div class="btn-container">
+    <a href="<%= api_keys_path %>" class="btn">&larr; API Keys</a>
+    <% if @api_key.enabled? %>
+      <%= link_to :Disable, @api_key, method: :delete, class: "btn danger pull-right" %>
+    <% else %>
+      <%#= link_to :Enable, @api_key, method: :delete, class: "btn danger pull-right" %>
+    <% end %>
+  </div>
+  <%= form_for @api_key do |f| %>
+    <div class="form-title"><%= @api_key.persisted? ? :Edit : :New %> API Key</div>
+
+    <%= render partial: "layouts/error_container", locals: { resource: @api_key } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= f.label :key, "Key (Cannot be edited)" %>
+        <%= f.text_field :key, readonly: true %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :name %>
+        <%= f.text_field :name %>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit "Save" %>
+    </div>
+  <% end %>
+</div>

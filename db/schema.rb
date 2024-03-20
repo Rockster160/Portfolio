@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_02_08_051555) do
+ActiveRecord::Schema[7.1].define(version: 2024_03_20_225059) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -76,6 +76,8 @@ ActiveRecord::Schema[7.1].define(version: 2024_02_08_051555) do
     t.text "key"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "last_used_at", precision: nil, null: false
+    t.boolean "enabled", default: true
     t.index ["user_id"], name: "index_api_keys_on_user_id"
   end
 

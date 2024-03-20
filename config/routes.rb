@@ -84,6 +84,7 @@ Rails.application.routes.draw do
   end
 
   get :account, controller: :users
+  resources :api_keys, except: :show
   resources :users, only: [ :new, :create, :update ]
   resources :lists do
     post :reorder, on: :collection

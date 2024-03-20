@@ -1,0 +1,37 @@
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <a href="<%= account_path %>" class="btn">Account</a>
+    <a href="<%= new_api_key_path %>" class="btn pull-right">New API Key</a>
+  </div>
+  <div class="lists-title">API Keys</div>
+  <div class="lists">
+    <div class="list-field">
+      <%= text_field_tag "api_key[name]", "", class: "filterable", placeholder: "Search API Keys" %>
+    </div>
+    <div class="important-list-items"></div>
+
+    <% @api_keys.each do |api_key| %>
+      <div class="list-item-container">
+        <div class="list-item-config">
+          <%= content_tag :div, api_key.key, class: "category" %>
+          <%= content_tag :div, :Disabled, class: "status disabled" if api_key.disabled? %>
+        </div>
+        <!-- <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div> -->
+        <a href="<%= edit_api_key_path(api_key) %>" class="list-item">
+          <span class="item-name"><%= api_key.name %></span>
+          <div class="list-item-brief">
+            <div class="right-brief">
+              <% if api_key.last_used_at.present? %>
+                Last Used:
+                <%= api_key.last_used_at.in_time_zone(current_user.timezone)&.to_formatted_s(:compact_week_month_time).gsub(":00 ", "") %>
+                (<%= relative_time_in_words(api_key.last_used_at) %>)
+              <% else %>
+                --Never Used--
+              <% end %>
+            </div>
+          </div>
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>
