@@ -9,9 +9,11 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def self.bool(val, jil=nil)
+    dug_bool = Proc.new { |b| bool((b.nil? && jil.present?) ? jil.eval_block(val) : b) }
+
     case val
-    when ::Array then bool(val.first.try(:dig, :raw))
-    when ::Hash then bool(val[:raw])
+    when ::Array then dug_bool.call(val.first.try(:dig, :raw))
+    when ::Hash then dug_bool.call(val[:raw])
     when ::String then !val.match?(/^(0|f|false|falsy|no)$/i)
     else
       !!val
