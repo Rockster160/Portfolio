@@ -148,7 +148,7 @@ class WebhooksController < ApplicationController
           }
         when "latency"
           obj[name][:latency] = {
-            idle: data.to_i,
+            seconds: data.to_i,
           }
         end
       end

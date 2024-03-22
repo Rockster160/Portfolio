@@ -108,7 +108,7 @@ import { dash_colors, scaleVal } from "../vars"
       let latency_icon = "󰔛 "
 
       if (data.latency && data.timestamp > two_minutes_ago) {
-        stats.push(formatScale(latency_scale, latency_icon, data.latency))
+        stats.push(formatScale(latency_scale, latency_icon, data.latency.seconds))
       } else {
         stats.push(latency_icon + Text.color(dash_colors.grey, "?"))
       }
