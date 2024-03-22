@@ -146,6 +146,10 @@ class WebhooksController < ApplicationController
           obj[name][:cpu] = {
             idle: data.to_i,
           }
+        when "latency"
+          obj[name][:latency] = {
+            idle: data.to_i,
+          }
         end
       end
     end

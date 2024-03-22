@@ -26,6 +26,13 @@ import { dash_colors, scaleVal } from "../vars"
     scale[dash_colors.red] = 250
     return scale
   })())
+  let latency_scale = ColorGenerator.colorScale((function() {
+    let scale = {}
+    scale[dash_colors.green] = 10
+    scale[dash_colors.yellow] = 60
+    scale[dash_colors.red] = 100
+    return scale
+  })())
 
   var uptimeData = function(cell, flash=false) {
     var api_key = cell.config.uptime_apikey
@@ -98,7 +105,13 @@ import { dash_colors, scaleVal } from "../vars"
       let cpu_icon = " "
       let mem_icon = " "
       let load_icon = " "
+      let latency_icon = "󰔛 "
 
+      if (data.latency && data.timestamp > two_minutes_ago) {
+        stats.push(formatScale(latency_scale, latency_icon, data.latency))
+      } else {
+        stats.push(latency_icon + Text.color(dash_colors.grey, "?"))
+      }
       if (data.cpu && data.timestamp > two_minutes_ago) {
         stats.push(formatScale(cpu_scale, cpu_icon, 100 - data.cpu.idle))
       } else {
