@@ -217,7 +217,7 @@ class ListItem < ApplicationRecord
   end
 
   def normalize_values
-    self.formatted_name = name.downcase.gsub(/[^a-z0-9]/i, "")
+    self.formatted_name = name.downcase.gsub(/[ '",.]/i, "")
     self.category = self.category.squish.titleize.presence if self.category
     self.permanent = false if self.schedule.present?
     true
