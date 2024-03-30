@@ -552,7 +552,7 @@ DEPENDENCIES
   redis-namespace (= 1.8.2)
   rest-client (= 2.1.0)
   rqrcode (= 2.1.2)
-  rspec-rails
+  rspec-rails (= 6.1.2)
   ruby-openai
   sass-rails (= 6.0.0)
   sidekiq (= 6.5.12)

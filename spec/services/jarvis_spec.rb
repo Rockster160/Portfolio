@@ -418,6 +418,12 @@ RSpec.describe Jarvis do
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 4, 52))
     end
 
+    it "can add action events with fraction" do
+      expect(jarvis("Log thing something x1/2")).to eq("Logged Thing (something x1/2)")
+      expect(@admin.action_events.pluck(:name)).to include("Thing")
+      expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 5, 45))
+    end
+
     it "can add action events with relative time" do
       expect(jarvis("Log thing 10 minutes ago.")).to eq("Logged Thing [Today 5:35 AM]")
       expect(@admin.action_events.pluck(:name)).to include("Thing")
