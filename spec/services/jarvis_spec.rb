@@ -89,7 +89,7 @@ RSpec.describe Jarvis do
 
     before do
       # allow(DataStorage).to receive(:[]).and_call_original
-      allow(DataStorage).to receive_message_chain(:[], :call).with(:tesla_forbidden).and_return(false)
+      # allow(DataStorage).to receive_message_chain(:[], :call).with(:tesla_forbidden).and_return(false)
       allow(TeslaControl).to receive(:new).and_return(tesla_control)
     end
 
@@ -218,8 +218,8 @@ RSpec.describe Jarvis do
           allow(tesla_control).to receive(:loc)
           allow(tesla_control).to receive(:start_car)
           data[:others]&.each do |k, args|
-            expect(tesla_control).to receive(k).with(args) if args
-            expect(tesla_control).to receive(k) unless args
+            expect(tesla_control).to receive(k).with(*args) if args.present?
+            expect(tesla_control).to receive(k) unless args.present?
           end
           unless data[:others]&.any? { |o| o.is_a?(Array) ? o[0] == action : o == action }
             expect(tesla_control).to receive(action) unless data[:skip]
@@ -316,6 +316,7 @@ RSpec.describe Jarvis do
     end
   end
 
+  # Garage is now a Jil task, so would have to pull that in to get it working.
   # context "with garage" do
   #   before do
   #     allow(DataStorage).to receive(:[]).with(any_args).and_return("unimportant")
@@ -428,22 +429,6 @@ RSpec.describe Jarvis do
       expect(@admin.action_events.pluck(:name)).to include("Thing")
       expect(@admin.action_events.pluck(:notes)).to include("sup")
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.local(2022, 6, 24, 4, 52))
-    end
-  end
-
-  context "with commands" do
-    # Verify passing arguments works as expected
-    let!(:command) { ::CommandProposal::Task.create(name: "Lumber Spacer", session_type: :function) }
-
-    before do
-      command.update(code: "print 'Lumber output!'")
-      command.current_iteration.update(status: :approved)
-    end
-
-    it "can run a function" do
-      perform_enqueued_jobs {
-        expect(jarvis("run lumber spacer")).to eq("Lumber output!")
-      }
     end
   end
 

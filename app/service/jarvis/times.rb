@@ -15,7 +15,7 @@ module Jarvis::Times
     time_str ||= words[/\b(in) (\d+|an?)( (and )?(a )?half( #{time_words_regex})?)?/]
     time_str ||= words[/(\bon )?(#{month_words_regex} \d{1,2}(\w{2})?(,? '?\d{2,4})? )?((in the )?(#{day_words_regex} ?)+ )?\b(at) \d+:?\d*( ?(am|pm))?( (#{day_words_regex} ?)+)?/]
     time_str ||= words[/(\bon )?#{month_words_regex} \d{1,2}(\w{2})?(,? '?\d{2,4})?/]
-    time_str ||= words[/(\bon )?\d{1,2}\/\d{1,2}(\/(\d{2}|\d{4})\b)?/]
+    time_str ||= words[/(\bon)(?:^| )?\d{1,2}\/\d{1,2}(\/(\d{2}|\d{4})\b)?/]
     time_str ||= words[/in the #{day_words_regex}/]
     time_str ||= words[/(\d+|an?) #{time_words_regex} \b(from now|ago)\b/]
     time_str ||= words[/((next|last) )?(#{day_words_regex} ?)+/]

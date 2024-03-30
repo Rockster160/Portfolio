@@ -101,13 +101,14 @@ class Jarvis
 
     res, res_data = new(user, words).command
 
-    JarvisChannel.broadcast_to(user, { say: res, data: res_data }) if res.present?
+    JarvisChannel.broadcast_to(user, { say: res, data: res_data }) if user.persisted? && res.present?
     return res if res_data.blank?
 
     [res, res_data]
   end
 
   def self.broadcast(user, msg, channel=:ws)
+    return unless user.persisted?
     return unless msg.present?
 
     case channel

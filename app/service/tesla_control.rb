@@ -11,9 +11,9 @@ class TeslaControl
     "Accept": "*/*",
     "accept-encoding": "deflate",
   }
-  STABLE_STATE = DataStorage[:tesla_stable_state] ||= SecureRandom.hex
-  CODE_VERIFIER = DataStorage[:tesla_code_verifier] ||= rand(36**86).to_s(36)
-  CODE_CHALLENGE = Base64.urlsafe_encode64(Digest::SHA256.digest(CODE_VERIFIER), padding: false)
+  STABLE_STATE = (DataStorage[:tesla_stable_state] ||= SecureRandom.hex)
+  CODE_VERIFIER = (DataStorage[:tesla_code_verifier] ||= rand(36**86).to_s(36))
+  CODE_CHALLENGE = ::Base64.urlsafe_encode64(::Digest::SHA256.digest(CODE_VERIFIER), padding: false)
 
   # https://developer.tesla.com/docs/fleet-api?ruby#api-status
 
@@ -95,11 +95,6 @@ class TeslaControl
   end
 
   def refresh
-    if Rails.env.production? # IP Banned from refreshing for some reason?
-      DataStorage[:tesla_forbidden] = true
-      TeslaCommand.broadcast(status: :forbidden)
-      return
-    end
     raise "Cannot refresh without refresh token" if @refresh_token.blank?
 
     success = auth(
@@ -400,7 +395,6 @@ class TeslaControl
   end
 
   def auth(params)
-    return if Rails.env.production? # Seems to be ip banned for this endpoint?
     raise "Should not auth in tests!" if Rails.env.test?
 
     res = RestClient.post(

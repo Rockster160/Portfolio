@@ -80,7 +80,7 @@ group :development, :test do
   gem "pry-rails", "0.3.9"
   gem "pry-byebug", "3.10.1"
   gem "spring-commands-rspec", "1.0.4"
-  gem "rspec-rails", "5.1.2"
+  gem "rspec-rails", "3.13.0"
   gem "better_errors", "2.9.1"
   gem "simplecov", "0.21.2", require: false, group: :test
   gem "timecop", "0.9.5"
