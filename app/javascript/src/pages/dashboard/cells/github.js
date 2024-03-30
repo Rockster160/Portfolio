@@ -72,6 +72,8 @@ import { dash_colors, beeps } from "../vars"
 
   let currentTime = function() {
     const now = new Date()
+    const month = now.getMonth() + 1
+    const day = now.getDate()
     let hours = now.getHours()
     const minutes = now.getMinutes()
     const ampm = hours >= 12 ? "pm" : "am"
@@ -80,7 +82,7 @@ import { dash_colors, beeps } from "../vars"
     const formattedHours = String(hours).padStart(2, "0")
     const formattedMinutes = String(minutes).padStart(2, "0")
 
-    return `${formattedHours}:${formattedMinutes}${ampm}`
+    return `${day}/${month} ${formattedHours}:${formattedMinutes}${ampm}`
   }
 
   let deployMonitor = function() {
