@@ -79,6 +79,7 @@ class FitnessBroadcast
       "Buspirone",
       "Fluoxetine",
       "Vitamins",
+      "Trintellix",
     ].map { |name| "name::#{name}" }.join(" ")
     row("💊", "OR(#{names})", want)
   end
