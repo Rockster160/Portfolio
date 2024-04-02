@@ -4,6 +4,7 @@ class ClimbsController < ApplicationController
 
   def index
     @climbs = current_user.climbs.not_empty.order(timestamp: :desc)
+    @best_climb = @climbs.best
   end
 
   def new

@@ -14,8 +14,12 @@ class Climb < ApplicationRecord
 
   scope :not_empty, -> { where.not(data: [nil, ""]) }
 
+  def self.best
+    all.max_by(&:score)
+  end
+
   def score
-    data&.split(" ")&.sum { |v| score_for(v.to_i) } || 0
+    @score ||= data&.split(" ")&.sum { |v| score_for(v.to_i) } || 0
   end
 
   def score_for(v_index)

@@ -2,6 +2,24 @@
 
 <%= link_to "New Climb", [:new, :climb], class: "btn" %>
 
+<% if @best_climb %>
+  <hr>
+  <div class="climb-row">
+    <h3>
+      Best:
+      <%= link_to edit_climb_path(@best_climb), style: "font-size: 16px; text-decoration: none;" do %>
+        <i class="fa fa-pencil"></i>
+      <% end %>
+      <%= @best_climb.timestamp.in_time_zone(current_user.timezone).to_formatted_s(:quick_week_time) %>
+    </h3>
+    <p>
+      &nbsp;&nbsp;<%= @best_climb.data %><br>
+      &nbsp;&nbsp;Score: <%= @best_climb.score %>
+    </p>
+  </div>
+  <hr>
+<% end %>
+
 <% @climbs.each do |climb| %>
   <div class="climb-row">
     <h3>
