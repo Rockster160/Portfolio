@@ -12,20 +12,13 @@
 class Climb < ApplicationRecord
   belongs_to :user
 
-  MULTIPLIER_PER_V = 2
-
   scope :not_empty, -> { where.not(data: [nil, ""]) }
 
   def score
     data&.split(" ")&.sum { |v| score_for(v.to_i) } || 0
   end
 
-  def score_for(go)
-    @score_list ||= {}
-    @score_list[go] ||= begin
-      val = 1
-      go.to_i.times { val *= MULTIPLIER_PER_V }
-      val
-    end
+  def score_for(v_index)
+    ::Calculator.fibonacci(v_index+2)
   end
 end
