@@ -85,7 +85,7 @@ class AmazonEmailParser
     return unless match.present?
 
     _, start_range, end_range = match&.to_a
-    meridian = (end_range || start_range).gsub(/^[a-z]/i, "")
+    meridian = (end_range || start_range).gsub(/[^a-z]/i, "")
     [start_range, end_range].compact.map { |time| time.gsub(/[^\d]/, "") }.join("-") + meridian
   end
 
