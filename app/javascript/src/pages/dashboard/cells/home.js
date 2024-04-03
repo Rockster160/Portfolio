@@ -130,7 +130,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
           delivery = order.date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
 
           let delivery_date = order.date.getTime()
-          if (Time.endOfDay() < delivery_date) {
+          if (Time.beginningOfDay() > delivery_date) {
             delivery = Text.color(dash_colors.orange, "Delayed?")
           } else if (Time.beginningOfDay() + Time.day() > delivery_date) {
             if (order.time_range) {
