@@ -35,7 +35,7 @@ module PrinterNotify
         title: @params[:topic],
         fields: [
           { title: "Name", value: print_name, short: true },
-          { title: "Progress", value: json(:progress).dig(:completion) || "", short: true },
+          { title: "Progress", value: dig(:progress, :completion) || "", short: true },
         ]
       }
     ]
@@ -50,31 +50,37 @@ module PrinterNotify
     ]
   end
 
-  def json(key)
-    JSON.parse(@params[key], symbolize_names: true)
+  def dig(*keys)
+    obj = @params
+    keys.each { |key|
+      obj = obj.dig(key).then { |val|
+        val.is_a?(String) && val.starts_with?("{") ? JSON.parse(val, symbolize_names: true) : val
+      }
+    }
+    obj
   end
 
   def print_name
-    full = json(:extra).dig(:name) || ""
+    full = dig(:extra, :name) || ""
     ext = full[/-?(\d+D)?(\d+H)?(\d+M)?.gcode/].to_s
 
     full[0..-ext.length - 1]
   end
 
   def actual_complete_time
-    time = json(:extra).dig(:time) || ""
+    time = dig(:extra, :time) || ""
 
     sec_to_dur(time)
   end
 
   def octo_est_time
-    time = json(:job).dig(:estimatedPrintTime) || ""
+    time = dig(:job, :estimatedPrintTime) || ""
 
     sec_to_dur(time)
   end
 
   def cura_est_time
-    str = json(:extra).dig(:name) || ""
+    str = dig(:extra, :name) || ""
     time = str[/-?(\d+D)?(\d+H)?(\d+M)?.gcode/].to_s[1..-7]
 
     str_to_dur(time)
