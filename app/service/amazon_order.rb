@@ -30,10 +30,12 @@ class AmazonOrder
 
   def save
     DataStorage[:amazon_deliveries] = AmazonOrder.deliveries_cache.merge(id => serialize)
+    @@all = nil
   end
 
   def destroy
     DataStorage[:amazon_deliveries] = AmazonOrder.deliveries_cache.except(id)
+    @@all = nil
   end
 
   def error!(str)
