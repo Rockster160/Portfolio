@@ -120,6 +120,10 @@ class Jarvis
     end
   end
 
+  # "Me" commands
+  def self.cmd(msg)
+    command(User.me, msg)
+  end
   def self.say(msg, channel=:ws)
     broadcast(User.me, msg, channel)
   end

@@ -10,40 +10,82 @@ class AmazonEmailParser
 
   def parse
     @doc = Nokogiri::HTML(@email.html_body)
+    @order = AmazonOrder.find(order_id)
+    @order.errors = [] # Clean previous errors
 
-    if @email.html_body.include?("Your package has been delivered!")
-      save("[DELIVERED]")
+    if info_card_html.include?("Your package has been delivered!")
+      @order.delivered = true
     else
-      save
+      parse_email
     end
+
+    @order.save
+    ActionCable.server.broadcast(:amz_updates_channel, AmazonOrder.serialize)
   rescue StandardError => e
     SlackNotifier.err(e, "Error parsing Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
   end
 
-  def save(timestamp_str=nil)
-    data_store = (DataStorage[:amazon_deliveries] || {}).with_indifferent_access
-    order = data_store[order_id] || {}
-    order[:delivery] = timestamp_str || arrival_date
-    extract_name&.tap { |name| order[:name] = name } if order[:name].blank?
-    data_store[order_id] = order
-    DataStorage[:amazon_deliveries] = data_store
-
-    ActionCable.server.broadcast(:amz_updates_channel, data_store)
-    order
+  def parse_email
+    arrival_date.tap { |date|
+      if date.nil?
+        @order.error!("Unable to parse date")
+      else
+        @order.delivery_date = date
+      end
+    }
+    @order.time_range = arrival_time # Might be `nil`
+    @order.name ||= extract_name
   end
 
   def order_id
-    @order_id ||= @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/]
+    @order_id ||= info_card_html[/\b\d{3}-\d{7}-\d{7}\b/]
+  end
+
+  def regex_words(*words)
+    Regexp.new("\\b(?:#{words.join("|")})\\b")
+  end
+
+  def month_regex
+    month_names = Date::MONTHNAMES.compact
+    with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
+    regex_words(with_shorts)
+  end
+
+  def wday_regex
+    month_names = Date::DAYNAMES.compact
+    with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
+    regex_words(with_shorts)
+  end
+
+  def future(date)
+    loop { date.past? ? date += 1.week : (break date) }
+  end
+
+  def info_card_html
+    @doc.at_css(".rio_total_info_card")&.inner_html || "".tap {
+      Jarvis.cmd("Add Amazon Email no info card: #{@email.id}")
+    }
   end
 
   def arrival_date
-    months = Regexp.new(Date::MONTHNAMES.compact.join("|"))
+    months = month_regex
+    wdays = wday_regex
     date_regexp = /(#{months}) \d{1,2}/
-    date_str = @email.html_body[date_regexp] || arrival_date_str
-    date = @email.html_body["Today"] if date_str.nil?
-    date || Date.parse(date_str)&.iso8601
+    date_str = info_card_html[date_regexp]
+    return Date.today if date_str.nil? && info_card_html["Today"].present?
+
+    Date.parse(date_str).then { |date| future(date) }&.iso8601
   rescue
-    "[ERROR]"
+    nil
+  end
+
+  def arrival_time
+    match = info_card_html.match(/(\d{1,2} ?[a-z]\.?m\.?)\W*(\d{1,2} ?[a-z]\.?m\.?)?/i)
+    return unless match.present?
+
+    _, start_range, end_range = match&.to_a
+    meridian = (end_range || start_range).gsub(/^[a-z]/i, "")
+    [start_range, end_range].compact.map { |time| time.gsub(/[^\d]/, "") }.join("-") + meridian
   end
 
   def extract_name
