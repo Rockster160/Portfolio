@@ -73,9 +73,52 @@ import { dash_colors } from "../vars"
   cell = Cell.register({
     title: "Printer",
     text: "Loading...",
-    data: {
-      lastUpdated: Time.now()
-    },
+    data: { lastUpdated: Time.now() },
+    socket: Server.socket("PrinterCallbackChannel", function(msg) {
+      cell.data.lastUpdated = Time.msSinceEpoch()
+      let data = msg.printer_data
+      if (!data) {
+        return // Should probably be a failed state
+      }
+      cell.data.printing = data.state?.flags?.printing
+      if (cell.data.printing) {
+        cell.data.prepping = false
+        cell.data.interval_timer = cell.data.interval_timer || setInterval(function() {
+          cell.data.printer_data.timeLeft -= 1000
+          if (cell.data.printer_data.timeLeft < 0) { cell.data.printer_data.timeLeft = 0 }
+          cell.data.printer_data.elapsedTime = (cell.data.printer_data.elapsedTime || 0) + 1000
+          renderLines()
+        }, 1000)
+      } else if (!cell.data.prepping) {
+        clearInterval(cell.data.interval_timer)
+        cell.data.interval_timer = null
+      }
+      // FIXME: Temps aren't coming through
+      var tool = Emoji.pen + (Math.round(data.temperature?.tool0?.actual) || "?") + "°"
+      var bed = Emoji.printer + " " + (Math.round(data.temperature?.bed?.actual) || "?") + "°"
+      if (data.temperature?.tool0?.target - (0.5 > data.temperature?.tool0?.actual)) {
+        tool = tool + " (" + (Math.round(data.temperature?.tool0?.target) || "?") + ")"
+      }
+      if (data.temperature?.bed?.target - (0.5 > data.temperature?.bed?.actual)) {
+        bed = bed + " (" + (Math.round(data.temperature?.bed?.target) || "?") + ")"
+      }
+      cell.data.temps = {
+        tool: tool,
+        bed: bed,
+      }
+
+      let printer_data = {}
+      printer_data.msSinceEpoch = Time.msSinceEpoch()
+      printer_data.progress = data.progress.completion
+      printer_data.timeLeft = data.progress.printTimeLeft * 1000
+      printer_data.elapsedTime = data.progress.printTime * 1000
+      printer_data.estimated = data.job.estimatedPrintTime * 1000
+      printer_data.filename = data.job.file.display.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "")
+      printer_data.eta_ms = data.progress.completion == 100 ? printer_data.elapsedTime : printer_data.msSinceEpoch + printer_data.timeLeft
+
+      cell.data.printer_data = printer_data
+      renderLines()
+    }),
     command: function(words) {
       let [cmd, ...args] = words.split(" ")
       Printer.post(cmd, args.join(" "))
@@ -114,98 +157,99 @@ import { dash_colors } from "../vars"
         cell.reload()
       },
     },
-    reloader: function() {
-      var cell = this
-      // =========================================
-      Printer.post("printer").done(function(data) {
-        cell.data.lastUpdated = Time.msSinceEpoch()
-        var data = data
-        cell.data.printing = data.state?.flags?.printing
-        if (cell.data.printing) {
-          cell.data.prepping = false
-          cell.data.interval_timer = cell.data.interval_timer || setInterval(function() {
-            cell.data.printer_data.timeLeft -= 1000
-            if (cell.data.printer_data.timeLeft < 0) { cell.data.printer_data.timeLeft = 0 }
-            cell.data.printer_data.elapsedTime = (cell.data.printer_data.elapsedTime || 0) + 1000
-            renderLines()
-          }, 1000)
-        }
-        if (cell.data.printing || cell.data.prepping) {
-          cell.resetTimer(Time.seconds(5))
-        } else {
-          cell.resetTimer(Time.minutes(5))
-          clearInterval(cell.data.interval_timer)
-          cell.data.interval_timer = null
-        }
-
-        var tool = Emoji.pen + (Math.round(data.temperature?.tool0?.actual) || "?") + "°"
-        var bed = Emoji.printer + " " + (Math.round(data.temperature?.bed?.actual) || "?") + "°"
-        if (data.temperature?.tool0?.target - (0.5 > data.temperature?.tool0?.actual)) {
-          tool = tool + " (" + (Math.round(data.temperature?.tool0?.target) || "?") + ")"
-        }
-        if (data.temperature?.bed?.target - (0.5 > data.temperature?.bed?.actual)) {
-          bed = bed + " (" + (Math.round(data.temperature?.bed?.target) || "?") + ")"
-        }
-        cell.data.temps = {
-          tool: tool,
-          bed: bed,
-        }
-        renderLines()
-
-        Printer.post("job").done(function(data) {
-          cell.data.fail = false
-          if (!data?.job?.user) {
-            cell.data.printer_data = {}
-            return renderLines()
-          }
-          let printer_data = {}
-
-          printer_data.msSinceEpoch = Time.msSinceEpoch()
-          printer_data.progress = data.progress.completion
-          printer_data.timeLeft = data.progress.printTimeLeft * 1000
-          printer_data.elapsedTime = data.progress.printTime * 1000
-          printer_data.estimated = data.job.estimatedPrintTime * 1000
-          printer_data.filename = data.job.file.display.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "")
-          printer_data.eta_ms = data.progress.completion == 100 ? printer_data.elapsedTime : printer_data.msSinceEpoch + printer_data.timeLeft
-
-          cell.data.printer_data = printer_data
-          renderLines()
-        })
-      }).fail(function(data) {
-        cell.data.fail = true
-        renderLines()
-      })
-    },
   })
 })()
 
 // {
+//   "deviceIdentifier": "zoro-pi-1",
+//   "topic": "Print Progress",
+//   "message": "Your print is 2 % complete.",
+//   "extra": {},
+//   "state": {
+//     "text": "Printing",
+//     "flags": {
+//       "operational": true,
+//       "printing": true,
+//       "cancelling": false,
+//       "pausing": false,
+//       "resuming": false,
+//       "finishing": false,
+//       "closedOrError": false,
+//       "error": false,
+//       "paused": false,
+//       "ready": false,
+//       "sdReady": false
+//     },
+//     "error": ""
+//   },
 //   "job": {
-//     "averagePrintTime": 1092.872925517986,
-//     "estimatedPrintTime": 967.5191510104092,
+//     "file": {
+//       "name": "Slime-24M.gcode",
+//       "path": "Slime-24M.gcode",
+//       "display": "Slime-24M.gcode",
+//       "origin": "local",
+//       "size": 908307,
+//       "date": 1712114222
+//     },
+//     "estimatedPrintTime": 1155.7580897501998,
+//     "averagePrintTime": null,
+//     "lastPrintTime": null,
 //     "filament": {
 //       "tool0": {
-//         "length": 1494.6377851781435,
-//         "volume": 3.5950251749839905
+//         "length": 954.1910799999978,
+//         "volume": 0.0
 //       }
 //     },
-//     "file": {
-//       "date": 1640306690,
-//       "display": "glassboard_clip-16M.gcode",
-//       "name": "glassboard_clip-16M.gcode",
-//       "origin": "local",
-//       "path": "glassboard_clip-16M.gcode",
-//       "size": 570671
-//     },
-//     "lastPrintTime": 1036.803297137958,
 //     "user": "Rockster160"
 //   },
 //   "progress": {
-//     "completion": 46.62213429454099,
-//     "filepos": 266059,
-//     "printTime": 540,
-//     "printTimeLeft": 442,
-//     "printTimeLeftOrigin": "genius"
+//     "completion": 2.0033975296898516,
+//     "filepos": 18197,
+//     "printTime": 272,
+//     "printTimeLeft": 1011,
+//     "printTimeLeftOrigin": "analysis"
 //   },
-//   "state": "Printing"
+//   "currentZ": 0.94,
+//   "offsets": {},
+//   "meta": {
+//     "hash": "aa1da4cb07cc5385a0a5d80a8c7c2907c9e919fe",
+//     "analysis": {
+//       "printingArea": {
+//         "maxX": 121.848,
+//         "maxY": 200.0,
+//         "maxZ": 21.94,
+//         "minX": 0.1,
+//         "minY": 20.0,
+//         "minZ": 0.0
+//       },
+//       "dimensions": {
+//         "depth": 180.0,
+//         "height": 21.94,
+//         "width": 121.748
+//       },
+//       "travelArea": {
+//         "maxX": 121.848,
+//         "maxY": 220.0,
+//         "maxZ": 32.14,
+//         "minX": 0.0,
+//         "minY": 0.0,
+//         "minZ": 0.0
+//       },
+//       "travelDimensions": {
+//         "depth": 220.0,
+//         "height": 32.14,
+//         "width": 121.848
+//       },
+//       "estimatedPrintTime": 1155.7580897501998,
+//       "filament": {
+//         "tool0": {
+//           "length": 954.1910799999978,
+//           "volume": 0.0
+//         }
+//       }
+//     }
+//   },
+//   "currentTime": 1712114536,
+//   "controller": "webhooks",
+//   "action": "notify"
 // }
