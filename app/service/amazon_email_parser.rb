@@ -35,6 +35,7 @@ class AmazonEmailParser
     }
     @order.time_range = arrival_time # Might be `nil`
     @order.name ||= extract_name
+    @order.email_ids << @email.id unless @order.email_ids.include?(@email.id)
   end
 
   def order_id

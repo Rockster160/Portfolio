@@ -1,9 +1,9 @@
 class AmazonOrder
-  attr_accessor :id, :name, :delivery_date, :time_range, :delivered, :errors
+  attr_accessor :id, :name, :delivery_date, :time_range, :delivered, :email_ids, :errors
 
   def self.all
     @@all = deliveries_cache.map { |id, data|
-      new(data.merge(order_id: id))
+      new(data.merge(id: id))
     }
   end
 
@@ -15,18 +15,24 @@ class AmazonOrder
     all.find { |order| id && order.id == id } || new(id: id)
   end
 
-  def serialize
-    all.map(&:to_h)
+  def self.serialize
+    all.each_with_object({}) { |order, obj| obj[order.id] = order.serialize }
   end
 
   def initialize(order_hash)
+    @errors = []
+    @email_ids = []
     order_hash.each do |key, val|
       self.send("#{key}=".to_sym, val) if self.respond_to?(key)
     end
   end
 
   def save
-    DataStorage[:amazon_deliveries] = deliveries_cache.merge(id => serialize)
+    DataStorage[:amazon_deliveries] = AmazonOrder.deliveries_cache.merge(id => serialize)
+  end
+
+  def destroy
+    DataStorage[:amazon_deliveries] = AmazonOrder.deliveries_cache.except(id)
   end
 
   def error!(str)
@@ -41,7 +47,8 @@ class AmazonOrder
       delivery_date: delivery_date,
       time_range: time_range,
       delivered: delivered,
-      errors: errors || [],
+      email_ids: email_ids,
+      errors: errors,
     }
   end
 end

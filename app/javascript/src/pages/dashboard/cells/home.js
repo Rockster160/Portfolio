@@ -117,28 +117,33 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
     if (cell.data.amz_updates) {
       cell.data.amz_updates.forEach(function(order, idx) {
-        let today = Time.beginningOfDay()
-        let delivery = order.delivery || ""
-        if (delivery == "[DELIVERED]") {
-          delivery = Text.color(dash_colors.green, "✓")
-        } else if (delivery[0] != "[") {
-          let [year, month, day, ...tz] = delivery.split(/-| /)
-          let date = (new Date()).setFullYear(year, parseInt(month) - 1, day)
-          let deliverTime = Time.at(date)
-          delivery = deliverTime.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
+        let delivery = Text.color(dash_colors.grey, "?")
+        let name = order.name || Text.color(dash_colors.grey, "?")
 
-          if (today > deliverTime) {
-            delivery = Text.color(dash_colors.orange, "Delayed?")
-          } else if (today + Time.day() > deliverTime) {
-            delivery = Text.color(dash_colors.green, "Today")
-          } else if (today + Time.days(2) > deliverTime) {
-            delivery = Text.color(dash_colors.yellow, "Tomorrow")
-          }
-        } else {
-          delivery = Text.color(dash_colors.red, delivery)
+        if (order.errors?.length > 0) {
+          name = Text.color(dash_colors.red, name)
         }
 
-        lines.push(Text.justify((idx + 1) + ". " + order.name, delivery))
+        if (order.delivered) {
+          delivery = Text.color(dash_colors.green, "✓")
+        } else if (order.date) {
+          delivery = order.date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
+
+          let delivery_date = order.date.getTime()
+          if (Time.endOfDay() < delivery_date) {
+            delivery = Text.color(dash_colors.orange, "Delayed?")
+          } else if (Time.beginningOfDay() + Time.day() > delivery_date) {
+            if (order.time_range) {
+              delivery = Text.color(dash_colors.green, order.time_range)
+            } else {
+              delivery = Text.color(dash_colors.green, "Today")
+            }
+          } else if (Time.beginningOfDay() + Time.days(2) > delivery_date) {
+            delivery = Text.color(dash_colors.yellow, "Tomorrow")
+          }
+        }
+
+        lines.push(Text.justify((idx + 1) + ". " + name, delivery))
       })
     }
 
@@ -167,20 +172,22 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
         let data = []
         for (var [order_id, order_data] of Object.entries(msg)) {
-          let order = { date: 0, id: order_id }
-          let delivery = order_data.delivery
-          if (delivery[0] != "[") {
-            let [year, month, day, ...tz] = delivery.split(/-| /)
-            order.date = (new Date()).setFullYear(year, parseInt(month) - 1, day)
+          let order = order_data
+
+          let [year, month, day, ...tz] = order_data.delivery_date.split(/-| /)
+          let date = new Date(0)
+          date.setFullYear(year, parseInt(month) - 1, day)
+          if (order_data.time_range) {
+            let meridian = order_data.time_range.match(/([^\d]*?)$/)[1]
+            let hour = parseInt(order_data.time_range.match(/(\d+)[^\d]*?$/)[1])
+            if (meridian == "pm") { hour += 12 }
+            date.setHours(hour)
           }
-          order.name = order_data.name || "#"
-          order.delivery = delivery
+          order.date = date
 
           data.push(order)
         }
-        this.data.amz_updates = data.sort(function(a, b) {
-          return a.date - b.date
-        })
+        this.data.amz_updates = data.sort((a, b) => a - b)
         renderLines()
       })
     )
@@ -220,7 +227,6 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         clearTimeout(cell.garage_timeout)
         cell.flash()
         if (data.loading) {
-
         } else {
           cell.data.garage.timestamp = data.timestamp * 1000
           // Somewhere - need to do an hourly? check, if no received, go grey
@@ -303,7 +309,13 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     commands: {
       quiet: function() {
         cell.data.sound = !cell.data.sound
-      }
+      },
+      open: function(idx) {
+        if (idx) {
+          let order = cell.data.amz_updates[parseInt(idx)]
+          order?.email_ids?.forEach(id => window.open(`https://ardesian.com/emails/${id}`, "_blank"))
+        }
+      },
     },
     command: function(msg) {
       if (msg.trim() == "o") {
