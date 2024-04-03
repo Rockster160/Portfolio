@@ -5,6 +5,7 @@ module PrinterNotify
     @params = params
     @fields = []
 
+    # if @params[:topic] == "Print Progress"
     if @params[:topic] == "Print Started"
       return # no-op
     elsif @params[:topic] == "Print Done"
@@ -34,7 +35,7 @@ module PrinterNotify
         title: @params[:topic],
         fields: [
           { title: "Name", value: print_name, short: true },
-          { title: "Progress", value: @params.dig(:progress, :completion) || "", short: true },
+          { title: "Progress", value: json(:progress).dig(:completion) || "", short: true },
         ]
       }
     ]
@@ -49,27 +50,31 @@ module PrinterNotify
     ]
   end
 
+  def json(key)
+    JSON.parse(@params[key], symbolize_names: true)
+  end
+
   def print_name
-    full = @params.dig(:extra, :name) || ""
+    full = json(:extra).dig(:name) || ""
     ext = full[/-?(\d+D)?(\d+H)?(\d+M)?.gcode/].to_s
 
     full[0..-ext.length - 1]
   end
 
   def actual_complete_time
-    time = @params.dig(:extra, :time) || ""
+    time = json(:extra).dig(:time) || ""
 
     sec_to_dur(time)
   end
 
   def octo_est_time
-    time = @params.dig(:webhook, :job, :estimatedPrintTime) || ""
+    time = json(:job).dig(:estimatedPrintTime) || ""
 
     sec_to_dur(time)
   end
 
   def cura_est_time
-    str = @params.dig(:extra, :name) || ""
+    str = json(:extra).dig(:name) || ""
     time = str[/-?(\d+D)?(\d+H)?(\d+M)?.gcode/].to_s[1..-7]
 
     str_to_dur(time)

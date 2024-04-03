@@ -105,7 +105,8 @@ class WebhooksController < ApplicationController
   def notify
     return head :no_content unless printer_authed?
 
-    ActionCable.server.broadcast :printer_callback_channel, { reload: true }
+    ActionCable.server.broadcast(:printer_callback_channel, { reload: true })
+    # Could probably just send the data down from here...
     PrinterNotify.notify(params)
   end
 
