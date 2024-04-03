@@ -23,7 +23,7 @@ class AmzUpdatesChannel < ApplicationCable::Channel
     #   }
     end
 
-    ActionCable.server.broadcast(:amz_updates_channel, deliveries)
+    ActionCable.server.broadcast(:amz_updates_channel, AmazonOrder.serialize)
   end
 
   def request(_)
