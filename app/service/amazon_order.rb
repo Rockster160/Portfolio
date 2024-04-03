@@ -1,5 +1,5 @@
 class AmazonOrder
-  attr_accessor :id, :name, :delivery_date, :time_range, :delivered, :email_ids, :errors
+  attr_accessor :id, :name, :delivery_date, :time_range, :delivered, :email_ids, :errors, :new
 
   def self.all
     @@all = deliveries_cache.map { |id, data|
@@ -12,7 +12,7 @@ class AmazonOrder
   end
 
   def self.find(id)
-    all.find { |order| id && order.id == id } || new(id: id)
+    all.find { |order| id && order.id == id } || new(id: id, new: true)
   end
 
   def self.serialize
@@ -22,6 +22,7 @@ class AmazonOrder
   def initialize(order_hash)
     @errors = []
     @email_ids = []
+    @new = false
     order_hash.each do |key, val|
       self.send("#{key}=".to_sym, val) if self.respond_to?(key)
     end

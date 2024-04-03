@@ -4,34 +4,29 @@ class AmzUpdatesChannel < ApplicationCable::Channel
   end
 
   def change(data)
-    deliveries = DataStorage[:amazon_deliveries].with_indifferent_access || {}
-    if data["remove"]
-      deliveries.delete(data["id"])
-    elsif data["rename"]
-      order = deliveries[data["id"]]
-      # order[:name] = data["rename"]
-      name = data["rename"]
+    order = AmazonOrder.find(data["id"])
 
-      sub, time = ::Jarvis::Times.extract_time(name, context: :future)
-      name = name.gsub(sub, "") if sub.present?
-      order[:name] = name
-      order[:delivery] = time.strftime("%Y-%m-%-d") if time.present?
-    elsif data["add"]
-      msg = data["add"].gsub(/^add /, "")
-      sub, time = ::Jarvis::Times.extract_time(msg, context: :future)
-      name = msg.gsub(sub, "")
-      deliveries[name] = {
-        name: name,
-        delivery: time&.strftime("%Y-%m-%-d") || "[ERROR]",
-      }
+    if data["remove"]
+      order.destroy
+    elsif data["rename"]
+      order.name = data["rename"]
+      order.save
+      # TODO: Allow changing the time, too
+      # TODO: Allow adding new items for tracking
+    # elsif data["add"]
+    #   msg = data["add"].gsub(/^add /, "")
+    #   sub, time = ::Jarvis::Times.extract_time(msg, context: :future)
+    #   name = msg.gsub(sub, "")
+    #   deliveries[name] = {
+    #     name: name,
+    #     delivery: time&.strftime("%Y-%m-%-d") || "[ERROR]",
+    #   }
     end
 
-    DataStorage[:amazon_deliveries] = deliveries
-
-    ActionCable.server.broadcast :amz_updates_channel, deliveries
+    ActionCable.server.broadcast(:amz_updates_channel, deliveries)
   end
 
   def request(_)
-    ActionCable.server.broadcast :amz_updates_channel, DataStorage[:amazon_deliveries]
+    ActionCable.server.broadcast(:amz_updates_channel, DataStorage[:amazon_deliveries])
   end
 end
