@@ -5,11 +5,13 @@ module PrinterNotify
     @params = params
     @fields = []
 
-    # if @params[:topic] == "Print Progress"
     if @params[:topic] == "Print Started"
-      return # no-op
+      return # no-op - should push to printer websocket
+    elsif @params[:topic] == "Print Progress"
+      return # no-op - should push to printer websocket
     elsif @params[:topic] == "Print Done"
       push_to_slack(complete_attachment)
+       # should push to printer websocket
     else
       push_to_slack(fail_attachment)
     end
