@@ -105,6 +105,7 @@ class WebhooksController < ApplicationController
   def notify
     return head :no_content unless printer_authed?
 
+    Rails.logger.warn("[#{request.remote_ip}] Printer IP Address")
     ActionCable.server.broadcast(:printer_callback_channel, { printer_data: params.permit!.to_h.except(:apiSecret) })
     PrinterNotify.notify(params)
   end
