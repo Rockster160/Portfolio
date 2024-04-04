@@ -105,7 +105,7 @@ module PrinterNotify
     ].join(":") + ":00"
   end
 
-  def push_to_slack attchs
+  def push_to_slack(attchs)
     SlackNotifier.notify("*#{message}*", channel: '#portfolio', username: 'Printer-Bot', icon_emoji: ':printer:', attachments: attchs)
   end
 end

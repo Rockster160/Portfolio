@@ -75,6 +75,7 @@ import { dash_colors } from "../vars"
     text: "Loading...",
     data: { lastUpdated: Time.now() },
     socket: Server.socket("PrinterCallbackChannel", function(msg) {
+      console.log(`%${msg?.printer_data?.progress?.completion}%`, msg);
       cell.data.lastUpdated = Time.msSinceEpoch()
       let data = msg.printer_data
       if (!data) {
@@ -109,12 +110,17 @@ import { dash_colors } from "../vars"
 
       let printer_data = {}
       printer_data.msSinceEpoch = Time.msSinceEpoch()
-      printer_data.progress = data.progress.completion
-      printer_data.timeLeft = data.progress.printTimeLeft * 1000
-      printer_data.elapsedTime = data.progress.printTime * 1000
-      printer_data.estimated = data.job.estimatedPrintTime * 1000
-      printer_data.filename = data.job.file.display.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "")
-      printer_data.eta_ms = data.progress.completion == 100 ? printer_data.elapsedTime : printer_data.msSinceEpoch + printer_data.timeLeft
+      if (data.progress) {
+        printer_data.progress = data.progress.completion
+        printer_data.timeLeft = data.progress.printTimeLeft * 1000
+        printer_data.elapsedTime = data.progress.printTime * 1000
+        printer_data.eta_ms = data.progress.completion == 100 ? printer_data.elapsedTime : printer_data.msSinceEpoch + printer_data.timeLeft
+      }
+      if (data.job) {
+        printer_data.estimated = data.job.estimatedPrintTime * 1000
+      }
+      let filename = (data.job?.file?.display || data?.extra?.name)?.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "")
+      if (filename) { printer_data.filename = filename }
 
       cell.data.printer_data = printer_data
       renderLines()
