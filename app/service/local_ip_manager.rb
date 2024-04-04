@@ -13,5 +13,6 @@ module LocalIpManager
         ip: new_ip
       }.to_query
     )
+    Jarvis.say("Updated IP Addresses! #{new_ip}")
   end
 end
