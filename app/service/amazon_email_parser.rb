@@ -10,6 +10,8 @@ class AmazonEmailParser
 
   def parse
     @doc = Nokogiri::HTML(@email.html_body)
+    return Jarvis.cmd("Add Amazon Email no order id: #{@email.id}") if order_id.blank?
+
     @order = AmazonOrder.find(order_id)
     @order.errors = [] # Clean previous errors
 
