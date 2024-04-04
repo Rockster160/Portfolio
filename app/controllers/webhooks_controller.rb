@@ -48,6 +48,7 @@ class WebhooksController < ApplicationController
     DataStorage[:tesla_forbidden] = false
 
     TeslaCommand.quick_command(:reload)
+    LocalIpManager.local_ip = request.remote_ip
 
     head :ok
   end
@@ -98,14 +99,21 @@ class WebhooksController < ApplicationController
     json = DataStorage[:local_data] || {}
     DataStorage[:local_data] = json.merge(data)
     LocalDataBroadcast.call(data)
+    LocalIpManager.local_ip = request.remote_ip
 
     head :created
+  end
+
+  def local_ping
+    LocalIpManager.local_ip = request.remote_ip
+
+    head :ok
   end
 
   def notify
     return head :no_content unless printer_authed?
 
-    Rails.logger.warn("[#{request.remote_ip}] Printer IP Address")
+    LocalIpManager.local_ip = request.remote_ip
     ActionCable.server.broadcast(:printer_callback_channel, { printer_data: params.permit!.to_h.except(:apiSecret) })
     PrinterNotify.notify(params)
   end

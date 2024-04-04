@@ -40,6 +40,7 @@ Rails.application.routes.draw do
   post "webhooks/battery" => "webhooks#battery"
   post "webhooks/report" => "webhooks#report"
   post "webhooks/local_data" => "webhooks#local_data"
+  post "webhooks/local_ping" => "webhooks#local_ping"
   post "webhooks/jenkins" => "webhooks#jenkins"
   post "webhooks/post" => "webhooks#post"
   post "webhooks/google_pub_sub" => "webhooks#google_pub_sub"
