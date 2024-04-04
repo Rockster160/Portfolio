@@ -39,7 +39,7 @@ class AmazonEmailParser
   end
 
   def order_id
-    @order_id ||= info_card_html[/\b\d{3}-\d{7}-\d{7}\b/]
+    @order_id ||= @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/]
   end
 
   def regex_words(*words)
