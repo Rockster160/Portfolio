@@ -8,14 +8,7 @@ module LocalIpManager
     DataStorage[:local_ip] = new_ip
     HTTParty.get(
       "https://www.duckdns.org/update?" + {
-        domains: :ardesian,
-        token: DataStorage[:duckdns_token],
-        ip: new_ip
-      }.to_query
-    )
-    HTTParty.get(
-      "https://www.duckdns.org/update?" + {
-        domains: :ronaya,
+        domains: "ardesian,ronaya",
         token: DataStorage[:duckdns_token],
         ip: new_ip
       }.to_query
