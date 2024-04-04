@@ -41,9 +41,6 @@ import { dash_colors } from "../vars"
 
   var renderLines = function() {
     if (!cell) { return cell.lines("Loading...") }
-    if (!cell.data.temps.tool || cell.data.fail) {
-      return cell.lines(["", "", "", Text.center(Text.color(dash_colors.red, "[ERROR]"))])
-    }
     let printer_data = cell.data.printer_data || {}
 
     let lines = []
@@ -65,6 +62,13 @@ import { dash_colors } from "../vars"
 
     cell.lines(lines)
 
+    if (cell.data.fail) {
+      cell.line(7, Text.center(Text.color(dash_colors.red, "[ERROR]")))
+    }
+    if (cell.data.error) {
+      cell.line(8, Text.center(Text.color(dash_colors.red, cell.data.error)))
+    }
+
     if (cell.data.lastUpdated < Time.now() + Time.minutes(6)) {
       return cell.line(9, Text.justify("", Text.color(dash_colors.orange, "[EXPIRED]")))
     }
@@ -78,9 +82,19 @@ import { dash_colors } from "../vars"
       console.log(`%${msg?.printer_data?.progress?.completion}%`, msg);
       cell.data.lastUpdated = Time.msSinceEpoch()
       let data = msg.printer_data
-      if (!data) {
-        return // Should probably be a failed state
+      if (!data) { return } // Should probably be a failed state
+      if (data?.state?.error) {
+        cell.data.fail = true
+        cell.data.error = data.state.error
+        cell.data.printing = false
+        cell.data.prepping = false
+        clearInterval(cell.data.interval_timer)
+        cell.data.interval_timer = null
+        renderLines()
+        return
       }
+      cell.data.fail = false
+      cell.data.error = undefined
       cell.data.printing = data.state?.flags?.printing
       if (cell.data.printing) {
         cell.data.prepping = false
@@ -111,8 +125,16 @@ import { dash_colors } from "../vars"
       let printer_data = {}
       printer_data.msSinceEpoch = Time.msSinceEpoch()
       if (data.progress) {
-        printer_data.progress = data.progress.completion
-        printer_data.timeLeft = data.progress.printTimeLeft * 1000
+        let estimatedSec = data?.job?.estimatedPrintTime
+        let estimated_progress = data.progress.printTime / (estimatedSec || 1)
+        if (estimated_progress < 1) {
+          printer_data.progress = estimated_progress * 100
+          printer_data.timeLeft = (estimatedSec - data.progress.printTime) * 1000
+        } else {
+          // Since this is based on the amount of Gcode that has been executed vs total, it's wildly inaccurate for a progress bar
+          printer_data.progress = data.progress.completion
+          printer_data.timeLeft = data.progress.printTimeLeft * 1000
+        }
         printer_data.elapsedTime = data.progress.printTime * 1000
         printer_data.eta_ms = data.progress.completion == 100 ? printer_data.elapsedTime : printer_data.msSinceEpoch + printer_data.timeLeft
       }
