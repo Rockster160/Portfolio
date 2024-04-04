@@ -13,7 +13,7 @@ class AmazonEmailParser
     @order = AmazonOrder.find(order_id)
     @order.errors = [] # Clean previous errors
 
-    if info_card_html.include?("Your package has been delivered!")
+    if @email.html_body.include?("Your package has been delivered!")
       @order.delivered = true
     else
       parse_email
