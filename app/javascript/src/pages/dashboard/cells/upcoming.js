@@ -53,7 +53,7 @@ import { dash_colors, text_height, clamp } from "../vars"
         }
 
         let name = evt.name?.replace(/^add /i, "") || "?"
-        let line = `${Text.color(dash_colors.yellow, date)}: ${Text.color(dash_colors.rocco, name)}`
+        let line = `${Text.yellow(date)}: ${Text.rocco(name)}`
 
         lines.push(line)
       })

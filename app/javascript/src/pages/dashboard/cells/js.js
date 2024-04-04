@@ -48,10 +48,10 @@ import { text_height, dash_colors } from "../vars"
       renderLines()
       try {
         if (msg.trim().length > 0) {
-          this.data.lines.push(Text.color(dash_colors.grey, "=> " + JSON.stringify((0, eval)(msg))))
+          this.data.lines.push(Text.grey("=> " + JSON.stringify((0, eval)(msg))))
         }
       } catch(e) {
-        this.data.lines.push(Text.color(dash_colors.red, e))
+        this.data.lines.push(Text.red(e))
       }
       renderLines()
       localStorage.setItem("js", this.data.lines.join("\n"))

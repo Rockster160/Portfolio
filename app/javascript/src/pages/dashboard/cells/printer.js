@@ -45,7 +45,11 @@ import { dash_colors } from "../vars"
 
     let lines = []
     lines.push(Text.center([cell.data.temps.tool, cell.data.temps.bed].join(" | ")))
-    lines.push("")
+    if (printer_data.paused) {
+      lines.push(Text.center(Text.grey("[PAUSED]")))
+    } else {
+      lines.push("")
+    }
     lines.push(Text.center(printer_data.filename || "[Job not found]"))
 
     if (printer_data.filename) {
@@ -63,14 +67,14 @@ import { dash_colors } from "../vars"
     cell.lines(lines)
 
     if (cell.data.fail) {
-      cell.line(7, Text.center(Text.color(dash_colors.red, "[ERROR]")))
+      cell.line(7, Text.center(Text.grey("[ERROR]")))
     }
     if (cell.data.error) {
-      cell.line(8, Text.center(Text.color(dash_colors.red, cell.data.error)))
+      cell.line(8, Text.center(Text.grey(cell.data.error)))
     }
 
     if (cell.data.lastUpdated < Time.now() + Time.minutes(6)) {
-      return cell.line(9, Text.justify("", Text.color(dash_colors.orange, "[EXPIRED]")))
+      return cell.line(9, Text.justify("", Text.grey("[EXPIRED]")))
     }
   }
 
@@ -95,6 +99,7 @@ import { dash_colors } from "../vars"
       }
       cell.data.fail = false
       cell.data.error = undefined
+      cell.data.paused = data.state?.flags?.paused || data.state?.flags?.pausing
       cell.data.printing = data.state?.flags?.printing
       if (cell.data.printing) {
         cell.data.prepping = false
@@ -131,7 +136,8 @@ import { dash_colors } from "../vars"
           printer_data.progress = estimated_progress * 100
           printer_data.timeLeft = (estimatedSec - data.progress.printTime) * 1000
         } else {
-          // Since this is based on the amount of Gcode that has been executed vs total, it's wildly inaccurate for a progress bar
+          // Since this is based on the amount of Gcode that has been executed vs total,
+          //   it's wildly inaccurate for a progress bar
           printer_data.progress = data.progress.completion
           printer_data.timeLeft = data.progress.printTimeLeft * 1000
         }

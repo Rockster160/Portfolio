@@ -10,7 +10,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     let topchar = cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "  "
     let topline = topchar + " ".repeat(single_width - 2)
     if (data.charging?.state == "Disconnected") {
-      topline = Text.center(Text.color(dash_colors.red, "[NOT CHARGING]"))
+      topline = Text.center(Text.red("[NOT CHARGING]"))
       topline = topline.replace(/^../, topchar)
     }
     lines.push(topline)
@@ -19,13 +19,13 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     if (data.climate?.current) {
       status_pieces.push(shiftTempToColor(data.climate.current))
     }
-    status_pieces.push(Text.color(dash_colors.yellow, (data.charge || "?") + "%"))
-    status_pieces.push(Text.color(dash_colors.yellow, (data.miles || "?") + "m"))
+    status_pieces.push(Text.yellow((data.charge || "?") + "%"))
+    status_pieces.push(Text.yellow((data.miles || "?") + "m"))
     lines.push(Text.center(status_pieces.join(" | ")))
 
     if (data.charging?.active && data.charging.eta > 0 && data.charging.speed > 0 && !(data.drive?.speed > 0)) {
       let charging_text = "Full: " + data.charging.eta + "min | [ico ti ti-weather-lightning]" + data.charging.speed + "mph"
-      lines.push(Text.center(Text.color(dash_colors.yellow, charging_text)))
+      lines.push(Text.center(Text.yellow(charging_text)))
     } else {
       lines.push("")
     }
@@ -55,11 +55,11 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
 
     if (data.climate?.on) {
       let climate_text = "Climate: " // [ico ti ti-mdi-fan ti-spin] - Not centered, so looks weird
-      climate_text += Text.color(dash_colors.green, "[ON] ")
+      climate_text += Text.green("[ON] ")
       climate_text += shiftTempToColor(data.climate.set)
       lines.push(Text.center(climate_text))
     } else {
-      lines.push(Text.center(Text.color(dash_colors.grey, "[OFF]")))
+      lines.push(Text.center(Text.grey("[OFF]")))
     }
 
     if (data.drive) {
@@ -68,14 +68,14 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
 
       drive_text += "[ico ti ti-oct-location]" + data.drive.location
       if (data.drive.speed > 0) { drive_text += " [ico ti ti-mdi-speedometer]" + data.drive.speed + "mph" }
-      lines.push(Text.center(Text.color(dash_colors.grey, drive_text)))
+      lines.push(Text.center(Text.grey(drive_text)))
     } else {
       lines.push("")
     }
 
-    let notify = cell.data.failed ? Text.color(dash_colors.orange, "[FAILED]") : ""
-    notify = cell.data.sleeping ? Text.color(dash_colors.grey, "[sleep]") : notify
-    notify = cell.data.forbidden ? Text.color(dash_colors.orange, "[AUTH]") : notify
+    let notify = cell.data.failed ? Text.orange("[FAILED]") : ""
+    notify = cell.data.sleeping ? Text.grey("[sleep]") : notify
+    notify = cell.data.forbidden ? Text.orange("[AUTH]") : notify
     lines.push(Text.justify(notify, Time.timeago(data.timestamp * 1000)))
 
     cell.lines(lines)

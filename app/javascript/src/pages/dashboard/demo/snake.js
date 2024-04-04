@@ -164,7 +164,7 @@ import { dash_colors } from "../vars"
       if (cell.data.gameover) {
         cell.refreshInterval = null
         var lose = Text.center("You Lose!")
-        var color = Text.color(dash_colors.red, lose)
+        var color = Text.red(lose)
         var bg = Text.bgColor(dash_colors.grey, color)
         cell.line(3, bg)
 

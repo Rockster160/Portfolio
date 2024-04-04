@@ -19,7 +19,7 @@ import { dash_colors } from "../vars"
   }
 
   var deck = function() {
-    return [Text.color("black", "♠"), Text.color(dash_colors.red, "♥"), Text.color(dash_colors.red, "♦"), Text.color("black", "♣")].map(function(suit) {
+    return [Text.color("black", "♠"), Text.red("♥"), Text.red("♦"), Text.color("black", "♣")].map(function(suit) {
       return [...Array(13).keys()].map(function(num) {
         num += 1
         if (num == 1) { num = "A" }
@@ -34,7 +34,7 @@ import { dash_colors } from "../vars"
   Cell.register({
     title: "Random",
     wrap: true,
-    text: Text.color(dash_colors.yellow, ".8ball .die .coin .draw .shuffle"),
+    text: Text.yellow(".8ball .die .coin .draw .shuffle"),
     commands: {
       "8ball": function() {
         this.data.history.push(Emoji["8ball"] + "  " + random([
@@ -66,13 +66,13 @@ import { dash_colors } from "../vars"
         render(this)
       },
       coin: function() {
-        this.data.history.push(Text.color(dash_colors.yellow, Emoji.coin) + " " + random(["Heads", "Tails"]))
+        this.data.history.push(Text.yellow(Emoji.coin) + " " + random(["Heads", "Tails"]))
         render(this)
       },
       draw: function() {
         var cell = this
         if (cell.data.cards.length == 0) {
-          cell.data.history.push("No cards left! Call " + Text.color(dash_colors.yellow, ".shuffle"))
+          cell.data.history.push("No cards left! Call " + Text.yellow(".shuffle"))
           return render(cell)
         }
         var card = random(cell.data.cards)

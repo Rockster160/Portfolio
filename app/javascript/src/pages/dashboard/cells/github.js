@@ -32,13 +32,13 @@ import { dash_colors, beeps } from "../vars"
           let pr = await gitGet(issue.pull_request.url)
           if (pr) {
             if (pr.mergeable_state == "clean") { // All checks good, approved
-              status = Text.color(dash_colors.green, "✓")
+              status = Text.green("✓")
             } else if (pr.mergeable_state == "blocked") { // Something not ready
-              status = Text.color(dash_colors.red, "𐄂")
+              status = Text.green("𐄂")
             } else if (pr.mergeable_state == "unstable") { // Approved, but not all checks passed
-              status = Text.color(dash_colors.orange, "✓")
+              status = Text.green("✓")
             } else {
-              status = Text.color(dash_colors.orange, "[" + pr.mergeable_state + "]")
+              status = Text.green("[" + pr.mergeable_state + "]")
             }
           }
         }
@@ -65,7 +65,7 @@ import { dash_colors, beeps } from "../vars"
   let renderLine = function(status, id, title) {
     return [
       status,
-      Text.color(dash_colors.green, id),
+      Text.green(id),
       title
     ].filter(i => i).join(" ")
   }

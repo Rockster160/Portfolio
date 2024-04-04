@@ -23,6 +23,10 @@ export let dash_colors = {
   black:  "#181425",
   grey:   "#8B9BB4",
 }
+// Add helpers to the Text class for quickly setting colors
+for (const [color, code] of Object.entries(dash_colors)) {
+  Text[color] = (msg) => Text.color(code, msg)
+}
 
 export let scaleVal = function(value, f1, f2, t1, t2) {
   var tr = t2 - t1

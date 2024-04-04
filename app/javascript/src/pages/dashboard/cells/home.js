@@ -30,7 +30,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     let data = cell.data.device_battery[name]
     if (!data) { return "" }
     let val = data.val
-    if (!val) { return Text.color(dash_colors.grey, icon + "?") }
+    if (!val) { return Text.grey(icon + "?") }
     let char = clamp(Math.round(scaleVal(val, 10, 90, 0, 7)), 0, 7)
     let level = "▁▂▃▄▅▆▇█"[char]
     let reported_at = Time.at(data.time)
@@ -54,30 +54,30 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     if ("state" in (cell.data?.garage || {})) {
       if (cell.data.garage.state == "open") {
         flash(false)
-        first_row.push(Text.color(dash_colors.orange, "  [ico ti ti-mdi-garage_open]"))
+        first_row.push(Text.orange("  [ico ti ti-mdi-garage_open]"))
       } else if (cell.data.garage.state == "closed") {
         flash(false)
-        first_row.push(Text.color(dash_colors.green, "  [ico ti ti-mdi-garage]"))
+        first_row.push(Text.green("  [ico ti ti-mdi-garage]"))
       } else if (cell.data.garage.state == "between") {
         flash(true)
         if (flash_on = !flash_on) {
-          first_row.push(Text.color(dash_colors.yellow, "  [ico ti ti-mdi-garage_open]"))
+          first_row.push(Text.yellow("  [ico ti ti-mdi-garage_open]"))
           if (cell.data.sound) {
             beep(100, 350, 0.02, "square")
           }
         } else {
-          first_row.push(Text.color(dash_colors.yellow, "    "))
+          first_row.push(Text.yellow("    "))
         }
       } else {
         flash(false)
-        first_row.push(Text.color(dash_colors.grey, " [ico ti ti-mdi-garage]?"))
+        first_row.push(Text.grey(" [ico ti ti-mdi-garage]?"))
       }
     } else {
       flash(false)
-      first_row.push(Text.color(dash_colors.grey, " [ico ti ti-mdi-garage]?"))
+      first_row.push(Text.grey(" [ico ti ti-mdi-garage]?"))
     }
 
-    first_row.push(cell.data.failed ? Text.color(dash_colors.orange, "[FAILED]") : "        ")
+    first_row.push(cell.data.failed ? Text.orange("[FAILED]") : "        ")
 
     lines.push(Text.justify(...first_row))
 
@@ -117,29 +117,25 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
     if (cell.data.amz_updates) {
       cell.data.amz_updates.forEach(function(order, idx) {
-        let delivery = Text.color(dash_colors.grey, "?")
-        let name = order.name || Text.color(dash_colors.grey, "?")
+        let delivery = Text.grey("?")
+        let name = order.name || Text.grey("?")
 
         if (order.errors?.length > 0) {
-          name = Text.color(dash_colors.red, name)
+          name = Text.red(name)
         }
 
         if (order.delivered) {
-          delivery = Text.color(dash_colors.green, "✓")
+          delivery = Text.green("✓")
         } else if (order.date) {
           delivery = order.date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
 
           let delivery_date = order.date.getTime()
           if (Time.beginningOfDay() > delivery_date) {
-            delivery = Text.color(dash_colors.orange, "Delayed?")
+            delivery = Text.orange("Delayed?")
           } else if (Time.beginningOfDay() + Time.day() > delivery_date) {
-            if (order.time_range) {
-              delivery = Text.color(dash_colors.green, order.time_range)
-            } else {
-              delivery = Text.color(dash_colors.green, "Today")
-            }
+            delivery = Text.green(order.time_range ? order.time_range : "Today")
           } else if (Time.beginningOfDay() + Time.days(2) > delivery_date) {
-            delivery = Text.color(dash_colors.yellow, "Tomorrow")
+            delivery = Text.yellow("Tomorrow")
           }
         }
 

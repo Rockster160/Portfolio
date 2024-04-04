@@ -44,17 +44,17 @@ import { dash_colors } from "../vars"
 
       function playerWin() {
         cell.data.player_wins += 1
-        var line = Text.justify("  " +  choice_map[choice], Text.color(dash_colors.green, "You Win! "), choice_map[cpu_choice] + "  ")
+        var line = Text.justify("  " +  choice_map[choice], Text.green("You Win! "), choice_map[cpu_choice] + "  ")
         cell.data.history = cell.data.history || []
         cell.data.history.push(line)
       }
       function draw() {
-        var line = Text.justify("  " +  choice_map[choice], Text.color(dash_colors.yellow, "Draw!"), choice_map[cpu_choice] + "  ")
+        var line = Text.justify("  " +  choice_map[choice], Text.yellow("Draw!"), choice_map[cpu_choice] + "  ")
         cell.data.history.push(line)
       }
       function playerLose() {
         cell.data.cpu_wins += 1
-        var line = Text.justify("  " +  choice_map[choice], Text.color(dash_colors.red, "You Lose!"), choice_map[cpu_choice] + "  ")
+        var line = Text.justify("  " +  choice_map[choice], Text.red("You Lose!"), choice_map[cpu_choice] + "  ")
         cell.data.history.push(line)
       }
 

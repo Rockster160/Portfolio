@@ -110,23 +110,23 @@ import { dash_colors, scaleVal } from "../vars"
       if (data.latency && data.timestamp > two_minutes_ago) {
         stats.push(formatScale(latency_scale, latency_icon, data.latency.seconds))
       } else {
-        stats.push(latency_icon + Text.color(dash_colors.grey, "?"))
+        stats.push(latency_icon + Text.grey("?"))
       }
       if (data.cpu && data.timestamp > two_minutes_ago) {
         stats.push(formatScale(cpu_scale, cpu_icon, 100 - data.cpu.idle))
       } else {
-        stats.push(cpu_icon + Text.color(dash_colors.grey, "?"))
+        stats.push(cpu_icon + Text.grey("?"))
       }
       if (data.memory && data.timestamp > two_minutes_ago) {
         let ratio = Math.round((data.memory.used / data.memory.total) * 100)
         stats.push(formatScale(mem_scale, mem_icon, ratio))
       } else {
-        stats.push(mem_icon + Text.color(dash_colors.grey, "?"))
+        stats.push(mem_icon + Text.grey("?"))
       }
       if (data.load && data.timestamp > two_minutes_ago) {
         stats.push(formatScale(load_scale, load_icon, data.load.one, data.load.five, data.load.ten))
       } else {
-        stats.push(load_icon + Text.color(dash_colors.grey, "???"))
+        stats.push(load_icon + Text.grey("???"))
       }
 
       lines.push(Text.justify(colored_name, stats.join("  ")))
