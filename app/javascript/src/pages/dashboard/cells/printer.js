@@ -129,8 +129,16 @@ import { dash_colors } from "../vars"
 
       let printer_data = {}
       printer_data.msSinceEpoch = Time.msSinceEpoch()
+      let filename = (data.job?.file?.display || data?.extra?.name)
       if (data.progress) {
-        let estimatedSec = data?.job?.estimatedPrintTime
+        let curaTime = filename.match(/(\d+D)?(\d+H)?(\d+M)/)
+        let [_full, days, hours, minutes] = curaTime
+        let estimatedMs = [
+          Time.days(parseInt(days) || 0),
+          Time.hours(parseInt(hours) || 0),
+          Time.minutes(parseInt(minutes) || 0)
+        ].reduce((acc, val) => acc + val)
+        let estimatedSec = (estimatedMs * 1000) || data?.job?.estimatedPrintTime 
         let estimated_progress = data.progress.printTime / (estimatedSec || 1)
         if (estimated_progress < 1) {
           printer_data.progress = estimated_progress * 100
@@ -147,8 +155,7 @@ import { dash_colors } from "../vars"
       if (data.job) {
         printer_data.estimated = data.job.estimatedPrintTime * 1000
       }
-      let filename = (data.job?.file?.display || data?.extra?.name)?.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "")
-      if (filename) { printer_data.filename = filename }
+      if (filename) { printer_data.filename = filename?.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "") }
 
       cell.data.printer_data = printer_data
       renderLines()
