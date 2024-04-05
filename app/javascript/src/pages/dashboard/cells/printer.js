@@ -138,7 +138,7 @@ import { dash_colors } from "../vars"
           Time.hours(parseInt(hours) || 0),
           Time.minutes(parseInt(minutes) || 0)
         ].reduce((acc, val) => acc + val)
-        let estimatedSec = (estimatedMs * 1000) || data?.job?.estimatedPrintTime 
+        let estimatedSec = (estimatedMs / 1000) || data?.job?.estimatedPrintTime 
         let estimated_progress = data.progress.printTime / (estimatedSec || 1)
         if (estimated_progress < 1) {
           printer_data.progress = estimated_progress * 100
