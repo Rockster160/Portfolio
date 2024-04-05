@@ -133,13 +133,14 @@ import { dash_colors } from "../vars"
       if (data.progress) {
         let curaTime = filename.match(/(\d+D)?(\d+H)?(\d+M)/)
         let [_full, days, hours, minutes] = curaTime
-        let estimatedMs = [
+        let cureEstimatedMs = [
           Time.days(parseInt(days) || 0),
           Time.hours(parseInt(hours) || 0),
           Time.minutes(parseInt(minutes) || 0)
         ].reduce((acc, val) => acc + val)
-        printer_data.estimated = estimatedMs
-        let estimatedSec = (estimatedMs / 1000) || data?.job?.estimatedPrintTime
+        let octoEstimatedSec = data?.job?.estimatedPrintTime
+        // printer_data.estimated = estimatedMs
+        let estimatedSec = [(estimatedMs / 1000), octoEstimatedSec].sort()[0]
         let estimated_progress = data.progress.printTime / (estimatedSec || 1)
         if (estimated_progress < 1) {
           printer_data.progress = estimated_progress * 100
