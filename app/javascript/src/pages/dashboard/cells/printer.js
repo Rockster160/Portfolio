@@ -1,6 +1,6 @@
 import { Text } from "../_text"
 import { Time } from "./_time"
-import { dash_colors } from "../vars"
+import { dash_colors, clamp } from "../vars"
 
 (function() {
   let cell = {}
@@ -53,6 +53,10 @@ import { dash_colors } from "../vars"
     lines.push(Text.center(printer_data.filename || "[Job not found]"))
 
     if (printer_data.filename) {
+      let estimated_progress = printer_data.elapsedTime / printer_data.estimated
+      printer_data.progress = clamp(estimated_progress * 100, 0, 100)
+      printer_data.eta_ms = printer_data.complete ? printer_data.elapsedTime : printer_data.msSinceEpoch + printer_data.timeLeft
+
       let progress_bar = (printer_data.progress == 0 || printer_data.progress) ? Text.progressBar(printer_data.progress) : ""
       let elapsed = timestampToDuration(printer_data.elapsedTime)
       let remaining = timestampToDuration(printer_data.timeLeft)
@@ -141,24 +145,14 @@ import { dash_colors } from "../vars"
         let octoEstimatedSec = data?.job?.estimatedPrintTime
         let estimatedSec = [(curaEstimatedMs / 1000), octoEstimatedSec].sort()[0]
         printer_data.estimated = estimatedSec * 1000
-        let estimated_progress = data.progress.printTime / (estimatedSec || 1)
-        if (estimated_progress < 1) {
-          printer_data.progress = estimated_progress * 100
-          printer_data.timeLeft = (estimatedSec - data.progress.printTime) * 1000
-        } else {
-          // Since this is based on the amount of Gcode that has been executed vs total,
-          //   it's wildly inaccurate for a progress bar
-          printer_data.progress = data.progress.completion
-          printer_data.timeLeft = data.progress.printTimeLeft * 1000
-        }
         printer_data.elapsedTime = data.progress.printTime * 1000
-        printer_data.eta_ms = data.progress.completion == 100 ? printer_data.elapsedTime : printer_data.msSinceEpoch + printer_data.timeLeft
+        printer_data.complete = data.progress.completion == 100
+      } else if (data.job) {
+        printer_data.estimated = data.job.estimatedPrintTime * 1000
       }
-      if (data.job) {
-        printer_data.estimated = printer_data.estimated || (data.job.estimatedPrintTime * 1000)
-      }
+      printer_data.timeLeft = printer_data.estimated - printer_data.elapsedTime
       if (filename) { printer_data.filename = filename?.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "") }
-
+ 
       cell.data.printer_data = printer_data
       renderLines()
     }),
