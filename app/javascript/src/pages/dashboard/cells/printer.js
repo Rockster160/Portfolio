@@ -138,7 +138,8 @@ import { dash_colors } from "../vars"
           Time.hours(parseInt(hours) || 0),
           Time.minutes(parseInt(minutes) || 0)
         ].reduce((acc, val) => acc + val)
-        let estimatedSec = (estimatedMs / 1000) || data?.job?.estimatedPrintTime 
+        printer_data.estimated = estimatedMs
+        let estimatedSec = (estimatedMs / 1000) || data?.job?.estimatedPrintTime
         let estimated_progress = data.progress.printTime / (estimatedSec || 1)
         if (estimated_progress < 1) {
           printer_data.progress = estimated_progress * 100
@@ -153,7 +154,7 @@ import { dash_colors } from "../vars"
         printer_data.eta_ms = data.progress.completion == 100 ? printer_data.elapsedTime : printer_data.msSinceEpoch + printer_data.timeLeft
       }
       if (data.job) {
-        printer_data.estimated = data.job.estimatedPrintTime * 1000
+        printer_data.estimated = printer_data.estimated || (data.job.estimatedPrintTime * 1000)
       }
       if (filename) { printer_data.filename = filename?.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "") }
 
