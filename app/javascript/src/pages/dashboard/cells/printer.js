@@ -135,16 +135,18 @@ import { dash_colors, clamp } from "../vars"
       printer_data.msSinceEpoch = Time.msSinceEpoch()
       let filename = (data.job?.file?.display || data?.extra?.name)
       if (data.progress) {
+        let estimatedSec
         let curaTime = filename.match(/(\d+D)?(\d+H)?(\d+M)/)
-        let [_full, days, hours, minutes] = curaTime
-        let curaEstimatedMs = [
-          Time.days(parseInt(days) || 0),
-          Time.hours(parseInt(hours) || 0),
-          Time.minutes(parseInt(minutes) || 0)
-        ].reduce((acc, val) => acc + val)
-        let octoEstimatedSec = data?.job?.estimatedPrintTime
-        let estimatedSec = [(curaEstimatedMs / 1000), octoEstimatedSec].sort()[0]
-        printer_data.estimated = estimatedSec * 1000
+        if (curaTime) {
+          let [_full, days, hours, minutes] = curaTime
+          let curaEstimatedMs = [
+            Time.days(parseInt(days) || 0),
+            Time.hours(parseInt(hours) || 0),
+            Time.minutes(parseInt(minutes) || 0)
+          ].reduce((acc, val) => acc + val)
+          estimatedSec = curaEstimatedMs / 1000
+        }
+        printer_data.estimated = (estimatedSec * 1000) || data?.job?.estimatedPrintTime
         printer_data.elapsedTime = data.progress.printTime * 1000
         printer_data.complete = data.progress.completion == 100
       } else if (data.job) {
@@ -152,7 +154,7 @@ import { dash_colors, clamp } from "../vars"
       }
       printer_data.timeLeft = printer_data.estimated - printer_data.elapsedTime
       if (filename) { printer_data.filename = filename?.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "") }
- 
+
       cell.data.printer_data = printer_data
       renderLines()
     }),
