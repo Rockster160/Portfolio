@@ -22,9 +22,17 @@ module ChatGPT
   end
 
   def short_name_from_order(order_title)
-    prompt = "In one or two words but less than 20 characters, summarize the following:"
+    prompt = "I've ordered an item online. The title is much longer than I'd like it. " \
+    "I know the item I ordered, but sometimes I order multiple items so I need some way to " \
+    "identify this specific item and list it. Please remove all product details, "\
+    "brand information, sizing data, and anything else that's generic. "\
+    "Return only the item name in as few letters and characters as possible. "\
+    "The title will be displayed in a list that only allows 20 characters:"
 
-    ask("#{prompt} #{order_title}")
+    ask("#{prompt} #{order_title}")&.then { |title|
+      title.gsub!(/\d+/, "").squish if title.match?(/[\D\S]/)
+      title.gsub!(/\bfilament\b/i, "Ink")
+    }
   end
 
   def order_with_timestamp(email_text)

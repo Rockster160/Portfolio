@@ -92,7 +92,9 @@ class AmazonEmailParser
   end
 
   def extract_name
-    @doc.at_css(".rio_black_href")&.text&.squish.to_s.delete(".").presence
+    @doc.at_css(".rio_black_href")&.text&.squish.to_s.delete(".").presence&.then { |title|
+      ChatGPT.short_name_from_order(title)
+    }
     # url = @doc.at_css(".rio_total_info_card").to_s[/\"https:\/\/www\.amazon\.com\/gp\/.*?\"/].to_s[1..-2]
     # /http%3A%2F%2Fwww.amazon.com%2Fdp%\w*%2Fref%3D\w*/
     # # https://www.amazon.com/dp/B01LP0V4JY/ref=pe_386300_440135490_TE_simp_item_image?th=1

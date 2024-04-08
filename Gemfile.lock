@@ -177,19 +177,19 @@ GEM
     erubis (2.7.0)
     et-orbi (1.2.7)
       tzinfo
+    event_stream_parser (1.0.0)
     exception_notification (4.5.0)
       actionmailer (>= 5.2, < 8)
       activesupport (>= 5.2, < 8)
     execjs (2.8.1)
     faker (2.21.0)
       i18n (>= 1.8.11, < 2)
-    faraday (2.8.1)
-      base64
-      faraday-net_http (>= 2.0, < 3.1)
-      ruby2_keywords (>= 0.0.4)
+    faraday (2.9.0)
+      faraday-net_http (>= 2.0, < 3.2)
     faraday-multipart (1.0.4)
       multipart-post (~> 2)
-    faraday-net_http (3.0.2)
+    faraday-net_http (3.1.0)
+      net-http
     ffi (1.15.5)
     font-awesome-rails (4.7.0.8)
       railties (>= 3.2, < 8.0)
@@ -267,10 +267,12 @@ GEM
     minitest (5.22.3)
     msgpack (1.6.0)
     multi_xml (0.6.0)
-    multipart-post (2.3.0)
+    multipart-post (2.4.0)
     mustermann (2.0.2)
       ruby2_keywords (~> 0.0.1)
     mutex_m (0.2.0)
+    net-http (0.4.1)
+      uri
     net-imap (0.3.4)
       date
       net-protocol
@@ -401,7 +403,8 @@ GEM
       rspec-mocks (~> 3.13)
       rspec-support (~> 3.13)
     rspec-support (3.13.1)
-    ruby-openai (4.1.0)
+    ruby-openai (6.5.0)
+      event_stream_parser (>= 0.3.0, < 2.0.0)
       faraday (>= 1)
       faraday-multipart (>= 1)
     ruby2_keywords (0.0.5)
@@ -477,6 +480,7 @@ GEM
     unf (0.1.4)
       unf_ext
     unf_ext (0.0.8.2)
+    uri (0.13.0)
     web-push (3.0.0)
       hkdf (~> 1.0)
       jwt (~> 2.0)
