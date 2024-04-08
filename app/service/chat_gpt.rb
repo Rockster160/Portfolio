@@ -30,8 +30,9 @@ module ChatGPT
     "The title will be displayed in a list that only allows 20 characters:"
 
     ask("#{prompt} #{order_title}")&.then { |title|
-      title.gsub!(/\d+/, "").squish if title.match?(/[\D\S]/)
+      title.gsub!(/\d+/, "") if title.match?(/[\D\S]/)
       title.gsub!(/\bfilament\b/i, "Ink")
+      title.squish
     }
   end
 
