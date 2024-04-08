@@ -21,6 +21,7 @@ class AmazonEmailParser
       parse_email
     end
 
+    @order.email_ids << @email.id unless @order.email_ids.include?(@email.id)
     @order.save
     ActionCable.server.broadcast(:amz_updates_channel, AmazonOrder.serialize)
   rescue StandardError => e
@@ -37,7 +38,6 @@ class AmazonEmailParser
     }
     @order.time_range = arrival_time # Might be `nil`
     @order.name ||= extract_name
-    @order.email_ids << @email.id unless @order.email_ids.include?(@email.id)
   end
 
   def order_id
@@ -83,7 +83,7 @@ class AmazonEmailParser
   end
 
   def arrival_time
-    match = info_card_html.match(/(\d{1,2} ?[a-z]\.?m\.?)\W*(\d{1,2} ?[a-z]\.?m\.?)?/i)
+    match = info_card_html.match(/(\d{1,2} ?[ap]\.?m\.?)\W*(\d{1,2} ?[ap]\.?m\.?)?/i)
     return unless match.present?
 
     _, start_range, end_range = match&.to_a
