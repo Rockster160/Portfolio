@@ -31,6 +31,8 @@ module ChatGPT
 
     ask("#{prompt} #{order_title}")&.then { |title|
       title.gsub!(/\d+/, "") if title.match?(/[\D\S]/)
+      # Maybe remove numbers and their attached words?
+      # 4-Way, 1.75mm, etc...
       title.gsub!(/\bfilament\b/i, "Ink")
       title.squish
     }

@@ -127,7 +127,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         if (order.delivered) {
           delivery = Text.green("✓")
         } else if (order.date) {
-          delivery = order.date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" })
+          delivery = Text.magenta(order.date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" }))
 
           let delivery_date = order.date.getTime()
           if (Time.beginningOfDay() > delivery_date) {
@@ -136,6 +136,8 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
             delivery = Text.green(order.time_range ? order.time_range : "Today")
           } else if (Time.beginningOfDay() + Time.days(2) > delivery_date) {
             delivery = Text.yellow("Tomorrow")
+          } else if (Time.beginningOfDay() + Time.days(6) > delivery_date) {
+            delivery = Text.blue(order.date.toLocaleString("en-us", { weekday: "short" }))
           }
         }
 
