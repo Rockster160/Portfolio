@@ -440,24 +440,30 @@ RSpec.describe Jarvis do
 
   context "with Venmo" do
     context "sending money" do
-      specify {
-        expect(jarvis("venmo B $10 for 🐱")).to eq("Paying Brendan $10 for 🐱")
-      }
-      specify {
-        expect(jarvis("Venmo B $10.47 bowling and pizza")).to eq("Paying Brendan $10.47 for bowling and pizza")
-      }
-      specify {
-        expect(jarvis("Venmo B $10.47 🎳 and 🍕")).to eq("Paying Brendan $10.47 for 🎳 and 🍕")
-      }
-      specify {
-        expect(jarvis("Venmo B $10.47 🎳🍕🐱 food")).to eq("Paying Brendan $10.47 for 🎳🍕🐱 food")
-      }
+      charges = [
+        ["venmo B $10 for 🐱", [:Brendan, 10, "🐱"]],
+        ["Venmo B $10.47 bowling and pizza", [:Brendan, 10.47, "bowling and pizza"]],
+        ["Venmo B $10.47 🎳 and 🍕", [:Brendan, 10.47, "🎳 and 🍕"]],
+        ["Venmo B $10.47 🎳🍕🐱 food", [:Brendan, 10.47, "🎳🍕🐱 food"]],
+        ["Venmo Sending $15.50 to B for the Uber ride 🚗.", [:Brendan, "15.50", "Uber ride 🚗"]],
+        ["Venmo charge $12 to Alex for 2 coffees ☕☕.", [:Brendan, 12, "2 coffees ☕☕"]],
+      ].each do |msg, (name, amount, note)|
+        it "can #{msg}" do
+          expect(jarvis(msg)).to eq("Paying #{name} $#{amount} for #{note}")
+        end
+      end
     end
 
     context "requesting money" do
-      specify {
-        expect(jarvis("venmo request B $10 🐱")).to eq("Requesting $10 from Brendan for 🐱")
-      }
+      charges = [
+        ["venmo request B $10 🐱", [:Brendan, 10, "🐱"]],
+        ["venmo request $10 from B for 🐱", [:Brendan, 10, "🐱"]],
+        ["Venmo Requesting a payment of $100 from B for rent 💸.", [:Brendan, 100, "rent 💸"]],
+      ].each do |msg, (name, amount, note)|
+        it "can #{msg}" do
+          expect(jarvis(msg)).to eq("Requesting $#{amount} from #{name} for #{note}")
+        end
+      end
     end
   end
 

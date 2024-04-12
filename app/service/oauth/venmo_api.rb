@@ -2,12 +2,14 @@
 # Used the above to generate keys and everything
 
 # ::Oauth::VenmoApi.new(User.me).send_by_name("Mom", 20, "🥩")
+# ::Oauth::VenmoApi.new(User.me).send_by_name("B", 1, "Test")
+# ::Oauth::VenmoApi.new(User.me).request_by_name("B", 1, "Test")
 
 class Oauth::VenmoApi < Oauth::Base
+  include ::ActionView::Helpers::NumberHelper
+
   VENMO_BALANCE_ID = 1653332309442560599
   constants(api_url: "https://api.venmo.com/v1")
-
-  include ActionView::Helpers::NumberHelper
 
   # ========== Via Name ==========
   def send_by_name(name, amount, note)
@@ -32,10 +34,10 @@ class Oauth::VenmoApi < Oauth::Base
   end
 
   # ========== Via Venmo User ID ==========
-  # positive = send money
-  # negative = request money
   def send_money(id, amount, note) = charge_money(id, amount.abs, note)
   def request_money(id, amount, note) = charge_money(id, -(amount.abs), note)
+    # positive = send money
+    # negative = request money
   def charge_money(id, amount, note)
     return if id.blank?
 
@@ -77,7 +79,9 @@ class Oauth::VenmoApi < Oauth::Base
   end
 
   def contact_by_name(name)
-    @user.address_book.contact_by_name(name)
+    @user.address_book.contact_by_name(name).tap { |contact|
+      Jarvis.ping("Unknown contact: '#{name}'.") if contact.nil?
+    }
   end
 
   def user_id_from_name(name)
@@ -103,7 +107,7 @@ class Oauth::VenmoApi < Oauth::Base
     return id if id.present?
 
     Jarvis.ping("Haven't mapped #{contact.name} yet.")
-    # TODO: Look up
+    # TODO: Attempt to look up by name in Venmo
     #
     # user = search(contact.raw[:name])
     # user ||= search(contact.name)
