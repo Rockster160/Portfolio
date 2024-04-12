@@ -21,7 +21,9 @@ RSpec.describe Jarvis do
     }
     @admin.contacts.create(JSON.parse(File.read("address_book.json"), symbolize_names: true))
     contact_id = @admin.contacts.find_by(name: "Brendan").id
+    mom_id = @admin.contacts.find_by(name: "Mom").id
     @admin.jarvis_cache.dig_set(:oauth, :venmo_api, :contact_mapping, contact_id.to_s, "brendanvenmoid")
+    @admin.jarvis_cache.dig_set(:oauth, :venmo_api, :contact_mapping, mom_id.to_s, "momvenmoid")
     @default_list = @admin.lists.find_or_create_by(name: "TODO")
     @other_list = @admin.lists.find_or_create_by(name: "Home Depot")
     @user = @admin
@@ -443,10 +445,10 @@ RSpec.describe Jarvis do
       charges = [
         ["venmo B $10 for 🐱", [:Brendan, 10, "🐱"]],
         ["Venmo B $10.47 bowling and pizza", [:Brendan, 10.47, "bowling and pizza"]],
-        ["Venmo B $10.47 🎳 and 🍕", [:Brendan, 10.47, "🎳 and 🍕"]],
-        ["Venmo B $10.47 🎳🍕🐱 food", [:Brendan, 10.47, "🎳🍕🐱 food"]],
+        ["Venmo Mom $10.47 🎳 and 🍕", [:Mom, 10.47, "🎳 and 🍕"]],
+        ["Venmo Mom $10.47 🎳🍕🐱 food", [:Mom, 10.47, "🎳🍕🐱 food"]],
         ["Venmo Sending $15.50 to B for the Uber ride 🚗.", [:Brendan, "15.50", "Uber ride 🚗"]],
-        ["Venmo charge $12 to Alex for 2 coffees ☕☕.", [:Brendan, 12, "2 coffees ☕☕"]],
+        ["Venmo charge $12 to B for 2 coffees ☕☕.", [:Brendan, 12, "2 coffees ☕☕"]],
       ].each do |msg, (name, amount, note)|
         it "can #{msg}" do
           expect(jarvis(msg)).to eq("Paying #{name} $#{amount} for #{note}")
@@ -459,6 +461,8 @@ RSpec.describe Jarvis do
         ["venmo request B $10 🐱", [:Brendan, 10, "🐱"]],
         ["venmo request $10 from B for 🐱", [:Brendan, 10, "🐱"]],
         ["Venmo Requesting a payment of $100 from B for rent 💸.", [:Brendan, 100, "rent 💸"]],
+        ["Venmo Request $65 from Mom for 🚙📃", [:Mom, 65, "🚙📃"]],
+        ["Venmo Request Mom $40 🏦", [:Mom, 40, "🏦"]],
       ].each do |msg, (name, amount, note)|
         it "can #{msg}" do
           expect(jarvis(msg)).to eq("Requesting $#{amount} from #{name} for #{note}")
