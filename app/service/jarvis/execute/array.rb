@@ -178,6 +178,11 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
     return found
   end
 
+  def from_length
+    num = ::Jarvis::Execute::Raw.num(eval_block(args))
+    Array.new(num)
+  end
+
   def any?
     arr = evalargs
     arr = SafeJsonSerializer.load(arr)

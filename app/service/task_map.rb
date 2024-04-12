@@ -344,6 +344,10 @@ class TaskMap
         { block: :array },
         :content,
       ],
+      from_length: [
+        { return: :array },
+        { block: :num },
+      ],
       any?:        [
         { return: :bool, description: "Bool of any truthy values in array." },
         { block: :array },
