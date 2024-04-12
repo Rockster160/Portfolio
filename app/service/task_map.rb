@@ -259,6 +259,14 @@ class TaskMap
         { block: :num, name: :value },
         { block: :num, name: :decimal_points, default: 0 },
       ],
+      floor:          [
+        { return: :num },
+        { block: :num, name: :value },
+      ],
+      ceil:           [
+        { return: :num },
+        { block: :num, name: :value },
+      ],
     },
     array: {
       cast:           [

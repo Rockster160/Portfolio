@@ -72,6 +72,16 @@ class Jarvis::Execute::Math < Jarvis::Execute::Executor
     num.round(dec)
   end
 
+  def floor
+    num = cast_num(eval_block(args))
+    num.floor
+  end
+
+  def ceil
+    num = cast_num(eval_block(args))
+    num.ceil
+  end
+
   private
 
   def prime_num?(num)
