@@ -92,6 +92,9 @@ class AmazonEmailParser
   end
 
   def extract_name
+    # ALSO TODO: Detect if there are multiple items in the email and add each one as a different item!
+    # TODO: If the name has an ellipsis, then open the page and pull from it instead.
+    # If failed, fall back to the ellipsis name.
     @doc.at_css(".rio_black_href")&.text&.squish.to_s.delete(".").presence&.then { |title|
       ChatGPT.short_name_from_order(title)
     }
