@@ -19,9 +19,9 @@ import { dash_colors, beeps } from "../vars"
       return await res.json()
     }
   }
-  var gitSearch = async function(filter) {
+  var gitSearch = async function(filter, repo) {
     var url = "https://api.github.com/search/issues"
-    var uri = url + "?q=" + encodeURIComponent(filter + " repo:WorkWave/slingshot-web-app")
+    var uri = url + "?q=" + encodeURIComponent(filter + ` repo:${repo}`)
     let json = await gitGet(uri)
     if (!json) { return }
 
@@ -54,9 +54,17 @@ import { dash_colors, beeps } from "../vars"
   }
 
   var getLines = async function(cell) {
-    cell.data.pending_review = await gitSearch("is:open is:pr review-requested:Rockster160")
-    cell.data.issues = await gitSearch("is:open is:issue assignee:Rockster160")
-    cell.data.prs = await gitSearch("is:open is:pr assignee:Rockster160")
+    cell.data.pending_review = await gitSearch("is:open is:pr review-requested:Rockster160", "WorkWave/slingshot-web-app")
+    cell.data.pending_review = cell.data.pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-backend"))
+    cell.data.pending_review = cell.data.pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-frontend"))
+
+    cell.data.issues = await gitSearch("is:open is:issue assignee:Rockster160", "WorkWave/slingshot-web-app")
+    cell.data.issues = cell.data.issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-backend"))
+    cell.data.issues = cell.data.issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-frontend"))
+
+    cell.data.prs = await gitSearch("is:open is:pr assignee:Rockster160", "WorkWave/slingshot-web-app")
+    cell.data.prs = cell.data.prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-backend"))
+    cell.data.prs = cell.data.prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-frontend"))
 
     render(cell)
     cell.flash()
