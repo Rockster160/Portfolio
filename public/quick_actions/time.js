@@ -1,11 +1,15 @@
 export function Time() {}
 Time.now = function() { return new Date() }
 Time.msSinceEpoch = function() { return Time.now().getTime() }
-Time.seconds = Time.second = function(n) { return (n || 1) * 1000 }
-Time.minutes = Time.minute = function(n) { return Time.seconds((n || 1) * 60) }
-Time.hours = Time.hour = function(n) { return Time.minutes((n || 1) * 60) }
-Time.days = Time.day = function(n) { return Time.hours((n || 1) * 24) }
-Time.weeks = Time.week = function(n) { return Time.days((n || 1) * 7) }
+
+Time.seconds = Time.second = function(n) { return n === 0 ? 0 : (n || 1) * 1000 }
+Time.minutes = Time.minute = function(n) { return n === 0 ? 0 : Time.seconds((n || 1) * 60) }
+Time.hours = Time.hour = function(n) { return n === 0 ? 0 : Time.minutes((n || 1) * 60) }
+Time.days = Time.day = function(n) { return n === 0 ? 0 : Time.hours((n || 1) * 24) }
+Time.weeks = Time.week = function(n) { return n === 0 ? 0 : Time.days((n || 1) * 7) }
+Time.months = Time.month = function(n) { return n === 0 ? 0 : Time.days((n || 1) * 30) }
+Time.years = Time.year = function(n) { return n === 0 ? 0 : Time.days((n || 1) * 365) }
+
 Time.fromNow = function(duration_ms, now) {
   now = now || Time.msSinceEpoch()
   return Time.at(now + duration_ms)
@@ -60,12 +64,13 @@ Time.duration = function(ms) {
   minutes = minutes % 60;
 
   return [hours, minutes, seconds].map(function(n) {
-    return n.toString().padStart(2, '0');
+    return n.toString().padStart(2, "0");
   }).join(":")
+  // 03:43
 }
 Time.monthnames = function(format) {
   let full = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-  switch (format || "short") {
+  switch (format || "full") {
     case "full":
       return full
     case "short":
@@ -76,7 +81,7 @@ Time.monthnames = function(format) {
 }
 Time.weekdays = function(format) {
   let full = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-  switch (format || "short") {
+  switch (format || "full") {
     case "full":
       return full
     case "short":
@@ -87,56 +92,49 @@ Time.weekdays = function(format) {
 }
 Time.asDateStr = function(ms_since_epoch) {
   let d = Time.asData(ms_since_epoch)
-  return `${d.wday}, ${d.month} ${d.date} ${d.hour}:${d.minute} ${d.mz}`
-  // Fri, Feb 10 10:40am
+  return `${d.wday}, ${d.month} ${d.date} ${d.hour}:${d.minute}${d.mz}`
+  // Fri, Feb 17 9:02am
 }
-Time.asData = function(ms_since_epoch) {
-  ms_since_epoch = ms_since_epoch ? ms_since_epoch : Time.msSinceEpoch()
+Time.asData = function(ms_since_epoch, format) {
+  format = format || "short"
+  ms_since_epoch = ms_since_epoch || Time.msSinceEpoch()
   let date = Time.at(ms_since_epoch)
 
   let hr = date.getHours()
-  let mz = hr >= 12 ? "PM" : "AM"
+  let mz = hr >= 12 ? "pm" : "am"
   hr = hr > 12 ? hr - 12 : hr
   hr = hr == 0 ? 12 : hr
 
   return {
-    date: date.getDate(),
-    month: date.getMonth(),
-    wday: date.getDay(),
-    hour: hr,
-    minute: date.getMinutes(),
-    mz: mz,
+    date:   date.getDate(),                             // 17
+    month:  Time.monthnames(format)[date.getMonth()],   // "Feb"
+    wday:   Time.weekdays(format)[date.getDay()],       // "Fri"
+    hour:   hr,                                         // 9
+    minute: String(date.getMinutes()).padStart(2, "0"), // "02"
+    mz:     mz,                                         // "am"
   }
-  // Fri, Feb 10 10:40am
 }
 Time.local = function(ms_since_epoch) {
-  ms_since_epoch = ms_since_epoch ? ms_since_epoch : Time.msSinceEpoch()
+  ms_since_epoch = ms_since_epoch || Time.msSinceEpoch()
   var time = Time.at(ms_since_epoch)
   var hr = time.getHours()
-  var mz = hr >= 12 ? "PM" : "AM"
+  var mz = hr >= 12 ? "pm" : "am"
   hr = hr > 12 ? hr - 12 : hr
   hr = hr == 0 ? 12 : hr
-  return hr + ":" + String(time.getMinutes()).padStart(2, "0") + " " + mz
+  return hr + ":" + String(time.getMinutes()).padStart(2, "0") + mz
+  // 8:03 am
 }
-Time.timeAgo = function(input) {
+Time.timeago = function(input) {
   const date = (input instanceof Date) ? input : new Date(input);
   if (date.getTime() == 0) { return "never" }
-  const formatter = new Intl.RelativeTimeFormat('en');
-  const ranges = {
-    years: 3600 * 24 * 365,
-    months: 3600 * 24 * 30,
-    weeks: 3600 * 24 * 7,
-    days: 3600 * 24,
-    hours: 3600,
-    minutes: 60,
-    seconds: 1
-  };
-  const secondsElapsed = (date.getTime() - Date.now()) / 1000;
-  for (let key in ranges) {
-    if (ranges[key] < Math.abs(secondsElapsed)) {
-      const delta = secondsElapsed / ranges[key];
-      return formatter.format(Math.round(delta), key);
+  const formatter = new Intl.RelativeTimeFormat("en");
+  for (const range of ["years", "months", "weeks", "days", "hours", "minutes", "seconds"]) {
+    let rangeDuration = Time[range]()
+    if (rangeDuration < Math.abs(msElapsed)) {
+      const delta = msElapsed / rangeDuration;
+      return formatter.format(Math.round(delta), range);
     }
   }
   return "just now"
+  // 17 hours ago
 }
