@@ -125,9 +125,10 @@ Time.local = function(ms_since_epoch) {
   // 8:03 am
 }
 Time.timeago = function(input) {
-  const date = (input instanceof Date) ? input : new Date(input);
+  const date = Time.at(input);
   if (date.getTime() == 0) { return "never" }
-  const formatter = new Intl.RelativeTimeFormat("en");
+  const formatter = new Intl.RelativeTimeFormat('en');
+  const msElapsed = date.getTime() - Date.now();
   for (const range of ["years", "months", "weeks", "days", "hours", "minutes", "seconds"]) {
     let rangeDuration = Time[range]()
     if (rangeDuration < Math.abs(msElapsed)) {
@@ -135,6 +136,6 @@ Time.timeago = function(input) {
       return formatter.format(Math.round(delta), range);
     }
   }
-  return "just now"
+  return "just now";
   // 17 hours ago
 }
