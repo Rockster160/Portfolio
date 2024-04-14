@@ -70,8 +70,14 @@ import { dash_colors, clamp } from "../vars"
 
     cell.lines(lines)
 
+    if (cell.data.pause) {
+      cell.line(7, Text.center(Text.grey("[PAUSED]")))
+    }
+    if (cell.data.stopped) {
+      cell.line(7, Text.center(Text.grey("[STOPPED]")))
+    }
     if (cell.data.fail) {
-      cell.line(7, Text.center(Text.grey("[ERROR]")))
+      cell.line(7, Text.center(Text.red("[ERROR]")))
     }
     if (cell.data.error) {
       cell.line(8, Text.center(Text.grey(cell.data.error)))
@@ -96,6 +102,8 @@ import { dash_colors, clamp } from "../vars"
         cell.data.error = data.state.error
         cell.data.printing = false
         cell.data.prepping = false
+        cell.data.paused = false
+        cell.data.stopped = false
         clearInterval(cell.data.interval_timer)
         cell.data.interval_timer = null
         renderLines()
@@ -104,7 +112,8 @@ import { dash_colors, clamp } from "../vars"
       cell.data.fail = false
       cell.data.error = undefined
       cell.data.paused = data.state?.flags?.paused || data.state?.flags?.pausing
-      cell.data.printing = data.state?.flags?.printing
+      cell.data.stopped = data.extra?.reason == "cancelled"
+      cell.data.printing = !cell.data.paused && !cell.data.stopped && data.state?.flags?.printing
       if (cell.data.printing) {
         cell.data.prepping = false
         cell.data.interval_timer = cell.data.interval_timer || setInterval(function() {
