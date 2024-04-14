@@ -146,13 +146,21 @@ import { dash_colors, clamp } from "../vars"
           ].reduce((acc, val) => acc + val)
           estimatedSec = curaEstimatedMs / 1000
         }
-        printer_data.estimated = (estimatedSec * 1000) || data?.job?.estimatedPrintTime
+        let octoEstSec = data?.job?.estimatedPrintTime
+        if (octoEstSec) { // Average the two times
+          estimatedSec = (estimatedSec + octoEstSec) / 2
+        }
+        printer_data.estimated = estimatedSec * 1000
         printer_data.elapsedTime = data.progress.printTime * 1000
         printer_data.complete = data.progress.completion == 100
       } else if (data.job) {
         printer_data.estimated = data.job.estimatedPrintTime * 1000
       }
       printer_data.timeLeft = printer_data.estimated - printer_data.elapsedTime
+      if (printer_data.complete) {
+        printer_data.estimated = printer_data.elapsedTime
+        printer_data.timeLeft = 0
+      }
       if (filename) { printer_data.filename = filename?.replace(/-?(\d+D)?(\d+H)?(\d+M)?\.gcode$/i, "") }
 
       cell.data.printer_data = printer_data
