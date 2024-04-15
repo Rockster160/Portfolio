@@ -125,7 +125,7 @@ Rails.application.routes.draw do
   namespace :jil do
     get :/, action: :index, controller: :jarvis_tasks
     resources :cron_tasks
-    resource :jarvis_cache, path: :cache
+    resources :jarvis_cache, path: :cache
     resources :jarvis_tasks, path: :tasks do
       get :config, on: :member, action: :configuration
       get :run, on: :member

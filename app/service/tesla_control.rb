@@ -203,7 +203,7 @@ class TeslaControl
   end
 
   def cached_vehicle_data
-    User.me.jarvis_cache.get(:car_data)
+    User.me.jarvis_caches.get(:car_data)
   end
 
   def vehicle_data(wake: false)
@@ -212,7 +212,7 @@ class TeslaControl
       car_data = cached_vehicle_data.merge(car_data) if car_data[:sleeping]
       car_data[:timestamp] = car_data.dig(:drive_state, :timestamp) # Bubble up
 
-      User.me.jarvis_cache.set(:car_data, car_data)
+      User.me.jarvis_caches.set(:car_data, car_data)
       break car_data if car_data[:sleeping]
       # Disabling as it can cause inaccuracies when the bluetooth fails to send
       # LocationCache.driving = !((car_data.dig(:drive_state, :shift_state) || "P") == "P")

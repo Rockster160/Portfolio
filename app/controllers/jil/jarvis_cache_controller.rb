@@ -1,16 +1,16 @@
-class Jil::JarvisCachesController < ApplicationController
+class Jil::JarvisCacheController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user
   layout false
 
   def show
-    @cache = current_user.jarvis_cache
+    @cache = current_user.jarvis_caches.by(params[:id])
   end
 
   def update
-    @cache = current_user.jarvis_cache
+    @cache = current_user.jarvis_caches.by(params[:id])
 
-    if @cache.update(data: params[:cache])
+    if @cache.update(wrap_data: params[:cache])
       render json: {}, status: :ok
     else
       render json: {}, status: :bad_request

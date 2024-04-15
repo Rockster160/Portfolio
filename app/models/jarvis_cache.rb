@@ -4,6 +4,7 @@
 #
 #  id         :bigint           not null, primary key
 #  data       :jsonb
+#  key        :string
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
 #  user_id    :bigint
@@ -14,8 +15,37 @@ class JarvisCache < ApplicationRecord
 
   belongs_to :user
 
-  def get(key)
-    (data || {})[key.to_s]
+  def self.by(key)
+    find_or_create_by(key: key)
+  end
+
+  def self.get(key)
+    by(key).data || {}
+  end
+
+  def self.dig(*steps)
+    key, *rest = steps
+    get(key).dig(*rest)
+  end
+
+  def self.set(key, val)
+    by(key).update(data: val)
+  end
+
+  def self.dig_set(*steps, val)
+    key, *rest = steps
+    by(key).dig_set(*rest, val)
+  end
+
+  def wrap_data
+    { key => (data || {}) }
+  end
+
+  def wrap_data=(new_data)
+    new_data.each do |key, val|
+      user.jarvis_caches.set(key, val)
+    end
+    self.destroy unless new_data.stringify_keys.include?(self.key.to_s)
   end
 
   def dig(*steps)

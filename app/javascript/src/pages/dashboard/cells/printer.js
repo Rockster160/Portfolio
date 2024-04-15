@@ -159,6 +159,7 @@ import { dash_colors, clamp } from "../vars"
         if (octoEstSec) { // Average the two times
           estimatedSec = (estimatedSec + octoEstSec) / 2
         }
+        // If one of them is over 100, ignore it
         printer_data.estimated = estimatedSec * 1000
         printer_data.elapsedTime = data.progress.printTime * 1000
         printer_data.complete = data.progress.completion == 100

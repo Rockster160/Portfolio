@@ -37,8 +37,8 @@ module Bowling
           game.dig(:frames_details, "8", :throw1).present? # 8 is index, so frame 9
         }
         if started_frame_9 && current_user.admin?
-          if !User.me.jarvis_cache.get(:bowlingCarStarted)
-            User.me.jarvis_cache.set(:bowlingCarStarted, true)
+          if !User.me.jarvis_caches.get(:bowlingCarStarted)
+            User.me.jarvis_caches.set(:bowlingCarStarted, true)
             Jarvis.say("Starting car for 9th frame")
             Jarvis.command(current_user, "Take me home") if Rails.env.production?
           end

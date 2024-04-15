@@ -106,6 +106,6 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
   end
 
   def user_cache
-    user.jarvis_cache.reload
+    user.jarvis_caches.reload
   end
 end

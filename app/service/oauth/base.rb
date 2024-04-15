@@ -57,7 +57,7 @@ class Oauth::Base
   end
 
   def cache
-    @cache ||= @user.jarvis_cache
+    @cache ||= @user.jarvis_caches
   end
 
   def auth(code, params={})
