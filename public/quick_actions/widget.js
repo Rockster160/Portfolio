@@ -58,7 +58,7 @@ export class Widget {
   updateTimestamp() {
     if (!this.ele?.querySelector(".last-sync")) { return }
 
-    this.ele.querySelector(".last-sync").textContent = Time.timeAgo(this.#last_sync)
+    this.ele.querySelector(".last-sync").textContent = Time.timeago(this.#last_sync)
   }
   delta() {
     if (this.#last_sync == 0) { return }

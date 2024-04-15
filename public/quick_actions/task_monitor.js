@@ -88,7 +88,7 @@ export class Monitor {
     if (new_timestamp) { sync.setAttribute("data-timestamp", new_timestamp) }
 
     let timestamp = new_timestamp || parseInt(sync.getAttribute("data-timestamp"))
-    if (timestamp) { sync.textContent = Time.timeAgo(timestamp) }
+    if (timestamp) { sync.textContent = Time.timeago(timestamp) }
   }
 
   do(action) {
