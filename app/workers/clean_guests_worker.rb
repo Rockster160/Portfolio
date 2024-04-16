@@ -10,7 +10,7 @@ class CleanGuestsWorker
     end
 
     User.guest
-      .where(created_at: DateTime.new..1.week.ago)
+      .where(created_at: ..1.week.ago)
       .left_outer_joins(associations.keys)
       .where(missing)
       .destroy_all
