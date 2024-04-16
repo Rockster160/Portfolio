@@ -2,15 +2,16 @@ class LocalDataBroadcast
   include ActionView::Helpers::DateHelper
 
   CALENDAR_COLORS = {
-    grey:    "#42464A",
-    yellow:  "#CBCB4D",
-    lblue:   "#3D94F6",
-    magenta: "#B55088",
-    pink:    "#EE9BB5",
-    green:   "#65DB39",
-    orange:  "#FF9500",
-    brown:   "#A2845D",
-    red:     "#FF0000",
+    grey:     "#42464A",
+    yellow:   "#CBCB4D",
+    paleblue: "#9FE1E7",
+    lblue:    "#3D94F6",
+    magenta:  "#B55088",
+    pink:     "#EE9BB5",
+    green:    "#65DB39",
+    orange:   "#FF9500",
+    brown:    "#A2845D",
+    red:      "#FF0000",
   }
 
   def self.call(data=nil)
@@ -79,6 +80,7 @@ class LocalDataBroadcast
     mapped_colors = {
       "rocco11nicholls@gmail.com"   => :lblue,
       "rocco.nicholls@workwave.com" => :orange,
+      "rocco@oneclaimsolution.com"  => :paleblue,
       "Janaya"                      => :pink,
       "Workout"                     => :brown,
     }
