@@ -1,5 +1,5 @@
  class Jarvis::Execute
-  MAX_ITERATIONS = 1000
+  MAX_ITERATIONS = 2000
   attr_accessor :ctx, :task, :data
 
   def self.call(task, data={})
