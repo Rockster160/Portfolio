@@ -191,7 +191,9 @@ class ActionEventsController < ApplicationController
   end
 
   def raw_event_params
-    params.to_unsafe_h.slice(:name, :timestamp, :notes)
+    params.to_unsafe_h.slice(:name, :timestamp, :notes).tap do |whitelist|
+      whitelist[:name] ||= params[:event_name].presence || params.dig(:action_event, :event_name)
+    end
   end
 
   def form_event_params
