@@ -51,7 +51,7 @@ class AmazonEmailParser
       end
     }
     @order.time_range = arrival_time # Might be `nil`
-    @order.name ||= extract_name
+    @order.name ||= shortened_name.presence || full_name
   end
 
   def order_id
@@ -122,18 +122,40 @@ class AmazonEmailParser
     [start_range, end_range].compact.map { |time| time.gsub(/[^\d]/, "") }.join("-") + meridian
   end
 
-  def extract_name
-    @doc.at_css(".rio_black_href")&.text&.squish.to_s.delete(".").presence&.then { |title|
-      ChatGPT.short_name_from_order(title)
-    }
-    # url = @doc.at_css(".rio_total_info_card").to_s[/\"https:\/\/www\.amazon\.com\/gp\/.*?\"/].to_s[1..-2]
-    # /http%3A%2F%2Fwww.amazon.com%2Fdp%\w*%2Fref%3D\w*/
-    # # https://www.amazon.com/dp/B01LP0V4JY/ref=pe_386300_440135490_TE_simp_item_image?th=1
-    # # https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240312040919092d4cb729ab46ccbae7c3549b50p0na&R=U0YHAXB6XMBU&T=C&U=http%3A%2F%2Fwww.amazon.com%2Fdp%2FB01LP0V4JY%2Fref%3Dpe_386300_440135490_TE_simp_item_image&H=AZGK110P29ZNXGETGJLO6NST2D8A&ref_=pe_386300_440135490_TE_simp_item_image
-    # # http%3A%2F%2Fwww.amazon.com%2Fdp%2FB01LP0V4JY%2Fref%3Dpe_386300_440135490_TE_simp_item_image&
-    # return unless url.present?
-    #
-    # ::RestClient.get(url)
+  def shortened_name
+    @shortened_name ||= ChatGPT.short_name_from_order(full_name).to_s
+  end
+
+  def full_name
+    @full_name ||= begin
+      listed_name = @doc.at_css(".rio_black_href")&.text&.squish.to_s
+      (listed_name.include?("...") ? listed_name : retrieve_full_name).presence || listed_name
+    end
+  end
+
+  def retrieve_full_name
+    urls = @doc.at_css(".rio_total_info_card").to_s.scan(/\"https:\/\/www\.amazon\.com\/gp\/.*?\"/)
+    item_urls = urls.filter_map { |url|
+      next if url.include?("orderId%3D")
+
+      full_url = url[1..-2]
+      item_id = full_url[/www\.amazon\.com\%2Fdp\%2F([a-z0-9]+)\%2Fref/i, 1]
+      next if item_id.blank?
+
+      "https://www.amazon.com/dp/#{item_id}"
+    }.uniq
+    # CGI.parse(URI.parse(url).query) # get the params from the url
+
+    item_url = item_urls.first # Could get multiple urls from this
+    # item_url = "https://www.amazon.com/dp/B01LP0V4JY"
+    res = ::RestClient.get(item_url)
+    item_doc = Nokogiri::HTML(res.body)
+    item_doc.title[/[^:]*? : (.*?) : [^:]*?/im, 1].tap { |name|
+      error("Unable to parse title: #{item_doc.title}") if name.blank?
+    }.to_s
+  rescue => e
+    SlackNotifier.err(e, "Error pulling Amazon page:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
+    ""
   end
 
   def error(msg="Failed to parse")

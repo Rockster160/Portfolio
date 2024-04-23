@@ -24,15 +24,16 @@ module ChatGPT
   def short_name_from_order(order_title)
     prompt = "I've ordered an item online. The title is much longer than I'd like it. " \
     "I know the item I ordered, but sometimes I order multiple items so I need some way to " \
-    "identify this specific item and list it. Please remove all product details, "\
-    "brand information, sizing data, and anything else that's generic. "\
+    "identify this specific item and list it. Please remove all product and brand information, "\
+    "sizing data, colors, and any other modifiers that describe the item but not the name itself. "\
+    "Assume I already know the item so I don't need a lot of info, just the most basic item name."\
     "Return only the item name in as few letters and characters as possible. "\
     "The title will be displayed in a list that only allows 20 characters:"
 
     ask("#{prompt} #{order_title}")&.then { |title|
-      title.gsub!(/\d+/, "") if title.match?(/[\D\S]/)
       # Maybe remove numbers and their attached words?
       # 4-Way, 1.75mm, etc...
+      # Nah, because we still want things like x4
       title.gsub!(/\bfilament\b/i, "Ink")
       title.squish
     }
