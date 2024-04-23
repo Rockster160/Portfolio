@@ -58,7 +58,7 @@ import { dash_colors, beeps } from "../vars"
     const sections = ["pending_review", "issues", "prs"]
 
     for (let section of sections) {
-      let found = (cell?.data[prop] || []).find(git => git.id === id)
+      let found = (cell?.data[section] || []).find(git => git.id === id)
       if (found) { return found }
     }
     return null
