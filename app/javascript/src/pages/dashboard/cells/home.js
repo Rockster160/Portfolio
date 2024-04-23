@@ -185,7 +185,13 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
           data.push(order)
         }
-        this.data.amz_updates = data.sort((a, b) => a.date - b.date)
+        this.data.amz_updates = data.sort((a, b) => {
+          // delivered status takes priority
+          if (b.delivered - a.delivered !== 0) {
+            return b.delivered - a.delivered;
+          }
+          return a.date - b.date
+        })
         renderLines()
       })
     )
