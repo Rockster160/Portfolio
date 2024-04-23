@@ -64,9 +64,17 @@ class AmazonEmailParser
     loop { date.past? ? date += 1.week : (break date) }
   end
 
+  def fallback_card_html
+    @doc.at_css(".rio_last_card")&.inner_html
+  end
+
   def info_card_html
-    @doc.at_css(".rio_total_info_card")&.inner_html || "".tap {
-      Jarvis.cmd("Add Amazon Email no info card: #{@email.id}")
+    @doc.at_css(".rio_total_info_card")&.inner_html || "".then {
+      if fallback_card_html && fallback_card_html["Order delayed"]
+        fallback_card_html
+      elsif fallback_card_html.nil?
+        error("No info card")
+      end
     }
   end
 
@@ -76,6 +84,7 @@ class AmazonEmailParser
     date_regexp = /(#{months}) \d{1,2}/
     date_str = info_card_html[date_regexp]
     return Date.today if date_str.nil? && info_card_html["Today"].present?
+    return Date.tomorrow if date_str.nil? && info_card_html["tomorrow"].present?
 
     Date.parse(date_str).then { |date| future(date) }&.iso8601
   rescue
@@ -106,5 +115,9 @@ class AmazonEmailParser
     # return unless url.present?
     #
     # ::RestClient.get(url)
+  end
+
+  def error(msg="Failed to parse")
+    Jarvis.cmd("Add Amazon Email #{msg}: #{@email.id}")
   end
 end
