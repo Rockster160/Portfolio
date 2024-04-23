@@ -209,8 +209,10 @@ class TeslaControl
   def vehicle_data(wake: false)
     @vehicle_data = cached_vehicle_data if Rails.env.development?
     @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |car_data|
-      car_data = cached_vehicle_data.merge(car_data) if car_data[:sleeping]
-      car_data[:timestamp] = car_data.dig(:drive_state, :timestamp) # Bubble up
+      cached_data = cached_vehicle_data
+      break cached_data unless car_data
+      car_data = cached_data.merge(car_data) if car_data[:sleeping]
+      car_data[:timestamp] = car_data.dig(:drive_state, :timestamp) # Bubble up to higher key
 
       User.me.jarvis_caches.set(:car_data, car_data)
       break car_data if car_data[:sleeping]
@@ -336,7 +338,7 @@ class TeslaControl
   rescue RestClient::Forbidden => err
     DataStorage[:tesla_forbidden] = true
     TeslaCommand.broadcast(status: :forbidden)
-    SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
+    # SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
   rescue JSON::ParserError => err
     SlackNotifier.notify("Failed to parse json from Tesla#post(#{endpoint}):\n#{params}\nCode: #{res.code}\n```#{res.body}```")
   end
@@ -358,7 +360,7 @@ class TeslaControl
   rescue RestClient::Forbidden => err
     DataStorage[:tesla_forbidden] = true
     TeslaCommand.broadcast(status: :forbidden)
-    SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
+    # SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
   rescue RestClient::ExceptionWithResponse => err
     return wake_up && retry if err.response&.code == 408
     return refresh && retry if err.response&.code == 401
@@ -384,7 +386,7 @@ class TeslaControl
   rescue RestClient::Forbidden => err
     DataStorage[:tesla_forbidden] = true
     TeslaCommand.broadcast(status: :forbidden)
-    SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
+    # SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
   rescue RestClient::ExceptionWithResponse => err
     return { sleeping: true } if !wake && err.response&.code == 408
     return wake_up && retry if err.response&.code == 408
@@ -414,7 +416,7 @@ class TeslaControl
   rescue RestClient::Forbidden => err
     DataStorage[:tesla_forbidden] = true
     TeslaCommand.broadcast(status: :forbidden)
-    SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
+    # SlackNotifier.notify("Tesla Forbidden. Need to refresh tokens")
     false
   rescue RestClient::GatewayTimeout => err
     return wake_up && retry
