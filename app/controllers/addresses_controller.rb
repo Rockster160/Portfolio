@@ -1,5 +1,5 @@
 class AddressesController < ApplicationController
-  before_action :authorize_user, :set_address
+  before_action :authorize_user_or_guest, :set_address
 
   def index
     @addresses = @contact.addresses.order(:created_at)

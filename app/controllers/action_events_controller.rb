@@ -1,6 +1,6 @@
 class ActionEventsController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user
+  before_action :authorize_user_or_guest
 
   def index
     @events = current_user.action_events.order(timestamp: :desc).page(params[:page]).per(50)

@@ -1,5 +1,5 @@
 class UsersController < ApplicationController
-  before_action :authorize_user
+  before_action :authorize_user_or_guest
   skip_before_action :verify_authenticity_token
 
   def new

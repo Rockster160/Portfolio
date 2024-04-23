@@ -1,7 +1,7 @@
 module Bowling
   class BowlingGamesController < ApplicationController
     skip_before_action :verify_authenticity_token
-    before_action :authorize_user
+    before_action :authorize_user_or_guest
     before_action :set_ivars, except: [:index]
 
     def index

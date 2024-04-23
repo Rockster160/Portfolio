@@ -1,6 +1,6 @@
 class ListsController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user, :color_scheme
+  before_action :authorize_user_or_guest, :color_scheme
   before_action :set_list, only: [:edit, :update, :show, :destroy, :users, :modify_from_message]
 
   def index

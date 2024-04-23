@@ -1,6 +1,6 @@
 class PagesController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user, :set_page
+  before_action :authorize_user_or_guest, :set_page
 
   def show
     respond_to do |format|

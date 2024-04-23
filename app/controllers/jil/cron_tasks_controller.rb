@@ -1,6 +1,6 @@
 class Jil::CronTasksController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user
+  before_action :authorize_user_or_guest
 
   def show
     @task = current_user.cron_tasks.find(params[:id])

@@ -1,5 +1,5 @@
 class FoldersController < ApplicationController
-  before_action :authorize_user, :set_folder
+  before_action :authorize_user_or_guest, :set_folder
 
   def index
     @folders = current_user.folders.order(updated_at: :desc).where(folder_id: nil)

@@ -1,4 +1,6 @@
 class ApiKeysController < ApplicationController
+  before_action :authorize_user
+
   def index
     @api_keys = current_user.api_keys.order("last_used_at DESC NULLS LAST, created_at DESC")
   end

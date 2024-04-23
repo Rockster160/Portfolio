@@ -1,7 +1,7 @@
 class Users::SessionsController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :unauthorize_user, :set_invitation_token, except: [ :destroy ], unless: :guest_account?
-  before_action :authorize_user, only: [ :destroy ]
+  before_action :authorize_user_or_guest, only: [ :destroy ]
 
   def new
     @user = User.new

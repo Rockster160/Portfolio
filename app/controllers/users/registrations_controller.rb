@@ -9,7 +9,7 @@ class Users::RegistrationsController < ApplicationController
   def guest_signup
     create_guest_user
 
-    redirect_to previous_url(lists_path), notice: "Welcome! We've created you a guest account. We'll"\
+    redirect_to previous_url, notice: "Welcome! We've created you a guest account. We'll"\
       " save your changes on your browser. If you want access from another devise, please visit the"\
       " account page to finish setting your account up."
   end

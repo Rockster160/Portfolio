@@ -1,6 +1,6 @@
 class ScheduledTasksController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user
+  before_action :authorize_user_or_guest
 
   def index
     @events = ::Jarvis::Schedule.get_events.sort_by { |evt| evt[:scheduled_time] || ::DateTime.new }

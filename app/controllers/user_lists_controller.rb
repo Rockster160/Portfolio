@@ -1,5 +1,5 @@
 class UserListsController < ApplicationController
-  before_action :authorize_user, :color_scheme
+  before_action :authorize_user_or_guest, :color_scheme
   before_action :set_list, :set_current_list_user
   skip_before_action :verify_authenticity_token
 

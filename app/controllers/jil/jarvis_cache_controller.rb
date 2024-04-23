@@ -1,6 +1,6 @@
 class Jil::JarvisCacheController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user
+  before_action :authorize_user_or_guest
   layout false
 
   def show

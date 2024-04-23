@@ -5,7 +5,7 @@ class QuickActionsController < ApplicationController
   layout "quick_actions"
 
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user
+  before_action :authorize_user_or_guest
 
   helper_method :current_user, :user_signed_in?
 

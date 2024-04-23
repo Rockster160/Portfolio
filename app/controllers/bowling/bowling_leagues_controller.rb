@@ -1,7 +1,7 @@
 module Bowling
   class BowlingLeaguesController < ApplicationController
     skip_before_action :verify_authenticity_token
-    before_action :authorize_user, :set_league
+    before_action :authorize_user_or_guest, :set_league
 
     def index
       @leagues = current_user.bowling_leagues.order(updated_at: :asc)

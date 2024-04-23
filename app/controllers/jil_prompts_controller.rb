@@ -1,5 +1,5 @@
 class JilPromptsController < ApplicationController
-  before_action :authorize_user
+  before_action :authorize_user_or_guest
   before_action :set_prompt, except: :index
 
   def index

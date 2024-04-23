@@ -1,6 +1,6 @@
 class ListItemsController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user
+  before_action :authorize_user_or_guest
 
   def show
     @list = current_user.lists.find(params[:list_id])

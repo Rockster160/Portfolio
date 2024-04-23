@@ -1,7 +1,7 @@
 module Bowling
   class BowlingSetsController < ApplicationController
     skip_before_action :verify_authenticity_token
-    before_action :authorize_user, :set_set
+    before_action :authorize_user_or_guest, :set_set
 
     def show
       @league = @set.league

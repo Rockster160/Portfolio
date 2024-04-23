@@ -9,16 +9,24 @@ module AuthHelper
 
   def unauthorize_user
     if current_user.present?
-      redirect_to lists_path
+      redirect_to previous_url
     end
   end
 
-  def authorize_user
+  def authorize_user_or_guest
     unless current_user.present?
       session[:forwarding_url] = request.original_url
       create_guest_user
 
       flash.now[:notice] = "We've signed you up with a guest account!"
+    end
+  end
+
+  def authorize_user
+    # TODO: if guest, request to finalize account set up
+    unless current_user.present?
+      session[:forwarding_url] = request.original_url
+      redirect_to login_path, "Please sign in before continuing"
     end
   end
 

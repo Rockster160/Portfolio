@@ -2,7 +2,7 @@ module Bowling
   class BowlersController < ApplicationController
     skip_before_action :verify_authenticity_token
     before_action :set_league, only: [:create]
-    # before_action :authorize_user, :set_league
+    # before_action :authorize_user_or_guest, :set_league
 
     def create
       @bowler = @league.bowlers.create(bowler_params.merge(position: @league.bowlers.count + 1))
