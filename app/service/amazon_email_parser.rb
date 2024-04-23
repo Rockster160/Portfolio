@@ -1,7 +1,9 @@
 class AmazonEmailParserError < StandardError; end
 class AmazonEmailParser
   def self.parse(email)
-    new(email).parse
+    Time.use_zone(User.timezone) do
+      new(email).parse
+    end
   end
 
   def initialize(email)
