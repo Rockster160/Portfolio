@@ -22,6 +22,7 @@ module CustomLogger
     return false if request.env["REQUEST_PATH"]&.include?("log_tracker")
     # TODO: Should check Dashboard UserAgent -- OR! Include some kind of param/token/header
     #   that disables the log tracker
+    return false if request.env["REQUEST_PATH"] == "/webhooks/local_ping"
     return false if request.env["REQUEST_PATH"] == "/webhooks/report"
     return false if request.env["REQUEST_PATH"] == "/printer_control"
 
