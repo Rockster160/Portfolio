@@ -19,7 +19,7 @@ import { dash_colors, beeps } from "../vars"
       return await res.json()
     }
   }
-  var gitSearch = async function(filter, repo) {
+  var gitSearch = async function(filter, repo, prefix) {
     var url = "https://api.github.com/search/issues"
     var uri = url + "?q=" + encodeURIComponent(filter + ` repo:${repo}`)
     let json = await gitGet(uri)
@@ -34,11 +34,11 @@ import { dash_colors, beeps } from "../vars"
             if (pr.mergeable_state == "clean") { // All checks good, approved
               status = Text.green("✓")
             } else if (pr.mergeable_state == "blocked") { // Something not ready
-              status = Text.green("𐄂")
+              status = Text.red("𐄂")
             } else if (pr.mergeable_state == "unstable") { // Approved, but not all checks passed
-              status = Text.green("✓")
+              status = Text.red("✓")
             } else {
-              status = Text.green("[" + pr.mergeable_state + "]")
+              status = Text.yellow("[" + pr.mergeable_state + "]")
             }
           }
         }
@@ -46,35 +46,56 @@ import { dash_colors, beeps } from "../vars"
         return {
           url: (issue.pull_request || issue.issue).html_url,
           status: status,
-          id: issue.number,
+          id: String(issue.number),
           title: issue.title,
+          prefix: prefix,
         }
       })
     )
   }
+  let findGit = function(id) {
+    id = String(id)
+    const sections = ["pending_review", "issues", "prs"]
+
+    for (let section of sections) {
+      let found = (cell?.data[prop] || []).find(git => git.id === id)
+      if (found) { return found }
+    }
+    return null
+  }
 
   var getLines = async function(cell) {
-    cell.data.pending_review = await gitSearch("is:open is:pr review-requested:Rockster160", "WorkWave/slingshot-web-app")
-    cell.data.pending_review = cell.data.pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-backend"))
-    cell.data.pending_review = cell.data.pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-frontend"))
+    let pending_review = []
+    pending_review = await gitSearch("is:open is:pr review-requested:Rockster160", "WorkWave/slingshot-web-app", "WB")
+    pending_review = pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "WorkWave/slingshot-frontend", "WF"))
+    pending_review = pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-backend", "OB"))
+    pending_review = pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-frontend", "OF"))
 
-    cell.data.issues = await gitSearch("is:open is:issue assignee:Rockster160", "WorkWave/slingshot-web-app")
-    cell.data.issues = cell.data.issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-backend"))
-    cell.data.issues = cell.data.issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-frontend"))
+    let issues = []
+    issues = await gitSearch("is:open is:issue assignee:Rockster160", "WorkWave/slingshot-web-app", "WB")
+    issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "WorkWave/slingshot-frontend", "WF"))
+    issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-backend", "OB"))
+    issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-frontend", "OF"))
 
-    cell.data.prs = await gitSearch("is:open is:pr assignee:Rockster160", "WorkWave/slingshot-web-app")
-    cell.data.prs = cell.data.prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-backend"))
-    cell.data.prs = cell.data.prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-frontend"))
+    let prs = []
+    prs = await gitSearch("is:open is:pr assignee:Rockster160", "WorkWave/slingshot-web-app", "WB")
+    prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "WorkWave/slingshot-frontend", "WF"))
+    prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-backend", "OB"))
+    prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-frontend", "OF"))
+
+    cell.data.pending_review = pending_review
+    cell.data.issues = issues
+    cell.data.prs = prs
 
     render(cell)
     cell.flash()
   }
 
-  let renderLine = function(status, id, title) {
+  let renderGit = function(git) {
     return [
-      status,
-      Text.green(id),
-      title
+      git.status,
+      Text.rocco(git.id),
+      `${git.prefix}:${git.title}`
     ].filter(i => i).join(" ")
   }
 
@@ -94,9 +115,11 @@ import { dash_colors, beeps } from "../vars"
   }
 
   let deployMonitor = function() {
-    setInterval(function() { render(cell) }, 1000)
     Monitor.subscribe(cell.config.deploy_uuid, {
       received: function(data) {
+        if (!cell.data.monitor_schedule) {
+          cell.data.monitor_schedule = setInterval(function() { render(cell) }, 1000)
+        }
         cell.flash()
         let json = data.result || {}
         if (json.deploy == "start") {
@@ -113,6 +136,7 @@ import { dash_colors, beeps } from "../vars"
             item.complete(true)
           })
           localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
+          cell.data.monitor_schedule = clearInterval(cell.data.monitor_schedule)
           victoryBeep()
         }
         render(cell)
@@ -133,19 +157,19 @@ import { dash_colors, beeps } from "../vars"
     if (cell.data.pending_review?.length > 0) {
       lines.push("-- Pending Review:")
       cell.data.pending_review.forEach(function(review) {
-        lines.push(renderLine(review.status, review.id, review.title))
+        lines.push(renderGit(review))
       })
     }
     if (cell.data.issues?.length > 0) {
       lines.push("-- Issues:")
       cell.data.issues.forEach(function(issue) {
-        lines.push(renderLine(issue.status, issue.id, issue.title))
+        lines.push(renderGit(issue))
       })
     }
     if (cell.data.prs?.length > 0) {
       lines.push("-- My PRs:")
       cell.data.prs.forEach(function(pr) {
-        lines.push(renderLine(pr.status, pr.id, pr.title))
+        lines.push(renderGit(pr))
       })
     }
     lines.push("-- Deploys:")
@@ -167,8 +191,8 @@ import { dash_colors, beeps } from "../vars"
       deploy_timers: [],
     },
     onload: function() {
-      deployMonitor()
       this.data.deploy_timers = Timer.loadFromJSON(JSON.parse(localStorage.getItem("deploy_timers") || "[]"))
+      deployMonitor()
     },
     reloader: function() {
       getLines(this)
@@ -180,8 +204,13 @@ import { dash_colors, beeps } from "../vars"
         var url = "https://workwave.atlassian.net/browse/" + jira_id
         window.open(url, "_blank")
       } else if (/\d+/.test(msg)) {
-        var url = "https://github.com/WorkWave/slingshot-web-app/pull/" + msg
-        window.open(url, "_blank")
+        let git = findGit(msg)
+        if (git) {
+          window.open(git.url, "_blank")
+        } else {
+          var url = "https://github.com/WorkWave/slingshot-web-app/pull/" + msg
+          window.open(url, "_blank")
+        }
       }
     }
   })
