@@ -185,7 +185,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
           data.push(order)
         }
-        this.data.amz_updates = data.sort((a, b) => a - b)
+        this.data.amz_updates = data.sort((a, b) => a.date - b.date)
         renderLines()
       })
     )
