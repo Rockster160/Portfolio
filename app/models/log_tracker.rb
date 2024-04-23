@@ -73,8 +73,8 @@ class LogTracker < ApplicationRecord
   end
 
   def geolocate
-    new_location_id = LogTracker.where(ip_address: self.ip_address).where.not(location_id: nil).pluck(:location_id).uniq.first
-    self.location_id = new_location_id || Location.create(ip: self.ip_address).id
+    # new_location_id = LogTracker.where(ip_address: self.ip_address).where.not(location_id: nil).pluck(:location_id).uniq.first
+    # self.location_id = new_location_id || Location.create(ip: self.ip_address).id
   end
 
   def set_ip_count
@@ -84,6 +84,6 @@ class LogTracker < ApplicationRecord
 
   def broadcast_creation
     rendered_message = LogTrackersController.render partial: 'log_trackers/logger_row', locals: { logger: self }
-    ActionCable.server.broadcast(:logger_channel, {message: rendered_message})
+    ActionCable.server.broadcast(:logger_channel, { message: rendered_message })
   end
 end

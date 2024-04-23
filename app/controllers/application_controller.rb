@@ -4,7 +4,8 @@ class ApplicationController < ActionController::Base
   # For APIs, you may want to use :null_session instead.
   protect_from_forgery with: :exception, if: -> { current_user&.id != 1 } # Hack- skip CSRF if it's me
   helper_method :current_user, :user_signed_in?, :guest_account?
-  before_action :see_current_user
+
+  before_action :logit, :see_current_user
   before_action :show_guest_banner, if: :guest_account?
   prepend_before_action :block_banned_ip
 
@@ -21,6 +22,12 @@ class ApplicationController < ActionController::Base
   end
 
   private
+
+  def logit
+    return if params[:checker]
+
+    ::CustomLogger.log_request(request, current_user)
+  end
 
   def see_current_user
     Rails.logger.silence do
