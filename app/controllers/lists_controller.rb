@@ -102,6 +102,7 @@ class ListsController < ApplicationController
     @user_list = current_user.user_lists.find_by(list: @list)
 
     return if @list.present?
+    # TODO: Extract this into a helper
     session[:forwarding_url] = request.original_url
     redirect_to lists_path, alert: "You do not have permission to view this list."
   end
