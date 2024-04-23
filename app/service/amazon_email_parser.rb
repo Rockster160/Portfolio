@@ -6,6 +6,18 @@ class AmazonEmailParser
     end
   end
 
+  # TODO: Detect if there are multiple items in the email and add each one as a different item!
+  # TODO: If the name has an ellipsis, then open the page and pull from it instead.
+  # If failed, fall back to the ellipsis name.
+
+  # Test emails:
+  # 3550 - different format (basic info card - Out for delivery "Today")
+  # 3545 - different format (last info card - Order delayed "tomorrow by...")
+  # 3465 - multiple items
+  # 3458, 3455, 3454, 3450, 3393, 3392, 3347, 3346, 3344, 3342, 3338, 3336, 3335, 3334,
+  # 3332, 3330, 3329, 3328, 3327, 3325, 3324, 3323, 3321, 3318, 3317, 3312, 3311, 3311, 3310, 3280,
+  # 3275, 3274, 3271, 3270, 3264, 3261, 3258, 3255, 3254, 3253
+
   def initialize(email)
     @email = email
   end
@@ -66,18 +78,26 @@ class AmazonEmailParser
     loop { date.past? ? date += 1.week : (break date) }
   end
 
-  def fallback_card_html
-    @doc.at_css(".rio_last_card")&.inner_html
+  def delayed_card_html
+    @doc.at_css(".rio_last_card")&.inner_html.to_s
+  end
+
+  def basic_card_html
+    @doc.at_css(".rio_card")&.inner_html.to_s
   end
 
   def info_card_html
-    @doc.at_css(".rio_total_info_card")&.inner_html || "".then {
-      if fallback_card_html && fallback_card_html["Order delayed"]
-        fallback_card_html
-      elsif fallback_card_html.nil?
-        error("No info card")
-      end
-    }
+    @doc.at_css(".rio_total_info_card")&.inner_html || fallback_html
+  end
+
+  def fallback_html
+    if fallback_card_html["Order delayed"]
+      return fallback_card_html
+    elsif basic_card_html["Out for delivery"]
+      return basic_card_html
+    end
+
+    "".tap { error("No info card") } # Always return at least an empty string, but notify if empty
   end
 
   def arrival_date
@@ -103,9 +123,6 @@ class AmazonEmailParser
   end
 
   def extract_name
-    # ALSO TODO: Detect if there are multiple items in the email and add each one as a different item!
-    # TODO: If the name has an ellipsis, then open the page and pull from it instead.
-    # If failed, fall back to the ellipsis name.
     @doc.at_css(".rio_black_href")&.text&.squish.to_s.delete(".").presence&.then { |title|
       ChatGPT.short_name_from_order(title)
     }
