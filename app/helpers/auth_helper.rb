@@ -23,17 +23,20 @@ module AuthHelper
   end
 
   def authorize_user
-    # TODO: if guest, request to finalize account set up
-    unless current_user.present?
+    if current_user.nil?
       session[:forwarding_url] = request.original_url
-      redirect_to login_path, "Please sign in before continuing"
+      redirect_to login_path, notice: "Please sign in before continuing."
+    elsif current_user.guest?
+      redirect_to account_path, notice: "Please finish setting up your account before continuing."
     end
   end
 
   def authorize_admin
-    unless current_user.try(:admin?)
+    if current_user.nil?
       session[:forwarding_url] = request.original_url
-      redirect_to login_path
+      redirect_to login_path, notice: "Please sign in before continuing."
+    elsif !current_user.admin?
+      redirect_to account_path, alert: "Sorry, you do not have access to this page."
     end
   end
 
