@@ -37,7 +37,7 @@ class AmazonEmailParser
 
     @order.email_ids << @email.id unless @order.email_ids.include?(@email.id)
     @order.save
-    ActionCable.server.broadcast(:amz_updates_channel, AmazonOrder.serialize)
+    AmazonOrder.broadcast
   rescue StandardError => e
     SlackNotifier.err(e, "Error parsing Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
   end

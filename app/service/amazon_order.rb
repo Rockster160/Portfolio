@@ -19,6 +19,10 @@ class AmazonOrder
     all.each_with_object({}) { |order, obj| obj[order.id] = order.serialize }
   end
 
+  def self.broadcast
+    ActionCable.server.broadcast(:amz_updates_channel, serialize)
+  end
+
   def initialize(order_hash)
     @errors = []
     @email_ids = []

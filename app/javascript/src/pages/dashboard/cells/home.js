@@ -171,6 +171,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         let data = []
         for (var [order_id, order_data] of Object.entries(msg)) {
           let order = order_data
+          if (!order_data.delivery_date) { return }
 
           let [year, month, day, ...tz] = order_data.delivery_date.split(/-| /)
           let date = new Date(0)
