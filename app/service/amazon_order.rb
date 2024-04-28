@@ -4,7 +4,6 @@ class AmazonOrder
     :item_id,
     :listed_name,
     :full_name,
-    :element, # Not serialized, but provides a reference to the doc.element
     :name,
     :delivery_date,
     :time_range,
@@ -12,11 +11,14 @@ class AmazonOrder
     :email_ids,
     :errors,
     :just_added,
-    :url,
   )
 
   def self.all
-    @@all ||= (DataStorage[:amazon_deliveries] || {}).map { |order_id, data| new(data) }
+    @@all ||= (DataStorage[:amazon_deliveries] || []).map { |data| new(data) }
+  end
+
+  def self.clear
+    @@all = DataStorage[:amazon_deliveries] = []
   end
 
   def self.serialize
@@ -58,11 +60,6 @@ class AmazonOrder
   def url
     "https://www.amazon.com/dp/#{item_id}"
   end
-
-  # def save
-  #   AmazonOrder.deliveries_cache.merge!(order_id => serialize)
-  #   @@all = nil
-  # end
 
   def destroy
     AmazonOrder.deliveries_cache.except!(order_id)

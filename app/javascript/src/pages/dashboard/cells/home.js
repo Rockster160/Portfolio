@@ -169,7 +169,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         this.flash()
 
         let data = []
-        for (var [order_id, order_data] of Object.entries(msg)) {
+        msg.forEach(item => {
           let order = order_data
           if (!order_data.delivery_date) { return }
 
@@ -185,7 +185,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
           order.date = date
 
           data.push(order)
-        }
+        })
         this.data.amz_updates = data.sort((a, b) => {
           // delivered status takes priority
           if (b.delivered - a.delivered !== 0) {

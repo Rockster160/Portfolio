@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html xmlns="https://www.w3.org/1999/xhtml">
+ <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <style type="text/css">
+html, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, font, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	font-weight: inherit;
+	font-style: inherit;
+	font-size: 100%;
+	font-family: inherit;
+	vertical-align: baseline;
+}
+
+@media only screen and (max-width: 480px) {
+	body {
+		width: 375px !important;
+	}
+	td.rio_main_td {
+		width: 375px !important;
+	}
+	td.rio_body_td {
+		width: 375px !important;
+	}
+	.rio_container {
+		width: 375px !important;
+	}
+}
+
+html {
+	display: table;
+	background-color: #FFFFFF;
+	width: 100%;
+}
+
+body, table {
+	background: #FFF;
+	display: block;
+	-webkit-text-size-adjust: 100%;
+	-ms-text-size-adjust: 100%;
+	margin: 0 auto;
+	padding: 0;
+}
+
+tbody {
+	display: block;
+}
+
+table {
+	border-collapse: collapse;
+	mso-table-lspace: 0pt !important;
+	mso-table-rspace: 0pt !important;
+}
+
+.rio_container {
+	cellspacing:0;
+	width:525px;
+	margin:0 auto;
+}
+
+.rio_inner_container {
+	width: 100%;
+}
+
+td.rio_main_td {
+	width: 525px;
+	border: 0 !important;
+	padding: 0 !important;
+	border-collapse: collapse !important;
+	margin: 0 auto;
+}
+
+td.rio_body_td {
+	width: 525px;
+}
+
+
+tr {
+	vertical-align:top;
+	display: block;
+}
+
+a {
+	color: #007185;
+	font-family: "Amazon Ember", Arial, sans-serif;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 20px;
+	text-decoration: none;
+	font-size: 15px;
+}
+
+.rio_link {
+	color: #007185 !important;
+	font-family: "Amazon Ember", Arial, sans-serif;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 20px;
+	text-decoration: none;
+	font-size: 15px;
+}
+
+p span {
+	display: block;
+	font-family: "Amazon Ember", Arial, sans-serif;
+	font-size: 15px;
+	color: #0F1111;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 20px;
+}
+
+.rio_footer {
+	color: #565959;
+	font-family: "Amazon Ember", Arial, sans-serif;
+	font-size: 13px;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 18px;
+	display: block;
+	background: #F0F2F2;
+}
+
+.rio_footer a {
+	font-size: 13px;
+	color: #007185 !important;
+}
+
+.rio_footer p {
+	margin: 0 16px;
+}
+
+.rio_hz_line {
+	height: 1px;
+	background: #D5D9D9;
+	padding: 0;
+}
+
+.rio_asin_img img {
+	max-height: 115px;
+	max-width: 115px;
+	margin: auto;
+	display: block;
+	padding: 8px;
+	mix-blend-mode: multiply;
+}
+
+.rio_asin_img a {
+	background-color: transparent;
+}
+
+.rio_asin_img {
+	background-image: linear-gradient(rgba(15, 17, 17, 0.03), rgba(15, 17, 17, 0.03));
+	border-radius: 4px;
+	display: table-cell;
+	width: 131px;
+	height: 131px;
+	vertical-align: middle;
+	text-align: center;
+	isolation: isolate;
+}
+
+img {
+	border: 0;
+	height: auto;
+	line-height: 100%;
+	outline: none;
+	text-decoration: none;
+	-ms-interpolation-mode: bicubic;
+}
+
+.rio_info_alert_icon {
+	width: 18px;
+	height: 18px;
+}
+
+.rio_info_alert_icon img{
+	margin-top: 1px !important;
+	width: 18px;
+	height: 18px;
+}
+
+.rio_info_text td {
+	vertical-align: top;
+}
+
+.rio_info_text a {
+	color: #007185 !important;
+}
+
+.rio_info_text b {
+	font-weight: 400;
+}
+
+.rio_critical_info {
+	color: #494D4D;
+	font-family: "Amazon Ember", Arial, sans-serif;
+	font-size: 14px;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 20px;
+	background-color: #0F8698;
+	border: 8px #0F8698 solid;
+	display: block;
+}
+
+.rio_critical_info_inner {
+	display: inline-table;
+	table-layout: fixed;
+	padding: 12px 8px 16px 8px;
+	background-color: #FFFFFF;
+	border-radius: 4px;
+}
+
+.rio_btn {
+	border-radius: 100px;
+	text-underline-color: #FFD814;
+	display: inline-block;
+	mso-padding-alt: 0;
+	vertical-align: middle;
+	mso-line-height-rule: at-least;
+}
+
+.rio_btn span {
+	color: #0F1111;
+	font-size: 13px;
+	font-weight: 400;
+	display: table-cell;
+	padding: 8px 16px;
+	line-height: 18px;
+	vertical-align: middle;
+	text-align: center;
+	font-family: "Amazon Ember", Arial, sans-serif;
+}
+
+.rio_td_cta_white {
+    background-color: #FEFEFE;
+    border: 1px solid #D5D9D9;
+    padding: 6px 16px;
+}
+
+.rio_td_cta_yellow {
+    background-color: #FFD814;
+    border: 1px solid #FCD200;
+    padding: 6px 16px;
+}
+
+p span span, .rio_btn span span, .rio_footer p span {
+	display: inline;
+}
+
+.rio_bg_yellow {
+	background: #FFD814;
+}
+
+.rio_bg_white {
+	background: #FFFFFF;
+}
+
+.rio_border_yellow {
+	border: 1px solid #FCD200 !important;
+}
+
+.rio_border_nickel {
+	border: 1px solid #D5D9D9 !important;
+}
+
+
+.rio_main_td a {
+	color: inherit;
+	text-decoration: none;
+	font-size: inherit;
+	font-family: inherit;
+	font-weight: inherit;
+	line-height: inherit;
+}
+
+.rio_amazon_logo {
+	height: 58px;
+	width: auto;
+	max-width: 100%;
+	display: block;
+	border: 0;
+	background-color: #FFFFFF;
+}
+
+.rio_lh_20 {
+	line-height: 20px;
+}
+
+.rio_lh_18 {
+	line-height: 18px;
+}
+
+.rio_amazon_smile {
+	width: 86px;
+	height: 43px;
+	display: block;
+}
+
+.rio_18_heavy {
+	color: #0F1111;
+	font-size: 18px;
+	font-weight: 700;
+	line-height: 22px;
+}
+
+.rio_15_heavy_green {
+	color: #067D62;
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.rio_15_heavy_black {
+	color: #0F1111;
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.rio_15_black {
+	color: #0F1111;
+	font-size: 15px;
+	font-weight: 400;
+}
+
+.rio_15_heavy_blue {
+	color: #007185;
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.rio_15_grey {
+	color: #565959;
+	font-size: 15px;
+}
+
+.rio_13_grey {
+	color: #565959;
+	font-size: 13px;
+}
+
+.rio_13_heavy_grey {
+	color: #565959;
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.rio_13_grey_href {
+	color: #565959 !important;
+	font-size: 13px;
+}
+
+.rio_15_grey_order_number {
+	color: #0F1111;
+	font-size: 15px;
+}
+
+.rio_summary {
+	color: #494D4D;
+	font-size: 14px;
+	font-weight: 400;
+	display: block;
+	background: #FFF;
+	padding: 16px 16px 16px 16px;
+}
+
+.rio_hero_headline {
+	color: #0F1111;
+	font-size: 22px;
+	font-weight: 700;
+	line-height: 28px;
+}
+
+.rio_asin_internal_text {
+	vertical-align: middle;
+}
+
+.rio_no_deco_href {
+	text-decoration: none;
+}
+
+.rio_micro_space {
+	margin-top: 4px !important;
+}
+
+.rio_body {
+	padding: 8px;
+	background-color: #d5d9d9 !important;
+	border-spacing: 0;
+}
+
+table {
+	mso-table-lspace: 0pt !important;
+	mso-table-rspace: 0pt !important;
+}
+
+.rio_card {
+	background-color: #FFFFFF;
+	border-radius: 4px;
+	padding: 12px 8px 16px 8px;
+	margin-bottom: 8px !important;
+}
+
+.rio_last_card {
+	background-color: #FFFFFF;
+	border-radius: 4px;
+	padding: 12px 8px 16px 8px;
+	margin-bottom: 0 !important;
+}
+
+.rio_total_info_card {
+	background-color: #FFFFFF;
+	padding: 12px 8px 16px 8px;
+	margin-bottom: 0 !important;
+	border-radius: 4px 4px 0 0;
+}
+
+.rio_total_card {
+	margin-top: 0;
+	color: #494D4D;
+	background: #F0F2F2;
+	padding: 12px 8px 12px 8px !important;
+	border-radius: 0 0 4px 4px !important;
+}
+
+.rio_total_last_card {
+	margin-bottom: 0 !important;
+}
+
+.rio_total_card td {
+	width: 100%;
+}
+
+.rio_total_card tr {
+	display: table-row;
+}
+
+.rio_allow_wrap {
+    white-space: normal !important;
+}
+
+.rio_no_wrap {
+	white-space: nowrap !important;
+}
+
+.rio_text_align_right {
+	text-align: right;
+	white-space: nowrap !important;
+}
+
+.rio_text_align_left {
+	text-align: left;
+	white-space: nowrap !important;
+}
+
+.rio_order_total_metadata a {
+	color: #007185 !important;
+}
+
+#outlook a {
+	padding: 0;
+}
+
+#rio_container #rio_inner_container p span a[x-apple-data-detectors=true]{
+	color: inherit !important;
+	-webkit-text-decoration-color: inherit !important;
+	text-decoration: inherit !important;
+}
+
+    .rio_card_v2 , .rio_card_b2b_asin_override {
+        background-color: #FFFFFF;
+        border-radius: 4px;
+        padding: 12px 8px 16px 8px;
+        margin-bottom: 0px !important;
+        margin-top: 8px !important;
+    }
+
+    .rio_total_info_card {
+        margin-top: 8px !important;
+    }
+
+    .rio_card_v2 a {
+        color: #007185 !important;
+    }
+
+    rio_card_b2b_asin_override {
+        color: #007185;
+    }
+
+    .rio_card_v2 b , .rio_card_b2b_asin_override b {
+        font-weight: 400;
+    }
+
+    .order_total_or_less_text_style {
+        display: inline !important;
+    }
+
+    .base_total_text_style {
+        display: inline !important;
+        font-weight: 700;
+    }
+
+    .rio_total_card {
+        border-radius: 0 0 4px 4px !important;
+    }
+
+    .rio_micro_space {
+        margin-top: 4px !important;
+    }
+
+    .rio_15_heavy_black a {
+        color: #007185 !important;
+    }
+
+    .rio_info_text span {
+        color: #0F1111 !important;
+        font-size: 15px;
+    }
+
+    .rio_13_grey a {
+        color: #007185 !important;
+    }
+
+    .rio_inline_link_span a {
+        color: #007185 !important;
+    }
+
+    .fan_funded_metadata strong {
+        font-weight: 700 !important;
+    }
+
+    .fan_funded_metadata td {
+        padding: 0 0 0 16px;
+    }
+
+    .fan_funded_metadata ol {
+        font-family: 'Amazon Ember', Arial, sans-serif;
+    }
+
+    .fan_funded_metadata li {
+        padding: 4px 0 0 0;
+    }
+
+    .rio_word_break {
+        word-break: break-word;
+    }
+
+    .rio_asin_card_img_td {
+        vertical-align: top;
+    }
+
+    .rio_asin_metadata_13_grey {
+        color: #565959;
+        font-size: 13px;
+    }
+
+    .rio_asin_metadata_13_grey a {
+        color: #565959 !important;
+    }
+
+    .rio_primeLogo {
+        vertical-align: middle;
+        width: 53px;
+        height: 17px;
+        padding: 0px 0px 0.9px 0px;
+    }
+</style>
+  <!--[if mso]>
+<noscript>
+    <xml>
+        <o:OfficeDocumentSettings>
+            <o:AllowPNG/>
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+        </o:OfficeDocumentSettings>
+    </xml>
+</noscript>
+<![endif]-->
+  <title></title>
+ </head>
+ <body style="background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; margin: 0 auto; padding: 0"><img width="1" height="1" src="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=WB60N74XYRW2&T=O&U=https%3A%2F%2Fimages-na.ssl-images-amazon.com%2Fimages%2FG%2F01%2Fnav%2Ftransp.gif&H=XXFXC1S3BSHC70MLUWTFIGMIPH8A&ref_=pe_386300_440135490_opens" />
+  <!--[if mso | IE]>
+    <table align="center" border="0" cellpadding="0" cellspacing="0" class="" style="width:525px;" width="525" bgcolor="#000000" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;">
+    <![endif]-->
+  <table class="rio_container" id="rio_container" style="cellspacing: 0; width: 525px; margin: 0 auto; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+   <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+    <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+     <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+      <table class="rio_inner_container" id="rio_inner_container" style="width: 100%; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+       <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+        <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+         <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+          <table style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+           <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+            <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+             <td class="rio_main_td" style="width: 525px; border: 0 !important; padding: 0 !important; border-collapse: collapse !important; margin: 0 auto; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+              <!--[if mso]>
+    <table class="rio_header" cellpadding="0"><tr><td>
+    <table class="rio_header"  width="541">
+    <![endif]-->
+              <!--[if !mso]>
+    <!-->
+              <table class="rio_header" style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+               <!--<![endif]-->
+               <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                <tr style="height: 0px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                 <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=AI4901RQ4I1X&T=C&U=https%3A%2F%2Fwww.amazon.com%2Fref%3Dpe_386300_440135490_TE_simp_&H=JCGXLAFMMNDAOJZS5J4MJPERQZWA&ref_=pe_386300_440135490_TE_simp_" title="Visit Amazon.com" style="color: inherit; text-decoration: none; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline"> <img class="rio_amazon_logo" alt="Amazon.com" src="https://m.media-amazon.com/images/G/01/outbound/OutboundTemplates/Amazon_logo_US._BG255,255,255_.png" height="58" style="height: 58px; width: auto; max-width: 100%; display: block; border: 0; background-color: rgb(255, 255, 255); margin: 0; padding: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; line-height: 100%; text-decoration: none; -ms-interpolation-mode: bicubic" /> </a> </td>
+                </tr>
+               </tbody>
+              </table>
+              <!--[if mso]>
+    </td></tr></table>
+    <![endif]-->
+              <!--[if mso]>
+    <table class="rio_body" cellpadding="8">
+    <![endif]-->
+              <table class="rio_body" style="padding: 8px; background-color: rgb(213, 217, 217) !important; border-spacing: 0; margin: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+               <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                 <td class="rio_body_td" style="width: 525px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+                  <!--[if mso]>
+    <table class="rio_last_card" cellpadding="8"><tr><td>
+    <table class="rio_last_card"  width="509">
+    <![endif]-->
+                  <!--[if !mso]>
+    <!-->
+                  <table class="rio_last_card" style="background-color: rgb(255, 255, 255); border-radius: 4px; padding: 12px 8px 16px 8px; margin-bottom: 0 !important; margin: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                   <!--<![endif]-->
+                   <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                    <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                     <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <span class="rio_hero_headline" style="color: rgb(15, 17, 17); font-size: 22px; font-weight: 700; line-height: 28px; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline"> Hello Rocco, </span> </p> </td>
+                    </tr>
+                    <tr style="height: 4px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                    <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                     <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <span style="display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-size: 15px; color: rgb(15, 17, 17); font-style: normal; font-weight: 400; line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline"> Thank you for shopping with us. Well send a confirmation when your item ships. </span> </p> </td>
+                    </tr>
+                   </tbody>
+                  </table>
+                  <!--[if mso]>
+    </td></tr></table>
+    <![endif]-->
+                  <!--[if mso]>
+<table cellpadding="0" cellspacing="0"><tr><td style="background-color: transparent;" colspan="1" height="8"></td></tr></table>
+<![endif]-->
+                  <!--[if mso]>
+    <table class="rio_total_info_card" cellpadding="8"><tr><td>
+    <table class="rio_total_info_card" width="509">
+    <![endif]-->
+                  <!--[if !mso]>
+    <!-->
+                  <table class="rio_total_info_card" style="background-color: rgb(255, 255, 255); padding: 12px 8px 16px 8px; margin-bottom: 0 !important; border-radius: 4px 4px 0 0; margin-top: 8px !important; margin: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                   <!--<![endif]-->
+                   <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                    <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                     <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"><span class="rio_18_heavy" style="color: rgb(15, 17, 17); font-size: 18px; font-weight: 700; line-height: 22px; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline">Order Confirmation</span></p> </td>
+                    </tr>
+                    <tr style="height: 12px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                    <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                     <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"><span class="rio_15_grey" style="color: rgb(86, 89, 89); font-size: 15px; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; font-weight: 400; line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline">Arriving:</span></p> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"><span class="rio_15_heavy_black" style="color: rgb(15, 17, 17); font-size: 15px; font-weight: 700; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline">tomorrow, April 28</span></p> </td>
+                    </tr>
+                    <tr style="height: 20px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                    <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                     <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <span class="rio_15_grey" style="color: rgb(86, 89, 89); font-size: 15px; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; font-weight: 400; line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline"> Ship to: </span> </p> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"><span class="rio_15_heavy_black" style="color: rgb(15, 17, 17); font-size: 15px; font-weight: 700; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline">Rocco</span></p> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"><span class="rio_15_heavy_black" style="color: rgb(15, 17, 17); font-size: 15px; font-weight: 700; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline">HERRIMAN, UT</span></p> </td>
+                    </tr>
+                    <tr style="height: 20px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                    <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                     <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"><span class="rio_15_grey" style="color: rgb(86, 89, 89); font-size: 15px; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; font-weight: 400; line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline">Order # </span></p> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"><span class="rio_15_heavy_black" style="color: rgb(15, 17, 17); font-size: 15px; font-weight: 700; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline"><a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=2PYU519S6M9FI&T=C&U=https%3A%2F%2Fwww.amazon.com%2Fgp%2Fcss%2Forder-details%3ForderId%3D112-2123924-5134626%26ref_%3Dpe_386300_440135490_TE_simp_od&H=2HXNVJGT2A7C6VUGPV1VF4P9VLOA&ref_=pe_386300_440135490_TE_simp_od" class="rio_link" style="color: rgb(0, 113, 133) !important; text-decoration: none; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; font-style: normal; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline"> 112-2123924-5134626</a></span></p> </td>
+                    </tr>
+                    <tr style="height: 20px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                    <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                     <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+                      <table style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                       <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                        <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                         <!--[if mso]>
+<td class="rio_td_cta_yellow">
+<!-->
+                         <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+                          <!--[endif]----> <a class="rio_btn rio_bg_yellow rio_border_yellow" href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=1X1AA4PS2Q7DT&T=C&U=https%3A%2F%2Fwww.amazon.com%2Fgp%2Fcss%2Forder-details%3ForderId%3D112-2123924-5134626%26ref_%3Dpe_386300_440135490_TE_simp_od&H=XP0LSUXX7IEHAXHX1UNRJHWCV8SA&ref_=pe_386300_440135490_TE_simp_od" target="_blank" rel="noopener" style="color: inherit; text-decoration: none; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; border-radius: 100px; text-underline-color: rgb(255, 216, 20); display: inline-block; mso-padding-alt: 0; vertical-align: middle; mso-line-height-rule: at-least; background: rgb(255, 216, 20); border: 1px solid rgb(252, 210, 0) !important; margin: 0; padding: 0; outline: 0; font-style: inherit"> <span style="color: rgb(15, 17, 17); font-size: 13px; font-weight: 400; display: table-cell; padding: 8px 16px; line-height: 18px; vertical-align: middle; text-align: center; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; margin: 0; border: 0; outline: 0; font-style: inherit"> View or manage order </span> </a> </td>
+                        </tr>
+                       </tbody>
+                      </table> </td>
+                    </tr>
+                    <tr style="height: 20px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                    <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                     <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> </td>
+                    </tr>
+                    <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                     <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+                      <table style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                       <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                        <tr class="rio_asin_card" style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                         <td class="rio_asin_img" style="background-image: linear-gradient(rgba(15,17,17,0.03),rgba(15,17,17,0.03)); border-radius: 4px; display: table-cell; width: 131px; height: 131px; vertical-align: middle; text-align: center; isolation: isolate; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit"> <a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=1OOCVIOKBUVLU&T=C&U=http%3A%2F%2Fwww.amazon.com%2Fdp%2FB07F19DK3S%2Fref%3Dpe_386300_440135490_TE_simp_item_image&H=UXHB6DHAJZVGYAE3BPN2PEAPG1QA&ref_=pe_386300_440135490_TE_simp_item_image" title="WYNNsky Low Pressure..." style="background-color: transparent; color: inherit; text-decoration: none; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline"> <img src="https://m.media-amazon.com/images/I/31BHs1VTkHL._SY115_SX115_.jpg" alt="WYNNsky Low Pressure..." style="max-height: 115px; max-width: 115px; margin: auto; display: block; padding: 8px; mix-blend-mode: multiply; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; height: auto; line-height: 100%; text-decoration: none; -ms-interpolation-mode: bicubic" /> </a> </td>
+                         <td style="width: 8px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"></td>
+                         <td class="rio_asin_internal_text" style="vertical-align: middle; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit"> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <span style="display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-size: 15px; color: rgb(15, 17, 17); font-style: normal; font-weight: 400; line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline"> <a class="rio_black_href rio_15_black" href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=2U9728HDSL3MT&T=C&U=http%3A%2F%2Fwww.amazon.com%2Fdp%2FB07F19DK3S%2Fref%3Dpe_386300_440135490_TE_simp_item_image&H=M1TW2PGMRZA1WGZB5UU2BV3ABA4A&ref_=pe_386300_440135490_TE_simp_item_image" style="color: inherit; text-decoration: none; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline"> <span style="display: inline; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-size: 15px; color: rgb(15, 17, 17); font-style: normal; font-weight: 400; line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline"> WYNNsky Low Pressure Pencil... </span> </a> </span> </p> <p class="rio_micro_space" style="margin-top: 4px !important; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <span class="rio_13_grey" style="color: rgb(86, 89, 89); font-size: 13px; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; font-weight: 400; line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline"> Qty : 1 </span> </p> </td>
+                        </tr>
+                       </tbody>
+                      </table> </td>
+                    </tr>
+                    <tr style="height: 12px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                   </tbody>
+                  </table>
+                  <!--[if mso]></td></tr></table><![endif]-->
+                  <!--[if mso]>
+    <table class="rio_total_card rio_total_last_card" cellpadding="8"><tr><td>
+    <table class="rio_total_card rio_total_last_card" width="509">
+    <![endif]-->
+                  <!--[if !mso]>
+    <!-->
+                  <table class="rio_total_card rio_total_last_card" style="margin-top: 0; color: rgb(73, 77, 77); background: rgb(240, 242, 242); padding: 12px 8px 12px 8px !important; border-radius: 0 0 4px 4px !important; margin-bottom: 0 !important; margin: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                   <!--<![endif]-->
+                   <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                    <tr style="display: table-row; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+                     <td style="width: 100%; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <span class="rio_15_grey rio_lh_20" style="line-height: 20px; color: rgb(86, 89, 89); font-size: 15px; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; font-weight: 400; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline"> Order Total: </span> </p> </td>
+                     <td class="rio_no_wrap             rio_text_align_right
+" style="width: 100%; white-space: nowrap !important; text-align: right; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <p style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <span class="rio_15_heavy_black rio_lh_20" style="line-height: 20px; color: rgb(15, 17, 17); font-size: 15px; font-weight: 700; display: block; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-style: normal; margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline"> $7.49 </span> </p> </td>
+                    </tr>
+                   </tbody>
+                  </table>
+                  <!--[if mso]></td></tr></table><![endif]-->
+                  <!--[if mso]>
+<table cellpadding="0" cellspacing="0"><tr><td style="background-color: transparent;" colspan="1" height="8"></td></tr></table>
+<![endif]-->
+                  <!--[if mso]>
+<table cellpadding="0" cellspacing="0"><tr><td style="background-color: transparent;" colspan="1" height="8"></td></tr></table>
+<![endif]-->
+                  <!--[if mso]>
+    <table class="rio_card_v2" cellpadding="8"><tr><td>
+    <table class="rio_card_v2"  width="509">
+    <![endif]-->
+                  <!--[if !mso]>
+    <!-->
+                  <table class="rio_card_v2" style="background-color: rgb(255, 255, 255); border-radius: 4px; padding: 12px 8px 16px 8px; margin-bottom: 0px !important; margin-top: 8px !important; margin: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                   <!--<![endif]-->
+                   <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                    <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                     <td id="marketingContent" class="rio_word_break" style="word-break: break-word; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+                      <!--rbd-->
+                      <div class="celwidget pd_rd_w-x2hsh content-id-amzn1.sym.e8f5a9d3-51d6-473f-aa67-49440df946f6:amzn1.symc.54fc3377-3bca-4a3a-9297-605d601e33cd pf_rd_p-e8f5a9d3-51d6-473f-aa67-49440df946f6 pf_rd_r-85BV349ANAWBJ6GNKGSF pd_rd_wg-71K5T pd_rd_r-ad78442e-9d98-4346-a3ab-512dfaef3aa3 c-f" cel_widget_id="p13n-asin-list-plain_email-order-confirmation_0" data-csa-op-log-render="" data-csa-c-content-id="amzn1.sym.e8f5a9d3-51d6-473f-aa67-49440df946f6:amzn1.symc.54fc3377-3bca-4a3a-9297-605d601e33cd" data-csa-c-slot-id="email-order-confirmation-1" data-csa-c-type="widget" data-csa-c-painter="p13n-asin-list-plain-cards" style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+                       <script>if(window.mix_csa){window.mix_csa('[cel_widget_id="p13n-asin-list-plain_email-order-confirmation_0"]', '#CardInstance7klP99Ow28kjZE3HDmfdBQ')('mark', 'bb')}</script>
+                       <script>if(window.uet){window.uet('bb','p13n-asin-list-plain_email-order-confirmation_0',{wb: 1})}</script>
+                       <style>._cDEzb_welcome_2Dav7{background:-webkit-linear-gradient(#01a4b5,#008296,#383e3e);background:linear-gradient(#01a4b5,#008296,#383e3e);color:#fff;padding:40px;text-align:center}._cDEzb_welcome_2Dav7 h1{font-size:4em}._cDEzb_welcome_2Dav7 h2{font-size:2.5em}._cDEzb_example_286SK{padding:40px}</style>
+                       <!--CardsClient-->
+                       <table style="width: 100%; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important" id="CardInstance7klP99Ow28kjZE3HDmfdBQ" data-card-metrics-id="p13n-asin-list-plain_email-order-confirmation_0">
+                        <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                         <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                          <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+                           <table width="100%" bgcolor="#FFFFFF" style="vertical-align: central; background: white; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                            <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                             <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                              <td style="text-align: left; font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-size: 18px; font-weight: 700; color: rgb(15, 17, 17); line-height: 22px; padding: 12px 8px; margin: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline">Keep shopping for</td>
+                             </tr>
+                            </tbody>
+                           </table></td>
+                         </tr>
+                         <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                          <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">
+                           <table width="100%" cellspacing="0" cellpadding="0" border="0" style="vertical-align: central; background: white; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                            <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                             <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                              <td width="48%" bgcolor="#ffffff" style="vertical-align: middle; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit">
+                               <table style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                                <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                                 <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                                  <td align="center" style="min-width: 80px; padding: 12px 4px 8px 4px; vertical-align: middle; margin: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit"><a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=5AF1T3WWI2Q5&T=C&U=https%3A%2F%2Fwww.amazon.com%2FPURA-DOR-Frankincense-Therapeutic-Aromatherapy%2Fdp%2FB07PQMLFJB%2Fref%3Dpe_386300_440135490_ci_mcx_mi_sccl_1%2F142-2846343-6549411%2Fref%3Dci_mcx_mi%3F_encoding%3DUTF8%26pd_rd_i%3DB07PQMLFJB%26psc%3D1%26pd_rd_w%3Dx2hsh%26content-id%3Damzn1.sym.e8f5a9d3-51d6-473f-aa67-49440df946f6%253Aamzn1.symc.54fc3377-3bca-4a3a-9297-605d601e33cd%26pf_rd_p%3De8f5a9d3-51d6-473f-aa67-49440df946f6%26pf_rd_r%3D85BV349ANAWBJ6GNKGSF%26pd_rd_wg%3D71K5T%26pd_rd_r%3Dad78442e-9d98-4346-a3ab-512dfaef3aa3&H=95AMAHKAJGACQRYL1KQ3TI3F51SA&ref_=pe_386300_440135490_ci_mcx_mi_sccl_1" style="color: rgb(0, 113, 133) !important; text-decoration: none; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline"><img style="margin: 0 8px 0 8px; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; height: auto; line-height: 100%; text-decoration: none; -ms-interpolation-mode: bicubic" src="https://m.media-amazon.com/images/I/81iyoDZ0+rL._AC_SX80_SY80_SS80_.jpg" alt="PURA D'OR Organic Frankincense Essential Oil (4oz with Glass Dropper) 100% Pure &amp; Natural Therapeutic Grade for Hair,Body,Ski" width="80" height="80" /></a></td>
+                                  <td style="padding: 12px 4px 8px 4px; min-width: 80px; margin: 4px; vertical-align: middle; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit">
+                                   <table style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                                    <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                                     <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                                      <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"><a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=27DAIZ6Z7DP88&T=C&U=https%3A%2F%2Fwww.amazon.com%2FPURA-DOR-Frankincense-Therapeutic-Aromatherapy%2Fdp%2FB07PQMLFJB%2Fref%3Dpe_386300_440135490_ci_mcx_mi_sccl_1%2F142-2846343-6549411%2Fref%3Dci_mcx_mi%3F_encoding%3DUTF8%26pd_rd_i%3DB07PQMLFJB%26psc%3D1%26pd_rd_w%3Dx2hsh%26content-id%3Damzn1.sym.e8f5a9d3-51d6-473f-aa67-49440df946f6%253Aamzn1.symc.54fc3377-3bca-4a3a-9297-605d601e33cd%26pf_rd_p%3De8f5a9d3-51d6-473f-aa67-49440df946f6%26pf_rd_r%3D85BV349ANAWBJ6GNKGSF%26pd_rd_wg%3D71K5T%26pd_rd_r%3Dad78442e-9d98-4346-a3ab-512dfaef3aa3&H=67IDNSEG255TCADNH3PAOZAL4Y8A&ref_=pe_386300_440135490_ci_mcx_mi_sccl_1" style="font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-size: 15px; text-decoration: none; color: rgb(0, 113, 133) !important; line-height: 20px; font-weight: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline">PURA D'OR Organic Frankincense...</a></td>
+                                     </tr>
+                                     <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                                      <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"><a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=WJBDGWM79RJ2&T=C&U=https%3A%2F%2Fwww.amazon.com%2FPURA-DOR-Frankincense-Therapeutic-Aromatherapy%2Fdp%2FB07PQMLFJB%2Fref%3Dpe_386300_440135490_ci_mcx_mi_sccl_1%2F142-2846343-6549411%2Fref%3Dci_mcx_mi%3F_encoding%3DUTF8%26pd_rd_i%3DB07PQMLFJB%26psc%3D1%26pd_rd_w%3Dx2hsh%26content-id%3Damzn1.sym.e8f5a9d3-51d6-473f-aa67-49440df946f6%253Aamzn1.symc.54fc3377-3bca-4a3a-9297-605d601e33cd%26pf_rd_p%3De8f5a9d3-51d6-473f-aa67-49440df946f6%26pf_rd_r%3D85BV349ANAWBJ6GNKGSF%26pd_rd_wg%3D71K5T%26pd_rd_r%3Dad78442e-9d98-4346-a3ab-512dfaef3aa3&H=SGOU4EW7R0Y0KTOTAUITSDNZBSEA&ref_=pe_386300_440135490_ci_mcx_mi_sccl_1" style="text-decoration: none; color: rgb(0, 113, 133) !important; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline"><span style="font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-size: 15px; text-decoration: none; color: rgb(86, 89, 89); line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; vertical-align: baseline">$20.10</span><span style="vertical-align: -3px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit"><img style="margin: 0px 4px; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; height: auto; line-height: 100%; text-decoration: none; -ms-interpolation-mode: bicubic" src="https://m.media-amazon.com/images/G/01/StreamDEX/prime_badge_small.png" border="0" alt="Prime shipping available" /></span></a></td>
+                                     </tr>
+                                    </tbody>
+                                   </table></td>
+                                 </tr>
+                                </tbody>
+                               </table></td>
+                              <td width="48%" bgcolor="#ffffff" style="vertical-align: middle; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit">
+                               <table style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                                <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                                 <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                                  <td align="center" style="min-width: 80px; padding: 12px 4px 8px 4px; vertical-align: middle; margin: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit"><a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=3HNPR47I0Q36D&T=C&U=https%3A%2F%2Fwww.amazon.com%2FSENCTRL-Pressure-Silicone-Liquid-Stainless%2Fdp%2FB0C2XJ6ZLZ%2Fref%3Dpe_386300_440135490_ci_mcx_mi_sccl_2%2F142-2846343-6549411%2Fref%3Dci_mcx_mi%3F_encoding%3DUTF8%26pd_rd_i%3DB0C2XJ6ZLZ%26psc%3D1%26pd_rd_w%3Dx2hsh%26content-id%3Damzn1.sym.e8f5a9d3-51d6-473f-aa67-49440df946f6%253Aamzn1.symc.54fc3377-3bca-4a3a-9297-605d601e33cd%26pf_rd_p%3De8f5a9d3-51d6-473f-aa67-49440df946f6%26pf_rd_r%3D85BV349ANAWBJ6GNKGSF%26pd_rd_wg%3D71K5T%26pd_rd_r%3Dad78442e-9d98-4346-a3ab-512dfaef3aa3&H=QGYSLLAXVLB4QPTVBDASYMVZ0CYA&ref_=pe_386300_440135490_ci_mcx_mi_sccl_2" style="color: rgb(0, 113, 133) !important; text-decoration: none; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline"><img style="margin: 0 8px 0 8px; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; height: auto; line-height: 100%; text-decoration: none; -ms-interpolation-mode: bicubic" src="https://m.media-amazon.com/images/I/61bngepqAML._AC_SX80_SY80_SS80_.jpg" alt="SENCTRL 0-15 Psi Fuel Pressure Gauge, 1-1/2&quot; Dial Size, 1/8&quot; NPT Back Mount, Silicone Oil Liquid Filled, Stainless Steel Case" width="80" height="80" /></a></td>
+                                  <td style="padding: 12px 4px 8px 4px; min-width: 80px; margin: 4px; vertical-align: middle; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit">
+                                   <table style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; background: rgb(255, 255, 255); display: block; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+                                    <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                                     <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                                      <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"><a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=1X5NAB38LK3UV&T=C&U=https%3A%2F%2Fwww.amazon.com%2FSENCTRL-Pressure-Silicone-Liquid-Stainless%2Fdp%2FB0C2XJ6ZLZ%2Fref%3Dpe_386300_440135490_ci_mcx_mi_sccl_2%2F142-2846343-6549411%2Fref%3Dci_mcx_mi%3F_encoding%3DUTF8%26pd_rd_i%3DB0C2XJ6ZLZ%26psc%3D1%26pd_rd_w%3Dx2hsh%26content-id%3Damzn1.sym.e8f5a9d3-51d6-473f-aa67-49440df946f6%253Aamzn1.symc.54fc3377-3bca-4a3a-9297-605d601e33cd%26pf_rd_p%3De8f5a9d3-51d6-473f-aa67-49440df946f6%26pf_rd_r%3D85BV349ANAWBJ6GNKGSF%26pd_rd_wg%3D71K5T%26pd_rd_r%3Dad78442e-9d98-4346-a3ab-512dfaef3aa3&H=ZBCW0CT0KNSBX1KROYT0TAVRN1AA&ref_=pe_386300_440135490_ci_mcx_mi_sccl_2" style="font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-size: 15px; text-decoration: none; color: rgb(0, 113, 133) !important; line-height: 20px; font-weight: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline">SENCTRL 0-15 Psi Fuel Pressure Gauge,...</a></td>
+                                     </tr>
+                                     <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                                      <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"><a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=1OVAAZYAG3HH1&T=C&U=https%3A%2F%2Fwww.amazon.com%2FSENCTRL-Pressure-Silicone-Liquid-Stainless%2Fdp%2FB0C2XJ6ZLZ%2Fref%3Dpe_386300_440135490_ci_mcx_mi_sccl_2%2F142-2846343-6549411%2Fref%3Dci_mcx_mi%3F_encoding%3DUTF8%26pd_rd_i%3DB0C2XJ6ZLZ%26psc%3D1%26pd_rd_w%3Dx2hsh%26content-id%3Damzn1.sym.e8f5a9d3-51d6-473f-aa67-49440df946f6%253Aamzn1.symc.54fc3377-3bca-4a3a-9297-605d601e33cd%26pf_rd_p%3De8f5a9d3-51d6-473f-aa67-49440df946f6%26pf_rd_r%3D85BV349ANAWBJ6GNKGSF%26pd_rd_wg%3D71K5T%26pd_rd_r%3Dad78442e-9d98-4346-a3ab-512dfaef3aa3&H=S62E2AYEIXOBKFJLAJW1COJB00MA&ref_=pe_386300_440135490_ci_mcx_mi_sccl_2" style="text-decoration: none; color: rgb(0, 113, 133) !important; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline"><span style="font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-size: 15px; text-decoration: none; color: rgb(86, 89, 89); line-height: 20px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; vertical-align: baseline">$12.95</span></a></td>
+                                     </tr>
+                                    </tbody>
+                                   </table></td>
+                                 </tr>
+                                </tbody>
+                               </table></td>
+                             </tr>
+                            </tbody>
+                           </table></td>
+                         </tr>
+                        </tbody>
+                       </table>
+                       <script>if(window.mix_csa){window.mix_csa('[cel_widget_id="p13n-asin-list-plain_email-order-confirmation_0"]', '#CardInstance7klP99Ow28kjZE3HDmfdBQ')('mark', 'be')}</script>
+                       <script>if(window.uet){window.uet('be','p13n-asin-list-plain_email-order-confirmation_0',{wb: 1})}</script>
+                       <script>if(window.mixTimeout){window.mixTimeout('p13n-asin-list-plain', 'CardInstance7klP99Ow28kjZE3HDmfdBQ', 90000)};
+P.when('mix:@amzn/mix.client-runtime', 'mix:p13n-asin-list-plain__d2OGA22z').execute(function (runtime, cardModule) {runtime.registerCardFactory('CardInstance7klP99Ow28kjZE3HDmfdBQ', cardModule).then(function(){if(window.mix_csa){window.mix_csa('[cel_widget_id="p13n-asin-list-plain_email-order-confirmation_0"]', '#CardInstance7klP99Ow28kjZE3HDmfdBQ')('mark', 'functional')}if(window.uex){window.uex('ld','p13n-asin-list-plain_email-order-confirmation_0',{wb: 1})}});});
+</script>
+                       <script>P.load.js('https://images-na.ssl-images-amazon.com/images/I/01flEqCNmTL.js?xcp');
+</script>
+                      </div> </td>
+                    </tr>
+                   </tbody>
+                  </table>
+                  <!--[if mso]>
+    </td></tr></table>
+    <![endif]--> </td>
+                </tr>
+               </tbody>
+              </table>
+              <!--[if mso]>
+    </table>
+    <![endif]-->
+              <!--[if mso]>
+    <table class="rio_footer" cellpadding="0"><tr><td>
+    <table class="rio_footer"  width="541">
+    <![endif]-->
+              <!--[if !mso]>
+    <!-->
+              <table class="rio_footer" style="color: rgb(86, 89, 89); font-family: &quot;Amazon Ember&quot;, Arial, sans-serif; font-size: 13px; font-style: normal; font-weight: 400; line-height: 18px; display: block; background: rgb(240, 242, 242); margin: 0; padding: 0; border: 0; outline: 0; vertical-align: baseline; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; border-collapse: collapse; mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important">
+               <!--<![endif]-->
+               <tbody style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                <tr style="height: 32px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                 <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <p style="margin: 0 16px; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">The payment for your invoice is processed by Amazon Payments, Inc. P.O. Box 81226 Seattle, Washington 98108-1226. If you need more information, please contact (866) 216-1075</p> </td>
+                </tr>
+                <tr style="height: 20px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                 <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <p style="margin: 0 16px; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">By placing your order, you agree to Amazon.coms <a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=2Y3HU110V870Q&T=C&U=https%3A%2F%2Fwww.amazon.com%2Fgp%2Fhelp%2Fcustomer%2Fdisplay.html%2Fref%3Dpe_386300_440135490_TE_simp_p%3Fie%3DUTF8%26nodeId%3D468496&H=MU7FQBFIHEV3GDA0M9L1YQHT9HEA&ref_=pe_386300_440135490_TE_simp_p" style="font-size: 13px; color: rgb(0, 113, 133) !important; text-decoration: none; font-family: inherit; font-weight: inherit; line-height: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline">Privacy Notice</a> and <a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=2KOE84SL2VUQ5&T=C&U=https%3A%2F%2Fwww.amazon.com%2Fgp%2Fhelp%2Fcustomer%2Fdisplay.html%2Fref%3Dpe_386300_440135490_TE_simp_p%3Fie%3DUTF8%26nodeId%3D508088&H=PT3IGZM9NFG3L8AHEZI1WQBAIIMA&ref_=pe_386300_440135490_TE_simp_p" style="font-size: 13px; color: rgb(0, 113, 133) !important; text-decoration: none; font-family: inherit; font-weight: inherit; line-height: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline"> Conditions of Use</a>. Unless otherwise noted, items sold by Amazon.com are subject to sales tax in select states in accordance with the applicable laws of that state. If your order contains one or more items from a seller other than Amazon.com, it may be subject to state and local sales tax, depending upon the seller's business policies and the location of their operations. Learn more about <a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=29OAAZIKTH7K8&T=C&U=https%3A%2F%2Fwww.amazon.com%2Fgp%2Fhelp%2Fcustomer%2Fdisplay.html%2Fref%3Dpe_386300_440135490_hp_bc_nav%3Fie%3DUTF8%26nodeId%3D202029700&H=LIEIDZJKDHBAPSTXMQWKUAMVRE8A&ref_=pe_386300_440135490_hp_bc_nav" style="font-size: 13px; color: rgb(0, 113, 133) !important; text-decoration: none; font-family: inherit; font-weight: inherit; line-height: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline">tax and seller information</a>.</p> </td>
+                </tr>
+                <tr style="height: 20px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                 <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <p style="margin: 0 16px; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline">This email was sent from a notification-only address that cannot accept incoming email. Please do not reply to this message.</p> </td>
+                </tr>
+                <tr style="height: 20px; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block"></tr>
+                <tr style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; display: block">
+                 <td style="margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline"> <a href="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=KRK7DB32JBMS&T=C&U=https%3A%2F%2Fwww.amazon.com%3Fie%3DUTF8%26ref_%3Dpe_386300_440135490_scr_home&H=BXYHEJDZNDJC6V81JFLXZATTBP8A&ref_=pe_386300_440135490_scr_home" title="Amazon.com" style="font-size: 13px; color: rgb(0, 113, 133) !important; text-decoration: none; font-family: inherit; font-weight: inherit; line-height: inherit; margin: 0; padding: 0; border: 0; outline: 0; font-style: inherit; vertical-align: baseline"> <img class="rio_amazon_smile" alt="Amazon.com" src="https://m.media-amazon.com/images/G/01/outbound/OutboundTemplates/Smile_Logo_Light._BG240,242,242_.png" height="43" style="width: 86px; height: 43px; display: block; margin: 0; padding: 0; border: 0; outline: 0; font-weight: inherit; font-style: inherit; font-size: 100%; font-family: inherit; vertical-align: baseline; line-height: 100%; text-decoration: none; -ms-interpolation-mode: bicubic" /> </a> </td>
+                </tr>
+               </tbody>
+              </table>
+              <!--[if mso]>
+    </td></tr></table>
+    <![endif]--> </td>
+            </tr>
+           </tbody>
+          </table> </td>
+        </tr>
+       </tbody>
+      </table> </td>
+    </tr>
+   </tbody>
+  </table>
+  <!--[if mso | IE]></td></tr></table><![endif]-->
+  <style type="text/css">
+html, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, font, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	font-weight: inherit;
+	font-style: inherit;
+	font-size: 100%;
+	font-family: inherit;
+	vertical-align: baseline;
+}
+
+@media only screen and (max-width: 480px) {
+	body {
+		width: 375px !important;
+	}
+	td.rio_main_td {
+		width: 375px !important;
+	}
+	td.rio_body_td {
+		width: 375px !important;
+	}
+	.rio_container {
+		width: 375px !important;
+	}
+}
+
+html {
+	display: table;
+	background-color: #FFFFFF;
+	width: 100%;
+}
+
+body, table {
+	background: #FFF;
+	display: block;
+	-webkit-text-size-adjust: 100%;
+	-ms-text-size-adjust: 100%;
+	margin: 0 auto;
+	padding: 0;
+}
+
+tbody {
+	display: block;
+}
+
+table {
+	border-collapse: collapse;
+	mso-table-lspace: 0pt !important;
+	mso-table-rspace: 0pt !important;
+}
+
+.rio_container {
+	cellspacing:0;
+	width:525px;
+	margin:0 auto;
+}
+
+.rio_inner_container {
+	width: 100%;
+}
+
+td.rio_main_td {
+	width: 525px;
+	border: 0 !important;
+	padding: 0 !important;
+	border-collapse: collapse !important;
+	margin: 0 auto;
+}
+
+td.rio_body_td {
+	width: 525px;
+}
+
+
+tr {
+	vertical-align:top;
+	display: block;
+}
+
+a {
+	color: #007185;
+	font-family: "Amazon Ember", Arial, sans-serif;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 20px;
+	text-decoration: none;
+	font-size: 15px;
+}
+
+.rio_link {
+	color: #007185 !important;
+	font-family: "Amazon Ember", Arial, sans-serif;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 20px;
+	text-decoration: none;
+	font-size: 15px;
+}
+
+p span {
+	display: block;
+	font-family: "Amazon Ember", Arial, sans-serif;
+	font-size: 15px;
+	color: #0F1111;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 20px;
+}
+
+.rio_footer {
+	color: #565959;
+	font-family: "Amazon Ember", Arial, sans-serif;
+	font-size: 13px;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 18px;
+	display: block;
+	background: #F0F2F2;
+}
+
+.rio_footer a {
+	font-size: 13px;
+	color: #007185 !important;
+}
+
+.rio_footer p {
+	margin: 0 16px;
+}
+
+.rio_hz_line {
+	height: 1px;
+	background: #D5D9D9;
+	padding: 0;
+}
+
+.rio_asin_img img {
+	max-height: 115px;
+	max-width: 115px;
+	margin: auto;
+	display: block;
+	padding: 8px;
+	mix-blend-mode: multiply;
+}
+
+.rio_asin_img a {
+	background-color: transparent;
+}
+
+.rio_asin_img {
+	background-image: linear-gradient(rgba(15, 17, 17, 0.03), rgba(15, 17, 17, 0.03));
+	border-radius: 4px;
+	display: table-cell;
+	width: 131px;
+	height: 131px;
+	vertical-align: middle;
+	text-align: center;
+	isolation: isolate;
+}
+
+img {
+	border: 0;
+	height: auto;
+	line-height: 100%;
+	outline: none;
+	text-decoration: none;
+	-ms-interpolation-mode: bicubic;
+}
+
+.rio_info_alert_icon {
+	width: 18px;
+	height: 18px;
+}
+
+.rio_info_alert_icon img{
+	margin-top: 1px !important;
+	width: 18px;
+	height: 18px;
+}
+
+.rio_info_text td {
+	vertical-align: top;
+}
+
+.rio_info_text a {
+	color: #007185 !important;
+}
+
+.rio_info_text b {
+	font-weight: 400;
+}
+
+.rio_critical_info {
+	color: #494D4D;
+	font-family: "Amazon Ember", Arial, sans-serif;
+	font-size: 14px;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 20px;
+	background-color: #0F8698;
+	border: 8px #0F8698 solid;
+	display: block;
+}
+
+.rio_critical_info_inner {
+	display: inline-table;
+	table-layout: fixed;
+	padding: 12px 8px 16px 8px;
+	background-color: #FFFFFF;
+	border-radius: 4px;
+}
+
+.rio_btn {
+	border-radius: 100px;
+	text-underline-color: #FFD814;
+	display: inline-block;
+	mso-padding-alt: 0;
+	vertical-align: middle;
+	mso-line-height-rule: at-least;
+}
+
+.rio_btn span {
+	color: #0F1111;
+	font-size: 13px;
+	font-weight: 400;
+	display: table-cell;
+	padding: 8px 16px;
+	line-height: 18px;
+	vertical-align: middle;
+	text-align: center;
+	font-family: "Amazon Ember", Arial, sans-serif;
+}
+
+.rio_td_cta_white {
+    background-color: #FEFEFE;
+    border: 1px solid #D5D9D9;
+    padding: 6px 16px;
+}
+
+.rio_td_cta_yellow {
+    background-color: #FFD814;
+    border: 1px solid #FCD200;
+    padding: 6px 16px;
+}
+
+p span span, .rio_btn span span, .rio_footer p span {
+	display: inline;
+}
+
+.rio_bg_yellow {
+	background: #FFD814;
+}
+
+.rio_bg_white {
+	background: #FFFFFF;
+}
+
+.rio_border_yellow {
+	border: 1px solid #FCD200 !important;
+}
+
+.rio_border_nickel {
+	border: 1px solid #D5D9D9 !important;
+}
+
+
+.rio_main_td a {
+	color: inherit;
+	text-decoration: none;
+	font-size: inherit;
+	font-family: inherit;
+	font-weight: inherit;
+	line-height: inherit;
+}
+
+.rio_amazon_logo {
+	height: 58px;
+	width: auto;
+	max-width: 100%;
+	display: block;
+	border: 0;
+	background-color: #FFFFFF;
+}
+
+.rio_lh_20 {
+	line-height: 20px;
+}
+
+.rio_lh_18 {
+	line-height: 18px;
+}
+
+.rio_amazon_smile {
+	width: 86px;
+	height: 43px;
+	display: block;
+}
+
+.rio_18_heavy {
+	color: #0F1111;
+	font-size: 18px;
+	font-weight: 700;
+	line-height: 22px;
+}
+
+.rio_15_heavy_green {
+	color: #067D62;
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.rio_15_heavy_black {
+	color: #0F1111;
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.rio_15_black {
+	color: #0F1111;
+	font-size: 15px;
+	font-weight: 400;
+}
+
+.rio_15_heavy_blue {
+	color: #007185;
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.rio_15_grey {
+	color: #565959;
+	font-size: 15px;
+}
+
+.rio_13_grey {
+	color: #565959;
+	font-size: 13px;
+}
+
+.rio_13_heavy_grey {
+	color: #565959;
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.rio_13_grey_href {
+	color: #565959 !important;
+	font-size: 13px;
+}
+
+.rio_15_grey_order_number {
+	color: #0F1111;
+	font-size: 15px;
+}
+
+.rio_summary {
+	color: #494D4D;
+	font-size: 14px;
+	font-weight: 400;
+	display: block;
+	background: #FFF;
+	padding: 16px 16px 16px 16px;
+}
+
+.rio_hero_headline {
+	color: #0F1111;
+	font-size: 22px;
+	font-weight: 700;
+	line-height: 28px;
+}
+
+.rio_asin_internal_text {
+	vertical-align: middle;
+}
+
+.rio_no_deco_href {
+	text-decoration: none;
+}
+
+.rio_micro_space {
+	margin-top: 4px !important;
+}
+
+.rio_body {
+	padding: 8px;
+	background-color: #d5d9d9 !important;
+	border-spacing: 0;
+}
+
+table {
+	mso-table-lspace: 0pt !important;
+	mso-table-rspace: 0pt !important;
+}
+
+.rio_card {
+	background-color: #FFFFFF;
+	border-radius: 4px;
+	padding: 12px 8px 16px 8px;
+	margin-bottom: 8px !important;
+}
+
+.rio_last_card {
+	background-color: #FFFFFF;
+	border-radius: 4px;
+	padding: 12px 8px 16px 8px;
+	margin-bottom: 0 !important;
+}
+
+.rio_total_info_card {
+	background-color: #FFFFFF;
+	padding: 12px 8px 16px 8px;
+	margin-bottom: 0 !important;
+	border-radius: 4px 4px 0 0;
+}
+
+.rio_total_card {
+	margin-top: 0;
+	color: #494D4D;
+	background: #F0F2F2;
+	padding: 12px 8px 12px 8px !important;
+	border-radius: 0 0 4px 4px !important;
+}
+
+.rio_total_last_card {
+	margin-bottom: 0 !important;
+}
+
+.rio_total_card td {
+	width: 100%;
+}
+
+.rio_total_card tr {
+	display: table-row;
+}
+
+.rio_allow_wrap {
+    white-space: normal !important;
+}
+
+.rio_no_wrap {
+	white-space: nowrap !important;
+}
+
+.rio_text_align_right {
+	text-align: right;
+	white-space: nowrap !important;
+}
+
+.rio_text_align_left {
+	text-align: left;
+	white-space: nowrap !important;
+}
+
+.rio_order_total_metadata a {
+	color: #007185 !important;
+}
+
+#outlook a {
+	padding: 0;
+}
+
+#rio_container #rio_inner_container p span a[x-apple-data-detectors=true]{
+	color: inherit !important;
+	-webkit-text-decoration-color: inherit !important;
+	text-decoration: inherit !important;
+}
+
+    .rio_card_v2 , .rio_card_b2b_asin_override {
+        background-color: #FFFFFF;
+        border-radius: 4px;
+        padding: 12px 8px 16px 8px;
+        margin-bottom: 0px !important;
+        margin-top: 8px !important;
+    }
+
+    .rio_total_info_card {
+        margin-top: 8px !important;
+    }
+
+    .rio_card_v2 a {
+        color: #007185 !important;
+    }
+
+    rio_card_b2b_asin_override {
+        color: #007185;
+    }
+
+    .rio_card_v2 b , .rio_card_b2b_asin_override b {
+        font-weight: 400;
+    }
+
+    .order_total_or_less_text_style {
+        display: inline !important;
+    }
+
+    .base_total_text_style {
+        display: inline !important;
+        font-weight: 700;
+    }
+
+    .rio_total_card {
+        border-radius: 0 0 4px 4px !important;
+    }
+
+    .rio_micro_space {
+        margin-top: 4px !important;
+    }
+
+    .rio_15_heavy_black a {
+        color: #007185 !important;
+    }
+
+    .rio_info_text span {
+        color: #0F1111 !important;
+        font-size: 15px;
+    }
+
+    .rio_13_grey a {
+        color: #007185 !important;
+    }
+
+    .rio_inline_link_span a {
+        color: #007185 !important;
+    }
+
+    .fan_funded_metadata strong {
+        font-weight: 700 !important;
+    }
+
+    .fan_funded_metadata td {
+        padding: 0 0 0 16px;
+    }
+
+    .fan_funded_metadata ol {
+        font-family: 'Amazon Ember', Arial, sans-serif;
+    }
+
+    .fan_funded_metadata li {
+        padding: 4px 0 0 0;
+    }
+
+    .rio_word_break {
+        word-break: break-word;
+    }
+
+    .rio_asin_card_img_td {
+        vertical-align: top;
+    }
+
+    .rio_asin_metadata_13_grey {
+        color: #565959;
+        font-size: 13px;
+    }
+
+    .rio_asin_metadata_13_grey a {
+        color: #565959 !important;
+    }
+
+    .rio_primeLogo {
+        vertical-align: middle;
+        width: 53px;
+        height: 17px;
+        padding: 0px 0px 0.9px 0px;
+    }
+</style>
+  <!--[if mso]>
+<noscript>
+    <xml>
+        <o:OfficeDocumentSettings>
+            <o:AllowPNG/>
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+        </o:OfficeDocumentSettings>
+    </xml>
+</noscript>
+<![endif]-->
+ <img width="1" height="1" src="https://www.amazon.com/gp/r.html?C=1GDZONJ9HF37K&K=39KY183HTBH0A&M=urn:rtn:msg:20240427220759d036e935def04886938baa3219d0p0na&R=365SBTOOVQ2XY&T=E&U=https%3A%2F%2Fimages-na.ssl-images-amazon.com%2Fimages%2FG%2F01%2Fnav%2Ftransp.gif&H=XEU06FM1P3RGOQCPSA9WKGG6IBWA&ref_=pe_386300_440135490_open" /></body>
+</html>

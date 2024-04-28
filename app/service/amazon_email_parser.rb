@@ -60,7 +60,7 @@ class AmazonEmailParser
         if date.nil?
           item.error!("Unable to parse date")
         else
-          item.delivery_date = date
+          item.delivery_date = date.encode("UTF-8")
         end
       }
       item.time_range = arrival_time(item) # might be `nil`
@@ -88,8 +88,25 @@ class AmazonEmailParser
     loop { date.past? ? date += 1.week : (break date) }
   end
 
+  def element(item) # the `tr` wrapping the image and name
+    @elements ||= {}
+    @elements[item.item_id] ||= begin
+      found = @doc.xpath("//a[contains(@href, '#{item.item_id}')]")
+      found.filter_map { |ele| ele.ancestors("tr").first }.first
+    end
+  end
+
+  def section(item) # the `table` wrapping the whole section (not just the items)
+    @sections ||= {}
+    @sections[item.item_id] ||= begin
+      element(item)&.ancestors("table")&.each_cons(2) { |table_a, table_b|
+        break table_a if table_b && table_b["class"] == "rio_body"
+      }
+    end
+  end
+
   def arrival_date(item)
-    table_html = element(item)&.ancestors("table")&.first&.inner_html
+    table_html = section(item)&.inner_html
     return item.error!("No info card") if table_html.blank?
 
     months = month_regex
@@ -105,7 +122,7 @@ class AmazonEmailParser
   end
 
   def arrival_time(item)
-    table_html = element(item)&.ancestors("table")&.first&.inner_html
+    table_html = section(item)&.inner_html
     return item.error!("No info card") if table_html.blank?
 
     match = table_html.match(/(\d{1,2} ?[ap]\.?m\.?)\W*(\d{1,2} ?[ap]\.?m\.?)?/i)
@@ -118,13 +135,6 @@ class AmazonEmailParser
 
   def shortened_name(item)
     ChatGPT.short_name_from_order(full_name(item), item).to_s
-  end
-
-  def element(item) # the `tr` wrapping the image and name
-    item.element ||= begin
-      found = @doc.xpath("//a[contains(@href, '#{item.item_id}')]")
-      found.filter_map { |ele| ele.ancestors("tr").first }.first
-    end
   end
 
   def full_name(item)
