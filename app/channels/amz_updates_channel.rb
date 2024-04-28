@@ -10,7 +10,6 @@ class AmzUpdatesChannel < ApplicationCable::Channel
       order.destroy
     elsif data["rename"]
       order.name = data["rename"]
-      order.save
       # TODO: Allow changing the time, too
       # TODO: Allow adding new items for tracking
     # elsif data["add"]
@@ -23,6 +22,7 @@ class AmzUpdatesChannel < ApplicationCable::Channel
     #   }
     end
 
+    AmazonOrder.save
     AmazonOrder.broadcast
   end
 
