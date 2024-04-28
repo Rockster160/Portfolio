@@ -14,7 +14,11 @@ class AmazonOrder
   )
 
   def self.all
-    @@all ||= (DataStorage[:amazon_deliveries] || []).map { |data| new(data) }
+    @@all ||= reload
+  end
+
+  def self.reload
+    @@all = (DataStorage[:amazon_deliveries] || []).map { |data| new(data) }
   end
 
   def self.clear

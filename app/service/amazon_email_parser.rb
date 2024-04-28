@@ -152,7 +152,7 @@ class AmazonEmailParser
   def retrieve_full_name(item)
     res = ::RestClient.get(item.url)
     item_doc = Nokogiri::HTML(res.body)
-    item_doc.title[/[^:]*? : (.*?) : [^:]*?/im, 1].tap { |name|
+    item_doc.title[/(?:[^:]*? : |Amazon.com: )(.*?) : [^:]*?/im, 1].tap { |name|
       error("Unable to parse title: [#{item.item_id}]:#{item_doc.title}") if name.blank?
     }.to_s
   rescue => e
