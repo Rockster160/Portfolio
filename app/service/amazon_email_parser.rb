@@ -1,22 +1,14 @@
 class AmazonEmailParserError < StandardError; end
 class AmazonEmailParser
+  include Memoizeable
+
   def self.parse(email)
     Time.use_zone(User.timezone) do
       new(email).parse
     end
   end
 
-  # TODO: Detect if there are multiple items in the email and add each one as a different item!
-  # TODO: If the name has an ellipsis, then open the page and pull from it instead.
-  # If failed, fall back to the ellipsis name.
-
-  # Test emails:
-  # 3550 - different format (basic info card - Out for delivery "Today")
-  # 3545 - different format (last info card - Order delayed "tomorrow by...")
-  # 3465 - multiple items
-  # 3458, 3455, 3454, 3450, 3393, 3392, 3347, 3346, 3344, 3342, 3338, 3336, 3335, 3334,
-  # 3332, 3330, 3329, 3328, 3327, 3325, 3324, 3323, 3321, 3318, 3317, 3312, 3311, 3311, 3310, 3280,
-  # 3275, 3274, 3271, 3270, 3264, 3261, 3258, 3255, 3254, 3253
+  memoize order_id: -> { @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/] }
 
   def initialize(email)
     @email = email
@@ -26,53 +18,69 @@ class AmazonEmailParser
     @doc = Nokogiri::HTML(@email.html_body)
     return Jarvis.cmd("Add Amazon Email no order id: #{@email.id}") if order_id.blank?
 
-    @order = AmazonOrder.find(order_id)
-    @order.errors = [] # Clean previous errors
-
     if @email.html_body.include?("Your package has been delivered!")
-      @order.delivered = true
+      doall { |item| item.delivered = true }
     else
       parse_email
     end
 
-    @order.email_ids << @email.id unless @order.email_ids.include?(@email.id)
-    @order.save
+    AmazonOrder.save
     AmazonOrder.broadcast
   rescue StandardError => e
     SlackNotifier.err(e, "Error parsing Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
   end
 
+  def order_items
+    @order_items ||= begin
+      urls = @doc.to_s.scan(/\"https:\/\/www\.amazon\.com\/gp\/.*?\"/)
+
+      item_ids = urls.filter_map { |url|
+        next if url.include?("orderId%3D")
+
+        full_url = url[1..-2]
+        full_url[/www\.amazon\.com\%2Fdp\%2F([a-z0-9]+)\%2Fref/i, 1].presence
+      }.uniq
+
+      item_ids.map { |item_id|
+        AmazonOrder.find_or_create(order_id, item_id).tap { |item|
+          item.errors = [] # Clear errors since a new email came in
+          item.email_ids << @email.id unless item.email_ids.include?(@email.id)
+        }
+      }
+    end
+  end
+
+  def doall(&block)
+    order_items.each { |item| block.call(item) }
+  end
+
   def parse_email
     arrival_date.tap { |date|
       if date.nil?
-        @order.error!("Unable to parse date")
+        doall { |item| item.error!("Unable to parse date") }
       else
-        @order.delivery_date = date
+        doall { |item| item.delivery_date = date }
       end
     }
-    @order.time_range = arrival_time # Might be `nil`
-    @order.name ||= shortened_name.presence || full_name
-  end
-
-  def order_id
-    @order_id ||= @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/]
+    arrival_time.tap { |time| doall { |item| item.time_range = time } } # might be `nil`
+    doall { |item| item.name ||= shortened_name(item) }
   end
 
   def regex_words(*words)
     Regexp.new("\\b(?:#{words.join("|")})\\b")
   end
 
-  def month_regex
+  memoize month_regex: -> {
     month_names = Date::MONTHNAMES.compact
     with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
     regex_words(with_shorts)
-  end
+  }
 
-  def wday_regex
+  memoize wday_regex: -> {
     month_names = Date::DAYNAMES.compact
     with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
     regex_words(with_shorts)
-  end
+  }
 
   def future(date)
     loop { date.past? ? date += 1.week : (break date) }
@@ -101,6 +109,8 @@ class AmazonEmailParser
   end
 
   def arrival_date
+    month_regex
+    month_regex
     months = month_regex
     wdays = wday_regex
     date_regexp = /(#{months}) \d{1,2}/
@@ -122,36 +132,34 @@ class AmazonEmailParser
     [start_range, end_range].compact.map { |time| time.gsub(/[^\d]/, "") }.join("-") + meridian
   end
 
-  def shortened_name
-    @shortened_name ||= ChatGPT.short_name_from_order(full_name).to_s
+  def shortened_name(item)
+    ChatGPT.short_name_from_order(full_name(item), item).to_s
   end
 
-  def full_name
-    @full_name ||= begin
-      listed_name = @doc.at_css(".rio_black_href")&.text&.squish.to_s
-      (listed_name.include?("...") ? listed_name : retrieve_full_name).presence || listed_name
+  def element(item) # the `tr` wrapping the image and name
+    item.element ||= begin
+      found = @doc.xpath("//a[contains(@href, '#{item.item_id}')]")
+      found.filter_map { |ele| ele.ancestors("tr").first }.first
     end
   end
 
-  def retrieve_full_name
-    urls = @doc.at_css(".rio_total_info_card").to_s.scan(/\"https:\/\/www\.amazon\.com\/gp\/.*?\"/)
-    item_urls = urls.filter_map { |url|
-      next if url.include?("orderId%3D")
+  def full_name(item)
+    item.full_name ||= begin
+      item.listed_name ||= element(item).at_css(".rio_black_href")&.text&.squish.to_s
 
-      full_url = url[1..-2]
-      item_id = full_url[/www\.amazon\.com\%2Fdp\%2F([a-z0-9]+)\%2Fref/i, 1]
-      next if item_id.blank?
+      if item.listed_name.include?("...")
+        retrieve_full_name(item).presence || item.listed_name
+      else
+        item.listed_name
+      end
+    end
+  end
 
-      "https://www.amazon.com/dp/#{item_id}"
-    }.uniq
-    # CGI.parse(URI.parse(url).query) # get the params from the url
-
-    item_url = item_urls.first # Could get multiple urls from this
-    # item_url = "https://www.amazon.com/dp/B01LP0V4JY"
-    res = ::RestClient.get(item_url)
+  def retrieve_full_name(item)
+    res = ::RestClient.get(item.url)
     item_doc = Nokogiri::HTML(res.body)
     item_doc.title[/[^:]*? : (.*?) : [^:]*?/im, 1].tap { |name|
-      error("Unable to parse title: #{item_doc.title}") if name.blank?
+      error("Unable to parse title: [#{item.item_id}]:#{item_doc.title}") if name.blank?
     }.to_s
   rescue => e
     SlackNotifier.err(e, "Error pulling Amazon page:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')

@@ -4,7 +4,7 @@ class AmzUpdatesChannel < ApplicationCable::Channel
   end
 
   def change(data)
-    order = AmazonOrder.find(data["id"])
+    order = AmazonOrder.find(data["order_id"], data["item_id"])
 
     if data["remove"]
       order.destroy
@@ -23,10 +23,10 @@ class AmzUpdatesChannel < ApplicationCable::Channel
     #   }
     end
 
-    ActionCable.server.broadcast(:amz_updates_channel, AmazonOrder.serialize)
+    AmazonOrder.broadcast
   end
 
   def request(_)
-    ActionCable.server.broadcast(:amz_updates_channel, DataStorage[:amazon_deliveries])
+    AmazonOrder.broadcast
   end
 end

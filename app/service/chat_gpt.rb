@@ -21,7 +21,7 @@ module ChatGPT
     @last_response = response.dig("choices", 0, "message", "content")
   end
 
-  def short_name_from_order(order_title)
+  def short_name_from_order(order_title, item=nil) # item for stubbing in specs
     prompt = "I've ordered an item online. The title is much longer than I'd like it. " \
     "I know the item I ordered, but sometimes I order multiple items so I need some way to " \
     "identify this specific item and list it. Please remove all product and brand information, "\

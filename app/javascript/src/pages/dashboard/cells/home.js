@@ -330,12 +330,12 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         let order = this.data.amz_updates[num - 1]
 
         if (/^-\d+/.test(msg)) { // Use - to remove item
-          cell.amz_socket.send({ action: "change", id: order.order_id, remove: true })
+          cell.amz_socket.send({ action: "change", order_id: order.order_id, item_id: order.item_id, remove: true })
         } else if (/^\d+\s*$/.test(msg)) { // No words means open the order
           let url = "https://www.amazon.com/gp/your-account/order-details?orderID="
           window.open(url + order.order_id.replace("#", ""), "_blank")
         } else { // Rename the order
-          cell.amz_socket.send({ action: "change", id: order.order_id, rename: msg.replace(/^\d+ /, "") })
+          cell.amz_socket.send({ action: "change", order_id: order.order_id, item_id: order.item_id, rename: msg.replace(/^\d+ /, "") })
         }
       } else if (/^add\b/i.test(msg)) { // Add item to AMZ deliveries
         cell.amz_socket.send({ action: "change", add: msg })
