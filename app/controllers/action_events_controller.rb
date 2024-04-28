@@ -192,7 +192,9 @@ class ActionEventsController < ApplicationController
 
   def raw_event_params
     params.to_unsafe_h.slice(:name, :timestamp, :notes).tap do |whitelist|
-      whitelist[:name] ||= params[:event_name].presence || params.dig(:action_event, :event_name)
+      (params[:event_name].presence || params.dig(:action_event, :event_name)).presence&.tap { |name|
+        whitelist[:name] ||= name
+      }
     end
   end
 
@@ -203,7 +205,9 @@ class ActionEventsController < ApplicationController
       :timestamp,
       :data,
     ).tap do |whitelist|
-      whitelist[:name] ||= params[:event_name].presence || params.dig(:action_event, :event_name)
+      (params[:event_name].presence || params.dig(:action_event, :event_name)).presence&.tap { |name|
+        whitelist[:name] ||= name
+      }
       whitelist[:timestamp] = whitelist[:timestamp].presence || Time.current
     end
   end
