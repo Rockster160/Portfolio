@@ -169,7 +169,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         this.flash()
 
         let data = []
-        msg.forEach(item => {
+        msg.forEach(order_data => {
           let order = order_data
           if (!order_data.delivery_date) { return }
 
