@@ -55,15 +55,17 @@ class AmazonEmailParser
   end
 
   def parse_email
-    arrival_date.tap { |date|
-      if date.nil?
-        doall { |item| item.error!("Unable to parse date") }
-      else
-        doall { |item| item.delivery_date = date }
-      end
+    doall { |item|
+      arrival_date(item).tap { |date|
+        if date.nil?
+          item.error!("Unable to parse date")
+        else
+          item.delivery_date = date
+        end
+      }
+      item.time_range = arrival_time(item) # might be `nil`
+      item.name ||= shortened_name(item)
     }
-    arrival_time.tap { |time| doall { |item| item.time_range = time } } # might be `nil`
-    doall { |item| item.name ||= shortened_name(item) }
   end
 
   def regex_words(*words)
@@ -86,45 +88,27 @@ class AmazonEmailParser
     loop { date.past? ? date += 1.week : (break date) }
   end
 
-  def delayed_card_html
-    @doc.at_css(".rio_last_card")&.inner_html.to_s
-  end
+  def arrival_date(item)
+    table_html = element(item)&.ancestors("table")&.first&.inner_html
+    return item.error!("No info card") if table_html.blank?
 
-  def basic_card_html
-    @doc.at_css(".rio_card")&.inner_html.to_s
-  end
-
-  def info_card_html
-    @doc.at_css(".rio_total_info_card")&.inner_html || fallback_html
-  end
-
-  def fallback_html
-    if fallback_card_html["Order delayed"]
-      return fallback_card_html
-    elsif basic_card_html["Out for delivery"]
-      return basic_card_html
-    end
-
-    "".tap { error("No info card") } # Always return at least an empty string, but notify if empty
-  end
-
-  def arrival_date
-    month_regex
-    month_regex
     months = month_regex
     wdays = wday_regex
     date_regexp = /(#{months}) \d{1,2}/
-    date_str = info_card_html[date_regexp]
-    return Date.today if date_str.nil? && info_card_html["Today"].present?
-    return Date.tomorrow if date_str.nil? && info_card_html["tomorrow"].present?
+    date_str = table_html[date_regexp]
+    return Date.today if date_str.nil? && table_html["Today"].present?
+    return Date.tomorrow if date_str.nil? && table_html["tomorrow"].present?
 
     Date.parse(date_str).then { |date| future(date) }&.iso8601
   rescue
     nil
   end
 
-  def arrival_time
-    match = info_card_html.match(/(\d{1,2} ?[ap]\.?m\.?)\W*(\d{1,2} ?[ap]\.?m\.?)?/i)
+  def arrival_time(item)
+    table_html = element(item)&.ancestors("table")&.first&.inner_html
+    return item.error!("No info card") if table_html.blank?
+
+    match = table_html.match(/(\d{1,2} ?[ap]\.?m\.?)\W*(\d{1,2} ?[ap]\.?m\.?)?/i)
     return unless match.present?
 
     _, start_range, end_range = match&.to_a
