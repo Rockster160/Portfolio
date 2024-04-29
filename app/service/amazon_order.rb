@@ -66,8 +66,7 @@ class AmazonOrder
   end
 
   def destroy
-    AmazonOrder.deliveries_cache.except!(order_id)
-    @@all = nil
+    @@all = AmazonOrder.all.without { |order| order.item_id == item_id }
   end
 
   def error!(str)
