@@ -66,7 +66,7 @@ class AmazonOrder
   end
 
   def destroy
-    @@all = AmazonOrder.all.without { |order| order.item_id == item_id }
+    @@all = AmazonOrder.all.select { |order| order.item_id != item_id }
   end
 
   def error!(str)
