@@ -41,7 +41,7 @@ import { dash_colors, beeps } from "../vars"
               let state = pr.mergeable_state
               state = state == "unknown" ? "?" : state
               state = state == "dirty" ? "~" : state
-              status = Text.yellow("[" + state + "]")
+              status = Text.yellow(state)
             }
           }
         }
