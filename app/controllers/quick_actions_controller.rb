@@ -15,7 +15,13 @@ class QuickActionsController < ApplicationController
 
   def update
     @page = current_user.jarvis_page
-    @page.update(blocks: params.permit!.to_h[:blocks])
+    ::WebPushNotifications.update_count(current_user)
+    @page.update(blocks: params.permit!.to_h[:blocks]) if params.key?(:blocks)
+
+    head :ok
+  end
+
+  def sync_badge
 
     head :ok
   end

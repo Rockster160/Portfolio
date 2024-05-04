@@ -39,6 +39,14 @@ class SimpleWS {
       }
 
       if (init_data.onopen && typeof(init_data.onopen) === "function") { init_data.onopen.call(sws) }
+      let url = document.querySelector(".main-wrapper").getAttribute("data-update-url")
+      fetch(url, {
+        method: "PATCH",
+        body: JSON.stringify({ resync_badges: true }),
+        headers: {
+          "Content-type": "application/json; charset=UTF-8"
+        }
+      })
     }
 
     sws.socket.onclose = function() {

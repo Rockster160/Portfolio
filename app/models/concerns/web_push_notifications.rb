@@ -28,6 +28,10 @@ class WebPushNotifications
     "Failed to push - (WebPush Error) [#{e.class}] #{e}"
   end
 
+  def self.update_count(user)
+    send_to(user, { badge: user.prompts.unanswered.reload.count })
+  end
+
   def self.format_payload(payload)
     extra_data = payload.deep_symbolize_keys!.slice!(*payload_keys)
 

@@ -11,18 +11,14 @@ class JilPromptsController < ApplicationController
     data = params.dig(:prompt, :response)&.permit!&.to_h || {}
     @prompt.update(response: data)
     @prompt.task&.execute(response: @prompt.response, params: @prompt.params)
-    WebPushNotifications.send_to(current_user, {
-      badge: current_user.prompts.unanswered.reload.count,
-    })
+    ::WebPushNotifications.update_count(current_user)
 
     redirect_to jarvis_path
   end
 
   def destroy
     @prompt.destroy
-    WebPushNotifications.send_to(current_user, {
-      badge: current_user.prompts.unanswered.reload.count,
-    })
+    ::WebPushNotifications.update_count(current_user)
     redirect_to jil_prompts_path
   end
 
