@@ -12,7 +12,7 @@ class JilPromptsController < ApplicationController
     @prompt.update(response: data)
     @prompt.task&.execute(response: @prompt.response, params: @prompt.params)
     WebPushNotifications.send_to(current_user, {
-      badge: current_user.prompts.unanswered.count,
+      badge: current_user.prompts.unanswered.reload.count,
     })
 
     redirect_to jarvis_path
