@@ -20,6 +20,9 @@ class JilPromptsController < ApplicationController
 
   def destroy
     @prompt.destroy
+    WebPushNotifications.send_to(current_user, {
+      badge: current_user.prompts.unanswered.count,
+    })
     redirect_to jil_prompts_path
   end
 
