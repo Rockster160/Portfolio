@@ -40,8 +40,18 @@ var saveSubscription = async function(subscription) {
 
 async function showLocalNotification(swRegistration, data) {
   // console.log("data", data)
-  var title = data.title || "Ardesian"
+  const title = data.title || "Ardesian"
   data.icon = data.icon || "/favicon/favicon.ico"
+  const badgeCount = data.badge
+
+  if (navigator.setAppBadge) {
+    if (badgeCount > 0) {
+      navigator.setAppBadge(badgeCount);
+    } else {
+      navigator.clearAppBadge();
+    }
+  }
+
   // https://developer.mozilla.org/en-US/docs/Web/API/notification
   swRegistration.showNotification(title, data)
 }
