@@ -40,7 +40,6 @@ var saveSubscription = async function(subscription) {
 
 async function showLocalNotification(swRegistration, data) {
   // console.log("data", data)
-  const title = data.title || "Ardesian"
   data.icon = data.icon || "/favicon/favicon.ico"
   const badgeCount = data.badge
 
@@ -53,7 +52,9 @@ async function showLocalNotification(swRegistration, data) {
   }
 
   // https://developer.mozilla.org/en-US/docs/Web/API/notification
-  swRegistration.showNotification(title, data)
+  if (data.title || data.body) {
+    swRegistration.showNotification(data.title, data)
+  }
 }
 
 self.addEventListener("activate", async function() {
