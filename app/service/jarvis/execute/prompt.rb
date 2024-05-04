@@ -45,7 +45,8 @@ class Jarvis::Execute::Prompt < Jarvis::Execute::Executor
     if Rails.env.production?
       WebPushNotifications.send_to(user, {
         title: q,
-        url: url
+        url: url,
+        badge: user.prompts.unanswered.count,
       })
     end
 

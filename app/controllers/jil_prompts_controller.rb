@@ -11,6 +11,9 @@ class JilPromptsController < ApplicationController
     data = params.dig(:prompt, :response)&.permit!&.to_h || {}
     @prompt.update(response: data)
     @prompt.task&.execute(response: @prompt.response, params: @prompt.params)
+    WebPushNotifications.send_to(current_user, {
+      badge: current_user.prompts.unanswered.count,
+    })
 
     redirect_to jarvis_path
   end
