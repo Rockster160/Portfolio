@@ -46,7 +46,7 @@ class Jarvis::Execute::Prompt < Jarvis::Execute::Executor
       WebPushNotifications.send_to(user, {
         title: q,
         url: url,
-        badge: user.prompts.unanswered.count,
+        badge: user.prompts.unanswered.reload.count,
       })
     end
 
