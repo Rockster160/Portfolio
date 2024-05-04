@@ -39,6 +39,7 @@ var saveSubscription = async function(subscription) {
 }
 
 async function showLocalNotification(swRegistration, data) {
+  console.log("[ServiceWorker] Push event:", data)
   // console.log("data", data)
   data.icon = data.icon || "/favicon/favicon.ico"
   const badgeCount = data.badge
