@@ -5,6 +5,10 @@ class AmzUpdatesChannel < ApplicationCable::Channel
 
   def change(data)
     order = AmazonOrder.find(data["order_id"], data["item_id"])
+    if !order
+      Rails.logger.warn("No order found: #{data}")
+      return
+    end
 
     if data["remove"]
       order.destroy
