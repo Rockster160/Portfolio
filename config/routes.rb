@@ -18,6 +18,7 @@ Rails.application.routes.draw do
   resource :ping, only: :create
 
   resource :jarvis, only: [:show, :update], controller: :quick_actions, as: :jarvis_page do
+    get :sync_badge
     get :render_widget
   end
   resources :jil_prompts, only: [:index, :show, :update, :destroy], path: :prompts

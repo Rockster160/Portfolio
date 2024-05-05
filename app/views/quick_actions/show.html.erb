@@ -13,7 +13,7 @@
   <meta name="theme-color" content="#00102B">
 <% end %>
 
-<div class="widget-wrapper main-wrapper" data-update-url="<%= jarvis_page_path %>" data-widget-url="<%= render_widget_jarvis_page_path %>">
+<div class="widget-wrapper main-wrapper" data-update-url="<%= jarvis_page_path %>" data-widget-url="<%= render_widget_jarvis_page_path %>" data-badge-url="<%= sync_badge_jarvis_page_path %>">
   <% @page.blocks.each do |widget_data| %>
     <% next if widget_data[:type].blank? %>
     <%= render partial: widget_data[:type], locals: { widget_data: widget_data } %>

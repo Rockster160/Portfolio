@@ -39,12 +39,21 @@ class SimpleWS {
       }
 
       if (init_data.onopen && typeof(init_data.onopen) === "function") { init_data.onopen.call(sws) }
-      let url = document.querySelector(".main-wrapper").getAttribute("data-update-url")
+      let url = document.querySelector(".main-wrapper").getAttribute("data-badge-url")
       fetch(url, {
-        method: "PATCH",
-        body: JSON.stringify({ resync_badges: true }),
+        method: "GET",
         headers: {
           "Content-type": "application/json; charset=UTF-8"
+        }
+      }).then(res => {
+        if (res.ok) {
+          res.json().then((json) => {
+            if (json.count > 0) {
+              window.navigator.setAppBadge(json.count)
+            } else {
+              window.navigator.clearAppBadge()
+            }
+          })
         }
       })
     }

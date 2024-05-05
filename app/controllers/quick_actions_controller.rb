@@ -6,6 +6,7 @@ class QuickActionsController < ApplicationController
 
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
+  after_action :repush_notifications, only: :show
 
   helper_method :current_user, :user_signed_in?
 
@@ -22,8 +23,7 @@ class QuickActionsController < ApplicationController
   end
 
   def sync_badge
-
-    head :ok
+    render json: { count: current_user.prompts.unanswered.reload.count }
   end
 
   def render_widget
@@ -50,5 +50,13 @@ class QuickActionsController < ApplicationController
     )
 
     render json: { html: widget_html, modal: modal_html }
+  end
+
+  private
+
+  def repush_notifications
+    return unless user_signed_in?
+
+    ::WebPushNotifications.update_count(current_user)
   end
 end
