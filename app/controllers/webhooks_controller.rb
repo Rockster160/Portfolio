@@ -181,7 +181,8 @@ class WebhooksController < ApplicationController
     return render(json: { data: :failure }, status: :ok) if params[:sub_auth].blank? || push_sub.blank?
 
     push_data = { endpoint: params[:endpoint] }.merge(params.permit(keys: [:auth, :p256dh])[:keys])
-    push_sub&.update(push_data)
+    # If there is an active push-sub, don't create a new one! (Debugging app losing notifications)
+    push_sub.update(push_data) if !push_sub.nil? && push_sub.pushable?
 
     render json: { data: push_sub.as_json.except(:created_at, :updated_at) }, status: :ok
   end
