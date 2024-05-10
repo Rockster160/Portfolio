@@ -9,7 +9,7 @@ import { dash_colors, text_height } from "../vars"
   const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
 
   let renderLines = function() {
-    let lines = cell.data.lines
+    let lines = cell.data?.lines || []
     cell.lines(lines)
 
     let content = cell.ele[0].querySelector(".dash-content")
