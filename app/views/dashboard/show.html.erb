@@ -21,13 +21,13 @@
 
     <% if Rails.env.development? %>
       Cell.loadConfig({
-        home: {},
-        github: {
-          deploy_uuid: "<%= JarvisTask.anyfind("Deploying...")&.uuid %>"
-        },
-        fitness: {},
-        jarvis: { w: 2 },
-        calendar: { h: 3 },
+        // home: {},
+        // github: {
+        //   deploy_uuid: "<%= JarvisTask.anyfind("Deploying...")&.uuid %>"
+        // },
+        // broker_logger: { x: 2, y: 5, env: "<%= ENV["BROKERAUTH"] %>" },
+        // jarvis: { w: 2 },
+        // calendar: { h: 3 },
       })
     <% else %>
       Cell.loadConfig({
@@ -72,7 +72,7 @@
         upcoming: { x: 4, y: 5 },
 
         timers: { x: 1, y: 6 },
-        // js: { x: 2, y: 6 },
+        broker: { x: 2, y: 6, "<%= ENV.fetch("BROKER_AUTH") %>" },
         jarvis: { x: 3, y: 6, w: 2 },
       })
     <% end %>
