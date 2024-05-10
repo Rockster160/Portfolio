@@ -24,23 +24,6 @@ import { dash_colors, text_height } from "../vars"
     content.scroll({ top: cell.data.scroll * text_height })
   }
 
-  // window.localDataChannel = consumer.subscriptions.create({
-  //   channel: "LocalDataChannel"
-  // }, {
-  //   connected: function() {
-  //     clearTimeout(window.local_data_timer)
-  //     window.local_data_timer = setTimeout(function() { window.localDataChannel.request() }, 50)
-  //   },
-  //   received: function(data) {
-  //     if (window.local_calendar_cell) {
-  //       window.local_calendar_cell.commands.render.call(window.local_calendar_cell, data.calendar)
-  //     }
-  //   },
-  //   request: function() {
-  //     return this.perform("request")
-  //   }
-  // })
-
   cell = Cell.register({
     title: "broker_logger",
     data: {
@@ -74,7 +57,7 @@ import { dash_colors, text_height } from "../vars"
       renderLines()
       cell.data.consumer = createConsumer.create('wss://itswildcat.com/cable', {
         headers: {
-          Authorization: `Bearer ${cell.config.apikey}`,,
+          Authorization: `Bearer ${cell.config.apikey}`,
         }
       });
       cell.data.subscription = cell.data.consumer.subscriptions.create("AgentsChannel", {
