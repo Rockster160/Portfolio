@@ -1,3 +1,4 @@
+import { createConsumer } from "@rails/actioncable"
 // import { Time } from "./_time"
 import { Text } from "../_text"
 import { dash_colors, text_height } from "../vars"
@@ -23,37 +24,67 @@ import { dash_colors, text_height } from "../vars"
     content.scroll({ top: cell.data.scroll * text_height })
   }
 
+  // window.localDataChannel = consumer.subscriptions.create({
+  //   channel: "LocalDataChannel"
+  // }, {
+  //   connected: function() {
+  //     clearTimeout(window.local_data_timer)
+  //     window.local_data_timer = setTimeout(function() { window.localDataChannel.request() }, 50)
+  //   },
+  //   received: function(data) {
+  //     if (window.local_calendar_cell) {
+  //       window.local_calendar_cell.commands.render.call(window.local_calendar_cell, data.calendar)
+  //     }
+  //   },
+  //   request: function() {
+  //     return this.perform("request")
+  //   }
+  // })
+
   cell = Cell.register({
     title: "broker_logger",
     data: {
       lines: localStorage.getItem("broker_logger")?.split("\n") || [],
     },
-    socket: Server.socket("AgentsChannel", function(msg) {
-      // Catch errors, too?
-      let agent = msg.log.agent == "Murton, Brendan" ? "B" : msg.log.agent.split(", ")[1][0]
-      let arrows = {
-        right: "ﰲ",
-        up:    "ﰵ",
-        left:  "ﰯ",
-        down:  "ﰬ",
-      }
-      let methodArr = {
-        get: Text.color(dash_colors.yellow, arrows.left),
-        post: Text.color(dash_colors.blue, arrows.right),
-        patch: Text.color(dash_colors.orange, arrows.up),
-        put: Text.color(dash_colors.magenta, arrows.up),
-        delete: Text.color(dash_colors.orange, arrows.down),
-      }
-      let method = methodArr[msg.log.method.toLowerCase()]
-      let path = msg.log.path
-      let params = JSON.stringify(msg.log.params).replaceAll(/\"(\w+)\":/g, "$1:")
-
-      this.data.lines.push(`${method} ${agent} ${path} ${params}`)
-      renderLines()
-      localStorage.setItem("broker_logger", this.data.lines.join("\n"))
-    }, "https://itswildcat.com"),
+    // socket: Server.socket("AgentsChannel", function(msg) {
+    //   // Catch errors, too?
+    //   let agent = msg.log.agent == "Murton, Brendan" ? "B" : msg.log.agent.split(", ")[1][0]
+    //   let arrows = {
+    //     right: "ﰲ",
+    //     up:    "ﰵ",
+    //     left:  "ﰯ",
+    //     down:  "ﰬ",
+    //   }
+    //   let methodArr = {
+    //     get: Text.color(dash_colors.yellow, arrows.left),
+    //     post: Text.color(dash_colors.blue, arrows.right),
+    //     patch: Text.color(dash_colors.orange, arrows.up),
+    //     put: Text.color(dash_colors.magenta, arrows.up),
+    //     delete: Text.color(dash_colors.orange, arrows.down),
+    //   }
+    //   let method = methodArr[msg.log.method.toLowerCase()]
+    //   let path = msg.log.path
+    //   let params = JSON.stringify(msg.log.params).replaceAll(/\"(\w+)\":/g, "$1:")
+    //
+    //   this.data.lines.push(`${method} ${agent} ${path} ${params}`)
+    //   renderLines()
+    //   localStorage.setItem("broker_logger", this.data.lines.join("\n"))
+    // }, "https://itswildcat.com"),
     onload: function() {
       renderLines()
+      cell.data.consumer = createConsumer.create('wss://itswildcat.com/cable', {
+        headers: {
+          Authorization: `Bearer ${cell.config.apikey}`,,
+        }
+      });
+      cell.data.subscription = cell.data.consumer.subscriptions.create("AgentsChannel", {
+        connected() {
+          console.log("Connected to WebSocket server");
+        },
+        received(data) {
+          console.log("Received data from server:", data);
+        }
+      });
     },
     // commands: {
     //   clear: function() {
