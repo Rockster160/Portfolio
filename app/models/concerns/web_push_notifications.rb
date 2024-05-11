@@ -35,7 +35,7 @@ module WebPushNotifications
     send_to(user, { count: count || user_counts(user })
   end
 
-  def user_counts(user
+  def user_counts(user)
     user.prompts.unanswered.reload.count
   end
 
