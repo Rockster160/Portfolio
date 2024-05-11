@@ -31,7 +31,8 @@ export default function registerNotifications() {
           "Content-Type": "application/json",
           "JarvisPushVersion": "2",
         },
-        body: JSON.stringify(subscription)
+        body: JSON.stringify(subscription),
+        credentials: "same-origin",
       })
     }).then(response => {
       if (!response.ok) {
