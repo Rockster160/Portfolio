@@ -23,7 +23,7 @@ export default function registerNotifications() {
       // Subscribe to push notifications
       return registration.pushManager.subscribe(subscribeOptions)
     }).then(subscription => {
-      console.log("[Push API] Push Notification Subscription:", subscription)
+      console.log("[Pus h API] Push Notification Subscription:", subscription)
       // Send the subscription details to the server using fetch API
       return fetch("/push_notification_subscribe", {
         method: "POST",
@@ -44,4 +44,16 @@ export default function registerNotifications() {
   } else {
     console.warn("[Push API] Service Worker and Push Messaging is not supported by your browser.")
   }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4)
+  const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/")
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+
+  return outputArray
 }
