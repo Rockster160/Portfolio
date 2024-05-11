@@ -28,8 +28,8 @@ export default function registerNotifications() {
       return fetch("/push_notification_subscribe", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
-          "JarvisPushVersion": "2"
+          "Content-Type": "application/json",
+          "JarvisPushVersion": "2",
         },
         body: JSON.stringify(subscription)
       })
