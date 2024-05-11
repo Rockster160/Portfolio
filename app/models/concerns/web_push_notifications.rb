@@ -32,7 +32,7 @@ module WebPushNotifications
   end
 
   def update_count(user, count=nil)
-    send_to(user, { count: count || user_counts(user })
+    send_to(user, { count: count || user_counts(user) })
   end
 
   def user_counts(user)
@@ -42,7 +42,7 @@ module WebPushNotifications
   def format_payload(user, payload)
     extra_data = payload.deep_symbolize_keys!.slice!(*payload_keys)
 
-    extra_data[:count] ||= user_counts(user
+    extra_data[:count] ||= user_counts(user)
 
     payload[:data] ||= {}
     payload[:data].merge!(extra_data)
