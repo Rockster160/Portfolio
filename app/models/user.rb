@@ -39,7 +39,7 @@ class User < ApplicationRecord
   has_many :action_events
   has_many :user_surveys
   has_many :user_survey_responses
-  has_one :push_sub, class_name: "UserPushSubscription", dependent: :destroy
+  has_many :push_subs, class_name: "UserPushSubscription", dependent: :destroy
   has_one :money_bucket
   has_one :avatar, dependent: :destroy
   def avatar; super() || build_avatar; end
@@ -60,8 +60,6 @@ class User < ApplicationRecord
     standard: 0,
     admin:    10
   }
-
-  delegate :sub_auth, to: :push_sub
 
   def self.me
     @@me ||= admin.first
@@ -168,8 +166,8 @@ class User < ApplicationRecord
     (user_lists.find_by(default: true) || user_lists.order(created_at: :asc).first).try(:list)
   end
 
-  def push_sub
-    super || create_push_sub
+  def primary_push_sub
+    push_subs.where.not(registered_at: nil).order(registered_at: :desc).first
   end
 
   def ordered_lists

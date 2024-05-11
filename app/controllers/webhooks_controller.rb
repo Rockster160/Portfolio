@@ -177,14 +177,23 @@ class WebhooksController < ApplicationController
   end
 
   def push_notification_subscribe
-    push_sub = UserPushSubscription.find_by(sub_auth: params[:sub_auth])
-    return render(json: { data: :failure }, status: :ok) if params[:sub_auth].blank? || push_sub.blank?
+    return head :ok unless request.headers["JarvisPushVersion"].to_s == "2"
+    Rails.logger.info("Sub version 2! #{current_user}")
+    return head :ok if !user_signed_in? || current_user.guest?
 
-    push_data = { endpoint: params[:endpoint] }.merge(params.permit(keys: [:auth, :p256dh])[:keys])
-    # If there is an active push-sub, don't create a new one! (Debugging app losing notifications)
-    push_sub.update(push_data) if !push_sub.nil? && !push_sub.pushable?
+    keys = params.permit(keys: [:auth, :p256dh])[:keys].slice(:auth, :p256dh)
 
-    render json: { data: push_sub.as_json.except(:created_at, :updated_at) }, status: :ok
+    push_sub = UserPushSubscription.find_or_initialize_by(endpoint: params[:endpoint])
+    push_sub.assign_attributes({
+      registered_at: Time.current,
+      **keys
+    })
+
+    if push_sub.save
+      head :ok
+    else
+      render json: { errors: push_sub.errors.full_messages }, status: :bad_request
+    end
   end
 
   private

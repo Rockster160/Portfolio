@@ -1,57 +1,47 @@
-function checkPushAPI() {
-  if (!("serviceWorker" in navigator)) {
-    console.log("[Push API] No Service Worker support!")
-    return false
-  }
+// import { registerNotifications } from "./push_subscribe.js";
+// document.on "click", ".subscribe", registerNotifications
 
-  if (!("PushManager" in window)) {
-    console.log("[Push API] No Push API support!")
-    return false
-  }
+export default function registerNotifications() {
+  if ("serviceWorker" in navigator && "PushManager" in window) {
+    // Register the service worker
+    navigator.serviceWorker.register("/push_worker.js").then(registration => {
+      console.log("[Push API] Service Worker registered with scope:", registration.scope)
+      // Request permission for notifications
+      return Notification.requestPermission()
+    }).then(permission => {
+      if (permission !== "granted") {
+        throw new Error("[Push API] Permission not granted for Notification")
+      }
 
-  return true
-}
-
-async function registerServiceWorker() {
-  var sub_auth = document.querySelector("[data-sub-auth]").getAttribute("data-sub-auth")
-  if (sub_auth.length == 0) { return false }
-  var swRegistration = await navigator.serviceWorker.register("/push_worker.js" + "?auth=" + sub_auth)
-  return swRegistration
-}
-
-async function requestNotificationPermission() {
-  let permission = await window.Notification.requestPermission()
-  // value of permission can be 'granted', 'default', 'denied'
-  if (permission == "granted") {
-    // User accepted notifications
-    return true
-  } else if (permission == "denied") {
-    // User denied notifications
-    return false
-  } else if (permission == "default") {
-    // User dismissed without responding
-    return
-  }
-}
-
-export async function registerNotifications() {
-  if (checkPushAPI()) {
-    console.log("[Push API] Support!")
-
-    var permissionGranted = await requestNotificationPermission()
-    if (permissionGranted) {
-      // console.log("[Push API] Permission Granted!")
-      var registration = await registerServiceWorker()
-      // if (registration) { console.log("[Push API] Registered!") }
-      console.log("[Push API] registration", registration)
-      if (!registration) { return console.log("[Push API] Failed to Register") }
-    } else {
-      console.log("[Push API] Permission rejected")
-    }
+      // Get the subscription
+      return navigator.serviceWorker.ready
+    }).then(registration => {
+      const subscribeOptions = {
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array("BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=")
+      }
+      // Subscribe to push notifications
+      return registration.pushManager.subscribe(subscribeOptions)
+    }).then(subscription => {
+      console.log("[Push API] Push Notification Subscription:", subscription)
+      // Send the subscription details to the server using fetch API
+      return fetch("/push_notification_subscribe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+          "JarvisPushVersion": "2"
+        },
+        body: JSON.stringify(subscription)
+      })
+    }).then(response => {
+      if (!response.ok) {
+        throw new Error("[Push API] Failed to send subscription object to server")
+      }
+      console.log("[Push API] Subscription object sent to server successfully.")
+    }).catch(error => {
+      console.error("[Push API] Error during service worker registration:", error)
+    })
   } else {
-    console.log("[Push API] Unsupported Browser")
+    console.warn("[Push API] Service Worker and Push Messaging is not supported by your browser.")
   }
 }
-
-// Click button to register for notifications
-// registerNotifications()

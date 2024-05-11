@@ -1,22 +1,25 @@
 # WebPushNotifications.send_to(User.me, { title: "Hello, World", body: "This is a message from Jarvis" })
-class WebPushNotifications
-  def self.send_to(user, payload={})
-    return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
+module WebPushNotifications
+  module_function
+
+  def send_to(user, payload={})
+    # return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
     return "Failed to push - user not found" unless user.present?
-    push_sub = user.push_sub
-    return "Failed to push - push_sub not set up" unless push_sub.pushable?
+    push_sub = user.primary_push_sub
+    return "Failed to push - push_sub not set up" unless push_sub&.pushable?
     # example payload = {
     #   title: "Ardesian",
     #   body: "You have a new message!",
+    #   count: 16,
     #   icon: "https://via.placeholder.com/100",
     #   url: "https://google.com"
     # }
 
     WebPush.payload_send(
       message: format_payload(payload).to_json,
-      endpoint: user.push_sub.endpoint,
-      p256dh: user.push_sub.p256dh,
-      auth: user.push_sub.auth,
+      endpoint: push_sub.endpoint,
+      p256dh: push_sub.p256dh,
+      auth: push_sub.auth,
       vapid: {
         subject: "mailto:rocco@ardesian.com",
         public_key: ENV["PORTFOLIO_VAPID_PUB"],
@@ -28,12 +31,18 @@ class WebPushNotifications
     "Failed to push - (WebPush Error) [#{e.class}] #{e}"
   end
 
-  def self.update_count(user, count=nil)
-    send_to(user, { badge: count || user.prompts.unanswered.reload.count })
+  def update_count(user, count=nil)
+    send_to(user, { count: count || user_counts })
   end
 
-  def self.format_payload(payload)
+  def user_counts
+    user.prompts.unanswered.reload.count
+  end
+
+  def format_payload(payload)
     extra_data = payload.deep_symbolize_keys!.slice!(*payload_keys)
+
+    extra_data[:count] ||= user_counts
 
     payload[:data] ||= {}
     payload[:data].merge!(extra_data)
@@ -41,7 +50,7 @@ class WebPushNotifications
     payload
   end
 
-  def self.payload_keys
+  def payload_keys
     # https://developer.mozilla.org/en-US/docs/Web/API/notification
     [
       :title,
