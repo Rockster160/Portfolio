@@ -16,7 +16,7 @@ module WebPushNotifications
     # }
 
     WebPush.payload_send(
-      message: format_payload(payload).to_json,
+      message: format_payload(user, payload).to_json,
       endpoint: push_sub.endpoint,
       p256dh: push_sub.p256dh,
       auth: push_sub.auth,
@@ -39,7 +39,7 @@ module WebPushNotifications
     user.prompts.unanswered.reload.count
   end
 
-  def format_payload(payload)
+  def format_payload(user, payload)
     extra_data = payload.deep_symbolize_keys!.slice!(*payload_keys)
 
     extra_data[:count] ||= user_counts(user
