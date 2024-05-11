@@ -197,6 +197,10 @@ class User < ApplicationRecord
     invitation_token.present?
   end
 
+  def confirmed?
+    persisted? && !guest?
+  end
+
   private
 
   def confirm_guest

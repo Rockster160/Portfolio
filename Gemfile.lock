@@ -536,6 +536,7 @@ DEPENDENCIES
   jquery-ui-rails (= 6.0.1)
   jsbundling-rails (= 1.0.2)
   json (~> 2.3)
+  jwt
   kaminari (= 1.2.2)
   launchy (= 2.5.0)
   listen (= 3.7.1)

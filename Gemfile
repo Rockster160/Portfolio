@@ -58,6 +58,7 @@ gem "sidekiq-unique-jobs"
 gem "ruby-openai"
 gem "webdrivers"
 gem "redcarpet"
+gem "jwt"
 # Dependency
 # > cap dependencies
 # == Used for ssh keys using capistrano

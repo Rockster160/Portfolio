@@ -1,4 +1,18 @@
 module AuthHelper
+  def jwt
+    return if !user_signed_in? || current_user.guest?
+
+    payload = { user_id: current_user.id, exp: 24.hours.from_now.to_i }
+    JWT.encode(payload, Rails.application.secrets.secret_key_base, "HS256")
+  end
+
+  def jwt_user(token)
+    decoded = JWT.decode(token, Rails.application.secrets.secret_key_base, true, algorithm: "HS256")
+    return unless decoded.is_a?(Array) && decoded.first.is_a?(Hash)
+
+    decoded.first["user_id"].presence&.then { |id| User.find(id) }
+  end
+
   def guest_account?
     current_user&.guest?
   end

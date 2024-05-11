@@ -1,15 +1,12 @@
 import { htmlToNode } from "./form.js"
 
 export let toMd = function(text) {
-  if (!text) { return text }
-  return text
-  .replace(/([\p{So}\p{Sk}\p{Sm}\p{Sc}\p{S}\p{C}]+)/gu, (match) => {
+  if (!text || typeof text !== "string") { return text }
+  return text.replace(/([\p{So}\p{Sk}\p{Sm}\p{Sc}\p{S}\p{C}]+)/gu, (match) => {
     return emoji(match)
-  })
-  .replace(/\[ico (.*?)(( [\w-]+: .*?)*)\]/gu, (match, p1, p2) => {
+  }).replace(/\[ico (.*?)(( [\w-]+: .*?)*)\]/gu, (match, p1, p2) => {
     return emoji(null, `ti ti-${p1}`, { style: p2 })
-  })
-  .replace(/\[img (.*?)\]/gu, (match, p1) => {
+  }).replace(/\[img (.*?)\]/gu, (match, p1) => {
     return img(p1)
   })
 }

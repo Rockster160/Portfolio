@@ -8,6 +8,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <%= yield :meta %>
   <%= yield :head_before_scripts %>
+  <% if current_user&.confirmed? %>
+    <script type="text/javascript">window.jwt = "<%= jwt %>";</script>
+  <% end %>
   <%= stylesheet_link_tag "quick_actions", media: "all" %>
   <script defer type="module" src="/quick_actions.js"></script>
   <%= yield :head %>

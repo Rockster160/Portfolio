@@ -30,6 +30,7 @@ export default function registerNotifications() {
         headers: {
           "Content-Type": "application/json",
           "JarvisPushVersion": "2",
+          // "UserJWT": window.jwt,
         },
         body: JSON.stringify(subscription),
         credentials: "same-origin",

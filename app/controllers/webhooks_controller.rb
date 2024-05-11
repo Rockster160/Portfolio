@@ -179,13 +179,15 @@ class WebhooksController < ApplicationController
   def push_notification_subscribe
     Rails.logger.info("Received subscription request! [#{current_user&.username}] (#{request.headers["JarvisPushVersion"].inspect})")
     return head :ok unless request.headers["JarvisPushVersion"].to_s == "2"
+    # return head :ok unless request.headers["UserJWT"].present?
+    # user = jwt_user(request.headers["UserJWT"])
     Rails.logger.info("Sub version 2! #{current_user&.username}")
     return head :ok if !user_signed_in? || current_user.guest?
 
     Rails.logger.info("Signed in!")
     keys = params.permit(keys: [:auth, :p256dh])[:keys].slice(:auth, :p256dh)
 
-    push_sub = UserPushSubscription.find_or_initialize_by(endpoint: params[:endpoint])
+    push_sub = current_user.push_subs.find_or_initialize_by(endpoint: params[:endpoint])
     push_sub.assign_attributes({
       registered_at: Time.current,
       **keys

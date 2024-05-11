@@ -16,6 +16,9 @@
   <%= yield :head_before_scripts %>
   <%= stylesheet_link_tag    "application", media: "all" %>
   <%= javascript_include_tag "application", "data-turbo-track": "reload", defer: true %>
+  <% if current_user&.confirmed? %>
+    <script type="text/javascript">window.jwt = "<%= jwt %>";</script>
+  <% end %>
   <%= yield :head %>
   <% if content_for? :favicon %>
     <%= yield :favicon %>
