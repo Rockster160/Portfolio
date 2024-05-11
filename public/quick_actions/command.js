@@ -1,4 +1,4 @@
-import { registerNotifications } from "./push_subscribe.js";
+import registerNotifications from "./push_subscribe.js";
 import { AuthWS } from './auth_ws.js';
 import { Widget } from './widget.js';
 import { showModal } from './modal.js';
