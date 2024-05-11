@@ -35,6 +35,14 @@ export default function registerNotifications() {
       })
     }).then(response => {
       if (!response.ok) {
+        response.json().then(data => {
+          console.log("[Push API] Server error: ", data)
+          throw new Error("[Push API] Failed to send subscription object to server");
+        }).catch(() => {
+          response.text().then((msg) => {
+            console.log("[Push API] Server message: ", msg)
+          })
+        })
         throw new Error("[Push API] Failed to send subscription object to server")
       }
       console.log("[Push API] Subscription object sent to server successfully.")

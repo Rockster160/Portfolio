@@ -177,10 +177,12 @@ class WebhooksController < ApplicationController
   end
 
   def push_notification_subscribe
+    Rails.logger.info("Received subscription request! [#{current_user&.username}] (#{request.headers["JarvisPushVersion"].inspect})")
     return head :ok unless request.headers["JarvisPushVersion"].to_s == "2"
-    Rails.logger.info("Sub version 2! #{current_user}")
+    Rails.logger.info("Sub version 2! #{current_user&.username}")
     return head :ok if !user_signed_in? || current_user.guest?
 
+    Rails.logger.info("Signed in!")
     keys = params.permit(keys: [:auth, :p256dh])[:keys].slice(:auth, :p256dh)
 
     push_sub = UserPushSubscription.find_or_initialize_by(endpoint: params[:endpoint])
@@ -188,10 +190,13 @@ class WebhooksController < ApplicationController
       registered_at: Time.current,
       **keys
     })
+    Rails.logger.info("Initialized!")
 
     if push_sub.save
+      Rails.logger.info("Saved!")
       head :ok
     else
+      Rails.logger.warn("\e[31mERROR:\e[0m #{push_sub.errors.full_messages}")
       render json: { errors: push_sub.errors.full_messages }, status: :bad_request
     end
   end
