@@ -15,8 +15,16 @@ class JarvisCache < ApplicationRecord
 
   belongs_to :user
 
+  def to_param
+    key || id
+  end
+
   def self.by(key)
-    find_or_create_by(key: key)
+    if key.to_s.match?(/^\d+$/)
+      find_by(key: key) || find_by(id: key) || find_or_create_by(key: key)
+    else
+      find_or_create_by(key: key)
+    end
   end
 
   def self.get(key)
@@ -29,7 +37,7 @@ class JarvisCache < ApplicationRecord
   end
 
   def self.set(key, val)
-    by(key).update(data: val)
+    by(key).update(data: val) && val
   end
 
   def self.dig_set(*steps, val)

@@ -1,7 +1,11 @@
 class Jil::JarvisCacheController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user
-  layout false
+  layout false, only: :show
+
+  def index
+    @caches = current_user.jarvis_caches
+  end
 
   def show
     @cache = current_user.jarvis_caches.by(params[:id])

@@ -1,0 +1,33 @@
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <a href="<%= account_path %>" class="btn">Account</a>
+  </div>
+  <div class="lists-title">Caches</div>
+  <div class="lists">
+    <div class="list-field">
+      <%= text_field_tag "cache[name]", "", class: "filterable", placeholder: "Search Caches" %>
+    </div>
+    <% @caches.each do |cache| %>
+      <div class="list-item-container">
+        <div class="list-item-config">
+          <%= content_tag :div, cache.data.to_s.size, class: "category" %>
+        </div>
+        <!-- <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div> -->
+        <a href="<%= jil_jarvis_cache_path(cache) %>" class="list-item">
+          <span class="item-name"><%= cache.key %></span>
+          <div class="list-item-brief">
+            <div class="right-brief">
+              <% if cache.updated_at.present? %>
+                Last Used:
+                <%= cache.updated_at.in_time_zone(current_user.timezone)&.to_formatted_s(:compact_week_month_time).gsub(":00 ", "") %>
+                (<%= relative_time_in_words(cache.updated_at) %>)
+              <% else %>
+                --Never Used--
+              <% end %>
+            </div>
+          </div>
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>
