@@ -11,14 +11,14 @@ self.addEventListener("push", evt => {
   const data = evt.data ? evt.data.json() : {};
   data.icon = data.icon || "/favicon/favicon.ico";
 
-  let badgeCount = parseInt(data.data.count)
-  if (navigator.setAppBadge) {
-    if (badgeCount > 0) {
-      navigator.setAppBadge(badgeCount);
-    } else {
-      navigator.clearAppBadge();
-    }
-  }
+  // let badgeCount = parseInt(data.data.count)
+  // if (navigator.setAppBadge) {
+  //   if (badgeCount > 0) {
+  //     navigator.setAppBadge(badgeCount);
+  //   } else {
+  //     navigator.clearAppBadge();
+  //   }
+  // }
 
   // https://developer.mozilla.org/en-US/docs/Web/API/notification
   if (data.title || data.body) {

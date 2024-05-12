@@ -15,6 +15,9 @@ module WebPushNotifications
     #   url: "https://google.com"
     # }
 
+    # Temp stub to see if empty notifications are what's breaking things.
+    return if payload.deep_symbolize_keys[:title].blank?
+
     WebPush.payload_send(
       message: format_payload(user, payload).to_json,
       endpoint: push_sub.endpoint,
