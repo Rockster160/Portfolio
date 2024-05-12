@@ -18,19 +18,23 @@ class AmazonOrder
   end
 
   def self.reload
-    @@all = (DataStorage[:amazon_deliveries] || []).map { |data| new(data) }
+    @@all = (MeCache.get(:amazon_deliveries) || []).map { |data| new(data) }
+  end
+
+  def self.save
+    @@all = MeCache.set(:amazon_deliveries, serialize)
   end
 
   def self.clear
-    @@all = DataStorage[:amazon_deliveries] = []
-  end
-
-  def self.serialize
-    all.map(&:serialize)
+    @@all = MeCache.set(:amazon_deliveries, [])
   end
 
   def self.broadcast
     ActionCable.server.broadcast(:amz_updates_channel, serialize)
+  end
+
+  def self.serialize
+    all.map(&:serialize)
   end
 
   def self.find(order_id, item_id=nil)
@@ -46,10 +50,6 @@ class AmazonOrder
 
   def self.create(order_hash)
     new(order_hash.merge(just_added: true)).tap { |item| @@all << item }
-  end
-
-  def self.save
-    DataStorage[:amazon_deliveries] = serialize
   end
 
   def initialize(order_hash)
