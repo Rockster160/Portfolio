@@ -161,6 +161,6 @@ class AmazonEmailParser
   end
 
   def error(msg="Failed to parse")
-    Jarvis.cmd("Add Amazon Email #{msg}: #{@email.id}")
+    Jarvis.say("Add Amazon Email #{msg}: #{@email.id}")
   end
 end
