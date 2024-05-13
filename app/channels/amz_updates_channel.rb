@@ -28,6 +28,7 @@ class AmzUpdatesChannel < ApplicationCable::Channel
 
     AmazonOrder.save
     AmazonOrder.broadcast
+    AmazonOrder.clear
   end
 
   def request(_)

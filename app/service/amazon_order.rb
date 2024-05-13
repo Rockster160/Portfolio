@@ -22,11 +22,12 @@ class AmazonOrder
   end
 
   def self.save
-    @@all = (MeCache.set(:amazon_deliveries, serialize) || []).map { |data| new(data) }
+    MeCache.set(:amazon_deliveries, serialize)
+    clear
   end
 
   def self.clear
-    @@all = MeCache.set(:amazon_deliveries, [])
+    @@all = nil
   end
 
   def self.broadcast

@@ -22,7 +22,7 @@ module ApplicationCable
     end
 
     def user_from_headers
-      raw_auth = request.headers["HTTP_AUTHORIZATION"]
+      raw_auth = request.headers["HTTP_AUTHORIZATION"] || request.parameters["Authorization"]
       return unless raw_auth.present?
 
       # Had issues where some clients were mixing up bearer vs basic
