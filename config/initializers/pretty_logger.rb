@@ -4,7 +4,7 @@
     return colorize(:grey, "[?]") unless current_user.present?
 
     name = current_user.try(:username).presence
-    name ||= "#{current_user.class.name}:#{current_user.id}"
+    name ||= "#{current_user.guest? ? :Guest : :User}:#{current_user.id}"
 
     case current_user.id
     when 1 then colorize(:rocco, "[Me]")

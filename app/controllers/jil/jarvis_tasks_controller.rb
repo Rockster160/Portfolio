@@ -1,6 +1,7 @@
 class Jil::JarvisTasksController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
+  skip_before_action :pretty_logit, only: [:run]
 
   def show
     @task = current_user.jarvis_tasks.anyfind(params[:id])
@@ -74,6 +75,7 @@ class Jil::JarvisTasksController < ApplicationController
 
   def run
     @task = current_user.jarvis_tasks.anyfind(params[:id])
+    request_logger.log_request("\e[36m\e[4m#{@task.name}\e[0m")
     data = ::Jarvis::Execute.call(
       @task,
       {
