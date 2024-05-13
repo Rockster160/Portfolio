@@ -1,4 +1,4 @@
-module CustomLogger
+module TrackerLogger
   module_function
 
   def log_request(request, user=nil)

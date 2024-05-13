@@ -5,6 +5,7 @@ class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception, if: -> { current_user&.id != 1 } # Hack- skip CSRF if it's me
   helper_method :current_user, :user_signed_in?, :guest_account?
 
+  before_action :pretty_logit, if: -> { should_log? }
   before_action :logit, :see_current_user
   before_action :show_guest_banner, if: :guest_account?
   prepend_before_action :block_banned_ip
@@ -26,7 +27,7 @@ class ApplicationController < ActionController::Base
   def logit
     return if params[:checker]
 
-    ::CustomLogger.log_request(request, current_user)
+    ::TrackerLogger.log_request(request, current_user)
   end
 
   def see_current_user
@@ -76,5 +77,19 @@ class ApplicationController < ActionController::Base
 
   def block_banned_ip
     head :unauthorized if BannedIp.where(ip: current_ip, whitelisted: false).any?
+  end
+
+  def should_log?
+    return false unless user_signed_in?
+
+    true
+  end
+
+  # Override default from PrettyLogger
+  def request_logger
+    @request_logger ||= ::PrettyLogger::RequestLogger.new(
+      request: request,
+      current_user: current_user,
+    )
   end
 end
