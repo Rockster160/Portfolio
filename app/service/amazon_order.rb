@@ -45,6 +45,10 @@ class AmazonOrder
     }
   end
 
+  def self.by_order(order_id)
+    all.select { |order| order.order_id == order_id }
+  end
+
   def self.find_or_create(order_id, item_id)
     find(order_id, item_id) || create(order_id: order_id, item_id: item_id)
   end

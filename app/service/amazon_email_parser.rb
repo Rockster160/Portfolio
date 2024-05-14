@@ -19,7 +19,7 @@ class AmazonEmailParser
     return Jarvis.cmd("Add Amazon Email no order id: #{@email.id}") if order_id.blank?
 
     if @email.html_body.include?("Your package has been delivered!")
-      doall { |item| item.delivered = true }
+      doall(:order) { |item| item.delivered = true }
     else
       parse_email
     end
@@ -32,6 +32,17 @@ class AmazonEmailParser
 
   def order_items
     @order_items ||= begin
+      AmazonOrder.by_order(order_id).tap { |items|
+        items.each do |item|
+          item.errors = [] # Clear errors since a new email came in
+          item.email_ids << @email.id unless item.email_ids.include?(@email.id)
+        end
+      }
+    end
+  end
+
+  def email_items
+    @email_items ||= begin
       urls = @doc.to_s.scan(/\"https:\/\/www\.amazon\.com\/gp\/.*?\"/)
 
       item_ids = urls.filter_map { |url|
@@ -50,12 +61,13 @@ class AmazonEmailParser
     end
   end
 
-  def doall(&block)
-    order_items.each { |item| block.call(item) }
+  def doall(scope, &block)
+    items = scope == :email ? email_items : order_items
+    items.each { |item| block.call(item) }
   end
 
   def parse_email
-    doall { |item|
+    doall(:email) { |item|
       arrival_date(item).tap { |date|
         if date.nil?
           item.error!("Unable to parse date")
