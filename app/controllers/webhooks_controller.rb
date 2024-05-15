@@ -18,7 +18,8 @@ class WebhooksController < ApplicationController
     # Find the Oauth for the issuer or other token, then find the current_user (maybe signed in?)
     # ::Oauth::MyApi.new(current_user).code = params[:code]
     if params[:issuer] == "https://auth.tesla.com/oauth2/v3"
-      # ::Oauth::TeslaApi.code = params[:code]
+      # Pretty sure not currently working?
+      ::Oauth::TeslaApi.code = params[:code]
     end
 
     render json: params
@@ -50,6 +51,7 @@ class WebhooksController < ApplicationController
 
     TeslaCommand.quick_command(:reload)
     LocalIpManager.local_ip = request.remote_ip
+    ::PrettyLogger::BaseLogger.info("[Reloaded Tesla Connection]")
 
     head :ok
   end

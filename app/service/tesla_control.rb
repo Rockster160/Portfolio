@@ -207,7 +207,7 @@ class TeslaControl
   end
 
   def vehicle_data(wake: false)
-    @vehicle_data = cached_vehicle_data if Rails.env.development?
+    # @vehicle_data = cached_vehicle_data if Rails.env.development?
     @vehicle_data ||= get("vehicles/#{vehicle_id}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |car_data|
       cached_data = cached_vehicle_data
       break cached_data unless car_data

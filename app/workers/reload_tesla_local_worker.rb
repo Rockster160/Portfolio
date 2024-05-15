@@ -8,6 +8,7 @@ class ReloadTeslaLocalWorker
       now = Time.current.strftime("%-m/%-d/%y %l:%M %p")
       puts "[\e[33m#{now}\e[0m] \e[36mTriggering Tesla Reload!\e[0m"
     }
+    sleep rand(1.minute)
     TeslaControl.local
   end
 end
