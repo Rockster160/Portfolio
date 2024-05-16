@@ -151,12 +151,17 @@ class AmazonEmailParser
 
   def full_name(item)
     item.full_name ||= begin
+      item.listed_name ||= @email.subject[/^[^\"]*\"(.*?)\"[^\"]*$/, 1]
       item.listed_name ||= element(item).at_css(".rio_black_href")&.text&.squish.to_s
+      count = @email.subject[/(\d+ ?x) ?\"/, 1]
 
       if item.listed_name.include?("...")
-        retrieve_full_name(item).presence || item.listed_name
+        [
+          count,
+          retrieve_full_name(item).presence || item.listed_name
+        ].filter_map(&:presence).join(" ")
       else
-        item.listed_name
+        [count, item.listed_name].filter_map(&:presence).join(" ")
       end
     end
   end
