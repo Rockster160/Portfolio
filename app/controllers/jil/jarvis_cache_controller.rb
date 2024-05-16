@@ -4,7 +4,7 @@ class Jil::JarvisCacheController < ApplicationController
   layout false, only: :show
 
   def index
-    @caches = current_user.jarvis_caches
+    @caches = current_user.jarvis_caches.order(updated_at: :desc)
   end
 
   def show
