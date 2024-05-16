@@ -49,7 +49,7 @@ class AmazonEmailParser
         next if url.include?("orderId%3D")
 
         full_url = url[1..-2]
-        full_url[/www\.amazon\.com\%2Fdp\%2F([a-z0-9]+)\%2Fref/i, 1].presence
+        full_url[/www\.amazon\.com\%2Fdp\%2F([a-z0-9]+)/i, 1].presence
       }.uniq
 
       item_ids.map { |item_id|
