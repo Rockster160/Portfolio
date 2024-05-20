@@ -57,11 +57,10 @@ class Oauth::Base
   end
 
   def cache
-    @cache ||= @user.jarvis_caches
+    @cache ||= @user.jarvis_caches.by(:oauth)
   end
 
-  def auth(code, params={})
-    # Should be given a user to pull the cache keys from
+  def auth(params={})
     Api.post(@exchange_url, {
       client_id: @client_id,
       client_secret: @client_secret,
@@ -69,10 +68,10 @@ class Oauth::Base
       scope: @scopes,
     }.merge(params)).tap { |json|
       next if json.nil?
-      # puts "\e[36m[LOGIT] | #{json}\e[0m"
+
       cache.skip_save_set = true
       [:access_token, :refresh_token, :id_token].each do |token_name|
-        cache.dig_set(:oauth, @storage_key, token_name, json[token_name]) if json[token_name].present?
+        cache.dig_set(@storage_key, token_name, json[token_name]) if json[token_name].present?
       end
       cache.skip_save_set = false
       cache.save
@@ -93,8 +92,8 @@ class Oauth::Base
     Api.post(url(path), params, base_headers.merge(headers))
   end
 
-  def cache_set(key, val) = cache.dig_set(:oauth, @storage_key, key, val)
-  def cache_get(key) = cache.dig(:oauth, @storage_key, key)
+  def cache_set(key, val) = cache.dig_set(@storage_key, key, val)
+  def cache_get(key) = cache.dig(@storage_key, key)
   def access_token=(new_token)
     cache_set(:access_token, new_token)
   end
@@ -121,8 +120,8 @@ class Oauth::Base
 
   def base_headers
     {
-      "Content-Type": "application/json",
-      "Authorization": access_token.present? ? "Bearer #{access_token}" : nil
+      content_type: "application/json",
+      Authorization: access_token.present? ? "Bearer #{access_token}" : nil
     }.compact_blank
   end
 end

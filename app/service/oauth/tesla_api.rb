@@ -9,11 +9,21 @@ class Oauth::TeslaApi < Oauth::Base
     redirect_uri: "https://ardesian.com/webhooks/auth",
     storage_key: :tesla_api,
     auth_params: {
-      state: TeslaControl::STABLE_STATE,
-      nonce: TeslaControl::CODE_VERIFIER,
+      state: (DataStorage[:tesla_stable_state] ||= SecureRandom.hex),
+      nonce: (DataStorage[:tesla_code_verifier] ||= rand(36**86).to_s(36)),
+      # CODE_CHALLENGE = ::Base64.urlsafe_encode64(::Digest::SHA256.digest(CODE_VERIFIER), padding: false)
     },
     exchange_params: {
       audience: "https://fleet-api.prd.na.vn.cloud.tesla.com",
     },
   )
+
+  # o = ::Oauth::TeslaApi.new(User.me)
+  # o.auth_url <click open and follow path, copy `code` param -- should be automatic in prod?>
+  # o.code = "NA..."
+  #
+
+  # t = TeslaControl.me
+  # bearer = post("https://auth.tesla.com/oauth2/v3/token", { grant_type: :client_credentials, client_id: @client_id, client_secret: @client_secret, scope: @scopes, audience: "https://fleet-api.prd.na.vn.cloud.tesla.com" })
+  # partner = post(:partner_accounts, { domain: "ardesian.com" }, { Authorization: "Bearer #{bearer[:access_token]}" })
 end

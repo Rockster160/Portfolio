@@ -21,6 +21,7 @@ module TeslaCommand
   end
 
   def command(original_cmd, original_opt=nil, quick=false)
+    return # Temporarily while I work on the Fleet API
     return if Rails.env.development? && !quick
 
     broadcast(loading: true)

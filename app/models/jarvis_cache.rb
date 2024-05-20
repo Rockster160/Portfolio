@@ -13,6 +13,8 @@ class JarvisCache < ApplicationRecord
   serialize :data, coder: ::SafeJsonSerializer
   attr_accessor :skip_save_set
 
+  # TODO: Encrypt data in the next life
+
   belongs_to :user
 
   def to_param

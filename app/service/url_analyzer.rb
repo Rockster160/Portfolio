@@ -7,7 +7,7 @@ class UrlAnalyzer
       )
       (?::(?<port>\d{1,5}))?
     )
-    (?<pathname>\/(?:[^\?\#]*)?\/(?<filename>[^\?]*))?
+    (?<pathname>\/(?:[^\?\#]*)\/(?<filename>[^\?]*))?
     (?<search>\?(?<query>[^\#]*))?
     (?<hash>\#(?<fragment>.*?$))?
   /x

@@ -10,10 +10,11 @@ class Api
     output("Response Headers", res.headers)
     JSON.parse(res.body, symbolize_names: true).tap { |json| output(:Response, json) }
   rescue RestClient::ExceptionWithResponse => res_exc
-    pst "\e[31m  > #{res_exc} [#{res_exc.http_body}](#{res_exc.message})\e[0m"
-    res_exc
+    pst "\e[31m  > #{res_exc} [#{res_exc.message}](#{res_exc.http_body})\e[0m"
+    raise res_exc
   rescue StandardError => e
     pst "\e[31m  [ERROR]> #{e.message}\e[0m"
+    raise e
   ensure
     res&.body
   end
@@ -29,10 +30,11 @@ class Api
     output("Response Headers", res.headers)
     JSON.parse(res.body, symbolize_names: true).tap { |json| output(:Response, json) }
   rescue RestClient::ExceptionWithResponse => res_exc
-    pst "\e[31m  > #{res_exc} [#{res_exc.http_body}](#{res_exc.message})\e[0m"
-    res_exc
+    pst "\e[31m  > #{res_exc} [#{res_exc.message}](#{res_exc.http_body})\e[0m"
+    raise res_exc
   rescue StandardError => e
     pst "\e[31m  [ERROR]> #{e.message}\e[0m"
+    raise e
   ensure
     res&.body
   end
