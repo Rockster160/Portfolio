@@ -35,7 +35,7 @@ class TeslaControl
   #   raise e
   end
 
-  #   @car = car || Tesla.new(self)
+  # @car = car || Tesla.new(self)
   # An `invalid_auth_code` response likely means the code is expired.
 
   def pop_boot(direction=:toggle)

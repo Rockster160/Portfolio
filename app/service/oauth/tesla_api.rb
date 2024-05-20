@@ -1,3 +1,7 @@
+# https://github.com/teslamotors/vehicle-command?tab=readme-ov-file#sending-commands-to-the-proxy-server
+
+# ### Obtain a Partner Authentication Token
+# https://developer.tesla.com/docs/fleet-api#partner-authentication-token
 # o = ::Oauth::TeslaApi.new(User.me)
 # partner_response = o.post("https://auth.tesla.com/oauth2/v3/token", {
 #   grant_type: :client_credentials,
@@ -7,8 +11,17 @@
 #   audience: "https://fleet-api.prd.na.vn.cloud.tesla.com"
 # })
 
+# ### Obtain a Third-Party Token
 # o.auth_url
-# post(:partner_accounts, { domain: "ardesian.com" }, { Authorization: "Bearer #{partner_response[:access_token]}" })
+# <auto sets the code via webhook and makes the post-request to Tesla and updated the credentials>
+
+# https://developer.tesla.com/docs/fleet-api#public_key
+# o.post(:partner_accounts, { domain: "ardesian.com" }, { Authorization: "Bearer #{partner_response[:access_token]}" })
+
+# https://www.tesla.com/_ak/ardesian.com
+
+# ### Command:
+# BE → (Proxy???) → Fleet API → Vehicle
 
 class Oauth::TeslaApi < Oauth::Base
   constants(
@@ -29,13 +42,4 @@ class Oauth::TeslaApi < Oauth::Base
       audience: "https://fleet-api.prd.na.vn.cloud.tesla.com",
     },
   )
-
-  # o = ::Oauth::TeslaApi.new(User.me)
-  # o.auth_url <click open and follow path, copy `code` param -- should be automatic in prod?>
-  # o.code = "NA..."
-  #
-
-  # t = TeslaControl.me
-  # bearer = post("https://auth.tesla.com/oauth2/v3/token", { grant_type: :client_credentials, client_id: @client_id, client_secret: @client_secret, scope: @scopes, audience: "https://fleet-api.prd.na.vn.cloud.tesla.com" })
-  # partner = post(:partner_accounts, { domain: "ardesian.com" }, { Authorization: "Bearer #{bearer[:access_token]}" })
 end
