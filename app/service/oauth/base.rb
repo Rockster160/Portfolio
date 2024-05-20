@@ -34,6 +34,9 @@ class Oauth::Base
   def initialize(user, overrides={})
     self.class.preset_constants.merge(overrides).each do |key, val|
       instance_variable_set("@#{key}", val)
+      self.class.define_method(key.to_sym) do
+        instance_variable_get("@#{key}")
+      end
     end
     @user = user
   end

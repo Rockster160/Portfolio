@@ -1,3 +1,15 @@
+# o = ::Oauth::TeslaApi.new(User.me)
+# partner_response = o.post("https://auth.tesla.com/oauth2/v3/token", {
+#   grant_type: :client_credentials,
+#   client_id: o.client_id,
+#   client_secret: o.client_secret,
+#   scope: o.scopes,
+#   audience: "https://fleet-api.prd.na.vn.cloud.tesla.com"
+# })
+
+# o.auth_url
+# post(:partner_accounts, { domain: "ardesian.com" }, { Authorization: "Bearer #{partner_response[:access_token]}" })
+
 class Oauth::TeslaApi < Oauth::Base
   constants(
     api_url: "https://fleet-api.prd.na.vn.cloud.tesla.com/api/1/",

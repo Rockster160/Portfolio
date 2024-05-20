@@ -1,6 +1,8 @@
 # https://developer.tesla.com/docs/fleet-api?ruby#api-status
 # https://tesla-api.timdorr.com/
 
+# https://www.tesla.com/_ak/ardesian.com
+
 class TeslaError < StandardError; end
 class TeslaControl
   attr_accessor :api
@@ -11,6 +13,10 @@ class TeslaControl
 
   def initialize(user)
     @api = ::Oauth::TeslaApi.new(user)
+  end
+
+  def code=(new_code)
+    @api.code = new_code
   end
 
   def authorize
