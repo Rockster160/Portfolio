@@ -191,9 +191,15 @@ class ActionEventsController < ApplicationController
   end
 
   def raw_event_params
-    params.to_unsafe_h.slice(:name, :timestamp, :notes).tap do |whitelist|
+    params.to_unsafe_h.slice(:name, :timestamp, :notes, :data).tap do |whitelist|
       (params[:event_name].presence || params.dig(:action_event, :event_name)).presence&.tap { |name|
         whitelist[:name] ||= name
+      }
+      whitelist.delete(:data).presence&.tap { |json|
+        json = SafeJsonSerializer.load(json)
+        if json.is_a?(::Hash) || json.is_a?(::Array)
+          whitelist[:data] = json
+        end
       }
     end
   end
