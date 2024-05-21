@@ -42,7 +42,7 @@
         <input data-update-url="<%= action_event_path(event) %>" name="notes" value="<%= event.notes %>" class="invisi-field" style="width: 100%;" type="text">
       </div>
       <div class="tcell">
-        <input data-update-url="<%= action_event_path(event) %>" name="data" value="<%= event.data.to_json %>" class="invisi-field" style="width: 100%;" type="text">
+        <input data-update-url="<%= action_event_path(event) %>" name="data" value="<%= event.data.presence&.to_json %>" class="invisi-field" style="width: 100%;" type="text">
       </div>
       <div class="tcell">
         <input data-update-url="<%= action_event_path(event) %>" name="timestamp" value="<%= event.timestamp.in_time_zone("Mountain Time (US & Canada)").iso8601[0..-7] %>" class="invisi-field" style="width: 100%;" type="datetime-local">
