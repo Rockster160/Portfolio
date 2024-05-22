@@ -31,7 +31,9 @@ class AmazonOrder
   end
 
   def self.broadcast
+    clear # Get a fresh broadcast
     ActionCable.server.broadcast(:amz_updates_channel, serialize)
+    clear # Clear for next
   end
 
   def self.serialize
