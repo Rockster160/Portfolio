@@ -237,7 +237,7 @@ class TeslaControl
     raise "Should not POST in tests!" if Rails.env.test?
 
     res = @api.post("vehicles/#{vehicle_id}/#{endpoint}")
-    ::PrettyLogger::BaseLogger.info("Tesla Response: #{res}")
+    ::PrettyLogger.info("Tesla Response: #{res}")
     res
   end
 end

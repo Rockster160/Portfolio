@@ -51,7 +51,7 @@ class WebhooksController < ApplicationController
 
     TeslaCommand.quick_command(:reload)
     LocalIpManager.local_ip = request.remote_ip
-    ::PrettyLogger::BaseLogger.info("[Reloaded Tesla Connection]")
+    ::PrettyLogger.info("[Reloaded Tesla Connection]")
 
     head :ok
   end

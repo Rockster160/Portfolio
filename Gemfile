@@ -65,7 +65,7 @@ gem "jwt"
 gem "ed25519"
 gem "bcrypt_pbkdf"
 # / cap dependencies
-gem "pretty_logger", "~> 1.1"
+gem "pretty_logger", "~> 1.2.4"
 
 group :development, :test do
   gem "capistrano",         require: false

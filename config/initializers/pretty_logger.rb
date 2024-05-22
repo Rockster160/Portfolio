@@ -8,9 +8,9 @@
     name ||= "#{current_user.guest? ? :Guest : :User}:#{current_user.id}"
 
     case current_user.id
-    when 1 then colorize(:rocco, "[Me]")
-    when 4 then colorize(:purple, "[Mom]")
-    when 33529 then colorize(:magenta, "[Janaya]")
+    when 1 then colorize(:rocco, "[R]")
+    when 4 then colorize(:purple, "[M]")
+    when 33529 then colorize(:magenta, "[J]")
     when 34226 then colorize(:pink, "[S]") # Saya
     when 37764 then colorize(:yellow, "[C]") # Carlos
     else colorize(:olive, "[#{name}]")
