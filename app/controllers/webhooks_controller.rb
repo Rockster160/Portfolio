@@ -19,7 +19,7 @@ class WebhooksController < ApplicationController
     # ::Oauth::MyApi.new(current_user).code = params[:code]
     if params[:issuer] == "https://auth.tesla.com/oauth2/v3"
       # FIXME: Should look up the user based on issuer or secret or something...
-      ::TeslaControl.me.code = params[:code]
+      # ::TeslaControl.me.code = params[:code]
     end
 
     render json: params
