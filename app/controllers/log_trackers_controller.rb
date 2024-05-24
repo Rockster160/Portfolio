@@ -1,5 +1,5 @@
 class LogTrackersController < ApplicationController
-  skip_before_action :logit
+  skip_before_action :tracker
   before_action :authorize_admin
 
   def index

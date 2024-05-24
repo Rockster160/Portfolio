@@ -1,7 +1,7 @@
 class Jil::JarvisTasksController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
-  skip_before_action :pretty_logit, only: [:run]
+  skip_before_action :pretty_logit, only: [:run] # Call manually with extra text
 
   def show
     @task = current_user.jarvis_tasks.anyfind(params[:id])
