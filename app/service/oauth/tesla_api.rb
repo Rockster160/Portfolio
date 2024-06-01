@@ -14,6 +14,7 @@
 # ### Obtain a Third-Party Token
 # o.auth_url
 # <auto sets the code via webhook and makes the post-request to Tesla and updated the credentials>
+# o.code = params[:code]
 
 # https://developer.tesla.com/docs/fleet-api#public_key
 # o.post(:partner_accounts, { domain: "ardesian.com" }, { Authorization: "Bearer #{partner_response[:access_token]}" })
@@ -21,7 +22,8 @@
 # https://www.tesla.com/_ak/ardesian.com
 
 # ### Command:
-# BE → (Proxy???) → Fleet API → Vehicle
+# BE → Proxy → Fleet API → Vehicle
+
 
 class Oauth::TeslaApi < Oauth::Base
   constants(
@@ -40,6 +42,16 @@ class Oauth::TeslaApi < Oauth::Base
     },
     exchange_params: {
       audience: "https://fleet-api.prd.na.vn.cloud.tesla.com",
-    },
+    }
   )
+
+  def proxy_post(path, params={}, headers={})
+    Api.request(
+      method: :post,
+      url: url(path, base: "https://localhost:8752/api/1/"),
+      payload: params,
+      headers: base_headers.merge(headers),
+      ssl_ca_file: "_scripts/tesla/cert.pem",
+    )
+  end
 end

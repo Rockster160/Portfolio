@@ -17,11 +17,10 @@ module TeslaCommand
   end
 
   def address_book
-    @address_book ||= User.admin.first.address_book
+    @address_book ||= User.me.address_book
   end
 
   def command(original_cmd, original_opt=nil, quick=false)
-    return # Temporarily while I work on the Fleet API
     return if Rails.env.development? && !quick
 
     broadcast(loading: true)
@@ -140,7 +139,7 @@ module TeslaCommand
     when :find
       @response = "Finding car..."
       unless quick
-        loc = LocationCache.last_coord # This uses phone location now...
+        loc = TeslaControl.me.loc
         Jarvis.say("http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}", :sms)
       end
     else
@@ -177,7 +176,7 @@ module TeslaCommand
 
     {
       forbidden: DataStorage[:tesla_forbidden],
-      sleeping: !!data[:sleeping],
+      sleeping: !!data[:state] == "sleeping",
       charge: data.dig(:charge_state, :battery_level),
       miles: data.dig(:charge_state, :battery_range)&.floor,
       charging: {
