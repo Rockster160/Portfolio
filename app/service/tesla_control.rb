@@ -188,6 +188,8 @@ class TeslaControl
   rescue => e
     Jarvis.say("Tesla Command Error: [#{e.class}]: #{e.message}")
     ::PrettyLogger.info("Tesla Command Error: [#{e.class}]: #{e.message}\n[#{cmd}]: #{params}")
+    # 401 Unauthorized (RestClient::Unauthorized)
+    # refresh
   end
 
   def parse_to(val, truthy, falsy)

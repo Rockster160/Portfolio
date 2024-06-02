@@ -123,6 +123,7 @@ class Oauth::Base
 
   def base_headers
     {
+      user_agent: "Jarvis-1.0",
       content_type: "application/json",
       Authorization: access_token.present? ? "Bearer #{access_token}" : nil
     }.compact_blank
