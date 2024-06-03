@@ -197,12 +197,14 @@ class TeslaControl
         info("Token refreshed. Trying again!")
         retry
       when 408
+        User.me.jarvis_caches.dig_set(:car_data, :state, :asleep)
+        @vehicle_data = User.me.jarvis_caches.dig(:car_data) # reset cache
         if tries >= max_attempts
-          TeslaCommand.broadcast(loading: false, sleeping: true)
+          TeslaCommand.broadcast(loading: false)
           return false # Did not wake up
         end
         info("Attempting to wake up... (#{tries}/#{max_attempts})")
-        TeslaCommand.broadcast(loading: true, sleeping: true)
+        TeslaCommand.broadcast(loading: true)
         !wake_up && sleep(10) # Only sleep if still sleeping
         info("Trying again after wakeup!")
         retry

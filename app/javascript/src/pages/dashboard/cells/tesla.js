@@ -101,7 +101,6 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     onload: function() {
       this.data.refresh_timer = undefined
       this.data.loading = true
-      this.data.car = {}
 
       renderLines()
       cell.commands.run("update")
