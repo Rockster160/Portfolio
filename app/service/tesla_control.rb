@@ -21,7 +21,7 @@ class TeslaControl
   def refresh
     @api.proxy_refresh
   rescue => e
-    info("Refresh Error", "[#{e.class}]: #{e.message}")
+    err("Refresh Error", e)
     raise
   end
 
@@ -145,7 +145,7 @@ class TeslaControl
         end
       } || cached_vehicle_data
     rescue => e
-      info("Vehicle Data Error", "[#{e.class}]: #{e.message}")
+      err("Vehicle Data Error", e)
       cached_vehicle_data
     end
   end
@@ -209,11 +209,11 @@ class TeslaControl
         info("Trying again after wakeup!")
         retry
       else
-        info("RestClient Wakeup Error", "[#{res_exc.class}]: #{res_exc.message}")
+        err("RestClient Wakeup Error", res_exc)
         raise
       end
     rescue => e
-      info("Wakeup Error", "[#{e.class}]: #{e.message}")
+      err("Wakeup Error", e)
     end
   end
 
@@ -229,7 +229,7 @@ class TeslaControl
       proxy_post_vehicle("command/#{cmd}", params)
     }
   rescue => e
-    info("Command Error", "[#{e.class}]: #{e.message}")
+    err("Proxy Command Error", e)
   end
 
   def command(cmd, params={})
@@ -238,7 +238,7 @@ class TeslaControl
       post_vehicle("command/#{cmd}", params)
     }
   rescue => e
-    info("Command Error", "[#{e.class}]: #{e.message}")
+    err("Command Error", e)
   end
 
   def parse_to(val, truthy, falsy)
@@ -272,5 +272,15 @@ class TeslaControl
       detail = detail.gsub(/:(\w+)=>/, '\1: ')
     end
     ::PrettyLogger.info("\b\e[94m[TESLA]\n#{title}#{detail}\e[0m")
+  end
+
+  def err(title=nil, exception)
+    ::SlackNotifier.err(exception)
+    ::PrettyLogger.error(
+      "\b\e[94m[TESLA]\e[31m[ERROR]\n",
+      title,
+      "[#{exception.class}] #{exception.message}"
+      ::PrettyLogger.focused_backtrace(exception.backtrace).first
+    )
   end
 end
