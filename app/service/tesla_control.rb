@@ -279,8 +279,8 @@ class TeslaControl
     ::PrettyLogger.error(
       "\b\e[94m[TESLA]\e[31m[ERROR]\n",
       title,
-      "[#{exception.class}] #{exception.message}"
-      ::PrettyLogger.focused_backtrace(exception.backtrace).first
+      "[#{exception.class}] #{exception.message}",
+      ::PrettyLogger.focused_backtrace(exception.backtrace).first,
     )
   end
 end
