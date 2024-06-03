@@ -48,7 +48,7 @@ class Oauth::TeslaApi < Oauth::Base
   def proxy_post(path, params={}, headers={})
     Api.request(
       method: :post,
-      url: url(path, base: "http://localhost:3142/api/1/"),
+      url: url(path, base: "#{DataStorage[:local_ip]}:3142/api/1/"),
       payload: params,
       headers: base_headers.merge(headers),
       # ssl_ca_file: "/home/rocco/tesla_keys/cert.pem",
