@@ -187,15 +187,14 @@ class TeslaControl
       case tesla_exc_code(res_exc)
       when 401
         info("Token expired. Refreshing...")
-        # set loading state
+        TeslaCommand.broadcast(loading: true)
         refresh
         tries -= 1 # Refresh doesn't count as an attempt
         info("Token refreshed. Trying again!")
         retry
       when 408
         info("Sleeping. Poking... (#{tries}/#{max_attempts})")
-        # set sleeping state
-        # set loading state
+        TeslaCommand.broadcast(loading: true, sleeping: true)
         info("Waiting for wakeup...")
         !wake_up && sleep(10) # Only sleep if still sleeping
         info("Trying again after wakeup!")

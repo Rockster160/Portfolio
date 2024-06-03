@@ -12,8 +12,8 @@ module TeslaCommand
     command(cmd, opt, true)
   end
 
-  def broadcast(car_data)
-    ActionCable.server.broadcast(:tesla_channel, format_data(car_data))
+  def broadcast(extra_data={})
+    ActionCable.server.broadcast(:tesla_channel, format_data(extra_data))
   end
 
   def address_book
@@ -47,7 +47,7 @@ module TeslaCommand
       @response = "Updating car cell"
       return @response
     when :request # Get cached car data
-      broadcast(Tesla.new.cached_vehicle_data)
+      broadcast
     when :update # Get current data, but do not wake up
       broadcast(car.vehicle_data) unless quick
       @response = "Updating car cell"
@@ -150,7 +150,7 @@ module TeslaCommand
     @response
   rescue TeslaError => e
     if e.message.match?(/forbidden/i)
-      broadcast(Tesla.new.cached_vehicle_data)
+      broadcast
     else
       broadcast(failed: true)
     end
@@ -170,7 +170,9 @@ module TeslaCommand
     (c * (9/5.to_f)).round + 32
   end
 
-  def format_data(data)
+  def format_data(extra_data={})
+    data = Tesla.new.cached_vehicle_data.merge(extra_data)
+
     return {} if data.blank?
     return data if data[:charge_state].blank?
 
