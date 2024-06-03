@@ -40,6 +40,7 @@ class Api
   end
 
   def self.request(url:, **opts)
+    return_full_response = opts.delete(:return_full_response)
     method = opts[:method] || :get
     pst "  \e[33m#{method.to_s.upcase} #{url}\e[0m"
     output(:Payload, opts[:payload]) if opts[:payload]
@@ -54,6 +55,7 @@ class Api
       **opts
     )
     output("Response Headers", res.headers)
+    return res if return_full_response
     JSON.parse(res.body, symbolize_names: true).tap { |json| output(:Response, json) }
   rescue RestClient::ExceptionWithResponse => res_exc
     pst "\e[31m  > #{res_exc} [#{res_exc.message}](#{res_exc.http_body})\e[0m"
@@ -70,8 +72,21 @@ class Api
 
     padded = "  #{name}  "
     pst "  \e[90m#{padded.center(60, "=")}\e[0m"
-    data = json.is_a?(::Hash) || json.is_a?(::Array) ? json.better.pretty : json.to_s
-    pst "  #{data.split("\n").join("\n  ")}"
+    pst "  #{pretty_obj(json).split("\n").join("\n  ")}"
+  end
+
+  def self.pretty_obj(obj)
+    return obj.to_s unless obj.is_a?(::Hash) || obj.is_a?(::Array)
+
+    ::CodeRay.scan(obj, :ruby).terminal.gsub(
+      /\e\[32m\e\[1;32m\"\e\[0m\e\[32m(\w+)\e\[1;32m\"\e\[0m\e\[32m\e\[0m=>/, ("\e[36m" + '\1: ' + "\e[0m")
+    ).gsub(
+      /\e\[36m:(\w+)\e\[0m=>/i, ("\e[36m" + '\1: ' + "\e[0m") # hashrocket(sym) to colon(sym)
+    ).gsub(
+      /\e\[0m=>/, "\e[0m: " # all hashrockets to colons
+    ).gsub(
+      "\e[1;36mnil\e[0m", "\e[1;90mnil\e[0m"
+    )
   end
 
   def initialize(base_url, always_params = {}, always_headers = {})
