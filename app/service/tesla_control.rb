@@ -114,9 +114,9 @@ class TeslaControl
     @vehicle_data = cached_vehicle_data if Rails.env.development?
     @vehicle_data ||= begin
       get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
-        car_data = json&.dig(:response)
+        car_data = json.is_a?(::Hash) && json.dig(:response)
         cached_data = cached_vehicle_data
-        break cached_data unless car_data
+        break cached_data unless car_data.present?
 
         car_data[:timestamp] = car_data.dig(:vehicle_state, :timestamp) # Bubble up to higher key
 
@@ -266,7 +266,7 @@ class TeslaControl
 
   def info(title, detail=nil)
     if detail
-      detail = PrettyLogger.pretty_message(detail)
+      detail = "\n" + PrettyLogger.pretty_message(detail)
       detail = detail.gsub(/:(\w+)=>/, '\1: ')
     end
     ::PrettyLogger.info("\b\e[94m[TESLA]\n#{title}#{detail}\e[0m")
