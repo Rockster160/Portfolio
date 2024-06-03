@@ -27,83 +27,82 @@ class TeslaControl
 
   def pop_boot(direction=:toggle)
     direction = parse_to(direction, :open, :close)
-    return command(:actuate_trunk, which_trunk: :rear) if direction == :toggle
+    return proxy_command(:actuate_trunk, which_trunk: :rear) if direction == :toggle
 
     state = vehicle_data.dig(:vehicle_state, :rt).to_i > 0 ? :open : :close
     return if state == direction
 
-    command(:actuate_trunk, which_trunk: :rear)
+    proxy_command(:actuate_trunk, which_trunk: :rear)
   end
 
   def windows(direction=:toggle)
     direction = parse_to(direction, :vent, :close)
-    return command(:window_control, command: :vent) if direction == :open
+    return proxy_command(:window_control, proxy_command: :vent) if direction == :open
 
     data = vehicle_data
     windows = [:fd, :fp, :rd, :rp]
     is_open = windows.any? { |window| data.dig(:vehicle_state, "#{window}_window".to_sym).to_i > 0 }
     state = direction == :toggle && !is_open ? :vent : :close
 
-    command(:window_control, command: state, lat: loc[0], lon: loc[1])
+    proxy_command(:window_control, proxy_command: state, lat: loc[0], lon: loc[1])
   end
 
   def doors(direction=:toggle)
     direction = parse_to(direction, :unlock, :lock)
-    return command(:door_lock) if direction == :lock
-    return command(:door_unlock) if direction == :unlock
+    return proxy_command(:door_lock) if direction == :lock
+    return proxy_command(:door_unlock) if direction == :unlock
 
     locked = vehicle_data.dig(:vehicle_state, :locked)
-    locked ? command(:door_unlock) : command(:door_lock)
+    locked ? proxy_command(:door_unlock) : proxy_command(:door_lock)
   end
 
   def pop_frunk
-    command(:actuate_trunk, which_trunk: :front)
+    proxy_command(:actuate_trunk, which_trunk: :front)
   end
 
   def start_car
-    command(:auto_conditioning_start)
+    proxy_command(:auto_conditioning_start)
   end
 
   def off_car
-    command(:auto_conditioning_stop)
+    proxy_command(:auto_conditioning_stop)
   end
 
   def honk
-    command(:honk_horn)
+    proxy_command(:honk_horn)
   end
 
-  def navigate(address)
+  def navigate(loc)
     address_params = {
-      type: :share_ext_content_raw,
-      locale: :"en-US",
-      timestamp_ms: (Time.current.to_f * 1000).round,
-      value: { "android.intent.extra.TEXT": address },
+      lat: loc[0],
+      lon: loc[1],
+      order: 0, # Assume a new navigation point should be the next one, not the last one in order
     }
 
-    command(:navigation_request, address_params)
+    command(:navigation_gps_request, address_params)
   end
 
   def set_temp(temp_F)
     temp_F = temp_F.to_f.clamp(59..82)
     # Tesla expects temp in Celsius
     temp_C = ((temp_F - 32) * (5/9.to_f)).round(1)
-    command(:set_temps, driver_temp: temp_C, passenger_temp: temp_C)
+    proxy_command(:set_temps, driver_temp: temp_C, passenger_temp: temp_C)
     # For some reason sometimes when setting temp while car is sleeping, it instead sets to TEMP_MIN
-    # To counter that, wait 5 seconds after command is performed and attempt to set the temp again
+    # To counter that, wait 5 seconds after proxy_command is performed and attempt to set the temp again
     # TeslaVerifyTempWorker.perform_in(5.seconds, temp_F) if Rails.env.production?
   end
 
   def heat_driver
-    command(:remote_seat_heater_request, heater: 0, level: 3)
+    proxy_command(:remote_seat_heater_request, heater: 0, level: 3)
   end
 
   def heat_passenger
-    command(:remote_seat_heater_request, heater: 1, level: 3)
+    proxy_command(:remote_seat_heater_request, heater: 1, level: 3)
   end
 
   def defrost(direction=true)
     direction = parse_to(direction, true, false)
-    command(:set_preconditioning_max, on: direction)
+    proxy_command(:set_preconditioning_max, on: direction)
   end
 
   def cached_vehicle_data
@@ -159,7 +158,7 @@ class TeslaControl
   end
 
   def wake_up
-    res = post_vehicle(:wake_up)
+    res = proxy_post_vehicle(:wake_up)
     res&.dig(:response, :state) == "online"
   end
 
@@ -178,7 +177,7 @@ class TeslaControl
     500
   end
 
-  def wakup_retry(max_attempts: 5, &block)
+  def wakeup_retry(max_attempts: 5, &block)
     tries = 0
     begin
       tries += 1
@@ -209,13 +208,22 @@ class TeslaControl
   end
 
   def get(url, wake: false)
-    wakup_retry(max_attempts: wake ? 5 : 1) {
+    wakeup_retry(max_attempts: wake ? 5 : 1) {
       @api.get(url)
     }
   end
 
+  def proxy_command(cmd, params={})
+    wakeup_retry {
+      info("#{cmd}")
+      proxy_post_vehicle("command/#{cmd}", params)
+    }
+  rescue => e
+    info("Command Error", "[#{e.class}]: #{e.message}")
+  end
+
   def command(cmd, params={})
-    wakup_retry {
+    wakeup_retry {
       info("#{cmd}")
       post_vehicle("command/#{cmd}", params)
     }
@@ -232,10 +240,18 @@ class TeslaControl
     val
   end
 
-  def post_vehicle(endpoint, params={})
+  def proxy_post_vehicle(endpoint, params={})
     raise "Should not POST in tests!" if Rails.env.test?
 
     @api.proxy_post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
+      info("Response", "#{res}")
+    }
+  end
+
+  def post_vehicle(endpoint, params={})
+    raise "Should not POST in tests!" if Rails.env.test?
+
+    @api.post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
       info("Response", "#{res}")
     }
   end

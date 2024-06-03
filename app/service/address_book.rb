@@ -82,7 +82,7 @@ class AddressBook
       address = data[::Jarvis::Regex.address]&.squish.presence
     end
     address ||= contact_by_name(data)&.primary_address&.street
-    address ||= nearest_address_from_name(data)
+    address ||= nearest_from_name(data)
     address.gsub("\n", "") if address.is_a?(String)
     SlackNotifier.notify("to_address is a #{data.class}") unless data.is_a?(String)
     address
@@ -97,7 +97,7 @@ class AddressBook
     return if to.blank? || from.blank?
 
     nonnil_cache("traveltime_seconds(#{to},#{from})") {
-      # ::Jarvis.say("Traveltime #{to},#{from}")
+      ::PrettyLogger.info("\b[AddressCache] Traveltime #{to},#{from}")
       params = {
         destinations: to,
         origins: from,
@@ -114,12 +114,14 @@ class AddressBook
     nil
   end
 
-  def nearest_address_from_name(name, loc=nil)
+  def nearest_from_name(name, loc: nil, extract: :address)
+    raise "Unacceptable extraction: #{extract}" unless extract.in?([:address, :loc])
+
     loc ||= current_loc
     return if name.blank? || loc.compact.blank?
 
-    nonnil_cache("nearest_address_from_name(#{name},#{loc.join(",")})") do
-      # ::Jarvis.say("Nearest name #{name},#{loc.join(",")}")
+    nonnil_cache("nearest_from_name(#{name},#{loc.join(",")})") {
+      ::PrettyLogger.info("\b[AddressCache] Nearest name #{name},#{loc.join(",")}")
       params = {
         input: name,
         inputtype: :textquery,
@@ -132,15 +134,22 @@ class AddressBook
       res = RestClient.get(url)
       json = JSON.parse(res.body, symbolize_names: true)
 
-      if json&.dig(:candidates)&.one?
-        json.dig(:candidates).first[:formatted_address]
+      json.dig(:candidates)
+    }.then { |candidates|
+      if candidates&.one?
+        candidates.first
       else
-        json.dig(:candidates).sort_by { |candidate|
+        candidates.sort_by { |candidate|
           next if candidate&.dig(:geometry, :location).blank?
           distance(loc, candidate.dig(:geometry, :location).values)
-        }.first&.dig(:formatted_address)
+        }.compact.first
       end
-    end
+    }.then { |candidate|
+      case extract
+      when :address then candidate&.dig(:formatted_address)
+      when :loc then candidate&.dig(:geometry, :location)&.slice(:lat, :lng)&.values
+      end
+    }
   end
 
   # Find address at [lat,lng]
@@ -172,7 +181,7 @@ class AddressBook
     return if address.blank?
 
     nonnil_cache("geocode(#{address})") do
-      # ::Jarvis.say("Geocoding #{address}")
+      ::PrettyLogger.info("\b[AddressCache] Geocoding #{address}")
       encoded = CGI.escape(address)
       url = "https://maps.googleapis.com/maps/api/geocode/json?address=#{encoded}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
       res = RestClient.get(url)
@@ -190,7 +199,7 @@ class AddressBook
     return if loc.compact.blank?
 
     nonnil_cache("reverse_geocode(#{loc.map { |l| l.round(2) }.join(",")},#{get})") do
-      # ::Jarvis.say("Reverse Geocoding #{loc.join(",")},#{get}")
+      ::PrettyLogger.info("\b[AddressCache] Reverse Geocoding #{loc.join(",")},#{get}")
       url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=#{loc.join(",")}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
       res = RestClient.get(url)
       json = JSON.parse(res.body, symbolize_names: true)
