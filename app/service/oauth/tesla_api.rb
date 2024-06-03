@@ -47,6 +47,7 @@ class Oauth::TeslaApi < Oauth::Base
   # 403 Forbidden - Everything bad
   # 401 Unauthorized - Refresh Oauth Token
   # 408 Request Timeout - Wake up
+  # 406 Not Acceptable (RestClient::NotAcceptable)
 
   # Use `true` except when bypassing and hitting the Go server directly while local
   USE_LOCAL_RAILS_PROXY = true

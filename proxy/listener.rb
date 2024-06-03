@@ -7,21 +7,23 @@ require "coderay"
 
 require_relative "../app/service/api.rb"
 
-TARGET_BASE_URL = "https://localhost:8752" # no slash
 DEBUG_LOGGING = true
+TARGET_BASE_URL = "https://localhost:8752" # no slash
 # Create a Rails-like object for the API to define whether to show debugging
 Rails = Object.new.tap { |obj|
   def obj.env
     Object.new.tap { |env|
       def env.production?
-        DEBUG_LOGGING
+        !DEBUG_LOGGING
       end
     }
   end
 }
 class String
   def presence
-    gsub(/\s/, "").length == 0 ? nil : self
+    to_s.gsub(/\s/, "").length == 0 ? nil : self
+  rescue ArgumentError
+    self
   end
 end
 
@@ -58,12 +60,6 @@ class ProxyServer < Sinatra::Base
 
   post "/tesla_refresh" do
     puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m #{params}\e[0m"
-    proxy_headers = request.env.slice("CONTENT_TYPE")
-    request.env.each do |key, value|
-      # puts "\e[36m#{key}:\e[33m #{value}\e[0m"
-      proxy_headers[key.gsub(/^HTTP_/, "")] = value if key.start_with?("HTTP_")
-    end
-
     puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[36mREFRESH\e[0m"
     begin
       # proxy_url = "https://ardesian.com/webhooks/post"
@@ -96,6 +92,7 @@ class ProxyServer < Sinatra::Base
       # puts "\e[36m#{key}:\e[33m #{value}\e[0m"
       proxy_headers[key.gsub(/^HTTP_/, "")] = value if key.start_with?("HTTP_")
     end
+    proxy_headers = proxy_headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase }
 
     begin
       res = Api.request(
