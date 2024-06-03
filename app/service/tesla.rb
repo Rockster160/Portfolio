@@ -7,7 +7,7 @@ class Tesla
   end
 
   def initialize(controller=nil)
-    @controller = controller || TeslaControl.new(self)
+    @controller = controller || TeslaControl.me
     @id = @controller.vin
   end
 
