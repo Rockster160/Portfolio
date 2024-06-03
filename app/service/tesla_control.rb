@@ -186,6 +186,10 @@ class TeslaControl
     rescue RestClient::ExceptionWithResponse => res_exc
       case tesla_exc_code(res_exc)
       when 401
+        if tries > 1 # Should only need to refresh on the first attempt
+          info("Failed to reauthorize")
+          raise
+        end
         info("Token expired. Refreshing...")
         TeslaCommand.broadcast(loading: true)
         refresh
@@ -193,9 +197,12 @@ class TeslaControl
         info("Token refreshed. Trying again!")
         retry
       when 408
-        info("Sleeping. Poking... (#{tries}/#{max_attempts})")
+        if tries >= max_attempts
+          TeslaCommand.broadcast(loading: false, sleeping: true)
+          return false # Did not wake up
+        end
+        info("Attempting to wake up... (#{tries}/#{max_attempts})")
         TeslaCommand.broadcast(loading: true, sleeping: true)
-        info("Waiting for wakeup...")
         !wake_up && sleep(10) # Only sleep if still sleeping
         info("Trying again after wakeup!")
         retry
@@ -258,7 +265,10 @@ class TeslaControl
   end
 
   def info(title, detail=nil)
-    details = detail ? ":\n\e[33m#{PrettyLogger.pretty_message(detail)}" : nil
-    ::PrettyLogger.info("\b\e[94m[TESLA]\n#{title}#{details}\e[0m")
+    if detail
+      detail = PrettyLogger.pretty_message(detail)
+      detail = detail.gsub(/:(\w+)=>/, '\1: ')
+    end
+    ::PrettyLogger.info("\b\e[94m[TESLA]\n#{title}#{detail}\e[0m")
   end
 end
