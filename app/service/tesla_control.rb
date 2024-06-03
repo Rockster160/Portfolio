@@ -76,7 +76,8 @@ class TeslaControl
     address_params = {
       lat: loc[0],
       lon: loc[1],
-      order: 0, # Assume a new navigation point should be the next one, not the last one in order
+      # order is 1 based, not 0 based
+      order: 1, # Assume a new navigation point should be the next one, not the last one in order
     }
 
     command(:navigation_gps_request, address_params)
