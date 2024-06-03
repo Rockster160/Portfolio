@@ -112,7 +112,7 @@ class TeslaControl
 
   def vehicle_data(wake: false)
     @vehicle_data = cached_vehicle_data if Rails.env.development?
-    @vehicle_data ||= @api.get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
+    @vehicle_data ||= get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
       car_data = json&.dig(:response)
       cached_data = cached_vehicle_data
       break cached_data unless car_data
@@ -156,31 +156,60 @@ class TeslaControl
   end
 
   def wake_up
-    wake_vehicle
-    start = Time.current.to_i
-
-    loop do
-      if Time.current.to_i - start > 60
-        TeslaCommand.broadcast(cached_vehicle_data.merge(sleeping: true, loading: false))
-        Jarvis.say("BluZoro is too asleep to wake up, sir.")
-        raise TeslaError, "Timed out waiting to wake up"
-      end
-
-      break true if wake_vehicle
-      TeslaCommand.broadcast(cached_vehicle_data.merge(sleeping: true, loading: true))
-      sleep(rand * 10)
-    end
+    res = post_vehicle(:wake_up)
+    res&.dig(:response, :state) == "online"
+    # start = Time.current.to_i
+    #
+    # loop do
+    #   if Time.current.to_i - start > 60
+    #     TeslaCommand.broadcast(cached_vehicle_data.merge(sleeping: true, loading: false))
+    #     Jarvis.say("BluZoro is too asleep to wake up, sir.")
+    #     raise TeslaError, "Timed out waiting to wake up"
+    #   end
+    #
+    #   break true if wake_vehicle
+    #   TeslaCommand.broadcast(cached_vehicle_data.merge(sleeping: true, loading: true))
+    #   sleep(rand * 10)
+    # end
   end
 
   private
 
-  def wake_vehicle
-    res = post_vehicle(:wake_up)
-    res&.dig(:response, :state) == "online"
+  def wakup_retry(max_attempts: 5, &block)
+    tries = 0
+    begin
+      tries += 1
+      block.call if tries <= max_attempts
+    rescue RestClient::ExceptionWithResponse => res_exc
+      if res_exc.response.code == 401
+        # set loading state
+        refresh
+        tries -= 1 # Refresh doesn't count as an attempt
+        retry
+      elsif res_exc.response.code == 408
+        # set sleeping state
+        # set loading state
+        sleep(10)
+        retry
+      else
+        Jarvis.say("Tesla RestClient Wakeup Error: [#{res_exc.class}]: #{res_exc.message}")
+        raise
+      end
+    rescue => e
+      Jarvis.say("Tesla Wakeup Error: [#{e.class}]: #{e.message}")
+    end
+  end
+
+  def get(url, wake: false)
+    wakup_retry(max_attempts: wake ? 5 : 1) {
+      @api.get(url)
+    }
   end
 
   def command(cmd, params={})
-    post_vehicle("command/#{cmd}", params)
+    wakup_retry {
+      post_vehicle("command/#{cmd}", params)
+    }
   rescue => e
     Jarvis.say("Tesla Command Error: [#{e.class}]: #{e.message}")
     ::PrettyLogger.info("Tesla Command Error: [#{e.class}]: #{e.message}\n[#{cmd}]: #{params}")

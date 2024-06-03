@@ -26,6 +26,8 @@
 
 
 class Oauth::TeslaApi < Oauth::Base
+  # Use `true` except when bypassing and hitting the Go server directly while local
+  USE_LOCAL_RAILS_PROXY = true
   constants(
     api_url: "https://fleet-api.prd.na.vn.cloud.tesla.com/api/1/",
     oauth_url: "https://auth.tesla.com/oauth2/v3/authorize",
@@ -49,8 +51,6 @@ class Oauth::TeslaApi < Oauth::Base
   # 408 Request Timeout - Wake up
   # 406 Not Acceptable (RestClient::NotAcceptable)
 
-  # Use `true` except when bypassing and hitting the Go server directly while local
-  USE_LOCAL_RAILS_PROXY = true
   def proxy_post(path, params={}, headers={})
     if USE_LOCAL_RAILS_PROXY
       Api.request(
@@ -73,20 +73,6 @@ class Oauth::TeslaApi < Oauth::Base
   def proxy_refresh
     if USE_LOCAL_RAILS_PROXY
       refresh(exchange_url: "#{DataStorage[:local_ip]}:3142/tesla_refresh")
-      # Api.request(
-      #   method: :post,
-      #   url: ,
-      #   payload: params,
-      #   headers: base_headers.merge(headers),
-      # )
-    else
-      # Api.request(
-      #   method: :post,
-      #   url: url(path, base: "https://localhost:8752/api/1/"),
-      #   payload: params,
-      #   headers: base_headers.merge(headers),
-      #   ssl_ca_file: "_scripts/tesla_keys/cert.pem",
-      # )
     end
   end
 end
