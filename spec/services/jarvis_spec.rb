@@ -87,7 +87,7 @@ RSpec.describe Jarvis do
 
   context "with car" do
     # turn the ac|heater on in my car|at home
-    let(:tesla_control) { double("TeslaControl", vehicle_id: 1, vehicle_data: {}) }
+    let(:tesla_control) { double("TeslaControl", vin: 1, vehicle_data: {}) }
 
     before do
       # allow(DataStorage).to receive(:[]).and_call_original

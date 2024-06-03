@@ -8,7 +8,7 @@ class Tesla
 
   def initialize(controller=nil)
     @controller = controller || TeslaControl.new(self)
-    @id = @controller.vehicle_id
+    @id = @controller.vin
   end
 
   delegate(
