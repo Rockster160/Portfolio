@@ -219,7 +219,6 @@ class TeslaControl
     }
   rescue => e
     Jarvis.say("Tesla Command Error: [#{e.class}]: #{e.message}")
-    ::PrettyLogger.info("Tesla Command Error: [#{e.class}]: #{e.message}\n[#{cmd}]: #{params}")
   end
 
   def parse_to(val, truthy, falsy)
@@ -235,7 +234,7 @@ class TeslaControl
     raise "Should not POST in tests!" if Rails.env.test?
 
     @api.proxy_post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
-      ::PrettyLogger.info("Tesla Response: #{res}")
+      ::Jarvis.say("Tesla Response: #{res}")
     }
   end
 end
