@@ -75,7 +75,7 @@ class Jil::JarvisTasksController < ApplicationController
 
   def run
     @task = current_user.jarvis_tasks.anyfind(params[:id])
-    request_logger.log_request("\e[36m\e[4m#{@task.name}\e[0m")
+    request_logger.log_request("\n\e[36m\e[4m#{@task.name}\e[0m")
     data = ::Jarvis::Execute.call(
       @task,
       {
