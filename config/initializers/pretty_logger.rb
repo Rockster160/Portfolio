@@ -15,13 +15,16 @@
     name = current_user.try(:username).presence
     name ||= "#{current_user.guest? ? :Guest : :User}:#{current_user.id}"
 
-    "\b" + case current_user.id
-    when 1 then colorize(:rocco, "[R]\n")
-    when 4 then colorize(:purple, "[M]\n")
-    when 33529 then colorize(:magenta, "[J]\n")
-    when 34226 then colorize(:pink, "[S]\n") # Saya
-    when 37764 then colorize(:yellow, "[C]\n") # Carlos
-    else colorize(:olive, "[#{name}]\n")
-    end
+    formatted = (
+      case current_user.id
+      when 1 then colorize(:rocco, "[R]")
+      when 4 then colorize(:purple, "[M]")
+      when 33529 then colorize(:magenta, "[J]")
+      when 34226 then colorize(:pink, "[S]") # Saya
+      when 37764 then colorize(:yellow, "[C]") # Carlos
+      else colorize(:olive, "[#{name}]")
+      end
+    )
+    "\b#{formatted}\n "
   end
 end

@@ -5,8 +5,8 @@ class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception, if: -> { current_user&.id != 1 } # Hack- skip CSRF if it's me
   helper_method :current_user, :user_signed_in?, :guest_account?
 
-  skip_before_action :pretty_logit # Defined by gem
-  before_action :pretty_logit, if: -> { user_signed_in? } # Only log for signed in users
+  # skip_before_action :pretty_logit # Defined by gem
+  # before_action :pretty_logit, if: -> { user_signed_in? } # Only log for signed in users
   before_action :tracker, :see_current_user
   before_action :show_guest_banner, if: :guest_account?
   prepend_before_action :block_banned_ip
