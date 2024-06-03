@@ -258,6 +258,6 @@ class TeslaControl
 
   def info(title, detail=nil)
     details = detail ? ":\n\e[33m#{PrettyLogger.pretty_message(detail)}" : nil
-    ::PrettyLogger.info("\b\e[94m[TESLA] #{title}#{details}\e[0m")
+    ::PrettyLogger.info("\b\e[94m[TESLA]\n#{title}#{details}\e[0m")
   end
 end
