@@ -44,14 +44,48 @@ class Oauth::TeslaApi < Oauth::Base
       audience: "https://fleet-api.prd.na.vn.cloud.tesla.com",
     }
   )
+  # 403 Forbidden - Everything bad
+  # 401 Unauthorized - Refresh Oauth Token
+  # 408 Request Timeout - Wake up
 
+  # Use `true` except when bypassing and hitting the Go server directly while local
+  USE_LOCAL_RAILS_PROXY = true
   def proxy_post(path, params={}, headers={})
-    Api.request(
-      method: :post,
-      url: url(path, base: "#{DataStorage[:local_ip]}:3142/api/1/"),
-      payload: params,
-      headers: base_headers.merge(headers),
-      # ssl_ca_file: "/home/rocco/tesla_keys/cert.pem",
-    )
+    if USE_LOCAL_RAILS_PROXY
+      Api.request(
+        method: :post,
+        url: url(path, base: "#{DataStorage[:local_ip]}:3142/api/1/"),
+        payload: params,
+        headers: base_headers.merge(headers),
+      )
+    else
+      Api.request(
+        method: :post,
+        url: url(path, base: "https://localhost:8752/api/1/"),
+        payload: params,
+        headers: base_headers.merge(headers),
+        ssl_ca_file: "_scripts/tesla_keys/cert.pem",
+      )
+    end
+  end
+
+  def proxy_refresh
+    if USE_LOCAL_RAILS_PROXY
+      refresh(exchange_url: "#{DataStorage[:local_ip]}:3142/tesla_refresh")
+      # Api.request(
+      #   method: :post,
+      #   url: ,
+      #   payload: params,
+      #   headers: base_headers.merge(headers),
+      # )
+    else
+      # Api.request(
+      #   method: :post,
+      #   url: url(path, base: "https://localhost:8752/api/1/"),
+      #   payload: params,
+      #   headers: base_headers.merge(headers),
+      #   ssl_ca_file: "_scripts/tesla_keys/cert.pem",
+      # )
+    end
   end
 end

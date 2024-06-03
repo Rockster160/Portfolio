@@ -9,6 +9,8 @@ class Oauth::Base
   # auth_params
   # exchange_params
 
+  USER_AGENT = "Jarvis-1.0"
+
   def self.key = name.split("::").last.underscore
   def self.defaults
     {
@@ -64,12 +66,12 @@ class Oauth::Base
   end
 
   def auth(params={})
-    Api.post(@exchange_url, {
+    Api.post(params.delete(:exchange_url) || @exchange_url, {
       client_id: @client_id,
       client_secret: @client_secret,
       redirect_uri: @redirect_uri,
       scope: @scopes,
-    }.merge(params)).tap { |json|
+    }.merge(params), { user_agent: USER_AGENT }).tap { |json|
       next if json.nil?
 
       cache.skip_save_set = true
@@ -112,20 +114,20 @@ class Oauth::Base
 
   # should have refresh_get, refresh_post
 
-  def refresh
-    auth(
+  def refresh(params={})
+    auth({
       grant_type: :refresh_token,
       refresh_token: refresh_token || access_token
-    )
+    }.merge(params))
 
     self
   end
 
-  def base_headers
+  def base_headers(include_access_token: true)
     {
-      user_agent: "Jarvis-1.0",
+      user_agent: USER_AGENT,
       content_type: "application/json",
-      Authorization: access_token.present? ? "Bearer #{access_token}" : nil
+      Authorization: include_access_token && access_token.present? ? "Bearer #{access_token}" : nil
     }.compact_blank
   end
 end

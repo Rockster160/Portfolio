@@ -2,13 +2,16 @@ class Api
   # BASE_URL="https://www.googleapis.com/calendar/v3"
   attr_accessor :res
 
-  def self.get(uri, params={}, headers={})
+  def self.get(uri, params={}, headers={}, opts={})
     url = [uri, params.presence&.to_query].compact.join("?")
     pst "  \e[33mGET #{url}\e[0m"
     output(:Headers, headers)
     res = RestClient::Request.execute(method: :get, url: url, headers: headers)
     output("Response Headers", res.headers)
+    return res if opts[:return_full_response]
     JSON.parse(res.body, symbolize_names: true).tap { |json| output(:Response, json) }
+  rescue JSON::ParserError
+    res&.body
   rescue RestClient::ExceptionWithResponse => res_exc
     pst "\e[31m  > #{res_exc} [#{res_exc.message}](#{res_exc.http_body})\e[0m"
     raise res_exc
@@ -19,7 +22,7 @@ class Api
     res&.body
   end
 
-  def self.post(uri, params={}, headers={})
+  def self.post(uri, params={}, headers={}, opts={})
     # url = [uri, params.presence&.to_query].compact.join("?")
     url = uri # Include params?
     pst "  \e[33mPOST #{url}\e[0m"
@@ -28,7 +31,10 @@ class Api
     params = params.to_json if params.is_a?(Hash) && headers[:content_type] == "application/json"
     res = RestClient.post(url, params, headers)
     output("Response Headers", res.headers)
+    return res if opts[:return_full_response]
     JSON.parse(res.body, symbolize_names: true).tap { |json| output(:Response, json) }
+  rescue JSON::ParserError
+    res&.body
   rescue RestClient::ExceptionWithResponse => res_exc
     pst "\e[31m  > #{res_exc} [#{res_exc.message}](#{res_exc.http_body})\e[0m"
     raise res_exc
@@ -57,6 +63,8 @@ class Api
     output("Response Headers", res.headers)
     return res if return_full_response
     JSON.parse(res.body, symbolize_names: true).tap { |json| output(:Response, json) }
+  rescue JSON::ParserError
+    res&.body
   rescue RestClient::ExceptionWithResponse => res_exc
     pst "\e[31m  > #{res_exc} [#{res_exc.message}](#{res_exc.http_body})\e[0m"
     raise res_exc
@@ -68,7 +76,7 @@ class Api
   end
 
   def self.output(name, json)
-    return if json.blank?
+    return if json.to_s.gsub(/\s/, "").length == 0 # .blank?
 
     padded = "  #{name}  "
     pst "  \e[90m#{padded.center(60, "=")}\e[0m"

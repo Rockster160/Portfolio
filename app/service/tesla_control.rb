@@ -18,12 +18,8 @@ class TeslaControl
     @api.auth_url
   end
 
-  def authorize
-    @api.auth_url
-  end
-
   def refresh
-    @api.refresh
+    @api.proxy_refresh
   rescue => e
     Jarvis.say("Tesla Refresh Error: [#{e.class}]: #{e.message}")
     raise

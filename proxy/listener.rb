@@ -1,7 +1,6 @@
 require "sinatra"
 
-require "uri"
-require "net/http"
+require "rest-client"
 
 require "json"
 require "coderay"
@@ -20,6 +19,11 @@ Rails = Object.new.tap { |obj|
     }
   end
 }
+class String
+  def presence
+    gsub(/\s/, "").length == 0 ? nil : self
+  end
+end
 
 # https://github.com/rubychan/coderay/blob/master/lib/coderay/encoders/terminal.rb
 termoverrides = {
@@ -49,35 +53,75 @@ class ProxyServer < Sinatra::Base
   before do
     # define routes to skip
     pass if request.path_info == "/favicon.ico"
-    pass if !request.path_info.start_with?("/api/1")
+    # pass if !request.path_info.start_with?("/api/1")
+  end
+
+  post "/tesla_refresh" do
+    puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m #{params}\e[0m"
+    proxy_headers = request.env.slice("CONTENT_TYPE")
+    request.env.each do |key, value|
+      # puts "\e[36m#{key}:\e[33m #{value}\e[0m"
+      proxy_headers[key.gsub(/^HTTP_/, "")] = value if key.start_with?("HTTP_")
+    end
+
+    puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[36mREFRESH\e[0m"
+    begin
+      # proxy_url = "https://ardesian.com/webhooks/post"
+      proxy_url = "https://auth.tesla.com/oauth2/v3/token"
+      res = Api.post(proxy_url, params, {}, { return_full_response: true })
+
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[32m Success\e[0m"
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m | #{res}\e[0m"
+      status res.code
+      headers res.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase }
+      res.body.presence || "{}"
+    rescue RestClient::ExceptionWithResponse => res_exc
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[37m request:#{res_exc.response.request.url}\e[0m"
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[31m Error\e[0m"
+      response = res_exc.response
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m status: #{response.code}\e[0m"
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m body: #{response.body}\e[0m"
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m headers: #{response.headers.to_h}\e[0m"
+
+      status response.code
+      headers response.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase }
+      response.body.presence || "{}"
+    end
   end
 
   post "/api/1/*" do
     data = request.body.read
-    headers = request.env.slice("CONTENT_TYPE")
+    proxy_headers = request.env.slice("CONTENT_TYPE")
     request.env.each do |key, value|
       # puts "\e[36m#{key}:\e[33m #{value}\e[0m"
-      headers[key] = value if key.start_with?("HTTP_")
+      proxy_headers[key.gsub(/^HTTP_/, "")] = value if key.start_with?("HTTP_")
     end
 
     begin
       res = Api.request(
         method: :post,
-        url: "#{TARGET_BASE_URL}/api/1/#{request.path_info}",
-        payload: payload,
-        headers: base_headers.merge(headers),
-        ssl_ca_file: "/home/rocco/tesla_keys/cert.pem",
+        url: "#{TARGET_BASE_URL}#{request.path_info}",
+        payload: data,
+        headers: proxy_headers,
+        ssl_ca_file: "/Users/rocco/code/Portfolio/_scripts/tesla_keys/cert.pem",
         return_full_response: true,
       )
 
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[32m Success\e[0m"
       status res.code
-      headers res.headers
-      body res.body
+      headers res.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase }
+      res.body.presence || "{}"
     rescue RestClient::ExceptionWithResponse => res_exc
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[37m request:#{res_exc.response.request.url}\e[0m"
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[31m Error\e[0m"
       response = res_exc.response
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m status: #{response.code}\e[0m"
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m body: #{response.body}\e[0m"
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m headers: #{response.headers.to_h}\e[0m"
+
       status response.code
-      headers response.headers
-      body response.body
+      headers response.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase }
+      response.body.presence || "{}"
     end
   end
 end
