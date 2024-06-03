@@ -7,8 +7,18 @@ require "coderay"
 
 require_relative "../app/service/api.rb"
 
+require "pry-rails"
+
+REAL_TESLA_ENDPOINTS = true
+if REAL_TESLA_ENDPOINTS
+  OAUTH_BASE_URL = "https://auth.tesla.com" # no slash
+  TARGET_BASE_URL = "https://localhost:8752" # no slash
+else
+  OAUTH_BASE_URL = "http://localhost:3141/tesla"
+  TARGET_BASE_URL = "http://localhost:3141/tesla"
+end
+
 DEBUG_LOGGING = true
-TARGET_BASE_URL = "https://localhost:8752" # no slash
 # Create a Rails-like object for the API to define whether to show debugging
 Rails = Object.new.tap { |obj|
   def obj.env
@@ -62,8 +72,7 @@ class ProxyServer < Sinatra::Base
     puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m #{params}\e[0m"
     puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[36mREFRESH\e[0m"
     begin
-      # proxy_url = "https://ardesian.com/webhooks/post"
-      proxy_url = "https://auth.tesla.com/oauth2/v3/token"
+      proxy_url = "#{OAUTH_BASE_URL}/oauth2/v3/token"
       res = Api.post(proxy_url, params, {}, { return_full_response: true })
 
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[32m Success\e[0m"
@@ -103,8 +112,8 @@ class ProxyServer < Sinatra::Base
         ssl_ca_file: "/Users/rocco/code/Portfolio/_scripts/tesla_keys/cert.pem",
         return_full_response: true,
       )
-
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[32m Success\e[0m"
+
       status res.code
       headers res.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase }
       res.body.presence || "{}"

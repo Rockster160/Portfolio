@@ -21,7 +21,7 @@ class TeslaControl
   def refresh
     @api.proxy_refresh
   rescue => e
-    Jarvis.say("Tesla Refresh Error: [#{e.class}]: #{e.message}")
+    info("Tesla Refresh Error", "[#{e.class}]: #{e.message}")
     raise
   end
 
@@ -144,7 +144,7 @@ class TeslaControl
       end
     } || cached_vehicle_data
   rescue => e
-    Jarvis.say("Tesla Vehicle Data Error: [#{e.class}]: #{e.message}")
+    info("Tesla Vehicle Data Error", "[#{e.class}]: #{e.message}")
   end
 
   def loc
@@ -163,7 +163,7 @@ class TeslaControl
     # loop do
     #   if Time.current.to_i - start > 60
     #     TeslaCommand.broadcast(cached_vehicle_data.merge(sleeping: true, loading: false))
-    #     Jarvis.say("BluZoro is too asleep to wake up, sir.")
+    #     info("BluZoro is too asleep to wake up, sir.")
     #     raise TeslaError, "Timed out waiting to wake up"
     #   end
     #
@@ -175,34 +175,48 @@ class TeslaControl
 
   private
 
+  def tesla_exc_code(exc)
+    # Tesla Proxy Server is correctly receiving the errors codes, but returning 500 for them.
+    return exc.response.code unless exc.response.code == 500
+
+    json = JSON.parse(exc.response.body, symbolize_names: true)
+    case json[:error]
+    when "vehicle unavailable: vehicle is offline or asleep" then 408
+    else 500.tap { info("Tesla Unknown Status", "#{json[:error]}") }
+    end
+  rescue JSON::ParserError
+    500
+  end
+
   def wakup_retry(max_attempts: 5, &block)
     tries = 0
     begin
       tries += 1
       block.call if tries <= max_attempts
     rescue RestClient::ExceptionWithResponse => res_exc
-      if res_exc.response.code == 401
-        Jarvis.say("Token expired. Refreshing...")
+      case tesla_exc_code(res_exc)
+      when 401
+        info("Token expired. Refreshing...")
         # set loading state
         refresh
         tries -= 1 # Refresh doesn't count as an attempt
-        Jarvis.say("Token refreshed. Trying again!")
+        info("Token refreshed. Trying again!")
         retry
-      elsif res_exc.response.code == 408
-        Jarvis.say("Tesla Sleeping. Poking... (#{tries}/#{max_attempts})")
+      when 408
+        info("Tesla Sleeping. Poking... (#{tries}/#{max_attempts})")
 
         # set sleeping state
         # set loading state
-        Jarvis.say("Waiting for wakeup...")
+        info("Waiting for wakeup...")
         !wake_up && sleep(10) # Only sleep if still sleeping
-        Jarvis.say("Trying again after wakeup!")
+        info("Trying again after wakeup!")
         retry
       else
-        Jarvis.say("Tesla RestClient Wakeup Error: [#{res_exc.class}]: #{res_exc.message}")
+        info("Tesla RestClient Wakeup Error", "[#{res_exc.class}]: #{res_exc.message}")
         raise
       end
     rescue => e
-      Jarvis.say("Tesla Wakeup Error: [#{e.class}]: #{e.message}")
+      info("Tesla Wakeup Error", "[#{e.class}]: #{e.message}")
     end
   end
 
@@ -214,11 +228,11 @@ class TeslaControl
 
   def command(cmd, params={})
     wakup_retry {
-      Jarvis.say("Tesla: #{cmd}")
+      info("Tesla #{cmd}")
       post_vehicle("command/#{cmd}", params)
     }
   rescue => e
-    Jarvis.say("Tesla Command Error: [#{e.class}]: #{e.message}")
+    info("Tesla Command Error", "[#{e.class}]: #{e.message}")
   end
 
   def parse_to(val, truthy, falsy)
@@ -234,7 +248,12 @@ class TeslaControl
     raise "Should not POST in tests!" if Rails.env.test?
 
     @api.proxy_post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
-      ::Jarvis.say("Tesla Response: #{res}")
+      info("Tesla Response", "#{res}")
     }
+  end
+
+  def info(title, detail=nil)
+    details = detail ? ":\n\e[33m#{PrettyLogger.pretty_message(detail)}" : nil
+    ::PrettyLogger.info("\e[94m#{title}#{details}\e[0m")
   end
 end

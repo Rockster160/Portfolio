@@ -7,6 +7,9 @@ Rails.application.routes.draw do
     get "/sub" => "index#sub"
   end
 
+  post "tesla/api/1/vehicles/:vin/command/:command" => "vehicles#command"
+  post "tesla/oauth2/v3/token" => "vehicles#token"
+
   root "index#home"
   post "/talk" => "index#talk"
   get "/nest_subscribe" => "index#nest_subscribe"

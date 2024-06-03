@@ -1,5 +1,13 @@
 # Override default from PrettyLogger
 ::PrettyLogger::RequestLogger.class_eval do
+  def instance
+    if Rails.env.development?
+      @instance ||= ::ActiveSupport::Logger.new("log/custom.log")
+    else
+      @instance ||= ::ActiveSupport::Logger.new("/home/deploy/apps/portfolio/shared/log/custom.log")
+    end
+  end
+
   def pretty_user
     return colorize(:grey, "[?]") unless current_user.present?
     return colorize(:grey, "Guest:#{current_user.id}") if current_user.guest?
