@@ -1,5 +1,8 @@
 `ruby proxy/listener.rb`
-Also start/run the go server
-Do both within systemD
+```
+cd /Users/rocco/code/vehicle-command
+go run ./cmd/tesla-http-proxy/main.go -tls-key /home/rocco/tesla_keys/tls.pem -cert /home/rocco/tesla_keys/cert.pem -key-file /home/rocco/tesla_keys/private_key.pem -port 8752 -verbose
+```
+Do both within systemD eventually
 
 Also have instructions for restarting/shutdown

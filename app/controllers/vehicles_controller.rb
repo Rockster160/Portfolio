@@ -5,5 +5,6 @@ class VehiclesController < ApplicationController
   end
 
   def token
+    head 200
   end
 end

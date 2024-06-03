@@ -21,7 +21,7 @@ class TeslaControl
   def refresh
     @api.proxy_refresh
   rescue => e
-    info("Tesla Refresh Error", "[#{e.class}]: #{e.message}")
+    info("Refresh Error", "[#{e.class}]: #{e.message}")
     raise
   end
 
@@ -144,7 +144,7 @@ class TeslaControl
       end
     } || cached_vehicle_data
   rescue => e
-    info("Tesla Vehicle Data Error", "[#{e.class}]: #{e.message}")
+    info("Vehicle Data Error", "[#{e.class}]: #{e.message}")
   end
 
   def loc
@@ -158,19 +158,6 @@ class TeslaControl
   def wake_up
     res = post_vehicle(:wake_up)
     res&.dig(:response, :state) == "online"
-    # start = Time.current.to_i
-    #
-    # loop do
-    #   if Time.current.to_i - start > 60
-    #     TeslaCommand.broadcast(cached_vehicle_data.merge(sleeping: true, loading: false))
-    #     info("BluZoro is too asleep to wake up, sir.")
-    #     raise TeslaError, "Timed out waiting to wake up"
-    #   end
-    #
-    #   break true if wake_vehicle
-    #   TeslaCommand.broadcast(cached_vehicle_data.merge(sleeping: true, loading: true))
-    #   sleep(rand * 10)
-    # end
   end
 
   private
@@ -182,7 +169,7 @@ class TeslaControl
     json = JSON.parse(exc.response.body, symbolize_names: true)
     case json[:error]
     when "vehicle unavailable: vehicle is offline or asleep" then 408
-    else 500.tap { info("Tesla Unknown Status", "#{json[:error]}") }
+    else 500.tap { info("Unknown Status", "#{json[:error]}") }
     end
   rescue JSON::ParserError
     500
@@ -203,7 +190,7 @@ class TeslaControl
         info("Token refreshed. Trying again!")
         retry
       when 408
-        info("Tesla Sleeping. Poking... (#{tries}/#{max_attempts})")
+        info("Sleeping. Poking... (#{tries}/#{max_attempts})")
 
         # set sleeping state
         # set loading state
@@ -212,11 +199,11 @@ class TeslaControl
         info("Trying again after wakeup!")
         retry
       else
-        info("Tesla RestClient Wakeup Error", "[#{res_exc.class}]: #{res_exc.message}")
+        info("RestClient Wakeup Error", "[#{res_exc.class}]: #{res_exc.message}")
         raise
       end
     rescue => e
-      info("Tesla Wakeup Error", "[#{e.class}]: #{e.message}")
+      info("Wakeup Error", "[#{e.class}]: #{e.message}")
     end
   end
 
@@ -228,11 +215,11 @@ class TeslaControl
 
   def command(cmd, params={})
     wakup_retry {
-      info("Tesla #{cmd}")
+      info("#{cmd}")
       post_vehicle("command/#{cmd}", params)
     }
   rescue => e
-    info("Tesla Command Error", "[#{e.class}]: #{e.message}")
+    info("Command Error", "[#{e.class}]: #{e.message}")
   end
 
   def parse_to(val, truthy, falsy)
@@ -248,12 +235,12 @@ class TeslaControl
     raise "Should not POST in tests!" if Rails.env.test?
 
     @api.proxy_post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
-      info("Tesla Response", "#{res}")
+      info("Response", "#{res}")
     }
   end
 
   def info(title, detail=nil)
     details = detail ? ":\n\e[33m#{PrettyLogger.pretty_message(detail)}" : nil
-    ::PrettyLogger.info("\e[94m#{title}#{details}\e[0m")
+    ::PrettyLogger.info("\b\e[94m[TESLA] #{title}#{details}\e[0m")
   end
 end

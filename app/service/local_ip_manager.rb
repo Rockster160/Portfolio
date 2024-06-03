@@ -3,7 +3,7 @@ module LocalIpManager
 
   def local_ip=(new_ip)
     old_ip = DataStorage[:local_ip]
-    return if new.to_s == "::1"
+    return if new_ip.to_s == "::1"
     return if old_ip.to_s == new_ip.to_s
 
     DataStorage[:local_ip] = new_ip
