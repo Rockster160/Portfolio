@@ -198,7 +198,7 @@ class TeslaControl
         retry
       when 408
         User.me.jarvis_caches.dig_set(:car_data, :state, :asleep)
-        @vehicle_data = User.me.jarvis_caches.dig(:car_data) # reset cache
+        @vehicle_data = User.me.jarvis_caches.get(:car_data) # reset cache
         if tries >= max_attempts
           TeslaCommand.broadcast(loading: false)
           return false # Did not wake up
