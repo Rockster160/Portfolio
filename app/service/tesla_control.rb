@@ -121,7 +121,7 @@ class TeslaControl
         car_data[:timestamp] = car_data.dig(:vehicle_state, :timestamp) # Bubble up to higher key
 
         User.me.jarvis_caches.set(:car_data, car_data)
-        break car_data if car_data[:state] == "sleeping"
+        break car_data if car_data[:state] == "asleep"
 
         if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
           list = User.me.list_by_name(:Chores)
