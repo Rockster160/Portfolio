@@ -182,14 +182,20 @@ class TeslaControl
       block.call if tries <= max_attempts
     rescue RestClient::ExceptionWithResponse => res_exc
       if res_exc.response.code == 401
+        Jarvis.say("Token expired. Refreshing...")
         # set loading state
         refresh
         tries -= 1 # Refresh doesn't count as an attempt
+        Jarvis.say("Token refreshed. Trying again!")
         retry
       elsif res_exc.response.code == 408
+        Jarvis.say("Tesla Sleeping. Poking... (#{tries}/#{max_attempts})")
+
         # set sleeping state
         # set loading state
-        sleep(10)
+        Jarvis.say("Waiting for wakeup...")
+        !wake_up && sleep(10) # Only sleep if still sleeping
+        Jarvis.say("Trying again after wakeup!")
         retry
       else
         Jarvis.say("Tesla RestClient Wakeup Error: [#{res_exc.class}]: #{res_exc.message}")
@@ -208,13 +214,12 @@ class TeslaControl
 
   def command(cmd, params={})
     wakup_retry {
+      Jarvis.say("Tesla: #{cmd}")
       post_vehicle("command/#{cmd}", params)
     }
   rescue => e
     Jarvis.say("Tesla Command Error: [#{e.class}]: #{e.message}")
     ::PrettyLogger.info("Tesla Command Error: [#{e.class}]: #{e.message}\n[#{cmd}]: #{params}")
-    # 401 Unauthorized (RestClient::Unauthorized)
-    # refresh
   end
 
   def parse_to(val, truthy, falsy)
