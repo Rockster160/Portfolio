@@ -1,72 +1,72 @@
 class Jarvis::Execute::Array < Jarvis::Execute::Executor
   def cast
-    SafeJsonSerializer.load(eval_block(args))
+    BetterJsonSerializer.load(eval_block(args))
   end
 
   def get
     arr, idx = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr[idx.to_i] # to_i is a hack because for some reason we're not evaling the evalargs
   end
 
   def set
     arr, idx, val = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr[idx.to_i] = val # to_i is a hack because for some reason we're not evaling the evalargs
     arr
   end
 
   def del
     arr, idx = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr.dup.tap { |a| a.delete_at(idx) }
   end
 
   def includes
     arr, val = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr.include?(val)
   end
 
   def min
     arr = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr.min
   end
 
   def max
     arr = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr.max
   end
 
   def sample
     arr = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr.sample
   end
 
   def prepend
     val, arr = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr.prepend(val)
   end
 
   def append
     arr, val = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr.append(val)
   end
 
   def length
     arr = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr.length
   end
 
   def sum
     arr = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr.sum
   end
 
@@ -79,7 +79,7 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
     loop_exit = false
     pre_key, pre_obj, pre_idx = jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] # save state
     arr, steps = args
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
 
     vals = eval_block(arr).map.with_index do |val, idx|
       jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] = idx, val, idx
@@ -141,7 +141,7 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
     loop_exit = false
     pre_key, pre_obj, pre_idx = jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] # save state
     arr, steps = args
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
 
     found = eval_block(arr).find.with_index do |val, idx|
       jil.ctx[:loop_key], jil.ctx[:loop_obj], jil.ctx[:loop_idx] = idx, val, idx
@@ -185,7 +185,7 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
 
   def any?
     arr = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr.any?
   end
 
@@ -195,7 +195,7 @@ class Jarvis::Execute::Array < Jarvis::Execute::Executor
 
   def all?
     arr = evalargs
-    arr = SafeJsonSerializer.load(arr)
+    arr = BetterJsonSerializer.load(arr)
     arr.all?
   end
 

@@ -26,9 +26,9 @@
 class JarvisTask < ApplicationRecord
   include Orderable
 
-  serialize :tasks, coder: ::SafeJsonSerializer
-  serialize :last_ctx, coder: ::SafeJsonSerializer
-  serialize :return_data, coder: ::SafeJsonSerializer
+  serialize :tasks, coder: ::BetterJsonSerializer
+  serialize :last_ctx, coder: ::BetterJsonSerializer
+  serialize :return_data, coder: ::BetterJsonSerializer
 
   belongs_to :user, required: true
 

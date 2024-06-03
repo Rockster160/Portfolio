@@ -63,7 +63,7 @@ class AddressBook
   end
 
   def to_address(data)
-    data = SafeJsonSerializer.load(data)
+    data = BetterJsonSerializer.load(data)
     return data.street if data.is_a?(Address)
     return data.primary_address&.street if data.is_a?(Contact)
 

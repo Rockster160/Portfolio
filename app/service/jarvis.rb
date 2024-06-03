@@ -79,8 +79,8 @@ class Jarvis
   end
 
   def self.execute_trigger(trigger, trigger_data={}, scope: {})
-    trigger_data = ::SafeJsonSerializer.load(trigger_data) || trigger_data
-    scope = ::SafeJsonSerializer.load(scope) || scope
+    trigger_data = ::BetterJsonSerializer.load(trigger_data) || trigger_data
+    scope = ::BetterJsonSerializer.load(scope) || scope
 
     if trigger.to_sym == :command
       command(User.find(scope[:user_id]), trigger_data[:words] || trigger_data[:command] || trigger_data)

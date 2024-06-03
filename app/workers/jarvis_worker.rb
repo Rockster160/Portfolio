@@ -2,7 +2,7 @@ class JarvisWorker
   include Sidekiq::Worker
 
   def perform(user_id, msg)
-    parsed = SafeJsonSerializer.load(msg)
+    parsed = BetterJsonSerializer.load(msg)
 
     # puts "\e[35m[LOGIT] | JarvisWorker(#{user_id})parsed:[#{parsed.class}]#{parsed}\e[0m"
     case parsed

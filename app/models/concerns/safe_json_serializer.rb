@@ -5,11 +5,11 @@ class SafeJsonSerializer
 
   def self.load(str)
     start_str = str.dup
-    safe_str = str.then { |s| next s if s.nil? || s.is_a?(String); s.to_json }
-    json = safe_str.present? ? JSON.parse(safe_str, object_class: BetterJson) : str
+    safe_str = (start_str.is_a?(::String) ? start_str : start_str.try(:to_json)) || start_str
+    json = safe_str.present? ? JSON.parse(safe_str, symbolize_names: true) : str
 
-    return json if json.is_a?(Hash) || json.is_a?(Array) || json.is_a?(BetterJson)
-    start_str == json ? json : SafeJsonSerializer.load(json)
+    return json if json.is_a?(::Hash) || json.is_a?(::Array)
+    start_str == json ? json : ::SafeJsonSerializer.load(json)
   rescue JSON::ParserError
     str
   end

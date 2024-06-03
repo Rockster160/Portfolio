@@ -196,7 +196,7 @@ class ActionEventsController < ApplicationController
         whitelist[:name] ||= name
       }
       whitelist.delete(:data).presence&.tap { |json|
-        json = SafeJsonSerializer.load(json)
+        json = BetterJsonSerializer.load(json)
         if json.is_a?(::Hash) || json.is_a?(::Array)
           whitelist[:data] = json
         end

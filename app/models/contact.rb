@@ -19,7 +19,7 @@ class Contact < ApplicationRecord
   belongs_to :user
   has_many :addresses
 
-  serialize :raw, coder: ::SafeJsonSerializer
+  serialize :raw, coder: ::BetterJsonSerializer
 
   validates_uniqueness_of :apple_contact_id, allow_nil: true
 
