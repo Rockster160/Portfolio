@@ -179,7 +179,8 @@ module TeslaCommand
 
     {
       forbidden: DataStorage[:tesla_forbidden],
-      sleeping: data[:state] == "asleep",
+      loading: !!data[:loading],
+      sleeping: data[:state] == "asleep" || !!data[:sleeping],
       charge: data.dig(:charge_state, :battery_level),
       miles: data.dig(:charge_state, :battery_range)&.floor,
       charging: {

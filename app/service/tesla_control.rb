@@ -220,12 +220,14 @@ class TeslaControl
   end
 
   def get(url, wake: false)
+    TeslaCommand.broadcast(loading: true)
     wakeup_retry(max_attempts: wake ? 5 : 1) {
       @api.get(url)
     }
   end
 
   def proxy_command(cmd, params={})
+    TeslaCommand.broadcast(loading: true)
     wakeup_retry {
       info("#{cmd}")
       proxy_post_vehicle("command/#{cmd}", params)
@@ -235,6 +237,7 @@ class TeslaControl
   end
 
   def command(cmd, params={})
+    TeslaCommand.broadcast(loading: true)
     wakeup_retry {
       info("#{cmd}")
       post_vehicle("command/#{cmd}", params)
