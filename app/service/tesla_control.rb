@@ -72,15 +72,17 @@ class TeslaControl
     proxy_command(:honk_horn)
   end
 
-  def navigate(loc)
+  def navigate(address)
+    # For whatever reason, the below does nothing.
+    # command(:navigation_gps_request, { lat: loc[0], lon: loc[1], order: 1 })
     address_params = {
-      lat: loc[0],
-      lon: loc[1],
-      # order is 1 based, not 0 based
-      order: 1, # Assume a new navigation point should be the next one, not the last one in order
+      type: :share_ext_content_raw,
+      locale: :"en-US",
+      timestamp_ms: (Time.current.to_f * 1000).round,
+      value: { "android.intent.extra.TEXT": address },
     }
 
-    command(:navigation_gps_request, address_params)
+    command(:navigation_request, address_params)
   end
 
   def set_temp(temp_F)

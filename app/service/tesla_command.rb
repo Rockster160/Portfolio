@@ -96,14 +96,14 @@ module TeslaCommand
       car.heat_passenger unless quick
     when :navigate
       address = opt[::Jarvis::Regex.address]&.squish.presence if opt.match?(::Jarvis::Regex.address)
-      gps = address_book.geocode(address) if address.present?
+      # gps = address_book.geocode(address) if address.present?
       # If specify nearest, search based on car location.
       # Otherwise use the one in contacts and fallback to nearest to house
-      gps ||= address_book.contact_by_name(original_opt)&.primary_address&.loc
-      gps ||= address_book.nearest_from_name(original_opt, extract: :loc)
+      address ||= address_book.contact_by_name(original_opt)&.primary_address&.street
+      address ||= address_book.nearest_from_name(original_opt, extract: :address)
 
-      if gps.present?
-        duration = address_book.traveltime_seconds(gps)
+      if address.present?
+        duration = address_book.traveltime_seconds(address)
         if duration && duration < 100 # seconds
           @cancel = true
           @response = "You're already at your destination."
@@ -115,7 +115,7 @@ module TeslaCommand
 
         if !@cancel && !quick
           car.start_car
-          car.navigate(gps)
+          car.navigate(address)
         end
       else
         @response = "I can't find #{original_opt.squish}"
