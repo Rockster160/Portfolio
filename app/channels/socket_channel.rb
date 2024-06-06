@@ -36,14 +36,6 @@ class SocketChannel < ApplicationCable::Channel
     return if data.nil?
 
     trigger(data, :receive)
-    identifier = (
-      if current_user
-        "\e[36m[#{current_user.try(:username).presence || "User #{current_user.try(:id)}"}]"
-      else
-        "\e[31m[?]"
-      end
-    )
-    ::PrettyLogger.info("\e[35m[WS]#{identifier}\n\e[0m#{PrettyLogger.pretty_message(data.deep_symbolize_keys)}")
   end
 
   private
@@ -53,6 +45,7 @@ class SocketChannel < ApplicationCable::Channel
     return unless params[:channel_id].present?
 
     receive_data = data.reverse_merge(params).except(:action)
+    logit(receive_data)
 
     ::Jarvis.execute_trigger(
       :websocket,
