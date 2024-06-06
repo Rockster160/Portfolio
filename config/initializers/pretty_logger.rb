@@ -25,6 +25,6 @@
       else colorize(:olive, "[#{name}]")
       end
     )
-    "\b#{formatted}\n "
+    "#{formatted}\n"
   end
 end
