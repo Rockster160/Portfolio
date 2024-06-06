@@ -66,7 +66,7 @@ gem "ed25519"
 gem "bcrypt_pbkdf"
 # / cap dependencies
 # gem "pretty_logger", path: "../pretty_logger"
-gem "pretty_logger", "1.4.2"
+gem "pretty_logger", "1.4.3"
 
 group :development, :test do
   gem "capistrano",         require: false
