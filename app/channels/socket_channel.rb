@@ -31,7 +31,10 @@ class SocketChannel < ApplicationCable::Channel
     trigger(params, :disconnected)
   end
 
-  def receive(data)
+  def receive(raw_data)
+    data = raw_data.try(:deep_symbolize_keys!)
+    return if data.nil?
+
     trigger(data, :receive)
     identifier = (
       if current_user
