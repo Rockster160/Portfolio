@@ -89,12 +89,12 @@ class Oauth::Base
     [base.to_s.sub(/\/$/, ""), path.to_s.sub(/^\//, "")].join("/")
   end
 
-  def get(path, params={}, headers={})
-    Api.get(url(path), params, base_headers.merge(headers))
+  def get(path, params={}, headers={}, opts={})
+    Api.get(url(path), params, base_headers.merge(headers), opts)
   end
 
-  def post(path, params={}, headers={})
-    Api.post(url(path), params, base_headers.merge(headers))
+  def post(path, params={}, headers={}, opts={})
+    Api.post(url(path), params, base_headers.merge(headers), opts)
   end
 
   def cache_set(key, val) = cache.dig_set(@storage_key, key, val)
