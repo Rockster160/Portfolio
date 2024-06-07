@@ -11,9 +11,8 @@
 #
 class JarvisCache < ApplicationRecord
   serialize :data, coder: ::SafeJsonSerializer
+  # TODO: Encrypt `data` in the next life
   attr_accessor :skip_save_set
-
-  # TODO: Encrypt data in the next life
 
   belongs_to :user
 
@@ -58,8 +57,12 @@ class JarvisCache < ApplicationRecord
     self.destroy unless new_data.stringify_keys.include?(self.key.to_s)
   end
 
+  def get(*steps)
+    dig(*steps)
+  end
+
   def dig(*steps)
-    (data || {}).dig(*steps)
+    (data || {}).dig(*steps.map { |s| s.to_s.to_sym })
   end
 
   def set(key, val)
