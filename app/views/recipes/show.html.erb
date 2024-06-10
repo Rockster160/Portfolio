@@ -48,7 +48,7 @@
           <% end %>
         <% end %>
 
-        <p class="instructions"><%= @recipe.instructions %></p>
+        <p class="instructions"><%= render_md(@recipe.instructions) %></p>
 
       </div>
     </div>
