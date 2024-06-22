@@ -49,8 +49,8 @@ module CharacterBuilderHelper
   def outfit_from_top_level_hash(params_hash)
     outfits = CharacterBuilder.default_outfits
     gender = params_hash[:gender]
-    gender_scope = outfits[gender]
-    gender_hash = params_hash[gender]
+    gender_scope = outfits[gender] || outfits[:male]
+    gender_hash = params_hash[gender] || params_hash[:male]
     body = gender_hash[:body]
 
     clothing = {}
@@ -75,6 +75,8 @@ module CharacterBuilderHelper
       body: body,
       clothing: clothing
     }
+  rescue
+    CharacterBuilder.new({}).tap(&:change_random)
   end
 
 end
