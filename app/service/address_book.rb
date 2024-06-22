@@ -88,7 +88,7 @@ class AddressBook
     address ||= contact_by_name(data)&.primary_address&.street
     address ||= nearest_from_name(data)
     address.gsub("\n", "") if address.is_a?(String)
-    SlackNotifier.notify("to_address is a #{data.class}") unless data.is_a?(String)
+    SlackNotifier.notify("to_address is a #{data.class}\n```#{data.inspect}```") unless data.is_a?(String)
     address
   end
 
