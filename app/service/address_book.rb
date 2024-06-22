@@ -1,6 +1,10 @@
 class AddressBook
   include DistanceHelper
 
+  def self.me
+    new(User.me)
+  end
+
   def initialize(user)
     @user = user
   end
@@ -88,21 +92,22 @@ class AddressBook
     address
   end
 
-  def traveltime_seconds(to, from=nil)
+  def traveltime_seconds(to, from=nil, at: nil)
     return 2700 unless Rails.env.production?
 
-    from ||= current_loc
+    from ||= current_address
     # Should be stringified addresses
     to, from = [to, from].map { |address| to_address(address) }
     return if to.blank? || from.blank?
 
-    nonnil_cache("traveltime_seconds(#{to},#{from})") {
-      ::PrettyLogger.info("\b[AddressCache] Traveltime #{to},#{from}")
+    nonnil_cache("traveltime_seconds(#{[to, from, at].compact_blank.join(",")})") {
+      ::PrettyLogger.info("\b[AddressCache] Traveltime #{to},#{from},#{at}")
       params = {
         destinations: to,
         origins: from,
         key: ENV["PORTFOLIO_GMAPS_PAID_KEY"],
-      }.to_query
+        arrival_time: at.presence&.to_i,
+      }.compact_blank.to_query
       url = "https://maps.googleapis.com/maps/api/distancematrix/json?#{params}"
       res = RestClient.get(url)
       json = JSON.parse(res.body, symbolize_names: true)
