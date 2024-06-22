@@ -68,6 +68,7 @@ class AddressBook
 
   def to_address(data)
     data = BetterJsonSerializer.load(data)
+    return data[:street] if data.is_a?(BetterJson)
     return data.street if data.is_a?(Address)
     return data.primary_address&.street if data.is_a?(Contact)
 
