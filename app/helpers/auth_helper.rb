@@ -17,6 +17,10 @@ module AuthHelper
     current_user&.guest?
   end
 
+  def user_signed_in?
+    current_user.present?
+  end
+
   def show_guest_banner
     @show_guest_banner = true
   end
@@ -27,9 +31,24 @@ module AuthHelper
     end
   end
 
+  def store_previous_url
+    return unless request.get? # Only store GET requests
+    return if controller_action == "users#account" # Don't store Account page
+    return if controller_action.match?(/^users\/(sessions|registrations)/) # Don't store login pages
+    return if user_signed_in? && !guest_account? # Don't store if already logged in
+
+    session[:forwarding_url] = request.original_url
+  end
+
+  def store_and_login(**msg)
+    msg = { notice: "Please sign in before continuing." } if msg.blank?
+    store_previous_url
+    redirect_to login_path, **msg
+  end
+
   def authorize_user_or_guest
     unless current_user.present?
-      session[:forwarding_url] = request.original_url
+      store_previous_url
       create_guest_user
 
       flash.now[:notice] = "We've signed you up with a guest account!"
@@ -38,7 +57,7 @@ module AuthHelper
 
   def authorize_user
     if current_user.nil?
-      session[:forwarding_url] = request.original_url
+      store_previous_url
       redirect_to login_path, notice: "Please sign in before continuing."
     elsif current_user.guest?
       redirect_to account_path, notice: "Please finish setting up your account before continuing."
@@ -47,7 +66,7 @@ module AuthHelper
 
   def authorize_admin
     if current_user.nil?
-      session[:forwarding_url] = request.original_url
+      store_previous_url
       redirect_to login_path, notice: "Please sign in before continuing."
     elsif !current_user.admin?
       redirect_to account_path, alert: "Sorry, you do not have access to this page."
@@ -68,10 +87,6 @@ module AuthHelper
     @user = User.create(role: :guest)
 
     sign_in @user
-  end
-
-  def user_signed_in?
-    current_user.present?
   end
 
   def sign_out

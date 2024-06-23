@@ -27,7 +27,7 @@ class UsersController < ApplicationController
     @user = current_user
 
     if @user.update_with_password(user_params)
-      redirect_to session[:forwarding_url] || account_path
+      redirect_to previous_url(account_path)
     else
       render :account
     end

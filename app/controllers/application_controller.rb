@@ -11,6 +11,8 @@ class ApplicationController < ActionController::Base
   before_action :show_guest_banner, if: :guest_account?
   prepend_before_action :block_banned_ip
 
+  rescue_from ::ActiveRecord::RecordNotFound, with: :rescue_login
+
   if Rails.env.production?
     rescue_from ::ActionController::InvalidAuthenticityToken, with: :ban_spam_ip
     rescue_from ::ActionController::UnknownHttpMethod, with: :under_rug
@@ -33,9 +35,7 @@ class ApplicationController < ActionController::Base
 
   def see_current_user
     Rails.logger.silence do
-      if request.get? && controller_action != "users#account"
-        session[:forwarding_url] = request.original_url
-      end
+      store_previous_url
 
       if user_signed_in?
         current_user.see!
@@ -52,7 +52,7 @@ class ApplicationController < ActionController::Base
   end
 
   def previous_url(fallback=nil)
-    session[:forwarding_url] || fallback || lists_path
+    session.delete(:forwarding_url) || fallback || lists_path
   end
 
   def current_ip_spamming?
@@ -70,6 +70,10 @@ class ApplicationController < ActionController::Base
     end
 
     raise exception
+  end
+
+  def rescue_login
+    store_and_login
   end
 
   def under_rug
