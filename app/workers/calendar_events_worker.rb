@@ -106,7 +106,8 @@ class CalendarEventsWorker
         traveltime = event[:notes]&.scan(/ttt (\d+)/i)&.flatten&.first&.to_i&.minutes
         traveltime ||= address_book.traveltime_seconds(
           event[:location],
-          address_book.current_address&.street
+          address_book.current_address&.street,
+          at: event[:start_time],
         )
         next unless traveltime.present?
         # Show time to leave
