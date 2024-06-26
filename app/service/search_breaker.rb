@@ -3,6 +3,8 @@ module SearchBreaker
 
   RX = {
     quot_str: /^"(.*?)"$/,
+    single_quot_str: /^'(.*?)'$/,
+    rx_str: /^\/(.*?)\/$/,
     paren_wrap: /^:*\((.*?)\)$/,
     start: /(?:^|\b)/,
   }
@@ -32,7 +34,9 @@ module SearchBreaker
 
       key, delim, val = piece.split(delim_regex, 2)
       delim_key = delims_with_aliases.find { |dk, d| delim.downcase == d.downcase }[0]
-      key, val = [key, val].map { |part| part.gsub(RX[:quot_str], '\1') }
+      key, val = [key, val].map { |part|
+        part.gsub(RX[:quot_str], '\1').gsub(RX[:single_quot_str], '\1').gsub(RX[:rx_str], '\1')
+      }
       if val.match?(RX[:paren_wrap])
         val = val.gsub(RX[:paren_wrap], '\1')
       end
@@ -75,7 +79,9 @@ module SearchBreaker
     rebuild = !tr.nil?
     tr ||= Tokenizer.new(str)
     tr.tokenize!(str, /\\./)
-    tr.tokenize!(str, /".*?"/)
+    tr.tokenize!(str, /"([^"\\]|\\.)*"/)
+    tr.tokenize!(str, /'([^'\\]|\\.)*'/)
+    tr.tokenize!(str, /\/([^\/\\]|\\.)*\//)
     tr.tokenize!(str, /\(.*?\)/)
 
     return str.split(/\s/) unless rebuild

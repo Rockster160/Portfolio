@@ -20,7 +20,7 @@ RSpec.describe JarvisTask do
     expect(@listeners).to match_array(expected_listeners)
   end
 
-  context "with basic trigger" do
+  context "with basic triggers" do
     before do
       JarvisTask.create(user: other_user, listener: "travel")
       JarvisTask.create(user: admin, listener: "travel")
@@ -35,6 +35,9 @@ RSpec.describe JarvisTask do
       JarvisTask.create(user: admin, listener: "email:from:blah subject:deliver")
       JarvisTask.create(user: admin, listener: "subject:deliver")
       JarvisTask.create(user: admin, listener: "email:body:\"awesome socks\"")
+      JarvisTask.create(user: admin, listener: "tell~/(?<direction>open|close|toggle)( (?:the|my))? garage/")
+      JarvisTask.create(user: admin, listener: "tell~/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/")
+      JarvisTask.create(user: admin, listener: "tell:\"Do the things\"")
 
       @listeners = []
       allow_any_instance_of(JarvisTask).to receive(:execute) do |jarvis_task, data|
@@ -81,6 +84,19 @@ RSpec.describe JarvisTask do
       ])
       expect_trigger_listeners(admin, :email, { from: "shipping@amazon.com", to: "rocco@ardesian.com", subject: "Your item has been Delivered!", text_body: "We delivered your Awesome Pants today!" }, [
         "email:from:amazon subject:deliver",
+      ])
+      expect_trigger_listeners(admin, :tell, "Open the garage", [
+        "tell~/(?<direction>open|close|toggle)( (?:the|my))? garage/",
+      ])
+      expect_trigger_listeners(admin, :tell, "Set the house 72 degrees this matters more", [
+        "tell~/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/",
+      ])
+      expect_trigger_listeners(admin, :tell, "Set the house 72 degrees", [
+      ])
+      expect_trigger_listeners(admin, :tell, "Do the things", [
+        "tell:\"Do the things\""
+      ])
+      expect_trigger_listeners(admin, :tell, "Do things", [
       ])
     end
   end

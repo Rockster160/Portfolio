@@ -1,6 +1,17 @@
 module Jarvis::Regex
   module_function
 
+  def match_data(str, rx)
+    # "Open the garage", "(?<direction>open|close|toggle)( (?:the|my))? garage"
+    md = str.match(Regexp.new(rx, Regexp::IGNORECASE | Regexp::MULTILINE))
+    return if md.nil?
+
+    {
+      match_list: md.to_a,
+      named_captures: md.named_captures.symbolize_keys
+    }
+  end
+
   def match_any_words?(str, *words)
     return false if words.flatten.none?
 

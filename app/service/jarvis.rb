@@ -83,15 +83,14 @@ class Jarvis
       else Array.wrap(user)
       end
     )
-    safe_trigger = Regexp.escape(trigger)
-    trigger_data = JSON.parse(trigger_data) if trigger_data.is_a?(String)
+    begin
+      trigger_data = JSON.parse(trigger_data) if trigger_data.is_a?(String)
+    rescue JSON::ParserError
+    end
 
     user_tasks = ::JarvisTask.enabled.where(user_id: user_ids)
-    user_tasks.where("listener ~* '(^|\\s)#{safe_trigger}(:|$)'").find_each.count do |task|
-      next unless task.listener_match?(trigger, trigger_data)
-      PrettyLogger.info("Trigger:#{task.name} [#{task.listener}]\n#{PrettyLogger.pretty_message({ trigger => trigger_data }.deep_symbolize_keys)}")
-
-      task.execute(trigger_data)
+    user_tasks.by_listener(trigger).find_each.count do |task|
+      task.match_run(trigger, trigger_data)
     end
     # Returns the count. If 0, we know the (command) missed these
   end

@@ -43,25 +43,6 @@ Choose date:
       <%= f.text_area :input %>
       <%= f.select :output_type, options_for_select(JarvisTask.output_types.map { |k, v| [k.humanize, k] }, selected: @task.output_type) %>
     </div>
-    <div data-watches-selector=".trigger-selector" data-watches-value="tell">
-      <p>Input Format:</p>
-      <ul>
-        <li>Common words will be filtered out of task names and inputs (<%= Jarvis::MatchTask::COMMON_WORDS.join(", ") %>)</li>
-        <li>(opt) will be optional text (no group)</li>
-        <li>(this|that|other) will be optional text and match any of the givens (no group)</li>
-        <li>(:/regexp/) optional that matches regex</li>
-        <li>(!opt) is required text (no group) - mostly only used when multiple options are provided:</li>
-        <li>(!this|that|other) will require any of the givens (no group)</li>
-        <li>{var} will lazy match everything by default. Can provide a regexp to be more specific - accessed through `var` variable within function</li>
-      </ul>
-      <%= f.label :input, "Trigger Phrases- alternatives separated by new lines" %>
-      <%= f.text_area :input, style: "white-space: nowrap; overflow: auto;" %>
-    </div>
-    <div data-watches-selector=".trigger-selector" data-watches-value="websocket">
-      <p>Websocket Channel</p>
-      <%= f.label :input, "Channel ID, excluding prefix and postfix" %>
-      <%= f.text_field :input, placeholder: "abcd" %>
-    </div>
     <div class="">
       Enabled:
       <label class="switch">

@@ -36,6 +36,10 @@ class JarvisTask < ApplicationRecord
   before_save :set_next_cron
   after_create { reload } # Needed to retrieve the generated uuid on the current instance in memory
 
+  scope :by_listener, ->(listener) {
+    safe_trigger = Regexp.escape(listener)
+    where("listener ~* '(^|\\s)#{safe_trigger}(~|:|$)'")
+  }
   scope :fuzzy_search, ->(q) { where("tasks::text ILIKE ?", "%#{q}%") }
   scope :enabled, -> { where(enabled: true) }
 
@@ -108,15 +112,50 @@ class JarvisTask < ApplicationRecord
     return_data&.dig(:data)
   end
 
-  def listener_match?(trigger, trigger_data)
+  def listener_match?(trigger, &block)
     # TODO: trigger must be an exact, not partial match
     escape_listener = listener.dup
     tz = Tokenizer.new(escape_listener)
     tz.tokenize!(escape_listener, /\".*?\"/m)
+    tz.tokenize!(escape_listener, /\'.*?\'/m)
+    tz.tokenize!(escape_listener, /\/.*?\//m)
+    tz.tokenize!(escape_listener, /\(.*?\)/m)
     escape_listener.split(" ").all? { |sub_listener|
       unescaped_listener = tz.untokenize!(sub_listener)
-      ::SearchBreakMatcher.call(unescaped_listener, { trigger => trigger_data })
+      block.call(unescaped_listener)
     }
+  end
+
+  def pretty_log(trigger, trigger_data)
+    PrettyLogger.info([
+      PrettyLogger.colorize(:grey, "[#{name}]"),
+      listener,
+      "\n",
+      PrettyLogger.pretty_message({ trigger => trigger_data }.deep_symbolize_keys)
+    ].join(""))
+  end
+
+  def match_run(trigger, trigger_data)
+    if trigger_data.is_a?(String)
+      match_data = nil
+      return unless listener_match?(trigger) { |escaped_listener|
+        rx = escaped_listener[/(?:\/|\'|\")(.*?)(?:\/|\'|\")$/, 1]
+        ::Jarvis::Regex.match_data(trigger_data, rx)&.tap { |md|
+          match_data ||= md
+        }.present?
+      }
+      return unless match_data.present?
+
+      pretty_log(trigger, { trigger_str: trigger_data, match_data: match_data })
+      execute(match_data)
+    else
+      return unless listener_match?(trigger) { |escaped_listener|
+        ::SearchBreakMatcher.call(escaped_listener, { trigger => trigger_data })
+      }
+
+      pretty_log(trigger, trigger_data)
+      execute(trigger_data)
+    end
   end
 
   def serialize
@@ -196,69 +235,21 @@ class JarvisTask < ApplicationRecord
   end
 
   def inputs
-    if function?
-      # Choose date:
-      # > from: :date, optional, default: Now
-      # > multiplier: [seconds, minutes, hours]
-      # > other: :str, label: Hello World
-      input.to_s.split(/\r?\n/).map { |line|
-        next unless line.starts_with?(/\s*>/)
-        full, key, type = line.match(/\s*>\s*(\w+):\s*(?::(\w+))?,?\s*/)&.to_a
-        type ||= :str
+    return unless function?
+    # Choose date:
+    # > from: :date, optional, default: Now
+    # > multiplier: [seconds, minutes, hours]
+    # > other: :str, label: Hello World
+    input.to_s.split(/\r?\n/).map { |line|
+      next unless line.starts_with?(/\s*>/)
+      full, key, type = line.match(/\s*>\s*(\w+):\s*(?::(\w+))?,?\s*/)&.to_a
+      type ||= :str
 
-        [key, [
-          { return: type },
-          key.titleize
-        ]]
-      }.compact
-    # elsif tell?
-    #   [["Full Input", [
-    #     { return: :str },
-    #     "Full Input"
-    #   ]]] + input.to_s.scan(/\{\w+/).map { |match|
-    #     word = match[1..]
-    #     [word, [
-    #       { return: :str },
-    #       word.titleize
-    #     ]]
-    #   }.uniq
-    # elsif list?
-    #   [
-    #     ["List Data", [
-    #       { return: :hash },
-    #       "List Data"
-    #     ]],
-    #     ["Item Name", [
-    #       { return: :str },
-    #       "Item Name"
-    #     ]],
-    #     ["Item Added", [
-    #       { return: :bool },
-    #       "Item Added"
-    #     ]]
-    #   ]
-    # elsif calendar?
-    #   [["Event Data", [
-    #     { return: :hash },
-    #     "Event Data"
-    #   ]]]
-    # elsif websocket?
-    #   [
-    #     ["WS Receive Data", [
-    #       { return: :hash },
-    #       "WS Receive Data"
-    #     ]],
-    #     ["Connection State", [
-    #       { return: :str },
-    #       "Connection State"
-    #     ]]
-    #   ]
-    # elsif monitor?
-    #   [["Pressed", [
-    #     { return: :bool },
-    #     "Pressed"
-    #   ]]]
-    end
+      [key, [
+        { return: type },
+        key.titleize
+      ]]
+    }.compact
   end
 
   private
