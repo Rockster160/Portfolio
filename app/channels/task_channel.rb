@@ -5,7 +5,7 @@ class TaskChannel < ApplicationCable::Channel
 
   def receive(data)
     data.deep_symbolize_keys!
-    ::Jarvis.trigger_events(current_user, :websocket, data.reverse_merge(params.except(:action)))
+    # ::Jarvis.trigger_events(current_user, :websocket, data.reverse_merge(params.except(:action)))
     # ::Jarvis.execute_trigger(
     #   :websocket,
     #   { input_vars: { "WS Receive Data" => data.reverse_merge(params.except(:action)) } },
