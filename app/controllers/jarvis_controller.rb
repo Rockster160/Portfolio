@@ -63,7 +63,7 @@ class JarvisController < ApplicationController
 
   def handle_data(data)
     data[:location]&.tap { |coord|
-      PrettyLogger.info("Location: #{coord.map(&:to_f}")
+      PrettyLogger.info("Location: #{coord.map(&:to_f)}")
       LocationCache.set(coord.map(&:to_f)) }
     data[:bluetooth_connected]&.tap { |bool|
       PrettyLogger.info("BL Connected: [#{bool.class}]#{bool.inspect}")
