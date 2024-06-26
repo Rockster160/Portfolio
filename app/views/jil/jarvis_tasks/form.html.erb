@@ -121,6 +121,8 @@ Choose date:
     <%= form_for [:jil, @task], html: { class: "basic", id: "task-form" } do |f| %>
       <%= link_to "Run", [:run, :jil, @task, test_mode: true], class: "btn run-task", remote: true, method: :post if @task.persisted? %>
       <%= f.submit "Save", class: "btn save-task pull-right" %>
+      <%= f.text_field :listener %>
+      <hr>
       <div class="flex">
         <%= f.select(
           :trigger,
