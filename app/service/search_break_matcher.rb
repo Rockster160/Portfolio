@@ -34,7 +34,7 @@ module SearchBreakMatcher
   # {piece} -- [String, {breaker}]
 
   def breaker_matches(breaker, data, d=nil)
-    if breaker.is_a?(String) && d.present?
+    if (breaker.is_a?(String) || breaker.is_a?(Symbol)) && d.present?
       return valstr_match(breaker, d, data)
     end
 
@@ -55,7 +55,7 @@ module SearchBreakMatcher
       # We have to do something with :or here!
       case piece
       when Array then piece.filter_map { |nested_breaker| breaker_matches(nested_breaker, data, delim) }
-      when String then valstr_match(piece, delim, data)
+      when String, Symbol then valstr_match(piece, delim, data)
       else
         # binding.pry
       end
@@ -65,6 +65,7 @@ module SearchBreakMatcher
   end
 
   def valstr_match(val, delim, data) # val is a bottom-level string from the {broken} data
+    data = data.to_s if data.is_a?(Symbol)
     return check_match?(val, delim, data) && data if data.is_a?(String)
     # Return back the first object that matches -- Might need to return the nested object?
     data&.find { |dkey, dvals|

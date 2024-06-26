@@ -74,6 +74,17 @@
 class Jarvis
   MY_NUMBER = "3852599640"
 
+  def self.trigger_events(user, trigger, trigger_data={})
+    # Not for triggering by UUID
+    safe_trigger = Regexp.escape(trigger)
+    user.jarvis_tasks.where("listener ~* '(^|\\s)#{safe_trigger}(:|$)'").find_each.count do |task|
+      next unless task.listener_match?(trigger, trigger_data)
+
+      task.execute(trigger_data)
+    end
+    # Returns the count. If 0, we know the (command) missed these
+  end
+
   def self.trigger(trigger, trigger_data, scope: {})
     ::JarvisTriggerWorker.perform_async(trigger.to_s, trigger_data.to_json, scope.to_json)
   end

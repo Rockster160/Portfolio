@@ -47,6 +47,7 @@ class SocketChannel < ApplicationCable::Channel
     receive_data = data.reverse_merge(params).except(:action)
     logit(receive_data)
 
+    # ::Jarvis.trigger_events(current_user, :websocket, trigger_data)
     ::Jarvis.execute_trigger(
       :websocket,
       { input_vars: { "WS Receive Data" => receive_data, "Connection State" => state || "unset" } },

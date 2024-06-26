@@ -8,6 +8,7 @@
 #  input           :text
 #  last_ctx        :jsonb
 #  last_trigger_at :datetime
+#  listener        :text
 #  name            :text
 #  next_trigger_at :datetime
 #  output_text     :text
@@ -105,6 +106,11 @@ class JarvisTask < ApplicationRecord
   end
   def return_val
     return_data&.dig(:data)
+  end
+
+  def listener_match?(trigger, trigger_data)
+     # TODO: trigger must be an exact, not partial match
+    ::SearchBreakMatcher.call(listener, { trigger => trigger_data })
   end
 
   def serialize
