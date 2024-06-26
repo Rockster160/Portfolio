@@ -29,6 +29,7 @@ RSpec.describe JarvisTask do
       JarvisTask.create(user: admin, listener: "travel:arrive")
       JarvisTask.create(user: admin, listener: "travel:arrive:home")
       JarvisTask.create(user: admin, listener: "travel:home")
+      JarvisTask.create(user: admin, listener: "travel:arrive:!home")
       JarvisTask.create(user: admin, listener: "event:name:ANY(food soda drink alcohol treat snack)")
 
       @listeners = []
@@ -50,6 +51,7 @@ RSpec.describe JarvisTask do
       expect_trigger_listeners(admin, :travel, { action: "Arrive", location: "Delton" }, [
         "travel",
         "travel:arrive",
+        "travel:arrive:!home",
       ])
       expect_trigger_listeners(admin, :travel, { action: :depart, location: "Delton" }, [
         "travel",

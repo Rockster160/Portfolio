@@ -5,8 +5,8 @@ module SearchBreakMatcher
     contains:     ":",
     exact:        "::",
     not:          "!",
-    not_contains: "!:",
-    not_exact:    "!::",
+    not_contains: ":!",
+    not_exact:    "::!",
     regex:        "~",
     any:          "ANY",
     aliases: { # Figure out a way that allows an "aliases" delimiter. Just in case.
