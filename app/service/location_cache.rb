@@ -7,7 +7,9 @@ class LocationCache
 
   def self.driving=(bool)
     # Called after Set
+    PrettyLogger.info("Before:#{driving?} SetTo:#{bool}")
     return if driving? == bool
+    PrettyLogger.info("Triggering Travel")
     departed = bool
 
     ::Jarvis.trigger(
