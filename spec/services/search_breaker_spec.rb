@@ -5,7 +5,7 @@ RSpec.describe SearchBreaker do
 
   let(:delims) {
     {
-      or: "OR",
+      any: "ANY",
       not: "!",
       contains: ":",
       not_contains: "!:",
@@ -13,7 +13,7 @@ RSpec.describe SearchBreaker do
       exact: "::",
       similar: "~",
       aliases: {
-        "OR:": "OR",
+        "ANY:": "ANY",
       }
     }
   }
@@ -21,7 +21,7 @@ RSpec.describe SearchBreaker do
 
   context "with different types of delimiters" do
     let(:q) {
-      'name:thing has:"bigger string" search each ~sorta word !bad notes!:z name::thing OR:(includes:dog includes:cat)'
+      'name:thing has:"bigger string" search each ~sorta word !bad notes!:z name::thing ANY:(includes:dog includes:cat)'
     }
     let(:expected) {
       # First delim found breaks the rest of the non-whitespace as the value
@@ -47,7 +47,7 @@ RSpec.describe SearchBreaker do
         vals: {
           similar: ["sorta"],
           not: ["bad"],
-          or: [
+          any: [
             {
               keys: {
                 "includes" => {
@@ -77,7 +77,7 @@ RSpec.describe SearchBreaker do
   end
 
   context "with multi-level values" do
-    let(:q) { "websocket:* websocket:garage event event:name:food event:OR(name::food name::drink) travel:arrived travel:departed travel:arrived::Delton" }
+    let(:q) { "websocket:* websocket:garage event event:name:food event:ANY(name::food name::drink) travel:arrived travel:departed travel:arrived::Delton" }
     let(:expected) {
       {
         keys: {
@@ -85,7 +85,7 @@ RSpec.describe SearchBreaker do
           "event" => {
             contains: [
               { keys: { "name" => { contains: ["food"]} } },
-              { vals: { or: [{ keys: { "name" => { exact: ["food", "drink"] } } }] } }
+              { vals: { any: [{ keys: { "name" => { exact: ["food", "drink"] } } }] } }
             ],
           },
           "travel" => {
@@ -130,6 +130,18 @@ RSpec.describe SearchBreaker do
       end
     end
 
+    context "with a matcher with an ANY value" do
+      let(:q) { "event::workout" }
+
+      it "returns correctly" do
+        expect(matcher?("event:name:ANY(work thirst)", { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(true)
+        expect(matcher?("event:ANY(saber thirst)", { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(true)
+        expect(matcher?("event:name:ANY(flip thirst)", { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(false)
+        expect(matcher?("event:name:ANY(saber thirst)", { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(false)
+        expect(matcher?("event:name:ANY(food treat drink soda alcohol)", { event: { name: "Drink", notes: "Protein" } })).to be(true)
+      end
+    end
+
     context "with a single top level str" do
       let(:q) { "travel" }
 
@@ -150,7 +162,9 @@ RSpec.describe SearchBreaker do
         expect(matcher?("event:data::nested_key:fuzzy_val", data)).to be(true)
         expect(matcher?("event:data:fuzzy_val", data)).to be(true)
         expect(matcher?("event:datam:fuzzy_val", data)).to be(false)
-        # expect(matcher?("event:data:OR(fuzzy something)", data)).to be(true)
+        expect(matcher?("event:ANY(data:fuzzy something)", data)).to be(true)
+        expect(matcher?("event:ANY(data:nothing thing)", data)).to be(true)
+        expect(matcher?("event:ANY(blah nothing)", data)).to be(false)
       end
     end
   end

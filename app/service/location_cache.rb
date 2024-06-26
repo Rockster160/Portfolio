@@ -16,6 +16,7 @@ class LocationCache
         from: recent_locations[departed ? -1 : -2], # If arrived, show previous, otherwise current
         location: current_location_name, # Most recent stopped
         action: departed ? :departed : :arrived,
+        (departed ? :departed : :arrived) => current_location_name, # Add this for convenient matchers `travel:arrive:home`
         timestamp: Time.current,
       }
     )

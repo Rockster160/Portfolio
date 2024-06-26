@@ -29,6 +29,7 @@ RSpec.describe JarvisTask do
       JarvisTask.create(user: admin, listener: "travel:arrive")
       JarvisTask.create(user: admin, listener: "travel:arrive:home")
       JarvisTask.create(user: admin, listener: "travel:home")
+      JarvisTask.create(user: admin, listener: "event:name:ANY(food soda drink alcohol treat snack)")
 
       @listeners = []
       allow_any_instance_of(JarvisTask).to receive(:execute) do |jarvis_task, data|
@@ -54,11 +55,19 @@ RSpec.describe JarvisTask do
         "travel",
         "travel:depart",
       ])
-      expect_trigger_listeners(admin, :travel, { action: "Arrive", location: "Home" }, [
+      expect_trigger_listeners(admin, :travel, { arrived: "Home" }, [
         "travel",
         "travel:arrive",
         "travel:arrive:home",
         "travel:home",
+      ])
+      expect_trigger_listeners(admin, :event, { name: "drink" }, [
+        "event:name:ANY(food soda drink alcohol treat snack)"
+      ])
+      expect_trigger_listeners(admin, :event, { name: "Wordle", notes: "food" }, [
+      ])
+      expect_trigger_listeners(admin, :event, { name: "soda" }, [
+        "event:name:ANY(food soda drink alcohol treat snack)"
       ])
     end
   end
