@@ -109,7 +109,7 @@ class JarvisTask < ApplicationRecord
     self.return_data = { data: new_val }
   end
   def return_val
-    return_data&.dig(:data)
+    return_data&.dig(:data) || output_text.to_s.split("\n").last
   end
 
   def listener_match?(trigger, &block)

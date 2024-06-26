@@ -88,11 +88,10 @@ class Jarvis
     rescue JSON::ParserError
     end
 
-    user_tasks = ::JarvisTask.enabled.where(user_id: user_ids)
-    user_tasks.by_listener(trigger).find_each.count do |task|
-      task.match_run(trigger, trigger_data)
+    user_tasks = ::JarvisTask.enabled.where(user_id: user_ids).distinct
+    user_tasks.by_listener(trigger).filter_map do |task|
+      task.match_run(trigger, trigger_data) && task
     end
-    # Returns the count. If 0, we know the (command) missed these
   end
 
   def self.trigger_async(user, trigger, trigger_data={})
