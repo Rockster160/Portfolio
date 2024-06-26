@@ -26,14 +26,18 @@ class WebhooksController < ApplicationController
   end
 
   def jil
-    res = ::Jarvis.execute_trigger(
-      :webhook,
-      params.to_unsafe_h.except(:controller, :action),
-      scope: { user_id: current_user.id }.tap { |task_scope|
-        task_scope[:name] = params[:task_name] if params[:task_name].present?
-        task_scope[:id] = params[:id] if params[:id].present?
-      }
+    task = ::JarvisTask.anyfind(
+      params[:uuid].presence || params[:id].presence || params[:name].presence || params[:task_name]
     )
+    res = task.execute(params.to_unsafe_h.except(:controller, :action))
+    # res = ::Jarvis.execute_trigger(
+    #   :webhook,
+    #   params.to_unsafe_h.except(:controller, :action),
+    #   scope: { user_id: current_user.id }.tap { |task_scope|
+    #     task_scope[:name] = params[:task_name] if params[:task_name].present?
+    #     task_scope[:id] = params[:id] if params[:id].present?
+    #   }
+    # )
 
     if res.none?
       render json: { error: "No webhooks found with that id" }

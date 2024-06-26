@@ -5,11 +5,12 @@ class TaskChannel < ApplicationCable::Channel
 
   def receive(data)
     data.deep_symbolize_keys!
-    ::Jarvis.execute_trigger(
-      :websocket,
-      { input_vars: { "WS Receive Data" => data.reverse_merge(params.except(:action)) } },
-      scope: ["input ~* ? OR input = '*'", "\\m#{params[:channel_id]}\\M"]
-    )
+    ::Jarvis.trigger_events(current_user, :websocket, data.reverse_merge(params.except(:action)))
+    # ::Jarvis.execute_trigger(
+    #   :websocket,
+    #   { input_vars: { "WS Receive Data" => data.reverse_merge(params.except(:action)) } },
+    #   scope: ["input ~* ? OR input = '*'", "\\m#{params[:channel_id]}\\M"]
+    # )
   end
 end
 # ActionCable.server.broadcast("task_#{btn_id}_channel", { rgb: "0,255,0", for_ms: 1000 })

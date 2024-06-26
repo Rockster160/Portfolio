@@ -246,7 +246,8 @@ class List < ApplicationRecord
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self }, layout: false
     ActionCable.server.broadcast "list_#{self.id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
 
-    JarvisTriggerWorker.perform_async(:list, { input_vars: { "List Data": serialize } }.to_json, { user: users.ids }.to_json)
+    ::JarvisTriggerWorker.perform_async(users.ids, :list, { list: serialize }.to_json)
+    # JarvisTriggerWorker.perform_async(:list, { input_vars: { "List Data": serialize } }.to_json, { user: users.ids }.to_json)
   end
 
 end

@@ -210,6 +210,18 @@ class ListItem < ApplicationRecord
     }
   end
 
+  def serialize
+    {
+      id:         id,
+      name:       name,
+      category:   category,
+      important:  important,
+      permanent:  permanent,
+      sort_order: sort_order,
+      deleted_at: deleted_at,
+    }
+  end
+
   private
 
   def set_sort_order
@@ -236,12 +248,13 @@ class ListItem < ApplicationRecord
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
     ActionCable.server.broadcast "list_#{self.list_id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
 
-    JarvisTriggerWorker.perform_async(:list,
-      {
-        input_vars: { "List Data": list.serialize, "Item Name": name, "Item Added": !deleted_at? }
-      }.to_json,
-      { user: list.users.ids }.to_json
-    )
+    ::JarvisTriggerWorker.perform_async(list.users.ids, :list, { list: list.serialize, item: item.serialize }.to_json)
+    # JarvisTriggerWorker.perform_async(:list,
+    #   {
+    #     input_vars: { "List Data": list.serialize, "Item Name": name, "Item Added": !deleted_at? }
+    #   }.to_json,
+    #   { user: list.users.ids }.to_json
+    # )
   end
 
 end

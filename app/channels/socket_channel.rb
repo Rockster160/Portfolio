@@ -44,17 +44,17 @@ class SocketChannel < ApplicationCable::Channel
     data.try(:deep_symbolize_keys!)
     return unless params[:channel_id].present?
 
-    receive_data = data.reverse_merge(params).except(:action)
+    receive_data = data.reverse_merge(params).except(:action).merge(connection_state: state || "unset")
     logit(receive_data)
 
-    # ::Jarvis.trigger_events(current_user, :websocket, trigger_data)
-    ::Jarvis.execute_trigger(
-      :websocket,
-      { input_vars: { "WS Receive Data" => receive_data, "Connection State" => state || "unset" } },
-      scope: [
-        "user_id = #{current_user.id} AND (input ~* ? OR input = '*')",
-        "\\m#{params[:channel_id]}\\M"
-      ]
-    )
+    ::Jarvis.trigger_events(current_user, :websocket, receive_data)
+    # ::Jarvis.execute_trigger(
+    #   :websocket,
+    #   { input_vars: { "WS Receive Data" => receive_data, "Connection State" => state || "unset" } },
+    #   scope: [
+    #     "user_id = #{current_user.id} AND (input ~* ? OR input = '*')",
+    #     "\\m#{params[:channel_id]}\\M"
+    #   ]
+    # )
   end
 end

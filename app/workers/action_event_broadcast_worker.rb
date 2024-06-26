@@ -6,16 +6,17 @@ class ActionEventBroadcastWorker
 
     if event.present? && trigger
       ::UpdateActionStreak.perform_async(event_id)
-      ::Jarvis.trigger(
-        :action_event,
-        {
-          id: event.id,
-          name: event.name,
-          notes: event.notes,
-          timestamp: event.timestamp,
-        },
-        scope: { user_id: event.user_id }
-      )
+      ::Jarvis.trigger_async(event.user_id, :event, event.serialize)
+      # ::Jarvis.trigger(
+      #   :action_event,
+      #   {
+      #     id: event.id,
+      #     name: event.name,
+      #     notes: event.notes,
+      #     timestamp: event.timestamp,
+      #   },
+      #   scope: { user_id: event.user_id }
+      # )
     end
 
     return unless event&.user&.me?

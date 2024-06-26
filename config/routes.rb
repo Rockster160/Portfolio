@@ -139,6 +139,8 @@ Rails.application.routes.draw do
     # Must be last because of the wildcard
     get "/:id", action: :show, controller: :jarvis_tasks
   end
+  # Must be after `jil` namespace so it doesn't overwrite existing routes
+  post "jil/:uuid" => "webhooks#jil"
 
   resources :climbs do
     patch :mark, on: :collection

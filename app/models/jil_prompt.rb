@@ -45,6 +45,6 @@ class JilPrompt < ApplicationRecord
   private
 
   def jil_callback
-    ::JarvisTriggerWorker.perform_async(:prompt, serialize.to_json, { user: user_id }.to_json)
+    ::JarvisTriggerWorker.perform_async(user_id, :prompt, serialize.to_json)
   end
 end

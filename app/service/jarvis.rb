@@ -76,8 +76,16 @@ class Jarvis
 
   def self.trigger_events(user, trigger, trigger_data={})
     # Not for triggering by UUID
+    user_ids = (
+      case user
+      when User then [user.id]
+      when ActiveRecord::Relation then user.ids
+      else Array.wrap(user)
+      end
+    )
     safe_trigger = Regexp.escape(trigger)
-    user.jarvis_tasks.where("listener ~* '(^|\\s)#{safe_trigger}(:|$)'").find_each.count do |task|
+
+    JarvisTask.where(user_id: user_ids).where("listener ~* '(^|\\s)#{safe_trigger}(:|$)'").find_each.count do |task|
       next unless task.listener_match?(trigger, trigger_data)
 
       task.execute(trigger_data)
@@ -85,8 +93,20 @@ class Jarvis
     # Returns the count. If 0, we know the (command) missed these
   end
 
+  def self.trigger_async(user, trigger, trigger_data={})
+    user_ids = (
+      case user
+      when User then user.id
+      when ActiveRecord::Relation then user.ids
+      else user.to_json
+      end
+    )
+
+    ::JarvisTriggerWorker.perform_async(user_ids, trigger.to_s, trigger_data.to_json)
+  end
+
   def self.trigger(trigger, trigger_data, scope: {})
-    ::JarvisTriggerWorker.perform_async(trigger.to_s, trigger_data.to_json, scope.to_json)
+    ::JarvisTriggerWorker.perform_async(trigger, trigger_data.to_json, scope.to_json)
   end
 
   def self.execute_trigger(trigger, trigger_data={}, scope: {})
