@@ -20,7 +20,7 @@ module Jarvis::MatchTask
 
   def match_run(user, ostr, skip=[], return_as: :str)
     begin
-      task = user.jarvis_tasks.where.not(id: skip).anyfind(ostr)
+      task = user.jarvis_tasks.enabled.where.not(id: skip).anyfind(ostr)
     rescue ActiveRecord::RecordNotFound
       task = nil
     end
@@ -105,7 +105,7 @@ module Jarvis::MatchTask
       "\\% *\\%" => "%",
     )
 
-    # user.jarvis_tasks.tell.find_each do |t|
+    # user.jarvis_tasks.enabled.tell.find_each do |t|
     #   erx = exe_rx("REGEXP_REPLACE(CONCAT('%', #{name_regex}, '%'), \'%{2,}\', \'%\', \'ig\')".gsub("REPLACE(input", "REPLACE('#{t.input.gsub("\n", "\\n")}'"))
     #   check = "'#{str}' ~~* '#{erx}'"
     #   puts check
@@ -113,8 +113,8 @@ module Jarvis::MatchTask
     # end
 
     # FIXME: This breaks with multiline
-    user.jarvis_tasks.tell.ordered.where.not(id: skip).find_by("'#{str}' ~~* #{name_regex}")
-    # user.jarvis_tasks.tell.ordered.where.not(id: skip).find_by("'#{str}' ~~* REGEXP_REPLACE(CONCAT('%', #{name_regex}, '%'), \'%{2,}\', \'%\', \'ig\')")
+    user.jarvis_tasks.enabled.tell.ordered.where.not(id: skip).find_by("'#{str}' ~~* #{name_regex}")
+    # user.jarvis_tasks.enabled.tell.ordered.where.not(id: skip).find_by("'#{str}' ~~* REGEXP_REPLACE(CONCAT('%', #{name_regex}, '%'), \'%{2,}\', \'%\', \'ig\')")
   end
 
   def exe_rx(st)

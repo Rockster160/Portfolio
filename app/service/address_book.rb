@@ -26,7 +26,7 @@ class AddressBook
   end
 
   def current_loc
-    current_coord || home&.loc
+    current_coord || home&.loc || []
   end
 
   def current_contact

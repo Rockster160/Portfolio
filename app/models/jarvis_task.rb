@@ -205,53 +205,53 @@ class JarvisTask < ApplicationRecord
           key.titleize
         ]]
       }.compact
-    elsif tell?
-      [["Full Input", [
-        { return: :str },
-        "Full Input"
-      ]]] + input.to_s.scan(/\{\w+/).map { |match|
-        word = match[1..]
-        [word, [
-          { return: :str },
-          word.titleize
-        ]]
-      }.uniq
-    elsif list?
-      [
-        ["List Data", [
-          { return: :hash },
-          "List Data"
-        ]],
-        ["Item Name", [
-          { return: :str },
-          "Item Name"
-        ]],
-        ["Item Added", [
-          { return: :bool },
-          "Item Added"
-        ]]
-      ]
-    elsif calendar?
-      [["Event Data", [
-        { return: :hash },
-        "Event Data"
-      ]]]
-    elsif websocket?
-      [
-        ["WS Receive Data", [
-          { return: :hash },
-          "WS Receive Data"
-        ]],
-        ["Connection State", [
-          { return: :str },
-          "Connection State"
-        ]]
-      ]
-    elsif monitor?
-      [["Pressed", [
-        { return: :bool },
-        "Pressed"
-      ]]]
+    # elsif tell?
+    #   [["Full Input", [
+    #     { return: :str },
+    #     "Full Input"
+    #   ]]] + input.to_s.scan(/\{\w+/).map { |match|
+    #     word = match[1..]
+    #     [word, [
+    #       { return: :str },
+    #       word.titleize
+    #     ]]
+    #   }.uniq
+    # elsif list?
+    #   [
+    #     ["List Data", [
+    #       { return: :hash },
+    #       "List Data"
+    #     ]],
+    #     ["Item Name", [
+    #       { return: :str },
+    #       "Item Name"
+    #     ]],
+    #     ["Item Added", [
+    #       { return: :bool },
+    #       "Item Added"
+    #     ]]
+    #   ]
+    # elsif calendar?
+    #   [["Event Data", [
+    #     { return: :hash },
+    #     "Event Data"
+    #   ]]]
+    # elsif websocket?
+    #   [
+    #     ["WS Receive Data", [
+    #       { return: :hash },
+    #       "WS Receive Data"
+    #     ]],
+    #     ["Connection State", [
+    #       { return: :str },
+    #       "Connection State"
+    #     ]]
+    #   ]
+    # elsif monitor?
+    #   [["Pressed", [
+    #     { return: :bool },
+    #     "Pressed"
+    #   ]]]
     end
   end
 
