@@ -2,7 +2,7 @@ class LocationCache
   extend DistanceHelper
 
   def self.driving?
-    !!User.me.jarvis_caches.get(:is_driving)
+    !!User.me.jarvis_caches.dig(:driving, :is_driving)
   end
 
   def self.driving=(bool)
@@ -24,7 +24,7 @@ class LocationCache
       scope: { user_id: User.me.id }
     )
 
-    User.me.jarvis_caches.set(:driving, :is_driving, departed)
+    User.me.jarvis_caches.dig_set(:driving, :is_driving, departed)
   end
 
   def self.nearby_contact(loc=nil)
