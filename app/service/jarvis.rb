@@ -89,7 +89,7 @@ class Jarvis
     user_tasks = ::JarvisTask.enabled.where(user_id: user_ids)
     user_tasks.where("listener ~* '(^|\\s)#{safe_trigger}(:|$)'").find_each.count do |task|
       next unless task.listener_match?(trigger, trigger_data)
-      PrettyLogger.info("Trigger:#{task.name}[#{task.listener}]\n#{{ trigger => trigger_data }}")
+      PrettyLogger.info("Trigger:#{task.name} [#{task.listener}]\n#{PrettyLogger.pretty_message({ trigger => trigger_data }.deep_symbolize_keys)}")
 
       task.execute(trigger_data)
     end
