@@ -38,6 +38,7 @@ RSpec.describe JarvisTask do
       JarvisTask.create(user: admin, listener: "tell~/(?<direction>open|close|toggle)( (?:the|my))? garage/")
       JarvisTask.create(user: admin, listener: "tell~/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/")
       JarvisTask.create(user: admin, listener: "tell:\"Do the things\"")
+      JarvisTask.create(user: admin, listener: "tell:~/Checkup/")
 
       @listeners = []
       allow_any_instance_of(JarvisTask).to receive(:execute) do |jarvis_task, data|
@@ -97,6 +98,17 @@ RSpec.describe JarvisTask do
         "tell:\"Do the things\""
       ])
       expect_trigger_listeners(admin, :tell, "Do things", [
+      ])
+      expect_trigger_listeners(admin, :tell, "Do the", [
+      ])
+      expect_trigger_listeners(admin, :tell, "Do the things twice", [
+      ])
+      expect_trigger_listeners(admin, :tell, "checkup", [
+        "tell:~/Checkup/",
+      ])
+      expect_trigger_listeners(admin, :tell, "add checkup", [
+      ])
+      expect_trigger_listeners(admin, :tell, "checkup do", [
       ])
     end
   end

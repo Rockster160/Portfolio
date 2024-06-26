@@ -3,7 +3,7 @@ module Jarvis::Regex
 
   def match_data(str, rx)
     # "Open the garage", "(?<direction>open|close|toggle)( (?:the|my))? garage"
-    md = str.match(Regexp.new(rx, Regexp::IGNORECASE | Regexp::MULTILINE))
+    md = str.match(Regexp.new("^#{rx}$", Regexp::IGNORECASE | Regexp::MULTILINE))
     return if md.nil?
 
     {

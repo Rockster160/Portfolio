@@ -1,7 +1,7 @@
 class Jarvis::Trigger < Jarvis::Action
   def attempt
     user_tasks = @user.jarvis_tasks.enabled
-    text = @msg.gsub(/^\s*run:?\s+/i)
+    text = @msg.gsub(/^\s*run:?\s+/i, "")
     ran_tasks = []
 
     if text.match?(/^(\w+-)+\w+$/i)
