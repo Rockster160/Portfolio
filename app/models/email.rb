@@ -147,6 +147,22 @@ class Email < ApplicationRecord
     AmazonEmailParser.parse(self)
   end
 
+  def relevant_user_ids
+    addresses = self.to.split(",")
+    user_ids = addresses.filter_map { |address|
+      personal, domain = address.split("@", 2)
+      next unless domain.in?(Email.registered_domains)
+
+      User.ilike(username: personal.split("+").first).take&.id
+    }
+
+    (user_ids + [User.me.id]).uniq
+  end
+
+  def serialize
+    as_json(only: [:id, :from, :to, :subject, :text_body, :html_body])
+  end
+
   def from_mail(mail, attaches=[])
     content = mail.body&.decoded.presence
     html_body = clean_content(mail.html_part&.body&.decoded.presence) || clean_content(content)
@@ -163,6 +179,9 @@ class Email < ApplicationRecord
     self.blob = self.blob.presence || mail.to_s
 
     success = save
+
+    ::Jarvis.trigger_events(relevant_user_ids, :email, serialize)
+    # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier
 
     blacklist = [
       "LV Bag",
