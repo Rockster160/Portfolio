@@ -93,6 +93,13 @@ class CalendarEventsWorker
         notes: event[:notes],
         user_id: @user_id,
         scheduled_time: event[:start_time],
+        data: {
+          event[:calendar] => {
+            name: event[:name],
+            notes: event[:notes],
+            scheduled_time: event[:start_time],
+          }
+        },
       )
 
       # Add helper to get "current location at time" which looks through scheduled events

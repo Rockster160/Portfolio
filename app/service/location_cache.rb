@@ -20,17 +20,6 @@ class LocationCache
         timestamp: Time.current,
       }
     )
-    # ::Jarvis.trigger(
-    #   :travel,
-    #   {
-    #     coord: departed ? nil : recent_locations[-1], # If arrived, show current
-    #     from: recent_locations[departed ? -1 : -2], # If arrived, show previous, otherwise current
-    #     location: current_location_name, # Most recent stopped
-    #     action: departed ? :departed : :arrived,
-    #     timestamp: Time.current,
-    #   },
-    #   scope: { user_id: User.me.id }
-    # )
 
     User.me.jarvis_caches.dig_set(:driving, :is_driving, departed)
   end

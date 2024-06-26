@@ -11,11 +11,6 @@ class JarvisWorker
       event_data = parsed[:event]
       if event_data[:user_id].present? && event_data[:type].present?
         ::Jarvis.trigger_async(event_data[:user_id], event_data[:type], event_data.except(:type, :user_id))
-        # ::Jarvis.trigger(
-        #   event_data[:type],
-        #   { input_vars: { "Event Data": event_data.except(:type, :user_id) } },
-        #   scope: { user_id: event_data[:user_id] }
-        # )
       end
     else
       # puts "\e[35m[LOGIT] | What is it? parsed:[#{parsed.class}]#{parsed}\e[0m"

@@ -48,13 +48,5 @@ class SocketChannel < ApplicationCable::Channel
     logit(receive_data)
 
     ::Jarvis.trigger_events(current_user, :websocket, receive_data)
-    # ::Jarvis.execute_trigger(
-    #   :websocket,
-    #   { input_vars: { "WS Receive Data" => receive_data, "Connection State" => state || "unset" } },
-    #   scope: [
-    #     "user_id = #{current_user.id} AND (input ~* ? OR input = '*')",
-    #     "\\m#{params[:channel_id]}\\M"
-    #   ]
-    # )
   end
 end
