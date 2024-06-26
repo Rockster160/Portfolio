@@ -100,6 +100,7 @@ class Jil::JarvisTasksController < ApplicationController
   def task_params
     params.require(:jarvis_task).permit(
       :name,
+      :listener,
       :trigger,
       :enabled,
       :input,
