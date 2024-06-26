@@ -31,6 +31,10 @@ RSpec.describe JarvisTask do
       JarvisTask.create(user: admin, listener: "travel:home")
       JarvisTask.create(user: admin, listener: "travel:arrive:!home")
       JarvisTask.create(user: admin, listener: "event:name:ANY(food soda drink alcohol treat snack)")
+      JarvisTask.create(user: admin, listener: "email:from:amazon subject:deliver")
+      JarvisTask.create(user: admin, listener: "email:from:blah subject:deliver")
+      JarvisTask.create(user: admin, listener: "subject:deliver")
+      JarvisTask.create(user: admin, listener: "email:body:\"awesome socks\"")
 
       @listeners = []
       allow_any_instance_of(JarvisTask).to receive(:execute) do |jarvis_task, data|
@@ -70,6 +74,13 @@ RSpec.describe JarvisTask do
       ])
       expect_trigger_listeners(admin, :event, { name: "soda" }, [
         "event:name:ANY(food soda drink alcohol treat snack)"
+      ])
+      expect_trigger_listeners(admin, :email, { from: "shipping@amazon.com", to: "rocco@ardesian.com", subject: "Your item has been Delivered!", text_body: "We delivered your Awesome Socks today!" }, [
+        "email:from:amazon subject:deliver",
+        "email:body:\"awesome socks\"",
+      ])
+      expect_trigger_listeners(admin, :email, { from: "shipping@amazon.com", to: "rocco@ardesian.com", subject: "Your item has been Delivered!", text_body: "We delivered your Awesome Pants today!" }, [
+        "email:from:amazon subject:deliver",
       ])
     end
   end

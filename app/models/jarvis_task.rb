@@ -109,8 +109,14 @@ class JarvisTask < ApplicationRecord
   end
 
   def listener_match?(trigger, trigger_data)
-     # TODO: trigger must be an exact, not partial match
-    ::SearchBreakMatcher.call(listener, { trigger => trigger_data })
+    # TODO: trigger must be an exact, not partial match
+    escape_listener = listener.dup
+    tz = Tokenizer.new(escape_listener)
+    tz.tokenize!(escape_listener, /\".*?\"/m)
+    escape_listener.split(" ").all? { |sub_listener|
+      unescaped_listener = tz.untokenize!(sub_listener)
+      ::SearchBreakMatcher.call(unescaped_listener, { trigger => trigger_data })
+    }
   end
 
   def serialize
