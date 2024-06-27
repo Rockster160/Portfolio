@@ -22,23 +22,27 @@ RSpec.describe JarvisTask do
 
   context "with basic triggers" do
     before do
-      JarvisTask.create(user: other_user, listener: "travel")
-      JarvisTask.create(user: admin, listener: "travel")
-      JarvisTask.create(user: admin, listener: "travel:depart:home")
-      JarvisTask.create(user: admin, listener: "travel:depart")
-      JarvisTask.create(user: admin, listener: "travel:arrive")
-      JarvisTask.create(user: admin, listener: "travel:arrive:home")
-      JarvisTask.create(user: admin, listener: "travel:home")
-      JarvisTask.create(user: admin, listener: "travel:arrive:!home")
-      JarvisTask.create(user: admin, listener: "event:name:ANY(food soda drink alcohol treat snack)")
-      JarvisTask.create(user: admin, listener: "email:from:amazon subject:deliver")
-      JarvisTask.create(user: admin, listener: "email:from:blah subject:deliver")
-      JarvisTask.create(user: admin, listener: "subject:deliver")
-      JarvisTask.create(user: admin, listener: "email:body:\"awesome socks\"")
-      JarvisTask.create(user: admin, listener: "tell~/(?<direction>open|close|toggle)( (?:the|my))? garage/")
-      JarvisTask.create(user: admin, listener: "tell~/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/")
-      JarvisTask.create(user: admin, listener: "tell:\"Do the things\"")
-      JarvisTask.create(user: admin, listener: "tell:~/Checkup/")
+      JarvisTask.create([
+        { user: other_user, listener: "travel" },
+        { user: admin, listener: "travel" },
+        { user: admin, listener: "travel:depart:home" },
+        { user: admin, listener: "travel:depart" },
+        { user: admin, listener: "travel:arrive" },
+        { user: admin, listener: "travel:arrive:home" },
+        { user: admin, listener: "travel:home" },
+        { user: admin, listener: "travel:arrive:!home" },
+        { user: admin, listener: "event:name:ANY(food soda drink alcohol treat snack)" },
+        { user: admin, listener: "email:from:amazon subject:ANY(\"has been\" \"is now\" delayed)" },
+        { user: admin, listener: "email:from:amazon subject:deliver" },
+        { user: admin, listener: "email:from:blah subject:deliver" },
+        { user: admin, listener: "subject:deliver" },
+        { user: admin, listener: "email:body:\"awesome socks\"" },
+        { user: admin, listener: "tell~/(?<direction>open|close|toggle)( (?:the|my))? garage/" },
+        { user: admin, listener: "tell~/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/" },
+        { user: admin, listener: "tell:\"Do the things\"" },
+        { user: admin, listener: "tell:~/Checkup/" },
+        { user: admin, listener: "tell:ANY(~/Checkup/ ~/Result/)" },
+      ])
 
       @listeners = []
       allow_any_instance_of(JarvisTask).to receive(:execute) do |jarvis_task, data|
@@ -47,10 +51,14 @@ RSpec.describe JarvisTask do
     end
 
     it "executes the correct values" do
+      expect_trigger_listeners(admin, :webhook, { travel: "home" }, [])
+      expect_trigger_listeners(admin, :tell, "Do things", [])
+      expect_trigger_listeners(admin, :tell, "Do the", [])
+      expect_trigger_listeners(admin, :tell, "add checkup", [])
+      expect_trigger_listeners(admin, :tell, "checkup do", [])
+
       expect_trigger_listeners(other_user, :travel, { action: "Arrive", location: "Home" }, [
         "travel",
-      ])
-      expect_trigger_listeners(admin, :webhook, { travel: "home" }, [
       ])
       expect_trigger_listeners(admin, :travel, { whatever: "home" }, [
         "travel",
@@ -80,11 +88,22 @@ RSpec.describe JarvisTask do
         "event:name:ANY(food soda drink alcohol treat snack)"
       ])
       expect_trigger_listeners(admin, :email, { from: "shipping@amazon.com", to: "rocco@ardesian.com", subject: "Your item has been Delivered!", text_body: "We delivered your Awesome Socks today!" }, [
+        "email:from:amazon subject:ANY(\"has been\" \"is now\" delayed)",
         "email:from:amazon subject:deliver",
         "email:body:\"awesome socks\"",
       ])
+      expect_trigger_listeners(admin, :email, { from: "shipping@amazon.com", to: "rocco@ardesian.com", subject: "Your item is now arriving tomorrow" }, [
+        "email:from:amazon subject:ANY(\"has been\" \"is now\" delayed)",
+      ])
+      expect_trigger_listeners(admin, :email, { from: "shipping@amazon.com", to: "rocco@ardesian.com", subject: "Your item has been lost" }, [
+        "email:from:amazon subject:ANY(\"has been\" \"is now\" delayed)",
+      ])
+      expect_trigger_listeners(admin, :email, { from: "shipping@amazon.com", to: "rocco@ardesian.com", subject: "Your item is delayed" }, [
+        "email:from:amazon subject:ANY(\"has been\" \"is now\" delayed)",
+      ])
       expect_trigger_listeners(admin, :email, { from: "shipping@amazon.com", to: "rocco@ardesian.com", subject: "Your item has been Delivered!", text_body: "We delivered your Awesome Pants today!" }, [
         "email:from:amazon subject:deliver",
+        "email:from:amazon subject:ANY(\"has been\" \"is now\" delayed)",
       ])
       expect_trigger_listeners(admin, :tell, "Open the garage", [
         "tell~/(?<direction>open|close|toggle)( (?:the|my))? garage/",
@@ -97,18 +116,15 @@ RSpec.describe JarvisTask do
       expect_trigger_listeners(admin, :tell, "Do the things", [
         "tell:\"Do the things\""
       ])
-      expect_trigger_listeners(admin, :tell, "Do things", [
-      ])
-      expect_trigger_listeners(admin, :tell, "Do the", [
-      ])
       expect_trigger_listeners(admin, :tell, "Do the things twice", [
+        "tell:\"Do the things\"",
       ])
       expect_trigger_listeners(admin, :tell, "checkup", [
         "tell:~/Checkup/",
+        "tell:ANY(~/Checkup/ ~/Result/)",
       ])
-      expect_trigger_listeners(admin, :tell, "add checkup", [
-      ])
-      expect_trigger_listeners(admin, :tell, "checkup do", [
+      expect_trigger_listeners(admin, :tell, "result", [
+        "tell:ANY(~/Checkup/ ~/Result/)",
       ])
     end
   end

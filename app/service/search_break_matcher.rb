@@ -1,5 +1,5 @@
-module SearchBreakMatcher
-  module_function
+class SearchBreakMatcher
+  attr_accessor :regex_match_data
 
   DELIMITERS = {
     contains:     ":",
@@ -14,15 +14,24 @@ module SearchBreakMatcher
     }
   }
 
-  def call(str, data)
-    breaker = SearchBreaker.call(str, DELIMITERS)
+  def initialize(str, data, parent=nil)
+    @parent = parent
+    @regex_match_data = { match_list: [], named_captures: {} }
+    @top_breaker = SearchBreaker.call(str, DELIMITERS)
+    @top_data = data
 
-    return false if !data.is_a?(Hash) || data.keys.none?
-    raise "Only 1 top level key allowed" unless data.keys.one?
-
-    breaker_matches(breaker, data).any?
+    match?
   rescue StandardError => e
-    # binding.pry
+    raise unless Rails.env.production?
+  end
+
+  def match?
+    @matched ||= begin
+      return false if !@top_data.is_a?(Hash) || @top_data.keys.none?
+      raise "Only 1 top level key allowed" unless @top_data.keys.one?
+
+      breaker_matches(@top_breaker, @top_data).any?
+    end
   end
 
   # {data} -- ...key: key: key: "string"
@@ -59,17 +68,17 @@ module SearchBreakMatcher
       when Array then piece.filter_map { |nested_breaker| breaker_matches(nested_breaker, data, delim) }
       when String, Symbol then valstr_match(piece, delim, data)
       else
-        # binding.pry
+        raise "Unhandled piece class: #{piece.class}"
       end
     }&.flatten || [])
   rescue StandardError => e
-    # binding.pry
+    raise unless Rails.env.production?
   end
 
   def valstr_match(val, delim, data) # val is a bottom-level string from the {broken} data
     data = data.to_s if data.is_a?(Symbol)
     return check_match?(val, delim, data) && data if data.is_a?(String)
-    data&.find { |dkey, dvals|
+    data.is_a?(Hash) && data.find { |dkey, dvals|
       break dvals if check_match?(val, delim, dkey, dvals)
 
       nested_val = (
@@ -85,13 +94,13 @@ module SearchBreakMatcher
         when String # string to string -- Check if they match according to the delim
           check_match?(val, delim, dvals) && dvals
         else
-          # binding.pry
+          raise "Unhandled dvals class: #{dvals.class}"
         end
       )
       break nested_val if nested_val
     } || false
   rescue StandardError => e
-    # binding.pry
+    raise unless Rails.env.production?
   end
 
   def check_match?(val, delim, str, nested={})
@@ -102,12 +111,25 @@ module SearchBreakMatcher
     when :not_contains then !str.include?(val)
     when :exact then val == str
     when :not, :not_exact then val != str
-    when :regex then str.match?(regex)
+    when :regex
+      ::Jarvis::Regex.match_data(str, val)&.tap { |md|
+        @regex_match_data[:match_list] += md[:match_list]
+        @regex_match_data[:named_captures].reverse_merge!(md[:named_captures])
+      }.present?
     when :any
-      val.split(" ").any? { |single_val| SearchBreakMatcher.call(single_val, { str => {} }) }
+      Tokenizer.split(
+        val,
+        Tokenizer.wrap_regex("\""),
+        Tokenizer.wrap_regex("'"),
+        Tokenizer.wrap_regex("/"),
+        Tokenizer.wrap_regex("(", ")"),
+        unwrap: true,
+      ).any? { |single_val|
+        SearchBreakMatcher.new(single_val, { str => {} }, @parent || self).match?
+      }
     else false
     end
   rescue StandardError => e
-    # binding.pry
+    raise unless Rails.env.production?
   end
 end

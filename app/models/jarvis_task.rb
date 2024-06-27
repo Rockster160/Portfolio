@@ -116,10 +116,10 @@ class JarvisTask < ApplicationRecord
     # TODO: trigger must be an exact, not partial match
     escape_listener = listener.dup
     tz = Tokenizer.new(escape_listener)
-    tz.tokenize!(escape_listener, /\".*?\"/m)
-    tz.tokenize!(escape_listener, /\'.*?\'/m)
-    tz.tokenize!(escape_listener, /\/.*?\//m)
-    tz.tokenize!(escape_listener, /\(.*?\)/m)
+    tz.tokenize!(escape_listener, Tokenizer.wrap_regex("/"))
+    tz.tokenize!(escape_listener, Tokenizer.wrap_regex("\""))
+    tz.tokenize!(escape_listener, Tokenizer.wrap_regex("'"))
+    tz.tokenize!(escape_listener, Tokenizer.wrap_regex("(", ")"))
     escape_listener.split(" ").all? { |sub_listener|
       unescaped_listener = tz.untokenize!(sub_listener)
       block.call(unescaped_listener)
@@ -136,26 +136,14 @@ class JarvisTask < ApplicationRecord
   end
 
   def match_run(trigger, trigger_data)
-    if trigger_data.is_a?(String)
-      match_data = nil
-      return unless listener_match?(trigger) { |escaped_listener|
-        rx = escaped_listener[/(?:\/|\'|\")(.*?)(?:\/|\'|\")$/, 1]
-        ::Jarvis::Regex.match_data(trigger_data, rx)&.tap { |md|
-          match_data ||= md
-        }.present?
-      }
-      return unless match_data.present?
+    first_match = nil
+    return unless listener_match?(trigger) { |escaped_listener|
+      matcher = ::SearchBreakMatcher.new(escaped_listener, { trigger => trigger_data })
+      matcher.match?.tap { |m| first_match ||= matcher if m }
+    }
 
-      pretty_log(trigger, { trigger_str: trigger_data, match_data: match_data })
-      execute(match_data)
-    else
-      return unless listener_match?(trigger) { |escaped_listener|
-        ::SearchBreakMatcher.call(escaped_listener, { trigger => trigger_data })
-      }
-
-      pretty_log(trigger, trigger_data)
-      execute(trigger_data)
-    end
+    pretty_log(trigger, trigger_data)
+    execute(trigger == :tell ? first_match.regex_match_data : trigger_data)
   end
 
   def serialize

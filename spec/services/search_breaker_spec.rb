@@ -108,7 +108,7 @@ RSpec.describe SearchBreaker do
     let(:q) { "event:data:custom:nested_key:fuzzy_val" }
 
     def matcher?(str, data)
-      SearchBreakMatcher.call(str, data)
+      SearchBreakMatcher.new(str, data).match?
     end
 
     context "with a nested exact matcher" do

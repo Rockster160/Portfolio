@@ -2,7 +2,8 @@ module Jarvis::Regex
   module_function
 
   def match_data(str, rx)
-    # "Open the garage", "(?<direction>open|close|toggle)( (?:the|my))? garage"
+    # "Open the garage", "/(?<direction>open|close|toggle)( (?:the|my))? garage/"
+    rx = rx[1..-2] if rx.starts_with?("/") && rx.ends_with?("/")
     md = str.match(Regexp.new("^#{rx}$", Regexp::IGNORECASE | Regexp::MULTILINE))
     return if md.nil?
 
