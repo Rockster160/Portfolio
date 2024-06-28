@@ -15,6 +15,7 @@ class JarvisCache < ApplicationRecord
   attr_accessor :skip_save_set
 
   belongs_to :user
+  has_many :cache_shares
 
   def to_param
     key || id
@@ -52,7 +53,7 @@ class JarvisCache < ApplicationRecord
 
   def wrap_data=(new_data)
     new_data.each do |key, val|
-      user.jarvis_caches.set(key, val)
+      user.caches.set(key, val)
     end
     self.destroy unless new_data.stringify_keys.include?(self.key.to_s)
   end

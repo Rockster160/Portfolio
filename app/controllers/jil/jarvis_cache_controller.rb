@@ -4,15 +4,15 @@ class Jil::JarvisCacheController < ApplicationController
   layout false, only: :show
 
   def index
-    @caches = current_user.jarvis_caches.order(updated_at: :desc)
+    @caches = current_user.caches.order(updated_at: :desc)
   end
 
   def show
-    @cache = current_user.jarvis_caches.by(params[:id])
+    @cache = current_user.caches.by(params[:id])
   end
 
   def update
-    @cache = current_user.jarvis_caches.by(params[:id])
+    @cache = current_user.caches.by(params[:id])
 
     if @cache.update(wrap_data: params[:cache])
       render json: {}, status: :ok

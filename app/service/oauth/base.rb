@@ -62,7 +62,7 @@ class Oauth::Base
   end
 
   def cache
-    @cache ||= @user.jarvis_caches.by(:oauth)
+    @cache ||= @user.caches.by(:oauth)
   end
 
   def auth(params={})

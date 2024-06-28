@@ -109,7 +109,7 @@ class TeslaControl
   end
 
   def cached_vehicle_data
-    User.me.jarvis_caches.get(:car_data)
+    User.me.caches.get(:car_data)
   end
 
   def vehicle_data(wake: false)
@@ -122,7 +122,7 @@ class TeslaControl
 
         car_data[:timestamp] = car_data.dig(:vehicle_state, :timestamp) # Bubble up to higher key
 
-        User.me.jarvis_caches.set(:car_data, car_data)
+        User.me.caches.set(:car_data, car_data)
         break car_data if car_data[:state] == "asleep"
 
         if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
@@ -199,8 +199,8 @@ class TeslaControl
         info("Token refreshed. Trying again!")
         retry
       when 408
-        User.me.jarvis_caches.dig_set(:car_data, :state, :asleep)
-        @vehicle_data = User.me.jarvis_caches.get(:car_data) # reset cache
+        User.me.caches.dig_set(:car_data, :state, :asleep)
+        @vehicle_data = User.me.caches.get(:car_data) # reset cache
         if tries >= max_attempts
           TeslaCommand.broadcast(loading: false)
           return false # Did not wake up

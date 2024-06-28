@@ -2,7 +2,7 @@ class LocationCache
   extend DistanceHelper
 
   def self.driving?
-    !!User.me.jarvis_caches.dig(:driving, :is_driving)
+    !!User.me.caches.dig(:driving, :is_driving)
   end
 
   def self.driving=(bool)
@@ -21,7 +21,7 @@ class LocationCache
       }
     )
 
-    User.me.jarvis_caches.dig_set(:driving, :is_driving, departed)
+    User.me.caches.dig_set(:driving, :is_driving, departed)
   end
 
   def self.nearby_contact(loc=nil)
@@ -45,7 +45,7 @@ class LocationCache
   end
 
   def self.recent_locations
-    User.me.jarvis_caches.dig(:driving, :recent_locations) || []
+    User.me.caches.dig(:driving, :recent_locations) || []
   end
 
   def self.set(loc, at=nil)
@@ -56,6 +56,6 @@ class LocationCache
     return if locations.length >= 3 && near?(locations.last[:loc], loc)
 
     locations = locations.push({ loc: loc, at: at, name: current_location_name(loc) }).last(3)
-    User.me.jarvis_caches.dig_set(:driving, :recent_locations, locations)
+    User.me.caches.dig_set(:driving, :recent_locations, locations)
   end
 end

@@ -46,6 +46,7 @@ class User < ApplicationRecord
   has_one :jarvis_page, dependent: :destroy
   def jarvis_page; super() || build_jarvis_page; end
   has_many :jarvis_caches, class_name: "JarvisCache"
+  def caches = ::JarvisCache.left_joins(:cache_shares).where("cache_shares.user_id = :id OR jarvis_caches.user_id = :id", id: id)
 
   has_secure_password validations: false
 

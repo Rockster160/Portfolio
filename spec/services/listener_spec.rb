@@ -56,6 +56,7 @@ RSpec.describe JarvisTask do
       expect_trigger_listeners(admin, :tell, "Do the", [])
       expect_trigger_listeners(admin, :tell, "add checkup", [])
       expect_trigger_listeners(admin, :tell, "checkup do", [])
+      expect_trigger_listeners(admin, :tell, "Set the house 72 degrees", [])
 
       expect_trigger_listeners(other_user, :travel, { action: "Arrive", location: "Home" }, [
         "travel",
@@ -110,8 +111,6 @@ RSpec.describe JarvisTask do
       ])
       expect_trigger_listeners(admin, :tell, "Set the house 72 degrees this matters more", [
         "tell~/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/",
-      ])
-      expect_trigger_listeners(admin, :tell, "Set the house 72 degrees", [
       ])
       expect_trigger_listeners(admin, :tell, "Do the things", [
         "tell:\"Do the things\""
