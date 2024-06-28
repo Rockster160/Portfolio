@@ -173,8 +173,9 @@ class AmazonEmailParser
       error("Unable to parse title: [#{item.item_id}]:#{item_doc.title}") if name.blank?
     }.to_s
   rescue => e
-    SlackNotifier.err(e, "Error pulling Amazon page:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
-    ""
+    # Amazon occasionally does Captcha checks, which ends with this being a 500.
+    # Don't report these, just return nothing and move on.
+    # SlackNotifier.err(e, "Error pulling Amazon page:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
   end
 
   def error(msg="Failed to parse")
