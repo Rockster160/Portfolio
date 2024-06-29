@@ -162,7 +162,7 @@ class Email < ApplicationRecord
 
   def serialize
     # Shouldn't return blob, just need to figure out how to parse email data better so we have access to nickname and properly parsed html data
-    as_json(only: [:id, :from, :to, :subject, :text_body, :html_body, :blob])
+    as_json(only: [:id, :from, :to, :subject, :text_body, :html_body, :blob, :created_at])
   end
 
   def from_mail(mail, attaches=[])
