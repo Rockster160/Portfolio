@@ -131,7 +131,9 @@ class JarvisTask < ApplicationRecord
       PrettyLogger.colorize(:grey, "[#{name}]"),
       listener,
       "\n",
-      PrettyLogger.pretty_message({ trigger => trigger_data }.deep_symbolize_keys)
+      PrettyLogger.pretty_message({
+        trigger => trigger_data.transform_values { |v| v.is_a?(String) ? v.truncate(100) : v}
+      }.deep_symbolize_keys)
     ].join(""))
   end
 
