@@ -25,11 +25,9 @@ class MonitorChannel < ApplicationCable::Channel
         break ts if ts.is_a?(Numeric) # If it's a number
         break ts.to_f if ts.to_f > 0 # Or looks like a number
       } || task.last_trigger_at.to_i,
-    }
-    ctx[:blip]&.then { |blip|
-      break unless blip.present?
-      data[:blip] = blip.to_s.first(3)
-    }
+      data: ctx[:data].presence,
+      blip: ctx[:blip]&.then { |blip| blip.to_s&.first(3).presence },
+    }.compact_blank
 
     broadcast_to(task.user, data)
     # This is VERY magic. If the task defines a "timestamp" variable, the monitor channel will

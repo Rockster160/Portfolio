@@ -90,7 +90,7 @@ class Jarvis
 
     user_tasks = ::JarvisTask.enabled.where(user_id: user_ids).distinct
     user_tasks.by_listener(trigger).filter_map do |task|
-      task.match_run(trigger, trigger_data) && task
+      task.match_run(trigger, trigger_data) && task rescue nil
     end
   end
 

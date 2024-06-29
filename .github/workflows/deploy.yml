@@ -3,7 +3,7 @@
 # journalctl -r -u puma_portfolio_production.service
 # systemctl status puma_portfolio_production.service
 # check syntax error with `sc`
-# bundle exec cap production deploy
+# (local) bundle exec cap production deploy
 
 name: Deploy after merge
 

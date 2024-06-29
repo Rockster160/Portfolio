@@ -34,6 +34,7 @@ class User < ApplicationRecord
   has_many :shared_recipes, through: :recipe_shares, source: :shared_to
   has_many :lists, through: :user_lists
   has_many :sent_emails, class_name: "Email", foreign_key: :sent_by_id, dependent: :destroy
+  has_many :emails, dependent: :destroy
   has_many :prompts, class_name: "JilPrompt", dependent: :destroy
   has_many :daily_usages, class_name: "JilUsage", dependent: :destroy
   has_many :action_events
@@ -46,7 +47,7 @@ class User < ApplicationRecord
   has_one :jarvis_page, dependent: :destroy
   def jarvis_page; super() || build_jarvis_page; end
   has_many :jarvis_caches, class_name: "JarvisCache"
-  def caches = ::JarvisCache.left_joins(:cache_shares).where("cache_shares.user_id = :id OR jarvis_caches.user_id = :id", id: id)
+  def caches = ::JarvisCache.assign(user: self).left_joins(:cache_shares).where("cache_shares.user_id = :id OR jarvis_caches.user_id = :id", id: id)
 
   has_secure_password validations: false
 

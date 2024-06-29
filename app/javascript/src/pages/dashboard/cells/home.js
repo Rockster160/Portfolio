@@ -43,43 +43,89 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     return icon + Text.color(battery_color, level)
   }
 
+  function shortAgo(timestamp) {
+    const now = Math.floor(Date.now() / 1000)
+    const at = parseInt(timestamp)
+    if (isNaN(at)) { return timestamp }
+    const elapsed = now - at
+
+    const secondsInMinute = 60
+    const secondsInHour = 3600
+
+    if (elapsed < secondsInMinute) {
+      return `${elapsed}s`
+    } else if (elapsed < secondsInHour) {
+      const minutes = Math.floor(elapsed / secondsInMinute)
+      return `${minutes}m`
+    } else {
+      const hours = Math.floor(elapsed / secondsInHour)
+      return `${hours}h`
+    }
+  }
+
   let renderLines = function() {
     let lines = []
     let first_row = []
-    first_row.push(cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]      " : "        ")
-    if (cell.data?.garage?.timestamp < Time.ago(Time.hour)) {
-      console.log("Garage Expired");
-      cell.data.garage.state = "unknown" }
+    first_row.push(cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "")
+    if (cell.data?.garage?.timestamp < Time.ago(Time.hour)) { cell.data.garage.state = "unknown" }
 
     if ("state" in (cell.data?.garage || {})) {
       if (cell.data.garage.state == "open") {
         flash(false)
-        first_row.push(Text.orange("  [ico ti ti-mdi-garage_open]"))
+        first_row.push(Text.orange("[ico ti ti-mdi-garage_open] "))
       } else if (cell.data.garage.state == "closed") {
         flash(false)
-        first_row.push(Text.green("  [ico ti ti-mdi-garage]"))
+        first_row.push(Text.green("[ico ti ti-mdi-garage] "))
       } else if (cell.data.garage.state == "between") {
         flash(true)
         if (flash_on = !flash_on) {
-          first_row.push(Text.yellow("  [ico ti ti-mdi-garage_open]"))
+          first_row.push(Text.yellow("[ico ti ti-mdi-garage_open] "))
           if (cell.data.sound) {
             beep(100, 350, 0.02, "square")
           }
         } else {
-          first_row.push(Text.yellow("    "))
+          first_row.push(Text.yellow("  "))
         }
       } else {
         flash(false)
-        first_row.push(Text.grey(" [ico ti ti-mdi-garage]?"))
+        first_row.push(Text.grey(" [ico ti ti-mdi-garage]? "))
       }
     } else {
       flash(false)
-      first_row.push(Text.grey(" [ico ti ti-mdi-garage]?"))
+      first_row.push(Text.grey(" [ico ti ti-mdi-garage]? "))
     }
 
-    first_row.push(cell.data.failed ? Text.orange("[FAILED]") : "        ")
+    if (cell.data.camera) {
+      [
+        "Driveway",
+        "Backyard",
+        "Doorbell",
+        "Storage",
+      ].forEach(location => {
+        const data = cell.data.camera[location] || { at: "?", type: "?" }
+        let typeIcon = undefined
+        const locIcon = {
+          Driveway: "[ico ti ti-fa-car]",
+          Backyard: "[ico ti ti-fae-plant]",
+          Doorbell: "[ico ti ti-mdi-door]",
+          Storage:  "[ico ti ti-fa-dropbox]",
+        }[location]
+        switch (data.type) {
+          case "person": typeIcon = "[ico ti ti-oct-person]"; break;
+          case "pet": typeIcon = "[ico ti ti-fa-paw]"; break;
+          case "vehicle": typeIcon = "[ico ti ti-fa-car]"; break;
+          case "motion": typeIcon = "[ico ti ti-fa-bullseye]"; break;
+          default: typeIcon = "?"
+        }
+        const time = shortAgo(data.at) || "---"
 
-    lines.push(Text.justify(...first_row))
+        if (locIcon) {
+          first_row.push(`${locIcon}${typeIcon}${time}`)
+        }
+      })
+    }
+
+    lines.push(Text.center(first_row.join("")))
 
     cell.data.devices?.forEach(function(device) {
       let mode_color = dash_colors.grey
@@ -233,6 +279,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         cell.flash()
         if (data.loading) {
         } else {
+          cell.data.camera = data.data?.camera || {}
           cell.data.garage.timestamp = data.timestamp * 1000
           // Somewhere - need to do an hourly? check, if no received, go grey
           let msg = data.result || ""
@@ -293,7 +340,8 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     data: {
       sound: true,
       device_battery: {},
-      garage: { state: "unknown", timestamp: 0 }
+      garage: { state: "unknown", timestamp: 0 },
+      camera: { Backyard: {}, Driveway: {}, Doorbell: {}, Storage: {} },
     },
     onload: subscribeWebsockets,
     reloader: function() {

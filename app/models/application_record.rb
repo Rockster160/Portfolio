@@ -46,6 +46,16 @@ class ApplicationRecord < ActiveRecord::Base
     all.to_sql.gsub("SELECT \"#{table_name}\".* FROM \"#{table_name}\" WHERE ", "")
   end
 
+  scope :assign, -> (data) {
+    relation = all
+    prev = relation.instance_variable_get(:@assigned_data) || {}
+    relation.instance_variable_set(:@assigned_data, data)
+    relation
+  }
+  def self.assigned(key)
+    (all.instance_variable_get(:@assigned_data) || {})[key]
+  end
+
   scope :search, ->(q) { ilike(search_indexed("%#{q}%"), :OR) }
   scope :unsearch, ->(q) { not_ilike(search_indexed("%#{q}%"), :AND) }
   scope :query, ->(q) {

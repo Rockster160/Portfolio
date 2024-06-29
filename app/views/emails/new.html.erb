@@ -12,7 +12,7 @@
     <div class="from">
       <%= f.text_field :from_user, placeholder: "From" %>
       <span>@</span>
-      <%= f.select :from_domain, Email.registered_domains %>
+      <%= f.select :from_domain, ::Email.registered_domains %>
     </div>
     <%= f.hidden_field :to, id: "csv-emails" %>
     <div class="entered-emails">

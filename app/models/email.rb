@@ -15,11 +15,13 @@
 #  created_at  :datetime         not null
 #  updated_at  :datetime         not null
 #  sent_by_id  :integer
+#  user_id     :bigint
 #
 
 class Email < ApplicationRecord
   attr_accessor :skip_validations, :from_user, :from_domain, :skip_notify, :tempfiles
   belongs_to :sent_by, class_name: "User", optional: true
+  belongs_to :user, optional: true
 
   serialize :attachments, coder: JsonWrapper
 
@@ -81,11 +83,11 @@ class Email < ApplicationRecord
   end
 
   def outbound?
-    (Email.domains_from_addresses(to) & Email.registered_domains).any?
+    (::Email.domains_from_addresses(to) & ::Email.registered_domains).any?
   end
 
   def inbound?
-    (Email.domains_from_addresses(from) & Email.registered_domains).any?
+    (::Email.domains_from_addresses(from) & ::Email.registered_domains).any?
   end
 
   def inbound_address
@@ -147,20 +149,20 @@ class Email < ApplicationRecord
     AmazonEmailParser.parse(self)
   end
 
-  def relevant_user_ids
+  def matching_user_id
     addresses = self.to.split(",")
-    user_ids = addresses.filter_map { |address|
+    addresses.find { |address|
       personal, domain = address.split("@", 2)
-      next unless domain.in?(Email.registered_domains)
+      next unless domain.in?(::Email.registered_domains)
 
-      User.ilike(username: personal.split("+").first).take&.id
+      user_id = User.ilike(username: personal.split("+").first).take&.id
+      break user_id if user_id.present?
     }
-
-    (user_ids + [User.me.id]).uniq
   end
 
   def serialize
-    as_json(only: [:id, :from, :to, :subject, :text_body, :html_body])
+    # Shouldn't return blob, just need to figure out how to parse email data better so we have access to nickname and properly parsed html data
+    as_json(only: [:id, :from, :to, :subject, :text_body, :html_body, :blob])
   end
 
   def from_mail(mail, attaches=[])
@@ -168,6 +170,7 @@ class Email < ApplicationRecord
     html_body = clean_content(mail.html_part&.body&.decoded.presence) || clean_content(content)
     text_body = clean_content(mail.text_part&.body&.decoded.presence) || clean_content(content, parse_text: true)
 
+    user_id = matching_user_id || User.me.id
     assign_attributes(
       from:      [mail.from].flatten.compact.join(","),
       to:        [mail.to].flatten.compact.join(","),
@@ -175,12 +178,13 @@ class Email < ApplicationRecord
       text_body: text_body,
       html_body: html_body,
       attachments: attaches,
+      user_id: user_id,
     )
     self.blob = self.blob.presence || mail.to_s
 
     success = save
 
-    ::Jarvis.trigger_events(relevant_user_ids, :email, serialize)
+    ::Jarvis.trigger_events(user_id, :email, serialize)
     # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier
 
     blacklist = [
@@ -189,17 +193,15 @@ class Email < ApplicationRecord
     ]
 
     if amazon_update?([mail.from].flatten.compact)
-      skip_notify = true
       parse_amazon
-      update(deleted_at: Time.current) # Auto archive Amazon emails
+      archive # Auto archive Amazon emails
     elsif blacklist.any? { |bad| html_body.include?(bad) }
-      skip_notify = true
-      update(deleted_at: Time.current)
+      archive
     end
 
-    notify_slack if success && !skip_notify
-    failure(*errors.full_messages) if errors.any?
     reload
+    notify_slack if success && !archived?
+    failure(*errors.full_messages) if errors.any?
   end
 
   def failure(*issues)

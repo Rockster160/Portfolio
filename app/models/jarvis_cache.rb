@@ -23,9 +23,9 @@ class JarvisCache < ApplicationRecord
 
   def self.by(key)
     if key.to_s.match?(/^\d+$/)
-      find_by(key: key) || find_by(id: key) || find_or_create_by(key: key)
+      find_by(key: key) || find_by(id: key) || find_or_create_by(key: key, user: assigned(:user))
     else
-      find_or_create_by(key: key)
+      find_or_create_by(key: key, user: assigned(:user))
     end
   end
 

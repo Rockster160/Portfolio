@@ -467,6 +467,12 @@ class TaskMap
         { block: :select, values: [:second, :minute, :hour, :day, :week, :month, :year] },
       ],
     },
+    emails: {
+      archive: [
+        { return: :bool },
+        { block: :num, label: :id }
+      ]
+    },
     lists: {
       # create? | destroy | all -- lists, not items?
       # TODO: Support ordering?

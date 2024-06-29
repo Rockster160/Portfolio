@@ -4,7 +4,7 @@ class EmailsController < ApplicationController
 
   def index
     # FIXME: Filter this by user unless admin?
-    @emails = Email.order_chrono.page(params[:page]).per(params[:per] || 10)
+    @emails = ::Email.order_chrono.page(params[:page]).per(params[:per] || 10)
 
     search = params[:q]&.dup.to_s
     @filters = search.scan(/\w*\:\w+/).each_with_object({}) do |filter, obj|
@@ -40,13 +40,13 @@ class EmailsController < ApplicationController
   end
 
   def show
-    @email = Email.find(params[:id])
+    @email = ::Email.find(params[:id])
     @email.read
   end
 
   def new
     @email = current_user.sent_emails.new(email_params)
-    @email.from_user ||= current_user.email.in?(Email.registered_domains) ? current_user.email : "#{(current_user.username.presence || 'contact')}@ardesian.com"
+    @email.from_user ||= current_user.email.in?(::Email.registered_domains) ? current_user.email : "#{(current_user.username.presence || 'contact')}@ardesian.com"
   end
 
   def create
@@ -62,7 +62,7 @@ class EmailsController < ApplicationController
   end
 
   def update
-    @email = Email.find(params[:id])
+    @email = ::Email.find(params[:id])
     @email.update(update_params)
 
     respond_to do |format|
