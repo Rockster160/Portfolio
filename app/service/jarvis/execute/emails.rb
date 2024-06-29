@@ -1,4 +1,4 @@
-class Jarvis::Execute::Email < Jarvis::Execute::Executor
+class Jarvis::Execute::Emails < Jarvis::Execute::Executor
   def archive
     email_id = evalargs
 
