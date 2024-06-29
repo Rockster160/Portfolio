@@ -127,12 +127,19 @@ class JarvisTask < ApplicationRecord
   end
 
   def pretty_log(trigger, trigger_data)
+    message_data = (
+      if trigger_data.is_a?(::String)
+        trigger_data.truncate(100)
+      else
+        trigger_data.transform_values { |v| v.is_a?(::String) ? v.truncate(100) : v }
+      end
+    )
     PrettyLogger.info([
       PrettyLogger.colorize(:grey, "[#{name}]"),
       listener,
       "\n",
       PrettyLogger.pretty_message({
-        trigger => trigger_data.transform_values { |v| v.is_a?(String) ? v.truncate(100) : v}
+        trigger => message_data
       }.deep_symbolize_keys)
     ].join(""))
   end

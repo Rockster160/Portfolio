@@ -1,4 +1,5 @@
 class SearchBreakMatcher
+  include Memoizeable
   attr_accessor :regex_match_data
 
   DELIMITERS = {
@@ -26,12 +27,11 @@ class SearchBreakMatcher
   end
 
   def match?
-    @matched ||= begin
-      return false if !@top_data.is_a?(Hash) || @top_data.keys.none?
-      raise "Only 1 top level key allowed" unless @top_data.keys.one?
+    return @matched if defined?(@matched)
+    return @matched = false if !@top_data.is_a?(Hash) || @top_data.keys.none?
+    raise "Only 1 top level key allowed" unless @top_data.keys.one?
 
-      breaker_matches(@top_breaker, @top_data).any?
-    end
+    @matched = breaker_matches(@top_breaker, @top_data).any?
   end
 
   # {data} -- ...key: key: key: "string"

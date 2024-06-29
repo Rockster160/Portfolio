@@ -59,7 +59,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       return `${minutes}m`
     } else {
       const hours = Math.floor(elapsed / secondsInHour)
-      return `${hours}h`
+      return `${hours > 99 ? "XX" : hours}h`
     }
   }
 
@@ -72,24 +72,25 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     if ("state" in (cell.data?.garage || {})) {
       if (cell.data.garage.state == "open") {
         flash(false)
-        first_row.push(Text.orange("[ico ti ti-mdi-garage_open] "))
+        first_row.push(Text.orange("[ico ti ti-mdi-garage_open]"))
       } else if (cell.data.garage.state == "closed") {
         flash(false)
-        first_row.push(Text.green("[ico ti ti-mdi-garage] "))
+        first_row.push(Text.green("[ico ti ti-mdi-garage]"))
       } else if (cell.data.garage.state == "between") {
         flash(true)
         if (flash_on = !flash_on) {
-          first_row.push(Text.yellow("[ico ti ti-mdi-garage_open] "))
+          first_row.push(Text.yellow("[ico ti ti-mdi-garage_open]"))
           if (cell.data.sound) {
             beep(100, 350, 0.02, "square")
           }
         } else {
-          first_row.push(Text.yellow("  "))
+          first_row.push(Text.yellow(" "))
         }
       } else {
         flash(false)
         first_row.push(Text.grey(" [ico ti ti-mdi-garage]? "))
       }
+      first_row.push(shortAgo(cell.data.garage.timestamp))
     } else {
       flash(false)
       first_row.push(Text.grey(" [ico ti ti-mdi-garage]? "))
@@ -117,7 +118,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
           case "motion": typeIcon = "[ico ti ti-fa-bullseye]"; break;
           default: typeIcon = "?"
         }
-        const time = shortAgo(data.at) || "---"
+        const time = shortAgo(data.at) || "--"
 
         if (locIcon) {
           first_row.push(`${locIcon}${typeIcon}${time}`)
@@ -278,12 +279,10 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       received: function(data) {
         clearTimeout(cell.garage_timeout)
         cell.flash()
-        console.log(data)
         if (data.loading) {
         } else {
           cell.data.camera = data.extra?.camera || {}
           cell.data.garage.timestamp = data.timestamp * 1000
-          // Somewhere - need to do an hourly? check, if no received, go grey
           let msg = data.result || ""
           if (msg.includes("[ico mdi-garage font-size: 100px; color: green;]")) {
             cell.data.garage.state = "closed"
