@@ -170,10 +170,10 @@ class Email < ApplicationRecord
     html_body = clean_content(mail.html_part&.body&.decoded.presence) || clean_content(content)
     text_body = clean_content(mail.text_part&.body&.decoded.presence) || clean_content(content, parse_text: true)
 
+    self.to = [mail.to].flatten.compact.join(",")
     user_id = matching_user_id || User.me.id
     assign_attributes(
       from:      [mail.from].flatten.compact.join(","),
-      to:        [mail.to].flatten.compact.join(","),
       subject:   mail.subject,
       text_body: text_body,
       html_body: html_body,
