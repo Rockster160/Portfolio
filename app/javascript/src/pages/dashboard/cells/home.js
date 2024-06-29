@@ -277,9 +277,10 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       received: function(data) {
         clearTimeout(cell.garage_timeout)
         cell.flash()
+        console.log(data)
         if (data.loading) {
         } else {
-          cell.data.camera = data.data?.camera || {}
+          cell.data.camera = data.extra?.camera || {}
           cell.data.garage.timestamp = data.timestamp * 1000
           // Somewhere - need to do an hourly? check, if no received, go grey
           let msg = data.result || ""
