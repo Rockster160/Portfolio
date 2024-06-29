@@ -193,6 +193,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
     cell.lines(lines)
   }
+  setInterval(renderLines, 1000)
 
   let getGarage = function() {
     cell.recent_garage = false
@@ -297,9 +298,6 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         }
       },
     })
-    setInterval(function() {
-      renderLines()
-    }, Time.hour())
 
     cell.nest_socket = new CellWS(
       cell,
