@@ -90,7 +90,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         flash(false)
         first_row.push(Text.grey(" [ico ti ti-mdi-garage]? "))
       }
-      first_row.push(shortAgo(cell.data.garage.timestamp))
+      first_row.push(shortAgo(cell.data.garage.timestamp / 1000))
     } else {
       flash(false)
       first_row.push(Text.grey(" [ico ti ti-mdi-garage]? "))
