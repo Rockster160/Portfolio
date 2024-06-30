@@ -112,16 +112,16 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
           Storage:  "[ico ti ti-fa-dropbox]",
         }[location]
         switch (data.type) {
-          case "person": typeIcon = "[ico ti ti-oct-person]"; break;
-          case "pet": typeIcon = "[ico ti ti-fa-paw]"; break;
-          case "vehicle": typeIcon = "[ico ti ti-fa-car]"; break;
-          case "motion": typeIcon = "[ico ti ti-fa-bullseye]"; break;
-          default: typeIcon = "?"
+          case "person": typeIcon = Text.lblue; break;
+          case "pet": typeIcon = Text.purple; break;
+          case "vehicle": typeIcon = Text.yellow; break;
+          case "motion": typeIcon = Text.grey; break;
+          default: typeIcon = Text.red
         }
-        const time = shortAgo(data.at) || "--"
+        const time = shortAgo(data.at || Text.red("--"))
 
         if (locIcon) {
-          first_row.push(`${locIcon}${typeIcon}${time}`)
+          first_row.push(typeIcon(` ${locIcon}${time}`))
         }
       })
     }

@@ -8,6 +8,8 @@ export let toMd = function(text) {
     return emoji(null, `ti ti-${p1}`, { style: p2 })
   }).replace(/\[img (.*?)\]/gu, (match, p1) => {
     return img(p1)
+  }).replace(/\n/gu, (match, p1) => {
+    return "<br>"
   })
 }
 
