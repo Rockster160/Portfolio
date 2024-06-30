@@ -118,7 +118,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
           case "motion": typeIcon = Text.grey; break;
           default: typeIcon = Text.red
         }
-        const time = shortAgo(data.at || Text.red("--"))
+        const time = shortAgo(data.at) || Text.red("--")
 
         if (locIcon) {
           first_row.push(typeIcon(` ${locIcon}${time}`))
