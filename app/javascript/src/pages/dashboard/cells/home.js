@@ -98,17 +98,17 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
     if (cell.data.camera) {
       [
+        "Doorbell",
         "Driveway",
         "Backyard",
-        "Doorbell",
         "Storage",
       ].forEach(location => {
         const data = cell.data.camera[location] || { at: "?", type: "?" }
         let typeIcon = undefined
         const locIcon = {
+          Doorbell: "[ico ti ti-mdi-door]",
           Driveway: "[ico ti ti-fa-car]",
           Backyard: "[ico ti ti-fae-plant]",
-          Doorbell: "[ico ti ti-mdi-door]",
           Storage:  "[ico ti ti-fa-dropbox]",
         }[location]
         switch (data.type) {
