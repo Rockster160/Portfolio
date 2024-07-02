@@ -14,6 +14,8 @@ class SearchBreakMatcher
       any: "ANY:", # Should probably reverse these so multiple aliases can point to one delim
     }
   }
+  # These could be actual/custom Objects that return the expected data based on calls.
+  # That would solve the issues of having conflicting keys.
 
   def initialize(str, data, parent=nil)
     @parent = parent
