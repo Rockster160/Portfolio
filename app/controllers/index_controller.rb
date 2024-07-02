@@ -5,17 +5,22 @@ class IndexController < ApplicationController
   def talk
     from_number = params["From"]
     body = params["Body"]
-    from_user = current_user || User.find_by(phone: from_number.gsub(/[^0-9]/, "").last(10))
+    squish_number = from_number.gsub(/[^0-9]/, "").last(10)
+    from_user = current_user || User.find_by(phone: squish_number)
 
     if from_user.present?
+      return if mom_opening_garage(from_user, body)
+
       response, data = Jarvis.command(from_user, body)
 
-       # TODO: If data has anything, interpret that and include with sms
+      # TODO: If data has anything, interpret that and include with sms
       SmsWorker.perform_async(from_number, response)
     else
       Jarvis.say("SMS from #{from_number}: #{body}")
       # SmsWorker.perform_async(from_number, "Sorry- I'm not sure who you are. Please log in and add your phone number before using SMS.")
     end
+
+    head :ok
   end
 
   def nest_subscribe
@@ -25,5 +30,19 @@ class IndexController < ApplicationController
     end
 
     render :home
+  end
+
+  private
+
+  def mom_opening_garage(user, body)
+    return unless user.id == 4 # Mom
+
+    direction = :open if body.match?(/\b(open)\b/)
+    direction = :close if body.match?(/\b(close|shut)\b/)
+    direction ||= :toggle
+
+    Jarvis.command(User.me, "#{direction} the garage")
+    Jarvis.log("Mom SMS: '#{body}' | #{direction} the garage")
+    return true
   end
 end

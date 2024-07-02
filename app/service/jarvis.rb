@@ -74,6 +74,10 @@
 class Jarvis
   MY_NUMBER = "3852599640"
 
+  def self.log(*messages)
+    PrettyLogger.log(*messages)
+  end
+
   def self.trigger_events(user, trigger, trigger_data={})
     # Not for triggering by UUID
     user_ids = (
