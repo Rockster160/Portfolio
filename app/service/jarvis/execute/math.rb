@@ -21,7 +21,7 @@ class Jarvis::Execute::Math < Jarvis::Execute::Executor
     task_op, task_num = evalargs
     task_num = cast_num(task_num)
     case task_op.to_sym
-    when :abs    then ::Math.abs(task_num)
+    when :abs    then task_num.abs
     when :sqrt   then ::Math.sqrt(task_num)
     when :square then task_num**2
     when :cubed  then task_num**3

@@ -9,9 +9,9 @@ module EventAnalyzer
       }
   end
 
-  def duration(seconds, sig_figs=2)
-    seconds = seconds.to_i
-    return "<1s" if seconds < 1
+  def duration(left, sig_figs=2)
+    left = left.to_i
+    return "<1s" if left < 1
 
     time_lengths = {
       s: 1.second.to_i,
@@ -22,11 +22,11 @@ module EventAnalyzer
     }
 
     time_lengths.reverse_each.with_object([]) { |(time, length), durations|
-      next if length > seconds
+      next if length > left
       next if durations.length >= sig_figs
 
-      count = (seconds / length).round
-      seconds -= count * length
+      count = (left / length).round
+      left -= count * length
 
       durations << "#{count}#{time}"
     }.join(" ")
