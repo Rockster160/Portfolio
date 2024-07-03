@@ -31,14 +31,14 @@ class ActionEvent < ApplicationRecord
     where("data @> ?", { actions: Array.wrap(qs).flatten.compact }.to_json)
   }
 
+  def self.serialize
+    all.as_json(only: [:id, :name, :notes, :timestamp, :data])
+  end
+
   def timestamp=(str_stamp)
     return if str_stamp.blank?
 
     super(str_stamp.in_time_zone("Mountain Time (US & Canada)"))
-  end
-
-  def self.serialize
-    all.as_json(only: [:id, :name, :notes, :timestamp, :data])
   end
 
   def serialize

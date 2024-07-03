@@ -6,7 +6,6 @@ class ActionEventBroadcastWorker
 
     if event.present? && trigger
       ::UpdateActionStreak.perform_async(event_id)
-      ::Jarvis.trigger_async(event.user_id, :event, event.serialize)
     end
 
     return unless event&.user&.me?

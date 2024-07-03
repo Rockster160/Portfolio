@@ -21,6 +21,7 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
       data: data,
       timestamp: timestamp,
     )
+    ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: :added))
     ::ActionEventBroadcastWorker.perform_async(event.id) if event.persisted?
     event.id
   end
@@ -35,7 +36,32 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
       data: data,
       timestamp: timestamp,
     }.compact)
-    ::ActionEventBroadcastWorker.perform_async(event.id, false) if success
+
+    return false unless success
+
+    ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: :changed))
+    ::ActionEventBroadcastWorker.perform_async(event.id, false)
+    success
+  end
+
+  def destroy
+    id = evalargs
+
+    event = user.action_events.find(id)
+    success = event.destroy
+
+    return false unless success
+
+    ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: :removed))
+
+    matching_events = ActionEvent
+      .where(user_id: event.user_id)
+      .ilike(name: event.name)
+      .where.not(id: event.id)
+    following = matching_events.where("timestamp > ?", event.timestamp).order(:timestamp).first
+    UpdateActionStreak.perform_async(following.id) if following.present?
+
+    ::ActionEventBroadcastWorker.perform_async(event.id, false)
     success
   end
 end
