@@ -95,6 +95,24 @@ class JarvisTask < ApplicationRecord
     keyval:   9,
   }, _prefix: :output #.output_any?
 
+  def self.full_export
+    # exportPortfolio "task_export.json" "JarvisTask.full_export"
+    all.order(:id).to_json
+  end
+  def self.full_import(json)
+    raise "Only for Dev mode!" unless Rails.env.development?
+
+    tasks = JSON.parse(json)
+    ActiveRecord::Base.connection.execute("SET FOREIGN_KEY_CHECKS = 0")
+    ActiveRecord::Base.transaction do
+      JarvisTask.reset_column_information
+      JarvisTask.delete_all
+      JarvisTask.insert_all(tasks)
+    end
+    ActiveRecord::Base.connection.execute("SET FOREIGN_KEY_CHECKS = 1")
+    puts "Imported #{tasks.length} tasks successfully"
+  end
+
   def self.find_by_uuid(uuid) = find_by!(uuid: uuid)
   def self.anyfind(id)
     case id.to_s
@@ -169,19 +187,23 @@ class JarvisTask < ApplicationRecord
     ).merge(return_val: return_val)
   end
 
+  def export
+    attributes.symbolize_keys.except(
+      :id,
+      :uuid,
+      :enabled,
+      :last_ctx,
+      :last_trigger_at,
+      :output_text,
+      :return_data,
+      :created_at,
+      :updated_at,
+    )
+  end
+
   def duplicate
     self.class.create!(
-      attributes.symbolize_keys.except(
-        :id,
-        :uuid,
-        :enabled,
-        :last_ctx,
-        :last_trigger_at,
-        :output_text,
-        :return_data,
-        :created_at,
-        :updated_at,
-      ).tap { |attrs| attrs[:name] = "#{attrs[:name]} (2)" }
+      export.tap { |attrs| attrs[:name] = "#{attrs[:name]} (2)" }
     )
   end
 

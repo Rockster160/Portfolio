@@ -7,11 +7,11 @@ class Jarvis::Execute::Logic < Jarvis::Execute::Executor
   end
 
   def logic_and
-    evalargs.all? { |t| eval_block(t).present? }
+    evalargs.inject(nil) { |memo, t| memo && eval_block(t) }
   end
 
   def logic_or
-    evalargs.any? { |t| eval_block(t).present? }
+    evalargs.inject(nil) { |memo, t| memo || eval_block(t) }
   end
 
   def logic_eq
