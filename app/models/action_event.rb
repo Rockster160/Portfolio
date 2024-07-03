@@ -22,6 +22,15 @@ class ActionEvent < ApplicationRecord
 
   search_terms :name, :notes
 
+  # Contains ANY
+  scope :search_data_actions_any, ->(*qs) {
+    where("data -> 'actions' ?| array[:actions]", actions: Array.wrap(qs).flatten.compact)
+  }
+  # Contains ALL
+  scope :search_data_actions_all, ->(*qs) {
+    where("data @> ?", { actions: Array.wrap(qs).flatten.compact }.to_json)
+  }
+
   def timestamp=(str_stamp)
     return if str_stamp.blank?
 
