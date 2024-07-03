@@ -103,6 +103,7 @@
       ActionCable.server.broadcast("jil_#{@task.uuid}_channel", { token: task_block[:token], res: res.as_json })
       # binding.pry if @task.id == 43
       # binding.pry if task_block[:token] == "funky.saloon.oak"
+      # binding.pry if task_block[:token] == "ago"
       # binding.pry if task_block[:type] == "task.print"
     }
   # rescue StandardError => e

@@ -49,8 +49,8 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
 
   def self.num(val, jil=nil)
     casted = case val
-    when ::Array then (val.one? && num(val.first.try(:dig, :raw))) || raise("Unable to cast <Array> to <Num>")
-    when ::Hash then val[:raw].present? ? num(val[:raw]) : raise("Unable to cast <Hash> to <Num>")
+    when ::Array then (val.one? && num(val.first.try(:dig, :raw))) || raise("Unable to cast <Array:#{val.inspect}> to <Num>")
+    when ::Hash then val[:raw].present? ? num(val[:raw]) : raise("Unable to cast <Hash:#{val.inspect}> to <Num>")
     when ::TrueClass then 1
     else
       val
@@ -62,11 +62,11 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
 
   def self.date(val, jil=nil)
     casted = case val
-    when ::Array then (val.one? && num(val.first.try(:dig, :raw))) || raise("Unable to cast <Array> to <Date>")
-    when ::Hash then val[:raw].present? ? num(val[:raw]) : raise("Unable to cast <Hash> to <Date>")
+    when ::Array then (val.one? && num(val.first.try(:dig, :raw))) || raise("Unable to cast <Array:#{val.inspect}> to <Date>")
+    when ::Hash then val[:raw].present? ? num(val[:raw]) : raise("Unable to cast <Hash:#{val.inspect}> to <Date>")
     when ::TrueClass then 1
     when ::Numeric then Time.at(val)
-    when ::String then ::Time.use_zone(current_user.timezone) { ::Time.parse(val) } rescue ::Time.current
+    when ::String then ::Time.use_zone(user.timezone) { ::Time.parse(val) } rescue raise("Unable to cast <String:#{val.inspect}> to <Date>")
     else
       val.to_datetime
     end

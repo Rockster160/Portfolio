@@ -100,16 +100,15 @@ class JarvisTask < ApplicationRecord
     all.order(:id).to_json
   end
   def self.full_import(json)
+    # rails runner "JarvisTask.full_import(File.read(\"task_export.json\"))"
     raise "Only for Dev mode!" unless Rails.env.development?
 
     tasks = JSON.parse(json)
-    ActiveRecord::Base.connection.execute("SET FOREIGN_KEY_CHECKS = 0")
     ActiveRecord::Base.transaction do
       JarvisTask.reset_column_information
       JarvisTask.delete_all
       JarvisTask.insert_all(tasks)
     end
-    ActiveRecord::Base.connection.execute("SET FOREIGN_KEY_CHECKS = 1")
     puts "Imported #{tasks.length} tasks successfully"
   end
 
