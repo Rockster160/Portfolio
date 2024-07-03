@@ -426,10 +426,10 @@ class TaskMap
         { return: :date },
         :NOW
       ],
-      # cast: [
-      #   { return: :date },
-      #   { block: :any },
-      # ],
+      cast: [
+        { return: :date },
+        { block: :any },
+      ],
       round: [
         { return: :date },
         { block: :date },

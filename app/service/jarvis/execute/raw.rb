@@ -1,6 +1,5 @@
 class Jarvis::Execute::Raw < Jarvis::Execute::Executor
-  CASTABLE = [:bool, :str, :text, :num]
-  # TODO: cast date
+  CASTABLE = [:bool, :str, :text, :num, :date]
 
   CASTABLE.each do |method|
     define_method(method) do
@@ -61,6 +60,18 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
     0
   end
 
+  def self.date(val, jil=nil)
+    casted = case val
+    when ::Array then (val.one? && num(val.first.try(:dig, :raw))) || raise("Unable to cast <Array> to <Date>")
+    when ::Hash then val[:raw].present? ? num(val[:raw]) : raise("Unable to cast <Hash> to <Date>")
+    when ::TrueClass then 1
+    when ::Numeric then Time.at(val)
+    when ::String then safeparse_time(val)
+    else
+      val.to_datetime
+    end
+  end
+
   def keyval
     key, val = evalargs
     [key, val]
@@ -107,5 +118,19 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
 
   def user_cache
     user.caches.reload
+  end
+
+  def safeparse_time(time=nil, default=::Time.currrent)
+    return default if time.blank?
+
+    if time.is_a?(::String)
+      begin
+        ::Time.use_zone(current_user.timezone) { ::Time.parse(time) }
+      rescue StandardError
+        return default
+      end
+    else
+      time
+    end
   end
 end
