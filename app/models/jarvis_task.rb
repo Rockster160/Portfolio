@@ -96,7 +96,7 @@ class JarvisTask < ApplicationRecord
   }, _prefix: :output #.output_any?
 
   def self.full_export
-    # exportPortfolio "task_export.json" "JarvisTask.full_export"
+    # exportPortfolio "task_export.json" "puts JarvisTask.full_export"
     all.order(:id).to_json
   end
   def self.full_import(json)

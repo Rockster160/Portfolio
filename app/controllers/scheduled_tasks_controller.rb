@@ -24,7 +24,7 @@ class ScheduledTasksController < ApplicationController
 
   def update
     @event = ::Jarvis::Schedule.get_events(current_user).find { |event| event[:uid] == params[:uid] }
-    ::Jarvis::Schedule.schedule(@event.merge!(event_params))
+    ::Jarvis::Schedule.schedule(@event.merge!(event_params)) if @event.present?
 
     sleep 0.5
     respond_to do |format|
@@ -35,7 +35,7 @@ class ScheduledTasksController < ApplicationController
 
   def destroy
     @event = ::Jarvis::Schedule.get_events(current_user).find { |event| event[:uid] == params[:uid] }
-    ::Jarvis::Schedule.cancel(@event[:jid])
+    ::Jarvis::Schedule.cancel(@event[:jid]) if @event&.dig(:jid).present?
 
     sleep 0.5
     respond_to do |format|

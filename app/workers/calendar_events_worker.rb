@@ -6,7 +6,6 @@ class CalendarEventsWorker
   PRE_OFFSET = 10.minutes
 
   def perform
-    return # Disable for Japan
     return if Rails.env.development?
 
     @user_id = User.me.id
@@ -110,6 +109,7 @@ class CalendarEventsWorker
       #   Set location for time there, otherwise default to home
 
       # If travelable - add TT and nav there and back
+      return # Disable for Japan
       if travelable_event?(event)
         traveltime = event[:notes]&.scan(/ttt (\d+)/i)&.flatten&.first&.to_i&.minutes
         traveltime ||= address_book.traveltime_seconds(

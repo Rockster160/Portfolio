@@ -66,6 +66,8 @@ class LocalDataBroadcast
     [
       "Rich's w/end",
       "Doug Works",
+      "rocco.nicholls@workwave.com", # Disable for Japan
+      "rocco@oneclaimsolution.com", # Disable for Japan
     ]
   end
 
