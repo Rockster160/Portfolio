@@ -95,6 +95,7 @@ class WebhooksController < ApplicationController
   end
 
   def local_data
+    return head :created # Disable for Japan
     data = params[:local_data].to_unsafe_h
     json = DataStorage[:local_data] || {}
     DataStorage[:local_data] = json.merge(data)

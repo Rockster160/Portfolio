@@ -66,7 +66,7 @@ class Jarvis::Execute::Raw < Jarvis::Execute::Executor
     when ::Hash then val[:raw].present? ? num(val[:raw]) : raise("[#{jil&.ctx&.dig(:current_token)}] Unable to cast <Hash:#{val.inspect}> to <Date>")
     when ::TrueClass then 1
     when ::Numeric then Time.at(val)
-    when ::String then ::Time.use_zone(user.timezone) { ::Time.parse(val) } rescue raise("[#{jil&.ctx&.dig(:current_token)}] Unable to cast <String:#{val.inspect}> to <Date>")
+    when ::String then ::Time.use_zone(jil&.task&.user&.timezone || User.timezone) { ::Time.parse(val) } rescue raise("[#{jil&.ctx&.dig(:current_token)}] Unable to cast <String:#{val.inspect}> to <Date>")
     else
       val.to_datetime rescue raise("[#{jil&.ctx&.dig(:current_token)}] Unable to cast <#{val.class}:#{val.inspect}> to <Date>")
     end

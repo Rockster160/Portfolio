@@ -6,6 +6,7 @@ class CalendarEventsWorker
   PRE_OFFSET = 10.minutes
 
   def perform
+    return # Disable for Japan
     return if Rails.env.development?
 
     @user_id = User.me.id
