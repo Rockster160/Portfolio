@@ -21,6 +21,10 @@ module GlobalHelper
     ::Nokogiri::XML(fixture("#{path}.xml")).to_xml
   end
 
+  def jil_fixture(path)
+    fixture("jil/#{path}.jil")
+  end
+
   def image_fixture(path)
     fixture_file_upload(::Rails.root.join("spec/fixtures/#{path}"), "image/png")
   end

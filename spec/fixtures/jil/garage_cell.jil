@@ -1,0 +1,60 @@
+garage = Global.get_cache("garage")::Hash
+state = garage.get("state")::String
+timestamp = garage.get("timestamp")::Numeric
+was = garage.get("was")::String
+color = String.new("grey")::String
+icon = String.new("mdi-garage_open")::String
+direction = String.new("")::String
+now = Date.now()::Date
+timeDiff = now.adjust("-", timestamp)::Numeric
+hour = Duration.new(1, "hours")::Duration
+j4d00 = Global.if({
+p9635 = Boolean.compare(timeDiff, "<", hour)::Boolean
+}, {
+i9c02 = Global.if({
+  b0aab = Boolean.eq(state, "open")::Boolean
+}, {
+  x5eab = Global.set(color, "orange")::Any
+}, {})::Any
+t34bb = Global.if({
+  hf2c3 = Boolean.eq(state, "closed")::Boolean
+}, {
+  wa029 = Global.set(color, "green")::Any
+  p45a4 = Global.set(icon, "mdi-garage")::Any
+}, {})::Any
+p3d1c = Global.if({
+  ub4b4 = Boolean.eq(state, "between")::Boolean
+}, {
+  y35d8 = Global.set(color, "yellow; animation: 1s infinite blink")::Any
+  p13e9 = Global.if({
+    i6e2a = Boolean.eq(was, "open")::Boolean
+  }, {
+    x9d1f = Global.set(direction, "↓")::Any
+  }, {
+    b6841 = Global.set(direction, "↑")::Any
+  })::Any
+}, {
+  of2b4 = Global.comment("Been > 1 hour since last received")::None
+})::Any
+}, {})::Any
+j9d84 = Global.if({
+sc979 = Global.input_data()::Hash
+e589c = sc979.get("pressed")::Boolean
+}, {
+# u7c8b = Global.if({
+#     m49e9 = state.match("closed")::String
+#   }, {
+#     ic6de = Global.comment("Toggle Garage (open)")::None
+#   }, {
+#     p2838 = Global.comment("Toggle Garage (close)")::None
+#   })::Any
+}, {})::Any
+rc012 = Global.if({
+w11df = Boolean.eq(color, "grey")::Boolean
+}, {
+v2237 = Global.comment("Resync Garage (Trigger \`request\` through WS)")::None
+d379b = Task.find("70da51c2-83b3-4e50-abe1-4fbeda49279b")::Task
+idf9a = d379b.run("")::Task
+}, {})::Any
+cams = Global.comment("Custom: Home States")::String
+ode01 = Global.return("#{cams}\n\n#{direction}[ico #{icon} font-size: 100px; color: #{color};]\n\n\n")::String
