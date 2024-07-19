@@ -45,7 +45,8 @@ RSpec.describe Jil::Executor do
         <<-JIL
           na887 = Boolean.new(true)::Boolean
           na882 = Boolean.new(false)::Boolean
-          # tbd36 = Global.print("\#{na882}")::String
+          tbd36 = Global.print("\#{na882}")::String
+          # abc123 = Global.print("\#{na882}")::String # Doesn't show up in vars
         JIL
       }
 
@@ -54,9 +55,9 @@ RSpec.describe Jil::Executor do
         expect(ctx[:vars]).to match_hash({
           na887: { class: :Boolean, value: true },
           na882: { class: :Boolean, value: false },
-          # tbd36: { class: :String,  value: "false" },
+          tbd36: { class: :String,  value: "\"false\"" },
         })
-        # expect(ctx[:output]).to eq(["false"])
+        expect(ctx[:output]).to eq(["false"])
       end
     end
   end
