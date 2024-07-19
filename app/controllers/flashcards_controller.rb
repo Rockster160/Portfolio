@@ -32,7 +32,6 @@ class FlashcardsController < ApplicationController
   end
 
   def next_card
-    binding.pry
     @card = @card.next
     @read_card = true
   end

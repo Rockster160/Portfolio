@@ -1,20 +1,20 @@
 class Jil::Parser
   attr_accessor :commented, :varname, :objname, :methodname, :args, :cast
 
-  REGEX = /
-    (?<commented>\#)?\s*
-    (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
-    (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
-    \.(?<methodname>[_0-9A-Za-z]+)
-    \((?<args>[\s\S]*)\)
-    ::(?<cast>[A-Z][_0-9A-Za-z]*)
-  /x
+  # REGEX = /
+  #   \s*(?<commented>\#)?\s*
+  #   (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
+  #   (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
+  #   \.(?<methodname>[_0-9A-Za-z]+)
+  #   \((?<args>[\s\S]*)\) -- Only difference from ESCAPED_REGEX
+  #   ::(?<cast>[A-Z][_0-9A-Za-z]*)
+  # /x
   ESCAPED_REGEX = /
-    (?<commented>\#)?\s*
+    \s*(?<commented>\#)?\s*
     (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
     (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
     \.(?<methodname>[_0-9A-Za-z]+)
-    (?<args>\[[a-f0-9]{2}-[a-f0-9]{2}-[a-f0-9]{2}-[a-f0-9]{2}\])
+    (?<args>\[[a-z0-9]{2}-[a-z0-9]{2}-[a-z0-9]{2}-[a-z0-9]{2}\])
     ::(?<cast>[A-Z][_0-9A-Za-z]*)
   /xm
 
@@ -43,11 +43,19 @@ class Jil::Parser
   end
 
   def initialize(commented, varname, objname, methodname, args, cast)
-    @commented = commented
-    @varname = varname
-    @objname = objname
-    @methodname = methodname
+    @commented = commented.present?
+    @varname = varname.to_sym
+    @objname = objname.to_sym
+    @methodname = methodname.to_sym
+    @cast = cast.to_sym
     @args = args
-    @cast = cast
+  end
+
+  def commented?
+    commented
+  end
+
+  def arg
+    args.first
   end
 end

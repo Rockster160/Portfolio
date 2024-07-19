@@ -11,7 +11,7 @@ RSpec.describe Jil::Parser do
       expect(parsed.all? { |line| line.is_a?(Jil::Parser)}).to be(true)
 
       if_block = parsed[10]
-      expect(if_block.methodname).to eq("if")
+      expect(if_block.methodname).to eq(:if)
       expect(if_block.args.length).to eq(3)
       if_condition, if_do, if_else = if_block.args
       expect(if_condition.first.args).to eq(["timeDiff", "\"<\"", "hour"])
