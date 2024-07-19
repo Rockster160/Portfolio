@@ -15,8 +15,10 @@ class Jil::Methods::Base
   end
 
   def evalarg(arg)
-    if arg.is_a?(Jil::Parser) || arg.is_a?(::Array)
+    if arg.is_a?(::Jil::Parser) || arg.is_a?(::Array)
       @jil.execute_block(arg)
+    # elsif arg.is_a?(::Hash) && arg.keys == [:cast, :value]
+    #   @jil.cast(arg[:value], arg[:cast], @ctx)
     else
       arg
     end

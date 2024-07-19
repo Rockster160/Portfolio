@@ -18,15 +18,19 @@ class Jil::Methods::String < Jil::Methods::Base
   def execute(line)
     case line.methodname
     when :new then cast(line.arg)
-    when :match then token_val(line.objname).match(cast(line.arg))
-    else send(line.methodname, line.args)
+    else
+      if line.objname.match?(/^[A-Z]/)
+        send(line.methodname, token_val(line.objname), *evalargs(line.args))
+      else
+        token_val(line.objname).send(line.methodname, *evalargs(line.args))
+      end
     end
   end
 end
 # [String]
 # [√]  #new(Any)
-# [ ]  .match(String)
-# [ ]  .scan(String)::Array
+# [√]  .match(String)
+# [√]  .scan(String)::Array
 # [ ]  .split(String?)::Array
 # [ ]  .format(["lower" "upper" "squish" "capital" "pascal" "title" "snake" "camel" "base64"])
 # [ ]  .replace(String)

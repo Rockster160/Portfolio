@@ -33,6 +33,8 @@ class Jil::Parser
         tk.untokenize(escaped, 1).then { |piece|
           if piece.starts_with?("{") && piece.ends_with?("}")
             from_tokenized_code(piece, tk)
+          elsif piece.starts_with?("\"") && piece.ends_with?("\"")
+            piece[1..-2]
           else
             piece
           end

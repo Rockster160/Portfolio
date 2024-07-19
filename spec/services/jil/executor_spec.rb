@@ -114,6 +114,24 @@ RSpec.describe Jil::Executor do
         expect(ctx[:output]).to eq([])
       end
     end
+
+    context "scan" do
+      let(:code) {
+        <<-JIL
+          na887 = String.new(\"Hello, world!\")::String
+          na885 = na887.scan(\"Hello\")::Array
+        JIL
+      }
+
+      it "stores the string" do
+        expect_successful
+        expect(ctx[:vars]).to match_hash({
+          na887: { class: :String, value: "Hello, world!" },
+          na885: { class: :Array, value: ["Hello"] },
+        })
+        expect(ctx[:output]).to eq([])
+      end
+    end
   end
 end
 # [ ] [Global]
@@ -227,33 +245,6 @@ end
 #   .any?(content(["Key"::String "Value"::Any "Index"::Numeric)])::Boolean
 #   .none?(content(["Key"::String "Value"::Any "Index"::Numeric)])::Boolean
 #   .all?(content(["Key"::String "Value"::Any "Index"::Numeric)])::Boolean
-# [Array]
-#   #new(content)
-#   #from_length(Numeric)
-#   .length::Numeric
-#   .merge
-#   .get(Numeric)::Any
-#   .set(Numeric "=" Any)
-#   .del(Numeric)
-#   .pop!::Any
-#   .push!(Any)
-#   .shift!::Any
-#   .unshift!(Any)
-#   .each(content(["Object"::Any "Index"::Numeric)])
-#   .map(content(["Object"::Any "Index"::Numeric)])
-#   .find(content(["Object"::Any "Index"::Numeric)])::Any
-#   .any?(content(["Object"::Any "Index"::Numeric)])::Boolean
-#   .none?(content(["Object"::Any "Index"::Numeric)])::Boolean
-#   .all?(content(["Object"::Any "Index"::Numeric)])::Boolean
-#   .sort_by(content(["Object"::Any "Index"::Numeric)])
-#   .sort_by!(content(["Object"::Any "Index"::Numeric)])
-#   .sort(["Ascending" "Descending" "Reverse" "Random"])
-#   .sort!(["Ascending" "Descending" "Reverse" "Random"])
-#   .sample::Any
-#   .min::Any
-#   .max::Any
-#   .sum::Any
-#   .join(String)::String
 # [List]
 #   #find(String|Numeric)
 #   #search(String)::Array
