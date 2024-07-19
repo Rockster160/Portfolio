@@ -87,14 +87,15 @@ class Jil::Executor
     # [ ] PromptQuestion
     # [ ] Task
     # [ ] Email
-    klass_name = obj if obj.is_a?(::Symbol) || obj.is_a?(::String)
-    klass_name ||= (
-      case obj.cast.to_sym
+    klass_name = obj.to_sym if obj.is_a?(::Symbol) || obj.is_a?(::String)
+    klass_name = obj[:class] if obj.is_a?(::Hash)
+    klass_name = (
+      case klass_name || obj.cast.to_sym
       # when :Hash then ::Hash # dig into the hash for special keys
       when :Hash, :Keyval then :Hash
       when :String, :Text then :String
       else
-        obj.class.to_sym
+        klass_name || obj.class.to_sym
       end
     )
     "::Jil::Methods::#{klass_name}".constantize

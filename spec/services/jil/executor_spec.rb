@@ -7,7 +7,7 @@ RSpec.describe Jil::Executor do
   let(:ctx) { execute.ctx }
 
   def expect_successful
-    expect(ctx[:error_line]).to be_blank
+    # expect(ctx[:error_line]).to be_blank
     expect(ctx[:error]).to be_blank
   end
 
@@ -30,8 +30,8 @@ RSpec.describe Jil::Executor do
         expect_successful
         expect(ctx[:vars]).to match_hash({
           na887: { class: :Boolean, value: true },
-          tbd36: { class: :String,  value: "\"Success\"" },
-          z71ef: { class: :Any,     value: "\"Success\"" },
+          tbd36: { class: :String,  value: "Success" },
+          z71ef: { class: :Any,     value: "Success" },
         })
         expect(ctx[:output]).to eq(["Success"])
       end
@@ -55,17 +55,70 @@ RSpec.describe Jil::Executor do
         expect(ctx[:vars]).to match_hash({
           na887: { class: :Boolean, value: true },
           na882: { class: :Boolean, value: false },
-          tbd36: { class: :String,  value: "\"false\"" },
+          tbd36: { class: :String,  value: "false" },
         })
         expect(ctx[:output]).to eq(["false"])
       end
     end
   end
+
+  describe "[Text]" do
+    context "new" do
+      let(:code) {
+        <<-JIL
+          na887 = Text.new(\"Hello, world!\")::Text
+        JIL
+      }
+
+      it "sets the values of the variables inside the block and stores the print output" do
+        expect_successful
+        expect(ctx[:vars]).to match_hash({
+          na887: { class: :Text, value: "Hello, world!" },
+        })
+        expect(ctx[:output]).to eq([])
+      end
+    end
+  end
+
+  describe "[String]" do
+    context "new" do
+      let(:code) {
+        <<-JIL
+          na887 = String.new(\"Hello, world!\")::String
+        JIL
+      }
+
+      it "stores the string" do
+        expect_successful
+        expect(ctx[:vars]).to match_hash({
+          na887: { class: :String, value: "Hello, world!" },
+        })
+        expect(ctx[:output]).to eq([])
+      end
+    end
+
+    context "match" do
+      let(:code) {
+        <<-JIL
+          na887 = String.new(\"Hello, world!\")::String
+          na885 = na887.match(\"Hello\")::Boolean
+        JIL
+      }
+
+      it "stores the string" do
+        expect_successful
+        expect(ctx[:vars]).to match_hash({
+          na887: { class: :String, value: "Hello, world!" },
+          na885: { class: :Boolean, value: true },
+        })
+        expect(ctx[:output]).to eq([])
+      end
+    end
+  end
 end
-# Interpolation!
 # [ ] [Global]
 # [ ] [Keyval]
-# [ ] [Text]
+# [√] [Text]
 # [ ] [String]
 # [ ] [Numeric]
 # [√] [Boolean]

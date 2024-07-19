@@ -38,7 +38,7 @@ class Jil::Parser
           end
         }
       }
-      line = Jil::Parser.new(commented, varname, objname, methodname, args, cast)
+      line = ::Jil::Parser.new(commented, varname, objname, methodname, args, cast)
     }#.tap { |vals|  }
   end
 
@@ -47,8 +47,8 @@ class Jil::Parser
     @varname = varname.to_sym
     @objname = objname.to_sym
     @methodname = methodname.to_sym
-    @cast = cast.to_sym
     @args = args
+    @cast = cast.to_sym
   end
 
   def commented?
@@ -57,5 +57,13 @@ class Jil::Parser
 
   def arg
     args.first
+  end
+
+  def cast_arg
+    cast_args.first
+  end
+
+  def cast_args
+    args.map { |arg|  }
   end
 end

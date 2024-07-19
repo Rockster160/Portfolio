@@ -25,4 +25,8 @@ class Jil::Methods::Base
   def evalargs(args)
     args.map { |arg| evalarg(arg) }
   end
+
+  def token_val(token)
+    @jil.ctx&.dig(:vars, token.to_sym, :value)
+  end
 end
