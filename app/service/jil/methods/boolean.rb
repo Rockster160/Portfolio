@@ -5,11 +5,11 @@ class Jil::Methods::Boolean < Jil::Methods::Base
 
   def execute(line)
     case line.methodname
-    when :new then line.arg
-    when :eq then evalarg(line.arg) == evalarg(line.args.last)
-    when :or then evalarg(line.arg) || evalarg(line.args.last)
-    when :and then evalarg(line.arg) && evalarg(line.args.last)
-    when :not then !evalarg(line.arg)
+    when :new then cast(line.arg)
+    when :eq then evalarg(line.args.first) == evalarg(line.args.last)
+    when :or then evalarg(line.args.first) || evalarg(line.args.last)
+    when :and then evalarg(line.args.first) && evalarg(line.args.last)
+    when :not then !evalarg(line.args.first)
     when :compare
       left, sign, right = evalargs(line.args)
       return unless sign.in?(["==", "!=", "<", "<=", ">", ">="])

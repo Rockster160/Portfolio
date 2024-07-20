@@ -7,8 +7,7 @@ RSpec.describe Jil::Executor do
   let(:ctx) { execute.ctx }
 
   def expect_successful
-    # expect(ctx[:error_line]).to be_blank
-    expect(ctx[:error]).to be_blank
+    expect([ctx[:error_line], ctx[:error]].compact.join("\n")).to be_blank
   end
 
   describe "[Global]" do
@@ -61,78 +60,6 @@ RSpec.describe Jil::Executor do
       end
     end
   end
-
-  describe "[Text]" do
-    context "new" do
-      let(:code) {
-        <<-JIL
-          na887 = Text.new(\"Hello, world!\")::Text
-        JIL
-      }
-
-      it "sets the values of the variables inside the block and stores the print output" do
-        expect_successful
-        expect(ctx[:vars]).to match_hash({
-          na887: { class: :Text, value: "Hello, world!" },
-        })
-        expect(ctx[:output]).to eq([])
-      end
-    end
-  end
-
-  describe "[String]" do
-    context "new" do
-      let(:code) {
-        <<-JIL
-          na887 = String.new(\"Hello, world!\")::String
-        JIL
-      }
-
-      it "stores the string" do
-        expect_successful
-        expect(ctx[:vars]).to match_hash({
-          na887: { class: :String, value: "Hello, world!" },
-        })
-        expect(ctx[:output]).to eq([])
-      end
-    end
-
-    context "match" do
-      let(:code) {
-        <<-JIL
-          na887 = String.new(\"Hello, world!\")::String
-          na885 = na887.match(\"Hello\")::Boolean
-        JIL
-      }
-
-      it "stores the string" do
-        expect_successful
-        expect(ctx[:vars]).to match_hash({
-          na887: { class: :String, value: "Hello, world!" },
-          na885: { class: :Boolean, value: true },
-        })
-        expect(ctx[:output]).to eq([])
-      end
-    end
-
-    context "scan" do
-      let(:code) {
-        <<-JIL
-          na887 = String.new(\"Hello, world!\")::String
-          na885 = na887.scan(\"Hello\")::Array
-        JIL
-      }
-
-      it "stores the string" do
-        expect_successful
-        expect(ctx[:vars]).to match_hash({
-          na887: { class: :String, value: "Hello, world!" },
-          na885: { class: :Array, value: ["Hello"] },
-        })
-        expect(ctx[:output]).to eq([])
-      end
-    end
-  end
 end
 # [ ] [Global]
 # [ ] [Keyval]
@@ -179,39 +106,6 @@ end
 #   #new(String ": " Any)
 # [Text]::textarea
 #   #new(Text)::String
-# [String]::text
-#   #new(Any)
-#   .match(String)
-#   .scan(String)::Array
-#   .split(String?)::Array
-#   .format(["lower" "upper" "squish" "capital" "pascal" "title" "snake" "camel" "base64"])
-#   .replace(String)
-#   .add("+" String)
-#   .length()::Numeric
-# [Numeric]::number
-#   #new(Any::Numeric)
-#   #pi(TAB "π" TAB)
-#   #e(TAB "e" TAB)
-#   #inf()
-#   #rand(Numeric:min Numeric:max Numeric?:figures)
-#   .round(Numeric(0))
-#   .floor
-#   .ceil
-#   .op(["+" "-" "*" "/" "^log"] Numeric)
-#   .abs
-#   .sqrt
-#   .squared
-#   .cubed
-#   .log(Numeric)
-#   .root(Numeric)
-#   .exp(Numeric)
-#   .zero?
-#   .even?
-#   .odd?
-#   .prime?
-#   .whole?
-#   .positive?
-#   .negative?
 # [Boolean]::checkbox
 #   #new(Any::Boolean)
 #   #eq(Any "==" Any)
