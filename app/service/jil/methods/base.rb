@@ -24,7 +24,7 @@ class Jil::Methods::Base
   end
 
   def evalargs(args)
-    args.map { |arg| evalarg(arg) }
+    Array.wrap(args).flatten.map { |arg| evalarg(arg) }
   end
 
   def token_val(token)
@@ -33,7 +33,7 @@ class Jil::Methods::Base
 
   def execute(line)
     case line.methodname
-    when :new then cast(line.arg)
+    when :new then cast(evalarg(line.arg))
     else
       if line.objname.match?(/^[A-Z]/)
         send(line.methodname, token_val(line.objname), *evalargs(line.args))

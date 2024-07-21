@@ -16,9 +16,9 @@ class Jil::Methods::Array < Jil::Methods::Base
     end
   end
 
-  def execute(line)
+  # def execute(line)
     # case line.methodname
-    # when :new then cast(line.arg)
+    # when :new then cast(evalarg(line.arg))
     # else
     #   if line.objname.match?(/^[A-Z]/)
     #     send(line.methodname, token_val(line.objname), *evalargs(line.args))
@@ -26,7 +26,7 @@ class Jil::Methods::Array < Jil::Methods::Base
     #     token_val(line.objname).send(line.methodname, *evalargs(line.args))
     #   end
     # end
-  end
+  # end
 end
 # [Array]
 # [ ] #new(content)

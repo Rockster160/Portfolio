@@ -1,4 +1,13 @@
 RSpec::Matchers.define :match_hash do |expected|
+  def format_hash(hash)
+    formatted = hash.map do |k, v|
+      formatted_value = v.is_a?(::Hash) ? format_hash(v) : v.inspect
+      formatted_key = k.is_a?(::Symbol) || k.is_a?(::String) ? k : k.inspect
+      "#{formatted_key}: #{formatted_value}"
+    end
+    "{ #{formatted.join(", ")} }"
+  end
+
   match do |actual|
     format_hash = lambda do |hash|
       hash.deep_stringify_keys.sort.to_h
@@ -11,11 +20,11 @@ RSpec::Matchers.define :match_hash do |expected|
   end
 
   failure_message do |actual|
-    "expected that #{actual} would match #{expected} ignoring key types and order"
+    "expected that \n    #{format_hash(actual)}\n would match \n    #{format_hash(expected)}\n ignoring key types and order"
   end
 
   failure_message_when_negated do |actual|
-    "expected that #{actual} would not match #{expected} ignoring key types and order"
+    "expected that \n    #{format_hash(actual)}\n would not match \n    #{format_hash(expected)}\n ignoring key types and order"
   end
 
   description do

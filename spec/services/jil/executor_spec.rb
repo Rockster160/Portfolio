@@ -106,13 +106,6 @@ end
 #   #new(String ": " Any)
 # [Text]::textarea
 #   #new(Text)::String
-# [Boolean]::checkbox
-#   #new(Any::Boolean)
-#   #eq(Any "==" Any)
-#   #or(Any "||" Any)
-#   #and(Any "&&" Any)
-#   #not("NOT" Any)
-#   #compare(Any ["==" "!=" ">" "<" ">=" "<="] Any)
 # [Duration]
 #   #new(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
 #   .add(Duration)
@@ -124,21 +117,6 @@ end
 #   .adjust(["+", "-"], Duration|Numeric)
 #   .round("TO" ["beginning" "end"] "OF" ["second" "minute" "hour" "day" "week" "month" "year"])
 #   .format(String)::String
-# [Hash]
-#   #new(content(Keyval [Keyval.new]))
-#   #keyval(String Any)::Keyval
-#   .length::Numeric
-#   .dig(content(String [String.new]))::Any
-#   .merge(Hash)
-#   .keys::Array
-#   .get(String)::Any
-#   .set(String "=" Any)
-#   .del(String)
-#   .each(content(["Key"::String "Value"::Any "Index"::Numeric)])
-#   .map(content(["Key"::String "Value"::Any "Index"::Numeric)])::Array
-#   .any?(content(["Key"::String "Value"::Any "Index"::Numeric)])::Boolean
-#   .none?(content(["Key"::String "Value"::Any "Index"::Numeric)])::Boolean
-#   .all?(content(["Key"::String "Value"::Any "Index"::Numeric)])::Boolean
 # [List]
 #   #find(String|Numeric)
 #   #search(String)::Array

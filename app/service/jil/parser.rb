@@ -40,7 +40,7 @@ class Jil::Parser
           end
         }
       }
-      line = ::Jil::Parser.new(commented, varname, objname, methodname, args, cast)
+      ::Jil::Parser.new(commented, varname, objname, methodname, args, cast)
     }#.tap { |vals|  }
   end
 
@@ -49,7 +49,7 @@ class Jil::Parser
     @varname = varname.to_sym
     @objname = objname.to_sym
     @methodname = methodname.to_sym
-    @args = args
+    @args = Array.wrap(args)
     @cast = cast.to_sym
   end
 
