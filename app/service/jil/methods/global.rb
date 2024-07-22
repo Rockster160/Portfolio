@@ -23,6 +23,9 @@ class Jil::Methods::Global < Jil::Methods::Base
         @jil.ctx[:output] << ::Jil::Methods::String.new(@jil, @ctx).cast(str).gsub(/^"|"$/, "")
       }
     when :comment then evalarg(line.arg)
+    when :Key then @ctx[:key]
+    when :Index then @ctx[:index]
+    when :Value then @ctx[:value]
     else send(line.methodname, line.args)
     end
   end
@@ -36,7 +39,7 @@ end
 # [~]   #return(Any?)
 # [~]   #if("IF" content "DO" content "ELSE" content)::Any
 # [ ]   #get(String)::Any // Variable reference
-# [ ]   #set(String "=" Any)::Any
+# [ ]   #set!(String "=" Any)::Any
 # [ ]   #get_cache(String)::Any // Could Cache.get be a non-object Class? Doesn't show up in return-types, but is still a class for organization
 # [ ]   #set_cache(String "=" Any)::Any
 # [~]   #exit

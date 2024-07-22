@@ -88,7 +88,7 @@ end
 #   #return(Any?)
 #   #if("IF" content "DO" content "ELSE" content)::Any
 #   #get(String)::Any // Variable reference
-#   #set(String "=" Any)::Any
+#   #set!(String "=" Any)::Any
 #   #get_cache(String)::Any // Could Cache.get be a non-object Class? Doesn't show up in return-types, but is still a class for organization
 #   #set_cache(String "=" Any)::Any
 #   #exit

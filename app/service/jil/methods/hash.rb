@@ -21,6 +21,18 @@ class Jil::Methods::Hash < Jil::Methods::Base
   def execute(line)
     case line.methodname
     when :new, :keyHash then hash_wrap(evalargs(line.args))
+    when :get then token_val(line.objname).dig(*evalargs(line.args))
+    when :set!
+      token = line.objname.to_sym
+      @jil.ctx[:vars][token] ||= { class: :Hash, value: nil }
+      @jil.ctx[:vars][token][:value] = token_val(line.objname).merge(hash_wrap(evalargs(line.args)))
+    when :del!
+      token = line.objname.to_sym
+      @jil.ctx[:vars][token] ||= { class: :Hash, value: nil }
+      @jil.ctx[:vars][token][:value].delete(evalarg(line.arg))
+      @jil.ctx[:vars][token][:value]
+    when :filter
+      @jil.enumerate_hash(token_val(line.objname), :filter) { |ctx| evalarg(line.arg, ctx) }
     else
       if line.objname.match?(/^[A-Z]/)
         send(line.methodname, token_val(line.objname), *evalargs(line.args))
@@ -50,8 +62,8 @@ end
 #   .merge(Hash)
 #   .keys::Array
 #   .get(String)::Any
-#   .set(String "=" Any)
-#   .del(String)
+#   .set!(String "=" Any)
+#   .del!(String)
 #   .each(content(["Key"::String "Value"::Any "Index"::Numeric)])
 #   .map(content(["Key"::String "Value"::Any "Index"::Numeric)])::Array
 #   .any?(content(["Key"::String "Value"::Any "Index"::Numeric)])::Boolean

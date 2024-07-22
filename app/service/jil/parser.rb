@@ -13,7 +13,7 @@ class Jil::Parser
     \s*(?<commented>\#)?\s*
     (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
     (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
-    \.(?<methodname>[_0-9A-Za-z]+)
+    \.(?<methodname>[_0-9A-Za-z]+[!?]?)
     (?<args>\[[a-z0-9]{2}-[a-z0-9]{2}-[a-z0-9]{2}-[a-z0-9]{2}\])
     ::(?<cast>[A-Z][_0-9A-Za-z]*)
   /xm
@@ -41,7 +41,9 @@ class Jil::Parser
         }
       }
       ::Jil::Parser.new(commented, varname, objname, methodname, args, cast)
-    }#.tap { |vals|  }
+    }.tap { |vals|
+      # binding.pry
+    }
   end
 
   def initialize(commented, varname, objname, methodname, args, cast)

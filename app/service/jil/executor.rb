@@ -15,7 +15,7 @@ class Jil::Executor
     @ctx[:time_start] = Time.current
     begin
       execute_block(@lines)
-    # rescue JilExecutionError => e
+    # rescue ::Jil::ExecutionError => e
     #   @ctx[:error] = e.message
     rescue => e
       @ctx[:error] = "[#{e.class}] #{e.message}"
@@ -44,11 +44,29 @@ class Jil::Executor
     last_line_val
   end
 
+  def enumerate_hash(hash, method, &block)
+    ctx = { break: false, next: false, state: :running }
+    hash.send(method).with_index do |(key, val), idx|
+      break unless @ctx[:state] == :running
+      break unless ctx[:state] == :running
+      next (ctx[:next] = false) if ctx[:break] || ctx[:next]
+
+      ctx[:key] = key
+      ctx[:value] = val
+      ctx[:index] = idx
+
+      yield(ctx)
+    end
+  end
+
   def execute_line(line, current_ctx={})
     klass = (
       if line.objname.match?(/^[A-Z]/) # upcase for class or downcase for instance
         klass_from_obj(line.objname)
       else
+        unless @ctx&.dig(:vars)&.key?(line.objname.to_sym)
+          raise ::Jil::ExecutionError, "Unfound line `#{line.objname.to_sym}`"
+        end
         klass_from_obj(@ctx.dig(:vars, line.objname.to_sym))
       end
     )
@@ -99,5 +117,7 @@ class Jil::Executor
       end
     )
     "::Jil::Methods::#{klass_name}".constantize
+  rescue NameError
+    raise ::Jil::ExecutionError, "Class does not exist: `#{klass_name}`"
   end
 end

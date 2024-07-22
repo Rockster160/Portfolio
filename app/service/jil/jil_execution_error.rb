@@ -1,1 +1,0 @@
-class JilExecutionError < StandardError; end
