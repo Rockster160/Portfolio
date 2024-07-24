@@ -46,7 +46,7 @@ class Jil::Executor
 
   def enumerate_hash(hash, method, &block)
     ctx = { break: false, next: false, state: :running }
-    hash.send(method).with_index do |(key, val), idx|
+    hash.each_with_index.send(method) do |(key, val), idx|
       break unless @ctx[:state] == :running
       break unless ctx[:state] == :running
       next (ctx[:next] = false) if ctx[:break] || ctx[:next]

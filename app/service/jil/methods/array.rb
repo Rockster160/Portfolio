@@ -1,5 +1,6 @@
 class Jil::Methods::Array < Jil::Methods::Base
   def cast(value)
+    load("/Users/rocco/.pryrc"); source_puts "#{value.class}:\n  #{value.inspect}"
     case value
     when ::Hash then value.to_a
     else ::Array.wrap(value)
@@ -16,42 +17,32 @@ class Jil::Methods::Array < Jil::Methods::Base
     end
   end
 
-  # def execute(line)
-    # case line.methodname
-    # when :new then cast(evalarg(line.arg))
-    # else
-    #   if line.objname.match?(/^[A-Z]/)
-    #     send(line.methodname, token_val(line.objname), *evalargs(line.args))
-    #   else
-    #     token_val(line.objname).send(line.methodname, *evalargs(line.args))
-    #   end
-    # end
-  # end
+  def execute(line)
+    case line.methodname
+    when :new then evalargs(line.args)
+    # when :new, :keyHash then hash_wrap(evalargs(line.args))
+    # when :get then token_val(line.objname).dig(*evalargs(line.args))
+    # when :set!
+    #   token = line.objname.to_sym
+    #   @jil.ctx[:vars][token] ||= { class: :Hash, value: nil }
+    #   @jil.ctx[:vars][token][:value] = token_val(line.objname).merge(hash_wrap(evalargs(line.args)))
+    # when :del!
+    #   token = line.objname.to_sym
+    #   @jil.ctx[:vars][token] ||= { class: :Hash, value: nil }
+    #   @jil.ctx[:vars][token][:value].delete(evalarg(line.arg))
+    #   @jil.ctx[:vars][token][:value]
+    # when :each, :map, :any?, :none?, :all?
+    #   @jil.enumerate_hash(token_val(line.objname), line.methodname) { |ctx| evalarg(line.arg, ctx) }
+    # when :filter
+    #   @jil.enumerate_hash(token_val(line.objname), line.methodname) { |ctx|
+    #     evalarg(line.arg, ctx)
+    #   }.to_h { |(k,v),i| [k,v] }
+    else
+      if line.objname.match?(/^[A-Z]/)
+        send(line.methodname, token_val(line.objname), *evalargs(line.args))
+      else
+        token_val(line.objname).send(line.methodname, *evalargs(line.args))
+      end
+    end
+  end
 end
-# [Array]
-# [ ] #new(content)
-# [ ] #from_length(Numeric)
-# [ ] .length::Numeric
-# [ ] .merge
-# [ ] .get(Numeric)::Any
-# [ ] .set(Numeric "=" Any)
-# [ ] .del(Numeric)
-# [ ] .pop!::Any
-# [ ] .push!(Any)
-# [ ] .shift!::Any
-# [ ] .unshift!(Any)
-# [ ] .each(content(["Object"::Any "Index"::Numeric)])
-# [ ] .map(content(["Object"::Any "Index"::Numeric)])
-# [ ] .find(content(["Object"::Any "Index"::Numeric)])::Any
-# [ ] .any?(content(["Object"::Any "Index"::Numeric)])::Boolean
-# [ ] .none?(content(["Object"::Any "Index"::Numeric)])::Boolean
-# [ ] .all?(content(["Object"::Any "Index"::Numeric)])::Boolean
-# [ ] .sort_by(content(["Object"::Any "Index"::Numeric)])
-# [ ] .sort_by!(content(["Object"::Any "Index"::Numeric)])
-# [ ] .sort(["Ascending" "Descending" "Reverse" "Random"])
-# [ ] .sort!(["Ascending" "Descending" "Reverse" "Random"])
-# [ ] .sample::Any
-# [ ] .min::Any
-# [ ] .max::Any
-# [ ] .sum::Any
-# [ ] .join(String)::String

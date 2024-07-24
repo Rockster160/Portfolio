@@ -31,8 +31,12 @@ class Jil::Methods::Hash < Jil::Methods::Base
       @jil.ctx[:vars][token] ||= { class: :Hash, value: nil }
       @jil.ctx[:vars][token][:value].delete(evalarg(line.arg))
       @jil.ctx[:vars][token][:value]
+    when :each, :map, :any?, :none?, :all?
+      @jil.enumerate_hash(token_val(line.objname), line.methodname) { |ctx| evalarg(line.arg, ctx) }
     when :filter
-      @jil.enumerate_hash(token_val(line.objname), :filter) { |ctx| evalarg(line.arg, ctx) }
+      @jil.enumerate_hash(token_val(line.objname), line.methodname) { |ctx|
+        evalarg(line.arg, ctx)
+      }.to_h { |(k,v),i| [k,v] }
     else
       if line.objname.match?(/^[A-Z]/)
         send(line.methodname, token_val(line.objname), *evalargs(line.args))
