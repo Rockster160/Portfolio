@@ -25,7 +25,7 @@ RSpec.describe Jil::Methods::Hash do
   #   .length::Numeric
   #   .merge(Hash)
   #   .keys::Array
-  #   .dig(content(String [String.new]))::Any
+  #   .dig(content(String|Numeric [String.new Numeric.new]))::Any
   #   .get(String)::Any
   #   .set!(String "=" Any)
   #   .del!(String)

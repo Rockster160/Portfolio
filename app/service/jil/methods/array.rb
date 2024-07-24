@@ -18,8 +18,10 @@ class Jil::Methods::Array < Jil::Methods::Base
   end
 
   def execute(line)
+    load("/Users/rocco/.pryrc"); source_puts line.inspect
     case line.methodname
     when :new then evalargs(line.args)
+    when :from_length then ::Array.new(@jil.cast(evalarg(line.arg), :Numeric))
     # when :new, :keyHash then hash_wrap(evalargs(line.args))
     # when :get then token_val(line.objname).dig(*evalargs(line.args))
     # when :set!
