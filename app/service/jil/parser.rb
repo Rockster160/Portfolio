@@ -36,7 +36,11 @@ class Jil::Parser
           elsif piece.starts_with?("\"") && piece.ends_with?("\"")
             piece[1..-2]
           else
-            piece
+            begin
+              ::JSON.parse(piece) rescue piece
+            rescue JSON::ParserError => e
+              piece
+            end
           end
         }
       }
