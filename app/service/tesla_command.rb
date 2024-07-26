@@ -21,7 +21,6 @@ module TeslaCommand
   end
 
   def command(original_cmd, original_opt=nil, quick=false)
-    return # Disable for Japan
     return if Rails.env.development? && !quick
 
     broadcast(loading: true)
