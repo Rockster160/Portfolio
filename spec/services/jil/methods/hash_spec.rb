@@ -15,7 +15,9 @@ RSpec.describe Jil::Methods::Hash do
   let(:ctx) { execute.ctx }
 
   def expect_successful
-    # load("/Users/rocco/.pryrc"); source_puts [ctx[:error_line], ctx[:error]].compact.join("\n")
+    if ctx[:error_line].present?
+      load("/Users/rocco/.pryrc"); source_puts [ctx[:error_line], ctx[:error]].compact.join("\n")
+    end
     expect([ctx[:error_line], ctx[:error]].compact.join("\n")).to be_blank
   end
 
