@@ -126,7 +126,7 @@ class AddressBook
     loc ||= current_loc
     return if name.blank? || loc.compact.blank?
 
-    nonnil_cache("nearest_from_name(#{name},#{loc.join(",")})") {
+    Rails.cache.fetch("nearest_from_name(#{name},#{loc.join(",")})") {
       ::PrettyLogger.info("\b[AddressCache] Nearest name #{name},#{loc.join(",")}")
       params = {
         input: name,
