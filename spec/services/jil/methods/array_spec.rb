@@ -40,7 +40,7 @@ RSpec.describe Jil::Methods::Hash do
   #   .max::Numeric
   #   .sum::Numeric
   #   .join(String)::String
-  #   .filter(content(["Object"::Any "Index"::Numeric]))::Array
+  #   .select(content(["Object"::Any "Index"::Numeric]))::Array
   #   .each(content(["Object"::Any "Index"::Numeric]))
   #   .map(content(["Object"::Any "Index"::Numeric]))
   #   .find(content(["Object"::Any "Index"::Numeric]))::Any
@@ -525,258 +525,416 @@ RSpec.describe Jil::Methods::Hash do
     end
   end
 
-  # context ".sum" do
-  #   let(:code) {
-  #     <<-JIL
-  #       r5ee3 = Array.new({
-  #         xfaea = Numeric.new(32)::Numeric
-  #         xfaeb = Numeric.new(16)::Numeric
-  #         xfaec = Numeric.new(47)::Numeric
-  #       })::Array
-  #     JIL
-  #   }
-  #   before do
-  #     code << "r817a = r5ee3.sum()::Numeric"
-  #   end
-  #
-  #   it "adds all of the values together" do
-  #     expect_successful
-  #     expect(ctx.dig(:vars)).to match_hash({
-  #       xfaea: { class: :Numeric, value: 32 },
-  #       xfaeb: { class: :Numeric, value: 16 },
-  #       xfaec: { class: :Numeric, value: 47 },
-  #       r5ee3: { class: :Array, value: [32, 16, 47] },
-  #       r817a: { class: :Numeric, value: 95 },
-  #     })
-  #     expect(ctx[:output]).to eq([])
-  #   end
-  # end
+  context ".join" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+      JIL
+    }
+    before do
+      code << "r817a = r5ee3.join(\", \")::String"
+    end
 
-  # context ".set!" do
-  #   before do
-  #     code << "r817a = r5ee3.set!(\"foo\", \"bing\")::Hash\n"
-  #     code << "r817b = r5ee3.set!(\"stuff\", \"item\")::Hash\n"
-  #   end
-  #
-  #   it "sets the value of the specified key" do
-  #     expect_successful
-  #     expect(ctx.dig(:vars)).to match_hash({
-  # rb9ed: { class: :String, value: "Hello, World!" },
-  # ydfcd: { class: :Boolean, value: false },
-  # xfaed: { class: :Numeric, value: 47 },
-  # r5ee3: { class: :Array, value: ["Hello, World!", false, 47] },
-  #       bad73: { class: :Keyval, value: { foo: "bar" } },
-  #       o9d36: { class: :Keyval, value: { hi: "low" } },
-  #       l0033: { class: :Keyval, value: { k: "bai" } },
-  #       r5ee3: { class: :Hash, value: { foo: "bing", hi: "low", k: "bai", stuff: "item" } },
-  #       r817a: { class: :Hash, value: { foo: "bing", hi: "low", k: "bai" } },
-  #       r817b: { class: :Hash, value: { foo: "bing", hi: "low", k: "bai", stuff: "item" } },
-  #     })
-  #     expect(ctx[:output]).to eq([])
-  #   end
-  # end
-  #
-  # context ".del!" do
-  #   before do
-  #     code << "r817a = r5ee3.del!(\"foo\")::Hash\n"
-  #   end
-  #
-  #   it "removes the key/value pair from the hash by key" do
-  #     expect_successful
-  #     expect(ctx.dig(:vars)).to match_hash({
-  # rb9ed: { class: :String, value: "Hello, World!" },
-  # ydfcd: { class: :Boolean, value: false },
-  # xfaed: { class: :Numeric, value: 47 },
-  # r5ee3: { class: :Array, value: ["Hello, World!", false, 47] },
-  #       bad73: { class: :Keyval, value: { foo: "bar" } },
-  #       o9d36: { class: :Keyval, value: { hi: "low" } },
-  #       l0033: { class: :Keyval, value: { k: "bai" } },
-  #       r5ee3: { class: :Hash, value: { hi: "low", k: "bai"} },
-  #       r817a: { class: :Hash, value: { hi: "low", k: "bai" } },
-  #     })
-  #     expect(ctx[:output]).to eq([])
-  #   end
-  # end
-  #
-  # context ".filter" do
-  #   before do
-  #     code << <<-JIL
-  #       hd4c1 = r5ee3.filter({
-  #         lf3d2 = Global.Index()::Numeric
-  #         ee0d3 = Boolean.compare(lf3d2, ">", "0")::Boolean
-  #       })::Hash
-  #     JIL
-  #   end
-  #
-  #   it "returns the new hash based on passing conditions" do
-  #     expect_successful
-  #     expect(ctx.dig(:vars)).to match_hash({
-  # rb9ed: { class: :String, value: "Hello, World!" },
-  # ydfcd: { class: :Boolean, value: false },
-  # xfaed: { class: :Numeric, value: 47 },
-  # r5ee3: { class: :Array, value: ["Hello, World!", false, 47] },
-  #       bad73: { class: :Keyval, value: { foo: "bar" } },
-  #       o9d36: { class: :Keyval, value: { hi: "low" } },
-  #       l0033: { class: :Keyval, value: { k: "bai" } },
-  #       r5ee3: { class: :Hash, value: { foo: "bar", hi: "low", k: "bai"} },
-  #       lf3d2: { class: :Numeric, value: 2 },
-  #       ee0d3: { class: :Boolean, value: true },
-  #       hd4c1: { class: :Hash, value: { hi: "low", k: "bai" } },
-  #     })
-  #     expect(ctx[:output]).to eq([])
-  #   end
-  # end
-  #
-  # context ".map" do
-  #   before do
-  #     code << <<-JIL
-  #       hd4c1 = r5ee3.map({
-  #         lf3d2 = Global.Index()::Numeric
-  #         ee0d3 = Boolean.compare(lf3d2, ">", "0")::Boolean
-  #       })::Array
-  #     JIL
-  #   end
-  #
-  #   it "returns an array of the values from each block" do
-  #     expect_successful
-  #     expect(ctx.dig(:vars)).to match_hash({
-  # rb9ed: { class: :String, value: "Hello, World!" },
-  # ydfcd: { class: :Boolean, value: false },
-  # xfaed: { class: :Numeric, value: 47 },
-  # r5ee3: { class: :Array, value: ["Hello, World!", false, 47] },
-  #       bad73: { class: :Keyval, value: { foo: "bar" } },
-  #       o9d36: { class: :Keyval, value: { hi: "low" } },
-  #       l0033: { class: :Keyval, value: { k: "bai" } },
-  #       r5ee3: { class: :Hash, value: { foo: "bar", hi: "low", k: "bai"} },
-  #       lf3d2: { class: :Numeric, value: 2 },
-  #       ee0d3: { class: :Boolean, value: true },
-  #       hd4c1: { class: :Array, value: [false, true, true] },
-  #     })
-  #     expect(ctx[:output]).to eq([])
-  #   end
-  # end
-  #
-  # context ".any?" do
-  #   before do
-  #     code << <<-JIL
-  #       hd4c1 = r5ee3.any?({
-  #         v3b3f = Global.Value()::String
-  #         mb1a3 = v3b3f.length()::Numeric
-  #         ee0d3 = Boolean.compare(mb1a3, ">", "2")::Boolean
-  #       })::Boolean
-  #     JIL
-  #   end
-  #
-  #   it "returns truthiness if there is any matching condition" do
-  #     expect_successful
-  #     expect(ctx.dig(:vars)).to match_hash({
-  # rb9ed: { class: :String, value: "Hello, World!" },
-  # ydfcd: { class: :Boolean, value: false },
-  # xfaed: { class: :Numeric, value: 47 },
-  # r5ee3: { class: :Array, value: ["Hello, World!", false, 47] },
-  #       bad73: { class: :Keyval, value: { foo: "bar" } },
-  #       o9d36: { class: :Keyval, value: { hi: "low" } },
-  #       l0033: { class: :Keyval, value: { k: "bai" } },
-  #       r5ee3: { class: :Hash, value: { foo: "bar", hi: "low", k: "bai"} },
-  #       v3b3f: { class: :String, value: "bar" },
-  #       mb1a3: { class: :Numeric, value: 3 },
-  #       ee0d3: { class: :Boolean, value: true },
-  #       hd4c1: { class: :Boolean, value: true },
-  #     })
-  #     expect(ctx[:output]).to eq([])
-  #   end
-  # end
-  #
-  # context ".none?" do
-  #   before do
-  #     code << <<-JIL
-  #       hd4c1 = r5ee3.none?({
-  #         v3b3f = Global.Value()::String
-  #         mb1a3 = v3b3f.length()::Numeric
-  #         ee0d3 = Boolean.compare(mb1a3, ">", "2")::Boolean
-  #       })::Boolean
-  #     JIL
-  #   end
-  #
-  #   it "returns truthiness if there is any matching condition" do
-  #     expect_successful
-  #     expect(ctx.dig(:vars)).to match_hash({
-  # rb9ed: { class: :String, value: "Hello, World!" },
-  # ydfcd: { class: :Boolean, value: false },
-  # xfaed: { class: :Numeric, value: 47 },
-  # r5ee3: { class: :Array, value: ["Hello, World!", false, 47] },
-  #       bad73: { class: :Keyval, value: { foo: "bar" } },
-  #       o9d36: { class: :Keyval, value: { hi: "low" } },
-  #       l0033: { class: :Keyval, value: { k: "bai" } },
-  #       r5ee3: { class: :Hash, value: { foo: "bar", hi: "low", k: "bai"} },
-  #       v3b3f: { class: :String, value: "bar" },
-  #       mb1a3: { class: :Numeric, value: 3 },
-  #       ee0d3: { class: :Boolean, value: true },
-  #       hd4c1: { class: :Boolean, value: false },
-  #     })
-  #     expect(ctx[:output]).to eq([])
-  #   end
-  # end
-  #
-  # context ".all?" do
-  #   before do
-  #     code << <<-JIL
-  #       hd4c1 = r5ee3.all?({
-  #         v3b3f = Global.Value()::String
-  #         mb1a3 = v3b3f.length()::Numeric
-  #         ee0d3 = Boolean.compare(mb1a3, ">", "2")::Boolean
-  #       })::Boolean
-  #     JIL
-  #   end
-  #
-  #   it "returns truthiness if there is any matching condition" do
-  #     expect_successful
-  #     expect(ctx.dig(:vars)).to match_hash({
-  # rb9ed: { class: :String, value: "Hello, World!" },
-  # ydfcd: { class: :Boolean, value: false },
-  # xfaed: { class: :Numeric, value: 47 },
-  # r5ee3: { class: :Array, value: ["Hello, World!", false, 47] },
-  #       bad73: { class: :Keyval, value: { foo: "bar" } },
-  #       o9d36: { class: :Keyval, value: { hi: "low" } },
-  #       l0033: { class: :Keyval, value: { k: "bai" } },
-  #       r5ee3: { class: :Hash, value: { foo: "bar", hi: "low", k: "bai"} },
-  #       v3b3f: { class: :String, value: "bai" },
-  #       mb1a3: { class: :Numeric, value: 3 },
-  #       ee0d3: { class: :Boolean, value: true },
-  #       hd4c1: { class: :Boolean, value: true },
-  #     })
-  #     expect(ctx[:output]).to eq([])
-  #   end
-  # end
-  #
-  # context ".each" do
-  #   before do
-  #     code << <<-JIL
-  #       hd4c1 = r5ee3.each({
-  #         v3b3f = Global.Value()::String
-  #         mb1a3 = v3b3f.length()::Numeric
-  #         ee0d3 = Boolean.compare(mb1a3, ">", "2")::Boolean
-  #       })::Boolean
-  #     JIL
-  #   end
-  #
-  #   it "returns truthiness if there is any matching condition" do
-  #     expect_successful
-  #     expect(ctx.dig(:vars)).to match_hash({
-  # rb9ed: { class: :String, value: "Hello, World!" },
-  # ydfcd: { class: :Boolean, value: false },
-  # xfaed: { class: :Numeric, value: 47 },
-  # r5ee3: { class: :Array, value: ["Hello, World!", false, 47] },
-  #       bad73: { class: :Keyval, value: { foo: "bar" } },
-  #       o9d36: { class: :Keyval, value: { hi: "low" } },
-  #       l0033: { class: :Keyval, value: { k: "bai" } },
-  #       r5ee3: { class: :Hash, value: { foo: "bar", hi: "low", k: "bai"} },
-  #       v3b3f: { class: :String, value: "bai" },
-  #       mb1a3: { class: :Numeric, value: 3 },
-  #       ee0d3: { class: :Boolean, value: true },
-  #       hd4c1: { class: :Boolean, value: true },
-  #     })
-  #     expect(ctx[:output]).to eq([])
-  #   end
-  # end
+    it "adds all of the values together" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        r817a: { class: :String, value: "32, 16, 47" },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".select" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.select({
+          d5ab6 = Global.Object()::Numeric
+          xf68d = Boolean.compare(d5ab6, ">", "20")::Boolean
+        })::Array
+      JIL
+    }
+
+    it "returns a new array with only the matching values" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        d5ab6: { class: :Numeric, value: 47 },
+        xf68d: { class: :Boolean, value: true },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        nba83: { class: :Array, value: [32, 47] },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".map" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.map({
+          d5ab6 = Global.Object()::Numeric
+          b7ad4 = d5ab6.op("*", 2)::Numeric
+        })::Array
+      JIL
+    }
+
+    it "returns a new array with the modified values" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        d5ab6: { class: :Numeric, value: 47 },
+        b7ad4: { class: :Numeric, value: 94 },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        nba83: { class: :Array, value: [64, 32, 94] },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".find" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.find({
+          d5ab6 = Global.Object()::Numeric
+          xf68d = Boolean.compare(d5ab6, "<", "20")::Boolean
+        })::Any
+      JIL
+    }
+
+    it "returns first object that matches" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        d5ab6: { class: :Numeric, value: 16 },
+        xf68d: { class: :Boolean, value: true },
+        nba83: { class: :Any, value: 16 },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".any?" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.any?({
+          d5ab6 = Global.Object()::Numeric
+          xf68d = Boolean.compare(d5ab6, "<", "20")::Boolean
+        })::Boolean
+      JIL
+    }
+
+    it "returns first object that matches" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        d5ab6: { class: :Numeric, value: 16 },
+        xf68d: { class: :Boolean, value: true },
+        nba83: { class: :Boolean, value: true },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".none?" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.none?({
+          d5ab6 = Global.Object()::Numeric
+          xf68d = Boolean.compare(d5ab6, "<", "20")::Boolean
+        })::Boolean
+      JIL
+    }
+
+    it "returns first object that matches" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        d5ab6: { class: :Numeric, value: 16 },
+        xf68d: { class: :Boolean, value: true },
+        nba83: { class: :Boolean, value: false },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".all?" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.all?({
+          d5ab6 = Global.Object()::Numeric
+          xf68d = Boolean.compare(d5ab6, ">", "20")::Boolean
+        })::Boolean
+      JIL
+    }
+
+    it "returns first object that matches" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        d5ab6: { class: :Numeric, value: 16 },
+        xf68d: { class: :Boolean, value: false },
+        nba83: { class: :Boolean, value: false },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".sort_by" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.sort_by({
+          d5ab6 = Global.Object()::Numeric
+        })::Array
+      JIL
+    }
+
+    it "returns a new array with only the matching values" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        d5ab6: { class: :Numeric, value: 47 },
+        nba83: { class: :Array, value: [16, 32, 47] },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".sort_by!" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.sort_by!({
+          d5ab6 = Global.Object()::Numeric
+        })::Array
+      JIL
+    }
+
+    it "returns a new array with only the matching values" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: [16, 32, 47] },
+        d5ab6: { class: :Numeric, value: 47 },
+        nba83: { class: :Array, value: [16, 32, 47] },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".sort Ascending" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.sort("Ascending")::Array
+      JIL
+    }
+
+    it "sorts array by Ascending" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        nba83: { class: :Array, value: [16, 32, 47] },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".sort Descending" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.sort("Descending")::Array
+      JIL
+    }
+
+    it "sorts array by Descending" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        nba83: { class: :Array, value: [47, 32, 16] },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".sort Reverse" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.sort("Reverse")::Array
+      JIL
+    }
+
+    it "sorts array by Reverse" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        nba83: { class: :Array, value: [47, 16, 32] },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".sort Random" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.sort("Random")::Array
+      JIL
+    }
+
+    it "sorts array by Random" do
+      expect_successful
+      expect(ctx.dig(:vars, :nba83, :value).sort).to match_array([16, 32, 47])
+
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".sort! Ascending" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.sort!("Ascending")::Array
+      JIL
+    }
+
+    it "sorts array by Ascending in place" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: [16, 32, 47] },
+        nba83: { class: :Array, value: [16, 32, 47] },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".each" do
+    let(:code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          xfaea = Numeric.new(32)::Numeric
+          xfaeb = Numeric.new(16)::Numeric
+          xfaec = Numeric.new(47)::Numeric
+        })::Array
+        nba83 = r5ee3.each({
+          d5ab6 = Global.Object()::Numeric
+          b7ad4 = d5ab6.op("*", 2)::Numeric
+        })::Array
+      JIL
+    }
+
+    it "returns a new array with the modified values" do
+      expect_successful
+      expect(ctx.dig(:vars)).to match_hash({
+        xfaea: { class: :Numeric, value: 32 },
+        xfaeb: { class: :Numeric, value: 16 },
+        xfaec: { class: :Numeric, value: 47 },
+        d5ab6: { class: :Numeric, value: 47 },
+        b7ad4: { class: :Numeric, value: 94 },
+        r5ee3: { class: :Array, value: [32, 16, 47] },
+        nba83: { class: :Array, value: [32, 16, 47] },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
 end

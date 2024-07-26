@@ -1,6 +1,5 @@
 class Jil::Methods::Array < Jil::Methods::Base
   def cast(value)
-    load("/Users/rocco/.pryrc"); source_puts "#{value.class}:\n  #{value.inspect}"
     case value
     when ::Hash then value.to_a
     else ::Array.wrap(value)
@@ -17,9 +16,9 @@ class Jil::Methods::Array < Jil::Methods::Base
     end
   end
 
-  def execute(line)
-    load("/Users/rocco/.pryrc"); source_puts line.inspect
-    case line.methodname
+  def execute(line, method=nil)
+    method ||= line.methodname
+    case method
     when :new then evalargs(line.args)
     when :from_length then ::Array.new(@jil.cast(evalarg(line.arg), :Numeric))
     when :combine then token_val(line.objname) + cast(evalarg(line.arg))
@@ -41,32 +40,34 @@ class Jil::Methods::Array < Jil::Methods::Base
       arr[@jil.cast(idx, :Numeric)] = val
       arr
     when :del! then token_val(line.objname).delete_at(@jil.cast(evalarg(line.arg), :Numeric))
-      # idx, val = *evalargs(line.args)
-      # arr =
-      # arr[] = val
-      # arr
-    # when :new, :keyHash then hash_wrap(evalargs(line.args))
-    # when :get then token_val(line.objname).dig(*evalargs(line.args))
-    # when :set!
-      # token = line.objname.to_sym
-    #   @jil.ctx[:vars][token] ||= { class: :Hash, value: nil }
-    #   @jil.ctx[:vars][token][:value] = token_val(line.objname).merge(hash_wrap(evalargs(line.args)))
-    # when :del!
-    #   token = line.objname.to_sym
-    #   @jil.ctx[:vars][token] ||= { class: :Hash, value: nil }
-    #   @jil.ctx[:vars][token][:value].delete(evalarg(line.arg))
-    #   @jil.ctx[:vars][token][:value]
-    # when :each, :map, :any?, :none?, :all?
-    #   @jil.enumerate_hash(token_val(line.objname), line.methodname) { |ctx| evalarg(line.arg, ctx) }
-    # when :filter
-    #   @jil.enumerate_hash(token_val(line.objname), line.methodname) { |ctx|
-    #     evalarg(line.arg, ctx)
-    #   }.to_h { |(k,v),i| [k,v] }
+    when :each, :map, :any?, :none?, :all?
+      @jil.enumerate_array(token_val(line.objname), method) { |ctx| evalarg(line.arg, ctx) }
+    when :select, :sort_by
+      @jil.enumerate_array(token_val(line.objname), method) { |ctx|
+        evalarg(line.arg, ctx)
+      }.map(&:first)
+    when :sort
+      token_val(line.objname).sort_by.with_index { |val, idx|
+        case evalarg(line.arg).to_sym
+        when :Ascending then val
+        when :Descending then -val
+        when :Reverse then -idx
+        when :Random then rand
+        end
+      }
+    when :sort_by!, :sort!
+      token = line.objname.to_sym
+      arr = token_val(token)
+      @jil.ctx[:vars][token][:value] = execute(line, method.to_s[..-2].to_sym)
+    when :find
+      @jil.enumerate_array(token_val(line.objname), method) { |ctx|
+        evalarg(line.arg, ctx)
+      }.first
     else
       if line.objname.match?(/^[A-Z]/)
-        send(line.methodname, token_val(line.objname), *evalargs(line.args))
+        send(method, token_val(line.objname), *evalargs(line.args))
       else
-        token_val(line.objname).send(line.methodname, *evalargs(line.args))
+        token_val(line.objname).send(method, *evalargs(line.args))
       end
     end
   end

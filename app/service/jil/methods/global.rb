@@ -25,7 +25,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     when :comment then evalarg(line.arg)
     when :Key then @ctx[:key]
     when :Index then @ctx[:index]
-    when :Value then @ctx[:value]
+    when :Value, :Object then @ctx[:value]
     else send(line.methodname, line.args)
     end
   end

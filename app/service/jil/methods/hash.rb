@@ -18,8 +18,9 @@ class Jil::Methods::Hash < Jil::Methods::Base
     end
   end
 
-  def execute(line)
-    case line.methodname
+  def execute(line, method=nil)
+    method ||= line.methodname
+    case method
     when :new, :keyHash then hash_wrap(evalargs(line.args))
     when :get then token_val(line.objname).dig(*evalargs(line.args))
     when :set!
@@ -32,16 +33,16 @@ class Jil::Methods::Hash < Jil::Methods::Base
       @jil.ctx[:vars][token][:value].delete(evalarg(line.arg))
       @jil.ctx[:vars][token][:value]
     when :each, :map, :any?, :none?, :all?
-      @jil.enumerate_hash(token_val(line.objname), line.methodname) { |ctx| evalarg(line.arg, ctx) }
+      @jil.enumerate_hash(token_val(line.objname), method) { |ctx| evalarg(line.arg, ctx) }
     when :filter
-      @jil.enumerate_hash(token_val(line.objname), line.methodname) { |ctx|
+      @jil.enumerate_hash(token_val(line.objname), method) { |ctx|
         evalarg(line.arg, ctx)
       }.to_h { |(k,v),i| [k,v] }
     else
       if line.objname.match?(/^[A-Z]/)
-        send(line.methodname, token_val(line.objname), *evalargs(line.args))
+        send(method, token_val(line.objname), *evalargs(line.args))
       else
-        token_val(line.objname).send(line.methodname, *evalargs(line.args))
+        token_val(line.objname).send(method, *evalargs(line.args))
       end
     end
   end

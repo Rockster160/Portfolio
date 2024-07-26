@@ -59,6 +59,20 @@ class Jil::Executor
     end
   end
 
+  def enumerate_array(array, method, &block)
+    ctx = { break: false, next: false, state: :running }
+    array.each_with_index.send(method) do |val, idx|
+      break unless @ctx[:state] == :running
+      break unless ctx[:state] == :running
+      next (ctx[:next] = false) if ctx[:break] || ctx[:next]
+
+      ctx[:value] = val
+      ctx[:index] = idx
+
+      yield(ctx)
+    end
+  end
+
   def execute_line(line, current_ctx={})
     klass = (
       if line.objname.match?(/^[A-Z]/) # upcase for class or downcase for instance

@@ -39,6 +39,8 @@ class Jil::Methods::Base
     else
       if line.objname.match?(/^[A-Z]/)
         send(line.methodname, token_val(line.objname), *evalargs(line.args))
+      elsif respond_to?(line.methodname)
+        send(line.methodname, token_val(line.objname), *evalargs(line.args))
       else
         token_val(line.objname).send(line.methodname, *evalargs(line.args))
       end
