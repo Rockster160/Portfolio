@@ -16,6 +16,7 @@ class SearchBreakMatcher
   }
   # These could be actual/custom Objects that return the expected data based on calls.
   # That would solve the issues of having conflicting keys.
+  # We could also store the "top" level data as the object with the current dug match for filtering.
 
   def initialize(str, data, parent=nil)
     @parent = parent
@@ -139,9 +140,7 @@ class SearchBreakMatcher
         SearchBreakMatcher.new(single_val, { str => {} }, @parent || self).match?
       }
     else false
-    end.tap { |b|
-      puts "\e[3#{b ? 2 : 1}m#{val}[#{delim}]#{str}\e[0m"
-    }
+    end
   rescue StandardError => e
     # binding.pry
     raise unless Rails.env.production?
