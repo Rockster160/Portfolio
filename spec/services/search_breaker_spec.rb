@@ -134,6 +134,7 @@ RSpec.describe SearchBreaker do
       let(:q) { "event::workout" }
 
       it "returns correctly" do
+        expect(matcher?("event:ANY(name:lazy notes:beat)", { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(true)
         expect(matcher?("event:name:ANY(work thirst)", { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(true)
         expect(matcher?("event:ANY(saber thirst)", { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(true)
         expect(matcher?("event:name:ANY(flip thirst)", { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(false)
@@ -147,7 +148,7 @@ RSpec.describe SearchBreaker do
 
       it "returns correctly" do
         expect(matcher?(q, { event: { name: "hardworkout", notes: "Beat Saber" } })).to be(false)
-        expect(matcher?(q, { event: { name: "Life", notes: "Traveled to Rome" } })).to be(true)
+        expect(matcher?(q, { event: { name: "Life", notes: "Traveled to Rome" } })).to be(false)
         expect(matcher?(q, { travel: { action: "departed", location: "Home" } })).to be(true)
       end
     end
