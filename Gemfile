@@ -57,6 +57,7 @@ gem "rqrcode", "2.1.2"
 gem "sidekiq-unique-jobs"
 gem "ruby-openai"
 gem "webdrivers"
+gem "rack-attack"
 gem "redcarpet"
 gem "jwt"
 # Dependency

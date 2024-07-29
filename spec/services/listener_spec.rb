@@ -65,7 +65,7 @@ RSpec.describe JarvisTask do
         "travel",
         "travel:home",
       ])
-      expect_trigger_listeners(admin, :travel, { action: "Arrive", location: "Delton" }, [
+      expect_trigger_listeners(admin, :travel, { action: "Arrive", location: "Delton", arrived: "Delton" }, [
         "travel",
         "travel:arrive",
         "travel:arrive:!home",
@@ -74,11 +74,18 @@ RSpec.describe JarvisTask do
         "travel",
         "travel:depart",
       ])
+      expect_trigger_listeners(admin, :travel, { location: "Home", action: "departed", departed: "Home" }, [
+        "travel",
+        "travel:depart",
+        "travel:depart:home",
+        "travel:home",
+      ])
       expect_trigger_listeners(admin, :travel, { arrived: "Home" }, [
         "travel",
         "travel:arrive",
         "travel:arrive:home",
         "travel:home",
+        # "travel:arrive:!home", # -- This should NOT be here!
       ])
       expect_trigger_listeners(admin, :event, { name: "drink" }, [
         "event:name:ANY(food soda drink alcohol treat snack)"

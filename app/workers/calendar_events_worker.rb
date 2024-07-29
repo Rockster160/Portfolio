@@ -109,7 +109,6 @@ class CalendarEventsWorker
       #   Set location for time there, otherwise default to home
 
       # If travelable - add TT and nav there and back
-      return # Disable for Japan
       if travelable_event?(event)
         traveltime = event[:notes]&.scan(/ttt (\d+)/i)&.flatten&.first&.to_i&.minutes
         traveltime ||= address_book.traveltime_seconds(
