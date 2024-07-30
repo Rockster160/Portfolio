@@ -21,18 +21,6 @@ RSpec.describe JarvisTask do
   end
 
   context "with basic triggers" do
-    let(:complex_listener) {
-      [
-        "websocket:*",
-        "websocket:garage",
-        "event",
-        "event:name:food",
-        "event:ANY(name::food name::drink)",
-        "travel:arrived",
-        "travel:departed",
-        "travel:arrived::Delton"
-      ].join(" ")
-    }
     before do
       JarvisTask.create([
         { user: other_user, listener: "travel" },
@@ -54,8 +42,6 @@ RSpec.describe JarvisTask do
         { user: admin, listener: "tell:\"Do the things\"" },
         { user: admin, listener: "tell:~/Checkup/" },
         { user: admin, listener: "tell:ANY(~/Checkup/ ~/Result/)" },
-        # { user: admin, listener: complex_listener },
-        # Make sure these work. 😅
       ])
 
       @listeners = []
