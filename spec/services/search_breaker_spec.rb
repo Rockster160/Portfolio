@@ -5,16 +5,24 @@ RSpec.describe SearchBreaker do
 
   let(:delims) {
     {
-      any: "ANY",
+      any: ["ANY", "ANY:"],
       not: "!",
       contains: ":",
       not_contains: "!:",
       not_exact: "!::",
       exact: "::",
       similar: "~",
-      aliases: {
-        "ANY:": "ANY",
-      }
+
+      # any: "ANY",
+      # not: "!",
+      # contains: ":",
+      # not_contains: "!:",
+      # not_exact: "!::",
+      # exact: "::",
+      # similar: "~",
+      # aliases: {
+      #   "ANY:": "ANY",
+      # }
     }
   }
 

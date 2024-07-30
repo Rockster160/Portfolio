@@ -7,17 +7,13 @@ class SearchBreakMatcher
   )
 
   DELIMITERS = {
-    # TODO: Allow the values here to be a string OR an array of strings to allow aliases
     contains:     ":",
     exact:        "::",
     not:          "!",
     not_contains: ":!",
     not_exact:    "::!",
     regex:        "~",
-    any:          "ANY",
-    aliases: { # Figure out a way that allows an "aliases" delimiter. Just in case.
-      any: "ANY:", # Should probably reverse these so multiple aliases can point to one delim
-    }
+    any:          ["ANY", "ANY:"],
   }
   # These could be actual/custom Objects that return the expected data based on calls.
   # That would solve the issues of having conflicting keys.
