@@ -11,13 +11,10 @@ module SearchBreaker
 
   def call(str, delimiters={})
     str = str.dup
-    tr = Tokenizer.new(str)
-    aliases = delimiters.delete(:aliases)
-
-    delims_with_aliases = delimiters.to_a
-    aliases&.each do |actual, ali|
-      delims_with_aliases << [delimiters.key(ali), actual.to_s]
-    end
+    tr = ::Tokenizer.new(str)
+    delims_with_aliases = delimiters.each_with_object([]) { |(key, delims), arr|
+      ::Array.wrap(delims).each { |item| arr << [key, item] }
+    }
 
     out = {
       keys: {},
@@ -57,14 +54,14 @@ module SearchBreaker
   def delim_escaped_regex(delimiters)
     sorted_delims = delimiters.sort_by { |dk, d| -d.length } # Longest first
     sorted_delims.map { |dk, d|
-      Regexp.escape(d)
+      ::Regexp.escape(d)
     }.join("|").then { |delims|
-      Regexp.new(/#{RX[:start]}(#{delims})/i)
+      ::Regexp.new(/#{RX[:start]}(#{delims})/i)
     }
   end
 
   def broken_or_val(val, delimiters)
-    broken = SearchBreaker.call(val, delimiters)
+    broken = ::SearchBreaker.call(val, delimiters)
 
     if broken[:vals].blank?
       if broken[:keys].keys == [val]
@@ -77,12 +74,12 @@ module SearchBreaker
   def tokenized_split(str, tr=nil)
     str = str.dup
     rebuild = !tr.nil?
-    tr ||= Tokenizer.new(str)
-    tr.tokenize!(str, Tokenizer.wrap_regex("/"))
+    tr ||= ::Tokenizer.new(str)
+    tr.tokenize!(str, ::Tokenizer.wrap_regex("/"))
     tr.tokenize!(str, /\\./)
-    tr.tokenize!(str, Tokenizer.wrap_regex("\""))
-    tr.tokenize!(str, Tokenizer.wrap_regex("'"))
-    tr.tokenize!(str, Tokenizer.wrap_regex("(", ")"))
+    tr.tokenize!(str, ::Tokenizer.wrap_regex("\""))
+    tr.tokenize!(str, ::Tokenizer.wrap_regex("'"))
+    tr.tokenize!(str, ::Tokenizer.wrap_regex("(", ")"))
 
     return str.split(/\s+/) unless rebuild
 
