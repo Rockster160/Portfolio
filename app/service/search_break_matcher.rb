@@ -9,7 +9,7 @@ class SearchBreakMatcher
   DELIMITERS = {
     contains:     ":",
     exact:        "::",
-    not:          "!",
+    not:          ["!", "-"],
     not_contains: ":!",
     not_exact:    "::!",
     regex:        "~",
