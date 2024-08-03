@@ -14,13 +14,6 @@ RSpec.describe Jil::Methods::Hash do
   let(:input_data) { {} }
   let(:ctx) { execute.ctx }
 
-  def expect_successful
-    if ctx[:error_line].present?
-      load("/Users/rocco/.pryrc"); source_puts [ctx[:error_line], ctx[:error]].compact.join("\n")
-    end
-    expect([ctx[:error_line], ctx[:error]].compact.join("\n")).to be_blank
-  end
-
   # [Hash]
   #   #new(content(Keyval [Keyval.new]))
   #   #keyval(String Any)::Keyval
@@ -40,7 +33,7 @@ RSpec.describe Jil::Methods::Hash do
 
   context "#new" do
     it "stores the values as key/val pairs" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars].keys).to eq([:bad73, :o9d36, :l0033, :n7c03])
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
@@ -58,7 +51,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns the number of items in the hash" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars].keys).to eq([:bad73, :o9d36, :l0033, :n7c03, :r817a])
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
@@ -94,7 +87,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns the item at the bottom of the dig" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xe891: { class: :Keyval, value: { foo: "bar" } },
         x7802: { class: :Keyval, value: { sup: "boom" } },
@@ -140,7 +133,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "merges two hashes together" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars].keys).to eq([:bad73, :o9d36, :l0033, :n7c03, :q1634, :z20a3, :a5129, :je296, :h36ee])
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
@@ -163,7 +156,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns the keys of the hash" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars].keys).to eq([:bad73, :o9d36, :l0033, :n7c03, :r817a])
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
@@ -182,7 +175,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns the value of the specified key" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars].keys).to eq([:bad73, :o9d36, :l0033, :n7c03, :r817a])
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
@@ -202,7 +195,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "sets the value of the specified key" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars].keys).to eq([:bad73, :o9d36, :l0033, :n7c03, :r817a, :r817b])
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
@@ -222,7 +215,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "removes the key/value pair from the hash by key" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars].keys).to eq([:bad73, :o9d36, :l0033, :n7c03, :r817a])
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
@@ -246,7 +239,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns the new hash based on passing conditions" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars].keys).to eq([:bad73, :o9d36, :l0033, :n7c03, :lf3d2, :ee0d3, :hd4c1])
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
@@ -272,7 +265,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns an array of the values from each block" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars].keys).to eq([:bad73, :o9d36, :l0033, :n7c03, :lf3d2, :ee0d3, :hd4c1])
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
@@ -299,7 +292,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns truthiness if there is any matching condition" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
         o9d36: { class: :Keyval, value: { hi: "low" } },
@@ -326,7 +319,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns truthiness if there is any matching condition" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
         o9d36: { class: :Keyval, value: { hi: "low" } },
@@ -353,7 +346,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns truthiness if there is any matching condition" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
         o9d36: { class: :Keyval, value: { hi: "low" } },
@@ -380,7 +373,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns truthiness if there is any matching condition" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         bad73: { class: :Keyval, value: { foo: "bar" } },
         o9d36: { class: :Keyval, value: { hi: "low" } },

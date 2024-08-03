@@ -14,13 +14,6 @@ RSpec.describe Jil::Methods::Hash do
   let(:input_data) { {} }
   let(:ctx) { execute.ctx }
 
-  def expect_successful
-    if ctx[:error_line].present?
-      load("/Users/rocco/.pryrc"); source_puts [ctx[:error_line], ctx[:error]].compact.join("\n")
-    end
-    expect([ctx[:error_line], ctx[:error]].compact.join("\n")).to be_blank
-  end
-
   # [Array]
   #   #new(content)
   #   #from_length(Numeric)
@@ -56,7 +49,7 @@ RSpec.describe Jil::Methods::Hash do
 
   context "#new" do
     it "stores the items" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -71,7 +64,7 @@ RSpec.describe Jil::Methods::Hash do
     let(:code) { "r5ee3 = Array.from_length(5)::Array" }
 
     it "creates an array of nil of the desired length" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         r5ee3: { class: :Array, value: [nil, nil, nil, nil, nil] },
       })
@@ -85,7 +78,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns the number of items in the hash" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -129,7 +122,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns the item at the bottom of the dig" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -184,7 +177,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns the item at the bottom of the dig" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -214,7 +207,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns the value of the specified key" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -232,7 +225,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns the value of the specified key" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -250,7 +243,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "returns the value of the specified key" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -268,7 +261,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "removes the value at the specified index" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -286,7 +279,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "removes the first value" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -304,7 +297,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "removes the last value" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -322,7 +315,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "adds to the end, modifying in place" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -340,7 +333,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "adds to the end, modifying in place" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -358,7 +351,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "adds to the end" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -376,7 +369,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "adds to the beginning" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
         ydfcd: { class: :Boolean, value: false },
@@ -394,7 +387,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "shuffles the order" do
-      expect_successful
+      expect_successful_jil
       shuffled = ctx.dig(:vars, :r817a, :value)
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
@@ -413,7 +406,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "shuffles the order" do
-      expect_successful
+      expect_successful_jil
       shuffled = ctx.dig(:vars, :r817a, :value)
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
@@ -432,7 +425,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "pulls a random value" do
-      expect_successful
+      expect_successful_jil
       sampled = ctx.dig(:vars, :r817a, :value)
       expect(["Hello, World!", false, 47]).to include(sampled)
       expect(ctx.dig(:vars)).to match_hash({
@@ -461,7 +454,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "pulls the lowest value" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -488,7 +481,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "pulls the highest value" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -515,7 +508,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "adds all of the values together" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -542,7 +535,7 @@ RSpec.describe Jil::Methods::Hash do
     end
 
     it "adds all of the values together" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -570,7 +563,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns a new array with only the matching values" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -600,7 +593,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns a new array with the modified values" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -630,7 +623,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns first object that matches" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -660,7 +653,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns first object that matches" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -690,7 +683,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns first object that matches" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -720,7 +713,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns first object that matches" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -749,7 +742,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns a new array with only the matching values" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -777,7 +770,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns a new array with only the matching values" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -803,7 +796,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "sorts array by Ascending" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -828,7 +821,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "sorts array by Descending" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -853,7 +846,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "sorts array by Reverse" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -878,7 +871,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "sorts array by Random" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars, :nba83, :value).sort).to match_array([16, 32, 47])
 
       expect(ctx[:output]).to eq([])
@@ -898,7 +891,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "sorts array by Ascending in place" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },
@@ -926,7 +919,7 @@ RSpec.describe Jil::Methods::Hash do
     }
 
     it "returns a new array with the modified values" do
-      expect_successful
+      expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         xfaea: { class: :Numeric, value: 32 },
         xfaeb: { class: :Numeric, value: 16 },

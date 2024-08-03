@@ -6,10 +6,6 @@ RSpec.describe Jil::Methods::String do
   let(:input_data) { {} }
   let(:ctx) { execute.ctx }
 
-  def expect_successful
-    expect([ctx[:error_line], ctx[:error]].compact.join("\n")).to be_blank
-  end
-
   describe "[Text]" do
     context "new" do
       let(:code) {
@@ -19,7 +15,7 @@ RSpec.describe Jil::Methods::String do
       }
 
       it "sets the values of the variables inside the block and stores the print output" do
-        expect_successful
+        expect_successful_jil
         expect(ctx[:vars]).to match_hash({
           na887: { class: :Text, value: "Hello, world!" },
         })
@@ -37,7 +33,7 @@ RSpec.describe Jil::Methods::String do
       }
 
       it "stores the string" do
-        expect_successful
+        expect_successful_jil
         expect(ctx[:vars]).to match_hash({
           na887: { class: :String, value: "Hello, world!" },
         })
@@ -54,7 +50,7 @@ RSpec.describe Jil::Methods::String do
       }
 
       it "stores the string" do
-        expect_successful
+        expect_successful_jil
         expect(ctx[:vars]).to match_hash({
           na887: { class: :String, value: "Hello, world!" },
           na885: { class: :Boolean, value: true },
@@ -72,7 +68,7 @@ RSpec.describe Jil::Methods::String do
       }
 
       it "stores the string" do
-        expect_successful
+        expect_successful_jil
         expect(ctx[:vars]).to match_hash({
           na887: { class: :String, value: "Hello, world!" },
           na885: { class: :Array, value: ["Hello"] },
@@ -90,7 +86,7 @@ RSpec.describe Jil::Methods::String do
       }
 
       it "split" do
-        expect_successful
+        expect_successful_jil
         expect(ctx[:vars]).to match_hash({
           na887: { class: :String, value: "Hello, world!" },
           na885: { class: :Array, value: "Hello, world!".split("") },
@@ -121,7 +117,7 @@ RSpec.describe Jil::Methods::String do
           }
 
           it "format" do
-            expect_successful
+            expect_successful_jil
             expect(ctx[:vars]).to match_hash({
               na887: { class: :String, value: from || start_string },
               na885: { class: :String, value: goal },
@@ -142,7 +138,7 @@ RSpec.describe Jil::Methods::String do
         }
 
         it "works" do
-          expect_successful
+          expect_successful_jil
           expect(ctx[:vars]).to match_hash({
             na887: { class: :String, value: "Hello, world!" },
             na885: { class: :String, value: "Goodbye, world!" },
@@ -160,7 +156,7 @@ RSpec.describe Jil::Methods::String do
         }
 
         it "works" do
-          expect_successful
+          expect_successful_jil
           expect(ctx[:vars]).to match_hash({
             na887: { class: :String, value: "Hello, world!" },
             na885: { class: :String, value: "world!" },
@@ -179,7 +175,7 @@ RSpec.describe Jil::Methods::String do
       }
 
       it "add" do
-        expect_successful
+        expect_successful_jil
         expect(ctx[:vars]).to match_hash({
           na887: { class: :String, value: "Hello, world!" },
           na885: { class: :String, value: "Hello, world! Goodbye, world!" },
@@ -197,7 +193,7 @@ RSpec.describe Jil::Methods::String do
       }
 
       it "length" do
-        expect_successful
+        expect_successful_jil
         expect(ctx[:vars]).to match_hash({
           na887: { class: :String, value: "Hello, world!" },
           na885: { class: :Numeric, value: 13 },

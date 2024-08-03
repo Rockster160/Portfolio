@@ -6,10 +6,6 @@ RSpec.describe Jil::Methods::Boolean do
   let(:input_data) { {} }
   let(:ctx) { execute.ctx }
 
-  def expect_successful
-    expect([ctx[:error_line], ctx[:error]].compact.join("\n")).to be_blank
-  end
-
   context "new with casted vals" do
     let(:code) {
       <<-JIL
@@ -20,7 +16,7 @@ RSpec.describe Jil::Methods::Boolean do
     }
 
     it "compares different types" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars]).to match_hash({
         j7fce: { class: :Numeric, value: 1 },
         n7526: { class: :Numeric, value: 1 },
@@ -40,7 +36,7 @@ RSpec.describe Jil::Methods::Boolean do
     }
 
     it "compares different types" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars]).to match_hash({
         j7fce: { class: :Numeric, value: 1 },
         n7526: { class: :String, value: "1" },
@@ -60,7 +56,7 @@ RSpec.describe Jil::Methods::Boolean do
     }
 
     it "compares same types" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars]).to match_hash({
         j7fce: { class: :Numeric, value: 1 },
         n7526: { class: :Numeric, value: 1 },
@@ -80,7 +76,7 @@ RSpec.describe Jil::Methods::Boolean do
     }
 
     it "returns the value, not only bools" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars]).to match_hash({
         j7fce: { class: :Boolean, value: false },
         n7526: { class: :Numeric, value: 1 },
@@ -100,7 +96,7 @@ RSpec.describe Jil::Methods::Boolean do
     }
 
     it "returns the value, not only bools" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars]).to match_hash({
         j7fce: { class: :Boolean, value: false },
         n7526: { class: :Numeric, value: 1 },
@@ -119,7 +115,7 @@ RSpec.describe Jil::Methods::Boolean do
     }
 
     it "returns the value, not only bools" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars]).to match_hash({
         n7526: { class: :Numeric, value: 1 },
         dfa1f: { class: :Boolean, value: false },
@@ -138,7 +134,7 @@ RSpec.describe Jil::Methods::Boolean do
     }
 
     it "compares different types" do
-      expect_successful
+      expect_successful_jil
       expect(ctx[:vars]).to match_hash({
         j7fce: { class: :Numeric, value: 5 },
         n7526: { class: :Numeric, value: 3 },

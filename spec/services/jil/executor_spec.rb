@@ -6,10 +6,6 @@ RSpec.describe Jil::Executor do
   let(:input_data) { {} }
   let(:ctx) { execute.ctx }
 
-  def expect_successful
-    expect([ctx[:error_line], ctx[:error]].compact.join("\n")).to be_blank
-  end
-
   describe "[Global]" do
     context "if" do
       # let(:code) { jil_fixture(:garage_cell) }
@@ -26,7 +22,7 @@ RSpec.describe Jil::Executor do
       }
 
       it "sets the values of the variables inside the block and stores the print output" do
-        expect_successful
+        expect_successful_jil
         expect(ctx[:vars]).to match_hash({
           na887: { class: :Boolean, value: true },
           tbd36: { class: :String,  value: "Success" },
@@ -50,7 +46,7 @@ RSpec.describe Jil::Executor do
       }
 
       it "sets the values of the variables inside the block and stores the print output" do
-        expect_successful
+        expect_successful_jil
         expect(ctx[:vars]).to match_hash({
           na887: { class: :Boolean, value: true },
           na882: { class: :Boolean, value: false },
