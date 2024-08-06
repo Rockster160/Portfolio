@@ -8,7 +8,6 @@ module TeslaCommand
   def quick_command(cmd, opt=nil)
     return "Currently forbidden" if DataStorage[:tesla_forbidden]
 
-    TeslaCommandWorker.perform_async(cmd.to_s, opt&.to_s)
     command(cmd, opt, true)
   end
 
@@ -21,8 +20,6 @@ module TeslaCommand
   end
 
   def command(original_cmd, original_opt=nil, quick=false)
-    return if Rails.env.development? && !quick
-
     broadcast(loading: true)
     car = Tesla.new unless quick
 
@@ -148,6 +145,7 @@ module TeslaCommand
     end
 
     Jarvis.ping(@response) unless quick
+    TeslaCommandWorker.perform_async(cmd.to_s, opt&.to_s) if quick && !@cancel
     @response
   rescue TeslaError => e
     if e.message.match?(/forbidden/i)

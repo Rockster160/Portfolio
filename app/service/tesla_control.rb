@@ -221,6 +221,11 @@ class TeslaControl
 
   def get(url, wake: false)
     TeslaCommand.broadcast(loading: true)
+
+    if Rails.env.development?
+      return dev_output(:GET, url)
+    end
+
     wakeup_retry(max_attempts: wake ? 5 : 1) {
       @api.get(url)
     }
@@ -257,6 +262,9 @@ class TeslaControl
 
   def proxy_post_vehicle(endpoint, params={})
     raise "Should not POST in tests!" if Rails.env.test?
+    if Rails.env.development?
+      return dev_output(:PROXY_POST, "vehicles/#{vin}/#{endpoint}", params)
+    end
 
     @api.proxy_post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
       info("Response", "#{res}")
@@ -265,10 +273,20 @@ class TeslaControl
 
   def post_vehicle(endpoint, params={})
     raise "Should not POST in tests!" if Rails.env.test?
+    if Rails.env.development?
+      return dev_output(:POST, "vehicles/#{vin}/#{endpoint}", params)
+    end
 
     @api.post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
       info("Response", "#{res}")
     }
+  end
+
+  def dev_output(method, url, params={})
+    puts "   #{method}   ".center(50, "=")
+    puts url
+    puts Api.pretty_obj(params)
+    {}
   end
 
   def info(title, detail=nil)
