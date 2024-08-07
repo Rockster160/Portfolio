@@ -20,6 +20,7 @@ module TeslaCommand
   end
 
   def command(original_cmd, original_opt=nil, quick=false)
+    ::PrettyLogger.info("command (quick #{quick})")
     broadcast(loading: true)
     car = Tesla.new unless quick
 
@@ -92,6 +93,7 @@ module TeslaCommand
       @response = "Turning on passenger seat heater"
       car.heat_passenger unless quick
     when :navigate
+      ::PrettyLogger.info("navigate")
       address = opt[::Jarvis::Regex.address]&.squish.presence if opt.match?(::Jarvis::Regex.address)
       # gps = address_book.geocode(address) if address.present?
       # If specify nearest, search based on car location.
@@ -100,6 +102,7 @@ module TeslaCommand
       address ||= address_book.nearest_from_name(original_opt, extract: :address)
 
       if address.present?
+        ::PrettyLogger.info("address")
         duration = address_book.traveltime_seconds(address)
         if duration && duration < 100 # seconds
           @cancel = true
@@ -110,7 +113,9 @@ module TeslaCommand
           @response = "Navigating to #{original_opt.squish}"
         end
 
+        ::PrettyLogger.info("!@cancel && !quick == #{!@cancel} && #{!quick}")
         if !@cancel && !quick
+          ::PrettyLogger.info("starting")
           car.start_car
           car.navigate(address)
         end

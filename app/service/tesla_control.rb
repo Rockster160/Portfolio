@@ -283,9 +283,12 @@ class TeslaControl
   end
 
   def dev_output(method, url, params={})
-    puts "   #{method}   ".center(50, "=")
-    puts url
-    puts Api.pretty_obj(params)
+    ::PrettyLogger.info(
+      "\b\e[94m[TESLA]\e[0m",
+      "   #{method}   ".center(50, "="),
+      url,
+      Api.pretty_obj(params),
+    )
     {}
   end
 
