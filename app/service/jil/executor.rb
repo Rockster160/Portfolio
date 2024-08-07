@@ -39,41 +39,15 @@ class Jil::Executor
       execute_line(line, current_ctx).tap { |line_val|
         @ctx[:vars][line.varname.to_sym] = line_val
         last_line_val = line_val[:value]
+        # str = "#{line.varname} = #{line.objname}.#{line.methodname}(#{line.args.join(", ")})::#{line.cast}"
+        # load("/Users/rocco/.pryrc"); source_puts "\e[37m#{str} → #{line_val[:value].inspect}"
       }
     end
     last_line_val
   end
 
-  def enumerate_hash(hash, method, &block)
-    ctx = { break: false, next: false, state: :running }
-    hash.each_with_index.send(method) do |(key, val), idx|
-      break unless @ctx[:state] == :running
-      break unless ctx[:state] == :running
-      next (ctx[:next] = false) if ctx[:break] || ctx[:next]
-
-      ctx[:key] = key
-      ctx[:value] = val
-      ctx[:index] = idx
-
-      yield(ctx)
-    end
-  end
-
-  def enumerate_array(array, method, &block)
-    ctx = { break: false, next: false, state: :running }
-    array.each_with_index.send(method) do |val, idx|
-      break unless @ctx[:state] == :running
-      break unless ctx[:state] == :running
-      next (ctx[:next] = false) if ctx[:break] || ctx[:next]
-
-      ctx[:value] = val
-      ctx[:index] = idx
-
-      yield(ctx)
-    end
-  end
-
   def execute_line(line, current_ctx={})
+    @ctx[:line] = line.varname
     klass = (
       if line.objname.match?(/^[A-Z]/) # upcase for class or downcase for instance
         klass_from_obj(line.objname)
@@ -90,6 +64,54 @@ class Jil::Executor
       class: line.cast,
       value: cast(obj.execute(line), line.cast, current_ctx),
     }
+  end
+
+  def enumerate_hash(hash, method, &block)
+    lctx = { break: false, next: false, state: :running, line: @ctx[:line] }
+    hash.each_with_index.send(method) do |(key, val), idx|
+      break unless @ctx[:state] == :running
+      break unless lctx[:state] == :running
+      next (lctx[:next] = false) if lctx[:break] || lctx[:next]
+
+      lctx[:key] = key
+      lctx[:value] = val
+      lctx[:index] = idx
+
+      yield(lctx)
+    end
+  end
+
+  def enumerate_array(array, method, &block)
+    lctx = { break: false, next: false, state: :running, line: @ctx[:line] }
+    array.each_with_index.send(method) do |val, idx|
+      break unless @ctx[:state] == :running
+      break unless lctx[:state] == :running
+      next (lctx[:next] = false) if lctx[:break] || lctx[:next]
+
+      lctx[:value] = val
+      lctx[:index] = idx
+
+      yield(lctx)
+    end
+  end
+
+  def enumerate_loop(&block)
+    lctx = { break: false, next: false, state: :running, line: @ctx[:line] }
+    idx = -1
+    last_val = nil
+    loop do
+      idx += 1
+      # load("/Users/rocco/.pryrc"); source_puts "#{idx} → #{lctx}"
+      break unless @ctx[:state] == :running
+      break unless lctx[:state] == :running
+      break if lctx[:break]
+
+      lctx[:value] = idx
+      lctx[:index] = idx
+
+      last_val = yield(lctx)
+    end
+    last_val
   end
 
   def cast(value, type, current_ctx={})

@@ -40,10 +40,10 @@ end
 # [ ]  .log(Numeric)
 # [ ]  .root(Numeric)
 # [ ]  .exp(Numeric)
-# [ ]  .zero?
-# [ ]  .even?
-# [ ]  .odd?
-# [ ]  .prime?
-# [ ]  .whole?
-# [ ]  .positive?
-# [ ]  .negative?
+# [ ]  .zero?::Boolean
+# [ ]  .even?::Boolean
+# [ ]  .odd?::Boolean
+# [ ]  .prime?::Boolean
+# [ ]  .whole?::Boolean
+# [ ]  .positive?::Boolean
+# [ ]  .negative?::Boolean

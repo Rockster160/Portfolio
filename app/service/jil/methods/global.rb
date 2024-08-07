@@ -11,8 +11,12 @@ class Jil::Methods::Global < Jil::Methods::Base
   def execute(line)
     case line.methodname
     when :input_data then @jil.ctx[:input_data]
-    when :next then @ctx[:next] = true
-    when :break then @ctx[:break] = true
+    when :next, :Next
+      @ctx[:next] = true
+      evalarg(line.arg)
+    when :break, :Break
+      @ctx[:break] = true
+      evalarg(line.arg)
     when :exit then @jil.ctx[:state] = :exit
     when :return
       @jil.ctx[:state] = :return
@@ -23,11 +27,28 @@ class Jil::Methods::Global < Jil::Methods::Base
         @jil.ctx[:output] << ::Jil::Methods::String.new(@jil, @ctx).cast(str).gsub(/^"|"$/, "")
       }
     when :comment then evalarg(line.arg)
+    when :loop then @jil.enumerate_loop { |ctx| evalarg(line.arg, ctx) }
     when :Key then @ctx[:key]
     when :Index then @ctx[:index]
     when :Value, :Object then @ctx[:value]
-    else send(line.methodname, line.args)
+    else send(line.methodname, *line.args)
     end
+  end
+
+  def get_cache(var)
+    @jil.user.caches.dig(:jil, var)
+  end
+
+  def set_cache(var, val)
+    @jil.user.caches.dig_set(:jil, var, val) && val
+  end
+
+  def get(var)
+    @jil.ctx[:vars][var.to_sym][:value]
+  end
+
+  def set!(var, val)
+    set_value(var, val)
   end
 
   def logic_if(condition, do_result, else_result)
@@ -49,7 +70,7 @@ end
 # [ ]   #request("Method" String BR "URL" String BR "Params" Hash BR "Headers" Hash)::Hash
 # [ ]   #broadcast_websocket("Channel" TAB String BR "Data" TAB Hash)::Numeric
 # [ ]   #trigger(String Hash)::Numeric
-# [ ]   #dowhile(content(["Break" "Next" "Index"::Numeric]))::Numeric
-# [ ]   #loop(content(["Break" "Next" "Index"::Numeric]))::Numeric
-# [ ]   #times(Numeric content(["Break" "Next" "Index"::Numeric]))::Numeric
+# [ ]   #dowhile(content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
+# [ ]   #loop(content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
+# [ ]   #times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
 # [ ]   #eval(Text) # Should return the value given by a "return" that's called inside

@@ -29,8 +29,8 @@ class Jil::Methods::Hash < Jil::Methods::Base
       @jil.ctx[:vars][token][:value] = token_val(line.objname).merge(hash_wrap(evalargs(line.args)))
     when :del!
       token = line.objname.to_sym
-      @jil.ctx[:vars][token] ||= { class: :Hash, value: nil }
-      @jil.ctx[:vars][token][:value].delete(evalarg(line.arg))
+      @jil.ctx[:vars][token] ||= { class: :Hash, value: {} }
+      @jil.ctx[:vars][token][:value]&.delete(evalarg(line.arg))
       @jil.ctx[:vars][token][:value]
     when :each, :map, :any?, :none?, :all?
       @jil.enumerate_hash(token_val(line.objname), method) { |ctx| evalarg(line.arg, ctx) }

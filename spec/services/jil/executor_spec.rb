@@ -76,7 +76,7 @@ end
 # [ ] [Email]
 
 # [Global]
-#   // #qloop(content(["Break" "Next" "Index"::Numeric]))::Numeric
+#   // #qloop(content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
 #   // #switch(Any::Boolean)
 #   // #thing(TAB "π" TAB)
 #   // #test(String?("Default Value"):"Bigger Placeholder" "and" Numeric(2))
@@ -94,9 +94,9 @@ end
 #   #request("Method" String BR "URL" String BR "Params" Hash BR "Headers" Hash)::Hash
 #   #broadcast_websocket("Channel" TAB String BR "Data" TAB Hash)::Numeric
 #   #trigger(String Hash)::Numeric
-#   #dowhile(content(["Break" "Next" "Index"::Numeric]))::Numeric
-#   #loop(content(["Break" "Next" "Index"::Numeric]))::Numeric
-#   #times(Numeric content(["Break" "Next" "Index"::Numeric]))::Numeric
+#   #dowhile(content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
+#   #loop(content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
+#   #times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
 #   #eval(Text) # Should return the value given by a "return" that's called inside
 # [Keyval]
 #   #new(String ": " Any)

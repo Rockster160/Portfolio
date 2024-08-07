@@ -15,7 +15,8 @@ class Jil::Methods::Boolean < Jil::Methods::Base
       return unless sign.in?(["==", "!=", "<", "<=", ">", ">="])
 
       @jil.cast(left, :Numeric).send(sign, @jil.cast(right, :Numeric))
-    else send(line.methodname, line.args)
+    else
+      send(line.methodname, line.args)
     end
   end
 end

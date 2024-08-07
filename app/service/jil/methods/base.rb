@@ -12,10 +12,12 @@ class Jil::Methods::Base
 
   def evalarg(arg, passed_ctx=nil)
     if arg.is_a?(::Jil::Parser) || arg.is_a?(::Array)
-      @jil.execute_block(arg, passed_ctx || @jil.ctx)
+      @jil.execute_block(arg, passed_ctx || @ctx || @jil.ctx)
     elsif arg.is_a?(::String) && !arg.match?(/^\".*?\"$/)
       # This is hacky... Shouldn't we know if it's a string vs variable?
-      @jil.ctx&.dig(:vars).key?(arg.to_sym) ? token_val(arg) : arg
+      @jil.ctx&.dig(:vars).key?(arg.to_sym) ? token_val(arg) : (arg.gsub(/\#\{\s*(.*?)\s*\}/) { |found|
+        token_val(Regexp.last_match[1])
+      })
     # elsif arg.is_a?(::Hash) && arg.keys == [:cast, :value]
     #   @jil.cast(arg[:value], arg[:cast], @ctx)
     else
@@ -50,5 +52,12 @@ class Jil::Methods::Base
         token_val(line.objname).send(line.methodname, *evalargs(line.args))
       end
     end
+  end
+
+  def set_value(token, val, type: nil)
+    token = token.to_sym
+    @jil.ctx[:vars][token] ||= { class: type || :Any, value: val }
+    @jil.ctx[:vars][token][:class] = type if type
+    @jil.ctx[:vars][token][:value] = val
   end
 end

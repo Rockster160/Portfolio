@@ -23,7 +23,7 @@ class JarvisCache < ApplicationRecord
 
   def self.by(key)
     if key.to_s.match?(/^\d+$/)
-      find_by(key: key) || find_by(id: key) || find_or_create_by(key: key, user: assigned(:user))
+      find_by(key: key, user: assigned(:user)) || find_by(id: key, user: assigned(:user)) || find_or_create_by(key: key, user: assigned(:user))
     else
       find_or_create_by(key: key, user: assigned(:user))
     end
@@ -34,7 +34,7 @@ class JarvisCache < ApplicationRecord
   end
 
   def self.dig(*steps)
-    key, *rest = steps
+    key, *rest = steps.map { |s| s.to_s.to_sym }
     get(key).dig(*rest)
   end
 
@@ -43,7 +43,7 @@ class JarvisCache < ApplicationRecord
   end
 
   def self.dig_set(*steps, val)
-    key, *rest = steps
+    key, *rest = steps.map { |s| s.to_s.to_sym }
     by(key).dig_set(*rest, val)
   end
 
