@@ -93,7 +93,6 @@ module TeslaCommand
       @response = "Turning on passenger seat heater"
       car.heat_passenger unless quick
     when :navigate
-      ::PrettyLogger.info("navigate")
       address = opt[::Jarvis::Regex.address]&.squish.presence if opt.match?(::Jarvis::Regex.address)
       # gps = address_book.geocode(address) if address.present?
       # If specify nearest, search based on car location.
@@ -102,7 +101,6 @@ module TeslaCommand
       address ||= address_book.nearest_from_name(original_opt, extract: :address)
 
       if address.present?
-        ::PrettyLogger.info("address")
         duration = address_book.traveltime_seconds(address)
         if duration && duration < 100 # seconds
           @cancel = true
@@ -151,6 +149,7 @@ module TeslaCommand
 
     Jarvis.ping(@response) unless quick
     TeslaCommandWorker.perform_async(cmd.to_s, opt&.to_s) if quick && !@cancel
+    @cancel = false
     @response
   rescue TeslaError => e
     if e.message.match?(/forbidden/i)
