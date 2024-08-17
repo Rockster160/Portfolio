@@ -1,22 +1,22 @@
 RSpec.describe JarvisCache, type: :model do
   let!(:user) { User.create(id: 1, role: :admin, username: :admiin, password: :password, password_confirmation: :password) }
-  let(:caches) { user.jarvis_caches }
+  let(:caches) { user.caches }
 
   describe "#get" do
     it "returns the cache object" do
-      val = User.me.caches.get(:bowlingCarStarted)
+      val = caches.get(:bowlingCarStarted)
       expect(val).to eq({})
 
       # numbers are currently broken since we set these at top level
-      # User.me.caches.set(:somethingElse, 15)
-      # expect(User.me.caches.get(:somethingElse)).to eq(15)
+      # caches.set(:somethingElse, 15)
+      # expect(caches.get(:somethingElse)).to eq(15)
 
-      User.me.caches.set(:blah, { thing: :set })
-      expect(User.me.caches.get(:blah)).to match_hash({ thing: "set" })
+      caches.set(:blah, { thing: :set })
+      expect(caches.get(:blah)).to match_hash({ thing: "set" })
 
-      User.me.caches.dig_set(:car, :state, :on)
-      expect(User.me.caches.get(:car)).to match_hash({ state: "on" })
-      expect(User.me.caches.dig(:car, :state)).to eq("on")
+      caches.dig_set(:car, :state, :on)
+      expect(caches.get(:car)).to match_hash({ state: "on" })
+      expect(caches.dig(:car, :state)).to eq("on")
     end
   end
 

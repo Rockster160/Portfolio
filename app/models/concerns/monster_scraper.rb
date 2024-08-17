@@ -70,7 +70,6 @@ module MonsterScraper
         description = skill_container.all('.list-group .list-group-item p').first.try(:text).to_s
         multiplier = description == multiplier ? "" : multiplier
         hit_count = NumbersInWords.in_numbers(description.match(/attacks the enemy \w+ times/i).to_s[18..-7]).to_i
-        binding.pry unless skill_container.all('.panel-heading .panel-title strong').any?
         skill_attrs = {
           name: skill_container.find('.panel-heading .panel-title strong').text,
           description: description,

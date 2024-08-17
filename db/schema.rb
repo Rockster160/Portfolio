@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_06_29_015034) do
+ActiveRecord::Schema[7.1].define(version: 2024_08_16_055003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -400,6 +400,21 @@ ActiveRecord::Schema[7.1].define(version: 2024_06_29_015034) do
     t.index ["user_id"], name: "index_jarvis_tasks_on_user_id"
   end
 
+  create_table "jil_executions", force: :cascade do |t|
+    t.bigint "user_id"
+    t.bigint "jil_task_id"
+    t.integer "status", default: 0
+    t.jsonb "input_data"
+    t.text "code"
+    t.jsonb "ctx"
+    t.datetime "started_at", default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime "finished_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["jil_task_id"], name: "index_jil_executions_on_jil_task_id"
+    t.index ["user_id"], name: "index_jil_executions_on_user_id"
+  end
+
   create_table "jil_prompts", force: :cascade do |t|
     t.text "question"
     t.jsonb "params"
@@ -412,6 +427,21 @@ ActiveRecord::Schema[7.1].define(version: 2024_06_29_015034) do
     t.datetime "updated_at", null: false
     t.index ["task_id"], name: "index_jil_prompts_on_task_id"
     t.index ["user_id"], name: "index_jil_prompts_on_user_id"
+  end
+
+  create_table "jil_tasks", force: :cascade do |t|
+    t.uuid "uuid"
+    t.bigint "user_id"
+    t.integer "sort_order"
+    t.text "name"
+    t.text "cron"
+    t.text "listener"
+    t.text "code"
+    t.boolean "enabled", default: true
+    t.datetime "next_trigger_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_jil_tasks_on_user_id"
   end
 
   create_table "jil_usages", force: :cascade do |t|

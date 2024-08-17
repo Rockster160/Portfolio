@@ -200,9 +200,7 @@ class CharacterBuilder
   end
 
   def randomly_find_clothes_for_path(path)
-    # o = self.class.outfit_paths_from_list(default_outfits, path, include_found: true)
-    # binding.pry
-    # o
+    # self.class.outfit_paths_from_list(default_outfits, path, include_found: true)
   end
 
   def remove_invalid_attributes

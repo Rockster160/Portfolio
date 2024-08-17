@@ -50,7 +50,6 @@ class Maze
     end
     @dead_ends = find_dead_ends(array)
     downstairs_x, downstairs_y = @dead_ends.sample.to_a.map(&:last)
-    # binding.pry unless downstairs_x && downstairs_y
     array[downstairs_y][downstairs_x] = "#{@end_str} "
     array
   end

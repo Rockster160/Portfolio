@@ -4,7 +4,7 @@
 # tz.untokenize!(str)
 
 class Tokenizer
-  attr_accessor :stored_strings, :token
+  attr_accessor :stored_strings
 
   def self.protect(str, *rxs, &block)
     return str if str.blank?
@@ -36,10 +36,14 @@ class Tokenizer
   def initialize(full_str)
     @unwrap = nil
     @stored_strings = []
-    @token = loop {
+    @token_prefix = loop {
       hex = SecureRandom.hex(3).scan(/.{2}/).join("-")
       break hex unless full_str.include?(hex)
     }
+  end
+
+  def token(idx)
+    "[#{@token_prefix}-#{idx.to_s.rjust(2, "0")}]"
   end
 
   def stepper(str)
@@ -58,8 +62,12 @@ class Tokenizer
   def tokenize!(full, regex)
     full.gsub!(regex) do |found|
       @stored_strings << found
-      "[#{@token}-#{@stored_strings.length-1}]"
+      token(@stored_strings.length-1)
     end
+  end
+
+  def tokenize(full, regex)
+    tokenize!(full.dup, regex) || full.dup
   end
 
   def untokenize!(full, levels=nil)
@@ -69,31 +77,14 @@ class Tokenizer
       break if levels && i > levels
       start = full.dup
       @stored_strings.each_with_index do |stored, idx|
-        full.gsub!("[#{@token}-#{idx}]", stored)
+        full.gsub!(token(idx), stored)
       end
       break if start == full
     end
     full
-  end
-
-  def tokenize(full, regex)
-    full.gsub(regex) do |found|
-      @stored_strings << found
-      "[#{@token}-#{@stored_strings.length-1}]"
-    end
   end
 
   def untokenize(full, levels=nil)
-    i = 0
-    loop do
-      i += 1
-      break if levels && i > levels
-      start = full.dup
-      @stored_strings.each_with_index do |stored, idx|
-        full = full.gsub("[#{@token}-#{idx}]", stored)
-      end
-      break if start == full
-    end
-    full
+    untokenize!(full.dup, levels) || full.dup
   end
 end

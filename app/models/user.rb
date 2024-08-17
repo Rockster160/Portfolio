@@ -19,6 +19,7 @@ class User < ApplicationRecord
 
   has_many :api_keys, dependent: :destroy
   has_many :jarvis_tasks, dependent: :destroy
+  has_many :jil_tasks, dependent: :destroy
   has_many :cron_tasks, dependent: :destroy
   has_many :bowling_leagues, dependent: :destroy
   has_many :climbs, dependent: :destroy
@@ -46,7 +47,7 @@ class User < ApplicationRecord
   def avatar; super() || build_avatar; end
   has_one :jarvis_page, dependent: :destroy
   def jarvis_page; super() || build_jarvis_page; end
-  has_many :jarvis_caches, class_name: "JarvisCache"
+  has_many :jarvis_caches, class_name: "JarvisCache" # DO NOT USE! Use `caches` instead
   def caches = ::JarvisCache.assign(user: self).left_joins(:cache_shares).where("cache_shares.user_id = :id OR jarvis_caches.user_id = :id", id: id)
 
   has_secure_password validations: false

@@ -1,20 +1,20 @@
 class Jil::Parser
   attr_accessor :commented, :varname, :objname, :methodname, :args, :cast
 
-  REGEX = /
-    (?<commented>\#)?\s*
-    (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
-    (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
-    \.(?<methodname>[_0-9A-Za-z]+)
-    \((?<args>[\s\S]*)\)
-    ::(?<cast>[A-Z][_0-9A-Za-z]*)
-  /x
+  # REGEX = /
+  #   \s*(?<commented>\#)?\s*
+  #   (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
+  #   (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
+  #   \.(?<methodname>[_0-9A-Za-z]+)
+  #   \((?<args>[\s\S]*)\) -- Only difference from ESCAPED_REGEX
+  #   ::(?<cast>[A-Z][_0-9A-Za-z]*)
+  # /x
   ESCAPED_REGEX = /
-    (?<commented>\#)?\s*
+    \s*(?<commented>\#)?\s*
     (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
     (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
-    \.(?<methodname>[_0-9A-Za-z]+)
-    (?<args>\[[a-f0-9]{2}-[a-f0-9]{2}-[a-f0-9]{2}-[a-f0-9]{2}\])
+    \.(?<methodname>[_0-9A-Za-z]+[!?]?)
+    (?<args>\[[a-z0-9]{2}-[a-z0-9]{2}-[a-z0-9]{2}-[a-z0-9]{2}\])
     ::(?<cast>[A-Z][_0-9A-Za-z]*)
   /xm
 
@@ -33,21 +33,45 @@ class Jil::Parser
         tk.untokenize(escaped, 1).then { |piece|
           if piece.starts_with?("{") && piece.ends_with?("}")
             from_tokenized_code(piece, tk)
+          elsif piece.starts_with?("\"") && piece.ends_with?("\"")
+            piece[1..-2]
           else
-            piece
+            begin
+              ::JSON.parse(piece) rescue piece
+            rescue JSON::ParserError => e
+              piece
+            end
           end
         }
       }
-      line = Jil::Parser.new(commented, varname, objname, methodname, args, cast)
-    }#.tap { |vals|  }
+      ::Jil::Parser.new(commented, varname, objname, methodname, args, cast)
+    }.tap { |vals|
+      # binding.pry
+    }
   end
 
   def initialize(commented, varname, objname, methodname, args, cast)
-    @commented = commented
-    @varname = varname
-    @objname = objname
-    @methodname = methodname
-    @args = args
-    @cast = cast
+    @commented = commented.present?
+    @varname = varname.to_sym
+    @objname = objname.to_sym
+    @methodname = methodname.to_sym
+    @args = Array.wrap(args)
+    @cast = cast.to_sym
+  end
+
+  def commented?
+    commented
+  end
+
+  def arg
+    args.first
+  end
+
+  def cast_arg
+    cast_args.first
+  end
+
+  def cast_args
+    args.map { |arg|  }
   end
 end
