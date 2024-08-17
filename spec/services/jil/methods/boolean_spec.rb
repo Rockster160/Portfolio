@@ -6,6 +6,14 @@ RSpec.describe Jil::Methods::Boolean do
   let(:input_data) { {} }
   let(:ctx) { execute.ctx }
 
+  # [Boolean]::checkbox
+  #   #new(Any::Boolean)
+  #   #eq(Any "==" Any)
+  #   #or(Any "||" Any)
+  #   #and(Any "&&" Any)
+  #   #not("NOT" Any)
+  #   #compare(Any ["==" "!=" ">" "<" ">=" "<="] Any)
+
   context "new with casted vals" do
     let(:code) {
       <<-JIL

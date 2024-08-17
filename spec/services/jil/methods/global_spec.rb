@@ -14,13 +14,7 @@ RSpec.describe Jil::Methods::Global do
   let(:input_data) { {} }
   let(:ctx) { execute.ctx }
 
-  # Specifically need to test loops, cache, and variables
-
   # [Global]
-  #   // #qloop(content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
-  #   // #switch(Any::Boolean)
-  #   // #thing(TAB "π" TAB)
-  #   // #test(String?("Default Value"):"Bigger Placeholder" "and" Numeric(2))
   #   #input_data::Hash
   #   #return(Any?)
   #   #if("IF" content "DO" content "ELSE" content)::Any
@@ -28,7 +22,6 @@ RSpec.describe Jil::Methods::Global do
   #   #set!(String "=" Any)::Any
   #   #get_cache(String)::Any // Could Cache.get be a non-object Class? Doesn't show up in return-types, but is still a class for organization
   #   #set_cache!(String "=" Any)::Any
-  #   #exit
   #   #print(Text)::String
   #   #comment(Text)::None
   #   #command(String)::String
@@ -38,7 +31,12 @@ RSpec.describe Jil::Methods::Global do
   #   #dowhile(content(["Break"::Any "Next"::Any "Index"::Numeric]))::Any
   #   #loop(content(["Break"::Any "Next"::Any "Index"::Numeric]))::Any
   #   #times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
-  #   #eval(Text) # Should return the value given by a "return" that's called inside
+
+  # command
+  # broadcast_websocket
+  # request
+  # trigger
+  # times
 
   context "#loop, Next, Break, Index, Return" do
     let(:code) {
@@ -138,6 +136,96 @@ RSpec.describe Jil::Methods::Global do
         daaab: { class: :Numeric, value: 123 }, # Unchanged
       })
       expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context "#request" do
+    # let(:code) { 'ee984 = Global.request("GET", "https://a.4cdn.org/boards.json", "", "")::Hash' }
+    #
+    # it "hits an endpoint and returns the data" do
+    #   expect_successful_jil
+    #
+    #   data = ctx.dig(:vars, :ee984)
+    #   expect(data[:class]).to eq(:Hash)
+    #   expect(data[:value].keys).to match_array([:code, :body, :headers])
+    #   expect(data.dig(:value, :body).class).to eq(::Hash)
+    # end
+  end
+
+  context "#command" do
+    let(:code) { 'ee984 = Global.command("Add whatever")::String' }
+
+    before do
+      user.lists.create(name: "TODO")
+    end
+
+    it "commands Jarvis to do the thing" do
+      expect_successful_jil
+
+      expect(ctx[:vars]).to match_hash({
+        ee984: { class: :String, value: "TODO:\n - whatever" }
+      })
+    end
+  end
+
+  context "#broadcast_websocket" do
+    let(:code) {
+      <<-JIL
+        v305d = Hash.new({
+          i785d = Keyval.new("action", "open")::Keyval
+        })::Hash
+        ldfd0 = Global.broadcast_websocket("garage", v305d)::Numeric
+      JIL
+    }
+
+    it "commands Jarvis to do the thing" do
+      expect_successful_jil
+
+      expect(ctx[:vars]).to match_hash({
+        i785d: { class: :Keyval,  value: {"action"=>"open"} },
+        v305d: { class: :Hash,    value: {"action"=>"open"} },
+        ldfd0: { class: :Numeric, value: 0 },
+      })
+    end
+  end
+
+  context "#trigger" do
+    let(:task_code) {
+      <<-JIL
+        r5ee3 = Array.new({
+          rb9ed = String.new("Hello, World!")::String
+          ydfcd = Boolean.new(false)::Boolean
+          xfaed = Numeric.new(47)::Numeric
+        })::Array
+      JIL
+    }
+    let!(:task) {
+      ::JilTask.create(listener: "magic:listener", user: user, code: task_code)
+    }
+    let(:code) {
+      <<-JIL
+        e2e54 = Hash.new({
+          qe8be = Keyval.keyHash("nest", {
+            ne65c = Keyval.keyHash("data", {
+              d8e4a = Keyval.new("foo", "listener")::Keyval
+            })::Keyval
+          })::Keyval
+        })::Hash
+        z54c9 = Global.trigger("magic", e2e54)::Numeric
+      JIL
+    }
+
+    it "triggers the relevant tasks" do
+      expect_successful_jil
+
+      expect(ctx[:vars]).to match_hash({
+        d8e4a: { class: :Keyval,  value: {"foo": "listener"} },
+        ne65c: { class: :Keyval,  value: {"data": {"foo": "listener"}} },
+        qe8be: { class: :Keyval,  value: {"nest": {"data": {"foo": "listener"}}} },
+        e2e54: { class: :Hash,    value: {"nest": {"data": {"foo": "listener"}}} },
+        z54c9: { class: :Numeric, value: 1 },
+      })
+      expect(::JilExecution.count).to eq(2)
     end
   end
 end

@@ -17,6 +17,7 @@ class Jil::Methods::Boolean < Jil::Methods::Base
       @jil.cast(left, :Numeric).send(sign, @jil.cast(right, :Numeric))
     else
       send(line.methodname, line.args)
+      # send(line.methodname, *evalargs(line.args))
     end
   end
 end

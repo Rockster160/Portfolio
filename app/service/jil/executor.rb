@@ -1,25 +1,57 @@
 class Jil::Executor
   attr_accessor :user, :ctx, :lines
 
-  def self.call(user, code, input_data={})
-    new(user, code, input_data).execute_all
+  def self.trigger(user, trigger, trigger_data={})
+    user_ids = (
+      case user
+      when ::User then [user.id]
+      when ::ActiveRecord::Relation then user.ids
+      else ::Array.wrap(user)
+      end
+    )
+
+    begin
+      trigger_data = ::JSON.parse(trigger_data) if trigger_data.is_a?(::String)
+    rescue ::JSON::ParserError
+    end
+
+    user_tasks = ::JilTask.enabled.ordered.where(user_id: user_ids).distinct
+    user_tasks.by_listener(trigger).filter_map do |task|
+      task.match_run(trigger, trigger_data) && task rescue nil
+    end
   end
 
-  def initialize(user, code, input_data={})
+  def self.call(user, code, input_data={}, task: nil)
+    new(user, code, input_data, task: nil).execute_all
+  end
+
+  def initialize(user, code, input_data={}, task: nil)
+    # @debug = true && !Rails.env.production?
+    load("/Users/rocco/.pryrc") if @debug
+
     @user = user
     @ctx = { vars: {}, input_data: input_data, return_val: nil, state: :running, output: [] }
+    @execution = ::JilExecution.create(user: user, code: code, ctx: @ctx, jil_task: task)
     @lines = ::Jil::Parser.from_code(code)
+  end
+
+  def store_progress(attrs={})
+    @execution.update(attrs.merge(ctx: @ctx))
+    # push ws?
   end
 
   def execute_all
     @ctx[:time_start] = Time.current
     begin
       execute_block(@lines)
+      store_progress(status: :success, finished_at: Time.current)
     # rescue ::Jil::ExecutionError => e
     #   @ctx[:error] = e.message
+    #   store_progress(status: :failed, finished_at: Time.current)
     rescue => e
       @ctx[:error] = "[#{e.class}] #{e.message}"
       @ctx[:error_line] = e.backtrace.find { |l| l.include?("/app/") }
+      store_progress(status: :failed, finished_at: Time.current)
     end
     @ctx[:state] = :complete
     @ctx[:time_complete] = Time.current
@@ -39,8 +71,10 @@ class Jil::Executor
       execute_line(line, current_ctx).tap { |line_val|
         @ctx[:vars][line.varname.to_sym] = line_val
         last_line_val = line_val[:value]
-        # str = "#{line.varname} = #{line.objname}.#{line.methodname}(#{line.args.join(", ")})::#{line.cast}"
-        # load("/Users/rocco/.pryrc"); source_puts "\e[37m#{str} → #{line_val[:value].inspect}"
+        if @debug
+          str = "#{line.varname} = #{line.objname}.#{line.methodname}(#{line.args.join(", ")})::#{line.cast}"
+          source_puts "\e[37m#{str} → #{line_val[:value].inspect}"
+        end
       }
     end
     last_line_val
@@ -101,7 +135,7 @@ class Jil::Executor
     last_val = nil
     loop do
       idx += 1
-      # load("/Users/rocco/.pryrc"); source_puts "#{idx} → #{lctx}"
+      # source_puts "#{idx} → #{lctx}" if @debug
       break unless @ctx[:state] == :running
       break unless lctx[:state] == :running
       break if lctx[:break]

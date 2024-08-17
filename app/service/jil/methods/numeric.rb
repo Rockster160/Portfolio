@@ -3,6 +3,7 @@ class Jil::Methods::Numeric < Jil::Methods::Base
     case value
     when FalseClass, NilClass then 0
     when TrueClass then 1
+    when ::Array, ::Hash then value.length
     else value.to_f.then { |n| n.to_i == n ? n.to_i : n }
     end
   end

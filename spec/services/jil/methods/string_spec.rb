@@ -6,6 +6,18 @@ RSpec.describe Jil::Methods::String do
   let(:input_data) { {} }
   let(:ctx) { execute.ctx }
 
+  # [Text]::textarea
+  #   #new(Text)::String
+  # [String]::text
+  #   #new(Any)
+  #   .match(String)
+  #   .scan(String)::Array
+  #   .split(String?)::Array
+  #   .format(["lower" "upper" "squish" "capital" "pascal" "title" "snake" "camel" "base64"])
+  #   .replace(String "with" String)
+  #   .add("+" String)
+  #   .length()::Numeric
+
   describe "[Text]" do
     context "new" do
       let(:code) {

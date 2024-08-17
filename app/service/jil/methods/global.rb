@@ -28,11 +28,21 @@ class Jil::Methods::Global < Jil::Methods::Base
       }
     when :comment then evalarg(line.arg)
     when :loop then @jil.enumerate_loop { |ctx| evalarg(line.arg, ctx) }
+    when :dowhile
+      @jil.enumerate_loop { |ctx|
+        val = evalarg(line.arg, ctx)
+        break val if val
+      }
     when :Key then @ctx[:key]
     when :Index then @ctx[:index]
     when :Value, :Object then @ctx[:value]
-    else send(line.methodname, *line.args)
+    when :get, :set! then send(line.methodname, *line.args)
+    else send(line.methodname, *evalargs(line.args))
     end
+  end
+
+  def logic_if(condition, do_result, else_result)
+    evalarg(condition) ? evalarg(do_result) : evalarg(else_result)
   end
 
   def get_cache(var)
@@ -48,29 +58,50 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def set!(var, val)
-    set_value(var, val)
+    set_value(var, evalarg(val))
   end
 
-  def logic_if(condition, do_result, else_result)
-    evalarg(condition) ? evalarg(do_result) : evalarg(else_result)
+  def command(text)
+    ::Jarvis.command(@jil.user, text)
   end
+
+  def broadcast_websocket(channel, data)
+    ::SocketChannel.send_to(@jil.user, channel, data)
+  end
+
+  def request(method, url, params, headers)
+    # TODO: Support different content-types
+    res = (
+      case method.to_s.upcase.to_sym
+      when :GET
+        ::RestClient.get(
+          url,
+          @jil.cast(headers.presence || {}, :Hash).merge(params: params),
+        )
+      when :POST, :PATCH, :PUT, :DELETE
+        ::RestClient.send(method.to_s.downcase,
+          url,
+          @jil.cast(params.presence || {}, :Hash).to_json,
+          @jil.cast(headers.presence || {}, :Hash),
+        )
+      end
+    )
+    body = res.body
+    body = ::JSON.parse(body) rescue body if res.headers[:content_type].match?(/json/)
+
+    {
+      code: res.code,
+      headers: res.headers,
+      body: body,
+    }
+  end
+
+  def trigger(scope, data)
+    ::Jil::Executor.trigger(@jil.user, scope, data)
+  end
+
+  # def import
+  # end
+
+  # times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
 end
-# [Global]
-# [~]   #input_data::Hash
-# [~]   #return(Any?)
-# [~]   #if("IF" content "DO" content "ELSE" content)::Any
-# [ ]   #get(String)::Any // Variable reference
-# [ ]   #set!(String "=" Any)::Any
-# [ ]   #get_cache(String)::Any // Could Cache.get be a non-object Class? Doesn't show up in return-types, but is still a class for organization
-# [ ]   #set_cache(String "=" Any)::Any
-# [~]   #exit
-# [~]   #print(Text)::String
-# [~]   #comment(Text)::None
-# [ ]   #command(String)::String
-# [ ]   #request("Method" String BR "URL" String BR "Params" Hash BR "Headers" Hash)::Hash
-# [ ]   #broadcast_websocket("Channel" TAB String BR "Data" TAB Hash)::Numeric
-# [ ]   #trigger(String Hash)::Numeric
-# [ ]   #dowhile(content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
-# [ ]   #loop(content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
-# [ ]   #times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
-# [ ]   #eval(Text) # Should return the value given by a "return" that's called inside

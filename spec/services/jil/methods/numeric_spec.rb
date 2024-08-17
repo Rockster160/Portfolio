@@ -6,6 +6,32 @@ RSpec.describe Jil::Methods::Numeric do
   let(:input_data) { {} }
   let(:ctx) { execute.ctx }
 
+  # [Numeric]::number
+  #   #new(Any::Numeric)
+  #   #pi(TAB "π" TAB)
+  #   #e(TAB "e" TAB)
+  #   #inf()
+  #   #rand(Numeric:min Numeric:max Numeric?:figures)
+  #   .round(Numeric(0))
+  #   .floor
+  #   .ceil
+  #   .op(["+" "-" "*" "/" "%" "^log"] Numeric)
+  #   .op!(["+=" "-=" "*=" "/=" "%="] Numeric)
+  #   .abs
+  #   .sqrt
+  #   .squared
+  #   .cubed
+  #   .log(Numeric)
+  #   .root(Numeric)
+  #   .exp(Numeric)
+  #   .zero?::Boolean
+  #   .even?::Boolean
+  #   .odd?::Boolean
+  #   .prime?::Boolean
+  #   .whole?::Boolean
+  #   .positive?::Boolean
+  #   .negative?::Boolean
+
   context "basic operator" do
     let(:code) {
       <<-JIL
