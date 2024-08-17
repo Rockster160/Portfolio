@@ -16,8 +16,13 @@ window.Statement = Statement
 window.selected = undefined
 
 // TODO: This should be specific to the current file, so that you can work on multiple at once
-console.log("Load", localStorage.getItem("jilcode"));
+// console.log("Load", localStorage.getItem("jilcode"));
 Statement.reloadFromText(localStorage.getItem("jilcode"))
+document.addEventListener("click", function(evt) {
+  if (evt.target.closest(".btn-save")) {
+    Statement.save()
+  }
+})
 
 Keyboard.on(["Alt", "Enter"], (evt) => {
   const wrapper = window.selected?.node || document
@@ -300,8 +305,6 @@ document.addEventListener("click", function(evt) {
   if (evt.target.closest(".statement-wrapper")) {
     if (!["INPUT", "SELECT", "TEXTAREA"].includes(evt.target.tagName)) {
       let statement = Statement.from(evt.target)
-      console.log(statement.toString());
-      console.log(statement);
       if (statement) { statement.selected = !statement.selected }
     }
   } else {
