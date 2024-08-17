@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>Jil</title>
+    <!-- <script src="https://kit.fontawesome.com/b00e44a575.js" crossorigin="anonymous"></script> -->
+  </head>
+  <body>
+    <div class="wrapper">
+      <div id="reference-dropdown" class="hidden"><ul></ul></div>
+
+      <div class="content-dropdown"><div class="reference"></div></div>
+      <div class="statements"></div>
+      <div class="content-dropdown below"><div class="reference"></div></div>
+    </div>
+
+    <template id="statement">
+      <div id="new-statement" class="statement-wrapper">
+        <div class="statement">
+          <span class="obj-dup fa fa-copy" title="Click to Duplicate below"></span>
+          <div class="obj-info">
+            <span class="obj-varname" title="Click to rename"></span><span class="hidden obj-eq"> =</span>
+            [<span class="obj-type"></span><span class="obj-refname hidden"></span><span class="obj-dot">.</span><span class="obj-method"></span>]
+          </div>
+          <div class="obj-actions">
+            <i class="obj-errors fa fa-exclamation-triangle hidden" title=""></i>
+            <i class="obj-delete fa fa-trash" title="Click to remove"></i>
+          </div>
+          <div class="handle"><i class="fa fa-ellipsis-v"></i></div>
+          <div class="obj-data">
+            →<span class="obj-returntype"></span>
+          </div>
+          <div class="obj-args"></div>
+          <div class="reference"></div>
+        </div>
+      </div>
+    </template>
+    <template id="content-dropdown">
+      <div class="content-dropdown"><div class="reference"></div></div>
+    </template>
+
+    <%= stylesheet_link_tag "jil", media: "all" %>
+    <%= javascript_include_tag "jil", type: "module", defer: true %>
+  </body>
+</html>

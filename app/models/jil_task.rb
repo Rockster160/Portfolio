@@ -55,7 +55,6 @@ class JilTask < ApplicationRecord
   end
 
   def execute(data={})
-    # ::Jarvis::Execute.call(self, data)
     ::Jil::Executor.call(user, code, data, task: self)
   end
 
