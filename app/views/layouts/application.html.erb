@@ -28,7 +28,6 @@
   <%= csrf_meta_tags %>
 </head>
 <body class="ctr-<%= controller_name %> act-<%= action_name %> <%= content_for :body_classes %>">
-
   <%= render 'layouts/flashes' %>
   <%= yield :modals %>
   <%= render partial: "layouts/guest_banner" if @show_guest_banner %>
