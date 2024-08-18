@@ -3,7 +3,7 @@ class CreateJilTask < ActiveRecord::Migration[7.1]
     # library tasks?
     # shared task?
     create_table :jil_tasks do |t|
-      t.uuid :uuid
+      t.uuid :uuid, default: -> { "uuid_generate_v4()" }
       t.belongs_to :user
       t.integer :sort_order
       t.text :name
@@ -12,6 +12,7 @@ class CreateJilTask < ActiveRecord::Migration[7.1]
       t.text :code
       t.boolean :enabled, default: true
       t.datetime :next_trigger_at
+      t.datetime :last_trigger_at
 
       t.timestamps
     end

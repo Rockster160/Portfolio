@@ -6,6 +6,7 @@
 #  code            :text
 #  cron            :text
 #  enabled         :boolean          default(TRUE)
+#  last_trigger_at :datetime
 #  listener        :text
 #  name            :text
 #  next_trigger_at :datetime
@@ -28,6 +29,10 @@ class JilTask < ApplicationRecord
     safe_trigger = Regexp.escape(listener)
     where("listener ~* '(^|\\s)#{safe_trigger}(~|:|$)'")
   }
+
+  def serialize
+    attributes.deep_symbolize_keys.except(:created_at, :updated_at)
+  end
 
   def listener_match?(trigger, &block)
     # TODO: trigger must be an exact, not partial match

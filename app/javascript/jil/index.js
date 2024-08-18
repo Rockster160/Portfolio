@@ -8,21 +8,13 @@ import Schema from "./schema.js"
 import Mouse from "./mouse.js"
 import Keyboard from "./keyboard.js"
 import Tokenizer from "./tokenizer.js"
-
-// import Task from "tasks/resync_garage.jil"
+import saveUtils from "./save_utils.js"
 
 window.Schema = Schema
 window.Statement = Statement
 window.selected = undefined
 
-// TODO: This should be specific to the current file, so that you can work on multiple at once
-// console.log("Load", localStorage.getItem("jilcode"));
-Statement.reloadFromText(localStorage.getItem("jilcode"))
-document.addEventListener("click", function(evt) {
-  if (evt.target.closest(".btn-save")) {
-    Statement.save()
-  }
-})
+saveUtils()
 
 Keyboard.on(["Alt", "Enter"], (evt) => {
   const wrapper = window.selected?.node || document

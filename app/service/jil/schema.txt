@@ -1,8 +1,4 @@
 [Global]
-  // #qloop(content(["Break"(Numeric)::Any "Next"::Any "Index"::Numeric]))::Numeric
-  // #switch(Any::Boolean)
-  // #thing(TAB "π" TAB)
-  // #test(String?("Default Value"):"Bigger Placeholder" "and" Numeric(2))
   #input_data::Hash
   #return(Any?)
   #if("IF" content "DO" content "ELSE" content)::Any

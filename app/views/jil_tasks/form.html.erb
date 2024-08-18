@@ -1,0 +1,54 @@
+<div class="config-wrapper">
+  <div class="config">
+    <%= form_for @task, html: { id: "jil_task_form" } do |f| %>
+      <%= f.text_field :name, placeholder: :Title %>
+      <%= f.text_field :cron, placeholder: :Cron %>
+      <%= f.text_field :listener, placeholder: :Listener %>
+
+      <div class="btns">
+        <span></span>
+        <div class="btn btn-save">Save</div>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div id="reference-dropdown" class="hidden"><ul></ul></div>
+
+  <div class="content-dropdown"><div class="reference"></div></div>
+  <div class="statements"></div>
+  <div class="content-dropdown below"><div class="reference"></div></div>
+</div>
+
+<template id="statement">
+  <div id="new-statement" class="statement-wrapper">
+    <div class="statement">
+      <span class="obj-dup fa fa-copy" title="Click to Duplicate below"></span>
+      <div class="obj-info">
+        <span class="obj-varname" title="Click to rename"></span><span class="hidden obj-eq"> =</span>
+        [<span class="obj-type"></span><span class="obj-refname hidden"></span><span class="obj-dot">.</span><span class="obj-method"></span>]
+      </div>
+      <div class="obj-actions">
+        <i class="obj-errors fa fa-exclamation-triangle hidden" title=""></i>
+        <i class="obj-delete fa fa-trash" title="Click to remove"></i>
+      </div>
+      <div class="handle"><i class="fa fa-ellipsis-v"></i></div>
+      <div class="obj-data">
+        →<span class="obj-returntype"></span>
+      </div>
+      <div class="obj-args"></div>
+      <div class="reference"></div>
+    </div>
+  </div>
+</template>
+
+<template id="content-dropdown">
+  <div class="content-dropdown"><div class="reference"></div></div>
+</template>
+
+<script type="text/javascript">
+  window.load_code = <%= raw @task.id.present? ? "`#{@task.code}`" : "undefined" %>;
+  window.load_schema = `<%= File.read("app/service/jil/schema.txt").html_safe %>`
+</script>
+<%= javascript_include_tag "jil", type: "module", defer: true %>

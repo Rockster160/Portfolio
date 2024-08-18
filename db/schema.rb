@@ -430,7 +430,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_08_16_055003) do
   end
 
   create_table "jil_tasks", force: :cascade do |t|
-    t.uuid "uuid"
+    t.uuid "uuid", default: -> { "uuid_generate_v4()" }
     t.bigint "user_id"
     t.integer "sort_order"
     t.text "name"
@@ -439,6 +439,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_08_16_055003) do
     t.text "code"
     t.boolean "enabled", default: true
     t.datetime "next_trigger_at"
+    t.datetime "last_trigger_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_jil_tasks_on_user_id"

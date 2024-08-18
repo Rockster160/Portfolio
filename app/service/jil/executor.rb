@@ -41,6 +41,7 @@ class Jil::Executor
   end
 
   def execute_all
+    @execution.task&.update(last_trigger_at: Time.current)
     @ctx[:time_start] = Time.current
     begin
       execute_block(@lines)
