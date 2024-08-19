@@ -125,6 +125,7 @@ input, textarea, select {
   text-shadow: 0 1px 0 darken($btn-color, 15%);
 
   &:hover {
+    cursor: pointer;
     background-color: darken($btn-color, 15%);
     box-shadow: 0 1px 0 0 $btn-color;
   }

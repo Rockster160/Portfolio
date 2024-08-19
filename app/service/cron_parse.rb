@@ -1,9 +1,9 @@
 module CronParse
   module_function
 
-  def next(cron)
+  def next(cron, user=nil)
     # current_user.timezone
-    Time.use_zone(User.timezone) {
+    Time.use_zone((user || User).timezone) {
       # Do NOT use commas to split- commas are part of cron syntax, so should not be used for multiple crons
       cron.split(/\s*\|\s*/).filter_map { |cron_str|
         Fugit::Cron.parse(cron_str)&.next_time&.to_i&.then { |i| Time.zone.at(i) }

@@ -9,7 +9,7 @@
   end
 
   def pretty_user
-    return colorize(:grey, "[?]\n") unless current_user.present?
+    return colorize(:grey, "[#{request.ip}]\n") unless current_user.present?
     return colorize(:grey, "Guest:#{current_user.id}\n") if current_user.guest?
 
     name = current_user.try(:username).presence

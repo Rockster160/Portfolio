@@ -34,6 +34,16 @@ class JilTasksController < ApplicationController
     }
   end
 
+  def run
+    @task = current_user.jil_tasks.find_by(id: params[:id]) unless params[:id] == "new"
+    code = params[:code]
+    data = params[:data]
+
+    ::Jil::Executor.async_call(current_user, code, data || {}, task: @task)
+
+    head :ok
+  end
+
   private
 
   def jil_task_params

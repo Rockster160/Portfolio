@@ -21,8 +21,12 @@ class Jil::Executor
     end
   end
 
+  def self.async_call(user, code, input_data={}, task: nil)
+    ::JilExecuteWorker.perform_async(user.id, code, input_data, task&.id)
+  end
+
   def self.call(user, code, input_data={}, task: nil)
-    new(user, code, input_data, task: nil).execute_all
+    new(user, code, input_data, task: task).execute_all
   end
 
   def initialize(user, code, input_data={}, task: nil)
@@ -41,21 +45,25 @@ class Jil::Executor
   end
 
   def execute_all
-    @execution.task&.update(last_trigger_at: Time.current)
+    @execution.jil_task&.update(last_trigger_at: Time.current)
     @ctx[:time_start] = Time.current
+    state = :running
     begin
       execute_block(@lines)
-      store_progress(status: :success, finished_at: Time.current)
+      state = :success
     # rescue ::Jil::ExecutionError => e
     #   @ctx[:error] = e.message
-    #   store_progress(status: :failed, finished_at: Time.current)
+    #   state = :failed
     rescue => e
       @ctx[:error] = "[#{e.class}] #{e.message}"
       @ctx[:error_line] = e.backtrace.find { |l| l.include?("/app/") }
-      store_progress(status: :failed, finished_at: Time.current)
+      state = :failed
+    ensure
+      @ctx[:state] = :complete
+      @ctx[:time_complete] = Time.current
+      store_progress(finished_at: Time.current, status: state)
     end
-    @ctx[:state] = :complete
-    @ctx[:time_complete] = Time.current
+    # @execution.jil_task&.update(last_trigger_at: Time.current)
     self
   end
 

@@ -66,6 +66,6 @@ class JilTask < ApplicationRecord
   private
 
   def set_next_cron
-    self.next_trigger_at = ::CronParse.next(cron) if cron.present?
+    self.next_trigger_at = ::CronParse.next(cron, user) if cron.present?
   end
 end

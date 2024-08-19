@@ -6,7 +6,9 @@
       <%= f.text_field :listener, placeholder: :Listener %>
 
       <div class="btns">
-        <span></span>
+        <div class="btn btn-run" href="<%= run_jil_task_path(@task.id || :new) %>">Run</div>
+        <div class="btn btn-history disabled">History</div>
+        <div class="btn btn-config disabled">Config</div>
         <div class="btn btn-save">Save</div>
       </div>
     <% end %>
