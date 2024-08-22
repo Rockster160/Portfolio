@@ -42,7 +42,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
       if line.objname.match?(/^[A-Z]/)
         send(method, token_val(line.objname), *evalargs(line.args))
       else
-        token_val(line.objname).send(method, *evalargs(line.args))
+        token_val(line.objname).with_indifferent_access.send(method, *evalargs(line.args))
       end
     end
   end

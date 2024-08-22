@@ -1,7 +1,7 @@
 class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :post_params, except: [:local_data, :report]
-  before_action :none_unless_user, only: [:jil, :command]
+  before_action :none_unless_user, only: [:execute_jil_task, :jil, :command]
   before_action :none_unless_admin, only: [:battery, :local_data, :report, :speak, :tesla_local]
   skip_before_action :pretty_logit, only: [:local_data, :report] # Lots of data here
 
