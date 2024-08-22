@@ -35,7 +35,7 @@ class Jil::Methods::Base
     @jil.ctx&.dig(:vars, token.to_sym, :value)
   end
 
-  def execute(line)
+  def execute(line) # TODO: Do not override this in lower classes, just have a different method to call
     case line.methodname
     when :new then cast(evalarg(line.arg))
     else
@@ -44,7 +44,6 @@ class Jil::Methods::Base
   end
 
   def fallback(line)
-    # require "pry-rails"; binding.pry if line.methodname == :now
     if line.objname.match?(/^[A-Z]/)
       send(line.methodname, *evalargs(line.args))
     elsif respond_to?(line.methodname)

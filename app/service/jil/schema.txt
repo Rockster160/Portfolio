@@ -63,16 +63,16 @@
   #and(Any "&&" Any)
   #not("NOT" Any)
   #compare(Any ["==" "!=" ">" "<" ">=" "<="] Any)
-[Duration]
-  #new(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
-  .add(Duration)
-  .subtract(Duration)
 [Date]::datetime-local
   #new(Numeric:year Numeric:month Numeric:day Numeric:hour Numeric:min Numeric:sec)
   #now
+  #ago(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
+  #from_now(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
   .piece(["second" "minute" "hour" "day" "week" "month" "year"])::Numeric
   .adjust(["+", "-"], Duration|Numeric)
-  .round("TO" ["beginning" "end"] "OF" ["second" "minute" "hour" "day" "week" "month" "year"])
+  .add(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
+  .subtract(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
+  .round("TO" ["beginning" "end" "nearest"] "OF" ["minute" "hour" "day" "week" "month" "year"])
   .format(String)::String
 [Hash]
   #new(content(Keyval [Keyval.new]))
