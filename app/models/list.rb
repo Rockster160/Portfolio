@@ -60,6 +60,32 @@ class List < ApplicationRecord
     all.map(&:serialize)
   end
 
+  def jil_serialize
+    as_json(
+      only: [
+        :id,
+        :name,
+        :description,
+        :important,
+        :parameterized_name,
+        :show_deleted,
+      ],
+      include: {
+        list_items: {
+          only: [
+            :id,
+            :name,
+            :category,
+            :important,
+            :permanent,
+            :sort_order,
+            :deleted_at,
+          ],
+        }
+      }
+    ).with_indifferent_access
+  end
+
   def serialize
     {
       id: id,

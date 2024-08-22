@@ -1,7 +1,7 @@
 class Jil::Methods::List < Jil::Methods::Base
   def cast(value)
     case value
-    when ::List then serialize(value)
+    when ::List then { id: value.id }
     else @jil.cast(value, :Hash)
     end
   end
@@ -11,23 +11,23 @@ class Jil::Methods::List < Jil::Methods::Base
   end
 
   def name(list)
-    cast(list)[:name]
+    load_list(list).name
   end
 
   def add(list, item_name)
-    @jil.user.lists.find(cast(list)[:id]).add(item_name)
+    load_list(list).add(item_name)
   end
 
   def remove(list, item_name)
-    @jil.user.lists.find(cast(list)[:id]).remove(item_name)
+    load_list(list).remove(item_name)
   end
 
   def items(list)
-    cast(list)[:list_items]
+    list_data(list)[:list_items]
   end
 
   def has_item?(list, item_name)
-    item = @jil.user.lists.find(cast(list)[:id]).list_items.by_data(name: item_name)
+    item = load_list(list).list_items.by_data(name: item_name)
     return false if item.nil?
 
     !item.deleted?
@@ -35,30 +35,12 @@ class Jil::Methods::List < Jil::Methods::Base
 
   private
 
-  def serialize(list)
-    list.as_json(
-      only: [
-        :id,
-        :name,
-        :description,
-        :important,
-        :parameterized_name,
-        :show_deleted,
-      ],
-      include: {
-        list_items: {
-          only: [
-            :id,
-            :name,
-            :category,
-            :important,
-            :permanent,
-            :sort_order,
-            :deleted_at,
-          ],
-        }
-      }
-    ).with_indifferent_access
+  def list_data(jil_list)
+    load_list(jil_list).jil_serialize
+  end
+
+  def load_list(jil_list)
+    @jil.user.lists.find(cast(jil_list)[:id])
   end
 end
 

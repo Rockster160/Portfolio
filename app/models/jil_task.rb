@@ -33,11 +33,15 @@ class JilTask < ApplicationRecord
   }
 
   def last_execution
-    jil_executions.order(:finished_at).last
+    @last_execution ||= jil_executions.order(:finished_at).last
   end
 
   def last_result
     last_execution&.result
+  end
+
+  def last_output
+    last_execution&.output
   end
 
   def serialize

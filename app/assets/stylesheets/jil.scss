@@ -52,13 +52,13 @@ body {
 .hidden { display: none !important; }
 
 #reference-dropdown {
-  background: white;
+  position: fixed;
+  z-index: 1;
   border-radius: 5px;
+  background: white;
+  width: 200px;
   height: auto;
   overflow: auto;
-  position: fixed;
-  width: 200px;
-  z-index: 1;
 
   ul {
     margin: 10px;
@@ -67,8 +67,8 @@ body {
 
     li {
       border-radius: 5px;
-      list-style-type: none;
       padding: 2px 5px;
+      list-style-type: none;
     }
 
     li:not(:has(ul)).dropdown-hovered-item {
@@ -80,8 +80,8 @@ body {
      ul {
        display: flex;
        justify-content: space-around;
-       list-style-type: none;
        margin: 0;
+       list-style-type: none;
 
        li {
          display: inline-block;
@@ -91,28 +91,28 @@ body {
 }
 
 input, textarea, select {
-  background-color: var(--input-bg);
-  border: 1px solid lightgrey;
-  border-color: rgba(211, 211, 211, 1);
-  border-radius: 4px;
-  color: lightgrey;
   display: inline-block;
-  font-size: 12px;
   margin: 3px 1px;
+  border: 1px solid lightgrey;
+  border-radius: 4px;
+  border-color: rgba(211, 211, 211, 1);
+  background-color: var(--input-bg);
+  color: lightgrey;
+  font-size: 12px;
 
   &::placeholder {
-    color: lightgrey;
     opacity: 0.4;
+    color: lightgrey;
   }
   &::-webkit-scrollbar {
     background: lightgrey;
-    height: 4px;
     width: 4px;
+    height: 4px;
   }
   &::-webkit-scrollbar-thumb {
-    background: var(--statement-bg);
-    border-radius: 1ex;
     box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.75);
+    border-radius: 1ex;
+    background: var(--statement-bg);
   }
   &::-webkit-scrollbar-corner {
     background: lightgrey;
@@ -120,19 +120,19 @@ input, textarea, select {
 }
 
 @mixin btn-color($btn-color) {
-  background-color: $btn-color;
   box-shadow: 0 1px 0 0 lighten($btn-color, 15%);
+  background-color: $btn-color;
   text-shadow: 0 1px 0 darken($btn-color, 15%);
 
   &:hover {
     cursor: pointer;
-    background-color: darken($btn-color, 15%);
     box-shadow: 0 1px 0 0 $btn-color;
+    background-color: darken($btn-color, 15%);
   }
 
   &:active, &.active {
-    background-color: darken($btn-color, 20%);
     box-shadow: 0 1px 0 0 darken($btn-color, 5%);
+    background-color: darken($btn-color, 20%);
   }
 }
 // Button-ish
@@ -183,46 +183,66 @@ input[type=submit] {
 
   .config {
     margin: 0 auto;
-    max-width: var(--statement-width);
     width: 100%;
+    max-width: var(--statement-width);
 
     input {
-      font-size: 18px;
       padding: 5px;
       width: 100%;
+      font-size: 18px;
     }
 
     .btns {
       display: flex;
       justify-content: space-between;
       margin-top: 10px;
-
-      .btn {
-
-      }
     }
   }
 }
+
+.results {
+  margin: 10px auto;
+  border-radius: 10px;
+  background: var(--statement-bg);
+  padding: 10px;
+  width: 100%;
+  max-width: var(--statement-width);
+  border: 2px solid $text-color;
+
+  &:has(.result:empty):has(.output:empty) {
+    display: none;
+  }
+
+  .result {
+    color: lime;
+  }
+  .output {
+    font-size: 12px;
+    color: lightgrey;
+    white-space: pre-wrap;
+  }
+}
+
 .wrapper {
   margin: 0 auto;
   width: 100%;
 
   .statements {
     margin: 0 auto;
-    max-width: var(--statement-width);
     width: 100%;
+    max-width: var(--statement-width);
   }
   .statement-wrapper {
     width: 100%;
 
     .statement {
-      background-color: var(--statement-bg);
+      position: relative;
+      margin: 5px 0;
       border: 1px solid lightgrey;
       border-radius: 5px;
-      margin: 5px 0;
+      background-color: var(--statement-bg);
       padding: 12px;
       padding-left: 25px;
-      position: relative;
 
       .obj-args {
         display: flex;
@@ -236,46 +256,46 @@ input[type=submit] {
         }
         nl {
           display: block;
-          height: 5px;
           width: 100%;
+          height: 5px;
         }
 
         .content {
-          min-height: 10px;
           position: relative;
           width: 100%;
+          min-height: 10px;
 
           &:before {
+            position: absolute;
+            left: -5px;
+            border-right: none;
+            border-width: 1px 1px 1px;
+            border-style: solid none solid solid;
             border-color: lightgrey lightgrey lightgrey;
             border-image: initial;
-            border-right: none;
-            border-style: solid none solid solid;
-            border-width: 1px 1px 1px;
-            content: "";
-            height: 100%;
-            left: -5px;
-            min-height: 10px;
-            position: absolute;
             width: 2px;
+            height: 100%;
+            min-height: 10px;
+            content: "";
           }
 
           &.open {
-            min-height: 50px;
             padding-bottom: 12px;
+            min-height: 50px;
 
             .content-dropdown.below {
-              bottom: 0;
-              left: 0;
               position: absolute;
               right: 0;
+              bottom: 0;
+              left: 0;
             }
           }
         }
       }
 
       .obj-info, .obj-dup, .obj-actions, .obj-data {
-        font-size: 10px;
         position: absolute;
+        font-size: 10px;
 
         * { display: inline-block; }
         .obj-dup, .obj-varname, .obj-delete, .obj-returntype {
@@ -284,52 +304,52 @@ input[type=submit] {
       }
 
       .obj-dup {
-        color: white;
-        left: 5px;
         position: absolute;
         top: 2px;
+        left: 5px;
         width: 10px;
+        color: white;
       }
       .obj-info {
-        left: 20px;
         top: 2px;
+        left: 20px;
 
         .obj-type { color: var(--syntax-class); }
         .obj-varname { color: var(--style-varname); }
         .obj-varname.noname:before {
           color: lightgrey;
-          content: "\f303"; /* fa-pencil */
           font-family: var(--fa-style-family, "Font Awesome 6 Free");
           font-weight: var(--fa-style, 900);
+          content: "\f303"; /* fa-pencil */
         }
         .obj-refname { color: var(--style-varname); }
       }
       .obj-actions {
-        right: 5px;
         top: 2px;
+        right: 5px;
 
         .obj-delete { color: var(--style-danger); }
       }
 
       .obj-data {
-        bottom: 0;
         right: 2px;
+        bottom: 0;
 
         .obj-returntype {
-          color: var(--syntax-class);
           padding-left: 2px;
+          color: var(--syntax-class);
         }
       }
       .handle {
-        cursor: move;
-        height: 20px;
-        left: 5px;
-        line-height: 20px;
-        margin-top: -10px;
         position: absolute;
-        text-align: center;
         top: 50%;
+        left: 5px;
+        cursor: move;
+        margin-top: -10px;
         width: 15px;
+        height: 20px;
+        line-height: 20px;
+        text-align: center;
       }
     }
     &.selected .statement { background-color: var(--statement-bg-highlight); }
@@ -345,15 +365,15 @@ input[type=submit] {
       position: relative;
 
       &:after {
-        background-color: grey;
+        position: absolute;
+        top: 0;
+        right: 0;
         bottom: 0;
-        content: '';
         left: 0;
         /* background-color: var(--statement-bg-commented); */
         opacity: 0.6;
-        position: absolute;
-        right: 0;
-        top: 0;
+        background-color: grey;
+        content: '';
       }
 
       /* select, input, textarea {
@@ -363,12 +383,12 @@ input[type=submit] {
     }
 
     &.flash .statement {
-      background-color: var(--statement-flash);
       transition: background-color 0s ease-in;
+      background-color: var(--statement-flash);
     }
     &.flash.fade-out .statement {
-      background-color: initial;
       transition: background-color 0.3s ease-out;
+      background-color: initial;
     }
     &.error .statement {
       background-color: var(--style-danger);
@@ -379,24 +399,24 @@ input[type=submit] {
 }
 
 .content-dropdown {
-  background: var(--input-bg);
-  border-radius: 5px;
-  cursor: pointer;
-  padding: 12px;
   position: relative;
+  cursor: pointer;
+  border-radius: 5px;
+  background: var(--input-bg);
+  padding: 12px;
 }
 .content > .content-dropdown {
   padding: 6px;
 }
 
 .reference {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='white' stroke-width='5px' viewBox='0 0 100 20'%3E%3Cpath d='M 3,3 50,17 97,3'/%3E%3C/svg%3E");
-  bottom: 2px;
-  height: 5px;
-  left: 50%;
   position: absolute;
+  bottom: 2px;
+  left: 50%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='white' stroke-width='5px' viewBox='0 0 100 20'%3E%3Cpath d='M 3,3 50,17 97,3'/%3E%3C/svg%3E");
   width: var(--statement-width);
   width: calc(5px*5);
+  height: 5px;
 }
 .content-dropdown {
   margin: 0 auto;
@@ -412,39 +432,39 @@ input[type=submit] {
     position: relative;
   }
   btn {
-    background: var(--input-bg);
-    border: 1px solid lightgrey;
-    border-radius: 4px 0 0 4px;
-    border-right: none;
-    cursor: pointer;
     display: inline-block;
-    height: 18px;
-    margin-right: -1px;
-    margin-top: 3px;
     position: relative;
     vertical-align: top;
+    cursor: pointer;
+    margin-top: 3px;
+    margin-right: -1px;
+    border: 1px solid lightgrey;
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    background: var(--input-bg);
     width: 18px;
+    height: 18px;
 
     &:after {
-      border-left: 3px solid transparent;
-      border-right: 3px solid transparent;
-      border-top: 4px solid lightgrey;
-      content: "";
-      height: 0;
-      left: 5px;
       position: absolute;
       top: calc(50% - 1px);
+      left: 5px;
+      border-top: 4px solid lightgrey;
+      border-right: 3px solid transparent;
+      border-left: 3px solid transparent;
       width: 0;
+      height: 0;
+      content: "";
     }
     &:not(:empty) {
+      margin-right: 1px;
       border: 1px solid lightgrey;
       border-radius: 4px;
+      padding-left: 20px;
+      width: 93px;
       font-size: 10px;
       line-height: 18px;
-      margin-right: 1px;
-      padding-left: 20px;
       text-align: center;
-      width: 93px;
     }
   }
   // input, textarea, select {
@@ -475,24 +495,24 @@ input[type=submit] {
     display: none;
   }
   .input-wrapper:has([required]):after {
-    content: "*";
-    font-size: 8px;
-    left: -2px;
     position: absolute;
     top: -2px;
+    left: -2px;
+    font-size: 8px;
+    content: "*";
   }
   .selected-tag {
+    margin-left: 3px;
     color: var(--style-varname);
     font-size: 12px;
-    margin-left: 3px;
   }
   btn + input, btn + select {
     border-left: none;
     border-radius: 0 4px 4px 0;
   }
   textarea {
-    max-width: 100%;
     width: 100%;
+    max-width: 100%;
   }
   // input, textarea, select, textarea {
   //   &::placeholder {
@@ -516,10 +536,10 @@ input[type=submit] {
 }
 .statement:has(> .obj-args:empty) {
   .obj-info {
-    font-size: 16px;
-    left: 0;
     position: relative;
     top: 3px;
+    left: 0;
+    font-size: 16px;
   }
   .obj-args {
     min-height: 0;
@@ -527,50 +547,50 @@ input[type=submit] {
 }
 
 .switch {
-  background: none;
   display: inline-block;
-  height: calc(var(--checkbox-width)/3 + 3);
-  margin-left: 5px;
   position: relative;
+  margin-left: 5px;
+  background: none;
   width: var(--checkbox-width);
+  height: calc(var(--checkbox-width)/3 + 3);
 
   /* Hide default HTML checkbox */
   input {
-    height: 0;
     opacity: 0;
     width: 0;
+    height: 0;
   }
   .slider {
-    background-color: lightgrey; /* Off BG color */
-    border-radius: var(--checkbox-width);
-    bottom: 0;
-    cursor: pointer;
-    left: 0;
     position: absolute;
-    right: 0;
     top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     transition: 0.4s;
+    cursor: pointer;
+    border-radius: var(--checkbox-width);
+    background-color: lightgrey; /* Off BG color */
 
     &:before {
-      background-color: white; /* Slider Circle color */
-      border-radius: var(--checkbox-height);
-      bottom: var(--checkbox-padding);
-      content: "";
-      height: var(--checkbox-innerheight);
-      left: var(--checkbox-padding);
       position: absolute;
+      bottom: var(--checkbox-padding);
+      left: var(--checkbox-padding);
       transition: 0.4s;
+      border-radius: var(--checkbox-height);
+      background-color: white; /* Slider Circle color */
       width: var(--checkbox-innerheight);
+      height: var(--checkbox-innerheight);
+      content: "";
     }
     &:after {
-      color: black; /* False Text color */
-      content: "false";
-      font-size: var(--checkbox-fontsize);
-      left: calc(var(--checkbox-padding)*2);
-      line-height: var(--checkbox-height);
       position: absolute;
       right: calc(var(--checkbox-padding)*2);
+      left: calc(var(--checkbox-padding)*2);
+      color: black; /* False Text color */
+      font-size: var(--checkbox-fontsize);
+      line-height: var(--checkbox-height);
       text-align: right;
+      content: "false";
     }
   }
 
@@ -584,8 +604,8 @@ input[type=submit] {
     }
     &:after {
       color: white; /* True Text color */
-      content: "true";
       text-align: left;
+      content: "true";
     }
   }
 }

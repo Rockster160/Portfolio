@@ -1,6 +1,12 @@
 <div class="config-wrapper">
   <div class="config">
+    <div class="btns">
+      <a class="btn" href="<%= jil_tasks_path %>">All Tasks</a>
+    </div>
+    <br>
+
     <%= form_for @task, html: { id: "jil_task_form" } do |f| %>
+      <%= f.hidden_field :uuid, disabled: true %>
       <%= f.text_field :name, placeholder: :Title %>
       <%= f.text_field :cron, placeholder: :Cron %>
       <%= f.text_field :listener, placeholder: :Listener %>
@@ -21,6 +27,11 @@
   <div class="content-dropdown"><div class="reference"></div></div>
   <div class="statements"></div>
   <div class="content-dropdown below"><div class="reference"></div></div>
+</div>
+
+<div class="results">
+  <p class="result"><%= @task.last_result %></p>
+  <p class="output"><%= @task.last_output&.join("\n") %></p>
 </div>
 
 <template id="statement">

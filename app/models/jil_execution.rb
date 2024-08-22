@@ -43,4 +43,8 @@ class JilExecution < ApplicationRecord
   def result
     (ctx || {}).deep_symbolize_keys[:return_val]
   end
+
+  def output
+    (ctx || {}).deep_symbolize_keys[:output]
+  end
 end

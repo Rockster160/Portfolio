@@ -155,17 +155,20 @@ export default class Statement {
 
   get wrapper() { return this.node.parentElement }
 
-  flash() {
-    this.node.classList.remove("flash")
-    this.node.classList.remove("fade-out")
-    clearTimeout(this.flashTimer)
-
-    this.node.classList.add("flash")
-    setTimeout(() => this.node.classList.add("fade-out"), 50)
-    this.flashTimer = setTimeout(() => {
+  flash(on) {
+    if (on) {
       this.node.classList.remove("flash")
       this.node.classList.remove("fade-out")
-    }, 300)
+      clearTimeout(this.flashTimer)
+
+      this.node.classList.add("flash")
+    } else {
+      setTimeout(() => this.node.classList.add("fade-out"), 50)
+      this.flashTimer = setTimeout(() => {
+        this.node.classList.remove("flash")
+        this.node.classList.remove("fade-out")
+      }, 300)
+    }
   }
 
   addToPage() {
@@ -236,7 +239,7 @@ export default class Statement {
     if (this.scope == "instance" && !this.reference) {
       this.addError("Reference not found")
     }
-    console.log(this.name, this.method, this.scope)
+    // console.log(this.name, this.method, this.scope)
     // Make sure `type` is imported/defined
     // Make sure `method` is defined on `type` as respective class/instance level
     // Make sure each arg is valid

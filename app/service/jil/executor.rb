@@ -62,8 +62,19 @@ class Jil::Executor
     # push ws?
   end
 
+  def broadcast!
+    data = {
+      line: @ctx[:line],
+      output: @ctx[:output] || [],
+      state: @ctx[:state],
+      result: @ctx[:return_val],
+    }
+    ::JilTasksChannel.send_to(@user, @execution&.jil_task&.uuid || :new, data)
+  end
+
   def execute_all
     @execution.jil_task&.update(last_trigger_at: Time.current)
+    broadcast!
     @ctx[:time_start] = Time.current
     state = :running
     begin
@@ -81,6 +92,7 @@ class Jil::Executor
       @ctx[:time_complete] = Time.current
       store_progress(finished_at: Time.current, status: state)
     end
+    broadcast!
     self
   end
 
@@ -108,6 +120,7 @@ class Jil::Executor
 
   def execute_line(line, current_ctx={})
     @ctx[:line] = line.varname
+    broadcast!
     klass = (
       if line.objname.match?(/^[A-Z]/) # upcase for class or downcase for instance
         klass_from_obj(line.objname)
