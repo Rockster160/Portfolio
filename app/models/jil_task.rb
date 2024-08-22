@@ -74,9 +74,7 @@ class JilTask < ApplicationRecord
   end
 
   def execute(data={})
-    ::Jil::Executor.call(user, code, data, task: self).tap { |exe|
-      # require "pry-rails"; binding.pry
-    }
+    ::Jil::Executor.call(user, code, data, task: self)
   end
 
   private

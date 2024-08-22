@@ -5,6 +5,8 @@ class JarvisScheduleWorker
   def perform
     tasks = ::JarvisTask.enabled.where(next_trigger_at: ..Time.current)
     crons = ::CronTask.enabled.where(next_trigger_at: ..Time.current)
+    # TODO: Jil should show up in Upcoming?
+    jils = ::JilTask.enabled.where(next_trigger_at: ..Time.current)
     broadcast_after = tasks.any? || crons.any?
 
     crons.find_each do |task|
@@ -14,6 +16,9 @@ class JarvisScheduleWorker
     end
     tasks.find_each do |task|
       ::Jarvis::Execute.call(task) # These are run inline
+    end
+    jils.find_each do |task|
+      task.execute
     end
 
     ::BroadcastUpcomingWorker.perform_async if broadcast_after
