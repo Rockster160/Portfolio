@@ -66,8 +66,8 @@
 [Date]::datetime-local
   #new(Numeric:year Numeric:month Numeric:day Numeric:hour Numeric:min Numeric:sec)
   #now
-  #ago(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
-  #from_now(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
+  #ago(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"] "ago")
+  #from_now(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"] "from now")
   .piece(["second" "minute" "hour" "day" "week" "month" "year"])::Numeric
   .adjust(["+", "-"], Duration|Numeric)
   .add(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
@@ -121,7 +121,7 @@
   .sum::Any
   .join(String)::String
 [List]
-  #find(String|Numeric)
+  #find(String:Name)
   #search(String)::Array
   #create(String)
   .name::String
@@ -130,6 +130,7 @@
   .add(String)::Boolean
   .remove(String)::Boolean
   .items::Array
+  .has_item?(String)::Boolean
 [ListItem]
   #find(String|Numeric)
   #search(String)::Array # All items belonging to user through user lists

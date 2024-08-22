@@ -1,10 +1,9 @@
 class Jil::Methods::Hash < Jil::Methods::Base
   def cast(value)
     case value
-    when ::Jil::Parser then hash_wrap(evalargs(value.args))
-    when ::Hash then value.to_h
+    when ::Jil::Parser then cast(hash_wrap(evalargs(value.args)))
     when ::Array
-      value.each_with_object({}) { |item, obj|
+      cast(value.each_with_object({}) { |item, obj|
         if item.is_a?(::Jil::Parser) && item.objname == :Keyval
           evalargs(item.args).tap { |k,v| obj[k] = v }
         elsif item.is_a?(::Array) && item.length == 2
@@ -12,9 +11,9 @@ class Jil::Methods::Hash < Jil::Methods::Base
         elsif item.is_a?(::Array)
           item
         end
-      }
+      })
     else
-      value.to_h
+      value.to_h.with_indifferent_access
     end
   end
 
@@ -37,7 +36,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
     when :filter
       @jil.enumerate_hash(token_val(line.objname), method) { |ctx|
         evalarg(line.arg, ctx)
-      }.to_h { |(k,v),i| [k,v] }
+      }.to_h.with_indifferent_access { |(k,v),i| [k,v] }
     else
       if line.objname.match?(/^[A-Z]/)
         send(method, token_val(line.objname), *evalargs(line.args))
