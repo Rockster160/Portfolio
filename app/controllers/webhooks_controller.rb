@@ -26,18 +26,28 @@ class WebhooksController < ApplicationController
   end
 
   def jil
-    task = ::JarvisTask.anyfind(
-      params[:uuid].presence || params[:id].presence || params[:name].presence || params[:task_name]
+    ::Jil::Executor.async_trigger(
+      current_user,
+      :webhook,
+      { params: json_params },
     )
-    res = task.execute(params.to_unsafe_h.except(:controller, :action))
-    # ::Jarvis.trigger_events(current_user, :webhook, params...)
 
-    if res.none?
-      render json: { error: "No webhooks found with that id" }
-    elsif res.many?
-      render json: { data: res[..-2] } # Remove "Success" from the end
+    head :ok
+  end
+
+  def execute_jil_task
+    task = current_user.jil_tasks.find_by(uuid: params[:uuid])
+
+    if task.present?
+      exe = task.match_run(:webhook, { params: json_params })
+
+      if exe.nil?
+        render json: { data: nil, task: nil, notice: "Task found, but input data does not match listener." }
+      else
+        render json: { data: task.last_result, task: task.serialize_with_execution }
+      end
     else
-      render json: { data: res.first }
+      execute_jarvis_task
     end
   end
 
@@ -204,6 +214,36 @@ class WebhooksController < ApplicationController
   end
 
   private
+
+  def json_params
+    @json_params ||= begin
+      json = params.to_unsafe_h.except(:controller, :action)
+      return json unless json.keys.length == 2 # uuid and broken json
+
+      json_key = json.except(:uuid).keys.first
+      return json unless json[json_key].nil?
+
+      json.except(json_key).merge(JSON.parse(json_key, symbolize_names: true))
+    rescue JSON::ParserError
+      json
+    end
+  end
+
+  def execute_jarvis_task
+    task = ::JarvisTask.anyfind(
+      params[:uuid].presence || params[:id].presence || params[:name].presence || params[:task_name]
+    )
+    res = task.execute(json_params)
+    # ::Jarvis.trigger_events(current_user, :webhook, params...)
+
+    if res.none?
+      render json: { error: "No webhooks found with that id" }
+    elsif res.many?
+      render json: { data: res[..-2] } # Remove "Success" from the end
+    else
+      render json: { data: res.first }
+    end
+  end
 
   def none_unless_user
     head :no_content unless user_signed_in?

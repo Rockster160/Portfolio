@@ -24,4 +24,23 @@ class JilExecution < ApplicationRecord
     success:   2,
     failed:    3,
   }
+
+  def serialize
+    attributes.deep_symbolize_keys.except(
+      :id,
+      :created_at,
+      :updated_at,
+      :jil_task_id,
+      :user_id,
+      :input_data,
+      :code,
+      :ctx,
+    ).merge(
+      ctx.deep_symbolize_keys.slice(:error, :output, :line)
+    )
+  end
+
+  def result
+    (ctx || {}).deep_symbolize_keys[:return_val]
+  end
 end

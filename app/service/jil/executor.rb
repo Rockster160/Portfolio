@@ -1,6 +1,24 @@
 class Jil::Executor
   attr_accessor :user, :ctx, :lines
 
+  def self.async_trigger(user, trigger, trigger_data={})
+    user_ids = (
+      case user
+      when ::User then [user.id]
+      when ::ActiveRecord::Relation then user.ids
+      else ::Array.wrap(user)
+      end
+    )
+
+    begin
+      trigger_data = ::JSON.parse(trigger_data) if trigger_data.is_a?(::String)
+    rescue ::JSON::ParserError
+      trigger_data = {}
+    end
+
+    ::JilTriggerWorker.perform_async(user_ids, trigger, trigger_data)
+  end
+
   def self.trigger(user, trigger, trigger_data={})
     user_ids = (
       case user
@@ -63,7 +81,6 @@ class Jil::Executor
       @ctx[:time_complete] = Time.current
       store_progress(finished_at: Time.current, status: state)
     end
-    # @execution.jil_task&.update(last_trigger_at: Time.current)
     self
   end
 

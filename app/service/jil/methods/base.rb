@@ -39,18 +39,23 @@ class Jil::Methods::Base
     case line.methodname
     when :new then cast(evalarg(line.arg))
     else
-      if line.objname.match?(/^[A-Z]/)
-        send(line.methodname, token_val(line.objname), *evalargs(line.args))
-      elsif respond_to?(line.methodname)
-        send(line.methodname, token_val(line.objname), *evalargs(line.args)).tap { |new_val|
-          if line.methodname.ends_with?("!")
-            token = line.objname.to_sym
-            @jil.ctx[:vars][token][:value] = new_val
-          end
-        }
-      else
-        token_val(line.objname).send(line.methodname, *evalargs(line.args))
-      end
+      fallback(line)
+    end
+  end
+
+  def fallback(line)
+    # require "pry-rails"; binding.pry if line.methodname == :now
+    if line.objname.match?(/^[A-Z]/)
+      send(line.methodname, *evalargs(line.args))
+    elsif respond_to?(line.methodname)
+      send(line.methodname, token_val(line.objname), *evalargs(line.args)).tap { |new_val|
+        if line.methodname.ends_with?("!")
+          token = line.objname.to_sym
+          @jil.ctx[:vars][token][:value] = new_val
+        end
+      }
+    else
+      token_val(line.objname).send(line.methodname, *evalargs(line.args))
     end
   end
 

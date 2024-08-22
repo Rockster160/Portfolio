@@ -24,14 +24,28 @@ class JilTask < ApplicationRecord
   after_create { reload } # Needed to retrieve the generated uuid on the current instance in memory
   orderable sort_order: :desc, scope: ->(task) { task.user.jil_tasks }
 
+  has_many :jil_executions
+
   scope :enabled, -> { where(enabled: true) }
   scope :by_listener, ->(listener) {
     safe_trigger = Regexp.escape(listener)
     where("listener ~* '(^|\\s)#{safe_trigger}(~|:|$)'")
   }
 
+  def last_execution
+    jil_executions.order(:finished_at).last
+  end
+
+  def last_result
+    last_execution&.result
+  end
+
   def serialize
-    attributes.deep_symbolize_keys.except(:created_at, :updated_at)
+    attributes.deep_symbolize_keys.except(:created_at, :updated_at, :code, :cron, :sort_order)
+  end
+
+  def serialize_with_execution
+    serialize.merge(last_execution&.serialize || {})
   end
 
   def listener_match?(trigger, &block)
@@ -60,7 +74,9 @@ class JilTask < ApplicationRecord
   end
 
   def execute(data={})
-    ::Jil::Executor.call(user, code, data, task: self)
+    ::Jil::Executor.call(user, code, data, task: self).tap { |exe|
+      # require "pry-rails"; binding.pry
+    }
   end
 
   private

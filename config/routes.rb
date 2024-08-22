@@ -40,7 +40,7 @@ Rails.application.routes.draw do
   resource :money_buckets, path: "/bucket"
 
   post "webhooks/tesla_local" => "webhooks#tesla_local"
-  post "webhooks/jil" => "webhooks#jil"
+  post "webhooks/jil" => "webhooks#execute_jil_task"
   post "webhooks/battery" => "webhooks#battery"
   post "webhooks/report" => "webhooks#report"
   post "webhooks/local_data" => "webhooks#local_data"
@@ -143,7 +143,7 @@ Rails.application.routes.draw do
     get "/:id", action: :show, controller: :jarvis_tasks
   end
   # Must be after `jil` namespace so it doesn't overwrite existing routes
-  post "jil/:uuid" => "webhooks#jil"
+  post "jil/:uuid" => "webhooks#execute_jil_task"
 
   resources :climbs do
     patch :mark, on: :collection
