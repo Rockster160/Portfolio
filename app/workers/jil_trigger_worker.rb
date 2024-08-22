@@ -1,4 +1,4 @@
-class JilExecuteWorker
+class JilTriggerWorker
   include Sidekiq::Worker
 
   def perform(user_ids, trigger, trigger_data={})
