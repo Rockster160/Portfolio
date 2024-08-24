@@ -46,11 +46,11 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def get_cache(var)
-    @jil.user.caches.dig(:jil, var)
+    @jil.user.caches.dig(var)
   end
 
   def set_cache(var, val)
-    @jil.user.caches.dig_set(:jil, var, val) && val
+    @jil.user.caches.dig_set(var, val) && val
   end
 
   def get(var)

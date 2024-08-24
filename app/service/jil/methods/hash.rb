@@ -1,7 +1,7 @@
 class Jil::Methods::Hash < Jil::Methods::Base
   def cast(value)
     case value
-    when ::List then cast()
+    when ::List then cast(value.jil_serialize)
     when ::Jil::Parser then cast(hash_wrap(evalargs(value.args)))
     when ::Array
       cast(value.each_with_object({}) { |item, obj|

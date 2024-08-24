@@ -32,10 +32,6 @@ RSpec.describe Jil::Methods::Global do
   #   #loop(content(["Break"::Any "Next"::Any "Index"::Numeric]))::Any
   #   #times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
 
-  # command
-  # broadcast_websocket
-  # request
-  # trigger
   # times
 
   context "#loop, Next, Break, Index, Return" do
@@ -139,7 +135,7 @@ RSpec.describe Jil::Methods::Global do
     end
   end
 
-  context "#request" do
+  context "#request" do # Working, just commented out to avoid needless requests
     # let(:code) { 'ee984 = Global.request("GET", "https://a.4cdn.org/boards.json", "", "")::Hash' }
     #
     # it "hits an endpoint and returns the data" do

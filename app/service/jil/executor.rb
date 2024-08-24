@@ -187,8 +187,9 @@ class Jil::Executor
     last_val
   end
 
-  def cast(value, type, current_ctx={})
+  def cast(value, type=nil, current_ctx={})
     case type
+    when nil then magic_cast(value)
     when :Any, :Global then value
     when :None then nil
     else klass_from_obj(type).new(self, current_ctx || @ctx).cast(value)
@@ -196,24 +197,6 @@ class Jil::Executor
   end
 
   def klass_from_obj(obj)
-    # ::ActiveModel::Type::Boolean.new.cast()
-    # [ ] Global
-    # [ ] Keyval
-    # [ ] Text
-    # [ ] String
-    # [ ] Numeric
-    # [ ] Boolean
-    # [ ] Duration
-    # [ ] Date
-    # [ ] Hash
-    # [ ] Array
-    # [ ] List
-    # [ ] ListItem
-    # [ ] ActionEvent
-    # [ ] Prompt
-    # [ ] PromptQuestion
-    # [ ] Task
-    # [ ] Email
     klass_name = obj.to_sym if obj.is_a?(::Symbol) || obj.is_a?(::String)
     klass_name = obj[:class] if obj.is_a?(::Hash)
     klass_name = (
@@ -228,5 +211,13 @@ class Jil::Executor
     "::Jil::Methods::#{klass_name}".constantize
   rescue NameError
     raise ::Jil::ExecutionError, "Class does not exist: `#{klass_name}`"
+  end
+
+  def magic_cast(value)
+    return value unless value.is_a?(::String)
+
+    YAML.safe_load(value, [::Symbol], aliases: true)
+  rescue
+    value
   end
 end

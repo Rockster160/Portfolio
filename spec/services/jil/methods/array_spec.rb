@@ -176,7 +176,7 @@ RSpec.describe Jil::Methods::Hash do
       JIL
     }
 
-    it "returns the item at the bottom of the dig" do
+    it "adds the two arrays together" do
       expect_successful_jil
       expect(ctx.dig(:vars)).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },

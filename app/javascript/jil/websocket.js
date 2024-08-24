@@ -8,7 +8,6 @@ const taskUuid = document.querySelector("#jil_task_uuid").value || "new"
 const resultsDiv = document.querySelector(".results .result")
 const ouputDiv = document.querySelector(".results .output")
 
-
 consumer.subscriptions.create({
   channel: "JilTasksChannel", id: taskUuid,
 },{

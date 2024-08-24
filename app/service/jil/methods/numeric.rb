@@ -22,6 +22,12 @@ class Jil::Methods::Numeric < Jil::Methods::Base
     return cast(val1) / cast(val2).to_f if operator == "/"
     cast(val1).send(operator, cast(val2))
   end
+
+  # def rand(min, max, sig_figs)
+  #   random_number = min + rand * (max - min)
+  #   scale_factor = 10**sig_figs
+  #   (random_number * scale_factor).round / scale_factor.to_f
+  # end
 end
 
 # [Numeric]::number
