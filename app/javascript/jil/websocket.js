@@ -19,6 +19,6 @@ consumer.subscriptions.create({
     }
     errorsDiv.innerText = data.error
     resultsDiv.innerText = data.result
-    ouputDiv.innerText = data.output?.replace("\\n", "\n")?.join("\n")
+    ouputDiv.innerText = data.output?.join("\n")
   }
 })
