@@ -20,8 +20,9 @@ RSpec.describe Jil::Methods::Global do
   #   #if("IF" content "DO" content "ELSE" content)::Any
   #   #get(String)::Any // Variable reference
   #   #set!(String "=" Any)::Any
-  #   #get_cache(String)::Any // Could Cache.get be a non-object Class? Doesn't show up in return-types, but is still a class for organization
-  #   #set_cache!(String "=" Any)::Any
+  #   #get_cache(String:"Cache Key" Any)::Any
+  #   #dig_cache(String:"Cache Key" content(Keyval [Keyval.new]))::Any
+  #   #set_cache(String:"Cache Key" Any "=" Any)::Any
   #   #print(Text)::String
   #   #comment(Text)::None
   #   #command(String)::String
@@ -95,16 +96,16 @@ RSpec.describe Jil::Methods::Global do
     let(:code) {
       <<-JIL
         s1e23 = Global.set!("abc", "123")::Numeric
-        cf84b = Global.get_cache("answer")::Numeric
+        cf84b = Global.get_cache("jil", "answer")::Numeric
         w9886 = cf84b.op!("+=", 5)::Numeric
         ucf39 = s1e23.op!("+=", 5)::Numeric
-        je119 = Global.get_cache("answer")::Numeric
+        je119 = Global.get_cache("jil", "answer")::Numeric
         h43d4 = Global.get("abc")::Numeric
-        ga973 = Global.set_cache("answer", "4321")::Numeric
+        ga973 = Global.set_cache("jil", "answer", "4321")::Numeric
         d6c8b = ga973.op!("+=", 5)::Numeric
-        b2a68 = Global.get_cache("answer")::Numeric
+        b2a68 = Global.get_cache("jil", "answer")::Numeric
         q5fa3 = b2a68.op!("+=", 5)::Numeric
-        t0f98 = Global.get_cache("answer")::Numeric
+        t0f98 = Global.get_cache("jil", "answer")::Numeric
         daaab = Global.get("abc")::Numeric
       JIL
     }

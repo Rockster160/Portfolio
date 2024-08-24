@@ -4,8 +4,9 @@
   #if("IF" content "DO" content "ELSE" content)::Any
   #get(String)::Any // Variable reference
   #set!(String "=" Any)::Any
-  #get_cache(String)::Any // Could Cache.get be a non-object Class? Doesn't show up in return-types, but is still a class for organization
-  #set_cache(String "=" Any)::Any
+  #get_cache(String:"Cache Key" Any)::Any // Could Cache.get be a non-object Class? Doesn't show up in return-types, but is still a class for organization
+  #dig_cache(String:"Cache Key" content(Keyval [Keyval.new]))::Any
+  #set_cache(String:"Cache Key" Any "=" Any)::Any
   #exit
   #print(Text)::String
   #comment(Text)::None

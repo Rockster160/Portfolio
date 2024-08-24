@@ -45,12 +45,16 @@ class Jil::Methods::Global < Jil::Methods::Base
     evalarg(condition) ? evalarg(do_result) : evalarg(else_result)
   end
 
-  def get_cache(var)
-    @jil.user.caches.dig(var)
+  def get_cache(key, var)
+    @jil.user.caches.dig(key, var)
   end
 
-  def set_cache(var, val)
-    @jil.user.caches.dig_set(var, val) && val
+  # def dig_cache(key, var)
+  #   @jil.user.caches.dig(key, var)
+  # end
+
+  def set_cache(key, var, val)
+    @jil.user.caches.dig_set(key, var, val) && val
   end
 
   def get(var)
