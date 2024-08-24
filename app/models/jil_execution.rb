@@ -40,6 +40,10 @@ class JilExecution < ApplicationRecord
     )
   end
 
+  def error
+    (ctx || {}).deep_symbolize_keys[:error]
+  end
+
   def result
     (ctx || {}).deep_symbolize_keys[:return_val]
   end

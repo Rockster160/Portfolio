@@ -36,6 +36,10 @@ class JilTask < ApplicationRecord
     @last_execution ||= jil_executions.order(:finished_at).last
   end
 
+  def last_error
+    last_execution&.error
+  end
+
   def last_result
     last_execution&.result
   end

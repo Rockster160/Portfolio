@@ -30,6 +30,7 @@
 </div>
 
 <div class="results">
+  <p class="error"><%= @task.last_error %></p>
   <p class="result"><%= @task.last_result %></p>
   <p class="output"><%= @task.last_output&.join("\n") %></p>
 </div>

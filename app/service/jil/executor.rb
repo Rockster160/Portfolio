@@ -65,6 +65,7 @@ class Jil::Executor
   def broadcast!
     data = {
       line: @ctx[:line],
+      error: @ctx[:error] || [],
       output: @ctx[:output] || [],
       state: @ctx[:state],
       result: @ctx[:return_val],

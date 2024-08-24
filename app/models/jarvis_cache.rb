@@ -35,7 +35,7 @@ class JarvisCache < ApplicationRecord
 
   def self.dig(*steps)
     key, *rest = steps.map { |s| s.to_s.to_sym }
-    get(key).dig(*rest)
+    rest.none? ? get(key) : get(key).dig(*rest)
   end
 
   def self.set(key, val)
@@ -63,7 +63,8 @@ class JarvisCache < ApplicationRecord
   end
 
   def dig(*steps)
-    (data || {}).dig(*steps.map { |s| s.to_s.to_sym })
+    d = (data || {})
+    steps.none? ? d : d.dig(*steps.map { |s| s.to_s.to_sym })
   end
 
   def set(key, val)

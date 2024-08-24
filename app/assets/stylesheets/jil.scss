@@ -209,10 +209,14 @@ input[type=submit] {
   max-width: var(--statement-width);
   border: 2px solid $text-color;
 
-  &:has(.result:empty):has(.output:empty) {
+  &:has(.result:empty):has(.output:empty):has(.error:empty) {
     display: none;
   }
 
+  .error {
+    color: red;
+    font-size: 12px;
+  }
   .result {
     color: lime;
   }
