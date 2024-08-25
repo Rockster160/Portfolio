@@ -39,7 +39,7 @@ class WebhooksController < ApplicationController
     task = current_user.jil_tasks.find_by(uuid: params[:uuid])
 
     if task.present?
-      exe = task.match_run(:webhook, { params: json_params })
+      exe = task.match_run(:webhook, { params: json_params }, force: true)
 
       if exe.nil?
         render json: { data: nil, task: nil, notice: "Task found, but input data does not match listener." }

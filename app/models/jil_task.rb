@@ -70,12 +70,13 @@ class JilTask < ApplicationRecord
     }
   end
 
-  def match_run(trigger, trigger_data)
+  def match_run(trigger, trigger_data, force: false)
     first_match = nil
-    return unless listener_match?(trigger) { |escaped_listener|
+    did_match = listener_match?(trigger) { |escaped_listener|
       matcher = ::SearchBreakMatcher.new(escaped_listener, { trigger => trigger_data })
       matcher.match?.tap { |m| first_match ||= matcher if m }
     }
+    return if !force && !did_match
 
     # pretty_log(trigger, trigger_data)
     execute(trigger_data.merge(first_match.regex_match_data))
