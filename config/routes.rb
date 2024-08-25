@@ -41,6 +41,7 @@ Rails.application.routes.draw do
 
   post "webhooks/tesla_local" => "webhooks#tesla_local"
   post "webhooks/jil" => "webhooks#execute_jil_task"
+  get "webhooks/jil" => "webhooks#execute_jil_task"
   post "webhooks/battery" => "webhooks#battery"
   post "webhooks/report" => "webhooks#report"
   post "webhooks/local_data" => "webhooks#local_data"
