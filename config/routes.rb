@@ -145,6 +145,7 @@ Rails.application.routes.draw do
   end
   # Must be after `jil` namespace so it doesn't overwrite existing routes
   post "jil/:uuid" => "webhooks#execute_jil_task"
+  get "jil/:uuid" => "webhooks#execute_jil_task"
 
   resources :climbs do
     patch :mark, on: :collection
