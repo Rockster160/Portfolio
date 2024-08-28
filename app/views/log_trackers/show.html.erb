@@ -16,7 +16,14 @@
   </div>
   <div style="margin-top: 20px;">
     <h4>IP</h4>
-    <p><%= @logger.ip_address %></p>
+    <p>
+      <%= @logger.ip_address %>
+      <% if @logger.banned? %>
+        <code>&lt;-- Banned --&gt;</code>
+      <% else %>
+        <%= link_to "BAN", ban_ip_path(ip: @logger.ip_address), class: "btn danger", method: :post %>
+      <% end %>
+    </p>
   </div>
   <div style="margin-top: 20px;">
     <h4>User Agent</h4>

@@ -72,7 +72,8 @@ Rails.application.routes.draw do
   resource :nfc, only: [:show]
 
   resources :emails, except: [:destroy, :edit]
-  resources :log_trackers, only: [ :index, :show ]
+  resources :log_trackers, only: [:index, :show ]
+  post "/ips/ban" => "log_trackers#ban", as: :ban_ip
 
   resources :surveys
   resources :survey_responses

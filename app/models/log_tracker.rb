@@ -64,6 +64,12 @@ class LogTracker < ApplicationRecord
     [location.country_code.presence, location.region_code.presence, location.city.presence].join(", ")
   end
 
+  def banned?
+    return false unless ip_address.present?
+
+    BannedIp.where(ip: ip_address).any?
+  end
+
   private
 
   def set_additional_tracking
