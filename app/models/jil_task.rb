@@ -48,6 +48,10 @@ class JilTask < ApplicationRecord
     last_execution&.output
   end
 
+  def stop_propagation?
+    !!last_execution&.stop_propagation?
+  end
+
   def serialize
     attributes.deep_symbolize_keys.except(:created_at, :updated_at, :code, :cron, :sort_order)
   end

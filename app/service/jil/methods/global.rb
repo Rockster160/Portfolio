@@ -37,6 +37,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     when :Index then @ctx[:index]
     when :Value, :Object then @ctx[:value]
     when :get, :set! then send(line.methodname, *line.args)
+    when :stop_propagation then @ctx[:stop_propagation] = true
     else send(line.methodname, *evalargs(line.args))
     end
   end

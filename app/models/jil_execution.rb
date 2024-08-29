@@ -51,4 +51,8 @@ class JilExecution < ApplicationRecord
   def output
     (ctx || {}).deep_symbolize_keys[:output]
   end
+
+  def stop_propagation?
+    !!(ctx || {}).deep_symbolize_keys[:stop_propagation]
+  end
 end

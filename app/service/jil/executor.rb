@@ -59,7 +59,6 @@ class Jil::Executor
 
   def store_progress(attrs={})
     @execution.update(attrs.merge(ctx: @ctx))
-    # push ws?
   end
 
   def broadcast!
