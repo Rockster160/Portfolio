@@ -78,7 +78,7 @@ class JilTask < ApplicationRecord
     }
     return if !force && !did_match
 
-    # pretty_log(trigger, trigger_data)
+    # pretty_log(trigger, trigger_data) if Rails.env.development?
     execute(trigger_data.merge(first_match.regex_match_data))
   end
 

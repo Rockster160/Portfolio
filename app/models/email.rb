@@ -185,6 +185,10 @@ class Email < ApplicationRecord
     success = save
 
     ::Jarvis.trigger_events(user_id, :email, serialize)
+    ::Jil::Executor.async_trigger(user_id, :email, serialize)
+    # Async is fine here because the code below should be in a task, not hard coded.
+    # The save above should be save! with a rescue that updates the status to failed parse and alerts Slack (as a dev/code error, not Jil error)
+
     # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier
 
     blacklist = [

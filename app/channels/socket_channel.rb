@@ -48,5 +48,6 @@ class SocketChannel < ApplicationCable::Channel
     logit(receive_data)
 
     ::Jarvis.trigger_events(current_user, :websocket, receive_data)
+    ::Jil::Executor.async_trigger(current_user, :websocket, receive_data)
   end
 end
