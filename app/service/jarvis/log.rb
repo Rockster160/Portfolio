@@ -38,6 +38,7 @@ class Jarvis::Log < Jarvis::Action
 
   def broadcast_event
     ::Jarvis.trigger_async(@event.user_id, :event, @event.serialize.merge(action: :added))
+    ::Jil::Executor.async_trigger(@event.user_id, :event, @event.serialize.merge(action: :added))
     ActionEventBroadcastWorker.perform_async(@event.id)
 
     evt_words = ["Logged #{@event.name}"]

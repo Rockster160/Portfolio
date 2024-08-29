@@ -22,6 +22,7 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
       timestamp: timestamp,
     )
     ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: :added))
+    ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: :added))
     ::ActionEventBroadcastWorker.perform_async(event.id) if event.persisted?
     event.id
   end
@@ -40,6 +41,7 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
     return false unless success
 
     ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: :changed))
+    ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: :changed))
     ::ActionEventBroadcastWorker.perform_async(event.id, false)
     success
   end
@@ -53,6 +55,7 @@ class Jarvis::Execute::ActionEvents < Jarvis::Execute::Executor
     return false unless success
 
     ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: :removed))
+    ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: :removed))
 
     matching_events = ActionEvent
       .where(user_id: event.user_id)
