@@ -34,6 +34,7 @@ class JarvisCache < ApplicationRecord
   end
 
   def self.dig(*steps)
+    steps = steps.map(&:presence).compact
     key, *rest = steps.map { |s| s.to_s.to_sym }
     rest.none? ? get(key) : get(key).dig(*rest)
   end
@@ -59,10 +60,12 @@ class JarvisCache < ApplicationRecord
   end
 
   def get(*steps)
+    steps = steps.map(&:presence).compact
     dig(*steps)
   end
 
   def dig(*steps)
+    steps = steps.map(&:presence).compact
     d = (data || {})
     steps.none? ? d : d.dig(*steps.map { |s| s.to_s.to_sym })
   end
@@ -75,6 +78,7 @@ class JarvisCache < ApplicationRecord
   end
 
   def dig_set(*steps, val)
+    steps = steps.map(&:presence).compact
     raise "Not working with numerics" if steps.any? { |step| step.is_a?(Numeric) }
     hash = (self.data ||= {})
     steps.each_with_index { |step, idx|
