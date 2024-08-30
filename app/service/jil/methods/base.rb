@@ -16,7 +16,7 @@ class Jil::Methods::Base
     elsif arg.is_a?(::String) && !arg.match?(/^\".*?\"$/)
       # This is hacky... Shouldn't we know if it's a string vs variable?
       @jil.ctx&.dig(:vars).key?(arg.to_sym) ? token_val(arg) : (arg.gsub(/\#\{\s*(.*?)\s*\}/) { |found|
-        token_val(Regexp.last_match[1])
+        @jil.cast(token_val(Regexp.last_match[1]), :String)
       })
     # elsif arg.is_a?(::Hash) && arg.keys == [:cast, :value]
     #   @jil.cast(arg[:value], arg[:cast], @ctx)

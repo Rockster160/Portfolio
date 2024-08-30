@@ -1,8 +1,8 @@
 class Jil::Methods::String < Jil::Methods::Base
   def cast(value)
     case value
-    when ::Hash then cast(value.to_json) # Might need to format because default formatting sucks
-    when ::Array then cast(value.to_json) # Maybe just fancy join
+    when ::Hash then clean_json(value)
+    when ::Array then clean_json(value)
     # when ::String then value
     else
       value.to_s.gsub(/^\"|\"$/, "").gsub(/#\{\s*(.*?)\s*\}/) { |found|
@@ -54,6 +54,22 @@ class Jil::Methods::String < Jil::Methods::Base
       Regexp.new(str[1..-2])
     else
       str
+    end
+  end
+
+  def clean_json(json)
+    case json
+    when ::Hash
+      return "{}" if json.blank?
+
+      json.map { |key, val|
+        "#{key.to_s.match?(/^\w+$/) ? key : key.to_s.inspect}: #{clean_json(val)}"
+      }.then { |arr| "{ #{arr.join(", ")} }" }
+    when ::Array
+      return "[]" if json.blank?
+
+      "[#{arr.join(", ")}]"
+    else json.inspect
     end
   end
 end
