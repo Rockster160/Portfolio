@@ -27,6 +27,11 @@ Keyboard.on(["Escape"], (evt) => {
     if (window.selected) { window.selected.selected = false }
   }
 })
+Keyboard.on(["/"], (evt) => {
+  if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+    if (window.selected) { window.selected.commented = !window.selected.commented }
+  }
+})
 Keyboard.on(["Tab"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
     const list = Array.from(document.querySelectorAll(".statement-wrapper"))
