@@ -27,13 +27,32 @@ class JilTask < ApplicationRecord
   has_many :jil_executions
 
   scope :enabled, -> { where(enabled: true) }
+  scope :functions, -> {
+    where("listener ~* '(^|\\s)function\\('")
+  }
+  scope :by_snake_name, ->(name) {
+    where("LOWER(REPLACE(REGEXP_REPLACE(name, '\\W+', '', 'g'), ' ', '_')) = ?", name)
+  }
   scope :by_listener, ->(listener) {
     safe_trigger = Regexp.escape(listener)
     where("listener ~* '(^|\\s)#{safe_trigger}(~|:|$)'")
   }
 
+  def self.schema(user=nil)
+    tasks = user.present? ? user.jil_tasks.functions : none
+    funcs = "[Custom]\n" + tasks.map { |task|
+      [
+        "  #",
+        task.name.downcase.gsub(" ", "_").gsub(/\W+/, ""),
+        "(", task.listener[/^\s*function\((.*)\)/, 1], ")::Any",
+      ].join("")
+    }.join("\n")
+
+    (funcs + "\n" + File.read("app/service/jil/schema.txt")).html_safe
+  end
+
   def last_execution
-    @last_execution ||= jil_executions.order(:finished_at).last
+    @last_execution ||= jil_executions.finished.order(:finished_at).last
   end
 
   def last_error
@@ -46,6 +65,10 @@ class JilTask < ApplicationRecord
 
   def last_output
     last_execution&.output
+  end
+
+  def last_completion_time
+    last_execution&.last_completion_time
   end
 
   def stop_propagation?
@@ -87,7 +110,7 @@ class JilTask < ApplicationRecord
   end
 
   def execute(data={})
-    ::Jil::Executor.call(user, code, data, task: self)
+    ::Jil::Executor.call(user, code, data, task: self).tap { @last_execution = nil }
   end
 
   private

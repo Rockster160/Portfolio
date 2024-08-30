@@ -57,6 +57,10 @@ class Jil::Executor
     @lines = ::Jil::Parser.from_code(code)
   end
 
+  def result
+    @ctx[:return_val]
+  end
+
   def store_progress(attrs={})
     @execution.update(attrs.merge(ctx: @ctx))
   end
@@ -68,6 +72,7 @@ class Jil::Executor
       output: @ctx[:output] || [],
       state: @ctx[:state],
       result: @ctx[:return_val],
+      timestamp: @execution&.last_completion_time || "Waiting...",
     }
     ::JilTasksChannel.send_to(@user, @execution&.jil_task&.uuid || :new, data)
   end
@@ -76,7 +81,7 @@ class Jil::Executor
     @execution.jil_task&.update(last_trigger_at: Time.current)
     broadcast!
     @ctx[:time_start] = Time.current
-    state = :running
+    state = :started
     begin
       execute_block(@lines)
       state = :success
@@ -90,7 +95,7 @@ class Jil::Executor
     ensure
       @ctx[:state] = :complete
       @ctx[:time_complete] = Time.current
-      store_progress(finished_at: Time.current, status: state)
+      store_progress(finished_at: @ctx[:time_complete], status: state)
     end
     broadcast!
     self

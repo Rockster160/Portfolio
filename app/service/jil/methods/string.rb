@@ -68,7 +68,7 @@ class Jil::Methods::String < Jil::Methods::Base
     when ::Array
       return "[]" if json.blank?
 
-      "[#{arr.join(", ")}]"
+      "[#{json.map { |item| clean_json(item) }.join(", ")}]"
     else json.inspect
     end
   end

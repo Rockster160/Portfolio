@@ -86,6 +86,7 @@ export function inputFromArg(arg) {
   let typename = arg.typename.indexOf("|") > 0 ? "String" : arg.preferredtype
   typename = typename == "Any" ? "Global" : typename
   let ele = inputFromType(typename)
+  let type = Schema.types[typename]?.inputtype || "text"
 
   if (typeof arg.placeholder !== "undefined") { ele.placeholder = arg.placeholder }
   if (typeof arg.defaultval !== "undefined") {

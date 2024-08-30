@@ -18,6 +18,8 @@ class JilExecution < ApplicationRecord
   belongs_to :user
   belongs_to :jil_task, optional: true
 
+  scope :finished, -> { where.not(finished_at: nil) }
+
   enum status: {
     started:   0,
     cancelled: 1,
