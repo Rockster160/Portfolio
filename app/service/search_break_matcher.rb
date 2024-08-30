@@ -12,7 +12,7 @@ class SearchBreakMatcher
     not:          ["!", "-"],
     not_contains: ":!",
     not_exact:    "::!",
-    regex:        "~",
+    regex:        ["~", ":~"],
     any:          ["ANY", "ANY:"],
   }
   # These could be actual/custom Objects that return the expected data based on calls.
@@ -45,6 +45,9 @@ class SearchBreakMatcher
       end
     )
 
+    # load("/Users/rocco/.pryrc")
+    # source_puts pretty_hash(@top_streams)
+    # source_puts pretty_hash(@top_breaker)
     calculate_matches
   rescue StandardError => e
     # binding.pry
@@ -78,12 +81,17 @@ class SearchBreakMatcher
     end
 
     ((breaker[:keys]&.flat_map { |val, broken| # val="event" && broken[:contains] = [{piece}]
+      # source_puts "|#{val}, #{broken}|"
       matching_streams = matching_stream_values(val, delim, stream) # This should iterate through every stream value and return the list that follows AFTER the matching key
+      # source_puts "matching_streams:#{matching_streams}"
       matching_streams.flat_map { |downstream|
         next true if broken.blank?
+        # source_puts "downstream:#{downstream}"
         broken.flat_map { |down_delim, breakers|
+          # source_puts "down_delim:#{down_delim} ||| breakers:#{breakers}"
           breakers.filter_map { |down_breaker|
-            breaker_matches?(down_breaker, downstream, down_delim)
+            # source_puts "down_breaker:#{down_breaker}"
+            breaker_matches?(down_breaker, downstream, down_delim)#.tap { |b| source_puts b }
           }
         }
       }
@@ -109,12 +117,20 @@ class SearchBreakMatcher
     }
   end
 
+  def contain_or_regex?(drop, val)
+    if val.match?(/^\s*\/.*?\/\s*$/)
+      delim_match?(val, :regex, drop)
+    else
+      drop.include?(val)
+    end
+  end
+
   def delim_match?(val, delim, drop)
     val = val.to_s.downcase
     drop = drop.to_s.downcase
     case delim
-    when :contains then drop.include?(val)
-    when :not_contains then !drop.include?(val)
+    when :contains then contain_or_regex?(drop, val)
+    when :not_contains then !contain_or_regex?(drop, val)
     when :exact then val == drop
     when :not, :not_exact then val != drop
     when :regex

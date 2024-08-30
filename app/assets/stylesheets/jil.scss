@@ -421,6 +421,7 @@ input[type=submit] {
   width: var(--statement-width);
   width: calc(5px*5);
   height: 5px;
+  cursor: pointer;
 }
 .content-dropdown {
   margin: 0 auto;

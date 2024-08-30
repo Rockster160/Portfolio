@@ -75,6 +75,7 @@ class FitnessBroadcast
 
   def drugs
     names = [
+      "Auvelity",
       "BupropionXL",
       "Buspirone",
       "Fluoxetine",

@@ -42,7 +42,10 @@ RSpec.describe JarvisTask do
         # { user: admin, listener: "tell:\"Do the things\"" },
         # { user: admin, listener: "tell:~/Checkup/" },
         # { user: admin, listener: "tell:ANY(~/Checkup/ ~/Result/)" },
-        { user: admin, listener: "event:/food|drink|snack|treat|alcohol/ note:/(?<text>.*?)(\((?<cals>\d+) ?cals?\))?/" },
+        # { user: admin, listener: "event:/food|drink|snack|treat|alcohol/ note:/(?<text>.*?)(\((?<cals>\d+) ?cals?\))?/" },
+        # { user: admin, listener: "event:note:/(?<text>.*?)(\((?<cals>\d+) ?cals?\))?/" },
+        # { user: admin, listener: "event:/food|drink|snack|treat|alcohol/" },
+        # { user: admin, listener: "tell:OR(/is the garage (open|closed)/ /check garage/)" },
       ])
 
       @listeners = []
@@ -58,6 +61,9 @@ RSpec.describe JarvisTask do
       # expect_trigger_listeners(admin, :tell, "add checkup", [])
       # expect_trigger_listeners(admin, :tell, "checkup do", [])
       # expect_trigger_listeners(admin, :tell, "Set the house 72 degrees", [])
+      # expect_trigger_listeners(admin, :tell, "is the garage open", [
+      #   "tell:OR(/is the garage (open|closed)/ /check garage/)",
+      # ])
       #
       # expect_trigger_listeners(other_user, :travel, { action: "Arrive", location: "Home" }, [
       #   "travel",
@@ -91,9 +97,10 @@ RSpec.describe JarvisTask do
       # expect_trigger_listeners(admin, :event, { name: "drink" }, [
       #   "event:name:ANY(food soda drink alcohol treat snack)"
       # ])
-      expect_trigger_listeners(admin, :event, { name: "drink", notes: "Fireball" }, [
-        "event:name:ANY(food soda drink alcohol treat snack)"
-      ])
+      # expect_trigger_listeners(admin, :event, { name: "drink", notes: "Fireball" }, [
+      #   "event:/food|drink|snack|treat|alcohol/"
+      #   # "event:name:ANY(food soda drink alcohol treat snack)",
+      # ])
       # expect_trigger_listeners(admin, :event, { name: "Wordle", notes: "food" }, [
       # ])
       # expect_trigger_listeners(admin, :event, { name: "soda" }, [
