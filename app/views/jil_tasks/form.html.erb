@@ -30,6 +30,7 @@
 </div>
 
 <div class="results">
+  <span class="timestamp"><%= @task.last_completion_time %></span>
   <p class="error"><%= @task.last_error %></p>
   <p class="result"><%= @task.last_result %></p>
   <p class="output"><%= @task.last_output&.join("\n") %></p>
@@ -63,6 +64,6 @@
 
 <script type="text/javascript">
   window.load_code = <%= raw @task.id.present? ? "`#{@task.code}`" : "undefined" %>;
-  window.load_schema = `<%= File.read("app/service/jil/schema.txt").html_safe %>`
+  window.load_schema = `<%= JilTask.schema(current_user) %>`
 </script>
 <%= javascript_include_tag "jil", type: "module", defer: true %>

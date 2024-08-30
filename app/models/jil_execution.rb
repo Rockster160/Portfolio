@@ -52,6 +52,10 @@ class JilExecution < ApplicationRecord
     (ctx || {}).deep_symbolize_keys[:output]
   end
 
+  def last_completion_time
+    Time.use_zone(user.timezone) { finished_at&.to_formatted_s(:compact_week_month_time_sec) }
+  end
+
   def stop_propagation?
     !!(ctx || {}).deep_symbolize_keys[:stop_propagation]
   end

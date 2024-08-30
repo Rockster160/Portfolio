@@ -208,11 +208,19 @@ input[type=submit] {
   width: 100%;
   max-width: var(--statement-width);
   border: 2px solid $text-color;
+  position: relative;
 
-  &:has(.result:empty):has(.output:empty):has(.error:empty) {
+  &:has(.result:empty):has(.output:empty):has(.error:empty):has(.timestamp:empty) {
     display: none;
   }
 
+  .timestamp {
+    color: $grey-blue;
+    font-size: 12px;
+    position: absolute;
+    top: 2px;
+    left: 5px;
+  }
   .error {
     color: red;
     font-size: 12px;
