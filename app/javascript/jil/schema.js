@@ -3,6 +3,17 @@ import Method from "./method.js"
 export default class Schema {
   static all = [] // List of all classes
   static types = {} // Key→Val of name→class
+  static enumArgs = {
+    Object: `"Object"::Any`,
+    Key:    `"Key"::String`,
+    Value:  `"Value"::Any`,
+    Index:  `"Index"::Numeric`,
+    Next:   `"Next"(ANY)::None`,
+    Break:  `"Break"(ANY)::None`,
+  }
+  static enumArgList = Object.keys(this.enumArgs).join(" ")
+  static enumArgOptions = Object.values(this.enumArgs)
+
   constructor(klass) {
     this.name = klass
     this.inputtype = null
@@ -82,7 +93,9 @@ export default class Schema {
 
   static method(type, name) {
     if (typeof type === "string") { // Class name
-      if (["Break", "Index", "Next"].indexOf(name) >= 0) { return Method.placeholder(name) }
+      if (Schema.enumArgs.hasOwnProperty(name)) {
+        return Method.placeholder(name, Schema.enumArgs[name])
+      }
       return this.types[type].singletons.find(singleton => singleton.name == name)
     } else { // Statement
       return this.types[type.returntype].instances.find(singleton => singleton.name == name)

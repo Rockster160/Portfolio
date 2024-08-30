@@ -36,6 +36,7 @@ RSpec.describe Jil::Methods::Global do
   # times
 
   context "#loop, Next, Break, Index, Return" do
+    #dowhile(enum_content)::Numeric
     let(:code) {
       <<-'JIL'
         outer_counter = Numeric.new(0)::Numeric

@@ -12,6 +12,7 @@ export default function saveUtils() {
 
   // Initial code load
   if (newTask || window.load_code === undefined) {
+    console.log(localStorage.getItem("jilcode"))
     Statement.reloadFromText(localStorage.getItem("jilcode"))
   } else {
     Statement.reloadFromText(window.load_code)

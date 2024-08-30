@@ -1,11 +1,13 @@
+[App]
+  push(String?:Title String?:Body Numeric?:Badge)
 [Global]
   #input_data::Hash
   #get_cache(String:"Cache Key" Any)::Any
   #dig_cache(String:"Cache Key" content(Keyval [Keyval.new]))::Any
   #set_cache(String:"Cache Key" Any "=" Any)::Any
   #exit
-  #dowhile(content(["Break"(Numeric)::Any "Next"::Any "Index"::Numeric]))::Numeric
-  #times(Numeric content(["Break"(Numeric)::Any "Next"::Any "Index"::Numeric]))::Numeric
+  #dowhile(enum_content)::Numeric
+  #times(Numeric enum_content)::Numeric
 [Text]::textarea
   #new(Text)::String
 [String]::text

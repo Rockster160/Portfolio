@@ -1,5 +1,6 @@
 import { unwrap } from "./form_helpers.js"
 import Tokenizer from "./tokenizer.js"
+import Schema from "./schema.js"
 
 export default class Arg {
   constructor(method, str) {
@@ -49,12 +50,13 @@ export default class Arg {
       // content(String|Numeric)
       // content([a b c])
       // content(Keyval [a b c])
-      match = str.match(/^content(?:\((?<allowedtypes>[A-Z][_0-9A-Za-z|]*)? ?(?:\[(?<args>.*)\])?\))?/)
+      match = str.match(/^(?<is_enum>enum_)?content(?:\((?<allowedtypes>[A-Z][_0-9A-Za-z|]*)? ?(?:\[(?<args>.*)\])?\))?/)
       if (match) {
-        let { allowedtypes, args } = match.groups
+        let { allowedtypes, args, is_enum } = match.groups
         this.content = true
         if (allowedtypes) { this.allowedtypes = allowedtypes }
         if (args) { this.options = this.tokenizer.split(args || "") }
+        if (is_enum) { this.options = [...Schema.enumArgOptions, ...(this.options || [])] }
         return
       }
       // [optiona b c]

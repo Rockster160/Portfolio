@@ -4,6 +4,8 @@ import Tokenizer from "./tokenizer.js"
 import Arg from "./arg.js"
 
 export default class Method {
+  static tokenizer = this.tokenizer = new Tokenizer
+
   constructor(data) {
     this.type = data.type
     this.name = data.name
@@ -17,29 +19,39 @@ export default class Method {
     this.optional = false
   }
 
-  static placeholder(name) {
+  static placeholder(name, str) {
+    const { returntype } = str.match(/(?:::(?<returntype>\w+))/)?.groups || {}
+
     return new Method({
       scope: "singleton",
       type: "Global",
       name: name,
-      args: name == "Index" ? null : `"${name}" TAB Any`,
-      returntype: "Any",
+      args: str.match(/\(ANY\)/) ? `"${name}" TAB Any` : `"${name}"`,
+      returntype: returntype || "Any",
     })
   }
+
+  static splitToArgs(str) {
+    if (!str) { return [] }
+
+    str = this.tokenize(str, /\"(.*?)\"/)
+    str = this.tokenize(str, /(?:enum_)?content\(([A-Z][_0-9A-Za-z|]*)? ?\[(.*?)\]\)/)
+    str = this.tokenize(str, /\[(.*?)\]/)
+    return str.split(" ").map(argStr => {
+      return new Arg(this, this.untokenize(argStr, "all"))
+    })
+  }
+
+  static trigger(token) { return this.tokenizer.trigger(token) }
+  static tokenize(str, regex, callback) { return this.tokenizer.tokenize(str, regex, callback) }
+  static untokenize(str, opt) { return this.tokenizer.untokenize(str, opt) }
 
   trigger(token) { return this.tokenizer.trigger(token) }
   tokenize(str, regex, callback) { return this.tokenizer.tokenize(str, regex, callback) }
   untokenize(str, opt) { return this.tokenizer.untokenize(str, opt) }
 
   args() {
-    let str = this.stringArgs
-    if (!str) { return [] }
-    str = this.tokenize(str, /\"(.*?)\"/)
-    str = this.tokenize(str, /content\(([A-Z][_0-9A-Za-z|]*)? ?\[(.*?)\]\)/)
-    str = this.tokenize(str, /\[(.*?)\]/)
-    return str.split(" ").map(argStr => {
-      return new Arg(this, this.untokenize(argStr, "all"))
-    })
+    return Method.splitToArgs(this.stringArgs)
   }
 
   parsedArgs() {

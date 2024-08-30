@@ -14,9 +14,10 @@
   #request("Method" String BR "URL" String BR "Params" Hash BR "Headers" Hash)::Hash
   #broadcast_websocket("Channel" TAB String BR "Data" TAB Hash)::Numeric
   #trigger(String Hash)::Numeric
-  #dowhile(content(["Break"(Numeric)::Any "Next"::Any "Index"::Numeric]))::Numeric
-  #loop(content(["Break"(Numeric)::Any "Next"::Any "Index"::Numeric]))::Any
-  #times(Numeric content(["Break"(Numeric)::Any "Next"::Any "Index"::Numeric]))::Numeric
+  #dowhile(enum_content)::Numeric
+  #loop(enum_content)::Any
+  #times(Numeric enum_content)::Numeric
+  #stop_propagation()::Boolean
   // #eval(Text) # Should return the value given by a "return" that's called inside
 [Keyval]
   #new(String ": " Any)
@@ -85,12 +86,12 @@
   .get(String)::Any
   .set!(String "=" Any)
   .del!(String)
-  .filter(content(["Key"::String "Value"::Any "Index"::Numeric]))::Hash
-  .each(content(["Key"::String "Value"::Any "Index"::Numeric]))
-  .map(content(["Key"::String "Value"::Any "Index"::Numeric]))::Array
-  .any?(content(["Key"::String "Value"::Any "Index"::Numeric]))::Boolean
-  .none?(content(["Key"::String "Value"::Any "Index"::Numeric]))::Boolean
-  .all?(content(["Key"::String "Value"::Any "Index"::Numeric]))::Boolean
+  .filter(enum_content)::Hash
+  .each(enum_content)
+  .map(enum_content)::Array
+  .any?(enum_content)::Boolean
+  .none?(enum_content)::Boolean
+  .all?(enum_content)::Boolean
 [Array]
   #new(content)
   #from_length(Numeric)
@@ -108,15 +109,15 @@
   .unshift!(Any)
   .unshift(Any)
   .shuffle
-  .each(content(["Object"::Any "Index"::Numeric "Break"::Any "Next"::Any]))
-  .select(content(["Object"::Any "Index"::Numeric "Break"::Any "Next"::Any]))::Array
-  .map(content(["Object"::Any "Index"::Numeric "Break"::Any "Next"::Any]))
-  .find(content(["Object"::Any "Index"::Numeric "Break"::Any "Next"::Any]))::Any
-  .any?(content(["Object"::Any "Index"::Numeric "Break"::Any "Next"::Any]))::Boolean
-  .none?(content(["Object"::Any "Index"::Numeric "Break"::Any "Next"::Any]))::Boolean
-  .all?(content(["Object"::Any "Index"::Numeric "Break"::Any "Next"::Any]))::Boolean
-  .sort_by(content(["Object"::Any "Index"::Numeric "Break"::Any "Next"::Any]))
-  .sort_by!(content(["Object"::Any "Index"::Numeric "Break"::Any "Next"::Any]))
+  .each(enum_content)
+  .select(enum_content)::Array
+  .map(enum_content)
+  .find(enum_content)::Any
+  .any?(enum_content)::Boolean
+  .none?(enum_content)::Boolean
+  .all?(enum_content)::Boolean
+  .sort_by(enum_content)
+  .sort_by!(enum_content)
   .sort(["Ascending" "Descending" "Reverse" "Random"])
   .sort!(["Ascending" "Descending" "Reverse" "Random"])
   .sample::Any

@@ -59,7 +59,7 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def get(var)
-    @jil.ctx[:vars][var.to_sym][:value]
+    @jil.ctx.dig(:vars, var.to_sym, :value)
   end
 
   def set!(var, val)
