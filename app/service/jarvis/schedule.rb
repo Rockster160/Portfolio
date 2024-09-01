@@ -17,6 +17,7 @@ module Jarvis::Schedule
       name = name.gsub(/(Remind me (to )?)/i, "•")
       name = name.gsub(/(Take me (to )?)/i, "→")
       name = name.gsub(/((Ping|Text|Tell|Message|SMS|Email) me (to )?)/i, "🗣")
+      name = name.gsub("\n", "")
 
       {
         timestamp: timestamp,
