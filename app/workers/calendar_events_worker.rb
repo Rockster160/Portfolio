@@ -84,6 +84,7 @@ class CalendarEventsWorker
         )
       end
       nav_home = false if event[:notes]&.match?(/\bnonav\b/i)
+      start_car = false if event[:notes]&.match?(/\bnodrive\b/i)
 
       # Trigger a Calendar event for everything that comes through
       new_events.push(
@@ -123,36 +124,47 @@ class CalendarEventsWorker
           name: "TTL: #{distance_of_time_in_words(traveltime)}",
           uid: event[:uid] + "-tt",
           type: :travel,
-          words: "Ping me Time to leave! It will take #{distance_of_time_in_words(traveltime)} to travel.",
+          words: "Ping me Time to leave!\nTTT: #{distance_of_time_in_words(traveltime)}",
           user_id: @user_id,
           scheduled_time: event[:start_time] - traveltime - 2.minutes,
         )
         # Start car + navigate 10 minutes prior to time-to-leave
-        new_events.push(
-          uid: event[:uid] + "-travel",
-          type: :travel,
-          words: "Take me to #{event[:location].presence || event[:name]}",
-          user_id: @user_id,
-          scheduled_time: event[:start_time] - traveltime - PRE_OFFSET,
-        )
-        # Check car after we're supposed to leave
-        new_events.push(
-          name: "Check Car",
-          uid: event[:uid] + "-precheck",
-          type: :travel,
-          words: "Reload Car",
-          user_id: @user_id,
-          scheduled_time: (event[:start_time] - traveltime) + 5.minutes,
-        )
-        # Check car after we're supposed to arrive
-        new_events.push(
-          name: "Check Car",
-          uid: event[:uid] + "-postcheck",
-          type: :travel,
-          words: "Reload Car",
-          user_id: @user_id,
-          scheduled_time: event[:start_time] + 5.minutes,
-        )
+        if start_car
+          new_events.push(
+            uid: event[:uid] + "-travel",
+            type: :travel,
+            words: "Take me to #{event[:location].presence || event[:name]}",
+            user_id: @user_id,
+            scheduled_time: event[:start_time] - traveltime - PRE_OFFSET,
+          )
+          # Check car after we're supposed to leave
+          new_events.push(
+            name: "Check Car",
+            uid: event[:uid] + "-precheck",
+            type: :travel,
+            words: "Reload Car",
+            user_id: @user_id,
+            scheduled_time: (event[:start_time] - traveltime) + 5.minutes,
+          )
+          # Check car after we're supposed to arrive
+          new_events.push(
+            name: "Check Car",
+            uid: event[:uid] + "-postcheck",
+            type: :travel,
+            words: "Reload Car",
+            user_id: @user_id,
+            scheduled_time: event[:start_time] + 5.minutes,
+          )
+        else
+          new_events.push(
+            uid: event[:uid] + "-travel",
+            type: :travel,
+            words: "Ping me Get ready to go!\nTTT: #{distance_of_time_in_words(traveltime)}",
+            user_id: @user_id,
+            scheduled_time: event[:start_time] - traveltime - PRE_OFFSET,
+          )
+        end
+
         # TODO: Only nav home if there are no other events
         # Also time estimate should be from "current" location-
         #   guessed based on the last event left us at
