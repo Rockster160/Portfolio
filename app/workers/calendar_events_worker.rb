@@ -61,6 +61,7 @@ class CalendarEventsWorker
 
       event[:uid] = "unix:#{event[:start_time].to_i}:#{event[:uid]}"
       nav_home = true
+      start_car = true
 
       # If notes starts with Jarvis, send to Jarvis as a message
       if event[:notes]&.match?(/^\s*jarvis[:,]? */i)
