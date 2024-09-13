@@ -29,6 +29,25 @@ class ActionEventsController < ApplicationController
     end
   end
 
+  def feelings
+    Time.use_zone(current_user.timezone) do
+      @today = Time.current.to_date
+
+      if params[:start_date].present? && params[:end_date].present?
+        @date = start_date = safeparse_time(params[:start_date]).to_date
+        end_date = safeparse_time(params[:end_date]).to_date
+        @range = (start_date.beginning_of_month..end_date.end_of_month)
+      else
+        @date = safeparse_time(params[:date]).to_date
+        @range = @date.then { |t| t.beginning_of_month..t.end_of_month }
+      end
+
+      @events = current_user.action_events.where(name: "Feeling").order(timestamp: :asc)
+      @events = @events.where(timestamp: @range)
+      @chart_data = @events.map { |evt| { id: evt.id, timestamp: evt.timestamp.to_i, data: evt.data } }
+    end
+  end
+
   def pullups
     Time.use_zone(current_user.timezone) do
       @today = Time.current.to_date

@@ -83,6 +83,7 @@ Rails.application.routes.draw do
   resources :action_events do
     get :calendar, on: :collection
     get :pullups, on: :collection
+    get :feelings, on: :collection
   end
 
   resource :summoners_war do

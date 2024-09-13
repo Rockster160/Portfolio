@@ -1,0 +1,19 @@
+<% content_for(:head) do %>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+<% end %>
+
+<div class="text-center" style="margin-bottom: 10px;">
+  <%= link_to "List", action_events_path %>
+  <%= link_to "Pullups", pullups_action_events_path if current_user.admin? %>
+  <%= link_to "Calendar", calendar_action_events_path %>
+</div>
+
+<div class="text-center" style="margin: 20px 0;">
+  <%= link_to "< Prev month", params.permit!.except(:action, :controller, :start_date, :end_date).merge(date: @date - 1.month) %>
+  - <%= link_to "Today", params.permit!.except(:action, :controller, :start_date, :end_date, :date) %> -
+  <%= link_to "Next month >", params.permit!.except(:action, :controller, :start_date, :end_date).merge(date: @date + 1.month) %>
+  <br>
+  <%= link_to "All Year", params.permit!.except(:action, :controller, :date).merge(start_date: @date.beginning_of_year, end_date: @date.end_of_year) %>
+</div>
+
+<div class="feelings-charts no-markdown" data-feelings-data="<%= @chart_data.to_json %>"></div>
