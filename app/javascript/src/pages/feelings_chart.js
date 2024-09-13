@@ -5,14 +5,30 @@ $(document).ready(function() {
   let ctx = document.createElement("canvas")
   $(".feelings-charts").append(ctx)
 
-  // Chart.defaults.backgroundColor = "#0160FF"
-  const labels = dataPoints.map(dp => new Date(dp.timestamp * 1000).toLocaleTimeString());
+  // Normalize labels to ensure variations are grouped together
+    function normalizeLabel(label) {
+      const labelMap = {
+        // "Sad | Happy": "Happy | Sad",
+        // "Sleepy | Alert": "Alert | Sleepy",
+        // Add any additional mappings here
+      };
+      return labelMap[label] || label;
+    }
 
-    // Extract datasets from the data
-    const datasetLabels = Object.keys(dataPoints[0].data);
+    // Extract unique labels from all data points and normalize them
+    const datasetLabels = [
+      ...new Set(
+        dataPoints.flatMap(dp => Object.keys(dp.data).map(normalizeLabel))
+      )
+    ];
+
+    // Prepare datasets for each normalized attribute
     const datasets = datasetLabels.map(label => ({
       label,
-      data: dataPoints.map(dp => dp.data[label]),
+      data: dataPoints.map(dp => ({
+        x: dp.timestamp*1000, // Timestamp for correct relative placement
+        y: dp.data[Object.keys(dp.data).find(key => normalizeLabel(key) === label)] || null
+      })),
       fill: false,
       borderColor: getRandomColor(),
       tension: 0.1
@@ -29,21 +45,28 @@ $(document).ready(function() {
     const chart = new Chart(ctx, {
       type: "line",
       data: {
-        labels, // X-axis (time)
-        datasets // Y-axis data for each attribute
+        datasets
       },
       options: {
         responsive: true,
         scales: {
           x: {
+            type: "time",
+            time: {
+              unit: "day", // Only show day labels
+              tooltipFormat: "PPpp", // Full date on hover
+              displayFormats: {
+                day: "MMM d" // Format for the X-axis labels (e.g., "Sep 13")
+              }
+            },
             title: {
               display: true,
-              text: "Time"
+              text: "Date"
             }
           },
           y: {
-            max: 100,
             min: 0,
+            max: 100,
             beginAtZero: true,
             title: {
               display: true,
