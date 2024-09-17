@@ -49,7 +49,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
 
   def hash_wrap(array)
     return array.to_h if array.first.is_a?(::Array)
-    return [array].to_h if array.length == 2
+    return [array].to_h if array.length == 2 && array.none? { |i| i.is_a?(::Hash) }
 
     first, *rest = *array
     if first.is_a?(::String) || first.is_a?(::Symbol)
