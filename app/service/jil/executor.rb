@@ -31,6 +31,7 @@ class Jil::Executor
     begin
       trigger_data = ::JSON.parse(trigger_data) if trigger_data.is_a?(::String)
     rescue ::JSON::ParserError
+      trigger_data = { data: trigger_data }
     end
 
     user_tasks = ::JilTask.enabled.ordered.where(user_id: user_ids).distinct
