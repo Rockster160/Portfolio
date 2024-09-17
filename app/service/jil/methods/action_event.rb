@@ -11,7 +11,11 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   end
 
   def search(q, limit, date, order)
-    events.query(q).serialize
+    limit = (limit.presence || 50).to_i.clamp(1..100)
+    scoped = events.query(q).per(limit)
+    scoped = scoped.where(timestamp: @jil.cast(date, :Date)..) if date.present?
+    scoped = scoped.order(created_at: order) if [:asc, :desc].include?(order.to_s.downcase.to_sym)
+    scoped.serialize
   end
 
   def add(name, notes, data, date)

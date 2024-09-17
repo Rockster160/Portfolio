@@ -37,17 +37,29 @@ RSpec.describe Jil::Methods::ActionEvent do
   end
 
   context "#search" do
-    # let(:code) { "gd1cb = ActionEvent.search(\"foo\", 50, \"\", \"ASC\")::Array" }
-    # let!(:event) { user.action_events.create(name: "Food", notes: "Dinner", data: { Calories: 400 }) }
-    #
-    # it "returns the found event" do
-    #   expect_successful_jil
-    #
-    #   expect(ctx.dig(:vars, :gd1cb, :class)).to eq(:Array)
-    #   expect(ctx.dig(:vars, :gd1cb, :value).length).to eq(1)
-    #   expect(ctx.dig(:vars, :gd1cb, :value, 0, "id")).to eq(event.id)
-    #   expect(ctx[:output]).to eq([])
-    # end
+    let(:code) { "gd1cb = ActionEvent.search(\"foo\", 50, \"\", \"ASC\")::Array" }
+    let!(:event) { user.action_events.create(name: "Food", notes: "Dinner", data: { Calories: 400 }) }
+
+    it "returns the found event" do
+      expect_successful_jil
+
+      expect(ctx.dig(:vars, :gd1cb, :class)).to eq(:Array)
+      expect(ctx.dig(:vars, :gd1cb, :value).length).to eq(1)
+      expect(ctx.dig(:vars, :gd1cb, :value, 0, "id")).to eq(event.id)
+      expect(ctx[:output]).to eq([])
+    end
+
+    context "with different search" do
+      let(:code) { "gd1cb = ActionEvent.search(\"blah\", 50, \"\", \"ASC\")::Array" }
+
+      it "does not return non-matches" do
+        expect_successful_jil
+
+        expect(ctx.dig(:vars, :gd1cb, :class)).to eq(:Array)
+        expect(ctx.dig(:vars, :gd1cb, :value).length).to eq(0)
+        expect(ctx[:output]).to eq([])
+      end
+    end
   end
 
   context "#add" do
