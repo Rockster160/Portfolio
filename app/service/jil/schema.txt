@@ -9,6 +9,7 @@
   #set_cache(String:"Cache Key" Any "=" Any)::Any
   #exit
   #print(Text)::String
+  #presence(Any)::Any
   #comment(Text)::None
   #command(String)::String
   #request("Method" String BR "URL" String BR "Params" Hash BR "Headers" Hash)::Hash
@@ -39,6 +40,7 @@
   #e(TAB "e" TAB)
   #inf()
   #rand(Numeric:min Numeric:max Numeric?:figures)
+  #op(Numeric ["+" "-" "*" "/" "%" "^log"] Numeric)
   .round(Numeric(0))
   .floor
   .ceil

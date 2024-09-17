@@ -167,7 +167,7 @@ input[type=submit] {
     width: 100%;
   }
 
-  &.btn-flash { @include btn-color(lime); }
+  &.btn-success { @include btn-color(lime); }
   &.danger, &.btn-error { @include btn-color($danger); }
   &.disabled, &:disabled, &.btn-pending {
     @include btn-color($text-color);

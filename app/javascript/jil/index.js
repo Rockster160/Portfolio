@@ -16,6 +16,9 @@ window.selected = undefined
 
 saveUtils()
 
+Keyboard.on(["Meta", "Enter"], (evt) => {
+  // Trigger Save and/or Run
+})
 Keyboard.on(["Alt", "Enter"], (evt) => {
   const wrapper = window.selected?.node || document
   let refs = wrapper.querySelectorAll(evt.shiftKey ? ".content-dropdown" : ".content-dropdown.below")

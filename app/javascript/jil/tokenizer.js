@@ -15,7 +15,7 @@ export default class Tokenizer {
   }
 
   // Escapes strings, then escapes each level of brackets/parens
-  stepper(str) {
+  stepper(str) { // Should be able to pass in a block that every unwrapped value gets passed to
     // Escape strings/quotes
     let tokenized = this.tokenize(str, /\"([^"]*)\"/) // , (_m, g) => g[1]
     tokenized = this.tokenize(tokenized, /\'([^']*)\'/) // , (_m, g) => g[1]

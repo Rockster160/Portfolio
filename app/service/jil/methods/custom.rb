@@ -5,6 +5,6 @@ class Jil::Methods::Custom < Jil::Methods::Base
 
   def execute(line)
     task = @jil.user.jil_tasks.functions.by_snake_name(line.methodname).take
-    task&.execute(params: line.args)&.result
+    task&.execute(params: evalargs(line.args))&.result
   end
 end

@@ -8,6 +8,13 @@ class Jil::Methods::Numeric < Jil::Methods::Base
     end
   end
 
+  def self.op(val1, operator, val2)
+    raise ::Jil::ExecutionError, "invalid operator" unless operator.in?(["+", "-", "*", "/", "%", "^log"])
+
+    return cast(val1) / cast(val2).to_f if operator == "/"
+    cast(val1).send(operator, cast(val2))
+  end
+
   def op(val1, operator, val2)
     raise ::Jil::ExecutionError, "invalid operator" unless operator.in?(["+", "-", "*", "/", "%", "^log"])
 
