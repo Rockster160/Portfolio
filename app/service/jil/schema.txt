@@ -81,6 +81,7 @@
   .format(String)::String
 [Hash]
   #new(content(Keyval [Keyval.new]))
+  #parse(Text)
   #keyval(String ": " Any)::Keyval
   .length::Numeric
   .merge(Hash)

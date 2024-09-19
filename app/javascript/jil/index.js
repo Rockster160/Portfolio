@@ -366,7 +366,7 @@ document.addEventListener("click", function(evt) {
   let btn = evt.target.closest("btn")
   if (btn) {
     let statement = Statement.from(evt.target)
-    let tokens = Statement.available(btn)
+    let tokens = Statement.available(btn).reverse()
     let selectedTag = btn.parentElement.querySelector(".selected-tag")
     let defaultOpts = []
     if (btn.getAttribute("allowInput") != "false") {
