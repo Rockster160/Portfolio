@@ -28,6 +28,7 @@ RSpec.describe JarvisCache, type: :model do
 
       expect(caches.dig(:oauth, :tesla, :access_token)).to eq("blah access blah")
       expect(caches.reload.dig(:oauth, :tesla, :access_token)).to eq("blah access blah")
+      expect(caches.reload.dig(:oauth, :tesla, :refresh_token)).to eq("blahrefreshblah")
       # expect(caches.dig(:somelist, 0)).to be_nil
       # expect(caches.dig(:somelist, 1, :sup)).to eq("not the first")
     end

@@ -78,7 +78,7 @@ class JarvisCache < ApplicationRecord
   end
 
   def dig_set(*steps, val)
-    steps = steps.map(&:presence).compact
+    steps = steps.map(&:presence).compact.map { |s| s.to_s.to_sym }
     raise "Not working with numerics" if steps.any? { |step| step.is_a?(Numeric) }
     hash = (self.data ||= {})
     steps.each_with_index { |step, idx|

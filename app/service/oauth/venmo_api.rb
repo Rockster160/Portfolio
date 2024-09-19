@@ -13,24 +13,24 @@ class Oauth::VenmoApi < Oauth::Base
 
   # ========== Via Name ==========
   def send_by_name(name, amount, note)
-    send_money(user_id_from_name(name), amount, note)
+    send_money(venmo_id_from_name(name), amount, note)
   end
   def request_by_name(name, amount, note)
-    request_money(user_id_from_name(name), amount, note)
+    request_money(venmo_id_from_name(name), amount, note)
   end
   def charge_by_name(name, amount, note)
-    charge_money(user_id_from_name(name), amount, note)
+    charge_money(venmo_id_from_name(name), amount, note)
   end
 
   # ========== Via Contact ==========
   def send_to_contact(contact, amount, note)
-    send_money(user_id_from_contact(contact), amount, note)
+    send_money(venmo_id_from_contact(contact), amount, note)
   end
   def request_from_contact(contact, amount, note)
-    request_money(user_id_from_contact(contact), amount, note)
+    request_money(venmo_id_from_contact(contact), amount, note)
   end
   def charge_contact(contact, amount, note)
-    charge_money(user_id_from_contact(contact), amount, note)
+    charge_money(venmo_id_from_contact(contact), amount, note)
   end
 
   # ========== Via Venmo User ID ==========
@@ -84,39 +84,37 @@ class Oauth::VenmoApi < Oauth::Base
     }
   end
 
-  def user_id_from_name(name)
-    user_id_from_contact(contact_by_name(name))
+  def venmo_id_from_name(name)
+    venmo_id_from_contact(contact_by_name(name))
   end
 
   def search(name)
     return unless name.present?
     # Should paginate this
-    # get(:users, { query: name })[:data].then { |users|
-    #   break users.first if users.length == 1
-    #
-    #   users.select { |user|
-    #     user[:friend_status]&.to_sym == :friend
-    #   }&.then { |d| d.first if d.length == 1 }
-    # }
+    get(:users, { query: name })[:data].then { |users|
+      break users.first if users.length == 1
+
+      users.select { |user|
+        user[:friend_status]&.to_sym == :friend
+      }&.then { |d| d.first if d.length == 1 }
+    }
   end
 
-  def user_id_from_contact(contact)
+  def venmo_id_from_contact(contact)
     return if contact.blank?
 
-    id = contact_mapping[contact.id.to_s.to_sym]
-    return id if id.present?
+    venmo_id = contact_mapping[contact.id.to_s.to_sym]
+    return venmo_id if venmo_id.present?
 
-    Jarvis.ping("Haven't mapped #{contact.name} yet.")
-    nil
-    # TODO: Attempt to look up by name in Venmo
-    #
-    # user = search(contact.raw[:name])
-    # user ||= search(contact.name)
-    # user ||= search(contact.nickname)
-    # return unless user.present?
-    #
-    # contact_mapping.merge!(contact.id => user[:id])
-    # cache_set(:contact_ids, contact_mapping)
-    # user[:id]
+    Jarvis.say("Searching for #{contact.name} in Venmo.")
+
+    user = search(contact.raw[:name])
+    user ||= search(contact.name)
+    user ||= search(contact.nickname)
+    return Jarvis.ping("Unable to find Venmo id for #{contact.name}.") unless user.present?
+
+    contact_mapping.merge!(contact.id => user[:id])
+    cache_set(:contact_ids, contact_mapping)
+    user[:id]
   end
 end
