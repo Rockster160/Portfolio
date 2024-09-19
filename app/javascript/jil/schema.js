@@ -93,8 +93,11 @@ export default class Schema {
 
   static method(type, name) {
     if (typeof type === "string") { // Class name
-      if (Schema.enumArgs.hasOwnProperty(name)) {
+      if (type == "Global" && Schema.enumArgs.hasOwnProperty(name)) {
         return Method.placeholder(name, Schema.enumArgs[name])
+      }
+      if (type == "Global" && name == "Item") {
+        return Method.placeholder(name, `"Item"::Any`)
       }
       return this.types[type].singletons.find(singleton => singleton.name == name)
     } else { // Statement

@@ -16,7 +16,9 @@ class Jil::Methods::Base
     elsif arg.is_a?(::String) && !arg.match?(/^\".*?\"$/)
       token_val(arg)
     elsif arg.is_a?(::String) && arg.match?(/^\".*?\"$/)
-      arg[1..-2]
+      arg[1..-2].gsub(/\#\{\s*(.*?)\s*\}/) { |found|
+        @jil.cast(token_val(Regexp.last_match[1]), :String)
+      }
     else
       arg
     end

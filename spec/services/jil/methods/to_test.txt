@@ -2,6 +2,7 @@
   push(String?:Title String?:Body Numeric?:Badge)
 [Global]
   #input_data::Hash
+  #params::Array
   #get_cache(String:"Cache Key" Any)::Any
   #dig_cache(String:"Cache Key" content(Keyval [Keyval.new]))::Any
   #set_cache(String:"Cache Key" Any "=" Any)::Any

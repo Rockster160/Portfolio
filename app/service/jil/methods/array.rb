@@ -10,6 +10,7 @@ class Jil::Methods::Array < Jil::Methods::Base
     method ||= line.methodname
     case method
     when :new then evalargs(line.args)
+    when :splat then splat(line)
     when :from_length then ::Array.new(@jil.cast(evalarg(line.arg), :Numeric))
     when :combine then token_val(line.objname) + cast(evalarg(line.arg))
     when :get then token_val(line.objname)[@jil.cast(evalarg(line.arg), :Numeric)]
@@ -59,6 +60,18 @@ class Jil::Methods::Array < Jil::Methods::Base
       else
         token_val(line.objname).send(method, *evalargs(line.args))
       end
+    end
+  end
+
+  def splat(line)
+    array = token_val(line.objname)
+    line.args.flatten.each_with_index do |arg, idx|
+      next if idx >= array.length
+
+      @jil.ctx[:vars][arg.varname] = {
+        class: arg.cast,
+        value: array[idx],
+      }
     end
   end
 end

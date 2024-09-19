@@ -11,6 +11,7 @@ class Jil::Methods::Global < Jil::Methods::Base
   def execute(line)
     case line.methodname
     when :input_data then @jil.ctx[:input_data]
+    when :params then @jil.ctx.dig(:input_data, :params)
     when :next, :Next
       @ctx[:next] = true
       evalarg(line.arg)
@@ -34,10 +35,11 @@ class Jil::Methods::Global < Jil::Methods::Base
         val = evalarg(line.arg, ctx)
         break val if val
       }
+    when :Item then nil # No-op, this is handled within the array #splat method
     when :Key then @ctx[:key]
     when :Index then @ctx[:index]
     when :Value, :Object then @ctx[:value]
-    when :get, :set! then send(line.methodname, *line.args)
+    # when :get, :set! then send(line.methodname, *line.args)
     when :stop_propagation then @ctx[:stop_propagation] = true
     else send(line.methodname, *evalargs(line.args))
     end
@@ -56,15 +58,15 @@ class Jil::Methods::Global < Jil::Methods::Base
   # end
 
   def set_cache(key, var, val)
-    @jil.user.caches.dig_set(*[key, var].map(&:presence), val) && val
+    @jil.user.caches.dig_set(*[key, var].compact_blank, val) && val
   end
 
   def get(var)
-    @jil.ctx.dig(:vars, var.to_sym, :value)
+    @jil.ctx.dig(:vars, var.to_s.to_sym, :value)
   end
 
   def set!(var, val)
-    set_value(var, evalarg(val))
+    set_value(var, val)
   end
 
   def command(text)

@@ -1,6 +1,7 @@
 [Global]
   #input_data::Hash
   #return(Any?)
+  #params::Array
   #if("IF" content "DO" content "ELSE" content)::Any
   #get(String)::Any // Variable reference
   #set!(String "=" Any)::Any
@@ -99,6 +100,7 @@
   #from_length(Numeric)
   .length::Numeric
   .combine(Array)
+  .splat(content(["Item"::Any]))
   .get(Numeric)::Any
   .set(Numeric "=" Any)
   .set!(Numeric "=" Any)

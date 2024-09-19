@@ -149,6 +149,36 @@ RSpec.describe Jil::Methods::Hash do
     end
   end
 
+  context ".splat" do
+    let(:code) {
+      <<-JIL
+        f1697 = Array.new({
+          g653e = String.new("Sam")::String
+          f8bef = String.new("trick")::String
+          acc05 = String.new("5")::String
+        })::Array
+        f256d = f1697.splat({
+          who = Global.Item()::String
+          what = Global.Item()::String
+          when = Global.Item()::Numeric
+        })::Array
+        z7cc9 = Global.get("who")::Any
+      JIL
+    }
+
+    it "assigns the variables from the array" do
+      expect_successful_jil
+
+      expect(ctx.dig(:vars).slice(:who, :what, :when, :z7cc9)).to match_hash({
+        who: { class: :String, value: "Sam" },
+        what: { class: :String, value: "trick" },
+        when: { class: :Numeric, value: "5" },
+        z7cc9: { class: :Any, value: "Sam" },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
   context ".combine" do
     let(:code) {
       <<-JIL
