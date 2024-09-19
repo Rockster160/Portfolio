@@ -29,15 +29,18 @@ class NewTokenizer
     @tokenized_text, _cursor = tokenize
   end
 
-  def untokenize(str=nil, unwrap: false, &block)
+  def untokenize(str=nil, levels=nil, unwrap: false, &block)
     untokenized = (str || @tokenized_text).dup
+    i = 0
     loop do
+      break if levels.present? && i >= levels
       break if @tokens.none? { |token, txt|
         untokenized.gsub!(token) {
           val = unwrap ? txt[1..-2] : txt
           block ? block.call(val) : val
         }
       }
+      i += 1
     end
     untokenized
   end

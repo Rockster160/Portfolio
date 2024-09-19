@@ -9,18 +9,19 @@ class Jil::Parser
   #   \((?<args>[\s\S]*)\) -- Only difference from ESCAPED_REGEX
   #   ::(?<cast>[A-Z][_0-9A-Za-z]*)
   # /x
+  TOKEN_REGEX = /\|\|TOKEN\d+\|\|/
   ESCAPED_REGEX = /
     \s*(?<commented>\#)?\s*
     (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
     (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
     \.(?<methodname>[_0-9A-Za-z]+[!?]?)
-    (?<args>\[[a-z0-9]{2}-[a-z0-9]{2}-[a-z0-9]{2}-[a-z0-9]{2}\])
+    (?<args>#{TOKEN_REGEX})
     ::(?<cast>[A-Z][_0-9A-Za-z]*)
   /xm
 
   def self.from_code(code)
-    tk = Tokenizer.new(code)
-    escaped = tk.stepper(code)
+    tk = NewTokenizer.new(code)
+    escaped = tk.tokenized_text
 
     from_tokenized_code(escaped, tk).tap { |parsed|
       # binding.pry
@@ -29,17 +30,18 @@ class Jil::Parser
 
   def self.from_tokenized_code(code, tk)
     code.scan(ESCAPED_REGEX)&.map.with_index { |(commented, varname, objname, methodname, arg_code, cast), idx|
-      args = tk.untokenize(arg_code, 1)[1..-2].split(/,?[ \n]+/).map { |escaped|
+      args = tk.untokenize(arg_code, 1, unwrap: true).split(/,?[ \n]+/).map { |escaped|
+        untokenized = tk.untokenize(escaped)
         tk.untokenize(escaped, 1).then { |piece|
           if piece.starts_with?("{") && piece.ends_with?("}")
             from_tokenized_code(piece, tk)
-          elsif piece.starts_with?("\"") && piece.ends_with?("\"")
-            piece # keep quotes
+          elsif untokenized.starts_with?("\"") && untokenized.ends_with?("\"")
+            untokenized # keep quotes
           else
             begin
-              ::JSON.parse(piece) rescue piece
+              ::JSON.parse(untokenized) rescue untokenized
             rescue JSON::ParserError => e
-              piece
+              untokenized
             end
           end
         }

@@ -56,6 +56,126 @@ RSpec.describe Jil::Executor do
       end
     end
   end
+
+  describe "Btn Receiver" do
+    let!(:receiver) {
+      JilTask.create(
+        name: "Btn Receiver",
+        listener: "websocket:receive",
+        code: receiver_code,
+        user: User.me,
+      )
+    }
+    let(:receiver_code) {
+      <<-JIL
+        input = Global.input_data()::Hash
+        channel = input.get("channel_id")::String
+        btn = input.get("btn_id")::String
+        u1fad = Global.print("\#{input}")::String
+        data = Hash.new({
+          ycd2a = Keyval.new("rgb", "0,40,150")::Keyval
+          b2075 = Keyval.new("for_ms", "1500")::Keyval
+          wa198 = Keyval.new("flash", "")::Keyval
+        })::Hash
+        l008c = Global.print("\#{channel}:\#{btn}")::String
+        r5e2a = Global.if({
+          ke292 = Boolean.eq(channel, "desk")::Boolean
+        }, {
+          mba58 = Global.if({
+            sb48d = btn.match("busp")::Boolean
+          }, {
+            v6e62 = ActionEvent.add("Auvelity", "", "", "")::ActionEvent
+            f7e22 = Global.exit()::Any
+          }, {})::Any
+          fcb22 = Global.if({
+            vada9 = btn.match("water")::Boolean
+          }, {
+            gb704 = ActionEvent.add("Water", "", "", "")::ActionEvent
+            k8447 = Global.exit()::Any
+          }, {})::Any
+          feef9 = Global.if({
+            i0011 = btn.match("soda")::Boolean
+          }, {
+            s4a23 = ActionEvent.add("Soda", "Mountain Dew", "", "")::ActionEvent
+            la9b8 = Global.exit()::Any
+          }, {})::Any
+          u91d6 = Global.if({
+            pb4c1 = btn.match("protein")::Boolean
+          }, {
+            ocsstart = Hash.keyval("ocs", "start")::Hash
+            cb42d = Global.trigger("ocs", ocsstart)::Numeric
+            p05dd = Global.exit()::Any
+          }, {})::Any
+        }, {})::Any
+        cc1e7 = Global.if({
+          pfb53 = btn.match("teeth")::Boolean
+        }, {
+          d4425 = ActionEvent.add("Teeth", "", "", "")::ActionEvent
+          f1630 = Global.exit()::Any
+        }, {})::Any
+        gfe60 = Global.if({
+          p1a39 = btn.match("laundry")::Boolean
+        }, {
+          ycdd3 = Hash.keyval("laundry", "start")::Hash
+          f2d3e = Global.trigger("laundry", ycdd3)::Numeric
+          o822f = Global.exit()::Any
+        }, {})::Any
+        k6b27 = Global.if({
+          e0d6d = btn.match("pullups")::Boolean
+        }, {
+          o4481 = ActionEvent.add("Handstand", "", "", "")::ActionEvent
+          i746d = Global.exit()::Any
+        }, {})::Any
+      JIL
+    }
+
+    describe "with an irrelevant trigger" do
+      let(:trigger_data) {
+        {
+          channel: "SocketChannel",
+          user_id: 1,
+          channel_id: "garage",
+          state: "closed",
+          connection_state: "receive",
+          match_list: [],
+          named_captures: {},
+        }
+      }
+
+      it "triggers the task but has no side effects" do
+        exe = receiver.execute(trigger_data)
+
+        expect(ActionEvent.count).to eq(0)
+        expect(exe.ctx.dig(:vars, :k6b27)).to be_present
+        expect(exe.ctx.dig(:input_data, :channel)).to eq("SocketChannel")
+        expect(exe.ctx.dig(:input_data, :channel_id)).to eq("garage")
+      end
+    end
+
+    describe "with a relevant trigger" do
+      let(:trigger_data) {
+        {
+          channel: "SocketChannel",
+          user_id: 1,
+          channel_id: "teeth",
+          btn_id: "teeth",
+          connection_state: "receive",
+          match_list: [],
+          named_captures: {},
+        }
+      }
+
+      it "triggers the second task and completes" do
+        exe = receiver.execute(trigger_data)
+
+        expect(ActionEvent.count).to eq(1)
+        expect(ActionEvent.first.name).to eq("Teeth")
+        expect(exe.ctx.dig(:vars, :k6b27)).not_to be_present
+        expect(exe.ctx.dig(:input_data, :channel)).to eq("SocketChannel")
+        expect(exe.ctx.dig(:input_data, :channel_id)).to eq("teeth")
+      end
+    end
+  end
 end
 # [ ] [Global]
 # [ ] [Keyval]
