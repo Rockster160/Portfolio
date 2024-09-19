@@ -14,12 +14,9 @@ class Jil::Methods::Base
     if arg.is_a?(::Jil::Parser) || arg.is_a?(::Array)
       @jil.execute_block(arg, passed_ctx || @ctx || @jil.ctx)
     elsif arg.is_a?(::String) && !arg.match?(/^\".*?\"$/)
-      # This is hacky... Shouldn't we know if it's a string vs variable?
-      @jil.ctx&.dig(:vars).key?(arg.to_sym) ? token_val(arg) : (arg.gsub(/\#\{\s*(.*?)\s*\}/) { |found|
-        @jil.cast(token_val(Regexp.last_match[1]), :String)
-      })
-    # elsif arg.is_a?(::Hash) && arg.keys == [:cast, :value]
-    #   @jil.cast(arg[:value], arg[:cast], @ctx)
+      token_val(arg)
+    elsif arg.is_a?(::String) && arg.match?(/^\".*?\"$/)
+      arg[1..-2]
     else
       arg
     end
