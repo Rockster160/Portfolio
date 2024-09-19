@@ -45,6 +45,28 @@ RSpec.describe Jil::Methods::Hash do
     end
   end
 
+  context "#parse" do
+    let(:code) {
+      <<-JIL
+        ee7a2 = Hash.parse("{ channel: \"SocketChannel\", user_id: 1, channel_id: \"garage\", state: \"closed\", connection_state: \"receive\", match_list: [], named_captures: {} }")::Hash
+      JIL
+    }
+
+    it "returns a proper hash" do
+      expect_successful_jil
+      expect(ctx.dig(:vars, :ee7a2, :value).keys.map(&:to_sym)).to match_array([
+        :channel,
+        :user_id,
+        :channel_id,
+        :state,
+        :connection_state,
+        :match_list,
+        :named_captures,
+      ])
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
   context ".length" do
     before do
       code << "r817a = n7c03.length()::Numeric"

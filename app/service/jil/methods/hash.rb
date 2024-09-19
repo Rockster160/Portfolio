@@ -21,6 +21,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
   def execute(line, method=nil)
     method ||= line.methodname
     case method
+    when :parse then parse(evalargs(line.args).first)
     when :new, :keyHash then hash_wrap(evalargs(line.args))
     when :get then token_val(line.objname).with_indifferent_access.dig(*evalargs(line.args))
     when :set!
@@ -45,6 +46,13 @@ class Jil::Methods::Hash < Jil::Methods::Base
         token_val(line.objname).with_indifferent_access.send(method, *evalargs(line.args))
       end
     end
+  end
+
+  def parse(raw)
+    tz = ::NewTokenizer.new(raw.to_s, only: { "\"" => "\"" })
+    processed = tz.untokenize(tz.tokenized_text.gsub(/(\w+): /, '"\1": '))
+
+    ::JSON.parse(processed).with_indifferent_access
   end
 
   def hash_wrap(array)

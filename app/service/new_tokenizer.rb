@@ -20,8 +20,8 @@ class NewTokenizer
     }
   end
 
-  def initialize(text, extra_pairs={})
-    @pairs = WRAP_PAIRS.merge(extra_pairs)
+  def initialize(text, extra_pairs={}, only: nil)
+    @pairs = only.nil? ? WRAP_PAIRS.merge(extra_pairs) : only
     @tokens = {}
     @token_count = 0
 
