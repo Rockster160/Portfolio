@@ -172,7 +172,7 @@ RSpec.describe Jil::Methods::Hash do
       expect(ctx.dig(:vars).slice(:who, :what, :when, :z7cc9)).to match_hash({
         who: { class: :String, value: "Sam" },
         what: { class: :String, value: "trick" },
-        when: { class: :Numeric, value: "5" },
+        when: { class: :Numeric, value: 5 },
         z7cc9: { class: :Any, value: "Sam" },
       })
       expect(ctx[:output]).to eq([])

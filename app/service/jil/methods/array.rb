@@ -70,7 +70,7 @@ class Jil::Methods::Array < Jil::Methods::Base
 
       @jil.ctx[:vars][arg.varname] = {
         class: arg.cast,
-        value: array[idx],
+        value: @jil.cast(array[idx], arg.cast),
       }
     end
   end

@@ -121,27 +121,40 @@ export default class Statement {
     return adds
   }
   static available(btn, statement) {
-    statement = (statement || btn)?.closest(".statement-wrapper")
-    let wrapper = statement?.closest(".content, .statements")
-    if (!wrapper) { return [] }
+    const all = Statement.all
+    const id = (statement || btn)?.closest(".statement-wrapper").id
+    const idx = all.findIndex(obj => obj.id == id)
+    const before = idx !== -1 ? all.slice(0, idx) : []
 
-    let types = btn.getAttribute("inputtype")?.split("|") || ["Any"]
-
-    let found = []
-    let previous = statement.previousElementSibling
-    while (previous) {
-      if (previous.classList.contains("statement-wrapper")) {
-        let prevStatement = Statement.from(previous)
-        if (prevStatement) {
-          if (types.indexOf("Any") >= 0 || types.indexOf(prevStatement.returntype) >= 0) {
-            found.push(prevStatement)
-          }
-        }
+    const types = btn.getAttribute("inputtype")?.split("|") || ["Any"]
+    return before.filter(obj => {
+      if (types.indexOf("Any") >= 0 || types.indexOf(obj.returntype) >= 0) {
+        return obj
       }
-      previous = previous.previousElementSibling
-    }
-
-    return [...found, ...this.available(btn, wrapper.parentElement)]
+    }).reverse()
+    // return
+    // TODO: Should intelligently determine which vars are in context or not
+    // statement = (statement || btn)?.closest(".statement-wrapper")
+    // let wrapper = statement?.closest(".content, .statements")
+    // if (!wrapper) { return [] }
+    //
+    // let types = btn.getAttribute("inputtype")?.split("|") || ["Any"]
+    //
+    // let found = []
+    // let previous = statement.previousElementSibling
+    // while (previous) {
+    //   if (previous.classList.contains("statement-wrapper")) {
+    //     let prevStatement = Statement.from(previous)
+    //     if (prevStatement) {
+    //       if (types.indexOf("Any") >= 0 || types.indexOf(prevStatement.returntype) >= 0) {
+    //         found.push(prevStatement)
+    //       }
+    //     }
+    //   }
+    //   previous = previous.previousElementSibling
+    // }
+    //
+    // return [...found, ...this.available(btn, wrapper.parentElement)]
   }
 
   static clearSelected() {
