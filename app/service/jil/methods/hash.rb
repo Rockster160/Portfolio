@@ -37,7 +37,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
     when :filter
       @jil.enumerate_hash(token_val(line.objname), method) { |ctx|
         evalarg(line.arg, ctx)
-      }.to_h.with_indifferent_access { |(k,v),i| [k,v] }
+      }.to_h { |(k,v),i| [k,v] }.with_indifferent_access
     else
       if line.objname.match?(/^[A-Z]/)
         send(method, token_val(line.objname), *evalargs(line.args))

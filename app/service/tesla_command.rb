@@ -147,10 +147,11 @@ module TeslaCommand
       @response = "Not sure how to tell car: #{[cmd, opt].map(&:presence).compact.join('|')}"
     end
 
+    res = @response # Local variable since modules share ivars
     Jarvis.ping(@response) unless quick
     TeslaCommandWorker.perform_async(cmd.to_s, opt&.to_s) if quick && !@cancel
     @cancel = false
-    @response
+    res
   rescue TeslaError => e
     if e.message.match?(/forbidden/i)
       broadcast

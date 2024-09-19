@@ -3,7 +3,7 @@ RSpec.describe Jarvis do
 
   def jarvis(msg, user=@user)
     res = Jarvis.command(user, msg)
-    res.is_a?(Array) ? res[0] : res
+    Array.wrap(res)[0]
   end
 
   before do
@@ -87,8 +87,6 @@ RSpec.describe Jarvis do
     let(:tesla_control) { double("TeslaControl", vin: 1, vehicle_data: {}, cached_vehicle_data: {}) }
 
     before do
-      # allow(DataStorage).to receive(:[]).and_call_original
-      # allow(DataStorage).to receive_message_chain(:[], :call).with(:tesla_forbidden).and_return(false)
       allow(TeslaControl).to receive(:new).and_return(tesla_control)
     end
 

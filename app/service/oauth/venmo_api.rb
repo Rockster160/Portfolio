@@ -75,7 +75,7 @@ class Oauth::VenmoApi < Oauth::Base
 
   def id_to_name(id)
     contact_id = contact_mapping.key(id)
-    Contact.find(contact_id).name
+    Contact.find(contact_id.to_s).name
   end
 
   def contact_by_name(name)
@@ -103,10 +103,11 @@ class Oauth::VenmoApi < Oauth::Base
   def user_id_from_contact(contact)
     return if contact.blank?
 
-    id = contact_mapping[contact.id.to_s]
+    id = contact_mapping[contact.id.to_s.to_sym]
     return id if id.present?
 
     Jarvis.ping("Haven't mapped #{contact.name} yet.")
+    nil
     # TODO: Attempt to look up by name in Venmo
     #
     # user = search(contact.raw[:name])

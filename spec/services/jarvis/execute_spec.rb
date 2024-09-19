@@ -2,7 +2,7 @@ RSpec.describe ::Jarvis::Execute do
   before { allow(SlackNotifier).to receive(:err) }
   let(:user) { User.me }
   let(:task) { JarvisTask.create(tasks: tasks, user: user) }
-  let(:execute) { ::Jarvis::Execute.call(task) }
+  let(:execute) { ::Jarvis::Execute.call(task); task.last_ctx }
   let(:hello) { "Hello, World!" }
   let(:goodbye) { "Goodbye, World!" }
 
@@ -54,13 +54,13 @@ RSpec.describe ::Jarvis::Execute do
     context "with positive blocks" do
       let(:args) { [1, 1] } # Matching
 
-      specify { expect(execute).to include(hello) }
+      specify { expect(execute[:msg]).to include(hello) }
     end
 
     context "with negative blocks" do
       let(:args) { [1, 0] } # NOT matching
 
-      specify { expect(execute).to include(goodbye) }
+      specify { expect(execute[:msg]).to include(goodbye) }
     end
   end
 
@@ -96,7 +96,7 @@ RSpec.describe ::Jarvis::Execute do
       }
 
       it "runs the block X times" do
-        expect(execute.count { |i| i == hello }).to eq(10)
+        expect(execute[:msg].count { |i| i == hello }).to eq(10)
       end
     end
 
@@ -170,9 +170,9 @@ RSpec.describe ::Jarvis::Execute do
       }
 
       it "runs the block 5 times" do
-        expect(execute.count { |i| i == hello }).to eq(5)
-        expect(execute.count { |i| i == goodbye }).to eq(5)
-        expect(execute).to include("After loop!")
+        expect(execute[:msg].count { |i| i == hello }).to eq(5)
+        expect(execute[:msg].count { |i| i == goodbye }).to eq(5)
+        expect(execute[:msg]).to include("After loop!")
       end
     end
 
@@ -204,44 +204,45 @@ RSpec.describe ::Jarvis::Execute do
       }
 
       it "does not run " do
-        expect(execute).to include("Before exit!")
-        expect(execute).to_not include("After exit!")
+        expect(execute[:msg]).to include("Before exit!")
+        expect(execute[:msg]).to_not include("After exit!")
       end
     end
 
-    context "with overflow" do
-      let(:tasks) {
-        [
-          {
-            returntype: "num",
-            type: "logic.times",
-            token: "apple.shiny.car",
-            data: [
-              { option: "input", raw: "1005" },
-              [
-                {
-                  returntype: "num",
-                  type: "logic.index",
-                  token: "bed.blue.purple"
-                }
-              ]
-            ]
-          }
-        ]
-      }
-
-      it "runs the block 1000 times then errors out" do
-        expect(execute.last).to include("Failed: Blocks exceed 1,000 allowed.")
-        expect(task.last_ctx[:i]).to eq(1001) # 1001 because it only errors AFTER exceeding
-
-        expected_totals = { itotal: 1001, executions: 1 }
-        expect(task.user.current_usage.data[task.uuid].symbolize_keys).to eq(expected_totals)
-        # ::Jarvis::Execute.call(task)
-        calc_sums = { icount: 1001, executions: 1 }
-        expect(JilUsage.sum_totals_by_user(task.user, Date.today).symbolize_keys).to eq(calc_sums)
-        expect(JilUsage.sum_totals_by_task(task, Date.today).symbolize_keys).to eq(calc_sums)
-      end
-    end
+    # NOTE: Block cap was removed
+    # context "with overflow" do
+    #   let(:tasks) {
+    #     [
+    #       {
+    #         returntype: "num",
+    #         type: "logic.times",
+    #         token: "apple.shiny.car",
+    #         data: [
+    #           { option: "input", raw: "1005" },
+    #           [
+    #             {
+    #               returntype: "num",
+    #               type: "logic.index",
+    #               token: "bed.blue.purple"
+    #             }
+    #           ]
+    #         ]
+    #       }
+    #     ]
+    #   }
+    #
+    #   it "runs the block 1000 times then errors out" do
+    #     expect(execute[:msg].last).to include("Failed: Blocks exceed 1,000 allowed.")
+    #     expect(task.last_ctx[:i]).to eq(1001) # 1001 because it only errors AFTER exceeding
+    #
+    #     expected_totals = { itotal: 1001, executions: 1 }
+    #     expect(task.user.current_usage.data[task.uuid].symbolize_keys).to eq(expected_totals)
+    #     # ::Jarvis::Execute.call(task)
+    #     calc_sums = { icount: 1001, executions: 1 }
+    #     expect(JilUsage.sum_totals_by_user(task.user, Date.today).symbolize_keys).to eq(calc_sums)
+    #     expect(JilUsage.sum_totals_by_task(task, Date.today).symbolize_keys).to eq(calc_sums)
+    #   end
+    # end
 
     context "with max iterations" do
       let(:tasks) {
@@ -265,8 +266,7 @@ RSpec.describe ::Jarvis::Execute do
       }
 
       it "runs the block 1000 times without error" do
-        expect(execute.last).to eq(999)
-        expect(task.last_ctx[:i]).to eq(1000)
+        expect(execute[:i]).to eq(1000)
       end
     end
   end
@@ -319,7 +319,7 @@ RSpec.describe ::Jarvis::Execute do
     }
 
     it "sets and gets a variable" do
-      expect(execute).to match_array(["This is my value!"])
+      expect(execute[:msg]).to match_array(["This is my value!"])
     end
   end
 
