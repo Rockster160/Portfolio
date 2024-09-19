@@ -30,6 +30,9 @@ class JilTask < ApplicationRecord
   scope :functions, -> {
     where("listener ~* '(^|\\s)function\\('")
   }
+  scope :by_method_name, ->(name) {
+    where("REPLACE(REGEXP_REPLACE(name, '\\W+', '', 'g'), ' ', '_') = ?", name)
+  }
   scope :by_snake_name, ->(name) {
     where("LOWER(REPLACE(REGEXP_REPLACE(name, '\\W+', '', 'g'), ' ', '_')) = ?", name)
   }
@@ -38,13 +41,20 @@ class JilTask < ApplicationRecord
     where("listener ~* '(^|\\s)#{safe_trigger}(~|:|$)'")
   }
 
+  def self.func_regex
+    /^\s*function(?:\((?<args>.*)\))(?:::(?<cast>[A-Z][_0-9A-Za-z|]*))?\s*$/i
+  end
+
   def self.schema(user=nil)
     tasks = user.present? ? user.jil_tasks.functions : none
-    funcs = "[Custom]\n" + tasks.map { |task|
+    funcs = "[Custom]\n" + tasks.filter_map { |task|
+      match = task.listener.match(func_regex)
+      next unless match.present?
+
       [
         "  #",
-        task.name.downcase.gsub(" ", "_").gsub(/\W+/, ""),
-        "(", task.listener[/^\s*function\((.*)\)/, 1], ")::Any",
+        task.name.gsub(/\W+/, "").gsub(" ", "_"),
+        "(", match[:args], ")::#{match[:cast] || :Any}",
       ].join("")
     }.join("\n")
 
