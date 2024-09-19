@@ -84,6 +84,21 @@ RSpec.describe SearchBreaker do
     end
   end
 
+  context "with nested and complex values" do
+    let(:q) { "tell~/(?<direction>open|close|toggle)( (?:the|my))? garage/" }
+    let(:expected) {
+      {
+        keys: {
+          "tell" => { similar: ["/(?<direction>open|close|toggle)( (?:the|my))? garage/"] }
+        }
+      }
+    }
+
+    it "sends back in the val" do
+      expect(subject).to eq(expected)
+    end
+  end
+
   context "with multi-level values" do
     let(:q) { "websocket:* websocket:garage event event:name:food event:ANY(name::food name::drink) travel:arrived travel:departed travel:arrived::Delton" }
     let(:expected) {

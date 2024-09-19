@@ -1,7 +1,7 @@
 RSpec.describe Jil::Methods::Hash do
   include ActiveJob::TestHelper
   let(:execute) { Jil::Executor.call(user, code, input_data) }
-  let(:user) { User.create(id: 1, role: :admin, username: :admiin, password: :password, password_confirmation: :password) }
+  let(:user) { User.me }
   let(:code) {
     <<-JIL
       n7c03 = Hash.new({

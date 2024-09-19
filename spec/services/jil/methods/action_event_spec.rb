@@ -1,7 +1,7 @@
 RSpec.describe Jil::Methods::ActionEvent do
   include ActiveJob::TestHelper
   let(:execute) { Jil::Executor.call(user, code, input_data) }
-  let(:user) { User.create(role: :admin, username: :admin, password: :password, password_confirmation: :password) }
+  let(:user) { User.me }
   let(:code) {
     <<-JIL
       q9693 = ActionEvent.find("")::ActionEvent

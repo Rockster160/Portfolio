@@ -15,10 +15,7 @@ RSpec.describe Jarvis do
   end
 
   before(:context) do
-    @admin = User.find_or_create_by!(username: :rocco, role: :admin) { |u|
-      u.password = :password
-      u.password_confirmation = :password
-    }
+    @admin = User.me
     @admin.contacts.create(JSON.parse(File.read("address_book.json"), symbolize_names: true))
     contact_id = @admin.contacts.find_by(name: "Brendan").id
     mom_id = @admin.contacts.find_by(name: "Mom").id

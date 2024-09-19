@@ -2,16 +2,20 @@ module SearchBreaker
   module_function
 
   RX = {
-    quot_str: /^#{Tokenizer.wrap_regex("\"")}$/,
-    single_quot_str: /^#{Tokenizer.wrap_regex("'")}$/,
-    rx_str: /^#{Tokenizer.wrap_regex("/")}$/,
-    paren_wrap: /^#{Tokenizer.wrap_regex("(", ")")}$/,
-    start: /(?:^|\b)/,
+    quot_str:        /^\"(.*?)\"$/,
+    single_quot_str: /^\'(.*?)\'$/,
+    rx_str:          /^\/(.*?)\/$/,
+    paren_wrap:      /^\((.*?)\)$/,
+    start:           /(?:^|\b)/,
   }
+
+  def unwrap(str)
+    str.gsub(/(?:#{RX[:quot_str]})|(?:#{RX[:single_quot_str]})/, '\1').gsub(RX[:paren_wrap], '\1')
+  end
 
   def call(str, delimiters={})
     str = str.dup
-    tr = ::Tokenizer.new(str)
+    tr = ::NewTokenizer.new(str)
     delims_with_aliases = delimiters.each_with_object([]) { |(key, delims), arr|
       ::Array.wrap(delims).each { |item| arr << [key, item] }
     }
@@ -26,17 +30,15 @@ module SearchBreaker
     end
 
     delim_regex = delim_escaped_regex(delims_with_aliases)
-    tokenized_split(str, tr).each_with_object(out) { |piece, obj| # Breaks each whitespace chunk
-      next (obj[:keys][piece] ||= {}) unless piece.match?(delim_regex)
+    tr.tokenized_text.split(/\s+/).each_with_object(out) { |tz_piece, obj|
+      piece = tr.untokenize(tz_piece)
+      next (obj[:keys][piece] ||= {}) unless tz_piece.match?(delim_regex)
 
-      key, delim, val = piece.split(delim_regex, 2)
+      tz_key, delim, tz_val = tz_piece.split(delim_regex, 2)
+      key = tr.untokenize(tz_key)
+      val = tr.untokenize(tz_val)
       delim_key = delims_with_aliases.find { |dk, d| delim.downcase == d.downcase }[0]
-      key, val = [key, val].map { |part|
-        part.gsub(RX[:quot_str], '\1').gsub(RX[:single_quot_str], '\1')
-      }
-      if val.match?(RX[:paren_wrap])
-        val = val.gsub(RX[:paren_wrap], '\1')
-      end
+      key, val = [key, val].map { |part| unwrap(part) }
 
       val = broken_or_val(val, delimiters) # Recursive search breaker
 
@@ -69,20 +71,5 @@ module SearchBreaker
       end
     end
     broken
-  end
-
-  def tokenized_split(str, tr=nil)
-    str = str.dup
-    rebuild = !tr.nil?
-    tr ||= ::Tokenizer.new(str)
-    tr.tokenize!(str, ::Tokenizer.wrap_regex("/"))
-    tr.tokenize!(str, /\\./)
-    tr.tokenize!(str, ::Tokenizer.wrap_regex("\""))
-    tr.tokenize!(str, ::Tokenizer.wrap_regex("'"))
-    tr.tokenize!(str, ::Tokenizer.wrap_regex("(", ")"))
-
-    return str.split(/\s+/) unless rebuild
-
-    str.split(/\s+/).map { |piece| tr.untokenize!(piece) }
   end
 end

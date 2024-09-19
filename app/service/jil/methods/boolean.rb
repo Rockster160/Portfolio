@@ -12,9 +12,11 @@ class Jil::Methods::Boolean < Jil::Methods::Base
     when :not then !evalarg(line.args.first)
     when :compare
       left, sign, right = evalargs(line.args)
-      return unless sign.in?(["==", "!=", "<", "<=", ">", ">="])
-
-      @jil.cast(left).send(sign, @jil.cast(right))
+      if sign.in?(["==", "!="])
+        @jil.cast(left).send(sign, @jil.cast(right))
+      elsif sign.in?(["==", "!=", "<", "<=", ">", ">="])
+        @jil.cast(left, :Numeric).send(sign, @jil.cast(right, :Numeric))
+      end
     else
       send(line.methodname, line.args)
       # send(line.methodname, *evalargs(line.args))

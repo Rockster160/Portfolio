@@ -61,4 +61,10 @@ RSpec.configure do |config|
   config.filter_rails_from_backtrace!
   # arbitrary gems may also be filtered via:
   # config.filter_gems_from_backtrace("gem name")
+  config.before(:suite) do
+    User.find_or_create_by!(username: :rocco, role: :admin) { |u|
+      u.password = :password
+      u.password_confirmation = :password
+    }
+  end
 end

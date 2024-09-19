@@ -1,7 +1,7 @@
 RSpec.describe Jil::Executor do
   include ActiveJob::TestHelper
   let(:execute) { described_class.call(user, code, input_data) }
-  let(:user) { User.create(id: 1, role: :admin, username: :admiin, password: :password, password_confirmation: :password) }
+  let(:user) { User.me }
   let(:code) { "" }
   let(:input_data) { {} }
   let(:ctx) { execute.ctx }

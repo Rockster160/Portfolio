@@ -13,7 +13,7 @@ class SearchBreakMatcher
     not_contains: ":!",
     not_exact:    "::!",
     regex:        ["~", ":~"],
-    any:          ["ANY", "ANY:"],
+    any:          ["ANY", "ANY:", "OR", "OR:"],
   }
   # These could be actual/custom Objects that return the expected data based on calls.
   # That would solve the issues of having conflicting keys.
@@ -45,9 +45,6 @@ class SearchBreakMatcher
       end
     )
 
-    # load("/Users/rocco/.pryrc")
-    # source_puts pretty_hash(@top_streams)
-    # source_puts pretty_hash(@top_breaker)
     calculate_matches
   rescue StandardError => e
     # binding.pry
@@ -81,16 +78,11 @@ class SearchBreakMatcher
     end
 
     ((breaker[:keys]&.flat_map { |val, broken| # val="event" && broken[:contains] = [{piece}]
-      # source_puts "|#{val}, #{broken}|"
       matching_streams = matching_stream_values(val, delim, stream) # This should iterate through every stream value and return the list that follows AFTER the matching key
-      # source_puts "matching_streams:#{matching_streams}"
       matching_streams.flat_map { |downstream|
         next true if broken.blank?
-        # source_puts "downstream:#{downstream}"
         broken.flat_map { |down_delim, breakers|
-          # source_puts "down_delim:#{down_delim} ||| breakers:#{breakers}"
           breakers.filter_map { |down_breaker|
-            # source_puts "down_breaker:#{down_breaker}"
             breaker_matches?(down_breaker, downstream, down_delim)#.tap { |b| source_puts b }
           }
         }
@@ -139,15 +131,9 @@ class SearchBreakMatcher
         @regex_match_data[:named_captures].reverse_merge!(md[:named_captures])
       }.present?
     when :any
-      ::Tokenizer.split(
-        val,
-        ::Tokenizer.wrap_regex("\""),
-        ::Tokenizer.wrap_regex("'"),
-        ::Tokenizer.wrap_regex("/"),
-        ::Tokenizer.wrap_regex("(", ")"),
-        unwrap: true,
-      ).any? { |single_val|
-        delim_match?(single_val, :contains, drop) # Should this default to contains or exact?
+      ::NewTokenizer.split(val).any? { |single_val|
+        unwrapped = SearchBreaker.unwrap(single_val)
+        delim_match?(unwrapped, :contains, drop) # Should this default to contains or exact?
       }
     else false
     end
