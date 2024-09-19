@@ -36,8 +36,8 @@ class Oauth::VenmoApi < Oauth::Base
   # ========== Via Venmo User ID ==========
   def send_money(id, amount, note) = charge_money(id, amount.abs, note)
   def request_money(id, amount, note) = charge_money(id, -(amount.abs), note)
-    # positive = send money
-    # negative = request money
+  # positive = send money
+  # negative = request money
   def charge_money(id, amount, note)
     return if id.blank?
 
