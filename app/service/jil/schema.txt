@@ -158,7 +158,7 @@
   .notes::Numeric
   .data::Hash
   .date::Date
-  .update("Name" TAB String BR "Notes" TAB String? BR "Data" TAB Hash? BR "Date" TAB Date?)::Boolean
+  .update("Name" TAB String? BR "Notes" TAB String? BR "Data" TAB Hash? BR "Date" TAB Date?)::Boolean
   .destroy::Boolean
 [Prompt]
   #find(String|Numeric)

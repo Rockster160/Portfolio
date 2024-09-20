@@ -27,7 +27,44 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     )
   end
 
+  def id(event)
+    event[:id]
+  end
+
+  def name(event)
+    event[:name]
+  end
+
+  def notes(event)
+    event[:notes]
+  end
+
+  def data(event)
+    event[:data]
+  end
+
+  def date(event)
+    event[:date]
+  end
+
+  def update(event, name, notes, data, date)
+    load_event(event).update({
+      name: name,
+      notes: notes,
+      data: data,
+      date: date,
+    }.compact_blank)
+  end
+
+  def destroy(event)
+    event.destroy
+  end
+
   private
+
+  def load_event(jil_event)
+    @jil.user.action_events.find(cast(jil_event)[:id])
+  end
 
   def events
     @events ||= @jil.user.action_events.order(timestamp: :desc).page(1).per(50)

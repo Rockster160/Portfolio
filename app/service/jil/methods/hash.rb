@@ -22,7 +22,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
     method ||= line.methodname
     case method
     when :parse then parse(evalargs(line.args).first)
-    when :new, :keyHash then hash_wrap(evalargs(line.args))
+    when :new, :keyHash, :keyval then hash_wrap(evalargs(line.args))
     when :get then token_val(line.objname).with_indifferent_access.dig(*evalargs(line.args))
     when :set!
       token = line.objname.to_sym
