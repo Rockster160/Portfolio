@@ -32,7 +32,7 @@ class ActionEvent < ApplicationRecord
   }
 
   def self.serialize
-    all.as_json(only: [:id, :name, :notes, :timestamp, :data])
+    all.as_json(only: [:id, :name, :notes, :timestamp, :data]).map(&:with_indifferent_access)
   end
 
   def timestamp=(str_stamp)
@@ -42,6 +42,6 @@ class ActionEvent < ApplicationRecord
   end
 
   def serialize
-    as_json(only: [:id, :name, :notes, :timestamp, :data])
+    as_json(only: [:id, :name, :notes, :timestamp, :data]).with_indifferent_access
   end
 end

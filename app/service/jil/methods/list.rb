@@ -1,7 +1,7 @@
 class Jil::Methods::List < Jil::Methods::Base
   def cast(value)
     case value
-    when ::List then { id: value.id }
+    when ::List then { id: value.id }.with_indifferent_access
     else @jil.cast(value, :Hash)
     end
   end

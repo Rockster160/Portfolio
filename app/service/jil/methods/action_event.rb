@@ -31,24 +31,24 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     }
   end
 
-  def id(event)
-    event[:id]
+  def id(event_data)
+    event_data[:id]
   end
 
-  def name(event)
-    event[:name]
+  def name(event_data)
+    event_data[:name]
   end
 
-  def notes(event)
-    event[:notes]
+  def notes(event_data)
+    event_data[:notes]
   end
 
-  def data(event)
-    event[:data]
+  def data(event_data)
+    event_data[:data]
   end
 
-  def date(event)
-    event[:date]
+  def date(event_data)
+    event_data[:date]
   end
 
   def update(event_data, name, notes, data, date)
