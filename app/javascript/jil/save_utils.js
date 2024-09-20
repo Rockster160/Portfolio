@@ -18,6 +18,12 @@ export default function saveUtils() {
     Statement.reloadFromText(window.load_code)
   }
 
+  document.addEventListener("mousedown", function(event) {
+    if (newTask && event.button === 1) {
+      Statement.reloadFromText("")
+    }
+  });
+
   let saveBtn = new SaveBtn(document.querySelector(".btn-save"))
   saveBtn.onClick(async () => {
     // formSubmitting = true

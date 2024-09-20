@@ -49,9 +49,10 @@ export default class Schema {
     let current
     list.forEach(item => {
       let match
-      if (match = item.match(/\[([A-Z][_a-zA-Z0-9]*)\](?:::([\w-]+))?/)) {
-        current = this.types[match[1]] || new Schema(match[1])
-        if (match[2]) { current.inputtype = match[2] }
+      if (match = item.match(/(\*?)\[([A-Z][_a-zA-Z0-9]*)\](?:::([\w-]+))?/)) {
+        current = this.types[match[2]] || new Schema(match[2])
+        if (match[1]) { current.hidden = true }
+        if (match[3]) { current.inputtype = match[3] }
       } else if (match = item.match(/^\s*\#/) && `${current.name}.${item.replace(/  #/, "")}`.match(Schema.funcRegex())) {
         const { methodname, args, cast } = match.groups
         current.addSingletonMethod(new Method({
@@ -76,9 +77,9 @@ export default class Schema {
 
   static instancesFor(type) { return this.types[type]?.instances || [] }
 
-  static globalMethods() {
+  static globalMethods(include_hidden) {
     return this.all.map(type => {
-      return type.singletons
+      return (type.hidden && !include_hidden) ? [] : type.singletons
     }).flat()
   }
 
