@@ -19,7 +19,7 @@ class Climb < ApplicationRecord
   end
 
   def score
-    @score ||= data&.split(" ")&.sum { |v| score_for(v.to_i) } || 0
+    data&.split(" ")&.sum { |v| score_for(v.to_i) } || 0
   end
 
   def score_for(v_index)
