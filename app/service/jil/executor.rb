@@ -79,27 +79,29 @@ class Jil::Executor
   end
 
   def execute_all
-    @execution.jil_task&.update(last_trigger_at: Time.current)
-    broadcast!
-    @ctx[:time_start] = Time.current
-    state = :started
-    begin
-      execute_block(@lines)
-      state = :success
-    # rescue ::Jil::ExecutionError => e
-    #   @ctx[:error] = e.message
-    #   state = :failed
-    rescue => e
-      @ctx[:error] = "[#{e.class}] #{e.message}"
-      @ctx[:error_line] = e.backtrace.find { |l| l.include?("/app/") }
-      state = :failed
-    ensure
-      @ctx[:state] = :complete
-      @ctx[:time_complete] = Time.current
-      store_progress(finished_at: @ctx[:time_complete], status: state)
-    end
-    broadcast!
-    self
+    Time.use_zone(@user.timezone) {
+      @execution.jil_task&.update(last_trigger_at: Time.current)
+      broadcast!
+      @ctx[:time_start] = Time.current
+      state = :started
+      begin
+        execute_block(@lines)
+        state = :success
+      # rescue ::Jil::ExecutionError => e
+      #   @ctx[:error] = e.message
+      #   state = :failed
+      rescue => e
+        @ctx[:error] = "[#{e.class}] #{e.message}"
+        @ctx[:error_line] = e.backtrace.find { |l| l.include?("/app/") }
+        state = :failed
+      ensure
+        @ctx[:state] = :complete
+        @ctx[:time_complete] = Time.current
+        store_progress(finished_at: @ctx[:time_complete], status: state)
+      end
+      broadcast!
+      self
+    }
   end
 
   def execute_block(lines, current_ctx={})
