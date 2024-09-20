@@ -11,6 +11,7 @@ module Bowling
     def create
       @league = find_or_create_league
       @set.league_id ||= @league.id
+      jil_trigger(:bowling, { league: @league.id })
 
       if @set.update(bowling_params)
         @set.games.each(&:save) # Hack because double gutter isn't registering as a change to games
@@ -32,6 +33,9 @@ module Bowling
       @set.league_id ||= @league.id
 
       if @set.update(bowling_params)
+        # game_vals = params.dig(:bowling_set, :games_attributes).values
+        # game_num = game_vals.max { |game| game[:game_num].to_i }
+        # jil_trigger(:bowling, {})
         started_frame_9 = params.dig(:bowling_set, :games_attributes).values&.any? { |game|
           next false unless game[:game_num] == "3"
           game.dig(:frames_details, "8", :throw1).present? # 8 is index, so frame 9

@@ -27,6 +27,10 @@ class ApplicationController < ActionController::Base
 
   private
 
+  def jil_trigger(scope, data={})
+    Jil.trigger(current_user.id, scope, data)
+  end
+
   def tracker
     return if params[:checker]
 

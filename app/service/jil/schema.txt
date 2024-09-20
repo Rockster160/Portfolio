@@ -170,7 +170,7 @@
   #text(String:"Question Text" BR "Default" String)
   #checkbox(String:"Question Text")
   #choices(String:"Question Text" content(String))
-  #scale(String:"Question Text" BR Numeric:"Min" Numeric:"Max")
+  #scale(String:"Question Text" BR Numeric?:"Min" Numeric?:"Max" Numeric?:"Default")
 [Task]
   #find(String|Numeric)
   #search(String)::Array

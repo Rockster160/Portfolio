@@ -12,6 +12,7 @@ class JilPromptsController < ApplicationController
     data = params.dig(:prompt, :response)&.permit!&.to_h || {}
     @prompt.update(response: data)
     @prompt.task&.execute(response: @prompt.response, params: @prompt.params)
+    jil_trigger(:prompt, { title: @prompt.question, id: @prompt.id })
 
     redirect_to jarvis_path
   end

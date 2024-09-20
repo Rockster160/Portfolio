@@ -31,6 +31,7 @@ class ClimbsController < ApplicationController
     Time.use_zone(current_user.timezone) {
       @climb = current_user.climbs.find_by(created_at: Time.current.all_day)
       @climb ||= current_user.climbs.create(timestamp: Time.current)
+      jil_trigger(:climbing, { last: params[:v_index], score: @climb.score })
 
       @climb.update(data: [@climb.data, params[:v_index]].compact_blank.join(" "))
     }
