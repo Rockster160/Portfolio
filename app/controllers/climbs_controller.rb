@@ -33,10 +33,10 @@ class ClimbsController < ApplicationController
       @climb ||= current_user.climbs.create(timestamp: Time.current)
 
       @climb.update(data: [@climb.data, params[:v_index]].compact_blank.join(" "))
-      jil_trigger(:climbing, { last: params[:v_index], score: @climb.score })
+      jil_trigger(:climbing, { last: params[:v_index], score: @climb.score, climbs: @climb.data.split(" ") })
     }
 
-    render json: { score: @climb.score }
+    render json: { score: @climb.score, climbs: @climb.data.split(" ").length }
   end
 
   def update
