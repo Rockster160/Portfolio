@@ -6,10 +6,10 @@ class Jil::Methods::Boolean < Jil::Methods::Base
   def execute(line)
     case line.methodname
     when :new then cast(evalarg(line.arg))
-    when :eq then evalarg(line.args.first) == evalarg(line.args.last)
-    when :or then evalarg(line.args.first) || evalarg(line.args.last)
-    when :and then evalarg(line.args.first) && evalarg(line.args.last)
-    when :not then !evalarg(line.args.first)
+    when :eq then evalarg(line.args.first).presence == evalarg(line.args.last).presence
+    when :or then evalarg(line.args.first).presence || evalarg(line.args.last).presence
+    when :and then evalarg(line.args.first).presence && evalarg(line.args.last).presence
+    when :not then !evalarg(line.args.first).presence
     when :compare
       left, sign, right = evalargs(line.args)
       if sign.in?(["==", "!="])
