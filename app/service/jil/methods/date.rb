@@ -4,16 +4,16 @@ class Jil::Methods::Date < Jil::Methods::Base
   def cast(value)
     case value
     when Numeric then value < 10**10 ? Time.at(value) : Time.at(value/1000.to_f)
-    when String then DateTime.parse(value)
-    else value.to_datetime
+    when String then value.in_time_zone(@jil.user.timezone)
+    else value.to_datetime.in_time_zone(@jil.user.timezone)
     end
   rescue Date::Error, TypeError, NoMethodError
-    DateTime.new
+    DateTime.new.in_time_zone(@jil.user.timezone)
   end
 
   def execute(line)
     case line.methodname
-    when :new then DateTime.new(*evalargs(line.args))
+    when :new then Time.zone.local(*evalargs(line.args))
     else
       fallback(line)
     end
