@@ -12,13 +12,14 @@ class JilPromptsController < ApplicationController
     data = params.dig(:prompt, :response)&.permit!&.to_h || {}
     @prompt.update(response: data)
     @prompt.task&.execute(response: @prompt.response, params: @prompt.params)
-    jil_trigger(:prompt, { title: @prompt.question, id: @prompt.id })
+    jil_trigger(:prompt, { status: :complete }.merge(@prompt.serialize))
 
     redirect_to jarvis_path
   end
 
   def destroy
     @prompt.destroy
+    jil_trigger(:prompt, { status: :skip }.merge(@prompt.serialize))
     redirect_to jil_prompts_path
   end
 

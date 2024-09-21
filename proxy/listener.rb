@@ -1,3 +1,6 @@
+REAL_TESLA_ENDPOINTS = true
+DEBUG_LOGGING = true
+
 require "sinatra"
 
 require "rest-client"
@@ -9,7 +12,6 @@ require_relative "../app/service/api.rb"
 
 require "pry-rails"
 
-REAL_TESLA_ENDPOINTS = true
 if REAL_TESLA_ENDPOINTS
   OAUTH_BASE_URL = "https://auth.tesla.com" # no slash
   TARGET_BASE_URL = "https://localhost:8752" # no slash
@@ -18,7 +20,6 @@ else
   TARGET_BASE_URL = "http://localhost:3141/tesla"
 end
 
-DEBUG_LOGGING = true
 # Create a Rails-like object for the API to define whether to show debugging
 Rails = Object.new.tap { |obj|
   def obj.env
@@ -66,6 +67,12 @@ class ProxyServer < Sinatra::Base
     # define routes to skip
     pass if request.path_info == "/favicon.ico"
     # pass if !request.path_info.start_with?("/api/1")
+  end
+
+  post "/test" do
+    puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m Test Received \e[36m#{request.ip}\e[0m"
+
+    { success: true }.to_json
   end
 
   post "/tesla_refresh" do

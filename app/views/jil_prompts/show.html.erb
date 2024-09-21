@@ -6,7 +6,7 @@
   <div class="text-right"><%= link_to "Skip", @prompt, method: :delete, class: "btn danger" %></div>
     <div class="lists-title instructions"><%= @prompt.question %></div>
     <div class="list-items survey-questions">
-      <% @prompt.options&.each do |option| %>
+      <% @prompt.options.presence&.each do |option| %>
         <% option = option.deep_symbolize_keys %>
         <% question = option[:question] %>
         <% default = option[:default] %>
