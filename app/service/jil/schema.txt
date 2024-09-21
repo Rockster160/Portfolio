@@ -131,8 +131,8 @@
   .join(String)::String
 [List]
   #find(String:Name)
-  #add(String:List String:Item)
-  #remove(String:List String:Item)
+  #list_add(String:List String:Item)
+  #list_remove(String:List String:Item)
   !#search(String)::Array
   !#create(String)
   .name::String
