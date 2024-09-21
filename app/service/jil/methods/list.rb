@@ -10,6 +10,14 @@ class Jil::Methods::List < Jil::Methods::Base
     List.by_name_for_user(list_name, @jil.user)
   end
 
+  def add(list_name, item_name)
+    List.by_name_for_user(list_name, @jil.user).add(item_name)
+  end
+
+  def remove(list_name, item_name)
+    List.by_name_for_user(list_name, @jil.user).remove(item_name)
+  end
+
   def name(list)
     load_list(list).name
   end
@@ -46,6 +54,8 @@ end
 
 # [List]
 #   #find(String)
+#   #add(String:List String:Item)
+#   #remove(String:List String:Item)
 #   #search(String)::Array
 #   #create(String)
 #   .name::String
