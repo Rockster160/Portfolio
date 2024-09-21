@@ -12,6 +12,7 @@ export default class Method {
     this.scope = data.scope
     this.stringArgs = data.args
     this.returntype = data.returntype
+    this.upcoming = data.upcoming
     this.tokenizer = new Tokenizer
 
     this.default = null

@@ -51,9 +51,9 @@ export default class Schema {
       let match
       if (match = item.match(/(\*?)\[([A-Z][_a-zA-Z0-9]*)\](?:::([\w-]+))?/)) {
         current = this.types[match[2]] || new Schema(match[2])
-        if (match[1]) { current.hidden = true }
+        if (match[1] == "*") { current.hidden = true }
         if (match[3]) { current.inputtype = match[3] }
-      } else if (match = item.match(/^\s*\#/) && `${current.name}.${item.replace(/  #/, "")}`.match(Schema.funcRegex())) {
+      } else if (match = (item.match(/^\s*\!?\#/) && `${current.name}.${item.replace(/  \!?#/, "")}`.match(Schema.funcRegex()))) {
         const { methodname, args, cast } = match.groups
         current.addSingletonMethod(new Method({
           scope: "singleton",
@@ -61,8 +61,9 @@ export default class Schema {
           name: methodname,
           args: args,
           returntype: cast || current.name,
+          upcoming: !!item.match(/^\s*\!/),
         }))
-      } else if (match = item.match(/^\s*\./) && `${current.name}.${item.replace(/  \./, "")}`.match(Schema.funcRegex())) {
+      } else if (match = (item.match(/^\s*\!?\./) && `${current.name}.${item.replace(/  \!?\./, "")}`.match(Schema.funcRegex()))) {
         const { methodname, args, cast } = match.groups
         current.addInstanceMethod(new Method({
           scope: "instance",
@@ -70,6 +71,7 @@ export default class Schema {
           name: methodname,
           args: args,
           returntype: cast || current.name,
+          upcoming: !!item.match(/^\s*\!/),
         }))
       }
     })

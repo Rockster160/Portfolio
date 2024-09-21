@@ -20,7 +20,6 @@
   #loop(enum_content)::Any
   #times(Numeric enum_content)::Numeric
   #stop_propagation()::Boolean
-  // #eval(Text) # Should return the value given by a "return" that's called inside
 [Keyval]
   #new(String ": " Any)
   #keyHash(String ": " content(Keyval [Keyval.new]))
@@ -37,10 +36,10 @@
   .length()::Numeric
 [Numeric]::number
   #new(Any::Numeric)
-  #pi(TAB "π" TAB)
-  #e(TAB "e" TAB)
-  #inf()
-  #rand(Numeric:min Numeric:max Numeric?:figures)
+  !#pi(TAB "π" TAB)
+  !#e(TAB "e" TAB)
+  !#inf()
+  !#rand(Numeric:min Numeric:max Numeric?:figures)
   #op(Numeric ["+" "-" "*" "/" "%" "^log"] Numeric)
   .round(Numeric(0))
   .floor
@@ -48,17 +47,17 @@
   .op(["+" "-" "*" "/" "%" "^log"] Numeric)
   .op!(["+=" "-=" "*=" "/=" "%="] Numeric)
   .abs
-  .sqrt
-  .squared
-  .cubed
-  .log(Numeric)
-  .root(Numeric)
-  .exp(Numeric)
-  .zero?::Boolean
+  !.sqrt
+  !.squared
+  !.cubed
+  !.log(Numeric)
+  !.root(Numeric)
+  !.exp(Numeric)
   .even?::Boolean
   .odd?::Boolean
-  .prime?::Boolean
-  .whole?::Boolean
+  !.prime?::Boolean
+  !.whole?::Boolean
+  .zero?::Boolean
   .positive?::Boolean
   .negative?::Boolean
 [Boolean]::checkbox
@@ -132,23 +131,23 @@
   .join(String)::String
 [List]
   #find(String:Name)
-  #search(String)::Array
-  #create(String)
+  !#search(String)::Array
+  !#create(String)
   .name::String
-  .update(String?:"Name")::Boolean
-  .destroy::Boolean
+  !.update(String?:"Name")::Boolean
+  !.destroy::Boolean
   .add(String)::Boolean
   .remove(String)::Boolean
   .items::Array
   .has_item?(String)::Boolean
-[ListItem]
-  #find(String|Numeric)
-  #search(String)::Array # All items belonging to user through user lists
-  .update(String?:"Name" String?:"Notes" Hash?:"Data")::Boolean
-  .name::String
-  .notes::String
-  .data::Hash
-  .destroy::Boolean
+*[ListItem]
+  !#find(String|Numeric)
+  !#search(String)::Array # All items belonging to user through user lists
+  !.update(String?:"Name" String?:"Notes" Hash?:"Data")::Boolean
+  !.name::String
+  !.notes::String
+  !.data::Hash
+  !.destroy::Boolean
 [ActionEvent]
   #find(String|Numeric)
   #search(String "limit" Numeric(50) "since" Date? "order" ["ASC" "DESC"])::Array
@@ -164,26 +163,26 @@
   #find(String|Numeric)
   #all("complete?" Boolean(false))::Array
   #create("Title" TAB String BR "Data" TAB Hash? BR "Questions" content(PromptQuestion) "Deliver" BR Boolean)
-  .update("Title" TAB String BR "Data" TAB Hash? BR "Questions" content(PromptQuestion))::Boolean
-  .destroy::Boolean
-  .deliver::Boolean
+  !.update("Title" TAB String BR "Data" TAB Hash? BR "Questions" content(PromptQuestion))::Boolean
+  !.destroy::Boolean
+  !.deliver::Boolean
 *[PromptQuestion]
-  #text(String:"Question Text" BR "Default" String)
-  #checkbox(String:"Question Text" BR "Default" Boolean)
-  #choices(String:"Question Text" content(String))
+  !#text(String:"Question Text" BR "Default" String)
+  !#checkbox(String:"Question Text" BR "Default" Boolean)
+  !#choices(String:"Question Text" content(String))
   #scale(String:"Question Text" BR Numeric(0):"Min" Numeric(100):"Max" Numeric?(50):"Default")
-[Task]
-  #find(String|Numeric)
-  #search(String)::Array
-  .enable(Boolean(true))::Boolean
-  .run(Date?)
-[Email]
-  #find(String|Numeric)
-  #search(String)::Array
-  #create("To" TAB String BR "Subject" TAB String BR Text)
-  .to::String
-  .from::String
-  .body::String
-  .text::String
-  .html::String
-  .archive(Boolean(true))::Boolean
+*[Task]
+  !#find(String|Numeric)
+  !#search(String)::Array
+  !.enable(Boolean(true))::Boolean
+  !.run(Date?)
+*[Email]
+  !#find(String|Numeric)
+  !#search(String)::Array
+  !#create("To" TAB String BR "Subject" TAB String BR Text)
+  !.to::String
+  !.from::String
+  !.body::String
+  !.text::String
+  !.html::String
+  !.archive(Boolean(true))::Boolean

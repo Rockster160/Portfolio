@@ -316,6 +316,10 @@ export default class Statement {
     this._scope = new_scope
     this.type = this.type
   }
+  schemaMethod(method_name) {
+    if (!this.reference && !this.type) { return }
+    return Schema.method(this.reference || this.type, method_name || this.method)
+  }
   get method() { return this.node.querySelector(".obj-method").innerText }
   set method(new_method) {
     this.node.querySelector(".obj-method").innerText = new_method
@@ -323,10 +327,15 @@ export default class Statement {
     argsContainer.innerHTML = ""
     if (this.keyword) { return }
 
-    let methodObj = Schema.method(this.reference || this.type, new_method)
+    let methodObj = this.schemaMethod(new_method)
     if (methodObj) {
       this.scope = methodObj.scope
       methodObj.parsedArgs().forEach(item => argsContainer.appendChild(item))
+      console.log(methodObj)
+      // debugger
+      if (methodObj.upcoming) {
+        this.addError("Method is not yet implemented.")
+      }
     } else {
       this.addError(`Unable to call ${new_method} on ${this.refname}::${this.type}`)
     }
