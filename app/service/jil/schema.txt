@@ -163,14 +163,15 @@
 [Prompt]
   #find(String|Numeric)
   #all("complete?" Boolean(false))::Array
-  #create("Title" TAB String BR "Params" TAB Hash? BR "Data" TAB Hash? BR "Questions" content(PromptQuestion))
-  .update("Title" TAB String BR "Params" TAB Hash? BR "Data" TAB Hash? BR "Questions" content(PromptQuestion))::Boolean
+  #create("Title" TAB String BR "Data" TAB Hash? BR "Questions" content(PromptQuestion) "Deliver" BR Boolean)
+  .update("Title" TAB String BR "Data" TAB Hash? BR "Questions" content(PromptQuestion))::Boolean
   .destroy::Boolean
-[PromptQuestion]
+  .deliver::Boolean
+*[PromptQuestion]
   #text(String:"Question Text" BR "Default" String)
-  #checkbox(String:"Question Text")
+  #checkbox(String:"Question Text" BR "Default" Boolean)
   #choices(String:"Question Text" content(String))
-  #scale(String:"Question Text" BR Numeric?:"Min" Numeric?:"Max" Numeric?:"Default")
+  #scale(String:"Question Text" BR Numeric(0):"Min" Numeric(100):"Max" Numeric?(50):"Default")
 [Task]
   #find(String|Numeric)
   #search(String)::Array

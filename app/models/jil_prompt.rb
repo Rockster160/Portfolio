@@ -14,7 +14,7 @@
 #  user_id     :bigint
 #
 class JilPrompt < ApplicationRecord
-  belongs_to :user
+  belongs_to :user, inverse_of: :prompts
   belongs_to :task, class_name: "JarvisTask"
 
   scope :unanswered, -> { where(response: nil) }
@@ -39,7 +39,7 @@ class JilPrompt < ApplicationRecord
       response: response,
       task: task&.uuid,
       url: Rails.application.routes.url_helpers.jil_prompt_url(self)
-    }
+    }.with_indifferent_access
   end
 
   private

@@ -210,6 +210,7 @@ class Jil::Executor
     klass_name = (
       case klass_name || obj.cast.to_sym
       # when :Hash then ::Hash # dig into the hash for special keys
+      when :Prompt, :PromptQuestion then :Prompt
       when :Hash, :Keyval then :Hash
       when :String, :Text then :String
       else

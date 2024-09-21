@@ -18,12 +18,26 @@ class Jil::Methods::Hash < Jil::Methods::Base
     end
   end
 
+  def enum_content(args)
+    evalargs(args).first
+  end
+
   def execute(line, method=nil)
     method ||= line.methodname
     case method
-    when :parse then parse(evalargs(line.args).first)
-    when :new, :keyHash, :keyval then hash_wrap(evalargs(line.args))
-    when :get then token_val(line.objname).with_indifferent_access.dig(*evalargs(line.args))
+    when :parse then parse(enum_content(line.args))
+    when :keyHash
+      key, hash = *line.args
+      { evalarg(key) => hash_wrap(evalargs(hash)) }
+    when :new, :keyval
+      if line.objname == :Hash
+        hash_wrap(enum_content(line.args))
+      else
+        hash_wrap(evalargs(line.args))
+      end
+    when :dig
+      token_val(line.objname).with_indifferent_access.send(method, *enum_content(line.args))
+    when :get then token_val(line.objname).with_indifferent_access.dig(*enum_content(line.args))
     when :set!
       token = line.objname.to_sym
       @jil.ctx[:vars][token] ||= { class: :Hash, value: nil }
@@ -41,9 +55,11 @@ class Jil::Methods::Hash < Jil::Methods::Base
       }.to_h { |(k,v),i| [k,v] }.with_indifferent_access
     else
       if line.objname.match?(/^[A-Z]/)
-        send(method, token_val(line.objname), *evalargs(line.args))
+        send(method, token_val(line.objname), enum_content(line.args))
+      elsif line.args.any?
+        token_val(line.objname).with_indifferent_access.send(method, enum_content(line.args))
       else
-        token_val(line.objname).with_indifferent_access.send(method, *evalargs(line.args))
+        token_val(line.objname).with_indifferent_access.send(method)
       end
     end
   end
@@ -56,7 +72,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
   end
 
   def hash_wrap(array)
-    return array.to_h if array.first.is_a?(::Array)
+    return array.to_h if array.first.is_a?(::Array) && array.first.length == 2
     return [array].to_h if array.length == 2 && array.none? { |i| i.is_a?(::Hash) }
 
     first, *rest = *array

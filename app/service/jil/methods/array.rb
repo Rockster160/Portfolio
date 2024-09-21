@@ -6,13 +6,31 @@ class Jil::Methods::Array < Jil::Methods::Base
     end
   end
 
+  # #new(content)
+  # .splat(content(["Item"::Any]))
+  # .dig(content(String|Numeric [String.new Numeric.new]))::Any
+  # .each(enum_content)
+  # .select(enum_content)::Array
+  # .map(enum_content)
+  # .find(enum_content)::Any
+  # .any?(enum_content)::Boolean
+  # .none?(enum_content)::Boolean
+  # .all?(enum_content)::Boolean
+  # .sort_by(enum_content)
+  # .sort_by!(enum_content)
+
+  def enum_content(args)
+    evalargs(args).first
+  end
+
   def execute(line, method=nil)
     method ||= line.methodname
     case method
-    when :new then evalargs(line.args)
+    when :new then enum_content(line.args)
     when :splat then splat(line)
     when :from_length then ::Array.new(@jil.cast(evalarg(line.arg), :Numeric))
     when :combine then token_val(line.objname) + cast(evalarg(line.arg))
+    when :dig then token_val(line.objname).send(method, *enum_content(line.args))
     when :get then token_val(line.objname)[@jil.cast(evalarg(line.arg), :Numeric)]
     when :pop! then token_val(line.objname).pop
     when :shift! then token_val(line.objname).shift
@@ -56,9 +74,11 @@ class Jil::Methods::Array < Jil::Methods::Base
       }.first
     else
       if line.objname.match?(/^[A-Z]/)
-        send(method, token_val(line.objname), *evalargs(line.args))
+        send(method, token_val(line.objname), enum_content(line.args))
+      elsif line.args.any?
+        token_val(line.objname).send(method, enum_content(line.args))
       else
-        token_val(line.objname).send(method, *evalargs(line.args))
+        token_val(line.objname).send(method)
       end
     end
   end

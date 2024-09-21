@@ -25,7 +25,7 @@ class Jil::Methods::Base
   end
 
   def evalargs(args)
-    Array.wrap(args).flatten.map { |arg| evalarg(arg) }
+    Array.wrap(args).map { |arg| arg.is_a?(::Array) ? evalargs(arg) : evalarg(arg) }
   end
 
   def token_val(token)
