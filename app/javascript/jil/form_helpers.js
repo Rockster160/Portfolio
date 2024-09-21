@@ -1,5 +1,4 @@
 import Schema from "./schema.js"
-import Tokenizer from "./tokenizer.js"
 import sortable from "./sortable.js"
 
 export function element(tag, data) {

@@ -65,7 +65,7 @@ export default class Statement {
     let captObjName = /(?<objname>[_a-zA-Z][_0-9A-Za-z]*)/
     let captMethodName = /\.(?<methodname>[_0-9A-Za-z]+[!?]?)/
     // let captArgs = /\((?<args>[^\(\)]*\(((?:(?!\()[^\(\)]*|\([^()]*\))*)\)[^\(\)]*)\)/ // Only insides
-    let captArgs = escaped_args ? /(?<args>\|\|[a-f0-9]{2}-[a-f0-9]{2}-[a-f0-9]{2}\|\|)/ : /\((?<args>[\s\S]*)\)/ // First to last
+    let captArgs = escaped_args ? /(?<args>\|\|TOKEN\d+\|\|)/ : /\((?<args>[\s\S]*)\)/ // First to last
     let captCast = /::(?<cast>[A-Z][_0-9A-Za-z]*)/
     let fullRegex = new RegExp([
       captComment,
@@ -92,8 +92,8 @@ export default class Statement {
     })
 
     let adds = []
-    let tokenizer = new Tokenizer()
-    let escaped = tokenizer.stepper(text)
+    let tokenizer = new Tokenizer(text)
+    let escaped = tokenizer.tokenizedText
     let matches = [...escaped.matchAll(Statement.regex(true))]
     matches.forEach(match => {
       const { commented, varname, objname, methodname, args, cast } = match.groups
@@ -112,7 +112,7 @@ export default class Statement {
         statement.reference = objname
       }
       statement.method = methodname
-      let argString = tokenizer.untokenize(args, "all")
+      let argString = tokenizer.untokenize(args)
       statement.argString = argString.substr(1, argString.length-2) // Remove wrapping parens
 
       adds.push(statement)
@@ -331,8 +331,6 @@ export default class Statement {
     if (methodObj) {
       this.scope = methodObj.scope
       methodObj.parsedArgs().forEach(item => argsContainer.appendChild(item))
-      console.log(methodObj)
-      // debugger
       if (methodObj.upcoming) {
         this.addError("Method is not yet implemented.")
       }
@@ -442,20 +440,17 @@ export default class Statement {
     newArgs.forEach(item => argsContainer.appendChild(item))
   }
   set argString(str) {
-    let vals = Tokenizer.split(str) // ['Default Value', '2']
+    let vals = Tokenizer.split(str, { by: /[, ]+/ }) // ['Default Value', '2']
     let argsContainer = this.node.querySelector(".obj-args")
     let inputs = Array.from(argsContainer.querySelectorAll(":scope > .input-wrapper, :scope > .content"))
     inputs.forEach((wrapper, idx) => {
       let val = vals[idx]
       if (wrapper.classList.contains("content")) {
-        let tokenizer = new Tokenizer()
-        let escaped = tokenizer.tokenize(str, /\{[^{}]*\}/m)
-        let section = escaped.split(/,? /)[idx]
-        let unwrap = tokenizer.untokenize(section) // Unwrap once, giving only the current level fns
-        let args = unwrap.split("\n").slice(1, -1) // Remove wrapping brackets
+        let section = Tokenizer.split(str, { by: /[, ]+/ })[idx]
+        let args = section.split("\n").slice(1, -1) // Remove wrapping brackets
 
         args.forEach(arg => {
-          let statement = Statement.fromText(tokenizer.untokenize(arg, "all"))[0]
+          let statement = Statement.fromText(arg)[0]
           if (statement) { statement.moveInside(wrapper) }
         })
       } else {

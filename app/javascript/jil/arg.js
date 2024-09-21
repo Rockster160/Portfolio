@@ -18,8 +18,6 @@ export default class Arg {
     this.content = undefined
     this.allowedtypes = "Any"
 
-    this.tokenizer = new Tokenizer
-
     this.breakdown(str)
   }
 
@@ -55,7 +53,7 @@ export default class Arg {
         let { allowedtypes, args, is_enum } = match.groups
         this.content = true
         if (allowedtypes) { this.allowedtypes = allowedtypes }
-        if (args) { this.options = this.tokenizer.split(args || "") }
+        if (args) { this.options = Tokenizer.split(args, { by: /[, ]+/ }) }
         if (is_enum) { this.options = [...Schema.enumArgOptions, ...(this.options || [])] }
         return
       }
@@ -64,7 +62,7 @@ export default class Arg {
       match = str.match(/\[(.*)\](\?)?/)
       if (match) {
         this.optional = match[2] == "?"
-        this.options = this.tokenizer.split(match[1]).map(item => unwrap(item))
+        this.options = Tokenizer.split(match[1], { by: /[, ]+/ }).map(item => unwrap(item))
       }
       return
     }

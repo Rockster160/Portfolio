@@ -7,7 +7,6 @@ import sortable from "./sortable.js"
 import Schema from "./schema.js"
 import Mouse from "./mouse.js"
 import Keyboard from "./keyboard.js"
-import Tokenizer from "./tokenizer.js"
 import saveUtils from "./save_utils.js"
 
 window.Schema = Schema

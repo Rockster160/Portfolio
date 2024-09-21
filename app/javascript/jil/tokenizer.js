@@ -1,117 +1,140 @@
 import { genHex } from "./form_helpers.js"
 
 export default class Tokenizer {
-  constructor() {
-    this.hold = {}
+  static WRAP_PAIRS = {
+    "(": ")",
+    "[": "]",
+    "{": "}",
+    "\"": "\"",
+    "/": "/"
+  };
+
+  constructor(text, extraPairs = {}, only = null) {
+    this.pairs = only === null ? { ...Tokenizer.WRAP_PAIRS, ...extraPairs } : only;
+    this.tokens = {};
+    this.tokenCount = 0;
+
+    this.text = this.tokenizeQuotes(text);
+    const result = this.tokenize();
+    this.tokenizedText = result[0];
   }
 
-  static split(str) {
-    let tokenizer = new Tokenizer
-    return tokenizer.split(str)
+  static split(text, { untokenize = true, unwrap = false, by = " " } = {}) {
+    const tz = new Tokenizer(text);
+    return tz.tokenizedText.split(by).map(str =>
+      untokenize ? tz.untokenize(str, { unwrap }) : str
+    );
   }
 
-  genId() {
-    return "||xx-xx-xx||".replaceAll(/xx/g, () => genHex())
+  untokenize(str = null, { levels = null, unwrap = false } = {}, callback = null) {
+    let untokenized = (str || this.tokenizedText).slice();
+    let i = 0;
+
+    while (true) {
+      if ((levels !== null && i >= levels) || i > untokenized.length) {
+        break
+      };
+
+      let replaced = false
+      Object.entries(this.tokens).forEach(([token, txt]) => {
+        const regex = new RegExp(token.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), "g");
+        untokenized = untokenized.replaceAll(regex, (a) => {
+          replaced = true
+          const val = unwrap ? txt.slice(1, -1) : txt;
+          return callback ? callback(val) : val;
+        });
+      });
+
+      if (!replaced) { break };
+
+      i += 1;
+    }
+    return untokenized;
   }
 
-  // Escapes strings, then escapes each level of brackets/parens
-  stepper(str) { // Should be able to pass in a block that every unwrapped value gets passed to
-    // Escape strings/quotes
-    let tokenized = this.tokenize(str, /\"([^"]*)\"/) // , (_m, g) => g[1]
-    tokenized = this.tokenize(tokenized, /\'([^']*)\'/) // , (_m, g) => g[1]
-    // Escape parens/brackets recursively
-    do {
-      tokenized = this.tokenize(tokenized, /\(([^(){}]*)\)/) // , (_m, g) => g[1]
-      tokenized = this.tokenize(tokenized, /\{([^(){}]*)\}/) // , (_m, g) => g[1]
-    } while (tokenized.match(/\(([^(){}]*)\)/) || tokenized.match(/\{([^(){}]*)\}/))
-    return tokenized
+  tokenizeQuotes(str) {
+    let tokenized = str.slice();
+
+    while (true) {
+      const firstIdx = this.findIndex(tokenized, "\"");
+      if (firstIdx === null) break;
+
+      const nextIdx = this.findIndex(tokenized, "\"", firstIdx);
+      if (nextIdx === null) break;
+
+      const quoted = tokenized.slice(firstIdx, nextIdx + 1);
+      const token = this.generateToken();
+      tokenized = tokenized.slice(0, firstIdx) + token + tokenized.slice(nextIdx + 1);
+      this.tokens[token] = quoted;
+    }
+
+    return tokenized;
   }
 
-  split(str) {
-    let tokenized = this.tokenize(str, /\"([^"]*)\"/) // , (_m, g) => g[1]
-    tokenized = this.tokenize(tokenized, /\'([^']*)\'/) // , (_m, g) => g[1]
-    return tokenized.split(/[, ]+/).map(token => this.untokenize(token))
+  findIndex(str, char, after = -1) {
+    const regex = new RegExp(`[${char.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}]`, 'g');
+    let match;
+    while ((match = regex.exec(str)) !== null) {
+      const idx = match.index;
+      if (idx > after) {
+        const escapes = str.slice(0, idx).match(/\\*$/)[0].length;
+        if (escapes % 2 === 0) {
+          return idx;
+        }
+      }
+    }
+    return null;
   }
 
-  trigger(token) {
-    return this.hold[token]?.()
+  tokenize(untilChar = null, idx = 0, nest = 0) {
+    let buffer = "";
+
+    while (true) {
+      if (idx >= this.text.length) {
+        if (untilChar === null) {
+          return [buffer, idx]
+          // return
+        }
+        break;
+      }
+
+      const char = this.text[idx];
+      const nextEscaped = char === "\\" && idx < this.text.length && this.text.slice(0, idx + 1).match(/\\*$/)[0].length % 2 === 1;
+
+      if (nextEscaped) {
+        buffer += "\\" + this.text[idx + 1];
+        idx += 1;
+      } else if (char === untilChar) {
+        buffer += char;
+        break;
+      } else if (this.pairs[char]) {
+        const nextIdx = this.findIndex(this.text, this.pairs[char], idx);
+        if (nextIdx === null) {
+          buffer += char;
+        } else {
+          const result = this.tokenize(this.pairs[char], idx + 1, nest + 1);
+          if (result === undefined) {
+            buffer += char;
+          } else {
+            const [wrapped, next] = result;
+            idx = next;
+            const token = this.generateToken();
+            buffer += token;
+            this.tokens[token] = char + wrapped;
+          }
+        }
+      } else {
+        buffer += char;
+      }
+
+      idx += 1;
+    }
+
+    return [buffer, idx];
   }
 
-  tokenize(str, regex, callback) {
-    let gregex = new RegExp(regex, "g")
-    do {
-      str = str.replaceAll(gregex, m => {
-        let id = this.genId()
-        // TODO: Make sure id doesn't already exist in `hold` or in `str`
-        this.hold[id] = (callback && typeof callback === "function") ? () => callback(m, m.match(regex)) : m
-        return id
-      })
-    } while (str.match(gregex))
-
-    return str
-  }
-
-  untokenize(str, count) {
-    count = count || 1
-    let token_regex = /\|\|[a-f0-9]{2}-[a-f0-9]{2}-[a-f0-9]{2}\|\|/g
-    do {
-      count = count == "all" ? count : count - 1
-      str = str.replaceAll(token_regex, m => {
-        let fn = this.hold[m]
-        if (fn && typeof fn === "function") { return fn() }
-        return (count == "all" || count > 0) ? this.untokenize(fn) : fn
-      })
-    } while ((count == "all" || count > 0) && str.match(token_regex))
-
-    return str
+  generateToken() {
+    this.tokenCount += 1;
+    return `||TOKEN${this.tokenCount}||`;
   }
 }
-
-// str.match(/\{[^{}]*\}/gm)
-// let str = `v9499 = Global.loop({
-//   h40db = Boolean.new(false)::Boolean
-//   p7726 = Global.loop({
-//     z98ff = Boolean.new(false)::Boolean
-//     i4cc5 = Global.loop({
-//       vb4a5 = Boolean.new(false)::Boolean
-//     })::Numeric
-//     k541a = Boolean.new(false)::Boolean
-//   })::Numeric
-// })::Numeric`
-// let t = new Tokenizer()
-// let z = t.tokenize(str, /\{[^{}]*\}/m)
-// debugger
-
-
-// let str = `i305a = Global.qloop({
-//   z1ee2 = Global.switch(false)::Any
-//   sea7b = Global.qloop({
-//     lf5a4 = Boolean.new(false)::Boolean
-//     l4240 = Global.qloop({
-//       m02e8 = Global.switch(false)::Any
-//       ef32a = Global.switch(false)::Any
-//     })::Numeric
-//     aee61 = Global.qloop({
-//       l18d9 = Global.switch(false)::Any
-//     })::Numeric
-//   })::Numeric
-//   n8941 = Global.switch(false)::Any
-// })::Numeric`
-// let str = `{
-//   z1ee2 = Global.switch(false)::Any
-//   sea7b = Global.qloop({
-//     lf5a4 = Boolean.new(false)::Boolean
-//     l4240 = Global.qloop({
-//       m02e8 = Global.switch(false)::Any
-//       ef32a = Global.switch(false)::Any
-//     })::Numeric
-//     aee61 = Global.qloop({
-//       l18d9 = Global.switch(false)::Any
-//     })::Numeric
-//   })::Numeric
-//   n8941 = Global.switch(false)::Any
-// }`
-// let t = new Tokenizer()
-// let z = t.tokenize(str, /\{[^{}]*\}/m)
-// let u = t.untokenize(z)
-// debugger
