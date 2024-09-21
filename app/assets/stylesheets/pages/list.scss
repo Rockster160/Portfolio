@@ -1,7 +1,22 @@
 // NOCOMMIT - scope this so it doesn't hit everything
-html, body {
-  overscroll-behavior: auto none;
+html:has(.ctr-jil_tasks.act-index) {
+  &.dark-mode, &, body {
+    overscroll-behavior: auto none;
+    background: #21374F;
+
+    .lists-index-container .important-list-items .list-item,
+    .lists-index-container .list-items .list-item,
+    .lists-index-container .lists .list-item {
+      background: #013080;
+
+      &:hover {
+        background: darken(#013080, 8%)
+      }
+    }
+  }
+
 }
+
 
 .list-container, .lists-index-container {
   padding-bottom: 40px;
