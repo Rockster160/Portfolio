@@ -18,6 +18,8 @@ saveUtils()
 // BUG:
 //
 // TODO:
+// Select + Delete/Backspace should remove the statement
+// Should be able to click on delete while a statement is commented
 // Need some way to define custom functions/classes
 //   * Require this be a different file?
 //     * Nahhhhhh. Inline functions would be really nice and convenient...

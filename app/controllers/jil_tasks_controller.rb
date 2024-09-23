@@ -1,6 +1,7 @@
 class JilTasksController < ApplicationController
   def index
-    @tasks = current_user.jil_tasks.ordered
+    # @tasks = current_user.jil_tasks.ordered
+    @tasks = current_user.jil_tasks.order("last_trigger_at DESC NULLS LAST")
   end
 
   def show

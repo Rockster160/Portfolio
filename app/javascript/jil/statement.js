@@ -446,11 +446,12 @@ export default class Statement {
     inputs.forEach((wrapper, idx) => {
       let val = vals[idx]
       if (wrapper.classList.contains("content")) {
-        let section = Tokenizer.split(str, { by: /[, ]+/ })[idx]
-        let args = section.split("\n").slice(1, -1) // Remove wrapping brackets
+        const tz = new Tokenizer(str)
+        let section = tz.tokenizedText.split(/[, ]+/)[idx]
+        let args = tz.untokenize(section, { levels: 1 }).split(/\s*\n\s*/).slice(1, -1) // Remove wrapping brackets
 
         args.forEach(arg => {
-          let statement = Statement.fromText(arg)[0]
+          let statement = Statement.fromText(tz.untokenize(arg))[0]
           if (statement) { statement.moveInside(wrapper) }
         })
       } else {
