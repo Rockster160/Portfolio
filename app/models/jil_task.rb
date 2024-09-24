@@ -69,6 +69,10 @@ class JilTask < ApplicationRecord
     last_execution&.error
   end
 
+  def last_message
+    last_result&.then { |r| r.is_a?(::String) ? r : nil }
+  end
+
   def last_result
     last_execution&.result
   end
