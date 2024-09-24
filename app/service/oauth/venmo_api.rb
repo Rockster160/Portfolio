@@ -58,7 +58,7 @@ class Oauth::VenmoApi < Oauth::Base
 
   # ========== Helpers ==========
   def contact_mapping
-    @contact_mapping ||= cache_get(:contact_mapping) || {}
+    @contact_mapping ||= cache_get(:contact_ids) || {}
   end
 
   def message(id, amount, note)

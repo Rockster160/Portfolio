@@ -19,8 +19,8 @@ RSpec.describe Jarvis do
     @admin.contacts.create(JSON.parse(File.read("address_book.json"), symbolize_names: true))
     contact_id = @admin.contacts.find_by(name: "Brendan").id
     mom_id = @admin.contacts.find_by(name: "Mom").id
-    @admin.caches.dig_set(:oauth, :venmo_api, :contact_mapping, contact_id.to_s, "brendanvenmoid")
-    @admin.caches.dig_set(:oauth, :venmo_api, :contact_mapping, mom_id.to_s, "momvenmoid")
+    @admin.caches.dig_set(:oauth, :venmo_api, :contact_ids, contact_id.to_s, "brendanvenmoid")
+    @admin.caches.dig_set(:oauth, :venmo_api, :contact_ids, mom_id.to_s, "momvenmoid")
     @default_list = @admin.lists.find_or_create_by(name: "TODO")
     @other_list = @admin.lists.find_or_create_by(name: "Home Depot")
     @user = @admin
