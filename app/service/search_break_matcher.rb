@@ -113,7 +113,7 @@ class SearchBreakMatcher
     if val.match?(/^\s*\/.*?\/[img]*\s*$/)
       delim_match?(val, :regex, drop)
     else
-      drop.include?(val)
+      drop.to_s.downcase.include?(val.to_s.downcase)
     end
   end
 
@@ -121,8 +121,8 @@ class SearchBreakMatcher
     lower_val = val.to_s.downcase
     lower_drop = drop.to_s.downcase
     case delim
-    when :contains then contain_or_regex?(lower_drop, lower_val)
-    when :not_contains then !contain_or_regex?(lower_drop, lower_val)
+    when :contains then contain_or_regex?(drop, val)
+    when :not_contains then !contain_or_regex?(drop, val)
     when :exact then lower_val == lower_drop
     when :not, :not_exact then lower_val != lower_drop
     when :regex
