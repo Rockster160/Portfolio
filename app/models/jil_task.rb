@@ -98,7 +98,8 @@ class JilTask < ApplicationRecord
   end
 
   def listener_match?(trigger, &block)
-    # TODO: trigger must be an exact, not partial match
+    return false unless trigger.to_s.downcase == listener.to_s.downcase.split(":").first
+
     NewTokenizer.split(listener).all? { |sub_listener|
       block.call(sub_listener)
     }

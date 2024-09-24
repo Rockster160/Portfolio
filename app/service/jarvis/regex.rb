@@ -3,7 +3,7 @@ module Jarvis::Regex
 
   def match_data(str, rx)
     # "Open the garage", "/(?<direction>open|close|toggle)( (?:the|my))? garage/"
-    rx = rx[1..-2] if rx.starts_with?("/") && rx.ends_with?("/")
+    rx = rx[1..-2] if rx[/^\/(.*?)\/[img]*$/, 1] # TODO: Actually use the flags
     md = str.match(Regexp.new("^#{rx}$", Regexp::IGNORECASE | Regexp::MULTILINE))
     return if md.nil?
 

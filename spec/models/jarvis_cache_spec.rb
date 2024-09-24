@@ -1,5 +1,5 @@
 RSpec.describe JarvisCache, type: :model do
-  let!(:user) { User.create(id: 1, role: :admin, username: :admiin, password: :password, password_confirmation: :password) }
+  let!(:user) { User.me }
   let(:caches) { user.caches }
 
   describe "#get" do

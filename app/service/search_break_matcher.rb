@@ -110,7 +110,7 @@ class SearchBreakMatcher
   end
 
   def contain_or_regex?(drop, val)
-    if val.match?(/^\s*\/.*?\/\s*$/)
+    if val.match?(/^\s*\/.*?\/[img]*\s*$/)
       delim_match?(val, :regex, drop)
     else
       drop.include?(val)
@@ -118,13 +118,13 @@ class SearchBreakMatcher
   end
 
   def delim_match?(val, delim, drop)
-    val = val.to_s.downcase
-    drop = drop.to_s.downcase
+    lower_val = val.to_s.downcase
+    lower_drop = drop.to_s.downcase
     case delim
-    when :contains then contain_or_regex?(drop, val)
-    when :not_contains then !contain_or_regex?(drop, val)
-    when :exact then val == drop
-    when :not, :not_exact then val != drop
+    when :contains then contain_or_regex?(lower_drop, lower_val)
+    when :not_contains then !contain_or_regex?(lower_drop, lower_val)
+    when :exact then lower_val == lower_drop
+    when :not, :not_exact then lower_val != lower_drop
     when :regex
       ::Jarvis::Regex.match_data(drop, val)&.tap { |md|
         @regex_match_data[:match_list] += md[:match_list]
