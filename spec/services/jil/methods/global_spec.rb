@@ -35,6 +35,10 @@ RSpec.describe Jil::Methods::Global do
 
   # times
 
+  context "inline functions" do
+
+  end
+
   context "#loop, Next, Break, Index, Return" do
     #dowhile(enum_content)::Numeric
     let(:code) {
@@ -42,22 +46,22 @@ RSpec.describe Jil::Methods::Global do
         outer_counter = Numeric.new(0)::Numeric
         inner_counter = Numeric.new(0)::Numeric
         fc4d9 = Global.loop({
-          oidx = Global.Index()::Numeric
+          oidx = Keyword.Index()::Numeric
           mb88e = Global.print("Outer #{oidx}")::String
           nc692 = outer_counter.op!("+=", 1)::Numeric
           g2c6d = Global.loop({
-            iidx = Global.Index()::Numeric
+            iidx = Keyword.Index()::Numeric
             e1b14 = inner_counter.op!("+=", 1)::Numeric
             uc906 = Global.if({
               v26d7 = iidx.even?()::Boolean
             }, {
-              l9380 = Global.Next("")::Any
+              l9380 = Keyword.Index("")::Any
             }, {})::Any
             ub716 = Global.print("Post Next #{iidx}")::String
             j52aa = Global.if({
               q83c5 = Boolean.eq("#{iidx}", "3")::Boolean
             }, {
-              e03a2 = Global.Break("")::Any
+              e03a2 = Keyword.Index("")::Any
             }, {})::Any
             ub717 = Global.print("Inner #{iidx}")::String
           })::Numeric
@@ -65,7 +69,7 @@ RSpec.describe Jil::Methods::Global do
           i5ad2 = Global.if({
             q22df = Boolean.eq("#{outer_counter}", "3")::Boolean
           }, {
-            m690b = Global.Break("")::Any
+            m690b = Keyword.Index("")::Any
           }, {})::Any
         })::Numeric
       JIL

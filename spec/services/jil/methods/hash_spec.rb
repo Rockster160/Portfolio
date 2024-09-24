@@ -254,7 +254,7 @@ RSpec.describe Jil::Methods::Hash do
     before do
       code << <<-JIL
         hd4c1 = n7c03.filter({
-          lf3d2 = Global.Index()::Numeric
+          lf3d2 = Keyword.Index()::Numeric
           ee0d3 = Boolean.compare(lf3d2, ">", "0")::Boolean
         })::Hash
       JIL
@@ -280,7 +280,7 @@ RSpec.describe Jil::Methods::Hash do
     before do
       code << <<-JIL
         hd4c1 = n7c03.map({
-          lf3d2 = Global.Index()::Numeric
+          lf3d2 = Keyword.Index()::Numeric
           ee0d3 = Boolean.compare(lf3d2, ">", "0")::Boolean
         })::Array
       JIL
@@ -306,7 +306,7 @@ RSpec.describe Jil::Methods::Hash do
     before do
       code << <<-JIL
         hd4c1 = n7c03.any?({
-          v3b3f = Global.Value()::String
+          v3b3f = Keyword.Value()::String
           mb1a3 = v3b3f.length()::Numeric
           ee0d3 = Boolean.compare(mb1a3, ">", "2")::Boolean
         })::Boolean
@@ -333,7 +333,7 @@ RSpec.describe Jil::Methods::Hash do
     before do
       code << <<-JIL
         hd4c1 = n7c03.none?({
-          v3b3f = Global.Value()::String
+          v3b3f = Keyword.Value()::String
           mb1a3 = v3b3f.length()::Numeric
           ee0d3 = Boolean.compare(mb1a3, ">", "2")::Boolean
         })::Boolean
@@ -360,7 +360,7 @@ RSpec.describe Jil::Methods::Hash do
     before do
       code << <<-JIL
         hd4c1 = n7c03.all?({
-          v3b3f = Global.Value()::String
+          v3b3f = Keyword.Value()::String
           mb1a3 = v3b3f.length()::Numeric
           ee0d3 = Boolean.compare(mb1a3, ">", "2")::Boolean
         })::Boolean
@@ -387,7 +387,7 @@ RSpec.describe Jil::Methods::Hash do
     before do
       code << <<-JIL
         hd4c1 = n7c03.each({
-          v3b3f = Global.Value()::String
+          v3b3f = Keyword.Value()::String
           mb1a3 = v3b3f.length()::Numeric
           ee0d3 = Boolean.compare(mb1a3, ">", "2")::Boolean
         })::Boolean

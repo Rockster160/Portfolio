@@ -158,9 +158,9 @@ RSpec.describe Jil::Methods::Hash do
           acc05 = String.new("5")::String
         })::Array
         f256d = f1697.splat({
-          who = Global.Item()::String
-          what = Global.Item()::String
-          when = Global.Item()::Numeric
+          who = Keyword.Item()::String
+          what = Keyword.Item()::String
+          when = Keyword.Item()::Numeric
         })::Array
         z7cc9 = Global.get("who")::Any
       JIL
@@ -586,7 +586,7 @@ RSpec.describe Jil::Methods::Hash do
           xfaec = Numeric.new(47)::Numeric
         })::Array
         nba83 = r5ee3.select({
-          d5ab6 = Global.Object()::Numeric
+          d5ab6 = Keyword.Object()::Numeric
           xf68d = Boolean.compare(d5ab6, ">", "20")::Boolean
         })::Array
       JIL
@@ -616,7 +616,7 @@ RSpec.describe Jil::Methods::Hash do
           xfaec = Numeric.new(47)::Numeric
         })::Array
         nba83 = r5ee3.map({
-          d5ab6 = Global.Object()::Numeric
+          d5ab6 = Keyword.Object()::Numeric
           b7ad4 = d5ab6.op("*", 2)::Numeric
         })::Array
       JIL
@@ -646,7 +646,7 @@ RSpec.describe Jil::Methods::Hash do
           xfaec = Numeric.new(47)::Numeric
         })::Array
         nba83 = r5ee3.find({
-          d5ab6 = Global.Object()::Numeric
+          d5ab6 = Keyword.Object()::Numeric
           xf68d = Boolean.compare(d5ab6, "<", "20")::Boolean
         })::Any
       JIL
@@ -676,7 +676,7 @@ RSpec.describe Jil::Methods::Hash do
           xfaec = Numeric.new(47)::Numeric
         })::Array
         nba83 = r5ee3.any?({
-          d5ab6 = Global.Object()::Numeric
+          d5ab6 = Keyword.Object()::Numeric
           xf68d = Boolean.compare(d5ab6, "<", "20")::Boolean
         })::Boolean
       JIL
@@ -706,7 +706,7 @@ RSpec.describe Jil::Methods::Hash do
           xfaec = Numeric.new(47)::Numeric
         })::Array
         nba83 = r5ee3.none?({
-          d5ab6 = Global.Object()::Numeric
+          d5ab6 = Keyword.Object()::Numeric
           xf68d = Boolean.compare(d5ab6, "<", "20")::Boolean
         })::Boolean
       JIL
@@ -736,7 +736,7 @@ RSpec.describe Jil::Methods::Hash do
           xfaec = Numeric.new(47)::Numeric
         })::Array
         nba83 = r5ee3.all?({
-          d5ab6 = Global.Object()::Numeric
+          d5ab6 = Keyword.Object()::Numeric
           xf68d = Boolean.compare(d5ab6, ">", "20")::Boolean
         })::Boolean
       JIL
@@ -766,7 +766,7 @@ RSpec.describe Jil::Methods::Hash do
           xfaec = Numeric.new(47)::Numeric
         })::Array
         nba83 = r5ee3.sort_by({
-          d5ab6 = Global.Object()::Numeric
+          d5ab6 = Keyword.Object()::Numeric
         })::Array
       JIL
     }
@@ -794,7 +794,7 @@ RSpec.describe Jil::Methods::Hash do
           xfaec = Numeric.new(47)::Numeric
         })::Array
         nba83 = r5ee3.sort_by!({
-          d5ab6 = Global.Object()::Numeric
+          d5ab6 = Keyword.Object()::Numeric
         })::Array
       JIL
     }
@@ -942,7 +942,7 @@ RSpec.describe Jil::Methods::Hash do
           xfaec = Numeric.new(47)::Numeric
         })::Array
         nba83 = r5ee3.each({
-          d5ab6 = Global.Object()::Numeric
+          d5ab6 = Keyword.Object()::Numeric
           b7ad4 = d5ab6.op("*", 2)::Numeric
         })::Array
       JIL

@@ -191,9 +191,9 @@ RSpec.describe Jil::Executor do
         now = Date.now()::Numeric
         ge783 = Global.params()::Array
         tbdab = ge783.splat({
-          maybeStart = Global.Item()::Any
-          end = Global.Item()::Numeric
-          sigfigs = Global.Item()::Numeric
+          maybeStart = Keyword.Item()::Any
+          end = Keyword.Item()::Numeric
+          sigfigs = Keyword.Item()::Numeric
         })::Array
         start = Boolean.or(maybeStart, now)::Numeric
         l92c9 = Numeric.op(end, "-", start)::Numeric
@@ -208,8 +208,8 @@ RSpec.describe Jil::Executor do
         left = Global.set!("left", diff)::Numeric
         lengths = Global.set!("lengths", "")::String
         q7ed4 = j5f2e.each({
-          time = Global.Key()::String
-          seconds = Global.Value()::Numeric
+          time = Keyword.Key()::String
+          seconds = Keyword.Value()::Numeric
           r64d9 = Global.print("\#{time}=\#{seconds}")::String
           nf9ca = lengths.split(" ")::Array
           v70fb = nf9ca.length()::Numeric
@@ -219,7 +219,7 @@ RSpec.describe Jil::Executor do
             zb2d1 = Boolean.or(aad68, me715)::Boolean
           }, {
             g08da = Global.print("NEXT \#{time} \#{v70fb} >= \#{sigfigs} OR \#{seconds} >= \#{left}")::String
-            k4a68 = Global.Next("")::None
+            k4a68 = Keyword.Next("")::None
           }, {
             e2268 = Global.print("ELSE \#{time} \#{v70fb} >= \#{sigfigs} OR \#{seconds} >= \#{left}")::String
           })::Any
