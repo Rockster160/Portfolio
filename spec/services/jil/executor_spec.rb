@@ -176,6 +176,80 @@ RSpec.describe Jil::Executor do
       end
     end
   end
+
+  describe "Duration" do
+    let!(:func) {
+      JilTask.create(
+        name: "Duration",
+        listener: 'function("From" Date?:Start "To" Date:End "Figs" Numeric(1):SigFigs)::String',
+        code: func_code,
+        user: User.me,
+      )
+    }
+    let(:func_code) {
+      <<-JIL
+        now = Date.now()::Numeric
+        ge783 = Global.params()::Array
+        tbdab = ge783.splat({
+          maybeStart = Global.Item()::Any
+          end = Global.Item()::Numeric
+          sigfigs = Global.Item()::Numeric
+        })::Array
+        start = Boolean.or(maybeStart, now)::Numeric
+        l92c9 = Numeric.op(end, "-", start)::Numeric
+        diff = l92c9.abs()::Numeric
+        j5f2e = Hash.new({
+          j3107 = Keyval.new("w", "604800")::Keyval
+          gea82 = Keyval.new("d", "86400")::Keyval
+          wbcc4 = Keyval.new("h", "3600")::Keyval
+          d75ca = Keyval.new("m", "60")::Keyval
+          i9522 = Keyval.new("s", "1")::Keyval
+        })::Hash
+        left = Global.set!("left", diff)::Numeric
+        lengths = Global.set!("lengths", "")::String
+        q7ed4 = j5f2e.each({
+          time = Global.Key()::String
+          seconds = Global.Value()::Numeric
+          r64d9 = Global.print("\#{time}=\#{seconds}")::String
+          nf9ca = lengths.split(" ")::Array
+          v70fb = nf9ca.length()::Numeric
+          vd626 = Global.if({
+            aad68 = Boolean.compare(v70fb, ">=", sigfigs)::Boolean
+            me715 = Boolean.compare(seconds, ">=", left)::Boolean
+            zb2d1 = Boolean.or(aad68, me715)::Boolean
+          }, {
+            g08da = Global.print("NEXT \#{time} \#{v70fb} >= \#{sigfigs} OR \#{seconds} >= \#{left}")::String
+            k4a68 = Global.Next("")::None
+          }, {
+            e2268 = Global.print("ELSE \#{time} \#{v70fb} >= \#{sigfigs} OR \#{seconds} >= \#{left}")::String
+          })::Any
+          x6f9b = Numeric.op(left, "/", seconds)::Numeric
+          count = x6f9b.floor()::Numeric
+          less = Numeric.op(count, "*", seconds)::Numeric
+          h3d90 = left.op!("-=", less)::Numeric
+          w3875 = Global.set!("lengths", "\#{lengths} \#{count}\#{time}")::Any
+        })::Hash
+        g5c18 = Boolean.or(lengths, "0")::String
+        j23d8 = g5c18.format("squish")::String
+        ia9d7 = Global.return(j23d8)::String
+      JIL
+    }
+    let(:code) {
+      <<-JIL
+        time = String.new("#{Time.new(2024, 7, 22, 9, 19, 17)}")::Date
+        dur = Custom.Duration("", time, 1)::String
+        abc = Global.return(dur)::String
+      JIL
+    }
+
+    it "returns the duration" do
+      travel_to(Time.new(2024, 7, 22, 8, 43, 34)) do
+        exe = execute
+        val = exe.ctx[:return_val]
+        expect(val).to eq("35m")
+      end
+    end
+  end
 end
 # [ ] [Global]
 # [ ] [Keyval]

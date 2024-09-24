@@ -152,7 +152,7 @@ class Jil::Executor
     hash.each_with_index.send(method) do |(key, val), idx|
       break unless @ctx[:state] == :running
       break unless lctx[:state] == :running
-      next (lctx[:next] = false) if lctx[:break] || lctx[:next]
+      break if lctx[:break]
 
       lctx[:key] = key
       lctx[:value] = val
@@ -167,7 +167,7 @@ class Jil::Executor
     array.each_with_index.send(method) do |val, idx|
       break unless @ctx[:state] == :running
       break unless lctx[:state] == :running
-      next (lctx[:next] = false) if lctx[:break] || lctx[:next]
+      break if lctx[:break]
 
       lctx[:value] = val
       lctx[:index] = idx
