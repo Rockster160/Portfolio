@@ -66,7 +66,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
 
   def parse(raw)
     tz = ::NewTokenizer.new(raw.to_s.gsub(/\\(["'\\])/, '\1'), only: { "\"" => "\"" })
-    processed = tz.untokenize(tz.tokenized_text.gsub(/(\w+): /, '"\1": '))
+    processed = tz.untokenize(tz.tokenized_text.gsub(/(\w+): /, '"\1": ').gsub("nil", "null"))
 
     ::JSON.parse(processed).with_indifferent_access
   end
