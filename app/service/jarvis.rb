@@ -218,7 +218,7 @@ class Jarvis
     if scheduled_time
       remaining_words = @words.sub(Regexp.new("(?:\b(?:at)\b )?#{time_str}", :i), "").squish
     end
-    tasks = ::Jil::Executor.trigger(@user, :tell, { words: remaining_words, timestamp: scheduled_time || Time.current })
+    tasks = ::Jil::Executor.trigger(@user, :tell, { words: remaining_words, timestamp: scheduled_time&.iso8601 || Time.current })
     return if tasks.any?(&:stop_propagation?)
 
     current_reserved_words = Jarvis.reserved_words.dup
