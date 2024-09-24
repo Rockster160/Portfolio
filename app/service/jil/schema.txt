@@ -30,9 +30,9 @@
   #loop(enum_content)::Any
   #times(Numeric enum_content)::Numeric
   #stop_propagation()::Boolean
-  #block(content)
-  #func("def" String:Name "(" String:Args ")" content(Any [Keywords.Arg Keywords.FuncReturn]))
-  #call(String:Name, content)
+  !#block(content)
+  !#func("def" String:Name "(" String:Args ")" content(Any [Keyword.Arg Keyword.FuncReturn]))
+  !#call(String:Name, content)
 [Keyval]
   #new(String ": " Any)
   #keyHash(String ": " content(Keyval [Keyval.new]))
@@ -113,7 +113,7 @@
   #from_length(Numeric)
   .length::Numeric
   .combine(Array)
-  .splat(content([Keywords.Item]))
+  .splat(content([Keyword.Item]))
   .get(Numeric)::Any
   .set(Numeric "=" Any)
   .set!(Numeric "=" Any)
