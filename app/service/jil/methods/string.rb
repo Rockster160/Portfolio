@@ -36,6 +36,7 @@ class Jil::Methods::String < Jil::Methods::Base
     when :upper then str.upcase
     when :squish then str.squish
     when :capital then str.capitalize
+    when :capitalize_first then str.gsub(/^[a-z]/, &:upcase)
     when :pascal then str.gsub(/[^a-z0-9 ]/i, "").titleize.gsub(/\s+/, "")
     when :title then str.titleize
     when :snake then str.gsub(/[^a-z0-9 ]/i, "").underscore.gsub(" ", "_")
@@ -78,7 +79,7 @@ end
 # [√]  .match(String)
 # [√]  .scan(String)::Array
 # [ ]  .split(String?)::Array
-# [ ]  .format(["lower" "upper" "squish" "capital" "pascal" "title" "snake" "camel" "base64"])
+# [ ]  .format(["lower" "upper" "squish" "capital" "capitalize_first" "pascal" "title" "snake" "camel" "base64"])
 # [ ]  .replace(String "with" String)
 # [ ]  .add("+" String)
 # [ ]  .length()::Numeric

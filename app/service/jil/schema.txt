@@ -30,7 +30,7 @@
   .match(String)
   .scan(String)::Array
   .split(String?)::Array
-  .format(["lower" "upper" "squish" "capital" "pascal" "title" "snake" "camel" "base64"])
+  .format(["lower" "upper" "squish" "capital" "capitalize_first" "pascal" "title" "snake" "camel" "base64"])
   .replace(String "with" String)
   .add("+" String)
   .length()::Numeric
