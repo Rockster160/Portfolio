@@ -150,6 +150,10 @@ class Jil::Executor
   def enumerate_hash(hash, method, &block)
     lctx = { break: false, next: false, state: :running, line: @ctx[:line] }
     hash.each_with_index.send(method) do |(key, val), idx|
+      if idx > 1000
+        # This should be able to be increased on some functions.
+        raise ::Jil::ExecutionError, "[#{@ctx[:line]}] Too many Hash iterations!"
+      end
       break unless @ctx[:state] == :running
       break unless lctx[:state] == :running
       break if lctx[:break]
@@ -165,6 +169,10 @@ class Jil::Executor
   def enumerate_array(array, method, &block)
     lctx = { break: false, next: false, state: :running, line: @ctx[:line] }
     array.each_with_index.send(method) do |val, idx|
+      if idx > 1000
+        # This should be able to be increased on some functions.
+        raise ::Jil::ExecutionError, "[#{@ctx[:line]}] Too many Array iterations!"
+      end
       break unless @ctx[:state] == :running
       break unless lctx[:state] == :running
       break if lctx[:break]
@@ -182,6 +190,10 @@ class Jil::Executor
     last_val = nil
     loop do
       idx += 1
+      if idx > 1000
+        # This should be able to be increased on some functions.
+        raise ::Jil::ExecutionError, "[#{@ctx[:line]}] Too many Array iterations!"
+      end
       # source_puts "#{idx} → #{lctx}" if @debug
       break unless @ctx[:state] == :running
       break unless lctx[:state] == :running

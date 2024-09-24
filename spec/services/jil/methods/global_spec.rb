@@ -55,13 +55,13 @@ RSpec.describe Jil::Methods::Global do
             uc906 = Global.if({
               v26d7 = iidx.even?()::Boolean
             }, {
-              l9380 = Keyword.Index("")::Any
+              l9380 = Keyword.Next("")::Any
             }, {})::Any
             ub716 = Global.print("Post Next #{iidx}")::String
             j52aa = Global.if({
               q83c5 = Boolean.eq("#{iidx}", "3")::Boolean
             }, {
-              e03a2 = Keyword.Index("")::Any
+              e03a2 = Keyword.Break("")::Any
             }, {})::Any
             ub717 = Global.print("Inner #{iidx}")::String
           })::Numeric
@@ -69,7 +69,7 @@ RSpec.describe Jil::Methods::Global do
           i5ad2 = Global.if({
             q22df = Boolean.eq("#{outer_counter}", "3")::Boolean
           }, {
-            m690b = Keyword.Index("")::Any
+            m690b = Keyword.Break("")::Any
           }, {})::Any
         })::Numeric
       JIL
