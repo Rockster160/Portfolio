@@ -136,32 +136,7 @@ document.addEventListener("click", function(evt) {
               }
             }
           } else {
-            let rx = /"(?<word>.*?)"(?:\((?<args>.*)\))?(?:::(?<type>.*))?/;
-            const match = opt.match(rx)
-            if (match) {
-              let { word, args, type } = match.groups
-              word = unwrap(word)
-              return {
-                text: word,
-                callback: () => {
-                  let statement = new Statement({
-                    type: "Global",
-                    keyword: true,
-                    returntype: type || "None",
-                    method: word,
-                    args: [
-                      element("span", { innerText: word }),
-                      // Args is a single "type" str for now... Fix this later.
-                      ...(args && args.length > 0 ? [
-                        field(Arg.fromType("TAB")),
-                        field(Arg.fromType(args)),
-                      ] : [])
-                    ].filter(Boolean)
-                  })
-                  statement.moveInside(context, top)
-                }
-              }
-            }
+            console.error("No method found for ", opt)
           }
         })
       }
@@ -175,7 +150,7 @@ document.addEventListener("click", function(evt) {
             }
           }
           return {
-            text: `${method.type == "Global" ? "" : method.type}.${method.name}`,
+            text: `${method.text}`,
             callback: () => {
               let statement = new Statement({
                 type: method.type,

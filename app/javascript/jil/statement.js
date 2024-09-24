@@ -308,8 +308,11 @@ export default class Statement {
   set type(new_type) {
     this._type = new_type
     this.node.querySelector(".obj-type").innerText = new_type
-    this.node.querySelector(".obj-type").classList.toggle("hidden", new_type == "Global" || this.scope == "instance")
-    this.node.querySelector(".obj-dot").classList.toggle("hidden", new_type == "Global")
+    let refShown = this.scope === "instance"
+    let showDot = !(new_type == "Global" || new_type == "Keyword")
+    let showType = showDot && !refShown
+    this.node.querySelector(".obj-type").classList.toggle("hidden", !showType)
+    this.node.querySelector(".obj-dot").classList.toggle("hidden", !showDot)
   }
   get scope() { return this._scope }
   set scope(new_scope) {
@@ -325,7 +328,6 @@ export default class Statement {
     this.node.querySelector(".obj-method").innerText = new_method
     let argsContainer = this.node.querySelector(".obj-args")
     argsContainer.innerHTML = ""
-    if (this.keyword) { return }
 
     let methodObj = this.schemaMethod(new_method)
     if (methodObj) {

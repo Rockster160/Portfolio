@@ -37,6 +37,13 @@ export default class Method {
     })
   }
 
+  get text() { // Used as the dropdown options-- currently only used by Global Functions
+    if (this.type == "Global") { return `.${this.name}` }
+    if (this.type == "Keyword") { return `${this.name}` }
+
+    return `${this.type}.${this.name}`
+  }
+
   args() {
     return Method.splitToArgs(this.stringArgs)
   }

@@ -3,16 +3,7 @@ import Method from "./method.js"
 export default class Schema {
   static all = [] // List of all classes
   static types = {} // Key→Val of name→class
-  static enumArgs = {
-    Object: `"Object"::Any`,
-    Key:    `"Key"::String`,
-    Value:  `"Value"::Any`,
-    Index:  `"Index"::Numeric`,
-    Next:   `"Next"(ANY)::None`,
-    Break:  `"Break"(ANY)::None`,
-  }
-  static enumArgList = Object.keys(this.enumArgs).join(" ")
-  static enumArgOptions = Object.values(this.enumArgs)
+  static enumArgOptions = "Object Key Value Index Next Break".split(" ")
 
   constructor(klass) {
     this.name = klass
@@ -45,6 +36,7 @@ export default class Schema {
 
     new Schema("Global")
     new Schema("None")
+    new Schema("Keyword")
 
     let current
     list.forEach(item => {
@@ -53,6 +45,19 @@ export default class Schema {
         current = this.types[match[2]] || new Schema(match[2])
         if (match[1] == "*") { current.hidden = true }
         if (match[3]) { current.inputtype = match[3] }
+      } else if (current?.name == "Keyword") {
+        // Keyword have special definitions since they are uppercase and don't have a # or . prefix
+        const line = item.replace(/[\s\*\!]*/, "")
+        match = `${current.name}.${line}`.match(Schema.funcRegex())
+        const { methodname, args, cast } = match.groups
+        current.addSingletonMethod(new Method({
+          scope: "singleton",
+          type: current.name,
+          name: methodname,
+          args: args,
+          returntype: cast || current.name,
+          upcoming: !!item.match(/^\s*\!/),
+        }))
       } else if (match = (item.match(/^\s*\!?\#/) && `${current.name}.${item.replace(/  \!?#/, "")}`.match(Schema.funcRegex()))) {
         const { methodname, args, cast } = match.groups
         current.addSingletonMethod(new Method({
@@ -87,21 +92,19 @@ export default class Schema {
 
   static methodFromStr(str) {
     if (!str) { return }
-    if (!str.match(/^(?:[A-Z][_a-zA-Z0-9]*)?\.?[a-z][_a-zA-Z0-9]*$/)) { return }
+    if (!str.match(/^(?:[A-Z][_a-zA-Z0-9]*)?\.?[_a-zA-Z0-9]*$/)) { return } // Validating it matches `Type.method`
+
     let [type, method] = str.split(".")
     if (!method && type) { method = type; type = undefined }
     type = (!type || type == "Any") ? "Global" : type
-    return this.types[type].singletons.find(singleton => singleton.name == method)
+    return (
+      Schema.types[type].singletons.find(singleton => singleton.name == method) ||
+      Schema.types["Keyword"].singletons.find(singleton => singleton.name == method)
+    )
   }
 
   static method(type, name) {
     if (typeof type === "string") { // Class name
-      if (type == "Global" && Schema.enumArgs.hasOwnProperty(name)) {
-        return Method.placeholder(name, Schema.enumArgs[name])
-      }
-      if (type == "Global" && name == "Item") {
-        return Method.placeholder(name, `"Item"::Any`)
-      }
       return this.types[type].singletons.find(singleton => singleton.name == name)
     } else { // Statement
       return this.types[type.returntype].instances.find(singleton => singleton.name == name)
