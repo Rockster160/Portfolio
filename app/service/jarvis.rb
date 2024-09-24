@@ -213,7 +213,12 @@ class Jarvis
   end
 
   def command
-    tasks = ::Jil::Executor.trigger(@user, :tell, { words: @words })
+    time_str, scheduled_time = ::Jarvis::Times.extract_time(@words.downcase.squish)
+    remaining_words = @words
+    if scheduled_time
+      remaining_words = @words.sub(Regexp.new("(?:\b(?:at)\b )?#{time_str}", :i), "").squish
+    end
+    tasks = ::Jil::Executor.trigger(@user, :tell, { words: remaining_words, timestamp: scheduled_time || Time.current })
     return if tasks.any?(&:stop_propagation?)
 
     current_reserved_words = Jarvis.reserved_words.dup
