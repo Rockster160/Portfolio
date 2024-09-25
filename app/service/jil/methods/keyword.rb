@@ -9,15 +9,6 @@ class Jil::Methods::Keyword < Jil::Methods::Base
   # end
 
   def execute(line)
-    # √ Object
-    # √ Key
-    # √ Value
-    # √ Index
-    # √ Break
-    # √ Next
-    # √ Item
-    #   Arg
-    # √ FuncReturn -- Specs!
     case line.methodname
     when :Next
       @ctx[:next] = true

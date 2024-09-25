@@ -172,8 +172,8 @@
   #search(String "limit" Numeric(50) "since" Date? "order" ["ASC" "DESC"])::Array
   #add("Name" TAB String BR "Notes" TAB String? BR "Data" TAB Hash? BR "Date" TAB Date?)
   .id::Numeric
-  .name::Numeric
-  .notes::Numeric
+  .name::String
+  .notes::String
   .data::Hash
   .date::Date
   .update("Name" TAB String? BR "Notes" TAB String? BR "Data" TAB Hash? BR "Date" TAB Date?)::Boolean
