@@ -1,5 +1,5 @@
 class Jil::Parser
-  attr_accessor :commented, :varname, :objname, :methodname, :args, :cast
+  attr_accessor :commented, :varname, :objname, :methodname, :args, :cast, :code
 
   # REGEX = /
   #   \s*(?<commented>\#)?\s*
@@ -30,6 +30,7 @@ class Jil::Parser
 
   def self.from_tokenized_code(code, tk)
     code.scan(ESCAPED_REGEX)&.map.with_index { |(commented, varname, objname, methodname, arg_code, cast), idx|
+      raw = "#{'# ' if commented}#{varname} = #{objname}.#{methodname}#{arg_code}::#{cast}"
       args = tk.untokenize(arg_code, 1, unwrap: true).split(/,?[ \n]+/).map { |escaped|
         untokenized = tk.untokenize(escaped)
         tk.untokenize(escaped, 1).then { |piece|
@@ -46,19 +47,20 @@ class Jil::Parser
           end
         }
       }
-      ::Jil::Parser.new(commented, varname, objname, methodname, args, cast)
+      ::Jil::Parser.new(commented, varname, objname, methodname, args, cast, tk.untokenize(raw))
     }.tap { |vals|
       # binding.pry
     }
   end
 
-  def initialize(commented, varname, objname, methodname, args, cast)
+  def initialize(commented, varname, objname, methodname, args, cast, code)
     @commented = commented.present?
     @varname = varname.to_sym
     @objname = objname.to_sym
     @methodname = methodname.to_sym
     @args = Array.wrap(args)
     @cast = cast.to_sym
+    @code = code
   end
 
   def commented?

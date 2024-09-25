@@ -35,10 +35,6 @@ RSpec.describe Jil::Methods::Global do
 
   # times
 
-  context "inline functions" do
-
-  end
-
   context "#loop, Next, Break, Index, Return" do
     #dowhile(enum_content)::Numeric
     let(:code) {

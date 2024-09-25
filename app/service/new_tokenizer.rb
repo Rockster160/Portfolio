@@ -11,7 +11,7 @@ class NewTokenizer
     "/" => "/"
   }
 
-  attr_accessor :text, :tokenized_text, :tokens
+  attr_accessor :raw, :text, :tokenized_text, :tokens
 
   def self.split(text, untokenize: true, unwrap: false)
     tz = new(text)
@@ -25,6 +25,7 @@ class NewTokenizer
     @tokens = {}
     @token_count = 0
 
+    @raw = text.to_s # .to_s dups
     @text = tokenize_quotes(text)
     @tokenized_text, _cursor = tokenize
   end

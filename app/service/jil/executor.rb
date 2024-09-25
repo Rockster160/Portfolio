@@ -134,7 +134,7 @@ class Jil::Executor
         klass_from_obj(line.objname)
       else
         unless @ctx&.dig(:vars)&.key?(line.objname.to_sym)
-          raise ::Jil::ExecutionError, "Unfound line `#{line.objname.to_sym}`"
+          raise ::Jil::ExecutionError, "[#{line.objname.to_sym}] Variable not found"
         end
         klass_from_obj(@ctx.dig(:vars, line.objname.to_sym))
       end

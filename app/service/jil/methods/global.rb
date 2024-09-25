@@ -31,6 +31,9 @@ class Jil::Methods::Global < Jil::Methods::Base
       }
     # when :get, :set! then send(line.methodname, *line.args)
     when :stop_propagation then @jil.ctx[:stop_propagation] = true
+    when :function
+      args, content = line.args
+      { args: evalarg(args), content: content.map(&:code).join("\n") }
     else send(line.methodname, *evalargs(line.args))
     end
   end

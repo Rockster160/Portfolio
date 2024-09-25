@@ -25,7 +25,9 @@ class Jil::Methods::Keyword < Jil::Methods::Base
     when :Break, :FuncReturn
       @ctx[:break] = true
       evalarg(line.arg)
-    when :Arg then nil # No-op, this is handled within the Global#func method
+    # when :FuncReturn
+    #   @ctx[:function_return] = evalarg(line.arg)
+    when :Arg then @ctx.dig(:args, evalarg(line.arg).to_s.to_sym)
     when :Item then nil # No-op, this is handled within the Array#splat method
     when :Key then @ctx[:key]
     when :Index then @ctx[:index]
