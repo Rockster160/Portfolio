@@ -91,7 +91,7 @@ class Jil::Executor
       #   @ctx[:error] = e.message
       #   state = :failed
       rescue => e
-        @ctx[:error] = "[#{e.class}] #{e.message}"
+        @ctx[:error] = "[#{@ctx[:line]}] [#{e.class}] #{e.message}"
         @ctx[:error_line] = e.backtrace.find { |l| l.include?("/app/") }
         state = :failed
       ensure
@@ -134,7 +134,7 @@ class Jil::Executor
         klass_from_obj(line.objname)
       else
         unless @ctx&.dig(:vars)&.key?(line.objname.to_sym)
-          raise ::Jil::ExecutionError, "[#{line.objname.to_sym}] Variable not found"
+          raise ::Jil::ExecutionError, "Variable not found"
         end
         klass_from_obj(@ctx.dig(:vars, line.objname.to_sym))
       end
@@ -152,7 +152,7 @@ class Jil::Executor
     hash.each_with_index.send(method) do |(key, val), idx|
       if idx > 1000
         # This should be able to be increased on some functions.
-        raise ::Jil::ExecutionError, "[#{@ctx[:line]}] Too many Hash iterations!"
+        raise ::Jil::ExecutionError, "Too many Hash iterations!"
       end
       break unless @ctx[:state] == :running
       break unless lctx[:state] == :running
@@ -171,7 +171,7 @@ class Jil::Executor
     array.each_with_index.send(method) do |val, idx|
       if idx > 1000
         # This should be able to be increased on some functions.
-        raise ::Jil::ExecutionError, "[#{@ctx[:line]}] Too many Array iterations!"
+        raise ::Jil::ExecutionError, "Too many Array iterations!"
       end
       break unless @ctx[:state] == :running
       break unless lctx[:state] == :running
@@ -192,7 +192,7 @@ class Jil::Executor
       idx += 1
       if idx > 1000
         # This should be able to be increased on some functions.
-        raise ::Jil::ExecutionError, "[#{@ctx[:line]}] Too many Array iterations!"
+        raise ::Jil::ExecutionError, "Too many Array iterations!"
       end
       # source_puts "#{idx} → #{lctx}" if @debug
       break unless @ctx[:state] == :running
