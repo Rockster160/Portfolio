@@ -29,7 +29,9 @@ class Jil::Methods::Hash < Jil::Methods::Base
     when :keyHash
       key, hash = *line.args
       { evalarg(key) => hash_wrap(evalargs(hash)) }
-    when :new, :keyval
+    when :keyval
+      hash_wrap(evalargs(line.args))
+    when :new
       if line.objname == :Hash
         hash_wrap(enum_content(line.args))
       else
