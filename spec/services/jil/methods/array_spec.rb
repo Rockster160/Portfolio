@@ -72,6 +72,60 @@ RSpec.describe Jil::Methods::Hash do
     end
   end
 
+  context ".first" do
+    before do
+      code << "r817a = r5ee3.first()::Any"
+    end
+
+    it "returns the first item" do
+      expect_successful_jil
+      expect(ctx.dig(:vars)).to match_hash({
+        rb9ed: { class: :String, value: "Hello, World!" },
+        ydfcd: { class: :Boolean, value: false },
+        xfaed: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: ["Hello, World!", false, 47] },
+        r817a: { class: :Any, value: "Hello, World!" },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".last" do
+    before do
+      code << "r817a = r5ee3.last()::Any"
+    end
+
+    it "returns the last item" do
+      expect_successful_jil
+      expect(ctx.dig(:vars)).to match_hash({
+        rb9ed: { class: :String, value: "Hello, World!" },
+        ydfcd: { class: :Boolean, value: false },
+        xfaed: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: ["Hello, World!", false, 47] },
+        r817a: { class: :Any, value: 47 },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context ".include?" do
+    before do
+      code << "r817a = r5ee3.include?(\"Hello, World!\")::Boolean"
+    end
+
+    it "returns whether the array has the item" do
+      expect_successful_jil
+      expect(ctx.dig(:vars)).to match_hash({
+        rb9ed: { class: :String, value: "Hello, World!" },
+        ydfcd: { class: :Boolean, value: false },
+        xfaed: { class: :Numeric, value: 47 },
+        r5ee3: { class: :Array, value: ["Hello, World!", false, 47] },
+        r817a: { class: :Boolean, value: true },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
   context ".length" do
     before do
       code << "r817a = r5ee3.length()::Numeric"

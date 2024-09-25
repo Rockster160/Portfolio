@@ -131,6 +131,9 @@
   .select(enum_content)::Array
   .map(enum_content)
   .find(enum_content)::Any
+  .include?(Any)::Boolean
+  .first::Any
+  .last::Any
   .any?(enum_content)::Boolean
   .none?(enum_content)::Boolean
   .all?(enum_content)::Boolean
