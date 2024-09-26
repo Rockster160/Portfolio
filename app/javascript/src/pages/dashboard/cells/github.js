@@ -124,7 +124,7 @@ import { dash_colors, beeps } from "../vars"
           cell.data.monitor_schedule = setInterval(function() { render(cell) }, 1000)
         }
         cell.flash()
-        let json = data.result || {}
+        let json = data.data || {}
         if (json.deploy == "start") {
           let timer = new Timer({ name: currentTime() })
           timer.start.minutes += 2

@@ -215,4 +215,4 @@
   #content(Text)
   #timestamp(Date|Numeric|Boolean)
   #blip(Numeric?)
-  #extra(Hash)
+  #data(Hash)

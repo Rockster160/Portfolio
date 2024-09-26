@@ -10,7 +10,7 @@ class Jil::Methods::Monitor < Jil::Methods::Base
   #   #content(Text)
   #   #timestamp(Date|Boolean)
   #   #blip(Numeric?)
-  #   #extra(Hash)
+  #   #data(Hash)
 
   def loading(name, bool)
     ::MonitorChannel.broadcast_to(@jil.user, id: name, loading: bool)
@@ -46,7 +46,7 @@ class Jil::Methods::Monitor < Jil::Methods::Base
     { blip: count&.zero? ? nil : count.to_s.first(3).presence }
   end
 
-  def extra(data={})
-    { extra: data }
+  def data(data={})
+    { data: data }
   end
 end
