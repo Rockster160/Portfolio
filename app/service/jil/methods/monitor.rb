@@ -21,6 +21,7 @@ class Jil::Methods::Monitor < Jil::Methods::Base
     data = param_blocks.inject({}) { |acc, hash| acc.merge(hash) }
     data[:timestamp] = data[:timestamp].presence || ::Time.current.to_i
     data[:id] = name
+    # data.delete(:loading) -- For some reason results in `undefined`
 
     ::MonitorChannel.broadcast_to(@jil.user, data)
     { id: name }
