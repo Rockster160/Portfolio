@@ -24,7 +24,7 @@ class Jil::Methods::String < Jil::Methods::Base
       md = token_val(line.objname).match(to_regex(evalarg(line.arg)))
       case line.cast
       when :Array then md.to_a.presence
-      when :Hash then md.named_captures.symbolize_keys.presence
+      when :Hash then md&.named_captures&.symbolize_keys.presence
       else md.to_a.first.presence
       end
     when :split
@@ -60,7 +60,7 @@ class Jil::Methods::String < Jil::Methods::Base
   end
 
   def to_regex(str)
-    Regexp.new(str, Regexp::IGNORECASE | Regexp::MULTILINE)
+    Regexp.new(str[/^\/(.*?)\/[img]*$/, 1] || str, Regexp::IGNORECASE | Regexp::MULTILINE)
   end
 
   def string_or_regex(str)
