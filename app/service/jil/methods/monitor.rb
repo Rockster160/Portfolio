@@ -28,7 +28,7 @@ class Jil::Methods::Monitor < Jil::Methods::Base
   end
 
   def refresh(name, data)
-    ::Jil.trigger(@jil.user.id, :monitor, { refresh: true }.merge(data.presence || {}))
+    ::Jil.trigger(@jil.user.id, :monitor, { id: name, refresh: true }.merge(data.presence || {}))
     { id: name }
   end
 
