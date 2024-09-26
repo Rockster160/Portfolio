@@ -40,18 +40,18 @@ module SearchBreaker
       key = tr.untokenize(tz_key)
       val = tr.untokenize(tz_val)
       delim_key = delims_with_aliases.find { |dk, d| delim.downcase == d.downcase }[0]
-      key, val = [key, val].map { |part| unwrap(part, quotes: false) }
 
+      key, val = [key, val].map { |part| unwrap(part, quotes: false) }
       val = broken_or_val(val, delimiters) # Recursive search breaker
+      key, val = [key, val].map { |part| part.is_a?(::String) ? unwrap(part, parens: false) : part }
 
       if key.blank?
         out[:vals][delim_key] ||= []
-        out[:vals][delim_key] << unwrap(val)
+        out[:vals][delim_key] << val
       else
-        unwrapped_key = unwrap(key)
-        out[:keys][unwrapped_key] ||= {}
-        out[:keys][unwrapped_key][delim_key] ||= []
-        out[:keys][unwrapped_key][delim_key] << unwrap(val)
+        out[:keys][key] ||= {}
+        out[:keys][key][delim_key] ||= []
+        out[:keys][key][delim_key] << val
       end
     }.compact_blank
   end
