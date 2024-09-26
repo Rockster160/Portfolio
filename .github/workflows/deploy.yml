@@ -19,7 +19,7 @@ jobs:
     steps:
     - name: Begin Deploy
       run: |
-        curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" -d "deploy=start" https://ardesian.com/jil/tasks/e7a6570c-3d6d-434b-bcd6-568a41fb6b02/run
+        curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" -d "id=e7a6570c-3d6d-434b-bcd6-568a41fb6b02&deploy=start" https://ardesian.com/jil/trigger/monitor
 
     - name: Checkout code
       uses: actions/checkout@v2
@@ -50,4 +50,4 @@ jobs:
     - name: Complete Deploy
       run: |
         sleep 10 # Attempt to give the server enough time to wake up after deploy
-        curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" -d "deploy=finish" https://ardesian.com/jil/tasks/e7a6570c-3d6d-434b-bcd6-568a41fb6b02/run
+        curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" -d "id=e7a6570c-3d6d-434b-bcd6-568a41fb6b02&deploy=finish" https://ardesian.com/jil/trigger/monitor
