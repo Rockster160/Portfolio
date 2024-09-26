@@ -39,15 +39,16 @@ class Jil::Executor
     stopped = false
     user_tasks.by_listener(trigger).filter_map do |task|
       next if stopped
+      ran = nil
       begin
-        task.match_run(trigger, trigger_data)
+        ran = task.match_run(trigger, trigger_data) && task
       rescue => e
         unless Rails.env.production?
           load("/Users/rocco/.pryrc"); source_puts "[#{e.class}] #{e.message}"
         end
         nil # Generic rescue
       end
-      task.tap { stopped = true if task.stop_propagation? }
+      ran&.tap { stopped = true if ran.stop_propagation? }
     end
   end
 

@@ -28,6 +28,7 @@
   #request("Method" String BR "URL" String BR "Params" Hash BR "Headers" Hash)::Hash
   #broadcast_websocket("Channel" TAB String BR "Data" TAB Hash)::Numeric
   #trigger(String Hash)::Numeric
+  !#relay(Contact|String Hash) # String is contact name/alias
   #dowhile(enum_content)::Numeric
   #loop(enum_content)::Any
   #times(Numeric enum_content)::Numeric
