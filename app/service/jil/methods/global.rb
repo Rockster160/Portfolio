@@ -51,7 +51,7 @@ class Jil::Methods::Global < Jil::Methods::Base
   # end
 
   def set_cache(key, var, val)
-    @jil.user.caches.dig_set(*[key, var].compact_blank, val) && val
+    @jil.user.caches.dig_set(*([key, var].compact_blank), val) && val
   end
 
   def get(var)
