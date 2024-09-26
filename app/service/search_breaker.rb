@@ -9,8 +9,10 @@ module SearchBreaker
     start:           /(?:^|\b)/,
   }
 
-  def unwrap(str)
-    str.gsub(/(?:#{RX[:quot_str]})|(?:#{RX[:single_quot_str]})/, '\1').gsub(RX[:paren_wrap], '\1')
+  def unwrap(str, parens: true, quotes: true)
+    str = str.gsub(/(?:#{RX[:quot_str]})|(?:#{RX[:single_quot_str]})/, '\1') if quotes
+    str = str.gsub(RX[:paren_wrap], '\1') if parens
+    str
   end
 
   def call(str, delimiters={})
@@ -38,17 +40,18 @@ module SearchBreaker
       key = tr.untokenize(tz_key)
       val = tr.untokenize(tz_val)
       delim_key = delims_with_aliases.find { |dk, d| delim.downcase == d.downcase }[0]
-      key, val = [key, val].map { |part| unwrap(part) }
+      key, val = [key, val].map { |part| unwrap(part, quotes: false) }
 
       val = broken_or_val(val, delimiters) # Recursive search breaker
 
       if key.blank?
         out[:vals][delim_key] ||= []
-        out[:vals][delim_key] << val
+        out[:vals][delim_key] << unwrap(val)
       else
-        out[:keys][key] ||= {}
-        out[:keys][key][delim_key] ||= []
-        out[:keys][key][delim_key] << val
+        unwrapped_key = unwrap(key)
+        out[:keys][unwrapped_key] ||= {}
+        out[:keys][unwrapped_key][delim_key] ||= []
+        out[:keys][unwrapped_key][delim_key] << unwrap(val)
       end
     }.compact_blank
   end

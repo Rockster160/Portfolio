@@ -20,6 +20,7 @@ class Jil::Executor
   end
 
   def self.trigger(user, trigger, trigger_data={})
+    # load("/Users/rocco/.pryrc"); source_puts "trigger:#{trigger} #{pretty_hash(trigger_data)}"
     user_ids = (
       case user
       when ::User then [user.id]
@@ -38,7 +39,14 @@ class Jil::Executor
     stopped = false
     user_tasks.by_listener(trigger).filter_map do |task|
       next if stopped
-      task.match_run(trigger, trigger_data) rescue nil
+      begin
+        task.match_run(trigger, trigger_data)
+      rescue => e
+        unless Rails.env.production?
+          load("/Users/rocco/.pryrc"); source_puts "[#{e.class}] #{e.message}"
+        end
+        nil # Generic rescue
+      end
       task.tap { stopped = true if task.stop_propagation? }
     end
   end
