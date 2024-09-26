@@ -106,12 +106,12 @@ Monitor.socket = new AuthWS("MonitorChannel", {
     console.log("MonitorChannel.onmessage", data);
     let monitor = Monitor.find(data.id)
     if (!monitor) { return }
-    if (data.loading) { return monitor.loading = true }
+    if (data.loading) { monitor.loading = true }
     if (data.error) {
-      // data.result is set by the server
       monitor.content = toMd(data.result)
       return monitor.error = true
     }
+    if (!data.timestamp) { return }
 
     monitor.loading = false
     monitor.blip = data.blip

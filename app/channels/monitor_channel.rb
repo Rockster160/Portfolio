@@ -17,7 +17,7 @@ class MonitorChannel < ApplicationCable::Channel
   end
 
   def self.send_task(task)
-    # can remove the `:var` after Jil 1 is dropped
+    # Remove this whole method after Jil1 is removed
     ctx = ->(name) { task.last_ctx.dig(:vars, name) || task.last_ctx.dig(:vars, "#{name}:var") }
     data = {
       id: task.uuid,
@@ -57,26 +57,29 @@ class MonitorChannel < ApplicationCable::Channel
   end
 
   def execute(data) # Runs task with executing:true
-    task = current_user.jarvis_tasks.anyfind(data["id"])
+    ::Jil.trigger(current_user.id, :monitor, data.symbolize_keys.merge({ execute: true }))
 
+    task = current_user.jarvis_tasks.anyfind(data["id"])
     ::Jarvis::Execute.call(task, input_vars: { "Pressed": true })
   rescue ActiveRecord::RecordNotFound
-    MonitorChannel.send_error(current_user, data["id"])
+  #   MonitorChannel.send_error(current_user, data["id"])
   end
 
   def refresh(data) # Runs task with executing:false
-    task = current_user.jarvis_tasks.anyfind(data["id"])
+    ::Jil.trigger(current_user.id, :monitor, data.symbolize_keys.merge({ refresh: true }))
 
+    task = current_user.jarvis_tasks.anyfind(data["id"])
     ::Jarvis::Execute.call(task, input_vars: { "Pressed": false })
   rescue ActiveRecord::RecordNotFound
-    MonitorChannel.send_error(current_user, data["id"])
+    # MonitorChannel.send_error(current_user, data["id"])
   end
 
   def resync(data) # Pulls most recent result without Running
-    task = current_user.jarvis_tasks.anyfind(data["id"])
+    ::Jil.trigger(current_user.id, :monitor, data.symbolize_keys.merge({ resync: true }))
 
+    task = current_user.jarvis_tasks.anyfind(data["id"])
     MonitorChannel.send_task(task)
   rescue ActiveRecord::RecordNotFound
-    MonitorChannel.send_error(current_user, data["id"])
+    # MonitorChannel.send_error(current_user, data["id"])
   end
 end

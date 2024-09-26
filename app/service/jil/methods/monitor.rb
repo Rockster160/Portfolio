@@ -21,7 +21,7 @@ class Jil::Methods::Monitor < Jil::Methods::Base
     data = param_blocks.inject({}) { |acc, hash| acc.merge(hash) }
     data[:timestamp] = data[:timestamp].presence || ::Time.current.to_i
     data[:id] = name
-    # data.delete(:loading) -- For some reason results in `undefined`
+    data.delete(:loading) # -- For some reason results in `undefined`
 
     ::MonitorChannel.broadcast_to(@jil.user, data)
     { id: name }
@@ -30,7 +30,7 @@ class Jil::Methods::Monitor < Jil::Methods::Base
   # [MonitorData]
 
   def content(text)
-    { content: text }
+    { result: text }
   end
 
   def timestamp(val) # time | bool
@@ -38,7 +38,7 @@ class Jil::Methods::Monitor < Jil::Methods::Base
   end
 
   def blip(count)
-    { blip: count }
+    { blip: count.zero? ? nil : count.to_s.first(3).presence }
   end
 
   def extra(data={})
