@@ -16,12 +16,20 @@ class Jil::Methods::Base
     elsif arg.is_a?(::String) && !arg.match?(/^\".*?\"$/)
       token_val(arg)
     elsif arg.is_a?(::String) && arg.match?(/^\".*?\"$/)
-      arg[1..-2].gsub(/\#\{\s*(.*?)\s*\}/) { |found|
-        @jil.cast(token_val(Regexp.last_match[1]), :String)
-      }
+      parse_unwrap_string(arg)
     else
       arg
     end
+  end
+
+  def parse_unwrap_string(arg)
+    unwrap = arg[1..-2]
+    tz = NewTokenizer.new(unwrap)
+    tz_unescaped = tz.tokenized_text.gsub(/\\+/) { |f| f.length.odd? ? "\\"*(f.length-1) : f }
+    unescaped = tz.untokenize(tz_unescaped)
+    unescaped.gsub(/\#\{\s*(.*?)\s*\}/) { |found|
+      @jil.cast(token_val(Regexp.last_match[1]), :String)
+    }
   end
 
   def evalargs(args)

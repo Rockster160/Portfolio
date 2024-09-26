@@ -216,7 +216,7 @@ class Jarvis
     time_str, scheduled_time = ::Jarvis::Times.extract_time(@words.downcase.squish)
     remaining_words = @words
     if scheduled_time
-      remaining_words = @words.sub(Regexp.new("(?:\b(?:at)\b )?#{time_str}", :i), "").squish
+      remaining_words = @words.sub(Regexp.new("(?:\b(?:at|on)\b )?#{time_str}", :i), "").squish
     end
     timestamp = (scheduled_time || Time.current).in_time_zone(@user.timezone).iso8601
     tasks = ::Jil::Executor.trigger(@user, :tell, { words: remaining_words, timestamp: timestamp })

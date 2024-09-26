@@ -86,4 +86,25 @@ RSpec.describe Jil::Methods::ActionEvent do
       expect(ctx[:output]).to eq([])
     end
   end
+
+  context "parsing" do
+    let!(:evt) { ActionEvent.create(user: user, name: "Drink", notes: "Coke") }
+    let!(:new_evt) { ActionEvent.create(user: user, name: "Drink", notes: "Coke") }
+    let(:code) {
+      <<-JIL
+        name = String.new("Drink")::String
+        notes = String.new("Coke")::String
+        id = Numeric.new(#{evt.id})::Numeric
+        evts = ActionEvent.search("name::\\"\#{name}\\" notes::\\"\#{notes}\\" id!::\#{id}", 5, "", "DESC")::Array
+      JIL
+    }
+
+    it "properly executes the search" do
+      expect_successful_jil
+
+      evts = ctx.dig(:vars, :evts, :value)
+      expect(evts.length).to eq(1)
+      expect(evts.dig(0, :id)).to eq(new_evt.id)
+    end
+  end
 end
