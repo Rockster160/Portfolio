@@ -20,6 +20,13 @@ class Jil::Methods::String < Jil::Methods::Base
     when :format then format(token_val(line.objname), cast(evalarg(line.arg)))
     when :replace then token_val(line.objname).gsub(*strreg_args(line.args))
     when :add then [token_val(line.objname), *strreg_args(line.args)].join("")
+    when :match
+      md = token_val(line.objname).match(string_or_regex(evalarg(line.arg)))
+      case line.cast
+      when :Array then md.to_a.presence
+      when :Hash then md.named_captures.symbolize_keys.presence
+      else md.to_a.first.presence
+      end
     when :split
       # Bunch of hackery here to properly split by newlines
       # gsub to fix the double escape, but multi line strings are still using an escaped newline

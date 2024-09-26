@@ -54,20 +54,58 @@ RSpec.describe Jil::Methods::String do
     end
 
     context "match" do
-      let(:code) {
-        <<-JIL
-          na887 = String.new(\"Hello, world!\")::String
-          na885 = na887.match(\"Hello\")::Boolean
-        JIL
-      }
+      context "with matching" do
+        let(:code) {
+          <<-JIL
+            na887 = String.new(\"Hello, world!\")::String
+            na885 = na887.match(\"Hello\")::Boolean
+          JIL
+        }
 
-      it "stores the string" do
-        expect_successful_jil
-        expect(ctx[:vars]).to match_hash({
-          na887: { class: :String, value: "Hello, world!" },
-          na885: { class: :Boolean, value: true },
-        })
-        expect(ctx[:output]).to eq([])
+        it "stores the string" do
+          expect_successful_jil
+          expect(ctx[:vars]).to match_hash({
+            na887: { class: :String, value: "Hello, world!" },
+            na885: { class: :Boolean, value: true },
+          })
+          expect(ctx[:output]).to eq([])
+        end
+      end
+
+      context "with similar" do
+        let(:code) {
+          <<-JIL
+            na887 = String.new(\"Hello, world!\")::String
+            na885 = na887.match(\"hello\")::Boolean
+          JIL
+        }
+
+        it "stores the string" do
+          expect_successful_jil
+          expect(ctx[:vars]).to match_hash({
+            na887: { class: :String, value: "Hello, world!" },
+            na885: { class: :Boolean, value: true },
+          })
+          expect(ctx[:output]).to eq([])
+        end
+      end
+
+      context "with no match" do
+        let(:code) {
+          <<-JIL
+            na887 = String.new(\"Hello, world!\")::String
+            na885 = na887.match(\"Goodbye\")::Boolean
+          JIL
+        }
+
+        it "does not store" do
+          expect_successful_jil
+          expect(ctx[:vars]).to match_hash({
+            na887: { class: :String, value: "Hello, world!" },
+            na885: { class: :Boolean, value: false },
+          })
+          expect(ctx[:output]).to eq([])
+        end
       end
     end
 
