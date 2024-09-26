@@ -28,8 +28,8 @@ class WebhooksController < ApplicationController
   def jil
     ::Jil::Executor.async_trigger(
       current_user,
-      :webhook,
-      { params: json_params },
+      params[:trigger],
+      json_params.except(:trigger),
     )
 
     head :ok
