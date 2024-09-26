@@ -13,20 +13,7 @@ export default class Method {
     this.upcoming = data.upcoming
 
     this.default = null
-    this.placeholder = null
     this.optional = false
-  }
-
-  static placeholder(name, str) {
-    const { returntype } = str.match(/(?:::(?<returntype>\w+))/)?.groups || {}
-
-    return new Method({
-      scope: "singleton",
-      type: "Global",
-      name: name,
-      args: str.match(/\(ANY\)/) ? `"${name}" TAB Any` : `"${name}"`,
-      returntype: returntype || "Any",
-    })
   }
 
   static splitToArgs(str) {

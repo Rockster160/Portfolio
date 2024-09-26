@@ -35,8 +35,11 @@ class Jil::Executor
     end
 
     user_tasks = ::JilTask.enabled.ordered.where(user_id: user_ids).distinct
+    stopped = false
     user_tasks.by_listener(trigger).filter_map do |task|
-      task.match_run(trigger, trigger_data) && task rescue nil
+      next if stopped
+      task.match_run(trigger, trigger_data) rescue nil
+      task.tap { stopped = true if task.stop_propagation? }
     end
   end
 

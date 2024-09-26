@@ -40,7 +40,11 @@ export default class Arg {
       this.typename = typename
       this.preferredtype = preferredtype || typename
       this.optional = !!optional
-      this.defaultval = unwrap(defaultval)
+      if (typename === "Boolean") {
+        this.defaultval = unwrap(defaultval) === "true"
+      } else {
+        this.defaultval = unwrap(defaultval)
+      }
       this.placeholder = unwrap(placeholder)
     } else {
       // Strings for displaying words

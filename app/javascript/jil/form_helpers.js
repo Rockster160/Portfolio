@@ -90,6 +90,11 @@ export function inputFromArg(arg) {
   if (typeof arg.placeholder !== "undefined") { ele.placeholder = arg.placeholder }
   if (typeof arg.defaultval !== "undefined") {
     ele[type == "textarea" ? "innerText" : "value"] = arg.defaultval
+    if (type == "checkbox") {
+      const input = ele.querySelector("input")
+      input.checked = arg.defaultval
+      input.value = arg.defaultval
+    }
   }
   if (!arg.optional) { ele.setAttribute("required", true) }
 
