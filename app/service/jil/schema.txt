@@ -207,3 +207,11 @@
   !.text::String
   !.html::String
   !.archive(Boolean(true))::Boolean
+[Monitor]
+  #loading(String:Name Boolean(true))
+  #broadcast(String:Name content(MonitorData) Boolean(false))
+*[MonitorData]
+  #content(Text)
+  #timestamp(Date|Boolean)
+  #blip(Numeric?)
+  #extra(Hash)

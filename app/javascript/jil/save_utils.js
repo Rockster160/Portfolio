@@ -19,7 +19,7 @@ export default function saveUtils() {
   }
 
   document.addEventListener("mousedown", function(event) {
-    if (newTask && event.button === 1) {
+    if (event.button === 1) {
       Statement.reloadFromText("")
     }
   });

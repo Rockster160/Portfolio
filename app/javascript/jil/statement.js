@@ -1,5 +1,5 @@
 import { fa, faStack } from "./icon.js"
-import { genHex, genLetter } from "./form_helpers.js"
+import { genHex, genLetter, clamp } from "./form_helpers.js"
 import Dropdown from "./dropdown.js"
 import Tokenizer from "./tokenizer.js"
 
@@ -486,6 +486,10 @@ export default class Statement {
             input.checked = val == "true"
           } else {
             input.value = val.replaceAll(/(^['"]|["']$)/g, "")
+            if (input.tagName == "TEXTAREA") {
+              const rows = clamp(val.split("\n").length, 3, 20)
+              input.rows = rows
+            }
             if (input.value == "<dynamic>") {
               let dynamicWrapper = wrapper.querySelector(".dynamic.input-wrapper")
               dynamicWrapper.classList.remove("hidden")

@@ -13,9 +13,9 @@ class Jil::Methods::Base
   def evalarg(arg, passed_ctx=nil)
     if arg.is_a?(::Jil::Parser) || arg.is_a?(::Array)
       @jil.execute_block(arg, passed_ctx || @ctx || @jil.ctx)
-    elsif arg.is_a?(::String) && !arg.match?(/^\".*?\"$/)
+    elsif arg.is_a?(::String) && !arg.match?(/^\".*?\"$/m)
       token_val(arg)
-    elsif arg.is_a?(::String) && arg.match?(/^\".*?\"$/)
+    elsif arg.is_a?(::String) && arg.match?(/^\".*?\"$/m)
       parse_unwrap_string(arg)
     else
       arg
@@ -25,7 +25,10 @@ class Jil::Methods::Base
   def parse_unwrap_string(arg)
     unwrap = arg[1..-2]
     tz = NewTokenizer.new(unwrap)
-    tz_unescaped = tz.tokenized_text.gsub(/\\+/) { |f| f.length.odd? ? "\\"*(f.length-1) : f }
+    tz_unescaped = tz.tokenized_text.gsub(/\\+\"/) { |f|
+      next f unless f.length.even?
+      "\\"*(f.length-2) + "\""
+    }
     unescaped = tz.untokenize(tz_unescaped)
     unescaped.gsub(/\#\{\s*(.*?)\s*\}/) { |found|
       @jil.cast(token_val(Regexp.last_match[1]), :String)

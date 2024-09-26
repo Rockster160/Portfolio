@@ -1,0 +1,46 @@
+class Jil::Methods::Monitor < Jil::Methods::Base
+  def cast(value)
+    @jil.cast(value, :Hash)
+  end
+
+  # [Monitor]
+  #   #loading(String:UUID)
+  #   #broadcast(String:UUID content(MonitorData))
+  # *[MonitorData]
+  #   #content(Text)
+  #   #timestamp(Date|Boolean)
+  #   #blip(Numeric?)
+  #   #extra(Hash)
+
+  def loading(name, bool)
+    ::MonitorChannel.broadcast_to(@jil.user, id: name, loading: bool)
+    { id: name }
+  end
+
+  def broadcast(name, param_blocks, loading)
+    data = param_blocks.inject({}) { |acc, hash| acc.merge(hash) }
+    data[:timestamp] = data[:timestamp].presence || ::Time.current.to_i
+    data[:id] = name
+
+    ::MonitorChannel.broadcast_to(@jil.user, data)
+    { id: name }
+  end
+
+  # [MonitorData]
+
+  def content(text)
+    { content: text }
+  end
+
+  def timestamp(val) # time | bool
+    { timestamp: val }
+  end
+
+  def blip(count)
+    { blip: count }
+  end
+
+  def extra(data={})
+    { extra: data }
+  end
+end

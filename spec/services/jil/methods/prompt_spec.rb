@@ -1,4 +1,4 @@
-RSpec.describe Jil::Methods::Hash do
+RSpec.describe Jil::Methods::Prompt do
   include ActiveJob::TestHelper
   let(:execute) { Jil::Executor.call(user, code, input_data) }
   let(:user) { User.me }

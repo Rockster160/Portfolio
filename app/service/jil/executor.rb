@@ -226,6 +226,7 @@ class Jil::Executor
       case klass_name || obj.cast.to_sym
       # when :Hash then ::Hash # dig into the hash for special keys
       when :Object then :Global
+      when :Monitor, :MonitorData then :Monitor
       when :Prompt, :PromptQuestion then :Prompt
       when :Hash, :Keyval then :Hash
       when :String, :Text then :String
