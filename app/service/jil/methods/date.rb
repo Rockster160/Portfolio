@@ -11,12 +11,8 @@ class Jil::Methods::Date < Jil::Methods::Base
     DateTime.new.in_time_zone(@jil.user.timezone)
   end
 
-  def execute(line)
-    case line.methodname
-    when :new then Time.zone.local(*evalargs(line.args))
-    else
-      fallback(line)
-    end
+  def init(line)
+    Time.zone.local(*evalargs(line.args))
   end
 
   def now

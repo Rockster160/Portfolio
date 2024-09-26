@@ -35,6 +35,7 @@ export default class Schema {
     let list = str.trim().split("\n")
 
     new Schema("Global")
+    new Schema("Object")
     new Schema("None")
     new Schema("Keyword")
 
@@ -107,7 +108,10 @@ export default class Schema {
     if (typeof type === "string") { // Class name
       return this.types[type].singletons.find(singleton => singleton.name == name)
     } else { // Statement
-      return this.types[type.returntype].instances.find(singleton => singleton.name == name)
+      return (
+        this.types[type.returntype].instances.find(instance => instance.name == name) ||
+        this.types["Object"].instances.find(instance => instance.name == name)
+      )
     }
   }
 

@@ -1,3 +1,5 @@
+*[Object]
+  .inspect::None
 *[Keyword]
   Object::Any
   Key::String

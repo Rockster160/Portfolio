@@ -297,6 +297,11 @@ export default class Statement {
   set returntype(new_type) {
     this._returntype = new_type
     this.node.querySelector(".obj-returntype").innerText = new_type == "Global" ? "Any" : new_type
+    if (new_type == "None") {
+      this.node.querySelectorAll(".obj-varname, .obj-eq").forEach(item => item.classList.add("hidden"))
+    } else {
+      this.node.querySelectorAll(".obj-varname, .obj-eq").forEach(item => item.classList.remove("hidden"))
+    }
 
     this.updateReferences()
   }
@@ -416,7 +421,7 @@ export default class Statement {
 
     return [
       [dup, copy, pasteup, pastedown, comment],
-      ...Schema.instancesFor(this.returntype).map(method => {
+      ...[...Schema.types["Object"].instances, ...Schema.instancesFor(this.returntype)].map(method => {
         return {
           text: `#${method.name}`,
           callback: () => {

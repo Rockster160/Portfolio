@@ -23,10 +23,13 @@ class Jil::Methods::Array < Jil::Methods::Base
     evalargs(args).first
   end
 
+  def init(line)
+    enum_content(line.args)
+  end
+
   def execute(line, method=nil)
     method ||= line.methodname
     case method
-    when :new then enum_content(line.args)
     when :splat then splat(line)
     when :from_length then ::Array.new(@jil.cast(evalarg(line.arg), :Numeric))
     when :combine then token_val(line.objname) + cast(evalarg(line.arg))

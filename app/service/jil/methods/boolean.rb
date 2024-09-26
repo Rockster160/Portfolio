@@ -5,7 +5,6 @@ class Jil::Methods::Boolean < Jil::Methods::Base
 
   def execute(line)
     case line.methodname
-    when :new then cast(evalarg(line.arg))
     when :eq then soft_presence(line.args.first) == soft_presence(line.args.last)
     when :or then soft_presence(line.args.first) || soft_presence(line.args.last)
     when :and then soft_presence(line.args.first) && soft_presence(line.args.last)

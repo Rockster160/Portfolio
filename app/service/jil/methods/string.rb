@@ -17,7 +17,6 @@ class Jil::Methods::String < Jil::Methods::Base
 
   def execute(line)
     case line.methodname
-    when :new then cast(evalarg(line.arg))
     when :format then format(token_val(line.objname), cast(evalarg(line.arg)))
     when :replace then token_val(line.objname).gsub(*strreg_args(line.args))
     when :add then [token_val(line.objname), *strreg_args(line.args)].join("")

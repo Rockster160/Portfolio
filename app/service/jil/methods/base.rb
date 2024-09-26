@@ -42,11 +42,15 @@ class Jil::Methods::Base
     @jil.ctx&.dig(:vars, token.to_sym, :value)
   end
 
-  def execute(line) # TODO: Do not override this in lower classes, just have a different method to call
+  def base_execute(line)
     case line.methodname
-    when :new then cast(evalarg(line.arg))
+    when :new then respond_to?(:init) ? init(line) : cast(evalarg(line.arg))
+    when :inspect
+      token_val(line.objname).tap { |str|
+        @jil.ctx[:output] << ::Jil::Methods::String.new(@jil, @ctx).cast(str).gsub(/^"|"$/, "")
+      }
     else
-      fallback(line)
+      respond_to?(:execute) ? execute(line) : fallback(line)
     end
   end
 

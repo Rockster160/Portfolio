@@ -22,6 +22,14 @@ class Jil::Methods::Hash < Jil::Methods::Base
     evalargs(args).first
   end
 
+  def init(line)
+    if line.objname == :Hash
+      hash_wrap(enum_content(line.args))
+    else
+      hash_wrap(evalargs(line.args))
+    end
+  end
+
   def execute(line, method=nil)
     method ||= line.methodname
     case method
@@ -31,12 +39,6 @@ class Jil::Methods::Hash < Jil::Methods::Base
       { evalarg(key) => hash_wrap(evalargs(hash)) }
     when :keyval
       hash_wrap(evalargs(line.args))
-    when :new
-      if line.objname == :Hash
-        hash_wrap(enum_content(line.args))
-      else
-        hash_wrap(evalargs(line.args))
-      end
     when :dig
       token_val(line.objname).with_indifferent_access.send(method, *enum_content(line.args))
     when :get then token_val(line.objname).with_indifferent_access.dig(*enum_content(line.args))
