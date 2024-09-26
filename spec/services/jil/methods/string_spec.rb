@@ -102,7 +102,7 @@ RSpec.describe Jil::Methods::String do
           expect_successful_jil
           expect(ctx[:vars]).to match_hash({
             na887: { class: :String, value: "Hello, world!" },
-            na885: { class: :Boolean, value: false },
+            na885: { class: :Boolean, value: nil },
           })
           expect(ctx[:output]).to eq([])
         end

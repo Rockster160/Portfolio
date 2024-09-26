@@ -21,7 +21,7 @@ class Jil::Methods::String < Jil::Methods::Base
     when :replace then token_val(line.objname).gsub(*strreg_args(line.args))
     when :add then [token_val(line.objname), *strreg_args(line.args)].join("")
     when :match
-      md = token_val(line.objname).match(string_or_regex(evalarg(line.arg)))
+      md = token_val(line.objname).match(to_regex(evalarg(line.arg)))
       case line.cast
       when :Array then md.to_a.presence
       when :Hash then md.named_captures.symbolize_keys.presence
@@ -30,7 +30,7 @@ class Jil::Methods::String < Jil::Methods::Base
     when :split
       # Bunch of hackery here to properly split by newlines
       # gsub to fix the double escape, but multi line strings are still using an escaped newline
-      token_val(line.objname).split(string_or_regex(evalarg(line.arg).gsub("\\\\n", "\\n")))
+      token_val(line.objname).split(to_regex(evalarg(line.arg).gsub("\\\\n", "\\n")))
     else
       if line.objname.match?(/^[A-Z]/)
         send(line.methodname, string_or_regex(token_val(line.objname)), *evalargs(line.args))
@@ -59,10 +59,14 @@ class Jil::Methods::String < Jil::Methods::Base
     evalargs(*args).map { |str| string_or_regex(str) }
   end
 
+  def to_regex(str)
+    Regexp.new(str, Regexp::IGNORECASE | Regexp::MULTILINE)
+  end
+
   def string_or_regex(str)
     # TODO: Support flags
     if str.starts_with?("/") && str.ends_with?("/")
-      Regexp.new(str[1..-2])
+      to_regex(str[1..-2])
     else
       str
     end
