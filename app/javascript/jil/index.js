@@ -51,6 +51,9 @@ Keyboard.on(["Backspace"], (evt) => {
     }
   }
 })
+Keyboard.on(["Cmd", "S"], (evt) => {
+  // save
+})
 Keyboard.on(["Cmd", "Z"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
     // Undo (include both deletes and adds)

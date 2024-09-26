@@ -112,7 +112,7 @@ import { dash_colors, clamp } from "../vars"
       cell.data.fail = false
       cell.data.error = undefined
       cell.data.paused = data.state?.flags?.paused || data.state?.flags?.pausing
-      cell.data.stopped = data.extra?.reason == "cancelled"
+      cell.data.stopped = data.data?.reason == "cancelled"
       cell.data.printing = !cell.data.paused && !cell.data.stopped && data.state?.flags?.printing
       if (cell.data.printing) {
         cell.data.prepping = false
@@ -142,7 +142,7 @@ import { dash_colors, clamp } from "../vars"
 
       let printer_data = {}
       printer_data.msSinceEpoch = Time.msSinceEpoch()
-      let filename = (data.job?.file?.display || data?.extra?.name)
+      let filename = (data.job?.file?.display || data?.data?.name)
       if (data.progress) {
         let estimatedSec
         let curaTime = filename.match(/(\d+D)?(\d+H)?(\d+M)/)

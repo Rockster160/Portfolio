@@ -281,7 +281,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         cell.flash()
         if (data.loading) {
         } else {
-          cell.data.camera = data.extra?.camera || {}
+          cell.data.camera = data.data?.camera || {}
           cell.data.garage.timestamp = data.timestamp * 1000
           let msg = data.result || ""
           if (msg.includes("[ico mdi-garage font-size: 100px; color: green;]")) {
