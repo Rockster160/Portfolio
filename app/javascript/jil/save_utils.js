@@ -19,6 +19,7 @@ export default function saveUtils() {
   }
 
   document.addEventListener("mousedown", function(event) {
+    if (event.target.matches("a, .btn, input, .statement")) { return }
     if (event.button === 1) {
       Statement.reloadFromText("")
     }

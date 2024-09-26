@@ -213,6 +213,6 @@
   #refresh(String:Name Hash?:Data)
 *[MonitorData]
   #content(Text)
-  #timestamp(Date|Boolean)
+  #timestamp(Date|Numeric|Boolean)
   #blip(Numeric?)
   #extra(Hash)

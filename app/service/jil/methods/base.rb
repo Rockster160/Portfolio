@@ -50,7 +50,7 @@ class Jil::Methods::Base
     when :new then respond_to?(:init) ? init(line) : cast(evalarg(line.arg))
     when :inspect
       token_val(line.objname).tap { |str|
-        @jil.ctx[:output] << ::Jil::Methods::String.new(@jil, @ctx).cast(str).gsub(/^"|"$/, "")
+        @jil.ctx[:output] << "[#{line.objname}]#{::Jil::Methods::String.new(@jil, @ctx).cast(str).gsub(/^"|"$/, "")}"
       }
     else
       respond_to?(:execute) ? execute(line) : fallback(line)
