@@ -27,6 +27,11 @@ class Jil::Methods::Monitor < Jil::Methods::Base
     { id: name }
   end
 
+  def refresh(name, data)
+    ::Jil.trigger(@jil.user.id, :monitor, { refresh: true }.merge(data.presence || {}))
+    { id: name }
+  end
+
   # [MonitorData]
 
   def content(text)

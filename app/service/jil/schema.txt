@@ -210,6 +210,7 @@
 [Monitor]
   #loading(String:Name Boolean(true))
   #broadcast(String:Name content(MonitorData) Boolean(false))
+  #refresh(String:Name Hash?:Data)
 *[MonitorData]
   #content(Text)
   #timestamp(Date|Boolean)
