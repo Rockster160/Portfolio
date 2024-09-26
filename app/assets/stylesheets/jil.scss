@@ -6,6 +6,7 @@ $text-color: darken($grey-blue, 20%);
 :root {
   --statement-width: 500px;
 
+  --syntax-base: #ABB2BF;
   --syntax-class: #E5C07B;
   --syntax-variable: #F7DEB1;
   --syntax-bool: #D19A66;
@@ -13,7 +14,7 @@ $text-color: darken($grey-blue, 20%);
   --syntax-symbol: #56B6C2;
   /* --style-return: #C678DD; */
 
-  --style-varname: orange;
+  --style-varname: #61AFEF;
   --style-danger: #B20015;
   /* #D62839 */
 
@@ -45,9 +46,9 @@ $text-color: darken($grey-blue, 20%);
 
 body {
   background: #21374F;
-  color: #ABB2BF;
-  font-family: "Menlo";
   padding-bottom: 500px;
+  color: var(--syntax-base);
+  font-family: "Menlo";
 }
 
 .hidden { display: none !important; }
@@ -202,25 +203,25 @@ input[type=submit] {
 }
 
 .results {
+  position: relative;
   margin: 10px auto;
+  border: 2px solid $text-color;
   border-radius: 10px;
   background: var(--statement-bg);
   padding: 10px;
   width: 100%;
   max-width: var(--statement-width);
-  border: 2px solid $text-color;
-  position: relative;
 
   &:has(.result:empty):has(.output:empty):has(.error:empty):has(.timestamp:empty) {
     display: none;
   }
 
   .timestamp {
-    color: $grey-blue;
-    font-size: 12px;
     position: absolute;
     top: 2px;
     left: 5px;
+    color: $grey-blue;
+    font-size: 12px;
   }
   .error {
     color: red;
@@ -230,8 +231,8 @@ input[type=submit] {
     color: lime;
   }
   .output {
-    font-size: 12px;
     color: lightgrey;
+    font-size: 12px;
     white-space: pre-wrap;
   }
 }
@@ -426,11 +427,11 @@ input[type=submit] {
   position: absolute;
   bottom: 2px;
   left: 50%;
+  cursor: pointer;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='white' stroke-width='5px' viewBox='0 0 100 20'%3E%3Cpath d='M 3,3 50,17 97,3'/%3E%3C/svg%3E");
   width: var(--statement-width);
   width: calc(5px*5);
   height: 5px;
-  cursor: pointer;
 }
 .content-dropdown {
   margin: 0 auto;
