@@ -59,7 +59,7 @@ class MonitorChannel < ApplicationCable::Channel
   def execute(data) # Runs task with executing:true
     ::Jil.trigger(current_user.id, :monitor, data.symbolize_keys.merge({ execute: true }))
 
-    task = current_user.jarvis_tasks.anyfind(data["id"])
+    task = current_user.jarvis_tasks.enabled.anyfind(data["id"])
     ::Jarvis::Execute.call(task, input_vars: { "Pressed": true })
   rescue ActiveRecord::RecordNotFound
   #   MonitorChannel.send_error(current_user, data["id"])
@@ -68,7 +68,7 @@ class MonitorChannel < ApplicationCable::Channel
   def refresh(data) # Runs task with executing:false
     ::Jil.trigger(current_user.id, :monitor, data.symbolize_keys.merge({ refresh: true }))
 
-    task = current_user.jarvis_tasks.anyfind(data["id"])
+    task = current_user.jarvis_tasks.enabled.anyfind(data["id"])
     ::Jarvis::Execute.call(task, input_vars: { "Pressed": false })
   rescue ActiveRecord::RecordNotFound
     # MonitorChannel.send_error(current_user, data["id"])
@@ -77,7 +77,7 @@ class MonitorChannel < ApplicationCable::Channel
   def resync(data) # Pulls most recent result without Running
     ::Jil.trigger(current_user.id, :monitor, data.symbolize_keys.merge({ resync: true }))
 
-    task = current_user.jarvis_tasks.anyfind(data["id"])
+    task = current_user.jarvis_tasks.enabled.anyfind(data["id"])
     MonitorChannel.send_task(task)
   rescue ActiveRecord::RecordNotFound
     # MonitorChannel.send_error(current_user, data["id"])
