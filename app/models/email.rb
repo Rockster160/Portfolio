@@ -160,6 +160,10 @@ class Email < ApplicationRecord
     }
   end
 
+  def jil_serialize
+    as_json(only: [:id, :from, :to, :subject])
+  end
+
   def serialize
     # Shouldn't return blob, just need to figure out how to parse email data better so we have access to nickname and properly parsed html data
     as_json(only: [:id, :from, :to, :subject, :text_body, :html_body, :blob, :created_at])
@@ -184,9 +188,10 @@ class Email < ApplicationRecord
 
     success = save
 
+    tasks = ::Jil::Executor.trigger(user_id, :email, serialize)
+    return if tasks.any?(&:stop_propagation?)
     ::Jarvis.trigger_events(user_id, :email, serialize)
-    ::Jil::Executor.async_trigger(user_id, :email, serialize)
-    # Async is fine here because the code below should be in a task, not hard coded.
+    reload # Since Jil reloads them
     # The save above should be save! with a rescue that updates the status to failed parse and alerts Slack (as a dev/code error, not Jil error)
 
     # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier
@@ -203,7 +208,6 @@ class Email < ApplicationRecord
       archive
     end
 
-    reload
     notify_slack if success && !archived?
     failure(*errors.full_messages) if errors.any?
   end
@@ -217,8 +221,8 @@ class Email < ApplicationRecord
     ApplicationMailer.deliver_email(id, tempfiles).deliver_now
   end
 
-  def archive
-    update(deleted_at: Time.current)
+  def archive(bool=true)
+    update(deleted_at: bool ? Time.current : nil)
   end
 
   def read?; read_at?; end
