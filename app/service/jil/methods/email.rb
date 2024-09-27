@@ -30,6 +30,10 @@ class Jil::Methods::Email < Jil::Methods::Base
     email(email_data).html_body
   end
 
+  def timestamp(email_data)
+    email(email_data).created_at
+  end
+
   def archive(email_data, boolean)
     email(email_data).archive(boolean)
   end

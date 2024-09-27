@@ -207,6 +207,7 @@
   .subject::String
   .text::String
   .html::String
+  .timestamp::Date
   .archive(Boolean(true))::Boolean
 [Monitor]
   #loading(String:Name Boolean(true))
