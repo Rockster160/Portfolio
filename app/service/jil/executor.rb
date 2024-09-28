@@ -156,6 +156,10 @@ class Jil::Executor
     {
       class: line.cast,
       value: cast(obj.base_execute(line), line.cast, current_ctx),
+    }.tap { |line_val|
+      if line.show
+        @ctx[:output] << "[#{line.varname}][#{line_val[:class]}]#{::Jil::Methods::String.new(self, @ctx).cast(line_val[:value]).gsub(/^"|"$/, "")}"
+      end
     }
   end
 

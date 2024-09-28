@@ -70,7 +70,7 @@ class Jil::Methods::Array < Jil::Methods::Base
     when :sort_by!, :sort!
       token = line.objname.to_sym
       arr = token_val(token)
-      @jil.ctx[:vars][token][:value] = execute(line, method.to_s[..-2].to_sym)
+      set_value(token, execute(line, method.to_s[..-2].to_sym))
     when :find
       @jil.enumerate_array(token_val(line.objname), method) { |ctx|
         evalarg(line.arg, ctx)
@@ -90,10 +90,7 @@ class Jil::Methods::Array < Jil::Methods::Base
     array = token_val(line.objname)
     line.args.flatten.map.with_index { |arg, idx|
       @jil.cast(array[idx], arg.cast).tap { |val|
-        @jil.ctx[:vars][arg.varname] = {
-          class: arg.cast,
-          value: val,
-        }
+        set_value(arg.varname, val, type: arg.cast)
       }
     }.compact
   end

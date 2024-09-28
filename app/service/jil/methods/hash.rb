@@ -43,9 +43,8 @@ class Jil::Methods::Hash < Jil::Methods::Base
       token_val(line.objname).with_indifferent_access.send(method, *enum_content(line.args))
     when :get then token_val(line.objname).with_indifferent_access.dig(*enum_content(line.args))
     when :set!
-      token = line.objname.to_sym
-      @jil.ctx[:vars][token] ||= { class: :Hash, value: nil }
-      @jil.ctx[:vars][token][:value] = token_val(line.objname).merge(hash_wrap(evalargs(line.args)))
+      val = token_val(line.objname).merge(hash_wrap(evalargs(line.args)))
+      set_value(line.objname, val, type: :Hash)
     when :del!
       token = line.objname.to_sym
       @jil.ctx[:vars][token] ||= { class: :Hash, value: {} }

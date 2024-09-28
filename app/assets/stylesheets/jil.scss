@@ -307,12 +307,12 @@ input[type=submit] {
         }
       }
 
-      .obj-info, .obj-dup, .obj-actions, .obj-data {
+      .obj-info, .obj-dup, .obj-actions, .obj-data, .obj-inspect {
         position: absolute;
         font-size: 10px;
 
         * { display: inline-block; }
-        .obj-dup, .obj-varname, .obj-delete, .obj-returntype {
+        .obj-dup, .obj-varname, .obj-delete, .obj-returntype, .obj-inspect {
           cursor: pointer;
         }
       }
@@ -322,7 +322,18 @@ input[type=submit] {
         top: 2px;
         left: 5px;
         width: 10px;
-        color: white;
+        color: lightgrey;
+      }
+      .obj-inspect {
+        position: absolute;
+        bottom: 3px;
+        left: 3px;
+        width: 10px;
+        color: rgba(lightgrey, 0.6);
+
+        &.fa-eye {
+          color: white;
+        }
       }
       .obj-info {
         top: 2px;

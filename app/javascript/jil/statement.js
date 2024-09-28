@@ -48,7 +48,7 @@ export default class Statement {
 
   static regex(escaped_args) {
     // wb74e = Global.test("Default Value", 2)::Any
-    // p6ec7 = p4b96.split(", ")::Array
+    // *p6ec7 = p4b96.split(", ")::Array
     // e739e = Boolean.new(true)::Boolean
     // d022b = Boolean.or(e739e, e739e)::Boolean
     // uef07 = Hash.new({
@@ -61,6 +61,7 @@ export default class Statement {
     //   m7923 = Numeric.new("75")::Numeric
     // })::Array
     let captComment = /(?<commented>\#)? */
+    let captVisibility = /(?<inspect>\*)? */
     let captVarName = /(?:(?<varname>[_a-z][_0-9A-Za-z]*) *= *)? */
     let captObjName = /(?<objname>[_a-zA-Z][_0-9A-Za-z]*)/
     let captMethodName = /\.(?<methodname>[_0-9A-Za-z]+[!?]?)/
@@ -69,6 +70,7 @@ export default class Statement {
     let captCast = /::(?<cast>[A-Z][_0-9A-Za-z]*)/
     let fullRegex = new RegExp([
       captComment,
+      captVisibility,
       captVarName,
       captObjName,
       captMethodName,
@@ -96,7 +98,7 @@ export default class Statement {
     let escaped = tokenizer.tokenizedText
     let matches = [...escaped.matchAll(Statement.regex(true))]
     matches.forEach(match => {
-      const { commented, varname, objname, methodname, args, cast } = match.groups
+      const { commented, inspect, varname, objname, methodname, args, cast } = match.groups
 
       let statement = new Statement({
         id: varname,
@@ -105,6 +107,9 @@ export default class Statement {
       })
       if (commented) {
         statement.commented = true
+      }
+      if (inspect) {
+        statement.inspect = true
       }
       if (/^[A-Z]/.test(objname)) {
         statement.type = objname
@@ -411,6 +416,16 @@ export default class Statement {
   toggleComment() {
     this.commented = !this.commented
   }
+  get inspect() { return this._inspect }
+  set inspect(bool) {
+    this._inspect = bool
+    this.node.querySelector(".obj-inspect").classList.toggle("fa-eye", this.inspect)
+    this.node.querySelector(".obj-inspect").classList.toggle("fa-eye-slash", !this.inspect)
+    this.updateReferences()
+  }
+  toggleInspect() {
+    this.inspect = !this.inspect
+  }
 
   dropdownOpts() {
     let dup = { icon: fa("clone regular"), title: "Duplicate", callback: () => this.duplicate() }
@@ -540,6 +555,7 @@ export default class Statement {
 
   toString(nest) {
     let str = ""
+    if (this._inspect) { str += `*` }
     if (this._name) { str += `${this._name} = ` }
     if (this._reference) {
       str += `${this._reference.name || this._reference.id}`

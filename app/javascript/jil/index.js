@@ -188,6 +188,24 @@ document.addEventListener("click", function(evt) {
 })
 
 document.addEventListener("click", function(evt) {
+  if (evt.target.closest(".obj-dup")) {
+    console.log("dup")
+    let statement = Statement.from(evt.target)
+    debugger
+    statement?.duplicate()
+    return
+  }
+  if (evt.target.closest(".obj-inspect")) {
+    let statement = Statement.from(evt.target)
+    statement?.toggleInspect()
+    return
+  }
+  if (evt.target.closest(".obj-delete")) {
+    let statement = Statement.from(evt.target)
+    statement?.remove()
+    return
+  }
+
   if (evt.target.closest(".statement-wrapper")) {
     if (!["INPUT", "SELECT", "TEXTAREA"].includes(evt.target.tagName)) {
       let statement = Statement.from(evt.target)
@@ -281,17 +299,6 @@ document.addEventListener("mousedown", function(event) {
         // Open dropdown to add new function AFTER statement
   }
 });
-
-document.addEventListener("click", function(evt) {
-  if (evt.target.closest(".obj-dup")) {
-    let statement = Statement.from(evt.target)
-    statement?.duplicate()
-  }
-  if (evt.target.closest(".obj-delete")) {
-    let statement = Statement.from(evt.target)
-    statement?.remove()
-  }
-})
 
 window.oncontextmenu = function(evt) {
   evt.preventDefault()
