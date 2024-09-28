@@ -89,8 +89,6 @@ class Jil::Methods::Array < Jil::Methods::Base
   def splat(line)
     array = token_val(line.objname)
     line.args.flatten.map.with_index { |arg, idx|
-      next if idx >= array.length
-
       @jil.cast(array[idx], arg.cast).tap { |val|
         @jil.ctx[:vars][arg.varname] = {
           class: arg.cast,
