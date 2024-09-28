@@ -5,6 +5,7 @@ class ReceiveEmailWorker
     require "mail"
 
     content = FileStorage.download(filename, bucket: bucket)
+    Jarvis.log("#{filename}[bucket]#{bucket}")
     mail = Mail.new(content)
 
     attaches = mail.attachments.each_with_object({}) do |attachment, obj|
@@ -14,8 +15,9 @@ class ReceiveEmailWorker
       obj[cid || attachment.filename] = attachment.filename
     end
 
-    # ::Email.from_mail(mail, attaches)
+    ::Email.from_mail(mail, attaches)
 
-    FileStorage.delete(filename, bucket: bucket)
+    Jarvis.log("Successfully parsed #{filename}[bucket]#{bucket}")
+    # FileStorage.delete(filename, bucket: bucket)
   end
 end

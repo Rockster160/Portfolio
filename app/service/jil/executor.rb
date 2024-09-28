@@ -35,6 +35,8 @@ class Jil::Executor
       trigger_data = { data: trigger_data }
     end
 
+    ::Jarvis.log(trigger, trigger_data)
+
     user_tasks = ::JilTask.enabled.ordered.where(user_id: user_ids).distinct
     stopped = false
     user_tasks.by_listener(trigger).filter_map do |task|

@@ -186,7 +186,7 @@ class Email < ApplicationRecord
     )
     self.blob = self.blob.presence || mail.to_s
 
-    success = save
+    success = save!
 
     tasks = ::Jil::Executor.trigger(user_id, :email, serialize)
     return if tasks.any?(&:stop_propagation?)
@@ -210,6 +210,9 @@ class Email < ApplicationRecord
 
     notify_slack if success && !archived?
     failure(*errors.full_messages) if errors.any?
+  rescue => e
+    notify_slack
+    Jarvis.log("Failed to parse email: \n#{errors.full_messages.join("\n")}")
   end
 
   def failure(*issues)
