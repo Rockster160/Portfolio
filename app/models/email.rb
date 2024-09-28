@@ -188,7 +188,7 @@ class Email < ApplicationRecord
 
     success = save!
 
-    tasks = ::Jil::Executor.trigger(e.user_id, :email, e.serialize)
+    tasks = ::Jil::Executor.trigger(user_id, :email, serialize)
     Jarvis.say("email[#{id}]tasks:#{tasks.map { |t| "[#{t.id}:#{t.stop_propagation?}]" }.join("")}")
     return if tasks.any?(&:stop_propagation?)
     ::Jarvis.trigger_events(user_id, :email, serialize)
