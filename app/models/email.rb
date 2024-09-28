@@ -189,11 +189,9 @@ class Email < ApplicationRecord
     success = save!
 
     tasks = ::Jil::Executor.trigger(user_id, :email, serialize)
-    Jarvis.say("email[#{id}]tasks:#{tasks.map { |t| "[#{t.id}:#{t.stop_propagation?}]" }.join("")}")
     return if tasks.any?(&:stop_propagation?)
     ::Jarvis.trigger_events(user_id, :email, serialize)
-    reload # Since Jil reloads them
-    # The save above should be save! with a rescue that updates the status to failed parse and alerts Slack (as a dev/code error, not Jil error)
+    reload # Since Jil updates them out of scope
 
     # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier
 
@@ -213,7 +211,7 @@ class Email < ApplicationRecord
     failure(*errors.full_messages) if errors.any?
   rescue => e
     notify_slack
-    Jarvis.log("Failure [#{e.class}]#{e.message}")
+    Jarvis.log("Email Failure [#{e.class}]#{e.message}")
     Jarvis.log("Failed to parse email: \n#{errors.full_messages.join("\n")}")
   end
 

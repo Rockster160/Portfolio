@@ -35,13 +35,13 @@ class Jil::Executor
       trigger_data = { data: trigger_data }
     end
 
-    ::Jarvis.log(PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data })))
+    ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data }), 1000))
 
     user_tasks = ::JilTask.enabled.ordered.where(user_id: user_ids).distinct
     stopped = false
     user_tasks.by_listener(trigger).filter_map do |task|
       next if stopped
-      ::Jarvis.log(task.listener)
+      ::Jarvis.log("\e[35m#{task.listener}")
       ran = nil
       begin
         ran = task.match_run(trigger, trigger_data) && task
