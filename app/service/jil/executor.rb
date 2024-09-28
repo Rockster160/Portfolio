@@ -35,7 +35,7 @@ class Jil::Executor
       trigger_data = { data: trigger_data }
     end
 
-    ::Jarvis.log({ trigger => PrettyLogger.truncate(PrettyLogger.pretty_message(trigger_data)) })
+    ::Jarvis.log(PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data })))
 
     user_tasks = ::JilTask.enabled.ordered.where(user_id: user_ids).distinct
     stopped = false
