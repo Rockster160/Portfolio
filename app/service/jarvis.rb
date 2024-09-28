@@ -221,6 +221,9 @@ class Jarvis
     timestamp = (scheduled_time || Time.current).in_time_zone(@user.timezone).iso8601
     tasks = ::Jil::Executor.trigger(@user, :tell, { words: remaining_words, timestamp: timestamp })
     return tasks.last.last_message if tasks.any?(&:stop_propagation?)
+    tasks.select { |t| t.trigger_type == :tell }.last.tap { |task|
+      return task.last_message
+    }
 
     current_reserved_words = Jarvis.reserved_words.dup
     actions.lazy.map do |action_klass| # lazy map means stop at the first one that returns a truthy value

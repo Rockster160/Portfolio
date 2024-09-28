@@ -61,6 +61,10 @@ class JilTask < ApplicationRecord
     (funcs + "\n" + File.read("app/service/jil/schema.txt")).html_safe
   end
 
+  def trigger_type
+    listener.to_s.split(":", 2).first.presence&.to_sym
+  end
+
   def last_execution
     @last_execution ||= jil_executions.finished.order(:finished_at).last
   end
