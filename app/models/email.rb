@@ -213,6 +213,7 @@ class Email < ApplicationRecord
     failure(*errors.full_messages) if errors.any?
   rescue => e
     notify_slack
+    Jarvis.log("Failure [#{e.class}]#{e.message}")
     Jarvis.log("Failed to parse email: \n#{errors.full_messages.join("\n")}")
   end
 
