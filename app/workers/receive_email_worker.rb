@@ -14,7 +14,7 @@ class ReceiveEmailWorker
       obj[cid || attachment.filename] = attachment.filename
     end
 
-    ::Email.from_mail(mail, attaches)
+    # ::Email.from_mail(mail, attaches)
 
     FileStorage.delete(filename, bucket: bucket)
   end
