@@ -116,6 +116,7 @@ class JilTask < ApplicationRecord
       matcher.match?.tap { |m| first_match ||= matcher if m }
     }
     return if !did_match && !force
+    ::Jarvis.log("[#{id}]\e[35m#{listener}")
 
     # pretty_log(trigger, trigger_data) if Rails.env.development?
     execute(trigger_data.merge(first_match.regex_match_data))

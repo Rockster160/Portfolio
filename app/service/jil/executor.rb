@@ -41,7 +41,6 @@ class Jil::Executor
     stopped = false
     user_tasks.by_listener(trigger).filter_map do |task|
       next if stopped
-      ::Jarvis.log("\e[35m#{task.listener}")
       ran = nil
       begin
         ran = task.match_run(trigger, trigger_data) && task
