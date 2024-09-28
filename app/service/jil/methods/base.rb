@@ -24,7 +24,8 @@ class Jil::Methods::Base
 
   def parse_unwrap_string(arg)
     unwrap = arg[1..-2]
-    unescaped = unwrap.gsub(/\\+/) { |f| "\\"*(f.length-1) }
+    escaped = unwrap.gsub(/\\n/, "\\\\\n") # Raw new lines from textareas
+    unescaped = escaped.gsub(/\\+/) { |f| "\\"*(f.length-1) }
     unescaped.gsub(/\#\{\s*(.*?)\s*\}/) { |found|
       @jil.cast(token_val(Regexp.last_match[1]), :String)
     }
