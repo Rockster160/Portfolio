@@ -28,9 +28,7 @@ class Jil::Methods::String < Jil::Methods::Base
       else md.to_a.first.presence
       end
     when :split
-      # Bunch of hackery here to properly split by newlines
-      # gsub to fix the double escape, but multi line strings are still using an escaped newline
-      token_val(line.objname).split(to_regex(evalarg(line.arg).gsub("\\\\n", "\\n")))
+      token_val(line.objname).split(to_regex(evalarg(line.arg)))
     else
       if line.objname.match?(/^[A-Z]/)
         send(line.methodname, string_or_regex(token_val(line.objname)), *evalargs(line.args))

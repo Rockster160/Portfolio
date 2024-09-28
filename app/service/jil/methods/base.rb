@@ -24,12 +24,7 @@ class Jil::Methods::Base
 
   def parse_unwrap_string(arg)
     unwrap = arg[1..-2]
-    tz = NewTokenizer.new(unwrap)
-    tz_unescaped = tz.tokenized_text.gsub(/\\+\"/) { |f|
-      next f unless f.length.even?
-      "\\"*(f.length-2) + "\""
-    }
-    unescaped = tz.untokenize(tz_unescaped)
+    unescaped = unwrap.gsub(/\\+/) { |f| "\\"*(f.length-1) }
     unescaped.gsub(/\#\{\s*(.*?)\s*\}/) { |found|
       @jil.cast(token_val(Regexp.last_match[1]), :String)
     }

@@ -107,23 +107,43 @@ RSpec.describe Jil::Methods::String do
           expect(ctx[:output]).to eq([])
         end
       end
+
+      context "with regex" do
+        let(:code) {
+          <<-JIL
+            na887 = String.new(\"[Backyard] has detected a person  2024/09/27 11:48:28\")::String
+            na885 = na887.match(\"/\\\\[?(\\\\w+)\\\\]? has detected (?:an? )?(\\\\w+)/i\")::Array
+          JIL
+        }
+
+        it "stores the string" do
+          expect_successful_jil
+          expect(ctx[:vars]).to match_hash({
+            na887: { class: :String, value: "[Backyard] has detected a person  2024/09/27 11:48:28" },
+            na885: { class: :Array, value: ["[Backyard] has detected a person","Backyard","person"] },
+          })
+          expect(ctx[:output]).to eq([])
+        end
+      end
     end
 
     context "scan" do
-      let(:code) {
-        <<-JIL
-          na887 = String.new(\"Hello, world!\")::String
-          na885 = na887.scan(\"Hello\")::Array
-        JIL
-      }
+      context "with text" do
+        let(:code) {
+          <<-JIL
+            na887 = String.new(\"Hello, world!\")::String
+            na885 = na887.scan(\"Hello\")::Array
+          JIL
+        }
 
-      it "stores the string" do
-        expect_successful_jil
-        expect(ctx[:vars]).to match_hash({
-          na887: { class: :String, value: "Hello, world!" },
-          na885: { class: :Array, value: ["Hello"] },
-        })
-        expect(ctx[:output]).to eq([])
+        it "stores the string" do
+          expect_successful_jil
+          expect(ctx[:vars]).to match_hash({
+            na887: { class: :String, value: "Hello, world!" },
+            na885: { class: :Array, value: ["Hello"] },
+          })
+          expect(ctx[:output]).to eq([])
+        end
       end
     end
 
