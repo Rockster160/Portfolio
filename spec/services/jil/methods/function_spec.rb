@@ -86,5 +86,39 @@ RSpec.describe Jil::Methods::Global do
         expect(ctx[:output]).to eq(["Good morning, Rocco! - Good evening, Rocco!"])
       end
     end
+
+    context "with content block" do
+      let(:fn_call) {
+        <<-JIL
+          nc783 = Custom.VerifyGarage("open", {
+            v8cc4 = Global.print("Garage is Open!")::String
+            g087a = Global.command("say Currently open!")::String
+          })::Any
+        JIL
+      }
+      let(:code) {
+        <<-JIL
+          n6aef = Global.params()::Array
+          state = n6aef.first()::String
+          current = Global.get_cache("garage", "state")::String
+          o4720 = Global.if({
+            ta7ad = Boolean.compare(state, "==", current)::Boolean
+          }, {
+            x4fac = n6aef.last()::Any
+          }, {})::Any
+        JIL
+      }
+
+      it "only executes the innard block when called by the function" do
+        expect_successful_jil
+
+        # set garage to open
+        # call
+        # verify output
+        # set garage to closed
+        # call
+        # verify NO output
+      end
+    end
   end
 end

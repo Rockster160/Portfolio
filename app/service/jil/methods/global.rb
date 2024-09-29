@@ -101,6 +101,10 @@ class Jil::Methods::Global < Jil::Methods::Base
     ::Jil::Executor.trigger(@jil.user, scope, data)
   end
 
+  def triggerWith(scope, data)
+    ::Jil::Executor.trigger(@jil.user, scope, @jil.cast(data, :Hash))
+  end
+
   # def import
   # end
 
