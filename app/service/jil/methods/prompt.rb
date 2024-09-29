@@ -61,7 +61,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     {
       type: :choices,
       question: text,
-      default: default,
+      selected: selected,
       choices: options,
     }
   end
