@@ -93,6 +93,6 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   end
 
   def prompts
-    @prompts ||= @jil.user.prompts.order(timestamp: :desc).page(1).per(50)
+    @prompts ||= @jil.user.prompts.order(created_at: :desc).page(1).per(50)
   end
 end

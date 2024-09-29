@@ -1,5 +1,9 @@
 class ProxyRequest
 
+  def self.local_ping
+    Api.post("#{DataStorage[:local_ip]}:3142/test")
+  end
+
   def self.execute(data)
     new.execute(data)
   end
