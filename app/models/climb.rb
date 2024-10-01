@@ -23,6 +23,6 @@ class Climb < ApplicationRecord
   end
 
   def score_for(v_index)
-    ::Calculator.fibonacci(v_index+2)
+    ::Calculator.fibonacci(v_index.to_i+2)
   end
 end
