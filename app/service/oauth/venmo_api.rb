@@ -1,6 +1,7 @@
 # _scripts/oauth/venmo_oauth.rb
 # Used the above to generate keys and everything
 
+# ::Oauth::VenmoApi.new(User.me).get(:me)
 # ::Oauth::VenmoApi.new(User.me).send_by_name("Mom", 20, "🥩")
 # ::Oauth::VenmoApi.new(User.me).send_by_name("B", 1, "Test")
 # ::Oauth::VenmoApi.new(User.me).request_by_name("B", 1, "Test")
@@ -9,6 +10,7 @@ class Oauth::VenmoApi < Oauth::Base
   include ::ActionView::Helpers::NumberHelper
 
   VENMO_BALANCE_ID = 1653332309442560599
+  BANK_ID = 1653333114748928453
   constants(api_url: "https://api.venmo.com/v1")
 
   # ========== Via Name ==========
@@ -38,8 +40,8 @@ class Oauth::VenmoApi < Oauth::Base
   def request_money(id, amount, note) = charge_money(id, -(amount.abs), note)
   # positive = send money
   # negative = request money
-  def charge_money(id, amount, note)
-    return if id.blank?
+  def charge_money(id, amount, note, source: :venmo)
+    return "Venmo: No id found!" if id.blank?
 
     if Rails.env.production?
       post(:payments, {
@@ -49,8 +51,20 @@ class Oauth::VenmoApi < Oauth::Base
         metadata: { quasi_cash_disclaimer_viewed: true },
         audience: :public,
       }.tap { |params|
-        params[:funding_source_id] = VENMO_BALANCE_ID if amount.positive?
-      })
+        if amount.positive?
+          params[:funding_source_id] = source == :venmo ? VENMO_BALANCE_ID : BANK_ID
+        end
+      }).tap { |res|
+        if res&.dig(:data, :error_code).present?
+          if source == :venmo
+            Jarvis.say("Venmo via balance failed. Trying via bank...")
+            return charge_money(id, amount, note, source: :bank)
+          else
+            MeCache.set(:venmo_error, res)
+            return "Failed to Venmo! Error stored in cache(venmo_error)"
+          end
+        end
+      }
     end
 
     message(id, amount, note)
