@@ -35,6 +35,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
       params: @jil.cast(data.presence, :Hash).presence,
       options: questions,
     ).tap { |prompt|
+      ::Jil.trigger(@jil.user, :prompt, { status: :create }.merge(prompt.serialize.except(:response, :task)))
       broadcast_push(prompt) if deliver
     }
   end
