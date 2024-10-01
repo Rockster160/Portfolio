@@ -6,6 +6,11 @@
 # ::Oauth::VenmoApi.new(User.me).send_by_name("B", 1, "Test")
 # ::Oauth::VenmoApi.new(User.me).request_by_name("B", 1, "Test")
 
+# o.get(:me)
+# {:data=>
+#   {:user=>
+#    :balance=>"10.00",
+
 class Oauth::VenmoApi < Oauth::Base
   include ::ActionView::Helpers::NumberHelper
 
