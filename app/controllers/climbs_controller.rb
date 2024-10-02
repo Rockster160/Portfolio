@@ -28,11 +28,21 @@ class ClimbsController < ApplicationController
   def mark
     @climb = current_user.climbs.find_by(created_at: Time.current.all_day)
     @climb ||= current_user.climbs.create(timestamp: Time.current)
+    @climb.scores ||= []
+    @climb.scores << params[:v_index].to_f
+    @climb.save
 
-    @climb.update(data: [@climb.data, params[:v_index]].compact_blank.join(" "))
-    jil_trigger(:climbing, { last: params[:v_index], score: @climb.score, climbs: @climb.data.split(" ") })
+    data = {
+      last: params[:v_index],
+      score: @climb.score,
+      climbs: @climb.scores,
+      recent_avg: current_user.climbs.recent_avg,
+      alltime_avg: current_user.climbs.alltime_avg,
+    }
 
-    render json: { score: @climb.score, climbs: @climb.data.split(" ").length }
+    jil_trigger(:climbing, data)
+
+    render json: data
   end
 
   def update

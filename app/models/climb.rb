@@ -16,6 +16,16 @@ class Climb < ApplicationRecord
 
   scope :not_empty, -> { where.not(data: [nil, ""]) }
 
+  def self.recent_avg
+    order(timestamp: :desc).limit(4).pluck(:total_pennies).then { |a|
+      ((a.any? ? a.sum.to_f / a.length : 0)/100.0).round(2)
+    }
+  end
+
+  def self.alltime_avg
+    (average(:total_pennies).to_f/100.0).round(2)
+  end
+
   def self.best
     all.max_by(&:total_pennies)
   end
