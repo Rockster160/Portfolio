@@ -1,54 +1,95 @@
-$(document).ready(function() {
-  if ($(".ctr-climbs.act-edit").length == 0) { return }
-  // TODO: Store by route, /new, /1, etc...
+document.addEventListener("DOMContentLoaded", function() {
+  if (!document.querySelector(".ctr-climbs.act-edit")) { return }
 
-  let saveClick = false
+  let saveClick = false;
+  let currentSpan = null;
 
-  let getStored = function() {
-    return localStorage.getItem("climb")?.split(" ")
+  const getStored = function() {
+    return localStorage.getItem("climb")?.split(" ");
   }
 
-  let setStored = function(new_store) {
-    localStorage.setItem("climb", new_store)
+  const setStored = function(newStore) {
+    localStorage.setItem("climb", newStore);
   }
 
-  let clearStored = function(new_store) {
-    localStorage.removeItem("climb")
+  const clearStored = function() {
+    localStorage.removeItem("climb");
   }
 
-  $(".numpad-key").click(function() {
-    let input = $(this).text()
-    if (input == "<<") {
-      $(".output span").last().remove()
-    } else {
-      let span = $("<span>").attr("score", $(this).attr("score")).text(input)
-      $(".output").append(span)
+  const output = document.querySelector(".output");
+
+  document.addEventListener("click", function(evt) {
+    const key = evt.target.closest(".numpad-key");
+    if (key) {
+      let input = key.textContent.trim();
+
+      if (input === "<<") {
+        let spans = output.querySelectorAll("span");
+        if (spans.length > 0) {
+          spans[spans.length - 1].remove();
+          currentSpan = null
+        }
+      } else if (input === "%") {
+        if (currentSpan && !currentSpan.textContent.includes("%")) {
+          currentSpan.textContent += "%";
+        }
+      } else if (key.classList.contains("climb-submit")) {
+        output.querySelectorAll(".current").forEach(span => span.classList.remove("current"));
+        currentSpan = null;
+      } else {
+        if (!currentSpan) {
+          currentSpan = document.createElement("span");
+          currentSpan.classList.add("current");
+          currentSpan.setAttribute("score", key.getAttribute("score"));
+          currentSpan.textContent = input;
+          output.appendChild(currentSpan);
+        } else {
+          currentSpan.textContent += input;
+        }
+      }
+
+      output.scrollLeft = output.scrollWidth - output.clientWidth;
+
+      let climbSpans = Array.from(output.querySelectorAll("span"));
+      let climbs = climbSpans.map(span => span.textContent);
+      let scores = climbSpans.map(span => calculateScore(span.textContent, Number(span.getAttribute("score"))));
+
+      if (saveClick) { setStored(climbs.join(" ")); }
+      document.querySelector("#climb_data").value = climbs.join(" ");
+      document.querySelector(".full-score").textContent = scores.reduce((a, b) => a + b, 0);
     }
-    const output = document.querySelector(".output")
-    output.scrollLeft = output.scrollWidth - output.clientWidth
+  });
 
-    let climb_spans = $(".output span").toArray()
+  const scoreFromClimb = function(v_index) {
+    const el = Array.from(document.querySelectorAll(".numpad-key")).find(el => el.innerText.includes(v_index))
+    if (!el) {
+      document.querySelector(".current").classList.add("error")
+      return 0
+    }
 
-    let climbs = climb_spans.map(function(span) { return Number($(span).text()) })
-    let scores = climb_spans.map(function(span) { return Number($(span).attr("score")) })
-
-    if (saveClick) { setStored(climbs.join(" ")) }
-    $("#climb_data").val(climbs.join(" "))
-    $(".full-score").text(scores.sum())
-  })
-
-  // Hacky, just click the button for each rather than having to go look up the scores and such.
-  let prior_climbs = getStored()
-  if (prior_climbs) {
-    prior_climbs.forEach(function(num) {
-      $(`.numpad-key:contains("${num}")`).filter(function() {
-        return $(this).text() == num
-      }).click()
-    })
-    saveClick = true
+    return Number(el.getAttribute("score"))
   }
 
-  $("form").submit(function() {
-    clearStored()
-  })
-})
+  const calculateScore = function(input) {
+    input = String(input)
+    let [score, percentage] = input.split(/[\.\%]/);
+    percentage = percentage?.length > 0 ? Number(`0.${percentage}`) : 1;
+
+    return parseFloat((scoreFromClimb(score) * percentage).toFixed(2));
+  }
+
+  let priorClimbs = getStored();
+  if (priorClimbs) {
+    priorClimbs.forEach(num => {
+      let button = Array.from(document.querySelectorAll(".numpad-key")).find(key => key.textContent.trim() === num);
+      if (button) {
+        button.click();
+      }
+    });
+    saveClick = true;
+  }
+
+  document.querySelector("form").addEventListener("submit", function() {
+    clearStored();
+  });
+});

@@ -1,4 +1,6 @@
 class JilTasksController < ApplicationController
+  before_action :authorize_user
+
   def index
     # @tasks = current_user.jil_tasks.ordered
     @tasks = current_user.jil_tasks.order("last_trigger_at DESC NULLS LAST")

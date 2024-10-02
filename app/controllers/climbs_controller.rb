@@ -26,7 +26,7 @@ class ClimbsController < ApplicationController
   end
 
   def mark
-    @climb = current_user.climbs.find_by(created_at: Time.current.all_day)
+    @climb = current_user.climbs.order(created_at: :desc).find_by(created_at: Time.current.all_day)
     @climb ||= current_user.climbs.create(timestamp: Time.current)
     @climb.add(params[:v_index])
 

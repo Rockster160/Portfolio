@@ -2,8 +2,18 @@
 
 <%= link_to "New Climb", [:new, :climb], class: "btn" %>
 
+<hr>
+<div class="climb-row">
+  <h3>
+    All Time average:
+    <small><%= @climbs.alltime_avg %></small>
+  </h3>
+  <h3>
+    Last 4 session average:
+    <small><%= @climbs.recent_avg(include_current: true) %></small>
+  </h3>
+</div>
 <% if @best_climb %>
-  <hr>
   <div class="climb-row">
     <h3>
       Best:
@@ -17,8 +27,8 @@
       &nbsp;&nbsp;Score: <%= @best_climb.score %>
     </p>
   </div>
-  <hr>
 <% end %>
+<hr>
 
 <% @climbs.each do |climb| %>
   <div class="climb-row">
@@ -32,7 +42,7 @@
       <% end %>
     </h3>
     <p>
-      &nbsp;&nbsp;<%= climb.scores.map { |score| score.to_i == score ? score.to_i : score }.join(" ") %><br>
+      &nbsp;&nbsp;<%= climb.scores.map { |score| score.to_i == score ? score.to_i : score.to_s.gsub(".", "%") }.join(" ") %><br>
       &nbsp;&nbsp;Score: <%= climb.score %>
     </p>
   </div>

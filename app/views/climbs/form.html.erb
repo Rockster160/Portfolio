@@ -16,7 +16,7 @@
 </div>
 
 <div class="output">
-  <% @climb.data&.split(" ")&.each do |go| %>
+  <% @climb.scores.map { |score| score.to_i == score ? score.to_i : score.to_s.gsub(".", "%") }&.each do |go| %>
     <span score="<%= @climb.score_for(go) %>"><%= go %></span>
   <% end %>
 </div>
@@ -25,9 +25,21 @@
 
 <div class="keypad-wrapper">
   <div class="keypad-entry">
-    <% (0..10).each do |t| %>
+    <% (1..3).each do |t| %>
       <div class="numpad-key" score="<%= @climb.score_for(t) %>"><%= t %></div>
     <% end %>
+
+    <% (4..6).each do |t| %>
+      <div class="numpad-key" score="<%= @climb.score_for(t) %>"><%= t %></div>
+    <% end %>
+
+    <% (7..8).each do |t| %>
+      <div class="numpad-key" score="<%= @climb.score_for(t) %>"><%= t %></div>
+    <% end %>
+    <div class="numpad-key">%</div>
+
     <div class="numpad-key">&lt;&lt;</div>
+    <div class="numpad-key" score="<%= @climb.score_for(0) %>"><%= 0 %></div>
+    <div class="numpad-key climb-submit"><%= fa(:check) %></div>
   </div>
 </div>

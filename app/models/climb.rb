@@ -16,15 +16,16 @@ class Climb < ApplicationRecord
 
   scope :not_empty, -> { where("scores IS NOT NULL AND jsonb_array_length(scores) > 0") }
 
-  def self.recent_avg
-    order(timestamp: :desc).limit(5).where.not(total_pennies: nil).pluck(:total_pennies).then { |a|
-      a.shift
+  def self.recent_avg(include_current: false)
+    pull = include_current ? 4 : 5
+    not_empty.order(timestamp: :desc).limit(pull).pluck(:total_pennies).then { |a|
+      a.shift unless include_current
       ((a.any? ? a.sum.to_f / a.length : 0)/100.0).round(2)
     }
   end
 
   def self.alltime_avg
-    (average(:total_pennies).to_f/100.0).round(2)
+    (not_empty.average(:total_pennies).to_f/100.0).round(2)
   end
 
   def self.best
@@ -32,7 +33,7 @@ class Climb < ApplicationRecord
   end
 
   def data=(str)
-    self.scores = str.split(/\s+/).map(&:to_f)
+    self.scores = str.gsub("%", ".").split(/\s+/).map(&:to_f)
     calculate_total
   end
 
@@ -65,7 +66,7 @@ class Climb < ApplicationRecord
   end
 
   def score_for(v_index)
-    v, partial = v_index.to_s.split(".").map(&:to_i)
-    ::Calculator.fibonacci(v+2) * (partial && partial > 0 ? "0.#{partial.to_i}".to_f : 1)
+    v, partial = v_index.to_s.split(/[\.\%]/).map(&:to_i)
+    (::Calculator.fibonacci(v+2) * (partial && partial > 0 ? "0.#{partial.to_i}".to_f : 1)).round(2)
   end
 end
