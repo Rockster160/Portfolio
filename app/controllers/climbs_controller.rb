@@ -28,9 +28,7 @@ class ClimbsController < ApplicationController
   def mark
     @climb = current_user.climbs.find_by(created_at: Time.current.all_day)
     @climb ||= current_user.climbs.create(timestamp: Time.current)
-    @climb.scores ||= []
-    @climb.scores << params[:v_index].to_f
-    @climb.save
+    @climb.add(params[:v_index])
 
     data = {
       last: params[:v_index],

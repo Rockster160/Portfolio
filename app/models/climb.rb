@@ -4,7 +4,7 @@
 #
 #  id            :bigint           not null, primary key
 #  data          :text
-#  scores        :json
+#  scores        :jsonb
 #  timestamp     :datetime
 #  total_pennies :integer
 #  created_at    :datetime         not null
@@ -14,10 +14,11 @@
 class Climb < ApplicationRecord
   belongs_to :user
 
-  scope :not_empty, -> { where.not(data: [nil, ""]) }
+  scope :not_empty, -> { where("scores IS NOT NULL AND jsonb_array_length(scores) > 0") }
 
   def self.recent_avg
-    order(timestamp: :desc).limit(4).pluck(:total_pennies).then { |a|
+    order(timestamp: :desc).limit(5).where.not(total_pennies: nil).pluck(:total_pennies).then { |a|
+      a.shift
       ((a.any? ? a.sum.to_f / a.length : 0)/100.0).round(2)
     }
   end
@@ -28,6 +29,13 @@ class Climb < ApplicationRecord
 
   def self.best
     all.max_by(&:total_pennies)
+  end
+
+  def add(val)
+    self.scores ||= []
+    self.scores << val.to_f
+    calculate_total
+    save!
   end
 
   def total
@@ -53,6 +61,6 @@ class Climb < ApplicationRecord
 
   def score_for(v_index)
     v, partial = v_index.to_s.split(".").map(&:to_i)
-    ::Calculator.fibonacci(v+2) * (partial || 1)
+    ::Calculator.fibonacci(v+2) * (partial && partial > 0 ? "0.#{partial.to_i}".to_f : 1)
   end
 end
