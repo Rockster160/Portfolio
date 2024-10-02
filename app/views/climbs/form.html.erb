@@ -16,7 +16,7 @@
 </div>
 
 <div class="output">
-  <% @climb.scores.map { |score| score.to_i == score ? score.to_i : score.to_s.gsub(".", "%") }&.each do |go| %>
+  <% @climb.scores&.map { |score| score.to_i == score ? score.to_i : score.to_s.gsub(".", "%") }&.each do |go| %>
     <span score="<%= @climb.score_for(go) %>"><%= go %></span>
   <% end %>
 </div>
