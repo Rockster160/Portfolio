@@ -40,6 +40,10 @@ module ApplicationHelper
     "<i class=\"fa fa-#{type}\"></i>".html_safe
   end
 
+  def fa(type)
+    "<i class=\"fa fa-#{type.to_s.gsub("_", "-")}\"></i>".html_safe
+  end
+
   def svg(svg_path, options={})
     Rails.cache.fetch("#{svg_path}.#{options.to_json}") do
       options[:nocomment] = true if options[:nocomment].nil?

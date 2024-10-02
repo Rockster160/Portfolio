@@ -31,16 +31,21 @@ class Climb < ApplicationRecord
     all.max_by(&:total_pennies)
   end
 
+  def data=(str)
+    self.scores = str.split(/\s+/).map(&:to_f)
+    calculate_total
+  end
+
   def add(val)
     self.scores ||= []
-    self.scores << val.to_f
+    self.scores << val.to_f.round(2).then { |n| n.to_i == n ? n.to_i : n }
     calculate_total
     save!
   end
 
   def total
     if total_pennies.present?
-      (total_pennies/100.0).then { |n| n.to_i == n ? n.to_i : n}
+      (total_pennies/100.0).then { |n| n.to_i == n ? n.to_i : n }
     else
       calculate_total
     end

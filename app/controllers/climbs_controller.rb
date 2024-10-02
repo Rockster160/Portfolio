@@ -34,8 +34,8 @@ class ClimbsController < ApplicationController
       last: params[:v_index],
       score: @climb.score,
       climbs: @climb.scores,
-      recent_avg: current_user.climbs.recent_avg,
-      alltime_avg: current_user.climbs.alltime_avg,
+      recent_avg: current_user.climbs.recent_avg.round(2),
+      alltime_avg: current_user.climbs.alltime_avg.round(2),
     }
 
     jil_trigger(:climbing, data)
