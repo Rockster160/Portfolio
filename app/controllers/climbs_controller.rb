@@ -20,29 +20,23 @@ class ClimbsController < ApplicationController
   end
 
   def create
-    Time.use_zone(current_user.timezone) {
-      @climb = current_user.climbs.create(climb_params)
-    }
+    @climb = current_user.climbs.create(climb_params)
 
     redirect_to :climbs
   end
 
   def mark
-    Time.use_zone(current_user.timezone) {
-      @climb = current_user.climbs.find_by(created_at: Time.current.all_day)
-      @climb ||= current_user.climbs.create(timestamp: Time.current)
+    @climb = current_user.climbs.find_by(created_at: Time.current.all_day)
+    @climb ||= current_user.climbs.create(timestamp: Time.current)
 
-      @climb.update(data: [@climb.data, params[:v_index]].compact_blank.join(" "))
-      jil_trigger(:climbing, { last: params[:v_index], score: @climb.score, climbs: @climb.data.split(" ") })
-    }
+    @climb.update(data: [@climb.data, params[:v_index]].compact_blank.join(" "))
+    jil_trigger(:climbing, { last: params[:v_index], score: @climb.score, climbs: @climb.data.split(" ") })
 
     render json: { score: @climb.score, climbs: @climb.data.split(" ").length }
   end
 
   def update
-    Time.use_zone(current_user.timezone) {
-      @climb = current_user.climbs.find(params[:id]).update(climb_params)
-    }
+    @climb = current_user.climbs.find(params[:id]).update(climb_params)
 
     redirect_to :climbs
   end

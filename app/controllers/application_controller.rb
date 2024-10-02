@@ -11,6 +11,8 @@ class ApplicationController < ActionController::Base
   before_action :show_guest_banner, if: :guest_account?
   prepend_before_action :block_banned_ip
 
+  around_action :use_timezone
+
   rescue_from ::ActiveRecord::RecordNotFound, with: :rescue_login
 
   if Rails.env.production?
@@ -86,5 +88,11 @@ class ApplicationController < ActionController::Base
 
   def block_banned_ip
     head :unauthorized if BannedIp.where(ip: current_ip, whitelisted: false).any?
+  end
+
+  def use_timezone
+    Time.use_zone(current_user&.timezone || User.timezone) do
+      yield if block_given?
+    end
   end
 end
