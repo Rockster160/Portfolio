@@ -34,11 +34,10 @@ class Jil::Methods::Numeric < Jil::Methods::Base
     Dentaku(text)
   end
 
-  # def rand(min, max, sig_figs)
-  #   random_number = min + rand * (max - min)
-  #   scale_factor = 10**sig_figs
-  #   (random_number * scale_factor).round / scale_factor.to_f
-  # end
+  def random(min, max, decimals)
+    random_number = min + rand * (max - min)
+    random_number.round(decimals)
+  end
 end
 
 # [Numeric]::number
