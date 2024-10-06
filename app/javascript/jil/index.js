@@ -129,6 +129,7 @@ document.addEventListener("click", function(evt) {
           if (method) {
             return {
               text: opt,
+              upcoming: method.upcoming,
               callback: () => {
                 let statement = new Statement({
                   type: method.type,
@@ -154,6 +155,7 @@ document.addEventListener("click", function(evt) {
           }
           return {
             text: `${method.text}`,
+            upcoming: method.upcoming,
             callback: () => {
               let statement = new Statement({
                 type: method.type,

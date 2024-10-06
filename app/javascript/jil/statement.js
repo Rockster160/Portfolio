@@ -439,6 +439,7 @@ export default class Statement {
       ...[...Schema.types["Object"].instances, ...Schema.instancesFor(this.returntype)].map(method => {
         return {
           text: `#${method.name}`,
+          upcoming: method.upcoming,
           callback: () => {
             (new Statement({
               reference: this,

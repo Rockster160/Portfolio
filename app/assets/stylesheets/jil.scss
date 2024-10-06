@@ -71,6 +71,11 @@ body {
       border-radius: 5px;
       padding: 2px 5px;
       list-style-type: none;
+      color: var(--input-bg);
+
+      &.upcoming {
+        color: var(--syntax-base);
+      }
     }
 
     li:not(:has(ul)).dropdown-hovered-item {

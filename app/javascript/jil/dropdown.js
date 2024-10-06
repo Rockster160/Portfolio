@@ -76,6 +76,7 @@ export default class Dropdown {
         })
         li.appendChild(nestedUl)
       } else {
+        if (opt.upcoming) { li.classList.add("upcoming") }
         if (opt.text) { li.innerText = opt.text }
         if (opt.icon) { li.appendChild(opt.icon) }
         if (opt.title) { li.title = opt.title }
