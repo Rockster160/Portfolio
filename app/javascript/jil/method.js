@@ -1,4 +1,3 @@
-import sortable from "./sortable.js"
 import { field, element, select } from "./form_helpers.js"
 import Tokenizer from "./tokenizer.js"
 import Arg from "./arg.js"

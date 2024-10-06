@@ -242,6 +242,19 @@ input[type=submit] {
   }
 }
 
+.sortable-ghost {
+  max-height: 10px;
+  min-height: 10px;
+  background: $base-blue;
+  border: 2px solid $grey-blue;
+  border-radius: 8px;
+  margin: 5px 0;
+
+  * {
+    display: none;
+  }
+}
+
 .wrapper {
   margin: 0 auto;
   width: 100%;
@@ -300,7 +313,7 @@ input[type=submit] {
 
           &.open {
             padding-bottom: 12px;
-            min-height: 50px;
+            min-height: 20px;
 
             .content-dropdown.below {
               position: absolute;
