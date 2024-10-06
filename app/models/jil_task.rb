@@ -40,6 +40,18 @@ class JilTask < ApplicationRecord
     safe_trigger = Regexp.escape(listener)
     where("listener ~* '(^|\\s)#{safe_trigger}(~|:|$)'")
   }
+  scope :by_code, ->(code) {
+    ilike(code: code)
+  }
+
+  def self.rename_function(from, to, &block)
+    # It would be much nicer to just take in the function names, break the tasks down with tokenizer
+    # Then find the task names and replace them - passing the args to a block, which would allow
+    #   moving the arg order or anything like that.
+    by_code("%#{from}%").find_each do |task|
+      task.update(code: task.code.gsub(from, to))
+    end
+  end
 
   def self.func_regex
     /^\s*function(?:\((?<args>.*)\))(?:::(?<cast>[A-Z][_0-9A-Za-z|]*))?\s*$/i

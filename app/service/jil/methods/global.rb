@@ -16,7 +16,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     when :return
       @jil.ctx[:state] = :return
       @jil.ctx[:return_val] = evalarg(line.arg)
-    when :if then logic_if(*line.args)
+    when :if, :ternary then logic_if(*line.args)
     when :print
       evalarg(line.arg).tap { |str|
         @jil.ctx[:output] << ::Jil::Methods::String.new(@jil, @ctx).cast(str).gsub(/^"|"$/, "")
@@ -66,6 +66,10 @@ class Jil::Methods::Global < Jil::Methods::Base
     ::Jarvis.command(@jil.user, text)
   end
 
+  def commandAt(date, text)
+    ::JarvisWorker.perform_at(date, @jil.user, text)
+  end
+
   def broadcast_websocket(channel, data)
     ::SocketChannel.send_to(@jil.user, channel, data)
   end
@@ -97,16 +101,17 @@ class Jil::Methods::Global < Jil::Methods::Base
     }
   end
 
-  def trigger(scope, data)
+  def triggerNow(scope, data)
     ::Jil::Executor.trigger(@jil.user, scope, data)
   end
 
-  def triggerWith(scope, data)
-    ::Jil::Executor.trigger(@jil.user, scope, @jil.cast(data, :Hash))
+  def triggerWith(scope, date, data)
+    ::Jil::Executor.async_trigger(@jil.user, scope, data, at: date)
   end
 
-  # def import
-  # end
+  def trigger(scope, date, data)
+    ::Jil::Executor.async_trigger(@jil.user, scope, @jil.cast(data, :Hash), at: date)
+  end
 
   # times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
 end

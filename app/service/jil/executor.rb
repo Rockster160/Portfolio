@@ -1,7 +1,7 @@
 class Jil::Executor
   attr_accessor :user, :ctx, :lines
 
-  def self.async_trigger(user, trigger, trigger_data={})
+  def self.async_trigger(user, trigger, trigger_data={}, at: nil)
     user_ids = (
       case user
       when ::User then [user.id]
@@ -16,7 +16,11 @@ class Jil::Executor
       trigger_data = {}
     end
 
-    ::JilTriggerWorker.perform_async(user_ids, trigger, trigger_data)
+    if at.blank?
+      ::JilTriggerWorker.perform_async(user_ids, trigger, trigger_data)
+    else
+      ::JilTriggerWorker.perform_at(at, user_ids, trigger, trigger_data)
+    end
   end
 
   def self.trigger(user, trigger, trigger_data={})
