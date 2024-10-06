@@ -60,7 +60,7 @@
   !#pi(TAB "π" TAB)
   !#e(TAB "e" TAB)
   !#inf()
-  !#rand(Numeric:min Numeric:max Numeric?:figures)
+  #random(Numeric(0):min "-" Numeric(10):max TAB "Decimal:" Numeric?(0):figures)
   #op(Numeric ["+" "-" "*" "/" "%" "^log"] Numeric)
   #evaluate(Text)
   .round(Numeric(0))
@@ -218,6 +218,22 @@
   .html::String
   .timestamp::Date
   .archive(Boolean(true))::Boolean
+[Contact]
+  #find(String|Numeric)
+  #search(String)::Array
+  #create(content(ContactData))
+  .name::String
+  .nickname::String
+  .phone::String
+  .data::Hash
+  .update!(content(ContactData))
+  .get(String)::Any
+  .set!(String " : " Any)
+*[ContactData]
+  #name(String)
+  #nickname(String)
+  #phone(String)
+  #data(content(Hash))
 [Monitor]
   #loading(String:Name Boolean(true))
   #broadcast(String:Name content(MonitorData) "Loading?" Boolean(false))

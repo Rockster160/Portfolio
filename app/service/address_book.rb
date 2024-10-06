@@ -46,20 +46,7 @@ class AddressBook
   end
 
   def contact_by_name(name)
-    name = name.to_s.downcase
-    return unless name.present?
-    # Exact match (no casing)
-    found = contacts.find_by("name ILIKE ?", name)
-    found ||= contacts.find_by("nickname ILIKE ?", name)
-    # Exact match without 's and/or house|place
-    found ||= contacts.find_by("name ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
-    found ||= contacts.find_by("nickname ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
-    # Match without special chars
-    found ||= contacts.find_by("REGEXP_REPLACE(name, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
-    found ||= contacts.find_by("REGEXP_REPLACE(nickname, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
-    # Match with only letters
-    found ||= contacts.find_by("REGEXP_REPLACE(name, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
-    found ||= contacts.find_by("REGEXP_REPLACE(nickname, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
+    contacts.name_find(name)
   end
 
   def loc_from_address(address)

@@ -41,6 +41,12 @@ class Jil::Methods::Base
     @jil.ctx&.dig(:vars, token.to_sym, :value)
   end
 
+  def token_class(token)
+    return @jil.ctx&.dig(:vars, token.to_sym, :class) if @jil.ctx&.dig(:vars)&.key?(token.to_sym)
+
+    token
+  end
+
   def base_execute(line)
     case line.methodname
     when :new then respond_to?(:init) ? init(line) : cast(evalarg(line.arg))

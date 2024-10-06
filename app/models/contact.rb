@@ -4,6 +4,7 @@
 #
 #  id               :bigint           not null, primary key
 #  address          :text
+#  data             :jsonb
 #  lat              :float
 #  lng              :float
 #  name             :text
@@ -19,11 +20,40 @@ class Contact < ApplicationRecord
   belongs_to :user
   has_many :addresses
 
+  search_terms :id, :name, :nickname, :phone
+
   serialize :raw, coder: ::BetterJsonSerializer
 
   validates_uniqueness_of :apple_contact_id, allow_nil: true
 
   after_save :store_primary_address
+
+  def self.name_find(name)
+    name = name.to_s.downcase
+    return unless name.present?
+    # Exact match (no casing)
+    found = find_by("name ILIKE ?", name)
+    found ||= find_by("nickname ILIKE ?", name)
+    # Exact match without 's and/or house|place
+    found ||= find_by("name ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
+    found ||= find_by("nickname ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
+    # Match without special chars
+    found ||= find_by("REGEXP_REPLACE(name, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
+    found ||= find_by("REGEXP_REPLACE(nickname, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
+    # Match with only letters
+    found ||= find_by("REGEXP_REPLACE(name, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
+    found ||= find_by("REGEXP_REPLACE(nickname, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
+  end
+
+  def serialize
+    {
+      id: id,
+      name: name,
+      nickname: nickname,
+      phone: phone,
+      data: data,
+    }
+  end
 
   def primary_address
     addresses.find_by(primary: true) || addresses.first
