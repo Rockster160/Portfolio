@@ -193,7 +193,6 @@ document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-dup")) {
     console.log("dup")
     let statement = Statement.from(evt.target)
-    debugger
     statement?.duplicate()
     return
   }

@@ -22,6 +22,7 @@ class Jil::Methods::Global < Jil::Methods::Base
         @jil.ctx[:output] << ::Jil::Methods::String.new(@jil, @ctx).cast(str).gsub(/^"|"$/, "")
       }
     when :presence then evalarg(line.arg).presence
+    when :block then evalargs(line.arg).last
     when :comment then evalarg(line.arg)
     when :loop then @jil.enumerate_loop { |ctx| evalarg(line.arg, ctx) }
     when :dowhile
