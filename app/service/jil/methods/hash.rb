@@ -11,6 +11,8 @@ class Jil::Methods::Hash < Jil::Methods::Base
           item.tap { |k,v| obj[k] = v }
         elsif item.is_a?(::Array)
           item
+        elsif item.is_a?(::Hash)
+          obj.merge!(item)
         end
       })
     else

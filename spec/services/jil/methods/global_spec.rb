@@ -209,7 +209,7 @@ RSpec.describe Jil::Methods::Global do
             })::Keyval
           })::Keyval
         })::Hash
-        z54c9 = Global.trigger("magic", e2e54)::Numeric
+        z54c9 = Global.triggerNow("magic", e2e54)::Numeric
       JIL
     }
 
