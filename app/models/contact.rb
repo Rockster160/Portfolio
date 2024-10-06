@@ -9,15 +9,18 @@
 #  lng              :float
 #  name             :text
 #  nickname         :text
+#  permit_relay     :boolean          default(TRUE)
 #  phone            :text
 #  raw              :jsonb
 #  created_at       :datetime         not null
 #  updated_at       :datetime         not null
 #  apple_contact_id :text
+#  friend_id        :bigint
 #  user_id          :bigint
 #
 class Contact < ApplicationRecord
   belongs_to :user
+  belongs_to :friend, optional: true, class_name: "User"
   has_many :addresses
 
   search_terms :id, :name, :nickname, :phone
@@ -28,21 +31,29 @@ class Contact < ApplicationRecord
 
   after_save :store_primary_address
 
+  def self.friends
+    joins("LEFT JOIN users AS friends ON friends.id = contacts.friend_id")
+  end
+
   def self.name_find(name)
     name = name.to_s.downcase
     return unless name.present?
     # Exact match (no casing)
     found = find_by("name ILIKE ?", name)
     found ||= find_by("nickname ILIKE ?", name)
+    found ||= friends.find_by("friends.username ILIKE ?", name)
     # Exact match without 's and/or house|place
     found ||= find_by("name ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
     found ||= find_by("nickname ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
+    found ||= friends.find_by("friends.username ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
     # Match without special chars
     found ||= find_by("REGEXP_REPLACE(name, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
     found ||= find_by("REGEXP_REPLACE(nickname, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
+    found ||= friends.find_by("REGEXP_REPLACE(friends.username, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
     # Match with only letters
     found ||= find_by("REGEXP_REPLACE(name, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
     found ||= find_by("REGEXP_REPLACE(nickname, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
+    found ||= friends.find_by("REGEXP_REPLACE(friends.username, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
   end
 
   def serialize

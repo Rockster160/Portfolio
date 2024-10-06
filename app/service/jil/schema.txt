@@ -32,7 +32,7 @@
   #trigger(String TAB Date content(Keyval|Hash [Keyval.new]))::Numeric
   #triggerWith(String TAB Date BR "" TAB Hash)::Numeric
   #triggerNow(String TAB Hash)::Numeric
-  !#relay(Contact|String Hash) # String is contact name/alias
+  #relay(Contact|String content(Hash|Keyval [Keyval.new]))::None # String is contact name/username/alias/id
   #dowhile(enum_content)::Numeric
   #loop(enum_content)::Any
   #times(Numeric enum_content)::Numeric

@@ -56,8 +56,16 @@ class ApplicationRecord < ActiveRecord::Base
     (all.instance_variable_get(:@assigned_data) || {})[key]
   end
 
-  scope :search, ->(q) { ilike(search_indexed("%#{q}%"), :OR) }
-  scope :unsearch, ->(q) { not_ilike(search_indexed("%#{q}%"), :AND) }
+  scope :search, ->(q) {
+    next none if search_terms.blank?
+
+    ilike(search_indexed("%#{q}%"), :OR)
+  }
+  scope :unsearch, ->(q) {
+    next none if search_terms.blank?
+
+    not_ilike(search_indexed("%#{q}%"), :AND)
+  }
   scope :query, ->(q) {
     built = search_scope
     data = q.is_a?(Hash) ? q : SearchParser.call(
