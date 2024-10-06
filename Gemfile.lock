@@ -163,6 +163,9 @@ GEM
     connection_pool (2.4.1)
     crass (1.0.6)
     date (3.3.3)
+    dentaku (3.5.4)
+      bigdecimal
+      concurrent-ruby
     diff-lcs (1.5.1)
     docile (1.4.0)
     domain_name (0.5.20190701)
@@ -524,6 +527,7 @@ DEPENDENCIES
   chroma (= 0.2.0)
   chronic (= 0.10.2)
   coffee-rails (= 5.0.0)
+  dentaku
   dotenv-rails (= 2.7.6)
   ed25519
   erubis (= 2.7.0)

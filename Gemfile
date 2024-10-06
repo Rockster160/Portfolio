@@ -68,6 +68,8 @@ gem "bcrypt_pbkdf"
 # / cap dependencies
 # gem "pretty_logger", path: "../pretty_logger"
 gem "pretty_logger", "1.4.6"
+# Jil Parser gems
+gem "dentaku"
 
 group :development, :test do
   gem "capistrano",         require: false

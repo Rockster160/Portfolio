@@ -30,6 +30,10 @@ class Jil::Methods::Numeric < Jil::Methods::Base
     cast(val1).send(operator, cast(val2))
   end
 
+  def evaluate(text)
+    Dentaku(text)
+  end
+
   # def rand(min, max, sig_figs)
   #   random_number = min + rand * (max - min)
   #   scale_factor = 10**sig_figs

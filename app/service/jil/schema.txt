@@ -62,6 +62,7 @@
   !#inf()
   !#rand(Numeric:min Numeric:max Numeric?:figures)
   #op(Numeric ["+" "-" "*" "/" "%" "^log"] Numeric)
+  #evaluate(Text)
   .round(Numeric(0))
   .floor
   .ceil
