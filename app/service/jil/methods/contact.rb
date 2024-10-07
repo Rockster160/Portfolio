@@ -31,10 +31,10 @@ class Jil::Methods::Contact < Jil::Methods::Base
 
   def execute(line)
     case line.methodname
-    when :id, :name, :nickname, :username, :phone, :data
+    when :id, *PERMIT_ATTRS
       case token_class(line.objname)
       when :Contact
-        token_val(line.objname)[line.methodname.to_s.underscore.gsub(/[^\w]/, "")]
+        token_val(line.objname)[line.methodname.to_s.underscore.gsub(/[^\w]/, "").to_sym]
       when :ContactData
         send(line.methodname, *evalargs(line.args))
       end
