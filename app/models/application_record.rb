@@ -77,6 +77,8 @@ class ApplicationRecord < ActiveRecord::Base
       not_exact: "!::",
       exact: "::",
       similar: "~",
+      before: "before:",
+      after: "after:",
       aliases: {
         ":": "=",
       }
@@ -88,6 +90,9 @@ class ApplicationRecord < ActiveRecord::Base
 
     data.dig(:props, :contains, :terms)&.each { |word| built = built.search(word) }
     data.dig(:props, :exact, :terms)&.each { |word| built = built.ilike(search_indexed(word)) }
+
+    data.dig(:props, :before, :terms)&.each { |word| built = built.before(word) }
+    data.dig(:props, :after, :terms)&.each { |word| built = built.after(word) }
 
     data.dig(:props, :not_contains, :terms)&.each { |word| built = built.unsearch(word) }
     data.dig(:props, :not_exact, :terms)&.each { |word| built = built.not_ilike(search_indexed(word)) }
@@ -104,6 +109,16 @@ class ApplicationRecord < ActiveRecord::Base
       built = built.where("(#{sql_chunks.join(" OR ")})")
     end
     built
+  }
+  scope :before, ->(time) {
+    key = column_names.include?("timestamp") ? :timestamp : :created_at
+    t = Time.zone.parse(time)
+    where(key => ..t)
+  }
+  scope :after, ->(time) {
+    key = column_names.include?("timestamp") ? :timestamp : :created_at
+    t = Time.zone.parse(time)
+    where(key => t..)
   }
 
   def new(attrs={})
