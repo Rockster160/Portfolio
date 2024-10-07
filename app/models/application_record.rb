@@ -111,11 +111,13 @@ class ApplicationRecord < ActiveRecord::Base
     built
   }
   scope :before, ->(time) {
+    # TODO: Have a rescue here for date parsing. If date parse fails, do not apply the filter.
     key = column_names.include?("timestamp") ? :timestamp : :created_at
     t = Time.zone.parse(time)
     where(key => ..t)
   }
   scope :after, ->(time) {
+    # TODO: Have a rescue here for date parsing. If date parse fails, do not apply the filter.
     key = column_names.include?("timestamp") ? :timestamp : :created_at
     t = Time.zone.parse(time)
     where(key => t..)

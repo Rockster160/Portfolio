@@ -26,7 +26,7 @@ class Jil::Methods::Contact < Jil::Methods::Base
     when :id, :name, :nickname, :phone, :data
       case token_class(line.objname)
       when :Contact
-        token_val(line.objname)[line.methodname]
+        token_val(line.objname)[line.methodname.to_s.underscore.gsub(/[^\w]/, "")]
       when :ContactData
         send(line.methodname, *evalargs(line.args))
       end
@@ -64,6 +64,14 @@ class Jil::Methods::Contact < Jil::Methods::Base
 
   def nickname(text)
     { nickname: text }
+  end
+
+  def username(text)
+    { username: text }
+  end
+
+  def permitRelay?(bool)
+    { permit_relay: bool }
   end
 
   def phone(text)

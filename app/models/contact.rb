@@ -61,6 +61,8 @@ class Contact < ApplicationRecord
       id: id,
       name: name,
       nickname: nickname,
+      username: username,
+      permit_relay: friend_id.presence && permit_relay,
       phone: phone,
       data: data,
     }

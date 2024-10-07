@@ -224,6 +224,8 @@
   #create(content(ContactData))
   .name::String
   .nickname::String
+  .username::String
+  .permitRelay?::Boolean
   .phone::String
   .data::Hash
   .update!(content(ContactData))
@@ -232,6 +234,8 @@
 *[ContactData]
   #name(String)
   #nickname(String)
+  #username(String)
+  #permitRelay?(Boolean)
   #phone(String)
   #data(content(Hash))
 [Monitor]
