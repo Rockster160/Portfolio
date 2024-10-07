@@ -74,6 +74,14 @@ class Contact < ApplicationRecord
     @primary_address = new_address
   end
 
+  def username
+    friend&.username
+  end
+
+  def username=(new_username)
+    self.friend_id = User.find_by(username: new_username)&.id
+  end
+
   def resync
     return if raw.blank?
 

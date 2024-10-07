@@ -61,6 +61,7 @@ class ContactsController < ApplicationController
     params.require(:contact).permit(
       :name,
       :nickname,
+      :username,
       :phone,
     )
   end
