@@ -9,7 +9,8 @@ class IndexController < ApplicationController
     from_user = current_user || User.find_by(phone: squish_number)
 
     if from_user.present?
-      return if mom_opening_garage(from_user, body)
+      ::Jil.trigger_async(from_user, :sms, { from: from_number, to: params["To"], body: body })
+      return head :ok if mom_opening_garage(from_user, body)
 
       response, data = Jarvis.command(from_user, body)
 
