@@ -93,7 +93,7 @@ class Jil::Methods::Global < Jil::Methods::Base
       end
     )
     body = res.body
-    body = ::JSON.parse(body) rescue body if res.headers[:content_type].match?(/json/)
+    body = ::JSON.parse(body) rescue body if res.headers[:content_type]&.match?(/json/)
 
     {
       code: res.code,
