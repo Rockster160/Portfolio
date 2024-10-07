@@ -1,4 +1,6 @@
 class Jil::Methods::Contact < Jil::Methods::Base
+  PERMIT_ATTRS = [:name, :nickname, :username, :permit_relay, :phone, :data]
+
   def cast(value)
     case value
     when ::Contact then value.serialize
@@ -12,18 +14,24 @@ class Jil::Methods::Contact < Jil::Methods::Base
   #   #create(content(ContactData))
   #   .name::String
   #   .nickname::String
+  #   .username::String
+  #   .permitRelay?::Boolean
   #   .phone::String
   #   .data::Hash
   #   .update!(content(ContactData))
+  #   .get(String)::Any
+  #   .set!(String " : " Any)
   # *[ContactData]
-  #   #name(String:First String:Last)
+  #   #name(String)
   #   #nickname(String)
+  #   #username(String)
+  #   #permitRelay?(Boolean)
   #   #phone(String)
   #   #data(content(Hash))
 
   def execute(line)
     case line.methodname
-    when :id, :name, :nickname, :phone, :data
+    when :id, :name, :nickname, :username, :phone, :data
       case token_class(line.objname)
       when :Contact
         token_val(line.objname)[line.methodname.to_s.underscore.gsub(/[^\w]/, "")]
@@ -46,6 +54,12 @@ class Jil::Methods::Contact < Jil::Methods::Base
 
   def create(details)
     @jil.user.contacts.create(@jil.cast(details, :Hash)).serialize
+  end
+
+  def update!(contact, details)
+    @jil.user.contacts.find(contact[:id]).tap { |c|
+      c.update(@jil.cast(details, :Hash).slice(*PERMIT_ATTRS))
+    }
   end
 
   def get(contact, key)
