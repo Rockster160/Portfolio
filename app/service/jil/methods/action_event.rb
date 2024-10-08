@@ -19,24 +19,15 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     scoped.serialize
   end
 
-  def add(name, notes, data, set_date)
-    events.create(
-      name: name,
-      notes: notes.presence,
-      data: @jil.cast(data.presence || {}, :Hash),
-      timestamp: set_date.present? ? @jil.cast(set_date, :Date) : ::Time.current,
-    ).tap { |event|
-      ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: :added))
-      ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: :added))
-      ActionEventBroadcastWorker.perform_async(event.id)
+  def add(name)
+    events.create(name: name).tap { |event|
+      event_callbacks(event, :added)
     }
   end
 
   def create(details)
     events.create(params(details)).tap { |event|
-      ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: :added))
-      ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: :added))
-      ActionEventBroadcastWorker.perform_async(event.id)
+      event_callbacks(event, :added)
     }.serialize
   end
 
@@ -53,29 +44,11 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     end
   end
 
-  def change(event_data, name, notes, data, set_date)
-    event = load_event(event_data)
-    event.update({
-      name: name,
-      notes: notes,
-      data: data,
-      date: set_date,
-    }.compact_blank).tap { |bool|
-      if bool
-        ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: :changed))
-        ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: :changed))
-        ActionEventBroadcastWorker.perform_async(event.id, set_date.present?)
-      end
-    }
-  end
-
   def update!(event_data, details)
     events.find(event_data[:id]).tap { |event|
       evt_data = params(details)
       if event.update(evt_data)
-        ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: :changed))
-        ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: :changed))
-        ActionEventBroadcastWorker.perform_async(event.id, evt_data[:date].present?)
+        event_callbacks(event, :changed, evt_data[:date].present?)
       end
     }
   end
@@ -84,17 +57,15 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     event = load_event(event_data)
     event.destroy.tap { |bool|
       if bool
-        ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: :removed))
-        ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: :removed))
-        # Reset following event streak info
-        matching_events = ActionEvent
-          .where(user_id: event.user_id)
-          .ilike(name: event.name)
-          .where.not(id: event.id)
-        following = matching_events.where("timestamp > ?", event.timestamp).order(:timestamp).first
-        UpdateActionStreak.perform_async(following.id) if following.present?
-        # / streak info
-        ActionEventBroadcastWorker.perform_async
+        event_callbacks(event, :removed) do |removed_event|
+          # Reset following event streak info
+          matching_events = ActionEvent
+            .where(user_id: removed_event.user_id)
+            .ilike(name: removed_event.name)
+            .where.not(id: removed_event.id)
+          following = matching_events.where("timestamp > ?", removed_event.timestamp).order(:timestamp).first
+          UpdateActionStreak.perform_async(following.id) if following.present?
+        end
       end
     }
   end
@@ -108,7 +79,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   end
 
   def date(date)
-    { date: date }
+    { timestamp: date }
   end
 
   def data(details={})
@@ -116,6 +87,13 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   end
 
   private
+
+  def event_callbacks(event, action, update_streak=true, &after)
+    ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: action))
+    ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: action))
+    after&.call(event)
+    ActionEventBroadcastWorker.perform_async(event.id, update_streak)
+  end
 
   def params(details)
     @jil.cast(details, :Hash).slice(*PERMIT_ATTRS).tap { |obj|

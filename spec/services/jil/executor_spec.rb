@@ -84,19 +84,22 @@ RSpec.describe Jil::Executor do
           mba58 = Global.if({
             sb48d = btn.match("busp")::Boolean
           }, {
-            v6e62 = ActionEvent.add("Auvelity", "", "", "")::ActionEvent
+            v6e62 = ActionEvent.add("Auvelity")::ActionEvent
             f7e22 = Global.exit()::Any
           }, {})::Any
           fcb22 = Global.if({
             vada9 = btn.match("water")::Boolean
           }, {
-            gb704 = ActionEvent.add("Water", "", "", "")::ActionEvent
+            gb704 = ActionEvent.add("Water")::ActionEvent
             k8447 = Global.exit()::Any
           }, {})::Any
           feef9 = Global.if({
             i0011 = btn.match("soda")::Boolean
           }, {
-            s4a23 = ActionEvent.add("Soda", "Mountain Dew", "", "")::ActionEvent
+            s8ff0 = ActionEvent.create({
+              jd135 = ActionEventData.name("Soda")::ActionEventData
+              n2a70 = ActionEventData.notes("Mountain Dew")::ActionEventData
+            })::ActionEvent
             la9b8 = Global.exit()::Any
           }, {})::Any
           u91d6 = Global.if({
@@ -110,7 +113,7 @@ RSpec.describe Jil::Executor do
         cc1e7 = Global.if({
           pfb53 = btn.match("teeth")::Boolean
         }, {
-          d4425 = ActionEvent.add("Teeth", "", "", "")::ActionEvent
+          d4425 = ActionEvent.add("Teeth")::ActionEvent
           f1630 = Global.exit()::Any
         }, {})::Any
         gfe60 = Global.if({
@@ -123,7 +126,7 @@ RSpec.describe Jil::Executor do
         k6b27 = Global.if({
           e0d6d = btn.match("pullups")::Boolean
         }, {
-          o4481 = ActionEvent.add("Handstand", "", "", "")::ActionEvent
+          o4481 = ActionEvent.add("Handstand")::ActionEvent
           i746d = Global.exit()::Any
         }, {})::Any
       JIL

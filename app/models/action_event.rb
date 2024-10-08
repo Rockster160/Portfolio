@@ -44,4 +44,8 @@ class ActionEvent < ApplicationRecord
   def serialize
     as_json(only: [:id, :name, :notes, :timestamp, :data]).with_indifferent_access
   end
+
+  def date # Used in Jil to rename method
+    timestamp
+  end
 end

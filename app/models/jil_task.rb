@@ -41,12 +41,12 @@ class JilTask < ApplicationRecord
     where("listener ~* '(^|\\s)#{safe_trigger}(~|:|$)'")
   }
   scope :by_code, ->(code) {
-    ilike(code: code)
+    ilike(code: "%#{code}%")
   }
 
   # refactor_function("ActionEvent.update") { |line| line.methodname = "change" }
   def self.refactor_function(function_call, &refactor)
-    by_code("%#{function_call}%").find_each do |task|
+    by_code(function_call).find_each do |task|
       puts "\e[94m===== [#{task.id}] #{task.name} =====\e[0m" if Rails.env.development?
       parser = ::Jil::Parser.breakdown(task.code) { |line|
         next line unless "#{line.varname} = #{line.objname}.#{line.methodname}(...)::#{line.cast}".include?(function_call)

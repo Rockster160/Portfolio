@@ -6,7 +6,10 @@ RSpec.describe Jil::Methods::ActionEvent do
     <<-JIL
       q9693 = ActionEvent.find("")::ActionEvent
       gd1cb = ActionEvent.search("", 50, "ASC")::Array
-      f065c = ActionEvent.add("asdf", "asdf", "", "")::ActionEvent
+      f065c = ActionEvent.create({
+        jd135 = ActionEventData.name("Title")::ActionEventData
+        n2a70 = ActionEventData.notes("details")::ActionEventData
+      })::ActionEvent
     JIL
   }
   let(:input_data) { {} }
@@ -63,7 +66,7 @@ RSpec.describe Jil::Methods::ActionEvent do
   end
 
   context "#add" do
-    let(:code) { "q9693 = ActionEvent.add(\"Food\", \"Dinner\", \"\", \"\")::ActionEvent" }
+    let(:code) { "q9693 = ActionEvent.add(\"Thing\")::ActionEvent" }
 
     it "returns the found event" do
       expect_successful_jil
@@ -76,11 +79,41 @@ RSpec.describe Jil::Methods::ActionEvent do
           class: :ActionEvent,
           value: {
             id: id,
-            name: "Food",
+            name: "Thing",
             timestamp: ts,
-            notes: "Dinner",
-            data: {},
+            notes: nil,
+            data: nil,
           },
+        },
+      })
+      expect(ctx[:output]).to eq([])
+    end
+  end
+
+  context "#create" do
+    let(:code) {
+      <<-JIL
+        q9693 = ActionEvent.create({
+          jd135 = ActionEventData.name("Food")::ActionEventData
+          n2a70 = ActionEventData.notes("Dinner")::ActionEventData
+        })::ActionEvent
+      JIL
+    }
+
+    it "returns the found event" do
+      expect_successful_jil
+
+      ts = ctx.dig(:vars, :q9693, :value, "timestamp")
+      id = ctx.dig(:vars, :q9693, :value, "id")
+      expect(DateTime.parse(ts).to_i).to be_within(5).of(::Time.current.to_i)
+      expect(ctx.dig(:vars, :q9693)).to match_hash({
+        class: :ActionEvent,
+        value: {
+          id: id,
+          name: "Food",
+          timestamp: ts,
+          notes: "Dinner",
+          data: {},
         },
       })
       expect(ctx[:output]).to eq([])

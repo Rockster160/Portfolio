@@ -183,13 +183,12 @@
   #find(String|Numeric)
   #search(Text "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array
   #create(content(ActionEventData))
-  #add("Name" TAB String BR "Notes" TAB String? BR "Data" TAB Hash? BR "Date" TAB Date?)
+  #add(String)
   .id::Numeric
   .name::String
   .notes::String
   .data::Hash
   .date::Date
-  .change("Name" TAB String? BR "Notes" TAB String? BR "Data" TAB Hash? BR "Date" TAB Date?)::Boolean
   .update!(content(ActionEventData))
   .destroy::Boolean
 *[ActionEventData]
@@ -197,7 +196,7 @@
   #notes(String)
   #date(Date)
   #data(content(Hash|Keyval))
-[Prompt]
+[Prompt] # Need to fix these create/update
   #find(String|Numeric)
   #all("complete?" Boolean(false))::Array
   #create("Title" TAB String BR "Data" TAB Hash? BR "Questions" content(PromptQuestion) "Deliver" BR Boolean(true))
