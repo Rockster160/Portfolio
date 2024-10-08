@@ -1,19 +1,11 @@
 class Jil::Parser
   attr_accessor :whitespace, :comment, :show, :varname, :objname, :methodname, :args, :cast
 
-  # REGEX = /
-  #   \s*(?<commented>\#)?\s*
-  #   (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
-  #   (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
-  #   \.(?<methodname>[_0-9A-Za-z]+)
-  #   \((?<args>[\s\S]*)\) -- Only difference from ESCAPED_REGEX
-  #   ::(?<cast>[A-Z][_0-9A-Za-z]*)
-  # /x
   TOKEN_REGEX = /\|\|TOKEN\d+\|\|/
   ESCAPED_REGEX = /
-    [\r*\n\r*]*
+    (\r*\n\r*)*
     (?<whitespace>\s*)
-    (?<commented>\#\s*)?
+    (?<comment>\#\s*)?
     (?<show>\*)?
     (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
     (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
@@ -22,21 +14,19 @@ class Jil::Parser
     ::(?<cast>[A-Z][_0-9A-Za-z]*)
   /xm
   COLORS = {
-    syntax: 37, # whiteish
-    err: 31, # red
-    commented: "3;90", # grey
-    objname: 31, # red (const or variable)
+    syntax: 37,
+    err: 31,
+    comment: "3;90",
+    objname: 31,
     castto: 90,
-
-    varname: 94, # cyan
-    variable: 94, # cyan
-
-    methodname: 37, # whiteish
-    const: 96, # yellow
-    cast: "3;36", # grey
-    constant: 35, # purple
-    string: 32, # green
-    numeric: 33, # light blue
+    varname: 94,
+    variable: 94,
+    methodname: 37,
+    const: 96,
+    cast: "3;36",
+    constant: 35,
+    string: 32,
+    numeric: 33,
   }.freeze
 
   def self.from_code(code)
@@ -48,7 +38,7 @@ class Jil::Parser
     tk ||= NewTokenizer.new(code)
     escaped ||= tk.tokenized_text
 
-    escaped.scan(ESCAPED_REGEX)&.map.with_index { |(whitespace, commented, show, varname, objname, methodname, arg_code, cast), idx|
+    escaped.scan(ESCAPED_REGEX)&.map.with_index { |(whitespace, comment, show, varname, objname, methodname, arg_code, cast), idx|
       args = tk.untokenize(arg_code, 1, unwrap: true).split(/,? +\r?\n?/).map { |nested|
         piece = tk.untokenize(nested)
 
@@ -62,7 +52,7 @@ class Jil::Parser
         ::JSON.parse(piece) rescue piece # Parse object literal to extra raw nums, bools, etc.
       }
 
-      line = ::Jil::Parser.new(whitespace, commented, show, varname, objname, methodname, args, cast)
+      line = ::Jil::Parser.new(whitespace, comment, show, varname, objname, methodname, args, cast)
 
       perline ? perline.call(line) : line
     }
@@ -120,7 +110,7 @@ class Jil::Parser
         col[:castto, "::"],
         col[:cast, line.cast],
       ].join.tap { |raw|
-        raw.gsub!(/\e\[[\d;]+m/, "\e[#{COLORS[:commented]}m") if line.commented?
+        raw.gsub!(/\e\[[\d;]+m/, "\e[#{COLORS[:comment]}m") if line.commented?
       }
     }.join("\n")
   end
@@ -171,7 +161,7 @@ class Jil::Parser
       next arg unless arg.is_a?(::Array)
       next "{}" if arg.empty?
 
-      "{\n#{@whitespace}  #{arg.to_s}\n#{@whitespace}}"
+      ["{", *arg, "#{@comment}#{@whitespace}}"].join("\n")
     }.join(", ")
   end
 end

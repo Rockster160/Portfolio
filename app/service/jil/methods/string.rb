@@ -3,6 +3,7 @@ class Jil::Methods::String < Jil::Methods::Base
     case value
     when ::Hash then clean_json(value)
     when ::Array then clean_json(value)
+    when ::Date, ::DateTime, ::Time, ActiveSupport::TimeWithZone then value.iso8601
     # when ::String then value
     else
       value.to_s.gsub(/^\"|\"$/, "").gsub(/#\{\s*(.*?)\s*\}/) { |found|

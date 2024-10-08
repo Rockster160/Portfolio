@@ -44,12 +44,23 @@ class JilTask < ApplicationRecord
     ilike(code: code)
   }
 
-  def self.rename_function(from, to, &block)
-    # It would be much nicer to just take in the function names, break the tasks down with tokenizer
-    # Then find the task names and replace them - passing the args to a block, which would allow
-    #   moving the arg order or anything like that.
-    by_code("%#{from}%").find_each do |task|
-      task.update(code: task.code.gsub(from, to))
+  # rename_function("ActionEvent.search", "ActionEvent.search") { |q, limit, date, order| }
+  def self.refactor_function(function_call, &refactor)
+    raise "Invalid refactor" unless function_call.match?(/\w+\.\w+/)
+    raise "No refactor block given" unless refactor
+
+    by_code("%#{function_call}(%").find_each do |task|
+      puts "\e[94m===== [#{task.id}] #{task.name} =====\e[0m" if Rails.env.development?
+      parser = ::Jil::Parser.breakdown(task.code) { |line|
+        next line unless "#{line.objname}.#{line.methodname}" == function_call
+
+        puts "\e[33m#{line}\e[0m" if Rails.env.development?
+        refactor.call(line)
+        puts "\e[36m#{line}\e[0m" if Rails.env.development?
+
+        line
+      }
+      task.update(code: parser.map(&:to_s).join("\n"))
     end
   end
 

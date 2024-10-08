@@ -181,7 +181,7 @@
   !.destroy::Boolean
 [ActionEvent]
   #find(String|Numeric)
-  #search(String "limit" Numeric(50) "since" Date? "order" ["ASC" "DESC"])::Array
+  #search(Text "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array
   #add("Name" TAB String BR "Notes" TAB String? BR "Data" TAB Hash? BR "Date" TAB Date?)
   .id::Numeric
   .name::String

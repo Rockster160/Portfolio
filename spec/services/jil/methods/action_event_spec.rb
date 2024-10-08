@@ -5,7 +5,7 @@ RSpec.describe Jil::Methods::ActionEvent do
   let(:code) {
     <<-JIL
       q9693 = ActionEvent.find("")::ActionEvent
-      gd1cb = ActionEvent.search("", 50, "", "ASC")::Array
+      gd1cb = ActionEvent.search("", 50, "ASC")::Array
       f065c = ActionEvent.add("asdf", "asdf", "", "")::ActionEvent
     JIL
   }
@@ -37,7 +37,7 @@ RSpec.describe Jil::Methods::ActionEvent do
   end
 
   context "#search" do
-    let(:code) { "gd1cb = ActionEvent.search(\"foo\", 50, \"\", \"ASC\")::Array" }
+    let(:code) { "gd1cb = ActionEvent.search(\"foo\", 50, \"ASC\")::Array" }
     let!(:event) { user.action_events.create(name: "Food", notes: "Dinner", data: { Calories: 400 }) }
 
     it "returns the found event" do
@@ -50,7 +50,7 @@ RSpec.describe Jil::Methods::ActionEvent do
     end
 
     context "with different search" do
-      let(:code) { "gd1cb = ActionEvent.search(\"blah\", 50, \"\", \"ASC\")::Array" }
+      let(:code) { "gd1cb = ActionEvent.search(\"blah\", 50, \"ASC\")::Array" }
 
       it "does not return non-matches" do
         expect_successful_jil
@@ -95,7 +95,7 @@ RSpec.describe Jil::Methods::ActionEvent do
         name = String.new("Drink")::String
         notes = String.new("Coke")::String
         id = Numeric.new(#{evt.id})::Numeric
-        evts = ActionEvent.search("name::\\"\#{name}\\" notes::\\"\#{notes}\\" id!::\#{id}", 5, "", "DESC")::Array
+        evts = ActionEvent.search("name::\\"\#{name}\\" notes::\\"\#{notes}\\" id!::\#{id}", 5, "DESC")::Array
       JIL
     }
 
