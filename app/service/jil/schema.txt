@@ -8,6 +8,7 @@
   Break("Break" TAB Any)::None
   Next("Next" TAB Any)::None
   Item::Any
+  ItemKey(String:Key)::Any
   Arg(String:Name)::Any
   FuncReturn("Return" TAB Any)::Any
 [Global]
@@ -107,6 +108,7 @@
   .length::Numeric
   .merge(Hash)
   .keys::Array
+  .splat(content([Keyword.ItemKey]))
   .dig(content(String|Numeric [String.new Numeric.new]))::Any
   .get(String)::Any
   .set!(String "=" Any)

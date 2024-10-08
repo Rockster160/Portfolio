@@ -35,6 +35,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
   def execute(line, method=nil)
     method ||= line.methodname
     case method
+    when :splat then splat(line)
     when :parse then parse(enum_content(line.args))
     when :keyHash
       key, hash = *line.args
@@ -86,6 +87,15 @@ class Jil::Methods::Hash < Jil::Methods::Base
     else
       array.inject({}) { |acc, hash| acc.merge(hash) }
     end
+  end
+
+  def splat(line)
+    hash = token_val(line.objname)
+    line.args.flatten.map { |arg, idx|
+      @jil.cast(hash[@jil.cast(arg.arg, :String)], arg.cast).tap { |val|
+        set_value(arg.varname, val, type: arg.cast)
+      }
+    }.compact
   end
 end
 # [Hash]
