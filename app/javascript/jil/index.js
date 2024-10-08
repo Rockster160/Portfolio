@@ -36,26 +36,6 @@ saveUtils()
 record() // Store initial state in history
 formDirty = false // Initial load should not dirty the state
 
-// BUG:
-//
-// TODO:
-// Select + Delete/Backspace should remove the statement
-// Should be able to click on delete while a statement is commented
-// Need some way to define custom functions/classes
-//   * Require this be a different file?
-//     * Nahhhhhh. Inline functions would be really nice and convenient...
-//     * Inline classes, too.
-//   * "Import" should essentially just run the code from the given file, giving access to functions/classes (and overwriting any existing methods based on the most recent definition)
-//   * Difference between "import" and "run"? Maybe "import" does some magic and only pulls function/class definitions but doesn't do any logic...
-//     * This would break if any definitions are nested in logic?
-//   Maybe definitions can ONLY be done on the top level? Definitions should also pre-run so they can be defined at the end of the file but used at the top?
-// Maybe? If there are no args in a Task, flatten it to take up less room
-// * Should probably redesign the chevrons to not look like items
-// On Dropdowns with a < type > - Need to have an empty state
-// Dropdown should have 2|3 columns: Global|Scoped?|Tokens
-// * Scoped would be contextual methods: Index, Object, Key, Value, etc
-// Statement.fromText(localStorage.getItem("jilcode"))
-
 Keyboard.on(["Meta", "Enter"], (evt) => {
   evt.preventDefault()
   document.querySelector(".btn-run").click()

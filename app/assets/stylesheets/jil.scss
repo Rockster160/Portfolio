@@ -1,4 +1,5 @@
 $base-blue: #0160FF;
+$base-comp: #FE9F00;
 $danger: #F6433D;
 $grey-blue: #6481A1;
 $text-color: darken($grey-blue, 20%);
@@ -49,6 +50,22 @@ body {
   padding-bottom: 500px;
   color: var(--syntax-base);
   font-family: "Menlo";
+}
+
+.env-banner {
+  background: $base-comp;
+  text-align: center;
+  position: fixed;
+  height: 10px;
+  font-size: 10px;
+  color: $text-color;
+  left: 0;
+  top: 0;
+  right: 0;
+  z-index: 1001;
+}
+body:has(.env-banner) {
+  margin-top: 10px;
 }
 
 .hidden { display: none !important; }

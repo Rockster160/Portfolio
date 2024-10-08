@@ -1,4 +1,3 @@
-// NOCOMMIT - scope this so it doesn't hit everything
 html:has(.ctr-jil_tasks.act-index) {
   &.dark-mode, &, body {
     overscroll-behavior: auto none;
@@ -14,7 +13,6 @@ html:has(.ctr-jil_tasks.act-index) {
       }
     }
   }
-
 }
 
 

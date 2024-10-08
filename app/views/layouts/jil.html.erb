@@ -8,6 +8,7 @@
     <%= stylesheet_link_tag "jil", media: "all" %>
   </head>
   <body>
+    <%= render "layouts/env_banner" unless Rails.env.production? %>
     <%= yield %>
   </body>
 </html>
