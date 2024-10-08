@@ -15,14 +15,26 @@ window.Statement = Statement
 window.History = History
 window.selected = undefined
 window.formSubmitting = false
+window.savedIdx = 0
+Object.defineProperty(window, "formDirty", {
+  get() {
+    return this._formDirty;
+  },
+  set(value) {
+    document.querySelector(".btn-save").classList.toggle("btn-dirty", value)
+    this._formDirty = value;
+  }
+})
 
 export const record = function() {
+  formDirty = true
   History.add(Statement.toCode())
   console.log("Recorded: ", History.currentIdx)
 }
 
 saveUtils()
 record() // Store initial state in history
+formDirty = false // Initial load should not dirty the state
 
 // BUG:
 //
@@ -78,16 +90,20 @@ Keyboard.on(["Meta", "Shift", "z"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
     console.log("Redo")
     const code = History.redo()
+    console.log(History.currentIdx, savedIdx)
     if (code === undefined || code === null) { return }
     Statement.reloadFromText(code)
+    formDirty = History.currentIdx !== savedIdx
   }
 })
 Keyboard.on(["Meta", "z"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
     console.log("Undo")
     const code = History.undo()
+    console.log(History.currentIdx, savedIdx)
     if (code === undefined || code === null) { return }
     Statement.reloadFromText(code)
+    formDirty = History.currentIdx !== savedIdx
   }
 })
 Keyboard.on(["Escape"], (evt) => {
@@ -346,7 +362,7 @@ document.addEventListener("click", function(evt) {
 document.addEventListener("input", (event) => {
   const target = event.target;
 
-  if (target.tagName === "INPUT" && target.type !== "checkbox" && target.type !== "radio") {
+  if (target.tagName === "TEXTAREA" || (target.tagName === "INPUT" && target.type !== "checkbox" && target.type !== "radio")) {
     target.addEventListener("blur", handleInputBlur, { once: true });
   } else {
     record()

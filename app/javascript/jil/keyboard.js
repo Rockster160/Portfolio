@@ -34,7 +34,6 @@ document.addEventListener("keydown", function(evt) {
   if (evt.metaKey) { return } // metaKey causes a LOT of weirdness with keys because it doesn't trigger a keyup event
   if (!Keyboard.held.has(evt.key)) {
     Keyboard.held.add(evt.key)
-    console.log(Keyboard.held)
     document.dispatchEvent(new CustomEvent("keyboard:press", { detail: { evt: evt } }))
   }
 })

@@ -40,6 +40,8 @@ export default function saveUtils() {
       headers: { "Accept": "application/json" },
     }).then(function(res) {
       formSubmitting = false
+      formDirty = false
+      savedIdx = History.currentIdx
       document.querySelectorAll(".jil-temp-code").forEach(item => item.remove())
       if (!res.ok) { throw new Error(`HTTP error! status: ${res.status}`) }
       res.json().then(function(json) {
@@ -67,7 +69,7 @@ export default function saveUtils() {
   })
 
   window.onbeforeunload = function(evt) {
-    if (!formSubmitting || jilHistory.currentIdx <= 1) { return }
+    if (formSubmitting || !formDirty) { return }
 
     return "You have unsaved changes. Are you sure you want to leave?"
   }
