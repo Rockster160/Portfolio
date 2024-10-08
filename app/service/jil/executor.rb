@@ -130,7 +130,7 @@ class Jil::Executor
     Array.wrap(lines).each do |line|
       break unless @ctx[:state] == :running
       next if current_ctx[:break] || current_ctx[:next]
-      next if line.commented
+      next if line.commented?
 
       execute_line(line, current_ctx).tap { |line_val|
         @ctx[:vars][line.varname.to_sym] = line_val
@@ -163,7 +163,7 @@ class Jil::Executor
       class: line.cast,
       value: cast(obj.base_execute(line), line.cast, current_ctx),
     }.tap { |line_val|
-      if line.show
+      if line.shown?
         @ctx[:output] << "[#{line.varname}][#{line_val[:class]}]#{::Jil::Methods::String.new(self, @ctx).cast(line_val[:value]).gsub(/^"|"$/, "")}"
       end
     }

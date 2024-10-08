@@ -1,5 +1,5 @@
 class Jil::Parser
-  attr_accessor :commented, :show, :varname, :objname, :methodname, :args, :cast, :code
+  attr_accessor :whitespace, :comment, :show, :varname, :objname, :methodname, :args, :cast
 
   # REGEX = /
   #   \s*(?<commented>\#)?\s*
@@ -11,6 +11,7 @@ class Jil::Parser
   # /x
   TOKEN_REGEX = /\|\|TOKEN\d+\|\|/
   ESCAPED_REGEX = /
+    [\r*\n\r*]*
     (?<whitespace>\s*)
     (?<commented>\#\s*)?
     (?<show>\*)?
@@ -39,129 +40,138 @@ class Jil::Parser
   }.freeze
 
   def self.from_code(code)
-    tk = NewTokenizer.new(code)
-    escaped = tk.tokenized_text
-
-    from_tokenized_code(escaped, tk).tap { |parsed|
-      # binding.pry
-    }
+    breakdown(code)
   end
 
-  def self.from_tokenized_code(code, tk)
-    code.scan(ESCAPED_REGEX)&.map.with_index { |(whitespace, commented, show, varname, objname, methodname, arg_code, cast), idx|
-      raw = "#{'# ' if commented}#{'*' if show}#{varname} = #{objname}.#{methodname}#{arg_code}::#{cast}"
-      args = tk.untokenize(arg_code, 1, unwrap: true).split(/,?[ \n]+/).map { |escaped|
-        untokenized = tk.untokenize(escaped)
-        tk.untokenize(escaped, 1).then { |piece|
-          if piece.starts_with?("{") && piece.ends_with?("}")
-            from_tokenized_code(piece, tk)
-          elsif untokenized.starts_with?("\"") && untokenized.ends_with?("\"")
-            untokenized # keep quotes
-          else
-            begin
-              ::JSON.parse(untokenized) rescue untokenized
-            rescue JSON::ParserError => e
-              untokenized
-            end
-          end
-        }
-      }
-      ::Jil::Parser.new(commented, show, varname, objname, methodname, args, cast, tk.untokenize(raw))
-    }.tap { |vals|
-      # binding.pry
-    }
-  end
-
-  def self.syntax_highlighting(code, tk=nil)
-    col = ->(color, text) { "\e[#{COLORS[color]}m#{text}\e[0m\e[#{COLORS[:syntax]}m" }
+  def self.breakdown(code, tk=nil, &perline)
     escaped = code if tk.present?
     tk ||= NewTokenizer.new(code)
     escaped ||= tk.tokenized_text
 
     escaped.scan(ESCAPED_REGEX)&.map.with_index { |(whitespace, commented, show, varname, objname, methodname, arg_code, cast), idx|
-      args = tk.untokenize(arg_code, 1, unwrap: true).split(/,?[ \n]+/).map { |nested|
-        untokenized = tk.untokenize(nested)
-        tk.untokenize(nested, 1).then { |piece|
-          if piece.starts_with?("{") && piece.ends_with?("}")
-            next piece if piece == "{}"
-            [
-              "{#{whitespace.gsub(/^\r?\n/, "")}  ",
-              syntax_highlighting(piece, tk),
-              "\n#{whitespace.gsub(/^\r?\n/, "")}#{commented}}",
-            ].join
-          elsif untokenized.starts_with?("\"") && untokenized.ends_with?("\"")
-            # untokenized to keep quotes
-            col[:string, untokenized].gsub(/(#\{\s*)(\w+)(\s*\})/) do |found|
-              _, start, word, finish = Regexp.last_match.to_a
-              [
-                col[:syntax, start],
-                col[:variable, word],
-                col[:syntax, finish],
-                "\e[#{COLORS[:string]}m",
-              ].join
-            end
-          else
-            case untokenized
-            when /^\d+$/
-              col[:numeric, untokenized]
-            when /^(nil|null|true|false)$/
-              col[:constant, untokenized]
-            when /^\w+$/
-              col[:variable, untokenized]
-            else
-              col[:err, "<dunno>#{untokenized}</dunno>"]
-            end
-          end
-        }
+      args = tk.untokenize(arg_code, 1, unwrap: true).split(/,? +\r?\n?/).map { |nested|
+        piece = tk.untokenize(nested)
+
+        if piece.starts_with?("{") && piece.ends_with?("}")
+          # Iterate through the nested functions as well.
+          next breakdown(tk.untokenize(nested, 1), tk, &perline)
+        end
+
+        next piece if piece.match?(/\A\".*?\"\z/) # Do not parse strings in order to retain quotes.
+
+        ::JSON.parse(piece) rescue piece # Parse object literal to extra raw nums, bools, etc.
       }
 
-      out = "\e[#{COLORS[:syntax]}m#{whitespace}"
-      out << commented if commented.present?
-      out << "*" if show
-      out << col[:varname, varname]
-      out << " = "
-      out << col[objname.match?(/^[A-Z]/) ? :const : :variable, objname]
-      out << "."
-      out << col[:methodname, methodname]
-      out << "("
-      out << args.join(", ")
-      out << ")"
-      out << col[:castto, "::"]
-      out << col[:cast, cast]
-      next out unless commented.present?
+      line = ::Jil::Parser.new(whitespace, commented, show, varname, objname, methodname, args, cast)
 
-      out.gsub(/\e\[[\d;]+m/, "\e[#{COLORS[:commented]}m")
-    }.join("")
+      perline ? perline.call(line) : line
+    }
   end
 
-  def initialize(commented, show, varname, objname, methodname, args, cast, code)
-    @commented = commented.present?
-    @show = show.present?
+  def self.syntax_highlighting(code, tk=nil)
+    col = ->(color, text) { "\e[#{COLORS[color]}m#{text}\e[0m\e[#{COLORS[:syntax]}m" }
+
+    breakdown(code) { |line|
+      [
+        "\e[#{COLORS[:syntax]}m",
+        line.whitespace,
+        line.comment,
+        line.show,
+        col[:varname, line.varname],
+        " = ",
+        col[line.objname.match?(/^[A-Z]/) ? :const : :variable, line.objname],
+        ".",
+        col[:methodname, line.methodname],
+        "(",
+        line.args.map { |arg|
+          if arg.is_a?(::Array)
+            next "{}" if arg.empty?
+
+            [
+              "{",
+              *arg,
+              "#{line.comment}#{line.whitespace}}",
+            ].join("\n")
+          else
+            case arg.to_s
+            when /\A\".*?\"\z/
+              col[:string, arg].gsub(/(#\{\s*)(\w+)(\s*\})/) { |found|
+                _, start, word, finish = Regexp.last_match.to_a
+                [
+                  col[:syntax, start],
+                  col[:variable, word],
+                  col[:syntax, finish],
+                  "\e[#{COLORS[:string]}m",
+                ].join
+              }
+            when /^\d+$/
+              col[:numeric, arg]
+            when /^(nil|null|true|false)$/
+              col[:constant, arg]
+            when /^\w+$/
+              col[:variable, arg]
+            else
+              col[:err, "<dunno>[Invalid String?]#{arg.inspect}</dunno>"]
+            end
+          # else col[:err, "<dunno>[#{arg.class}]#{arg.inspect}</dunno>"]
+          end
+        }.join(", "),
+        ")",
+        col[:castto, "::"],
+        col[:cast, line.cast],
+      ].join.tap { |raw|
+        raw.gsub!(/\e\[[\d;]+m/, "\e[#{COLORS[:commented]}m") if line.commented?
+      }
+    }.join("\n")
+  end
+
+  def initialize(whitespace, comment, show, varname, objname, methodname, args, cast)
+    @whitespace = whitespace == "" ? nil : whitespace
+    @comment = comment.presence
+    @show = show.presence
     @varname = varname.to_sym
     @objname = objname.to_sym
     @methodname = methodname.to_sym
     @args = Array.wrap(args)
     @cast = cast.to_sym
-    @code = code
   end
 
-  def show?
-    show
+  def shown?
+    @show.present?
   end
 
   def commented?
-    commented
+    @comment.present?
   end
 
   def arg
     args.first
   end
 
-  def cast_arg
-    cast_args.first
+  def to_s
+    [
+      @whitespace,
+      @comment,
+      @show,
+      @varname,
+      " = ",
+      @objname,
+      ".",
+      @methodname,
+      "(",
+      args_to_s,
+      ")",
+      "::",
+      @cast,
+    ].compact.join
   end
 
-  def cast_args
-    args.map { |arg|  }
+  def args_to_s
+    @args.map { |arg|
+      next arg unless arg.is_a?(::Array)
+      next "{}" if arg.empty?
+
+      "{\n#{@whitespace}  #{arg.to_s}\n#{@whitespace}}"
+    }.join(", ")
   end
 end

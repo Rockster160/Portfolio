@@ -34,7 +34,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     when :stop_propagation then @jil.ctx[:stop_propagation] = true
     when :function
       args, content = line.args
-      { args: evalarg(args), content: content.map(&:code).join("\n") }
+      { args: evalarg(args), content: content.map { |line| line.to_s.squish }.join("\n") }
     else send(line.methodname, *evalargs(line.args))
     end
   end
