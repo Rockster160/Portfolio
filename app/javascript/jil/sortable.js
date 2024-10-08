@@ -22,6 +22,7 @@ export default function sortable(ele) {
       document.querySelectorAll(".content.open").forEach(item => item.classList.remove("open"))
       let statement = Statement.from(evt.item)
       statement.moved()
+      History.record()
     },
     onMove: function(evt) {
       const { related, to, originalEvent } = evt

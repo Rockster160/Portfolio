@@ -26,14 +26,14 @@ Object.defineProperty(window, "formDirty", {
   }
 })
 
-export const record = function() {
+History.record = function() {
   formDirty = true
   History.add(Statement.toCode())
   console.log("Recorded: ", History.currentIdx)
 }
 
 saveUtils()
-record() // Store initial state in history
+History.record() // Store initial state in history
 formDirty = false // Initial load should not dirty the state
 
 Keyboard.on(["Meta", "Enter"], (evt) => {
@@ -50,7 +50,7 @@ Keyboard.on(["Backspace"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
     if (window.selected) {
       window.selected.remove()
-      record()
+      History.record()
     }
   }
 })
@@ -58,7 +58,7 @@ Keyboard.on(["Delete"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
     if (window.selected) {
       window.selected.remove()
-      record()
+      History.record()
     }
   }
 })
@@ -95,7 +95,7 @@ Keyboard.on(["/"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
     if (window.selected) {
       window.selected.commented = !window.selected.commented
-      record()
+      History.record()
     }
   }
 })
@@ -129,7 +129,7 @@ document.addEventListener("mousedown", function(event) {
   if (event.target.matches("a, .btn, input, .statement")) { return }
   if (event.button === 1) { // middle click
     Statement.reloadFromText("")
-    record()
+    History.record()
   }
 });
 
@@ -170,7 +170,7 @@ document.addEventListener("click", function(evt) {
                   method: method.name,
                 })
                 statement.moveInside(context, top)
-                record()
+                History.record()
               }
             }
           } else {
@@ -201,7 +201,7 @@ document.addEventListener("click", function(evt) {
               } else {
                 if (top) { statement.moveTo(0) }
               }
-              record()
+              History.record()
             }
           }
         }).filter(Boolean)
@@ -209,7 +209,7 @@ document.addEventListener("click", function(evt) {
 
       let paste = {
         icon: fa("paste regular"), title: "Paste",
-        callback: () => addBlock(navigator.clipboard.readText()) && record()
+        callback: () => addBlock(navigator.clipboard.readText()) && History.record()
       }
 
       Dropdown.showAt(leftPosition, topPosition, [
@@ -229,19 +229,19 @@ document.addEventListener("click", function(evt) {
     console.log("dup")
     let statement = Statement.from(evt.target)
     statement?.duplicate()
-    statement && record()
+    statement && History.record()
     return
   }
   if (evt.target.closest(".obj-inspect")) {
     let statement = Statement.from(evt.target)
     statement?.toggleInspect()
-    statement && record()
+    statement && History.record()
     return
   }
   if (evt.target.closest(".obj-delete")) {
     let statement = Statement.from(evt.target)
     statement?.remove()
-    statement && record()
+    statement && History.record()
     return
   }
 
@@ -263,7 +263,7 @@ document.addEventListener("click", function(evt) {
 
     try {
       statement.name = newname
-      record()
+      History.record()
     } catch (e) {
       return alert(e)
     }
@@ -286,7 +286,7 @@ document.addEventListener("click", function(evt) {
 
     try {
       statement.reference = new_ref
-      record()
+      History.record()
     } catch (e) {
       return alert(e)
     }
@@ -302,7 +302,7 @@ document.addEventListener("click", function(evt) {
           text: type.show,
           callback: () => {
             statement.returntype = type.show
-            record()
+            History.record()
           }
         }
       })
@@ -320,7 +320,7 @@ document.addEventListener("click", function(evt) {
     if (btn.getAttribute("allowInput") != "false") {
       defaultOpts.push({ text: "<input>", callback: () => {
         selectedTag.innerText = ""
-        record()
+        History.record()
       } })
     }
 
@@ -331,7 +331,7 @@ document.addEventListener("click", function(evt) {
           text: `${token.name}:${token.returntype}`,
           callback: () => {
             selectedTag.innerText = token.name
-            record()
+            History.record()
           }
         }
       })
@@ -345,12 +345,12 @@ document.addEventListener("input", (event) => {
   if (target.tagName === "TEXTAREA" || (target.tagName === "INPUT" && target.type !== "checkbox" && target.type !== "radio")) {
     target.addEventListener("blur", handleInputBlur, { once: true });
   } else {
-    record()
+    History.record()
   }
 });
 // Separate function so that `once` works
 function handleInputBlur(event) {
-  record()
+  History.record()
 }
 
 document.addEventListener("mousedown", function(event) {
