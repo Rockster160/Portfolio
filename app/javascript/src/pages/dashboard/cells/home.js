@@ -260,7 +260,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     )
     cell.device_battery_socket.send({ action: "request" })
 
-    cell.garage_socket = Monitor.subscribe("e46e2278-1f9a-4a1e-8cfe-962f666a6620", {
+    cell.garage_socket = Monitor.subscribe("garage", {
       connected: function() {
         console.log("socket Connected");
         setTimeout(function() {
