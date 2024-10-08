@@ -27,7 +27,7 @@ export default function saveUtils() {
 
   let saveBtn = new SaveBtn(document.querySelector(".btn-save"))
   saveBtn.onClick(async () => {
-    // formSubmitting = true
+    formSubmitting = true
     const code = Statement.toCode()
     if (newTask && jilTaskNameField.value.trim().length == 0) {
       localStorage.setItem("jilcode", code)
@@ -48,6 +48,7 @@ export default function saveUtils() {
       body: formData,
       headers: { "Accept": "application/json" },
     }).then(function(res) {
+      formSubmitting = false
       document.querySelectorAll(".jil-temp-code").forEach(item => item.remove())
       if (!res.ok) { throw new Error(`HTTP error! status: ${res.status}`) }
       res.json().then(function(json) {
@@ -74,9 +75,9 @@ export default function saveUtils() {
     })
   })
 
-  // window.onbeforeunload = function(evt) {
-  //   if (formSubmitting || !dirtyChanges) { return }
-  //
-  //   return "You have unsaved changes. Are you sure you want to leave?"
-  // }
+  window.onbeforeunload = function(evt) {
+    if (!formSubmitting || jilHistory.currentIdx == 0) { return }
+
+    return "You have unsaved changes. Are you sure you want to leave?"
+  }
 }

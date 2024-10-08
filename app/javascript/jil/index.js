@@ -5,6 +5,7 @@ import Arg from "./arg.js"
 import Dropdown from "./dropdown.js"
 import sortable from "./sortable.js"
 import Schema from "./schema.js"
+import History from "./history.js"
 import Mouse from "./mouse.js"
 import Keyboard from "./keyboard.js"
 import saveUtils from "./save_utils.js"
@@ -12,6 +13,8 @@ import saveUtils from "./save_utils.js"
 window.Schema = Schema
 window.Statement = Statement
 window.selected = undefined
+window.formSubmitting = false
+window.jilHistory = History
 
 saveUtils()
 
@@ -36,7 +39,8 @@ saveUtils()
 // Statement.fromText(localStorage.getItem("jilcode"))
 
 Keyboard.on(["Meta", "Enter"], (evt) => {
-  // Trigger Save and/or Run
+  evt.preventDefault()
+  document.querySelector(".btn-run").click()
 })
 Keyboard.on(["Alt", "Enter"], (evt) => {
   const wrapper = window.selected?.node || document
@@ -47,21 +51,28 @@ Keyboard.on(["Alt", "Enter"], (evt) => {
 Keyboard.on(["Backspace"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
     if (window.selected) {
-      // remove statement
+      window.selected.remove()
     }
   }
 })
-Keyboard.on(["Cmd", "S"], (evt) => {
-  // save
+Keyboard.on(["Meta", "s"], (evt) => {
+  evt.preventDefault()
+  document.querySelector(".btn-save").click()
 })
-Keyboard.on(["Cmd", "Z"], (evt) => {
+Keyboard.on(["Meta", "Shift", "z"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
-    // Undo (include both deletes and adds)
+    console.log("Redo")
+    const code = History.redo()
+    if (code === undefined || code === null) { return }
+    Statement.reloadFromText(code)
   }
 })
-Keyboard.on(["Cmd", "Shift", "Z"], (evt) => {
+Keyboard.on(["Meta", "z"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
-    // Redo (include both deletes and adds)
+    console.log("Undo")
+    const code = History.undo()
+    if (code === undefined || code === null) { return }
+    Statement.reloadFromText(code)
   }
 })
 Keyboard.on(["Escape"], (evt) => {

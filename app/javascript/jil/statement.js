@@ -403,6 +403,7 @@ export default class Statement {
       statement.refId = null
       statement.addError("Parent statement has been removed")
     })
+    if (this.selected) { Statement.clearSelected() }
     this.node.remove()
     Statement.all = Statement.all.filter(item => item.id != this.id)
   }
