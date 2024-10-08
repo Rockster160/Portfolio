@@ -194,7 +194,7 @@
 *[ActionEventData]
   #name(String)
   #notes(String)
-  #date(Date)
+  #timestamp(Date)
   #data(content(Hash|Keyval))
 [Prompt] # Need to fix these create/update
   #find(String|Numeric)

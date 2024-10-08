@@ -19,7 +19,7 @@
   end
 
   def call
-    MonitorChannel.started(@task)
+    # MonitorChannel.started(@task) # deprecated in favor of Jil Monitors
     @test_mode = data.delete(:test_mode)
     @ctx = { vars: {}, i: 0, msg: [], loop_idx: nil, loop_obj: nil, current_token: nil }
     @ctx.merge!(@data[:ctx] || {})
@@ -49,7 +49,7 @@
       return_val: @ctx[:return],
       output_text: @ctx[:msg].join("\n"),
     )
-    MonitorChannel.send_task(@task)
+    # MonitorChannel.send_task(@task) # deprecated in favor of Jil Monitors
     # Ensure does NOT return the last value
   end
 
