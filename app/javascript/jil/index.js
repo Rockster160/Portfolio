@@ -12,11 +12,17 @@ import saveUtils from "./save_utils.js"
 
 window.Schema = Schema
 window.Statement = Statement
+window.History = History
 window.selected = undefined
 window.formSubmitting = false
-window.jilHistory = History
+
+export const record = function() {
+  History.add(Statement.toCode())
+  console.log("Recorded: ", History.currentIdx)
+}
 
 saveUtils()
+record() // Store initial state in history
 
 // BUG:
 //
@@ -52,6 +58,15 @@ Keyboard.on(["Backspace"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
     if (window.selected) {
       window.selected.remove()
+      record()
+    }
+  }
+})
+Keyboard.on(["Delete"], (evt) => {
+  if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+    if (window.selected) {
+      window.selected.remove()
+      record()
     }
   }
 })
@@ -82,7 +97,10 @@ Keyboard.on(["Escape"], (evt) => {
 })
 Keyboard.on(["/"], (evt) => {
   if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
-    if (window.selected) { window.selected.commented = !window.selected.commented }
+    if (window.selected) {
+      window.selected.commented = !window.selected.commented
+      record()
+    }
   }
 })
 Keyboard.on(["Tab"], (evt) => {
@@ -110,6 +128,14 @@ Keyboard.on(["Tab"], (evt) => {
     }
   }
 })
+
+document.addEventListener("mousedown", function(event) {
+  if (event.target.matches("a, .btn, input, .statement")) { return }
+  if (event.button === 1) { // middle click
+    Statement.reloadFromText("")
+    record()
+  }
+});
 
 document.addEventListener("click", function(evt) {
   if (evt.target.matches(".reference") || evt.target.matches(".content-dropdown")) {
@@ -148,6 +174,7 @@ document.addEventListener("click", function(evt) {
                   method: method.name,
                 })
                 statement.moveInside(context, top)
+                record()
               }
             }
           } else {
@@ -178,6 +205,7 @@ document.addEventListener("click", function(evt) {
               } else {
                 if (top) { statement.moveTo(0) }
               }
+              record()
             }
           }
         }).filter(Boolean)
@@ -185,7 +213,7 @@ document.addEventListener("click", function(evt) {
 
       let paste = {
         icon: fa("paste regular"), title: "Paste",
-        callback: () => addBlock(navigator.clipboard.readText())
+        callback: () => addBlock(navigator.clipboard.readText()) && record()
       }
 
       Dropdown.showAt(leftPosition, topPosition, [
@@ -205,16 +233,19 @@ document.addEventListener("click", function(evt) {
     console.log("dup")
     let statement = Statement.from(evt.target)
     statement?.duplicate()
+    statement && record()
     return
   }
   if (evt.target.closest(".obj-inspect")) {
     let statement = Statement.from(evt.target)
     statement?.toggleInspect()
+    statement && record()
     return
   }
   if (evt.target.closest(".obj-delete")) {
     let statement = Statement.from(evt.target)
     statement?.remove()
+    statement && record()
     return
   }
 
@@ -236,6 +267,7 @@ document.addEventListener("click", function(evt) {
 
     try {
       statement.name = newname
+      record()
     } catch (e) {
       return alert(e)
     }
@@ -258,6 +290,7 @@ document.addEventListener("click", function(evt) {
 
     try {
       statement.reference = new_ref
+      record()
     } catch (e) {
       return alert(e)
     }
@@ -271,7 +304,10 @@ document.addEventListener("click", function(evt) {
       ...Schema.all.map(type => {
         return {
           text: type.show,
-          callback: () => statement.returntype = type.show
+          callback: () => {
+            statement.returntype = type.show
+            record()
+          }
         }
       })
     ])
@@ -286,7 +322,10 @@ document.addEventListener("click", function(evt) {
     let selectedTag = btn.parentElement.querySelector(".selected-tag")
     let defaultOpts = []
     if (btn.getAttribute("allowInput") != "false") {
-      defaultOpts.push({ text: "<input>", callback: () => selectedTag.innerText = "" })
+      defaultOpts.push({ text: "<input>", callback: () => {
+        selectedTag.innerText = ""
+        record()
+      } })
     }
 
     Dropdown.show([
@@ -294,16 +333,32 @@ document.addEventListener("click", function(evt) {
       ...tokens.map(token => {
         return {
           text: `${token.name}:${token.returntype}`,
-          callback: () => selectedTag.innerText = token.name
+          callback: () => {
+            selectedTag.innerText = token.name
+            record()
+          }
         }
       })
     ])
   }
 })
 
+document.addEventListener("input", (event) => {
+  const target = event.target;
+
+  if (target.tagName === "INPUT" && target.type !== "checkbox" && target.type !== "radio") {
+    target.addEventListener("blur", handleInputBlur, { once: true });
+  } else {
+    record()
+  }
+});
+// Separate function so that `once` works
+function handleInputBlur(event) {
+  record()
+}
 
 document.addEventListener("mousedown", function(event) {
-  if (event.button === 1 ) {
+  if (event.button === 1 ) { // middle click
     // if statement
       // if Keyboard.isPressed("CMD")
         // Open dropdown to add new function BEFORE statement

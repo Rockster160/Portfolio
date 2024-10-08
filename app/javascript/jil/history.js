@@ -3,10 +3,10 @@ export default class History {
   static currentIdx = 0;
   static maxStates = 100;
 
-  static add(state) {
+  static add(newState) {
     this.states = this.states.slice(0, this.maxStates-1).slice(0, this.currentIdx + 1);
     this.states.push(newState);
-    this.currentIdx++;
+    this.currentIdx = this.states.length - 1;
   }
 
   static getState() {

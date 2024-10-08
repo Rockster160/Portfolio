@@ -7,8 +7,6 @@ export default function saveUtils() {
   let jilTaskNameField = document.querySelector("#jil_task_name")
   let jilTaskForm = document.querySelector("#jil_task_form")
   let newTask = jilTaskForm.classList.contains("new_jil_task")
-  // let formSubmitting = false
-  // let dirtyChanges = false
 
   // Initial code load
   if (newTask || window.load_code === undefined) {
@@ -17,13 +15,6 @@ export default function saveUtils() {
   } else {
     Statement.reloadFromText(window.load_code)
   }
-
-  document.addEventListener("mousedown", function(event) {
-    if (event.target.matches("a, .btn, input, .statement")) { return }
-    if (event.button === 1) {
-      Statement.reloadFromText("")
-    }
-  });
 
   let saveBtn = new SaveBtn(document.querySelector(".btn-save"))
   saveBtn.onClick(async () => {
@@ -76,7 +67,7 @@ export default function saveUtils() {
   })
 
   window.onbeforeunload = function(evt) {
-    if (!formSubmitting || jilHistory.currentIdx == 0) { return }
+    if (!formSubmitting || jilHistory.currentIdx <= 1) { return }
 
     return "You have unsaved changes. Are you sure you want to leave?"
   }
