@@ -246,6 +246,7 @@ class Jil::Executor
       # when :Hash then ::Hash # dig into the hash for special keys
       when :Object then :Global
       when :Contact, :ContactData then :Contact
+      when :ActionEvent, :ActionEventData then :ActionEvent
       when :Monitor, :MonitorData then :Monitor
       when :Prompt, :PromptQuestion then :Prompt
       when :Hash, :Keyval then :Hash

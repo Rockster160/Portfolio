@@ -44,15 +44,12 @@ class JilTask < ApplicationRecord
     ilike(code: code)
   }
 
-  # rename_function("ActionEvent.search", "ActionEvent.search") { |q, limit, date, order| }
+  # refactor_function("ActionEvent.update") { |line| line.methodname = "change" }
   def self.refactor_function(function_call, &refactor)
-    raise "Invalid refactor" unless function_call.match?(/\w+\.\w+/)
-    raise "No refactor block given" unless refactor
-
-    by_code("%#{function_call}(%").find_each do |task|
+    by_code("%#{function_call}%").find_each do |task|
       puts "\e[94m===== [#{task.id}] #{task.name} =====\e[0m" if Rails.env.development?
       parser = ::Jil::Parser.breakdown(task.code) { |line|
-        next line unless "#{line.objname}.#{line.methodname}" == function_call
+        next line unless "#{line.varname} = #{line.objname}.#{line.methodname}(...)::#{line.cast}".include?(function_call)
 
         puts "\e[33m#{line}\e[0m" if Rails.env.development?
         refactor.call(line)

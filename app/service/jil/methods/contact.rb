@@ -53,12 +53,12 @@ class Jil::Methods::Contact < Jil::Methods::Base
   end
 
   def create(details)
-    @jil.user.contacts.create(@jil.cast(details, :Hash)).serialize
+    @jil.user.contacts.create(params(details)).serialize
   end
 
   def update!(contact, details)
     @jil.user.contacts.find(contact[:id]).tap { |c|
-      c.update(@jil.cast(details, :Hash).slice(*PERMIT_ATTRS))
+      c.update(params(details))
     }
   end
 
@@ -94,5 +94,13 @@ class Jil::Methods::Contact < Jil::Methods::Base
 
   def data(details={})
     { data: details }
+  end
+
+  private
+
+  def params(details)
+    @jil.cast(details, :Hash).slice(*PERMIT_ATTRS).tap { |obj|
+      obj[:data] = @jil.cast(obj[:data], :Hash)
+    }
   end
 end

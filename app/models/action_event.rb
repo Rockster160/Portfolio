@@ -18,7 +18,7 @@ class ActionEvent < ApplicationRecord
 
   validates :name, presence: true
 
-  before_save { self.timestamp ||= Time.current }
+  before_save { self.timestamp ||= ::Time.current }
 
   search_terms :id, :name, :notes
 

@@ -182,14 +182,21 @@
 [ActionEvent]
   #find(String|Numeric)
   #search(Text "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array
+  #create(content(ActionEventData))
   #add("Name" TAB String BR "Notes" TAB String? BR "Data" TAB Hash? BR "Date" TAB Date?)
   .id::Numeric
   .name::String
   .notes::String
   .data::Hash
   .date::Date
-  .update("Name" TAB String? BR "Notes" TAB String? BR "Data" TAB Hash? BR "Date" TAB Date?)::Boolean
+  .change("Name" TAB String? BR "Notes" TAB String? BR "Data" TAB Hash? BR "Date" TAB Date?)::Boolean
+  .update!(content(ActionEventData))
   .destroy::Boolean
+*[ActionEventData]
+  #name(String)
+  #notes(String)
+  #date(Date)
+  #data(content(Hash|Keyval))
 [Prompt]
   #find(String|Numeric)
   #all("complete?" Boolean(false))::Array
@@ -237,7 +244,7 @@
   #username(String)
   #permitRelay?(Boolean)
   #phone(String)
-  #data(content(Hash))
+  #data(content(Hash|Keyval))
 [Monitor]
   #loading(String:Name Boolean(true))
   #broadcast(String:Name content(MonitorData) "Loading?" Boolean(false))
