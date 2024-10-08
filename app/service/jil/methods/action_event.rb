@@ -1,5 +1,5 @@
 class Jil::Methods::ActionEvent < Jil::Methods::Base
-  PERMIT_ATTRS = [:name, :notes, :data, :date]
+  PERMIT_ATTRS = [:name, :notes, :data, :timestamp]
 
   def cast(value)
     case value
@@ -48,7 +48,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     events.find(event_data[:id]).tap { |event|
       evt_data = params(details)
       if event.update(evt_data)
-        event_callbacks(event, :changed, evt_data[:date].present?)
+        event_callbacks(event, :changed, evt_data[:timestamp].present?)
       end
     }
   end
@@ -78,8 +78,8 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     { notes: text }
   end
 
-  def date(date)
-    { timestamp: date }
+  def timestamp(timestamp)
+    { timestamp: timestamp }
   end
 
   def data(details={})
@@ -97,7 +97,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
 
   def params(details)
     @jil.cast(details, :Hash).slice(*PERMIT_ATTRS).tap { |obj|
-      obj[:data] = @jil.cast(obj[:data], :Hash)
+      obj[:data] = @jil.cast(obj[:data], :Hash) if obj.key?(:data)
     }
   end
 

@@ -35,17 +35,7 @@ class ActionEvent < ApplicationRecord
     all.as_json(only: [:id, :name, :notes, :timestamp, :data]).map(&:with_indifferent_access)
   end
 
-  def timestamp=(str_stamp)
-    return if str_stamp.blank?
-
-    super(str_stamp.in_time_zone("Mountain Time (US & Canada)"))
-  end
-
   def serialize
     as_json(only: [:id, :name, :notes, :timestamp, :data]).with_indifferent_access
-  end
-
-  def date # Used in Jil to rename method
-    timestamp
   end
 end

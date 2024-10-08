@@ -100,7 +100,7 @@ class Jil::Methods::Contact < Jil::Methods::Base
 
   def params(details)
     @jil.cast(details, :Hash).slice(*PERMIT_ATTRS).tap { |obj|
-      obj[:data] = @jil.cast(obj[:data], :Hash)
+      obj[:data] = @jil.cast(obj[:data], :Hash) if obj.key?(:data)
     }
   end
 end

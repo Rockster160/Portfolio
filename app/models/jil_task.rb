@@ -44,6 +44,21 @@ class JilTask < ApplicationRecord
     ilike(code: "%#{code}%")
   }
 
+  def self.last_exe
+    ::JilExecution.finished.order(:finished_at).last
+  end
+
+  def self.last_error
+    ::JilExecution.finished.failed.order(:finished_at).last&.ctx&.then { |ctx|
+      ctx = ctx.deep_symbolize_keys
+      {
+        timestamp: Time.zone.parse(ctx[:time_complete]),
+        error: ctx[:error],
+        line: ctx[:error_line],
+      }
+    }
+  end
+
   # refactor_function("ActionEvent.update") { |line| line.methodname = "change" }
   def self.refactor_function(function_call, &refactor)
     by_code(function_call).find_each do |task|
