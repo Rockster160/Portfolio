@@ -251,5 +251,6 @@
 *[MonitorData]
   #content(Text)
   #timestamp(Date|Numeric|Boolean)
+  #timestampFormat(["long", "short", "none"])
   #blip(Numeric?)
   #data(Hash)

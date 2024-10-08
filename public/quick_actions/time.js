@@ -68,6 +68,30 @@ Time.duration = function(ms) {
   }).join(":")
   // 03:43
 }
+Time.humanDuration = function(left, sigFigs = 2) {
+  left = Math.floor(left);
+  if (!left || left < Time.second()) { return "<1s" }
+
+  const timeLengths = {
+    w: Time.week(),
+    d: Time.day(),
+    h: Time.hour(),
+    m: Time.minute(),
+    s: Time.second()
+  };
+
+  let durations = [];
+  for (const [time, length] of Object.entries(timeLengths)) {
+    if (length > left || durations.length >= sigFigs) { continue };
+
+    const count = Math.floor(left / length);
+    left -= count * length;
+
+    durations.push(`${count}${time}`);
+  }
+
+  return durations.join(" ");
+}
 Time.monthnames = function(format) {
   let full = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
   switch (format || "full") {
@@ -124,11 +148,14 @@ Time.local = function(ms_since_epoch) {
   return hr + ":" + String(time.getMinutes()).padStart(2, "0") + mz
   // 8:03 am
 }
-Time.timeago = function(input) {
+Time.timeago = function(input, format) {
   const date = Time.at(input);
   if (date.getTime() == 0) { return "never" }
   const formatter = new Intl.RelativeTimeFormat('en');
   const msElapsed = date.getTime() - Date.now();
+  if (format == "short") {
+    return Time.humanDuration(Math.abs(msElapsed));
+  }
   for (const range of ["years", "months", "weeks", "days", "hours", "minutes", "seconds"]) {
     let rangeDuration = Time[range]()
     if (rangeDuration < Math.abs(msElapsed)) {

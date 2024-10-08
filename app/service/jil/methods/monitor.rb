@@ -42,6 +42,10 @@ class Jil::Methods::Monitor < Jil::Methods::Base
     { timestamp: val }
   end
 
+  def timestampFormat(val)
+    { timestamp_format: val }
+  end
+
   def blip(count)
     { blip: count&.zero? ? nil : count.to_s.first(3).presence }
   end

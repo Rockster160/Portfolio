@@ -88,7 +88,13 @@ export class Monitor {
     if (new_timestamp) { sync.setAttribute("data-timestamp", new_timestamp) }
 
     let timestamp = new_timestamp || parseInt(sync.getAttribute("data-timestamp"))
-    if (timestamp) { sync.textContent = Time.timeago(timestamp) }
+    if (timestamp) {
+      if (monitor.timestampFormat == "none") {
+        sync.textContent = ""
+      } else {
+        sync.textContent = Time.timeago(timestamp, monitor.timestampFormat)
+      }
+    }
   }
 
   do(action) {
@@ -115,6 +121,7 @@ Monitor.socket = new AuthWS("MonitorChannel", {
 
     monitor.loading = false
     monitor.blip = data.blip
+    if (data.timestamp_format) { monitor.timestampFormat = data.timestamp_format }
     monitor.timestamp = data.timestamp * 1000
     monitor.content = toMd(data.result)
   },
