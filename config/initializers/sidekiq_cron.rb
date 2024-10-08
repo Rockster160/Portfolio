@@ -1,5 +1,6 @@
 return if ENV["RAILS_CONSOLE"] == "true"
 return if ENV["LOCAL_QUEUE"] == "true"
+return unless defined?(Rails::Server)
 return if Rails.env.test?
 # Based on UTC time
 
