@@ -53,6 +53,7 @@ class DotHash < Hash
       bdata = branches(v)
       case bdata
       when ::Hash
+        obj["#{format_key}"] = "" if bdata.blank?
         bdata.each do |bkey, bval|
           obj["#{format_key}.#{bkey}"] = bval
         end

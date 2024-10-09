@@ -41,6 +41,8 @@ RSpec.describe JarvisTask do
         { user: admin, listener: "event:note:/(?<text>.*?)(\((?<cals>\d+) ?cals?\))?/" },
         { user: admin, listener: "event:/food|drink|snack|treat|alcohol/" },
         { user: admin, listener: "tell:OR(/is the garage (open|closed)/ /check garage/)" },
+        { user: admin, listener: "shortcut:data" },
+        { user: admin, listener: "shortcut" },
       ])
 
       @listeners = []
@@ -64,6 +66,18 @@ RSpec.describe JarvisTask do
       ])
       expect_trigger_listeners(other_user, :travel, { action: "Arrive", location: "Home" }, [
         "travel",
+      ])
+      expect_trigger_listeners(admin, :shortcut, { shortcut: { data: { something: {} } } }, [
+        "shortcut",
+        "shortcut:data",
+      ])
+      expect_trigger_listeners(admin, :shortcut, { shortcut: { data: { something: [] } } }, [
+        "shortcut",
+        "shortcut:data",
+      ])
+      expect_trigger_listeners(admin, :shortcut, { shortcut: [{data: nil}] }, [
+        "shortcut",
+        "shortcut:data",
       ])
       expect_trigger_listeners(admin, :travel, { whatever: "home" }, [
         "travel",

@@ -113,7 +113,7 @@ RSpec.describe Jil::Methods::ActionEvent do
           name: "Food",
           timestamp: ts,
           notes: "Dinner",
-          data: {},
+          data: nil,
         },
       })
       expect(ctx[:output]).to eq([])
