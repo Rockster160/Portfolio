@@ -457,6 +457,7 @@ export default class Statement {
             } else {
               statement.moveAfter(this)
             }
+            statement.focus()
             History.record()
           }
         }
