@@ -147,6 +147,7 @@ class JilTask < ApplicationRecord
   def match_run(trigger, trigger_data, force: false)
     first_match = nil
     did_match = listener_match?(trigger) { |sub_listener|
+      next true if sub_listener == trigger
       matcher = ::SearchBreakMatcher.new(sub_listener, { trigger => trigger_data })
       matcher.match?.tap { |m| first_match ||= matcher if m }
     }
@@ -154,7 +155,7 @@ class JilTask < ApplicationRecord
     ::Jarvis.log("[#{id}]\e[35m#{listener}")
 
     # pretty_log(trigger, trigger_data) if Rails.env.development?
-    execute(trigger_data.merge(first_match.regex_match_data))
+    execute(trigger_data.merge(first_match&.regex_match_data || { match_list: [], named_captures: {} }))
   end
 
   def execute(data={})
