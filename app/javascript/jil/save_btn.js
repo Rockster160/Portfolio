@@ -34,7 +34,7 @@ export default class SaveBtn {
   get error() { return this._error }
   set error(msg) {
     console.error(msg)
-    this.trigger("error")
+    this.trigger("error", msg)
     this._saving = false
     this._error = msg
     this.updateState()
@@ -93,15 +93,15 @@ export default class SaveBtn {
     return this // For chaining
   }
   onSave(callback) {
-    this.btn.addEventListener("save-btn:save-start", async (evt) => await callback())
+    this.btn.addEventListener("save-btn:save-start", async (evt) => await callback(evt))
     return this // For chaining
   }
   onSaveDone(callback) {
-    this.btn.addEventListener("save-btn:save-success", async (evt) => await callback())
+    this.btn.addEventListener("save-btn:save-success", async (evt) => await callback(evt))
     return this // For chaining
   }
   onError(callback) {
-    this.btn.addEventListener("save-btn:error", async (evt) => await callback())
+    this.btn.addEventListener("save-btn:error", async (evt) => await callback(evt))
     return this // For chaining
   }
 }

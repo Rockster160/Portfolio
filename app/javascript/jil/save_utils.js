@@ -43,13 +43,15 @@ export default function saveUtils() {
       formDirty = false
       savedIdx = History.currentIdx
       document.querySelectorAll(".jil-temp-code").forEach(item => item.remove())
-      if (!res.ok) { throw new Error(`HTTP error! status: ${res.status}`) }
+      if (!res.ok) { throw new Error(`HTTP error! status: ${res.status} response: ${JSON.stringify(res)}`) }
       res.json().then(function(json) {
         if (newTask && json.url) {
           window.location.href = json.url
         }
       })
     })
+  }).onError(async (evt) => {
+    document.querySelector(".results .error").innerText = evt.detail || "[SAVE] Unknown Error"
   })
 
   let runBtn = new SaveBtn(document.querySelector(".btn-run"))
@@ -61,11 +63,13 @@ export default function saveUtils() {
       body: JSON.stringify({ code: code }),
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
     }).then(function(res) {
-      if (!res.ok) { throw new Error(`HTTP error! status: ${res.status}`) }
+      if (!res.ok) { throw new Error(`HTTP error! status: ${res.status} response: ${JSON.stringify(res)}`) }
       // res.json().then(function(json) {
       //   console.log("Started")
       // })
     })
+  }).onError(async (evt) => {
+    document.querySelector(".results .error").innerText = evt.detail || "[RUN] Unknown Error"
   })
 
   window.onbeforeunload = function(evt) {
