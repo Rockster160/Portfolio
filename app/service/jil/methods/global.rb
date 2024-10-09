@@ -12,6 +12,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     case line.methodname
     when :input_data then @jil.ctx[:input_data]
     when :params then @jil.ctx.dig(:input_data, :params)
+    when :functionParams then splatParams(line)
     when :exit then @jil.ctx[:state] = :exit
     when :return
       @jil.ctx[:state] = :return
@@ -41,6 +42,15 @@ class Jil::Methods::Global < Jil::Methods::Base
 
   def logic_if(condition, do_result, else_result)
     evalarg(condition) ? evalarg(do_result) : evalarg(else_result)
+  end
+
+  def splatParams(line)
+    array = @jil.ctx.dig(:input_data, :params)
+    line.args.flatten.map.with_index { |arg, idx|
+      @jil.cast(array[idx], arg.cast).tap { |val|
+        set_value(arg.varname, val, type: arg.cast)
+      }
+    }.compact
   end
 
   def get_cache(key, var)

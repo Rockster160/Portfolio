@@ -16,6 +16,7 @@
   #input_data("Input Data")::Hash
   #return(Any?)
   #params::Array
+  #functionParams(content([Keyword.Item]))::Array # Used in Function TASKS, not inline functions
   #if("IF" content "DO" content "ELSE" content)::Any
   #ternary(Boolean|Any " ? " Any " : " Any)::Any # Useful for setting vars
   #get(String)::Any // Variable reference
