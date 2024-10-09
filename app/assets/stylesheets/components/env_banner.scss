@@ -1,14 +1,15 @@
 .env-banner {
-  background: $base-complementary;
-  text-align: center;
   position: fixed;
-  height: 10px;
-  font-size: 10px;
-  color: $text-color;
-  left: 0;
   top: 0;
   right: 0;
+  left: 0;
   z-index: 1001;
+  background: $base-complementary;
+  height: 10px;
+  color: $text-color;
+  font-size: 10px;
+  line-height: 10px;
+  text-align: center;
 }
 
 body:has(.env-banner) {
