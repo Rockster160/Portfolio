@@ -147,10 +147,10 @@
   .any?(enum_content)::Boolean
   .none?(enum_content)::Boolean
   .all?(enum_content)::Boolean
-  .reverse(Array)
-  .reverse!(Array)
-  .uniq(Array)
-  .uniq!(Array)
+  .reverse()
+  .reverse!()
+  .uniq(g)
+  .uniq!(g)
   .sort_by(enum_content)
   .sort_by!(enum_content)
   .sort(["Ascending" "Descending" "Reverse" "Random"])
