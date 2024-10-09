@@ -15,7 +15,6 @@ window.Statement = Statement
 window.History = History
 window.selected = undefined
 window.formSubmitting = false
-window.savedIdx = 0
 Object.defineProperty(window, "formDirty", {
   get() {
     return this._formDirty;
@@ -28,7 +27,7 @@ Object.defineProperty(window, "formDirty", {
 
 History.record = function() {
   if (History.add(Statement.toCode())) {
-    formDirty = true
+    formDirty = !History.noChange()
     console.log("Recorded: ", History.currentIdx)
   }
 }
@@ -45,7 +44,6 @@ const laterMoveAfter = (other) => {
 const laterMoveBefore = (other) => {
   window.moveStatement = (statement) => statement.moveBefore(other)
 }
-
 const placeStatement = (statement, context, top) => {
   if (window.moveStatement) {
     window.moveStatement(statement)
@@ -119,31 +117,6 @@ Keyboard.on(["Delete"], (evt) => {
     History.record()
   }
 })
-// Save
-Keyboard.on(["Meta", "s"], (evt) => {
-  evt.preventDefault()
-  document.querySelector(".btn-save").click()
-})
-// Redo
-Keyboard.on(["Meta", "Shift", "z"], (evt) => {
-  if (notInput()) {
-    const code = History.redo()
-    console.log("Redo", History.currentIdx, savedIdx)
-    if (code === undefined || code === null) { return }
-    Statement.reloadFromText(code)
-    formDirty = History.currentIdx !== savedIdx
-  }
-})
-// Undo
-Keyboard.on(["Meta", "z"], (evt) => {
-  if (notInput()) {
-    const code = History.undo()
-    console.log("Undo", History.currentIdx, savedIdx)
-    if (code === undefined || code === null) { return }
-    Statement.reloadFromText(code)
-    formDirty = History.currentIdx !== savedIdx
-  }
-})
 // Unselect currently selected statement
 Keyboard.on(["Escape"], (evt) => {
   if (notInput() && window.selected) { window.selected.selected = false }
@@ -180,6 +153,72 @@ Keyboard.on(["Tab"], (evt) => {
       }
     }
   }
+})
+// Save
+Keyboard.on(["Meta", "s"], (evt) => {
+  evt.preventDefault()
+  document.querySelector(".btn-save").click()
+})
+// Redo
+Keyboard.on(["Meta", "Shift", "z"], (evt) => {
+  if (notInput()) {
+    const code = History.redo()
+    console.log("Redo", History.savedIdx, History.currentIdx)
+    if (code === undefined || code === null) { return }
+    Statement.reloadFromText(code)
+    formDirty = !History.noChange()
+  }
+})
+// Undo
+Keyboard.on(["Meta", "z"], (evt) => {
+  if (notInput()) {
+    const code = History.undo()
+    console.log("Undo", History.savedIdx, History.currentIdx)
+    if (code === undefined || code === null) { return }
+    Statement.reloadFromText(code)
+    formDirty = !History.noChange()
+  }
+})
+// Cmd arrow testing
+Keyboard.on(["Meta", "↑"], (evt) => {
+  if (notInput()) {
+    console.log("Up")
+  }
+})
+Keyboard.on(["Meta", "←"], (evt) => {
+  if (notInput()) {
+    console.log("Left")
+  }
+})
+Keyboard.on(["Meta", "→"], (evt) => {
+  if (notInput()) {
+    console.log("Right")
+  }
+})
+Keyboard.on(["Meta", "↓"], (evt) => {
+  if (notInput()) {
+    console.log("Down")
+  }
+})
+// Fixes for Meta key events
+// document.addEventListener("keydown", function(evt) {
+//   if (!evt.metaKey) { return }
+//   if (event.key === "s") {
+//     event.preventDefault(); // Prevent default save action
+//     console.log("Cmd+S pressed");
+//   }
+//
+//   if (event.key === "z") {
+//     if (event.shiftKey) {
+//       console.log("Cmd+Shift+Z pressed"); // Redo
+//     } else {
+//       console.log("Cmd+Z pressed"); // Undo
+//     }
+//   }
+// })
+Keyboard.on(["Alt", "↓"], (evt) => {
+  evt.preventDefault()
+  console.log("Alt ↓!")
 })
 
 // Delete everything on middle click outside of the code

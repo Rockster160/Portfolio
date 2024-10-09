@@ -41,7 +41,7 @@ export default function saveUtils() {
     }).then(function(res) {
       formSubmitting = false
       formDirty = false
-      savedIdx = History.currentIdx
+      History.savedIdx = History.currentIdx
       document.querySelectorAll(".jil-temp-code").forEach(item => item.remove())
       if (!res.ok) { throw new Error(`HTTP error! status: ${res.status} response: ${JSON.stringify(res)}`) }
       res.json().then(function(json) {

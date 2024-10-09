@@ -23,6 +23,7 @@ export default class Dropdown {
     this.selectFirst()
   }
   static moveToMouse() {
+    if (!Mouse.x || !Mouse.y) { return }
     this.reposition(Mouse.x, Mouse.y)
   }
   static reposition(x, y) {

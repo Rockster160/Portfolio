@@ -1,5 +1,6 @@
 export default class History {
   static states = [];
+  static savedIdx = 0;
   static currentIdx = 0;
   static maxStates = 100;
 
@@ -12,6 +13,11 @@ export default class History {
     this.states.push(newState);
     this.currentIdx = this.states.length - 1;
     return true
+  }
+
+  static noChange() {
+    if (this.savedIdx == this.currentIdx) { return true }
+    return this.states[this.savedIdx] == this.getState()
   }
 
   static getState() {

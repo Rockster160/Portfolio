@@ -16,7 +16,7 @@ class Jarvis::Say < Jarvis::Action
   def valid_words?
     return false if @rx.match_any_words?(@msg, @current_reserved_words)
 
-    @rx.match_any_words?(@msg, say_words)
+    @msg.match?(/^\s*say\b/i)
   end
 
   def parse_text_words

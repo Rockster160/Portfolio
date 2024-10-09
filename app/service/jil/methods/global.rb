@@ -78,7 +78,7 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def commandAt(date, text)
-    ::JarvisWorker.perform_at(date, @jil.user, text)
+    ::JarvisWorker.perform_at(date, @jil.user.id, text)
   end
 
   def broadcast_websocket(channel, data)
