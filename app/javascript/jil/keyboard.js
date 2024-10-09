@@ -1,3 +1,7 @@
+const mapKey = (key) => {
+  return key == " " ? "Space" : key
+}
+
 export default class Keyboard {
   static #held = new Set();
   static get held() { return Keyboard.#held };
@@ -32,13 +36,15 @@ export default class Keyboard {
 
 document.addEventListener("keydown", function(evt) {
   if (evt.metaKey) { return } // metaKey causes a LOT of weirdness with keys because it doesn't trigger a keyup event
-  if (!Keyboard.held.has(evt.key)) {
-    Keyboard.held.add(evt.key)
+  if (!Keyboard.held.has(mapKey(evt.key))) {
+    Keyboard.held.add(mapKey(evt.key))
+    // console.log(Keyboard.held)
     document.dispatchEvent(new CustomEvent("keyboard:press", { detail: { evt: evt } }))
   }
 })
 
 document.addEventListener("keyup", function(evt) {
   if (evt.metaKey) { return } // metaKey causes a LOT of weirdness with keys because it doesn't trigger a keyup event
-  Keyboard.held.delete(evt.key)
+  Keyboard.held.delete(mapKey(evt.key))
+  // console.log(Keyboard.held)
 })
