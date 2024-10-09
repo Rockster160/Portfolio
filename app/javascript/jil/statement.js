@@ -374,7 +374,7 @@ export default class Statement {
     if (top) { this.moveTo(0) }
   }
   moveBefore(other) {
-    this.wrapper.insertBefore(this.node, other.node)
+    other.wrapper.insertBefore(this.node, other.node)
     this.moved()
   }
   moveAfter(other) {

@@ -27,80 +27,120 @@ Object.defineProperty(window, "formDirty", {
 })
 
 History.record = function() {
-  formDirty = true
-  History.add(Statement.toCode())
-  console.log("Recorded: ", History.currentIdx)
+  if (History.add(Statement.toCode())) {
+    formDirty = true
+    console.log("Recorded: ", History.currentIdx)
+  }
+}
+
+const notInput = (node) => {
+  node = node || document.activeElement
+  return !["INPUT", "TEXTAREA", "SELECT"].includes(node.tagName)
+}
+
+window.moveStatement = null
+const laterMoveAfter = (other) => {
+  window.moveStatement = (statement) => statement.moveAfter(other)
+}
+const laterMoveBefore = (other) => {
+  window.moveStatement = (statement) => statement.moveBefore(other)
 }
 
 saveUtils()
 History.record() // Store initial state in history
 formDirty = false // Initial load should not dirty the state
 
+// Add a new function below/above the current selected or hovered one
+Keyboard.on(["Space"], (evt) => {
+  evt.preventDefault()
+  if (notInput()) {
+    let statement = window.selected
+    if (!statement) {
+      statement = Statement.from(document.elementFromPoint(Mouse.x, Mouse.y))
+    }
+
+    let wrapper = null
+    if (statement) {
+      const node = statement.node
+      wrapper = node.closest(".statement") || node.closest(".wrapper")
+    }
+    wrapper = wrapper || document.querySelector(".wrapper")
+    let refs = wrapper.querySelectorAll(evt.shiftKey ? ".content-dropdown" : ".content-dropdown.below")
+    if (refs.length == 0) { refs = wrapper.querySelectorAll(".reference") }
+    if (statement) {
+      const other = statement
+      evt.shiftKey ? laterMoveBefore(other) : laterMoveAfter(other)
+    }
+    refs[evt.shiftKey ? 0 : refs.length - 1].click()
+    Dropdown.moveToMouse()
+  }
+})
+// Quick-Run
 Keyboard.on(["Meta", "Enter"], (evt) => {
   evt.preventDefault()
   document.querySelector(".btn-run").click()
 })
+// Add a new function at the top/bottom of the current container
 Keyboard.on(["Alt", "Enter"], (evt) => {
   const wrapper = window.selected?.node || document
   let refs = wrapper.querySelectorAll(evt.shiftKey ? ".content-dropdown" : ".content-dropdown.below")
   if (refs.length == 0) { refs = wrapper.querySelectorAll(".reference") }
   refs[evt.shiftKey ? 0 : refs.length - 1].click()
+  Dropdown.moveToMouse()
 })
+// Delete selected statement
 Keyboard.on(["Backspace"], (evt) => {
-  if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
-    if (window.selected) {
-      window.selected.remove()
-      History.record()
-    }
+  if (notInput() && window.selected) {
+    window.selected.remove()
+    History.record()
   }
 })
+// Delete selected statement
 Keyboard.on(["Delete"], (evt) => {
-  if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
-    if (window.selected) {
-      window.selected.remove()
-      History.record()
-    }
+  if (notInput() && window.selected) {
+    window.selected.remove()
+    History.record()
   }
 })
+// Save
 Keyboard.on(["Meta", "s"], (evt) => {
   evt.preventDefault()
   document.querySelector(".btn-save").click()
 })
+// Redo
 Keyboard.on(["Meta", "Shift", "z"], (evt) => {
-  if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
-    console.log("Redo")
+  if (notInput()) {
     const code = History.redo()
-    console.log(History.currentIdx, savedIdx)
+    console.log("Redo", History.currentIdx, savedIdx)
     if (code === undefined || code === null) { return }
     Statement.reloadFromText(code)
     formDirty = History.currentIdx !== savedIdx
   }
 })
+// Undo
 Keyboard.on(["Meta", "z"], (evt) => {
-  if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
-    console.log("Undo")
+  if (notInput()) {
     const code = History.undo()
-    console.log(History.currentIdx, savedIdx)
+    console.log("Undo", History.currentIdx, savedIdx)
     if (code === undefined || code === null) { return }
     Statement.reloadFromText(code)
     formDirty = History.currentIdx !== savedIdx
   }
 })
+// Unselect currently selected statement
 Keyboard.on(["Escape"], (evt) => {
-  if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
-    if (window.selected) { window.selected.selected = false }
-  }
+  if (notInput() && window.selected) { window.selected.selected = false }
 })
+// Mark selected statement as commented
 Keyboard.on(["/"], (evt) => {
-  if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
-    if (window.selected) {
-      window.selected.commented = !window.selected.commented
-      History.record()
-    }
+  if (notInput() && window.selected) {
+    window.selected.commented = !window.selected.commented
+    History.record()
   }
 })
+// Tab between "selected" statements
 Keyboard.on(["Tab"], (evt) => {
-  if (!["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+  if (notInput()) {
     const list = Array.from(document.querySelectorAll(".statement-wrapper"))
     evt.preventDefault()
     if (!evt.shiftKey) {
@@ -125,6 +165,7 @@ Keyboard.on(["Tab"], (evt) => {
   }
 })
 
+// Delete everything on middle click outside of the code
 document.addEventListener("mousedown", function(event) {
   if (event.target.matches("a, .btn, input, .statement")) { return }
   if (event.button === 1) { // middle click
@@ -133,6 +174,7 @@ document.addEventListener("mousedown", function(event) {
   }
 });
 
+// Open the dropdown to select a statement to add to the code
 document.addEventListener("click", function(evt) {
   if (evt.target.matches(".reference") || evt.target.matches(".content-dropdown")) {
     let target = evt.target.closest(".content-dropdown") || evt.target
@@ -149,8 +191,18 @@ document.addEventListener("click", function(evt) {
       const content = target.closest(".content")
 
       let addBlock = function(str) {
-        let statement = Statement.fromText(str)
-        if (top) { statement[0].moveTo(0) }
+        let statement = Statement.fromText(str)[0] // FIXME: Should be all added statements, not first
+
+        if (window.moveStatement) {
+          window.moveStatement(statement[0])
+        } else {
+          if (context) {
+            statement.moveInside(context, top)
+          } else {
+            if (top) { statement[0].moveTo(0) }
+          }
+        }
+        History.record()
       }
 
       let passedOptions = function() {
@@ -169,7 +221,11 @@ document.addEventListener("click", function(evt) {
                   returntype: method.returntype,
                   method: method.name,
                 })
-                statement.moveInside(context, top)
+                if (window.moveStatement) {
+                  window.moveStatement(statement)
+                } else {
+                  statement.moveInside(context, top)
+                }
                 History.record()
               }
             }
@@ -196,10 +252,14 @@ document.addEventListener("click", function(evt) {
                 returntype: method.returntype,
                 method: method.name,
               })
-              if (content) {
-                statement.moveInside(content, top)
+              if (window.moveStatement) {
+                window.moveStatement(statement)
               } else {
-                if (top) { statement.moveTo(0) }
+                if (content) {
+                  statement.moveInside(content, top)
+                } else {
+                  if (top) { statement.moveTo(0) }
+                }
               }
               History.record()
             }
@@ -209,7 +269,7 @@ document.addEventListener("click", function(evt) {
 
       let paste = {
         icon: fa("paste regular"), title: "Paste",
-        callback: () => addBlock(navigator.clipboard.readText()) && History.record()
+        callback: () => addBlock(navigator.clipboard.readText())
       }
 
       Dropdown.showAt(leftPosition, topPosition, [
@@ -224,6 +284,7 @@ document.addEventListener("click", function(evt) {
   }
 })
 
+// Handle dup, inspect, delete, and selected states
 document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-dup")) {
     console.log("dup")
@@ -245,16 +306,20 @@ document.addEventListener("click", function(evt) {
     return
   }
 
-  if (evt.target.closest(".statement-wrapper")) {
-    if (!["INPUT", "SELECT", "TEXTAREA"].includes(evt.target.tagName)) {
-      let statement = Statement.from(evt.target)
-      if (statement) { statement.selected = !statement.selected }
+  // Do NOT mark a statement as selected when clicking the dropdowns
+  if (!evt.target.closest(".content-dropdown")) {
+    if (evt.target.closest(".statement-wrapper")) {
+      if (notInput(evt.target)) {
+        let statement = Statement.from(evt.target)
+        if (statement) { statement.selected = !statement.selected }
+      }
+    } else {
+      Statement.clearSelected()
     }
-  } else {
-    Statement.clearSelected()
   }
 })
 
+// Change varname
 document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-varname")) {
     let statement = Statement.from(evt.target)
@@ -270,6 +335,7 @@ document.addEventListener("click", function(evt) {
   }
 })
 
+// Change refname (object the function is being called on)
 document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-refname")) {
     let statement = Statement.from(evt.target)
@@ -293,6 +359,7 @@ document.addEventListener("click", function(evt) {
   }
 })
 
+// Change returntype of statement
 document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-returntype")) {
     let statement = Statement.from(evt.target)
@@ -310,6 +377,8 @@ document.addEventListener("click", function(evt) {
   }
 })
 
+// Controls the pop up after clicking the left dropdown arrow on inputs
+// Sets whether <input> or ref
 document.addEventListener("click", function(evt) {
   let btn = evt.target.closest("btn")
   if (btn) {
@@ -339,6 +408,7 @@ document.addEventListener("click", function(evt) {
   }
 })
 
+// Record history events
 document.addEventListener("input", (event) => {
   const target = event.target;
 
@@ -353,16 +423,7 @@ function handleInputBlur(event) {
   History.record()
 }
 
-document.addEventListener("mousedown", function(event) {
-  if (event.button === 1 ) { // middle click
-    // if statement
-      // if Keyboard.isPressed("CMD")
-        // Open dropdown to add new function BEFORE statement
-      // else
-        // Open dropdown to add new function AFTER statement
-  }
-});
-
+// Right click a statement
 window.oncontextmenu = function(evt) {
   evt.preventDefault()
   if (evt.target.closest(".statement-wrapper")) {

@@ -11,7 +11,7 @@ export default class Dropdown {
   static shown() { return !this.node.classList.contains("hidden") }
   static show(opts) { this.showAt(Mouse.x, Mouse.y, opts) }
   static showAt(x, y, opts) {
-    this.hide()
+    this.hide(false)
     let node = this.node
     node.focus()
 
@@ -19,9 +19,17 @@ export default class Dropdown {
 
     node.classList.remove("hidden")
 
+    this.reposition(x, y)
+    this.selectFirst()
+  }
+  static moveToMouse() {
+    this.reposition(Mouse.x, Mouse.y)
+  }
+  static reposition(x, y) {
+    const node = this.node
     const dropdownRect = node.getBoundingClientRect()
-    const pageWidth = document.documentElement.clientWidth - 20 // 20 to give some padding
-    const pageHeight = document.documentElement.clientHeight - 20 // 20 to give some padding
+    const pageWidth = document.documentElement.clientWidth - 20 // 20 to pad page edges
+    const pageHeight = document.documentElement.clientHeight - 20 // 20 to pad page edges
 
     let height = dropdownRect.height
     if (y + height > pageHeight) { // Overflowing vertically
@@ -35,7 +43,7 @@ export default class Dropdown {
 
     let width = dropdownRect.width
     x = x - (width/2) // Center on the desired x
-    if (x + width > pageWidth) { // Overflowing vertically
+    if (x + width > pageWidth) { // Overflowing horizontally
       width = pageWidth - x
       const minOverflowWidth = clamp(200, 200, pageWidth) // Cap at page width
       if (width < minOverflowWidth && dropdownRect.width > minOverflowWidth) {
@@ -48,7 +56,6 @@ export default class Dropdown {
     node.style.left = `${x}px`
     node.style.height = `${height}px`
     node.style.width = `${width}px`
-    this.selectFirst()
   }
 
   static buildOpts(node, opts) {
@@ -92,13 +99,14 @@ export default class Dropdown {
     })
   }
 
-  static hide() {
+  static hide(clearMoveStatement=true) {
     this.search = []
     this.node.classList.add("hidden")
     this.node.querySelectorAll("li").forEach(li => li.remove())
 
     this.node.style.height = "auto"
     this.node.style.width = "200px"
+    if (clearMoveStatement) { window.moveStatement = null }
   }
 
   static removeSelected() {
@@ -256,6 +264,6 @@ document.addEventListener("keydown", (evt) => {
       Dropdown.search.push(evt.key)
       Dropdown.updateSearch()
     }
-    if (evt.key == "Escape") { Dropdown.hide() }
+    if (evt.key == "Escape") { Dropdown.hide(false) }
   }
 })
