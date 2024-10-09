@@ -1,5 +1,6 @@
 *[Object]
   .inspect::None
+  .presence::Any
 *[Keyword]
   Object::Any
   Key::String

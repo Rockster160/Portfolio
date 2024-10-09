@@ -54,6 +54,8 @@ class Jil::Methods::Base
       token_val(line.objname).tap { |str|
         @jil.ctx[:output] << "[#{line.objname}]#{::Jil::Methods::String.new(@jil, @ctx).cast(str).gsub(/^"|"$/, "")}"
       }
+    when :presence
+      token_val(line.objname).presence
     else
       respond_to?(:execute) ? execute(line) : fallback(line)
     end
