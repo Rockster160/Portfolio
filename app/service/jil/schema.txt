@@ -190,7 +190,7 @@
   .name::String
   .notes::String
   .data::Hash
-  .date::Date
+  .timestamp::Date
   .update!(content(ActionEventData))
   .destroy::Boolean
 *[ActionEventData]
