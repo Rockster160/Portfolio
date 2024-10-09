@@ -8,7 +8,7 @@
     <%= stylesheet_link_tag "jil", media: "all" %>
   </head>
   <body>
-    <%= render "layouts/env_banner" unless Rails.env.production? %>
+    <%= content_tag(:div, "[#{Rails.env.upcase}]", class: "env-banner") unless Rails.env.production? %>
     <%= yield %>
   </body>
 </html>
