@@ -16,10 +16,10 @@ class Jarvis::Tesla < Jarvis::Action
   def valid_words?
     return false if @rx.match_any_words?(@msg, @current_reserved_words)
 
-    @rx.match_any_words?(@msg, *car_commands)
+    @rx.match_any_words?(@msg, *car_strict_commands)
   end
 
-  def car_commands
+  def car_strict_commands
     [
       :doors,
       :door,
@@ -31,28 +31,34 @@ class Jarvis::Tesla < Jarvis::Action
       :seat,
       :update,
       :reload,
+      :boot,
+      :trunk,
+      :frunk,
+      :honk,
+      :horn,
+      :vent,
+      :defrost,
+      :climate,
+    ]
+  end
+
+  def car_soft_commands
+    [
+      *car_strict_commands,
       :off,
       :stop,
       :on,
       :start,
       :close,
       :shut,
-      :boot,
-      :trunk,
       :lock,
       :unlock,
-      :frunk,
       :temp,
       :cool,
       :heat,
       :warm,
       :find,
       :where,
-      :honk,
-      :horn,
-      :vent,
-      :defrost,
-      :climate,
     ]
   end
 
@@ -74,7 +80,7 @@ class Jarvis::Tesla < Jarvis::Action
       words = "#{words} open"
     end
 
-    words = words.gsub(/(.+)(#{@rx.words(car_commands)})/) do |found|
+    words = words.gsub(/(.+)(#{@rx.words(car_soft_commands)})/) do |found|
       cmd = Regexp.last_match(2)
       "#{Regexp.last_match(1)}"
     end
