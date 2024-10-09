@@ -1,5 +1,5 @@
 import { fa, faStack } from "./icon.js"
-import { genHex, genLetter, clamp } from "./form_helpers.js"
+import { genHex, genLetter, clamp, inputSelector } from "./form_helpers.js"
 import Dropdown from "./dropdown.js"
 import Tokenizer from "./tokenizer.js"
 
@@ -198,6 +198,10 @@ export default class Statement {
   }
   updateReferences() {
     this.downReferences().forEach(statement => statement.reference = this)
+  }
+
+  focus() {
+    this.wrapper.querySelector(inputSelector)?.focus()
   }
 
   get selected() { return this.node.classList.contains("selected") }

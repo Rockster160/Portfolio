@@ -12,7 +12,7 @@
   Arg(String:Name)::Any
   FuncReturn("Return" TAB Any)::Any
 [Global]
-  #input_data::Hash
+  #input_data("Input Data")::Hash
   #return(Any?)
   #params::Array
   #if("IF" content "DO" content "ELSE" content)::Any

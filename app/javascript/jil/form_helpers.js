@@ -1,6 +1,8 @@
 import Schema from "./schema.js"
 import sortable from "./sortable.js"
 
+export const inputSelector = "input:not(:disabled), select:not(:disabled), textarea:not(:disabled)"
+
 export function element(tag, data) {
   let ele = document.createElement(tag)
   if (data) {

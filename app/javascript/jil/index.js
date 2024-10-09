@@ -46,14 +46,31 @@ const laterMoveBefore = (other) => {
   window.moveStatement = (statement) => statement.moveBefore(other)
 }
 
+const placeStatement = (statement, context, top) => {
+  if (window.moveStatement) {
+    window.moveStatement(statement)
+    window.moveStatement = null
+  } else {
+    if (context) {
+      statement.moveInside(context, top)
+    } else {
+      if (top) { statement.moveTo(0) }
+    }
+  }
+  statement.focus()
+  History.record()
+}
+
+
 saveUtils()
 History.record() // Store initial state in history
 formDirty = false // Initial load should not dirty the state
 
 // Add a new function below/above the current selected or hovered one
 Keyboard.on(["Space"], (evt) => {
-  evt.preventDefault()
   if (notInput()) {
+    evt.preventDefault()
+
     let statement = window.selected
     if (!statement) {
       statement = Statement.from(document.elementFromPoint(Mouse.x, Mouse.y))
@@ -192,17 +209,7 @@ document.addEventListener("click", function(evt) {
 
       let addBlock = function(str) {
         let statement = Statement.fromText(str)[0] // FIXME: Should be all added statements, not first
-
-        if (window.moveStatement) {
-          window.moveStatement(statement[0])
-        } else {
-          if (context) {
-            statement.moveInside(context, top)
-          } else {
-            if (top) { statement[0].moveTo(0) }
-          }
-        }
-        History.record()
+        placeStatement(statement, context || content, top)
       }
 
       let passedOptions = function() {
@@ -221,12 +228,7 @@ document.addEventListener("click", function(evt) {
                   returntype: method.returntype,
                   method: method.name,
                 })
-                if (window.moveStatement) {
-                  window.moveStatement(statement)
-                } else {
-                  statement.moveInside(context, top)
-                }
-                History.record()
+                placeStatement(statement, context, top)
               }
             }
           } else {
@@ -252,16 +254,7 @@ document.addEventListener("click", function(evt) {
                 returntype: method.returntype,
                 method: method.name,
               })
-              if (window.moveStatement) {
-                window.moveStatement(statement)
-              } else {
-                if (content) {
-                  statement.moveInside(content, top)
-                } else {
-                  if (top) { statement.moveTo(0) }
-                }
-              }
-              History.record()
+              placeStatement(statement, content, top)
             }
           }
         }).filter(Boolean)
@@ -408,7 +401,7 @@ document.addEventListener("click", function(evt) {
   }
 })
 
-// Record history events
+// Record history events of inputs being edited
 document.addEventListener("input", (event) => {
   const target = event.target;
 
