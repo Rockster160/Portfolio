@@ -442,12 +442,18 @@ export default class Statement {
           text: `#${method.name}`,
           upcoming: method.upcoming,
           callback: () => {
-            (new Statement({
+            const statement = new Statement({
               reference: this,
               type: method.type,
               returntype: method.returntype,
               method: method.name,
-            })).moveAfter(this)
+            })
+            if (window.moveStatement) {
+              window.moveStatement(statement)
+            } else {
+              statement.moveAfter(this)
+            }
+            History.record()
           }
         }
       })
