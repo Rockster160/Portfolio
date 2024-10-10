@@ -6,6 +6,8 @@ class Jil::Methods::Numeric < Jil::Methods::Base
     when ::Array, ::Hash then value.length
     else value.to_f.then { |n| n.to_i == n ? n.to_i : n }
     end
+  rescue NoMethodError
+    value.respond_to?(:id) ? cast(value.id) : 0
   end
 
   def self.op(val1, operator, val2)

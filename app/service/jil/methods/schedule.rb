@@ -1,7 +1,10 @@
 class Jil::Methods::Schedule < Jil::Methods::Base
   PERMIT_ATTRS = [:execute_at, :trigger, :data]
   def cast(value)
-    @jil.cast(value, :Hash)
+    case value
+    when ::Schedule then value.serialize
+    else @jil.cast(value, :Hash)
+    end
   end
 
   # [Schedule]
@@ -45,13 +48,14 @@ class Jil::Methods::Schedule < Jil::Methods::Base
     schedules.find(schedule[:id])&.tap { |s|
       s.update(params(details))
       ::Jil::Schedule.update(s)
-    }
+    }.serialize
   end
 
   def cancel!(schedule)
     schedules.find(schedule[:id])&.tap { |s|
       ::Jil::Schedule.cancel(s)
-    }
+      s.destroy
+    }.serialize.merge(canceled: true).except(:id)
   end
 
   # [ScheduleData]

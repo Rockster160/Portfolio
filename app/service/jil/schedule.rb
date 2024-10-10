@@ -16,7 +16,7 @@ module Jil::Schedule
     )
     return unless schedule.persisted?
 
-    add_job(schedule)
+    add_job(schedule) unless far_future?(schedule)
     schedule
   end
 
