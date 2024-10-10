@@ -172,6 +172,7 @@ const moveSelectionUp = () => {
     if (idx > list.length - 1) { idx = 0 }
     Statement.from(list[idx]).selected = true
   }
+  window.selected?.node?.scrollIntoViewIfNeeded()
 }
 const moveSelectionDown = () => {
   const list = Array.from(document.querySelectorAll(".statement-wrapper"))
@@ -184,6 +185,7 @@ const moveSelectionDown = () => {
     if (idx > list.length - 1) { idx = 0 }
     Statement.from(list[idx]).selected = true
   }
+  window.selected?.node?.scrollIntoViewIfNeeded()
 }
 // Tab between "selected" statements
 Keyboard.on(["Tab"], (evt) => {
