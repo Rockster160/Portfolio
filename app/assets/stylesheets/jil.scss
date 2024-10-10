@@ -425,24 +425,31 @@ input[type=submit] {
       width: 96%;
     }
     &.commented .statement {
-      position: relative;
+      filter: grayscale(0.8) brightness(0.9);
+      opacity: 0.5;
 
-      &:after {
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        /* background-color: var(--statement-bg-commented); */
-        opacity: 0.6;
-        background-color: grey;
-        content: '';
+      .commented .statement {
+        filter: none;
+        opacity: 1;
       }
-
-      /* select, input, textarea {
-        background-color: $grey-blue;
-        color: darkgrey;
-      } */
+      // position: relative;
+      //
+      // &:after {
+      //   position: absolute;
+      //   top: 0;
+      //   right: 0;
+      //   bottom: 0;
+      //   left: 0;
+      //   /* background-color: var(--statement-bg-commented); */
+      //   opacity: 0.6;
+      //   background-color: grey;
+      //   content: '';
+      // }
+      //
+      // /* select, input, textarea {
+      //   background-color: $grey-blue;
+      //   color: darkgrey;
+      // } */
     }
 
     &.flash .statement {

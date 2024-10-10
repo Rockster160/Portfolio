@@ -269,4 +269,4 @@
 *[ScheduleData]
   #executeAt(Date)
   #trigger(String)
-  #data(content(Hash))
+  #data(content(Hash|Keyval))
