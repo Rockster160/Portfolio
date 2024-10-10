@@ -24,7 +24,7 @@ class JarvisScheduleWorker
       task.execute
     end
 
-    ::BroadcastUpcomingWorker.perform_async if broadcast_after
+    ::BroadcastUpcomingWorker.perform_async if broadcast_after # TODO: Convert to Jil
   rescue StandardError => e
     SlackNotifier.err(e)
     raise
