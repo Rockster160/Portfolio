@@ -497,7 +497,9 @@ RSpec.describe Jarvis do
       "in an hour 20" => [Time.local(2022, 6, 24, 7, 05), "today at 7:05am"],
       "in an hour and 20" => [Time.local(2022, 6, 24, 7, 05), "today at 7:05am"],
       "in an hour and 20 minutes" => [Time.local(2022, 6, 24, 7, 05), "today at 7:05am"],
+      "in an hour and a half" => [Time.local(2022, 6, 24, 7, 15), "today at 7:15am"],
       "in 3 and a half hours" => [Time.local(2022, 6, 24, 9, 15), "today at 9:15am"],
+      "in 3.5 hours" => [Time.local(2022, 6, 24, 9, 15), "today at 9:15am"],
       "tonight" => [Time.local(2022, 6, 24, 22, 0), "today at 10pm"],
       "at 11:15 tomorrow" => [Time.local(2022, 6, 25, 11, 15), "tomorrow at 11:15am"],
       "at 9:15 tomorrow night" => [Time.local(2022, 6, 25, 21, 15), "tomorrow at 9:15pm"],
@@ -506,6 +508,7 @@ RSpec.describe Jarvis do
       "at 9:45 pm" => [Time.local(2022, 6, 24, 21, 45), "today at 9:45pm"],
       "tomorrow afternoon" => [Time.local(2022, 6, 25, 15, 00), "tomorrow at 3pm"], # Afternoon is 3pm
       "next wednesday" => [Time.local(2022, 6, 29, 12, 00), "on Wed, Jun 29 at noon"], # Default is noon
+      "on wednesday" => [Time.local(2022, 6, 29, 12, 00), "on Wed, Jun 29 at noon"], # Default is noon
       "oct 23" => [Time.local(2022, 10, 23, 12, 00), "on Sun, Oct 23 at noon"], # Default is noon
       "oct 23, 2022" => [Time.local(2022, 10, 23, 12, 00), "on Sun, Oct 23 at noon"], # Default is noon
       "october 23 25 at 9" => [Time.local(2025, 10, 23, 9, 00), "on Thu, Oct 23, 2025 at 9am"],

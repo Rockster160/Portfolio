@@ -6,6 +6,7 @@ module Jarvis::Times
 
   def extract_time(words, chronic_opts={})
     rx = Jarvis::Regex
+    drx = /\d+(?:\.\d+)?/
     words = words.gsub(rx.words(:later), "today")
     month_words = Date::MONTHNAMES + Date::ABBR_MONTHNAMES
     month_words_regex = rx.words(month_words)
@@ -14,33 +15,34 @@ module Jarvis::Times
     time_words = [:second, :minute, :hour, :day, :week, :month, :year]
     time_words_regex = rx.words(time_words, suffix: "s?")
     iso8601_regex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-07:00/
-    time_str = words[/\b(in) (\d+|an?) #{time_words_regex}( (and )?\d+( #{time_words_regex})?)?/]
-    time_str ||= words[/\b(in) (\d+|an?)( (and )?(a )?half( #{time_words_regex})?)?/]
+    time_str = words[/\b(in) (#{drx}|an?) #{time_words_regex}(( and)?( a)?( half)?)?( (and )?#{drx}( #{time_words_regex})?)?/]
+    time_str ||= words[/\b(in) (#{drx}|an?)( (and )?(a )?half( #{time_words_regex})?)?/]
     time_str ||= words[/(\bon )?(#{month_words_regex} \d{1,2}(\w{2})?(,? '?\d{2,4})? )?((in the )?(#{day_words_regex} ?)+ )?\b(at) \d+:?\d*( ?(am|pm))?( (#{day_words_regex} ?)+)?/]
     time_str ||= words[/(\bon )?#{month_words_regex} \d{1,2}(\w{2})?(,? '?\d{2,4})?/]
     time_str ||= words[/(\bon)(?:^| )?\d{1,2}\/\d{1,2}(\/(\d{2}|\d{4})\b)?/]
+    time_str ||= words[/(\bon)(?:^| )#{day_words_regex}/]
     time_str ||= words[/in the #{day_words_regex}/]
-    time_str ||= words[/(\d+|an?) #{time_words_regex} \b(from now|ago)\b/]
+    time_str ||= words[/(#{drx}|an?) #{time_words_regex} \b(from now|ago)\b/]
     time_str ||= words[/((next|last) )?(#{day_words_regex} ?)+/]
     time_str ||= words[/(\bat )(#{iso8601_regex} ?)/]
 
     pre_sub = time_str
 
     # Need to clean up a little bit for Chronic syntax
-    time_str = time_str.to_s.gsub(/an? (#{time_words_regex})/, '1 \1')
-    time_str = time_str.gsub(/^(.*?)(at \d+(?::\d+)?(?: ?(?:a|p)m)?)(.*?)$/) do |found| # If two day words are found here, only 1 is moved to the front
+    time_str = time_str.to_s.gsub(/an? (#{time_words_regex})/, '1 \1') # an hour → 1 hour
+    time_str = time_str.gsub(/^(.*?)(at \d+(?::\d+)?(?: ?(?:a|p)m)?)(.*?)$/) do |found|
+      # If two day words are found here, only 1 is moved to the front
       "#{Regexp.last_match(1)} #{Regexp.last_match(3)} #{Regexp.last_match(2)}"
     end
-    time_str = time_str.gsub(/(\d+) and (?:a )?half/, '\1.5')
-    time_str = time_str.to_s.gsub(/ ?\b(at|on)\b ?/, " ")
-
+    time_str = time_str.gsub(/(#{drx})( #{time_words_regex})? and (?:a )?half/, '\1.5 \2') # 3 and a half hours → 3.5 hours
+    time_str = time_str.to_s.gsub(/ ?\b(at|on)\b ?/, " ").squish
     [pre_sub, safe_date_parse(time_str.squish, chronic_opts)].then { |pre_text, parsed_time|
       if parsed_time.present?
         if time_str.include?("morning") && parsed_time.hour == 21
           parsed_time += 12.hours
         end
       else
-        m = time_str.match(/in (\d+.?\d*) (#{time_words_regex}) ?(?:and )?(\d*) ?(#{time_words_regex})?/)
+        m = time_str.match(/in (#{drx}) (#{time_words_regex}) ?(?:and )?(\d*) ?(#{time_words_regex})?/)
         parsed_time = m&.to_a&.then { |_, n1, t1, n2, t2|
           t = Time.current
           t += (n1 || 1).to_f.send(t1 || :hours)
