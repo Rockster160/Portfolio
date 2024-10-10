@@ -19,24 +19,39 @@ export default class Keyboard {
     return keys.every(key => Keyboard.held.has(mapKey(key)))
   }
 
-  static on(keys, callback) {
-    if (keys.includes("Meta")) {
-      // Special behavior for Meta/Cmd because it doesn't trigger the same way as other keys
+  static on(combos, callback) {
+    combos = Array.isArray(combos) ? combos : [combos]
+    combos.forEach(keys => {
+      keys = keys.split("+")
+      const metaKey = keys.includes("Meta")
       const shiftKey = keys.includes("Shift")
-      keys = keys.filter(key => key !== "Meta" && key !== "Shift")
-      if (keys.length !== 1) { throw `Invalid keys: [${JSON.stringify(keys)}] - can only be 1.` }
-      const key = keys[0].toLowerCase()
+      const controlKey = keys.includes("Control")
+      const modifiersMatch = (evt) => {
+        if (metaKey !== !!evt.metaKey) { return false }
+        if (shiftKey !== !!evt.shiftKey) { return false }
+        if (controlKey !== !!evt.controlKey) { return false }
+        return true
+      }
+      keys = keys.map(key => mapKey(key))
 
-      document.addEventListener("keydown", function(evt) {
-        if (evt.metaKey && shiftKey == evt.shiftKey && key === mapKey(evt.key).toLowerCase()) {
-          evt.preventDefault()
-          callback(evt)
-        }
+      if (metaKey) {
+        // Special behavior for Meta/Cmd because it doesn't trigger the same way as other keys
+        keys = keys.filter(key => key !== "Meta" && key !== "Shift" && keys !== "Control")
+        if (keys.length !== 1) { throw `Invalid keys: [${JSON.stringify(keys)}] - can only be 1.` }
+        const key = keys[0].toLowerCase()
+
+        document.addEventListener("keydown", function(evt) {
+          if (modifiersMatch(evt) && key === mapKey(evt.key).toLowerCase()) {
+            // evt.preventDefault()
+            callback(evt)
+          }
+        })
+        return
+      }
+      document.addEventListener("keyboard:press", (evt) => {
+        if (!modifiersMatch(evt)) { return }
+        if (Keyboard.isPressed(keys)) { callback(evt.detail.evt) }
       })
-      return
-    }
-    document.addEventListener("keyboard:press", (evt) => {
-      if (Keyboard.isPressed(keys)) { callback(evt.detail.evt) }
     })
   }
 }

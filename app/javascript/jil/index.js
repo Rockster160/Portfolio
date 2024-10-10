@@ -33,11 +33,11 @@ History.record = function() {
   }
 }
 
-const notInput = (node) => {
-  if (Dropdown.shown()) { return false }
+const activeInput = (node) => {
+  if (Dropdown.shown()) { return true }
 
   node = node || document.activeElement
-  return !["INPUT", "TEXTAREA", "SELECT"].includes(node.tagName)
+  return ["INPUT", "TEXTAREA", "SELECT"].includes(node.tagName)
 }
 
 window.moveStatement = null
@@ -68,8 +68,8 @@ History.record() // Store initial state in history
 formDirty = false // Initial load should not dirty the state
 
 // Add a new function below/above the current selected or hovered one
-Keyboard.on(["Space"], (evt) => {
-  if (notInput()) {
+Keyboard.on("Space", (evt) => {
+  if (!activeInput()) {
     evt.preventDefault()
 
     let statement = window.selected
@@ -94,12 +94,12 @@ Keyboard.on(["Space"], (evt) => {
   }
 })
 // Quick-Run
-Keyboard.on(["Meta", "Enter"], (evt) => {
+Keyboard.on("Meta+Enter", (evt) => {
   evt.preventDefault()
   document.querySelector(".btn-run").click()
 })
 // Add a new function at the top/bottom of the current container
-Keyboard.on(["Alt", "Enter"], (evt) => {
+Keyboard.on("Alt+Enter", (evt) => {
   const wrapper = window.selected?.node || document
   let refs = wrapper.querySelectorAll(evt.shiftKey ? ".content-dropdown" : ".content-dropdown.below")
   if (refs.length == 0) { refs = wrapper.querySelectorAll(".reference") }
@@ -107,60 +107,43 @@ Keyboard.on(["Alt", "Enter"], (evt) => {
   Dropdown.moveToMouse()
 })
 // Delete selected statement
-Keyboard.on(["Backspace"], (evt) => {
-  if (notInput() && window.selected) {
-    window.selected.remove()
-    History.record()
-  }
-})
-// Delete selected statement
-Keyboard.on(["Delete"], (evt) => {
-  if (notInput() && window.selected) {
+Keyboard.on(["Backspace", "Delete"], (evt) => {
+  if (!activeInput() && window.selected) {
     window.selected.remove()
     History.record()
   }
 })
 // Unselect currently selected statement
-Keyboard.on(["Escape"], (evt) => {
-  if (notInput()) {
+Keyboard.on("Escape", (evt) => {
+  if (!activeInput()) {
     if (window.selected) { window.selected.selected = false }
   } else {
     document.activeElement.blur()
   }
 })
 // Mark selected statement as commented
-Keyboard.on(["/"], (evt) => {
-  if (notInput() && window.selected) {
+Keyboard.on("/", (evt) => {
+  if (!activeInput() && window.selected) {
     window.selected.commented = !window.selected.commented
     History.record()
   }
 })
 // Focus selected statement fields
-Keyboard.on(["→"], (evt) => {
-  if (notInput() && window.selected) {
-    window.selected.focus()
-  }
-})
-Keyboard.on(["Meta", "e"], (evt) => {
-  if (notInput() && window.selected) {
+Keyboard.on(["→", "Meta+e"], (evt) => {
+  if (!activeInput() && window.selected) {
     window.selected.focus()
   }
 })
 // Duplicate statement
-Keyboard.on(["Meta", "d"], (evt) => {
-  if (notInput() && window.selected) {
-    window.selected.duplicate()
-    History.record()
-  }
-})
-Keyboard.on(["Meta", "Shift", "d"], (evt) => {
-  if (notInput() && window.selected) {
+Keyboard.on(["Meta+Shift+d", "Meta+d"], (evt) => {
+  if (!activeInput() && window.selected) {
     const dups = window.selected.duplicate()
-    dups.reverse().forEach(item => item.moveBefore(window.selected))
+    if (evt.shiftKey) {
+      dups.reverse().forEach(item => item.moveBefore(window.selected))
+    }
     History.record()
   }
 })
-// statement.duplicate()
 const moveSelectionUp = () => {
   const list = Array.from(document.querySelectorAll(".statement-wrapper"))
 
@@ -188,8 +171,8 @@ const moveSelectionDown = () => {
   window.selected?.node?.scrollIntoViewIfNeeded()
 }
 // Tab between "selected" statements
-Keyboard.on(["Tab"], (evt) => {
-  if (notInput()) {
+Keyboard.on(["Tab", "Shift+Tab"], (evt) => {
+  if (!activeInput()) {
     evt.preventDefault()
     if (!evt.shiftKey) {
       moveSelectionDown()
@@ -199,13 +182,13 @@ Keyboard.on(["Tab"], (evt) => {
   }
 })
 // Save
-Keyboard.on(["Meta", "s"], (evt) => {
+Keyboard.on("Meta+s", (evt) => {
   evt.preventDefault()
   document.querySelector(".btn-save").click()
 })
 // Redo
-Keyboard.on(["Meta", "Shift", "z"], (evt) => {
-  if (notInput()) {
+Keyboard.on("Meta+Shift+z", (evt) => {
+  if (!activeInput()) {
     const code = History.redo()
     console.log("Redo", History.savedIdx, History.currentIdx)
     if (code === undefined || code === null) { return }
@@ -214,8 +197,8 @@ Keyboard.on(["Meta", "Shift", "z"], (evt) => {
   }
 })
 // Undo
-Keyboard.on(["Meta", "z"], (evt) => {
-  if (notInput()) {
+Keyboard.on("Meta+z", (evt) => {
+  if (!activeInput()) {
     const code = History.undo()
     console.log("Undo", History.savedIdx, History.currentIdx)
     if (code === undefined || code === null) { return }
@@ -224,8 +207,8 @@ Keyboard.on(["Meta", "z"], (evt) => {
   }
 })
 // ↓ opens the input dropdown menu to select different vars
-Keyboard.on(["↓"], (evt) => {
-  if (!notInput()) { // Focused on an input field
+Keyboard.on("↓", (evt) => {
+  if (activeInput() && !Dropdown.shown()) {
     const btn = evt.target.closest(".input-wrapper")?.querySelector(":scope > btn")
     if (btn) {
       evt.preventDefault()
@@ -234,27 +217,27 @@ Keyboard.on(["↓"], (evt) => {
   }
 })
 // Move statement selection up/down
-Keyboard.on(["↑"], (evt) => {
-  if (notInput()) {
+Keyboard.on("↑", (evt) => {
+  if (!activeInput() && !Dropdown.shown()) {
     evt.preventDefault()
     moveSelectionUp()
   }
 })
-Keyboard.on(["↓"], (evt) => {
-  if (notInput()) {
+Keyboard.on("↓", (evt) => {
+  if (!activeInput() && !Dropdown.shown()) {
     evt.preventDefault()
     moveSelectionDown()
   }
 })
 // Increase statement selection up/down
-Keyboard.on(["Shift", "↑"], (evt) => {
+Keyboard.on("Shift+↑", (evt) => {
   // increase selection up
 })
-Keyboard.on(["Shift", "↓"], (evt) => {
+Keyboard.on("Shift+↓", (evt) => {
   // increase selection down
 })
 // Move Statement up/down
-Keyboard.on(["Meta", "↑"], (evt) => {
+Keyboard.on("Meta+↑", (evt) => {
   if (!window.selected) { return }
   evt.preventDefault()
 
@@ -264,8 +247,9 @@ Keyboard.on(["Meta", "↑"], (evt) => {
 
   window.selected.moveBefore(Statement.from(list[idx]))
   History.record()
+  window.selected?.node?.scrollIntoViewIfNeeded()
 })
-Keyboard.on(["Meta", "↓"], (evt) => {
+Keyboard.on("Meta+↓", (evt) => {
   if (!window.selected) { return }
   evt.preventDefault()
 
@@ -275,27 +259,29 @@ Keyboard.on(["Meta", "↓"], (evt) => {
 
   window.selected.moveAfter(Statement.from(list[idx]))
   History.record()
+  window.selected?.node?.scrollIntoViewIfNeeded()
 })
-Keyboard.on(["Meta", "1"], (evt) => {
+// Hot keys for toggling options or changing statment attributes
+Keyboard.on("Meta+1", (evt) => {
   if (!window.selected) { return }
   evt.preventDefault()
 
   window.selected.inspect = !window.selected.inspect
   History.record()
 })
-Keyboard.on(["Meta", "2"], (evt) => {
+Keyboard.on("Meta+2", (evt) => {
   if (!window.selected) { return }
   evt.preventDefault()
 
   window.selected.node.querySelector(".obj-varname")?.click()
 })
-Keyboard.on(["Meta", "3"], (evt) => {
+Keyboard.on("Meta+3", (evt) => {
   if (!window.selected) { return }
   evt.preventDefault()
 
   window.selected.node.querySelector(".obj-refname")?.click()
 })
-Keyboard.on(["Meta", "4"], (evt) => {
+Keyboard.on("Meta+4", (evt) => {
   if (!window.selected) { return }
   evt.preventDefault()
 
@@ -429,7 +415,7 @@ document.addEventListener("click", function(evt) {
   // Do NOT mark a statement as selected when clicking the dropdowns
   if (!evt.target.closest(".content-dropdown")) {
     if (evt.target.closest(".statement-wrapper")) {
-      if (notInput(evt.target)) {
+      if (!activeInput(evt.target)) {
         let statement = Statement.from(evt.target)
         if (statement) { statement.selected = !statement.selected }
       }

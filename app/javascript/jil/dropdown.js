@@ -224,7 +224,7 @@ Keyboard.on("Enter", (evt) => {
     }))
   }
 })
-Keyboard.on("ArrowUp", (evt) => {
+Keyboard.on("↑", (evt) => {
   if (Dropdown.shown()) {
     evt.preventDefault()
 
@@ -237,7 +237,7 @@ Keyboard.on("ArrowUp", (evt) => {
     }
   }
 })
-Keyboard.on("ArrowDown", (evt) => {
+Keyboard.on("↓", (evt) => {
   if (Dropdown.shown()) {
     evt.preventDefault()
 
