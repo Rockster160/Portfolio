@@ -44,6 +44,10 @@ class JilTask < ApplicationRecord
     ilike(code: "%#{code}%")
   }
 
+  def links
+    ids.each { |id| puts "https://ardesian.com/jil_tasks/#{id}" };nil
+  end
+
   def self.last_exe
     ::JilExecution.finished.order(:finished_at).last
   end
