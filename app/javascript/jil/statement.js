@@ -191,6 +191,7 @@ export default class Statement {
   duplicate() {
     let dups = Statement.fromText(this.toString())
     dups.forEach(dup => dup.moveAfter(this))
+    return dups
   }
 
   downReferences() {
@@ -201,7 +202,7 @@ export default class Statement {
   }
 
   focus() {
-    this.wrapper.querySelector(inputSelector)?.focus()
+    this.node.querySelector(inputSelector)?.focus()
   }
 
   get selected() { return this.node.classList.contains("selected") }

@@ -44,11 +44,11 @@ export default class Keyboard {
 // NOTE: Keys are uppercase when <Shift> is pressed and "special" with <Alt>
 // Can use `evt.code` which looks like "KeyC" or "ControlLeft" if needed.
 document.addEventListener("keydown", function(evt) {
-  console.log(evt)
+  // console.log(evt)
   if (evt.metaKey) { return } // metaKey causes a LOT of weirdness with keys because it doesn't trigger a keyup event
   if (!Keyboard.held.has(mapKey(evt.key))) {
     Keyboard.held.add(mapKey(evt.key))
-    console.log(Keyboard.held)
+    // console.log(Keyboard.held)
     document.dispatchEvent(new CustomEvent("keyboard:press", { detail: { evt: evt } }))
   }
 })
@@ -56,5 +56,5 @@ document.addEventListener("keydown", function(evt) {
 document.addEventListener("keyup", function(evt) {
   if (evt.metaKey) { return } // metaKey causes a LOT of weirdness with keys because it doesn't trigger a keyup event
   Keyboard.held.delete(mapKey(evt.key))
-  console.log(Keyboard.held)
+  // console.log(Keyboard.held)
 })

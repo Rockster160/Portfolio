@@ -14,6 +14,7 @@ window.Schema = Schema
 window.Statement = Statement
 window.History = History
 window.selected = undefined
+window.recentStatement = null
 window.formSubmitting = false
 Object.defineProperty(window, "formDirty", {
   get() {
@@ -119,7 +120,11 @@ Keyboard.on(["Delete"], (evt) => {
 })
 // Unselect currently selected statement
 Keyboard.on(["Escape"], (evt) => {
-  if (notInput() && window.selected) { window.selected.selected = false }
+  if (notInput()) {
+    if (window.selected) { window.selected.selected = false }
+  } else {
+    document.activeElement.blur()
+  }
 })
 // Mark selected statement as commented
 Keyboard.on(["/"], (evt) => {
@@ -128,29 +133,64 @@ Keyboard.on(["/"], (evt) => {
     History.record()
   }
 })
+// Focus selected statement fields
+Keyboard.on(["→"], (evt) => {
+  if (notInput() && window.selected) {
+    window.selected.focus()
+  }
+})
+Keyboard.on(["Meta", "e"], (evt) => {
+  if (notInput() && window.selected) {
+    window.selected.focus()
+  }
+})
+// Duplicate statement
+Keyboard.on(["Meta", "d"], (evt) => {
+  if (notInput() && window.selected) {
+    window.selected.duplicate()
+    History.record()
+  }
+})
+Keyboard.on(["Meta", "Shift", "d"], (evt) => {
+  if (notInput() && window.selected) {
+    const dups = window.selected.duplicate()
+    dups.reverse().forEach(item => item.moveBefore(window.selected))
+    History.record()
+  }
+})
+// statement.duplicate()
+const moveSelectionUp = () => {
+  const list = Array.from(document.querySelectorAll(".statement-wrapper"))
+
+  if (!window.selected) {
+    Statement.from(list[list.length - 1]).selected = true
+  } else {
+    let idx = list.indexOf(window.selected.node) - 1
+    if (idx < 0) { idx = list.length - 1 }
+    if (idx > list.length - 1) { idx = 0 }
+    Statement.from(list[idx]).selected = true
+  }
+}
+const moveSelectionDown = () => {
+  const list = Array.from(document.querySelectorAll(".statement-wrapper"))
+
+  if (!window.selected) {
+    Statement.from(list[0]).selected = true
+  } else {
+    let idx = list.indexOf(window.selected.node) + 1
+    if (idx < 0) { idx = list.length - 1 }
+    if (idx > list.length - 1) { idx = 0 }
+    Statement.from(list[idx]).selected = true
+  }
+}
 // Tab between "selected" statements
 Keyboard.on(["Tab"], (evt) => {
   if (notInput()) {
-    const list = Array.from(document.querySelectorAll(".statement-wrapper"))
     evt.preventDefault()
     if (!evt.shiftKey) {
-      if (!window.selected) {
-        Statement.from(list[0]).selected = true
-      } else {
-        let idx = list.indexOf(window.selected.node) + 1
-        if (idx < 0) { idx = list.length - 1 }
-        if (idx > list.length - 1) { idx = 0 }
-        Statement.from(list[idx]).selected = true
-      }
+      moveSelectionDown()
     } else {
-      if (!window.selected) {
-        Statement.from(list[list.length - 1]).selected = true
-      } else {
-        let idx = list.indexOf(window.selected.node) - 1
-        if (idx < 0) { idx = list.length - 1 }
-        if (idx > list.length - 1) { idx = 0 }
-        Statement.from(list[idx]).selected = true
-      }
+      moveSelectionUp()
     }
   }
 })
@@ -179,47 +219,88 @@ Keyboard.on(["Meta", "z"], (evt) => {
     formDirty = !History.noChange()
   }
 })
-// Cmd arrow testing
-Keyboard.on(["Meta", "↑"], (evt) => {
-  if (notInput()) {
-    console.log("Up")
-  }
-})
-Keyboard.on(["Meta", "←"], (evt) => {
-  if (notInput()) {
-    console.log("Left")
-  }
-})
-Keyboard.on(["Meta", "→"], (evt) => {
-  if (notInput()) {
-    console.log("Right")
-  }
-})
-Keyboard.on(["Meta", "↓"], (evt) => {
-  if (notInput()) {
-    console.log("Down")
-  }
-})
-// Fixes for Meta key events
-// document.addEventListener("keydown", function(evt) {
-//   if (!evt.metaKey) { return }
-//   if (event.key === "s") {
-//     event.preventDefault(); // Prevent default save action
-//     console.log("Cmd+S pressed");
-//   }
-//
-//   if (event.key === "z") {
-//     if (event.shiftKey) {
-//       console.log("Cmd+Shift+Z pressed"); // Redo
-//     } else {
-//       console.log("Cmd+Z pressed"); // Undo
-//     }
+// Keyboard.on(["Meta", "↑"], (evt) => {
+//   if (notInput()) {
+//     console.log("Up")
 //   }
 // })
-Keyboard.on(["Alt", "↓"], (evt) => {
-  evt.preventDefault()
-  console.log("Alt ↓!")
+// Keyboard.on(["Meta", "←"], (evt) => {
+//   if (notInput()) {
+//     console.log("Left")
+//   }
+// })
+// Keyboard.on(["Meta", "→"], (evt) => {
+//   if (notInput()) {
+//     console.log("Right")
+//   }
+// })
+// Keyboard.on(["Meta", "↓"], (evt) => {
+//   if (notInput()) {
+//     console.log("Down")
+//   }
+// })
+// ↓ opens the input dropdown menu to select different vars
+Keyboard.on(["↓"], (evt) => {
+  if (evt.shiftKey) { return }
+  if (!notInput()) { // Focused on an input field
+    const btn = evt.target.closest(".input-wrapper")?.querySelector(":scope > btn")
+    if (btn) {
+      evt.preventDefault()
+      btn.click()
+    }
+  }
 })
+// Move statement selection up/down
+Keyboard.on(["↑"], (evt) => {
+  if (notInput()) {
+    evt.preventDefault()
+    moveSelectionUp()
+  }
+})
+Keyboard.on(["↓"], (evt) => {
+  if (notInput()) {
+    evt.preventDefault()
+    moveSelectionDown()
+  }
+})
+// Increase statement selection up/down
+Keyboard.on(["Shift", "↑"], (evt) => {
+  // increase selection up
+})
+Keyboard.on(["Shift", "↓"], (evt) => {
+  // increase selection down
+})
+// Move Statement up/down
+Keyboard.on(["Meta", "↑"], (evt) => {
+  if (!window.selected) { return }
+  evt.preventDefault()
+
+  const list = Array.from(document.querySelectorAll(".statement-wrapper"))
+  let idx = list.indexOf(window.selected.node) - 1
+  if (idx == -1) { return }
+
+  window.selected.moveBefore(Statement.from(list[idx]))
+  History.record()
+})
+Keyboard.on(["Meta", "↓"], (evt) => {
+  if (!window.selected) { return }
+  evt.preventDefault()
+
+  const list = Array.from(document.querySelectorAll(".statement-wrapper"))
+  let idx = list.indexOf(window.selected.node) + 1
+  if (idx == list.length) { return }
+
+  window.selected.moveAfter(Statement.from(list[idx]))
+  History.record()
+})
+
+
+
+// Select the Statement that is focused
+document.addEventListener("focusin", function(evt) {
+  const statement = Statement.from(evt.target)
+  if (statement) { statement.selected = true }
+});
 
 // Delete everything on middle click outside of the code
 document.addEventListener("mousedown", function(event) {

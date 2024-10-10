@@ -26,7 +26,6 @@
   #set_cache(String:"Cache Key" Any "=" Any)::Any
   #exit
   #print(Text)::String
-  #presence(Any)::Any
   #comment(Text)::None
   #command(String)::String
   #commandAt(Date Text)::String
