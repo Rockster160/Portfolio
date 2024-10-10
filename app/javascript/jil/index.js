@@ -34,6 +34,8 @@ History.record = function() {
 }
 
 const notInput = (node) => {
+  if (Dropdown.shown()) { return false }
+
   node = node || document.activeElement
   return !["INPUT", "TEXTAREA", "SELECT"].includes(node.tagName)
 }
@@ -219,29 +221,8 @@ Keyboard.on(["Meta", "z"], (evt) => {
     formDirty = !History.noChange()
   }
 })
-// Keyboard.on(["Meta", "↑"], (evt) => {
-//   if (notInput()) {
-//     console.log("Up")
-//   }
-// })
-// Keyboard.on(["Meta", "←"], (evt) => {
-//   if (notInput()) {
-//     console.log("Left")
-//   }
-// })
-// Keyboard.on(["Meta", "→"], (evt) => {
-//   if (notInput()) {
-//     console.log("Right")
-//   }
-// })
-// Keyboard.on(["Meta", "↓"], (evt) => {
-//   if (notInput()) {
-//     console.log("Down")
-//   }
-// })
 // ↓ opens the input dropdown menu to select different vars
 Keyboard.on(["↓"], (evt) => {
-  if (evt.shiftKey) { return }
   if (!notInput()) { // Focused on an input field
     const btn = evt.target.closest(".input-wrapper")?.querySelector(":scope > btn")
     if (btn) {
@@ -293,7 +274,31 @@ Keyboard.on(["Meta", "↓"], (evt) => {
   window.selected.moveAfter(Statement.from(list[idx]))
   History.record()
 })
+Keyboard.on(["Meta", "1"], (evt) => {
+  if (!window.selected) { return }
+  evt.preventDefault()
 
+  window.selected.inspect = !window.selected.inspect
+  History.record()
+})
+Keyboard.on(["Meta", "2"], (evt) => {
+  if (!window.selected) { return }
+  evt.preventDefault()
+
+  window.selected.node.querySelector(".obj-varname")?.click()
+})
+Keyboard.on(["Meta", "3"], (evt) => {
+  if (!window.selected) { return }
+  evt.preventDefault()
+
+  window.selected.node.querySelector(".obj-refname")?.click()
+})
+Keyboard.on(["Meta", "4"], (evt) => {
+  if (!window.selected) { return }
+  evt.preventDefault()
+
+  window.selected.node.querySelector(".obj-returntype")?.click()
+})
 
 
 // Select the Statement that is focused
@@ -452,6 +457,7 @@ document.addEventListener("click", function(evt) {
 document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-refname")) {
     let statement = Statement.from(evt.target)
+    if (statement.reference === undefined) { return }
     let new_ref = window.prompt("Enter new ref", statement.refname)?.trim()
     if (new_ref === undefined) { return }
 
