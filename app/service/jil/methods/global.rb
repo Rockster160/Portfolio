@@ -78,7 +78,7 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def commandAt(date, text)
-    ::JarvisWorker.perform_at(date, @jil.user.id, text)
+    ::Jil::Schedule.add_schedule(@jil.user, date, :command, { words: text })
   end
 
   def broadcast_websocket(channel, data)
@@ -123,15 +123,15 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def triggerNow(scope, data)
-    ::Jil::Executor.trigger(@jil.user, scope, data)
+    ::Jil::Executor.trigger(@jil.user, scope, data).map(&:serialize_with_execution)
   end
 
   def triggerWith(scope, date, data)
-    ::Jil::Executor.async_trigger(@jil.user, scope, data, at: date)
+    ::Jil::Schedule.add_schedule(@jil.user, date, scope, @jil.cast(data, :Hash))
   end
 
   def trigger(scope, date, data)
-    ::Jil::Executor.async_trigger(@jil.user, scope, @jil.cast(data, :Hash), at: date)
+    ::Jil::Schedule.add_schedule(@jil.user, date, scope, @jil.cast(data, :Hash))
   end
 
   # times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric

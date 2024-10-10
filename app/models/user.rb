@@ -37,6 +37,7 @@ class User < ApplicationRecord
   has_many :lists, through: :user_lists
   has_many :sent_emails, class_name: "Email", foreign_key: :sent_by_id, dependent: :destroy
   has_many :emails, dependent: :destroy
+  has_many :scheduled_triggers, class_name: "JilScheduledTrigger", dependent: :destroy
   has_many :prompts, class_name: "JilPrompt", dependent: :destroy
   has_many :daily_usages, class_name: "JilUsage", dependent: :destroy
   has_many :action_events
@@ -94,6 +95,10 @@ class User < ApplicationRecord
     user_scope = user_scope.where(phone: raw_params[:phone].gsub(/[^0-9]/, "").last(10)) if raw_params[:phone].present?
     user_scope = user_scope.where(raw_params.except(:username, :phone))
     user_scope.first || User.new(raw_params)
+  end
+
+  def self.id(user_or_id)
+    user_or_id.is_a?(::User) ? user_or_id.id : user_or_id.to_i
   end
 
   def account_has_data?

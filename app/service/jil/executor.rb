@@ -19,7 +19,7 @@ class Jil::Executor
     if at.blank?
       ::JilTriggerWorker.perform_async(user_ids, trigger, trigger_data)
     else
-      ::JilTriggerWorker.perform_at(at, user_ids, trigger, trigger_data)
+      ::Jil::Schedule.add_schedules(user_ids, at, trigger, trigger_data)
     end
   end
 
@@ -41,9 +41,12 @@ class Jil::Executor
 
     ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data }), 1000))
 
+    # Possibly big bug - if one user "stops" a task and there are multiple users here, the remaining
+    #   users will not have that event trigger. This is not desired. However, because it's unlikely
+    #   there will be multiple users here, not worrying about it for now.
     user_tasks = ::JilTask.enabled.ordered.where(user_id: user_ids).distinct
     stopped = false
-    user_tasks.by_listener(trigger).filter_map do |task|
+    user_tasks.by_listener(trigger).filter_map { |task|
       next if stopped
       ran = nil
       begin
@@ -55,7 +58,14 @@ class Jil::Executor
         nil # Generic rescue
       end
       ran&.tap { stopped = true if ran.stop_propagation? }
-    end
+    }.tap { |tasks|
+      if !stopped && trigger.to_sym == :command
+        user_ids.each do |user_id|
+          words = trigger_data.dig(:words) || trigger_data.dig(:data, :words)
+          ::Jarvis.command(User.find(user_id), words)
+        end
+      end
+    }
   end
 
   def self.async_call(user, code, input_data={}, task: nil)
@@ -246,6 +256,7 @@ class Jil::Executor
       case klass_name || obj.cast.to_sym
       # when :Hash then ::Hash # dig into the hash for special keys
       when :Object then :Global
+      when :Schedule, :ScheduleData then :Schedule
       when :Contact, :ContactData then :Contact
       when :ActionEvent, :ActionEventData then :ActionEvent
       when :Monitor, :MonitorData then :Monitor

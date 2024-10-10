@@ -28,12 +28,12 @@
   #print(Text)::String
   #comment(Text)::None
   #command(String)::String
-  #commandAt(Date Text)::String
+  #commandAt(Date Text)::Schedule
   #request("Method" String BR "URL" String BR "Params" Hash BR "Headers" Hash)::Hash
   #broadcast_websocket("Channel" TAB String BR "Data" TAB Hash)::Numeric
-  #trigger(String TAB Date content(Keyval|Hash [Keyval.new]))::Numeric
-  #triggerWith(String TAB Date BR "" TAB Hash)::Numeric
-  #triggerNow(String TAB Hash)::Numeric
+  #trigger(String TAB Date content(Keyval|Hash [Keyval.new]))::Schedule
+  #triggerWith(String TAB Date BR "" TAB Hash)::Schedule
+  #triggerNow(String TAB Hash)::Array
   #relay(Contact|String content(Hash|Keyval [Keyval.new]))::None # String is contact name/username/alias/id
   #dowhile(enum_content)::Numeric
   #loop(enum_content)::Any
@@ -257,3 +257,16 @@
   #timestampFormat(["long", "short", "none"])
   #blip(Numeric?)
   #data(Hash)
+[Schedule]
+  #find(Numeric)
+  #search(Text("*"))::Array # Using listener syntax trigger:word::data
+  .update!(content(ScheduleData))
+  .cancel!::Boolean
+  .id::Numeric # String or Numeric?
+  .executeAt::Date
+  .trigger::String
+  .data::Hash
+*[ScheduleData]
+  #executeAt(Date)
+  #trigger(String)
+  #data(content(Hash))

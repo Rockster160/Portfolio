@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_10_08_060039) do
+ActiveRecord::Schema[7.1].define(version: 2024_10_10_174546) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -433,6 +433,17 @@ ActiveRecord::Schema[7.1].define(version: 2024_10_08_060039) do
     t.datetime "updated_at", null: false
     t.index ["task_id"], name: "index_jil_prompts_on_task_id"
     t.index ["user_id"], name: "index_jil_prompts_on_user_id"
+  end
+
+  create_table "jil_scheduled_triggers", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "trigger", null: false
+    t.jsonb "data", default: {}, null: false
+    t.datetime "execute_at", null: false
+    t.text "jid"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_jil_scheduled_triggers_on_user_id"
   end
 
   create_table "jil_tasks", force: :cascade do |t|
