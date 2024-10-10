@@ -2,12 +2,7 @@ class Jarvis::ScheduleParser < Jarvis::Action
   def attempt
     return unless valid_words?
 
-    ::Jarvis::Schedule.schedule(
-      scheduled_time: @scheduled_time,
-      user_id: @user.id,
-      words: @remaining_words,
-      type: :command,
-    )
+    ::Jil::Schedule.add_schedule(@user.id, @scheduled_time, :command, { words: @remaining_words })
     @response = "I'll #{Jarvis::Text.rephrase(@remaining_words)} #{natural_time}"
 
     return @response.presence || "Sent to Schedule"

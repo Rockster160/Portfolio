@@ -8,7 +8,7 @@ class TriggerWorker
     return unless schedule.ready?
 
     # Trigger async which prevents errors messing up this job
-    ::Jil.trigger(schedule.user_id, schedule.trigger, { schedule.trigger => schedule.data})
+    ::Jil.trigger(schedule.user_id, schedule.trigger, schedule.data)
 
     schedule.destroy
   end
