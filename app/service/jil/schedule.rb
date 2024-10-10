@@ -11,12 +11,13 @@ module Jil::Schedule
     schedule = ::JilScheduledTrigger.create(
       user_id: ::User.id(user),
       trigger: trigger,
-      execute_at: execute_at,
+      execute_at: execute_at.presence || ::Time.current,
       data: data,
     )
     return unless schedule.persisted?
 
     add_job(schedule)
+    schedule
   end
 
   def update(schedule) # Also run on create, but we need the schedule.id so it must be persisted.
