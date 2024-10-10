@@ -2,7 +2,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   PERMIT_ATTRS = [:execute_at, :trigger, :data]
   def cast(value)
     case value
-    when ::Schedule then value.serialize
+    when ::JilScheduledTrigger then value.serialize
     else @jil.cast(value, :Hash)
     end
   end
