@@ -25,7 +25,7 @@ class WebhooksController < ApplicationController
     render json: params
   end
 
-  # /webhooks/jil/:trigger
+  # /jil/trigger/:trigger
   def jil
     ::Jil.trigger(
       current_user,

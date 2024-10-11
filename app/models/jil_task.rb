@@ -44,7 +44,7 @@ class JilTask < ApplicationRecord
     ilike(code: "%#{code}%")
   }
 
-  def links
+  def self.links
     ids.each { |id| puts "https://ardesian.com/jil_tasks/#{id}" };nil
   end
 
