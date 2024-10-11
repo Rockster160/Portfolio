@@ -25,6 +25,7 @@ class WebhooksController < ApplicationController
     render json: params
   end
 
+  # /webhooks/jil/:trigger
   def jil
     ::Jil.trigger(
       current_user,
@@ -105,6 +106,7 @@ class WebhooksController < ApplicationController
   end
 
   def local_data
+    return head :ok unless current_user == User.me
     data = params[:local_data].to_unsafe_h
     json = DataStorage[:local_data] || {}
     DataStorage[:local_data] = json.merge(data)
@@ -115,6 +117,7 @@ class WebhooksController < ApplicationController
   end
 
   def local_ping
+    return head :ok unless current_user == User.me
     LocalIpManager.local_ip = request.remote_ip
 
     head :ok

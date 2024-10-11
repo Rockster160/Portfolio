@@ -34,7 +34,7 @@ export default class Statement {
     return this.all.find(statement => statement.id == id || statement.name == id)
   }
   static from(element) {
-    return Statement.find(element.closest(".statement-wrapper")?.id)
+    return Statement.find(element?.closest(".statement-wrapper")?.id)
   }
   static nameTaken(name, ignore) {
     if (!name) { return false }
