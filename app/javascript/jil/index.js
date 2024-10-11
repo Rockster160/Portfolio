@@ -207,15 +207,10 @@ Keyboard.on(["Meta+v", "Meta+Shift+v"], async (evt) => {
 
   const statements = Statement.fromText(await navigator.clipboard.readText())
   if (evt.shiftKey) {
-    statements.forEach(statement => {
-      statement.moveBefore(window.selected)
-    })
+    await window.selected.pasteAbove()
   } else {
-    statements.reverse().forEach(statement => {
-      statement.moveAfter(window.selected)
-    })
+    await window.selected.pasteBelow()
   }
-  statements[statements.length-1]?.select()
   History.record()
 })
 // Redo
@@ -432,7 +427,7 @@ document.addEventListener("click", function(evt) {
       }
 
       Dropdown.showAt(leftPosition, topPosition, [
-        [paste],
+        // [paste],
         ...passedOptions().concat(globalOptions()),
         // ...(content ? passedOptions().concat(globalOptions()) : (passedOptions() || globalOptions()))
       ])

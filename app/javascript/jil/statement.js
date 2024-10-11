@@ -428,13 +428,19 @@ export default class Statement {
     this.updateReferences()
   }
 
-  pasteAbove() {
-    // let statement = Statement.fromText(navigator.clipboard.readText())
-    // statement?.moveBefore(this)
+  async pasteAbove() {
+    const statements = Statement.fromText(await navigator.clipboard.readText())
+    statements.forEach(statement => {
+      statement.moveBefore(this)
+    })
+    statements[statements.length-1]?.select()
   }
-  pasteBelow() {
-    // let statement = Statement.fromText(navigator.clipboard.readText())
-    // statement?.moveAfter(this)
+  async pasteBelow() {
+    const statements = Statement.fromText(await navigator.clipboard.readText())
+    statements.reverse().forEach(statement => {
+      statement.moveAfter(window.selected)
+    })
+    statements[statements.length-1]?.select()
   }
 
   remove() {
@@ -471,13 +477,13 @@ export default class Statement {
 
   dropdownOpts() {
     let dup = { icon: fa("clone regular"), title: "Duplicate", callback: () => this.duplicate() }
-    let copy = { icon: fa("regular clipboard"), title: "Copy to Clipboard", callback: () => navigator.clipboard.writeText(this.toString()) }
+    let copy = { icon: fa("regular clipboard"), title: "Copy to Clipboard", callback: async () => navigator.clipboard.writeText(this.toString()) }
     let pasteup = { text: "↑", icon: fa("paste regular"), title: "Paste Above", callback: () => this.pasteAbove() }
     let pastedown = { text: "↓", icon: fa("paste regular"), title: "Paste Below", callback: () => this.pasteBelow() }
     let comment = { icon: fa("hashtag"), title: "Toggle Comment", callback: () => this.toggleComment() }
 
     return [
-      [dup, copy, pasteup, pastedown, comment],
+      // [dup, copy, pasteup, pastedown, comment],
       ...[...Schema.types["Object"].instances, ...Schema.instancesFor(this.returntype)].map(method => {
         return {
           text: `#${method.name}`,
