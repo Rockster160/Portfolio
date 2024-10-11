@@ -182,6 +182,42 @@ Keyboard.on("Meta+s", (evt) => {
   evt.preventDefault()
   document.querySelector(".btn-save").click()
 })
+// Copy
+Keyboard.on("Meta+c", (evt) => {
+  if (activeInput()) { return }
+  if (!window.selected) { return }
+
+  evt.preventDefault()
+  navigator.clipboard.writeText(window.selected.toString())
+})
+// Cut
+Keyboard.on("Meta+x", (evt) => {
+  if (activeInput()) { return }
+  if (!window.selected) { return }
+
+  evt.preventDefault()
+  navigator.clipboard.writeText(window.selected.toString())
+  window.selected.remove()
+  History.record()
+})
+// Paste
+Keyboard.on(["Meta+v", "Meta+Shift+v"], async (evt) => {
+  if (activeInput()) { return }
+  if (!window.selected) { return }
+
+  const statements = Statement.fromText(await navigator.clipboard.readText())
+  if (evt.shiftKey) {
+    statements.forEach(statement => {
+      statement.moveBefore(window.selected)
+    })
+  } else {
+    statements.reverse().forEach(statement => {
+      statement.moveAfter(window.selected)
+    })
+  }
+  statements[statements.length-1]?.select()
+  History.record()
+})
 // Redo
 Keyboard.on("Meta+Shift+z", (evt) => {
   if (!activeInput()) {

@@ -444,7 +444,7 @@ export default class Statement {
       statement.refId = null
       statement.addError("Parent statement has been removed")
     })
-    if (this.selected) { this.next()?.select() }
+    if (this.selected) { (this.next() || this.previous() || Statement.first())?.select() }
     this.node.remove()
     Statement.all = Statement.all.filter(item => item.id != this.id)
   }
