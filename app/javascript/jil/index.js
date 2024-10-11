@@ -13,9 +13,9 @@ import saveUtils from "./save_utils.js"
 window.Schema = Schema
 window.Statement = Statement
 window.History = History
-window.selected = undefined
-window.recentStatement = null
 window.formSubmitting = false
+window.selected = undefined
+window.moveStatement = null
 Object.defineProperty(window, "formDirty", {
   get() {
     return this._formDirty;
@@ -39,8 +39,6 @@ const activeInput = (node) => {
   node = node || document.activeElement
   return ["INPUT", "TEXTAREA", "SELECT"].includes(node.tagName)
 }
-
-window.moveStatement = null
 const laterMoveAfter = (other) => {
   window.moveStatement = (statement) => statement.moveAfter(other)
 }
@@ -58,40 +56,65 @@ const placeStatement = (statement, context, top) => {
       if (top) { statement.moveTo(0) }
     }
   }
+  statement.select()
   statement.focus()
   History.record()
 }
+const moveSelectionUp = () => {
+  const list = Array.from(document.querySelectorAll(".statement-wrapper"))
 
+  if (!window.selected) {
+    Statement.from(list[list.length - 1]).select()
+  } else {
+    let idx = list.indexOf(window.selected.node) - 1
+    if (idx < 0) { idx = list.length - 1 }
+    if (idx > list.length - 1) { idx = 0 }
+    Statement.from(list[idx]).select()
+  }
+  window.selected?.node?.scrollIntoViewIfNeeded()
+}
+const moveSelectionDown = () => {
+  const list = Array.from(document.querySelectorAll(".statement-wrapper"))
+
+  if (!window.selected) {
+    Statement.from(list[0]).select()
+  } else {
+    let idx = list.indexOf(window.selected.node) + 1
+    if (idx < 0) { idx = list.length - 1 }
+    if (idx > list.length - 1) { idx = 0 }
+    Statement.from(list[idx]).select()
+  }
+  window.selected?.node?.scrollIntoViewIfNeeded()
+}
 
 saveUtils()
 History.record() // Store initial state in history
 formDirty = false // Initial load should not dirty the state
 
 // Add a new function below/above the current selected or hovered one
-Keyboard.on("Space", (evt) => {
-  if (!activeInput()) {
-    evt.preventDefault()
+Keyboard.on(["Enter", "Shift+Enter"], (evt) => {
+  if (activeInput() || Dropdown.shown()) { return }
+  evt.preventDefault()
 
-    let statement = window.selected
-    if (!statement) {
-      statement = Statement.from(document.elementFromPoint(Mouse.x, Mouse.y))
-    }
-
-    let wrapper = null
-    if (statement) {
-      const node = statement.node
-      wrapper = node.closest(".statement") || node.closest(".wrapper")
-    }
-    wrapper = wrapper || document.querySelector(".wrapper")
-    let refs = wrapper.querySelectorAll(evt.shiftKey ? ".content-dropdown" : ".content-dropdown.below")
-    if (refs.length == 0) { refs = wrapper.querySelectorAll(".reference") }
-    if (statement) {
-      const other = statement
-      evt.shiftKey ? laterMoveBefore(other) : laterMoveAfter(other)
-    }
-    refs[evt.shiftKey ? 0 : refs.length - 1].click()
-    Dropdown.moveToMouse()
+  let statement = window.selected
+  if (!statement) {
+    statement = Statement.from(document.elementFromPoint(Mouse.x, Mouse.y))
   }
+
+  let wrapper = null
+  if (statement) {
+    const node = statement.node
+    wrapper = node.closest(".statement") || node.closest(".wrapper")
+  }
+  wrapper = wrapper || document.querySelector(".wrapper")
+  let refs = wrapper.querySelectorAll(evt.shiftKey ? ".content-dropdown" : ".content-dropdown.below")
+  if (refs.length == 0) { refs = wrapper.querySelectorAll(".reference") }
+  if (statement) {
+    const other = statement
+    evt.shiftKey ? laterMoveBefore(other) : laterMoveAfter(other)
+  }
+  refs[evt.shiftKey ? 0 : refs.length - 1].click()
+  Dropdown.moveToMouse()
 })
 // Quick-Run
 Keyboard.on("Meta+Enter", (evt) => {
@@ -113,11 +136,9 @@ Keyboard.on(["Backspace", "Delete"], (evt) => {
     History.record()
   }
 })
-// Unselect currently selected statement
+// Remove focus and close dropdowns
 Keyboard.on("Escape", (evt) => {
-  if (!activeInput()) {
-    if (window.selected) { window.selected.selected = false }
-  } else {
+  if (activeInput()) {
     document.activeElement.blur()
   }
 })
@@ -138,38 +159,13 @@ Keyboard.on(["→", "Meta+e"], (evt) => {
 Keyboard.on(["Meta+Shift+d", "Meta+d"], (evt) => {
   if (!activeInput() && window.selected) {
     const dups = window.selected.duplicate()
+    dups[dups.length-1]?.select()
     if (evt.shiftKey) {
       dups.reverse().forEach(item => item.moveBefore(window.selected))
     }
     History.record()
   }
 })
-const moveSelectionUp = () => {
-  const list = Array.from(document.querySelectorAll(".statement-wrapper"))
-
-  if (!window.selected) {
-    Statement.from(list[list.length - 1]).selected = true
-  } else {
-    let idx = list.indexOf(window.selected.node) - 1
-    if (idx < 0) { idx = list.length - 1 }
-    if (idx > list.length - 1) { idx = 0 }
-    Statement.from(list[idx]).selected = true
-  }
-  window.selected?.node?.scrollIntoViewIfNeeded()
-}
-const moveSelectionDown = () => {
-  const list = Array.from(document.querySelectorAll(".statement-wrapper"))
-
-  if (!window.selected) {
-    Statement.from(list[0]).selected = true
-  } else {
-    let idx = list.indexOf(window.selected.node) + 1
-    if (idx < 0) { idx = list.length - 1 }
-    if (idx > list.length - 1) { idx = 0 }
-    Statement.from(list[idx]).selected = true
-  }
-  window.selected?.node?.scrollIntoViewIfNeeded()
-}
 // Tab between "selected" statements
 Keyboard.on(["Tab", "Shift+Tab"], (evt) => {
   if (!activeInput()) {
@@ -216,18 +212,27 @@ Keyboard.on("↓", (evt) => {
     }
   }
 })
+// Move statement selection to top/bottom
+Keyboard.on("Home", (evt) => {
+  if (activeInput() || Dropdown.shown()) { return }
+  evt.preventDefault()
+  Statement.first()?.select()
+})
+Keyboard.on("End", (evt) => {
+  if (activeInput() || Dropdown.shown()) { return }
+  evt.preventDefault()
+  Statement.last()?.select()
+})
 // Move statement selection up/down
 Keyboard.on("↑", (evt) => {
-  if (!activeInput() && !Dropdown.shown()) {
-    evt.preventDefault()
-    moveSelectionUp()
-  }
+  if (activeInput() || Dropdown.shown()) { return }
+  evt.preventDefault()
+  moveSelectionUp()
 })
 Keyboard.on("↓", (evt) => {
-  if (!activeInput() && !Dropdown.shown()) {
-    evt.preventDefault()
-    moveSelectionDown()
-  }
+  if (activeInput() || Dropdown.shown()) { return }
+  evt.preventDefault()
+  moveSelectionDown()
 })
 // Increase statement selection up/down
 Keyboard.on("Shift+↑", (evt) => {
@@ -236,32 +241,43 @@ Keyboard.on("Shift+↑", (evt) => {
 Keyboard.on("Shift+↓", (evt) => {
   // increase selection down
 })
+// Move Statement to top/bottom
+Keyboard.on("Meta+Home", (evt) => {
+  if (activeInput() || Dropdown.shown()) { return }
+  if (!window.selected) { return }
+  evt.preventDefault()
+
+  window.selected.moveBefore(Statement.first())
+  window.selected.node.scrollIntoViewIfNeeded()
+  History.record()
+})
+Keyboard.on("Meta+End", (evt) => {
+  if (activeInput() || Dropdown.shown()) { return }
+  if (!window.selected) { return }
+  evt.preventDefault()
+
+  window.selected.moveAfter(Statement.last())
+  window.selected.node.scrollIntoViewIfNeeded()
+  History.record()
+})
 // Move Statement up/down
 Keyboard.on("Meta+↑", (evt) => {
   if (activeInput() || Dropdown.shown()) { return }
   if (!window.selected) { return }
   evt.preventDefault()
 
-  const list = Array.from(document.querySelectorAll(".statement-wrapper"))
-  let idx = list.indexOf(window.selected.node) - 1
-  if (idx == -1) { return }
-
-  window.selected.moveBefore(Statement.from(list[idx]))
+  window.selected.moveBefore(window.selected.previous())
+  window.selected.node.scrollIntoViewIfNeeded()
   History.record()
-  window.selected?.node?.scrollIntoViewIfNeeded()
 })
 Keyboard.on("Meta+↓", (evt) => {
   if (activeInput() || Dropdown.shown()) { return }
   if (!window.selected) { return }
   evt.preventDefault()
 
-  const list = Array.from(document.querySelectorAll(".statement-wrapper"))
-  let idx = list.indexOf(window.selected.node) + 1
-  if (idx == list.length) { return }
-
-  window.selected.moveAfter(Statement.from(list[idx]))
+  window.selected.moveAfter(window.selected.next())
+  window.selected.node.scrollIntoViewIfNeeded()
   History.record()
-  window.selected?.node?.scrollIntoViewIfNeeded()
 })
 // Hot keys for toggling options or changing statment attributes
 Keyboard.on("Meta+1", (evt) => {
@@ -293,8 +309,7 @@ Keyboard.on("Meta+4", (evt) => {
 
 // Select the Statement that is focused
 document.addEventListener("focusin", function(evt) {
-  const statement = Statement.from(evt.target)
-  if (statement) { statement.selected = true }
+  Statement.from(evt.target)?.select()
 });
 
 // Delete everything on middle click outside of the code
@@ -394,36 +409,25 @@ document.addEventListener("click", function(evt) {
 
 // Handle dup, inspect, delete, and selected states
 document.addEventListener("click", function(evt) {
+  let statement = Statement.from(evt.target)
+  if (!statement) { return }
+
+  statement.select()
+
   if (evt.target.closest(".obj-dup")) {
-    console.log("dup")
-    let statement = Statement.from(evt.target)
-    statement?.duplicate()
-    statement && History.record()
-    return
+    const dups = statement.duplicate()
+    dups[dups.length-1]?.select()
+    History.record()
   }
   if (evt.target.closest(".obj-inspect")) {
-    let statement = Statement.from(evt.target)
-    statement?.toggleInspect()
-    statement && History.record()
-    return
+    statement.toggleInspect()
+    History.record()
   }
   if (evt.target.closest(".obj-delete")) {
-    let statement = Statement.from(evt.target)
-    statement?.remove()
-    statement && History.record()
-    return
-  }
-
-  // Do NOT mark a statement as selected when clicking the dropdowns
-  if (!evt.target.closest(".content-dropdown")) {
-    if (evt.target.closest(".statement-wrapper")) {
-      if (!activeInput(evt.target)) {
-        let statement = Statement.from(evt.target)
-        if (statement) { statement.selected = !statement.selected }
-      }
-    } else {
-      Statement.clearSelected()
-    }
+    const next = statement.next()
+    statement.remove()
+    if (next) { next.select() }
+    History.record()
   }
 })
 
@@ -431,6 +435,7 @@ document.addEventListener("click", function(evt) {
 document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-varname")) {
     let statement = Statement.from(evt.target)
+    statment.select()
     let newname = window.prompt("Enter new name", statement._name)?.trim()
     if (newname === undefined) { return }
 
@@ -448,6 +453,7 @@ document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-refname")) {
     let statement = Statement.from(evt.target)
     if (statement.reference === undefined) { return }
+    statment.select()
     let new_ref = window.prompt("Enter new ref", statement.refname)?.trim()
     if (new_ref === undefined) { return }
 
@@ -472,6 +478,7 @@ document.addEventListener("click", function(evt) {
 document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-returntype")) {
     let statement = Statement.from(evt.target)
+    statment.select()
     Dropdown.show([
       ...Schema.all.map(type => {
         return {
@@ -492,6 +499,7 @@ document.addEventListener("click", function(evt) {
   let btn = evt.target.closest("btn")
   if (btn) {
     let statement = Statement.from(evt.target)
+    statment.select()
     let tokens = Statement.available(btn).reverse()
     let selectedTag = btn.parentElement.querySelector(".selected-tag")
     let defaultOpts = []

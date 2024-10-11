@@ -20,8 +20,7 @@ export default class Statement {
     Statement.all.push(this)
   }
   static toCode() {
-    let topLevel = document.querySelectorAll(".statements > .statement-wrapper")
-    return Array.from(topLevel).map(statement => {
+    return Array.from(this.topLevelNodes()).map(statement => {
       return Statement.from(statement).toString()
     }).join("\n")
   }
@@ -83,6 +82,7 @@ export default class Statement {
   static reloadFromText(text) {
     Statement.all.forEach(item => item.remove())
     this.fromText(text)
+    Statement.first()?.select()
   }
   static fromText(text) {
     if (!text) { return }
@@ -125,6 +125,16 @@ export default class Statement {
 
     return adds
   }
+  static topLevelNodes() {
+    return document.querySelectorAll(".statements > .statement-wrapper")
+  }
+  static first() {
+    return Statement.from(this.topLevelNodes()[0])
+  }
+  static last() {
+    const nodes = this.topLevelNodes()
+    return Statement.from(nodes[nodes.length-1])
+  }
   static available(btn, statement) {
     // TODO: Should intelligently determine which vars are in context or not
     statement = (statement || btn)?.closest(".statement-wrapper")
@@ -151,12 +161,32 @@ export default class Statement {
   }
 
   static clearSelected() {
-    window.selected = undefined
-    document.querySelectorAll(".statement-wrapper").forEach(item => {
-      item.classList.remove("upper-selected")
-      item.classList.remove("selected")
-      item.classList.remove("lower-selected")
-    })
+    document.querySelectorAll(".selected").forEach(item => item.classList.remove("selected"))
+    // window.selected = undefined
+    // document.querySelectorAll(".statement-wrapper").forEach(item => {
+    //   item.classList.remove("upper-selected")
+    //   item.classList.remove("selected")
+    //   item.classList.remove("lower-selected")
+    // })
+  }
+
+  previous() {
+    const list = Array.from(document.querySelectorAll(".statement-wrapper"))
+    let idx = list.indexOf(this.node)
+
+    for (let i = idx-1; i >= 0; i--) {
+      // Get the previous statement that is not inside of the current one
+      if (!this.node.contains(list[i])) { return Statement.from(list[i]) }
+    }
+  }
+  next() {
+    const list = Array.from(document.querySelectorAll(".statement-wrapper"))
+    let idx = list.indexOf(this.node)
+
+    for (let i = idx+1; i < list.length; i++) {
+      // Get the next statement that is not inside of the current one
+      if (!this.node.contains(list[i])) { return Statement.from(list[i]) }
+    }
   }
 
   get wrapper() { return this.node.parentElement }
@@ -208,11 +238,15 @@ export default class Statement {
   get selected() { return this.node.classList.contains("selected") }
   set selected(bool) {
     Statement.clearSelected()
-    if (bool) { window.selected = this }
     this.node.classList.toggle("selected", bool)
-    this.reference?.node.classList.toggle("upper-selected", bool)
-    this.downReferences().forEach(item => item.node.classList.toggle("lower-selected", bool))
+    if (bool) {
+      window.selected = this
+      this.node.scrollIntoViewIfNeeded()
+    }
+    // this.reference?.node.classList.toggle("upper-selected", bool)
+    // this.downReferences().forEach(item => item.node.classList.toggle("lower-selected", bool))
   }
+  select() { this.selected = true }
 
   get reference() { return this._reference }
   set reference(ref) {
@@ -379,10 +413,12 @@ export default class Statement {
     if (top) { this.moveTo(0) }
   }
   moveBefore(other) {
+    if (!other) { return }
     other.wrapper.insertBefore(this.node, other.node)
     this.moved()
   }
   moveAfter(other) {
+    if (!other) { return }
     // There's no insertAfter, so insert `this` before the new one, then move the new one before it
     other.wrapper.insertBefore(this.node, other.node)
     other.wrapper.insertBefore(other.node, this.node)
@@ -408,7 +444,7 @@ export default class Statement {
       statement.refId = null
       statement.addError("Parent statement has been removed")
     })
-    if (this.selected) { Statement.clearSelected() }
+    if (this.selected) { this.next()?.select() }
     this.node.remove()
     Statement.all = Statement.all.filter(item => item.id != this.id)
   }
