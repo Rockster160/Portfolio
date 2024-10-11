@@ -166,6 +166,26 @@ RSpec.describe Jil::Methods::Global do
     end
   end
 
+  context "#trigger command" do
+    let(:code) {
+      <<-JIL
+        k16d3 = Global.trigger("command", "", {
+          h59a1 = Keyval.new("words", "add it")::Keyval
+        })::Schedule
+      JIL
+    }
+
+    before do
+      user.lists.create(name: "TODO")
+    end
+
+    it "commands Jarvis to do the thing" do
+      expect_successful_jil
+
+      expect(user.lists.first.list_items.name).to eq("it")
+    end
+  end
+
   context "#broadcast_websocket" do
     let(:code) {
       <<-JIL

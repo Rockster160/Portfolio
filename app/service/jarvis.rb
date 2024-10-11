@@ -188,20 +188,19 @@ class Jarvis
     # Order sensitive classes to iterate through and attempt commands
     # @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/^(what|where|when|why|is|how|are)\s+(about|is|are|were|did|have|it)\b/)
     [
-      Jarvis::Trigger,        # √
-      Jarvis::Say,            # √
-      Jarvis::Log,            # √
-      Jarvis::ScheduleParser, # √
-      Jarvis::Bedtime,        # -- integration
-      Jarvis::Navigate,       # -- integration
-      Jarvis::Wifi,           # -- integration
-      Jarvis::List,           # √
-      Jarvis::Printer,        # -- integration
-      Jarvis::Nest,           # -- integration
-      Jarvis::Tesla,          # -- integration
-      Jarvis::Sms,            # √
-      Jarvis::Venmo,          # -- integration
-      Jarvis::Talk,           # √
+      Jarvis::Trigger,        # -- XXX deprecated
+      Jarvis::Say,            # √ -- Eventually remove this as well. This is just a websocket.
+      Jarvis::Log,            # √ -- Could probably migrate to Jil?
+      Jarvis::ScheduleParser, # √ KEEP! This will be the magic that delays things via words. Should be disable-able?
+      Jarvis::Navigate,       # -- Move to Jil after Tesla
+      Jarvis::Wifi,           # -- Move to Jil after QR
+      Jarvis::List,           # ? Maybe integration? Maybe default?
+      Jarvis::Printer,        # -- Move to Jil whenever
+      Jarvis::Nest,           # -- Move to Jil after Oauth
+      Jarvis::Tesla,          # -- Move to Jil after Oauth
+      Jarvis::Sms,            # Contains logic for remind and ping - need to extract those. Then not sure what to do about SMS in general...
+      Jarvis::Venmo,          # -- Move to Jil after Oauth
+      Jarvis::Talk,           # √ Controls fallback Jarvis responses
     ]
   end
 

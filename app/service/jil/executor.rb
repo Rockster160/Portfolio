@@ -61,6 +61,7 @@ class Jil::Executor
     }.tap { |tasks|
       if !stopped && trigger.to_sym == :command
         user_ids.each do |user_id|
+          trigger_data.deep_symbolize_keys!
           words = trigger_data.dig(:words) || trigger_data.dig(:command, :words)
           ::Jarvis.command(User.find(user_id), words)
         end

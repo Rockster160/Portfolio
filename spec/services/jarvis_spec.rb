@@ -480,8 +480,10 @@ RSpec.describe Jarvis do
 
     it "can schedule a job in the middle of a command" do
       msg = "Do the laundry"
+      # Jil::Schedule.add_schedule(user, execute_at, trigger, data)
       perform_enqueued_jobs {
-        expect(JarvisWorker).to receive(:perform_at).with(5.minutes.from_now, @admin.id, "Text me to do the laundry").and_call_original
+        # expect(JarvisWorker).to receive(:perform_at).with(5.minutes.from_now, @admin.id, "Text me to do the laundry").and_call_original
+        expect(Jil::Schedule).to receive(:add_schedule).with(@admin.id, 5.minutes.from_now, :command, { words: "Text me to do the laundry" }).and_call_original
         # Call original above to make sure the SmsWorker gets called
         expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
 

@@ -17,7 +17,6 @@ class JilScheduledTrigger < ApplicationRecord
 
   scope :not_scheduled, -> { where(jid: nil) }
   scope :upcoming_soon, -> { where(execute_at: ..REDIS_OFFSET.from_now) }
-  # scope :ready, -> { where(execute_at: ::Time.current..) }
 
   def self.break_searcher(search_string)
     return all if search_string.squish.then { |str| str.blank? || str == "*" }
