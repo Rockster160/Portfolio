@@ -238,6 +238,7 @@ Keyboard.on("Shift+↓", (evt) => {
 })
 // Move Statement up/down
 Keyboard.on("Meta+↑", (evt) => {
+  if (activeInput() || Dropdown.shown()) { return }
   if (!window.selected) { return }
   evt.preventDefault()
 
@@ -250,6 +251,7 @@ Keyboard.on("Meta+↑", (evt) => {
   window.selected?.node?.scrollIntoViewIfNeeded()
 })
 Keyboard.on("Meta+↓", (evt) => {
+  if (activeInput() || Dropdown.shown()) { return }
   if (!window.selected) { return }
   evt.preventDefault()
 
