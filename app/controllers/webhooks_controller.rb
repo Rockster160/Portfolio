@@ -25,6 +25,15 @@ class WebhooksController < ApplicationController
     render json: params
   end
 
+  # /jil/webhook
+  def jil_webhook
+    json_params.each do |key, data|
+      ::Jil.trigger(current_user, key, data)
+    end
+
+    head :ok
+  end
+
   # /jil/trigger/:trigger
   def jil
     ::Jil.trigger(

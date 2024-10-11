@@ -14,6 +14,7 @@ class ApplicationController < ActionController::Base
   around_action :use_timezone
 
   rescue_from ::ActiveRecord::RecordNotFound, with: :rescue_login
+  rescue_from ::ActionDispatch::Http::Parameters::ParseError, with: :rescue_bad_params
 
   if Rails.env.production?
     rescue_from ::ActionController::InvalidAuthenticityToken, with: :ban_spam_ip
@@ -88,6 +89,16 @@ class ApplicationController < ActionController::Base
 
   def block_banned_ip
     head :unauthorized if BannedIp.where(ip: current_ip, whitelisted: false).any?
+  end
+
+  def rescue_bad_params
+    render(
+      json: {
+        error: "The request params are in an unexpected format. Please try again with valid JSON.",
+        params: request.body.read(1005).truncate(1000),
+      },
+      status: :unprocessable_entity,
+    )
   end
 
   def use_timezone
