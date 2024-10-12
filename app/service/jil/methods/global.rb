@@ -26,6 +26,8 @@ class Jil::Methods::Global < Jil::Methods::Base
     when :block then evalargs(line.arg).last
     when :comment then evalarg(line.arg)
     when :loop then @jil.enumerate_loop { |ctx| evalarg(line.arg, ctx) }
+    when :times
+      @jil.enumerate_array(0...evalarg(line.args.first), :map) { |ctx| evalarg(line.args.last, ctx) }
     when :dowhile
       @jil.enumerate_loop { |ctx|
         val = evalarg(line.arg, ctx)

@@ -76,7 +76,7 @@ class Jil::Methods::Base
   end
 
   def set_value(token, val, type: nil)
-    token = token.to_sym
+    token = token.to_s.to_sym
     @jil.ctx[:vars][token] ||= { class: type || :Any, value: val }
     @jil.ctx[:vars][token][:class] = type if type
     @jil.ctx[:vars][token][:value] = val
