@@ -71,14 +71,16 @@ gem "pretty_logger", "1.4.6"
 # Jil Parser gems
 gem "dentaku"
 
+# Needed in prod so that we can deploy via SSH
+gem "capistrano",         require: false
+gem "capistrano-rails",   require: false
+gem "capistrano-rbenv",   require: false
+gem "capistrano-bundler", require: false
+gem "capistrano-sidekiq", require: false
+gem "capistrano3-puma",   require: false
+gem "capistrano-dotenv",   require: false
+
 group :development, :test do
-  gem "capistrano",         require: false
-  gem "capistrano-rails",   require: false
-  gem "capistrano-rbenv",   require: false
-  gem "capistrano-bundler", require: false
-  gem "capistrano-sidekiq", require: false
-  gem "capistrano3-puma",   require: false
-  gem "capistrano-dotenv",   require: false
   gem "spring", "4.0.0"
   gem "annotate", "3.2.0"
   gem "listen", "3.7.1"
