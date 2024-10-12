@@ -219,6 +219,7 @@ Keyboard.on("Enter", (evt) => {
   if (item) {
     evt.preventDefault()
     evt.stopPropagation()
+    Keyboard.clear()
     item.dispatchEvent(new CustomEvent("select", {
       bubbles: true,
     }))

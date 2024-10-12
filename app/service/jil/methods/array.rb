@@ -37,8 +37,8 @@ class Jil::Methods::Array < Jil::Methods::Base
     when :get then token_val(line.objname)[@jil.cast(evalarg(line.arg), :Numeric)]
     when :pop! then token_val(line.objname).pop
     when :shift! then token_val(line.objname).shift
-    when :push then token_val(line.objname).dup.push(*cast(evalarg(line.arg)))
-    when :push! then token_val(line.objname).push(*cast(evalarg(line.arg)))
+    when :push then token_val(line.objname).dup.push(evalarg(line.arg))
+    when :push! then token_val(line.objname).push(evalarg(line.arg))
     when :unshift then token_val(line.objname).dup.unshift(*cast(evalarg(line.arg)))
     when :unshift! then token_val(line.objname).unshift(*cast(evalarg(line.arg)))
     when :set

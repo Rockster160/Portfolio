@@ -22,7 +22,7 @@ export default class Statement {
   static toCode() {
     return Array.from(this.topLevelNodes()).map(statement => {
       return Statement.from(statement).toString()
-    }).join("\n")
+    }).filter(Boolean).join("\n")
   }
   static save() {
     let code = Statement.toCode()
@@ -610,21 +610,25 @@ export default class Statement {
   }
 
   toString(nest) {
-    let str = ""
-    if (this._inspect) { str += `*` }
-    if (this._name) { str += `${this._name} = ` }
-    if (this._reference) {
-      str += `${this._reference.name || this._reference.id}`
-    } else {
-      str += this.type
+    try {
+      let str = ""
+      if (this._inspect) { str += `*` }
+      if (this._name) { str += `${this._name} = ` }
+      if (this._reference) {
+        str += `${this._reference.name || this._reference.id}`
+      } else {
+        str += this.type
+      }
+      str += `.${this.method}(`
+      str += this.args.map(arg => this.argValue(arg, nest)).filter(Boolean).join(", ")
+      // iterate through obj-args, pull the value from inputs- when a content block, wrap inside {}
+      str += `)::${this.returntype}`
+      if (this.commented) {
+        str = str.split("\n").map(line => `# ${line}`).join("\n")
+      }
+      return str
+    } catch (e) {
+      // Do nothing- invalid syntax or something.
     }
-    str += `.${this.method}(`
-    str += this.args.map(arg => this.argValue(arg, nest)).filter(Boolean).join(", ")
-    // iterate through obj-args, pull the value from inputs- when a content block, wrap inside {}
-    str += `)::${this.returntype}`
-    if (this.commented) {
-      str = str.split("\n").map(line => `# ${line}`).join("\n")
-    }
-    return str
   }
 }

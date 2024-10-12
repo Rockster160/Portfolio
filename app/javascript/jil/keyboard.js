@@ -14,6 +14,11 @@ export default class Keyboard {
   static set held(keys) { Keyboard.#held = keys };
   constructor() {}
 
+  // Used to clear keys- essentially acting like stopPropagation as it stops other listeners being triggered.
+  static clear() {
+    Keyboard.held = new Set()
+  }
+
   static isPressed(keys) {
     keys = Array.isArray(keys) ? keys : [keys]
     return keys.every(key => Keyboard.held.has(mapKey(key)))
@@ -25,11 +30,9 @@ export default class Keyboard {
       keys = keys.split("+")
       const metaKey = keys.includes("Meta")
       const shiftKey = keys.includes("Shift")
-      const controlKey = keys.includes("Control")
       const modifiersMatch = (evt) => {
         if (metaKey !== !!evt.metaKey) { return false }
         if (shiftKey !== !!evt.shiftKey) { return false }
-        if (controlKey !== !!evt.controlKey) { return false }
         return true
       }
       keys = keys.map(key => mapKey(key))

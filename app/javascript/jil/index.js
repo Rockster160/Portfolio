@@ -121,12 +121,12 @@ Keyboard.on("Meta+Enter", (evt) => {
   evt.preventDefault()
   document.querySelector(".btn-run").click()
 })
-// Add a new function at the top/bottom of the current container
-Keyboard.on("Alt+Enter", (evt) => {
-  const wrapper = window.selected?.node || document
-  let refs = wrapper.querySelectorAll(evt.shiftKey ? ".content-dropdown" : ".content-dropdown.below")
-  if (refs.length == 0) { refs = wrapper.querySelectorAll(".reference") }
-  refs[evt.shiftKey ? 0 : refs.length - 1].click()
+// Add a chain function
+Keyboard.on("Control+Enter", (evt) => {
+  if (!window.selected) { return }
+  const wrapper = window.selected.node
+  let ref = wrapper.querySelector(".reference")
+  ref.click()
   Dropdown.moveToMouse()
 })
 // Delete selected statement
@@ -158,6 +158,7 @@ Keyboard.on(["→", "Meta+e"], (evt) => {
 // Duplicate statement
 Keyboard.on(["Meta+Shift+d", "Meta+d"], (evt) => {
   if (!activeInput() && window.selected) {
+    evt.preventDefault()
     const dups = window.selected.duplicate()
     dups[dups.length-1]?.select()
     if (evt.shiftKey) {
@@ -186,6 +187,7 @@ Keyboard.on("Meta+s", (evt) => {
 Keyboard.on("Meta+c", (evt) => {
   if (activeInput()) { return }
   if (!window.selected) { return }
+  if (window.getSelection().toString().length > 0) { return }
 
   evt.preventDefault()
   navigator.clipboard.writeText(window.selected.toString())
@@ -310,7 +312,7 @@ Keyboard.on("Meta+↓", (evt) => {
   window.selected.node.scrollIntoViewIfNeeded()
   History.record()
 })
-// Hot keys for toggling options or changing statment attributes
+// Hot keys for toggling options or changing statement attributes
 Keyboard.on("Meta+1", (evt) => {
   if (!window.selected) { return }
   evt.preventDefault()
@@ -466,7 +468,7 @@ document.addEventListener("click", function(evt) {
 document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-varname")) {
     let statement = Statement.from(evt.target)
-    statment.select()
+    statement.select()
     let newname = window.prompt("Enter new name", statement._name)?.trim()
     if (newname === undefined) { return }
 
@@ -484,7 +486,7 @@ document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-refname")) {
     let statement = Statement.from(evt.target)
     if (statement.reference === undefined) { return }
-    statment.select()
+    statement.select()
     let new_ref = window.prompt("Enter new ref", statement.refname)?.trim()
     if (new_ref === undefined) { return }
 
@@ -509,7 +511,7 @@ document.addEventListener("click", function(evt) {
 document.addEventListener("click", function(evt) {
   if (evt.target.closest(".obj-returntype")) {
     let statement = Statement.from(evt.target)
-    statment.select()
+    statement.select()
     Dropdown.show([
       ...Schema.all.map(type => {
         return {
@@ -530,7 +532,7 @@ document.addEventListener("click", function(evt) {
   let btn = evt.target.closest("btn")
   if (btn) {
     let statement = Statement.from(evt.target)
-    statment.select()
+    statement.select()
     let tokens = Statement.available(btn).reverse()
     let selectedTag = btn.parentElement.querySelector(".selected-tag")
     let defaultOpts = []
