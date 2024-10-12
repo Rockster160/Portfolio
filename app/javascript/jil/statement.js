@@ -86,7 +86,7 @@ export default class Statement {
   }
   static fromText(text) {
     if (!text) { return }
-    [...text.matchAll(/^ *(?<varname>[_a-z][_0-9A-Za-z]*) *=/gm)].forEach(m => {
+    [...text.matchAll(/^ *\*?(?<varname>[_a-z][_0-9A-Za-z]*) *=/gm)].forEach(m => {
       let { varname } = m.groups
       if (Statement.find(varname)) {
         text = text.replaceAll(varname, (genLetter() + genHex(2)))
