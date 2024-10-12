@@ -6,6 +6,6 @@ set :stage,           :production
 set :rails_env,       :production
 set :ssh_options, {
  keys: File.join(ENV["HOME"], ".ssh/id_rsa"),
- forward_agent: false,
+ forward_agent: true,
  auth_methods: %w(publickey)
 }
