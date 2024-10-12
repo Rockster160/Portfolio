@@ -35,7 +35,8 @@ jobs:
         echo "${{ secrets.PORTFOLIO_DEPLOY_SSH_KEY }}" > /home/runner/.ssh/github_actions
         chmod 600 /home/runner/.ssh/github_actions
         ssh-add /home/runner/.ssh/github_actions
-        ssh deploy@165.227.15.235 -o StrictHostKeyChecking=no -p 22 "bash -ic 'source /home/rocco/.bashrc; RBENV_ROOT=/home/rocco/.rbenv RBENV_VERSION=3.2.2 cd /home/deploy/apps/portfolio/current && /home/rocco/.rbenv/bin/rbenv exec bundle exec cap production deploy'"
+        ssh-add -l
+        ssh -A deploy@165.227.15.235 -o StrictHostKeyChecking=no -p 22 "bash -c 'source /home/rocco/.bashrc; RBENV_ROOT=/home/rocco/.rbenv RBENV_VERSION=3.2.2 cd /home/deploy/apps/portfolio/current && /home/rocco/.rbenv/bin/rbenv exec bundle exec cap production deploy:check --trace'"
 
     - name: Complete Deploy
       run: |
