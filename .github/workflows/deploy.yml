@@ -39,5 +39,5 @@ jobs:
 
     - name: Complete Deploy
       run: |
-        sleep 5
+        sleep 4
         curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" -d "id=deploy&deploy=finish" https://ardesian.com/jil/trigger/monitor
