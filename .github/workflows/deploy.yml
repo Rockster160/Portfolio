@@ -25,7 +25,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: SSH to server and trigger deploy
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 3.2.2
+
+    - name: Install dependencies
+      run: |
+        gem install bundler
+        bundle install
+
+    - name: Deploy to Digital Ocean
       env:
         SSH_PRIVATE_KEY: /tmp/ssh_key
       run: |
@@ -34,12 +44,11 @@ jobs:
         ssh-keyscan 165.227.15.235 >> /home/runner/.ssh/known_hosts
         echo "${{ secrets.PORTFOLIO_DEPLOY_SSH_KEY }}" > /home/runner/.ssh/github_actions
         chmod 600 /home/runner/.ssh/github_actions
+        ssh-agent -a $SSH_PRIVATE_KEY > /dev/null
         ssh-add /home/runner/.ssh/github_actions
-        ssh-add -l
-        ssh deploy@165.227.15.235 -o StrictHostKeyChecking=no "bash -ic 'ssh-add -L'"
-        # ssh deploy@165.227.15.235 -o StrictHostKeyChecking=no -p 22 "bash -c 'source /home/rocco/.bashrc; RBENV_ROOT=/home/rocco/.rbenv RBENV_VERSION=3.2.2 cd /home/deploy/apps/portfolio/current && /home/rocco/.rbenv/bin/rbenv exec bundle exec cap production deploy:check --trace'"
+        bundle exec cap production deploy
 
     - name: Complete Deploy
       run: |
-        sleep 4
+        sleep 15 # Attempt to give the server enough time to wake up after deploy
         curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" -d "id=deploy&deploy=finish" https://ardesian.com/jil/trigger/monitor
