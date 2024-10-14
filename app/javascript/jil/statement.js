@@ -556,7 +556,28 @@ export default class Statement {
           if (input.type == "checkbox") {
             input.checked = val == "true"
           } else {
-            input.value = val.replaceAll(/(^['"]|["']$)/g, "")
+            if (val[0] == "\"" && val[val.length-1] == "\"") {
+              try {
+                input.value = JSON.parse(val.replace(/\\`/g, "`").replace(/\\'/g, "'"))
+                // .replace(/(\\+)(.)?/g, (all, slashes, char, midx) => {
+                //   const length = slashes.length
+                //   const odd = length % 2 === 1
+                //   console.log({ length, all, slashes, char, midx })
+                //
+                //   if (char == "\"" && odd)
+                //   // if (length == 1) { return all }
+                //
+                //   // debugger
+                //   // return "\\".repeat(length-1)
+                //   // return "\\".repeat(length % 2 === 0 ? length - 1 : length) + (char ? char : "")
+                //     return all
+                // })
+              } catch (e) {
+                input.value = val
+              }
+            } else {
+              input.value = val
+            }
             if (input.tagName == "TEXTAREA") {
               const rows = clamp(val.split("\n").length, 3, 20)
               input.rows = rows
@@ -602,7 +623,7 @@ export default class Statement {
         switch (input.type) {
           case "number": return JSON.stringify(parseFloat(input.value));
           case "checkbox": return JSON.stringify(input.checked);
-          default: return JSON.stringify(input.value);
+          default: return JSON.stringify(input.value)
         }
       default:
         console.log(`Unknown value for type:${input.tagName.toLowerCase()}`);

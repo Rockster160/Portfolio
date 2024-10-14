@@ -54,13 +54,19 @@ export default class Tokenizer {
 
   tokenizeQuotes(str) {
     let tokenized = str.slice();
+    // if (tokenized[0] === "\"" && tokenized[tokenized.length-1] === "\"") {
+    //   // Have not added this to RB
+    //   const fullToken = this.generateToken();
+    //   this.tokens[fullToken] = tokenized;
+    //   return fullToken
+    // }
 
     while (true) {
       const firstIdx = this.findIndex(tokenized, "\"");
-      if (firstIdx === null) break;
+      if (firstIdx === null) { break }
 
       const nextIdx = this.findIndex(tokenized, "\"", firstIdx);
-      if (nextIdx === null) break;
+      if (nextIdx === null) { break }
 
       const quoted = tokenized.slice(firstIdx, nextIdx + 1);
       const token = this.generateToken();
