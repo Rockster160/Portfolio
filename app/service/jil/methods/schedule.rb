@@ -22,13 +22,14 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   #   #data(content(Hash))
 
   def execute(line)
-    case line.methodname
+    method_sym = line.methodname.to_s.underscore.gsub(/[^\w]/, "").to_sym
+    case method_sym
     when :id, *PERMIT_ATTRS
       case token_class(line.objname)
       when :Schedule
-        token_val(line.objname)[line.methodname.to_s.underscore.gsub(/[^\w]/, "").to_sym]
+        token_val(line.objname)[method_sym]
       when :ScheduleData
-        send(line.methodname, *evalargs(line.args))
+        send(method_sym, *evalargs(line.args))
       end
     else fallback(line)
     end

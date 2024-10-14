@@ -12,6 +12,9 @@ export default class Dropdown {
   static show(opts) { this.showAt(Mouse.x, Mouse.y, opts) }
   static showAt(x, y, opts) {
     this.hide(false)
+    if (document.activeElement.tagName === "INPUT") {
+      document.activeElement.blur()
+    }
     let node = this.node
     node.focus()
 
@@ -253,6 +256,7 @@ Keyboard.on("↓", (evt) => {
 })
 document.addEventListener("keydown", (evt) => {
   if (Dropdown.shown()) {
+    evt.preventDefault()
     if (evt.metaKey) {
       if (evt.key == "Backspace" || evt.key == "Delete") { Dropdown.search = [] }
       Dropdown.updateSearch()
