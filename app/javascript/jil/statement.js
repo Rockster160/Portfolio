@@ -558,21 +558,20 @@ export default class Statement {
           } else {
             if (val[0] == "\"" && val[val.length-1] == "\"") {
               try {
-                input.value = JSON.parse(val.replace(/\\`/g, "`").replace(/\\'/g, "'"))
-                // .replace(/(\\+)(.)?/g, (all, slashes, char, midx) => {
-                //   const length = slashes.length
-                //   const odd = length % 2 === 1
-                //   console.log({ length, all, slashes, char, midx })
-                //
-                //   if (char == "\"" && odd)
-                //   // if (length == 1) { return all }
-                //
-                //   // debugger
-                //   // return "\\".repeat(length-1)
-                //   // return "\\".repeat(length % 2 === 0 ? length - 1 : length) + (char ? char : "")
-                //     return all
-                // })
+                const parsed = val.replace(/(\\+)(.)?/g, (all, slashes, char, midx) => {
+                  // ` and ' are special and we have to double escape them when saving and sending data from the BE.
+                  // Unwrap them here by detecting if they are escaped, and if so, unescaping them.
+                  if (char !== "`" && char !== "'") { return all }
+
+                  const length = slashes.length
+                  const odd = length % 2 === 1
+                  // console.log({ length, all, slashes, char, midx })
+
+                  return "\\".repeat(odd ? length-1 : length) + (char || "")
+                })
+                input.value = JSON.parse(parsed)
               } catch (e) {
+                console.log("Failed to parse", val)
                 input.value = val
               }
             } else {
