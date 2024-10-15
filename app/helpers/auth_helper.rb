@@ -10,7 +10,11 @@ module AuthHelper
     decoded = JWT.decode(token, Rails.application.secrets.secret_key_base, true, algorithm: "HS256")
     return unless decoded.is_a?(Array) && decoded.first.is_a?(Hash)
 
-    decoded.first["user_id"].presence&.then { |id| User.find(id) }
+    decoded.first["user_id"].presence&.then { |id|
+      @auth_type = :jwt
+      @auth_type_id = id
+      User.find(id)
+    }
   end
 
   def guest_account?
@@ -86,6 +90,8 @@ module AuthHelper
   def create_guest_user
     @user = User.create(role: :guest)
 
+    @auth_type = :guest
+    @auth_type_id = @user.id
     sign_in @user
   end
 
@@ -115,12 +121,23 @@ module AuthHelper
     basic_auth_string = Base64.decode64(auth_string.to_s)
 
     if basic_auth_string.include?(":")
-      User.auth_from_basic(basic_auth_string)
+      User.auth_from_basic(basic_auth_string)&.tap { |user|
+        @auth_type = :username
+        @auth_type_id = user.id
+      }
     else
-      ApiKey.find_by(key: auth_string)&.tap(&:use!)&.user
+      ApiKey.find_by(key: auth_string)&.tap { |key|
+        @auth_type = :api_key
+        @auth_type_id = key.id
+        key.use!
+      }&.user
     end
   rescue ActiveRecord::StatementInvalid # Sometimes decoding the auth string can result in weirdness
-    ApiKey.find_by(key: auth_string)&.tap(&:use!)&.user
+    ApiKey.find_by(key: auth_string)&.tap { |key|
+      @auth_type = :api_key
+      @auth_type_id = key.id
+      key.use!
+    }&.user
   end
 
   def auth_from_session

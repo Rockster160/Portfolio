@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_10_10_174546) do
+ActiveRecord::Schema[7.1].define(version: 2024_10_15_055153) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -417,6 +417,8 @@ ActiveRecord::Schema[7.1].define(version: 2024_10_10_174546) do
     t.datetime "finished_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "auth_type"
+    t.integer "auth_type_id"
     t.index ["jil_task_id"], name: "index_jil_executions_on_jil_task_id"
     t.index ["user_id"], name: "index_jil_executions_on_user_id"
   end

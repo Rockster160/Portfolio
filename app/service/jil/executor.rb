@@ -69,18 +69,19 @@ class Jil::Executor
     }
   end
 
-  def self.async_call(user, code, input_data={}, task: nil)
-    ::JilExecuteWorker.perform_async(user.id, code, input_data, task&.id)
+  def self.async_call(user, code, input_data={}, task: nil, auth: nil)
+    ::JilExecuteWorker.perform_async(user.id, code, input_data, task&.id, auth)
   end
 
-  def self.call(user, code, input_data={}, task: nil)
+  def self.call(user, code, input_data={}, task: nil, auth: nil)
     new(user, code, input_data, task: task).execute_all
   end
 
-  def initialize(user, code, input_data={}, task: nil)
+  def initialize(user, code, input_data={}, task: nil, auth: nil)
     # @debug = true && !Rails.env.production?
     load("/Users/rocco/.pryrc") if @debug
 
+    # Need to store auth, but need to remember to pass the id as well
     @user = user
     @ctx = { vars: {}, input_data: input_data, return_val: nil, state: :running, output: [] }
     @execution = ::JilExecution.create(user: user, code: code, ctx: @ctx, jil_task: task)
