@@ -56,7 +56,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
       if (saveClick) { setStored(climbs.join(" ")); }
       document.querySelector("#climb_data").value = climbs.join(" ");
-      document.querySelector(".full-score").textContent = scores.reduce((a, b) => a + b, 0);
+      document.querySelector(".full-score").textContent = roundScore(scores.reduce((a, b) => a + b, 0))
     }
   });
 
@@ -70,12 +70,16 @@ document.addEventListener("DOMContentLoaded", function() {
     return Number(el.getAttribute("score"))
   }
 
+  const roundScore = function(score) {
+    return parseFloat(score.toFixed(2).replace(/\.?0+$/g, ""))
+  }
+
   const calculateScore = function(input) {
     input = String(input)
     let [score, percentage] = input.split(/[\.\%]/);
     percentage = percentage?.length > 0 ? Number(`0.${percentage}`) : 1;
 
-    return parseFloat((scoreFromClimb(score) * percentage).toFixed(2));
+    return roundScore(scoreFromClimb(score) * percentage);
   }
 
   let priorClimbs = getStored();

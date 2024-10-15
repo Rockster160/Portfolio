@@ -1,4 +1,5 @@
 class ClimbsController < ApplicationController
+  include RenderHelper
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
 
@@ -40,7 +41,7 @@ class ClimbsController < ApplicationController
 
     jil_trigger(:climbing, data)
 
-    render json: data
+    render json: hash_table(data)
   end
 
   def update

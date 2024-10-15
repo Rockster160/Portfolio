@@ -39,7 +39,7 @@ class Climb < ApplicationRecord
 
   def add(val)
     self.scores ||= []
-    self.scores << val.to_f.round(2).then { |n| n.to_i == n ? n.to_i : n }
+    self.scores << val.gsub("%", ".").to_f.round(2).then { |n| n.to_i == n ? n.to_i : n }
     calculate_total
     save!
   end
