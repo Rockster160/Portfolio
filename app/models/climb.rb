@@ -33,13 +33,13 @@ class Climb < ApplicationRecord
   end
 
   def data=(str)
-    self.scores = str.gsub("%", ".").split(/\s+/).map(&:to_f)
+    self.scores = str.to_s.gsub("%", ".").split(/\s+/).map(&:to_f)
     calculate_total
   end
 
   def add(val)
     self.scores ||= []
-    self.scores << val.gsub("%", ".").to_f.round(2).then { |n| n.to_i == n ? n.to_i : n }
+    self.scores << val.to_s.gsub("%", ".").to_f.round(2).then { |n| n.to_i == n ? n.to_i : n }
     calculate_total
     save!
   end
