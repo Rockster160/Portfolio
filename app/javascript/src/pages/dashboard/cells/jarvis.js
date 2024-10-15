@@ -1,3 +1,4 @@
+// localStorage.setItem("jarvis_history", localStorage.getItem("jarvis_history")?.split("\n")?.slice(6, 50).join("\n"))
 import { Time } from "./_time"
 
 (function() {
@@ -38,8 +39,17 @@ import { Time } from "./_time"
       this.flash()
     }),
     command: function(text) {
-      cell.lines(["[ico ti ti-fa-spinner ti-spin]", ...getHistory()])
-      cell.ws.send({ action: "command", words: text })
+      if (/^-\d+$/.test(text)) {
+        const num = parseInt(text.match(/\d+/)[0])
+        if (num === 0) { return renderLines() } // -0 removes loading indicator
+        let newHistory = getHistory()
+        newHistory.splice(num-1, 1)
+        saveHistory(newHistory)
+        renderLines()
+      } else {
+        cell.lines(["[ico ti ti-fa-spinner ti-spin]", ...getHistory()])
+        cell.ws.send({ action: "command", words: text })
+      }
     },
     commands: {
       clear: function() {
