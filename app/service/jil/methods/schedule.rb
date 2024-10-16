@@ -52,17 +52,17 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   end
 
   def update!(schedule, details)
-    schedules.find(schedule[:id])&.tap { |s|
+    schedules.find(schedule[:id]).tap { |s|
       s.update(params(details))
       ::Jil::Schedule.update(s)
     }.serialize
   end
 
   def cancel!(schedule)
-    schedules.find(schedule[:id])&.tap { |s|
+    schedules.find_by(id: schedule[:id])&.tap { |s|
       ::Jil::Schedule.cancel(s)
       s.destroy
-    }.serialize.merge(canceled: true).except(:id)
+    }&.serialize&.merge(canceled: true)&.except(:id)
   end
 
   # [ScheduleData]
