@@ -2,6 +2,7 @@
 # tz.untokenize!(str)
 
 class NewTokenizer
+  # PRIORITY_PAIRS = { ... } - Add double quotes here, and run this instead of `tokenize_quotes`
   WRAP_PAIRS = {
     "(" => ")",
     "[" => "]",
@@ -18,6 +19,26 @@ class NewTokenizer
     tz.tokenized_text.split(" ").map { |str|
       untokenize ? tz.untokenize(str, unwrap: unwrap) : str
     }
+  end
+
+  def self.find_unescaped_index(str, char, after: -1)
+    str.enum_for(:scan, /[#{Regexp.escape(char)}]/m).find { |_m|
+      idx = Regexp.last_match.begin(0)
+      next unless idx > after
+
+      escapes = str[...idx][/\\*\z/].length
+      return idx if escapes.even?
+    }
+  end
+
+  def self.find_unescaped_pair(str, char)
+    first_idx = find_unescaped_index(str, char)
+    return if first_idx.nil?
+
+    next_idx = find_unescaped_index(str, char, after: first_idx)
+    return if next_idx.nil?
+
+    [first_idx, next_idx]
   end
 
   def initialize(text, extra_pairs={}, only: nil)
@@ -51,11 +72,8 @@ class NewTokenizer
   def tokenize_quotes(str)
     tokenized = str.to_s.dup
     loop do
-      first_idx = find_index(tokenized, "\"")
-      break if first_idx.nil?
-
-      next_idx = find_index(tokenized, "\"", after: first_idx)
-      break if next_idx.nil?
+      first_idx, next_idx = ::NewTokenizer.find_unescaped_pair(tokenized, "\"")
+      break if first_idx.nil? || next_idx.nil?
 
       quoted = tokenized[first_idx..next_idx]
       token = generate_token
@@ -63,16 +81,6 @@ class NewTokenizer
       @tokens[token] = quoted
     end
     tokenized
-  end
-
-  def find_index(str, char, after: -1)
-    str.enum_for(:scan, /[#{Regexp.escape(char)}]/).find { |_m|
-      idx = Regexp.last_match.begin(0)
-      next unless idx > after
-
-      escapes = str[...idx][/\\*$/].length
-      return idx if escapes.even?
-    }
   end
 
   def tokenize(until_char=nil, idx=0, nest=0)
@@ -100,7 +108,7 @@ class NewTokenizer
         buffer << char
         break
       elsif @pairs.key?(char)
-        next_idx = find_index(text, @pairs[char], after: idx)
+        next_idx = ::NewTokenizer.find_unescaped_index(text, @pairs[char], after: idx)
         if next_idx.nil?
           buffer << char
         else

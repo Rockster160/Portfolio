@@ -81,7 +81,9 @@ class Jil::Methods::Hash < Jil::Methods::Base
 
   def parse(raw)
     tz = ::NewTokenizer.new(raw.to_s.gsub(/\\(["'\\])/, '\1'), only: { "\"" => "\"" })
-    processed = tz.untokenize(tz.tokenized_text.gsub(/(\w+): /, '"\1": ').gsub("nil", "null"))
+    processed = tz.untokenize(tz.tokenized_text.gsub(/(\w+): /, '"\1": ').gsub("nil", "null")) do |str|
+      str.gsub(/(\\*)\\\n/, "\\n") # TODO: negative lookbehind to make sure it's not escaped
+    end
 
     ::JSON.parse(processed).with_indifferent_access
     # TODO: Rescue and bubble better error
