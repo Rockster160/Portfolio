@@ -3,7 +3,7 @@ module WebPushNotifications
   module_function
 
   def send_to(user, payload={})
-    # return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
+    return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
     return "Failed to push - user not found" unless user.present?
     push_sub = user.primary_push_sub
     return "Failed to push - push_sub not set up" unless push_sub&.pushable?

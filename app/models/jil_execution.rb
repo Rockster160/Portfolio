@@ -39,6 +39,10 @@ class JilExecution < ApplicationRecord
     failed:    3,
   }
 
+  def compact_all
+    update_all(ctx: nil, code: nil)
+  end
+
   def serialize
     attributes.deep_symbolize_keys.except(
       :id,

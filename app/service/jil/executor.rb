@@ -85,7 +85,7 @@ class Jil::Executor
     @user = user
     @ctx = { vars: {}, input_data: input_data, return_val: nil, state: :running, output: [] }
     @execution = ::JilExecution.create(user: user, code: code, ctx: @ctx, jil_task: task)
-    ::JilExecution.order(started_at: :desc).where(user: user, jil_task: task).offset(5).destroy_all
+    ::JilExecution.order(started_at: :desc).where(user: user, jil_task: task).offset(5).compact_all
     @lines = ::Jil::Parser.from_code(code)
   end
 
