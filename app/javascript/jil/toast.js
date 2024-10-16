@@ -34,9 +34,3 @@ export default class Toast {
     toast.addEventListener("transitionend", () => toast.remove())
   }
 }
-
-// Add styles for the toast (can be included in your CSS file)
-// const style = document.createElement("style")
-// style.innerHTML = `
-// `
-// document.head.appendChild(style)

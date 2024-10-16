@@ -80,6 +80,8 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   end
 
   def timestamp(timestamp)
+    return if timestamp.year < 0 # Invalid date should just leave blank
+
     { timestamp: timestamp }
   end
 
