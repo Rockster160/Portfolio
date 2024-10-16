@@ -84,7 +84,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
             beep(100, 350, 0.02, "square")
           }
         } else {
-          first_row.push(Text.yellow(" "))
+          first_row.push(Text.yellow("  "))
         }
       } else {
         flash(false)
