@@ -69,20 +69,14 @@ import { dash_colors, beeps } from "../vars"
 
   var getLines = async function(cell) {
     let pending_review = []
-    pending_review = pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "WorkWave/slingshot-web-app", "WW:B"))
-    pending_review = pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "WorkWave/slingshot-frontend", "WW:F"))
     pending_review = pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-backend", "OCS:B"))
     pending_review = pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-frontend", "OCS:F"))
 
     let issues = []
-    issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "WorkWave/slingshot-web-app", "WW:B"))
-    issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "WorkWave/slingshot-frontend", "WW:F"))
     issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-backend", "OCS:B"))
     issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-frontend", "OCS:F"))
 
     let prs = []
-    prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "WorkWave/slingshot-web-app", "WW:B"))
-    prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "WorkWave/slingshot-frontend", "WW:F"))
     prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-backend", "OCS:B"))
     prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-frontend", "OCS:F"))
 
@@ -201,17 +195,12 @@ import { dash_colors, beeps } from "../vars"
       getLines(this)
     },
     command: function(msg) {
-      if (/\w+\-\d+/.test(msg)) {
-        var jira_id = msg.match(/\w+\-\d+/)
-        jira_id = jira_id ? jira_id[0] : ""
-        var url = "https://workwave.atlassian.net/browse/" + jira_id
-        window.open(url, "_blank")
-      } else if (/\d+/.test(msg)) {
+      if (/\d+/.test(msg)) {
         let git = findGit(msg)
         if (git) {
           window.open(git.url, "_blank")
         } else {
-          var url = "https://github.com/WorkWave/slingshot-web-app/pull/" + msg
+          var url = "https://github.com/oneclaimsolution/ocs-backend/pull/" + msg
           window.open(url, "_blank")
         }
       }

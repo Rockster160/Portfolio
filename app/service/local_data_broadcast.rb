@@ -9,6 +9,7 @@ class LocalDataBroadcast
     magenta:  "#B55088",
     pink:     "#EE9BB5",
     green:    "#65DB39",
+    pine:     "#3E8948",
     orange:   "#FF9500",
     brown:    "#A2845D",
     red:      "#FF0000",
@@ -82,7 +83,7 @@ class LocalDataBroadcast
     mapped_colors = {
       "rocco11nicholls@gmail.com"   => :lblue,
       "rocco.nicholls@workwave.com" => :orange,
-      "rocco@oneclaimsolution.com"  => :paleblue,
+      "rocco@oneclaimsolution.com"  => :pine,
       "Janaya"                      => :pink,
       "Workout"                     => :brown,
     }
