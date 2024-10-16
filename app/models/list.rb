@@ -27,6 +27,10 @@ class List < ApplicationRecord
   scope :by_param, ->(name) { where(parameterized_name: name.parameterize) }
 
   def self.by_name_for_user(name, user)
+    if name.match?(/^\s*\d+\s*$/)
+      list = user.ordered_lists.find_by(id: name.squish)
+      return list if list
+    end
     intro_regexp = /\b(to|for|from|on|in|into)\b/
     my_rx = /\b(the|my)\b/
     list_rx = /\b(list)\b/
