@@ -8,14 +8,17 @@ class Jil::Methods::List < Jil::Methods::Base
 
   def find(list_name)
     List.by_name_for_user(list_name, @jil.user)
+    # TODO: Rescue/handle no list found
   end
 
   def list_add(list_name, item_name)
     List.by_name_for_user(list_name, @jil.user).tap { |list| list.add(item_name) }
+    # TODO: Rescue/handle no list found
   end
 
   def list_remove(list_name, item_name)
     List.by_name_for_user(list_name, @jil.user).tap { |list| list.remove(item_name) }
+    # TODO: Rescue/handle no list found
   end
 
   def name(list)

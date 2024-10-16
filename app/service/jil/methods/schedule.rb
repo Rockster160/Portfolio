@@ -46,7 +46,8 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   end
 
   def create(details)
-    s = @jil.user.scheduled_triggers.create!(params(details))
+    fix_params = params(details).compact_blank.reverse_merge(execute_at: ::Time.current)
+    s = @jil.user.scheduled_triggers.create!(fix_params)
     ::Jil::Schedule.update(s) # Schedules the job
     s.serialize
   end
