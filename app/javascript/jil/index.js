@@ -14,7 +14,7 @@ window.Schema = Schema
 window.Statement = Statement
 window.History = History
 window.formSubmitting = false
-window.selected = undefined
+window.selected = null
 window.moveStatement = null
 Object.defineProperty(window, "formDirty", {
   get() {
@@ -555,6 +555,13 @@ document.addEventListener("click", function(evt) {
         }
       })
     ])
+  }
+})
+
+document.addEventListener("click", function(evt) {
+  if (activeInput()) { return }
+  if (!evt.target.closest(".statements")) {
+    window.selected?.unselect()
   }
 })
 

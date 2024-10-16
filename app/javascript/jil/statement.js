@@ -242,11 +242,14 @@ export default class Statement {
     if (bool) {
       window.selected = this
       this.node.scrollIntoViewIfNeeded()
+    } else {
+      window.selected = null
     }
     // this.reference?.node.classList.toggle("upper-selected", bool)
     // this.downReferences().forEach(item => item.node.classList.toggle("lower-selected", bool))
   }
   select() { this.selected = true }
+  unselect() { this.selected = false }
 
   get reference() { return this._reference }
   set reference(ref) {
