@@ -1,5 +1,5 @@
 class Jil::Methods::Schedule < Jil::Methods::Base
-  PERMIT_ATTRS = [:execute_at, :trigger, :data]
+  PERMIT_ATTRS = [:name, :execute_at, :trigger, :data]
   def cast(value)
     case value
     when ::JilScheduledTrigger then value.serialize
@@ -45,6 +45,12 @@ class Jil::Methods::Schedule < Jil::Methods::Base
     schedules.break_searcher(name).map(&:serialize)
   end
 
+  def create(details)
+    s = @jil.user.scheduled_triggers.create!(params(details))
+    ::Jil::Schedule.update(s) # Schedules the job
+    s.serialize
+  end
+
   def update!(schedule, details)
     schedules.find(schedule[:id])&.tap { |s|
       s.update(params(details))
@@ -63,6 +69,10 @@ class Jil::Methods::Schedule < Jil::Methods::Base
 
   def execute_at(date)
     { execute_at: date }
+  end
+
+  def name(text)
+    { name: text }
   end
 
   def trigger(text)

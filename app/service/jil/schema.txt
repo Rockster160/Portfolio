@@ -34,6 +34,8 @@
   #trigger(String TAB Date content(Keyval|Hash [Keyval.new]))::Schedule
   #triggerWith(String TAB Date BR "" TAB Hash)::Schedule
   #triggerNow(String TAB Hash)::Array
+  !#triggerRaw(Hash)::Array # Should this just be a trigger class?
+  !#triggerVia(String)::Array # "command.say.'blah blah blah'"
   #relay(Contact|String content(Hash|Keyval [Keyval.new]))::None # String is contact name/username/alias/id
   #dowhile(enum_content)::Numeric
   #loop(enum_content)::Any
@@ -109,10 +111,12 @@
   .length::Numeric
   .merge(Hash)
   .keys::Array
+  .key?(String)::Boolean
   .splat(content([Keyword.ItemKey]))
   .dig(content(String|Numeric [String.new Numeric.new]))::Any
   .get(String)::Any
   .set!(String "=" Any)
+  .setData!(content(Keyval [Keyval.new]))
   .del!(String)
   .filter(enum_content)::Hash
   .each(enum_content)
@@ -260,13 +264,16 @@
 [Schedule]
   #find(Numeric)
   #search(Text("*"))::Array # Using listener syntax trigger:word::data
+  #create(content(ScheduleData))
   .update!(content(ScheduleData))
   .cancel!::Boolean
   .id::Numeric # String or Numeric?
+  .name::String
   .executeAt::Date
   .trigger::String
   .data::Hash
 *[ScheduleData]
+  #name(String)
   #executeAt(Date)
   #trigger(String)
   #data(content(Hash|Keyval))

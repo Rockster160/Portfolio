@@ -6,6 +6,7 @@
 #  data       :jsonb            not null
 #  execute_at :datetime         not null
 #  jid        :text
+#  name       :text
 #  trigger    :text             not null
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
@@ -35,6 +36,7 @@ class JilScheduledTrigger < ApplicationRecord
   def serialize
     {
       id: id,
+      name: name,
       trigger: trigger,
       data: data,
       execute_at: execute_at,

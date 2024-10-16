@@ -48,6 +48,9 @@ class Jil::Methods::Hash < Jil::Methods::Base
     when :set!
       val = token_val(line.objname).merge(hash_wrap(evalargs(line.args)))
       set_value(line.objname, val, type: :Hash)
+    when :setData!
+      val = token_val(line.objname).merge(hash_wrap(*evalargs(line.args)))
+      set_value(line.objname, val, type: :Hash)
     when :del!
       token = line.objname.to_sym
       @jil.ctx[:vars][token] ||= { class: :Hash, value: {} }
