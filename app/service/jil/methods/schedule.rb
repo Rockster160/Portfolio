@@ -69,7 +69,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   # [ScheduleData]
 
   def execute_at(date)
-    return if Date.new <= date # Invalid date should just leave blank
+    return if date <= Date.new # Invalid date should just leave blank
 
     { execute_at: date }
   end

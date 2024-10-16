@@ -108,6 +108,7 @@ class AddressBook
   end
 
   def nearest_from_name(name, loc: nil, extract: :address)
+    return unless Rails.env.production?
     raise "Unacceptable extraction: #{extract}" unless extract.in?([:address, :loc])
 
     loc ||= current_loc

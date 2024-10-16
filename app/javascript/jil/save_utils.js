@@ -1,4 +1,5 @@
 import SaveBtn from "./save_btn.js"
+import Toast from "./toast.js"
 
 export default function saveUtils() {
   // TODO:
@@ -45,12 +46,16 @@ export default function saveUtils() {
       document.querySelectorAll(".jil-temp-code").forEach(item => item.remove())
       if (!res.ok) { throw new Error(`HTTP error! status: ${res.status} response: ${JSON.stringify(res)}`) }
       res.json().then(function(json) {
+        const toastMessage = document.createElement("span")
+        toastMessage.classList.add("fa", "fa-check", "text-center")
+        Toast.success(toastMessage, 2000)
         if (newTask && json.url) {
           window.location.href = json.url
         }
       })
     })
   }).onError(async (evt) => {
+    Toast.error(evt.detail || "[SAVE] Unknown Error")
     document.querySelector(".results .error").innerText = evt.detail || "[SAVE] Unknown Error"
   })
 
@@ -69,6 +74,7 @@ export default function saveUtils() {
       // })
     })
   }).onError(async (evt) => {
+    Toast.error(evt.detail || "[Run] Unknown Error")
     document.querySelector(".results .error").innerText = evt.detail || "[RUN] Unknown Error"
   })
 
