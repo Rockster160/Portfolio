@@ -10,6 +10,17 @@ const resultsDiv = document.querySelector(".results .result")
 const outputDiv = document.querySelector(".results .output")
 const timestampSpan = document.querySelector(".results .timestamp")
 
+const isBlank = (val) => {
+  if (val === null || val === undefined) { return true }
+  if (Array.isArray(val) && val.length == 0) { return true }
+  if (typeof val === "string" && val.trim() === "") { return true }
+  if (typeof val === "object" && Object.keys(val).length === 0) { return true }
+  if (typeof val === "boolean") { return false } // explicitly not blank
+  return false
+}
+
+const show = (val) => (typeof val === "string" || isBlank(val)) ? val : JSON.stringify(val)
+
 consumer.subscriptions.create({
   channel: "JilTasksChannel", id: taskUuid,
 },{
@@ -18,8 +29,8 @@ consumer.subscriptions.create({
     if (data.line) {
       Statement.find(data.line).flash(true)
     }
-    errorsDiv.innerText = data.error
-    resultsDiv.innerText = data.result
+    errorsDiv.innerText = show(data.error)
+    resultsDiv.innerText = show(data.result)
     outputDiv.innerText = data.output?.join("\n")
     timestampSpan.innerText = data.timestamp
   }
