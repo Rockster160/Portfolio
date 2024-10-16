@@ -15,6 +15,12 @@ class Jil::Methods::Hash < Jil::Methods::Base
           obj.merge!(item)
         end
       })
+    when ::String
+      begin
+        value.present? ? parse(value) : {}.with_indifferent_access
+      rescue JSON::ParserError
+        {}.with_indifferent_access
+      end
     else
       value.to_h.with_indifferent_access
     end
@@ -78,6 +84,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
     processed = tz.untokenize(tz.tokenized_text.gsub(/(\w+): /, '"\1": ').gsub("nil", "null"))
 
     ::JSON.parse(processed).with_indifferent_access
+    # TODO: Rescue and bubble better error
   end
 
   def hash_wrap(array)
