@@ -78,45 +78,85 @@ body:has(.env-banner) {
   display: none;
 }
 .modal-wrapper:has(.modal.show) {
+  display: flex;
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
+  align-items: flex-start;
+  justify-content: center;
   z-index: 1000;
   transition: 0.4s;
   background: rgba(0, 0, 0, 0.4);
   padding: 10px;
   padding-top: 50px;
   overflow: auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  overflow-y: auto;
 
   .modal {
     position: relative;
     margin: 0 auto;
-    margin-top: 50px;
-    width: 400px;
-    max-width: 100%;
+    border-radius: 10px;
     background: var(--body-bg);
     padding: 10px;
-    border-radius: 10px;
+    width: 400px;
+    max-width: 100%;
 
     code {
       display: block;
-      font-size: 12px;
-      color: lime;
-      background: black;
-      border-radius: 4px;
       outline: none;
-      font-family: monospace;
-      padding: 10px;
       border: 1px solid #ccc;
+      border-radius: 4px;
+      background: black;
+      padding: 10px;
       min-height: 100px;
+      overflow-x: auto;
+      color: lime;
+      font-family: monospace;
+      font-size: 12px;
       line-height: 1.5;
       white-space: pre;
-      overflow-x: auto;
+
+      .syntax--statement:not(.syntax--commented) {
+        color: #DBDBDB; // Default syntax color (=, ::, (), etc...)
+
+        .syntax--inspect {}
+        .syntax--variable {
+          color: #276AD9; // abcde = fdsa.doit((abcd))
+        }
+        .syntax--varname {
+          color: #276AD9; // (abcde) = fdsa.doit
+        }
+        .syntax--objname {
+          color: #276AD9; // abcde = (fdsa).doit
+        }
+        .syntax--singleton {
+          color: #26D9D9; // abcde = (Class).doit
+        }
+        .syntax--methodname {
+          color: #ABB2BF; // abcde = fdsa.(doit)
+        }
+        .syntax--op {
+          color: #DBDBDB; // ::
+        }
+        .syntax--cast {
+          color: darkcyan; // ::(Cast)
+        }
+        .syntax--string {
+          color: #26D926;
+        }
+        .syntax--constant {
+          color: #C678DD; // (true|false|null)
+        }
+        .syntax--numeric {
+          color: #EDDD3D; // (17)
+        }
+      }
+      .syntax--commented {
+        color: grey;
+        font-style: italic;
+      }
     }
   }
 }
@@ -136,9 +176,9 @@ body:has(.env-banner) {
   border-radius: 5px;
   background-color: #333;
   padding: 15px;
+  min-width: 100px;
   max-width: 300px;
   color: white;
-  min-width: 100px;
 
   &.show {
     transform: translateX(-320px);

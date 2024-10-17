@@ -9,6 +9,7 @@ import History from "./history.js"
 import Mouse from "./mouse.js"
 import Modal from "./modal.js"
 import Keyboard from "./keyboard.js"
+import SyntaxHighlighter from "./syntax_highlighter.js"
 import saveUtils from "./save_utils.js"
 
 window.Schema = Schema
@@ -89,6 +90,7 @@ const moveSelectionDown = () => {
 }
 
 saveUtils()
+// const shx = new SyntaxHighlighter(document.querySelector("code.code-preview"))
 History.record() // Store initial state in history
 formDirty = false // Initial load should not dirty the state
 

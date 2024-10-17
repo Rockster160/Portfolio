@@ -16,13 +16,12 @@ export default function saveUtils() {
   } else {
     Statement.reloadFromText(window.load_code)
   }
-  document.querySelector(".code-preview").innerText = Statement.toCode()
+  document.querySelector(".code-preview").innerHTML = Statement.toCode(true)
 
   let saveBtn = new SaveBtn(document.querySelector(".btn-save"))
   saveBtn.onClick(async () => {
     formSubmitting = true
     const code = Statement.toCode()
-    document.querySelector(".code-preview").innerText = code
     if (newTask && jilTaskNameField.value.trim().length == 0) {
       localStorage.setItem("jilcode", code)
       return

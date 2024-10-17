@@ -1,5 +1,5 @@
 import { fa, faStack } from "./icon.js"
-import { genHex, genLetter, clamp, inputSelector } from "./form_helpers.js"
+import { genHex, genLetter, clamp, inputSelector, hi, prettify } from "./form_helpers.js"
 import Dropdown from "./dropdown.js"
 import Tokenizer from "./tokenizer.js"
 
@@ -19,10 +19,10 @@ export default class Statement {
 
     Statement.all.push(this)
   }
-  static toCode() {
+  static toCode(pretty=false) {
     return Array.from(this.topLevelNodes()).map(statement => {
-      return Statement.from(statement).toString()
-    }).filter(Boolean).join("\n")
+      return Statement.from(statement).toString(0, pretty)
+    }).filter(Boolean).join(pretty ? "<br>" : "\n")
   }
   static save() {
     let code = Statement.toCode()
@@ -593,11 +593,12 @@ export default class Statement {
       }
     })
   }
-  argValue(arg, nest) {
+  argValue(arg, nest, pretty, passComment) {
+    const color = pretty && !passComment
     nest = nest || 0
     let tag = arg.querySelector(":scope > .selected-tag")?.innerText
     tag = tag || arg.querySelector(":scope > .dynamic > .selected-tag")?.innerText
-    if (tag) { return tag }
+    if (tag) { return prettify(color, "variable", tag) }
     let inputSelector = [
       "input",
       "textarea",
@@ -611,43 +612,66 @@ export default class Statement {
       if (statements.length == 0) { return "{}" }
       let indent = "  ".repeat(nest)
       let str = `{\n${indent}  `
-      str += statements.map(wrapper => Statement.from(wrapper).toString(nest+1)).join(`\n  ${indent}`)
+      str += statements.map(wrapper => Statement.from(wrapper).toString(nest+1, pretty, passComment)).join(`\n  ${indent}`)
       str += `\n${indent}}`
       return str
     }
 
-    if (!input && arg.querySelector(":scope > .selected-tag")) { return JSON.stringify("") }
+    if (!input && arg.querySelector(":scope > .selected-tag")) { return prettify(color, "string", JSON.stringify("")) }
     if (!input) { return } // Words (And, DO, IF, etc...)
     switch (input.tagName.toLowerCase()) {
       case "textarea":
       case "select":
       case "input":
         switch (input.type) {
-          case "number": return JSON.stringify(parseFloat(input.value));
-          case "checkbox": return JSON.stringify(input.checked);
-          default: return JSON.stringify(input.value)
+          case "number": return prettify(color, "numeric", JSON.stringify(parseFloat(input.value)));
+          case "checkbox": return prettify(color, "constant", JSON.stringify(input.checked));
+          default: return prettify(color, "string", JSON.stringify(input.value))
         }
       default:
         console.log(`Unknown value for type:${input.tagName.toLowerCase()}`);
     }
   }
 
-  toString(nest) {
+  toString(nest, pretty=false, passComment=false) {
     try {
       let str = ""
-      if (this._inspect) { str += `*` }
-      if (this._name) { str += `${this._name} = ` }
-      if (this._reference) {
-        str += `${this._reference.name || this._reference.id}`
-      } else {
-        str += this.type
+      const add = (type, text) => {
+        if (this.commented || passComment) {
+          str += text
+        } else {
+          str += prettify(pretty, type, text)
+        }
+        return str
+      };
+      if (this._inspect) { add("inspect", "*") }
+      if (this._name) {
+        add("varname", this._name)
+        str += " = "
       }
-      str += `.${this.method}(`
-      str += this.args.map(arg => this.argValue(arg, nest)).filter(Boolean).join(", ")
+      if (this._reference) {
+        add("objname", this._reference.name || this._reference.id)
+      } else {
+        add("singleton", this.type)
+      }
+      str += "."
+      add("methodname", this.method)
+      str += "("
+      str += this.args.map(arg => this.argValue(arg, nest, pretty, this.commented || passComment)).filter(Boolean).join(", ")
       // iterate through obj-args, pull the value from inputs- when a content block, wrap inside {}
-      str += `)::${this.returntype}`
-      if (this.commented) {
+      str += ")"
+      add("op-cast", "::")
+      add("cast", this.returntype)
+      if (this.commented && !passComment) {
         str = str.split("\n").map(line => `# ${line}`).join("\n")
+      }
+      if (pretty) {
+        str = str.replace("\n", "<br>")
+        if (this.commented) {
+          str = `<span class="syntax--statement syntax--commented">${str}</span>`
+        } else {
+          str = `<span class="syntax--statement">${str}</span>`
+        }
       }
       return str
     } catch (e) {

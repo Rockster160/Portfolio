@@ -3,6 +3,24 @@ import sortable from "./sortable.js"
 
 export const inputSelector = "input:not(:disabled), select:not(:disabled), textarea:not(:disabled)"
 
+export function hi(type, text) {
+  return `<span class="syntax--${type}">${text}</span>`
+}
+
+export function prettify(colorize, type, text) {
+  if (colorize) {
+    if (type === "string") {
+      return hi(type, ("\"" + JSON.parse(text) + "\"").replace("<", "&lt;")).replace(/\#\{([^\}]*?)\}/g, (_all, content) => {
+        return prettify(colorize, "op", `#{${prettify(colorize, "variable", content)}}`)
+      })
+    } else {
+      return hi(type, text)
+    }
+  } else {
+    return text
+  }
+}
+
 export function element(tag, data) {
   let ele = document.createElement(tag)
   if (data) {
