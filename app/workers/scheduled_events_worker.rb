@@ -8,6 +8,7 @@ class ScheduledEventsWorker
   )
 
   def perform(args={})
+    return # Deprecated via Jil. Keeping temporarily for reference
     args = JSON.parse(args) if args.is_a?(String)
     events = ::DataStorage[:scheduled_events] || []
 

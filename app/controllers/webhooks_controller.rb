@@ -114,17 +114,6 @@ class WebhooksController < ApplicationController
     head :created
   end
 
-  def local_data
-    return head :ok unless current_user == User.me
-    data = params[:local_data].to_unsafe_h
-    json = DataStorage[:local_data] || {}
-    DataStorage[:local_data] = json.merge(data)
-    LocalDataBroadcast.call(data)
-    LocalIpManager.local_ip = request.remote_ip
-
-    head :created
-  end
-
   def local_ping
     return head :ok unless current_user == User.me
     LocalIpManager.local_ip = request.remote_ip

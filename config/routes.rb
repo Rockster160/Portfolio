@@ -45,7 +45,6 @@ Rails.application.routes.draw do
   get "webhooks/jil" => "webhooks#execute_jil_task"
   post "webhooks/battery" => "webhooks#battery"
   post "webhooks/report" => "webhooks#report"
-  post "webhooks/local_data" => "webhooks#local_data"
   get "webhooks/local_ping" => "webhooks#local_ping"
   post "webhooks/local_ping" => "webhooks#local_ping"
   post "webhooks/jenkins" => "webhooks#jenkins"

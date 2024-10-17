@@ -6,6 +6,7 @@ class CalendarEventsWorker
   PRE_OFFSET = 10.minutes
 
   def perform
+    return # Deprecated via Jil. Keeping temporarily for reference
     return if Rails.env.development?
 
     @user_id = User.me.id

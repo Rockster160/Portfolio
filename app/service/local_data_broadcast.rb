@@ -20,6 +20,7 @@ class LocalDataBroadcast
   end
 
   def call(data=nil)
+    return # Deprecated via Jil. Keeping temporarily for reference
     data ||= DataStorage[:local_data] || {}
     @data = data.deep_symbolize_keys
     @user = User.me

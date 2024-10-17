@@ -6,6 +6,7 @@ class LocalDataCalendarParser
   end
 
   def call(raw_calendar_lines=nil)
+    return {} # Deprecated via Jil. Keeping temporarily for reference
     raw_calendar_lines ||= (DataStorage[:local_data] || {}).deep_symbolize_keys[:calendar]
 
     used_uids = []

@@ -2,6 +2,7 @@ module Jarvis::Schedule
   module_function
 
   def upcoming
+    return [] # Deprecated via Jil. Keeping temporarily for reference
     # Should be per User!
     [*::JarvisTask.enabled.cron, *::CronTask.enabled, *::Jarvis::Schedule.get_events].map { |sched|
       timestamp = (
@@ -35,8 +36,7 @@ module Jarvis::Schedule
   end
 
   def get_events(user=nil)
-    # Should be per User!
-    ::DataStorage[:scheduled_events] || []
+    []
   end
 
   def similar_time?(time1, time2, coverage=1.minute)
