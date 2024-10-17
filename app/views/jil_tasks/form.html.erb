@@ -14,7 +14,7 @@
       <div class="btns">
         <div class="btn btn-run" href="<%= run_jil_task_path(@task.id || :new) %>">Run</div>
         <div class="btn btn-history disabled">History</div>
-        <div class="btn btn-config disabled">Config</div>
+        <div class="btn btn-config" data-modal="#config-modal">Config</div>
         <div class="btn btn-save">Save</div>
       </div>
     <% end %>

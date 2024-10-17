@@ -6,6 +6,7 @@ $text-color: darken($grey-blue, 20%);
 
 :root {
   --statement-width: 500px;
+  --body-bg: #21374F;
 
   --syntax-base: #ABB2BF;
   --syntax-class: #E5C07B;
@@ -47,7 +48,7 @@ $text-color: darken($grey-blue, 20%);
 }
 
 body {
-  background: #21374F;
+  background: var(--body-bg);
   padding-bottom: 500px;
   color: var(--syntax-base);
   font-family: "Menlo";
@@ -72,6 +73,54 @@ body:has(.env-banner) {
 
 .hidden { display: none !important; }
 .text-center { text-align: center; }
+
+.modal-wrapper {
+  display: none;
+}
+.modal-wrapper:has(.modal.show) {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1000;
+  transition: 0.4s;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 10px;
+  padding-top: 50px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  .modal {
+    position: relative;
+    margin: 0 auto;
+    margin-top: 50px;
+    width: 400px;
+    max-width: 100%;
+    background: var(--body-bg);
+    padding: 10px;
+    border-radius: 10px;
+
+    code {
+      display: block;
+      font-size: 12px;
+      color: lime;
+      background: black;
+      border-radius: 4px;
+      outline: none;
+      font-family: monospace;
+      padding: 10px;
+      border: 1px solid #ccc;
+      min-height: 100px;
+      line-height: 1.5;
+      white-space: pre;
+      overflow-x: auto;
+    }
+  }
+}
+
 
 .toast {
   position: fixed;

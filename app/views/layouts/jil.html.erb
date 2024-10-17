@@ -9,6 +9,15 @@
   </head>
   <body>
     <%= content_tag(:div, "[#{Rails.env.upcase}]", class: "env-banner") unless Rails.env.production? %>
+    <div class="modal-wrapper">
+      <div class="modal" id="config-modal" tabindex="-1">
+        <div class="status"></div>
+        <div class="close"><i class="ti ti-fa-close"></i></div>
+        <div class="modal-content">
+          <code contenteditable="true" data-language="jil" class="code-preview"></code>
+        </div>
+      </div>
+    </div>
     <%= yield %>
   </body>
 </html>
