@@ -591,6 +591,7 @@ document.addEventListener("focusout", (evt) => {
   if (evt.target.classList.contains("code-preview")) {
     const code = evt.target.innerText
     if (History.add(code)) {
+      formDirty = !History.noChange()
       Statement.reloadFromText(code)
     }
   }
