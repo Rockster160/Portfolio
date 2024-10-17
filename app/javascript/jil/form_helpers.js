@@ -10,7 +10,7 @@ export function hi(type, text) {
 export function prettify(colorize, type, text) {
   if (colorize) {
     if (type === "string") {
-      return hi(type, ("\"" + JSON.parse(text) + "\"").replace("<", "&lt;")).replace(/\#\{([^\}]*?)\}/g, (_all, content) => {
+      return hi(type, ("\"" + JSON.parse(text) + "\"").replace(/\</g, "&lt;")).replace(/\#\{([^\}]*?)\}/g, (_all, content) => {
         return prettify(colorize, "op", `#{${prettify(colorize, "variable", content)}}`)
       })
     } else {
