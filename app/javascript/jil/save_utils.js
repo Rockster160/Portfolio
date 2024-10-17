@@ -16,7 +16,6 @@ export default function saveUtils() {
   } else {
     Statement.reloadFromText(window.load_code)
   }
-  document.querySelector(".code-preview").innerHTML = Statement.toCode(true)
 
   let saveBtn = new SaveBtn(document.querySelector(".btn-save"))
   saveBtn.onClick(async () => {

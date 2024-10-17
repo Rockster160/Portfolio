@@ -9,7 +9,6 @@ import History from "./history.js"
 import Mouse from "./mouse.js"
 import Modal from "./modal.js"
 import Keyboard from "./keyboard.js"
-import SyntaxHighlighter from "./syntax_highlighter.js"
 import saveUtils from "./save_utils.js"
 
 window.Schema = Schema
@@ -32,6 +31,7 @@ History.record = function() {
   if (History.add(Statement.toCode())) {
     formDirty = !History.noChange()
     console.log("Recorded: ", History.currentIdx)
+    document.querySelector(".code-preview").innerHTML = Statement.toCode(true)
   }
 }
 
@@ -569,9 +569,12 @@ document.addEventListener("click", function(evt) {
 })
 
 // Record history events of inputs being edited
-document.addEventListener("input", (event) => {
-  const target = event.target;
+document.addEventListener("input", (evt) => {
+  const target = evt.target;
 
+  if (target.classList.contains("code-preview")) {
+    return
+  }
   if (target.tagName === "TEXTAREA" || (target.tagName === "INPUT" && target.type !== "checkbox" && target.type !== "radio")) {
     target.addEventListener("blur", handleInputBlur, { once: true });
   } else {
@@ -579,9 +582,19 @@ document.addEventListener("input", (event) => {
   }
 });
 // Separate function so that `once` works
-function handleInputBlur(event) {
+function handleInputBlur(evt) {
   History.record()
 }
+
+// After editing the code container, update the page code
+document.addEventListener("focusout", (evt) => {
+  if (evt.target.classList.contains("code-preview")) {
+    const code = evt.target.innerText
+    if (History.add(code)) {
+      Statement.reloadFromText(code)
+    }
+  }
+})
 
 // Right click a statement
 window.oncontextmenu = function(evt) {

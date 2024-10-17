@@ -575,7 +575,7 @@ export default class Statement {
                 input.value = JSON.parse(parsed)
               } catch (e) {
                 console.log("Failed to parse", val)
-                input.value = val
+                input.value = val.replace(/^"|"$/mg, "")
               }
             } else {
               input.value = val
