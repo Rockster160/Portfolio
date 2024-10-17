@@ -135,14 +135,14 @@ import { dash_colors, scaleVal } from "../vars"
     return lines
   }
 
-  let subscribeWebsockets = function() {
-    cell.uptime_socket = new CellWS(
-      cell,
-      Server.socket("UptimeChannel", function(msg) {
-        uptimeData(cell, true)
-      })
-    )
-  }
+  // let subscribeWebsockets = function() {
+  //   cell.uptime_socket = new CellWS(
+  //     cell,
+  //     Server.socket("UptimeChannel", function(msg) {
+  //       uptimeData(cell, true)
+  //     })
+  //   )
+  // }
 
   var renderCell = function(cell) {
     cell.lines([
@@ -157,21 +157,21 @@ import { dash_colors, scaleVal } from "../vars"
       uptime_data: {},
       load_data: {},
     },
-    onload: subscribeWebsockets,
-    started: function() {
-      cell.uptime_socket.reopen()
-    },
-    stopped: function() {
-      cell.uptime_socket.close()
-    },
-    socket: Server.socket("LoadtimeChannel", function(msg) {
-      this.data.load_data = msg
-      renderCell(this)
-    }),
+    // onload: subscribeWebsockets,
+    // started: function() {
+      // cell.uptime_socket.reopen()
+    // },
+    // stopped: function() {
+      // cell.uptime_socket.close()
+    // },
+    // socket: Server.socket("LoadtimeChannel", function(msg) {
+    //   this.data.load_data = msg
+    //   renderCell(this)
+    // }),
     refreshInterval: Time.minutes(10),
-    reloader: function() {
-      uptimeData(cell)
-      cell.ws.send("request")
-    },
+    // reloader: function() {
+      // uptimeData(cell)
+      // cell.ws.send("request")
+    // },
   })
 })()

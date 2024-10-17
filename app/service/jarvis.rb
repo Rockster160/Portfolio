@@ -128,7 +128,6 @@ class Jarvis
     responses = tasks.find_each.map do |task|
       ::Jarvis::Execute.call(task, trigger_data)
     end
-    ::BroadcastUpcomingWorker.perform_async
     responses
   end
 

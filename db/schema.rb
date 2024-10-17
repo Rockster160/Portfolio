@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_10_16_044508) do
+ActiveRecord::Schema[7.1].define(version: 2024_10_17_220253) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -284,19 +284,6 @@ ActiveRecord::Schema[7.1].define(version: 2024_10_16_044508) do
     t.boolean "permit_relay", default: true
     t.index ["friend_id"], name: "index_contacts_on_friend_id"
     t.index ["user_id"], name: "index_contacts_on_user_id"
-  end
-
-  create_table "cron_tasks", force: :cascade do |t|
-    t.bigint "user_id"
-    t.text "name"
-    t.text "cron"
-    t.text "command"
-    t.boolean "enabled", default: true
-    t.datetime "last_trigger_at"
-    t.datetime "next_trigger_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_cron_tasks_on_user_id"
   end
 
   create_table "data_storages", force: :cascade do |t|

@@ -32,7 +32,6 @@ class Jil::JarvisTasksController < ApplicationController
   def update
     @task = current_user.jarvis_tasks.anyfind(params[:id])
     @task.update(task_params)
-    ::BroadcastUpcomingWorker.perform_async
 
     respond_to do |format|
       format.html { redirect_to edit_jil_jarvis_task_path(@task) }
@@ -43,7 +42,6 @@ class Jil::JarvisTasksController < ApplicationController
   def create
     @task = current_user.jarvis_tasks.create(task_params)
 
-    ::BroadcastUpcomingWorker.perform_async
 
     respond_to do |format|
       format.html { redirect_to edit_jil_jarvis_task_path(@task) }
@@ -54,7 +52,6 @@ class Jil::JarvisTasksController < ApplicationController
   def duplicate
     old_task = current_user.jarvis_tasks.anyfind(params[:id])
     @task = old_task.duplicate
-    ::BroadcastUpcomingWorker.perform_async
 
     respond_to do |format|
       format.html { redirect_to edit_jil_jarvis_task_path(@task) }
@@ -66,7 +63,6 @@ class Jil::JarvisTasksController < ApplicationController
     @task = current_user.jarvis_tasks.anyfind(params[:id])
 
     if @task.destroy
-      ::BroadcastUpcomingWorker.perform_async
       redirect_to :jil
     else
       redirect_to [:jil, @task, :edit]
@@ -83,7 +79,6 @@ class Jil::JarvisTasksController < ApplicationController
         **params.permit!.to_h.except(:id, :action, :controller, :test_mode, :jarvis_task)
       }
     )
-    ::BroadcastUpcomingWorker.perform_async
 
     if @task.uuid == "c96939ac-9dc1-4dab-9200-143ac699d5d6"
       # Saya Protein Tracker

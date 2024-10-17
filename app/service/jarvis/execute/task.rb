@@ -48,20 +48,9 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
     run_task = jil.task.user.jarvis_tasks.anyfind(name)
 
     if timestamp
-      # TODO: The ctx[:i] will not be passed back- this can be used to bypass block limitations
-      # Not sure how to work around this...
-      # At least pass `i` through, so the scheduled job will continue off of this one.
-      # * This prevents infinity, but can still be used to bypass the 1k limit
-      jid = Jarvis::Schedule.schedule(
-        scheduled_time: timestamp,
-        user_id: jil.task.user.id,
-        words: "Run #{run_task.name}",
-        type: :command,
-        # vars: { i: jil.ctx[:i] }
-      ).first
-      ::BroadcastUpcomingWorker.perform_async
+      SlackNotifier.notify("Attempted to run JarvisTask async: (JarvisTask[#{run_task.id}])")
 
-      jid
+      0
     else
       msg = ::Jarvis::Execute.call(run_task, { ctx: { i: jil.ctx[:i] } })
       jil.ctx[:i] = run_task.last_ctx[:i]
@@ -90,21 +79,8 @@ class Jarvis::Execute::Task < Jarvis::Execute::Executor
 
   def schedule
     cmd, timestamp, data = evalargs
-
-    # TODO: The ctx[:i] will not be passed- this can be used to bypass block limitations
-    # Not sure how to work around this...
-    # Maybe somehow pass a back reference to the id,
-    #   and use that to get the count for the new task as well as update the old task
-    jid = Jarvis::Schedule.schedule(
-      scheduled_time: timestamp,
-      user_id: jil.task.user.id,
-      words: cmd,
-      type: :command,
-    ).first
-    # jil.ctx[:i] = run_task.last_ctx[:i]
-    ::BroadcastUpcomingWorker.perform_async
-
-    jid
+    SlackNotifier.notify("Attempted to run JarvisTask[#{jil.task.id}] async: ('#{cmd}')")
+    0
   end
 
   def email

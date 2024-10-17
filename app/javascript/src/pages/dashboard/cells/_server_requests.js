@@ -76,23 +76,3 @@ Server.socket = function(subscription, receive, domain) {
     }
   }
 }
-
-if (window.location.pathname == "/dashboard") {
-  // window.localDataChannel.request()
-  window.localDataChannel = consumer.subscriptions.create({
-    channel: "LocalDataChannel"
-  }, {
-    connected: function() {
-      clearTimeout(window.local_data_timer)
-      window.local_data_timer = setTimeout(function() { window.localDataChannel.request() }, 50)
-    },
-    received: function(data) {
-      if (window.local_calendar_cell) {
-        window.local_calendar_cell.commands.render.call(window.local_calendar_cell, data.calendar)
-      }
-    },
-    request: function() {
-      return this.perform("request")
-    }
-  })
-}

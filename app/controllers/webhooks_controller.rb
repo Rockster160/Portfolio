@@ -1,9 +1,9 @@
 class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :post_params, except: [:local_data, :report]
+  before_action :post_params, except: [:report]
   before_action :none_unless_user, only: [:execute_jil_task, :jil, :command]
-  before_action :none_unless_admin, only: [:battery, :local_data, :report, :speak, :tesla_local]
-  skip_before_action :pretty_logit, only: [:local_data, :report] # Lots of data here
+  before_action :none_unless_admin, only: [:battery, :report, :speak, :tesla_local]
+  skip_before_action :pretty_logit, only: [:report] # Lots of data here
 
   def jenkins
     head :ok
@@ -130,51 +130,52 @@ class WebhooksController < ApplicationController
   end
 
   def uptime
-    if params[:alertTypeFriendlyName] == "Down"
-      User.me.list_by_name(:TODO).add("#{params[:monitorFriendlyName]} DOWN")
-    else
-      User.me.list_by_name(:TODO).remove("#{params[:monitorFriendlyName]} DOWN")
-    end
-
-    ::ActionCable.server.broadcast :uptime_channel, {}
+    # if params[:alertTypeFriendlyName] == "Down"
+    #   User.me.list_by_name(:TODO).add("#{params[:monitorFriendlyName]} DOWN")
+    # else
+    #   User.me.list_by_name(:TODO).remove("#{params[:monitorFriendlyName]} DOWN")
+    # end
+    #
+    # ::ActionCable.server.broadcast :uptime_channel, {}
 
     head :no_content
   end
 
   def report
-    gathered = params[:report]&.to_unsafe_h&.each_with_object({}) do |(name, report_data), obj|
-      obj[name] = { timestamp: Time.current.to_i }
-      report_data.each do |key, data|
-        case key
-        when "memory"
-          # ["Mem:", "3951", "1103", "1100", "143", "1748", "2405"]
-          _, total, used, free, shared, buff, available = data.split(/\s+/)
-          obj[name][:memory] = {
-            used: used.to_i,
-            free: free.to_i,
-            total: total.to_i,
-          }
-        when "load"
-          # 0.03 0.03 0.00 1/196 4114
-          one, five, ten, pids, _ = data.split(/\s+/)
-          obj[name][:load] = {
-            one: (one.to_f * 100).round,
-            five: (five.to_f * 100).round,
-            ten: (ten.to_f * 100).round,
-          }
-        when "cpu"
-          obj[name][:cpu] = {
-            idle: data.to_i,
-          }
-        when "latency"
-          obj[name][:latency] = {
-            seconds: data.to_i,
-          }
-        end
-      end
-    end
+    # gathered = params[:report]&.to_unsafe_h&.each_with_object({}) do |(name, report_data), obj|
+    #   obj[name] = { timestamp: Time.current.to_i }
+    #   report_data.each do |key, data|
+    #     case key
+    #     when "memory"
+    #       # ["Mem:", "3951", "1103", "1100", "143", "1748", "2405"]
+    #       _, total, used, free, shared, buff, available = data.split(/\s+/)
+    #       obj[name][:memory] = {
+    #         used: used.to_i,
+    #         free: free.to_i,
+    #         total: total.to_i,
+    #       }
+    #     when "load"
+    #       # 0.03 0.03 0.00 1/196 4114
+    #       one, five, ten, pids, _ = data.split(/\s+/)
+    #       obj[name][:load] = {
+    #         one: (one.to_f * 100).round,
+    #         five: (five.to_f * 100).round,
+    #         ten: (ten.to_f * 100).round,
+    #       }
+    #     when "cpu"
+    #       obj[name][:cpu] = {
+    #         idle: data.to_i,
+    #       }
+    #     when "latency"
+    #       obj[name][:latency] = {
+    #         seconds: data.to_i,
+    #       }
+    #     end
+    #   end
+    # end
 
-    LoadtimeBroadcast.call(gathered)
+    # TODO! Change this to Jil!
+    # LoadtimeBroadcast.call(gathered)
 
     head :no_content
   end

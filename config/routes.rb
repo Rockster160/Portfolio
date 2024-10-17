@@ -128,13 +128,11 @@ Rails.application.routes.draw do
   end
 
   resources :jarvis_tasks, path: :tasks
-  resources :scheduled_tasks, path: :scheduled, param: :uid, only: [:index, :create, :update, :destroy]
   resources :jil_tasks do
     post :run, on: :member
   end
   namespace :jil do
     get :/, action: :index, controller: :jarvis_tasks
-    resources :cron_tasks
     resources :jarvis_cache, path: :cache
     resources :jarvis_tasks, path: :tasks do
       get :config, on: :member, action: :configuration
