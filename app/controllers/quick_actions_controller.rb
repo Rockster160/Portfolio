@@ -11,11 +11,11 @@ class QuickActionsController < ApplicationController
   helper_method :current_user, :user_signed_in?
 
   def show
-    @page = current_user.jarvis_page
+    @page = current_user.user_dashboard
   end
 
   def update
-    @page = current_user.jarvis_page
+    @page = current_user.user_dashboard
     ::WebPushNotifications.update_count(current_user)
     @page.update(blocks: params.permit!.to_h[:blocks]) if params.key?(:blocks)
 

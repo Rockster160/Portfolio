@@ -22,7 +22,7 @@ Rails.application.routes.draw do
   get "playground" => "index#playground"
   resource :ping, only: :create
 
-  resource :jarvis, only: [:show, :update], controller: :quick_actions, as: :jarvis_page do
+  resource :jarvis, only: [:show, :update], controller: :quick_actions, as: :user_dashboard do
     get :sync_badge
     get :render_widget
   end

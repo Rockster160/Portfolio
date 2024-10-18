@@ -44,8 +44,8 @@ class User < ApplicationRecord
   has_one :money_bucket
   has_one :avatar, dependent: :destroy
   def avatar; super() || build_avatar; end
-  has_one :jarvis_page, dependent: :destroy
-  def jarvis_page; super() || build_jarvis_page; end
+  has_one :user_dashboard, dependent: :destroy
+  def user_dashboard; super() || build_user_dashboard; end
   has_many :caches, class_name: "UserCache"
 
   search_terms :username, :email
