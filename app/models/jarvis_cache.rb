@@ -15,7 +15,6 @@ class JarvisCache < ApplicationRecord
   attr_accessor :skip_save_set
 
   belongs_to :user
-  has_many :cache_shares
 
   def to_param
     key || id
@@ -23,9 +22,9 @@ class JarvisCache < ApplicationRecord
 
   def self.by(key)
     if key.to_s.match?(/^\d+$/)
-      find_by(key: key, user: assigned(:user)) || find_by(id: key, user: assigned(:user)) || find_or_create_by(key: key, user: assigned(:user))
+      find_by(key: key) || find_by(id: key) || find_or_create_by(key: key)
     else
-      find_or_create_by(key: key, user: assigned(:user))
+      find_or_create_by(key: key)
     end
   end
 

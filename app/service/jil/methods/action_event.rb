@@ -93,7 +93,6 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
 
   def event_callbacks(event, action, update_streak=true, &after)
     ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: action))
-    ::Jarvis.trigger_async(event.user_id, :event, event.serialize.merge(action: action))
     after&.call(event)
     ActionEventBroadcastWorker.perform_async(event.id, update_streak)
   end

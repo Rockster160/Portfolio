@@ -18,8 +18,6 @@ class JilPrompt < ApplicationRecord
 
   scope :unanswered, -> { where(response: nil) }
 
-  after_commit :jil_callback
-
   enum answer_type: {
     single: 0,
     many:   1,
@@ -36,14 +34,7 @@ class JilPrompt < ApplicationRecord
       params: params,
       options: options,
       response: response,
-      task: task&.uuid,
       url: Rails.application.routes.url_helpers.jil_prompt_url(self)
     }.with_indifferent_access
-  end
-
-  private
-
-  def jil_callback
-    ::JarvisTriggerWorker.perform_async(user_id, :prompt, serialize.to_json)
   end
 end

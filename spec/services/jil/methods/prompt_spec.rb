@@ -62,7 +62,6 @@ RSpec.describe Jil::Methods::Prompt do
             },
           ],
           response: nil,
-          task: nil,
           url: "http://localhost:3141/prompts/#{prompt.id}",
         },
       })

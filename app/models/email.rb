@@ -190,7 +190,6 @@ class Email < ApplicationRecord
 
     tasks = ::Jil::Executor.trigger(user_id, :email, serialize)
     return if tasks.any?(&:stop_propagation?)
-    ::Jarvis.trigger_events(user_id, :email, serialize)
     reload # Since Jil updates them out of scope
 
     # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier

@@ -20,16 +20,6 @@ class LocationCache
         timestamp: Time.current,
       }
     )
-    ::Jarvis.trigger_async(User.me.id, :travel,
-      {
-        coord: departed ? nil : recent_locations[-1], # If arrived, show current
-        from: recent_locations[departed ? -1 : -2], # If arrived, show previous, otherwise current
-        location: current_location_name, # Most recent stopped
-        action: departed ? :departed : :arrived,
-        (departed ? :departed : :arrived) => current_location_name, # Add this for convenient matchers `travel:arrive:home`
-        timestamp: Time.current,
-      }
-    )
 
     User.me.caches.dig_set(:driving, :is_driving, departed)
   end

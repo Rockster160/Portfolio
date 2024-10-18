@@ -134,7 +134,6 @@ class Jarvis
     # Order sensitive classes to iterate through and attempt commands
     # @asking_question = simple_words.match?(/\?$/) || simple_words.match?(/^(what|where|when|why|is|how|are)\s+(about|is|are|were|did|have|it)\b/)
     [
-      Jarvis::Trigger,        # -- XXX deprecated
       Jarvis::Say,            # √ -- Eventually remove this as well. This is just a websocket.
       Jarvis::Log,            # √ -- Could probably migrate to Jil?
       Jarvis::ScheduleParser, # √ KEEP! This will be the magic that delays things via words. Should be disable-able?
