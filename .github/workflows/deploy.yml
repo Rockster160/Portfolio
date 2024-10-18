@@ -18,12 +18,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Begin Deploy
-      run: |
-        curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" -d "id=deploy&deploy=start" https://ardesian.com/jil/trigger/monitor
-
     - name: Checkout code
       uses: actions/checkout@v2
+
+    - name: Get Commit Details
+      id: commit_info
+      run: |
+        merge_sha=$(git rev-parse HEAD)
+        sha=$(git rev-list --no-merges -n 1 HEAD)
+        author=$(git log -1 --pretty=format:'%an' $sha)
+        message=$(git log -1 --pretty=format:'%s' $sha)
+        echo "::set-output name=merge::$merge_sha"
+        echo "::set-output name=sha::$sha"
+        echo "::set-output name=author::$author"
+        echo "::set-output name=message::$message"
+
+    - name: Begin Deploy
+      run: |
+        curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" \
+        -d "id=deploy&deploy=start&merge=${{ steps.commit_info.outputs.merge }}&sha=${{ steps.commit_info.outputs.sha }}&author=${{ steps.commit_info.outputs.author }}&message=${{ steps.commit_info.outputs.message }}" \
+        https://ardesian.com/jil/trigger/monitor
 
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
@@ -47,3 +61,10 @@ jobs:
         ssh-agent -a $SSH_PRIVATE_KEY > /dev/null
         ssh-add /home/runner/.ssh/github_actions
         bundle exec cap production deploy
+
+    - name: Handle Deploy Failure
+      if: failure()
+      run: |
+        curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" \
+        -d "id=deploy&deploy=failed&sha=${{ steps.commit_info.outputs.sha }}" \
+        https://ardesian.com/jil/trigger/monitor
