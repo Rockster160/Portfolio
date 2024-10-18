@@ -12,13 +12,13 @@ export default class Modal {
     })
   }
 
-  static isShown() {
+  static shown() {
     return !!document.querySelector(".modal.show")
   }
 }
 
 Keyboard.on("Escape", (evt) => {
-  if (Modal.isShown()) {
+  if (Modal.shown()) {
     evt.preventDefault()
     Modal.hide()
   }

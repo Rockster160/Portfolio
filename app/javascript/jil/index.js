@@ -36,7 +36,7 @@ History.record = function() {
 }
 
 const activeInput = (node) => {
-  if (Dropdown.shown()) { return true }
+  if (Dropdown.shown() || Modal.shown()) { return true }
 
   node = node || document.activeElement
   return ["INPUT", "TEXTAREA", "SELECT"].includes(node.tagName)
