@@ -8,16 +8,16 @@ export function hi(type, text) {
 }
 
 export function prettify(colorize, type, text) {
-  if (colorize) {
-    if (type === "string") {
-      return hi(type, ("\"" + JSON.parse(text) + "\"").replace(/\</g, "&lt;")).replace(/\#\{([^\}]*?)\}/g, (_all, content) => {
-        return prettify(colorize, "op", `#{${prettify(colorize, "variable", content)}}`)
-      })
-    } else {
-      return hi(type, text)
-    }
+  if (!colorize) { return text }
+
+  if (type === "string") {
+    return hi(type, ("\"" + JSON.parse(text) + "\"").replace(/\</g, "&lt;")).replace(/\#\{([^\}]*?)\}/g, (_all, content) => {
+      return prettify(colorize, "op", `#{${prettify(colorize, "variable", content)}}`)
+    })
+  } else if (type == "spaces") {
+    return text.replace(/ /g, hi("space", " "))
   } else {
-    return text
+    return hi(type, text)
   }
 }
 

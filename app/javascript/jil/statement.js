@@ -610,9 +610,10 @@ export default class Statement {
     if (arg.classList.contains("content")) {
       let statements = Array.from(arg.querySelectorAll(":scope > .statement-wrapper"))
       if (statements.length == 0) { return "{}" }
-      let indent = "  ".repeat(nest)
-      let str = `{\n${indent}  `
-      str += statements.map(wrapper => Statement.from(wrapper).toString(nest+1, pretty, passComment)).join(`\n  ${indent}`)
+      const indent = prettify(color, "spaces", "  ".repeat(nest))
+      const extraIndent = prettify(color, "spaces", "  ".repeat(nest+1))
+      let str = "{\n" + extraIndent
+      str += statements.map(wrapper => Statement.from(wrapper).toString(nest+1, pretty, passComment)).join("\n" + extraIndent)
       str += `\n${indent}}`
       return str
     }
@@ -636,6 +637,7 @@ export default class Statement {
   toString(nest, pretty=false, passComment=false) {
     try {
       let str = ""
+      const space = prettify(pretty, "spaces", " ")
       const add = (type, text) => {
         if (this.commented || passComment) {
           str += text
@@ -647,7 +649,7 @@ export default class Statement {
       if (this._inspect) { add("inspect", "*") }
       if (this._name) {
         add("varname", this._name)
-        str += " = "
+        add("spaces", " = ")
       }
       if (this._reference) {
         add("objname", this._reference.name || this._reference.id)
@@ -657,7 +659,7 @@ export default class Statement {
       str += "."
       add("methodname", this.method)
       str += "("
-      str += this.args.map(arg => this.argValue(arg, nest, pretty, this.commented || passComment)).filter(Boolean).join(", ")
+      str += this.args.map(arg => this.argValue(arg, nest, pretty, this.commented || passComment)).filter(Boolean).join("," + space)
       // iterate through obj-args, pull the value from inputs- when a content block, wrap inside {}
       str += ")"
       add("op-cast", "::")

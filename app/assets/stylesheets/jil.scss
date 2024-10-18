@@ -152,6 +152,21 @@ body:has(.env-banner) {
         .syntax--numeric {
           color: #EDDD3D; // (17)
         }
+        .syntax--space { // Literally a space character
+          position: relative;
+
+          &:before {
+            content: "" ;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 2px;
+            height: 2px;
+            background: grey;
+            border-radius: 50%;
+          }
+        }
       }
       .syntax--commented {
         color: grey;
