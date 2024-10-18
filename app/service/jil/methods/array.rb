@@ -40,8 +40,8 @@ class Jil::Methods::Array < Jil::Methods::Base
     when :shift! then token_val(line.objname).shift
     when :push then token_val(line.objname).dup.push(evalarg(line.arg))
     when :push! then token_val(line.objname).push(evalarg(line.arg))
-    when :unshift then token_val(line.objname).dup.unshift(*cast(evalarg(line.arg)))
-    when :unshift! then token_val(line.objname).unshift(*cast(evalarg(line.arg)))
+    when :unshift then token_val(line.objname).dup.unshift(evalarg(line.arg))
+    when :unshift! then token_val(line.objname).unshift(evalarg(line.arg))
     when :set
       idx, val = *evalargs(line.args)
       arr = token_val(line.objname).dup
