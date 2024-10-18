@@ -29,7 +29,7 @@ RSpec.describe Jil::Methods::Prompt do
   context "#create" do
     it "creates a PromptQuestion" do
       expect_successful_jil
-      prompt = JilPrompt.last
+      prompt = Prompt.last
       expect(ctx.dig(:vars, :t33bc)).to match_hash({
         class: :PromptQuestion,
         value: {

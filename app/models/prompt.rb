@@ -33,7 +33,7 @@ class Prompt < ApplicationRecord
       params: params,
       options: options,
       response: response,
-      url: Rails.application.routes.url_helpers.jil_prompt_url(self)
+      url: Rails.application.routes.url_helpers.prompt_url(self)
     }.with_indifferent_access
   end
 end

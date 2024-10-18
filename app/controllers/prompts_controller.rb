@@ -1,4 +1,4 @@
-class JilPromptsController < ApplicationController
+class PromptsController < ApplicationController
   before_action :authorize_user_or_guest
   before_action :set_prompt, except: :index
   after_action :repush_notifications
@@ -20,7 +20,7 @@ class JilPromptsController < ApplicationController
   def destroy
     @prompt.destroy
     jil_trigger(:prompt, { status: :skip }.merge(@prompt.serialize))
-    redirect_to jil_prompts_path
+    redirect_to prompts_path
   end
 
   private

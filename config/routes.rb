@@ -26,7 +26,7 @@ Rails.application.routes.draw do
     get :sync_badge
     get :render_widget
   end
-  resources :jil_prompts, only: [:index, :show, :update, :destroy], path: :prompts
+  resources :prompts, only: [:index, :show, :update, :destroy], path: :prompts
 
   scope module: :users do
     get :login,         controller: :sessions,      action: :new

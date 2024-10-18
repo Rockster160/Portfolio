@@ -1,7 +1,7 @@
 class Jil::Methods::Prompt < Jil::Methods::Base
   def cast(value)
     case value
-    when ::JilPrompt then value.serialize
+    when ::Prompt then value.serialize
     else @jil.cast(value, :Hash)
     end
   end
@@ -84,13 +84,13 @@ class Jil::Methods::Prompt < Jil::Methods::Base
 
     WebPushNotifications.send_to(@jil.user, {
       title: prompt.question,
-      url: Rails.application.routes.url_helpers.jil_prompt_url(prompt),
+      url: Rails.application.routes.url_helpers.prompt_url(prompt),
       badge: @jil.user.prompts.unanswered.reload.count,
     })
   end
 
-  def load_prompt(jil_prompt)
-    @jil.user.prompts.find(cast(jil_prompt)[:id])
+  def load_prompt(prompt)
+    @jil.user.prompts.find(cast(prompt)[:id])
   end
 
   def prompts
