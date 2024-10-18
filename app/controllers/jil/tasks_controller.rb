@@ -1,4 +1,4 @@
-class TasksController < ApplicationController
+class Jil::TasksController < ApplicationController
   before_action :authorize_user
   skip_before_action :verify_authenticity_token # User is authorized and we don't want to prevent JS
 
@@ -24,7 +24,7 @@ class TasksController < ApplicationController
 
     render json: {
       data: @task.serialize,
-      url: task_path(@task),
+      url: jil_task_path(@task),
     }
   end
 
@@ -34,7 +34,7 @@ class TasksController < ApplicationController
 
     render json: {
       data: @task.serialize,
-      url: task_path(@task),
+      url: jil_task_path(@task),
     }
   end
 

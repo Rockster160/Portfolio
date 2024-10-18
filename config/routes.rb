@@ -129,11 +129,11 @@ Rails.application.routes.draw do
     get :change_clothes, action: :load_character
   end
 
-  resources :tasks do
-    post :run, on: :member
-  end
   namespace :jil do
-    # get :/, action: :index, controller: :tasks
+    get :/, action: :index, controller: :tasks
+    resources :tasks do
+      post :run, on: :member
+    end
     resources :user_cache, path: :cache
   end
   # Must be after `jil` namespace so it doesn't overwrite existing routes

@@ -1,7 +1,7 @@
 <div class="skinny-container lists-index-container">
   <div class="btn-container">
     <a href="<%= account_path %>" class="btn">Account</a>
-    <a href="<%= new_task_path %>" class="btn pull-right">New Task +</a>
+    <a href="<%= new_jil_task_path %>" class="btn pull-right">New Task +</a>
   </div>
   <div class="lists-title">Tasks</div>
   <div class="lists">
@@ -17,7 +17,7 @@
           <%= content_tag :div, :Disabled, class: "status disabled" if !task.enabled? %>
         </div>
         <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>
-        <a href="<%= task_path(task) %>" class="list-item">
+        <a href="<%= jil_task_path(task) %>" class="list-item">
           <span class="item-name"><%= task.name.titleize %></span>
           <div class="list-item-brief">
             <div class="left-brief">
