@@ -26,8 +26,8 @@ cron_jobs = [
     cron: every_minute
   },
   {
-    name: "Trigger Jarvis Cron",
-    class: "JarvisScheduleWorker",
+    name: "Trigger Jil Cron",
+    class: "JilScheduleWorker",
     cron: every_minute
   },
 ]

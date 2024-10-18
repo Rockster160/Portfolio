@@ -1,4 +1,4 @@
-class JarvisScheduleWorker
+class JilScheduleWorker
   include Sidekiq::Worker
   sidekiq_options retry: false
 

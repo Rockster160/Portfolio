@@ -50,7 +50,7 @@ module MarkdownHelper
   end
 
   def leading_spaces(content)
-    Tokenizer.protect(content, /```.*?```/m) do |text|
+    OldTokenizer.protect(content, /```.*?```/m) do |text|
       text.gsub(/^ +/) { |spaces| "&nbsp;" * spaces.length }
     end
   end

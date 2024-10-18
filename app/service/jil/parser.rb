@@ -35,7 +35,7 @@ class Jil::Parser
 
   def self.breakdown(code, tk=nil, &perline)
     escaped = code if tk.present?
-    tk ||= NewTokenizer.new(code)
+    tk ||= Tokenizer.new(code)
     escaped ||= tk.tokenized_text
 
     escaped.scan(ESCAPED_REGEX)&.map.with_index { |(whitespace, comment, show, varname, objname, methodname, arg_code, cast), idx|

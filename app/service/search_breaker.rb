@@ -17,7 +17,7 @@ module SearchBreaker
 
   def call(str, delimiters={})
     str = str.dup
-    tr = ::NewTokenizer.new(str)
+    tr = ::Tokenizer.new(str)
     delims_with_aliases = delimiters.each_with_object([]) { |(key, delims), arr|
       ::Array.wrap(delims).each { |item| arr << [key, item] }
     }

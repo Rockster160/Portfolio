@@ -131,7 +131,7 @@ class SearchBreakMatcher
         @regex_match_data[:named_captures].reverse_merge!(md[:named_captures])
       }.present?
     when :any
-      ::NewTokenizer.split(val).any? { |single_val|
+      ::Tokenizer.split(val).any? { |single_val|
         unwrapped = SearchBreaker.unwrap(single_val)
         delim_match?(unwrapped, :contains, drop) # Should this default to contains or exact?
       }

@@ -4,7 +4,7 @@ module SearchParser
   def call(str, delimiters={})
     aliases = delimiters.delete(:aliases)
     str = str.dup
-    tr = Tokenizer.new(str)
+    tr = OldTokenizer.new(str)
 
     delims_with_aliases = delimiters.to_a.each_with_object([]) { |(dk, d), obj|
       obj << [dk, d]
@@ -46,7 +46,7 @@ module SearchParser
   def tokenized_split(str, tr=nil)
     str = str.dup
     rebuild = !tr.nil?
-    tr ||= Tokenizer.new(str)
+    tr ||= OldTokenizer.new(str)
     tr.tokenize!(str, /\\./)
     tr.tokenize!(str, /".*?"/)
     tr.tokenize!(str, /\(.*?\)/)

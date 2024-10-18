@@ -1,90 +1,143 @@
-# tz = Tokenizer.new(str)
-# tz.tokenize!(str, /\".*?\"/m)
-# # Make other changes to `str`
-# tz.untokenize!(str)
-
 class Tokenizer
-  attr_accessor :stored_strings
+  # PRIORITY_PAIRS = { ... } - Add double quotes here, and run this instead of `tokenize_quotes`
+  WRAP_PAIRS = {
+    "(" => ")",
+    "[" => "]",
+    "{" => "}",
+    "\"" => "\"",
+    "'" => "'",
+    "/" => "/"
+  }
 
-  def self.protect(str, *rxs, &block)
-    return str if str.blank?
-    str = str.dup
-    tz = new(str)
-    rxs.each { |rx| tz.tokenize!(str, rx) }
-    tz.untokenize!(block.call(str))
-  end
+  attr_accessor :raw, :text, :tokenized_text, :tokens
 
-  def self.split(str, *rxs, by: " ", unwrap: false)
-    return str if str.blank?
-    str = str.dup
-    tz = new(str)
-    rxs.each { |rx| tz.tokenize!(str, rx) }
-    str.split(by).map { |sub_str|
-      tz.untokenize(sub_str).then { |wrapped_str|
-        next wrapped_str unless unwrap
-        rxs.lazy.map { |rx| wrapped_str[rx, 1] }.find(&:itself) || wrapped_str
-      }
+  def self.split(text, untokenize: true, unwrap: false)
+    tz = new(text)
+    tz.tokenized_text.split(" ").map { |str|
+      untokenize ? tz.untokenize(str, unwrap: unwrap) : str
     }
   end
 
-  def self.wrap_regex(open_str, close_str=nil)
-    close_str ||= open_str
-    # TODO: This should skip escaped values
-    /#{Regexp.escape(open_str)}([^#{Regexp.escape(open_str)}#{Regexp.escape(close_str)}]*?)#{Regexp.escape(close_str)}/m
-  end
+  def self.find_unescaped_index(str, char, after: -1)
+    str.enum_for(:scan, /[#{Regexp.escape(char)}]/m).find { |_m|
+      idx = Regexp.last_match.begin(0)
+      next unless idx > after
 
-  def initialize(full_str)
-    @unwrap = nil
-    @stored_strings = []
-    @token_prefix = loop {
-      hex = SecureRandom.hex(3).scan(/.{2}/).join("-")
-      break hex unless full_str.include?(hex)
+      escapes = str[...idx][/\\*\z/].length
+      return idx if escapes.even?
     }
   end
 
-  def token(idx)
-    "[#{@token_prefix}-#{idx.to_s.rjust(2, "0")}]"
+  def self.find_unescaped_pair(str, char)
+    first_idx = find_unescaped_index(str, char)
+    return if first_idx.nil?
+
+    next_idx = find_unescaped_index(str, char, after: first_idx)
+    return if next_idx.nil?
+
+    [first_idx, next_idx]
   end
 
-  def stepper(str)
-    tokenized = tokenize(str, Tokenizer.wrap_regex("\""))
-    tokenized = tokenize(tokenized, Tokenizer.wrap_regex("\'"))
+  def initialize(text, extra_pairs={}, only: nil)
+    @pairs = only.nil? ? WRAP_PAIRS.merge(extra_pairs) : only
+    @tokens = {}
+    @token_count = 0
+
+    @raw = text.to_s # .to_s dups
+    @text = tokenize_quotes(text)
+    @tokenized_text, _cursor = tokenize
+  end
+
+  def untokenize(str=nil, levels=nil, unwrap: false, &block)
+    untokenized = (str || @tokenized_text).dup
+    i = 0
     loop do
-      # break unless tokenized.match(/\(([^(){}]*)\)/) || tokenized.match(/\{([^(){}]*)\}/)
-      pre_str = tokenized.dup
-      tokenized = tokenize(tokenized, Tokenizer.wrap_regex("(", ")"))
-      tokenized = tokenize(tokenized, Tokenizer.wrap_regex("{", "}"))
-      break if pre_str == tokenized
+      break if levels.present? && i >= levels
+      break if @tokens.none? { |token, txt|
+        untokenized.gsub!(token) {
+          val = unwrap ? txt[1..-2] : txt
+          block ? block.call(val) : val
+        }
+      }
+      i += 1
+    end
+    untokenized
+  end
+
+  private
+
+  def tokenize_quotes(str)
+    tokenized = str.to_s.dup
+    loop do
+      first_idx, next_idx = ::Tokenizer.find_unescaped_pair(tokenized, "\"")
+      break if first_idx.nil? || next_idx.nil?
+
+      quoted = tokenized[first_idx..next_idx]
+      token = generate_token
+      tokenized[first_idx..next_idx] = token
+      @tokens[token] = quoted
     end
     tokenized
   end
 
-  def tokenize!(full, regex)
-    full.gsub!(regex) do |found|
-      @stored_strings << found
-      token(@stored_strings.length-1)
-    end
-  end
+  def tokenize(until_char=nil, idx=0, nest=0)
+    h = "#{"> "*nest}[#{[rand(16).to_s(16), rand(16).to_s(16)].join.upcase}]"
+    buffer = ""
 
-  def tokenize(full, regex)
-    tokenize!(full.dup, regex) || full.dup
-  end
-
-  def untokenize!(full, levels=nil)
-    i = 0
+    # logit "#{h}:#{idx}:tokenize:#{until_char}"
     loop do
-      i += 1
-      break if levels && i > levels
-      start = full.dup
-      @stored_strings.each_with_index do |stored, idx|
-        full.gsub!(token(idx), stored)
+      if idx >= text.length
+        return unless until_char.nil? # Unmatched char, exit without replacing
+        break
       end
-      break if start == full
+
+      top = nest == 0
+      char = text[idx]
+      next_escaped = char == "\\" && idx < text.length && text[...idx+1][/\\*$/].length.odd?
+
+      if next_escaped
+        # Remove the escape and add the next character instead
+        buffer << "\\" + text[idx+1]
+        idx += 1 # Extra increment to skip next character
+      elsif char == until_char
+        # Found closing char, time to exit
+        # logit "#{h}:#{idx}:close:#{char}"
+        buffer << char
+        break
+      elsif @pairs.key?(char)
+        next_idx = ::Tokenizer.find_unescaped_index(text, @pairs[char], after: idx)
+        if next_idx.nil?
+          buffer << char
+        else
+          # logit "#{h}:#{idx}:open:#{char}"
+          wrapped, next_idx = tokenize(@pairs[char], idx+1, nest+1)
+
+          if wrapped.nil?
+            # logit "#{h}:#{idx}:\e[31m No close '#{char}'"
+            # Pair did not close, add the char and move on
+            buffer << char
+            # return unless until_char.nil?
+          else
+            idx = next_idx
+            token = generate_token
+            buffer << token
+            @tokens[token] = "#{char}#{wrapped}"
+            # logit "#{h}:#{idx}:\e[32mAdded \e[0m'#{@tokens[token]}'"
+          end
+        end
+      else
+        buffer << char
+      end
+
+      idx += 1
     end
-    full
+    # logit "#{h}:#{idx}:buffer:\e[0m'#{buffer}'"
+
+    [buffer, idx]
   end
 
-  def untokenize(full, levels=nil)
-    untokenize!(full.dup, levels) || full.dup
+  def generate_token
+    @token_count += 1
+    "||TOKEN#{@token_count}||"
   end
 end

@@ -143,7 +143,7 @@ class JilTask < ApplicationRecord
   def listener_match?(trigger, &block)
     return false unless trigger.to_s.downcase == listener.to_s.downcase.split(":").first
 
-    NewTokenizer.split(listener).all? { |sub_listener|
+    Tokenizer.split(listener).all? { |sub_listener|
       block.call(sub_listener)
     }
   end

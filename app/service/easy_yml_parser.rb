@@ -17,7 +17,7 @@ module EasyYmlParser
     return if raw_data.blank?
 
     # Split out raw strings
-    tz = Tokenizer.new(raw_data)
+    tz = OldTokenizer.new(raw_data)
     tz.tokenize!(raw_data, /\".*?\"/m)
 
     # If there is a colon followed by more data on the line, or a single line left
