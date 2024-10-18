@@ -6,8 +6,8 @@
   Key::String
   Value::Any
   Index::Numeric
-  Break("Break" TAB Any)::None
-  Next("Next" TAB Any)::None
+  Break("Break" TAB Any)::Any
+  Next("Next" TAB Any)::Any
   Item::Any
   ItemKey(String:Key)::Any
   Arg(String:Name)::Any
