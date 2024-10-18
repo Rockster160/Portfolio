@@ -135,12 +135,6 @@ class User < ApplicationRecord
     @address_book ||= AddressBook.new(self)
   end
 
-  def current_usage(date=Date.today)
-    daily_usages.find_or_create_by!(date: date)
-  rescue ActiveRecord::RecordNotUnique
-    retry
-  end
-
   def update_with_password(new_attrs)
     should_require_current_password = !guest?
     update(new_attrs)
