@@ -1,11 +1,9 @@
 Rails.application.config.after_initialize do
-  if defined?(Puma) && !Puma.respond_to?(:cli_config) && !Rails.env.test? && !Rails.const_defined?("Console")
-    ::Jil.trigger(User.me, :startup, {
-      merge: `git rev-parse HEAD`.strip,
-      **(`git log --no-merges -n 1 --format="%H|%an|%s"`.strip.then { |raw|
-        hash, author, message = raw.split("|")
-        { hash: hash, author: author, message: message }
-      })
-    })
+  $startup_complete ||= false
+  if defined?(Puma) && !$startup_complete && !Rails.env.test? && !Rails.const_defined?("Console")
+    $startup_complete = true
+    file_path = Rails.root.join("config", "git_info.json")
+    git_json = JSON.parse(File.read(file_path)) rescue {}
+    ::Jil.trigger(User.me, :startup, git_json)
   end
 end

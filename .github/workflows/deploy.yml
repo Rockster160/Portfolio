@@ -47,8 +47,3 @@ jobs:
         ssh-agent -a $SSH_PRIVATE_KEY > /dev/null
         ssh-add /home/runner/.ssh/github_actions
         bundle exec cap production deploy
-
-    - name: Complete Deploy
-      run: |
-        sleep 15 # Attempt to give the server enough time to wake up after deploy
-        curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" -d "id=deploy&deploy=finish" https://ardesian.com/jil/trigger/monitor
