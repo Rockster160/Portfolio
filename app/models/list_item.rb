@@ -49,11 +49,12 @@ class ListItem < ApplicationRecord
     end
   end
 
-  def self.by_data(params)
+  def self.by_data(params, deleted: true)
+    q = deleted ? with_deleted : all
     if params.is_a?(Hash) || params.is_a?(ActionController::Parameters)
-      with_deleted.find_by(id: params[:id]) || with_deleted.by_formatted_name(params[:name])
+      q.find_by(id: params[:id]) || q.by_formatted_name(params[:name])
     else
-      with_deleted.by_formatted_name(params.to_s)
+      q.by_formatted_name(params.to_s)
     end
   end
 
@@ -71,7 +72,7 @@ class ListItem < ApplicationRecord
   end
 
   def self.remove(item_name)
-    old_item = by_data(item_name)
+    old_item = by_data(item_name, deleted: false) || by_data(item_name)
 
     old_item&.soft_destroy
   end

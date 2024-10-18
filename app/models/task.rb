@@ -45,7 +45,7 @@ class Task < ApplicationRecord
   }
 
   def self.links
-    ids.each { |id| puts "https://ardesian.com/jil/#{id}" };nil
+    ids.each { |id| puts "https://ardesian.com/jil/tasks/#{id}" };nil
   end
 
   def self.last_exe
