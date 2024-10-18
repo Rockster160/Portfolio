@@ -119,7 +119,7 @@ import { dash_colors, beeps } from "../vars"
         }
         cell.flash()
         let json = data.data || {}
-        if (json.deploy == "start") {
+        if (json.status == "deploying") {
           let timer = new Timer({ name: currentTime() })
           timer.start.minutes += 2
           timer.start.seconds += 30
@@ -128,13 +128,21 @@ import { dash_colors, beeps } from "../vars"
           cell.data.deploy_timers = cell.data.deploy_timers.slice(0, 5)
           localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
         }
-        if (json.deploy == "finish") {
+        if (json.status == "success") {
           cell.data.deploy_timers.forEach(item => {
             item.complete(true)
           })
           localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
           cell.data.monitor_schedule = clearInterval(cell.data.monitor_schedule)
           victoryBeep()
+        }
+        if (json.status == "failed") {
+          cell.data.deploy_timers.forEach(item => {
+            item.error(true)
+          })
+          localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
+          cell.data.monitor_schedule = clearInterval(cell.data.monitor_schedule)
+          failureBeep()
         }
         render(cell)
       },
@@ -146,6 +154,14 @@ import { dash_colors, beeps } from "../vars"
       [100, 1000, 0.1, "sine"], // Short and high-pitched
       [150,  800, 0.2, "sine"], // Slightly longer and lower-pitched
       [300, 1200, 0.4, "sine"], // Even longer and higher-pitched
+    ])
+  }
+
+  let failureBeep = function() {
+    beeps([
+      [200, 600, 0.4, "sine"],
+      [200, 500, 0.2, "sine"],
+      [150, 400, 0.1, "sine"],
     ])
   }
 
