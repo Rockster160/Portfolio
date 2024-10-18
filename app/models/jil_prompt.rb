@@ -15,7 +15,6 @@
 #
 class JilPrompt < ApplicationRecord
   belongs_to :user, inverse_of: :prompts
-  belongs_to :task, class_name: "JarvisTask", optional: true
 
   scope :unanswered, -> { where(response: nil) }
 

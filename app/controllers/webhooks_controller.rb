@@ -25,6 +25,17 @@ class WebhooksController < ApplicationController
     render json: params
   end
 
+  # POST /jil/tasks/c96939ac-9dc1-4dab-9200-143ac699d5d6/run
+  # TODO: Remove after updating Saya's app
+  def saya
+    return head :unauthorized unless current_user.id == 34226
+    task = current_user.jil_tasks.find_by(name: "Protein & Carb Tracker")
+    request_logger.log_request("\n\e[36m\e[4m#{task.name}\e[0m")
+    task.execute
+
+    render json: { response: task.last_output }
+  end
+
   # /jil/webhook
   def jil_webhook
     json_params.each do |key, data|
@@ -45,17 +56,6 @@ class WebhooksController < ApplicationController
     head :ok
   end
 
-  # POST /jil/tasks/c96939ac-9dc1-4dab-9200-143ac699d5d6/run
-  # TODO: Remove after updating Saya's app
-  def saya
-    return head :unauthorized unless current_user.id == 34226
-    task = current_user.jil_tasks.find_by(name: "Protein & Carb Tracker")
-    request_logger.log_request("\n\e[36m\e[4m#{task.name}\e[0m")
-    task.execute
-
-    render json: { response: task.last_output }
-  end
-
   def execute_jil_task
     task = current_user.jil_tasks.find_by(uuid: params[:uuid])
 
@@ -68,7 +68,7 @@ class WebhooksController < ApplicationController
         render json: { data: task.last_result, task: task.serialize_with_execution }
       end
     else
-      execute_jarvis_task
+      render json: { data: nil, task: nil, notice: "No task found by that uuid." }, status: :not_found
     end
   end
 
@@ -239,22 +239,6 @@ class WebhooksController < ApplicationController
       json.except(json_key).merge(JSON.parse(json_key, symbolize_names: true))
     rescue JSON::ParserError
       json
-    end
-  end
-
-  def execute_jarvis_task
-    task = ::JarvisTask.anyfind(
-      params[:uuid].presence || params[:id].presence || params[:name].presence || params[:task_name]
-    )
-    res = task.execute(json_params)
-    # ::Jarvis.trigger_events(current_user, :webhook, params...)
-
-    if res.none?
-      render json: { error: "No webhooks found with that id" }
-    elsif res.many?
-      render json: { data: res[..-2] } # Remove "Success" from the end
-    else
-      render json: { data: res.first }
     end
   end
 

@@ -13,7 +13,7 @@ class Jil::Executor
     begin
       trigger_data = ::JSON.parse(trigger_data) if trigger_data.is_a?(::String)
     rescue ::JSON::ParserError
-      trigger_data = {}
+      trigger_data = { data: trigger_data }
     end
 
     if at.blank?
@@ -41,7 +41,7 @@ class Jil::Executor
 
     ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data }), 1000))
 
-    user_ids.each do |user_id|
+    user_ids.map { |user_id|
       user_tasks = ::JilTask.enabled.ordered.where(user_id: user_id).distinct
       stopped = false
       user_tasks.by_listener(trigger).filter_map { |task|
@@ -63,7 +63,7 @@ class Jil::Executor
           ::Jarvis.command(User.find(user_id), words)
         end
       }
-    end
+    }.flatten
   end
 
   def self.async_call(user, code, input_data={}, task: nil, auth: nil)

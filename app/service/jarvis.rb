@@ -78,60 +78,6 @@ class Jarvis
     PrettyLogger.log(*messages)
   end
 
-  def self.trigger_events(user, trigger, trigger_data={})
-    # Not for triggering by UUID
-    user_ids = (
-      case user
-      when User then [user.id]
-      when ActiveRecord::Relation then user.ids
-      else Array.wrap(user)
-      end
-    )
-    begin
-      trigger_data = JSON.parse(trigger_data) if trigger_data.is_a?(String)
-    rescue JSON::ParserError
-    end
-
-    user_tasks = ::JarvisTask.enabled.where(user_id: user_ids).distinct
-    user_tasks.by_listener(trigger).filter_map do |task|
-      task.match_run(trigger, trigger_data) && task rescue nil
-    end
-  end
-
-  def self.trigger_async(user, trigger, trigger_data={})
-    user_ids = (
-      case user
-      when User then user.id
-      when ActiveRecord::Relation then user.ids
-      else user.to_json
-      end
-    )
-
-    ::JarvisTriggerWorker.perform_async(user_ids, trigger.to_s, trigger_data.to_json)
-  end
-
-  def self.trigger(trigger, trigger_data, scope: {})
-    ::JarvisTriggerWorker.perform_async(trigger, trigger_data.to_json, scope.to_json)
-  end
-
-  # TODO: Remove all of this. Jarvis should ONLY handle text/words.
-  def self.execute_trigger(trigger, trigger_data={}, scope: {})
-    trigger_data = ::BetterJsonSerializer.load(trigger_data) || trigger_data
-    scope = ::BetterJsonSerializer.load(scope) || scope
-
-    if trigger.to_sym == :command
-      command(User.find(scope[:user_id]), trigger_data[:words] || trigger_data[:command] || trigger_data)
-    else
-      tasks = ::JarvisTask.enabled.where(trigger: trigger)
-      tasks = scope.is_a?(Array) ? tasks.where(*scope.to_a) : tasks.where(scope.to_h)
-    end
-
-    responses = tasks.find_each.map do |task|
-      ::Jarvis::Execute.call(task, trigger_data)
-    end
-    responses
-  end
-
   def self.command(user, words)
     return unless words.present?
 

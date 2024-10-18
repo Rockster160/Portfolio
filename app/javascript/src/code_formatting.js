@@ -1,6 +1,6 @@
 $(document).ready(function() {
   if ($(".no-markdown").length > 0) { return }
-  if ($("body.ctr-jarvis_tasks, body.ctr-tasks, body.ctr-pages").length > 0) { return }
+  if ($("body.ctr-pages").length > 0) { return }
 
   contrastForColor = function(bg_color_hex) {
     var black = "#000", white = "#FFF"

@@ -129,21 +129,12 @@ Rails.application.routes.draw do
     get :change_clothes, action: :load_character
   end
 
-  resources :jarvis_tasks, path: :tasks
   resources :jil_tasks do
     post :run, on: :member
   end
   namespace :jil do
-    get :/, action: :index, controller: :jarvis_tasks
+    # get :/, action: :index, controller: :jil_tasks
     resources :jarvis_cache, path: :cache
-    resources :jarvis_tasks, path: :tasks do
-      get :config, on: :member, action: :configuration
-      get :run, on: :member
-      post :run, on: :member
-      post :duplicate, on: :member
-    end
-    # Must be last because of the wildcard
-    get "/:id", action: :show, controller: :jarvis_tasks
   end
   # Must be after `jil` namespace so it doesn't overwrite existing routes
   post "jil/:uuid" => "webhooks#execute_jil_task"

@@ -18,9 +18,7 @@ class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 
   has_many :api_keys, dependent: :destroy
-  has_many :jarvis_tasks, dependent: :destroy
   has_many :jil_tasks, dependent: :destroy
-  has_many :cron_tasks, dependent: :destroy
   has_many :bowling_leagues, dependent: :destroy
   has_many :climbs, dependent: :destroy
   has_many :folders, dependent: :destroy
@@ -39,7 +37,6 @@ class User < ApplicationRecord
   has_many :emails, dependent: :destroy
   has_many :scheduled_triggers, class_name: "JilScheduledTrigger", dependent: :destroy
   has_many :prompts, class_name: "JilPrompt", dependent: :destroy
-  has_many :daily_usages, class_name: "JilUsage", dependent: :destroy
   has_many :action_events
   has_many :user_surveys
   has_many :user_survey_responses

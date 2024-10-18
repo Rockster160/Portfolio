@@ -1,4 +1,4 @@
-RSpec.describe JarvisTask do
+RSpec.describe JilTask do
   include ActiveJob::TestHelper
 
   let(:admin) { User.me }
@@ -11,13 +11,13 @@ RSpec.describe JarvisTask do
 
   def expect_trigger_listeners(user, trigger, trigger_data, expected_listeners)
     @listeners = []
-    Jarvis.trigger_events(user, trigger, trigger_data)
+    Jil.trigger(user, trigger, trigger_data)
     expect(@listeners).to match_array(expected_listeners)
   end
 
   context "with basic triggers" do
     before do
-      JarvisTask.create([
+      JilTask.create([
         { user: other_user, listener: "travel" },
         { user: admin, listener: "travel" },
         { user: admin, listener: "travel:depart:home" },
@@ -32,8 +32,8 @@ RSpec.describe JarvisTask do
         { user: admin, listener: "email:from:blah subject:deliver" },
         { user: admin, listener: "subject:deliver" },
         { user: admin, listener: "email:body:\"awesome socks\"" },
-        { user: admin, listener: "tell~/(?<direction>open|close|toggle)( (?:the|my))? garage/" },
-        { user: admin, listener: "tell~/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/" },
+        { user: admin, listener: "tell:/(?<direction>open|close|toggle)( (?:the|my))? garage/" },
+        { user: admin, listener: "tell:/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/" },
         { user: admin, listener: "tell:\"Do the things\"" },
         { user: admin, listener: "tell:~/Checkup/" },
         { user: admin, listener: "tell:ANY(~/Checkup/ ~/Result/)" },
@@ -46,8 +46,8 @@ RSpec.describe JarvisTask do
       ])
 
       @listeners = []
-      allow_any_instance_of(JarvisTask).to receive(:execute) do |jarvis_task, data|
-        @listeners << jarvis_task.listener
+      allow_any_instance_of(JilTask).to receive(:execute) do |task, data|
+        @listeners << task.listener
       end
     end
 
@@ -140,10 +140,10 @@ RSpec.describe JarvisTask do
         "email:from:amazon subject:ANY(\"has been\" \"is now\" delayed)",
       ])
       expect_trigger_listeners(admin, :tell, "Open the garage", [
-        "tell~/(?<direction>open|close|toggle)( (?:the|my))? garage/",
+        "tell:/(?<direction>open|close|toggle)( (?:the|my))? garage/",
       ])
       expect_trigger_listeners(admin, :tell, "Set the house 72 degrees this matters more", [
-        "tell~/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/",
+        "tell:/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/",
       ])
       expect_trigger_listeners(admin, :tell, "Do the things", [
         "tell:\"Do the things\""
