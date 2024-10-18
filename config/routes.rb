@@ -134,7 +134,7 @@ Rails.application.routes.draw do
   end
   namespace :jil do
     # get :/, action: :index, controller: :tasks
-    resources :jarvis_cache, path: :cache
+    resources :user_cache, path: :cache
   end
   # Must be after `jil` namespace so it doesn't overwrite existing routes
   post "jil/:uuid" => "webhooks#execute_task"

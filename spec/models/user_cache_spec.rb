@@ -1,4 +1,4 @@
-RSpec.describe JarvisCache, type: :model do
+RSpec.describe UserCache, type: :model do
   let!(:user) { User.me }
   let(:caches) { user.caches }
 

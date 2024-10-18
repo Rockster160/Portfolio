@@ -46,7 +46,7 @@ class User < ApplicationRecord
   def avatar; super() || build_avatar; end
   has_one :jarvis_page, dependent: :destroy
   def jarvis_page; super() || build_jarvis_page; end
-  has_many :caches, class_name: "JarvisCache"
+  has_many :caches, class_name: "UserCache"
 
   search_terms :username, :email
 
