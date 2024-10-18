@@ -469,12 +469,12 @@ RSpec.describe Jarvis do
   context "with scheduling" do
     # now Time.local(2022, 6, 24, 5, 45)
     it "can schedule a job for later" do
-      expect(JarvisWorker).to receive(:perform_at).with(10.minutes.from_now, @admin.id, "add something to list")
+      expect(::Jil::Schedule).to receive(:add_schedule).with(@admin.id, 10.minutes.from_now, :command, { words: "add something to list"})
       expect(jarvis("add something to list in 10 minutes")).to eq("I'll add something to list today at 5:55am")
     end
 
     it "can schedule a job for a time" do
-      expect(JarvisWorker).to receive(:perform_at).with(Time.local(2022, 6, 24, 21, 45), @admin.id, "add something to list")
+      expect(::Jil::Schedule).to receive(:add_schedule).with(@admin.id, Time.local(2022, 6, 24, 21, 45), :command, { words: "add something to list"})
       expect(jarvis("add something to list at 9:45 PM")).to eq("I'll add something to list today at 9:45pm")
     end
 
@@ -482,12 +482,23 @@ RSpec.describe Jarvis do
       msg = "Do the laundry"
       # Jil::Schedule.add_schedule(user, execute_at, trigger, data)
       perform_enqueued_jobs {
-        # expect(JarvisWorker).to receive(:perform_at).with(5.minutes.from_now, @admin.id, "Text me to do the laundry").and_call_original
-        expect(Jil::Schedule).to receive(:add_schedule).with(@admin.id, 5.minutes.from_now, :command, { words: "Text me to do the laundry" }).and_call_original
+        expect(Jil::Schedule).to receive(:add_schedule).with(
+          @admin.id,
+          be_within(1.second).of(5.minutes.from_now),
+          :command,
+          { words: "Text me to do the laundry" }
+        ).and_call_original
         # Call original above to make sure the SmsWorker gets called
+
         expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
 
         expect(jarvis("Text me in 5 minutes to do the laundry")).to eq("I'll text you to do the laundry today at 5:50am")
+
+        Timecop.travel(5.minutes.from_now) do
+          # Trigger Worker is run immediately because of inline jobs, but then cancels since
+          #   the schedule time is in the future. Re-run the job.
+          ::TriggerWorker.perform_async(::JilScheduledTrigger.maximum(:id))
+        end
       }
     end
 
@@ -518,7 +529,7 @@ RSpec.describe Jarvis do
 
     actions.each do |time_words, (timestamp, rel_time)|
       it "can schedule #{time_words}" do
-        expect(JarvisWorker).to receive(:perform_at).with(timestamp, @admin.id, "Do thing")
+        expect(::Jil::Schedule).to receive(:add_schedule).with(@admin.id, timestamp, :command, { words: "Do thing"})
         if rel_time.present?
           expect(jarvis("Do thing #{time_words}")).to eq("I'll do thing #{rel_time}")
         else

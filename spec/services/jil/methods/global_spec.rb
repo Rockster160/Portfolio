@@ -145,8 +145,8 @@ RSpec.describe Jil::Methods::Global do
     #
     #   data = ctx.dig(:vars, :ee984)
     #   expect(data[:class]).to eq(:Hash)
-    #   expect(data[:value].keys).to match_array([:code, :body, :headers])
-    #   expect(data.dig(:value, :body).class).to eq(::Hash)
+    #   expect(data[:value].keys.map(&:to_sym)).to match_array([:code, :body, :headers])
+    #   expect(data.dig(:value, :body).class).to eq(::ActiveSupport::HashWithIndifferentAccess)
     # end
   end
 
@@ -182,7 +182,7 @@ RSpec.describe Jil::Methods::Global do
     it "commands Jarvis to do the thing" do
       expect_successful_jil
 
-      expect(user.lists.first.list_items.name).to eq("it")
+      expect(user.lists.first.list_items.first.name).to eq("it")
     end
   end
 

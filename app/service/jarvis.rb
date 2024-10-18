@@ -48,7 +48,7 @@
 
 # =============================== JarvisTasks ===============================
 # [ ] Add some sort of interface for managing automations
-#     * "X minutes before events called Y run Z command"
+#     * "X minutes before events called Y run Z"
 #     * Parse this schedule on every calendar change, but only schedule for the next 6? hours?
 # [*] Scrape a site. Provide a URL and some selectors and then set an interval and have it alert you when your requested check happens.
 # [*] Sending good morning/day summary text
@@ -114,6 +114,7 @@ class Jarvis
     ::JarvisTriggerWorker.perform_async(trigger, trigger_data.to_json, scope.to_json)
   end
 
+  # TODO: Remove all of this. Jarvis should ONLY handle text/words.
   def self.execute_trigger(trigger, trigger_data={}, scope: {})
     trigger_data = ::BetterJsonSerializer.load(trigger_data) || trigger_data
     scope = ::BetterJsonSerializer.load(scope) || scope
@@ -217,7 +218,7 @@ class Jarvis
       remaining_words = @words.sub(Regexp.new("(?:\b(?:at|on)\b )?#{time_str}", :i), "").squish
     end
     timestamp = (scheduled_time || Time.current).in_time_zone(@user.timezone).iso8601
-    tasks = ::Jil::Executor.trigger(@user, :tell, { words: remaining_words, timestamp: timestamp })
+    tasks = ::Jil::Executor.trigger(@user, :tell, { words: remaining_words, timestamp: timestamp, full: @words })
     return tasks.last.last_message if tasks.any?(&:stop_propagation?)
     tasks.select { |t| t.trigger_type == :tell }.last&.tap { |task|
       return task.last_message

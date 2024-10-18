@@ -7,15 +7,9 @@ class JarvisScheduleWorker
       ::Jil::Schedule.add_job(schedule)
     end
 
-    tasks = ::JarvisTask.enabled.where(next_trigger_at: ..Time.current) # deprecated
     jils = ::JilTask.enabled.where(next_trigger_at: ..Time.current)
 
-    tasks.find_each do |task|
-      ::Jarvis::Execute.call(task) # These are run inline
-    end
-    jils.find_each do |task|
-      task.execute
-    end
+    jils.find_each(&:execute)
   rescue StandardError => e
     SlackNotifier.err(e)
     raise
