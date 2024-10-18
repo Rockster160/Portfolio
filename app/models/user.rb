@@ -35,8 +35,8 @@ class User < ApplicationRecord
   has_many :lists, through: :user_lists
   has_many :sent_emails, class_name: "Email", foreign_key: :sent_by_id, dependent: :destroy
   has_many :emails, dependent: :destroy
-  has_many :scheduled_triggers, class_name: "JilScheduledTrigger", dependent: :destroy
-  has_many :prompts, class_name: "JilPrompt", dependent: :destroy
+  has_many :scheduled_triggers, dependent: :destroy
+  has_many :prompts, dependent: :destroy
   has_many :action_events
   has_many :user_surveys
   has_many :user_survey_responses

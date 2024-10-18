@@ -3,7 +3,7 @@ class JilScheduleWorker
   sidekiq_options retry: false
 
   def perform
-    ::JilScheduledTrigger.not_scheduled.upcoming_soon.find_each do |schedule|
+    ::ScheduledTrigger.not_scheduled.upcoming_soon.find_each do |schedule|
       ::Jil::Schedule.add_job(schedule)
     end
 

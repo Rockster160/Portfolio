@@ -8,7 +8,7 @@ module Jil::Schedule
   end
 
   def add_schedule(user, execute_at, trigger, data)
-    schedule = ::JilScheduledTrigger.create(
+    schedule = ::ScheduledTrigger.create(
       user_id: ::User.id(user),
       trigger: trigger,
       execute_at: execute_at.presence || ::Time.current,
@@ -51,7 +51,7 @@ module Jil::Schedule
   end
 
   def far_future?(schedule)
-    schedule.execute_at > ::JilScheduledTrigger::REDIS_OFFSET.from_now
+    schedule.execute_at > ::ScheduledTrigger::REDIS_OFFSET.from_now
   end
 
   def similar_time?(time1, time2, coverage=6.seconds)
