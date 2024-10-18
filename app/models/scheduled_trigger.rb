@@ -1,6 +1,6 @@
 # == Schema Information
 #
-# Table name: jil_scheduled_triggers
+# Table name: scheduled_triggers
 #
 #  id         :bigint           not null, primary key
 #  data       :jsonb            not null
@@ -12,7 +12,7 @@
 #  updated_at :datetime         not null
 #  user_id    :bigint           not null
 #
-class JilScheduledTrigger < ApplicationRecord
+class ScheduledTrigger < ApplicationRecord
   REDIS_OFFSET = 10.minutes
   belongs_to :user
 
@@ -23,7 +23,7 @@ class JilScheduledTrigger < ApplicationRecord
     return all if search_string.squish.then { |str| str.blank? || str == "*" }
     trigger, _rest = search_string.split(":", 2)
 
-    schedules = ::JilScheduledTrigger.where(trigger: trigger)
+    schedules = ::ScheduledTrigger.where(trigger: trigger)
     schedules.select do |schedule|
       ::SearchBreakMatcher.new(search_string, { trigger => schedule.data}).match?
     end

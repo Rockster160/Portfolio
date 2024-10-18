@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_10_17_220253) do
+ActiveRecord::Schema[7.1].define(version: 2024_10_18_061735) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -210,15 +210,6 @@ ActiveRecord::Schema[7.1].define(version: 2024_10_17_220253) do
     t.index ["league_id"], name: "index_bowling_sets_on_league_id"
   end
 
-  create_table "cache_shares", force: :cascade do |t|
-    t.bigint "user_id"
-    t.bigint "jarvis_cache_id"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["jarvis_cache_id"], name: "index_cache_shares_on_jarvis_cache_id"
-    t.index ["user_id"], name: "index_cache_shares_on_user_id"
-  end
-
   create_table "climbs", force: :cascade do |t|
     t.bigint "user_id"
     t.text "data"
@@ -311,6 +302,23 @@ ActiveRecord::Schema[7.1].define(version: 2024_10_17_220253) do
     t.index ["user_id"], name: "index_emails_on_user_id"
   end
 
+  create_table "executions", force: :cascade do |t|
+    t.bigint "user_id"
+    t.bigint "jil_task_id"
+    t.integer "status", default: 0
+    t.jsonb "input_data"
+    t.text "code"
+    t.jsonb "ctx"
+    t.datetime "started_at", default: -> { "now()" }
+    t.datetime "finished_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.integer "auth_type"
+    t.integer "auth_type_id"
+    t.index ["jil_task_id"], name: "index_executions_on_jil_task_id"
+    t.index ["user_id"], name: "index_executions_on_user_id"
+  end
+
   create_table "flash_cards", id: :serial, force: :cascade do |t|
     t.integer "batch_id"
     t.string "title", limit: 255
@@ -352,116 +360,6 @@ ActiveRecord::Schema[7.1].define(version: 2024_10_17_220253) do
     t.text "results"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
-  end
-
-  create_table "jarvis_caches", force: :cascade do |t|
-    t.bigint "user_id"
-    t.jsonb "data"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.string "key"
-    t.index ["user_id"], name: "index_jarvis_caches_on_user_id"
-  end
-
-  create_table "jarvis_pages", force: :cascade do |t|
-    t.bigint "user_id"
-    t.jsonb "blocks"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_jarvis_pages_on_user_id"
-  end
-
-  create_table "jarvis_tasks", force: :cascade do |t|
-    t.bigint "user_id"
-    t.text "name"
-    t.text "cron"
-    t.integer "trigger", default: 0
-    t.jsonb "last_ctx"
-    t.datetime "last_trigger_at"
-    t.datetime "next_trigger_at"
-    t.jsonb "tasks"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.text "input"
-    t.integer "output_type", default: 1
-    t.integer "sort_order"
-    t.boolean "enabled", default: true
-    t.uuid "uuid", default: -> { "uuid_generate_v4()" }
-    t.jsonb "return_data", default: "{\"data\":null}"
-    t.text "output_text"
-    t.text "listener"
-    t.index ["user_id"], name: "index_jarvis_tasks_on_user_id"
-  end
-
-  create_table "jil_executions", force: :cascade do |t|
-    t.bigint "user_id"
-    t.bigint "jil_task_id"
-    t.integer "status", default: 0
-    t.jsonb "input_data"
-    t.text "code"
-    t.jsonb "ctx"
-    t.datetime "started_at", default: -> { "now()" }
-    t.datetime "finished_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.integer "auth_type"
-    t.integer "auth_type_id"
-    t.index ["jil_task_id"], name: "index_jil_executions_on_jil_task_id"
-    t.index ["user_id"], name: "index_jil_executions_on_user_id"
-  end
-
-  create_table "jil_prompts", force: :cascade do |t|
-    t.text "question"
-    t.jsonb "params"
-    t.jsonb "options"
-    t.jsonb "response"
-    t.integer "answer_type"
-    t.bigint "task_id"
-    t.bigint "user_id"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["task_id"], name: "index_jil_prompts_on_task_id"
-    t.index ["user_id"], name: "index_jil_prompts_on_user_id"
-  end
-
-  create_table "jil_scheduled_triggers", force: :cascade do |t|
-    t.bigint "user_id", null: false
-    t.text "trigger", null: false
-    t.jsonb "data", default: {}, null: false
-    t.datetime "execute_at", null: false
-    t.text "jid"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.text "name"
-    t.index ["user_id"], name: "index_jil_scheduled_triggers_on_user_id"
-  end
-
-  create_table "jil_tasks", force: :cascade do |t|
-    t.uuid "uuid", default: -> { "uuid_generate_v4()" }
-    t.bigint "user_id"
-    t.integer "sort_order"
-    t.text "name"
-    t.text "cron"
-    t.text "listener"
-    t.text "code"
-    t.boolean "enabled", default: true
-    t.datetime "next_trigger_at"
-    t.datetime "last_trigger_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_jil_tasks_on_user_id"
-  end
-
-  create_table "jil_usages", force: :cascade do |t|
-    t.bigint "user_id"
-    t.integer "executions"
-    t.date "date"
-    t.integer "icount"
-    t.jsonb "data"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["user_id", "date"], name: "index_jil_usages_on_user_id_and_date", unique: true
-    t.index ["user_id"], name: "index_jil_usages_on_user_id"
   end
 
   create_table "lines", id: :serial, force: :cascade do |t|
@@ -600,6 +498,18 @@ ActiveRecord::Schema[7.1].define(version: 2024_10_17_220253) do
     t.datetime "captured_at", precision: nil
   end
 
+  create_table "prompts", force: :cascade do |t|
+    t.text "question"
+    t.jsonb "params"
+    t.jsonb "options"
+    t.jsonb "response"
+    t.integer "answer_type"
+    t.bigint "user_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_prompts_on_user_id"
+  end
+
   create_table "recipe_favorites", id: :serial, force: :cascade do |t|
     t.integer "recipe_id"
     t.integer "favorited_by_id"
@@ -638,6 +548,18 @@ ActiveRecord::Schema[7.1].define(version: 2024_10_17_220253) do
     t.string "description"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
+  end
+
+  create_table "scheduled_triggers", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "trigger", null: false
+    t.jsonb "data", default: {}, null: false
+    t.datetime "execute_at", null: false
+    t.text "jid"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.text "name"
+    t.index ["user_id"], name: "index_scheduled_triggers_on_user_id"
   end
 
   create_table "survey_question_answer_results", id: :serial, force: :cascade do |t|
@@ -706,6 +628,39 @@ ActiveRecord::Schema[7.1].define(version: 2024_10_17_220253) do
     t.text "name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+  end
+
+  create_table "tasks", force: :cascade do |t|
+    t.uuid "uuid", default: -> { "uuid_generate_v4()" }
+    t.bigint "user_id"
+    t.integer "sort_order"
+    t.text "name"
+    t.text "cron"
+    t.text "listener"
+    t.text "code"
+    t.boolean "enabled", default: true
+    t.datetime "next_trigger_at"
+    t.datetime "last_trigger_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_tasks_on_user_id"
+  end
+
+  create_table "user_caches", force: :cascade do |t|
+    t.bigint "user_id"
+    t.jsonb "data"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "key"
+    t.index ["user_id"], name: "index_user_caches_on_user_id"
+  end
+
+  create_table "user_dashboards", force: :cascade do |t|
+    t.bigint "user_id"
+    t.jsonb "blocks"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_user_dashboards_on_user_id"
   end
 
   create_table "user_lists", id: :serial, force: :cascade do |t|

@@ -1,6 +1,6 @@
 # == Schema Information
 #
-# Table name: jil_tasks
+# Table name: tasks
 #
 #  id              :bigint           not null, primary key
 #  code            :text
@@ -16,7 +16,7 @@
 #  updated_at      :datetime         not null
 #  user_id         :bigint
 #
-class JilTask < ApplicationRecord
+class Task < ApplicationRecord
   include ::Orderable
   belongs_to :user, required: true
 

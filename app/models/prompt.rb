@@ -1,6 +1,6 @@
 # == Schema Information
 #
-# Table name: jil_prompts
+# Table name: prompts
 #
 #  id          :bigint           not null, primary key
 #  answer_type :integer
@@ -10,10 +10,9 @@
 #  response    :jsonb
 #  created_at  :datetime         not null
 #  updated_at  :datetime         not null
-#  task_id     :bigint
 #  user_id     :bigint
 #
-class JilPrompt < ApplicationRecord
+class Prompt < ApplicationRecord
   belongs_to :user, inverse_of: :prompts
 
   scope :unanswered, -> { where(response: nil) }

@@ -1,6 +1,6 @@
 # == Schema Information
 #
-# Table name: jarvis_caches
+# Table name: user_caches
 #
 #  id         :bigint           not null, primary key
 #  data       :jsonb
@@ -9,7 +9,7 @@
 #  updated_at :datetime         not null
 #  user_id    :bigint
 #
-class JarvisCache < ApplicationRecord
+class UserCache < ApplicationRecord
   serialize :data, coder: ::SafeJsonSerializer
   # TODO: Encrypt `data` in the next life
   attr_accessor :skip_save_set

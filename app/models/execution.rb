@@ -1,6 +1,6 @@
 # == Schema Information
 #
-# Table name: jil_executions
+# Table name: executions
 #
 #  id           :bigint           not null, primary key
 #  auth_type    :integer
@@ -16,7 +16,7 @@
 #  jil_task_id  :bigint
 #  user_id      :bigint
 #
-class JilExecution < ApplicationRecord
+class Execution < ApplicationRecord
   belongs_to :user
   belongs_to :jil_task, optional: true
 

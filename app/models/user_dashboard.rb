@@ -1,6 +1,6 @@
 # == Schema Information
 #
-# Table name: jarvis_pages
+# Table name: user_dashboards
 #
 #  id         :bigint           not null, primary key
 #  blocks     :jsonb
@@ -8,7 +8,7 @@
 #  updated_at :datetime         not null
 #  user_id    :bigint
 #
-class JarvisPage < ApplicationRecord
+class UserDashboard < ApplicationRecord
   include IndifferentJsonb
   belongs_to :user
 
