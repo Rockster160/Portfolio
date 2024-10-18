@@ -13,7 +13,7 @@
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
 #  auth_type_id :integer
-#  task_id  :bigint
+#  task_id      :bigint
 #  user_id      :bigint
 #
 class Execution < ApplicationRecord

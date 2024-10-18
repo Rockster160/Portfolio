@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_10_18_061735) do
+ActiveRecord::Schema[7.1].define(version: 2024_10_18_065743) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -304,7 +304,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_10_18_061735) do
 
   create_table "executions", force: :cascade do |t|
     t.bigint "user_id"
-    t.bigint "jil_task_id"
+    t.bigint "task_id"
     t.integer "status", default: 0
     t.jsonb "input_data"
     t.text "code"
@@ -315,7 +315,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_10_18_061735) do
     t.datetime "updated_at", null: false
     t.integer "auth_type"
     t.integer "auth_type_id"
-    t.index ["jil_task_id"], name: "index_executions_on_jil_task_id"
+    t.index ["task_id"], name: "index_executions_on_task_id"
     t.index ["user_id"], name: "index_executions_on_user_id"
   end
 
