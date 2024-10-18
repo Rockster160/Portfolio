@@ -71,6 +71,10 @@ class Jil::Methods::Global < Jil::Methods::Base
     @jil.user.caches.dig_set(*([key, var].compact_blank), val) && val
   end
 
+  def ref(var)
+    var
+  end
+
   def get(var)
     @jil.ctx.dig(:vars, var.to_s.to_sym, :value)
   end

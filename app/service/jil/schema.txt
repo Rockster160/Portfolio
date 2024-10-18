@@ -19,6 +19,7 @@
   #functionParams(content([Keyword.Item]))::Array # Used in Function TASKS, not inline functions
   #if("IF" content "DO" content "ELSE" content)::Any
   #ternary(Boolean|Any " ? " Any " : " Any)::Any # Useful for setting vars
+  #ref(Any)::Any // Variable reference, returns the variable itself, does NOT evaluate it.
   #get(String)::Any // Variable reference
   #set!(String "=" Any)::Any
   #get_cache(String:"Cache Key" Any)::Any // Could Cache.get be a non-object Class? Doesn't show up in return-types, but is still a class for organization
