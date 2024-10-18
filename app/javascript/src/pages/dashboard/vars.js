@@ -63,7 +63,7 @@ let audioCtx = new (window.AudioContext || window.webkitAudioContext || window.a
 // volume of the tone. Default is 1, off is 0.
 // type of tone. Possible values are sine, square, sawtooth, triangle, and custom. Default is sine.
 // callback to use on end of tone
-let beep = function(duration, frequency, volume, type, callback) {
+export let beep = function(duration, frequency, volume, type, callback) {
   var oscillator = audioCtx.createOscillator()
   var gainNode = audioCtx.createGain()
 
@@ -79,7 +79,7 @@ let beep = function(duration, frequency, volume, type, callback) {
   oscillator.stop(audioCtx.currentTime + ((duration || 500) / 1000))
 }
 
-let beeps = function(beepsArray) {
+export let beeps = function(beepsArray) {
   let currentIndex = 0
 
   function playNextBeep() {
