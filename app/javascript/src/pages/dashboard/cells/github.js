@@ -102,13 +102,13 @@ import { dash_colors, beeps } from "../vars"
     const day = now.getDate()
     let hours = now.getHours()
     const minutes = now.getMinutes()
-    const ampm = hours >= 12 ? "pm" : "am"
+    const ampm = hours >= 12 ? "p" : "a"
     hours = hours % 12 || 12
 
     const formattedHours = String(hours).padStart(2, "0")
     const formattedMinutes = String(minutes).padStart(2, "0")
 
-    return `${day}/${month} ${formattedHours}:${formattedMinutes}${ampm}`
+    return `${day}-${formattedHours}:${formattedMinutes}${ampm}`
   }
 
   let deployMonitor = function() {
