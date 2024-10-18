@@ -1,5 +1,5 @@
 Rails.application.config.after_initialize do
-  if defined?(Rails::Server)
+  if defined?(Puma) && !Rails.env.test? && !Rails.const_defined?("Console")
     ::Jil.trigger(User.me, :startup, {
       merge: `git rev-parse HEAD`.strip,
       **(`git log --no-merges -n 1 --format="%H|%an|%s"`.strip.then { |raw|
