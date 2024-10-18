@@ -11,18 +11,18 @@
 <div class="config-wrapper">
   <div class="config">
     <div class="btns">
-      <a class="btn" href="<%= jil_tasks_path %>">All Tasks</a>
+      <a class="btn" href="<%= tasks_path %>">All Tasks</a>
     </div>
     <br>
 
-    <%= form_for @task, html: { id: "jil_task_form" } do |f| %>
+    <%= form_for @task, html: { id: "task_form" } do |f| %>
       <%= f.hidden_field :uuid, disabled: true %>
       <%= f.text_field :name, placeholder: :Title %>
       <%= f.text_field :cron, placeholder: :Cron %>
       <%= f.text_field :listener, placeholder: :Listener %>
 
       <div class="btns">
-        <div class="btn btn-run" href="<%= run_jil_task_path(@task.id || :new) %>">Run</div>
+        <div class="btn btn-run" href="<%= run_task_path(@task.id || :new) %>">Run</div>
         <div class="btn btn-history disabled">History</div>
         <div class="btn btn-config" data-modal="#config-modal">Config</div>
         <div class="btn btn-save">Save</div>
@@ -75,6 +75,6 @@
 
 <script type="text/javascript">
   window.load_code = <%= raw @task.id.present? ? "String.raw`#{@task.code.gsub(/\`/, "\\\\`")}`" : "undefined" %>;
-  window.load_schema = `<%= JilTask.schema(current_user) %>`
+  window.load_schema = `<%= Task.schema(current_user) %>`
 </script>
 <%= javascript_include_tag "jil", type: "module", defer: true %>

@@ -5,9 +5,9 @@ export default function saveUtils() {
   // TODO:
   // If new task, and has value for either cron or listening:
   //   Show message saying it will not run until given a name and saved
-  let jilTaskNameField = document.querySelector("#jil_task_name")
-  let jilTaskForm = document.querySelector("#jil_task_form")
-  let newTask = jilTaskForm.classList.contains("new_jil_task")
+  let jilTaskNameField = document.querySelector("#task_name")
+  let jilTaskForm = document.querySelector("#task_form")
+  let newTask = jilTaskForm.classList.contains("new_task")
 
   // Initial code load
   if (newTask || window.load_code === undefined) {
@@ -29,7 +29,7 @@ export default function saveUtils() {
     const codeField = document.createElement("input")
     codeField.setAttribute("class", "jil-temp-code")
     codeField.setAttribute("type", "hidden")
-    codeField.setAttribute("name", "jil_task[code]")
+    codeField.setAttribute("name", "task[code]")
     codeField.setAttribute("value", code)
     jilTaskForm.appendChild(codeField)
 

@@ -13,12 +13,12 @@
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
 #  auth_type_id :integer
-#  jil_task_id  :bigint
+#  task_id  :bigint
 #  user_id      :bigint
 #
 class Execution < ApplicationRecord
   belongs_to :user
-  belongs_to :jil_task, optional: true
+  belongs_to :task, optional: true
 
   scope :finished, -> { where.not(finished_at: nil) }
 
@@ -48,7 +48,7 @@ class Execution < ApplicationRecord
       :id,
       :created_at,
       :updated_at,
-      :jil_task_id,
+      :task_id,
       :user_id,
       :input_data,
       :code,

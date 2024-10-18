@@ -18,7 +18,7 @@ class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 
   has_many :api_keys, dependent: :destroy
-  has_many :jil_tasks, dependent: :destroy
+  has_many :tasks, dependent: :destroy
   has_many :bowling_leagues, dependent: :destroy
   has_many :climbs, dependent: :destroy
   has_many :folders, dependent: :destroy

@@ -1,45 +1,45 @@
-class JilTasksController < ApplicationController
+class TasksController < ApplicationController
   before_action :authorize_user
   skip_before_action :verify_authenticity_token # User is authorized and we don't want to prevent JS
 
   def index
-    # @tasks = current_user.jil_tasks.ordered
-    @tasks = current_user.jil_tasks.order("last_trigger_at DESC NULLS LAST")
+    # @tasks = current_user.tasks.ordered
+    @tasks = current_user.tasks.order("last_trigger_at DESC NULLS LAST")
   end
 
   def show
-    @task = current_user.jil_tasks.find(params[:id])
+    @task = current_user.tasks.find(params[:id])
 
     render "form", layout: "jil"
   end
 
   def new
-    @task = current_user.jil_tasks.new
+    @task = current_user.tasks.new
 
     render "form", layout: "jil"
   end
 
   def create
-    @task = current_user.jil_tasks.create(jil_task_params)
+    @task = current_user.tasks.create(task_params)
 
     render json: {
       data: @task.serialize,
-      url: jil_task_path(@task),
+      url: task_path(@task),
     }
   end
 
   def update
-    @task = current_user.jil_tasks.find(params[:id])
-    @task.update(jil_task_params)
+    @task = current_user.tasks.find(params[:id])
+    @task.update(task_params)
 
     render json: {
       data: @task.serialize,
-      url: jil_task_path(@task),
+      url: task_path(@task),
     }
   end
 
   def run
-    @task = current_user.jil_tasks.find_by(id: params[:id]) unless params[:id] == "new"
+    @task = current_user.tasks.find_by(id: params[:id]) unless params[:id] == "new"
     code = params[:code]
     data = params[:data]
 
@@ -50,8 +50,8 @@ class JilTasksController < ApplicationController
 
   private
 
-  def jil_task_params
-    params.require(:jil_task).permit(
+  def task_params
+    params.require(:task).permit(
       :name,
       :cron,
       :listener,

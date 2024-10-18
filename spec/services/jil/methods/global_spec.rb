@@ -218,7 +218,7 @@ RSpec.describe Jil::Methods::Global do
       JIL
     }
     let!(:task) {
-      ::JilTask.create(listener: "magic:listener", user: user, code: task_code)
+      ::Task.create(listener: "magic:listener", user: user, code: task_code)
     }
     let(:code) {
       <<-JIL

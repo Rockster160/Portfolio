@@ -43,8 +43,8 @@ Rails.application.routes.draw do
 
   post "webhooks/tesla_local" => "webhooks#tesla_local"
   post "jil/trigger/:trigger" => "webhooks#jil"
-  post "webhooks/jil" => "webhooks#execute_jil_task"
-  get "webhooks/jil" => "webhooks#execute_jil_task"
+  post "webhooks/jil" => "webhooks#execute_task"
+  get "webhooks/jil" => "webhooks#execute_task"
   post "webhooks/battery" => "webhooks#battery"
   post "webhooks/report" => "webhooks#report"
   get "webhooks/local_ping" => "webhooks#local_ping"
@@ -129,16 +129,16 @@ Rails.application.routes.draw do
     get :change_clothes, action: :load_character
   end
 
-  resources :jil_tasks do
+  resources :tasks do
     post :run, on: :member
   end
   namespace :jil do
-    # get :/, action: :index, controller: :jil_tasks
+    # get :/, action: :index, controller: :tasks
     resources :jarvis_cache, path: :cache
   end
   # Must be after `jil` namespace so it doesn't overwrite existing routes
-  post "jil/:uuid" => "webhooks#execute_jil_task"
-  get "jil/:uuid" => "webhooks#execute_jil_task"
+  post "jil/:uuid" => "webhooks#execute_task"
+  get "jil/:uuid" => "webhooks#execute_task"
 
   resources :climbs do
     patch :mark, on: :collection

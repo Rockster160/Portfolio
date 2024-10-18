@@ -42,7 +42,7 @@ class Jil::Executor
     ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data }), 1000))
 
     user_ids.map { |user_id|
-      user_tasks = ::JilTask.enabled.ordered.where(user_id: user_id).distinct
+      user_tasks = ::Task.enabled.ordered.where(user_id: user_id).distinct
       stopped = false
       user_tasks.by_listener(trigger).filter_map { |task|
         next if stopped
@@ -81,8 +81,8 @@ class Jil::Executor
     # Need to store auth, but need to remember to pass the id as well
     @user = user
     @ctx = { vars: {}, input_data: input_data, return_val: nil, state: :running, output: [] }
-    @execution = ::JilExecution.create(user: user, code: code, ctx: @ctx, jil_task: task)
-    ::JilExecution.order(started_at: :desc).where(user: user, jil_task: task).offset(5).compact_all
+    @execution = ::JilExecution.create(user: user, code: code, ctx: @ctx, task: task)
+    ::JilExecution.order(started_at: :desc).where(user: user, task: task).offset(5).compact_all
     @lines = ::Jil::Parser.from_code(code)
   end
 
@@ -103,12 +103,12 @@ class Jil::Executor
       result: @ctx[:return_val],
       timestamp: @execution&.last_completion_time || "Waiting...",
     }
-    ::JilTasksChannel.send_to(@user, @execution&.jil_task&.uuid || :new, data)
+    ::TasksChannel.send_to(@user, @execution&.task&.uuid || :new, data)
   end
 
   def execute_all
     Time.use_zone(@user.timezone) {
-      @execution.jil_task&.update(last_trigger_at: Time.current)
+      @execution.task&.update(last_trigger_at: Time.current)
       broadcast!
       @ctx[:time_start] = Time.current
       state = :started

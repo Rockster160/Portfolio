@@ -59,7 +59,7 @@ RSpec.describe Jil::Executor do
 
   describe "Btn Receiver" do
     let!(:receiver) {
-      JilTask.create(
+      Task.create(
         name: "Btn Receiver",
         listener: "websocket:receive",
         code: receiver_code,
@@ -182,7 +182,7 @@ RSpec.describe Jil::Executor do
 
   describe "Duration" do
     let!(:func) {
-      JilTask.create(
+      Task.create(
         name: "Duration",
         listener: 'function("From" Date?:Start "To" Date:End "Figs" Numeric(1):SigFigs)::String',
         code: func_code,

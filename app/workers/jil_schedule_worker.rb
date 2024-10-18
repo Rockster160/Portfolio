@@ -7,7 +7,7 @@ class JilScheduleWorker
       ::Jil::Schedule.add_job(schedule)
     end
 
-    jils = ::JilTask.enabled.where(next_trigger_at: ..Time.current)
+    jils = ::Task.enabled.where(next_trigger_at: ..Time.current)
 
     jils.find_each(&:execute)
   rescue StandardError => e

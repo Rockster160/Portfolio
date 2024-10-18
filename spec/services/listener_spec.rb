@@ -1,4 +1,4 @@
-RSpec.describe JilTask do
+RSpec.describe Task do
   include ActiveJob::TestHelper
 
   let(:admin) { User.me }
@@ -17,7 +17,7 @@ RSpec.describe JilTask do
 
   context "with basic triggers" do
     before do
-      JilTask.create([
+      Task.create([
         { user: other_user, listener: "travel" },
         { user: admin, listener: "travel" },
         { user: admin, listener: "travel:depart:home" },
@@ -46,7 +46,7 @@ RSpec.describe JilTask do
       ])
 
       @listeners = []
-      allow_any_instance_of(JilTask).to receive(:execute) do |task, data|
+      allow_any_instance_of(Task).to receive(:execute) do |task, data|
         @listeners << task.listener
       end
     end

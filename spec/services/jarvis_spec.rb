@@ -313,7 +313,7 @@ RSpec.describe Jarvis do
     end
   end
 
-  # Garage is now a Jil task, so would have to pull that in to get it working.
+  # Garage is now a task, so would have to pull that in to get it working.
   # context "with garage" do
   #   before do
   #     allow(DataStorage).to receive(:[]).with(any_args).and_return("unimportant")

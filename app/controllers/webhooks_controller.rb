@@ -1,7 +1,7 @@
 class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :post_params, except: [:report]
-  before_action :none_unless_user, only: [:execute_jil_task, :jil, :command]
+  before_action :none_unless_user, only: [:execute_task, :jil, :command]
   before_action :none_unless_admin, only: [:battery, :report, :speak, :tesla_local]
   skip_before_action :pretty_logit, only: [:report] # Lots of data here
 
@@ -29,7 +29,7 @@ class WebhooksController < ApplicationController
   # TODO: Remove after updating Saya's app
   def saya
     return head :unauthorized unless current_user.id == 34226
-    task = current_user.jil_tasks.find_by(name: "Protein & Carb Tracker")
+    task = current_user.tasks.find_by(name: "Protein & Carb Tracker")
     request_logger.log_request("\n\e[36m\e[4m#{task.name}\e[0m")
     task.execute
 
@@ -56,8 +56,8 @@ class WebhooksController < ApplicationController
     head :ok
   end
 
-  def execute_jil_task
-    task = current_user.jil_tasks.find_by(uuid: params[:uuid])
+  def execute_task
+    task = current_user.tasks.find_by(uuid: params[:uuid])
 
     if task.present?
       exe = task.match_run(:webhook, { params: json_params }, force: true)

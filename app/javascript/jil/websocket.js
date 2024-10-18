@@ -3,8 +3,8 @@ import Rails from "@rails/ujs"
 import consumer from "../src/channels/consumer"
 Rails.start()
 
-const jilTaskForm = document.querySelector("#jil_task_form")
-const taskUuid = document.querySelector("#jil_task_uuid").value || "new"
+const jilTaskForm = document.querySelector("#task_form")
+const taskUuid = document.querySelector("#task_uuid").value || "new"
 const errorsDiv = document.querySelector(".results .error")
 const resultsDiv = document.querySelector(".results .result")
 const outputDiv = document.querySelector(".results .output")
@@ -22,7 +22,7 @@ const isBlank = (val) => {
 const show = (val) => (typeof val === "string" || isBlank(val)) ? val : JSON.stringify(val)
 
 consumer.subscriptions.create({
-  channel: "JilTasksChannel", id: taskUuid,
+  channel: "TasksChannel", id: taskUuid,
 },{
   received: function(data) {
     Statement.all.forEach(item => item.flash(false))

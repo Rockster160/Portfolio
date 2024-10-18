@@ -22,7 +22,7 @@ class Task < ApplicationRecord
 
   before_save :set_next_cron
   after_create { reload } # Needed to retrieve the generated uuid on the current instance in memory
-  orderable sort_order: :desc, scope: ->(task) { task.user.jil_tasks }
+  orderable sort_order: :desc, scope: ->(task) { task.user.tasks }
 
   has_many :jil_executions
 
@@ -45,7 +45,7 @@ class Task < ApplicationRecord
   }
 
   def self.links
-    ids.each { |id| puts "https://ardesian.com/jil_tasks/#{id}" };nil
+    ids.each { |id| puts "https://ardesian.com/tasks/#{id}" };nil
   end
 
   def self.last_exe
@@ -85,7 +85,7 @@ class Task < ApplicationRecord
   end
 
   def self.schema(user=nil)
-    tasks = user.present? ? user.jil_tasks.functions : none
+    tasks = user.present? ? user.tasks.functions : none
     funcs = "[Custom]\n" + tasks.filter_map { |task|
       match = task.listener.match(func_regex)
       next unless match.present?
