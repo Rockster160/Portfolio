@@ -169,9 +169,9 @@ import { dash_colors, scaleVal } from "../vars"
     //   renderCell(this)
     // }),
     refreshInterval: Time.minutes(10),
-    // reloader: function() {
-      // uptimeData(cell)
+    reloader: function() {
+      uptimeData(cell)
       // cell.ws.send("request")
-    // },
+    },
   })
 })()
