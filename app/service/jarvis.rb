@@ -163,7 +163,7 @@ class Jarvis
       remaining_words = @words.sub(Regexp.new("(?:\b(?:at|on)\b )?#{time_str}", :i), "").squish
     end
     timestamp = (scheduled_time || Time.current).in_time_zone(@user.timezone).iso8601
-    tasks = ::Jil::Executor.trigger(@user, :tell, { words: remaining_words, timestamp: timestamp, full: @words })
+    tasks = ::Jil.trigger_now(@user, :tell, { words: remaining_words, timestamp: timestamp, full: @words })
     return tasks.last.last_message if tasks.any?(&:stop_propagation?)
     tasks.select { |t| t.trigger_type == :tell }.last&.tap { |task|
       return task.last_message

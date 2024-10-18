@@ -1,6 +1,6 @@
 Rails.application.config.after_initialize do
   if defined?(Rails::Server)
-    ::Jil::Executor.async_trigger(User.me, :startup, {
+    ::Jil.trigger(User.me, :startup, {
       merge: `git rev-parse HEAD`.strip,
       **(`git log --no-merges -n 1 --format="%H|%an|%s"`.strip.then { |raw|
         hash, author, message = raw.split("|")

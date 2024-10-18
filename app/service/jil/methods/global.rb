@@ -124,12 +124,12 @@ class Jil::Methods::Global < Jil::Methods::Base
 
     return unless friend&.contacts&.where(friend_id: @jil.user.id, permit_relay: true)&.present?
 
-    ::Jil::Executor.trigger(friend, :relay, @jil.cast(data, :Hash).merge(from: @jil.user.username))
+    ::Jil.trigger_now(friend, :relay, @jil.cast(data, :Hash).merge(from: @jil.user.username))
     nil
   end
 
   def triggerNow(scope, data)
-    ::Jil::Executor.trigger(@jil.user, scope, data).map(&:serialize_with_execution)
+    ::Jil.trigger_now(@jil.user, scope, data).map(&:serialize_with_execution)
   end
 
   def triggerWith(scope, date, data)

@@ -188,7 +188,7 @@ class Email < ApplicationRecord
 
     success = save!
 
-    tasks = ::Jil::Executor.trigger(user_id, :email, serialize)
+    tasks = ::Jil.trigger_now(user_id, :email, serialize)
     return if tasks.any?(&:stop_propagation?)
     reload # Since Jil updates them out of scope
 

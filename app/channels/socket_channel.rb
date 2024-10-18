@@ -47,6 +47,6 @@ class SocketChannel < ApplicationCable::Channel
     receive_data = data.reverse_merge(params).except(:action).merge(connection_state: state || "unset")
     logit(receive_data)
 
-    ::Jil::Executor.async_trigger(current_user, :websocket, receive_data)
+    ::Jil.trigger(current_user, :websocket, receive_data)
   end
 end

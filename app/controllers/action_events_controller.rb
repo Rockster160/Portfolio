@@ -125,7 +125,7 @@ class ActionEventsController < ApplicationController
 
   def create
     event = ActionEvent.create(event_params)
-    ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: :added))
+    ::Jil.trigger(event.user_id, :event, event.serialize.merge(action: :added))
     ActionEventBroadcastWorker.perform_async(event.id)
 
     respond_to do |format|
@@ -151,7 +151,7 @@ class ActionEventsController < ApplicationController
     @event = ActionEvent.find(params[:id])
 
     @event.update(event_params)
-    ::Jil::Executor.async_trigger(@event.user_id, :event, @event.serialize.merge(action: :changed))
+    ::Jil.trigger(@event.user_id, :event, @event.serialize.merge(action: :changed))
     ActionEventBroadcastWorker.perform_async(@event.id, false)
   end
 
@@ -159,7 +159,7 @@ class ActionEventsController < ApplicationController
     event = current_user.action_events.find(params[:id])
 
     if event.destroy
-      ::Jil::Executor.async_trigger(event.user_id, :event, event.serialize.merge(action: :removed))
+      ::Jil.trigger(event.user_id, :event, event.serialize.merge(action: :removed))
     else
       flash[:alert] = "Failed to destroy event."
     end
