@@ -181,6 +181,13 @@ Keyboard.on(["Tab", "Shift+Tab"], (evt) => {
     }
   }
 })
+// Open config
+Keyboard.on("Meta+k", (evt) => {
+  if (activeInput() || Dropdown.shown()) { return }
+  evt.preventDefault()
+
+  Modal.toggle("#config-modal") // Toggle off doesn't work because modal open is activeInput
+})
 // Save
 Keyboard.on("Meta+s", (evt) => {
   evt.preventDefault()

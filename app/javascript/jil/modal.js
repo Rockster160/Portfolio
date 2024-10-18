@@ -6,6 +6,15 @@ export default class Modal {
     document.querySelector(id)?.classList?.add("show")
   }
 
+  static toggle(id) {
+    const modal = document.querySelector(id)
+    if (modal?.classList?.contains("show")) {
+      Modal.hide()
+    } else {
+      Modal.show(id)
+    }
+  }
+
   static hide(data) {
     document.querySelectorAll(".modal").forEach(modal => {
       modal.id !== data?.except && modal.classList.remove("show")
