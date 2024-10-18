@@ -1,5 +1,6 @@
 class JilTasksController < ApplicationController
   before_action :authorize_user
+  skip_before_action :verify_authenticity_token # User is authorized and we don't want to prevent JS
 
   def index
     # @tasks = current_user.jil_tasks.ordered

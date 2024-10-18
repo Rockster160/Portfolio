@@ -55,7 +55,7 @@ export default function saveUtils() {
       })
     })
   }).onError(async (evt) => {
-    Toast.error(evt.detail || "[SAVE] Unknown Error")
+    Toast.error((evt.detail && JSON.stringify(evt.detail)) || "[SAVE] Unknown Error")
     document.querySelector(".results .error").innerText = evt.detail || "[SAVE] Unknown Error"
   })
 
@@ -74,7 +74,7 @@ export default function saveUtils() {
       // })
     })
   }).onError(async (evt) => {
-    Toast.error(evt.detail || "[Run] Unknown Error")
+    Toast.error((evt.detail && JSON.stringify(evt.detail)) || "[Run] Unknown Error")
     document.querySelector(".results .error").innerText = evt.detail || "[RUN] Unknown Error"
   })
 

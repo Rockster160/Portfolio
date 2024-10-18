@@ -41,32 +41,29 @@ class Jil::Executor
 
     ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data }), 1000))
 
-    # Possibly big bug - if one user "stops" a task and there are multiple users here, the remaining
-    #   users will not have that event trigger. This is not desired. However, because it's unlikely
-    #   there will be multiple users here, not worrying about it for now.
-    user_tasks = ::JilTask.enabled.ordered.where(user_id: user_ids).distinct
-    stopped = false
-    user_tasks.by_listener(trigger).filter_map { |task|
-      next if stopped
-      ran = nil
-      begin
-        ran = task.match_run(trigger, trigger_data) && task
-      rescue => e
-        unless Rails.env.production?
-          load("/Users/rocco/.pryrc"); source_puts "[#{e.class}] #{e.message}"
+    user_ids.each do |user_id|
+      user_tasks = ::JilTask.enabled.ordered.where(user_id: user_id).distinct
+      stopped = false
+      user_tasks.by_listener(trigger).filter_map { |task|
+        next if stopped
+        ran = nil
+        begin
+          ran = task.match_run(trigger, trigger_data) && task
+        rescue => e
+          unless Rails.env.production?
+            load("/Users/rocco/.pryrc"); source_puts "[#{e.class}] #{e.message}"
+          end
+          nil # Generic rescue
         end
-        nil # Generic rescue
-      end
-      ran&.tap { stopped = true if ran.stop_propagation? }
-    }.tap { |tasks|
-      if !stopped && trigger.to_sym == :command
-        user_ids.each do |user_id|
+        ran&.tap { stopped = true if ran.stop_propagation? }
+      }.tap { |tasks|
+        if !stopped && trigger.to_sym == :command
           trigger_data.deep_symbolize_keys!
           words = trigger_data.dig(:words) || trigger_data.dig(:command, :words)
           ::Jarvis.command(User.find(user_id), words)
         end
-      end
-    }
+      }
+    end
   end
 
   def self.async_call(user, code, input_data={}, task: nil, auth: nil)
