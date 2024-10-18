@@ -243,7 +243,7 @@ RSpec.describe Jil::Methods::Global do
         e2e54: { class: :Hash,    value: {"nest": {"data": {"foo": "listener"}}} },
         z54c9: { class: :Numeric, value: 1 },
       })
-      expect(::JilExecution.count).to eq(2)
+      expect(::Execution.count).to eq(2)
     end
   end
 end

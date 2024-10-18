@@ -81,8 +81,8 @@ class Jil::Executor
     # Need to store auth, but need to remember to pass the id as well
     @user = user
     @ctx = { vars: {}, input_data: input_data, return_val: nil, state: :running, output: [] }
-    @execution = ::JilExecution.create(user: user, code: code, ctx: @ctx, task: task)
-    ::JilExecution.order(started_at: :desc).where(user: user, task: task).offset(5).compact_all
+    @execution = ::Execution.create(user: user, code: code, ctx: @ctx, task: task)
+    ::Execution.order(started_at: :desc).where(user: user, task: task).offset(5).compact_all
     @lines = ::Jil::Parser.from_code(code)
   end
 

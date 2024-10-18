@@ -24,7 +24,7 @@ class Task < ApplicationRecord
   after_create { reload } # Needed to retrieve the generated uuid on the current instance in memory
   orderable sort_order: :desc, scope: ->(task) { task.user.tasks }
 
-  has_many :jil_executions
+  has_many :executions
 
   scope :enabled, -> { where(enabled: true) }
   scope :functions, -> {
@@ -49,11 +49,11 @@ class Task < ApplicationRecord
   end
 
   def self.last_exe
-    ::JilExecution.finished.order(:finished_at).last
+    ::Execution.finished.order(:finished_at).last
   end
 
   def self.last_error
-    ::JilExecution.finished.failed.order(:finished_at).last&.ctx&.then { |ctx|
+    ::Execution.finished.failed.order(:finished_at).last&.ctx&.then { |ctx|
       ctx = ctx.deep_symbolize_keys
       {
         timestamp: Time.zone.parse(ctx[:time_complete]),
@@ -105,7 +105,7 @@ class Task < ApplicationRecord
   end
 
   def last_execution
-    @last_execution ||= jil_executions.finished.order(:finished_at).last
+    @last_execution ||= executions.finished.order(:finished_at).last
   end
 
   def last_error
