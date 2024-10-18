@@ -56,6 +56,10 @@ elsif Rails.env.development?
   ]
 end
 
-Rails.application.reloader.to_prepare do
+if Rails.env.development?
+  Rails.application.reloader.to_prepare do
+    Sidekiq::Cron::Job.load_from_array!(cron_jobs)
+  end
+else
   Sidekiq::Cron::Job.load_from_array!(cron_jobs)
 end
