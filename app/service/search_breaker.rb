@@ -9,6 +9,12 @@ module SearchBreaker
     start:           /(?:^|\b)/,
   }
 
+  # SearchBreaker needs a "direct" match for finding a key/value that's immediately following the previous.
+  #   `deploy:>:start` # maybe?
+  #   `deploy>start` # immediate follow soft match
+  #   `deploy>::start` # exact match
+  #   `deploy::>start` # exact match (alternate?)
+
   def unwrap(str, parens: true, quotes: true)
     str = str.gsub(/(?:#{RX[:quot_str]})|(?:#{RX[:single_quot_str]})/, '\1') if quotes
     str = str.gsub(RX[:paren_wrap], '\1') if parens

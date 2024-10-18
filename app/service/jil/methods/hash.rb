@@ -103,11 +103,11 @@ class Jil::Methods::Hash < Jil::Methods::Base
 
   def splat(line)
     hash = token_val(line.objname)
-    line.args.flatten.map { |arg, idx|
+    line.args.flatten.each_with_object({}) { |(arg, idx), obj|
       @jil.cast(hash[@jil.cast(arg.arg, :String)], arg.cast).tap { |val|
-        set_value(arg.varname, val, type: arg.cast)
+        obj[arg.varname] = set_value(arg.varname, val, type: arg.cast)
       }
-    }.compact
+    }
   end
 end
 # [Hash]

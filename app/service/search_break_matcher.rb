@@ -6,6 +6,11 @@ class SearchBreakMatcher
     :regex_match_data,
   )
 
+  # SearchBreaker needs a "direct" match for finding a key/value that's immediately following the previous.
+  #   `deploy:>:start` # maybe?
+  #   `deploy>start` # immediate follow soft match
+  #   `deploy>::start` # exact match
+  #   `deploy::>start` # exact match (alternate?)
   DELIMITERS = {
     contains:     ":",
     exact:        "::",
