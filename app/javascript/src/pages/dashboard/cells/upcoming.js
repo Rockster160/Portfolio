@@ -23,7 +23,7 @@ import { dash_colors, text_height, clamp } from "../vars"
 
   cell = Cell.register({
     title: "Upcoming",
-    text: "\n\n\n" + Text.center(Text.red("== [FIXME] ==")),
+    text: "Loading...",
     data: { lines: [] },
     refreshInterval: Time.hour(),
     reloader: function() {
@@ -32,7 +32,9 @@ import { dash_colors, text_height, clamp } from "../vars"
     },
     onload: function() {
       cell.monitor = Monitor.subscribe("upcoming", {
-        connected: function() {},
+        connected: function() {
+          cell.monitor?.send({ request: "get" })
+        },
         disconnected: function() {},
         received: function(data) {
           if (data.data.lines) {
