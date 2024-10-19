@@ -108,7 +108,7 @@ import { dash_colors, beeps } from "../vars"
     const formattedHours = String(hours).padStart(2, "0")
     const formattedMinutes = String(minutes).padStart(2, "0")
 
-    return `${day}-${formattedHours}:${formattedMinutes}${ampm}`
+    return `${day}/${formattedHours}:${formattedMinutes}${ampm}`
   }
 
   let deployMonitor = function() {

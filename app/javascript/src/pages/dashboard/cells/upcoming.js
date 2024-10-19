@@ -28,8 +28,22 @@ import { dash_colors, text_height, clamp } from "../vars"
     refreshInterval: Time.hour(),
     reloader: function() {
       var cell = this
-
-      // cell.ws.send({ action: "request" })
+      cell.monitor?.send({ request: "get" })
+    },
+    onload: function() {
+      cell.monitor = Monitor.subscribe("upcoming", {
+        connected: function() {},
+        disconnected: function() {},
+        received: function(data) {
+          if (data.data.lines) {
+            cell.flash()
+            cell.data.lines = data.data.lines
+            renderLines()
+          } else {
+            console.log("Unknown data for Monitor.upcoming:", data)
+          }
+        },
+      })
     },
     // TODO: Change this into a monitor.
     // socket: Server.socket("UpcomingEventsChannel", function(msg) {
@@ -76,7 +90,7 @@ import { dash_colors, text_height, clamp } from "../vars"
       renderLines()
     },
     command: function(text) {
-      return window.open("https://ardesian.com/scheduled", "_blank")
+      // return window.open("https://ardesian.com/scheduled", "_blank")
     }
   })
 })()
