@@ -7,6 +7,7 @@ RSpec.describe Jarvis do
   end
 
   before do
+    Time.zone = User.timezone
     Timecop.freeze(Time.local(2022, 6, 24, 5, 45))
   end
 
@@ -512,6 +513,7 @@ RSpec.describe Jarvis do
       "in an hour and 20 minutes" => [Time.local(2022, 6, 24, 7, 05), "today at 7:05am"],
       "in an hour and a half" => [Time.local(2022, 6, 24, 7, 15), "today at 7:15am"],
       "in 3 and a half hours" => [Time.local(2022, 6, 24, 9, 15), "today at 9:15am"],
+      "in 3 hours and 30 minutes" => [Time.local(2022, 6, 24, 9, 15), "today at 9:15am"],
       "in 3.5 hours" => [Time.local(2022, 6, 24, 9, 15), "today at 9:15am"],
       "tonight" => [Time.local(2022, 6, 24, 22, 0), "today at 10pm"],
       "at 11:15 tomorrow" => [Time.local(2022, 6, 25, 11, 15), "tomorrow at 11:15am"],
