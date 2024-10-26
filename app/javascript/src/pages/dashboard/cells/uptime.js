@@ -138,7 +138,7 @@ import { dash_colors, scaleVal } from "../vars"
   var renderCell = function(cell) {
     cell.lines([
       ...uptimeLines(cell),
-      ...(cell.data.ws_lines || []),
+      ...(cell.data.ws_lines),
     ])
   }
 
@@ -147,7 +147,7 @@ import { dash_colors, scaleVal } from "../vars"
     text: "Loading...",
     data: {
       uptime_data: {},
-      ws_lines: {},
+      ws_lines: [],
       load_data: {},
     },
     onload: function() {
