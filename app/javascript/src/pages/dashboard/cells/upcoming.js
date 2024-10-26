@@ -28,12 +28,12 @@ import { dash_colors, text_height, clamp } from "../vars"
     refreshInterval: Time.hour(),
     reloader: function() {
       var cell = this
-      cell.monitor?.send({ request: "get" })
+      cell.monitor?.resync()
     },
     onload: function() {
       cell.monitor = Monitor.subscribe("upcoming", {
         connected: function() {
-          cell.monitor?.send({ request: "get" })
+          cell.monitor?.resync()
         },
         disconnected: function() {},
         received: function(data) {
