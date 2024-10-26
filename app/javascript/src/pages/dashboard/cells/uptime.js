@@ -165,6 +165,7 @@ import { dash_colors, scaleVal } from "../vars"
           cell.flash()
           if (data.loading) {
           } else {
+            console.log(data)
             cell.data.ws_lines = data.data.lines
             renderCell(cell)
           }
