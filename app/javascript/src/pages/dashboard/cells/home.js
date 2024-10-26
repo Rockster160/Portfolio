@@ -198,12 +198,12 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
   let getGarage = function() {
     cell.recent_garage = false
-    cell.garage_socket.send({ channel: "garage", request: "get" })
+    cell.garage_socket.send({ request: "get" })
 
     // If no response within 10 seconds, forget the current state
     clearTimeout(cell.garage_timeout)
     cell.garage_timeout = setTimeout(function() {
-      cell.garage_socket.send({ channel: "garage", request: "get" })
+      cell.garage_socket.send({ request: "get" })
       console.log("Timed out waiting for garage response");
       cell.data.garage.state = "unknown"
       renderLines()

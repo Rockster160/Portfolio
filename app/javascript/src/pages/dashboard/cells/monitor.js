@@ -32,6 +32,7 @@ export class Monitor {
 
   send(data) {
     console.log("send", data);
+    data.channel = this.uuid
     Monitor.socket.perform("broadcast", data)
   }
 
