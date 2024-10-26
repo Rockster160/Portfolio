@@ -58,6 +58,14 @@ export class Monitor {
     let callback = this.callbacks.received
     if (callback && typeof(callback) === "function") { callback.call(this, data) }
   }
+  do(action) {
+    let monitor = this
+    monitor.loading = true
+    Monitor.socket.perform(action, { id: monitor.id })
+  }
+  execute() { this.do("execute") } // Runs task with executing:true
+  refresh() { this.do("refresh") } // Runs task with executing:false
+  resync()  { this.do("resync")  } // Pulls most recent result without Running
 }
 // Defining after class to help race conditions
 Monitor.socket = consumer.subscriptions.create({
