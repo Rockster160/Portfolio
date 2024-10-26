@@ -158,7 +158,7 @@ import { dash_colors, scaleVal } from "../vars"
           }, 1000)
         },
         disconnected: function() {
-          renderLines()
+          renderCell(cell)
         },
         received: function(data) {
           clearTimeout(cell.websockets_timeout)
@@ -166,6 +166,7 @@ import { dash_colors, scaleVal } from "../vars"
           if (data.loading) {
           } else {
             cell.data.ws_lines = data.data.lines
+            renderCell(cell)
           }
         },
       })
