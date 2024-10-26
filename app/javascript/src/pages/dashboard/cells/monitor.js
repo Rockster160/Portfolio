@@ -1,6 +1,6 @@
 import consumer from "./../../../channels/consumer"
 
-// let socket = Monitor.subscribe(uuid, { // Does NOT open a new channel, just subscribes to the listener
+// let socket = Monitor.subscribe(channel, { // Does NOT open a new channel, just subscribes to the listener
 //   connected: function() {},
 //   disconnected: function() {},
 //   received: function(data) {},
@@ -11,16 +11,16 @@ export class Monitor {
   static #connected = false
   static #monitors = {}
 
-  constructor(uuid, callbacks) {
-    this.uuid = uuid
+  constructor(channel, callbacks) {
+    this.channel = channel
     this.callbacks = callbacks || {}
 
-    Monitor.#monitors[uuid] = Monitor.#monitors[uuid] || []
-    Monitor.#monitors[uuid].push(this)
+    Monitor.#monitors[channel] = Monitor.#monitors[channel] || []
+    Monitor.#monitors[channel].push(this)
   }
 
-  static subscribe(uuid, callbacks) {
-    let monitor = new Monitor(uuid, callbacks)
+  static subscribe(channel, callbacks) {
+    let monitor = new Monitor(channel, callbacks)
     if (Monitor.#connected) {
       monitor.connected()
     } else {
@@ -32,11 +32,11 @@ export class Monitor {
 
   send(data) {
     console.log("send", data);
-    data.channel = this.uuid
+    data.channel = this.channel
     Monitor.socket.perform("broadcast", data)
   }
 
-  static byUUID(uuid) { return Monitor.#monitors[uuid] || [] }
+  static byUUID(channel) { return Monitor.#monitors[channel] || [] }
 
   static all() { return Object.values(Monitor.#monitors).flat() }
 
@@ -61,7 +61,7 @@ export class Monitor {
   do(action) {
     let monitor = this
     monitor.loading = true
-    Monitor.socket.perform(action, { id: monitor.id })
+    Monitor.socket.perform(action, { id: monitor.id, channel: monitor.channel })
   }
   execute() { this.do("execute") } // Runs task with executing:true
   refresh() { this.do("refresh") } // Runs task with executing:false
