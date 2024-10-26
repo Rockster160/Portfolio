@@ -142,25 +142,6 @@ import { dash_colors, scaleVal } from "../vars"
     ])
   }
 
-  cell.websockets_socket = Monitor.subscribe("websockets", {
-    connected: function() {
-      setTimeout(function() {
-        cell.websockets_socket?.resync()
-      }, 1000)
-    },
-    disconnected: function() {
-      renderLines()
-    },
-    received: function(data) {
-      clearTimeout(cell.websockets_timeout)
-      cell.flash()
-      if (data.loading) {
-      } else {
-        cell.data.ws_lines = data.data.lines
-      }
-    },
-  })
-
   cell = Cell.register({
     title: "Uptime",
     text: "Loading...",
@@ -169,7 +150,26 @@ import { dash_colors, scaleVal } from "../vars"
       ws_lines: {},
       load_data: {},
     },
-    // onload: subscribeWebsockets,
+    onload: function() {
+      cell.websockets_socket = Monitor.subscribe("websockets", {
+        connected: function() {
+          setTimeout(function() {
+            cell.websockets_socket?.resync()
+          }, 1000)
+        },
+        disconnected: function() {
+          renderLines()
+        },
+        received: function(data) {
+          clearTimeout(cell.websockets_timeout)
+          cell.flash()
+          if (data.loading) {
+          } else {
+            cell.data.ws_lines = data.data.lines
+          }
+        },
+      })
+    },
     // started: function() {
       // cell.uptime_socket.reopen()
     // },
