@@ -121,8 +121,8 @@ import { dash_colors, beeps } from "../vars"
         let json = data.data || {}
         if (json.status == "deploying") {
           let timer = new Timer({ name: currentTime() })
-          timer.start.minutes += 2
-          timer.start.seconds += 30
+          timer.start.minutes += 1
+          timer.start.seconds += 50
           timer.go()
           cell.data.deploy_timers.unshift(timer)
           cell.data.deploy_timers = cell.data.deploy_timers.slice(0, 5)
