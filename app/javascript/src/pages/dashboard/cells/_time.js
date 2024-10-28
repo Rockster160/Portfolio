@@ -84,7 +84,7 @@ Time.durationFigs = function(left, sigFigs = 2) {
   Object.entries(timeLengths).forEach(([time, length]) => {
     if (length > left || durations.length >= sigFigs) return;
 
-    const count = Math.round(left / length);
+    const count = Math.floor(left / length);
     left -= count * length;
 
     durations.push(`${count}${time}`);
