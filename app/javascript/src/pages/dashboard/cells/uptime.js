@@ -152,7 +152,7 @@ import { dash_colors, scaleVal } from "../vars"
       const label = item.connected ? Text.green(name) : Text.red(name)
       return `${label} ${time}`
     })
-    let lines = []
+    let lines = [""]
     for (let i = 0; i < labels.length; i += 2) {
       lines.push(Text.justify(labels[i], labels[i + 1] || ""))
     }
