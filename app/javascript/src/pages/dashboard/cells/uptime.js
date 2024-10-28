@@ -143,7 +143,11 @@ import { dash_colors, scaleVal } from "../vars"
     const labels = ws_conns.map(item => {
       const timestamp = parseFloat(item.timestamp)*1000
       const duration = Time.durationFigs(now - timestamp).split(" ").map(s => s.padStart(3)).join(" ")
-      const time = Text.grey(duration.padStart(7))
+      let time = duration
+      if (duration.length < 4 && !duration.match(/\ds/)) {
+        time = `${time}  0s`
+      }
+      time = Text.grey(time.padStart(7))
       const name = item.channel.padEnd(7)
       const label = item.connected ? Text.green(name) : Text.red(name)
       return `${label} ${time}`
@@ -183,7 +187,6 @@ import { dash_colors, scaleVal } from "../vars"
           renderCell(cell)
         },
         received: function(data) {
-          clearTimeout(cell.websockets_timeout)
           cell.flash()
           if (data.loading) {
           } else {
