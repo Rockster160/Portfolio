@@ -135,19 +135,41 @@ import { dash_colors, scaleVal } from "../vars"
     return lines
   }
 
+  var wsConns = function() {
+    const ws_conns = cell.data.ws_conns
+    if (!ws_conns) { return [] }
+
+    const now = Time.now().getTime()
+    const labels = ws_conns.map(item => {
+      const timestamp = parseFloat(item.timestamp)*1000
+      const duration = Time.durationFigs(now - timestamp).split(" ").map(s => s.padStart(3)).join(" ")
+      const time = Text.grey(duration.padStart(7))
+      const name = item.channel.padEnd(7)
+      const label = item.connected ? Text.green(name) : Text.red(name)
+      return `${label} ${time}`
+    })
+    let lines = []
+    for (let i = 0; i < labels.length; i += 2) {
+      lines.push(Text.justify(labels[i], labels[i + 1] || ""))
+    }
+    return lines
+  }
+
   var renderCell = function(cell) {
     cell.lines([
       ...uptimeLines(cell),
-      ...(cell.data.ws_lines),
+      ...wsConns(),
     ])
   }
+
+  let tickTimer = undefined
 
   cell = Cell.register({
     title: "Uptime",
     text: "Loading...",
     data: {
       uptime_data: {},
-      ws_lines: [],
+      ws_conns: [],
       load_data: {},
     },
     onload: function() {
@@ -165,12 +187,13 @@ import { dash_colors, scaleVal } from "../vars"
           cell.flash()
           if (data.loading) {
           } else {
-            console.log(data)
-            cell.data.ws_lines = data.data.lines
+            cell.data.ws_conns = data.data.connections
             renderCell(cell)
           }
         },
       })
+      clearInterval(tickTimer)
+      tickTimer = setInterval(() => renderCell(cell), 1000)
     },
     // started: function() {
       // cell.uptime_socket.reopen()

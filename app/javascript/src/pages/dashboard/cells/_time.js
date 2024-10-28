@@ -68,6 +68,30 @@ Time.duration = function(ms) {
   }).join(":")
   // 03:43
 }
+Time.durationFigs = function(left, sigFigs = 2) {
+  left = Math.floor(left);
+  if (left < 1) return "<1s";
+
+  const timeLengths = {
+    w: Time.week(),
+    d: Time.day(),
+    h: Time.hour(),
+    m: Time.minute(),
+    s: Time.second(),
+  };
+
+  const durations = [];
+  Object.entries(timeLengths).forEach(([time, length]) => {
+    if (length > left || durations.length >= sigFigs) return;
+
+    const count = Math.round(left / length);
+    left -= count * length;
+
+    durations.push(`${count}${time}`);
+  });
+
+  return durations.join(" ");
+}
 Time.monthnames = function(format) {
   let full = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
   switch (format || "full") {
