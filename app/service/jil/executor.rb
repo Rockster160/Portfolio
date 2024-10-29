@@ -2,13 +2,7 @@ class Jil::Executor
   attr_accessor :user, :ctx, :lines
 
   def self.async_trigger(user, trigger, trigger_data={}, at: nil)
-    user_ids = (
-      case user
-      when ::User then [user.id]
-      when ::ActiveRecord::Relation then user.ids
-      else ::Array.wrap(user)
-      end
-    )
+    user_ids = ::User.ids(user)
 
     begin
       trigger_data = ::JSON.parse(trigger_data) if trigger_data.is_a?(::String)
@@ -25,13 +19,7 @@ class Jil::Executor
 
   def self.trigger(user, trigger, trigger_data={})
     # load("/Users/rocco/.pryrc"); source_puts "trigger:#{trigger} #{pretty_hash(trigger_data)}"
-    user_ids = (
-      case user
-      when ::User then [user.id]
-      when ::ActiveRecord::Relation then user.ids
-      else ::Array.wrap(user)
-      end
-    )
+    user_ids = ::User.ids(user)
 
     begin
       trigger_data = ::JSON.parse(trigger_data) if trigger_data.is_a?(::String)

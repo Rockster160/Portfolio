@@ -21,7 +21,7 @@ module Jil::Schedule
   end
 
   def broadcast(schedule, action)
-    # ::Jil.trigger(schedule.user, :schedule, schedule.serialize.merge(action: action))
+    ::Jil.trigger(schedule.user, :schedule, schedule.serialize.merge(action: action))
     schedule
   end
 

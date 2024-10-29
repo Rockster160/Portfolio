@@ -97,6 +97,14 @@ class User < ApplicationRecord
     user_or_id.is_a?(::User) ? user_or_id.id : user_or_id.to_i
   end
 
+  def self.ids(user_or_ids)
+    case user_or_ids
+    when ::User then [user_or_ids.id]
+    when ::ActiveRecord::Relation then user_or_ids.ids
+    else ::Array.wrap(user_or_ids)
+    end
+  end
+
   def account_has_data?
     self.class.reflections.values.find do |reflection|
       next unless reflection.is_a?(ActiveRecord::Reflection::HasManyReflection)
