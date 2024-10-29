@@ -3,8 +3,9 @@ return if ENV["LOCAL_QUEUE"] == "true"
 return unless defined?(Puma)
 return if Rails.env.test?
 return if Rails.const_defined?("Console")
-# Based on UTC time
+return if Rails.const_defined?("Rails::Command::RunnerCommand")
 
+# Based on UTC time
 every_minute = "* * * * *"
 every_5_minutes = "*/5 * * * *"
 every_hour = "0 * * * *"

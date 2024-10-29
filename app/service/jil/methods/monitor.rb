@@ -18,10 +18,16 @@ class Jil::Methods::Monitor < Jil::Methods::Base
   end
 
   def broadcast(name, param_blocks, loading)
-    data = param_blocks.inject({}) { |acc, hash| acc.merge(hash) }
-    data[:timestamp] = data[:timestamp].presence || ::Time.current.to_i
+    data = param_blocks.inject({}) { |acc, hash| acc.merge(hash) }.deep_symbolize_keys
     data[:id] = name
-    data.delete(:loading) # -- For some reason results in `undefined`
+    data[:timestamp] = (
+      case data[:timestamp]
+      when TrueClass then ::Time.current.to_i
+      when FalseClass then false
+      else data[:timestamp].to_i.then { |n| n == 0 ? ::Time.current.to_i : n }
+      end
+    )
+    data[:loading] = loading
 
     ::MonitorChannel.broadcast_to(@jil.user, data)
     { id: name }
