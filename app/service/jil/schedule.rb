@@ -17,6 +17,11 @@ module Jil::Schedule
     return unless schedule.persisted?
 
     add_job(schedule) unless far_future?(schedule)
+    broadcast(schedule, :created)
+  end
+
+  def broadcast(schedule, action)
+    ::Jil.trigger(schedule.user, :schedule, schedule.serialize.merge(action: action))
     schedule
   end
 
