@@ -11,5 +11,6 @@ class TriggerWorker
     ::Jil.trigger(schedule.user_id, schedule.trigger, schedule.data)
 
     schedule.destroy
+    ::Jil.trigger(schedule.user_id, :schedule, schedule.serialize.merge(action: :complete).except(:id))
   end
 end
