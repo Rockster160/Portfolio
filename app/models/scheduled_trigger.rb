@@ -33,6 +33,10 @@ class ScheduledTrigger < ApplicationRecord
     execute_at < 5.seconds.from_now # offset for minor async issues
   end
 
+  def delayed_trigger?
+    execute_at < created_at + 5.seconds
+  end
+
   def serialize
     {
       id: id,

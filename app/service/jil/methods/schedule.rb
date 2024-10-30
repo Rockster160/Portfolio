@@ -49,7 +49,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
     fix_params = params(details).compact_blank.reverse_merge(execute_at: ::Time.current)
     s = @jil.user.scheduled_triggers.create!(fix_params)
     ::Jil::Schedule.update(s) # Schedules the job
-    broadcast(s, :created)
+    ::Jil::Schedule.broadcast(s, :created)
     s.serialize
   end
 
@@ -57,7 +57,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
     schedules.find(schedule[:id]).tap { |s|
       s.update(params(details))
       ::Jil::Schedule.update(s)
-      broadcast(s, :updated)
+      ::Jil::Schedule.broadcast(s, :updated)
     }.serialize
   end
 
@@ -65,7 +65,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
     schedules.find_by(id: schedule[:id])&.tap { |s|
       ::Jil::Schedule.cancel(s)
       s.destroy
-      broadcast(s, :canceled)
+      ::Jil::Schedule.broadcast(s, :canceled)
     }&.serialize&.merge(canceled: true)&.except(:id)
   end
 
@@ -90,10 +90,6 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   end
 
   private
-
-  def broadcast(schedule, action)
-    ::Jil::Schedule.broadcast(schedule, action)
-  end
 
   def schedules
     @jil.user.scheduled_triggers

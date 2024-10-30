@@ -11,9 +11,7 @@ class TriggerWorker
     ::Jil.trigger(schedule.user_id, schedule.trigger, schedule.data)
 
     schedule.destroy
-    # Attempt to prevent snowball by only triggering if it was ACTUALLY scheduled, not just async.
-    return if schedule.execute_at < schedule.created_at + 1.minute
 
-    ::Jil.trigger_now(schedule.user_id, :schedule, schedule.serialize.merge(action: :complete).except(:id))
+    ::Jil::Schedule.broadcast(schedule, :completed)
   end
 end
