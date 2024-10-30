@@ -70,6 +70,12 @@ class Execution < ApplicationRecord
     (ctx || {}).deep_symbolize_keys[:output]
   end
 
+  def duration
+    return unless finished_at?
+
+    finished_at - started_at
+  end
+
   def last_completion_time
     Time.use_zone(user.timezone) { finished_at&.to_formatted_s(:compact_week_month_time_sec) }
   end

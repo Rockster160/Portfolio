@@ -18,6 +18,16 @@ class Jil::Executor
   end
 
   def self.trigger(user, trigger, trigger_data={})
+    if trigger.blank?
+      lines = caller.select { |line|
+        line.include?(Rails.root.to_s) || line.include?("_scripts")
+      }.map { |line|
+        line.gsub(/^.*?#{Rails.root}/, "").gsub(/(app)?\/app\//, "app/").gsub(":in `", " `").gsub(/(:\d+) .*?$/, '\1')
+      }.join("\n")
+      msg = "No trigger:```\n#{lines}\n```"
+      msg += "\n\n```\n#{JSON.pretty_generate(trigger_data)}\n```" if trigger_data.present?
+      SlackNotifier.notify(msg)
+    end
     # load("/Users/rocco/.pryrc"); source_puts "trigger:#{trigger} #{pretty_hash(trigger_data)}"
     user_ids = ::User.ids(user)
 
