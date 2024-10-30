@@ -28,6 +28,7 @@ class Jarvis::ScheduleParser < Jarvis::Action
   end
 
   def valid_words?
+    # context can still be overridden with `x time ago`
     time_str, @scheduled_time = Jarvis::Times.extract_time(@msg.downcase.squish, context: :future)
     return false unless @scheduled_time
 

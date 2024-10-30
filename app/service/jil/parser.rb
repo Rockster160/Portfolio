@@ -94,14 +94,10 @@ class Jil::Parser
                   "\e[#{COLORS[:string]}m",
                 ].join
               }
-            when /^\d+$/
-              col[:numeric, arg]
-            when /^(nil|null|true|false)$/
-              col[:constant, arg]
-            when /^\w+$/
-              col[:variable, arg]
-            else
-              col[:err, "<dunno>[Invalid String?]#{arg.inspect}</dunno>"]
+            when /^\d+$/ then col[:numeric, arg]
+            when /^(nil|null|true|false)$/ then col[:constant, arg] # reserved words
+            when /^\w+$/ then col[:variable, arg]
+            else col[:err, "<dunno>[Invalid String?]#{arg.inspect}</dunno>"]
             end
           # else col[:err, "<dunno>[#{arg.class}]#{arg.inspect}</dunno>"]
           end

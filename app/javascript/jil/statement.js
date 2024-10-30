@@ -315,6 +315,8 @@ export default class Statement {
       throw new Error("Name must match [_a-z0-9]")
     } else if (!newname.match(/^[_a-z]/)) {
       throw new Error("Name must begin with a lowercase letter!")
+    } else if (!newname.match(/^(nil|null|true|false)$/)) {
+      throw new Error("Name cannot be a reserved word!")
     } else if (Statement.nameTaken(newname, this)) {
       throw new Error("Name has already been taken!")
     }

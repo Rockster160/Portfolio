@@ -13,10 +13,12 @@ module Jarvis::Times
     day_words = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday, :morning, :night, :afternoon, :evening, :tonight]).map { |w| w.to_s.downcase.to_sym }
     day_words_regex = rx.words(day_words)
     time_words = [:second, :minute, :hour, :day, :week, :month, :year]
-    time_words_regex = rx.words(time_words, suffix: "s?")
-    iso8601_regex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-07:00/
-    time_str = words[/\b(in) (#{drx}|an?) #{time_words_regex}(( and)?( a)?( half)?)?( (and )?#{drx}( #{time_words_regex})?)?/]
-    time_str ||= words[/\b(in) (#{drx}|an?)( (and )?(a )?half( #{time_words_regex})?)?/]
+    rel_words_regex = rx.words(time_words, suffix: "s?")
+    iso8601_regex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-\d{2}:\d{2}/
+    and_some = /(?: (?:and )?(?:an? )?(#{drx})?(?: ?\bhalf\b ?)?(?: (#{rel_words_regex}))?)?/
+    time_words_regex = /(#{rel_words_regex})#{and_some}/
+    time_str = words[/\bin (#{drx}|an?) #{time_words_regex}(?: ?(#{drx}))?/]
+    time_str ||= words[/\bin (#{drx}|an?)#{and_some}(#{rel_words_regex})/]
     time_str ||= words[/(\b(?:on|next|last) )?(#{month_words_regex} \d{1,2}(\w{2})?(,? '?\d{2,4})? )?((in the )?(#{day_words_regex} ?)+ )?\b(at) \d+:?\d*( ?(am|pm))?( (#{day_words_regex} ?)+)?/]
     time_str ||= words[/(\b(?:on|next|last) )?#{month_words_regex} \d{1,2}(\w{2})?(,? '?\d{2,4})?/]
     time_str ||= words[/(\b(?:on|next|last))(?:^| )?\d{1,2}\/\d{1,2}(\/(\d{2}|\d{4})\b)?/]
@@ -42,11 +44,12 @@ module Jarvis::Times
           parsed_time += 12.hours
         end
       else
-        m = time_str.match(/in (#{drx}) (#{time_words_regex}) ?(?:and )?(\d*) ?(#{time_words_regex})?/)
+        m = time_str.match(/(#{drx})\s+(#{rel_words_regex})#{and_some}/)
         parsed_time = m&.to_a&.then { |_, n1, t1, n2, t2|
-          t = Time.current
-          t += (n1 || 1).to_f.send(t1 || :hours)
-          t += n2.to_i.send(t2 || :minutes)
+          interval = (n1 || 1).to_f.send(t1 || :hours)
+          interval += n2.to_i.send(t2 || :minutes)
+          interval = chronic_opts[:context] == :past ? -interval : interval
+          Time.current + interval
         }
       end
 
@@ -55,14 +58,21 @@ module Jarvis::Times
   end
 
   def safe_date_parse(timestamp, chronic_opts={})
+    # Force override the context if using `in x time` or `x time ago`
+    chronic_opts[:context] = :future if timestamp.match?(/^\s*in\b/)
+    chronic_opts[:context] = :past if timestamp.match?(/\b(from now|ago)\s*$/)
     opts = chronic_opts.reverse_merge(ambiguous_time_range: 8)
     ::Chronic.time_class = ::ActiveSupport::TimeZone.new("Mountain Time (US & Canada)")
-    ::Chronic.parse(timestamp, opts).then { |time|
-      next if time.nil?
+    ::Chronic.parse(timestamp, opts)&.then { |time|
       skip = timestamp.match?(/(a|p)m/) ? 24.hours : 12.hours
       time += skip while chronic_opts[:context] == :future && time < Time.current
       time -= skip while chronic_opts[:context] == :past && time > Time.current
       time
     }
+  rescue => e
+    ### Rescue various Chronic errors, specifically
+    # -- https://github.com/mojombo/chronic/issues/415
+    #   ::Chronic.parse("3 hours and 30 minutes before")
+    #   → NoMethodError: undefined method `start=' for nil:NilClass
   end
 end
