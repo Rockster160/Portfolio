@@ -21,6 +21,9 @@ module Jil::Schedule
   end
 
   def broadcast(schedule, action)
+    # Do not broadcast immediate triggers since many times it's just used as a function call
+    return schedule if schedule.execute_at.blank? || schedule.execute_at <= 1.minute.from_now
+
     ::Jil.trigger(schedule.user, :schedule, schedule.serialize.merge(action: action))
     schedule
   end

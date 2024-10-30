@@ -57,6 +57,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
     schedules.find(schedule[:id]).tap { |s|
       s.update(params(details))
       ::Jil::Schedule.update(s)
+      broadcast(s, :updated)
     }.serialize
   end
 
@@ -91,8 +92,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   private
 
   def broadcast(schedule, action)
-    hash = schedule.is_a?(::Hash) ? schedule : schedule.serialize
-    ::Jil.trigger(@jil.user, :schedule, hash.merge(action: action))
+    ::Jil::Schedule.broadcast(schedule, action)
   end
 
   def schedules
