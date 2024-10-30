@@ -27,8 +27,9 @@ class Jil::Executor
       msg = "No trigger:```\n#{lines}\n```"
       msg += "\n\n```\n#{JSON.pretty_generate(trigger_data)}\n```" if trigger_data.present?
       SlackNotifier.notify(msg)
+      return
     end
-    # load("/Users/rocco/.pryrc"); source_puts "trigger:#{trigger} #{pretty_hash(trigger_data)}"
+
     user_ids = ::User.ids(user)
 
     begin

@@ -8,6 +8,8 @@ module Jil::Schedule
   end
 
   def add_schedule(user, execute_at, trigger, data)
+    return unless trigger.present?
+
     schedule = ::ScheduledTrigger.create(
       user_id: ::User.id(user),
       trigger: trigger,

@@ -19,6 +19,8 @@ class ScheduledTrigger < ApplicationRecord
   scope :not_scheduled, -> { where(jid: nil) }
   scope :upcoming_soon, -> { where(execute_at: ..REDIS_OFFSET.from_now) }
 
+  validates :trigger, presence: true
+
   def self.break_searcher(search_string)
     return all if search_string.squish.then { |str| str.blank? || str == "*" }
     trigger, _rest = search_string.split(":", 2)
@@ -34,7 +36,7 @@ class ScheduledTrigger < ApplicationRecord
   end
 
   def delayed_trigger?
-    execute_at < created_at + 5.seconds
+    execute_at > created_at + 5.seconds
   end
 
   def serialize
