@@ -13,8 +13,8 @@
 <% end %>
 
 <div class="text-center" style="margin-bottom: 10px;">
-  <%= link_to "Pullups", pullups_action_events_path if current_user.admin? %>
-  <%= link_to "Calendar", calendar_action_events_path %>
+  <%= link_to "Calendar", calendar_action_events_path(request.query_parameters) %>
+  <%= link_to "Feelings", feelings_action_events_path %>
 </div>
 
 <div class="text-center">

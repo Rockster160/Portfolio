@@ -175,7 +175,7 @@ class ActionEventsController < ApplicationController
 
     ActionEventBroadcastWorker.perform_async
     ::RecentEventsBroadcast.call if event.present?
-    redirect_to action_events_path
+    redirect_to request.referrer || action_events_path
   end
 
   private
