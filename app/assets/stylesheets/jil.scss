@@ -67,12 +67,35 @@ body {
   line-height: 10px;
   text-align: center;
 }
+body:has(.title-bar) {
+  margin-top: 40px;
+}
 body:has(.env-banner) {
-  margin-top: 10px;
+  margin-top: 50px; // 40+10
 }
 
 .hidden { display: none !important; }
 .text-center { text-align: center; }
+
+.title-bar {
+  display: flex;
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  flex-direction: column;
+  justify-content: center;
+  z-index: 1000;
+  box-shadow: 0 2px 2px $grey-blue;
+  background: var(--input-bg);
+  height: 40px;
+  color: var(--body-bg);
+  font-weight: bold;
+  text-align: center;
+}
+body:has(.title-bar) .title-bar {
+  top: 10px;
+}
 
 .modal-wrapper {
   display: none;
@@ -152,20 +175,20 @@ body:has(.env-banner) {
         .syntax--numeric {
           color: #EDDD3D; // (17)
         }
-        .syntax--space { // Literally a space character
+        .syntax--space {
           position: relative;
 
           &:before {
-            content: "" ;
             position: absolute;
-            left: 50%;
             top: 50%;
+            left: 50%;
             transform: translate(-50%, -50%);
+            border-radius: 50%;
+            background: grey;
             width: 2px;
             height: 2px;
-            background: grey;
-            border-radius: 50%;
-          }
+            content: "" ;
+          } // Literally a space character
         }
       }
       .syntax--commented {
