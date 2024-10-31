@@ -13,7 +13,7 @@ class Jil::Methods::Custom < Jil::Methods::Base
       end
     end
 
-    task = @jil.user.tasks.functions.by_method_name(line.methodname).take
+    task = @jil.user.tasks.enabled.functions.by_method_name(line.methodname).take
     raise ::Jil::ExecutionError, "Undefined Method #{line.methodname}" if task.blank?
 
     task.execute(params: evalargs(line.args))&.result

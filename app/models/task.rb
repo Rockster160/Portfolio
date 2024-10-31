@@ -85,7 +85,7 @@ class Task < ApplicationRecord
   end
 
   def self.schema(user=nil)
-    tasks = user.present? ? user.tasks.functions : none
+    tasks = user.present? ? user.tasks.enabled.functions : none
     funcs = "[Custom]\n" + tasks.filter_map { |task|
       match = task.listener.match(func_regex)
       next unless match.present?

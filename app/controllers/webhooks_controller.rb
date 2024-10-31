@@ -57,7 +57,7 @@ class WebhooksController < ApplicationController
   end
 
   def execute_task
-    task = current_user.tasks.find_by(uuid: params[:uuid])
+    task = current_user.tasks.enabled.find_by(uuid: params[:uuid])
 
     if task.present?
       exe = task.match_run(:webhook, { params: json_params }, force: true)
