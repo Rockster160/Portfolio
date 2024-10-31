@@ -165,8 +165,8 @@
   .reverse!()
   .uniq(g)
   .uniq!(g)
-  .sort_by(enum_content)
-  .sort_by!(enum_content)
+  .sort_by(enum_content BR "" TAB ["ASC" "DESC"])
+  .sort_by!(enum_content BR "" TAB ["ASC" "DESC"])
   .sort(["Ascending" "Descending" "Reverse" "Random"])
   .sort!(["Ascending" "Descending" "Reverse" "Random"])
   .sample::Any

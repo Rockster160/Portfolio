@@ -64,7 +64,11 @@ class Jil::Methods::Array < Jil::Methods::Base
     when :select, :sort_by
       @jil.enumerate_array(token_val(line.objname), method) { |ctx|
         evalarg(line.arg, ctx)
-      }.map(&:first)
+      }.map(&:first).then { |arr|
+        next arr unless line.args.length == 2
+
+        evalarg(line.args.last).to_s.upcase.to_sym == :DESC ? arr.reverse : arr
+      }
     when :sort
       token_val(line.objname).sort_by.with_index { |val, idx|
         case evalarg(line.arg).to_sym
