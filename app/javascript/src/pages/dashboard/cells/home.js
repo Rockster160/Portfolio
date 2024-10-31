@@ -59,7 +59,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       return `${minutes}m`
     } else {
       const hours = Math.floor(elapsed / secondsInHour)
-      return `${hours > 99 ? "XX" : hours}h`
+      return hours > 99 ? Text.grey("--h") : `${String(hours).padStart(2)}h`
     }
   }
 
@@ -88,12 +88,12 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         }
       } else {
         flash(false)
-        first_row.push(Text.grey(" [ico ti ti-mdi-garage]? "))
+        first_row.push(Text.grey(" [ico ti ti-mdi-garage]?"))
       }
       first_row.push(shortAgo(cell.data.garage.timestamp / 1000))
     } else {
       flash(false)
-      first_row.push(Text.grey(" [ico ti ti-mdi-garage]? "))
+      first_row.push(Text.grey(" [ico ti ti-mdi-garage]?"))
     }
 
     if (cell.data.camera) {
@@ -104,7 +104,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         "Storage",
       ].forEach(location => {
         const data = cell.data.camera[location] || { at: "?", type: "?" }
-        let typeIcon = undefined
+        let typeIcon = Text.grey
         const locIcon = {
           Doorbell: "[ico ti ti-mdi-door]",
           Driveway: "[ico ti ti-fa-car]",
@@ -116,9 +116,8 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
           case "pet": typeIcon = Text.purple; break;
           case "vehicle": typeIcon = Text.yellow; break;
           case "motion": typeIcon = Text.grey; break;
-          default: typeIcon = Text.red
         }
-        const time = shortAgo(data.at) || Text.red("--")
+        const time = shortAgo(data.at) || "--"
 
         if (locIcon) {
           first_row.push(typeIcon(` ${locIcon}${time}`))
@@ -194,7 +193,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
     cell.lines(lines)
   }
-  setInterval(renderLines, 1000)
+  // setInterval(renderLines, 1000)
 
   let getGarage = function() {
     cell.recent_garage = false

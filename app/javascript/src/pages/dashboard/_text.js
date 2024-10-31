@@ -44,11 +44,18 @@ Text.overlay = function(top_text, bottom_text) {
 Text.justify = function(...args) {
   var width = single_width
   if (typeof args[0] == "number") { width = args.shift() }
+  if (args[0].includes("PMTS")) {
+    console.log("Justify", args)
+  }
 
   var text_length = Text.clean(args.join("")).length
   if (text_length > width) {
-    let remove = (text_length - width) + 1
-    args[args.length - 2] = args[args.length - 2].slice(0, -remove) + "…"
+    const remove = (text_length - width) + 1
+    const fullStr = args[args.length - 2]
+    const cleanStr = Text.clean(fullStr)
+    const cutStr = cleanStr.slice(0, -remove) + "…"
+
+    args[args.length - 2] = fullStr.replace(cleanStr, cutStr)
   }
   var spaces = (width - text_length) / (args.length - 1)
   spaces = spaces < 0 ? 0 : spaces
