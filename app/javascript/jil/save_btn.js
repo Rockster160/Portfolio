@@ -88,6 +88,10 @@ export default class SaveBtn {
     }
   }
 
+  click() {
+    this.btn.click()
+  }
+
   onClick(callback) {
     this.btn.addEventListener("click", async (evt) => this.save(callback))
     return this // For chaining

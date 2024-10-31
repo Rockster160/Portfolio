@@ -9,7 +9,7 @@ import History from "./history.js"
 import Mouse from "./mouse.js"
 import Modal from "./modal.js"
 import Keyboard from "./keyboard.js"
-import saveUtils from "./save_utils.js"
+import { setup, undo, redo } from "./save_utils.js"
 
 window.Schema = Schema
 window.Statement = Statement
@@ -17,23 +17,6 @@ window.History = History
 window.formSubmitting = false
 window.selected = null
 window.moveStatement = null
-Object.defineProperty(window, "formDirty", {
-  get() {
-    return this._formDirty;
-  },
-  set(value) {
-    document.querySelector(".btn-save").classList.toggle("btn-dirty", value)
-    this._formDirty = value;
-  }
-})
-
-History.record = function() {
-  if (History.add(Statement.toCode())) {
-    formDirty = !History.noChange()
-    console.log("Recorded: ", History.currentIdx)
-    document.querySelector(".code-preview").innerHTML = Statement.toCode(true)
-  }
-}
 
 const activeInput = (node) => {
   if (Dropdown.shown() || Modal.shown()) { return true }
@@ -89,10 +72,8 @@ const moveSelectionDown = () => {
   window.selected?.node?.scrollIntoViewIfNeeded()
 }
 
-saveUtils()
+setup()
 // const shx = new SyntaxHighlighter(document.querySelector("code.code-preview"))
-History.record() // Store initial state in history
-formDirty = false // Initial load should not dirty the state
 
 // Add a new function below/above the current selected or hovered one
 Keyboard.on(["Enter", "Shift+Enter"], (evt) => {
@@ -228,21 +209,15 @@ Keyboard.on(["Meta+v", "Meta+Shift+v"], async (evt) => {
 // Redo
 Keyboard.on("Meta+Shift+z", (evt) => {
   if (!activeInput()) {
-    const code = History.redo()
-    console.log("Redo", History.savedIdx, History.currentIdx)
-    if (code === undefined || code === null) { return }
-    Statement.reloadFromText(code)
-    formDirty = !History.noChange()
+    evt.preventDefault()
+    redo()
   }
 })
 // Undo
 Keyboard.on("Meta+z", (evt) => {
   if (!activeInput()) {
-    const code = History.undo()
-    console.log("Undo", History.savedIdx, History.currentIdx)
-    if (code === undefined || code === null) { return }
-    Statement.reloadFromText(code)
-    formDirty = !History.noChange()
+    evt.preventDefault()
+    undo()
   }
 })
 // ↓ opens the input dropdown menu to select different vars
