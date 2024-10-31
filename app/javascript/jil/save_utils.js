@@ -154,8 +154,12 @@ runBtn.onClick(async () => {
 })
 
 const enabledCheckbox = document.querySelector("input[name='task[enabled]'][type=checkbox]")
-const function setEnabled() {
+function setEnabled() {
   document.querySelector(".disabled-label").classList.toggle("hidden", enabledCheckbox.checked)
 }
 enabledCheckbox.addEventListener("change", setEnabled)
 setEnabled() // Set initial state
+
+jilTaskNameField.addEventListener("change", () => {
+  document.querySelector(".task-name").innerText = jilTaskNameField.value
+})

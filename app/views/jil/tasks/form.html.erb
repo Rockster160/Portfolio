@@ -1,5 +1,5 @@
 <div class="title-bar">
-  <%= @task.name %>
+  <span class="task-name"><%= @task.name %></span>
 </div>
 
 <%= form_for [:jil, @task], html: { id: "task_form" } do |f| %>
