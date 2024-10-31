@@ -59,7 +59,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       return `${minutes}m`
     } else {
       const hours = Math.floor(elapsed / secondsInHour)
-      return hours > 99 ? Text.grey("--h") : `${String(hours).padStart(2)}h`
+      return hours > 99 ? Text.grey("--h") : `${hours}h`
     }
   }
 
