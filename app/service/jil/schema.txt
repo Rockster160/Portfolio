@@ -231,7 +231,7 @@
   !.run(Date?)
 [Email]
   #find(String|Numeric)
-  !#search(String)::Array
+  #search(Text "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array
   !#create("To" TAB String BR "Subject" TAB String BR Text "Deliver?" Boolean)
   .to::String
   .from::String

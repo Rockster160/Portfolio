@@ -10,6 +10,13 @@ class Jil::Methods::Email < Jil::Methods::Base
     @jil.user.emails.find(id)
   end
 
+  def search(q, limit, order)
+    limit = (limit.presence || 50).to_i.clamp(1..100)
+    scoped = @jil.user.emails.query(q, { in: "in:" }).page(1).per(limit)
+    scoped = scoped.order(created_at: order) if [:asc, :desc].include?(order.to_s.downcase.to_sym)
+    scoped.map(&:jil_serialize)
+  end
+
   def to(email_data)
     email(email_data).to
   end

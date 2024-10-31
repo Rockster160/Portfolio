@@ -23,6 +23,8 @@ class Jil::Methods::Base
   end
 
   def parse_unwrap_string(arg)
+    return "\n" if arg == "\"\\\\n\"" # Hacky hacky to fix joining/splitting by newlines
+
     unwrap = arg[1..-2]
     escaped = unwrap.gsub(/\\n/, "\\\\\n") # Raw new lines from textareas
     unescaped = escaped.gsub(/\\+/) { |f| "\\"*(f.length-1) }

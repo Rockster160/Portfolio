@@ -10,13 +10,13 @@ class ApplicationRecord < ActiveRecord::Base
     # where(build_query(hash, "NOT ILIKE", join), *hash.values)
     where(
       # Dumb PG removes empty values when querying for a NOT for some reason
-      hash.map { |k, v| "(#{k}::TEXT NOT ILIKE ? OR #{k} IS NULL)" }.join(" #{join} "),
+      hash.map { |k, v| "(\"#{k}\"::TEXT NOT ILIKE ? OR \"#{k}\" IS NULL)" }.join(" #{join} "),
       *hash.values
     )
   end
 
   def self.build_query(hash, point, join_with=:AND)
-    hash.map { |k, v| "#{k}::TEXT #{point} ?" }.join(" #{join_with} ")
+    hash.map { |k, v| "\"#{k}\"::TEXT #{point} ?" }.join(" #{join_with} ")
   end
 
   def self.search_scope
@@ -66,7 +66,7 @@ class ApplicationRecord < ActiveRecord::Base
 
     not_ilike(search_indexed("%#{q}%"), :AND)
   }
-  scope :query, ->(q) {
+  scope :query, ->(q, extra_breakers={}, data_only: false) {
     built = search_scope
     data = q.is_a?(Hash) ? q : SearchParser.call(
       q,
@@ -79,10 +79,10 @@ class ApplicationRecord < ActiveRecord::Base
       similar: "~",
       before: "before:",
       after: "after:",
-      aliases: {
-        ":": "=",
-      }
+      aliases: { ":": "=" },
+      **extra_breakers,
     )
+    break data if data_only
     #   ~   - similar? (95% text match?)
 
     data.dig(:terms)&.each { |word| built = built.search(word) }
@@ -96,6 +96,11 @@ class ApplicationRecord < ActiveRecord::Base
 
     data.dig(:props, :not_contains, :terms)&.each { |word| built = built.unsearch(word) }
     data.dig(:props, :not_exact, :terms)&.each { |word| built = built.not_ilike(search_indexed(word)) }
+
+    extra_breakers.each do |breaker_key, breaker_val|
+      # Must have custom scopes defined on the model to handle these
+      data.dig(:props, breaker_key, :terms)&.each { |word| built = built.send(breaker_key, word) }
+    end
 
     search_terms.each do |alt_name, col_name|
       data.dig(:props, :contains, :props, alt_name)&.each { |word| built = built.ilike(col_name => "%#{word}%") }

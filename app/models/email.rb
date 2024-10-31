@@ -32,18 +32,23 @@ class Email < ApplicationRecord
   scope :unread,       -> { where(read_at: nil) }
   scope :read,         -> { where.not(read_at: nil) }
   scope :failed,       -> { where.not(blob: nil).where(from: nil, to: nil) }
-  scope :search,       ->(str) {
-    str = "%#{str}%"
-    where("
-      emails.from ILIKE :str OR
-      emails.to ILIKE :str OR
-      emails.subject ILIKE :str OR
-      emails.text_body ILIKE :str
-    ", str: str)
-    # Maybe also search attachment names?
+  scope :in, ->(*mailboxes) {
+    mailboxes = Array.wrap(mailboxes).flatten
+    next mailboxes.inject(self) { |obj, method| obj.in(method) } unless Array.wrap(mailboxes).one?
+    case mailboxes.first.to_sym
+    when :inbox    then inbound.not_archived
+    when :sent     then outbound
+    when :read     then read
+    when :unread   then unread
+    when :archived then archived
+    when :failed   then failed
+    when :all      then all
+    else none
+    end
   }
+  search_terms :id, :from, :to, :subject, text: :text_body
 
-  scope :order_chrono, -> { order(created_at: :desc) }
+  scope :ordered, -> { order(created_at: :desc) }
 
   def self.from_mail(mail, attaches=[])
     new.from_mail(mail, attaches)
