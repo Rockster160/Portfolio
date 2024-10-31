@@ -36,12 +36,18 @@ class Jil::Methods::Array < Jil::Methods::Base
     when :dig then token_val(line.objname).send(method, *enum_content(line.args))
     when :get then token_val(line.objname)[@jil.cast(evalarg(line.arg), :Numeric)]
     when :pop! then token_val(line.objname).pop
-    when :shift then token_val(line.objname).dup.tap(&:shift)
-    when :shift! then token_val(line.objname).shift
     when :push then token_val(line.objname).dup.push(evalarg(line.arg))
     when :push! then token_val(line.objname).push(evalarg(line.arg))
-    when :unshift then token_val(line.objname).dup.unshift(evalarg(line.arg))
-    when :unshift! then token_val(line.objname).unshift(evalarg(line.arg))
+    when :append then token_val(line.objname).dup.push(evalarg(line.arg))
+    when :append! then token_val(line.objname).push(evalarg(line.arg))
+    when :prepend then token_val(line.objname).dup.unshift(evalarg(line.arg))
+    when :prepend! then token_val(line.objname).unshift(evalarg(line.arg))
+    when :firstN then token_val(line.objname).first(evalarg(line.arg))
+    when :lastN then token_val(line.objname).last(evalarg(line.arg))
+    when :sliceN then token_val(line.objname).slice(*evalargs(line.args))
+    when :slice then token_val(line.objname).slice(evalarg(line.arg)..)
+    when :shift then token_val(line.objname).dup.tap { |a| a.shift(evalarg(line.arg)) }
+    when :shift! then token_val(line.objname).shift(evalarg(line.arg))
     when :set
       idx, val = *evalargs(line.args)
       arr = token_val(line.objname).dup

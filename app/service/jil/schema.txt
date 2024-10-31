@@ -139,9 +139,17 @@
   .pop!::Any
   .push(Any)
   .push!(Any)
-  .shift!::Any
-  .unshift!(Any)
-  .unshift(Any)
+  .shift(Numeric)
+  .shift!(Numeric)::Any
+  .prepend(Any)
+  .prepend!(Any)
+  .append(Any)
+  .append!(Any)
+  .slice("From:" Numeric)
+  .sliceN("From:" Numeric "Take:" Numeric)
+  .firstN(Numeric)
+  .lastN(Numeric)
+  .fill(Any)
   .shuffle
   .each(enum_content)
   .select(enum_content)::Array
