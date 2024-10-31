@@ -2,24 +2,29 @@
   <%= @task.name %>
 </div>
 
-<div class="modal-wrapper">
-  <div class="modal" id="config-modal" tabindex="-1">
-    <div class="status"></div>
-    <div class="close"><i class="ti ti-fa-close"></i></div>
-    <div class="modal-content">
-      <code spellcheck=false contenteditable=true data-language=jil class="code-preview"></code>
+<%= form_for [:jil, @task], html: { id: "task_form" } do |f| %>
+  <div class="modal-wrapper">
+    <div class="modal" id="config-modal" tabindex="-1">
+      <div class="status"></div>
+      <div class="close"><i class="ti ti-fa-close"></i></div>
+      <div class="modal-content">
+        Enabled:
+        <%= f.label :enabled, class: :switch do %>
+          <%= f.check_box :enabled %>
+          <span class="slider"></span>
+        <% end %>
+        <code spellcheck=false contenteditable=true data-language=jil class="code-preview"></code>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="config-wrapper">
-  <div class="config">
-    <div class="btns">
-      <a class="btn" href="<%= jil_tasks_path %>">All Tasks</a>
-    </div>
-    <br>
-
-    <%= form_for [:jil, @task], html: { id: "task_form" } do |f| %>
+  <div class="config-wrapper">
+    <div class="config">
+      <div class="btns">
+        <a class="btn" href="<%= jil_tasks_path %>">All Tasks</a>
+        <span class="disabled-label <%= 'hidden' if @task.enabled? %>">Disabled</span>
+      </div>
+      <br>
       <%= f.hidden_field :uuid, disabled: true %>
       <%= f.text_field :name, placeholder: :Title %>
       <%= f.text_field :cron, placeholder: :Cron %>
@@ -31,9 +36,9 @@
         <div class="btn btn-config" data-modal="#config-modal">Config</div>
         <div class="btn btn-save">Save</div>
       </div>
-    <% end %>
+    </div>
   </div>
-</div>
+<% end %>
 
 <div class="wrapper">
   <div id="reference-dropdown" class="hidden"><ul></ul></div>

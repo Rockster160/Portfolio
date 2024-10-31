@@ -56,6 +56,7 @@ class Jil::TasksController < ApplicationController
       :cron,
       :listener,
       :code,
+      :enabled,
     )
   end
 end

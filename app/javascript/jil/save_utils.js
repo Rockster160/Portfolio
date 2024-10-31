@@ -152,3 +152,10 @@ runBtn.onClick(async () => {
   Toast.error((evt.detail && JSON.stringify(evt.detail)) || "[Run] Unknown Error")
   document.querySelector(".results .error").innerText = evt.detail || "[RUN] Unknown Error"
 })
+
+const enabledCheckbox = document.querySelector("input[name='task[enabled]'][type=checkbox]")
+const function setEnabled() {
+  document.querySelector(".disabled-label").classList.toggle("hidden", enabledCheckbox.checked)
+}
+enabledCheckbox.addEventListener("change", setEnabled)
+setEnabled() // Set initial state
