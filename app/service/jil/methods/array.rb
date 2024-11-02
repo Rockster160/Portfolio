@@ -84,8 +84,8 @@ class Jil::Methods::Array < Jil::Methods::Base
       set_value(token, execute(line, method.to_s[..-2].to_sym))
     when :find
       @jil.enumerate_array(token_val(line.objname), method) { |ctx|
-        evalarg(line.arg, ctx)
-      }.first
+        evalarg(line.arg, ctx).presence
+      }&.first
     else
       if line.objname.match?(/^[A-Z]/)
         send(method, token_val(line.objname), enum_content(line.args))
