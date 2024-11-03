@@ -193,7 +193,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
 
     cell.lines(lines)
   }
-  // setInterval(renderLines, 1000)
+  setInterval(renderLines, Time.second())
 
   let getGarage = function() {
     cell.recent_garage = false
