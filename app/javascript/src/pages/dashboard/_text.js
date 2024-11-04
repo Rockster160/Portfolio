@@ -44,9 +44,6 @@ Text.overlay = function(top_text, bottom_text) {
 Text.justify = function(...args) {
   var width = single_width
   if (typeof args[0] == "number") { width = args.shift() }
-  if (args[0].includes("PMTS")) {
-    console.log("Justify", args)
-  }
 
   var text_length = Text.clean(args.join("")).length
   if (text_length > width) {
@@ -298,8 +295,8 @@ Text.filterOrder = function(text, options, transformer) {
 }
 
 
-Text.prototype.center = function(opt_text) {
-  return Text.center(this.text || opt_text, this.width)
+Text.prototype.center = function(opt_text, spacer) {
+  return Text.center(this.text || opt_text, this.width, spacer)
 }
 Text.prototype.justify = function(...args) {
   return Text.justify(...[this.width].concat(args))

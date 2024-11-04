@@ -21,15 +21,60 @@ import { dash_colors, text_height, clamp } from "../vars"
     content.scroll({ top: cell.data.scroll * text_height })
   }
 
+  function merchantName(name) {
+    return name
+      .replace(/Amazon web services/i, "AWS")
+      .replace(/Amazon/i, "AMZ")
+      .replace(/Disney Plus/i, "Disney+")
+      .replace(/\.com/i, "")
+      .replace(/ inc\b/i, "")
+      .replace(/ #\d+/, "")
+  }
+
+  function dateLine(date) {
+    return Text.center(` ${date.toDateString()} `, null, "-")
+  }
+
+  function parseTransactionLines() {
+    if (!cell.data.transactions) { return }
+
+    let lastDateLine = dateLine(new Date())
+    cell.data.lines = []
+    cell.data.transactions.map(trans => {
+      const { merchant, amount, account, timestamp, email_id } = trans
+      const time = new Date(timestamp)
+      const transDateLine = dateLine(time)
+
+      if (lastDateLine !== transDateLine) {
+        lastDateLine = transDateLine
+        cell.data.lines.push(lastDateLine)
+      }
+
+      const name = Text.lblue(merchantName(merchant))
+      const moneyColor = amount < 0 ? dash_colors.green : (Time.beginningOfDay() < time ? dash_colors.magenta : dash_colors.grey)
+      const dollars = Text.color(moneyColor, formatCurrency(Math.abs(amount)))
+
+      cell.data.lines.push(Text.justify(name, dollars))
+    })
+  }
+
   function formatCurrency(amount) {
     return amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
   }
 
+  function dailyParse() {
+    setTimeout(function() {
+      parseTransactionLines()
+      renderLines()
+      dailyParse()
+    }, Time.msUntilNextDay())
+  }
+  dailyParse()
+
   cell = Cell.register({
     title: "Transactions",
     text: "Loading...",
-    data: { lines: [] },
-    refreshInterval: Time.hour(),
+    data: { transactions: [], lines: [] },
     reloader: function() {
       var cell = this
       cell.monitor?.resync()
@@ -43,14 +88,8 @@ import { dash_colors, text_height, clamp } from "../vars"
         received: function(data) {
           if (data.data.transactions) {
             cell.flash()
-            cell.data.lines = data.data.transactions.map(trans => {
-              const { merchant, amount, account, timestamp, email_id } = trans
-              const name = Text.rocco(merchant)
-              const moneyColor = amount >= 0 ? dash_colors.grey : dash_colors.green
-              const dollars = Text.color(moneyColor, formatCurrency(Math.abs(amount)))
-
-              return Text.justify(name, dollars)
-            })
+            cell.data.transactions = data.data.transactions
+            parseTransactionLines()
             renderLines()
           } else {
             console.log("Unknown data for Monitor.transactions:", data)
