@@ -32,11 +32,11 @@ import { dash_colors, text_height, clamp } from "../vars"
   }
 
   function dateLine(date) {
-    return Text.center(` ${date.toDateString().replace(" 0", "  ").replace(/ \d{4}/, "")} `, null, "-")
+    return Text.center(` ${date.toDateString().replace(" 0", " ").replace(/ \d{4}/, "")} `, null, "-")
   }
 
   function parseTransactionLines() {
-    if (!cell.data.transactions) { return }
+    if (!cell.data.transactions) { return renderLines() }
 
     let lastDateLine = dateLine(new Date())
     cell.data.lines = []
@@ -56,19 +56,14 @@ import { dash_colors, text_height, clamp } from "../vars"
 
       cell.data.lines.push(Text.justify(name, dollars))
     })
+    renderLines()
   }
 
   function formatCurrency(amount) {
     return amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
   }
 
-  function dailyParse() {
-    setTimeout(function() {
-      parseTransactionLines()
-      renderLines()
-      dailyParse()
-    }, Time.msUntilNextDay())
-  }
+  const dailyParse = () => setTimeout(() => parseTransactionLines() && dailyParse(), Time.msUntilNextDay())
   dailyParse()
 
   cell = Cell.register({
@@ -90,7 +85,6 @@ import { dash_colors, text_height, clamp } from "../vars"
             cell.flash()
             cell.data.transactions = json.data.transactions
             parseTransactionLines()
-            renderLines()
           } else {
             console.log("Unknown data for Monitor.transactions:", json)
           }

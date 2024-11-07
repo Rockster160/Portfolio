@@ -1,3 +1,4 @@
+import { Time } from "./_time"
 import { Text } from "../_text"
 import { dash_colors } from "../vars"
 
@@ -5,7 +6,7 @@ import { dash_colors } from "../vars"
   let cell = undefined
 
   function dateLine(date) {
-    return Text.center(` ${date.toDateString().replace(" 0", "  ").replace(/ \d{4}/, "")} `, null, "-")
+    return Text.center(` ${date.toDateString().replace(" 0", " ").replace(/ \d{4}/, "")} `, null, "-")
   }
 
   function timeFromDate(date) {
@@ -16,11 +17,30 @@ import { dash_colors } from "../vars"
     return `${hours}:${minutes}${period}`
   }
 
+  const formatTime = (date, options) => {
+    return new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "numeric",
+      hour12: true,
+      timeZone: options.timeZone
+    }).format(date).replace(" ", "").toLowerCase()
+  }
+
+  function timezonesLine() {
+    const date = new Date()
+
+    const mdtTime = "M-" + formatTime(date, { timeZone: "America/Denver" })
+    const utcTime = "UTC-" + formatTime(date, { timeZone: "UTC" })
+    const azTime = "A-" + formatTime(date, { timeZone: "America/Phoenix" })
+    return Text.justify(mdtTime, utcTime, azTime)
+  }
+
   function renderLines() {
-    if (!cell.data.events) { return }
+    let lines = [timezonesLine()]
+    if (!cell.data.events) { return cell.lines(lines) }
 
     let lastDateLine = dateLine(new Date())
-    let lines = [lastDateLine]
+    lines.push(lastDateLine)
     cell.data.events.forEach(event => {
       const { uid, name, unix, notes, location, calendar, start_time, end_time } = event
       const time = new Date(start_time)
@@ -56,6 +76,9 @@ import { dash_colors } from "../vars"
     cell.lines(lines)
   }
 
+  const ticker = () => setTimeout(() => renderLines() && ticker(), Time.msUntilNextMinute()+1)
+  ticker()
+
   cell = Cell.register({
     title: "Calendar",
     text: "Loading...",
@@ -63,15 +86,12 @@ import { dash_colors } from "../vars"
     wrap: true,
     flash: false,
     onload: function() {
-      console.log("Load")
       cell.monitor = Monitor.subscribe("calendar", {
         connected: function() {
-          console.log("Connected")
           cell.monitor?.resync()
         },
         disconnected: function() {},
         received: function(json) {
-          console.log("received", json)
           if (json.data.events) {
             cell.flash()
             cell.data.events = json.data.events
