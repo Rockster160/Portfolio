@@ -1,4 +1,16 @@
 class Jil::Methods::Hash < Jil::Methods::Base
+  def self.parse(raw)
+    tz = ::Tokenizer.new(raw.to_s.gsub(/\\(["'\\])/, '\1'), only: { "\"" => "\"", "'" => "'" })
+    # TODO: Deal with hash rocket syntax
+    # Also make sure to handle symbols: `"[:a]"` → `"[\"a\"]"`
+    processed = tz.untokenize(tz.tokenized_text.gsub(/(\w+): /, '"\1": ').gsub("nil", "null")) do |str|
+      str.gsub(/^'(.*?)'$/, '"\1"')
+        .gsub(/(\\*)\\\n/, "\\n") # TODO: negative lookbehind to make sure it's not escaped
+    end
+
+    ::JSON.parse(processed).then { |j| j.is_a?(Hash) ? j.with_indifferent_access : j }
+  end
+
   def cast(value)
     case value
     when ::List then cast(value.jil_serialize)
@@ -80,12 +92,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
   end
 
   def parse(raw)
-    tz = ::Tokenizer.new(raw.to_s.gsub(/\\(["'\\])/, '\1'), only: { "\"" => "\"" })
-    processed = tz.untokenize(tz.tokenized_text.gsub(/(\w+): /, '"\1": ').gsub("nil", "null")) do |str|
-      str.gsub(/(\\*)\\\n/, "\\n") # TODO: negative lookbehind to make sure it's not escaped
-    end
-
-    ::JSON.parse(processed).with_indifferent_access
+    self.class.parse(raw)
     # TODO: Rescue and bubble better error
   end
 

@@ -63,7 +63,7 @@ import { dash_colors, text_height, clamp } from "../vars"
     return amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
   }
 
-  const dailyParse = () => setTimeout(() => parseTransactionLines() && dailyParse(), Time.msUntilNextDay())
+  const dailyParse = () => setTimeout(() => dailyParse() && parseTransactionLines(), Time.msUntilNextDay())
   dailyParse()
 
   cell = Cell.register({

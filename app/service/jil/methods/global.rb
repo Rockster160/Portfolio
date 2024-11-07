@@ -46,6 +46,31 @@ class Jil::Methods::Global < Jil::Methods::Base
     end
   end
 
+  def looksLike(str, recurse: true)
+    case str
+    when Hash                  then return :Hash
+    when Array                 then return :Array
+    when TrueClass, FalseClass then return :Boolean
+    when NilClass              then return :None
+    when Numeric               then return :Numeric
+    when Date, Time, DateTime  then return :Date
+    end
+
+    str = str.to_s
+    begin
+      json = ::Jil::Methods::Hash.parse(str)
+      return recurse ? looksLike(json, false) : :String
+    rescue => e
+    end
+    return :Boolean if ["true", "false", "t", "f"].include?(str.downcase)
+    return :Numeric if Integer(str) rescue false
+    return :Numeric if Float(str) rescue false
+    # FIXME: "'6'" is considered a date because it looks like '6
+    return :Date if Date.parse(str) rescue false
+    return :Date if Time.parse(str) rescue false
+    :String
+  end
+
   def logic_if(condition, do_result, else_result)
     evalarg(condition) ? evalarg(do_result) : evalarg(else_result)
   end

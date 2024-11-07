@@ -76,7 +76,7 @@ import { dash_colors } from "../vars"
     cell.lines(lines)
   }
 
-  const ticker = () => setTimeout(() => renderLines() && ticker(), Time.msUntilNextMinute()+1)
+  const ticker = () => setTimeout(() => ticker() && renderLines(), Time.msUntilNextMinute()+1)
   ticker()
 
   cell = Cell.register({

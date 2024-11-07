@@ -43,6 +43,7 @@
   #times(Numeric enum_content)::Numeric
   #stop_propagation()::Boolean
   #block(content)::Any
+  #looksLike(String)::String
   #function("function(" String:"Arg Names" ")" content(Any [Keyword.Arg Keyword.FuncReturn]))::Function
 [Function]
   .call(content)::Any
