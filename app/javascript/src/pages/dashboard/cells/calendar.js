@@ -1,21 +1,77 @@
 import { Text } from "../_text"
 
 (function() {
-  window.local_calendar_cell = Cell.register({
+  let cell = undefined
+
+  function dateLine(date) {
+    return Text.center(` ${date.toDateString().replace(" 0", "  ").replace(/ \d{4}/, "")} `, null, "-")
+  }
+
+  function timeFromDate(date) {
+    let hours = date.getHours()
+    const minutes = String(date.getMinutes()).padStart(2, "0")
+    const period = hours >= 12 ? "pm" : "am"
+    hours = (hours % 12) || 12
+    return `${hours}:${minutes}${period}`
+  }
+
+  function renderLines() {
+    if (!cell.data.events) { return }
+
+    let lastDateLine = dateLine(new Date())
+    let lines = [lastDateLine]
+    cell.data.events.forEach(event => {
+      const { uid, name, unix, notes, location, calendar, start_time, end_time } = event
+      const time = new Date(start_time)
+      const eventDateLine = dateLine(time)
+
+      if (lastDateLine !== eventDateLine) {
+        lastDateLine = eventDateLine
+        lines.push(lastDateLine)
+      }
+
+      lines.push(Text.lblue(`• ${name}`))
+      if (time) {
+        let timeStr = timeFromDate(time)
+        if (end_time) {
+          const endTime = new Date(end_time)
+          timeStr = `${timeStr} - ${timeFromDate(endTime)}`
+        }
+        lines.push(Text.yellow(`    ${timeStr}`))
+      }
+      if (location && !location.match(/zoom\.us|meet\.google|webinar/i)) {
+        lines.push("    " + Text.grey(location.replace("\n", " ")))
+      }
+    })
+    cell.lines(lines)
+  }
+
+  cell = Cell.register({
     title: "Calendar",
     text: "\n\n\n" + Text.center(Text.red("== [FIXME] ==")),
+    data: { events: [] },
     wrap: true,
     flash: false,
-    commands: {
-      render: function(data) {
-        this.lines(data)
-        this.flash()
-      },
+    onload: function() {
+      console.log("Load")
+      cell.monitor = Monitor.subscribe("calendar", {
+        connected: function() {
+          console.log("Connected")
+          cell.monitor?.resync()
+        },
+        disconnected: function() {},
+        received: function(json) {
+          console.log("received", json)
+          if (json.data.events) {
+            cell.flash()
+            cell.data.events = json.data.events
+            renderLines()
+          } else {
+            console.log("Unknown data for Monitor.events:", json)
+          }
+        },
+      })
     },
-    reloader: function() {
-      // clearTimeout(window.local_data_timer)
-      // window.local_data_timer = setTimeout(function() { window.localDataChannel.request() }, 50)
-    }
   })
 })()
 

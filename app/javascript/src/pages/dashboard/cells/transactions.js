@@ -32,7 +32,7 @@ import { dash_colors, text_height, clamp } from "../vars"
   }
 
   function dateLine(date) {
-    return Text.center(` ${date.toDateString()} `, null, "-")
+    return Text.center(` ${date.toDateString().replace(" 0", "  ").replace(/ \d{4}/, "")} `, null, "-")
   }
 
   function parseTransactionLines() {
@@ -85,14 +85,14 @@ import { dash_colors, text_height, clamp } from "../vars"
           cell.monitor?.resync()
         },
         disconnected: function() {},
-        received: function(data) {
-          if (data.data.transactions) {
+        received: function(json) {
+          if (json.data.transactions) {
             cell.flash()
-            cell.data.transactions = data.data.transactions
+            cell.data.transactions = json.data.transactions
             parseTransactionLines()
             renderLines()
           } else {
-            console.log("Unknown data for Monitor.transactions:", data)
+            console.log("Unknown data for Monitor.transactions:", json)
           }
         },
       })
