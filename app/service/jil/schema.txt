@@ -286,3 +286,8 @@
   #executeAt(Date)
   #trigger(String)
   #data(content(Hash|Keyval))
+![Class]
+  !#new(String:ClassName content(Method))::None
+*[Method]
+  !#singletonMethod(String content([functionParams])) # String is schema syntax for defining variables, including Cast optionally
+  !#instanceMethod(String content([functionParams])) # String is schema syntax for defining variables, including Cast optionally
