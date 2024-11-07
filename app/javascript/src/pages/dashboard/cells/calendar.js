@@ -1,4 +1,5 @@
 import { Text } from "../_text"
+import { dash_colors } from "../vars"
 
 (function() {
   let cell = undefined
@@ -27,18 +28,27 @@ import { Text } from "../_text"
 
       if (lastDateLine !== eventDateLine) {
         lastDateLine = eventDateLine
+        lines.push("")
         lines.push(lastDateLine)
       }
 
-      lines.push(Text.lblue(`• ${name}`))
-      if (time) {
-        let timeStr = timeFromDate(time)
-        if (end_time) {
-          const endTime = new Date(end_time)
-          timeStr = `${timeStr} - ${timeFromDate(endTime)}`
-        }
-        lines.push(Text.yellow(`    ${timeStr}`))
+      let color = "lblue"
+      if (calendar == "rocco@oneclaimsolution.com") { color = "green" }
+      if (calendar == "Workout") { color = "orange" }
+      const nameLine = Text.color(dash_colors[color], `• ${name} `)
+
+      let timeStr = ""
+      timeStr = timeFromDate(time)
+      if (end_time) {
+        const endTime = new Date(end_time)
+        timeStr = `${timeStr}-${timeFromDate(endTime)}`
       }
+      timeStr = Text.yellow(timeStr)
+
+      lines.push(nameLine)
+      lines.push("    " + timeStr)
+      // lines.push(Text.justify(nameLine, timeStr))
+
       if (location && !location.match(/zoom\.us|meet\.google|webinar/i)) {
         lines.push("    " + Text.grey(location.replace("\n", " ")))
       }
@@ -48,7 +58,7 @@ import { Text } from "../_text"
 
   cell = Cell.register({
     title: "Calendar",
-    text: "\n\n\n" + Text.center(Text.red("== [FIXME] ==")),
+    text: "Loading...",
     data: { events: [] },
     wrap: true,
     flash: false,
