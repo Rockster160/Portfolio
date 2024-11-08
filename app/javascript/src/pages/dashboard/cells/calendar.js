@@ -22,7 +22,7 @@ import { dash_colors } from "../vars"
       hour: "numeric",
       minute: "numeric",
       hour12: true,
-      timeZone: options.timeZone
+      ...options
     }).format(date).replace(" ", "").toLowerCase()
   }
 
@@ -30,8 +30,8 @@ import { dash_colors } from "../vars"
     const date = new Date()
 
     const mdtTime = "M-" + formatTime(date, { timeZone: "America/Denver" })
-    const utcTime = "UTC-" + formatTime(date, { timeZone: "UTC" })
-    const azTime = "A-" + formatTime(date, { timeZone: "America/Phoenix" })
+    const utcTime = "UTC-" + formatTime(date, { timeZone: "UTC", hour12: false })
+    const azTime = "A-" + formatTime(date, { timeZone: "America/Phoenix", hour12: false })
     return Text.justify(mdtTime, utcTime, azTime)
   }
 
