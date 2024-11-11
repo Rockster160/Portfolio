@@ -2,6 +2,7 @@
 # Used the above to generate keys and everything
 
 # ::Oauth::VenmoApi.new(User.me).get(:me)
+# ::Oauth::VenmoApi.new(User.me).get("payment-methods")
 # ::Oauth::VenmoApi.new(User.me).send_by_name("Mom", 20, "🥩")
 # ::Oauth::VenmoApi.new(User.me).send_by_name("B", 1, "Test")
 # ::Oauth::VenmoApi.new(User.me).request_by_name("B", 1, "Test")
@@ -15,7 +16,8 @@ class Oauth::VenmoApi < Oauth::Base
   include ::ActionView::Helpers::NumberHelper
 
   VENMO_BALANCE_ID = 1653332309442560599
-  BANK_ID = 1653333114748928453
+  MACU_ID = 1653333114748928453
+  CHASE_ID = 4195446905898258092
   constants(api_url: "https://api.venmo.com/v1")
 
   # ========== Via Name ==========
@@ -57,7 +59,7 @@ class Oauth::VenmoApi < Oauth::Base
         audience: :public,
       }.tap { |params|
         if amount.positive?
-          params[:funding_source_id] = source == :venmo ? VENMO_BALANCE_ID : BANK_ID
+          params[:funding_source_id] = source == :venmo ? VENMO_BALANCE_ID : CHASE_ID
         end
       }).tap { |res|
         if res&.dig(:data, :error_code).present?
