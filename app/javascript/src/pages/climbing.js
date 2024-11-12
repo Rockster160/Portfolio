@@ -1,19 +1,24 @@
 document.addEventListener("DOMContentLoaded", function() {
   if (!document.querySelector(".ctr-climbs.act-edit")) { return }
 
-  let saveClick = false;
   let currentSpan = null;
 
-  const getStored = function() {
-    return localStorage.getItem("climb")?.split(" ");
-  }
-
-  const setStored = function(newStore) {
-    localStorage.setItem("climb", newStore);
-  }
-
-  const clearStored = function() {
-    localStorage.removeItem("climb");
+  function remoteSubmit() {
+    const form = document.querySelector("form")
+    console.log(form.action)
+    fetch(form.action, {
+      method: "PATCH",
+      body: new FormData(form),
+      headers: {
+        "Accept": "application/json; charset=UTF-8",
+      }
+    }).then(function(res) {
+      res.json().then(function(json) {
+        if (res.ok) {
+          console.log(json)
+        }
+      })
+    })
   }
 
   const output = document.querySelector(".output");
@@ -36,6 +41,7 @@ document.addEventListener("DOMContentLoaded", function() {
       } else if (key.classList.contains("climb-submit")) {
         output.querySelectorAll(".current").forEach(span => span.classList.remove("current"));
         currentSpan = null;
+        remoteSubmit()
       } else {
         if (!currentSpan) {
           currentSpan = document.createElement("span");
@@ -54,7 +60,6 @@ document.addEventListener("DOMContentLoaded", function() {
       let climbs = climbSpans.map(span => span.textContent);
       let scores = climbSpans.map(span => calculateScore(span.textContent, Number(span.getAttribute("score"))));
 
-      if (saveClick) { setStored(climbs.join(" ")); }
       document.querySelector("#climb_data").value = climbs.join(" ");
       document.querySelector(".full-score").textContent = roundScore(scores.reduce((a, b) => a + b, 0))
     }
@@ -81,19 +86,4 @@ document.addEventListener("DOMContentLoaded", function() {
 
     return roundScore(scoreFromClimb(score) * percentage);
   }
-
-  let priorClimbs = getStored();
-  if (priorClimbs) {
-    priorClimbs.forEach(num => {
-      let button = Array.from(document.querySelectorAll(".numpad-key")).find(key => key.textContent.trim() === num);
-      if (button) {
-        button.click();
-      }
-    });
-    saveClick = true;
-  }
-
-  document.querySelector("form").addEventListener("submit", function() {
-    clearStored();
-  });
 });

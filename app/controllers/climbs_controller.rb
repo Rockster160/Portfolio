@@ -44,9 +44,18 @@ class ClimbsController < ApplicationController
   end
 
   def update
-    @climb = current_user.climbs.find(params[:id]).update(climb_params)
+    @climb = current_user.climbs.find(params[:id])
+    @climb.update(climb_params)
 
-    redirect_to :climbs
+    respond_to do |format|
+      format.html { redirect_to :climbs }
+      format.json { render json: {
+        score: @climb.score,
+        climbs: @climb.scores,
+        recent_avg: current_user.climbs.recent_avg.round(2),
+        alltime_avg: current_user.climbs.alltime_avg.round(2),
+      } }
+    end
   end
 
   def destroy
