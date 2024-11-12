@@ -21,6 +21,11 @@ class Execution < ApplicationRecord
   belongs_to :task, optional: true
 
   scope :finished, -> { where.not(finished_at: nil) }
+  scope :with_duration, -> {
+    where.not(finished_at: nil, started_at: nil)
+      .select("*, AVG(EXTRACT(EPOCH FROM (finished_at - started_at)) * 1000) AS duration")
+      .group(:id)
+  }
 
   enum auth_type: {
     guest:    1, # + guest user id
@@ -41,6 +46,10 @@ class Execution < ApplicationRecord
 
   def self.compact_all
     update_all(ctx: nil, code: nil)
+  end
+
+  def self.average_duration(count)
+    finished.order(:finished_at).limit(count).map(&:duration).then { |a| a.sum.to_f / a.length }
   end
 
   def serialize

@@ -104,6 +104,10 @@ class Task < ApplicationRecord
     listener.to_s.split(":", 2).first.presence&.to_sym
   end
 
+  def average_duration(count)
+    executions.finished.order(:finished_at).limit(count).map(&:duration).then { |a| a.sum.to_f / a.length }
+  end
+
   def last_execution
     @last_execution ||= executions.finished.order(:finished_at).last
   end
