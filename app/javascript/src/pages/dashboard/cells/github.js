@@ -2,6 +2,7 @@ import { Time } from "./_time"
 import { Text } from "../_text"
 import { Timer } from "./timers"
 import { dash_colors, beeps } from "../vars"
+import { proxy } from "jquery"
 
 (function() {
   var cell = undefined
@@ -47,7 +48,7 @@ import { dash_colors, beeps } from "../vars"
         }
 
         return {
-          url: (issue.pull_request || issue.issue).html_url,
+          url: (issue.pull_request || issue.issue || issue)?.html_url,
           status: status,
           id: String(issue.number),
           title: issue.title,
@@ -72,9 +73,9 @@ import { dash_colors, beeps } from "../vars"
     pending_review = pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-backend", "OCS:B"))
     pending_review = pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-frontend", "OCS:F"))
 
-    let issues = []
-    issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-backend", "OCS:B"))
-    issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-frontend", "OCS:F"))
+    // let issues = []
+    // issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-backend", "OCS:B"))
+    // issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-frontend", "OCS:F"))
 
     let prs = []
     prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-backend", "OCS:B"))

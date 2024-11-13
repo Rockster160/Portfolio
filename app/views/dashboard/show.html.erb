@@ -22,9 +22,12 @@
     <% if Rails.env.development? %>
       Cell.loadConfig({
         home: {},
-        // github: {
-        //   deploy_uuid: "deploy",
-        // },
+
+        github: {
+          x: 4, y: 2,
+          deploy_uuid: "deploy",
+          github_apikey: "<%= ENV.fetch("GITHUB_APIKEY") %>"
+        },
         // broker_logger: { x: 2, y: 5, env: "<%= ENV["BROKERAUTH"] %>" },
         jarvis: { w: 2 },
         // upcoming: {},
