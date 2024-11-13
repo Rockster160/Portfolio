@@ -59,7 +59,8 @@ import { proxy } from "jquery"
   }
   let findGit = function(id) {
     id = String(id)
-    const sections = ["pending_review", "issues", "prs"]
+    // const sections = ["pending_review", "issues", "prs"]
+    const sections = ["pending_review", "prs"]
 
     for (let section of sections) {
       let found = (cell?.data[section] || []).find(git => git.id === id)
@@ -82,7 +83,7 @@ import { proxy } from "jquery"
     prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-frontend", "OCS:F"))
 
     cell.data.pending_review = pending_review
-    cell.data.issues = issues
+    // cell.data.issues = issues
     cell.data.prs = prs
 
     render(cell)
@@ -174,12 +175,12 @@ import { proxy } from "jquery"
         lines.push(renderGit(review))
       })
     }
-    if (cell.data.issues?.length > 0) {
-      lines.push("-- Issues:")
-      cell.data.issues.forEach(function(issue) {
-        lines.push(renderGit(issue))
-      })
-    }
+    // if (cell.data.issues?.length > 0) {
+    //   lines.push("-- Issues:")
+    //   cell.data.issues.forEach(function(issue) {
+    //     lines.push(renderGit(issue))
+    //   })
+    // }
     if (cell.data.prs?.length > 0) {
       lines.push("-- My PRs:")
       cell.data.prs.forEach(function(pr) {
