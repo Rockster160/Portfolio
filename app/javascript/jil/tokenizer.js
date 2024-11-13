@@ -141,6 +141,6 @@ export default class Tokenizer {
 
   generateToken() {
     this.tokenCount += 1;
-    return `||TOKEN${this.tokenCount}||`;
+    return `__TOKEN${this.tokenCount}__`;
   }
 }

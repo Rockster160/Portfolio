@@ -3,33 +3,33 @@ RSpec.describe Tokenizer do
     it "should map the tokens" do
       {
         'This is a (((simple))) example.': {
-          "||TOKEN1||": "(simple)", "||TOKEN2||": "(||TOKEN1||)", "||TOKEN3||": "(||TOKEN2||)",
+          "__TOKEN1__": "(simple)", "__TOKEN2__": "(__TOKEN1__)", "__TOKEN3__": "(__TOKEN2__)",
         },
         'This is a (com(plex) example).': {
-          "||TOKEN1||": "(plex)", "||TOKEN2||": "(com||TOKEN1|| example)",
+          "__TOKEN1__": "(plex)", "__TOKEN2__": "(com__TOKEN1__ example)",
         },
         '(This) [is] {just} "a" _bunch_ /of/ *separate* ((styles))': {
-          "||TOKEN1||": "\"a\"", "||TOKEN2||": "(This)", "||TOKEN3||": "[is]", "||TOKEN4||": "{just}",
-          "||TOKEN5||": "/of/", "||TOKEN6||": "(styles)", "||TOKEN7||": "(||TOKEN6||)",
+          "__TOKEN1__": "\"a\"", "__TOKEN2__": "(This)", "__TOKEN3__": "[is]", "__TOKEN4__": "{just}",
+          "__TOKEN5__": "/of/", "__TOKEN6__": "(styles)", "__TOKEN7__": "(__TOKEN6__)",
         },
         '"This is (all {quoted, so nothing\' } gets [tokenized]"': {
-          "||TOKEN1||": "\"This is (all {quoted, so nothing' } gets [tokenized]\""
+          "__TOKEN1__": "\"This is (all {quoted, so nothing' } gets [tokenized]\""
         },
         'With " (unclosed)': {
-          "||TOKEN1||": "(unclosed)"
+          "__TOKEN1__": "(unclosed)"
         },
         '(Full parens)': {
-          "||TOKEN1||": "(Full parens)"
+          "__TOKEN1__": "(Full parens)"
         },
         'Unmatched (section {without a close" } test [ok]': {
-          "||TOKEN1||": "{without a close\" }", "||TOKEN2||": "[ok]"
+          "__TOKEN1__": "{without a close\" }", "__TOKEN2__": "[ok]"
         },
         'This is a test { with (nested [sections]) } and "ignore {these}"': {
-          "||TOKEN1||": "\"ignore {these}\"", "||TOKEN2||": "[sections]",
-          "||TOKEN3||": "(nested ||TOKEN2||)", "||TOKEN4||": "{ with ||TOKEN3|| }"
+          "__TOKEN1__": "\"ignore {these}\"", "__TOKEN2__": "[sections]",
+          "__TOKEN3__": "(nested __TOKEN2__)", "__TOKEN4__": "{ with __TOKEN3__ }"
         },
         'Escaped brackets \\{should not be tokenized} and normal brackets {this should}': {
-          "||TOKEN1||": "{this should}"
+          "__TOKEN1__": "{this should}"
         },
       }.each do |text, tokens|
         tz = Tokenizer.new(text.to_s)

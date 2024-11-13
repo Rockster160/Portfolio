@@ -138,6 +138,6 @@ class Tokenizer
 
   def generate_token
     @token_count += 1
-    "||TOKEN#{@token_count}||"
+    "__TOKEN#{@token_count}__"
   end
 end

@@ -1,7 +1,7 @@
 class Jil::Parser
   attr_accessor :whitespace, :comment, :show, :varname, :objname, :methodname, :args, :cast
 
-  TOKEN_REGEX = /\|\|TOKEN\d+\|\|/
+  TOKEN_REGEX = /__TOKEN\d+__/
   ESCAPED_REGEX = /
     (\r*\n\r*)*
     (?<whitespace>\s*)

@@ -65,7 +65,7 @@ export default class Statement {
     let captObjName = /(?<objname>[_a-zA-Z][_0-9A-Za-z]*)/
     let captMethodName = /\.(?<methodname>[_0-9A-Za-z]+[!?]?)/
     // let captArgs = /\((?<args>[^\(\)]*\(((?:(?!\()[^\(\)]*|\([^()]*\))*)\)[^\(\)]*)\)/ // Only insides
-    let captArgs = escaped_args ? /(?<args>\|\|TOKEN\d+\|\|)/ : /\((?<args>[\s\S]*)\)/ // First to last
+    let captArgs = escaped_args ? /(?<args>__TOKEN\d+__)/ : /\((?<args>[\s\S]*)\)/ // First to last
     let captCast = /::(?<cast>[A-Z][_0-9A-Za-z]*)/
     let fullRegex = new RegExp([
       captComment,
