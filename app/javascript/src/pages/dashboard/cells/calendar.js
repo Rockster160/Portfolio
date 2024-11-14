@@ -31,7 +31,7 @@ import { dash_colors } from "../vars"
 
     const mdtTime = "M-" + formatTime(date, { timeZone: "America/Denver" })
     const utcTime = "UTC-" + formatTime(date, { timeZone: "UTC", hour12: false })
-    const azTime = "A-" + formatTime(date, { timeZone: "America/Phoenix", hour12: false })
+    const azTime = "I-" + formatTime(date, { timeZone: "CST" })
     return Text.justify(mdtTime, utcTime, azTime)
   }
 
