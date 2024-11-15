@@ -1,5 +1,6 @@
 class Tokenizer
   # PRIORITY_PAIRS = { ... } - Add double quotes here, and run this instead of `tokenize_quotes`
+  TOKEN_REGEX = /__TOKEN\d+__/
   WRAP_PAIRS = {
     "(" => ")",
     "[" => "]",
@@ -45,7 +46,7 @@ class Tokenizer
 
     @raw = text.to_s # .to_s dups
     @text = tokenize_quotes(text)
-    @tokenized_text, _cursor = tokenize
+    @tokenized_text, _cursor = tokenize(@text)
   end
 
   def untokenize(str=nil, levels=nil, unwrap: false, &block)
@@ -64,40 +65,24 @@ class Tokenizer
     untokenized
   end
 
-  private
-
-  def tokenize_quotes(str)
-    tokenized = str.to_s.dup
-    loop do
-      first_idx, next_idx = ::Tokenizer.find_unescaped_pair(tokenized, "\"")
-      break if first_idx.nil? || next_idx.nil?
-
-      quoted = tokenized[first_idx..next_idx]
-      token = generate_token
-      tokenized[first_idx..next_idx] = token
-      @tokens[token] = quoted
-    end
-    tokenized
-  end
-
-  def tokenize(until_char=nil, idx=0, nest=0)
+  def tokenize(str, until_char=nil, idx=0, nest=0)
     h = "#{"> "*nest}[#{[rand(16).to_s(16), rand(16).to_s(16)].join.upcase}]"
     buffer = ""
 
     # logit "#{h}:#{idx}:tokenize:#{until_char}"
     loop do
-      if idx >= text.length
+      if idx >= str.length
         return unless until_char.nil? # Unmatched char, exit without replacing
         break
       end
 
       top = nest == 0
-      char = text[idx]
-      next_escaped = char == "\\" && idx < text.length && text[...idx+1][/\\*$/].length.odd?
+      char = str[idx]
+      next_escaped = char == "\\" && idx < str.length && str[...idx+1][/\\*$/].length.odd?
 
       if next_escaped
         # Remove the escape and add the next character instead
-        buffer << "\\" + text[idx+1]
+        buffer << "\\" + str[idx+1]
         idx += 1 # Extra increment to skip next character
       elsif char == until_char
         # Found closing char, time to exit
@@ -105,12 +90,12 @@ class Tokenizer
         buffer << char
         break
       elsif @pairs.key?(char)
-        next_idx = ::Tokenizer.find_unescaped_index(text, @pairs[char], after: idx)
+        next_idx = ::Tokenizer.find_unescaped_index(str, @pairs[char], after: idx)
         if next_idx.nil?
           buffer << char
         else
           # logit "#{h}:#{idx}:open:#{char}"
-          wrapped, next_idx = tokenize(@pairs[char], idx+1, nest+1)
+          wrapped, next_idx = tokenize(str, @pairs[char], idx+1, nest+1)
 
           if wrapped.nil?
             # logit "#{h}:#{idx}:\e[31m No close '#{char}'"
@@ -136,8 +121,27 @@ class Tokenizer
     [buffer, idx]
   end
 
-  def generate_token
-    @token_count += 1
-    "__TOKEN#{@token_count}__"
+  private
+
+  def tokenize_quotes(str)
+    tokenized = str.to_s.dup
+    loop do
+      first_idx, next_idx = ::Tokenizer.find_unescaped_pair(tokenized, "\"")
+      break if first_idx.nil? || next_idx.nil?
+
+      quoted = tokenized[first_idx..next_idx]
+      token = generate_token
+      tokenized[first_idx..next_idx] = token
+      @tokens[token] = quoted
+    end
+    tokenized
+  end
+
+  def generate_token(full_str=@raw)
+    loop do
+      @token_count += 1
+      token = "__TOKEN#{@token_count}__"
+      break token unless full_str.include?(token)
+    end
   end
 end
