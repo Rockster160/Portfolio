@@ -8,8 +8,10 @@ class EmailsController < ApplicationController
 
     mailboxes = []
     if params[:q].present?
-      @emails = @emails.query(params[:q], { in: "in:" })
-      mailboxes = ::Email.query(params[:q], { in: "in:" }, data_only: true).dig(:props, :in, :terms)&.map(&:to_sym) || []
+      @emails = @emails.query(params[:q])
+      mailboxes = Tokenizing::Node.parse(params[:q]).flatten.filter_map { |node|
+        node[:field] == "in" ? node[:conditions] : nil
+      }.map(&:to_sym)
     end
     @emails = @emails.inbound unless (mailboxes & [:all, :sent]).any?
     @emails = @emails.not_archived unless (mailboxes & [:all, :archived]).any?

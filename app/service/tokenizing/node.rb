@@ -43,6 +43,19 @@
 #   ]
 # }
 
+# Maybe? Whitelist certain characters inside of strings.
+#   in:inbox,sent timestamp<2019-01-01
+# BUG: Things like ! and - affect only the next item without the previous one.
+#   They will need special handling. Hacking - for now, but it's not ideal because it breaks dates.
+# BUG: name::(this OR that)
+#  {:field=>nil,
+#   :operator=>:AND,
+#   :conditions=>
+#    [{:field=>nil, :operator=>:OR, :conditions=>["this", "that"]}, # -- This should a condition under `name`
+#     {:field=>"name", :operator=>:"::", :conditions=>[]}]}
+# BUG: "name::('Z*')"
+#   [{:field=>"Z", :operator=>:*, :conditions=>[]}, # -- Field should be 'Z*' and as a condition under `name`
+#    {:field=>"name", :operator=>:"::", :conditions=>[]}]
 class Tokenizing::Node
   KEYWORDS = %w(NOT - OR AND) # priority order?
 
@@ -228,5 +241,16 @@ class Tokenizing::Node
       operator: operator,
       conditions: conditions.as_json,
     }
+  end
+
+  def flatten
+    if conditions.is_a?(Array)
+      [
+        { field: field, operator: operator },
+        *Array.wrap(conditions).map { |cond| cond.is_a?(Tokenizing::Node) ? cond.flatten : cond }
+      ].flatten
+    else
+      [as_json]
+    end
   end
 end

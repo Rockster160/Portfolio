@@ -20,7 +20,7 @@ class ActionEvent < ApplicationRecord
 
   before_save { self.timestamp ||= ::Time.current }
 
-  search_terms :id, :name, :notes
+  search_terms :id, :name, :notes, :timestamp
 
   # Contains ANY
   scope :search_data_actions_any, ->(*qs) {
