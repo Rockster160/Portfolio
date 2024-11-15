@@ -1,3 +1,4 @@
+# DEPRECATED! Use Tokenizing::Node instead
 module SearchParser
   module_function
 

@@ -44,7 +44,7 @@
 # }
 
 class Tokenizing::Node
-  KEYWORDS = %w(NOT OR AND) # priority order?
+  KEYWORDS = %w(NOT - OR AND) # priority order?
 
   attr_accessor :field, :operator, :conditions
 
@@ -61,28 +61,35 @@ class Tokenizing::Node
   end
 
   def self.parse(tokens, compress=true) # ALWAYS returns a single Tokenizing::Node
+    node = tokenize(tokens, compress)
+    return node if node.is_a?(Tokenizing::Node)
+
+    Tokenizing::Node.new(operator: :AND, conditions: node)
+  end
+
+  def self.tokenize(tokens, compress=true) # Will return a single item for a single string
     return tokens if tokens.is_a?(Tokenizing::Node)
 
     if tokens.is_a?(String)
       tz = Tokenizer.new(tokens)
-      sections = tz.tokenized_text.split(/\s*(\b#{KEYWORDS.join("\\b|\\b")}\b)\s*/i)
+      sections = tz.tokenized_text.split(/\s*(\b#{KEYWORDS.join("\\b|\\b")}\b|\B-(?:\B|\b))\s*/i)
 
       if sections.many?
         return parse_sections(
           sections.map { |section|
-            tz.untokenize(section).then { |sec| keyword?(sec) ? sec.to_sym : sec }
+            tz.untokenize(section).then { |sec| keyword?(sec) ? sec.upcase.to_sym : sec }
           }
         )
       else
         tokens = Tokenizing::Breaker.breakdown(tokens).map { |token|
-          token.is_a?(Array) ? parse(token, false) : token
+          token.is_a?(Array) ? tokenize(token, false) : token
         }
       end
     elsif tokens.is_a?(Array)
-      return parse(tokens.first, false) if tokens.one?
+      return tokenize(tokens.first, false) if tokens.one?
 
       return parse_sections(
-        tokens.map { |section| keyword?(section) ? section.to_sym : section }
+        tokens.map { |section| keyword?(section) ? section.upcase.to_sym : section }
       )
     end
 
@@ -101,7 +108,7 @@ class Tokenizing::Node
           node.operator = token.to_sym
         end
       elsif node.operator || active_node&.operator
-        new_node = parse("\"#{token}\"", false) # wrap in quotes to prevent breaking the string
+        new_node = tokenize("\"#{token}\"", false) # wrap in quotes to prevent breaking the string
         node.conditions << new_node
         if !node.field && active_node.is_a?(Tokenizing::Node)
           active_node.conditions << node
@@ -111,7 +118,7 @@ class Tokenizing::Node
         active_node = new_node.conditions.last
         node = Tokenizing::Node.new
       elsif node.field
-        new_node = parse("\"#{token}\"", false) # wrap in quotes to prevent breaking the string
+        new_node = tokenize("\"#{token}\"", false) # wrap in quotes to prevent breaking the string
         node.conditions << new_node
       else
         node.field = token
@@ -138,12 +145,12 @@ class Tokenizing::Node
       val = val[1..-2] if val.match?(unwrap_pairs_rx)
     end
 
-    parse(val, false).then { |v| wrap ? [v] : v }
+    tokenize(val, false).then { |v| wrap ? [v] : v }
   end
 
   def self.parse_sections(tokens)
-    while tokens.include?(:NOT)
-      idx = tokens.index(:NOT)
+    while tokens.include?(:NOT) || tokens.include?(:-)
+      idx = tokens.index(:NOT) || tokens.index(:-)
       min, max = idx, idx+1
       max += 1 while max < tokens.length && tokens[max].is_a?(Symbol) # Other Keyword
       next tokens.delete_at(idx) if idx >= tokens.length

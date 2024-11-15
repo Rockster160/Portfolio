@@ -1,3 +1,4 @@
+# DEPRECATED! Use Tokenizing::Node instead
 class SearchBreakMatcher
   attr_accessor(
     :top_breaker,
