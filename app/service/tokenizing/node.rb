@@ -262,6 +262,10 @@ class Tokenizing::Node
     }
   end
 
+  def to_s
+    "\e[0m<Node field:\e[32m#{field || "\e[90mnil"}\e[0m operator:\e[36m#{operator}\e[0m conditions:\e[35m[\n#{Array.wrap(conditions).map(&:to_s).join(",")}]\e[0m>"
+  end
+
   def flatten
     if conditions.is_a?(Array)
       [

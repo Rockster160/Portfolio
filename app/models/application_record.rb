@@ -52,10 +52,76 @@ class ApplicationRecord < ActiveRecord::Base
 
   def self.raw_sql(q, data=nil)
     sql = unscoped.where(q, data)
-    sql.take # validate
+    sql.any? # validate
     sql.stripped_sql
   rescue ActiveRecord::StatementInvalid
     raise unless Rails.env.production?
+  end
+
+  def self.node_sql(node, parent_node=nil)
+    field = (parent_node&.field || node.field).to_sym
+    return unless search_terms.key?(field)
+
+    column = search_terms[field].to_s
+    column_data = nil
+    scope_method = nil
+
+    if !column.include?(".") && !column_names.include?(column)
+      scope_method = column
+      column = nil
+    else
+      column_data = columns.find { |c| c.name == column }
+    end
+
+    operator = (parent_node&.operator || node.operator).to_sym
+
+    text_operators = %i[: :: !: !::] # ~ !~
+    numeric_operators = %i[= != < > <= >=]
+    # json_operators = %i[=> ->]
+    # Eventually this should detect that it's a json column and use the jsonb operators
+    Array.wrap(node.conditions).map { |value|
+      next unscoped.query_by_node(value, node).stripped_sql if value.is_a?(Tokenizing::Node)
+
+      next if value.is_a?(Tokenizing::Node)
+      next unless operator.in?(text_operators + numeric_operators)
+
+      if scope_method.present?
+        unscoped.send(scope_method, *value).stripped_sql
+      elsif column_data.type.in?(%i[string text])
+        case operator.to_s
+        when *%w[:] then raw_sql("#{column} ILIKE ?", "%#{value}%")
+        when *%w[:: =] then raw_sql("#{column} ILIKE ?", value)
+        when *%w[!:] then raw_sql("#{column} NOT ILIKE ?", "%#{value}%")
+        when *%w[!:: !=] then raw_sql("#{column} NOT ILIKE ?", value)
+        end
+      elsif column_data.type.in?(%i[datetime date])
+        value = parse_date_with_operator(value, operator)
+        case operator.to_s
+        when *%w[= : ::] then raw_sql("#{column}::DATE = ?::DATE", value)
+        when *%w[!= !: !::] then raw_sql("#{column}::DATE != ?::DATE", value)
+        when *%w[<] then raw_sql("#{column} < ?", value)
+        when *%w[>] then raw_sql("#{column} > ?", value)
+        when *%w[<=] then raw_sql("#{column} <= ?", value)
+        when *%w[>=] then raw_sql("#{column} >= ?", value)
+        end
+      elsif column_data.type.in?(%i[integer float decimal])
+        case operator.to_s
+        when *%w[= : ::] then raw_sql("#{column} = ?", value.to_f)
+        when *%w[!= !: !::] then raw_sql("#{column} != ?", value.to_f)
+        when *%w[<] then raw_sql("#{column} < ?", value.to_f)
+        when *%w[>] then raw_sql("#{column} > ?", value.to_f)
+        when *%w[<=] then raw_sql("#{column} <= ?", value.to_f)
+        when *%w[>=] then raw_sql("#{column} >= ?", value.to_f)
+        end
+      end
+    }.compact_blank.then { |values|
+      next values.first unless values.many?
+      case node.operator
+      when :AND then "(#{values.join(" AND ")})"
+      when :OR then "(#{values.join(" OR ")})"
+      when :NOT then "NOT (#{values.join(" AND ")})"
+      end
+    }
   end
 
   scope :assign, -> (data) {
@@ -78,17 +144,23 @@ class ApplicationRecord < ActiveRecord::Base
 
     not_ilike(search_indexed("%#{q}%"), :AND)
   }
-  scope :query_by_node, ->(node) {
-    source_puts(node.as_json)
+  scope :query_by_node, ->(node, parent_node=nil) {
+    # TODO: # Allow passing `offset:50` and `limit:50` to the query
     sql = (
       if node.field.nil?
-        conditions = Array.wrap(node.conditions).map { |condition|
-          if condition.is_a?(Tokenizing::Node)
-            unscoped.query_by_node(condition).stripped_sql
+        conditions = (
+          if parent_node
+            [node_sql(node, parent_node)]
           else
-            unscoped.search(condition).stripped_sql
+            Array.wrap(node.conditions).map { |condition|
+              if condition.is_a?(Tokenizing::Node)
+                unscoped.query_by_node(condition).stripped_sql
+              else
+                unscoped.search(condition).stripped_sql
+              end
+            }.compact_blank
           end
-        }.compact_blank
+        )
 
         next if conditions.blank?
 
@@ -98,65 +170,11 @@ class ApplicationRecord < ActiveRecord::Base
         when :NOT then "NOT (#{conditions.join(" AND ")})"
         end
       else
-        field = node.field.to_sym
-        next unless search_terms.key?(field)
-
-        column = search_terms[field].to_s
-        column_data = nil
-        scope_method = nil
-
-        if !column.include?(".") && !column_names.include?(column)
-          scope_method = column
-          column = nil
-        else
-          column_data = columns.find { |c| c.name == column }
-        end
-
-        value = node.conditions
-        next if value.is_a?(Array) # Don't currently support nested string matching
-        # Eventually this should detect that it's a json column and use the jsonb operators
-        # Allow passing `offset:50` and `limit:50` to the query
-
-        operator = node.operator.to_sym
-        text_operators = %i[: :: !: !::] # ~ !~
-        numeric_operators = %i[= != < > <= >=]
-        # json_operators = %i[=> ->]
-
-        next unless operator.in?(text_operators + numeric_operators)
-
-        if scope_method.present?
-          unscoped.send(scope_method, *value).stripped_sql
-        elsif column_data.type.in?(%i[string text])
-          case operator.to_s
-          when *%w[:] then raw_sql("#{column} ILIKE ?", "%#{value}%")
-          when *%w[:: =] then raw_sql("#{column} ILIKE ?", value)
-          when *%w[!:] then raw_sql("#{column} NOT ILIKE ?", "%#{value}%")
-          when *%w[!:: !=] then raw_sql("#{column} NOT ILIKE ?", value)
-          end
-        elsif column_data.type.in?(%i[datetime date])
-          value = parse_date_with_operator(value, operator)
-          case operator.to_s
-          when *%w[= : ::] then raw_sql("#{column}::DATE = ?::DATE", value)
-          when *%w[!= !: !::] then raw_sql("#{column}::DATE != ?::DATE", value)
-          when *%w[<] then raw_sql("#{column} < ?", value)
-          when *%w[>] then raw_sql("#{column} > ?", value)
-          when *%w[<=] then raw_sql("#{column} <= ?", value)
-          when *%w[>=] then raw_sql("#{column} >= ?", value)
-          end
-        elsif column_data.type.in?(%i[integer float decimal])
-          case operator.to_s
-          when *%w[= : ::] then raw_sql("#{column} = ?", value)
-          when *%w[!= !: !::] then raw_sql("#{column} != ?", value)
-          when *%w[<] then raw_sql("#{column} < ?", value)
-          when *%w[>] then raw_sql("#{column} > ?", value)
-          when *%w[<=] then raw_sql("#{column} <= ?", value)
-          when *%w[>=] then raw_sql("#{column} >= ?", value)
-          end
-        end
+        node_sql(node)
       end
     ).to_s
 
-    sql = sql.gsub(/\((.*?)\)/, '\1') while sql.match?(/\((.*?)\)/)
+    sql = sql.gsub(/\A\({2}(.*?)\){2}\z/, '(\1)') while sql.match?(/\A\({2}(.*?)\){2}\z/)
     next if sql.blank?
 
     where(sql)

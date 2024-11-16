@@ -1,6 +1,4 @@
 RSpec.describe Tokenizing::Node, type: :model do
-
-  # load("/Users/rocco/.pryrc"); pretty_puts(node.as_json)
   describe ".parse" do
     it "parses complex expressions with AND, OR, and nested conditions" do
       node = Tokenizing::Node.parse("price > 10 AND price < 20 (Potter OR Rowling) name::food:cereal data=>exact data->partial")
