@@ -53,7 +53,7 @@
 #   :conditions=>
 #    [{:field=>nil, :operator=>:OR, :conditions=>["this", "that"]}, # -- This should a condition under `name`
 #     {:field=>"name", :operator=>:"::", :conditions=>[]}]}
-# BUG: "name::('Z*')"
+# √ BUG: "name::('Z*')"
 #   [{:field=>"Z", :operator=>:*, :conditions=>[]}, # -- Field should be 'Z*' and as a condition under `name`
 #    {:field=>"name", :operator=>:"::", :conditions=>[]}]
 class Tokenizing::Node
@@ -110,7 +110,14 @@ class Tokenizing::Node
     node = Tokenizing::Node.new
     active_node = nil
     tokens.each do |token|
-      next conditions << token if token.is_a?(Tokenizing::Node)
+      if token.is_a?(Tokenizing::Node)
+        if node.operator || active_node&.operator
+          node.conditions << token
+        else
+          conditions << token
+        end
+        next
+      end
       raise "Splitting by keywords first!" if keyword?(token)
 
       if operation?(token)
@@ -121,7 +128,7 @@ class Tokenizing::Node
           node.operator = token.to_sym
         end
       elsif node.operator || active_node&.operator
-        new_node = tokenize("\"#{token}\"", false) # wrap in quotes to prevent breaking the string
+        new_node = tokenize(token, false)
         node.conditions << new_node
         if !node.field && active_node.is_a?(Tokenizing::Node)
           active_node.conditions << node
@@ -131,7 +138,7 @@ class Tokenizing::Node
         active_node = new_node.conditions.last
         node = Tokenizing::Node.new
       elsif node.field
-        new_node = tokenize("\"#{token}\"", false) # wrap in quotes to prevent breaking the string
+        new_node = tokenize(token, false)
         node.conditions << new_node
       else
         node.field = token
@@ -143,20 +150,18 @@ class Tokenizing::Node
     Tokenizing::Node.new(operator: :AND, conditions: conditions).compact(compress)
   end
 
+  def self.unwrap(str, wraps={ "(" => ")", "[" => "]", "{" => "}" })
+    unwrap_pairs_rx = wraps.map { |k, v|
+      Regexp.escape(k) + ".*" + Regexp.escape(v)
+    }.join("|").then { |rx| /\A#{rx}\z/ }
+
+    str.match?(unwrap_pairs_rx) ? str[1..-2] : str
+  end
+
   def self.unwrap_parse(val, wrap: true)
     return val.map { |v| unwrap_parse(v, wrap: false) } if val.is_a?(Array)
 
-    if val.is_a?(String)
-      unwrap_pairs_rx = {
-        "(" => ")",
-        "[" => "]",
-        "{" => "}",
-      }.map { |k, v|
-        Regexp.escape(k) + ".*" + Regexp.escape(v)
-      }.join("|").then { |rx| /\A#{rx}\z/ }
-
-      val = val[1..-2] if val.match?(unwrap_pairs_rx)
-    end
+    val = unwrap(val) if val.is_a?(String)
 
     tokenize(val, false).then { |v| wrap ? [v] : v }
   end
@@ -202,21 +207,27 @@ class Tokenizing::Node
     @conditions = conditions
   end
 
+  def unwrap_quotes(str)
+    self.class.unwrap(str, { "\"" => "\"", "'" => "'" })
+  end
+
   def compact(compress=true)
+    @field = unwrap_quotes(@field) if @field.is_a?(String)
+    if @conditions.is_a?(Array)
+      @conditions = @conditions.map { |cond| cond.is_a?(String) ? unwrap_quotes(cond) : cond }
+    else
+      @conditions = unwrap_quotes(@conditions) if @conditions.is_a?(String)
+    end
+
     return self unless compress
     return self unless conditions.is_a?(Array)
 
     return if field.nil? && operator.nil? && conditions.blank?
     return field if field.present? && operator.nil? && conditions.blank?
 
-    if field.nil? && (operator == :AND || operator == :OR) && conditions.one?
-      condition = conditions.first
-      return condition.is_a?(Tokenizing::Node) ? condition.compact : condition
-    end
-
     @conditions = @conditions.flat_map { |node|
       if node.is_a?(Tokenizing::Node)
-        if operator == :AND && node.operator == :AND && field == node.field
+        if (operator == :AND || operator == :OR) && node.operator == operator && field == node.field
           node.conditions.map { |cond| cond.is_a?(Tokenizing::Node) ? cond.compact : cond }
         elsif node.field.nil? && node.operator.nil?
           node.conditions.map { |cond| cond.is_a?(Tokenizing::Node) ? cond.compact : cond }
@@ -228,8 +239,16 @@ class Tokenizing::Node
       end
     }
 
-    if conditions.one? && !conditions.first.is_a?(Tokenizing::Node)
-      @conditions = conditions.first
+    if conditions.one?
+      condition = conditions.first
+
+      if field.nil? && (operator == :AND || operator == :OR)
+        return condition.is_a?(Tokenizing::Node) ? condition.compact : condition
+      end
+
+      unless conditions.first.is_a?(Tokenizing::Node)
+        @conditions = condition
+      end
     end
 
     self

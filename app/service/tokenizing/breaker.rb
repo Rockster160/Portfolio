@@ -15,7 +15,7 @@ class Tokenizing::Breaker
 
       case wrap_start
       when /[\(\{\[]/ then breakdown(content)
-      when /["']/ then content
+      # when /["']/ then content -- We want the strings so we know what to parse
       when /[\/]/ then full_piece
       else full_piece
       end

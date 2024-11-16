@@ -1,4 +1,6 @@
 RSpec.describe Tokenizing::Node, type: :model do
+
+  # load("/Users/rocco/.pryrc"); pretty_puts(node.as_json)
   describe ".parse" do
     it "parses complex expressions with AND, OR, and nested conditions" do
       node = Tokenizing::Node.parse("price > 10 AND price < 20 (Potter OR Rowling) name::food:cereal data=>exact data->partial")
@@ -6,45 +8,54 @@ RSpec.describe Tokenizing::Node, type: :model do
         field: nil,
         operator: "AND".to_sym,
         conditions: [
+          { field: "price", operator: ">".to_sym, conditions: "10" },
           {
-            field: "price",
-            operator: ">".to_sym,
-            conditions: "10"
-          },
-          {
-            field: "price",
-            operator: "<".to_sym,
-            conditions: "20"
-          },
+            field: nil,
+            operator: "AND".to_sym,
+            conditions: [
+              { field: "price", operator: "<".to_sym, conditions: "20" },
+              {
+                field: nil,
+                operator: "OR".to_sym,
+                conditions: ["Potter", "Rowling"]
+              },
+              {
+                field: "name",
+                operator: "::".to_sym,
+                conditions: [{ field: "food", operator: ":".to_sym, conditions: "cereal" }]
+              },
+              { field: "data", operator: "=>".to_sym, conditions: "exact" },
+              { field: "data", operator: "->".to_sym, conditions: "partial" }
+            ]
+          }
+        ]
+      })
+    end
+
+    it "properly nests paren expressions" do
+      node = Tokenizing::Node.parse("name:('Z*')")
+      expect(node.as_json).to eq({
+        field: "name",
+        operator: ":".to_sym,
+        conditions: "Z*"
+      })
+    end
+
+    it "properly nests multiple paren expressions" do
+      node = Tokenizing::Node.parse("name:(Workout OR Z OR 'Z*')")
+      expect(node.as_json).to eq({
+        field: "name",
+        operator: ":".to_sym,
+        conditions: [
           {
             field: nil,
             operator: "OR".to_sym,
             conditions: [
-              "Potter",
-              "Rowling"
+              "Workout",
+              "Z",
+              "Z*",
             ]
           },
-          {
-            field: "name",
-            operator: "::".to_sym,
-            conditions: [
-              {
-                field: "food",
-                operator: ":".to_sym,
-                conditions: "cereal"
-              }
-            ]
-          },
-          {
-            field: "data",
-            operator: "=>".to_sym,
-            conditions: "exact"
-          },
-          {
-            field: "data",
-            operator: "->".to_sym,
-            conditions: "partial"
-          }
         ]
       })
     end
@@ -58,10 +69,7 @@ RSpec.describe Tokenizing::Node, type: :model do
           {
             field: nil,
             operator: "OR".to_sym,
-            conditions: [
-              "Potter",
-              "Rowling"
-            ]
+            conditions: ["Potter", "Rowling"]
           },
           {
             field: nil,
@@ -71,23 +79,11 @@ RSpec.describe Tokenizing::Node, type: :model do
                 field: nil,
                 operator: "AND".to_sym,
                 conditions: [
-                  {
-                    field: "price",
-                    operator: "<".to_sym,
-                    conditions: "20"
-                  },
-                  {
-                    field: "name",
-                    operator: ":".to_sym,
-                    conditions: "Hello, World!"
-                  }
+                  { field: "price", operator: "<".to_sym, conditions: "20" },
+                  { field: "name", operator: ":".to_sym, conditions: "Hello, World!" }
                 ]
               },
-              {
-                field: "name",
-                operator: ":".to_sym,
-                conditions: "Goodbye"
-              }
+              { field: "name", operator: ":".to_sym, conditions: "Goodbye" }
             ]
           }
         ]
@@ -100,21 +96,9 @@ RSpec.describe Tokenizing::Node, type: :model do
         field: nil,
         operator: "AND".to_sym,
         conditions: [
-          {
-            field: "price",
-            operator: "<".to_sym,
-            conditions: "20"
-          },
-          {
-            field: "price",
-            operator: ">".to_sym,
-            conditions: "10"
-          },
-          {
-            field: nil,
-            operator: "NOT".to_sym,
-            conditions: "Potter"
-          }
+          { field: "price", operator: "<".to_sym, conditions: "20" },
+          { field: "price", operator: ">".to_sym, conditions: "10" },
+          { field: nil, operator: "NOT".to_sym, conditions: "Potter" }
         ]
       })
     end
@@ -125,16 +109,8 @@ RSpec.describe Tokenizing::Node, type: :model do
         field: nil,
         operator: "AND".to_sym,
         conditions: [
-          {
-            field: "price",
-            operator: "<".to_sym,
-            conditions: "20"
-          },
-          {
-            field: "price",
-            operator: ">".to_sym,
-            conditions: "10"
-          },
+          { field: "price", operator: "<".to_sym, conditions: "20" },
+          { field: "price", operator: ">".to_sym, conditions: "10" },
           {
             field: nil,
             operator: "NOT".to_sym,
@@ -142,10 +118,7 @@ RSpec.describe Tokenizing::Node, type: :model do
               {
                 field: nil,
                 operator: "OR".to_sym,
-                conditions: [
-                  "Potter",
-                  "Rowling"
-                ]
+                conditions: ["Potter", "Rowling"]
               }
             ]
           }
