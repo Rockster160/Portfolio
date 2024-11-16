@@ -47,7 +47,7 @@ class ApplicationRecord < ActiveRecord::Base
   end
 
   def self.stripped_sql
-    all.to_sql.gsub("SELECT \"#{table_name}\".* FROM \"#{table_name}\" WHERE ", "")
+    all.to_sql.gsub(/(?: AND )?SELECT "#{table_name}"\.\* FROM "#{table_name}"(?: WHERE )?/, "")
   end
 
   def self.raw_sql(q, data=nil)
@@ -60,7 +60,7 @@ class ApplicationRecord < ActiveRecord::Base
 
   scope :assign, -> (data) {
     relation = all
-    prev = relation.instance_variable_get(:@assigned_data) || {}
+    # prev = relation.instance_variable_get(:@assigned_data) || {}
     relation.instance_variable_set(:@assigned_data, data)
     relation
   }
@@ -79,8 +79,7 @@ class ApplicationRecord < ActiveRecord::Base
     not_ilike(search_indexed("%#{q}%"), :AND)
   }
   scope :query_by_node, ->(node) {
-    q = search_scope
-
+    source_puts(node.as_json)
     sql = (
       if node.field.nil?
         conditions = Array.wrap(node.conditions).map { |condition|
@@ -89,7 +88,9 @@ class ApplicationRecord < ActiveRecord::Base
           else
             unscoped.search(condition).stripped_sql
           end
-        }
+        }.compact_blank
+
+        next if conditions.blank?
 
         case node.operator&.to_sym
         when :AND then "(#{conditions.join(" AND ")})"
@@ -153,15 +154,17 @@ class ApplicationRecord < ActiveRecord::Base
           end
         end
       end
-    )
+    ).to_s
 
-    next if sql.nil?
+    sql = sql.gsub(/\((.*?)\)/, '\1') while sql.match?(/\((.*?)\)/)
+    next if sql.blank?
 
-    q.where(sql)
+    where(sql)
   }
   scope :query, ->(q) {
     breaker = ::Tokenizing::Node.parse(q)
-    query_by_node(breaker)
+
+    where(unscoped.query_by_node(breaker).stripped_sql)
   }
   scope :before, ->(time) {
     t = Time.zone.parse(time) rescue (next none)
