@@ -39,16 +39,94 @@ class ApplicationRecord < ActiveRecord::Base
   end
 
   def self.search_indexed(word)
-    search_terms.values.index_with(word)
+    search_terms.values.filter_map { |column|
+      next column if column.to_s.include?(".")
+      column_data = columns.find { |c| c.name == column.to_s }
+      next column if column_data&.type.in?(%i[string text])
+    }.index_with(word)
   end
 
   def self.stripped_sql
-    all.to_sql.gsub("SELECT \"#{table_name}\".* FROM \"#{table_name}\" WHERE ", "")
+    all.to_sql.gsub(/(?: AND )?SELECT "#{table_name}"\.\* FROM "#{table_name}"(?: WHERE )?/, "")
+  end
+
+  def self.raw_sql(q, data=nil)
+    sql = unscoped.where(q, data)
+    sql.any? # validate
+    sql.stripped_sql
+  rescue ActiveRecord::StatementInvalid
+    raise unless Rails.env.production?
+  end
+
+  def self.node_sql(node, parent_node=nil)
+    field = (parent_node&.field || node.field).to_sym
+    return unless search_terms.key?(field)
+
+    column = search_terms[field].to_s
+    column_data = nil
+    scope_method = nil
+
+    if !column.include?(".") && !column_names.include?(column)
+      scope_method = column
+      column = nil
+    else
+      column_data = columns.find { |c| c.name == column }
+    end
+
+    operator = (parent_node&.operator || node.operator).to_sym
+
+    text_operators = %i[: :: !: !::] # ~ !~
+    numeric_operators = %i[= != < > <= >=]
+    # json_operators = %i[=> ->]
+    # Eventually this should detect that it's a json column and use the jsonb operators
+    Array.wrap(node.conditions).map { |value|
+      next unscoped.query_by_node(value, node).stripped_sql if value.is_a?(Tokenizing::Node)
+
+      next if value.is_a?(Tokenizing::Node)
+      next unless operator.in?(text_operators + numeric_operators)
+
+      if scope_method.present?
+        unscoped.send(scope_method, *value).stripped_sql
+      elsif column_data.type.in?(%i[string text])
+        case operator.to_s
+        when *%w[:] then raw_sql("#{column} ILIKE ?", "%#{value}%")
+        when *%w[:: =] then raw_sql("#{column} ILIKE ?", value)
+        when *%w[!:] then raw_sql("#{column} NOT ILIKE ?", "%#{value}%")
+        when *%w[!:: !=] then raw_sql("#{column} NOT ILIKE ?", value)
+        end
+      elsif column_data.type.in?(%i[datetime date])
+        value = parse_date_with_operator(value, operator)
+        case operator.to_s
+        when *%w[= : ::] then raw_sql("#{column}::DATE = ?::DATE", value)
+        when *%w[!= !: !::] then raw_sql("#{column}::DATE != ?::DATE", value)
+        when *%w[<] then raw_sql("#{column} < ?", value)
+        when *%w[>] then raw_sql("#{column} > ?", value)
+        when *%w[<=] then raw_sql("#{column} <= ?", value)
+        when *%w[>=] then raw_sql("#{column} >= ?", value)
+        end
+      elsif column_data.type.in?(%i[integer float decimal])
+        case operator.to_s
+        when *%w[= : ::] then raw_sql("#{column} = ?", value.to_f)
+        when *%w[!= !: !::] then raw_sql("#{column} != ?", value.to_f)
+        when *%w[<] then raw_sql("#{column} < ?", value.to_f)
+        when *%w[>] then raw_sql("#{column} > ?", value.to_f)
+        when *%w[<=] then raw_sql("#{column} <= ?", value.to_f)
+        when *%w[>=] then raw_sql("#{column} >= ?", value.to_f)
+        end
+      end
+    }.compact_blank.then { |values|
+      next values.first unless values.many?
+      case node.operator
+      when :AND then "(#{values.join(" AND ")})"
+      when :OR then "(#{values.join(" OR ")})"
+      when :NOT then "NOT (#{values.join(" AND ")})"
+      end
+    }
   end
 
   scope :assign, -> (data) {
     relation = all
-    prev = relation.instance_variable_get(:@assigned_data) || {}
+    # prev = relation.instance_variable_get(:@assigned_data) || {}
     relation.instance_variable_set(:@assigned_data, data)
     relation
   }
@@ -66,54 +144,45 @@ class ApplicationRecord < ActiveRecord::Base
 
     not_ilike(search_indexed("%#{q}%"), :AND)
   }
-  scope :query, ->(q, extra_breakers={}, data_only: false) {
-    built = search_scope
-    data = q.is_a?(Hash) ? q : SearchParser.call(
-      q,
-      or: "OR",
-      not: "!",
-      contains: ":",
-      not_contains: "!:",
-      not_exact: "!::",
-      exact: "::",
-      similar: "~",
-      before: "before:",
-      after: "after:",
-      aliases: { ":": "=" },
-      **extra_breakers,
-    )
-    break data if data_only
-    #   ~   - similar? (95% text match?)
+  scope :query_by_node, ->(node, parent_node=nil) {
+    # TODO: # Allow passing `offset:50` and `limit:50` to the query
+    sql = (
+      if node.field.nil?
+        conditions = (
+          if parent_node
+            [node_sql(node, parent_node)]
+          else
+            Array.wrap(node.conditions).map { |condition|
+              if condition.is_a?(Tokenizing::Node)
+                unscoped.query_by_node(condition).stripped_sql
+              else
+                unscoped.search(condition).stripped_sql
+              end
+            }.compact_blank
+          end
+        )
 
-    data.dig(:terms)&.each { |word| built = built.search(word) }
-    data.dig(:props, :not)&.each { |word| built = built.unsearch(word) }
+        next if conditions.blank?
 
-    data.dig(:props, :contains, :terms)&.each { |word| built = built.search(word) }
-    data.dig(:props, :exact, :terms)&.each { |word| built = built.ilike(search_indexed(word)) }
+        case node.operator&.to_sym
+        when :AND then "(#{conditions.join(" AND ")})"
+        when :OR then "(#{conditions.join(" OR ")})"
+        when :NOT then "NOT (#{conditions.join(" AND ")})"
+        end
+      else
+        node_sql(node)
+      end
+    ).to_s
 
-    data.dig(:props, :before, :terms)&.each { |word| built = built.before(word) }
-    data.dig(:props, :after, :terms)&.each { |word| built = built.after(word) }
+    sql = sql.gsub(/\A\({2}(.*?)\){2}\z/, '(\1)') while sql.match?(/\A\({2}(.*?)\){2}\z/)
+    next if sql.blank?
 
-    data.dig(:props, :not_contains, :terms)&.each { |word| built = built.unsearch(word) }
-    data.dig(:props, :not_exact, :terms)&.each { |word| built = built.not_ilike(search_indexed(word)) }
+    where(sql)
+  }
+  scope :query, ->(q) {
+    breaker = ::Tokenizing::Node.parse(q)
 
-    extra_breakers.each do |breaker_key, breaker_val|
-      # Must have custom scopes defined on the model to handle these
-      data.dig(:props, breaker_key, :terms)&.each { |word| built = built.send(breaker_key, word) }
-    end
-
-    search_terms.each do |alt_name, col_name|
-      data.dig(:props, :contains, :props, alt_name)&.each { |word| built = built.ilike(col_name => "%#{word}%") }
-      data.dig(:props, :not_contains, :props, alt_name)&.each { |word| built = built.not_ilike(col_name => "%#{word}%") }
-      data.dig(:props, :exact, :props, alt_name)&.each { |word| built = built.ilike(col_name => word) }
-      data.dig(:props, :not_exact, :props, alt_name)&.each { |word| built = built.not_ilike(col_name => word) }
-    end
-
-    data.dig(:props, :or, :terms)&.each do |or_groups|
-      sql_chunks = or_groups.map { |or_group| unscoped.query(or_group).stripped_sql }
-      built = built.where("(#{sql_chunks.join(" OR ")})")
-    end
-    built
+    where(unscoped.query_by_node(breaker).stripped_sql)
   }
   scope :before, ->(time) {
     t = Time.zone.parse(time) rescue (next none)
@@ -150,5 +219,23 @@ class ApplicationRecord < ActiveRecord::Base
 
   def to_h
     as_json
+  end
+
+  def self.parse_date_with_operator(value, operator)
+    date = Date.new(*value.split(/\D/).map(&:to_i))
+    case value
+    when /^\d{4}$/
+      operator.in?(%w[<]) ? date.beginning_of_year : date.end_of_year
+    when /^\d{4}-\d{1,2}$/
+      operator.in?(%w[<]) ? date.beginning_of_month : date.end_of_month
+    when /^\d{4}-\d{1,2}-\d{1,2}$/
+      operator.in?(%w[<]) ? date.beginning_of_day : date.end_of_day
+    else
+      DateTime.parse(value)
+    end
+  rescue ArgumentError
+    DateTime.parse(value)
+  rescue ArgumentError
+    value
   end
 end

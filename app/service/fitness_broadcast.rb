@@ -81,12 +81,12 @@ class FitnessBroadcast
       "Fluoxetine",
       "Vitamins",
       "Trintellix",
-    ].map { |name| "name::#{name}" }.join(" ")
-    row("💊", "OR(#{names})", want)
+    ].map { |name| "name::#{name}" }.join(" OR ")
+    row("💊", names, want)
   end
 
   def treat
-    row("[img /can.png]", "OR(name::Soda name::Treat)", bad)
+    row("[img /can.png]", "name::Soda OR name::Treat", bad)
   end
 
   def water
@@ -94,7 +94,7 @@ class FitnessBroadcast
   end
 
   def workout
-    row("🤸‍♂️", "OR(name::Workout name::Z name::Z*)", need)
+    row("🤸‍♂️", "name::Workout OR name::Z OR name::'Z*'", need)
   end
 
   def teeth
@@ -107,9 +107,9 @@ class FitnessBroadcast
 
   def calories
     calorie_event_names = ["food", "soda", "drink", "alcohol", "treat", "snack", "workout", "z"]
-    cal_query = calorie_event_names.map { |n| "name::#{n}" }.join(" ")
+    cal_query = calorie_event_names.map { |n| "name::#{n}" }.join(" OR ")
     "🔥 " + dates do |date|
-      cal_events = query("OR(#{cal_query})", date)
+      cal_events = query(cal_query, date)
       total = -1800
       cal_events.each do |event|
         calories = event.data&.dig("Calories").to_i

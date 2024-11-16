@@ -1,3 +1,4 @@
+# DEPRECATED! Use Tokenizing::Node instead
 module SearchBreaker
   module_function
 

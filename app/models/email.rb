@@ -46,7 +46,7 @@ class Email < ApplicationRecord
     else none
     end
   }
-  search_terms :id, :from, :to, :subject, text: :text_body
+  search_terms :id, :from, :to, :in, :subject, text: :text_body, timestamp: :created_at
 
   scope :ordered, -> { order(created_at: :desc) }
 
