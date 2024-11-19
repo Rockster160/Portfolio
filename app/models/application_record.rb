@@ -117,9 +117,9 @@ class ApplicationRecord < ActiveRecord::Base
     }.compact_blank.then { |values|
       next values.first unless values.many?
       case node.operator
-      when :AND then "(#{values.join(" AND ")})"
-      when :OR then "(#{values.join(" OR ")})"
-      when :NOT then "NOT (#{values.join(" AND ")})"
+      when :AND then "((#{values.join(") AND (")}))"
+      when :OR then "((#{values.join(") OR (")}))"
+      when :NOT then "NOT ((#{values.join(") AND (")}))"
       end
     }
   end
@@ -174,7 +174,11 @@ class ApplicationRecord < ActiveRecord::Base
       end
     ).to_s
 
-    sql = sql.gsub(/\A\({2}(.*?)\){2}\z/, '(\1)') while sql.match?(/\A\({2}(.*?)\){2}\z/)
+    # Reduce parens:
+    # tz = Tokenizer.new(sql, only: { "\"" => "\"", "'" => "'" })
+    # str = tz.tokenized_text
+    # /\({2}(\w+ \S+ \w+)\){2}/.tap { |rx| str = str.gsub(rx, '(\1)') while str.match?(rx) }
+    # sql = tz.untokenize(str)
     next if sql.blank?
 
     where(sql)

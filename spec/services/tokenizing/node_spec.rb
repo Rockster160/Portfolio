@@ -136,7 +136,6 @@ RSpec.describe Tokenizing::Node, type: :model do
 
     it "respects any level of nested parens" do
       node = Tokenizing::Node.parse("(timestamp<'2019-01-01') AND (name::(Workout OR Z OR 'Z*') OR name::(Food Treat))")
-      load("/Users/rocco/.pryrc"); pretty_puts(node.as_json)
       expect(node.as_json).to eq({
         field: nil,
         operator: :AND,
@@ -157,6 +156,35 @@ RSpec.describe Tokenizing::Node, type: :model do
                 field: "name",
                 operator: "::".to_sym,
                 conditions: [{ field: nil, operator: :AND, conditions: ["Food", "Treat"] }],
+              }
+            ]
+          }
+        ]
+      })
+    end
+
+    it "parses nested values properly" do
+      node = Tokenizing::Node.parse(
+        "timestamp>'2024-11-12 07:00:00' AND (name::(Workout OR Z) OR name::(Food OR Treat))",
+      )
+      expect(node.as_json).to eq({
+        field: nil,
+        operator: :AND,
+        conditions: [
+          { field: "timestamp", operator: ">".to_sym, conditions: "2024-11-12 07:00:00" },
+          {
+            field: nil,
+            operator: :OR,
+            conditions: [
+              {
+                field: "name",
+                operator: "::".to_sym,
+                conditions: [{ field: nil, operator: :OR, conditions: ["Workout", "Z"] }],
+              },
+              {
+                field: "name",
+                operator: "::".to_sym,
+                conditions: [{ field: nil, operator: :OR, conditions: ["Food", "Treat"] }],
               }
             ]
           }
