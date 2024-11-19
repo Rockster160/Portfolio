@@ -47,15 +47,6 @@
 #   in:inbox,sent timestamp<2019-01-01
 # BUG: Things like ! and - affect only the next item without the previous one.
 #   They will need special handling. Hacking - for now, but it's not ideal because it breaks dates.
-# BUG: name::(this OR that)
-#  {:field=>nil,
-#   :operator=>:AND,
-#   :conditions=>
-#    [{:field=>nil, :operator=>:OR, :conditions=>["this", "that"]}, # -- This should a condition under `name`
-#     {:field=>"name", :operator=>:"::", :conditions=>[]}]}
-# √ BUG: "name::('Z*')"
-#   [{:field=>"Z", :operator=>:*, :conditions=>[]}, # -- Field should be 'Z*' and as a condition under `name`
-#    {:field=>"name", :operator=>:"::", :conditions=>[]}]
 class Tokenizing::Node
   KEYWORDS = %w(NOT - OR AND) # priority order?
 
@@ -73,14 +64,16 @@ class Tokenizing::Node
     token.match?(/\A#{Tokenizing::Breaker::NON_WORD_RX}\z/)
   end
 
-  def self.parse(tokens, compress=true) # ALWAYS returns a single Tokenizing::Node
-    node = tokenize(tokens, compress)
+  # ALWAYS returns a single Tokenizing::Node
+  def self.parse(tokens)
+    node = tokenize(tokens).compact(compress: true, top: true)
     return node if node.is_a?(Tokenizing::Node)
 
     Tokenizing::Node.new(operator: :AND, conditions: node)
   end
 
-  def self.tokenize(tokens, compress=true) # Will return a single item for a single string
+  # May return a single item vs a node
+  def self.tokenize(tokens, compress: false, top: true)
     return tokens if tokens.is_a?(Tokenizing::Node)
 
     if tokens.is_a?(String)
@@ -95,14 +88,14 @@ class Tokenizing::Node
         )
       else
         tokens = Tokenizing::Breaker.breakdown(tokens).map { |token|
-          token.is_a?(Array) ? tokenize(token, false) : token
+          token.is_a?(Array) ? tokenize(token, compress: false, top: false) : token
         }
       end
     elsif tokens.is_a?(Array)
-      return tokenize(tokens.first, false) if tokens.one?
+      return tokenize(tokens.first, compress: false, top: false) if tokens.one?
 
       return parse_sections(
-        tokens.map { |section| keyword?(section) ? section.upcase.to_sym : section }
+        tokens.map { |section| keyword?(section) ? section.upcase.to_sym : section },
       )
     end
 
@@ -128,26 +121,28 @@ class Tokenizing::Node
           node.operator = token.to_sym
         end
       elsif node.operator || active_node&.operator
-        new_node = tokenize(token, false)
+        new_node = parse(token)
         node.conditions << new_node
         if !node.field && active_node.is_a?(Tokenizing::Node)
           active_node.conditions << node
         else
           conditions << node
         end
-        active_node = new_node.conditions.last
+        active_node = new_node
         node = Tokenizing::Node.new
       elsif node.field
-        new_node = tokenize(token, false)
-        node.conditions << new_node
+        conditions << node
+        node = parse(token)
       else
         node.field = token
       end
     end
 
+    return node if conditions.blank? && node.conditions.blank?
+
     conditions << node if node.field || node.conditions.any?
 
-    Tokenizing::Node.new(operator: :AND, conditions: conditions).compact(compress)
+    Tokenizing::Node.new(operator: :AND, conditions: conditions).compact(compress: compress, top: top)
   end
 
   def self.unwrap(str, wraps={ "(" => ")", "[" => "]", "{" => "}" })
@@ -163,7 +158,7 @@ class Tokenizing::Node
 
     val = unwrap(val) if val.is_a?(String)
 
-    tokenize(val, false).then { |v| wrap ? [v] : v }
+    tokenize(val, compress: false).then { |v| wrap ? [v] : v }
   end
 
   def self.parse_sections(tokens)
@@ -211,19 +206,18 @@ class Tokenizing::Node
     self.class.unwrap(str, { "\"" => "\"", "'" => "'" })
   end
 
-  def compact(compress=true)
+  def compact(compress: true, top: false)
     @field = unwrap_quotes(@field) if @field.is_a?(String)
     if @conditions.is_a?(Array)
       @conditions = @conditions.map { |cond| cond.is_a?(String) ? unwrap_quotes(cond) : cond }
-    else
-      @conditions = unwrap_quotes(@conditions) if @conditions.is_a?(String)
+    elsif @conditions.is_a?(String)
+      @conditions = unwrap_quotes(@conditions)
     end
 
     return self unless compress
     return self unless conditions.is_a?(Array)
 
-    return if field.nil? && operator.nil? && conditions.blank?
-    return field if field.present? && operator.nil? && conditions.blank?
+    return field.presence if !top && field.present? && operator.nil? && conditions.blank?
 
     @conditions = @conditions.flat_map { |node|
       if node.is_a?(Tokenizing::Node)
@@ -239,7 +233,9 @@ class Tokenizing::Node
       end
     }
 
-    if conditions.one?
+    if top && operator == :AND && field.nil? && conditions.one? && conditions.first.is_a?(Tokenizing::Node)
+      return conditions.first.compact(top: true)
+    elsif conditions.one?
       condition = conditions.first
 
       if field.nil? && (operator == :AND || operator == :OR)

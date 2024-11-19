@@ -1,3 +1,4 @@
+# load("/Users/rocco/.pryrc"); pretty_puts(node.as_json)
 RSpec.describe Tokenizing::Node, type: :model do
   describe ".parse" do
     it "parses complex expressions with AND, OR, and nested conditions" do
@@ -7,25 +8,13 @@ RSpec.describe Tokenizing::Node, type: :model do
         operator: "AND".to_sym,
         conditions: [
           { field: "price", operator: ">".to_sym, conditions: "10" },
-          {
-            field: nil,
-            operator: "AND".to_sym,
-            conditions: [
-              { field: "price", operator: "<".to_sym, conditions: "20" },
-              {
-                field: nil,
-                operator: "OR".to_sym,
-                conditions: ["Potter", "Rowling"]
-              },
-              {
-                field: "name",
-                operator: "::".to_sym,
-                conditions: [{ field: "food", operator: ":".to_sym, conditions: "cereal" }]
-              },
-              { field: "data", operator: "=>".to_sym, conditions: "exact" },
-              { field: "data", operator: "->".to_sym, conditions: "partial" }
-            ]
-          }
+          { field: "price", operator: "<".to_sym, conditions: "20" },
+          { field: nil, operator: "OR".to_sym, conditions: ["Potter", "Rowling"] },
+          { field: "name", operator: "::".to_sym, conditions: [
+            { field: "food", operator: ":".to_sym, conditions: "cereal" },
+          ]},
+          { field: "data", operator: "=>".to_sym, conditions: "exact" },
+          { field: "data", operator: "->".to_sym, conditions: "partial" },
         ]
       })
     end
@@ -117,6 +106,57 @@ RSpec.describe Tokenizing::Node, type: :model do
                 field: nil,
                 operator: "OR".to_sym,
                 conditions: ["Potter", "Rowling"]
+              }
+            ]
+          }
+        ]
+      })
+    end
+
+    it "parses a single expression" do
+      node = Tokenizing::Node.parse("Wordle")
+      expect(node.as_json).to eq({
+        field: "Wordle",
+        operator: nil,
+        conditions: [],
+      })
+    end
+
+    it "parses expressions with just words and a comparison" do
+      node = Tokenizing::Node.parse("Wordle timestamp>'2024-11-19T00:00:00-07:00'")
+      expect(node.as_json).to eq({
+        field: nil,
+        operator: "AND".to_sym,
+        conditions: [
+          "Wordle",
+          { field: "timestamp", operator: ">".to_sym, conditions: "2024-11-19T00:00:00-07:00" },
+        ]
+      })
+    end
+
+    it "respects any level of nested parens" do
+      node = Tokenizing::Node.parse("(timestamp<'2019-01-01') AND (name::(Workout OR Z OR 'Z*') OR name::(Food Treat))")
+      load("/Users/rocco/.pryrc"); pretty_puts(node.as_json)
+      expect(node.as_json).to eq({
+        field: nil,
+        operator: :AND,
+        conditions: [
+          {
+            field: "timestamp",
+            operator: "<".to_sym,
+            conditions: "2019-01-01",
+          }, {
+            field: nil,
+            operator: :OR,
+            conditions: [
+              {
+                field: "name",
+                operator: "::".to_sym,
+                conditions: [{ field: nil, operator: :OR, conditions: ["Workout", "Z", "Z*"] }],
+              }, {
+                field: "name",
+                operator: "::".to_sym,
+                conditions: [{ field: nil, operator: :AND, conditions: ["Food", "Treat"] }],
               }
             ]
           }
