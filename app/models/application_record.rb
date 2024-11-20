@@ -60,7 +60,9 @@ class ApplicationRecord < ActiveRecord::Base
 
   def self.node_sql(node, parent_node=nil)
     field = (parent_node&.field || node.field).to_sym
-    return unless search_terms.key?(field)
+    unless search_terms.key?(field)
+      return unscoped.search(field).stripped_sql
+    end
 
     column = search_terms[field].to_s
     column_data = nil
@@ -156,6 +158,7 @@ class ApplicationRecord < ActiveRecord::Base
               if condition.is_a?(Tokenizing::Node)
                 unscoped.query_by_node(condition).stripped_sql
               else
+                raise("Pretty sure this is deprecated")
                 unscoped.search(condition).stripped_sql
               end
             }.compact_blank
