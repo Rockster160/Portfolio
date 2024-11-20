@@ -158,7 +158,6 @@ class ApplicationRecord < ActiveRecord::Base
               if condition.is_a?(Tokenizing::Node)
                 unscoped.query_by_node(condition).stripped_sql
               else
-                raise("Pretty sure this is deprecated")
                 unscoped.search(condition).stripped_sql
               end
             }.compact_blank
@@ -178,10 +177,12 @@ class ApplicationRecord < ActiveRecord::Base
     ).to_s
 
     # Reduce parens:
-    # tz = Tokenizer.new(sql, only: { "\"" => "\"", "'" => "'" })
-    # str = tz.tokenized_text
-    # /\({2}(\w+ \S+ \w+)\){2}/.tap { |rx| str = str.gsub(rx, '(\1)') while str.match?(rx) }
-    # sql = tz.untokenize(str)
+    tz = Tokenizer.new(sql)
+    str = tz.tokenized_text
+    sql = tz.untokenize do |val|
+      /\A\((\w+)\)\z/.tap { |rx| val = val.gsub(rx, '\1') while val.match?(rx) }
+      val
+    end
     next if sql.blank?
 
     where(sql)
