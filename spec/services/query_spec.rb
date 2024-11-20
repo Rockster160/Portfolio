@@ -20,6 +20,26 @@ RSpec.describe ApplicationRecord, type: :model do
       expect(sql).to eq("(((\"name\"::TEXT ILIKE '%workout%' OR \"notes\"::TEXT ILIKE '%workout%') AND (NOT (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%'))))")
     end
 
+    it "returns records matching words with negates" do
+      sql = query("workout !climbing")
+      expect(sql).to eq("(((\"name\"::TEXT ILIKE '%workout%' OR \"notes\"::TEXT ILIKE '%workout%') AND (NOT (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%'))))")
+    end
+
+    it "returns records with starting negates" do
+      sql = query("-climbing")
+      expect(sql).to eq("(NOT (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%'))")
+    end
+
+    # it "returns records with starting negates" do
+    #   sql = query("-climbing workout")
+    #   expect(sql).to eq("(NOT (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%') AND (\"name\"::TEXT ILIKE '%workout%' OR \"notes\"::TEXT ILIKE '%workout%'))")
+    # end
+
+    it "returns records with starting negates" do
+      sql = query("!climbing")
+      expect(sql).to eq("(NOT (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%'))")
+    end
+
     it "returns records for timestamps" do
       sql = query("wordle timestamp>'2020-01-01' timestamp<'2021-01-01'")
       expect(sql).to eq("(((\"name\"::TEXT ILIKE '%wordle%' OR \"notes\"::TEXT ILIKE '%wordle%') AND (timestamp > '2020-01-01 23:59:59.999999') AND (timestamp < '2021-01-01 23:59:59.999999')))")

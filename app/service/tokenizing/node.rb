@@ -48,7 +48,7 @@
 # BUG: Things like ! and - affect only the next item without the previous one.
 #   They will need special handling. Hacking - for now, but it's not ideal because it breaks dates.
 class Tokenizing::Node
-  KEYWORDS = %w(NOT - OR AND) # priority order?
+  KEYWORDS = %w(NOT ! - OR AND) # priority order?
 
   attr_accessor :field, :operator, :conditions
 
@@ -78,7 +78,7 @@ class Tokenizing::Node
 
     if tokens.is_a?(String)
       tz = Tokenizer.new(tokens)
-      sections = tz.tokenized_text.split(/\s*(\b#{KEYWORDS.join("\\b|\\b")}\b|\B-(?:\B|\b))\s*/i)
+      sections = tz.tokenized_text.split(/\s*(\b#{KEYWORDS.join("\\b|\\b")}\b|\B[!-](?:\B|\b))\s*/i)
 
       if sections.many?
         return parse_sections(
@@ -162,8 +162,8 @@ class Tokenizing::Node
   end
 
   def self.parse_sections(tokens)
-    while tokens.include?(:NOT) || tokens.include?(:-)
-      idx = tokens.index(:NOT) || tokens.index(:-)
+    while tokens.include?(:NOT) || tokens.include?(:-) || tokens.include?(:!)
+      idx = tokens.index(:NOT) || tokens.index(:-) || tokens.index(:!)
       min, max = idx, idx+1
       max += 1 while max < tokens.length && tokens[max].is_a?(Symbol) # Other Keyword
       next tokens.delete_at(idx) if idx >= tokens.length
