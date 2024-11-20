@@ -64,7 +64,7 @@ export class ListCell {
           data.move = true
         } else if (/^\d+ /gi.test(text)) {
           data.rename = true
-        } else if (!/^(\-|\+|add|remove)/gi.test(text)) {
+        } else {
           data.add = text
           delete data.message
         }
