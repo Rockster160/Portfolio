@@ -36,7 +36,7 @@
       background: $blue-d4;
     }
 
-    code {
+    code, codeblock {
       display: inline-block;
       vertical-align: middle;
       white-space: pre;
@@ -45,9 +45,25 @@
       border-radius: 5px;
       padding: 2px 5px;
     }
-    pre code {
+    codeblock {
       display: block;
       width: 100%;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+
+      th, td {
+        padding: 12px 15px;
+        border: 1px solid #DDD;
+      }
+
+      th {
+        font-weight: bold;
+        text-transform: uppercase;
+      }
     }
 
     img {

@@ -19,11 +19,7 @@
     <% end %>
   </div>
   <div class="lists-title"><%= @folder.name %></div>
-  <% if @readme %>
-    <div class="markdown-container">
-      <%= render_md(@readme.content) %>
-    </div>
-  <% end %>
+  <%= Markdown.new(@readme.content, user: current_user).to_html if @readme %>
   <div class="lists">
     <div class="list-field">
       <%= text_field_tag "folder[name]", "", class: "filterable", placeholder: "Search" %>

@@ -1,6 +1,6 @@
 <%= meta_title @page.name, include_name: false %>
 
-<div class="skinny-container">
+<div class="wide-container">
   <div class="btn-container">
     <%= link_to "Back", @page.folder || :folders, class: :btn %>
     <%= link_to "Edit", [:edit, @page], class: "btn pull-right" %>
@@ -19,7 +19,5 @@
     <% end %>
   </div>
   <hr>
-  <div class="markdown-container">
-    <%= render_md(@page.content) %>
-  </div>
+  <%= Markdown.new(@page.content, user: current_user).to_html %>
 </div>
