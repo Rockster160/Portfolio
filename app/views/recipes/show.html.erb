@@ -48,8 +48,9 @@
           <% end %>
         <% end %>
 
-        <p class="instructions"><%= render_md(@recipe.instructions) %></p>
-
+        <p class="instructions">
+          <%= Markdown.new(@recipe.instructions, user: current_user).to_html %>
+        </p>
       </div>
     </div>
   </div>

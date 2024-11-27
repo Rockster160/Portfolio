@@ -29,10 +29,10 @@ class Markdown
       /~(.*?)~/             => wrap('\1', :del),
       /!\[(.*?)\]\((.*?)\)/ => wrap(nil, :img, src: '\2', alt: '\1'),
       /\[(.*?)\]\((.*?)\)/  => wrap('\1', :a, href: '\2', target: :_blank),
-      /\[(\w\s)*\]/                  => internal_link_wrapper,
-      /^( *\* (?:.*?\n))+/m          => ul_wrapper,
-      /^( *1[\.\)-:]? +(?:.*?\n))+/m => ol_wrapper,
-      /^(\|(.+?\|)+ *(\n|\z))+/m     => table_wrapper,
+      /\[(\w\s)*\]/                    => internal_link_wrapper,
+      /^( *\* (?:.*?\n))+/m            => ul_wrapper,
+      /^( *1[\.\)-:]? +(?:.*?\n))+/m   => ol_wrapper,
+      /^ *(\|([^\n]+?\|)+ *(\n|\z))+/m => table_wrapper,
       /\n{3,}/m => ->(match) { "\n\n" + "</br>"*(match[0].length-2) },
     )
 
@@ -183,7 +183,8 @@ class Markdown
   def table_wrapper
     ->(match) {
       rows = match[0].strip.split(/\s*\n\s*/).map { |row|
-        cells = row[/^\s*\|(.*?)\|\s*$/, 1].split(/\|/).map { |cell| wrap(cell.to_s.strip.html_safe, :td) }
+        row = row[/^\s*\|(.*?)\|\s*$/, 1] || row
+        cells = row.split(/\|/).map { |cell| wrap(cell.to_s.strip.html_safe, :td) }
         wrap(cells, :tr)
       }
       wrap(rows, :table)
