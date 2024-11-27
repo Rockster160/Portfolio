@@ -11,63 +11,63 @@
       background: white;
     }
   }
+}
 
-  .markdown-container {
-    word-wrap: break-word;
-    font-family: Menlo, monospace;
-    * { box-sizing: border-box; }
+.markdown-container {
+  word-wrap: break-word;
+  font-family: Menlo, monospace;
+  * { box-sizing: border-box; }
 
-    ::-webkit-scrollbar {
-      height: 4px;
-      width: 4px;
-      background: $blue-d3;
+  ::-webkit-scrollbar {
+    height: 4px;
+    width: 4px;
+    background: $blue-d3;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: darken(lime, 25%);
+    border-radius: 1ex;
+    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.75);
+
+    &:hover { background: darken(lime, 15%); }
+    &:active { background: darken(lime, 5%); }
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: $blue-d4;
+  }
+
+  code, codeblock {
+    display: inline-block;
+    vertical-align: middle;
+    white-space: pre;
+    overflow: auto;
+    background: $blue-d4;
+    border-radius: 5px;
+    padding: 2px 5px;
+  }
+  codeblock {
+    display: block;
+    width: 100%;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+
+    th, td {
+      padding: 12px 15px;
+      border: 1px solid #DDD;
     }
 
-    ::-webkit-scrollbar-thumb {
-      background: darken(lime, 25%);
-      border-radius: 1ex;
-      box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.75);
-
-      &:hover { background: darken(lime, 15%); }
-      &:active { background: darken(lime, 5%); }
+    th {
+      font-weight: bold;
+      text-transform: uppercase;
     }
+  }
 
-    ::-webkit-scrollbar-corner {
-      background: $blue-d4;
-    }
-
-    code, codeblock {
-      display: inline-block;
-      vertical-align: middle;
-      white-space: pre;
-      overflow: auto;
-      background: $blue-d4;
-      border-radius: 5px;
-      padding: 2px 5px;
-    }
-    codeblock {
-      display: block;
-      width: 100%;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 20px 0;
-
-      th, td {
-        padding: 12px 15px;
-        border: 1px solid #DDD;
-      }
-
-      th {
-        font-weight: bold;
-        text-transform: uppercase;
-      }
-    }
-
-    img {
-      width: 100%;
-    }
+  img {
+    width: 100%;
   }
 }
