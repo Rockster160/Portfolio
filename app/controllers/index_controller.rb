@@ -11,6 +11,7 @@ class IndexController < ApplicationController
     if from_user.present?
       ::Jil.trigger_async(from_user, :sms, { from: from_number, to: params["To"], body: body })
       return head :ok if mom_opening_garage(from_user, body)
+      return head :ok if janaya_opening_garage(from_user, body)
 
       response, data = Jarvis.command(from_user, body)
 
@@ -34,6 +35,18 @@ class IndexController < ApplicationController
   end
 
   private
+
+  def janaya_opening_garage(user, body)
+    return unless user.id == 48217 # Janaya
+
+    direction = :open if body.match?(/\b(open)\b/)
+    direction = :close if body.match?(/\b(close|shut)\b/)
+    direction ||= :toggle
+
+    Jarvis.command(User.me, "#{direction} the garage")
+    Jarvis.log("Janaya SMS: '#{body}' | #{direction} the garage")
+    return true
+  end
 
   def mom_opening_garage(user, body)
     return unless user.id == 4 # Mom
