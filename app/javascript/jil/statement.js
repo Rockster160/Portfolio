@@ -629,7 +629,7 @@ export default class Statement {
         switch (input.type) {
           case "number": return prettify(color, "numeric", JSON.stringify(parseFloat(input.value)));
           case "checkbox": return prettify(color, "constant", JSON.stringify(input.checked));
-          default: return prettify(color, "string", JSON.stringify(input.value))
+          default: return prettify(color, "string", JSON.stringify(input.dataset.raw || input.value))
         }
       default:
         console.log(`Unknown value for type:${input.tagName.toLowerCase()}`);

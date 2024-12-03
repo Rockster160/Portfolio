@@ -579,6 +579,26 @@ document.addEventListener("focusout", (evt) => {
   }
 })
 
+function showSpaces(input) {
+  if (!input.closest(".input-wrapper")) { return }
+  if (!(typeof input.value === "string")) { return }
+
+  input.dataset.raw = input.value
+  input.value = input.value.replace(/ /g, "░")
+  // input.value = input.value.replace(/ /g, "␣")
+}
+function hideSpaces(input) {
+  if (!input.closest(".input-wrapper")) { return }
+  if (!(typeof input.value === "string")) { return }
+  if (!input.dataset.raw) { return }
+
+  input.value = input.dataset.raw
+  input.dataset.raw = null
+}
+document.addEventListener("focusin", (evt) => hideSpaces(evt.target))
+document.addEventListener("focusout", (evt) => showSpaces(evt.target))
+document.querySelectorAll(".input-wrapper input[type=text], .input-wrapper textarea").forEach(input => showSpaces(input))
+
 // Right click a statement
 window.oncontextmenu = function(evt) {
   evt.preventDefault()

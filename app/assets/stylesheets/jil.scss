@@ -23,7 +23,7 @@ $text-color: darken($grey-blue, 20%);
   --statement-bg: #013080;
   // --statement-bg-highlight: color-mix(in srgb, var(--statement-bg), #EEF 20%);
   --statement-border: #4F677F;
-  --statement-bg-commented: #5282b7;
+  --statement-bg-commented: #5282B7;
   --statement-flash: orange;
 
   --input-bg: #6481A1;
@@ -129,7 +129,7 @@ body:has(.env-banner) .title-bar {
     code {
       display: block;
       outline: none;
-      border: 1px solid #ccc;
+      border: 1px solid #CCC;
       border-radius: 4px;
       background: black;
       padding: 10px;
@@ -316,6 +316,7 @@ body:has(.env-banner) .title-bar {
 }
 
 input, textarea, select {
+  font-family: monospace;
   display: inline-block;
   margin: 3px 1px;
   border: 1px solid var(--statement-border);
