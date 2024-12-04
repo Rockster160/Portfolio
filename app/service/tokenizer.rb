@@ -65,7 +65,15 @@ class Tokenizer
     untokenized
   end
 
-  def tokenize(str, until_char=nil, idx=0, nest=0)
+  def tokenize_regex(regex, str=nil)
+    @tokenized_text.gsub!(regex) { |match|
+      token = generate_token
+      @tokens[token] = Regexp.last_match[1] || match
+      token
+    }
+  end
+
+  def tokenize(str, until_char=nil, idx=0, nest=0, pairs: @pairs)
     h = "#{"> "*nest}[#{[rand(16).to_s(16), rand(16).to_s(16)].join.upcase}]"
     buffer = ""
 
@@ -89,13 +97,13 @@ class Tokenizer
         # logit "#{h}:#{idx}:close:#{char}"
         buffer << char
         break
-      elsif @pairs.key?(char)
-        next_idx = ::Tokenizer.find_unescaped_index(str, @pairs[char], after: idx)
+      elsif pairs.key?(char)
+        next_idx = ::Tokenizer.find_unescaped_index(str, pairs[char], after: idx)
         if next_idx.nil?
           buffer << char
         else
           # logit "#{h}:#{idx}:open:#{char}"
-          wrapped, next_idx = tokenize(str, @pairs[char], idx+1, nest+1)
+          wrapped, next_idx = tokenize(str, pairs[char], idx+1, nest+1)
 
           if wrapped.nil?
             # logit "#{h}:#{idx}:\e[31m No close '#{char}'"
