@@ -584,7 +584,7 @@ function showSpaces(input) {
   if (!(typeof input.value === "string")) { return }
 
   input.dataset.raw = input.value
-  input.value = input.value.replace(/ /g, "░")
+  input.value = input.value.replaceAll(/  /g, "░▒").replaceAll(/░▒ /g, "░▒░").replaceAll(/^ | $/g, "░")
   // input.value = input.value.replace(/ /g, "␣")
 }
 function hideSpaces(input) {

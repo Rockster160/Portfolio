@@ -26,7 +26,7 @@ class Jil::Methods::String < Jil::Methods::Base
       case line.cast
       when :Array then md.to_a.presence
       when :Hash then md&.named_captures&.symbolize_keys.presence
-      else md.to_a.first.presence
+      else md.to_a[1].presence || md.to_a.first.presence
       end
     when :split
       token_val(line.objname).split(to_regex(evalarg(line.arg)))
