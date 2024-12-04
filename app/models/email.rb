@@ -200,6 +200,7 @@ class Email < ApplicationRecord
     tasks = ::Jil.trigger_now(user_id, :email, serialize)
     return if tasks.any?(&:stop_propagation?)
     reload # Since Jil updates them out of scope
+    return if archived? # Task might have archived this. No need to do further logic if so.
 
     # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier
 
