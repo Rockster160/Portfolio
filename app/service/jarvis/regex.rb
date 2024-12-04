@@ -1,6 +1,8 @@
 module Jarvis::Regex
   module_function
 
+  UUID = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}/
+
   def match_data(str, rx)
     # "Open the garage", "/(?<direction>open|close|toggle)( (?:the|my))? garage/"
     rx = rx[/^\/(.*?)\/[img]*$/, 1] || rx # TODO: Actually use the flags
@@ -17,6 +19,10 @@ module Jarvis::Regex
     return false if words.flatten.none?
 
     str.match?(words(words))
+  end
+
+  def uuid?(str)
+    str.match?(/\A#{UUID.source}\z/)
   end
 
   def words(*words, suffix: nil, prefix: nil)

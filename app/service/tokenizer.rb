@@ -45,7 +45,7 @@ class Tokenizer
     @token_count = 0
 
     @raw = text.to_s # .to_s dups
-    @text = tokenize_quotes(text)
+    @text = @pairs["\""] == "\"" ? tokenize_quotes(text) : text
     @tokenized_text, _cursor = tokenize(@text)
   end
 
@@ -65,10 +65,11 @@ class Tokenizer
     untokenized
   end
 
-  def tokenize_regex(regex, str=nil)
+  def tokenize_regex(regex, replace=nil, &block)
     @tokenized_text.gsub!(regex) { |match|
       token = generate_token
-      @tokens[token] = Regexp.last_match[1] || match
+      value = replace || Regexp.last_match[1] || match
+      @tokens[token] = block_given? ? block.call(value) : value
       token
     }
   end

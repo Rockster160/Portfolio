@@ -158,10 +158,14 @@ class Email < ApplicationRecord
     addresses = self.to.split(",")
     addresses.find { |address|
       personal, domain = address.split("@", 2)
+      personal, ext = personal.split("+", 2)
       next unless domain.in?(::Email.registered_domains)
 
-      user_id = User.ilike(username: personal.split("+").first).take&.id
+      user_id = User.ilike(username: personal).take&.id
       break user_id if user_id.present?
+
+      next unless ::Jarvis::Regex.uuid?(personal)
+      Task.find_by(uuid: personal)&.user_id
     }
   end
 
