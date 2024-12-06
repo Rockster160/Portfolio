@@ -66,18 +66,18 @@ class Oauth::Base
   def auth_url
     params = {
       response_type: :code,
-      client_id: @client_id,
+      client_id: client_id,
       state: jwt,
-      redirect_uri: @redirect_uri,
-      scope: @scopes,
+      redirect_uri: redirect_uri,
+      scope: scopes,
       access_type: :offline,
-    }.merge(@auth_params).compact_blank
+    }.merge(auth_params).compact_blank
 
-    "#{@oauth_url}?#{params.to_query}"
+    "#{oauth_url}?#{params.to_query}"
   end
 
   def code=(code)
-    auth({ code: code, grant_type: :authorization_code }.merge(@exchange_params)).compact_blank
+    auth({ code: code, grant_type: :authorization_code }.merge(exchange_params)).compact_blank
 
     self
   end
@@ -87,24 +87,24 @@ class Oauth::Base
   end
 
   def auth(params={})
-    Api.post(params.delete(:exchange_url) || @exchange_url, {
-      client_id: @client_id,
-      client_secret: @client_secret,
-      redirect_uri: @redirect_uri,
-      scope: @scopes,
+    Api.post(params.delete(:exchange_url) || exchange_url, {
+      client_id: client_id,
+      client_secret: client_secret,
+      redirect_uri: redirect_uri,
+      scope: scopes,
     }.merge(params), { user_agent: USER_AGENT }).tap { |json|
       next if json.nil?
 
       cache.skip_save_set = true
       [:access_token, :refresh_token, :id_token].each do |token_name|
-        cache.dig_set(@storage_key, token_name, json[token_name]) if json[token_name].present?
+        cache.dig_set(storage_key, token_name, json[token_name]) if json[token_name].present?
       end
       cache.skip_save_set = false
       cache.save
     }
   end
 
-  def url(path, base: @api_url)
+  def url(path, base: api_url)
     return path if path.starts_with?("http")
 
     [base.to_s.sub(/\/$/, ""), path.to_s.sub(/^\//, "")].join("/")
@@ -140,8 +140,6 @@ class Oauth::Base
   def client_secret=(new_token)
     @client_secret = cache_set(:client_secret, new_token)
   end
-  # def client_id = cache_get(:client_id) || @client_id
-  # def client_secret = cache_get(:client_secret) || @client_secret
   def access_token = cache_get(:access_token)
   def refresh_token = cache_get(:refresh_token)
   def id_token = cache_get(:id_token)
