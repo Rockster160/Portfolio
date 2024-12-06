@@ -1,7 +1,7 @@
 # o = Oauth::ClassApi.new(User.me, scopes: %w[user-email user-account])
 # o.client_id = "abc-123"
 # o.client_secret = "321-cba"
-# o.auth_url
+# o.auth_url # -- click the link, authorize
 
 
 # o = Oauth::ClassApi.from_jwt(token)

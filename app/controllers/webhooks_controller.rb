@@ -23,7 +23,7 @@ class WebhooksController < ApplicationController
     end
 
     case params[:service].to_s.to_sym
-    when :spotify
+    when :spotify_api
       ::Oauth::SpotifyApi.from_jwt(params[:state])&.code = params[:code] if params[:code].present?
     end
 
