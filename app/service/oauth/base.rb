@@ -1,6 +1,8 @@
 # o = Oauth::ClassApi.new(User.me, scopes: %w[user-email user-account])
 # o.client_id = "abc-123"
 # o.client_secret = "321-cba"
+# o.auth_url
+
 
 # o = Oauth::ClassApi.from_jwt(token)
 
@@ -20,8 +22,9 @@ class Oauth::Base
   def self.key = name.split("::").last.underscore
   def self.defaults
     {
-      oauth_url: "",
-      exchange_url: "",
+      oauth_url: "", # First interaction - give the user this url to click/open
+      exchange_url: "", # Second interaction - use the code from the first interaction to get the access_token
+      api_url: "", # All future interactions: Base url for all api requests
       client_id: nil,
       client_secret: nil,
       scopes: [],
@@ -55,7 +58,7 @@ class Oauth::Base
     self.class.preset_constants.merge(overrides).each do |key, val|
       instance_variable_set("@#{key}", cache_get(key) || val)
       self.class.define_method(key.to_sym) do
-        instance_variable_get("@#{key}")
+        cache_get(key) || instance_variable_get("@#{key}")
       end
     end
   end
@@ -137,6 +140,8 @@ class Oauth::Base
   def client_secret=(new_token)
     @client_secret = cache_set(:client_secret, new_token)
   end
+  # def client_id = cache_get(:client_id) || @client_id
+  # def client_secret = cache_get(:client_secret) || @client_secret
   def access_token = cache_get(:access_token)
   def refresh_token = cache_get(:refresh_token)
   def id_token = cache_get(:id_token)
