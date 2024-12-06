@@ -52,6 +52,8 @@
   #keyHash(String ": " content(Keyval [Keyval.new]))
 [Text]::textarea
   #new(Text)::String
+[Password]::password
+  #new(Password)::String
 [String]::text
   #new(Any)
   .match(String)
@@ -155,6 +157,7 @@
   .each(enum_content)
   .select(enum_content)::Array
   .map(enum_content)
+  .compact()
   .find(enum_content)::Any
   .include?(Any)::Boolean
   .first::Any
@@ -287,6 +290,16 @@
   #executeAt(Date)
   #trigger(String)
   #data(content(Hash|Keyval))
+[Oauth]
+  #connection("Service Name" TAB String BR "Authorization Endpoint" TAB String:"URL" BR "Exchange Endpoint" TAB String:"URL" BR "Base URI" TAB String:"URL" BR "Scopes" TAB Any:"Array|String" BR "Client ID" TAB String BR "Client Secret" TAB Password)
+  .auth_url::String
+  .get("Path" TAB String)::Hash
+  .getFull("Path" TAB String BR "Params" TAB Hash BR "Headers" TAB Hash)::Hash
+  .post("Path" TAB String BR "Params" TAB Hash BR "Headers" TAB Hash)::Hash
+  .patch("Path" TAB String BR "Params" TAB Hash BR "Headers" TAB Hash)::Hash
+  .put("Path" TAB String BR "Params" TAB Hash BR "Headers" TAB Hash)::Hash
+  .delete("Path" TAB String BR "Params" TAB Hash BR "Headers" TAB Hash)::Hash
+  .request("Method" TAB String BR "Path" TAB String BR "Params" TAB Hash BR "Headers" TAB Hash)::Hash
 ![Class]
   !#new(String:ClassName content(Method))::None
 *[Method]

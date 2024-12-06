@@ -686,6 +686,14 @@ input[type=submit] {
   transform: rotate(180deg);
 }
 
+input.text-security {
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-security: disc;
+  -webkit-text-security: disc;
+}
+
 .statement .obj-args {
   & > span:not(.input-wrapper) { padding: 2px; }
   .input-wrapper {

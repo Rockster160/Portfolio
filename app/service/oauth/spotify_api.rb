@@ -11,7 +11,7 @@ class Oauth::SpotifyApi < Oauth::Base
       "user-read-playback-state",
       "user-modify-playback-state",
       "user-read-currently-playing",
-    ],
+    ].join(" "),
   )
 
   def me

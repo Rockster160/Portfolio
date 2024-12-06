@@ -45,10 +45,23 @@ class Api
     res&.body
   end
 
+  def self.put(uri, params={}, headers={}, opts={})
+    request(url: uri, payload: params, headers: headers, method: :put)
+  end
+
+  def self.patch(uri, params={}, headers={}, opts={})
+    request(url: uri, payload: params, headers: headers, method: :patch)
+  end
+
+  def self.delete(uri, params={}, headers={}, opts={})
+    request(url: uri, payload: params, headers: headers, method: :delete)
+  end
+
   def self.request(url:, **opts)
+    return get(url, opts.delete(:params), opts.delete(:headers), opts) if opts[:method] == :get
     return_full_response = opts.delete(:return_full_response)
     method = opts[:method] || :get
-    pst "  \e[33m#{method.to_s.upcase} #{url}\e[0m"
+    pst "  \e[33mREQ:#{method.to_s.upcase} #{url}\e[0m"
     output(:Payload, opts[:payload]) if opts[:payload]
     output(:Headers, opts[:headers]) if opts[:headers]
     if opts[:payload].is_a?(::Hash) && opts[:headers][:content_type] == "application/json"

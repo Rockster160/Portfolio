@@ -25,7 +25,7 @@ export function element(tag, data) {
   let ele = document.createElement(tag)
   if (data) {
     for (const [key, value] of Object.entries(data)) {
-      if (key == "class") {
+      if (key == "class" && value) {
         ele.classList.add(...value.split(" "))
       } else if (key == "data") {
         for (const [dkey, dval] of Object.entries(data.data)) {
@@ -124,7 +124,10 @@ export function inputFromArg(arg) {
 export function inputFromType(typename) {
   let type = Schema.types[typename]?.inputtype || "text"
 
-  let ele = element("input")
+  let ele = element("input", { class: type == "password" ? "text-security" : null })
+  if (type == "password") {
+    type = "text" // We don't want password managers trying to enter stuff into these.
+  }
   if (type == "textarea") { ele = element("textarea") }
   if (type == "checkbox") { ele = slider() }
 

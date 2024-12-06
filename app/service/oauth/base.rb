@@ -1,10 +1,10 @@
 # o = Oauth::ClassApi.new(User.me, scopes: %w[user-email user-account])
+# # NOTE: Careful! Some services expect scopes to be a string, others an array.
 # o.client_id = "abc-123"
 # o.client_secret = "321-cba"
 # o.auth_url # -- click the link, authorize
-
-
-# o = Oauth::ClassApi.from_jwt(token)
+# # After filling in, this will redirect and theoretically set `o.code = params[:code]`
+# # After that point, things should be working!
 
 class Oauth::Base
   # oauth_url
@@ -19,17 +19,19 @@ class Oauth::Base
 
   USER_AGENT = "Jarvis-1.0"
 
-  def self.key = name.split("::").last.underscore
-  def self.defaults
+  def self.default_service_name = name.split("::").last.underscore
+  def self.defaults(service=nil)
+    service ||= default_service_name
     {
+      service: service,
       oauth_url: "", # First interaction - give the user this url to click/open
       exchange_url: "", # Second interaction - use the code from the first interaction to get the access_token
       api_url: "", # All future interactions: Base url for all api requests
       client_id: nil,
       client_secret: nil,
       scopes: [],
-      redirect_uri: "https://ardesian.com/webhooks/oauth/#{key}",
-      storage_key: key,
+      redirect_uri: "https://ardesian.com/webhooks/oauth/#{service}",
+      storage_key: service,
       auth_params: {},
       exchange_params: {},
     }
@@ -38,8 +40,8 @@ class Oauth::Base
   def self.constants(hash)
     @constants = hash
   end
-  def self.preset_constants
-    (@constants || {}).reverse_merge(defaults)
+  def self.preset_constants(service=nil)
+    (@constants || {}).reverse_merge(defaults(service))
   end
 
   def self.from_jwt(token)
@@ -54,13 +56,19 @@ class Oauth::Base
   end
 
   def initialize(user, overrides={})
+    @_overrides = overrides # Store for serialization
     @user = user
-    self.class.preset_constants.merge(overrides).each do |key, val|
+
+    self.class.preset_constants(overrides[:service]).merge(overrides).each do |key, val|
       instance_variable_set("@#{key}", cache_get(key) || val)
       self.class.define_method(key.to_sym) do
         cache_get(key) || instance_variable_get("@#{key}")
       end
     end
+  end
+
+  def to_h
+    @_overrides.merge(client_id: client_id, client_secret: client_secret)
   end
 
   def auth_url
@@ -110,16 +118,33 @@ class Oauth::Base
     [base.to_s.sub(/\/$/, ""), path.to_s.sub(/^\//, "")].join("/")
   end
 
-  def get(path, params={}, headers={}, opts={})
-    Api.get(url(path), params, base_headers.merge(headers), opts)
+  [:get, :post, :put, :patch, :delete].each do |method|
+    define_method(method) do |path, params={}, headers={}, opts={}|
+      request(url(path), method, params, headers, opts)
+    end
   end
 
-  def post(path, params={}, headers={}, opts={})
-    Api.post(url(path), params, base_headers.merge(headers), opts)
+  def request(path, method, params={}, headers={}, opts={})
+    attempt = 0
+    begin
+      attempt += 1
+      Api.request(
+        url: url(path),
+        payload: params.presence || {},
+        headers: base_headers.merge(headers.presence || {}),
+        method: method,
+        **opts,
+      )
+    rescue RestClient::Unauthorized
+      raise if attempt > 1
+
+      refresh
+      retry
+    end
   end
 
   def jwt
-    payload = { user_id: @user.id, service: self.class.key, timestamp: Time.now.to_i, nonce: SecureRandom.hex(16) }
+    payload = { user_id: @user.id, service: service, timestamp: Time.now.to_i, nonce: SecureRandom.hex(16) }
     JWT.encode(payload, Rails.application.secret_key_base, "HS256")
   end
 
