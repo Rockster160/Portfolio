@@ -1,3 +1,9 @@
+# o = Oauth::ClassApi.new(User.me, scopes: %w[user-email user-account])
+# o.client_id = "abc-123"
+# o.client_secret = "321-cba"
+
+# o = Oauth::ClassApi.from_jwt(token)
+
 class Oauth::Base
   # oauth_url
   # exchange_url
@@ -33,20 +39,32 @@ class Oauth::Base
     (@constants || {}).reverse_merge(defaults)
   end
 
+  def self.from_jwt(token)
+    decoded = JWT.decode(token, Rails.application.secret_key_base, true, algorithm: "HS256")
+    return unless decoded.is_a?(Array) && decoded.first.is_a?(Hash)
+    json = decoded.first.deep_symbolize_keys
+    return unless json[:timestamp].to_i > 10.minutes.ago.to_i
+    return unless json[:service].to_s == key
+
+    user = json[:user_id].presence&.then { |id| User.find_by(id: id) }
+    new(user) if user.present?
+  end
+
   def initialize(user, overrides={})
+    @user = user
     self.class.preset_constants.merge(overrides).each do |key, val|
-      instance_variable_set("@#{key}", val)
+      instance_variable_set("@#{key}", cache_get(key) || val)
       self.class.define_method(key.to_sym) do
         instance_variable_get("@#{key}")
       end
     end
-    @user = user
   end
 
   def auth_url
     params = {
       response_type: :code,
       client_id: @client_id,
+      state: jwt,
       redirect_uri: @redirect_uri,
       scope: @scopes,
       access_type: :offline,
@@ -97,7 +115,12 @@ class Oauth::Base
     Api.post(url(path), params, base_headers.merge(headers), opts)
   end
 
-  def cache_set(key, val) = cache.dig_set(@storage_key, key, val)
+  def jwt
+    payload = { user_id: @user.id, service: self.class.key, timestamp: Time.now.to_i, nonce: SecureRandom.hex(16) }
+    JWT.encode(payload, Rails.application.secret_key_base, "HS256")
+  end
+
+  def cache_set(key, val) = cache.dig_set(@storage_key, key, val) && val
   def cache_get(key) = cache.dig(@storage_key, key)
   def access_token=(new_token)
     cache_set(:access_token, new_token)
@@ -107,6 +130,12 @@ class Oauth::Base
   end
   def id_token=(new_token)
     cache_set(:id_token, new_token)
+  end
+  def client_id=(new_token)
+    @client_id = cache_set(:client_id, new_token)
+  end
+  def client_secret=(new_token)
+    @client_secret = cache_set(:client_secret, new_token)
   end
   def access_token = cache_get(:access_token)
   def refresh_token = cache_get(:refresh_token)

@@ -22,6 +22,11 @@ class WebhooksController < ApplicationController
       # ::TeslaControl.me.code = params[:code]
     end
 
+    case params[:service].to_s.to_sym
+    when :spotify
+      ::Oauth::SpotifyApi.from_jwt(params[:state])&.code = params[:code] if params[:code].present?
+    end
+
     render json: params
   end
 

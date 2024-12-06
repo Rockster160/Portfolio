@@ -81,6 +81,8 @@ import { proxy } from "jquery"
     let prs = []
     prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-backend", "OCS:B"))
     prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-frontend", "OCS:F"))
+    // When changing from 𐄂 to ✓:
+    // readyBeep()
 
     cell.data.pending_review = pending_review
     // cell.data.issues = issues
@@ -149,6 +151,10 @@ import { proxy } from "jquery"
         render(cell)
       },
     })
+  }
+
+  let readyBeep = function() {
+    beep(150, 1800, 0.8, "triangle")
   }
 
   let victoryBeep = function() {
