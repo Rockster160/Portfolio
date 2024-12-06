@@ -52,8 +52,6 @@
   #keyHash(String ": " content(Keyval [Keyval.new]))
 [Text]::textarea
   #new(Text)::String
-[Password]::password
-  #new(Password)::String
 [String]::text
   #new(Any)
   .match(String)
@@ -305,3 +303,5 @@
 *[Method]
   !#singletonMethod(String content([functionParams])) # String is schema syntax for defining variables, including Cast optionally
   !#instanceMethod(String content([functionParams])) # String is schema syntax for defining variables, including Cast optionally
+[Password]::password
+  #new(Password)::String
