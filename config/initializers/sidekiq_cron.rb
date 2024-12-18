@@ -4,6 +4,7 @@ return unless defined?(Puma)
 return if Rails.env.test?
 return if Rails.const_defined?("Console")
 return if Rails.const_defined?("Rails::Command::RunnerCommand")
+return unless Rails.env.production?
 
 # Based on UTC time
 every_minute = "* * * * *"

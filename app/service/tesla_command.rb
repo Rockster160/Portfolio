@@ -39,6 +39,8 @@ module TeslaCommand
       cmd = opt
     end
 
+    return "No command found" if cmd.blank?
+
     case cmd.to_sym
     when :reload # Wake up car and get current data
       broadcast(car.vehicle_data(wake: true)) unless quick

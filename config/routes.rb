@@ -2,6 +2,7 @@
 Rails.application.routes.draw do
   get "/blockly" => "index#blockly"
   get "/icons" => "index#icons"
+  get "/privacy-policy" => "index#privacy_policy"
 
   constraints subdomain: "sub" do
     get "/sub" => "index#sub"
@@ -21,6 +22,14 @@ Rails.application.routes.draw do
   get "map" => "index#map"
   get "playground" => "index#playground"
   resource :ping, only: :create
+
+  resource :oauth, only: [] do
+    get :authorize
+    # post :authorize
+    # get :callback
+    # get :auth
+    # get :logout
+  end
 
   resource :jarvis, only: [:show, :update], controller: :quick_actions, as: :user_dashboard do
     get :sync_badge

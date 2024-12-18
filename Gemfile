@@ -59,6 +59,8 @@ gem "slack-notifier", "2.4.0"
 gem "webdrivers"
 gem "web-push", "3.0.0"
 
+gem "doorkeeper"
+
 # Dependency
 # > cap dependencies
 # == Used for ssh keys using capistrano
