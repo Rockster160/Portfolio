@@ -143,10 +143,10 @@ module AuthHelper
   def auth_from_session
     current_user_id = (
       session[:current_user_id].presence ||
-      cookies&.signed&.dig(:current_user_id).presence ||
-      cookies&.permanent&.dig(:current_user_id).presence ||
+      (cookies && cookies.signed[:current_user_id].presence) ||
+      (cookies && cookies.permanent[:current_user_id].presence) ||
       session[:user_id].presence ||
-      cookies&.signed&.dig(:user_id).presence
+      (cookies && cookies.signed[:user_id].presence)
     )
 
     if current_user_id.present?
