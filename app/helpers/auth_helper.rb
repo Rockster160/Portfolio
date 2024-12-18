@@ -141,12 +141,12 @@ module AuthHelper
   end
 
   def auth_from_session
-    current_user_id = session[:current_user_id].presence || cookies.signed[:current_user_id].presence || cookies.permanent[:current_user_id].presence || session[:user_id].presence || cookies.signed[:user_id].presence
+    current_user_id = session[:current_user_id].presence || cookies&.signed[:current_user_id].presence || cookies.permanent[:current_user_id].presence || session[:user_id].presence || cookies.signed[:user_id].presence
 
     if current_user_id.present?
       session[:current_user_id] = current_user_id
-      defined?(cookies) && cookies.signed[:current_user_id] = current_user_id
-      defined?(cookies) && cookies.permanent[:current_user_id] = current_user_id
+      cookies && cookies.signed[:current_user_id] = current_user_id
+      cookies && cookies.permanent[:current_user_id] = current_user_id
       user = User.find_by_id(current_user_id)
       sign_out if user.nil?
       user
