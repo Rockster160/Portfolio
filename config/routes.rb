@@ -1,5 +1,6 @@
 
 Rails.application.routes.draw do
+  use_doorkeeper
   get "/blockly" => "index#blockly"
   get "/icons" => "index#icons"
   get "/privacy-policy" => "index#privacy_policy"
@@ -23,12 +24,11 @@ Rails.application.routes.draw do
   get "playground" => "index#playground"
   resource :ping, only: :create
 
-  resource :oauth, only: [] do
-    get :authorize
-    # post :authorize
-    # get :callback
-    # get :auth
-    # get :logout
+  namespace :api do
+    namespace :v1 do
+      post :alexa, controller: :alexa
+      # resource :alexa, controller: :alexa
+    end
   end
 
   resource :jarvis, only: [:show, :update], controller: :quick_actions, as: :user_dashboard do

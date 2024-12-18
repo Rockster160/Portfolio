@@ -170,6 +170,8 @@ GEM
     docile (1.4.0)
     domain_name (0.5.20190701)
       unf (>= 0.0.5, < 1.0.0)
+    doorkeeper (5.8.1)
+      railties (>= 5)
     dotenv (2.7.6)
     dotenv-rails (2.7.6)
       dotenv (= 2.7.6)
@@ -527,6 +529,7 @@ DEPENDENCIES
   chronic (= 0.10.2)
   coffee-rails (= 5.0.0)
   dentaku
+  doorkeeper (= 5.8.1)
   dotenv-rails (= 2.7.6)
   ed25519
   erubis (= 2.7.0)

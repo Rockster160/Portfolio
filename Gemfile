@@ -59,7 +59,7 @@ gem "slack-notifier", "2.4.0"
 gem "webdrivers"
 gem "web-push", "3.0.0"
 
-gem "doorkeeper"
+gem "doorkeeper", "5.8.1"
 
 # Dependency
 # > cap dependencies
