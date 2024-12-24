@@ -48,6 +48,9 @@ class Oauth::TeslaApi < Oauth::Base
   )
   # 403 Forbidden - Everything bad
   # 401 Unauthorized - Refresh Oauth Token
+    # (t = Oauth::TeslaApi.new(User.me)).auth_url
+    # * follow url
+    # t.code = "NA_..."
   # 408 Request Timeout - Wake up
   # 406 Not Acceptable (RestClient::NotAcceptable)
 

@@ -6,6 +6,10 @@ class TeslaControl
     new(User.me)
   end
 
+  def perform_requests?
+    ::Rails.env.development?
+  end
+
   def initialize(user)
     @api = ::Oauth::TeslaApi.new(user)
   end
@@ -113,7 +117,7 @@ class TeslaControl
   end
 
   def vehicle_data(wake: false)
-    @vehicle_data = cached_vehicle_data if Rails.env.development?
+    @vehicle_data = cached_vehicle_data if perform_requests?
     @vehicle_data ||= begin
       get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
         car_data = json.is_a?(::Hash) && json.dig(:response)
@@ -222,7 +226,7 @@ class TeslaControl
   def get(url, wake: false)
     TeslaCommand.broadcast(loading: true)
 
-    if Rails.env.development?
+    if perform_requests?
       return dev_output(:GET, url)
     end
 
@@ -262,7 +266,7 @@ class TeslaControl
 
   def proxy_post_vehicle(endpoint, params={})
     raise "Should not POST in tests!" if Rails.env.test?
-    if Rails.env.development?
+    if perform_requests?
       return dev_output(:PROXY_POST, "vehicles/#{vin}/#{endpoint}", params)
     end
 
@@ -273,7 +277,7 @@ class TeslaControl
 
   def post_vehicle(endpoint, params={})
     raise "Should not POST in tests!" if Rails.env.test?
-    if Rails.env.development?
+    if perform_requests?
       return dev_output(:POST, "vehicles/#{vin}/#{endpoint}", params)
     end
 

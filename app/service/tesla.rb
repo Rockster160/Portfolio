@@ -3,7 +3,7 @@ class Tesla
 
   # Allows calling methods directly from the class rather than `Tesla.new.start` -> `Tesla.start`
   def self.method_missing(method, *args, &block)
-    new.send(method, *args)
+    (@controller ||= new).send(method, *args)
   end
 
   def initialize(controller=nil)
