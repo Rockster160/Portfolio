@@ -60,6 +60,6 @@ module Jarvis::Regex
       :dr,
     ]
 
-    /(suite|ste)? ?[0-9]+[ \w.,]*#{words(street_name_words)}([ .,-]*[a-z0-9]*)*/i
+    /(suite|ste)?\s*?[0-9]+[\s\w.,]*#{words(street_name_words)}([\s.,-]*[a-z0-9]*)*/im
   end
 end

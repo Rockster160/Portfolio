@@ -75,7 +75,7 @@ class AddressBook
     end
     address ||= contact_by_name(data)&.primary_address&.street
     address ||= nearest_from_name(data)
-    address.gsub("\n", "") if address.is_a?(String)
+    address.gsub("\n", ", ").squish if address.is_a?(String)
     SlackNotifier.notify("to_address is a #{data.class}\n```#{data.inspect}```") unless data.is_a?(String)
     address
   end
@@ -83,7 +83,7 @@ class AddressBook
   def traveltime_seconds(to, from=nil, at: nil)
     return 2700 unless Rails.env.production?
 
-    from ||= current_address
+    from ||= current_loc
     # Should be stringified addresses
     to, from = [to, from].map { |address| to_address(address) }
     return if to.blank? || from.blank?
