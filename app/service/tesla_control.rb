@@ -191,7 +191,7 @@ class TeslaControl
       block.call if tries <= max_attempts
     rescue RestClient::ExceptionWithResponse => res_exc
       case tesla_exc_code(res_exc)
-      when 401
+      when 401, 403
         if tries > 1 # Should only need to refresh on the first attempt
           info("Failed to reauthorize")
           raise
