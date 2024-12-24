@@ -55,6 +55,10 @@ class Oauth::Base
     new(user) if user.present?
   end
 
+  def self.me
+    new(User.me)
+  end
+
   def initialize(user, overrides={})
     @_overrides = overrides # Store for serialization
     @user = user
