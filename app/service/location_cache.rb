@@ -10,7 +10,7 @@ class LocationCache
 
     departed = bool
 
-    ::Jil.trigger(User.me.id, :travel,
+    ::Jil.trigger(User.me.id, :trytravel,
       {
         coord: departed ? nil : recent_locations[-1], # If arrived, show current
         from: recent_locations[departed ? -1 : -2], # If arrived, show previous, otherwise current
