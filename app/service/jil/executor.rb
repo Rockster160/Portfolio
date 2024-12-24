@@ -41,7 +41,7 @@ class Jil::Executor
     trigger_data.deep_symbolize_keys!
 
     if trigger_data.keys == [:data] && trigger_data[:data].match?(/\w+(:\w+)+/)
-      trigger_data = trigger_data[:data].split(":").reverse.reduce { |value, key| { key.to_sym => value } }
+      trigger_data[:data] = trigger_data[:data].split(":").reverse.reduce { |value, key| { key.to_sym => value } }
     end
 
     ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data }), 1000))
