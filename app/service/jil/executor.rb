@@ -38,6 +38,10 @@ class Jil::Executor
       trigger_data = { data: trigger_data }
     end
 
+    if trigger_data.keys == [:data] && trigger_data[:data].match?(/\w+(:\w+)+/)
+      trigger_data = trigger_data.split(":").reverse.reduce { |value, key| { key.to_sym => value } }
+    end
+
     ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data }), 1000))
 
     user_ids.map { |user_id|
