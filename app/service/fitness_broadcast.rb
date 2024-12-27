@@ -1,4 +1,6 @@
 class FitnessBroadcast
+  TIME_OFFSET = 4.hours # Base everything off of 4am
+
   def self.broadcast
     new.broadcast
   end
@@ -9,7 +11,9 @@ class FitnessBroadcast
 
   def initialize
     @user = User.me
-    @range = Time.use_zone(@user.timezone) { 6.days.ago.beginning_of_day..Time.current.end_of_day }
+    @range = Time.use_zone(@user.timezone) {
+      (6.days.ago.beginning_of_day+TIME_OFFSET)..(Time.current.end_of_day+TIME_OFFSET)
+    }
   end
 
   def events
@@ -21,7 +25,9 @@ class FitnessBroadcast
   end
 
   def allday(date)
-    Time.use_zone(@user.timezone) { date.beginning_of_day..date.end_of_day }
+    Time.use_zone(@user.timezone) {
+      (date.beginning_of_day+TIME_OFFSET)..(date.end_of_day+TIME_OFFSET)
+    }
   end
 
   def fitness_data
@@ -39,31 +45,31 @@ class FitnessBroadcast
     ]
   end
 
-  def pullups
-    pulls = @user.action_events.where(name: "Pullups").where("notes ~ '^\\d+$'")
+  # def pullups
+  #   pulls = @user.action_events.where(name: "Pullups").where("notes ~ '^\\d+$'")
 
-    month_goal = 1_000
-    current_yday = today.yday
-    days_in_year = today.end_of_year.yday
-    days_in_month = today.end_of_month.mday
+  #   month_goal = 1_000
+  #   current_yday = today.yday
+  #   days_in_year = today.end_of_year.yday
+  #   days_in_month = today.end_of_month.mday
 
-    current_date = today.beginning_of_day...today.end_of_day
-    current_month = today.beginning_of_month...today.end_of_month
+  #   current_date = today.beginning_of_day...today.end_of_day
+  #   current_month = today.beginning_of_month...today.end_of_month
 
-    pullups_today = pulls.where(timestamp: current_date).sum("notes::integer")
-    pullups_this_month = pulls.where(timestamp: current_month).sum("notes::integer")
+  #   pullups_today = pulls.where(timestamp: current_date).sum("notes::integer")
+  #   pullups_this_month = pulls.where(timestamp: current_month).sum("notes::integer")
 
-    monthly_remaining = month_goal - pullups_this_month
-    monthly_goal = (
-      if days_in_month == today.mday
-        monthly_remaining
-      else
-        ((month_goal - pullups_this_month) / (days_in_month - today.mday)).round(1)
-      end
-    )
+  #   monthly_remaining = month_goal - pullups_this_month
+  #   monthly_goal = (
+  #     if days_in_month == today.mday
+  #       monthly_remaining
+  #     else
+  #       ((month_goal - pullups_this_month) / (days_in_month - today.mday)).round(1)
+  #     end
+  #   )
 
-    "#{pullups_today}t / #{monthly_remaining}r / #{monthly_goal}d"
-  end
+  #   "#{pullups_today}t / #{monthly_remaining}r / #{monthly_goal}d"
+  # end
 
   def days
     "   " + dates { |date| date.strftime("%a") }
