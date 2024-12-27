@@ -11,8 +11,11 @@ class FitnessBroadcast
 
   def initialize
     @user = User.me
+    @days = Time.use_zone(@user.timezone) {
+      (6.days.ago.to_date)..(Time.current.to_date)
+    }
     @range = Time.use_zone(@user.timezone) {
-      (6.days.ago.beginning_of_day+TIME_OFFSET)..(Time.current.end_of_day+TIME_OFFSET)
+      (@days.first.beginning_of_day+TIME_OFFSET)..(@days.last.end_of_day+TIME_OFFSET)
     }
   end
 
@@ -193,7 +196,7 @@ class FitnessBroadcast
   end
 
   def dates(ico="", &block)
-    @range.then { |r| (r.first.to_date)..(r.last.to_date) }.map { |date|
+    @days.then { |r| (r.first.to_date)..(r.last.to_date) }.map { |date|
       block.call(date).to_s.rjust(3)
     }.reverse.join(" ")
   end
