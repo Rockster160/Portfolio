@@ -43,7 +43,10 @@ class Markdown
 
     # linkify urls, but tokenize links and images so we don't double-link
     tokenize_tags(:a, :img)
-    @text.gsub!(/\b(https?:\/\/\S+)\b/) { |found| wrap(found, :a, href: found) }
+    @text.gsub!(/\b(https?:\/\/[^\s\n\r<]+)\b/) { |found|
+      link = Regexp.last_match[1]
+      wrap(link, :a, href: link)
+    }
 
     # Tokenized blocks are stand-alone, so they don't need to be wrapped in paragraphs
     @text.gsub!(/<p>(%%\w{8}%%)<\/p>/, '\1')
