@@ -54,6 +54,27 @@ class Oauth::TeslaApi < Oauth::Base
   # 408 Request Timeout - Wake up
   # 406 Not Acceptable (RestClient::NotAcceptable)
 
+  # Oauth::TeslaApi.me.request_telemetry
+  def request_telemetry
+    proxy_post("vehicles/fleet_telemetry_config", {
+      vins: [Tesla.vin],
+      config: {
+        alert_types: ["service"],
+        fields: TeslaService.fields(30.minutes),
+        ca: File.read("_scripts/tesla_keys/cert.pem") + File.read("_scripts/tesla_keys/cert.pem"),
+        hostname: "https://ardesian.com/jil/trigger/tesla"
+      },
+    })
+  end
+
+  def check_telemetry
+    get("vehicles/#{Tesla.vin}/fleet_telemetry_config")
+  end
+
+  def fleet_status
+    proxy_post("vehicles/fleet_status", vins: [Tesla.vin])
+  end
+
   def proxy_post(path, params={}, headers={})
     if USE_LOCAL_RAILS_PROXY
       Api.request(

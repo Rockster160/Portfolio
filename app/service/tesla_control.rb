@@ -7,7 +7,7 @@ class TeslaControl
   end
 
   def perform_requests?
-    ::Rails.env.development?
+    ::Rails.env.production?
   end
 
   def initialize(user)
@@ -117,39 +117,41 @@ class TeslaControl
   end
 
   def vehicle_data(wake: false)
-    @vehicle_data = cached_vehicle_data if perform_requests?
+    return @vehicle_data = cached_vehicle_data unless perform_requests?
+
     @vehicle_data ||= begin
-      get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
-        car_data = json.is_a?(::Hash) && json.dig(:response)
-        cached_data = cached_vehicle_data
-        break cached_data unless car_data.present?
+      cached_vehicle_data
+      # get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
+      #   car_data = json.is_a?(::Hash) && json.dig(:response)
+      #   cached_data = cached_vehicle_data
+      #   break cached_data unless car_data.present?
 
-        car_data[:timestamp] = car_data.dig(:vehicle_state, :timestamp) # Bubble up to higher key
+      #   car_data[:timestamp] = car_data.dig(:vehicle_state, :timestamp) # Bubble up to higher key
 
-        User.me.caches.set(:car_data, car_data)
-        break car_data if car_data[:state] == "asleep"
+      #   User.me.caches.set(:car_data, car_data)
+      #   break car_data if car_data[:state] == "asleep"
 
-        if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
-          list = User.me.list_by_name(:Chores)
-          [:fl, :fr, :rl, :rr].each do |tire|
-            tirename = tire.to_s.split("").then { |dir, side|
-              [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
-            }.join(" ")
+      #   if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
+      #     list = User.me.list_by_name(:Chores)
+      #     [:fl, :fr, :rl, :rr].each do |tire|
+      #       tirename = tire.to_s.split("").then { |dir, side|
+      #         [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
+      #       }.join(" ")
 
-            if car_data.dig(:vehicle_state, "tpms_soft_warning_#{tire}".to_sym)
-              list.add("#{tirename} tire pressure low")
-            else
-              list.remove("#{tirename} tire pressure low")
-            end
+      #       if car_data.dig(:vehicle_state, "tpms_soft_warning_#{tire}".to_sym)
+      #         list.add("#{tirename} tire pressure low")
+      #       else
+      #         list.remove("#{tirename} tire pressure low")
+      #       end
 
-            if car_data.dig(:vehicle_state, "tpms_hard_warning_#{tire}".to_sym)
-              User.me.list_by_name(:TODO).add("#{tirename} tire pressure low")
-            else
-              User.me.list_by_name(:TODO).remove("#{tirename} tire pressure low")
-            end
-          end
-        end
-      } || cached_vehicle_data
+      #       if car_data.dig(:vehicle_state, "tpms_hard_warning_#{tire}".to_sym)
+      #         User.me.list_by_name(:TODO).add("#{tirename} tire pressure low")
+      #       else
+      #         User.me.list_by_name(:TODO).remove("#{tirename} tire pressure low")
+      #       end
+      #     end
+      #   end
+      # } || cached_vehicle_data
     rescue => e
       err("Vehicle Data Error", e)
       cached_vehicle_data
@@ -226,9 +228,7 @@ class TeslaControl
   def get(url, wake: false)
     TeslaCommand.broadcast(loading: true)
 
-    if perform_requests?
-      return dev_output(:GET, url)
-    end
+    return dev_output(:GET, url) unless perform_requests?
 
     wakeup_retry(max_attempts: wake ? 5 : 1) {
       @api.get(url)
@@ -266,9 +266,7 @@ class TeslaControl
 
   def proxy_post_vehicle(endpoint, params={})
     raise "Should not POST in tests!" if Rails.env.test?
-    if perform_requests?
-      return dev_output(:PROXY_POST, "vehicles/#{vin}/#{endpoint}", params)
-    end
+    return dev_output(:PROXY_POST, "vehicles/#{vin}/#{endpoint}", params) unless perform_requests?
 
     @api.proxy_post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
       info("Response", "#{res}")
@@ -277,9 +275,7 @@ class TeslaControl
 
   def post_vehicle(endpoint, params={})
     raise "Should not POST in tests!" if Rails.env.test?
-    if perform_requests?
-      return dev_output(:POST, "vehicles/#{vin}/#{endpoint}", params)
-    end
+    return dev_output(:POST, "vehicles/#{vin}/#{endpoint}", params) unless perform_requests?
 
     @api.post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
       info("Response", "#{res}")
