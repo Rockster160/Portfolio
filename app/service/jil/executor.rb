@@ -42,7 +42,7 @@ class Jil::Executor
     trigger_data = trigger_data.to_h if trigger_data.is_a?(::ActiveSupport::HashWithIndifferentAccess)
     trigger_data.deep_symbolize_keys!
 
-    if trigger_data.keys == [:data] && trigger_data[:data].match?(/\w+(:\w+)+/)
+    if trigger_data.keys == [:data] && trigger_data[:data].is_a?(::String) && trigger_data[:data].match?(/\w+(:\w+)+/)
       trigger_data[:data] = trigger_data[:data].split(":").reverse.reduce { |value, key| { key.to_sym => value } }
     end
 

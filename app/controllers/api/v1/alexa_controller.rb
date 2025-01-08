@@ -2,6 +2,7 @@ class Api::V1::AlexaController < Api::V1::BaseController
   skip_before_action :verify_authenticity_token
 
   def alexa
+    Jarvis.say("Alexa via #{current_user&.username}")
     render json: alexa_response("Success")
   end
 

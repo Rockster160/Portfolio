@@ -1,6 +1,7 @@
 
 Rails.application.routes.draw do
   use_doorkeeper
+
   get "/blockly" => "index#blockly"
   get "/icons" => "index#icons"
   get "/privacy-policy" => "index#privacy_policy"

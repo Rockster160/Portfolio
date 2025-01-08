@@ -14,7 +14,7 @@ Doorkeeper.configure do
     current_admin || redirect_to(account_url, alert: "Sorry, you do not have access to this page.")
   end
 
-  default_scopes  :access
+  default_scopes :access
 
   access_token_expires_in 2.hours
 
