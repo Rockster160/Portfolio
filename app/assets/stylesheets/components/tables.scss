@@ -26,25 +26,26 @@ table.monsters {
 }
 
 
-.ttable {
+.ttable, .gtable {
   display: table;
+
   &.wide { width: 100%; max-width: 100%; }
   &.equal { table-layout: fixed; }
   &.striped {
     color: $text-color;
 
     .trow:nth-child(even) {
-      background-color: $blue-l5;
+      &, .tcell, .sub-row { background-color: $blue-l5; }
     }
     .trow:nth-child(odd) {
-      background-color: $blue-l4;
+      &, .tcell, .sub-row { background-color: $blue-l4; }
     }
   }
   .title-row .tcell {
-    background-color: $base-blue;
+    &, .tcell, .sub-row { background-color: $base-blue; }
   }
   &.bordered {
-    .tcell {
+    .tcell, .sub-row {
       padding: 5px;
       border: 1px solid white;
       border-collapse: collapse;
@@ -56,6 +57,7 @@ table.monsters {
   }
   a.trow {
     text-decoration: none;
+
     &:hover {
       background-color: $base-blue !important;
     }
@@ -63,26 +65,42 @@ table.monsters {
 }
 .tbody { display: table-row-group; }
 .trow, .thead { display: table-row; }
-.tcell, .th { display: table-cell; }
+.tcell, .th { display: table-cell; position: relative }
+
+.gtable {
+  display: grid;
+  grid-template-columns: repeat(5, auto);
+
+  .thead, .trow {
+    display: contents;
+  }
+  .th, .tcell {
+    display: inline-block;
+  }
+
+  .trow .sub-row {
+    grid-column: 1 / span 5;
+  }
+}
 
 .dark-mode {
-  .ttable {
+  .ttable, .gtable {
     &.striped {
       color: $grey-light;
 
       .trow:nth-child(even) {
-        background-color: $blue-d2;
+        &, .tcell, .sub-row { background-color: $blue-d2; }
       }
       .trow:nth-child(odd) {
-        background-color: $blue-d3;
+        &, .tcell, .sub-row { background-color: $blue-d3; }
       }
     }
-    &.bordered .tcell {
+    &.bordered .tcell, .sub-row {
       border-color: $blue-d5;
     }
-    a.trow, a.tcell {
+    a.trow, a.tcell, a.sub-row {
       &:hover {
-        background-color: $base-blue !important;
+        &, .tcell, .sub-row { background-color: $base-blue !important; }
       }
     }
   }

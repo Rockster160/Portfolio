@@ -136,12 +136,16 @@ textarea {
   }
   &.invisi-field {
     border: none;
-    width: auto;
-    height: auto;
     margin: 0;
-    padding: 0;
+    padding: 3px 10px;
     color: inherit;
     background: inherit;
+
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
   }
 }
 

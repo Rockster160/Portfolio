@@ -1,7 +1,7 @@
 $(document).ready(function() {
   if ($(".live-edit-events").length == 0) { return }
 
-  $(".live-edit-events input").blur(function() {
+  $(".live-edit-events input, .live-edit-events textarea").blur(function() {
     let params = {}
     params[$(this).attr("name")] = $(this).val()
 
@@ -11,7 +11,7 @@ $(document).ready(function() {
       data: params
     })
   }).keydown(function(evt) {
-    if (evt.key == "Enter") {
+    if ($(this).is("input") && evt.key == "Enter") {
       $(this).blur()
     }
   })
