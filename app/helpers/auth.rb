@@ -7,4 +7,7 @@ class Auth
     @session = session
     @request = request
   end
+
+  def current_user
+  end
 end
