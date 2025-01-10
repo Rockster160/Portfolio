@@ -4,11 +4,20 @@ class Api::V1::AlexaController < Api::V1::BaseController
   before_action :authorize_alexa_user!
 
   def alexa
-    Jarvis.say("Alexa via #{@current_user&.username}")
-    render json: alexa_response("Success")
+    Jarvis.say("Alexa via #{@current_user&.username}: #{alexa_command}")
+    response = Jarvis.command(@current_user, alexa_command)
+
+    render json: alexa_response(response.presence || "Success")
   end
 
   private
+
+  def alexa_command
+    slots = params.dig(:request, :intent, :slots)
+    return if slots.blank?
+
+    slots.dig(:control, :value) + " " + slots.dig(:device, :value)
+  end
 
   def alexa_response(words)
     words = words.to_s.presence || "No response from Jarvis"
