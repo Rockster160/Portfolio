@@ -71,7 +71,7 @@ class ScheduledTasksController < ApplicationController
   end
 
   def event_params
-    (params[:action_event] || params).to_unsafe_h.slice(:trigger, :execute_at, :data).tap do |whitelist|
+    (params[:action_event] || params).to_unsafe_h.slice(:name, :trigger, :execute_at, :data).tap do |whitelist|
       whitelist[:execute_at] = safeparse_time(whitelist[:execute_at])
       whitelist.delete(:data).presence&.tap { |json|
         json = json.to_s.gsub(/\n?\s*(\w+):/, ' "\1":')

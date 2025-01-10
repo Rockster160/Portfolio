@@ -3,9 +3,10 @@
   <%= paginate @events %>
 </div>
 
-<div class="gtable gtable-3 striped bordered wide">
+<div class="gtable gtable-4 striped bordered wide">
   <div class="thead text-center">
     <div class="th"></div>
+    <div class="th">Name</div>
     <div class="th">Trigger</div>
     <div class="th">Timestamp</div>
   </div>
@@ -13,6 +14,9 @@
   <% @events.each do |event| %>
     <div class="trow live-edit-events">
       <%= link_to "X", scheduled_task_path(event), method: :delete, class: "tcell text-center" %>
+      <div class="tcell">
+        <input data-update-url="<%= scheduled_task_path(event) %>" name="name" value="<%= event.name %>" class="invisi-field" style="width: 100%;" type="text">
+      </div>
       <div class="tcell">
         <input data-update-url="<%= scheduled_task_path(event) %>" name="trigger" value="<%= event.trigger %>" class="invisi-field" style="width: 100%;" type="text">
       </div>
