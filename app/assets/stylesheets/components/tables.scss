@@ -83,6 +83,13 @@ table.monsters {
   }
 }
 
+.gtable-3 {
+  grid-template-columns: repeat(3, auto);
+  .trow .sub-row {
+    grid-column: 1 / span 3;
+  }
+}
+
 .dark-mode {
   .ttable, .gtable {
     &.striped {

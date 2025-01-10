@@ -1,0 +1,34 @@
+<div class="text-center">
+  <%= page_entries_info @events %>
+  <%= paginate @events %>
+</div>
+
+<div class="gtable gtable-3 striped bordered wide">
+  <div class="thead text-center">
+    <div class="th"></div>
+    <div class="th">Trigger</div>
+    <div class="th">Timestamp</div>
+  </div>
+
+  <% @events.each do |event| %>
+    <div class="trow live-edit-events">
+      <%= link_to "X", scheduled_task_path(event), method: :delete, class: "tcell text-center" %>
+      <div class="tcell">
+        <input data-update-url="<%= scheduled_task_path(event) %>" name="trigger" value="<%= event.trigger %>" class="invisi-field" style="width: 100%;" type="text">
+      </div>
+      <div class="tcell">
+        <input data-update-url="<%= scheduled_task_path(event) %>" name="execute_at" value="<%= event.execute_at.in_time_zone("Mountain Time (US & Canada)").iso8601[0..-7] %>" class="invisi-field" style="width: 100%;" type="datetime-local">
+      </div>
+      <div class="sub-row">
+        <% json = event.data.present? ? h(JSON.pretty_generate(event.data).gsub(/"(\w+)": /, '\1: ')) : "" %>
+        <div class="json-wrapper" style="min-height: <%= 1+(json.count("\n")+1) %>rem">
+          <textarea data-update-url="<%= scheduled_task_path(event) %>" name="data" class="invisi-field"><%= json %></textarea>
+        </div>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<div class="text-center">
+  <%= paginate @events %>
+</div>

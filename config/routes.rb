@@ -98,6 +98,8 @@ Rails.application.routes.draw do
     get :feelings, on: :collection
   end
 
+  resources :scheduled_tasks, path: :schedules
+
   resource :summoners_war do
     get :runes
     resources :monsters
