@@ -73,7 +73,7 @@ gem "pretty_logger", "1.4.6"
 gem "dentaku"
 
 # Needed in prod so that we can deploy via SSH
-gem "capistrano",         require: false
+gem "capistrano", "~> 3.18.0", require: false
 gem "capistrano3-puma",   require: false
 gem "capistrano-bundler", require: false
 gem "capistrano-dotenv",  require: false
