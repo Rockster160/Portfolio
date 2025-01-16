@@ -15,6 +15,7 @@ class AmazonEmailParser
   end
 
   def parse
+    @changed = false
     @doc = Nokogiri::HTML(@email.html_body)
     return Jarvis.cmd("Add Amazon Email no order id: #{@email.id}") if order_id.blank?
 
@@ -26,13 +27,16 @@ class AmazonEmailParser
 
     AmazonOrder.save
     AmazonOrder.broadcast
+    @changed
   rescue StandardError => e
     SlackNotifier.err(e, "Error parsing Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
+    false
   end
 
   def order_items
     @order_items ||= begin
       AmazonOrder.by_order(order_id).tap { |items|
+        @changed = true
         items.each do |item|
           item.errors = [] # Clear errors since a new email came in
           item.email_ids << @email.id unless item.email_ids.include?(@email.id)
@@ -49,11 +53,12 @@ class AmazonEmailParser
         next if url.include?("orderId%3D")
 
         full_url = url[1..-2]
-        full_url[/www\.amazon\.com\%2Fdp\%2F([a-z0-9]+)/i, 1].presence
+        full_url[/\%2Fdp\%2F([a-z0-9]+)/i, 1].presence
       }.uniq
 
       item_ids.map { |item_id|
         AmazonOrder.find_or_create(order_id, item_id).tap { |item|
+          @changed = true
           item.errors = [] # Clear errors since a new email came in
           item.email_ids << @email.id unless item.email_ids.include?(@email.id)
         }

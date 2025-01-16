@@ -210,8 +210,7 @@ class Email < ApplicationRecord
     ]
 
     if amazon_update?([mail.from].flatten.compact)
-      parse_amazon
-      archive # Auto archive Amazon emails
+      parse_amazon && archive # Auto archive Amazon emails
     elsif blacklist.any? { |bad| html_body.include?(bad) }
       archive
     end

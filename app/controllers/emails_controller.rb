@@ -10,7 +10,7 @@ class EmailsController < ApplicationController
     if params[:q].present?
       @emails = @emails.query(params[:q])
       mailboxes = Tokenizing::Node.parse(params[:q]).flatten.filter_map { |node|
-        node[:field] == "in" ? node[:conditions] : nil
+        node.is_a?(Hash) && node[:field] == "in" ? node[:conditions] : nil
       }.map(&:to_sym)
     end
     @emails = @emails.inbound unless (mailboxes & [:all, :sent]).any?
