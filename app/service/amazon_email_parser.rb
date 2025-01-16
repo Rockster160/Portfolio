@@ -1,6 +1,6 @@
 class AmazonEmailParserError < StandardError; end
 class AmazonEmailParser
-  include 💾able
+  include ::Memoizeable
 
   def self.parse(email)
     Time.use_zone(User.timezone) do
