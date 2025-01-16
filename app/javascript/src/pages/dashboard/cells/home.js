@@ -218,18 +218,18 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         let data = []
         msg.forEach(order_data => {
           let order = order_data
-          if (!order_data.delivery_date) { return }
-
-          let [year, month, day, ...tz] = order_data.delivery_date.split(/-| /)
-          let date = new Date(0)
-          date.setFullYear(year, parseInt(month) - 1, day)
-          if (order_data.time_range) {
-            let meridian = order_data.time_range.match(/([^\d]*?)$/)[1]
-            let hour = parseInt(order_data.time_range.match(/(\d+)[^\d]*?$/)[1])
-            if (meridian == "pm") { hour += 12 }
-            date.setHours(hour)
+          if (order_data.delivery_date) {
+            let [year, month, day, ...tz] = order_data.delivery_date.split(/-| /)
+            let date = new Date(0)
+            date.setFullYear(year, parseInt(month) - 1, day)
+            if (order_data.time_range) {
+              let meridian = order_data.time_range.match(/([^\d]*?)$/)[1]
+              let hour = parseInt(order_data.time_range.match(/(\d+)[^\d]*?$/)[1])
+              if (meridian == "pm") { hour += 12 }
+              date.setHours(hour)
+            }
+            order.date = date
           }
-          order.date = date
 
           data.push(order)
         })
