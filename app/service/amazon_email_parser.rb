@@ -1,6 +1,6 @@
 class AmazonEmailParserError < StandardError; end
 class AmazonEmailParser
-  include Memoizeable
+  include 💾able
 
   def self.parse(email)
     Time.use_zone(User.timezone) do
@@ -8,7 +8,7 @@ class AmazonEmailParser
     end
   end
 
-  memoize(:order_id) { @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/] }
+  💾(:order_id) { @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/] }
 
   def initialize(email)
     @email = email
@@ -89,13 +89,13 @@ class AmazonEmailParser
     Regexp.new("\\b(?:#{words.join("|")})\\b")
   end
 
-  memoize(:month_regex) {
+  💾(:month_regex) {
     month_names = Date::MONTHNAMES.compact
     with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
     regex_words(with_shorts)
   }
 
-  memoize(:wday_regex) {
+  💾(:wday_regex) {
     month_names = Date::DAYNAMES.compact
     with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
     regex_words(with_shorts)
@@ -133,7 +133,11 @@ class AmazonEmailParser
     return Date.today if date_str.nil? && table_html["Today"].present?
     return Date.tomorrow if date_str.nil? && table_html["tomorrow"].present?
 
-    Date.parse(date_str).then { |date| future(date) }&.iso8601
+    return Date.parse(date_str).then { |date| future(date) }&.iso8601 if date_str.present?
+
+    arrival_ele = @doc.at_xpath("//*[contains(text(), 'Your package will arrive by')]")
+    arrival_text = arrival_ele&.ancestors("tr")&.first&.at_css(".rio_15_heavy_black")&.text
+    return Date.parse(arrival_text).then { |date| future(date) }&.iso8601 if arrival_text.present?
   rescue
     nil
   end
@@ -174,9 +178,13 @@ class AmazonEmailParser
   def retrieve_full_name(item)
     res = ::RestClient.get(item.url)
     item_doc = Nokogiri::HTML(res.body)
-    item_doc.title[/(?:[^:]*? : |Amazon.com: )(.*?) : [^:]*?/im, 1].tap { |name|
-      error("Unable to parse title: [#{item.item_id}]:#{item_doc.title}") if name.blank?
-    }.to_s
+    name = item_doc.title[/(?:[^:]*? : |Amazon.com: )(.*?) : [^:]*?/im, 1]
+    return name unless name.blank?
+
+    name = item_doc.title.split(": Amazon.com").first
+    error("Unable to parse title: [#{item.item_id}]:#{item_doc.title}") if name.blank?
+
+    name.to_s
   rescue => e
     # Amazon occasionally does Captcha checks, which ends with this being a 500.
     # Don't report these, just return nothing and move on.
