@@ -77,7 +77,7 @@ class AmazonEmailParser
         if date.nil?
           item.error!("Unable to parse date")
         else
-          item.delivery_date = date.encode("UTF-8")
+          item.delivery_date = date.iso8601.encode("UTF-8")
         end
       }
       item.time_range = arrival_time(item) # might be `nil`
@@ -133,11 +133,11 @@ class AmazonEmailParser
     return Date.today if date_str.nil? && table_html["Today"].present?
     return Date.tomorrow if date_str.nil? && table_html["tomorrow"].present?
 
-    return Date.parse(date_str).then { |date| future(date) }&.iso8601 if date_str.present?
+    return Date.parse(date_str).then { |date| future(date) } if date_str.present?
 
     arrival_ele = @doc.at_xpath("//*[contains(text(), 'Your package will arrive by')]")
     arrival_text = arrival_ele&.ancestors("tr")&.first&.at_css(".rio_15_heavy_black")&.text
-    return Date.parse(arrival_text).then { |date| future(date) }&.iso8601 if arrival_text.present?
+    return Date.parse(arrival_text).then { |date| future(date) } if arrival_text.present?
   rescue
     nil
   end
