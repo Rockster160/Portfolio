@@ -8,7 +8,7 @@ class AmazonEmailParser
     end
   end
 
-  💾(:order_id) { @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/] }
+  memoize(:order_id) { @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/] }
 
   def initialize(email)
     @email = email
@@ -89,13 +89,13 @@ class AmazonEmailParser
     Regexp.new("\\b(?:#{words.join("|")})\\b")
   end
 
-  💾(:month_regex) {
+  memoize(:month_regex) {
     month_names = Date::MONTHNAMES.compact
     with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
     regex_words(with_shorts)
   }
 
-  💾(:wday_regex) {
+  memoize(:wday_regex) {
     month_names = Date::DAYNAMES.compact
     with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
     regex_words(with_shorts)
