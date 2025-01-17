@@ -64,16 +64,17 @@ class ApplicationRecord < ActiveRecord::Base
       return unscoped.search(field).stripped_sql
     end
 
-    column = search_terms[field].to_s
+    column = search_terms[field]
     column_data = nil
     scope_method = nil
 
-    if !column.include?(".") && !column_names.include?(column)
+    if !column.to_s.include?(".") && !column_names.include?(column.to_s)
       scope_method = column
       column = nil
     else
-      column_data = columns.find { |c| c.name == column }
+      column_data = columns.find { |c| c.name == column.to_s }
     end
+    column = "#{table_name}.#{column}" if column.is_a?(Symbol)
 
     operator = (parent_node&.operator || node.operator).to_sym
 
