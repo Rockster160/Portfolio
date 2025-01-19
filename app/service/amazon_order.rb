@@ -40,6 +40,11 @@ class AmazonOrder
     all.map(&:serialize)
   end
 
+  def self.reparse(email_or_email_id)
+    email = email_or_email_id.is_a?(Email) ? email_or_email_id : Email.find(email_or_email_id)
+    AmazonEmailParser.parse(email)
+  end
+
   def self.find(order_id, item_id=nil)
     all.find { |order|
       next unless order.order_id == order_id
@@ -66,6 +71,11 @@ class AmazonOrder
     order_hash.each do |key, val|
       self.send("#{key}=".to_sym, val) if self.respond_to?(key)
     end
+  end
+
+  def reparse(email_id=nil)
+    email_id ||= email_ids.last
+    AmazonEmailParser.parse(Email.find(email_id))
   end
 
   def url
