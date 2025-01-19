@@ -1,3 +1,8 @@
+# email = @email = Email.find(23405)
+# @doc = Nokogiri::HTML(@email.html_body)
+# def order_id; @order_id ||= @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/]; end
+# def month_regex; @month_regex ||= /\b(?:January|Jan|February|Feb|March|Mar|April|Apr|May|May|June|Jun|July|Jul|August|Aug|September|Sep|October|Oct|November|Nov|December|Dec)\b/; end
+# def wday_regex; @wday_regex ||= /\b(?:Sunday|Sun|Monday|Mon|Tuesday|Tue|Wednesday|Wed|Thursday|Thu|Friday|Fri|Saturday|Sat)\b/; end
 class AmazonEmailParserError < StandardError; end
 class AmazonEmailParser
   include ::Memoizeable
@@ -133,6 +138,7 @@ class AmazonEmailParser
     return Date.today if date_str.nil? && table_html["Today"].present?
     return Date.tomorrow if date_str.nil? && table_html["tomorrow"].present?
 
+    date_str ||= table_html[/Arriving (#{wdays})/, 1]
     return Date.parse(date_str).then { |date| future(date) } if date_str.present?
 
     arrival_ele = @doc.at_xpath("//*[contains(text(), 'Your package will arrive by')]")
