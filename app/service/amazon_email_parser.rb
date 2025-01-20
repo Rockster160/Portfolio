@@ -1,4 +1,4 @@
-# email = @email = Email.find(23405)
+# email = @email = Email.find(23471)
 # @doc = Nokogiri::HTML(@email.html_body)
 # def order_id; @order_id ||= @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/]; end
 # def month_regex; @month_regex ||= /\b(?:January|Jan|February|Feb|March|Mar|April|Apr|May|May|June|Jun|July|Jul|August|Aug|September|Sep|October|Oct|November|Nov|December|Dec)\b/; end
@@ -41,8 +41,8 @@ class AmazonEmailParser
   def order_items
     @order_items ||= begin
       AmazonOrder.by_order(order_id).tap { |items|
-        @changed = true
         items.each do |item|
+          @changed = true
           item.errors = [] # Clear errors since a new email came in
           item.email_ids << @email.id unless item.email_ids.include?(@email.id)
         end
@@ -135,8 +135,8 @@ class AmazonEmailParser
     wdays = wday_regex
     date_regexp = /(#{months}) \d{1,2}/
     date_str = table_html[date_regexp]
-    return Date.today if date_str.nil? && table_html["Today"].present?
-    return Date.tomorrow if date_str.nil? && table_html["tomorrow"].present?
+    return Date.today if date_str.nil? && table_html[/\btoday\b/i].present?
+    return Date.tomorrow if date_str.nil? && table_html[/\btomorrow\b/i].present?
 
     date_str ||= table_html[/Arriving (#{wdays})/, 1]
     return Date.parse(date_str).then { |date| future(date) } if date_str.present?
