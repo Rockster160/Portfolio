@@ -9,6 +9,12 @@ class MonitorChannel < ApplicationCable::Channel
   # end
 
   def subscribed
+    last_sha = ::DataStorage[:last_sha]
+    if last_sha != COMMIT_SHA
+      ::DataStorage[:last_sha] = COMMIT_SHA
+      ::Jil.trigger(User.me, :startup, { sha: COMMIT_SHA })
+    end
+
     stream_for current_user
   end
 

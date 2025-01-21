@@ -8,6 +8,9 @@
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
 #
+
+# This should only be used for TRUE global storage, such as `last_sha`
+# Personal storage should use UserCache
 class DataStorage < ApplicationRecord
   serialize :data, coder: ::BetterJsonSerializer
 
