@@ -10,7 +10,7 @@
 #  user_id    :bigint
 #
 class UserCache < ApplicationRecord
-  serialize :data, coder: ::SafeJsonSerializer
+  json_serialize :data, coder: ::SafeJsonSerializer
   # TODO: Encrypt `data` in the next life
   attr_accessor :skip_save_set
 

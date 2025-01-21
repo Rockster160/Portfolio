@@ -3,7 +3,10 @@ class Api::V1::ListItemsController < Api::V1::BaseController
   before_action :authorize_user_or_guest
 
   def index
-    serialize current_list.list_items.serialize
+    items = current_list.list_items
+    items = items.with_deleted if params[:with_deleted] == "true"
+
+    serialize items
   end
 
   def show

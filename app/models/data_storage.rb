@@ -12,7 +12,7 @@
 # This should only be used for TRUE global storage, such as `last_sha`
 # Personal storage should use UserCache
 class DataStorage < ApplicationRecord
-  serialize :data, coder: ::BetterJsonSerializer
+  json_serialize :data, coder: ::BetterJsonSerializer
 
   def self.[](key)
     get(key)

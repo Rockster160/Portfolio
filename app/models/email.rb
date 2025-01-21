@@ -23,7 +23,7 @@ class Email < ApplicationRecord
   belongs_to :sent_by, class_name: "User", optional: true
   belongs_to :user, optional: true
 
-  serialize :attachments, coder: JsonWrapper
+  json_serialize :attachments, coder: JsonWrapper
 
   scope :not_archived, -> { where(deleted_at: nil) }
   scope :archived,     -> { where.not(deleted_at: nil) }
@@ -169,7 +169,7 @@ class Email < ApplicationRecord
     }
   end
 
-  def serialize
+  def serialize(opts={})
     as_json(only: [:id, :from, :to, :subject])
   end
 

@@ -14,16 +14,16 @@ class Api::V1::BaseController < ApplicationController
     render json: { data: json.as_json }, **opts
   end
 
-  def serialize(data)
+  def serialize(data, opts={})
     errors = []
 
     case data
     when ::Hash, ::Array
     when ::ActiveRecord::Base
       errors = data.errors.full_messages
-      data = data.serialize
+      data = data.serialize(opts)
     when ::ActiveRecord::Relation
-      data = data.map(&:serialize)
+      data = data.serialize(opts)
     end
 
     render(

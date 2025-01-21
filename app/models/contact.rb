@@ -25,7 +25,7 @@ class Contact < ApplicationRecord
 
   search_terms :id, :name, :nickname, :phone
 
-  serialize :raw, coder: ::BetterJsonSerializer
+  json_serialize :raw, coder: ::BetterJsonSerializer
 
   validates_uniqueness_of :apple_contact_id, allow_nil: true
 

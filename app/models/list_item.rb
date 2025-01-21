@@ -90,11 +90,7 @@ class ListItem < ApplicationRecord
     end
   end
 
-  def self.serialize
-    all.map(&:serialize)
-  end
-
-  def serialize
+  def serialize(opts={})
     as_json(
       only: [
         :id,

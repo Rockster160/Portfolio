@@ -5,11 +5,11 @@ class Api::V1::ListsController < Api::V1::BaseController
   def index
     @lists = current_user.ordered_lists
 
-    serialize @lists
+    serialize @lists, with_deleted: params[:with_deleted] == "true"
   end
 
   def show
-    serialize current_list
+    serialize current_list, with_deleted: params[:with_deleted] == "true"
   end
 
   def reorder

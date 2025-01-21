@@ -14,7 +14,8 @@
 
 class List < ApplicationRecord
   attr_accessor :do_not_broadcast, :response
-  has_many :list_items, dependent: :destroy
+  has_many :list_items, -> { ordered }, dependent: :destroy
+  has_many :deleted_list_items, -> { ordered.with_deleted }, class_name: "ListItem", dependent: :destroy
   has_many :user_lists, dependent: :destroy
   has_many :users, through: :user_lists
 
@@ -64,12 +65,8 @@ class List < ApplicationRecord
     all.map(&:legacy_serialize)
   end
 
-  def self.serialize
-    all.map(&:serialize)
-  end
-
-  def serialize
-    as_json(
+  def serialize(opts={})
+    serialized_opts = {
       only: [
         :id,
         :name,
@@ -91,7 +88,15 @@ class List < ApplicationRecord
           ],
         }
       }
-    ).with_indifferent_access
+    }
+
+    if opts[:with_deleted]
+      serialized_opts[:include][:deleted_list_items] = serialized_opts[:include].delete(:list_items)
+    end
+
+    as_json(serialized_opts).with_indifferent_access.tap { |json|
+      json[:items] = json.delete(:list_items) || json.delete(:deleted_list_items)
+    }
   end
 
   def legacy_serialize

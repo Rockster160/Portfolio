@@ -206,6 +206,18 @@ class ApplicationRecord < ActiveRecord::Base
     where(key => t..)
   }
 
+  class << self
+    alias_method :json_serialize, :serialize
+  end
+
+  def self.serialize(opts={})
+    all.map { |item| item.serialize(opts) }
+  end
+
+  def serialize(opts={})
+    as_json(opts.reverse_merge(except: [:created_at, :updated_at])).with_indifferent_access
+  end
+
   def new(attrs={})
     @new_attributes = attrs
     super(attrs)
