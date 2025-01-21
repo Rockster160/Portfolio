@@ -90,6 +90,24 @@ class ListItem < ApplicationRecord
     end
   end
 
+  def self.serialize
+    all.map(&:serialize)
+  end
+
+  def serialize
+    as_json(
+      only: [
+        :id,
+        :name,
+        :category,
+        :important,
+        :permanent,
+        :sort_order,
+        :deleted_at,
+      ],
+    ).with_indifferent_access
+  end
+
   def self.with_deleted
     unscope(where: :deleted_at)
   end

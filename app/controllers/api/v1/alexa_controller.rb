@@ -1,6 +1,5 @@
 class Api::V1::AlexaController < Api::V1::BaseController
   skip_before_action :verify_authenticity_token
-  skip_before_action :doorkeeper_authorize!
   before_action :authorize_alexa_user!
 
   def alexa

@@ -50,7 +50,7 @@ class Jil::Methods::Contact < Jil::Methods::Base
   end
 
   def search(name)
-    @jil.user.contacts.search(name).map(&:serialize)
+    @jil.user.contacts.search(name).map(&:legacy_serialize)
   end
 
   def create(details)

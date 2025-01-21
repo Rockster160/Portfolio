@@ -29,6 +29,14 @@ Rails.application.routes.draw do
     namespace :v1 do
       post :alexa, controller: :alexa
       # resource :alexa, controller: :alexa
+
+      resources :lists, only: [:index, :show, :update, :create] do
+        post :reorder, on: :collection
+        put :order_items, on: :member
+
+        resources :list_items, only: [:index, :show, :update, :create]
+        # resources :user_lists, only: [:index, :create, :destroy], path: :users
+      end
     end
   end
 

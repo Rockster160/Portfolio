@@ -37,7 +37,7 @@ class AmazonOrder
   end
 
   def self.legacy_serialize
-    all.map(&:serialize)
+    all.map(&:legacy_serialize)
   end
 
   def self.reparse(email_or_email_id)

@@ -42,7 +42,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   end
 
   def search(name)
-    schedules.break_searcher(name).map(&:serialize)
+    schedules.break_searcher(name).map(&:legacy_serialize)
   end
 
   def create(details)

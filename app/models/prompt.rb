@@ -23,7 +23,7 @@ class Prompt < ApplicationRecord
   }
 
   def self.legacy_serialize
-    all.map(&:serialize)
+    all.map(&:legacy_serialize)
   end
 
   def legacy_serialize

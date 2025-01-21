@@ -61,6 +61,10 @@ class List < ApplicationRecord
   end
 
   def self.legacy_serialize
+    all.map(&:legacy_serialize)
+  end
+
+  def self.serialize
     all.map(&:serialize)
   end
 

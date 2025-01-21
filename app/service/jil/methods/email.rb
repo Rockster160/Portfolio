@@ -14,7 +14,7 @@ class Jil::Methods::Email < Jil::Methods::Base
     limit = (limit.presence || 50).to_i.clamp(1..100)
     scoped = @jil.user.emails.query(q).page(1).per(limit)
     scoped = scoped.order(created_at: order) if [:asc, :desc].include?(order.to_s.downcase.to_sym)
-    scoped.map(&:serialize)
+    scoped.map(&:legacy_serialize)
   end
 
   def to(email_data)
