@@ -41,7 +41,7 @@ class Api::V1::ListItemsController < Api::V1::BaseController
     @item = current_list.list_items.find_by(id: params[:id])
     @item ||= current_list.list_items.by_formatted_name(params[:name]) if params[:name].present?
     @item ||= current_list.list_items.by_formatted_name(params[:id])
-    @item ||= current_list.list_items.find(params[:id])
+    @item ||= current_list.list_items.find(params[:id] || params[:name])
   end
 
   def list_item_params

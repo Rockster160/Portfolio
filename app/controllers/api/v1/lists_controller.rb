@@ -47,6 +47,14 @@ class Api::V1::ListsController < Api::V1::BaseController
     serialize @list
   end
 
+  def destroy
+    @list = current_list
+
+    @list.destroy
+
+    serialize @list
+  end
+
   private
 
   def current_list
