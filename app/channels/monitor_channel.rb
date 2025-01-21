@@ -13,9 +13,7 @@ class MonitorChannel < ApplicationCable::Channel
     if last_sha != COMMIT_SHA
       ::DataStorage[:last_sha] = COMMIT_SHA
       ::Jil.trigger(User.me, :startup, { sha: COMMIT_SHA })
-      ::Jarvis.say("Subscribed: SHA mismatch")
-    else
-      ::Jarvis.say("Subscribed: SHA matches")
+      ::Jarvis.say("Subscribed: Updated SHA")
     end
 
     stream_for current_user
