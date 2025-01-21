@@ -31,15 +31,6 @@ set :bundle_env_variables, { "BUNDLE_FORCE_RUBY_PLATFORM" => "true" }
 set :puma_service_unit_name, "puma_portfolio_production"
 set :puma_systemctl_user, false
 
-namespace :puma do
-  desc "Restart Puma service"
-  task :restart do
-    on roles(:app) do
-      execute :sudo, "/bin/systemctl restart #{fetch(:puma_service_unit_name)}"
-    end
-  end
-end
-
 set :default_env, {
   path: "/home/rocco/.rbenv/plugins/ruby-build/bin:/home/rocco/.rbenv/shims:/home/rocco/.rbenv/bin:$PATH",
   rbenv_root: "/home/rocco/.rbenv"

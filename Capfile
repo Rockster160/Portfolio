@@ -17,3 +17,12 @@ install_plugin Capistrano::SCM::Git
 
 # Load custom tasks from `lib/capistrano/tasks` if you have any defined
 Dir.glob("lib/capistrano/tasks/*.rake").each { |r| import r }
+
+namespace :puma do
+  desc "Restart Puma service"
+  task :restart do
+    on roles(:app) do
+      execute :sudo, "/bin/systemctl restart #{fetch(:puma_service_unit_name)}"
+    end
+  end
+end
