@@ -28,6 +28,7 @@ set :puma_worker_timeout, nil
 set :puma_init_active_record, true  # Change to false when not using ActiveRecord
 set :bundle_flags, "--deployment --quiet"
 set :bundle_env_variables, { "BUNDLE_FORCE_RUBY_PLATFORM" => "true" }
+set :puma_service_unit_name, "puma_portfolio_production"
 
 set :default_env, {
   path: "/home/rocco/.rbenv/plugins/ruby-build/bin:/home/rocco/.rbenv/shims:/home/rocco/.rbenv/bin:$PATH",
