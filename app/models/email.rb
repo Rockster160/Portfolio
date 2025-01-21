@@ -126,7 +126,7 @@ class Email < ApplicationRecord
       from:    from,
       to:      to&.split(","),
       subject: subject,
-      body:    html_body
+      body:    html_body,
     )
   end
 
@@ -197,7 +197,7 @@ class Email < ApplicationRecord
 
     success = save!
 
-    tasks = ::Jil.trigger_now(user_id, :email, serialize)
+    tasks = ::Jil.trigger_now(user_id, :email, legacy_serialize)
     return if tasks.any?(&:stop_propagation?)
     reload # Since Jil updates them out of scope
     return if archived? # Task might have archived this. No need to do further logic if so.
