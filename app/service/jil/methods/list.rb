@@ -47,7 +47,7 @@ class Jil::Methods::List < Jil::Methods::Base
   private
 
   def list_data(jil_list)
-    load_list(jil_list).jil_serialize
+    load_list(jil_list).serialize
   end
 
   def load_list(jil_list)

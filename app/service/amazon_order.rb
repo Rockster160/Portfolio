@@ -36,7 +36,7 @@ class AmazonOrder
     clear # Clear for next
   end
 
-  def self.serialize
+  def self.legacy_serialize
     all.map(&:serialize)
   end
 
@@ -92,7 +92,7 @@ class AmazonOrder
     @errors.push(str)
   end
 
-  def serialize
+  def legacy_serialize
     {
       order_id: order_id,
       item_id: item_id,

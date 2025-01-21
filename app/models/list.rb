@@ -60,11 +60,11 @@ class List < ApplicationRecord
     list.modify_from_message(msg)
   end
 
-  def self.serialize
+  def self.legacy_serialize
     all.map(&:serialize)
   end
 
-  def jil_serialize
+  def serialize
     as_json(
       only: [
         :id,
@@ -90,7 +90,7 @@ class List < ApplicationRecord
     ).with_indifferent_access
   end
 
-  def serialize
+  def legacy_serialize
     {
       id: id,
       name: name,

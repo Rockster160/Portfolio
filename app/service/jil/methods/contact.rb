@@ -3,7 +3,7 @@ class Jil::Methods::Contact < Jil::Methods::Base
 
   def cast(value)
     case value
-    when ::Contact then value.serialize
+    when ::Contact then value.legacy_serialize
     else @jil.cast(value, :Hash)
     end
   end
@@ -46,7 +46,7 @@ class Jil::Methods::Contact < Jil::Methods::Base
   def find(name)
     found = @jil.user.contacts.find_by(id: name) if name.match?(/^\d+$/)
     found ||= @jil.user.contacts.name_find(name)
-    found&.serialize
+    found&.legacy_serialize
   end
 
   def search(name)
@@ -54,7 +54,7 @@ class Jil::Methods::Contact < Jil::Methods::Base
   end
 
   def create(details)
-    @jil.user.contacts.create(params(details)).serialize
+    @jil.user.contacts.create(params(details)).legacy_serialize
   end
 
   def update!(contact, details)

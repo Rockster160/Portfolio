@@ -136,12 +136,12 @@ class Task < ApplicationRecord
     !!last_execution&.stop_propagation?
   end
 
-  def serialize
+  def legacy_serialize
     attributes.deep_symbolize_keys.except(:created_at, :updated_at, :code, :cron, :sort_order)
   end
 
   def serialize_with_execution
-    serialize.merge(last_execution&.serialize || {})
+    serialize.merge(last_execution&.legacy_serialize || {})
   end
 
   def listener_match?(trigger, &block)

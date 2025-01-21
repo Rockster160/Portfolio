@@ -23,7 +23,7 @@ class Jil::TasksController < ApplicationController
     @task = current_user.tasks.create(task_params)
 
     render json: {
-      data: @task.serialize,
+      data: @task.legacy_serialize,
       url: jil_task_path(@task),
     }
   end
@@ -33,7 +33,7 @@ class Jil::TasksController < ApplicationController
     @task.update(task_params)
 
     render json: {
-      data: @task.serialize,
+      data: @task.legacy_serialize,
       url: jil_task_path(@task),
     }
   end

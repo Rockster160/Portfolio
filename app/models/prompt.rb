@@ -22,11 +22,11 @@ class Prompt < ApplicationRecord
     many:   1,
   }
 
-  def self.serialize
+  def self.legacy_serialize
     all.map(&:serialize)
   end
 
-  def serialize
+  def legacy_serialize
     {
       id: id,
       question: question,

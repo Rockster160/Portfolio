@@ -8,7 +8,7 @@ class ScheduledTasksController < ApplicationController
 
     respond_to do |format|
       format.html
-      format.json { render json: @events.per(30).serialize }
+      format.json { render json: @events.per(30).legacy_serialize }
     end
   end
 
@@ -16,7 +16,7 @@ class ScheduledTasksController < ApplicationController
     event = current_user.scheduled_triggers.create!(event_params)
     ::Jil::Schedule.update(event) # Schedules the job
     ::Jil::Schedule.broadcast(event, :created)
-    event.serialize
+    event.legacy_serialize
 
     respond_to do |format|
       format.json do

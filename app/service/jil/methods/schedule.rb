@@ -2,7 +2,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   PERMIT_ATTRS = [:name, :execute_at, :trigger, :data]
   def cast(value)
     case value
-    when ::ScheduledTrigger then value.serialize
+    when ::ScheduledTrigger then value.legacy_serialize
     else @jil.cast(value, :Hash)
     end
   end
@@ -38,7 +38,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   # [Schedule]
 
   def find(id)
-    schedules.find_by(id: id)&.serialize
+    schedules.find_by(id: id)&.legacy_serialize
   end
 
   def search(name)
@@ -50,7 +50,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
     s = @jil.user.scheduled_triggers.create!(fix_params)
     ::Jil::Schedule.update(s) # Schedules the job
     ::Jil::Schedule.broadcast(s, :created)
-    s.serialize
+    s.legacy_serialize
   end
 
   def update!(schedule, details)
@@ -58,7 +58,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
       s.update(params(details))
       ::Jil::Schedule.update(s)
       ::Jil::Schedule.broadcast(s, :updated)
-    }.serialize
+    }.legacy_serialize
   end
 
   def cancel!(schedule)
@@ -66,7 +66,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
       ::Jil::Schedule.cancel(s)
       s.destroy
       ::Jil::Schedule.broadcast(s, :canceled)
-    }&.serialize&.merge(canceled: true)&.except(:id)
+    }&.legacy_serialize&.merge(canceled: true)&.except(:id)
   end
 
   # [ScheduleData]

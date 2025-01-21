@@ -52,7 +52,7 @@ class Execution < ApplicationRecord
     finished.order(:finished_at).limit(count).map(&:duration).then { |a| a.sum.to_f / a.length }
   end
 
-  def serialize
+  def legacy_serialize
     attributes.deep_symbolize_keys.except(
       :id,
       :created_at,

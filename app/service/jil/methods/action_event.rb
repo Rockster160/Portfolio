@@ -3,7 +3,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
 
   def cast(value)
     case value
-    when ::ActionEvent then value.serialize
+    when ::ActionEvent then value.legacy_serialize
     else @jil.cast(value, :Hash)
     end
   end
@@ -16,7 +16,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     limit = (limit.presence || 50).to_i.clamp(1..100)
     scoped = events.query(q).page(1).per(limit)
     scoped = scoped.order(created_at: order) if [:asc, :desc].include?(order.to_s.downcase.to_sym)
-    scoped.serialize
+    scoped.legacy_serialize
   end
 
   def add(name)
@@ -28,7 +28,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   def create(details)
     events.create(params(details)).tap { |event|
       event_callbacks(event, :added)
-    }.serialize
+    }.legacy_serialize
   end
 
   def execute(line)
@@ -92,7 +92,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   private
 
   def event_callbacks(event, action, update_streak=true, &after)
-    ::Jil.trigger(event.user_id, :event, event.serialize.merge(action: action))
+    ::Jil.trigger(event.user_id, :event, event.legacy_serialize.merge(action: action))
     after&.call(event)
     ActionEventBroadcastWorker.perform_async(event.id, update_streak)
   end

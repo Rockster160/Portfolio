@@ -1,7 +1,7 @@
 class Jil::Methods::Prompt < Jil::Methods::Base
   def cast(value)
     case value
-    when ::Prompt then value.serialize
+    when ::Prompt then value.legacy_serialize
     else @jil.cast(value, :Hash)
     end
   end
@@ -26,7 +26,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   def all(include_complete)
     scoped = prompts
     scoped = scoped.unanswered unless include_complete
-    scoped.serialize
+    scoped.legacy_serialize
   end
 
   def create(title, data, questions, deliver)
@@ -35,7 +35,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
       params: @jil.cast(data.presence, :Hash).presence,
       options: questions,
     ).tap { |prompt|
-      ::Jil.trigger(@jil.user, :prompt, { status: :create }.merge(prompt.serialize.except(:response, :task)))
+      ::Jil.trigger(@jil.user, :prompt, { status: :create }.merge(prompt.legacy_serialize.except(:response, :task)))
       broadcast_push(prompt) if deliver
     }
   end

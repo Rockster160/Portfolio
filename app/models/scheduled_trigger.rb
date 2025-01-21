@@ -39,7 +39,7 @@ class ScheduledTrigger < ApplicationRecord
     execute_at > created_at + 5.seconds
   end
 
-  def serialize
+  def legacy_serialize
     {
       id: id,
       name: name,
