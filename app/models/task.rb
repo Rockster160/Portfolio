@@ -141,7 +141,7 @@ class Task < ApplicationRecord
   end
 
   def serialize_with_execution
-    serialize.merge(last_execution&.legacy_serialize || {})
+    legacy_serialize.merge(last_execution&.legacy_serialize || {})
   end
 
   def listener_match?(trigger, &block)

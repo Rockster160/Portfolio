@@ -31,11 +31,12 @@ class Api::V1::ListItemsController < Api::V1::BaseController
   private
 
   def current_list
-    @list = current_user.lists.find_by(id: params[:list_id]) || current_user.lists.by_param(params[:list_id]).take!
+    @list ||= current_user.lists.find_by(id: params[:list_id]) || current_user.lists.by_param(params[:list_id]).take!
   end
 
   def current_item
     @item = current_list.list_items.find_by(id: params[:id])
+    @item ||= current_list.list_items.by_formatted_name(params[:name]) if params[:name].present?
     @item ||= current_list.list_items.by_formatted_name(params[:id])
     @item ||= current_list.list_items.find(params[:id])
   end

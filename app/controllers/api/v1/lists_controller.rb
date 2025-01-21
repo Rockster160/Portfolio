@@ -50,7 +50,7 @@ class Api::V1::ListsController < Api::V1::BaseController
   private
 
   def current_list
-    current_user.lists.find_by(id: params[:id]) || current_user.lists.by_param(params[:id]).take!
+    @list ||= current_user.lists.find_by(id: params[:id]) || current_user.lists.by_param(params[:id]).take!
   end
 
   def list_params
