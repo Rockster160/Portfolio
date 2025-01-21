@@ -6,6 +6,11 @@
     <script src="https://kit.fontawesome.com/b00e44a575.js" crossorigin="anonymous"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <%= stylesheet_link_tag "jil", media: "all" %>
+    <% if content_for? :favicon %>
+      <%= yield :favicon %>
+    <% else %>
+      <%= render "favicon" %>
+    <% end %>
   </head>
   <body>
     <%= content_tag(:div, "[#{Rails.env.upcase}]", class: "env-banner") unless Rails.env.production? %>

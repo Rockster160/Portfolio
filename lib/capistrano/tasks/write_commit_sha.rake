@@ -1,10 +1,10 @@
 namespace :deploy do
   task :write_commit_sha do
+    commit_sha = `git rev-parse HEAD`.strip
     on roles(:app) do
       within release_path do
         with rails_env: fetch(:stage) do
-          commit_sha = capture("git rev-parse HEAD")
-          execute :echo, "#{commit_sha} > #{release_path}/REVISION"
+          execute :echo, "#{commit_sha} > #{release_path}/REVISION" if commit_sha.present?
         end
       end
     end
