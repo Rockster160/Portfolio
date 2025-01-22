@@ -31,7 +31,8 @@ module Orderable
       set_scope = opts.delete(:scope)
       orderable_by(opts) if opts.present?
       orderable_scope(set_scope) if set_scope
-      default_scope { ordered }
+      # Don't apply default scope since you have to then unscope to do any other ordering
+      # default_scope { ordered }
     end
 
     def orderable_ordered
