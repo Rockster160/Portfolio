@@ -2,7 +2,7 @@ require_relative "boot"
 
 require "rails/all"
 
-require_relative "../app/middlewares/catch_mime_negotiation_middleware.rb"
+require_relative "../lib/middleware/catch_mime_negotiation_middleware"
 
 # Require the gems listed in Gemfile, including any gems
 # you've limited to :test, :development, or :production.
@@ -26,7 +26,7 @@ module Portfolio
       require "#{config.root}/app/service/better_json.rb"
     end
 
-    config.middleware.use CatchMimeNegotiation
+    config.middleware.use ::CatchMimeNegotiationMiddleware
 
     # Configuration for the application, engines, and railties goes here.
     #

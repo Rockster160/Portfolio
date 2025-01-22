@@ -1,4 +1,4 @@
-class CatchMimeNegotiation
+class CatchMimeNegotiationMiddleware
   def initialize(app)
     @app = app
   end
