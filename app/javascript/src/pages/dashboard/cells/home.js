@@ -181,7 +181,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
           } else if (Time.beginningOfDay() + Time.day() > delivery_date) {
             delivery = Text.green(order.time_range ? order.time_range : "Today")
           } else if (Time.beginningOfDay() + Time.days(2) > delivery_date) {
-            delivery = Text.yellow("Tomorrow")
+            delivery = Text.yellow("Tmrw")
           } else if (Time.beginningOfDay() + Time.days(6) > delivery_date) {
             delivery = Text.blue(order.date.toLocaleString("en-us", { weekday: "short" }))
           }
