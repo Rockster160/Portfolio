@@ -34,7 +34,7 @@ class Jil::Methods::List < Jil::Methods::Base
   end
 
   def items(list)
-    list_data(list)[:list_items]
+    list_data(list)[:items]
   end
 
   def has_item?(list, item_name)
