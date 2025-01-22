@@ -2,6 +2,8 @@ require_relative "boot"
 
 require "rails/all"
 
+require_relative "../app/middlewares/catch_mime_negotiation_middleware.rb"
+
 # Require the gems listed in Gemfile, including any gems
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
@@ -23,6 +25,8 @@ module Portfolio
       require "#{config.root}/app/service/colorize.rb"
       require "#{config.root}/app/service/better_json.rb"
     end
+
+    config.middleware.use CatchMimeNegotiation
 
     # Configuration for the application, engines, and railties goes here.
     #
