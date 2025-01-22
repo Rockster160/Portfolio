@@ -24,8 +24,16 @@ import { Time } from "./_time"
       renderLines()
     },
     socket: Server.socket("JarvisChannel", function(msg) {
-      // TODO: Do stuff with msg.data
-      if (msg.say?.trim()?.length > 0)  {
+      if (msg.data) {
+        console.log(msg.data)
+      }
+
+      if (msg.data?.reload || msg.data === "reload") {
+        window.location.reload()
+        return
+      }
+
+      if (msg.say?.trim()?.length > 0) {
         let history = getHistory()
         if (/^Logged \w( |\*|ish|$)/.test(msg.say)) { return renderLines(history) }
         if (!/^Logged /.test(msg.say) || /\[/.test(msg.say)) {
