@@ -126,7 +126,7 @@ import { proxy } from "jquery"
         if (json.status == "deploying") {
           let timer = new Timer({ name: currentTime() })
           timer.start.minutes += 2
-          timer.start.seconds += 30
+          timer.start.seconds += 50
           timer.go()
           cell.data.deploy_timers.unshift(timer)
           cell.data.deploy_timers = cell.data.deploy_timers.slice(0, 5)
