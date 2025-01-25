@@ -36,6 +36,7 @@ class ApplicationController < ActionController::Base
 
   def tracker
     return if params[:checker]
+    return if Rails.env.test?
 
     ::TrackerLogger.log_request(request, current_user)
   end

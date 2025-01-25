@@ -3,7 +3,6 @@ class Jil::TasksController < ApplicationController
   skip_before_action :verify_authenticity_token # User is authorized and we don't want to prevent JS
 
   def index
-    # @tasks = current_user.tasks.ordered
     @tasks = current_user.tasks.order("last_trigger_at DESC NULLS LAST")
   end
 

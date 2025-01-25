@@ -175,7 +175,7 @@ class User < ApplicationRecord
   end
 
   def default_list
-    (user_lists.find_by(default: true) || user_lists.order(created_at: :asc).first).try(:list)
+    (user_lists.find_by(default: true) || user_lists.first).try(:list)
   end
 
   def primary_push_sub

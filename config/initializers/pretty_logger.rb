@@ -1,7 +1,7 @@
 # Override default from PrettyLogger
 ::PrettyLogger::RequestLogger.class_eval do
   def instance
-    if Rails.env.development?
+    if Rails.env.development? || Rails.env.test?
       @instance ||= ::ActiveSupport::Logger.new("log/custom.log")
     else
       @instance ||= ::ActiveSupport::Logger.new("/home/deploy/apps/portfolio/shared/log/custom.log")
