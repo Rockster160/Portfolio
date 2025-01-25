@@ -265,8 +265,8 @@ class TeslaControl
   end
 
   def proxy_post_vehicle(endpoint, params={})
-    raise "Should not POST in tests!" if Rails.env.test?
-    return dev_output(:PROXY_POST, "vehicles/#{vin}/#{endpoint}", params) unless perform_requests?
+  return dev_output(:PROXY_POST, "vehicles/#{vin}/#{endpoint}", params) unless perform_requests?
+  raise "Should not POST in tests!" if Rails.env.test?
 
     @api.proxy_post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
       info("Response", "#{res}")
@@ -274,8 +274,8 @@ class TeslaControl
   end
 
   def post_vehicle(endpoint, params={})
-    raise "Should not POST in tests!" if Rails.env.test?
-    return dev_output(:POST, "vehicles/#{vin}/#{endpoint}", params) unless perform_requests?
+  return dev_output(:POST, "vehicles/#{vin}/#{endpoint}", params) unless perform_requests?
+  raise "Should not POST in tests!" if Rails.env.test?
 
     @api.post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
       info("Response", "#{res}")
