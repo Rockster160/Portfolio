@@ -144,6 +144,9 @@ class Oauth::Base
 
       refresh
       retry
+    # rescue RestClient::BadRequest => e
+    # TODO: Rescue other RestClient errors and bubble up as a response
+    #   raise
     end
   end
 

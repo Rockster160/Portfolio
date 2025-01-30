@@ -5,6 +5,10 @@ module FileStorage
   DEFAULT_REGION = "us-east-1"
   DEFAULT_BUCKET = "ardesian-storage"
 
+  def use_live_s3?
+    Rails.env.production?
+  end
+
   def object(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
     Aws::S3::Resource.new(region: region, credentials: CREDENTIALS)
       .bucket(bucket)
@@ -13,12 +17,28 @@ module FileStorage
 
   def upload(file_data, filename: nil, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
     filename = filename || "file-#{Time.current.strftime("%Y-%m-%d-%H-%M-%S")}"
+
+    if !use_live_s3?
+      file_path = "downloads/#{bucket}/#{filename}"
+      puts "\e[35m[FileStorage] Saving file locally: #{file_path}\e[0m"
+      FileUtils.mkdir_p(File.dirname(file_path))
+      return File.open(file_path, "w+") { |f| f.puts file_data }
+    end
+
     object(filename, bucket: bucket, region: region).tap { |obj|
       obj.put(body: file_data)
     }
   end
 
   def download(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
+    if !use_live_s3?
+      begin
+        return File.read("downloads/#{bucket}/#{filename}")
+      rescue Errno::ENOENT
+        # Continue - load from S3
+      end
+    end
+
     object(filename, bucket: bucket, region: region).then { |obj|
       obj.exists? ? obj.get.body.read : obj
     }

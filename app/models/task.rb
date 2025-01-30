@@ -63,6 +63,8 @@ class Task < ApplicationRecord
     }
   end
 
+  # TODO: When renaming a function, should call the refactor to go through and edit all of the tasks below to change the call
+
   # refactor_function("ActionEvent.update") { |line| line.methodname = "change" }
   def self.refactor_function(function_call, &refactor)
     by_code(function_call).find_each do |task|
