@@ -117,9 +117,7 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def broadcast_websocket(channel, data)
-    if (channel == "Jarvis" && @jil.user == User.me) {
-      ::JarvisChannel.broadcast(data)
-    }
+    ::JarvisChannel.broadcast(data) if channel == "Jarvis" && @jil.user == User.me
     ::SocketChannel.send_to(@jil.user, channel, data)
   end
 
