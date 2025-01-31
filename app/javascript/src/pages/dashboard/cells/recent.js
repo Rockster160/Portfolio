@@ -4,7 +4,7 @@ import { Time } from "./_time"
 (function() {
   var renderEvents = function(cell, events) {
     cell.lines(events.map(function(item) {
-      if (cell.data.quiet && item.name.length == 1) { return }
+      if (cell.data.quiet && (item.name.length == 1 || item.name == "Zish")) { return }
 
       var timestamp = Time.at(Date.parse(item.timestamp))
       var h = timestamp.getHours()
