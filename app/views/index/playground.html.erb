@@ -58,7 +58,7 @@
 
         <a href="<%= colors_path %>" class="project-wrapper">
           <div class="json-btn" data-modal="#code-example-colors">API</div>
-          <%= render_modal "code-example-colors", "Colors" do %>
+          <%= render_modal "code-example-colors", "Colors", "code-formatting" do %>
             <p>The Colors endpoint allows you to request colors and an amount of steps between them to fade across.</p>
             <%= raw pretty(:bash, "requests/colors/index.json") %>
             <%= raw pretty(:js, "response/colors/index.json") %>

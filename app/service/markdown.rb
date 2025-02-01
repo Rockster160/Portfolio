@@ -27,6 +27,8 @@ class Markdown
       /\*(.*?)\*/           => wrap('\1', :strong),
       /_(.*?)_/             => wrap('\1', :em),
       /~(.*?)~/             => wrap('\1', :del),
+      /\[\[([^\]]*?)\]\]\((.*?)\)/  => color_wrapper,
+      /\[\[([^\]]*?)\]\]/           => color_wrapper,
       /!\[(.*?)\]\((.*?)\)/ => wrap(nil, :img, src: '\2', alt: '\1'),
       /\[(.*?)\]\((.*?)\)/  => wrap('\1', :a, href: '\2', target: :_blank),
       /\[(\w\s)*\]/                    => internal_link_wrapper,
@@ -132,6 +134,16 @@ class Markdown
 
       escapes = str[...idx][/\\*\z/].length
       return { start_idx: idx, end_idx: idx+Regexp.last_match.to_s.length-1, match: Regexp.last_match } if escapes.even?
+    }
+  end
+
+  def color_wrapper
+    -> (match) {
+      color = match[1]
+      content = match[2].presence || match[1]
+      contrast = ColorGenerator.contrast_text_color_on_background(color) # Must be hex
+
+      wrap(content, :color, style: "background-color: #{color}; color: #{contrast};")
     }
   end
 
