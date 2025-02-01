@@ -1,4 +1,4 @@
-<div class="skinny-container">
+<div class="wide-container">
   <div class="btn-container">
     <a href="<%= recipes_path %>" class="btn">&larr; All Recipes</a>
     <a href="<%= logout_path %>" class="btn pull-right">Logout</a>
@@ -17,7 +17,7 @@
 
       <div class="form-field">
         <%= f.label :description %>
-        <%= f.text_area :description %>
+        <%= f.text_area :description, rows: [@recipe.description.to_s.split("\n").length, 5].max %>
       </div>
 
       <div class="form-field">
@@ -27,12 +27,12 @@
 
       <div class="form-field">
         <%= f.label :ingredients %>
-        <%= f.text_area :ingredients %>
+        <%= f.text_area :ingredients, rows: [@recipe.ingredients.to_s.split("\n").length, 5].max %>
       </div>
 
       <div class="form-field">
         <%= f.label :instructions %>
-        <%= f.text_area :instructions %>
+        <%= f.text_area :instructions, rows: [@recipe.instructions.to_s.split("\n").length, 10].max %>
       </div>
 
       <div class="form-field">

@@ -26,6 +26,11 @@ class MazesController < ApplicationController
     end
   end
 
+  def solve
+    params[:seed]
+    params[:directions]
+  end
+
   def redirect
     redirect_to maze_path(params.except(:action, :controller).permit!.compact_blank)
   end

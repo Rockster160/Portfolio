@@ -1,7 +1,7 @@
 <%= meta_title @recipe.title, include_name: false %>
 <%= meta_description @recipe.description %>
 
-<div class="skinny-container">
+<div class="wide-container">
   <div class="btn-container">
     <% if user_signed_in? %>
       <a href="<%= recipes_path %>" class="btn">All Recipes</a>
@@ -21,7 +21,7 @@
 
     <div class="app-card-body">
       <div class="app-card-inner">
-        <p class="instructions"><%= @recipe.description %></p>
+        <p class="instructions"><%= Markdown.new(@recipe.description, user: current_user).to_html %></p>
 
         <ul class="ingredients-list">
           <% @recipe.ingredients_list.each do |ingredient| %>
