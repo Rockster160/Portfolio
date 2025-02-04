@@ -126,7 +126,6 @@ import { dash_colors } from "../vars"
 //   "rocco11nicholls@gmail.com"   => :lblue,
 //   "rocco.nicholls@workwave.com" => :orange,
 //   "rocco@oneclaimsolution.com"  => :pine,
-//   "Janaya"                      => :pink,
 //   "Workout"                     => :brown,
 // }
 //
