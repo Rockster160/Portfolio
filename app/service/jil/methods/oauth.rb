@@ -73,5 +73,17 @@ class Jil::Methods::Oauth < Jil::Methods::Base
 
   def req(oauth, path, params={}, headers={}, method: :get)
     connect(oauth).request(path, method, params, headers, {})
+  rescue RestClient::Exception => e
+    {
+      message:  e.message,
+      status:   e.try(:http_code) || 500,
+      response: safe_json(e.try(:response)&.body)
+    }
+  end
+
+  def safe_json(json)
+    JSON.parse(json, symbolize_names: true)
+  rescue JSON::ParserError
+    json
   end
 end

@@ -4,7 +4,9 @@ class Api::V1::AlexaController < Api::V1::BaseController
   before_action :authorize_alexa_user!
 
   def alexa
-    Jarvis.say("Alexa via #{@current_user&.username}: #{alexa_command}")
+    unless alexa_command.starts_with?("log")
+      Jarvis.say("Alexa via #{@current_user&.username}: #{alexa_command}")
+    end
     response = Jarvis.command(@current_user, alexa_command)
 
     render json: alexa_response(response.presence || "Success")
