@@ -3,7 +3,7 @@
 
 <div class="skinny-container">
 
-  <%= form_tag "", id: "random-generation-form" do |f| %>
+  <%= form_tag "", id: "random-generation-form", class: "code-formatting" do |f| %>
     <div class="form-title">
       Random
     </div>
@@ -88,7 +88,7 @@
 
 </div>
 
-<%= render_modal("set-howto", "Custom Set") do %>
+<%= render_modal("set-howto", "Custom Set", "code-formatting") do %>
   <p>Select an object from a set by typing (or pasting) a list of objects to select from.</p>
   <p>Objects are split using precedence of a new line (Enter key), `|`, and `,`</p>
   <p>Example: <br>
@@ -96,35 +96,35 @@
   </p>
 <% end %>
 
-<%= render_modal("range-howto", "Specific Range") do %>
+<%= render_modal("range-howto", "Specific Range", "code-formatting") do %>
   <p>Generate a random number inside of a set using the range operator `..`</p>
   <p>This will generate a number between the two numbers you've provided inclusively.</p>
-  <p>This will work for negative number and decimals.</p>
+  <p>This will work for negative numbers and decimals.</p>
   <p>Random decimals will use the highest number of decimal places you provide.</p>
   <p>Example: <br>
-  `5..10` => `7` <br>
-  `1..1.4` => `1.2` <br>
-  `0.0026..0.03` => `0.0115` <br>
-  `-5..5` => `-3` <br>
+  `5..10` → `7` <br>
+  `1..1.4` → `1.2` <br>
+  `0.0026..0.03` → `0.0115` <br>
+  `-5..5` → `-3` <br>
   </p>
 <% end %>
 
-<%= render_modal("dnd-howto", "What is Dice Notation?") do %>
+<%= render_modal("dnd-howto", "What is Dice Notation?", "code-formatting") do %>
   <p>In the examples below, `#` is replaced by any number.</p>
   <p>Notation is not case sensitive.</p>
   <p>Multiple dice can be rolled at once, and additional arithmetic can be applied.</p>
   <table class="instruction-table">
     <tr>
       <td>`d`</td>
-      <td>used to simulate the roll of virtual dice.</td>
+      <td>used to simulate the roll of virtual dice with 6 sides `1..6`.</td>
     </tr>
     <tr>
       <td>`#d`</td>
-      <td>Roll the dice "n" times. (Default 1)</td>
+      <td>Roll the die "#" times. (Default 1)</td>
     </tr>
     <tr>
       <td>`d#`</td>
-      <td>Roll a dice with "n" sides. (Default 6)</td>
+      <td>Roll a dice with "#" sides. (Default 6)</td>
     </tr>
     <tr>
       <td>`d%`</td>
@@ -136,15 +136,15 @@
     </tr>
     <tr>
       <td>`d!#`</td>
-      <td>Roll an additional time if "n" is rolled (Default 1)</td>
+      <td>Roll an additional time if "#" is rolled (Default 1)</td>
     </tr>
     <tr>
       <td>`d+!#`</td>
-      <td>Roll an additional time if the roll is equal or greater than "n"</td>
+      <td>Roll an additional time if the roll is equal or greater than "#"</td>
     </tr>
     <tr>
       <td>`d-!#`</td>
-      <td>Roll an additional time if the roll is equal or less than "n"</td>
+      <td>Roll an additional time if the roll is equal or less than "#"</td>
     </tr>
     <tr>
       <td>`dL`</td>
@@ -152,7 +152,7 @@
     </tr>
     <tr>
       <td>`dL#`</td>
-      <td>Drop the lowest result "n" times.</td>
+      <td>Drop the lowest result "#" times.</td>
     </tr>
     <tr>
       <td>`dH`</td>
@@ -160,7 +160,7 @@
     </tr>
     <tr>
       <td>`dH#`</td>
-      <td>Drop the highest result "n" times.</td>
+      <td>Drop the highest result "#" times.</td>
     </tr>
     <tr>
       <td>`dK`</td>
@@ -168,7 +168,7 @@
     </tr>
     <tr>
       <td>`dK#`</td>
-      <td>Drop the highest result "n" times.</td>
+      <td>Drop the highest result "#" times.</td>
     </tr>
     <tr>
       <td>`d-L`</td>
@@ -176,7 +176,7 @@
     </tr>
     <tr>
       <td>`d-L#`</td>
-      <td>Drop all results equal to or less than "n"</td>
+      <td>Drop all results equal to or less than "#"</td>
     </tr>
     <tr>
       <td>`d-H`</td>
@@ -184,9 +184,9 @@
     </tr>
     <tr>
       <td>`d-H#`</td>
-      <td>Drop all results equal to or greater than "n"</td>
+      <td>Drop all results equal to or greater than "#"</td>
     </tr>
   </table>
   <p>Example: <br>
-  `4d6 + 10` => Roll a 6 sided dice 4 times, add them all together and add 10 to the final result.</p>
+  `4d6 + 10` → Roll a 6 sided dice 4 times, add them all together and add 10 to the final result giving a result roughly matching bell curve ranging from `14..34`.</p>
 <% end %>

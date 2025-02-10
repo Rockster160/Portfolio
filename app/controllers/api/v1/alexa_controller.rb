@@ -31,7 +31,7 @@ class Api::V1::AlexaController < Api::V1::BaseController
       response: {
         outputSpeech: {
           type: "PlainText",
-          text: words.split("\n").first(2).join("\n"), # Only return the first item
+          text: words.split("\n").first(2).join(": "), # Only return the first item
           # playBehavior: "REPLACE_ENQUEUED"
         },
         # card: {
