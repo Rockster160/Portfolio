@@ -127,11 +127,30 @@ class User < ApplicationRecord
     guest_account.destroy
   end
 
-  def self.timezone
-    "America/Denver"
+  def self.timezone(&block)
+    return "America/Denver" unless block_given?
+
+    Time.use_zone(timezone) do
+      block.call
+    end
   end
-  def timezone
-    "America/Denver"
+  def timezone(&block)
+    return "America/Denver" unless block_given?
+
+    Time.use_zone(timezone) do
+      block.call
+    end
+  end
+
+  def parse_time(time_str, format=nil)
+    timezone do
+      if format.nil?
+        Time.zone.parse(time_str)
+      else
+        Time.strptime(time_str, format)
+      end
+    end
+    # parse_time("02/06/25 4:52pm", "%m/%d/%y %I:%M%p")
   end
 
   def me?
