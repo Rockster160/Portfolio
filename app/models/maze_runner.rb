@@ -27,7 +27,7 @@ class MazeRunner
       D: [0, 1],
       L: [-1, 0],
     }
-    str.split("").each do |dir|
+    str.to_s.split("").each do |dir|
       rx, ry = dirs[dir.upcase.to_sym]
       @x += rx
       @y += ry
