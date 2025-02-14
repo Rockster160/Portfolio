@@ -3,6 +3,7 @@
 class Maze
   DIRECTIONS = [ [1, 0], [-1, 0], [0, 1], [0, -1] ]
   attr_accessor :start_str, :end_str, :path, :wall, :width, :height, :seed
+  attr_accessor :start_x, :start_y
 
   def initialize(width, height, options={})
     @seed = (options[:seed] || rand(999999)).to_i

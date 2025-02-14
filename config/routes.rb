@@ -191,6 +191,7 @@ Rails.application.routes.draw do
 
   resource :maze, only: [ :show ] do
     collection do
+      post ":seed/solve", action: :solve
       post "/", action: :redirect
       get ".txt", action: "show"
       get ":seed", action: "show"
