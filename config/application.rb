@@ -1,6 +1,7 @@
 require_relative "boot"
 
 require "rails/all"
+require "rack/cors"
 
 require_relative "../lib/middleware/catch_mime_negotiation_middleware"
 
@@ -30,7 +31,7 @@ module Portfolio
 
     config.middleware.insert_before 0, Rack::Cors do
       allow do
-        origins /\Ahttp://localhost(:\d+)?\z/
+        origins /\Ahttp:\/\/localhost(:\d+)?\z/
         resource "/maze", headers: :any, methods: :get
         resource "/maze/*/solve", headers: :any, methods: :post
       end

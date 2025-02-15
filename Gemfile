@@ -60,6 +60,7 @@ gem "webdrivers"
 gem "web-push", "3.0.0"
 
 gem "doorkeeper", "5.8.1"
+gem "rack-cors"
 
 # Dependency
 # > cap dependencies
