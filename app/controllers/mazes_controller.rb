@@ -30,6 +30,10 @@ class MazesController < ApplicationController
     render plain: runner.draw.join("\n"), status: :unprocessable_entity
   end
 
+  def preflight
+    head :no_content
+  end
+
   def redirect
     redirect_to maze_path(params.except(:action, :controller).permit!.compact_blank)
   end
