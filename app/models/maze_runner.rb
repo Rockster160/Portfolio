@@ -29,6 +29,8 @@ class MazeRunner
     }
     str.to_s.split("").each do |dir|
       rx, ry = dirs[dir.upcase.to_sym]
+      raise MazeRunnerError, "Invalid character" if rx.nil? || ry.nil?
+
       @x += rx
       @y += ry
       raise MazeRunnerError, "Invalid move" if crash?

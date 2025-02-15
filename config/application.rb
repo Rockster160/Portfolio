@@ -28,6 +28,14 @@ module Portfolio
 
     config.middleware.use ::CatchMimeNegotiationMiddleware
 
+    config.middleware.insert_before 0, Rack::Cors do
+      allow do
+        origins /\Ahttp://localhost(:\d+)?\z/
+        resource "/maze", headers: :any, methods: :get
+        resource "/maze/*/solve", headers: :any, methods: :post
+      end
+    end
+
     # Configuration for the application, engines, and railties goes here.
     #
     # These settings can be overridden in specific environments using the files
