@@ -57,7 +57,7 @@ class MazesController < ApplicationController
   end
 
   def set_cors_headers
-    response.set_header("Access-Control-Allow-Origin", request.headers["Origin"] || "*")
+    response.set_header("Access-Control-Allow-Origin", "*")
     response.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     response.set_header("Access-Control-Allow-Headers", "*")
   end
