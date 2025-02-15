@@ -18,7 +18,6 @@ class MazesController < ApplicationController
     @seed = params[:seed].to_i
     headers["X-Maze-Seed"] = @seed
 
-
     runner = MazeRunner.new(generate_maze)
     runner.move(params[:moves])
 
