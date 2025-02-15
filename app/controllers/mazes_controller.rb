@@ -60,5 +60,6 @@ class MazesController < ApplicationController
     response.set_header("Access-Control-Allow-Origin", "*")
     response.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     response.set_header("Access-Control-Allow-Headers", "*")
+    response.set_header("Access-Control-Expose-Headers", "X-Maze-Seed")
   end
 end
