@@ -1,5 +1,6 @@
 class MazesController < ApplicationController
   skip_before_action :verify_authenticity_token
+  before_action :set_cors_headers
 
   def show
     @seed = (params[:seed] || rand(999999)).to_i
@@ -53,5 +54,11 @@ class MazesController < ApplicationController
     }
 
     @maze = Maze.new(width, height, options)
+  end
+
+  def set_cors_headers
+    response.set_header("Access-Control-Allow-Origin", request.headers["Origin"] || "*")
+    response.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    response.set_header("Access-Control-Allow-Headers", "*")
   end
 end
