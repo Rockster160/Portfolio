@@ -3,8 +3,9 @@ class ActionEventsController < ApplicationController
   before_action :authorize_user_or_guest
 
   def index
-    @events = current_user.action_events.order(timestamp: :desc).page(params[:page]).per(50)
+    @events = current_user.action_events
     @events = @events.query(params[:q]) if params[:q].present?
+    @events = @events.order(timestamp: :desc).page(params[:page]).per(50)
 
     respond_to do |format|
       format.html
@@ -17,8 +18,9 @@ class ActionEventsController < ApplicationController
       @today = Time.current.to_date
       @date = safeparse_time(params[:date]).to_date.end_of_week(:sunday)
       @week = @date.then { |t| (t - 6.days)..t }
-      @events = current_user.action_events.order(timestamp: :asc)
+      @events = current_user.action_events
       @events = @events.query(params[:q]) if params[:q].present?
+      @events = @events.order(timestamp: :asc)
       @events = @events.where(timestamp: @week.min.beginning_of_day..@week.max.end_of_day)
 
       grouped_events = @events.group_by { |evt| [evt.timestamp.to_date, evt.timestamp.hour] }
@@ -62,9 +64,10 @@ class ActionEventsController < ApplicationController
         @range = @date.then { |t| t.beginning_of_month..t.end_of_month }
       end
 
-      @events = current_user.action_events.where(name: "Pullups").order(timestamp: :asc)
+      @events = current_user.action_events
       @events = @events.query(params[:q]) if params[:q].present?
       @events = @events.where(timestamp: @range.min.beginning_of_day..@range.max.end_of_day)
+      @events = @events.where(name: "Pullups").order(timestamp: :asc)
 
       grouped_events = @events.group_by { |evt| evt.timestamp.to_date }
       @range_data = @range.each_with_object({}) { |date, obj| obj[date] = grouped_events[date] }

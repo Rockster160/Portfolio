@@ -3,8 +3,9 @@ class LogTrackersController < ApplicationController
   before_action :authorize_admin
 
   def index
-    @loggers = LogTracker.order(created_at: :desc).page(params[:page])
+    @loggers = LogTracker.all
     @loggers = @loggers.query(params[:q]) if params[:q].present?
+    @loggers = @loggers.order(created_at: :desc).page(params[:page])
   end
 
   def show
