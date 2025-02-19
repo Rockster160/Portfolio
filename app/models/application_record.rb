@@ -21,7 +21,7 @@ class ApplicationRecord < ActiveRecord::Base
 
   def self.search_scope
     # Redefine this in the model if a `joins` or other default scope is needed
-    all
+    unscoped
   end
 
   def self.search_terms(*set_terms)
@@ -48,20 +48,22 @@ class ApplicationRecord < ActiveRecord::Base
 
   def self.stripped_sql
     all.to_sql.gsub(/(?: AND )?SELECT "#{table_name}"\.\* FROM "#{table_name}"(?: WHERE )?/, "")
+      .gsub(/ ?LEFT OUTER JOIN \"\w+\" ON \"\w+\".\"id\" = \"#{table_name}\".\"\w+\" WHERE/, "")
   end
 
   def self.raw_sql(q, data=nil)
-    sql = unscoped.where(q, data)
+    sql = search_scope.where(q, data)
     sql.any? # validate
     sql.stripped_sql
   rescue ActiveRecord::StatementInvalid
+    # puts sql.to_sql unless Rails.env.production?
     raise unless Rails.env.production?
   end
 
   def self.node_sql(node, parent_node=nil)
     field = (parent_node&.field || node.field).to_sym
     unless search_terms.key?(field)
-      return unscoped.search(field).stripped_sql
+      return search_scope.search(field).stripped_sql
     end
 
     column = search_terms[field]
@@ -71,6 +73,9 @@ class ApplicationRecord < ActiveRecord::Base
     if !column.to_s.include?(".") && !column_names.include?(column.to_s)
       scope_method = column
       column = nil
+    elsif column.to_s.include?(".")
+      table, table_column = column.to_s.split(".")
+      column_data = table.classify.constantize.columns.find { |c| c.name == table_column }
     else
       column_data = columns.find { |c| c.name == column.to_s }
     end
@@ -83,13 +88,13 @@ class ApplicationRecord < ActiveRecord::Base
     # json_operators = %i[=> ->]
     # Eventually this should detect that it's a json column and use the jsonb operators
     Array.wrap(node.conditions).map { |value|
-      next unscoped.query_by_node(value, node).stripped_sql if value.is_a?(Tokenizing::Node)
+      next search_scope.query_by_node(value, node).stripped_sql if value.is_a?(Tokenizing::Node)
 
       next if value.is_a?(Tokenizing::Node)
       next unless operator.in?(text_operators + numeric_operators)
 
       if scope_method.present?
-        unscoped.send(scope_method, *value).stripped_sql
+        search_scope.send(scope_method, *value).stripped_sql
       elsif column_data.type.in?(%i[string text])
         case operator.to_s
         when *%w[:] then raw_sql("#{column} ILIKE ?", "%#{value}%")
@@ -140,7 +145,7 @@ class ApplicationRecord < ActiveRecord::Base
   scope :search, ->(q) {
     next none if search_terms.blank?
 
-    ilike(search_indexed("%#{q}%"), :OR)
+    search_scope.ilike(search_indexed("%#{q}%"), :OR)
   }
   scope :unsearch, ->(q) {
     next none if search_terms.blank?
@@ -157,9 +162,9 @@ class ApplicationRecord < ActiveRecord::Base
           else
             Array.wrap(node.conditions).map { |condition|
               if condition.is_a?(Tokenizing::Node)
-                unscoped.query_by_node(condition).stripped_sql
+                search_scope.query_by_node(condition).stripped_sql
               else
-                unscoped.search(condition).stripped_sql
+                search_scope.search(condition).stripped_sql
               end
             }.compact_blank
           end
@@ -191,7 +196,7 @@ class ApplicationRecord < ActiveRecord::Base
   scope :query, ->(q) {
     breaker = ::Tokenizing::Node.parse(q)
 
-    where(unscoped.query_by_node(breaker).stripped_sql)
+    search_scope.where(search_scope.query_by_node(breaker).stripped_sql)
   }
   scope :before, ->(time) {
     t = Time.zone.parse(time) rescue (next none)

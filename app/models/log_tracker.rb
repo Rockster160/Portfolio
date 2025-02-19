@@ -25,7 +25,7 @@ class LogTracker < ApplicationRecord
   after_create_commit :broadcast_creation
 
   def self.search_scope
-    left_outer_joins(:user)
+    left_outer_joins(:user).references(:user)
   end
   search_terms(
     :url,
