@@ -362,7 +362,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       },
       open: function(idx) {
         if (idx) {
-          let order = cell.data.amz_updates[parseInt(idx)]
+          let order = cell.data.amz_updates[parseInt(idx)-1]
           order?.email_ids?.forEach(id => window.open(`https://ardesian.com/emails/${id}`, "_blank"))
         }
       },
@@ -379,6 +379,8 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         } else if (/^\d+\s*$/.test(msg)) { // No words means open the order
           let url = "https://www.amazon.com/gp/your-account/order-details?orderID="
           window.open(url + order.order_id.replace("#", ""), "_blank")
+        } else if (/^\d+\s*o\b$/.test(msg)) { // "o" means open the email
+          order?.email_ids?.forEach(id => window.open(`https://ardesian.com/emails/${id}`, "_blank"))
         } else { // Rename the order
           cell.amz_socket.send({ action: "change", order_id: order.order_id, item_id: order.item_id, rename: msg.replace(/^\d+ /, "") })
         }

@@ -1,6 +1,11 @@
 class Jil::Methods::Boolean < Jil::Methods::Base
   def cast(value)
-    ::ActiveModel::Type::Boolean.new.cast(value)
+    case value
+    when String, Symbol then ::ActiveModel::Type::Boolean.new.cast(value.to_s)
+    when TrueClass, FalseClass then value
+    when Numeric then value != 0
+    else value.present?
+    end
   end
 
   def execute(line)
