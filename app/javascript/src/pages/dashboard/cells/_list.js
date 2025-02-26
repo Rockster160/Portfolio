@@ -1,4 +1,5 @@
 import { Text } from "../_text"
+import { beep } from "../vars"
 
 export class ListCell {
   constructor(list_name) {
@@ -8,8 +9,10 @@ export class ListCell {
       cell.text("Loading...")
       cell.socket?.close()
 
+      // const url = "http://localhost:3141/lists/" + name
+      const url = "https://ardesian.com/lists/" + name
       cell.list = (
-        await fetch("https://ardesian.com/lists/" + name)
+        await fetch(url)
           .then(res => res.json())
           .then(json => { return json })
       )
@@ -24,8 +27,15 @@ export class ListCell {
           if (!msg.list_data) { return }
 
           var lines = Text.numberedList(msg.list_data.list_items)
-          this.text(lines.join("\n"))
-          this.flash()
+          if (cell.text() !== "Loading...") {
+            if (cell.text().length < lines.join("\n").length) {
+              beep(50, 1300, 0.05, "sine") // Added
+            } else if (cell.text().length > lines.join("\n").length) {
+              beep(60, 800, 0.05, "sine") // Removed
+            }
+          }
+          cell.text(lines.join("\n"))
+          cell.flash()
         })
       )
 
