@@ -8,6 +8,7 @@ class JarvisChannel < ApplicationCable::Channel
 
   def subscribed
     stream_for current_user
+    ::Jil.trigger(User.me, :jarvis_subscribed)
   end
 
   def command(data)
