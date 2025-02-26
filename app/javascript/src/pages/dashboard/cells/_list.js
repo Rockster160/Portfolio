@@ -29,9 +29,9 @@ export class ListCell {
           var lines = Text.numberedList(msg.list_data.list_items)
           if (cell.text() !== "Loading...") {
             if (cell.text().length < lines.join("\n").length) {
-              beep(50, 1300, 0.05, "sine") // Added
+              beep(50, 1300, 0.1, "sine") // Added
             } else if (cell.text().length > lines.join("\n").length) {
-              beep(60, 800, 0.05, "sine") // Removed
+              beep(60, 800, 0.1, "sine") // Removed
             }
           }
           cell.text(lines.join("\n"))

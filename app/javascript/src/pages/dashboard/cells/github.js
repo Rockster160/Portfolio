@@ -1,8 +1,7 @@
 import { Time } from "./_time"
 import { Text } from "../_text"
 import { Timer } from "./timers"
-import { dash_colors, beeps } from "../vars"
-import { proxy } from "jquery"
+import { beeps, beep } from "../vars"
 
 (function() {
   var cell = undefined
