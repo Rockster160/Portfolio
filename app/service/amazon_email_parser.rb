@@ -60,6 +60,7 @@ class AmazonEmailParser
 
       item_ids = urls.filter_map { |url|
         next if url.include?("orderId%3D")
+        next unless url.include?("U=%2Fdp")
 
         full_url = url[1..-2]
         full_url[/\%2Fdp\%2F([a-z0-9]+)/i, 1].presence# && full_url
