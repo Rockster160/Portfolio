@@ -8,6 +8,7 @@ export let registered_cells = {}
 
 // https://lospec.com/palette-list/endesga-32
 export let dash_colors = {
+  muted_purple: "#8A70A0", // Not Endesga32
   red:      "#E91616", // Not Endesga32
   purple:   "#68386C",
   magenta:  "#B55088",

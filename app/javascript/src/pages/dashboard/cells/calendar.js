@@ -55,6 +55,7 @@ import { dash_colors } from "../vars"
       let color = "lblue"
       if (calendar == "rocco@oneclaimsolution.com") { color = "green" }
       if (calendar == "Workout") { color = "orange" }
+      if (calendar == "Chelsea") { color = "muted_purple" }
       const nameLine = Text.color(dash_colors[color], `• ${name} `)
 
       let timeStr = ""
