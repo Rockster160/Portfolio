@@ -44,7 +44,11 @@ import { dash_colors, clamp } from "../vars"
     let printer_data = cell.data.printer_data || {}
 
     let lines = []
-    lines.push(Text.center([cell.data.temps.tool, cell.data.temps.bed].join(" | ")))
+    if (cell.data.temps) {
+      lines.push(Text.center([cell.data.temps.tool, cell.data.temps.bed].join(" | ")))
+    } else {
+      lines.push("[Temps not found]")
+    }
     if (printer_data.paused) {
       lines.push(Text.center(Text.grey("[PAUSED]")))
     } else {

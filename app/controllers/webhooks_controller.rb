@@ -143,6 +143,9 @@ class WebhooksController < ApplicationController
     LocalIpManager.local_ip = request.remote_ip
     ActionCable.server.broadcast(:printer_callback_channel, { printer_data: params.permit!.to_h.except(:apiSecret) })
     PrinterNotify.notify(params)
+    Jil.trigger(current_user, :printer, params.permit!.to_h)
+
+    head :ok
   end
 
   def uptime

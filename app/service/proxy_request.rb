@@ -1,5 +1,11 @@
-class ProxyRequest
+# Not working?
+# Restart modem, router, and computer - in that order
+# `updateIp`
+# Verify `myip` matches the port forwarding in `https://192.168.0.1/advancedsetup_advancedportforwarding.html`
+# Router: DMZ Hosting → Enable local ip address
+# ProxyRequest.local_ping
 
+class ProxyRequest
   def self.local_ping
     Api.post("http://#{DataStorage[:local_ip]}:3142/test")
   end

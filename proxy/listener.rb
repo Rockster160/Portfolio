@@ -105,7 +105,7 @@ class ProxyServer < Sinatra::Base
     data = request.body.read
     proxy_headers = request.env.slice("CONTENT_TYPE")
     request.env.each do |key, value|
-      # puts "\e[36m#{key}:\e[33m #{value}\e[0m"
+      puts "\e[36m#{key}:\e[33m #{value}\e[0m"
       proxy_headers[key.gsub(/^HTTP_/, "")] = value if key.start_with?("HTTP_")
     end
     proxy_headers = proxy_headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase }
