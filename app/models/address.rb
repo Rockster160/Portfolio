@@ -19,7 +19,9 @@ class Address < ApplicationRecord
   belongs_to :contact
 
   before_save :set_primary
-  after_destroy { contact.addresses.first&.update(primary: true) if primary? }
+  after_destroy { contact.addresses.last&.update(primary: true) if primary? }
+
+  scope :ordered, -> { order(primary: :desc, created_at: :asc) }
 
   def loc
     [lat, lng]
@@ -44,11 +46,11 @@ class Address < ApplicationRecord
   private
 
   def set_primary
-    if changed&.include?("primary")
+    if primary_changed?
       if primary
         contact.addresses.where(primary: true).where.not(id: id).update_all(primary: false)
-      else
-        contact.addresses.where.not(id: id).first&.update(primary: true) || self.primary = true
+      elsif primary_was == false
+        contact.addresses.where.not(id: id).last&.update(primary: true) || self.primary = true
       end
     end
   end

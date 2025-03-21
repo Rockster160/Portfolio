@@ -36,7 +36,7 @@
       <%= f.submit %>
     </div>
 
-    <% @contact.addresses.each do |address| %>
+    <% @contact.addresses.ordered.each do |address| %>
       <div class="sub-form">
         <% if address.primary? %>
           <i class="fa fa-star is-primary"></i>
