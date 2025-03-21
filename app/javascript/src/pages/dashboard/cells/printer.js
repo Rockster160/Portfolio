@@ -57,6 +57,7 @@ import { dash_colors, clamp } from "../vars"
     lines.push(Text.center(printer_data.filename || "[Job not found]"))
 
     if (printer_data.filename) {
+      // FIXME: Times are WAY off
       let estimated_progress = printer_data.elapsedTime / printer_data.estimated
       printer_data.progress = clamp(estimated_progress * 100, 0, 100)
       printer_data.eta_ms = printer_data.complete ? printer_data.elapsedTime : printer_data.msSinceEpoch + printer_data.timeLeft
