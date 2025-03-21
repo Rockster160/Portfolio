@@ -1,8 +1,10 @@
-# email = @email = Email.find(24553)
-# @doc = Nokogiri::HTML(@email.html_body)
+# email = @email = Email.find(26542)
+# @doc = Nokogiri::HTML(@email.html_body); nil
 # def order_id; @order_id ||= @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/]; end
 # def month_regex; @month_regex ||= /\b(?:January|Jan|February|Feb|March|Mar|April|Apr|May|May|June|Jun|July|Jul|August|Aug|September|Sep|October|Oct|November|Nov|December|Dec)\b/; end
 # def wday_regex; @wday_regex ||= /\b(?:Sunday|Sun|Monday|Mon|Tuesday|Tue|Wednesday|Wed|Thursday|Thu|Friday|Fri|Saturday|Sat)\b/; end
+
+# Rack::Utils.parse_nested_query(URI.parse(url).query)
 
 # Collect URLS from a bunch of ids, return all of the urls, pull out the good ones.
 # Check if `www.amazon.com%2Fdp%2FB09VNT8WN2` only happens and happens for ALL goods
@@ -56,7 +58,7 @@ class AmazonEmailParser
   def email_items
     @email_items ||= begin
       # urls = @doc.to_s.scan(/\"https:\/\/www\.amazon\.com\/gp\/.*?\"/)
-      urls = @doc.to_s.split(/keep shopping for/i, 2).first.scan(/\"https:\/\/www\.amazon\.com\/gp\/.*?\"/)
+      urls = @doc.to_s.split(/keep shopping for/i, 2).first.scan(/\"(https:\/\/www\.amazon\.com\/gp\/.*?)\"/).flatten
 
       item_ids = urls.filter_map { |url|
         next if url.include?("orderId%3D")
@@ -64,7 +66,8 @@ class AmazonEmailParser
 
         full_url = url[1..-2]
         full_url[/\%2Fdp\%2F([a-z0-9]+)/i, 1].presence# && full_url
-      }.uniq
+      }.uniq.presence
+      item_ids ||= [order_id]
 
       item_ids.map { |item_id|
         AmazonOrder.find_or_create(order_id, item_id).tap { |item|
