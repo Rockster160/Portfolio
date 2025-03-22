@@ -17,7 +17,7 @@ RSpec.describe Api::V1::AlexaController, type: :controller do
   }
   let(:responses) {
     {
-      add_bread_to_shopping:       "Shopping:\n - bread",
+      add_bread_to_shopping:       "Shopping::  - bread",
       log_1:                       "Logged 1",
       log_shower:                  "Logged Shower",
       open_the_garage:             "I don't know how to open the garage, sir.",

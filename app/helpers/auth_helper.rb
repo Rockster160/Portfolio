@@ -35,13 +35,21 @@ module AuthHelper
     end
   end
 
+  def previous_url(fallback=nil)
+    session[:forwarding_url] || fallback || lists_path
+  end
+
+  def controller_action
+    "#{controller_name}##{action_name}"
+  end
+
   def store_previous_url
     return unless request.get? # Only store GET requests
     return if controller_action == "users#account" # Don't store Account page
     return if controller_action.match?(/^users\/(sessions|registrations)/) # Don't store login pages
     return if user_signed_in? && !guest_account? # Don't store if already logged in
 
-    session[:forwarding_url] = request.original_url
+    session[:forwarding_url] = request.fullpath || request.original_url
   end
 
   def store_and_login(**msg)

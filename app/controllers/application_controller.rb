@@ -13,6 +13,8 @@ class ApplicationController < ActionController::Base
 
   around_action :use_timezone
 
+  after_action { session.delete(:forwarding_url) if current_user.present? }
+
   rescue_from ::ActiveRecord::RecordNotFound, with: :rescue_login
   rescue_from ::ActionDispatch::Http::Parameters::ParseError, with: :rescue_bad_params
 
@@ -53,14 +55,6 @@ class ApplicationController < ActionController::Base
         }
       end
     end
-  end
-
-  def controller_action
-    "#{params[:controller]}##{params[:action]}"
-  end
-
-  def previous_url(fallback=nil)
-    session.delete(:forwarding_url) || fallback || lists_path
   end
 
   def current_ip_spamming?
