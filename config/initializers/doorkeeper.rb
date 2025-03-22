@@ -14,6 +14,8 @@ Doorkeeper.configure do
     current_admin || redirect_to(account_url, alert: "Sorry, you do not have access to this page.")
   end
 
+  skip_authorization { true } # Alexa is the only client for now
+
   default_scopes :access
 
   access_token_expires_in 2.hours
