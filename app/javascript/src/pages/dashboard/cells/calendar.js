@@ -71,7 +71,7 @@ import { dash_colors } from "../vars"
       // lines.push(Text.justify(nameLine, timeStr))
 
       if (location && !location.match(/zoom\.us|meet\.google|webinar/i)) {
-        lines.push("    " + Text.grey(location.replace("\n", " ")))
+        lines.push("    " + Text.grey(location.replaceAll("\n", " ")))
       }
     })
     cell.lines(lines)
