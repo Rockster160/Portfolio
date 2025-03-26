@@ -1,4 +1,4 @@
-# email = @email = Email.find(26542)
+# email = @email = Email.find(27212)
 # @doc = Nokogiri::HTML(@email.html_body); nil
 # def order_id; @order_id ||= @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/]; end
 # def month_regex; @month_regex ||= /\b(?:January|Jan|February|Feb|March|Mar|April|Apr|May|May|June|Jun|July|Jul|August|Aug|September|Sep|October|Oct|November|Nov|December|Dec)\b/; end
@@ -145,6 +145,7 @@ class AmazonEmailParser
     date_str = table_html[date_regexp]
     return Date.today if date_str.nil? && table_html[/\btoday\b/i].present?
     return Date.tomorrow if date_str.nil? && table_html[/\btomorrow\b/i].present?
+    return Date.tomorrow if date_str.nil? && table_html[/\bovernight\b/i].present?
 
     date_str ||= table_html[/Arriving (#{wdays})/, 1]
     return Date.parse(date_str).then { |date| future(date) } if date_str.present?
