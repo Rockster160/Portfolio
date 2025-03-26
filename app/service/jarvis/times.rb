@@ -59,8 +59,9 @@ module Jarvis::Times
 
   def safe_date_parse(timestamp, chronic_opts={})
     # Force override the context if using `in x time` or `x time ago`
-    chronic_opts[:context] = :future if timestamp.match?(/^\s*in\b/)
-    chronic_opts[:context] = :past if timestamp.match?(/\b(from now|ago)\s*$/)
+    chronic_opts[:context] = :past if timestamp.match?(/\b(ago)\s*$/)
+    chronic_opts[:context] ||= :future if timestamp.match?(/^\s*in\b/)
+    chronic_opts[:context] ||= :future if timestamp.match?(/\b(from now)\s*$/)
     opts = chronic_opts.reverse_merge(ambiguous_time_range: 8)
     ::Chronic.time_class = ::ActiveSupport::TimeZone.new("Mountain Time (US & Canada)")
     ::Chronic.parse(timestamp, opts)&.then { |time|
