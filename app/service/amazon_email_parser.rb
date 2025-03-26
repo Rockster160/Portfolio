@@ -8,6 +8,7 @@
 
 # Collect URLS from a bunch of ids, return all of the urls, pull out the good ones.
 # Check if `www.amazon.com%2Fdp%2FB09VNT8WN2` only happens and happens for ALL goods
+# AmazonEmailParser.parse(Email.find(27212))
 class AmazonEmailParserError < StandardError; end
 class AmazonEmailParser
   include ::Memoizeable
