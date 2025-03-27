@@ -221,9 +221,14 @@ class ActionEventsController < ApplicationController
       (params[:event_name].presence || params.dig(:action_event, :event_name)).presence&.tap { |name|
         whitelist[:name] ||= name
       }
-      whitelist.delete(:data).presence&.tap { |json|
-        json = json.to_s.gsub(/\n?\s*(\w+):/, ' "\1":')
-        json = BetterJsonSerializer.load(json)
+      whitelist.delete(:data).presence&.tap { |data|
+        raw_json = Tokenizer.tokenize(data.to_s, only: { "\"" => "\"" }) { |str|
+          str.gsub(/\n?\s*(\w+):/) { |found|
+            key = Regexp.last_match[1]
+            key.match?(/__TOKEN\d+__/) ? found : " \"#{key}\":"
+          }
+        }
+        json = BetterJsonSerializer.load(raw_json)
         if json.is_a?(::Hash) || json.is_a?(::Array)
           whitelist[:data] = json
         end

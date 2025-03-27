@@ -39,6 +39,13 @@ class Tokenizer
     [first_idx, next_idx]
   end
 
+  def self.tokenize(str, extra_pairs={}, only: nil, &block)
+    tz = new(str, extra_pairs, only: only)
+    changed = block.call(tz.tokenized_text)
+    tz.tokenized_text = changed if changed.is_a?(String)
+    tz.untokenize
+  end
+
   def initialize(text, extra_pairs={}, only: nil)
     @pairs = only.nil? ? WRAP_PAIRS.merge(extra_pairs) : only
     @tokens = {}
