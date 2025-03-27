@@ -50,17 +50,24 @@ class WebhooksController < ApplicationController
     head :ok
   end
 
-  # /jil/trigger/:trigger
+  # /jil/trigger/:trigger?
   def jil
-    ::Jil.trigger(
-      current_user,
-      params[:trigger],
-      json_params.except(:trigger),
-    )
+    if params.key?(:trigger)
+      ::Jil.trigger(
+        current_user,
+        params[:trigger],
+        json_params.except(:trigger),
+      )
+    else
+      json_params.each do |trigger, data|
+        ::Jil.trigger(current_user, trigger, data)
+      end
+    end
 
     head :ok
   end
 
+  # /webhooks/jil
   def execute_task
     task = current_user.tasks.enabled.find_by(uuid: params[:uuid])
 
