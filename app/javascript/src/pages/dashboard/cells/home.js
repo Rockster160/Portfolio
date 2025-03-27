@@ -9,6 +9,90 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
   let flashing = undefined
   let flash_on = true
 
+  class Order {
+    static _render = true;
+    static get render() { return this._render }
+    static set render(val) {
+      this._render = val
+      if (val) { renderLines() }
+    }
+
+    static add(name) {
+      cell.amz_socket.send({ action: "change", add: name })
+    }
+
+    constructor(data) {
+      this._data = { ...data }
+    }
+    // Immutable properties
+    get full_id() { return `${this._data.order_id}-${this._data.item_id}` }
+    get order_id() { return this._data.order_id }
+    get item_id() { return this._data.item_id }
+
+    // Mutable properties
+    get name() { return this._data.name }
+    set name(val) { this._update("name", val) }
+
+    get errors() { return this._data.errors }
+    set errors(val) { this._update("errors", val) }
+
+    get delivered() { return this._data.delivered }
+    set delivered(val) { this._update("delivered", val) }
+
+    get date() { return this._data.date }
+    set date(val) { this._update("date", val) }
+
+    get time_range() { return this._data.time_range }
+    set time_range(val) { this._update("time_range", val) }
+
+    get email_ids() { return this._data.email_ids }
+    set email_ids(val) { this._update("email_ids", val) }
+
+    remove() {
+      cell.amz_socket.send({
+        action: "change",
+        order_id: this.order_id,
+        item_id: this.item_id,
+        remove: true
+      })
+    }
+
+    openAmz() {
+      let url = "https://www.amazon.com/gp/your-account/order-details?orderID="
+      window.open(url + this.order_id.replace("#", ""), "_blank")
+    }
+
+    openEmails() {
+      this.email_ids?.forEach(id => window.open(`https://ardesian.com/emails/${id}`, "_blank"))
+    }
+
+    _update(prop, newVal, fromSocket=false) {
+      const oldVal = this._data[prop]
+      if (oldVal !== newVal) {
+        this._data[prop] = newVal
+        if (!fromSocket && prop === "name") {
+          cell.amz_socket.send({
+            action: "change",
+            order_id: this.order_id,
+            item_id: this.item_id,
+            rename: newVal
+          })
+        }
+        renderLines()
+      }
+      return oldVal !== newVal
+    }
+
+    updateFromSocket(newData) {
+      if ("name" in newData) this._update("name", newData.name, true)
+      if ("errors" in newData) this._update("errors", newData.errors, true)
+      if ("delivered" in newData) this._update("delivered", newData.delivered, true)
+      if ("date" in newData) this._update("date", newData.date, true)
+      if ("time_range" in newData) this._update("time_range", newData.time_range, true)
+      if ("email_ids" in newData) this._update("email_ids", newData.email_ids, true)
+    }
+  }
+
   let flash = function(active) {
     if (active) {
       flashing = flashing || setInterval(renderLines, 400)
@@ -161,35 +245,34 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     }
     lines.push(Text.center(battery_line.join(" ")))
 
-    if (cell.data.amz_updates) {
-      cell.data.amz_updates.forEach(function(order, idx) {
-        let delivery = Text.grey("?")
-        let name = order.name || Text.grey("?")
+    cell.data.orders.forEach(function(order, idx) {
+      let delivery = Text.grey("?")
+      let name = order.name || Text.grey("?")
 
-        if (order.errors?.length > 0) {
-          name = Text.red(name)
+      if (order.errors?.length > 0) {
+        name = Text.red(name)
+      }
+
+      if (order.delivered) {
+        // Detect if previously NOT delivered, and if so- beep
+        delivery = Text.green("✓")
+      } else if (order.date) {
+        delivery = Text.magenta(order.date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" }))
+
+        let delivery_date = order.date.getTime()
+        if (Time.beginningOfDay() > delivery_date) {
+          delivery = Text.orange("Delayed?")
+        } else if (Time.beginningOfDay() + Time.day() > delivery_date) {
+          delivery = Text.green(order.time_range ? order.time_range : "Today")
+        } else if (Time.beginningOfDay() + Time.days(2) > delivery_date) {
+          delivery = Text.yellow("Tmrw")
+        } else if (Time.beginningOfDay() + Time.days(6) > delivery_date) {
+          delivery = Text.blue(order.date.toLocaleString("en-us", { weekday: "short" }))
         }
+      }
 
-        if (order.delivered) {
-          delivery = Text.green("✓")
-        } else if (order.date) {
-          delivery = Text.magenta(order.date.toLocaleString("en-us", { weekday: "short", month: "short", day: "numeric" }))
-
-          let delivery_date = order.date.getTime()
-          if (Time.beginningOfDay() > delivery_date) {
-            delivery = Text.orange("Delayed?")
-          } else if (Time.beginningOfDay() + Time.day() > delivery_date) {
-            delivery = Text.green(order.time_range ? order.time_range : "Today")
-          } else if (Time.beginningOfDay() + Time.days(2) > delivery_date) {
-            delivery = Text.yellow("Tmrw")
-          } else if (Time.beginningOfDay() + Time.days(6) > delivery_date) {
-            delivery = Text.blue(order.date.toLocaleString("en-us", { weekday: "short" }))
-          }
-        }
-
-        lines.push(Text.justify((idx + 1) + ". " + name, delivery))
-      })
-    }
+      lines.push(Text.justify((idx + 1) + ". " + name, delivery))
+    })
 
     cell.lines(lines)
   }
@@ -210,53 +293,53 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
   }
 
   let subscribeWebsockets = function() {
-    cell.amz_socket = new CellWS(
-      cell,
-      Server.socket("AmzUpdatesChannel", function(msg) {
-        this.flash()
+    cell.amz_socket = new CellWS(cell, Server.socket("AmzUpdatesChannel", function(msg) {
+      Order.render = false
+      this.flash()
 
-        let data = []
-        msg.forEach(order_data => {
-          let order = order_data
-          if (order_data.delivery_date) {
-            let [year, month, day, ...tz] = order_data.delivery_date.split(/-| /)
-            let date = new Date(0)
-            date.setFullYear(year, parseInt(month) - 1, day)
-            if (order_data.time_range) {
-              let meridian = order_data.time_range.match(/([^\d]*?)$/)[1]
-              let hour = parseInt(order_data.time_range.match(/(\d+)[^\d]*?$/)[1])
-              if (meridian == "pm") { hour += 12 }
-              date.setHours(hour)
-            }
-            order.date = date
+      const currentOrders = cell.data.orders || []
+      const updatedOrders = []
+      msg.forEach(order_data => {
+        if (order_data.delivery_date) {
+          let [year, month, day, ...tz] = order_data.delivery_date.split(/-| /)
+          let date = new Date(0)
+          date.setFullYear(year, parseInt(month) - 1, day)
+          if (order_data.time_range) {
+            let meridian = order_data.time_range.match(/([^\d]*?)$/)[1]
+            let hour = parseInt(order_data.time_range.match(/(\d+)[^\d]*?$/)[1])
+            if (meridian == "pm") { hour += 12 }
+            date.setHours(hour)
           }
+          order_data.date = date
+        }
 
-          data.push(order)
-        })
-        this.data.amz_updates = data.sort((a, b) => {
-          // delivered status takes priority
-          if (b.delivered - a.delivered !== 0) {
-            return b.delivered - a.delivered;
-          }
-          return a.date - b.date
-        })
-        renderLines()
+        let existing = currentOrders.find(o => o.full_id === `${order_data.order_id}-${order_data.item_id}`)
+        if (existing) {
+          existing.updateFromSocket(order_data)
+          updatedOrders.push(existing)
+        } else {
+          updatedOrders.push(new Order(order_data))
+        }
       })
-    )
+      this.data.orders = updatedOrders.sort((a, b) => {
+        // delivered status takes priority
+        if ((b.delivered - a.delivered) !== 0) { return b.delivered - a.delivered }
+        return a.date - b.date
+      })
+      Order.render = true
+    }))
     cell.amz_socket.send({ action: "request" })
-    cell.device_battery_socket = new CellWS(
-      cell,
-      Server.socket("DeviceBatteryChannel", function(msg) {
-        this.flash()
 
-        if (msg.Phone) { cell.data.device_battery.Phone = msg.Phone }
-        if (msg.iPad) { cell.data.device_battery.iPad = msg.iPad }
-        if (msg.Watch) { cell.data.device_battery.Watch = msg.Watch }
-        if (msg.Pencil) { cell.data.device_battery.Pencil = msg.Pencil }
+    cell.device_battery_socket = new CellWS(cell, Server.socket("DeviceBatteryChannel", function(msg) {
+      this.flash()
 
-        renderLines()
-      })
-    )
+      if (msg.Phone) { cell.data.device_battery.Phone = msg.Phone }
+      if (msg.iPad) { cell.data.device_battery.iPad = msg.iPad }
+      if (msg.Watch) { cell.data.device_battery.Watch = msg.Watch }
+      if (msg.Pencil) { cell.data.device_battery.Pencil = msg.Pencil }
+
+      renderLines()
+    }))
     cell.device_battery_socket.send({ action: "request" })
 
     cell.garage_socket = Monitor.subscribe("garage", {
@@ -297,32 +380,29 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       },
     })
 
-    cell.nest_socket = new CellWS(
-      cell,
-      Server.socket("NestChannel", function(msg) {
-        this.flash()
+    cell.nest_socket = new CellWS(cell, Server.socket("NestChannel", function(msg) {
+      this.flash()
 
-        if (msg.failed) {
-          this.data.loading = false
-          this.data.failed = true
-          clearInterval(this.data.nest_timer) // Don't try anymore until we manually update
-          renderLines()
-          return
-        } else {
-          this.data.failed = false
-        }
-        if (msg.loading) {
-          this.data.loading = true
-          renderLines()
-          return
-        }
-
+      if (msg.failed) {
         this.data.loading = false
-        this.data.devices = msg.devices
-
+        this.data.failed = true
+        clearInterval(this.data.nest_timer) // Don't try anymore until we manually update
         renderLines()
-      })
-    )
+        return
+      } else {
+        this.data.failed = false
+      }
+      if (msg.loading) {
+        this.data.loading = true
+        renderLines()
+        return
+      }
+
+      this.data.loading = false
+      this.data.devices = msg.devices
+
+      renderLines()
+    }))
     cell.nest_socket.send({ action: "command", settings: "update" })
     this.data.nest_timer = setInterval(function() {
       cell.nest_socket.send({ action: "command", settings: "update" })
@@ -337,6 +417,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
     data: {
       sound: true,
       device_battery: {},
+      orders: [],
       garage: { state: "unknown", timestamp: 0 },
       camera: { Backyard: {}, Driveway: {}, Doorbell: {}, Storage: {} },
     },
@@ -362,7 +443,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
       },
       open: function(idx) {
         if (idx) {
-          let order = cell.data.amz_updates[parseInt(idx)-1]
+          let order = cell.data.orders[parseInt(idx)-1]
           order?.email_ids?.forEach(id => window.open(`https://ardesian.com/emails/${id}`, "_blank"))
         }
       },
@@ -372,20 +453,20 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars"
         window.open(cell.config.google_api_url, "_blank")
       } else if (/^-?\d+/.test(msg) && parseInt(msg.match(/\d+/)[0]) < 30) {
         var num = parseInt(msg.match(/\d+/)[0])
-        let order = this.data.amz_updates[num - 1]
+        let order = this.data.orders[num - 1]
+        if (!order) { return }
 
         if (/^-\d+/.test(msg)) { // Use - to remove item
-          cell.amz_socket.send({ action: "change", order_id: order.order_id, item_id: order.item_id, remove: true })
+          order.remove()
         } else if (/^\d+\s*$/.test(msg)) { // No words means open the order
-          let url = "https://www.amazon.com/gp/your-account/order-details?orderID="
-          window.open(url + order.order_id.replace("#", ""), "_blank")
+          order.openAmz()
         } else if (/^\d+\s*o\b$/.test(msg)) { // "o" means open the email
-          order?.email_ids?.forEach(id => window.open(`https://ardesian.com/emails/${id}`, "_blank"))
+          order.openEmails()
         } else { // Rename the order
-          cell.amz_socket.send({ action: "change", order_id: order.order_id, item_id: order.item_id, rename: msg.replace(/^\d+ /, "") })
+          order.name = msg.replace(/^\d+\s*/, "")
         }
       } else if (/^add\b/i.test(msg)) { // Add item to AMZ deliveries
-        cell.amz_socket.send({ action: "change", add: msg })
+        Order.add(msg.replace(/^add\s*/i, ""))
       } else if (/\b(open|close|toggle|garage)\b/.test(msg)) { // open/close
         cell.garage_socket.send({ channel: "garage", request: msg.match(/\b(open|close|toggle)\b/)[0] })
       } else { // Assume AC control
