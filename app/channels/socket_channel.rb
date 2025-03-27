@@ -45,7 +45,7 @@ class SocketChannel < ApplicationCable::Channel
     return unless params[:channel_id].present?
 
     receive_data = data.reverse_merge(params).except(:action).merge(connection_state: state || "unset")
-    logit(receive_data)
+    pretty_log_data(receive_data)
 
     ::Jil.trigger(current_user, :websocket, receive_data)
   end

@@ -60,11 +60,14 @@ class AmazonOrder
     find(order_id, item_id) || create(order_id: order_id, item_id: item_id)
   end
 
-  def self.create(order_hash)
+  def self.create(order_hash={})
     new(order_hash.merge(just_added: true)).tap { |item| @@all << item }
   end
 
-  def initialize(order_hash)
+  # NOTE: Do not use `new` directly, use `create` instead
+  def initialize(order_hash={})
+    @order_id = "CUSTOM"
+    @item_id = "CUSTOM-#{SecureRandom.hex(2)}"
     @errors = []
     @email_ids = []
     @just_added = false # Gets overridden
@@ -80,6 +83,10 @@ class AmazonOrder
 
   def url
     "https://www.amazon.com/dp/#{item_id}"
+  end
+
+  def delivery_date=(date)
+    @delivery_date = date ? date.to_date.iso8601.encode("UTF-8") : nil
   end
 
   def destroy

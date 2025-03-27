@@ -1,6 +1,6 @@
 module ApplicationCable
   class Channel < ActionCable::Channel::Base
-    def logit(data)
+    def pretty_log_data(data)
       identifier = (
         if current_user
           "\e[36m[#{current_user.try(:username).presence || "User #{current_user.try(:id)}"}]"
