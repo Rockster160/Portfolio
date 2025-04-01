@@ -8,6 +8,7 @@
   Index::Numeric
   Break("Break" TAB Any)::Any
   Next("Next" TAB Any)::Any
+  !When("When" Any content)::Any
   Item::Any
   ItemKey(String:Key)::Any
   Arg(String:Name)::Any
@@ -18,6 +19,7 @@
   #params::Array
   #functionParams(content([Keyword.Item]))::Array # Used in Function TASKS, not inline functions.
   #if("IF" content "DO" content "ELSE" content)::Any
+  !#case("CASE" Any content(Keyword [Keyword.When]))
   #ternary(Boolean|Any " ? " Any " : " Any)::Any # Useful for setting vars
   #ref(Any)::Any // Variable reference, returns the variable itself, does NOT evaluate it.
   #get(String)::Any // Variable reference
