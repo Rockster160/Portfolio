@@ -29,10 +29,12 @@ import { dash_colors } from "../vars"
   function timezonesLine() {
     const date = new Date()
 
-    const mdtTime = "M-" + formatTime(date, { timeZone: "America/Denver" })
+    // const mdtTime = "M-" + formatTime(date, { timeZone: "America/Denver" })
+    const azTime = "A-" + formatTime(date, { timeZone: "US/Arizona" })
     const utcTime = "UTC-" + formatTime(date, { timeZone: "UTC", hour12: false })
-    const azTime = "I-" + formatTime(date, { timeZone: "CST" })
-    return Text.justify(mdtTime, utcTime, azTime)
+    const iowaTime = "I-" + formatTime(date, { timeZone: "CST" })
+
+    return Text.justify(azTime, utcTime, iowaTime)
   }
 
   function renderLines() {
