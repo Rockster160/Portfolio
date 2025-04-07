@@ -51,8 +51,8 @@ class ApplicationRecord < ActiveRecord::Base
       .gsub(/ ?LEFT OUTER JOIN \"\w+\" ON \"\w+\".\"id\" = \"#{table_name}\".\"\w+\" WHERE/, "")
   end
 
-  def self.raw_sql(q, data=nil)
-    sql = search_scope.where(q, data)
+  def self.raw_sql(q, *data)
+    sql = search_scope.where(q, *data)
     sql.any? # validate
     sql.stripped_sql
   rescue ActiveRecord::StatementInvalid
@@ -103,14 +103,14 @@ class ApplicationRecord < ActiveRecord::Base
         when *%w[!:: !=] then raw_sql("#{column} NOT ILIKE ?", value)
         end
       elsif column_data.type.in?(%i[datetime date])
-        value = parse_date_with_operator(value, operator)
+        single_date = parse_date_with_operator(value, operator)
         case operator.to_s
-        when *%w[= : ::] then raw_sql("#{column}::DATE = ?::DATE", value)
-        when *%w[!= !: !::] then raw_sql("#{column}::DATE != ?::DATE", value)
-        when *%w[<] then raw_sql("#{column} < ?", value)
-        when *%w[>] then raw_sql("#{column} > ?", value)
-        when *%w[<=] then raw_sql("#{column} <= ?", value)
-        when *%w[>=] then raw_sql("#{column} >= ?", value)
+        when *%w[= : ::] then raw_sql("(#{column} >= ? AND #{column} <= ?)", *parse_date_range_with_operator(value, operator).minmax)
+        when *%w[!= !: !::] then raw_sql("(#{column} < ? OR #{column} > ?)", *parse_date_range_with_operator(value, operator).minmax)
+        when *%w[<] then raw_sql("#{column} < ?", single_date)
+        when *%w[>] then raw_sql("#{column} > ?", single_date)
+        when *%w[<=] then raw_sql("#{column} <= ?", single_date)
+        when *%w[>=] then raw_sql("#{column} >= ?", single_date)
         end
       elsif column_data.type.in?(%i[integer float decimal])
         case operator.to_s
@@ -198,17 +198,21 @@ class ApplicationRecord < ActiveRecord::Base
 
     search_scope.where(search_scope.query_by_node(breaker).stripped_sql)
   }
-  scope :before, ->(time) {
-    t = Time.zone.parse(time) rescue (next none)
+  scope :before, ->(time) { # Not used by `query` scope
+    User.timezone {
+      t = ::DateTime.parse(time) rescue (next none)
 
-    key = column_names.include?("timestamp") ? :timestamp : :created_at
-    where(key => ..t)
+      key = column_names.include?("timestamp") ? :timestamp : :created_at
+      where(key => ..t)
+    }
   }
-  scope :after, ->(time) {
-    t = Time.zone.parse(time) rescue (next none)
+  scope :after, ->(time) { # Not used by `query` scope
+    User.timezone {
+      t = ::DateTime.parse(time) rescue (next none)
 
-    key = column_names.include?("timestamp") ? :timestamp : :created_at
-    where(key => t..)
+      key = column_names.include?("timestamp") ? :timestamp : :created_at
+      where(key => t..)
+    }
   }
 
   class << self
@@ -248,20 +252,43 @@ class ApplicationRecord < ActiveRecord::Base
   end
 
   def self.parse_date_with_operator(value, operator)
-    date = Date.new(*value.split(/\D/).map(&:to_i))
-    case value
-    when /^\d{4}$/
-      operator.in?(%w[<]) ? date.beginning_of_year : date.end_of_year
-    when /^\d{4}-\d{1,2}$/
-      operator.in?(%w[<]) ? date.beginning_of_month : date.end_of_month
-    when /^\d{4}-\d{1,2}-\d{1,2}$/
-      operator.in?(%w[<]) ? date.beginning_of_day : date.end_of_day
-    else
-      DateTime.parse(value)
-    end
-  rescue ArgumentError
-    DateTime.parse(value)
-  rescue ArgumentError
-    value
+    ::User.timezone {
+      begin
+        date = Date.new(*value.split(/\D/).map(&:to_i))
+        case value
+        when /^\d{4}$/
+          operator.in?(%w[<]) ? date.beginning_of_year : date.end_of_year
+        when /^\d{4}-\d{1,2}$/
+          operator.in?(%w[<]) ? date.beginning_of_month : date.end_of_month
+        when /^\d{4}-\d{1,2}-\d{1,2}$/
+          operator.in?(%w[<]) ? date.beginning_of_day : date.end_of_day
+        else
+          DateTime.parse(value)
+        end
+      rescue ArgumentError
+        DateTime.parse(value)
+      rescue ArgumentError
+        value
+      end
+    }
+  end
+
+  def self.parse_date_range_with_operator(value, operator)
+    ::User.timezone {
+      begin
+        date = Date.new(*value.split(/\D/).map(&:to_i))
+        case value
+        when /^\d{4}$/ then date.beginning_of_year..date.end_of_year
+        when /^\d{4}-\d{1,2}$/ then date.beginning_of_month..date.end_of_month
+        when /^\d{4}-\d{1,2}-\d{1,2}$/ then date.beginning_of_day..date.end_of_day
+        else
+          DateTime.parse(value).all_day
+        end
+      rescue ArgumentError
+        DateTime.parse(value).all_day
+      rescue ArgumentError
+        value
+      end
+    }
   end
 end

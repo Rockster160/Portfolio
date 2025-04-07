@@ -1,7 +1,7 @@
 RSpec.describe ApplicationRecord, type: :model do
   def query(str)
     sql = ActionEvent.query(str).to_sql
-    sql[/\ASELECT \"action_events\"\.\* FROM \"action_events\" WHERE \((.*?)\)\z/, 1]
+    sql[/\ASELECT \"action_events\"\.\* FROM \"action_events\" WHERE \((.*?)\)\z/, 1].gsub("action_events.", "")
   end
 
   describe "nested conditions for an operator" do
@@ -40,9 +40,16 @@ RSpec.describe ApplicationRecord, type: :model do
       expect(sql).to eq("(NOT (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%'))")
     end
 
-    it "returns records for timestamps" do
-      sql = query("wordle timestamp>'2020-01-01' timestamp<'2021-01-01'")
-      expect(sql).to eq("(((\"name\"::TEXT ILIKE '%wordle%' OR \"notes\"::TEXT ILIKE '%wordle%') AND (timestamp > '2020-01-01 23:59:59.999999') AND (timestamp < '2021-01-01 23:59:59.999999')))")
+    it "returns records between timestamps" do
+      # Just uses the generic "timestamp" word to figure out the column.
+      # Maybe should add before|after as magic keywords?
+      sql = query("wordle timestamp>'2020-01-01' timestamp<'2021-02-01'")
+      expect(sql).to eq("(((\"name\"::TEXT ILIKE '%wordle%' OR \"notes\"::TEXT ILIKE '%wordle%') AND (timestamp > '2020-01-02 06:59:59.999999') AND (timestamp < '2021-02-02 06:59:59.999999')))")
+    end
+
+    it "returns records on day" do
+      sql = query("wordle timestamp:'2020-01-01'")
+      expect(sql).to eq("(((\"name\"::TEXT ILIKE '%wordle%' OR \"notes\"::TEXT ILIKE '%wordle%') AND (timestamp >= '2020-01-01 07:00:00' AND timestamp <= '2020-01-02 06:59:59.999999')))")
     end
 
     it "returns records matching the query with AND conditions" do
