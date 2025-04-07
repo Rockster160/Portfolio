@@ -192,6 +192,9 @@ html:has(.ctr-tasks.act-index) {
       margin: 0;
       font-size: 14px;
     }
+    span.invited {
+      color: $grey-blue;
+    }
   }
 
   .new-list-item-form {

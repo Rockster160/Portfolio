@@ -14,6 +14,7 @@
 #  updated_at       :datetime         not null
 #
 
+# Should have `invited_at` and `invited_by`
 class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 

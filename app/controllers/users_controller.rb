@@ -7,8 +7,13 @@ class UsersController < ApplicationController
   end
 
   def create
-    @list = List.find_by_id(params[:list_id])
-    @user = User.find_or_create_by_filtered_params(user_params)
+    @list = List.find_by(id: params[:list_id])
+    @user = User.find_or_create_by_filtered_params(user_params) # Only does an initialize
+    if !@user.persisted? && @list && (@user.phone.blank? && @user.email.blank?)
+      # Inviting a user by list, but only giving a username, and that user doesn't exist
+      @user.errors.add(:base, "No user found with that username")
+      return render :new
+    end
     @user.assign_invitation_token unless @user.persisted?
 
     if @user.save
