@@ -255,13 +255,13 @@ class ApplicationRecord < ActiveRecord::Base
     ::User.timezone {
       begin
         date = Date.new(*value.split(/\D/).map(&:to_i))
-        case value
+        case value.to_sym
         when /^\d{4}$/
-          operator.in?(%w[<]) ? date.beginning_of_year : date.end_of_year
+          operator.in?(%i[< <=]) ? date.beginning_of_year : date.end_of_year
         when /^\d{4}-\d{1,2}$/
-          operator.in?(%w[<]) ? date.beginning_of_month : date.end_of_month
+          operator.in?(%i[< <=]) ? date.beginning_of_month : date.end_of_month
         when /^\d{4}-\d{1,2}-\d{1,2}$/
-          operator.in?(%w[<]) ? date.beginning_of_day : date.end_of_day
+          operator.in?(%i[< <=]) ? date.beginning_of_day : date.end_of_day
         else
           DateTime.parse(value)
         end
