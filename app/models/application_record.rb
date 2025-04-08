@@ -254,20 +254,17 @@ class ApplicationRecord < ActiveRecord::Base
   def self.parse_date_with_operator(value, operator)
     ::User.timezone {
       begin
-        date = Date.new(*value.split(/\D/).map(&:to_i))
-        case value.to_sym
-        when /^\d{4}$/
-          operator.in?(%i[< <=]) ? date.beginning_of_year : date.end_of_year
-        when /^\d{4}-\d{1,2}$/
-          operator.in?(%i[< <=]) ? date.beginning_of_month : date.end_of_month
-        when /^\d{4}-\d{1,2}-\d{1,2}$/
-          operator.in?(%i[< <=]) ? date.beginning_of_day : date.end_of_day
-        else
-          DateTime.parse(value)
+        date = DateTime.new(*value.split(/\D/).map(&:to_i))
+        less = operator.to_sym.in?(%i[< <=])
+        case value
+        when /^\d{4}$/                 then less ? date.beginning_of_year : date.end_of_year
+        when /^\d{4}-\d{1,2}$/         then less ? date.beginning_of_month : date.end_of_month
+        when /^\d{4}-\d{1,2}-\d{1,2}$/ then less ? date.beginning_of_day : date.end_of_day
+        else DateTime.parse(value)
         end
-      rescue ArgumentError
+      rescue ArgumentError, Date::Error
         DateTime.parse(value)
-      rescue ArgumentError
+      rescue ArgumentError, Date::Error
         value
       end
     }
@@ -276,17 +273,16 @@ class ApplicationRecord < ActiveRecord::Base
   def self.parse_date_range_with_operator(value, operator)
     ::User.timezone {
       begin
-        date = Date.new(*value.split(/\D/).map(&:to_i))
+        date = DateTime.new(*value.split(/\D/).map(&:to_i))
         case value
-        when /^\d{4}$/ then date.beginning_of_year..date.end_of_year
-        when /^\d{4}-\d{1,2}$/ then date.beginning_of_month..date.end_of_month
+        when /^\d{4}$/                 then date.beginning_of_year..date.end_of_year
+        when /^\d{4}-\d{1,2}$/         then date.beginning_of_month..date.end_of_month
         when /^\d{4}-\d{1,2}-\d{1,2}$/ then date.beginning_of_day..date.end_of_day
-        else
-          DateTime.parse(value).all_day
+        else DateTime.parse(value).all_day
         end
-      rescue ArgumentError
+      rescue ArgumentError, Date::Error
         DateTime.parse(value).all_day
-      rescue ArgumentError
+      rescue ArgumentError, Date::Error
         value
       end
     }
