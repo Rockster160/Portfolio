@@ -4,6 +4,8 @@ export let toMd = function(text) {
   if (!text || typeof text !== "string") { return text }
   return text.replace(/([\p{So}\p{Sk}\p{Sm}\p{Sc}\p{S}\p{C}]+)/gu, (match) => {
     return emoji(match)
+  }).replace(/\<svg.*?\<\/svg\>/igu, (match) => {
+    return emoji(match)
   }).replace(/\[ico (.*?)(( [\w-]+: .*?)*)\]/gu, (match, p1, p2) => {
     return emoji(null, `ti ti-${p1}`, { style: p2 })
   }).replace(/\[img (.*?)\]/gu, (match, p1) => {
@@ -14,7 +16,13 @@ export let toMd = function(text) {
 }
 
 let img = function(filename) {
-  return emoji(`<img src='/${filename}.png'/>`)
+  if (!filename.startsWith("http") && !filename.startsWith("/")) {
+    filename = `/${filename}`
+  }
+  if (!filename.includes(".")) {
+    filename = `${filename}.png`
+  }
+  return emoji(`<img src='${filename}'/>`)
 }
 
 let emoji = function(icon, extraClasses = null, { style } = {}) {

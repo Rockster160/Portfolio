@@ -66,7 +66,7 @@ i.emoji {
   text-align: center;
   white-space: nowrap;
 
-  img {
+  img, svg {
     position: absolute;
     margin-top: -20px; // min-widget height / 4 (emoji is centered)
     margin-left: 8px; // (48 - 32)/2
