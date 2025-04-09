@@ -18,11 +18,11 @@ export function setup() {
   // Add the `formDirty` getter/setter to window that has a magic callback
   Object.defineProperty(window, "formDirty", {
     get() {
-      return this._formDirty;
+      return window._formDirty;
     },
     set(value) {
       document.querySelector(".btn-save").classList.toggle("btn-dirty", value)
-      this._formDirty = value;
+      window._formDirty = value;
     }
   })
   // Load code from text or local storage
