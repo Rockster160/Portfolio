@@ -26,6 +26,8 @@ class ClimbsController < ApplicationController
   end
 
   def mark
+    return render json: "You can't climb that high, don't lie." if params[:v_index].to_i > 20
+
     @climb = current_user.climbs.order(created_at: :desc).find_by(created_at: Time.current.all_day)
     @climb ||= current_user.climbs.create(timestamp: Time.current)
     @climb.add(params[:v_index])

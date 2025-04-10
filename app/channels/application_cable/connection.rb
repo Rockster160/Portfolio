@@ -21,6 +21,8 @@ module ApplicationCable
       reject_unauthorized_connection
     end
 
+    # ws://url/cable?Authorization="Bearer <raw_api_key>"
+    # ws://url/cable headers: { Authorization: "Bearer <b64(username:password)>" }
     def user_from_headers
       raw_auth = request.headers["HTTP_AUTHORIZATION"] || request.parameters["Authorization"]
       return unless raw_auth.present?
@@ -35,6 +37,9 @@ module ApplicationCable
       else
         ApiKey.find_by(key: auth_string)&.tap(&:use!)&.user
       end
+    rescue StandardError => e
+      # NoMethodError might get thrown if the raw_auth is not b64
+      nil
     end
 
     def find_avatar
