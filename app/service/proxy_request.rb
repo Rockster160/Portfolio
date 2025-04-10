@@ -1,8 +1,8 @@
 # Not working?
 # Restart modem, router, and computer - in that order
 # `updateIp`
-# Verify `myip` matches the port forwarding in `https://192.168.0.1/advancedsetup_advancedportforwarding.html`
-# Router: DMZ Hosting → Enable local ip address
+# Verify `myip` on laptop matches the port forwarding in `https://192.168.0.1/advancedsetup_advancedportforwarding.html`
+# Router: DMZ Hosting → Enable laptop local ip address
 # ProxyRequest.local_ping
 
 class ProxyRequest

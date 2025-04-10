@@ -12,7 +12,7 @@ module LocalIpManager
 
     HTTParty.get(
       "https://www.duckdns.org/update?" + {
-        domains: "ardesian,ronaya",
+        domains: "ardesian",
         token: DataStorage[:duckdns_token],
         ip: new_ip
       }.to_query
