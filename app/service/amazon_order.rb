@@ -85,6 +85,11 @@ class AmazonOrder
     AmazonEmailParser.parse(Email.find(email_id))
   end
 
+  # TODO: Create an emails api
+  # def prod_email
+  #   ProdApi.get([:emails, email_ids.last])
+  # end
+
   def url
     "https://www.amazon.com/dp/#{item_id}"
   end
