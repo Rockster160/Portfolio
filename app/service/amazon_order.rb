@@ -36,8 +36,12 @@ class AmazonOrder
     clear # Clear for next
   end
 
+  def self.ordered
+    all.sort_by { |order| order.delivery_time || 1.year.from_now }
+  end
+
   def self.serialize
-    all.map(&:serialize)
+    ordered.map(&:serialize)
   end
 
   def self.reparse(email_or_email_id)
@@ -87,6 +91,20 @@ class AmazonOrder
 
   def delivery_date=(date)
     @delivery_date = date ? date.to_date.iso8601.encode("UTF-8") : nil
+  end
+
+  def delivery_time
+    return unless @delivery_date.present?
+    start_time, end_time = time_range.to_s.split("-")
+    time = start_time.present? ? " #{start_time.to_s[/\d+/]}#{start_time.to_s[/\wm/i] || end_time.to_s[/\wm/i]}" : nil
+
+    User.timezone do
+      Time.zone.parse("#{@delivery_date}#{time}").then { |t|
+        time.nil? ? t.end_of_day : t
+      }
+    end
+  rescue ArgumentError, Date::Error
+    nil
   end
 
   def destroy
