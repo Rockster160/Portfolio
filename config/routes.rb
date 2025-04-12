@@ -10,8 +10,6 @@ Rails.application.routes.draw do
     get "/sub" => "index#sub"
   end
 
-  get "/jil/tasks/c96939ac-9dc1-4dab-9200-143ac699d5d6/run", to: "webhooks#saya"
-
   post "tesla/api/1/vehicles/:vin/command/:command" => "vehicles#command"
   post "tesla/oauth2/v3/token" => "vehicles#token"
 

@@ -30,17 +30,6 @@ class WebhooksController < ApplicationController
     render json: params
   end
 
-  # POST /jil/tasks/c96939ac-9dc1-4dab-9200-143ac699d5d6/run
-  # TODO: Remove after updating Saya's app
-  def saya
-    return head :unauthorized unless current_user.id == 34226
-    task = current_user.tasks.find_by(name: "Protein & Carb Tracker")
-    request_logger.log_request("\n\e[36m\e[4m#{task.name}\e[0m")
-    task.execute
-
-    render json: { response: task.last_output }
-  end
-
   # /jil/webhook
   def jil_webhook
     json_params.each do |key, data|
