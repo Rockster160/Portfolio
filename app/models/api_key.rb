@@ -11,6 +11,8 @@
 #  updated_at   :datetime         not null
 #  user_id      :bigint
 #
+
+# Should DEFINITELY have a uniqueness constraint on key
 class ApiKey < ApplicationRecord
   belongs_to :user
 
