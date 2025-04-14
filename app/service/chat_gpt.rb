@@ -54,6 +54,20 @@ module ChatGPT
     # ["111-3842886-2135464", "2023-07-25T22:00:00-0600"]
   end
 
+  def calorie_explain(item, color: false)
+    prompt = (
+      "Take your best guess at the calorie count for the provided dish." \
+      "Take your time and research online, especially when given a restaurant." \
+      "Assume a single serving unless there are multipliers in the text" \
+      "and explain each portion that adds into the final result."
+    )
+
+    ask("#{prompt}\n\n> #{item}").then { |res|
+      !color ? res : res.gsub(/\b([\d+,])\b/, "\e[94m\\1\e[0m")
+    }
+  end
+
+  # TODO: Use the magic format to require that it only returns a number
   def calorie_check(item)
     prompt = (
       "Please respond only with the number of calories." \
