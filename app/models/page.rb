@@ -22,7 +22,7 @@ class Page < ApplicationRecord
   has_many :page_tags
   has_many :tags, through: :page_tags
 
-  before_save -> { self.parameterized_name = name.parameterize }
+  before_save :assign_parameterized_name
 
   after_commit :broadcast_timestamp
 
@@ -51,6 +51,18 @@ class Page < ApplicationRecord
   end
 
   private
+
+  def assign_parameterized_name
+    base_name = name.parameterize
+    unique_name = base_name
+    counter = 0
+    while Page.where(user_id: user_id, parameterized_name: unique_name).where.not(id: id).any?
+      unique_name = "#{base_name}-#{id}#{"-#{counter}" if counter > 0}"
+      counter += 1
+    end
+
+    self.parameterized_name = unique_name
+  end
 
   def broadcast_timestamp
     return if @skip_broadcast
