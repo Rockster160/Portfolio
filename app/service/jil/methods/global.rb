@@ -152,7 +152,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     friend = @jil.user.contacts.name_find(contact)&.friend if contact.is_a?(::String)
     friend ||= @jil.user.contacts.find_by(id: contact[:id])&.friend if contact.is_a?(::Hash)
 
-    return unless friend&.contacts&.where(friend_id: @jil.user.id, permit_relay: true)&.present?
+    return unless friend&.contacts&.where(friend_id: @jil.user.id, permit_relay: true).present?
 
     ::Jil.trigger_now(friend, :relay, @jil.cast(data, :Hash).merge(from: @jil.user.username))
     nil

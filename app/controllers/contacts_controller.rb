@@ -19,7 +19,7 @@ class ContactsController < ApplicationController
     @contact = current_user.contacts.new(contact_params)
 
     if @contact.save
-      redirect_to :contacts
+      redirect_to [:edit, @contact]
     else
       render :form
     end
@@ -31,7 +31,7 @@ class ContactsController < ApplicationController
 
   def update
     if @contact.update(contact_params)
-      redirect_to :contacts
+      redirect_to [:edit, @contact]
     else
       render :form
     end
@@ -63,6 +63,7 @@ class ContactsController < ApplicationController
       :nickname,
       :username,
       :phone,
+      :permit_relay,
     )
   end
 end

@@ -76,6 +76,10 @@ class Contact < ApplicationRecord
     @primary_address = new_address
   end
 
+  def friend?
+    friend_id?
+  end
+
   def username
     friend&.username
   end

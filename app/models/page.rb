@@ -26,6 +26,8 @@ class Page < ApplicationRecord
 
   after_commit :broadcast_timestamp
 
+  validates :parameterized_name, uniqueness: { scope: :user_id }
+
   def timestamp=(new_timestamp)
     self.updated_at = Time.at(new_timestamp.to_i)
   end

@@ -26,6 +26,18 @@
         <%= f.text_field :username %>
       </div>
 
+      <% if @contact.friend? %>
+        <div class="form-field">
+          <div class="checkbox-wrapper">
+            <%= f.check_box :permit_relay %>
+            <%= f.label :permit_relay do %>
+              <div class="checkbox-placeholder"></div>
+              Permit Relay?
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+
       <div class="form-field">
         <%= f.label :phone %>
         <%= f.phone_field :phone %>

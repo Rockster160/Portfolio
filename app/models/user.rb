@@ -15,6 +15,7 @@
 #
 
 # Should have `invited_at` and `invited_by`
+# Ensure Username starts with a letter
 class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 
