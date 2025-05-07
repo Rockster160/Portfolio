@@ -78,7 +78,7 @@ $(document).ready(function() {
         // Update sort order of already found item
         matching_items.attr("data-sort-order", $(this).attr("data-sort-order"))
         // Update name correctly
-        matching_items.find(".item-name").html($(this).find(".item-name").text().replace("<", "&lt;"))
+        matching_items.find(".item-name").html($(this).find(".item-name").html()) // .replace("<", "&lt;")
 
         // Define whether it's checked or not - Only update if not locked
         if ($(this).find(".list-item-config .locked").length == 0) {

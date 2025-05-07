@@ -32,7 +32,7 @@
   %>
   <label for="list_item[<%= item.id %>]" class="list-item">
     <div class="checkbox-wrapper"></div>
-    <div class="item-name"><%= Markdown.new(item.name, user: current_user).to_html %></div>
+    <div class="item-name" data-raw="<%= item.name %>"><%= Markdown.new(item.name, user: current_user).to_html %></div>
     <input type="text" name="name" value="<%= item.name %>" class="hidden list-item-field">
     <input type="text" name="category" value="<%= item.category %>" placeholder="Category" class="hidden list-item-category-field">
   </label>

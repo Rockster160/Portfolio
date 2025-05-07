@@ -161,6 +161,7 @@ $(document).ready(function() {
       $itemField = $(this),
       args = {}
 
+    $itemName.data().raw = updatedName
     $itemName.val(updatedName)
     $itemName.removeClass("hidden")
     $itemField.addClass("hidden")
@@ -185,7 +186,7 @@ $(document).ready(function() {
         var $itemName = heldListItem.find(".item-name")
         var $itemField = heldListItem.find(".list-item-field")
         $itemName.addClass("hidden")
-        $itemField.val($itemName.text())
+        $itemField.val($itemName.data().raw)
         $itemField.removeClass("hidden")
         $itemField.focus()
       }, 700)
