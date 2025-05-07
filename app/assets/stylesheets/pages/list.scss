@@ -233,7 +233,11 @@ html:has(.ctr-tasks.act-index) {
       text-decoration: none;
 
       .checkbox-wrapper {}
-      .item-name {}
+      .item-name {
+        .markdown-container {
+          font-family: "Comic Sans MS", sans-serif;
+        }
+      }
       &:hover {
 
         text-decoration: none;

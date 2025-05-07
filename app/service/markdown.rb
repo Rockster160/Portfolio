@@ -24,8 +24,8 @@ class Markdown
       /^###### (.*?)$/      => wrap('\1', :h6),
       /^\s*(-{3,}|={3,})\s*$/ => tag(:hr),
       /`(.*?)`/             => wrap('\1', :code),
-      /\*(.*?)\*/           => wrap('\1', :strong),
-      /_(.*?)_/             => wrap('\1', :em),
+      /\b\*(.*?)\*\b/       => wrap('\1', :strong),
+      /\b_(.*?)_\b/         => wrap('\1', :em),
       /~(.*?)~/             => wrap('\1', :del),
       /\[\[([^\]]*?)\]\]\((.*?)\)/  => color_wrapper,
       /\[\[([^\]]*?)\]\]/           => color_wrapper,
@@ -47,7 +47,7 @@ class Markdown
     tokenize_tags(:a, :img)
     @text.gsub!(/\b(https?:\/\/[^\s\n\r<]+)\b/) { |found|
       link = Regexp.last_match[1]
-      wrap(link, :a, href: link)
+      wrap(link.split("?").first.gsub(/(https?:\/\/)?(www\.)/, "").gsub(/\/$/, "") || link, :a, href: link, target: :_blank)
     }
 
     # Tokenized blocks are stand-alone, so they don't need to be wrapped in paragraphs
