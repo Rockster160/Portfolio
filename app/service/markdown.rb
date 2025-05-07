@@ -47,7 +47,7 @@ class Markdown
     tokenize_tags(:a, :img)
     @text.gsub!(/\b(https?:\/\/[^\s\n\r<]+)\b/) { |found|
       link = Regexp.last_match[1]
-      wrap(link.split("?").first.gsub(/(https?:\/\/)?(www\.)/, "").gsub(/\/$/, "") || link, :a, href: link, target: :_blank)
+      wrap(link.split("?").first.gsub(/^(https?:\/\/)?(www\.)?/, "").gsub(/\/$/, "") || link, :a, href: link, target: :_blank)
     }
 
     # Tokenized blocks are stand-alone, so they don't need to be wrapped in paragraphs
