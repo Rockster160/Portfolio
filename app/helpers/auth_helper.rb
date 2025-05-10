@@ -151,16 +151,14 @@ module AuthHelper
   def auth_from_session
     current_user_id = (
       session[:current_user_id].presence ||
-      (cookies && cookies.signed[:current_user_id].presence) ||
-      (cookies && cookies.permanent[:current_user_id].presence) ||
+      cookies[:current_user_id].presence ||
       session[:user_id].presence ||
-      (cookies && cookies.signed[:user_id].presence)
+      cookies[:user_id].presence
     )
 
     if current_user_id.present?
       session[:current_user_id] = current_user_id
-      cookies && cookies.signed[:current_user_id] = current_user_id
-      cookies && cookies.permanent[:current_user_id] = current_user_id
+      cookies[:current_user_id] = { value: current_user_id, httponly: true }
       user = User.find_by_id(current_user_id)
       sign_out if user.nil?
       user
