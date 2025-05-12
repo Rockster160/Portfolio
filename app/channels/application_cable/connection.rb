@@ -11,12 +11,13 @@ module ApplicationCable
     protected
 
     def find_verified_user # this checks whether a user is authenticated
+      user = user_from_headers
+      return user if user
+      return reject_unauthorized_connection if cookies.nil? # Cookies are undefined in broadcasts
+
       current_user_id = cookies.signed[:current_user_id].presence || cookies.permanent[:current_user_id].presence || cookies.signed[:user_id].presence
 
       return User.find(current_user_id) if current_user_id.present?
-
-      user = user_from_headers
-      return user if user
 
       reject_unauthorized_connection
     end

@@ -57,9 +57,7 @@ class Jil::Executor
         begin
           ran = task.match_run(trigger, trigger_data) && task
         rescue => e
-          unless Rails.env.production?
-            load("/Users/rocco/.pryrc"); source_puts "[#{e.class}] #{e.message}"
-          end
+          load("/Users/rocco/.pryrc") && show_exc(e) unless Rails.env.production?
           nil # Generic rescue
         end
         ran&.tap { stopped = true if ran.stop_propagation? }

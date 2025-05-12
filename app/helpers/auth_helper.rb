@@ -106,6 +106,7 @@ module AuthHelper
   def sign_out
     session[:user_id] = nil
     session[:current_user_id] = nil
+    session.clear
 
     safe_set_cookie(:user_id, nil)
     safe_set_cookie(:current_user_id, nil)
@@ -150,24 +151,24 @@ module AuthHelper
   end
 
   def safe_cookie(key)
-    return unless cookies
+    return if cookies.nil?
 
     begin
       cookies.signed[key].presence || cookies.permanent[key].presence
       # There is a crazy bug right now where our cookies got messed up and are returning nil
     rescue NoMethodError
-      cookies[key] rescue nil
+    #   cookies[key] rescue nil
     end
   end
 
   def safe_set_cookie(key, value)
-    return unless cookies
+    return if cookies.nil?
 
     begin
       cookies.signed[key] = value
       cookies.permanent[key] = value
     rescue NoMethodError
-      (cookies[key] = value) rescue nil
+    #   (cookies[key] = value) rescue nil
     end
   end
 
