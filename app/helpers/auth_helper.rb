@@ -105,10 +105,11 @@ module AuthHelper
 
   def sign_out
     session[:user_id] = nil
-    cookies.signed[:user_id] = nil
     session[:current_user_id] = nil
-    cookies.signed[:current_user_id] = nil
-    cookies.permanent[:current_user_id] = nil
+
+    safe_set_cookie(:user_id, nil)
+    safe_set_cookie(:current_user_id, nil)
+
     @_current_user = nil
   end
 
@@ -148,19 +149,40 @@ module AuthHelper
     }&.user
   end
 
+  def safe_cookie(key)
+    return unless cookies
+
+    begin
+      cookies.signed[key].presence || cookies.permanent[key].presence
+      # There is a crazy bug right now where our cookies got messed up and are returning nil
+    rescue NoMethodError
+      cookies[key] rescue nil
+    end
+  end
+
+  def safe_set_cookie(key, value)
+    return unless cookies
+
+    begin
+      cookies.signed[key] = value
+      cookies.permanent[key] = value
+    rescue NoMethodError
+      (cookies[key] = value) rescue nil
+    end
+  end
+
   def auth_from_session
     current_user_id = (
-      session[:current_user_id].presence ||
-      cookies[:current_user_id].presence ||
-      session[:user_id].presence ||
-      cookies[:user_id].presence
+      session[:current_user_id].presence || safe_cookie(:current_user_id).presence ||
+      session[:user_id].presence || safe_cookie(:user_id).presence
     )
 
     if current_user_id.present?
-      session[:current_user_id] = current_user_id
-      cookies[:current_user_id] = { value: current_user_id, httponly: true }
       user = User.find_by_id(current_user_id)
-      sign_out if user.nil?
+      return sign_out if user.nil?
+
+      session[:current_user_id] = current_user_id
+      safe_set_cookie(:current_user_id, current_user_id)
       user
     end
   end
