@@ -6,7 +6,7 @@ module ChatGPT
   def last_chat_data = @last_chat_data
 
   def client
-    @client ||= OpenAI::Client.new
+    @client ||= ::OpenAI::Client.new(log_errors: true)
   end
 
   def ask(str)
@@ -19,6 +19,24 @@ module ChatGPT
     )
     @last_chat_data = response
     @last_response = response.dig("choices", 0, "message", "content")
+  end
+
+  def generate_image(prompt)
+    puts " > Generating icon for '#{item}'..."
+    begin
+      resp = client.images.generate(
+        parameters: {
+          model: "dall-e-3",
+          prompt: "#{prompt}\n\n#{item}",
+          n: 1, # number of images to generate
+          size: "1024x1024"
+        }
+      )
+      url = resp.dig("data", 0, "url").tap { sleep 0.5 } # Give the image a moment to save the image
+    rescue Faraday::BadRequestError => e
+      show_exc(e)
+      raise
+    end
   end
 
   def short_name_from_order(order_title, item=nil) # item for stubbing in specs
@@ -78,4 +96,40 @@ module ChatGPT
     res = ask("#{prompt}: #{item}")
     res[/\d+/]
   end
+
+  def generate_sd_icon(item)
+    tmp = "/Users/rocco/code/Portfolio/tmp/"
+
+    prompt = "Simple, minimal, easily distinguishable, square icon for StreamDeck action button: "
+    url = generate_image("#{prompt}\n\n#{item}")
+
+    filename = item.parameterize.tr("-", "_")
+    raw_filepath = "#{tmp}#{filename}-raw.png"
+    URI.open(url) do |img|
+      File.open(raw_filepath, "wb") { |f| f.write(img.read) }
+    end
+
+    magick_opts = [
+      "-fuzz 20%",
+      "-trim +repage",
+    ].join(" ")
+    clean_filepath = "#{tmp}#{filename}.png"
+    `magick #{raw_filepath} #{magick_opts} #{clean_filepath}`
+    # File.delete(raw_filepath) if File.exist?(raw_filepath)
+    `open #{raw_filepath}`
+    `open #{clean_filepath}`
+    clean_filepath
+  end
 end
+# 1. pick up the top‑left pixel colour
+# bg=$(magick soda_can_edges.png -format "%[pixel:p{0,0}]" info:)
+# # 2. make that bg transparent, then trim
+# magick soda_can_edges.png \
+#   -alpha set \
+#   -fuzz 10% \
+#   -fill none \
+#   -floodfill +0+0 "$bg" \
+#   -trim +repage \
+#   soda_can_inner.png
+
+# magick /Users/rocco/Downloads/soda_can_edges.png -fuzz 20% -trim +repage /Users/rocco/Downloads/soda_can_clean.png
