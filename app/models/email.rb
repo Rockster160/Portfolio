@@ -52,20 +52,48 @@ class Email < ApplicationRecord
 
   # TODO: SEND emails should also use S3
 
+  def self.parse(s3_object_key, bucket: "ardesian-emails")
+    # 0fbk4c83djki6ol1v7d992kakp3ur7eq50sal501
+    ::ReceiveEmailWorker.new.perform(bucket, s3_object_key)
+  end
+
   def self.registered_domains
     ["ardesian.com", "rocconicholls.me", "rdjn.me"]
   end
 
   💾(:mail) { ::Mail.new(mail_blob.download) }
 
+  def from
+    inbound? ? outbound_mailboxes : inbound_mailboxes
+  end
+
+  def to
+    inbound? ? inbound_mailboxes : outbound_mailboxes
+  end
+
   def to_html
     # TODO: This will not render attachments.
-    raw = mail.html_part&.body&.decoded.presence || mail.body.decoded
+    raw = mail.multipart? ? mail.html_part&.decoded : mail.body.decoded
+    mail.html_part&.body&.decoded.presence || mail.body.decoded
     raw ||= "<pre>#{ERB::Util.html_escape(mail.text_part&.body&.decoded || mail.body.decoded)}</pre>"
 
     doc = ::Nokogiri::HTML.fragment(raw)
     doc.xpath("//script|//style").remove
     doc.to_html
+
+    # <% if @email.legacy_attachment_json&.any? %>
+    #   <p> Attachments:
+    #     <% @email.retrieve_legacy_attachments.each do |(attach_id, attachment)| %>
+    #       <%= link_to "<#{attachment[:filename]}>", attachment[:presigned_url], target: "_blank" %>
+    #     <% end %>
+    #   </p>
+    # <% end %>
+    # <% if @email.legacy_attachment_json&.any? %>
+    #   <p> Attachments:</p>
+    #   <% @email.retrieve_legacy_attachments.each do |(attach_id, attachment)| %>
+    #     <img style="max-width: 100%;" src="<%= attachment[:presigned_url] %>" alt="<%= attachment[:filename] %>">
+    #   <% end %>
+    # <% end %>
   end
 
   def archive! = update!(archived_at: ::Time.current)
