@@ -2,20 +2,21 @@
 #
 # Table name: emails
 #
-#  id          :integer          not null, primary key
-#  attachments :text
-#  blob        :text
-#  deleted_at  :datetime
-#  from        :string
-#  html_body   :text
-#  read_at     :datetime
-#  subject     :string
-#  text_body   :text
-#  to          :string
-#  created_at  :datetime         not null
-#  updated_at  :datetime         not null
-#  sent_by_id  :integer
-#  user_id     :bigint
+#  id                     :integer          not null, primary key
+#  blurb                  :text
+#  deleted_at             :datetime
+#  from                   :string
+#  html_body              :text
+#  legacy_attachment_json :text
+#  legacy_blob            :text
+#  read_at                :datetime
+#  subject                :string
+#  text_body              :text
+#  to                     :string
+#  created_at             :datetime         not null
+#  updated_at             :datetime         not null
+#  sent_by_id             :integer
+#  user_id                :bigint
 #
 
 class Email < ApplicationRecord
@@ -23,7 +24,9 @@ class Email < ApplicationRecord
   belongs_to :sent_by, class_name: "User", optional: true
   belongs_to :user, optional: true
 
-  json_serialize :attachments, coder: JsonWrapper
+  json_serialize :legacy_attachment_json, coder: JsonWrapper
+  has_one_attached :blob, dependent: :destroy
+  has_many_attached :attachments, dependent: :destroy
 
   scope :not_archived, -> { where(deleted_at: nil) }
   scope :archived,     -> { where.not(deleted_at: nil) }
@@ -77,9 +80,9 @@ class Email < ApplicationRecord
     SlackNotifier.notify(message_parts.join("\n"), channel: "#portfolio", username: "Mail-Bot", icon_emoji: ":mailbox:")
   end
 
-  def retrieve_attachments
-    @retrieve_attachments ||= begin
-      (attachments || []).each_with_object({}) do |(attch_id, attch_filename), obj|
+  def retrieve_legacy_attachments
+    @retrieve_legacy_attachment_json ||= begin
+      (legacy_attachment_json || []).each_with_object({}) do |(attch_id, attch_filename), obj|
         obj[attch_id] = {
           filename: attch_filename,
           presigned_url: FileStorage.expiring_url(attch_filename)
@@ -115,7 +118,7 @@ class Email < ApplicationRecord
   def html_for_display
     with_attach = html_body.gsub(/src\=\"cid\:(\w+)\"/) do |found|
       cid = Regexp.last_match(1)
-      "src=\"#{retrieve_attachments&.dig(cid, :presigned_url)}\""
+      "src=\"#{retrieve_legacy_attachment_json&.dig(cid, :presigned_url)}\""
     end
     open_links_in_new_tab = with_attach.gsub(/\<a\s/, "<a target=\"_blank\" ")
 
@@ -191,7 +194,7 @@ class Email < ApplicationRecord
       subject:   mail.subject,
       text_body: text_body,
       html_body: html_body,
-      attachments: attaches,
+      legacy_attachment_json: attaches,
       user_id: user_id,
     )
     self.blob = self.blob.presence || mail.to_s

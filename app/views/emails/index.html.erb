@@ -33,7 +33,7 @@
           <% if email.archived? %>
             <i class="ti ti-oct-trashcan"></i>
           <% end %>
-          <% if email.attachments&.any? %>
+          <% if email.legacy_attachment_json&.present? %>
             <div class="attachments"><i class="ti ti-mdi-paperclip"></i></div>
           <% end %>
           <% if email.inbound? %>

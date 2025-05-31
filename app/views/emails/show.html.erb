@@ -55,9 +55,9 @@
   <% else %>
     <%= link_to "Archive", email_path(@email, email: {archived: true}), method: :patch, class: "btn" %>
   <% end %>
-  <% if @email.attachments&.any? %>
+  <% if @email.legacy_attachment_json&.any? %>
     <p> Attachments:
-      <% @email.retrieve_attachments.each do |(attach_id, attachment)| %>
+      <% @email.retrieve_legacy_attachments.each do |(attach_id, attachment)| %>
         <%= link_to "<#{attachment[:filename]}>", attachment[:presigned_url], target: "_blank" %>
       <% end %>
     </p>
@@ -76,9 +76,9 @@
   <% else %>
     <h3 class="text-center">No Content</h3>
   <% end %>
-  <% if @email.attachments&.any? %>
+  <% if @email.legacy_attachment_json&.any? %>
     <p> Attachments:</p>
-    <% @email.retrieve_attachments.each do |(attach_id, attachment)| %>
+    <% @email.retrieve_legacy_attachments.each do |(attach_id, attachment)| %>
       <img style="max-width: 100%;" src="<%= attachment[:presigned_url] %>" alt="<%= attachment[:filename] %>">
     <% end %>
   <% end %>

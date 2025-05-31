@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_12_18_093644) do
+ActiveRecord::Schema[7.1].define(version: 2025_05_31_151840) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -34,6 +34,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_12_18_093644) do
     t.bigint "record_id", null: false
     t.bigint "blob_id", null: false
     t.datetime "created_at", precision: nil, null: false
+    t.index ["blob_id"], name: "index_active_storage_attachments_on_blob_id"
     t.index ["record_type", "record_id", "name", "blob_id"], name: "index_active_storage_attachments_uniqueness", unique: true
   end
 
@@ -289,15 +290,16 @@ ActiveRecord::Schema[7.1].define(version: 2024_12_18_093644) do
     t.string "from"
     t.string "to"
     t.string "subject"
-    t.text "blob"
+    t.text "legacy_blob"
     t.text "text_body"
     t.text "html_body"
     t.datetime "read_at", precision: nil
     t.datetime "deleted_at", precision: nil
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
-    t.text "attachments"
+    t.text "legacy_attachment_json"
     t.bigint "user_id"
+    t.text "blurb"
     t.index ["sent_by_id"], name: "index_emails_on_sent_by_id"
     t.index ["user_id"], name: "index_emails_on_user_id"
   end
@@ -604,6 +606,15 @@ ActiveRecord::Schema[7.1].define(version: 2024_12_18_093644) do
     t.index ["user_id"], name: "index_scheduled_triggers_on_user_id"
   end
 
+  create_table "sessions", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "ip_address"
+    t.string "user_agent"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_sessions_on_user_id"
+  end
+
   create_table "survey_question_answer_results", id: :serial, force: :cascade do |t|
     t.integer "survey_id"
     t.integer "survey_result_id"
@@ -765,8 +776,11 @@ ActiveRecord::Schema[7.1].define(version: 2024_12_18_093644) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"
+  add_foreign_key "oauth_access_grants", "users", column: "resource_owner_id"
   add_foreign_key "oauth_access_tokens", "oauth_applications", column: "application_id"
+  add_foreign_key "oauth_access_tokens", "users", column: "resource_owner_id"
   add_foreign_key "page_tags", "pages"
   add_foreign_key "page_tags", "tags"
   add_foreign_key "pages", "users"
+  add_foreign_key "sessions", "users"
 end
