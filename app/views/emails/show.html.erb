@@ -19,11 +19,11 @@
     </tr>
     <tr class="from">
       <td>From</td>
-      <td><%= @email.from %></td>
+      <td><%= @email.from.join %></td>
     </tr>
     <tr class="to">
       <td>To</td>
-      <td><%= @email.to %></td>
+      <td><%= @email.to.join %></td>
     </tr>
     <tr class="subject">
       <td>Subject</td>
@@ -35,16 +35,16 @@
   <%
     reply_details = {
       email: {
-        from_user: @email.inbound_address,
-        to: @email.outbound_address,
+        from_user: @email.from,
+        to: @email.to,
         subject: "RE: #{@email.subject}"
       }
     }
     forward_details = {
       email: {
-        from_user: @email.inbound_address,
+        from_user: @email.from,
         subject: "FWD: #{@email.subject}",
-        html_body: @email.html_body
+        to_html: @email.to_html
       }
     }
   %>
@@ -55,36 +55,8 @@
   <% else %>
     <%= link_to "Archive", email_path(@email, email: {archived: true}), method: :patch, class: "btn" %>
   <% end %>
-  <% if @email.legacy_attachment_json&.any? %>
-    <p> Attachments:
-      <% @email.retrieve_legacy_attachments.each do |(attach_id, attachment)| %>
-        <%= link_to "<#{attachment[:filename]}>", attachment[:presigned_url], target: "_blank" %>
-      <% end %>
-    </p>
-  <% end %>
 </div>
 
 <div class="skinny-container">
-  <% if @email.html_body.present? %>
-    <%= render_iframe(@email.html_for_display) %>
-  <% elsif @email.text_body.present? %>
-    <h3 class="text-center">Text:</h3>
-    <pre><%= @email.text_body %></pre>
-  <% elsif @email.blob.present? %>
-    <h3 class="text-center">Blob:</h3>
-    <%= render_iframe(@email.blob) %>
-  <% else %>
-    <h3 class="text-center">No Content</h3>
-  <% end %>
-  <% if @email.legacy_attachment_json&.any? %>
-    <p> Attachments:</p>
-    <% @email.retrieve_legacy_attachments.each do |(attach_id, attachment)| %>
-      <img style="max-width: 100%;" src="<%= attachment[:presigned_url] %>" alt="<%= attachment[:filename] %>">
-    <% end %>
-  <% end %>
+  <%= render_iframe(@email.to_html) %>
 </div>
-
-<%= form_for @email do |f| %>
-  <%= f.submit %>
-  <%= f.text_area :html_body, rows: @email.html_body&.count("\n").to_i + 5, style: "white-space: nowrap;", class: "no-markdown" %>
-<% end %>

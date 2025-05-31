@@ -13,7 +13,7 @@ RSpec.describe AmazonEmailParser do
     email = double(
       "Email",
       id: email_id,
-      html_body: html_fixture("email_body_#{email_id}", raw: true),
+      to_html: html_fixture("email_body_#{email_id}", raw: true),
       subject: "Whatever"
     )
     AmazonEmailParser.parse(email)

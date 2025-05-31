@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_05_31_151840) do
+ActiveRecord::Schema[7.1].define(version: 2025_05_31_163410) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -285,22 +285,19 @@ ActiveRecord::Schema[7.1].define(version: 2025_05_31_151840) do
     t.datetime "updated_at", null: false
   end
 
-  create_table "emails", id: :serial, force: :cascade do |t|
-    t.integer "sent_by_id"
-    t.string "from"
-    t.string "to"
-    t.string "subject"
-    t.text "legacy_blob"
-    t.text "text_body"
-    t.text "html_body"
-    t.datetime "read_at", precision: nil
-    t.datetime "deleted_at", precision: nil
-    t.datetime "created_at", precision: nil, null: false
-    t.datetime "updated_at", precision: nil, null: false
-    t.text "legacy_attachment_json"
-    t.bigint "user_id"
-    t.text "blurb"
-    t.index ["sent_by_id"], name: "index_emails_on_sent_by_id"
+  create_table "emails", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.integer "direction", null: false
+    t.jsonb "inbound_mailboxes", default: [], null: false
+    t.jsonb "outbound_mailboxes", default: [], null: false
+    t.text "subject", null: false
+    t.text "blurb", null: false
+    t.boolean "has_attachments", default: false, null: false
+    t.datetime "timestamp", null: false
+    t.datetime "read_at"
+    t.datetime "archived_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_emails_on_user_id"
   end
 
@@ -775,6 +772,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_05_31_151840) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "emails", "users"
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_grants", "users", column: "resource_owner_id"
   add_foreign_key "oauth_access_tokens", "oauth_applications", column: "application_id"

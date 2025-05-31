@@ -1,6 +1,6 @@
 # email = @email = Email.find(27212)
-# @doc = Nokogiri::HTML(@email.html_body); nil
-# def order_id; @order_id ||= @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/]; end
+# @doc = Nokogiri::HTML(@email.to_html); nil
+# def order_id; @order_id ||= @email.to_html[/\b\d{3}-\d{7}-\d{7}\b/]; end
 # def month_regex; @month_regex ||= /\b(?:January|Jan|February|Feb|March|Mar|April|Apr|May|May|June|Jun|July|Jul|August|Aug|September|Sep|October|Oct|November|Nov|December|Dec)\b/; end
 # def wday_regex; @wday_regex ||= /\b(?:Sunday|Sun|Monday|Mon|Tuesday|Tue|Wednesday|Wed|Thursday|Thu|Friday|Fri|Saturday|Sat)\b/; end
 
@@ -11,7 +11,7 @@
 # AmazonEmailParser.parse(Email.find(27212))
 class AmazonEmailParserError < StandardError; end
 class AmazonEmailParser
-  include ::Memoizeable
+  include ::Memoizable
 
   def self.parse(email)
     Time.use_zone(User.timezone) do
@@ -19,7 +19,7 @@ class AmazonEmailParser
     end
   end
 
-  memoize(:order_id) { @email.html_body[/\b\d{3}-\d{7}-\d{7}\b/] }
+  💾(:order_id) { @email.to_html[/\b\d{3}-\d{7}-\d{7}\b/] }
 
   def initialize(email)
     @email = email
@@ -27,10 +27,10 @@ class AmazonEmailParser
 
   def parse
     @changed = false
-    @doc = Nokogiri::HTML(@email.html_body)
+    @doc = Nokogiri::HTML(@email.to_html)
     return Jarvis.cmd("Add Amazon Email no order id: #{@email.id}") if order_id.blank?
 
-    if @email.html_body.include?("Your package has been delivered!")
+    if @email.to_html.include?("Your package has been delivered!")
       doall(:order) { |item| item.delivered = true }
     else
       parse_email
@@ -103,13 +103,13 @@ class AmazonEmailParser
     Regexp.new("\\b(?:#{words.join("|")})\\b")
   end
 
-  memoize(:month_regex) {
+  💾(:month_regex) {
     month_names = Date::MONTHNAMES.compact
     with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
     regex_words(with_shorts)
   }
 
-  memoize(:wday_regex) {
+  💾(:wday_regex) {
     month_names = Date::DAYNAMES.compact
     with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
     regex_words(with_shorts)

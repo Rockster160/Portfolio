@@ -27,23 +27,23 @@
 
   <% @emails.each do |email| %>
     <div class="email-wrapper">
-      <a href="<%= email_path(email) %>" class="email-container <%= 'unread' unless email.read? %>">
-        <div class="timestamp"><%= email.created_at.in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:simple_with_time) %></div>
+      <a href="<%= email_path(email) %>" class="email-container <%= :unread unless email.read? %>">
+        <div class="timestamp"><%= email.timestamp.in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:simple_with_time) %></div>
         <div class="from">
           <% if email.archived? %>
             <i class="ti ti-oct-trashcan"></i>
           <% end %>
-          <% if email.legacy_attachment_json&.present? %>
+          <% if email.has_attachments? %>
             <div class="attachments"><i class="ti ti-mdi-paperclip"></i></div>
           <% end %>
           <% if email.inbound? %>
             <i class="ti ti-fa-arrow_right"></i>
           <% end %>
-          <%= email.outbound_address %>
+          <%= email.outbound_mailboxes.join %>
         </div>
-        <div class="to"><%= email.inbound_address %></div>
+        <div class="to"><%= email.inbound_mailboxes.join %></div>
         <div class="subject"><%= email.subject.presence || "<No Subject>" %></div>
-        <div class="body"><%= email.text_body.presence || "<No Content>" %></div>
+        <div class="body"><%= email.blurb.presence || "<No Content>" %></div>
       </a>
       <div class="controls">
         <%= link_to email_path(email, email: { archived: true }), method: :patch, remote: true, class: "remote-email archived" do %><i class="ti ti-oct-trashcan"></i><% end %>

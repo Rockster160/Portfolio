@@ -1,0 +1,66 @@
+Return-Path: <rocco11nicholls@gmail.com>
+Received: from mail-pg1-f170.google.com (mail-pg1-f170.google.com [209.85.215.170])
+ by inbound-smtp.us-east-1.amazonaws.com with SMTP id 0fbk4c83djki6ol1v7d992kakp3ur7eq50sal501
+ for rockster160@ardesian.com;
+ Fri, 23 May 2025 23:49:05 +0000 (UTC)
+X-SES-Spam-Verdict: PASS
+X-SES-Virus-Verdict: PASS
+Received-SPF: pass (spfCheck: domain of _spf.google.com designates 209.85.215.170 as permitted sender) client-ip=209.85.215.170; envelope-from=rocco11nicholls@gmail.com; helo=mail-pg1-f170.google.com;
+Authentication-Results: amazonses.com;
+ spf=pass (spfCheck: domain of _spf.google.com designates 209.85.215.170 as permitted sender) client-ip=209.85.215.170; envelope-from=rocco11nicholls@gmail.com; helo=mail-pg1-f170.google.com;
+ dkim=pass header.i=@gmail.com;
+ dmarc=pass header.from=gmail.com;
+X-SES-RECEIPT: AEFBQUFBQUFBQUFFVXBUcFJyRVV3Wm5UbGFoNlJzUUJUUGdROS96cHFYbkNYT1BYNGVTMnRMRHlTVUJoZ2NoQnpPK3BzQjhtbnJScXNtcTRrd0libE15ZlpIRTNzMVBJSnBBK0JtUDl2d0pHYVpqRytvUVJUWnlQL005V1hsNXRLZ2lTYU9GaXJzS3ZLRTc4VVQxaEtibmthL1BoWEgrVm1QOFQwYzc3WDVNbTNFZXN3YTJjMk9uai8vVlJuaUVvZWNLU1p6UGc4VXpFWml2MmROWEdkWTlBNDUxcWVBZ3ZUdnFzTnNiM0VRYmtnNm1ocDZhS3lHOW52dnMrNmR1QW1qcnd1dm9JcEhhcHdWMUwzK3ZBQzlRYi84dDFwSTRZS3BlOEkxQkRaQ01YSjZ3YU10MWdPd1E9PQ==
+X-SES-DKIM-SIGNATURE: a=rsa-sha256; q=dns/txt; b=P5bxsj590zLs8hS8EMlRDvwBPkbSAYUkTmcCrUQk14w4cUXd+yzB3EcKAekEruKPtU8UlDeYxJOr7lQyhGtd5dwyfjXnMtePHiEqE6KGnmI0vmYaNX2xAZQxLHBO2qXT1GvQhI/nIj2rjLu6wpcw63QX+ohGxMKDQskbImuCBns=; c=relaxed/simple; s=6gbrjpgwjskckoa6a5zn6fwqkn67xbtw; d=amazonses.com; t=1748044145; v=1; bh=oIwOs5j2eSgdD+LEAYdtveDtTCxyY6CZ8dE3ppcjqUU=; h=From:To:Cc:Bcc:Subject:Date:Message-ID:MIME-Version:Content-Type:X-SES-RECEIPT;
+Received: by mail-pg1-f170.google.com with SMTP id 41be03b00d2f7-af908bb32fdso304386a12.1
+        for <rockster160@ardesian.com>; Fri, 23 May 2025 16:49:05 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20230601; t=1748044144; x=1748648944; darn=ardesian.com;
+        h=content-transfer-encoding:mime-version:subject:to:from:date
+         :message-id:from:to:cc:subject:date:message-id:reply-to;
+        bh=oIwOs5j2eSgdD+LEAYdtveDtTCxyY6CZ8dE3ppcjqUU=;
+        b=BclWi5XeKYG2hSgS1tU/5NVy7XtyGeJwat7NMaCMh7r+C6N/EurOUUE1H+EsP3Zo54
+         XxlmuS6xtGbseGG5DaahoHzuDzwG+l4doL/iEUXPLa1oV3G7610lBYgMU0uCsE64K3la
+         RYAxfhyrZCgaZ23MYWZ+e79Z/ngJFtVT4H9ahOUOupMnQpkd8TYuxgi2GPiFLLkpGYZf
+         khQRqcirvMs14HmeyDV5gFiaG+bb6Asni94nnV7i0gDgh0iLVp33oDLnbg261jIMc71U
+         gu9YcJR9ChOid2dU7Kv9IiTwtraVKqIn6zI9L7VXgf2I7ceEsbST8sdBv4EZLq0ppe6/
+         qwpg==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20230601; t=1748044144; x=1748648944;
+        h=content-transfer-encoding:mime-version:subject:to:from:date
+         :message-id:x-gm-message-state:from:to:cc:subject:date:message-id
+         :reply-to;
+        bh=oIwOs5j2eSgdD+LEAYdtveDtTCxyY6CZ8dE3ppcjqUU=;
+        b=kENjfYbnUiae3wf9qRw9mmiNospM+jA5Xy2EsZ1GjWucNSOjJaG63g6UJh5fK+WDxt
+         dumy0fPhEyM04xxSd3+ISCNTL+B+/QHDtDFJbeZHa6BmjdQe8ebQfQpOnbWDzhi+c6Ez
+         pd2s/E4gejRAh/OCadDQfQWbHPPcpNeaQ+Jdr8rgTSYJ5EkjdrKY8I28p8RjfsLx7C7c
+         F5Sd7xwYkU2C+Jfq2xMHfCkWzneq/YKyuNLfjS3ziubUQZxQNrz5O7GpcbRnRTN5Am76
+         br2JFl+isJDrNa49XKjOixTx6P79MaB510xbgHYVrv2o9D006aoKMWMII1aa+rMWNXFe
+         U0Kg==
+X-Gm-Message-State: AOJu0YzAyFPJyV8ZX1SfDe9WBYDIaRRifgI6UjzR1KecMfBU8gsDPR1o
+	3DCOjzPqowfa6R3BFrHXIm+0KkdBBcAPuPJyoMrQFzKyXDjdWrFF1kjJ/9Ikhg==
+X-Gm-Gg: ASbGncsxYOEPPrW0a6AfMG9L9bhiU7Vz11eG2yK2LifIYz7igadx6oRZ1T7o4xy70v3
+	DcetM4Ar/V5CQksWs4DHfZSZRadjv2Dwi42BaGK+0fMydrprPi+bDmhbQSKYY5/8btG1Se0hnbZ
+	TzG4l0D5paY/4aUi966Gh0dJjmTvmOLe2MMeEjPCNMkw4UHR5E7WX+Q89UA7wVM6TcKEbdzvqaQ
+	H9+KUPZj4Tv260TjzlREsEV6BVwqu40BKKzPKKwsLWhdea47DGvhgVuX3DbNN8OF6neWFmu80uW
+	doQ1QdpL84tdVJEydQm5Z4p3G2HwsRuBv2TGZxusD9NnIKlukhvUmpTDH1Ig5upqNRy8x23fUVc
+	QKixjcrM7KGI=
+X-Google-Smtp-Source: AGHT+IEU2z9+55ZmTfTSKEbki4IrkNewCHIiPX2LWWTpqXt9G8AbKXvP57rFNgBwN/8YK/qDWYVX5g==
+X-Received: by 2002:a17:902:e5d1:b0:231:c9bb:6106 with SMTP id d9443c01a7336-23414cafbe7mr22746035ad.9.1748044144031;
+        Fri, 23 May 2025 16:49:04 -0700 (PDT)
+Return-Path: <rocco11nicholls@gmail.com>
+Received: from GUEST (174-23-5-251.slkc.qwest.net. [174.23.5.251])
+        by smtp.gmail.com with ESMTPSA id d9443c01a7336-231d4ed5683sm129699605ad.245.2025.05.23.16.49.03
+        for <rockster160@ardesian.com>
+        (version=TLS1_2 cipher=ECDHE-RSA-AES128-GCM-SHA256 bits=128/128);
+        Fri, 23 May 2025 16:49:03 -0700 (PDT)
+Message-ID: <6831096f.170a0220.3514b8.be53@mx.google.com>
+Date: Fri, 23 May 2025 16:49:03 -0700 (PDT)
+From: "Reolink"<rocco11nicholls@gmail.com>
+To:<rockster160@ardesian.com>
+Subject:=?UTF-8?B?W0Rvb3JiZWxsXSBoYXMgZGV0ZWN0ZWQgYSBwZXJzb24gIDIwMjUvMDUvMjMgMTc6NDk6MDM=?=
+Mime-Version:1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: base64
+
+RG9vcmJlbGwgaGFzIGRldGVjdGVkIGEgcGVyc29uLgoKW0Rvb3JiZWxsXSBDaGFubmVsIDAzL05WUgo=
