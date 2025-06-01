@@ -4,7 +4,7 @@ class EmailsController < ApplicationController
 
   def index
     # FIXME: Filter this by user unless admin?
-    @emails = ::Email.ordered.page(params[:page]).per(params[:per] || 10)
+    @emails = ::Email.ordered
 
     mailboxes = []
     if params[:q].present?
@@ -15,6 +15,7 @@ class EmailsController < ApplicationController
     end
     @emails = @emails.inbound unless (mailboxes & [:all, :sent]).any?
     @emails = @emails.not_archived unless (mailboxes & [:all, :archived]).any?
+    @emails = @emails.page(params[:page]).per(params[:per] || 10)
   end
 
   def show
