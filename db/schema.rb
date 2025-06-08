@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_05_31_163410) do
+ActiveRecord::Schema[7.1].define(version: 2025_06_01_162157) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -600,6 +600,8 @@ ActiveRecord::Schema[7.1].define(version: 2025_05_31_163410) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.text "name"
+    t.datetime "started_at"
+    t.datetime "completed_at"
     t.index ["user_id"], name: "index_scheduled_triggers_on_user_id"
   end
 
@@ -693,6 +695,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_05_31_163410) do
     t.datetime "last_trigger_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "last_status"
     t.index ["user_id"], name: "index_tasks_on_user_id"
   end
 

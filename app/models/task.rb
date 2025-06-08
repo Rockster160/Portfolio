@@ -6,6 +6,7 @@
 #  code            :text
 #  cron            :text
 #  enabled         :boolean          default(TRUE)
+#  last_status     :integer
 #  last_trigger_at :datetime
 #  listener        :text
 #  name            :text
@@ -26,7 +27,10 @@ class Task < ApplicationRecord
 
   has_many :executions
 
+  enum last_status: ::Execution.statuses
+
   scope :enabled, -> { where(enabled: true) }
+  scope :pending, -> { where(next_trigger_at: ..Time.current) }
   scope :functions, -> {
     where("listener ~* '(^|\\s)function\\('")
   }

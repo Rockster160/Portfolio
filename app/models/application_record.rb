@@ -2,6 +2,20 @@ class ApplicationRecord < ActiveRecord::Base
   attr_accessor :new_attributes
   self.abstract_class = true
 
+  # TODO: Support `started_at: :start` to tweak the helper methods to be `start!` instead of `started!`
+  def self.timestamp_bool(*cols)
+    cols.map(&:to_sym).each do |col|
+      bool = col.to_s.gsub(/_at\z/, "").to_sym
+
+      define_method("#{bool}?") { send("#{col}?") }
+      define_method("#{bool}!") { update!(col => ::Time.current) }
+      define_method("#{bool}=") { |v| send("#{col}=", v ? ::Time.current : nil) }
+
+      scope bool, -> { where.not(col => nil) }
+      scope "not_#{bool}", -> { where(col => nil) }
+    end
+  end
+
   def self.ilike(hash, join=:OR)
     where(build_query(hash, :ILIKE, join), *hash.values)
   end

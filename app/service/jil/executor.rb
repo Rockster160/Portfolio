@@ -1,21 +1,22 @@
 class Jil::Executor
   attr_accessor :user, :ctx, :lines
 
-  def self.async_trigger(user, trigger, trigger_data={}, at: nil)
-    user_ids = ::User.ids(user)
+  # def self.async_trigger(user, trigger, trigger_data={}, at: nil)
+  #   ::User.ids(user).each do |user_id|
+  #     ::ScheduledTrigger.create!(
+  #       user_id: user_id,
+  #       execute_at: at || ::Time.current,
+  #       trigger: trigger,
+  #       data: ::Trigger.parse_trigger_data(trigger_data),
+  #     )
+  #   end
 
-    begin
-      trigger_data = ::JSON.parse(trigger_data) if trigger_data.is_a?(::String)
-    rescue ::JSON::ParserError
-      trigger_data = { data: trigger_data }
-    end
-
-    if at.blank?
-      ::JilTriggerWorker.perform_async(user_ids, trigger, trigger_data)
-    else
-      ::Jil::Schedule.add_schedules(user_ids, at, trigger, trigger_data)
-    end
-  end
+  #   if at.blank?
+  #     ::JilTriggerWorker.perform_async(user_ids, trigger, trigger_data)
+  #   else
+  #     ::Jil::Schedule.add_schedules(user_ids, at, trigger, trigger_data)
+  #   end
+  # end
 
   def self.trigger(user, trigger, trigger_data={})
     if trigger.blank?
@@ -30,47 +31,36 @@ class Jil::Executor
       return
     end
 
-    user_ids = ::User.ids(user)
-
-    begin
-      trigger_data = ::JSON.parse(trigger_data) if trigger_data.is_a?(::String)
-    rescue ::JSON::ParserError
-      trigger_data = { data: trigger_data }
-    end
-
-    trigger_data = trigger_data.permit!.to_h if trigger_data.is_a?(::ActionController::Parameters)
-    trigger_data = trigger_data.to_h if trigger_data.is_a?(::ActiveSupport::HashWithIndifferentAccess)
-    trigger_data.deep_symbolize_keys!
-
-    if trigger_data.keys == [:data] && trigger_data[:data].is_a?(::String) && trigger_data[:data].match?(/\w+(:\w+)+/)
-      trigger_data[:data] = trigger_data[:data].split(":").reverse.reduce { |value, key| { key.to_sym => value } }
-    end
+    trigger_data = ScheduledTrigger.parse_trigger_data(trigger_data)
 
     ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data }), 1000))
 
-    user_ids.map { |user_id|
-      user_tasks = ::Task.enabled.ordered.where(user_id: user_id).distinct
-      stopped = false
-      user_tasks.by_listener(trigger).filter_map { |task|
-        next if stopped
-        ran = nil
-        begin
-          ran = task.match_run(trigger, trigger_data) && task
-        rescue => e
-          load("/Users/rocco/.pryrc") && show_exc(e) unless Rails.env.production?
-          nil # Generic rescue
+    user_id = user.id
+    user_tasks = ::Task.enabled.ordered.where(user_id: user_id).distinct
+    stopped = false
+    user_tasks.by_listener(trigger).filter_map { |task|
+      next if stopped
+      ran = nil
+      begin
+        ran = task.match_run(trigger, trigger_data) && task
+      rescue => e
+        unless Rails.env.production?
+          puts "[#{exc.class}] #{exc.message}".red
+          puts focused_backtrace($is_ocs ? exc : exc.backtrace).join("\n").grey
         end
-        ran&.tap { stopped = true if ran.stop_propagation? }
-      }.tap { |tasks|
-        if !stopped && trigger.to_sym == :command
-          trigger_data.deep_symbolize_keys!
-          words = trigger_data.dig(:words) || trigger_data.dig(:command, :words)
-          ::Jarvis.command(User.find(user_id), words)
-        end
-      }
-    }.flatten
+        nil # Generic rescue
+      end
+      ran&.tap { stopped = true if ran.stop_propagation? }
+    }.tap { |tasks|
+      if !stopped && trigger.to_sym == :command
+        trigger_data.deep_symbolize_keys!
+        words = trigger_data.dig(:words) || trigger_data.dig(:command, :words)
+        ::Jarvis.command(user, words)
+      end
+    }
   end
 
+  # Used for directly executing code via UI
   def self.async_call(user, code, input_data={}, task: nil, auth: nil)
     ::JilExecuteWorker.perform_async(user.id, code, input_data, task&.id, auth)
   end

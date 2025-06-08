@@ -1,15 +1,14 @@
 class Jil
-  # data can be "something.nested.value" or json
-  def self.trigger(user_id, scope, data={})
-    return trigger_now(user_id, scope, data) if Rails.env.development?
-    Jil::Executor.async_trigger(user_id, scope, data)
+  # data can be "something:nested:value" or json
+  def self.trigger(user, scope, data={})
+    trigger_now(user, scope, data)
   end
 
-  def self.trigger_async(user_id, scope, data={})
-    trigger(user_id, scope, data)
+  def self.trigger_async(from_user, scope, data={})
+    ::Jil::Schedule.add_schedule(user, ::Time.current, trigger, data)
   end
 
-  def self.trigger_now(user_id, scope, data={})
-    Jil::Executor.trigger(user_id, scope, data)
+  def self.trigger_now(user, scope, data={})
+    Jil::Executor.trigger(user, scope, data)
   end
 end

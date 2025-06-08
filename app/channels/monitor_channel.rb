@@ -29,14 +29,14 @@ class MonitorChannel < ApplicationCable::Channel
   end
 
   def execute(data) # Runs task with executing:true
-    ::Jil.trigger(current_user.id, :monitor, data.symbolize_keys.merge({ execute: true }))
+    ::Jil.trigger(current_user, :monitor, data.symbolize_keys.merge({ execute: true }))
   end
 
   def refresh(data) # Runs task with executing:false
-    ::Jil.trigger(current_user.id, :monitor, data.symbolize_keys.merge({ refresh: true }))
+    ::Jil.trigger(current_user, :monitor, data.symbolize_keys.merge({ refresh: true }))
   end
 
   def resync(data) # Pulls most recent result without Running
-    ::Jil.trigger(current_user.id, :monitor, data.symbolize_keys.merge({ resync: true }))
+    ::Jil.trigger(current_user, :monitor, data.symbolize_keys.merge({ resync: true }))
   end
 end

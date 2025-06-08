@@ -12,9 +12,8 @@ class IndexController < ApplicationController
       ::Jil.trigger_async(from_user, :sms, { from: from_number, to: params["To"], body: body })
       return head :ok if opening_garage?(from_user, body)
 
-      response, data = Jarvis.command(from_user, body)
-
       # TODO: If data has anything, interpret that and include with sms
+      response, data = Jarvis.command(from_user, body)
       SmsWorker.perform_async(from_number, response)
     else
       Jarvis.say("SMS from #{from_number}: #{body}")

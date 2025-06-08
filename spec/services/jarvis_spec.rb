@@ -498,7 +498,8 @@ RSpec.describe Jarvis do
         Timecop.travel(5.minutes.from_now) do
           # Trigger Worker is run immediately because of inline jobs, but then cancels since
           #   the schedule time is in the future. Re-run the job.
-          ::TriggerWorker.perform_async(::ScheduledTrigger.maximum(:id))
+          # raise "This might need to be JilRunnerWorker"
+          ::JilRunnerWorker.perform_async(::ScheduledTrigger.maximum(:id))
         end
       }
     end

@@ -58,6 +58,7 @@ gem "sidekiq-unique-jobs"
 gem "slack-notifier", "2.4.0"
 gem "webdrivers"
 gem "web-push", "3.0.0"
+gem "with_advisory_lock"
 
 gem "doorkeeper", "5.8.1"
 

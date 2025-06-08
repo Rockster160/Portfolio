@@ -7,11 +7,10 @@ class JilScheduleWorker
       ::Jil::Schedule.add_job(schedule)
     end
 
-    jils = ::Task.enabled.where(next_trigger_at: ..Time.current)
+    ::Task.enabled.pending.distinct.pluck(:user_id).each do |user_id|
+      next if User.advisory_lock_exists?("jil_runner_#{user_id}")
 
-    jils.find_each(&:execute)
-  rescue StandardError => e
-    SlackNotifier.err(e)
-    raise
+      ::JilRunnerWorker.perform_async(user_id)
+    end
   end
 end

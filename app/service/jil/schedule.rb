@@ -10,13 +10,12 @@ module Jil::Schedule
   def add_schedule(user, execute_at, trigger, data)
     return unless trigger.present?
 
-    schedule = ::ScheduledTrigger.create(
+    schedule = ::ScheduledTrigger.create!(
       user_id: ::User.id(user),
       trigger: trigger,
       execute_at: execute_at.presence || ::Time.current,
       data: data,
     )
-    return unless schedule.persisted?
 
     add_job(schedule) unless far_future?(schedule)
     broadcast(schedule, :created)
@@ -24,7 +23,7 @@ module Jil::Schedule
 
   def broadcast(schedule, action)
     # Do not broadcast immediate triggers since many times it's just used as a function call
-    return schedule unless schedule.delayed_trigger?
+    return schedule if immediate?(schedule)
 
     ::Jil.trigger_now(schedule.user, :schedule, { schedule_id: schedule.id, action: action })
     schedule
@@ -39,7 +38,7 @@ module Jil::Schedule
     end
 
     if far_future?(schedule)
-      schedule.update(jid: nil)
+      schedule.update!(jid: nil)
     else
       add_job(schedule)
     end
@@ -50,18 +49,22 @@ module Jil::Schedule
   end
 
   def add_job(schedule)
-    schedule.update(
+    schedule.update!(
       # Offset 1 second to make up for async slowness
-      jid: ::TriggerWorker.perform_at(schedule.execute_at-1.second, schedule.id),
+      jid: ::JilRunnerWorker.perform_at(schedule.execute_at-1.second, schedule.user.id),
     )
   end
 
   def existing_job(jid)
-    ::Sidekiq::ScheduledSet.new.find { |j| j.jid == jid && j.klass == ::TriggerWorker.name }
+    ::Sidekiq::ScheduledSet.new.find { |j| j.jid == jid && j.klass == ::JilRunnerWorker.name }
+  end
+
+  def immediate?(schedule)
+    schedule.created_at + 2.seconds > schedule.execute_at
   end
 
   def far_future?(schedule)
-    schedule.execute_at > ::ScheduledTrigger::REDIS_OFFSET.from_now
+    schedule.execute_at > schedule.created_at + ::ScheduledTrigger::REDIS_OFFSET
   end
 
   def similar_time?(time1, time2, coverage=6.seconds)

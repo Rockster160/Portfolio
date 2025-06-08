@@ -22,7 +22,7 @@ class ReceiveEmailWorker
       @email.mail_blob.attach(stored_blob)
     end
 
-    # tasks = ::Jil.trigger_now(user_id, :email, legacy_serialize)
+    # tasks = ::Jil.trigger_now(user, :email, legacy_serialize)
     # return if tasks.any?(&:stop_propagation?)
     # reload # Since Jil updates them out of scope
     # return if archived? # Task might have archived this. No need to do further logic if so.
