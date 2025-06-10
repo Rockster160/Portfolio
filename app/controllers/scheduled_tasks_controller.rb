@@ -3,7 +3,7 @@ class ScheduledTasksController < ApplicationController
   before_action :authorize_user_or_guest
 
   def index
-    @events = current_user.scheduled_triggers.order(execute_at: :asc).page(params[:page]).per(50)
+    @events = current_user.scheduled_triggers.not_started.order(execute_at: :asc).page(params[:page]).per(50)
     # @events = @events.query(params[:q]) if params[:q].present?
 
     respond_to do |format|
