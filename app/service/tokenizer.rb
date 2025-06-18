@@ -19,6 +19,29 @@ class Tokenizer
     }
   end
 
+  def self.tokenize(str, extra_pairs={}, only: nil, &block)
+    tz = new(str, extra_pairs, only: only)
+    changed = block.call(tz.tokenized_text)
+    tz.tokenized_text = changed if changed.is_a?(String)
+    tz.untokenize
+  end
+
+  def self.unescaped_split(str, char)
+    return [] if str.blank? || char.blank?
+    str, char = str.to_s.dup, char.to_s.dup
+    raise "Can only split on a single character, not a string" if char.length > 1
+
+    chunks = []
+    loop do
+      idx = find_unescaped_index(str, char, after: -1)
+      break if idx.nil?
+
+      chunks << str[...idx]
+      str = str[(idx + 1)..]
+    end
+    [*chunks, *(str == "" ? nil : [str])]
+  end
+
   def self.find_unescaped_index(str, char, after: -1)
     str.enum_for(:scan, /[#{Regexp.escape(char)}]/m).find { |_m|
       idx = Regexp.last_match.begin(0)
@@ -37,13 +60,6 @@ class Tokenizer
     return if next_idx.nil?
 
     [first_idx, next_idx]
-  end
-
-  def self.tokenize(str, extra_pairs={}, only: nil, &block)
-    tz = new(str, extra_pairs, only: only)
-    changed = block.call(tz.tokenized_text)
-    tz.tokenized_text = changed if changed.is_a?(String)
-    tz.untokenize
   end
 
   def initialize(text, extra_pairs={}, only: nil)
