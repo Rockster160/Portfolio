@@ -27,25 +27,6 @@ class ScheduledTrigger < ApplicationRecord
 
   validates :trigger, presence: true
 
-  def self.parse_trigger_data(input)
-    input = input.permit!.to_h if input.is_a?(::ActionController::Parameters)
-    input = input.to_h if input.is_a?(::ActiveSupport::HashWithIndifferentAccess)
-
-    return input.deep_symbolize_keys if input.is_a?(::Hash)
-    return { data: input } if input.is_a?(::Array)
-
-    begin
-      return parse_trigger_data(::JSON.parse(input)) if input.is_a?(::String)
-    rescue ::JSON::ParserError
-      # Might be nested string `something:nested:value`
-    end
-
-    return { data: input } unless input.is_a?(::String)
-    return { data: input } unless input.match?(/\w+(:\w+)+/)
-
-    parse_trigger_data(input.split(":").reverse.reduce { |value, key| { key.to_sym => value } })
-  end
-
   def self.break_searcher(search_string)
     return all if search_string.squish.then { |str| str.blank? || str == "*" }
     trigger, _rest = search_string.split(":", 2)

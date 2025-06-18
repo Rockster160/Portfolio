@@ -13,6 +13,8 @@ module Portfolio
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 7.0
 
+    config.global_id.app = "Jarvis"
+
     config.secret_key_base = ENV["PORTFOLIO_SECRET"]
     config.active_record.belongs_to_required_by_default = true
     config.action_controller.default_protect_from_forgery = true
