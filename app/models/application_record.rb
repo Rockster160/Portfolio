@@ -1,6 +1,8 @@
 class ApplicationRecord < ActiveRecord::Base
-  attr_accessor :new_attributes
   self.abstract_class = true
+  attr_accessor :new_attributes
+
+  include Jilable
 
   # TODO: Support `started_at: :start` to tweak the helper methods to be `start!` instead of `started!`
   def self.timestamp_bool(*cols)
