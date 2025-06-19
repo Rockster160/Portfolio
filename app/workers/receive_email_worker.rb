@@ -7,10 +7,9 @@ class ReceiveEmailWorker
     @object_key = object_key
 
     ::ActiveRecord::Base.transaction do
-      @email = ::Email.find_by(mail_id: mail.message_id, timestamp: mail.date)
-      @email ||= ::Email.create!(
-        mail_id: mail.message_id,
-        user_id: matching_user_id || ::User.me.id,
+      @email = user.emails.find_by(mail_id: mail.message_id, timestamp: mail.date)
+      @email ||= user.emails.create!(
+        mail_id: mail.message_id,,
         timestamp: mail.date,
         direction: :inbound,
         inbound_mailboxes: mail.to_addresses.map(&:to_s),
@@ -105,6 +104,9 @@ class ReceiveEmailWorker
       key: @object_key,
       service_name: :s3_emails,
     )
+  }
+  💾(:user) {
+    matching_user_id.present? ? ::User.find(matching_user_id) : ::User.me
   }
   💾(:matching_user_id) {
     to_addresses.find { |address|
