@@ -39,9 +39,9 @@
           <% if email.inbound? %>
             <i class="ti ti-fa-arrow_right"></i>
           <% end %>
-          <%= email.outbound_mailboxes.join %>
+          <%= email.show_mailboxes(:outbound) %>
         </div>
-        <div class="to"><%= email.inbound_mailboxes.join %></div>
+        <div class="to"><%= email.show_mailboxes(:inbound) %></div>
         <div class="subject"><%= email.subject.presence || "<No Subject>" %></div>
         <div class="body"><%= email.blurb.presence || "<No Content>" %></div>
       </a>

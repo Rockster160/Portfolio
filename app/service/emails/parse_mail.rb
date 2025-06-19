@@ -73,6 +73,7 @@ class Emails::ParseMail
   end
 
   def part_text(part)
+    return if part.mime_type.nil? # Technically an invalid email
     return part_text_image(part) unless part.mime_type.starts_with?("text/")
     return decode_part(part) if part.mime_type == "text/plain"
 
@@ -80,6 +81,7 @@ class Emails::ParseMail
   end
 
   def part_html(part)
+    return if part.mime_type.nil? # Technically an invalid email
     return part_html_image(part) unless part.mime_type.starts_with?("text/")
 
     decode_part(part)&.then { |str|

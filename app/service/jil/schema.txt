@@ -244,6 +244,7 @@
   .html::String
   .timestamp::Date
   .archive(Boolean(true))::Boolean
+  .delete_forever!::Boolean
 [Contact]
   #find(String|Numeric)
   #search(String)::Array

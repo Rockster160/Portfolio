@@ -46,6 +46,11 @@ class Jil::Methods::Email < Jil::Methods::Base
     email(email_data).archive(boolean)
   end
 
+  def delete_forever!(email_data)
+    email(email_data).destroy!
+    true
+  end
+
   private
 
   def email(email_data)

@@ -99,6 +99,12 @@ class Email < ApplicationRecord
     html_body
   end
 
+  def show_mailboxes(type=:inbound)
+    ::Emails::Normalizer.addresses_from_meta(send("#{type}_mailboxes")).then { |addresses|
+      addresses.size == 1 ? addresses.first : "[#{addresses.join(" | ")}]"
+    }
+  end
+
   def archive! = update!(archived_at: ::Time.current)
   def archived? = archived_at?
   def read! = update!(read_at: ::Time.current)
