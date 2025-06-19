@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_06_19_040236) do
+ActiveRecord::Schema[7.1].define(version: 2025_06_19_171913) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -298,7 +298,9 @@ ActiveRecord::Schema[7.1].define(version: 2025_06_19_040236) do
     t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.text "mail_id"
+    t.text "mail_id", null: false
+    t.index ["mail_id", "timestamp"], name: "index_emails_on_mail_id_and_timestamp"
+    t.index ["mail_id"], name: "index_emails_on_mail_id"
     t.index ["user_id"], name: "index_emails_on_user_id"
   end
 

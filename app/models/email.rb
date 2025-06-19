@@ -14,7 +14,7 @@
 #  timestamp          :datetime         not null
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
-#  mail_id            :text
+#  mail_id            :text             not null
 #  user_id            :bigint           not null
 #
 

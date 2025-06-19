@@ -9,7 +9,7 @@ class ReceiveEmailWorker
     ::ActiveRecord::Base.transaction do
       @email = user.emails.find_by(mail_id: mail.message_id, timestamp: mail.date)
       @email ||= user.emails.create!(
-        mail_id: parser.message_id,
+        mail_id: mail.message_id.presence || "no-message-id-#{::SecureRandom.hex(4)}",
         timestamp: mail.date,
         direction: :inbound,
         inbound_mailboxes: to_addresses,
@@ -17,7 +17,9 @@ class ReceiveEmailWorker
         subject: mail.subject,
         blurb: text_content.gsub(/\s*\n\s*/, " ").first(500),
         has_attachments: mail.has_attachments?,
-      )
+      ).tap { |created_email|
+        warn_blank_message_id(created_email) if mail.message_id.blank?
+      }
 
       @email.mail_blob.attach(stored_blob) if @email.mail_blob.blank?
     end
@@ -134,5 +136,13 @@ class ReceiveEmailWorker
     message_parts << "<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>"
     message_parts << ">>> #{clean_text.truncate(2000)}"
     SlackNotifier.notify(message_parts.join("\n"), channel: "#portfolio", username: "Mail-Bot", icon_emoji: ":mailbox:")
+  end
+
+  def warn_blank_message_id(email)
+    SlackNotifier.notify(
+      "*Email##{email&.id}*\n" \
+      "Message ID blank! [#{mail.message_id.class}](#{mail.message_id.inspect}) \n" \
+      "```ReceiveEmailWorker.new.perform(\"#{@bucket}\", \"#{@object_key}\")```",
+    )
   end
 end
