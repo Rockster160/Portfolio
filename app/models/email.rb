@@ -50,6 +50,26 @@ class Email < ApplicationRecord
     else none
     end
   }
+  # Us
+  scope :with_inbound_name, ->(name) {
+    where(
+      "EXISTS (
+        SELECT 1
+        FROM   jsonb_array_elements_text(inbound_mailboxes) AS m(addr)
+        WHERE  addr ILIKE ?
+      )", "#{name} <%"
+    )
+  }
+  # External
+  scope :with_outbound_name, ->(name) {
+    where(
+      "EXISTS (
+        SELECT 1
+        FROM   jsonb_array_elements_text(outbound_mailboxes) AS m(addr)
+        WHERE  addr ILIKE ?
+      )", "#{name} <%"
+    )
+  }
 
   # TODO: SEND emails should also use S3
 
