@@ -22,12 +22,13 @@ class ReceiveEmailWorker
       @email.mail_blob.attach(stored_blob)
     end
 
-    # tasks = ::Jil.trigger_now(user, :email, legacy_serialize)
-    # return if tasks.any?(&:stop_propagation?)
-    # reload # Since Jil updates them out of scope
-    # return if archived? # Task might have archived this. No need to do further logic if so.
+    # tasks = ::Jil.trigger_now(me, :email, Email.last)
+    tasks = ::Jil.trigger_now(user, :email, @email)
+    return if tasks.any?(&:stop_propagation?)
+    @email.reload # Since Jil updates them out of scope
+    return if @email.archived? # Task might have archived this. No need to do further logic if so.
 
-    # # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier
+    # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier
 
     blacklist = [
       "LV Bag",

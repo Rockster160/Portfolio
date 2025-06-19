@@ -1,8 +1,8 @@
 class Jil::Methods::Prompt < Jil::Methods::Base
   def cast(value)
     case value
-    when ::Prompt then value.legacy_serialize
-    else @jil.cast(value, :Hash)
+    when ::Prompt then value
+    else ::SoftAssign.call(::Prompt.new, @jil.cast(value, :Hash))
     end
   end
 
@@ -90,6 +90,8 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   end
 
   def load_prompt(prompt)
+    return prompt if prompt.is_a?(::Prompt)
+
     @jil.user.prompts.find(cast(prompt)[:id])
   end
 

@@ -18,4 +18,10 @@ module Jilable
     key, *rest = keys
     self[key]&.then { |v| rest.any? ? v&.dig(*rest) : v }
   end
+
+  def merge(hash)
+    @execution_attrs ||= {}
+    @execution_attrs.merge!(hash)
+    self
+  end
 end

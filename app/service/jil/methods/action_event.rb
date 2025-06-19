@@ -3,8 +3,8 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
 
   def cast(value)
     case value
-    when ::ActionEvent then value.legacy_serialize
-    else @jil.cast(value, :Hash)
+    when ::ActionEvent then value
+    else ::SoftAssign.call(::ActionEvent.new, @jil.cast(value, :Hash))
     end
   end
 
@@ -104,6 +104,8 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   end
 
   def load_event(jil_event)
+    return jil_event if jil_event.is_a?(::ActionEvent)
+
     @jil.user.action_events.find(cast(jil_event)[:id])
   end
 

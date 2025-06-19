@@ -63,6 +63,10 @@ class Email < ApplicationRecord
 
   💾(:mail) { ::Mail.new(mail_blob.download) }
 
+  def serialize(opts={})
+    super(opts).merge(body: to_html, blob: mail, from: from, to: to)
+  end
+
   def from
     inbound? ? outbound_mailboxes : inbound_mailboxes
   end
@@ -101,6 +105,10 @@ class Email < ApplicationRecord
   def read! = update!(read_at: ::Time.current)
   def read?; read_at?; end
   def unread?; !read_at?; end
+
+  def archive(boolean)
+    boolean ? archive! : update!(archived_at: nil)
+  end
 
   # # def deliver!
   # #   ApplicationMailer.deliver_email(id, tempfiles).deliver_now

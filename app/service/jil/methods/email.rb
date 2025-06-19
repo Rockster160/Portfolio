@@ -1,8 +1,8 @@
 class Jil::Methods::Email < Jil::Methods::Base
   def cast(value)
     case value
-    when ::Email then value.as_json(only: [:id, :from, :to, :subject])
-    else @jil.cast(value, :Hash)
+    when ::Email then value
+    else ::SoftAssign.call(::Email.new, @jil.cast(value, :Hash))
     end
   end
 
@@ -48,6 +48,8 @@ class Jil::Methods::Email < Jil::Methods::Base
   private
 
   def email(email_data)
-    @jil.user.emails.find(cast(email_data)[:id])
+    return email_data if email_data.is_a?(::Email)
+
+    @jil.user.emails.find_by(id: cast(email_data)[:id])
   end
 end

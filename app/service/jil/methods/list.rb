@@ -1,8 +1,8 @@
 class Jil::Methods::List < Jil::Methods::Base
   def cast(value)
     case value
-    when ::List then { id: value.id }.with_indifferent_access
-    else @jil.cast(value, :Hash)
+    when ::List then value
+    else ::SoftAssign.call(::List.new, @jil.cast(value, :Hash))
     end
   end
 
@@ -51,6 +51,8 @@ class Jil::Methods::List < Jil::Methods::Base
   end
 
   def load_list(jil_list)
+    return jil_list if jil_list.is_a?(::List)
+
     @jil.user.lists.find(cast(jil_list)[:id])
   end
 end

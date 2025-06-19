@@ -2,8 +2,8 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   PERMIT_ATTRS = [:name, :execute_at, :trigger, :data]
   def cast(value)
     case value
-    when ::ScheduledTrigger then value.legacy_serialize
-    else @jil.cast(value, :Hash)
+    when ::ScheduledTrigger then value
+    else ::SoftAssign.call(::ScheduledTrigger.new, @jil.cast(value, :Hash))
     end
   end
 

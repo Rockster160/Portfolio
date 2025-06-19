@@ -239,7 +239,9 @@ class ApplicationRecord < ActiveRecord::Base
   end
 
   def serialize(opts={})
-    as_json(opts.reverse_merge(except: [:created_at, :updated_at])).with_indifferent_access
+    as_json(
+      opts.reverse_merge(except: [:created_at, :updated_at])
+    ).merge(@execution_attrs || {}).with_indifferent_access
   end
 
   def new(attrs={})

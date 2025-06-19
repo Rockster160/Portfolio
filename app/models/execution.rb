@@ -45,7 +45,7 @@ class Execution < ApplicationRecord
   }
 
   def self.compact_all
-    update_all(ctx: nil, code: nil)
+    where("code IS NOT NULL").update_all(ctx: nil, code: nil, input_data: nil)
   end
 
   def self.average_duration(count)

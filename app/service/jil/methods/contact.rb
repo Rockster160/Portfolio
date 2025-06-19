@@ -3,8 +3,8 @@ class Jil::Methods::Contact < Jil::Methods::Base
 
   def cast(value)
     case value
-    when ::Contact then value.legacy_serialize
-    else @jil.cast(value, :Hash)
+    when ::Contact then value
+    else ::SoftAssign.call(::Contact.new, @jil.cast(value, :Hash))
     end
   end
 

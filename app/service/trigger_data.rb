@@ -2,6 +2,7 @@ module TriggerData
   module_function
 
   def parse(input, as: nil)
+    return input if input.is_a?(::ApplicationRecord)
     input = input.permit!.to_h.except(:controller, :action) if input.is_a?(::ActionController::Parameters)
     input = input.to_h if input.is_a?(::ActiveSupport::HashWithIndifferentAccess)
 
@@ -49,11 +50,12 @@ module TriggerData
     string
   end
 
-  def serialize(data)
+  def serialize(data, use_global_id: true)
     case data
     when ::Hash then data.transform_values { |value| serialize(value) }
     when ::Array then data.map { |value| serialize(value) }
-    when ::ApplicationRecord then data.to_global_id.to_s
+    when ::ApplicationRecord
+      use_global_id ? data.to_global_id.to_s : data.serialize(use_global_id: use_global_id)
     when ::String then data
     else data
     end

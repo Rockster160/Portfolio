@@ -160,9 +160,10 @@ class Task < ApplicationRecord
 
   def match_run(trigger, trigger_data, force: false)
     first_match = nil
+    serialized_data = TriggerData.serialize(trigger_data, use_global_id: false)
     did_match = listener_match?(trigger) { |sub_listener|
       next true if sub_listener == trigger
-      matcher = ::SearchBreakMatcher.new(sub_listener, { trigger => trigger_data })
+      matcher = ::SearchBreakMatcher.new(sub_listener, { trigger => serialized_data })
       matcher.match?.tap { |m| first_match ||= matcher if m }
     }
     return if !did_match && !force

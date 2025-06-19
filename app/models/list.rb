@@ -94,7 +94,7 @@ class List < ApplicationRecord
       serialized_opts[:include][:deleted_list_items] = serialized_opts[:include].delete(:list_items)
     end
 
-    as_json(serialized_opts).with_indifferent_access.tap { |json|
+    super(serialized_opts).tap { |json|
       json[:items] = json.delete(:list_items) || json.delete(:deleted_list_items)
     }
   end

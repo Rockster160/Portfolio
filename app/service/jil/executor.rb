@@ -1,5 +1,6 @@
 class Jil::Executor
   attr_accessor :user, :ctx, :lines
+  attr_accessor :input_data
 
   # def self.async_trigger(user, trigger, trigger_data={}, at: nil)
   #   ::User.ids(user).each do |user_id|
@@ -31,7 +32,7 @@ class Jil::Executor
       return
     end
 
-    trigger_data = ScheduledTrigger.parse_trigger_data(trigger_data)
+    trigger_data = TriggerData.parse(trigger_data, as: user)
 
     ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data }), 1000))
 
@@ -43,7 +44,7 @@ class Jil::Executor
       ran = nil
       begin
         ran = task.match_run(trigger, trigger_data) && task
-      rescue => e
+      rescue => exc
         unless Rails.env.production?
           puts "[#{exc.class}] #{exc.message}".red
           puts focused_backtrace($is_ocs ? exc : exc.backtrace).join("\n").grey
@@ -62,6 +63,7 @@ class Jil::Executor
 
   # Used for directly executing code via UI
   def self.async_call(user, code, input_data={}, task: nil, auth: nil)
+    # Might need to serialize objects into GID
     ::JilExecuteWorker.perform_async(user.id, code, input_data, task&.id, auth)
   end
 
@@ -75,8 +77,9 @@ class Jil::Executor
 
     # Need to store auth, but need to remember to pass the id as well
     @user = user
-    @ctx = { vars: {}, input_data: input_data, return_val: nil, state: :running, output: [] }
-    @execution = ::Execution.create(user: user, code: code, ctx: @ctx, task: task)
+    @ctx = { vars: {}, return_val: nil, state: :running, output: [] }
+    @input_data = input_data || {}
+    @execution = ::Execution.create(user: user, code: code, ctx: @ctx, task: task, input_data: TriggerData.serialize(input_data))
     ::Execution.order(started_at: :desc).where(user: user, task: task).offset(5).compact_all
     @lines = ::Jil::Parser.from_code(code)
   end
@@ -86,7 +89,7 @@ class Jil::Executor
   end
 
   def store_progress(attrs={})
-    @execution.update(attrs.merge(ctx: @ctx))
+    @execution.update(attrs.merge(ctx: @ctx.except(:vars)))
   end
 
   def broadcast!
@@ -138,6 +141,7 @@ class Jil::Executor
       next if line.commented?
 
       execute_line(line, current_ctx).tap { |line_val|
+        # TODO: We don't need to break these down into hash - just keep the object references in the hash instead
         @ctx[:vars][line.varname.to_sym] = line_val
         last_line_val = line_val[:value]
         if @debug
@@ -163,6 +167,12 @@ class Jil::Executor
       end
     )
     obj = klass.new(self, current_ctx || @ctx)
+
+    # Alternative:
+    # { type: "Number", value: 5 }
+    # { type: "_jv_gid", value: "gid://Jarvis/Email/5" }
+    # { type: "Email", value: "gid://Jarvis/Email/5" } # - Magically knows DB classes use gid?
+    # Or... Since this is internal, the values should already be parsed, so do not serialize them
 
     {
       class: line.cast,

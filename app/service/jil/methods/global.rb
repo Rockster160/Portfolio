@@ -10,8 +10,8 @@ class Jil::Methods::Global < Jil::Methods::Base
 
   def execute(line)
     case line.methodname
-    when :input_data then @jil.ctx[:input_data]
-    when :params then @jil.ctx.dig(:input_data, :params)
+    when :input_data then @jil.input_data
+    when :params then @jil.input_data&.dig(:params)
     when :functionParams then splatParams(line)
     when :exit then @jil.ctx[:state] = :exit
     when :return
@@ -76,7 +76,7 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def splatParams(line)
-    array = @jil.ctx.dig(:input_data, :params)
+    array = @jil.input_data&.dig(:params)
     line.args.flatten.map.with_index { |arg, idx|
       @jil.cast(array[idx], arg.cast).tap { |val|
         set_value(arg.varname, val, type: arg.cast)

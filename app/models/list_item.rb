@@ -91,7 +91,7 @@ class ListItem < ApplicationRecord
   end
 
   def serialize(opts={})
-    as_json(
+    super(
       only: [
         :id,
         :name,
@@ -101,7 +101,7 @@ class ListItem < ApplicationRecord
         :sort_order,
         :deleted_at,
       ],
-    ).with_indifferent_access
+    )
   end
 
   def self.with_deleted
