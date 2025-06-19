@@ -110,6 +110,13 @@ class Email < ApplicationRecord
   def archive(boolean)
     boolean ? archive! : update!(archived_at: nil)
   end
+  def archived=(boolean)
+    if boolean && archived_at.nil?
+      self.archived_at = ::Time.current
+    elsif !boolean && archived_at.present?
+      self.archived_at = nil
+    end
+  end
 
   # # def deliver!
   # #   ApplicationMailer.deliver_email(id, tempfiles).deliver_now
