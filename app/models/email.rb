@@ -51,29 +51,20 @@ class Email < ApplicationRecord
     else none
     end
   }
-  # Us
+  # Us | Internal
   scope :with_inbound_name, ->(name) {
-    where(
-      "EXISTS (
-        SELECT 1
-        FROM   jsonb_array_elements_text(inbound_mailboxes) AS m(addr)
-        WHERE  addr ILIKE ?
-      )", "#{name} <%"
-    )
+    where("inbound_mailboxes @> ?", [{ name: name }].to_json)
   }
-  # External
+  # Them | External
   scope :with_outbound_name, ->(name) {
-    where(
-      "EXISTS (
-        SELECT 1
-        FROM   jsonb_array_elements_text(outbound_mailboxes) AS m(addr)
-        WHERE  addr ILIKE ?
-      )", "#{name} <%"
-    )
+    where("outbound_mailboxes @> ?", [{ name: name }].to_json)
   }
 
   # TODO: SEND emails should also use S3
 
+  def for_local # Call in prod to get code to call locally
+    "::Email.parse(\"#{mail_blob.key}\")"
+  end
   def self.parse(s3_object_key, bucket: "ardesian-emails")
     # 0fbk4c83djki6ol1v7d992kakp3ur7eq50sal501
     ::ReceiveEmailWorker.new.perform(bucket, s3_object_key)

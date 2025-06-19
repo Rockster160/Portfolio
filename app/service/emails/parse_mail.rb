@@ -32,6 +32,14 @@ class Emails::ParseMail
     )
   }
   💾(:failed_delivery?) { flat_parts.any? { |part| part.mime_type == "message/delivery-status" } }
+  💾(:condensed_text) {
+    text_part.force_encoding("ASCII-8BIT").encode(
+      "UTF-8",
+      invalid: :replace,
+      undef:   :replace,
+      replace: "",
+    ).gsub(/\s+/, " ")
+  }
   💾(:text_part) { parts[:text] }
   💾(:html_part) { parts[:html] }
   💾(:parts) { extracted_parts }
@@ -120,7 +128,7 @@ class Emails::ParseMail
     str = decode_encoding(str, "7bit") { |part_str|
       ::SafeEncode.call(part_str).strip
     }
-    decode_encoding(str, /quoted-?printable/) { |part_str|
+    str = decode_encoding(str, /quoted-?printable/) { |part_str|
       ::Mail::Encodings::QuotedPrintable.decode(part_str).strip
     }
   end

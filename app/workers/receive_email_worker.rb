@@ -15,7 +15,7 @@ class ReceiveEmailWorker
         inbound_mailboxes: internal_mailboxes,
         outbound_mailboxes: external_mailboxes,
         subject: mail.subject,
-        blurb: text_content.gsub(/\s*\n\s*/, " ").first(500),
+        blurb: parser.condensed_text.first(500),
         has_attachments: mail.has_attachments?,
       ).tap { |created_email|
         warn_blank_message_id(created_email) if mail.message_id.blank?
