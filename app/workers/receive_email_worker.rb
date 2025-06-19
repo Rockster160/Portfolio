@@ -45,7 +45,7 @@ class ReceiveEmailWorker
       "auto-confirm@amazon.com",
       "order-update@amazon.com",
       "shipment-tracking@amazon.com",
-    ] & internal_addresses).any?
+    ] & external_addresses).any?
   end
 
   def parse_amazon
@@ -59,6 +59,7 @@ class ReceiveEmailWorker
   💾(:internal_mailboxes) { parser.to }
   💾(:external_mailboxes) { parser.from }
   💾(:internal_addresses) { internal_mailboxes.map { |address| address[:address] } }
+  💾(:external_addresses) { external_mailboxes.map { |address| address[:address] } }
   💾(:stored_blob) {
     blob = ::ActiveStorage::Blob.find_by(key: @object_key)
     next blob if blob.present?

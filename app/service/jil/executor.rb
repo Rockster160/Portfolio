@@ -19,7 +19,7 @@ class Jil::Executor
   #   end
   # end
 
-  def self.trigger(user, trigger, trigger_data={})
+  def self.trigger(user, trigger, raw_trigger_data={})
     if trigger.blank?
       lines = caller.select { |line|
         line.include?(Rails.root.to_s) || line.include?("_scripts")
@@ -27,14 +27,14 @@ class Jil::Executor
         line.gsub(/^.*?#{Rails.root}/, "").gsub(/(app)?\/app\//, "app/").gsub(":in `", " `").gsub(/(:\d+) .*?$/, '\1')
       }.join("\n")
       msg = "No trigger:```\n#{lines}\n```"
-      msg += "\n\n```\n#{JSON.pretty_generate(trigger_data)}\n```" if trigger_data.present?
+      msg += "\n\n```\n#{JSON.pretty_generate(raw_trigger_data)}\n```" if raw_trigger_data.present?
       SlackNotifier.notify(msg)
       return
     end
 
-    trigger_data = TriggerData.parse(trigger_data, as: user)
+    ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => raw_trigger_data }), 1000))
 
-    ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => trigger_data }), 1000))
+    trigger_data = TriggerData.parse(raw_trigger_data, as: user)
 
     user_id = user.id
     user_tasks = ::Task.enabled.ordered.where(user_id: user_id).distinct
