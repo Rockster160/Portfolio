@@ -2,6 +2,7 @@ class Jil::Methods::List < Jil::Methods::Base
   def cast(value)
     case value
     when ::List then value
+    when ::ActiveRecord::Relation then cast(value.one? ? value.first : value.to_a)
     else ::SoftAssign.call(::List.new, @jil.cast(value, :Hash))
     end
   end

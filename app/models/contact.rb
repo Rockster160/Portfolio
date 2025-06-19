@@ -56,7 +56,7 @@ class Contact < ApplicationRecord
     found ||= friends.find_by("REGEXP_REPLACE(friends.username, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
   end
 
-  def legacy_serialize
+  def serialize
     {
       id: id,
       name: name,

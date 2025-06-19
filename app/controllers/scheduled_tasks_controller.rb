@@ -6,17 +6,13 @@ class ScheduledTasksController < ApplicationController
     @events = current_user.scheduled_triggers.not_started.order(execute_at: :asc).page(params[:page]).per(50)
     # @events = @events.query(params[:q]) if params[:q].present?
 
-    respond_to do |format|
-      format.html
-      format.json { render json: @events.per(30).legacy_serialize }
-    end
+    serialize @events
   end
 
   def create
     event = current_user.scheduled_triggers.create!(event_params)
     ::Jil::Schedule.update(event) # Schedules the job
     ::Jil::Schedule.broadcast(event, :created)
-    event.legacy_serialize
 
     respond_to do |format|
       format.json do

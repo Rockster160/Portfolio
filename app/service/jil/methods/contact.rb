@@ -4,6 +4,7 @@ class Jil::Methods::Contact < Jil::Methods::Base
   def cast(value)
     case value
     when ::Contact then value
+    when ::ActiveRecord::Relation then cast(value.one? ? value.first : value.to_a)
     else ::SoftAssign.call(::Contact.new, @jil.cast(value, :Hash))
     end
   end
@@ -46,15 +47,15 @@ class Jil::Methods::Contact < Jil::Methods::Base
   def find(name)
     found = @jil.user.contacts.find_by(id: name) if name.match?(/^\d+$/)
     found ||= @jil.user.contacts.name_find(name)
-    found&.legacy_serialize
+    found
   end
 
   def search(name)
-    @jil.user.contacts.search(name).map(&:legacy_serialize)
+    @jil.user.contacts.search(name)
   end
 
   def create(details)
-    @jil.user.contacts.create(params(details)).legacy_serialize
+    @jil.user.contacts.create(params(details))
   end
 
   def update!(contact, details)

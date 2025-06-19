@@ -2,6 +2,7 @@ class Jil::Methods::Email < Jil::Methods::Base
   def cast(value)
     case value
     when ::Email then value
+    when ::ActiveRecord::Relation then cast(value.one? ? value.first : value.to_a)
     else ::SoftAssign.call(::Email.new, @jil.cast(value, :Hash))
     end
   end
@@ -14,7 +15,7 @@ class Jil::Methods::Email < Jil::Methods::Base
     limit = (limit.presence || 50).to_i.clamp(1..100)
     scoped = @jil.user.emails.query(q).page(1).per(limit)
     scoped = scoped.order(created_at: order) if [:asc, :desc].include?(order.to_s.downcase.to_sym)
-    scoped.map(&:legacy_serialize)
+    scoped
   end
 
   def to(email_data)

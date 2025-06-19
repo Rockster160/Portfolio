@@ -46,8 +46,9 @@ class Jil::Executor
         ran = task.match_run(trigger, trigger_data) && task
       rescue => exc
         unless Rails.env.production?
-          puts "[#{exc.class}] #{exc.message}".red
-          puts focused_backtrace($is_ocs ? exc : exc.backtrace).join("\n").grey
+          load("/Users/rocco/.pryrc")
+          source_puts "[#{exc.class}] #{exc.message}".red
+          source_puts focused_backtrace($is_ocs ? exc : exc.backtrace).join("\n").grey
         end
         nil # Generic rescue
       end
@@ -168,12 +169,6 @@ class Jil::Executor
     )
     obj = klass.new(self, current_ctx || @ctx)
 
-    # Alternative:
-    # { type: "Number", value: 5 }
-    # { type: "_jv_gid", value: "gid://Jarvis/Email/5" }
-    # { type: "Email", value: "gid://Jarvis/Email/5" } # - Magically knows DB classes use gid?
-    # Or... Since this is internal, the values should already be parsed, so do not serialize them
-
     {
       class: line.cast,
       value: cast(obj.base_execute(line), line.cast, current_ctx),
@@ -249,6 +244,8 @@ class Jil::Executor
     when nil then magic_cast(value)
     when :Any, :Global then value
     when :None then nil
+    when :ScheduleData, :ContactData, :ActionEventData, :MonitorData, :PromptQuestion
+      cast(value, :Hash)
     else klass_from_obj(type).new(self, current_ctx || @ctx).cast(value)
     end
   end

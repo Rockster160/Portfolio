@@ -4,6 +4,7 @@ class Jil::Methods::String < Jil::Methods::Base
     when ::Hash then clean_json(value)
     when ::Array then clean_json(value)
     when ::Date, ::DateTime, ::Time, ActiveSupport::TimeWithZone then value.iso8601
+    when ::ApplicationRecord then cast(value.serialize)
     # when ::String then value
     else
       value.to_s.gsub(/^\"|\"$/, "").gsub(/#\{\s*(.*?)\s*\}/) { |found|

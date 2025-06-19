@@ -3,6 +3,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   def cast(value)
     case value
     when ::ScheduledTrigger then value
+    when ::ActiveRecord::Relation then cast(value.one? ? value.first : value.to_a)
     else ::SoftAssign.call(::ScheduledTrigger.new, @jil.cast(value, :Hash))
     end
   end
@@ -38,11 +39,11 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   # [Schedule]
 
   def find(id)
-    schedules.find_by(id: id)&.legacy_serialize
+    schedules.find_by(id: id)
   end
 
   def search(name)
-    schedules.break_searcher(name).map(&:legacy_serialize)
+    schedules.break_searcher(name)
   end
 
   def create(details)
@@ -50,7 +51,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
     s = @jil.user.scheduled_triggers.create!(fix_params)
     ::Jil::Schedule.update(s) # Schedules the job
     ::Jil::Schedule.broadcast(s, :created)
-    s.legacy_serialize
+    s
   end
 
   def update!(schedule, details)
@@ -58,7 +59,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
       s.update(params(details))
       ::Jil::Schedule.update(s)
       ::Jil::Schedule.broadcast(s, :updated)
-    }.legacy_serialize
+    }
   end
 
   def cancel!(schedule)
@@ -66,7 +67,8 @@ class Jil::Methods::Schedule < Jil::Methods::Base
       ::Jil::Schedule.cancel(s)
       s.destroy
       ::Jil::Schedule.broadcast(s, :canceled)
-    }&.legacy_serialize&.merge(canceled: true)&.except(:id)
+      s.id = nil
+    }&.merge(canceled: true)
   end
 
   # [ScheduleData]

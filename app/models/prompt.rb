@@ -22,18 +22,7 @@ class Prompt < ApplicationRecord
     many:   1,
   }
 
-  def self.legacy_serialize
-    all.map(&:legacy_serialize)
-  end
-
-  def legacy_serialize
-    {
-      id: id,
-      question: question,
-      params: params,
-      options: options,
-      response: response,
-      url: Rails.application.routes.url_helpers.prompt_url(self)
-    }.with_indifferent_access
+  def serialize(opts={})
+    super(opts).merge(url: Rails.application.routes.url_helpers.prompt_url(self))
   end
 end

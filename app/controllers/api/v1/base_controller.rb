@@ -5,33 +5,6 @@ class Api::V1::BaseController < ApplicationController
 
   rescue_from ::ActiveRecord::RecordNotFound, with: :not_found_response
 
-  def render_json(data)
-    return serialize(data) if data.respond_to?(:serialize)
-
-    json = data.except(:status)
-    opts = data.slice(:status)
-
-    render json: { data: json.as_json }, **opts
-  end
-
-  def serialize(data, opts={})
-    errors = []
-
-    case data
-    when ::Hash, ::Array
-    when ::ActiveRecord::Base
-      errors = data.errors.full_messages
-      data = data.serialize(opts)
-    when ::ActiveRecord::Relation
-      data = data.serialize(opts)
-    end
-
-    render(
-      json: { data: data.as_json, errors: errors },
-      status: errors.any? ? :unprocessable_entity : :ok,
-    )
-  end
-
   def authorize_user
     if current_user.nil?
       render_json error: "Please sign in before continuing.", status: :unauthorized

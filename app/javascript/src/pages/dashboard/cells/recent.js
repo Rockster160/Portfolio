@@ -34,8 +34,8 @@ import { Time } from "./_time"
     }),
     reloader: function() {
       var cell = this
-      $.getJSON("/action_events", function(data) {
-        renderEvents(cell, data)
+      $.getJSON("/action_events", function(res) {
+        renderEvents(cell, res.data)
       }).fail(function(data) {
         cell.text("Failed to retrieve: " + JSON.stringify(data))
       })

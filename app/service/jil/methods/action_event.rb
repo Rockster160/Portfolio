@@ -4,6 +4,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   def cast(value)
     case value
     when ::ActionEvent then value
+    when ::ActiveRecord::Relation then cast(value.one? ? value.first : value.to_a)
     else ::SoftAssign.call(::ActionEvent.new, @jil.cast(value, :Hash))
     end
   end
@@ -16,7 +17,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     limit = (limit.presence || 50).to_i.clamp(1..100)
     scoped = events.query(q).page(1).per(limit)
     scoped = scoped.order(created_at: order) if [:asc, :desc].include?(order.to_s.downcase.to_sym)
-    scoped.legacy_serialize
+    scoped
   end
 
   def add(name)
@@ -28,7 +29,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   def create(details)
     events.create(params(details)).tap { |event|
       event_callbacks(event, :added)
-    }.legacy_serialize
+    }
   end
 
   def execute(line)
@@ -92,12 +93,17 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   private
 
   def event_callbacks(event, action, update_streak=true, &callback)
-    ::Jil.trigger(@jil.user, :event, event.legacy_serialize.merge(action: action))
+    ::Jil.trigger(@jil.user, :event, event.with_jil_attrs(action: action))
     callback&.call(event)
     ActionEventBroadcastWorker.perform_async(event.id, update_streak)
   end
 
   def params(details)
+    Array.wrap(details).tap { |d|
+      next unless d.length == 1 && d.first.is_a?(ActionEvent)
+      return details.first.serialize.except(:id)
+    }
+
     @jil.cast(details, :Hash).slice(*PERMIT_ATTRS).tap { |obj|
       obj[:data] = @jil.cast(obj[:data], :Hash) if obj.key?(:data)
     }

@@ -11,14 +11,14 @@ class PromptsController < ApplicationController
   def update
     data = params.dig(:prompt, :response)&.permit!&.to_h || {}
     @prompt.update(response: data)
-    jil_trigger(:prompt, { status: :complete }.merge(@prompt.legacy_serialize))
+    jil_trigger(:prompt, @prompt.with_jil_attrs(status: :complete))
 
     redirect_to jarvis_path
   end
 
   def destroy
     @prompt.destroy
-    jil_trigger(:prompt, { status: :skip }.merge(@prompt.legacy_serialize))
+    jil_trigger(:prompt, @prompt.with_jil_attrs(status: :skip))
     redirect_to prompts_path
   end
 
