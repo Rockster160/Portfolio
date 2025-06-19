@@ -9,7 +9,7 @@ class ReceiveEmailWorker
     ::ActiveRecord::Base.transaction do
       @email = user.emails.find_by(mail_id: mail.message_id, timestamp: mail.date)
       @email ||= user.emails.create!(
-        mail_id: mail.message_id,,
+        mail_id: mail.message_id,
         timestamp: mail.date,
         direction: :inbound,
         inbound_mailboxes: mail.to_addresses.map(&:to_s),
