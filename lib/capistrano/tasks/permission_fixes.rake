@@ -2,7 +2,15 @@ namespace :deploy do
   desc "Clear bootsnap cache"
   task :clear_bootsnap_cache do
     on roles(:app) do
-      execute "rm -rf #{shared_path}/tmp/cache/bootsnap"
+      # ensure deploy can remove everything under bootsnap
+      execute :chmod, "-R u+rwx #{shared_path}/tmp/cache/bootsnap", raise_on_non_zero_exit: false
+
+      # attempt to clear cache without aborting on failure
+      begin
+        execute :rm, "-rf #{shared_path}/tmp/cache/bootsnap"
+      rescue SSHKit::Command::Failed
+        info "Skipping bootsnap cache cleanup error"
+      end
     end
   end
 end
