@@ -139,9 +139,22 @@ class ReceiveEmailWorker
   end
 
   def warn_blank_message_id(email)
+    desc = (
+      if email&.persisted?
+        [
+          "*<https://ardesian.com/emails/#{email.id}|Email##{email.id}>*",
+          "> #{email.subject}",
+        ].join("\n")
+      else
+        [
+          "*Failed to create!*",
+          *email&.errors&.full_messages,
+        ].join("\n * ")
+      end
+    )
     SlackNotifier.notify(
-      "*Email##{email&.id}*\n" \
-      "Message ID blank! [#{mail.message_id.class}](#{mail.message_id.inspect}) \n" \
+      desc + "\n" \
+      "Message ID blank! `[#{mail.message_id.class}](#{mail.message_id.inspect})`\n" \
       "```ReceiveEmailWorker.new.perform(\"#{@bucket}\", \"#{@object_key}\")```",
     )
   end
