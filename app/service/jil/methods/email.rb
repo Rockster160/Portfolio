@@ -39,7 +39,7 @@ class Jil::Methods::Email < Jil::Methods::Base
   end
 
   def timestamp(email_data)
-    email(email_data).created_at
+    email(email_data).timestamp
   end
 
   def archive(email_data, boolean)
