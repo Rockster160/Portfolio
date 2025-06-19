@@ -5,10 +5,11 @@ class ReceiveEmailWorker
   def perform(bucket, object_key)
     @bucket = bucket
     @object_key = object_key
-    require "mail"
 
     ::ActiveRecord::Base.transaction do
-      @email = ::Email.create!(
+      @email = ::Email.find_by(mail_id: mail.message_id, timestamp: mail.date)
+      @email ||= ::Email.create!(
+        mail_id: mail.message_id,
         user_id: matching_user_id || ::User.me.id,
         timestamp: mail.date,
         direction: :inbound,
@@ -19,7 +20,7 @@ class ReceiveEmailWorker
         has_attachments: mail.has_attachments?,
       )
 
-      @email.mail_blob.attach(stored_blob)
+      @email.mail_blob.attach(stored_blob) if @email.mail_blob.blank?
     end
 
     # tasks = ::Jil.trigger_now(me, :email, Email.last)
@@ -89,6 +90,9 @@ class ReceiveEmailWorker
   💾(:to_addresses) { [mail.to].flatten.compact }
   💾(:from_addresses) { [mail.from].flatten.compact }
   💾(:stored_blob) {
+    blob = ::ActiveStorage::Blob.find_by(key: @object_key)
+    next blob if blob.present?
+
     checksum = ::Base64.encode64(::Digest::MD5.digest(content)).strip
     byte_size = content.bytesize
     filename = "email-#{SecureRandom.hex(4)}.eml"
@@ -135,9 +139,9 @@ class ReceiveEmailWorker
     clean_text = clean_text.gsub(/(blahblah ?){2,}/, "blahblah")
 
     message_parts = []
-    message_parts << "*#{to} received email from #{from}*"
-    message_parts << "_#{subject}_"
-    message_parts << "<#{Rails.application.routes.url_helpers.email_url(id: id)}|Click here to view.>"
+    message_parts << "*#{to_addresses} received email from #{from_addresses}*"
+    message_parts << "_#{@email.subject}_"
+    message_parts << "<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>"
     message_parts << ">>> #{clean_text.truncate(2000)}"
     SlackNotifier.notify(message_parts.join("\n"), channel: "#portfolio", username: "Mail-Bot", icon_emoji: ":mailbox:")
   end
