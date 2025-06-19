@@ -237,12 +237,14 @@
   #find(String|Numeric)
   #search(Text "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array
   !#create("To" TAB String BR "Subject" TAB String BR Text "Deliver?" Boolean)
+  .id::Numeric
   .to::String
   .from::String
   .subject::String
   .text::String
   .html::String
   .timestamp::Date
+  .archived?::Boolean
   .archive(Boolean(true))::Boolean
   .delete_forever!::Boolean
 [Contact]

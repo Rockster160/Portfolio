@@ -46,7 +46,7 @@ class Email < ApplicationRecord
     when :read     then read
     when :unread   then unread
     when :archived then archived
-    when :failed   then failed
+    # when :failed   then failed
     when :all      then all
     else none
     end
@@ -66,6 +66,20 @@ class Email < ApplicationRecord
     where("outbound_mailboxes @> ?", [{ address: address }].to_json)
   }
 
+  def self.query(q)
+    return inbound.not_archived if q.blank?
+
+    res = super(q)
+
+    mailboxes = Tokenizing::Node.parse(q).flatten.filter_map { |node|
+      node.is_a?(Hash) && node[:field] == "in" ? node[:conditions] : nil
+    }.map(&:to_sym)
+    res = res.inbound unless (mailboxes & [:all, :sent]).any?
+    res = res.not_archived unless (mailboxes & [:all, :archived]).any?
+
+    res
+  end
+
   # TODO: SEND emails should also use S3
 
   def for_local # Call in prod to get code to call locally
@@ -81,7 +95,7 @@ class Email < ApplicationRecord
   end
 
   def serialize(opts={})
-    super(opts).merge(body: to_html, blob: mail, from: from, to: to)
+    super(opts).merge(body: to_html, blob: mail, from: from, to: to, archived?: archived?)
   end
 
   💾(:mail) { ::Mail.new(mail_blob.download) }

@@ -18,6 +18,10 @@ class Jil::Methods::Email < Jil::Methods::Base
     scoped
   end
 
+  def id(email_data)
+    email(email_data).id
+  end
+
   def to(email_data)
     email(email_data).to
   end
@@ -43,7 +47,15 @@ class Jil::Methods::Email < Jil::Methods::Base
   end
 
   def archive(email_data, boolean)
-    email(email_data).archive(boolean)
+    email(email_data).then { |e|
+      next false unless e.id.present?
+
+      e.archive(boolean)
+    }
+  end
+
+  def archived?(email_data)
+    email(email_data).archived?
   end
 
   def delete_forever!(email_data)

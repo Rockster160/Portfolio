@@ -3,23 +3,13 @@ class EmailsController < ApplicationController
   before_action :authorize_admin
 
   def index
-    # FIXME: Filter this by user unless admin?
-    @emails = ::Email.ordered
-
-    mailboxes = []
-    if params[:q].present?
-      @emails = @emails.query(params[:q])
-      mailboxes = Tokenizing::Node.parse(params[:q]).flatten.filter_map { |node|
-        node.is_a?(Hash) && node[:field] == "in" ? node[:conditions] : nil
-      }.map(&:to_sym)
-    end
-    @emails = @emails.inbound unless (mailboxes & [:all, :sent]).any?
-    @emails = @emails.not_archived unless (mailboxes & [:all, :archived]).any?
+    @emails = current_user.emails.ordered
+    @emails = @emails.query(params[:q])
     @emails = @emails.page(params[:page]).per(params[:per] || 10)
   end
 
   def show
-    @email = ::Email.find(params[:id])
+    @email = current_user.emails.find(params[:id])
     @email.read!
   end
 
