@@ -62,63 +62,20 @@ class Email < ApplicationRecord
     ["ardesian.com", "rocconicholls.me", "rdjn.me"]
   end
 
-  💾(:mail) { ::Mail.new(mail_blob.download) }
-
   def serialize(opts={})
     super(opts).merge(body: to_html, blob: mail, from: from, to: to)
   end
 
-  def from
-    inbound? ? outbound_mailboxes : inbound_mailboxes
-  end
+  💾(:mail) { ::Mail.new(mail_blob.download) }
+  💾(:parser) { ::Emails::ParseMail.call(mail) }
 
-  def to
-    inbound? ? inbound_mailboxes : outbound_mailboxes
-  end
-
-  def text_body
-    clean_content(mail.text_part&.body&.decoded.presence) || clean_content(mail_blob.download, parse_text: true)
-  end
-
-  def html_body
-    to_html
-  end
-
-  def clean_content(raw_html, parse_text: false)
-    return unless raw_html.present?
-
-    html = raw_html.encode("UTF-8", invalid: :replace, undef: :replace, replace: "", universal_newline: true).gsub(/\P{ASCII}/, "")
-    return html unless parse_text
-
-    parser = ::Nokogiri::HTML(html, nil, ::Encoding::UTF_8.to_s)
-    parser.xpath("//script")&.remove
-    parser.xpath("//style")&.remove
-    parser.xpath("//text()").map(&:text).join(" ").squish
-  end
+  💾(:from) { inbound? ? outbound_mailboxes : inbound_mailboxes }
+  💾(:to) { inbound? ? inbound_mailboxes : outbound_mailboxes }
+  💾(:text_body) { parser.text_part }
+  💾(:html_body) { parser.html_part }
 
   def to_html
-    # TODO: This will not render attachments.
-    raw = mail.multipart? ? mail.html_part&.decoded : mail.body.decoded
-    # mail.html_part&.body&.decoded.presence || mail.body.decoded
-    raw ||= "<pre>#{ERB::Util.html_escape(mail.text_part&.body&.decoded || mail.body.decoded)}</pre>"
-
-    doc = ::Nokogiri::HTML.fragment(raw)
-    doc.xpath("//script|//style").remove
-    doc.to_html
-
-    # <% if @email.legacy_attachment_json&.any? %>
-    #   <p> Attachments:
-    #     <% @email.retrieve_legacy_attachments.each do |(attach_id, attachment)| %>
-    #       <%= link_to "<#{attachment[:filename]}>", attachment[:presigned_url], target: "_blank" %>
-    #     <% end %>
-    #   </p>
-    # <% end %>
-    # <% if @email.legacy_attachment_json&.any? %>
-    #   <p> Attachments:</p>
-    #   <% @email.retrieve_legacy_attachments.each do |(attach_id, attachment)| %>
-    #     <img style="max-width: 100%;" src="<%= attachment[:presigned_url] %>" alt="<%= attachment[:filename] %>">
-    #   <% end %>
-    # <% end %>
+    html_body
   end
 
   def archive! = update!(archived_at: ::Time.current)

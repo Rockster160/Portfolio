@@ -24,10 +24,10 @@ module Memoizable
         end
       end
 
-      alias_method :"💾", :memoize
+      alias_method :💾, :memoize
     end
 
-    def memo(value = nil, memo_key: nil, &block)
+    def memo(value=nil, memo_key: nil, &block)
       memo_key ||= caller_locations(1, 1)[0].label
       memo_ivar = :"@#{memo_key.to_s.delete("?")}"
       return instance_variable_get(memo_ivar) if instance_variable_defined?(memo_ivar)
@@ -40,6 +40,6 @@ module Memoizable
       instance_variable_set(memo_ivar, value)
     end
 
-    alias_method :"💾", :memo
+    alias_method :💾, :memo
   end
 end

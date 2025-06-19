@@ -2,25 +2,27 @@ class ReceiveEmailWorker
   include Sidekiq::Worker
   include ::Memoizable
 
-  def perform(bucket, object_key)
+  def perform(bucket, object_key, trigger=true)
     @bucket = bucket
     @object_key = object_key
 
     ::ActiveRecord::Base.transaction do
       @email = user.emails.find_by(mail_id: mail.message_id, timestamp: mail.date)
       @email ||= user.emails.create!(
-        mail_id: mail.message_id,
+        mail_id: parser.message_id,
         timestamp: mail.date,
         direction: :inbound,
-        inbound_mailboxes: mail.to_addresses.map(&:to_s),
-        outbound_mailboxes: [mail.from_address.to_s],
+        inbound_mailboxes: to_addresses.map(&:to_s),
+        outbound_mailboxes: from_addresses.map(&:to_s),
         subject: mail.subject,
-        blurb: text_content.first(500),
+        blurb: text_content.gsub(/\s*\n\s*/, " ").first(500),
         has_attachments: mail.has_attachments?,
       )
 
       @email.mail_blob.attach(stored_blob) if @email.mail_blob.blank?
     end
+
+    return unless trigger
 
     # tasks = ::Jil.trigger_now(me, :email, Email.last)
     tasks = ::Jil.trigger_now(user, :email, @email)
@@ -83,11 +85,10 @@ class ReceiveEmailWorker
 
   💾(:content) { ::FileStorage.download(@object_key, bucket: @bucket) }
   💾(:mail) { ::Mail.new(content) }
-  💾(:text_content) {
-    clean_content(mail.text_part&.body&.decoded.presence) || clean_content(content, parse_text: true)
-  }
-  💾(:to_addresses) { [mail.to].flatten.compact }
-  💾(:from_addresses) { [mail.from].flatten.compact }
+  💾(:parser) { ::Emails::ParseMail.call(mail) }
+  💾(:text_content) { parser.text_part }
+  💾(:to_addresses) { parser.to }
+  💾(:from_addresses) { parser.from }
   💾(:stored_blob) {
     blob = ::ActiveStorage::Blob.find_by(key: @object_key)
     next blob if blob.present?
@@ -122,21 +123,8 @@ class ReceiveEmailWorker
     }
   }
 
-  def clean_content(raw_html, parse_text: false)
-    return unless raw_html.present?
-
-    html = raw_html.encode("UTF-8", invalid: :replace, undef: :replace, replace: "", universal_newline: true).gsub(/\P{ASCII}/, "")
-    return html unless parse_text
-
-    parser = ::Nokogiri::HTML(html, nil, ::Encoding::UTF_8.to_s)
-    parser.xpath("//script")&.remove
-    parser.xpath("//style")&.remove
-    parser.xpath("//text()").map(&:text).join(" ").squish
-  end
-
   def notify_slack
     clean_text = text_content.to_s.gsub(/\n{3,}/, "\n\n")
-    clean_text = clean_text.gsub(/\b= \b/, "")
     clean_text = clean_text.gsub(/[^\s]{30,}/, "blahblah")
     clean_text = clean_text.gsub(/(blahblah ?){2,}/, "blahblah")
 
