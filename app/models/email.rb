@@ -25,6 +25,7 @@ class Email < ApplicationRecord
   belongs_to :user
 
   has_one_attached :mail_blob, service: :s3_emails, dependent: :destroy
+  json_attributes :inbound_mailboxes, :outbound_mailboxes
 
   enum direction: {
     inbound: 0, # Email sent to a registered domain

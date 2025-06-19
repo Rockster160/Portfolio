@@ -3,6 +3,7 @@ class ApplicationRecord < ActiveRecord::Base
   attr_accessor :new_attributes
 
   include Jilable
+  include Jsonable
 
   # TODO: Support `started_at: :start` to tweak the helper methods to be `start!` instead of `started!`
   def self.timestamp_bool(*cols)
@@ -262,6 +263,10 @@ class ApplicationRecord < ActiveRecord::Base
   def update(attrs={})
     @new_attributes = attrs
     super(attrs)
+  end
+
+  def error_messages
+    errors&.full_messages || []
   end
 
   def to_h

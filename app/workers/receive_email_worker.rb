@@ -12,8 +12,8 @@ class ReceiveEmailWorker
         mail_id: mail.message_id.presence || "no-message-id-#{::SecureRandom.hex(4)}",
         timestamp: mail.date,
         direction: :inbound,
-        inbound_mailboxes: to_addresses,
-        outbound_mailboxes: from_addresses,
+        inbound_mailboxes: internal_mailboxes,
+        outbound_mailboxes: external_mailboxes,
         subject: mail.subject,
         blurb: text_content.gsub(/\s*\n\s*/, " ").first(500),
         has_attachments: mail.has_attachments?,
@@ -26,51 +26,18 @@ class ReceiveEmailWorker
 
     return unless trigger
 
-    # tasks = ::Jil.trigger_now(me, :email, Email.last)
+    # TODO: If using UUID, should specifically trigger ONLY that Task with the email as input.
     tasks = ::Jil.trigger_now(user, :email, @email)
     return if tasks.any?(&:stop_propagation?)
     @email.reload # Since Jil updates them out of scope
     return if @email.archived? # Task might have archived this. No need to do further logic if so.
 
     # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier
-
-    blacklist = [
-      "LV Bag",
-      "Louis Vuitton"
-    ]
-
-    if reolink?
-      parse_reolink && @email.archive!
-      # && @email.destroy # Should trigger the file to be deleted as well
-    elsif amazon_update?
+    if amazon_update?
       parse_amazon && @email.archive! # Auto archive Amazon emails
-    elsif blacklist.any? { |bad| text_content.include?(bad) }
-      @email.archive!
     end
 
     notify_slack if !@email.archived?
-  end
-
-  def reolink?
-    mail.from_address.display_name == "Reolink"
-  end
-
-  def parse_reolink
-    _, location, detection = mail.subject.match(/\[?(\w+)\]? has detected (?:an? )?(\w+)/i)&.to_a
-    return unless location && detection
-
-    camera = ::MeCache.get(:camera)
-    loc = camera[location.to_sym] || {}
-    loc.merge!(at: mail.date.to_f, type: detection)
-
-    camera[:states] = [:Doorbell, :Driveway, :Backyard, :Storage].map { |key|
-      at = camera.dig(key, :at)
-      next "?" unless at
-
-      ::EventAnalyzer.duration(::Time.current.to_f - at.to_f, 1)
-    }.join(" ")
-
-    ::MeCache.set(:camera, camera)
   end
 
   def amazon_update?
@@ -78,7 +45,7 @@ class ReceiveEmailWorker
       "auto-confirm@amazon.com",
       "order-update@amazon.com",
       "shipment-tracking@amazon.com",
-    ] & from_addresses).any?
+    ] & internal_addresses).any?
   end
 
   def parse_amazon
@@ -89,8 +56,9 @@ class ReceiveEmailWorker
   💾(:mail) { ::Mail.new(content) }
   💾(:parser) { ::Emails::ParseMail.call(mail) }
   💾(:text_content) { parser.text_part }
-  💾(:to_addresses) { parser.to }
-  💾(:from_addresses) { parser.from }
+  💾(:internal_mailboxes) { parser.to }
+  💾(:external_mailboxes) { parser.from }
+  💾(:internal_addresses) { internal_mailboxes.map { |address| address[:address] } }
   💾(:stored_blob) {
     blob = ::ActiveStorage::Blob.find_by(key: @object_key)
     next blob if blob.present?
@@ -112,18 +80,23 @@ class ReceiveEmailWorker
     matching_user_id.present? ? ::User.find(matching_user_id) : ::User.me
   }
   💾(:matching_user_id) {
-    to_addresses.find { |address|
+    internal_addresses.find { |address|
       personal, domain = address.split("@", 2)
       personal, ext = personal.split("+", 2)
       next unless domain.in?(::Email.registered_domains)
 
       user_id = ::User.ilike(username: personal).take&.id
+      user_id ||= ::Task.find_by(uuid: ext)&.user_id if ::Jarvis::Regex.uuid?(ext)
+      user_id ||= ::Task.find_by(uuid: personal)&.user_id if ::Jarvis::Regex.uuid?(personal)
       break user_id if user_id.present?
-
-      next unless ::Jarvis::Regex.uuid?(personal)
-      ::Task.find_by(uuid: personal)&.user_id
     }
   }
+
+  def show_mailboxes(mailboxes)
+    ::Emails::Normalizer.addresses_from_meta(mailboxes).then { |addresses|
+      addresses.size == 1 ? addresses.first : "[#{addresses.join(" | ")}]"
+    }
+  end
 
   def notify_slack
     clean_text = text_content.to_s.gsub(/\n{3,}/, "\n\n")
@@ -131,7 +104,7 @@ class ReceiveEmailWorker
     clean_text = clean_text.gsub(/(blahblah ?){2,}/, "blahblah")
 
     message_parts = []
-    message_parts << "*#{to_addresses} received email from #{from_addresses}*"
+    message_parts << "*#{show_mailboxes(internal_mailboxes)} received email from #{show_mailboxes(external_mailboxes)}*"
     message_parts << "_#{@email.subject}_"
     message_parts << "<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>"
     message_parts << ">>> #{clean_text.truncate(2000)}"

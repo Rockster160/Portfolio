@@ -22,7 +22,7 @@ module Jarvis::Regex
   end
 
   def uuid?(str)
-    str.match?(/\A#{UUID.source}\z/)
+    str.to_s.match?(/\A#{UUID.source}\z/)
   end
 
   def words(*words, suffix: nil, prefix: nil)
