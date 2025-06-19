@@ -55,9 +55,15 @@ class Email < ApplicationRecord
   scope :with_inbound_name, ->(name) {
     where("inbound_mailboxes @> ?", [{ name: name }].to_json)
   }
+  scope :with_inbound_address, ->(address) {
+    where("inbound_mailboxes @> ?", [{ address: address }].to_json)
+  }
   # Them | External
   scope :with_outbound_name, ->(name) {
     where("outbound_mailboxes @> ?", [{ name: name }].to_json)
+  }
+  scope :with_outbound_address, ->(address) {
+    where("outbound_mailboxes @> ?", [{ address: address }].to_json)
   }
 
   # TODO: SEND emails should also use S3
