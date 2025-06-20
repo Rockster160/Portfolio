@@ -10,12 +10,26 @@ class QuickActionsController < ApplicationController
 
   helper_method :current_user, :user_signed_in?
 
+  def get_create # *Sigh*... What am I even doing...?
+    @page = current_user.user_dashboards.create!
+
+    redirect_to dashboard_path(@page)
+  end
+
   def show
-    @page = current_user.user_dashboard
+    if params[:id].present?
+      @page = current_user.user_dashboards.find(params[:id])
+    else
+      @page = current_user.user_dashboards.first_or_create!
+    end
   end
 
   def update
-    @page = current_user.user_dashboard
+    if params[:id].present?
+      @page = current_user.user_dashboards.find(params[:id])
+    else
+      @page = current_user.user_dashboards.first_or_create!
+    end
     ::WebPushNotifications.update_count(current_user)
     @page.update(blocks: params.permit!.to_h[:blocks]) if params.key?(:blocks)
 

@@ -42,11 +42,12 @@ class User < ApplicationRecord
   has_many :user_surveys
   has_many :user_survey_responses
   has_many :push_subs, class_name: "UserPushSubscription", dependent: :destroy
+  has_many :user_dashboards, dependent: :destroy
   has_one :money_bucket
   has_one :avatar, dependent: :destroy
   def avatar; super() || build_avatar; end
-  has_one :user_dashboard, dependent: :destroy
-  def user_dashboard; super() || build_user_dashboard; end
+  # has_one :user_dashboard, dependent: :destroy
+  # def user_dashboard; super() || build_user_dashboard; end
   has_many :caches, class_name: "UserCache"
 
   has_many :access_grants, class_name: "Doorkeeper::AccessGrant", foreign_key: :resource_owner_id, dependent: :delete_all

@@ -44,6 +44,11 @@ Rails.application.routes.draw do
     get :sync_badge
     get :render_widget
   end
+  resources :dashboards, only: [:show, :update], controller: :quick_actions do
+    get "/create", on: :collection, action: :get_create
+    get :sync_badge
+    get :render_widget
+  end
   resources :prompts, only: [:index, :show, :update, :destroy], path: :prompts
 
   scope module: :users do
