@@ -16,7 +16,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   def search(q, limit, order)
     limit = (limit.presence || 50).to_i.clamp(1..100)
     scoped = events.query(q).page(1).per(limit)
-    scoped = scoped.order(created_at: order) if [:asc, :desc].include?(order.to_s.downcase.to_sym)
+    scoped = scoped.order(timestamp: order) if [:asc, :desc].include?(order.to_s.downcase.to_sym)
     scoped
   end
 
