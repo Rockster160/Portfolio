@@ -9,8 +9,7 @@ export class ListCell {
       cell.text("Loading...")
       cell.socket?.close()
 
-      // const url = "http://localhost:3141/lists/" + name
-      const url = "https://ardesian.com/lists/" + name
+      const url = `${window.location.origin}/lists/${name}`
       cell.list = (
         await fetch(url)
           .then(res => res.json())
