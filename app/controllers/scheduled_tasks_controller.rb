@@ -5,6 +5,7 @@ class ScheduledTasksController < ApplicationController
   def index
     @events = current_user.scheduled_triggers.not_started.order(execute_at: :asc).page(params[:page]).per(50)
     # @events = @events.query(params[:q]) if params[:q].present?
+    # @events = @events.where(user: current_user) # Query loses user scope
 
     serialize @events
   end

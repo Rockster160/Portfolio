@@ -181,7 +181,7 @@ class FitnessBroadcast
   end
 
   def query(q, date)
-    events.query(q).where(timestamp: allday(date))
+    events.query(q).where(timestamp: allday(date)).where(user: @user).order(timestamp: :asc)
   end
 
   def colorize(str, color_name)

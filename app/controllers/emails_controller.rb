@@ -5,6 +5,7 @@ class EmailsController < ApplicationController
   def index
     @emails = current_user.emails.ordered
     @emails = @emails.query(params[:q])
+    @emails = @emails.where(user: current_user).ordered
     @emails = @emails.page(params[:page]).per(params[:per] || 10)
   end
 

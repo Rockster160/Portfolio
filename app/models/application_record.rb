@@ -212,6 +212,7 @@ class ApplicationRecord < ActiveRecord::Base
   scope :query, ->(q) {
     breaker = ::Tokenizing::Node.parse(q)
 
+    # NOTE! This removes current scope! This will lose user filtering!!!
     search_scope.where(search_scope.query_by_node(breaker).stripped_sql)
   }
   scope :before, ->(time) { # Not used by `query` scope

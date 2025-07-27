@@ -16,7 +16,13 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   def search(q, limit, order)
     limit = (limit.presence || 50).to_i.clamp(1..100)
     scoped = events.query(q).page(1).per(limit)
-    scoped = scoped.order(timestamp: order) if [:asc, :desc].include?(order.to_s.downcase.to_sym)
+    scoped = scoped.where(user: @jil.user)
+
+    order = [:asc, :desc].include?(order.to_s.downcase.to_sym) ? order.to_s.downcase.to_sym : :desc
+    scoped = scoped.order(timestamp: order)
+
+    puts "#{scoped.to_sql}".light_purple
+
     scoped
   end
 
