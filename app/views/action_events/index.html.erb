@@ -1,3 +1,5 @@
+<%= meta_title "Events", include_name: false %>
+
 <%= form_tag nil, method: :get, enforce_utf8: false, authenticity_token: false do |f| %>
   <input type="text" name="q" value="<%= params[:q] %>" placeholder="Filter">
 <% end %>
