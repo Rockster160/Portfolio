@@ -21,8 +21,6 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     order = [:asc, :desc].include?(order.to_s.downcase.to_sym) ? order.to_s.downcase.to_sym : :desc
     scoped = scoped.order(timestamp: order)
 
-    puts "#{scoped.to_sql}".light_purple
-
     scoped
   end
 
