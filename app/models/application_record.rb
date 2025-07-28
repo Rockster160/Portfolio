@@ -214,6 +214,8 @@ class ApplicationRecord < ActiveRecord::Base
 
     # NOTE! This removes current scope! This will lose user filtering!!!
     search_scope.where(search_scope.query_by_node(breaker).stripped_sql)
+    # Will this work to fix the above?
+    # where(search_scope.query_by_node(breaker).stripped_sql)
   }
   scope :before, ->(time) { # Not used by `query` scope
     User.timezone {
@@ -280,6 +282,11 @@ class ApplicationRecord < ActiveRecord::Base
         now = Time.current
         year, mth, day, hr, mn, sec = vals = value.split(/\D/).map(&:to_i)
 
+        if year <= 12
+          mth, day, hr, mn, sec = year, mth, day, hr, mn
+          year = now.year
+        end
+
         date_str = [
           (year ||= now.year) < 1000 ? year + 2000 : year,
           (mth ||= now.month),
@@ -299,15 +306,15 @@ class ApplicationRecord < ActiveRecord::Base
         unit = units[vals.length - 1]
         if range
           date.send("beginning_of_#{unit}")..date.send("end_of_#{unit}")
+        elsif operator && operator == :>=
+          date.send("beginning_of_#{unit}")
         elsif operator && !operator.in?(%i[< <=])
           date.send("end_of_#{unit}")
         else
           date.send("beginning_of_#{unit}")
         end
       rescue ArgumentError, Date::Error
-        DateTime.parse(value).then { |dt| range ? dt.all_day : dt }
-      rescue ArgumentError, Date::Error
-        value
+        DateTime.parse(value).then { |dt| range ? dt.all_day : dt } rescue value
       end
     }
   end

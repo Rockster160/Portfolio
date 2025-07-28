@@ -4,6 +4,10 @@ RSpec.describe ApplicationRecord, type: :model do
     sql[/\ASELECT \"action_events\"\.\* FROM \"action_events\" WHERE \((.*?)\)\z/, 1].gsub("action_events.", "")
   end
 
+  def expect_matching(sql, expected_sql)
+    expect(sql).to eq(expected_sql.gsub(/\(\n */, "(").gsub(/\n *\)/, ")").gsub(/\n */, " ").squish)
+  end
+
   describe "nested conditions for an operator" do
     it "returns records matching a singular word" do
       sql = query("workout")
@@ -50,6 +54,20 @@ RSpec.describe ApplicationRecord, type: :model do
     it "returns records on day" do
       sql = query("wordle timestamp:'2020-01-01'")
       expect(sql).to eq("(((\"name\"::TEXT ILIKE '%wordle%' OR \"notes\"::TEXT ILIKE '%wordle%') AND (timestamp >= '2020-01-01 07:00:00' AND timestamp <= '2020-01-02 06:59:59.999999')))")
+    end
+
+    it "returns records on/after day" do
+      sql = query("wordle timestamp>='2020-01-01'")
+      expect_matching sql, <<~SQL
+        (
+          (
+            ("name"::TEXT ILIKE '%wordle%' OR "notes"::TEXT ILIKE '%wordle%')
+            AND (
+              timestamp >= '2020-01-01 07:00:00'
+            )
+          )
+        )
+      SQL
     end
 
     it "returns records matching the query with AND conditions" do
