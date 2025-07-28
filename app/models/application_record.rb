@@ -285,6 +285,7 @@ class ApplicationRecord < ActiveRecord::Base
         if year <= 12
           mth, day, hr, mn, sec = year, mth, day, hr, mn
           year = now.year
+          vals = [year, mth, day, hr, mn, sec].compact
         end
 
         date_str = [

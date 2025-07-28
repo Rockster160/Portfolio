@@ -8,6 +8,8 @@ RSpec.describe ApplicationRecord, type: :model do
     expect(sql).to eq(expected_sql.gsub(/\(\n */, "(").gsub(/\n *\)/, ")").gsub(/\n */, " ").squish)
   end
 
+  let(:now) { ::Time.current }
+
   describe "nested conditions for an operator" do
     it "returns records matching a singular word" do
       sql = query("workout")
@@ -64,6 +66,20 @@ RSpec.describe ApplicationRecord, type: :model do
             ("name"::TEXT ILIKE '%wordle%' OR "notes"::TEXT ILIKE '%wordle%')
             AND (
               timestamp >= '2020-01-01 07:00:00'
+            )
+          )
+        )
+      SQL
+    end
+
+    it "returns records during month" do
+      sql = query("wordle timestamp>='7-17'")
+      expect_matching sql, <<~SQL
+        (
+          (
+            ("name"::TEXT ILIKE '%wordle%' OR "notes"::TEXT ILIKE '%wordle%')
+            AND (
+              timestamp >= '#{now.year}-07-17 06:00:00'
             )
           )
         )
