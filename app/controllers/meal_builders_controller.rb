@@ -14,6 +14,7 @@ class MealBuildersController < ApplicationController
 
   def new
     @meal_builder = current_user.meal_builders.new
+    render :form
   end
 
   def create
@@ -22,16 +23,20 @@ class MealBuildersController < ApplicationController
     if @meal_builder.save
       redirect_to @meal_builder, notice: "Meal builder was successfully created."
     else
-      render :new
+      render :form
     end
   end
 
   def edit
+    render :form
   end
 
   def update
     if @meal_builder.update(meal_builder_params)
-      redirect_to @meal_builder, notice: "Meal builder was successfully updated."
+      respond_to do |format|
+        format.html { redirect_to @meal_builder, notice: "Meal builder was successfully updated." }
+        format.json { render json: @meal_builder, status: :ok }
+      end
     else
       render :edit
     end
@@ -49,6 +54,12 @@ class MealBuildersController < ApplicationController
   end
 
   def meal_builder_params
-    params.require(:meal_builder).permit(:name, :items)
+    params.require(:meal_builder).permit(:name).tap do |whitelisted|
+      if params[:meal_builder][:items].is_a?(String)
+        whitelisted[:items] = params[:meal_builder][:items]
+      else
+        whitelisted[:items] = params[:meal_builder][:items].map(&:permit!)
+      end
+    end
   end
 end
