@@ -10,6 +10,7 @@ module LocalIpManager
 
     return unless Rails.env.production?
 
+    # ardesian.duckdns.org
     HTTParty.get(
       "https://www.duckdns.org/update?" + {
         domains: "ardesian",

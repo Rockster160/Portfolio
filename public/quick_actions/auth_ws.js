@@ -39,7 +39,11 @@ class SimpleWS {
       }
 
       if (init_data.onopen && typeof(init_data.onopen) === "function") { init_data.onopen.call(sws) }
-      let url = document.querySelector(".main-wrapper").getAttribute("data-badge-url")
+      let url = document.querySelector(".main-wrapper")?.getAttribute("data-badge-url")
+      if (!url) {
+        return
+      }
+
       fetch(url, {
         method: "GET",
         headers: {

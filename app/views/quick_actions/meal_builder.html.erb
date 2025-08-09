@@ -1,0 +1,233 @@
+<!-- app/views/meals/new.html.erb -->
+<% content_for :title, "Meal Calorie Tracker" %>
+
+<div class="wrap" data-turbo="false">
+  <div class="topbar">
+    <input id="search" type="text" placeholder="Search food..." autocomplete="off">
+    <button id="submit" class="primary" disabled>Submit</button>
+  </div>
+  <div id="grid" class="grid"></div>
+</div>
+
+<script id="items-data" type="application/json">
+  <%= raw(@items.to_json) %>
+</script>
+
+<style>
+  html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 20px 28px }
+  .topbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px }
+  input[type="text"] {
+    flex: 1; padding: 10px 12px; font-size: 16px; border: 1px solid #CCC;
+    border-radius: 8px; outline: none
+  }
+  button {
+    padding: inherit;
+  }
+  button.primary {
+    padding: 10px 14px; font-size: 16px; border: none; border-radius: 8px;
+    background: #2563EB; color: black; cursor: pointer
+  }
+  button.primary:disabled { opacity: .5; cursor: default }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px
+  }
+  .card-styles {
+    color: #ECF0F1;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #D5E5FF;
+    border-image: initial;
+    background: #00102B;
+  }
+  .card {
+    position: relative; border: 1px solid #E5E7EB; border-radius: 12px;
+    padding: 10px; display: flex; flex-direction: column; gap: 8px;
+    align-items: center; justify-content: space-between; background: #00102B;
+    transition: transform .08s ease, box-shadow .08s ease
+  }
+  .card:hover { transform: translateY(-1px); box-shadow: 0 2px 10px #0001 }
+  .card.selected { outline: 2px solid #22C55E; background: #0C3A30 }
+  .imgbox {
+    width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; background: #D5E5FF;
+    display: grid; place-items: center; overflow: hidden
+  }
+  .imgbox img { width: 100%; height: 100%; object-fit: cover }
+  .title { text-align: center; font-size: 14px; line-height: 1.2 }
+  .cal { font-size: 12px; color: #6B7280 }
+  .controls {
+    display: flex; gap: 8px; align-items: center; justify-content: center;
+    margin-top: 2px
+  }
+  .controls.hidden { display: none }
+  .pill {
+    min-width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D1D5DB;
+    background: #FFF; cursor: pointer; display: grid; place-items: center;
+    font-weight: 600
+  }
+  .count { min-width: 28px; text-align: center }
+  .sticky-note {
+    position: absolute; top: 8px; left: 8px; font-size: 12px;
+    background: #22C55E; color: #FFF; padding: 2px 6px; border-radius: 999px
+  }
+</style>
+
+<script>
+  const ITEMS = JSON.parse(
+    document.getElementById("items-data").textContent || "[]"
+  )
+
+  const picked = new Map()
+  let query = ""
+
+  const elGrid = document.getElementById("grid")
+  const elSearch = document.getElementById("search")
+  const elSubmit = document.getElementById("submit")
+
+  const fuzzyMatch = (needle, hay) => {
+    if (!needle) return true
+    let i = 0, j = 0
+    const n = needle.toLowerCase(), h = hay.toLowerCase()
+    while (i < n.length && j < h.length) {
+      if (n[i] === h[j]) i++
+      j++
+    }
+    return i === n.length
+  }
+
+  const computeView = () => {
+    return ITEMS.filter(it => fuzzyMatch(query, it.name))
+  }
+
+  const updateSubmit = () => {
+    elSubmit.disabled = picked.size === 0
+  }
+
+  const render = () => {
+    elGrid.innerHTML = ""
+    const view = computeView()
+
+    view.forEach(it => {
+      const isSel = picked.has(it.id)
+      const count = picked.get(it.id) || 0
+
+      const card = document.createElement("div")
+      card.className = `card${isSel ? " selected" : ""}`
+      card.dataset.id = it.id
+
+      const imgbox = document.createElement("div")
+      imgbox.className = "imgbox"
+      if (it.img) {
+        const img = document.createElement("img")
+        img.src = it.img
+        img.alt = it.name
+        imgbox.appendChild(img)
+      } else {
+        imgbox.textContent = "🍽️"
+      }
+
+      const title = document.createElement("div")
+      title.className = "title"
+      title.textContent = it.name
+
+      const cal = document.createElement("div")
+      cal.className = "cal"
+      cal.textContent = `${it.cal} cal`
+
+      const controls = document.createElement("div")
+      controls.className = `controls`
+
+      const minus = document.createElement("button")
+      minus.className = "pill"
+      minus.type = "button"
+      minus.textContent = "−"
+      minus.addEventListener("click", e => {
+        e.stopPropagation()
+        const cur = picked.get(it.id) || 0
+        if (cur > 1) {
+          picked.set(it.id, cur - 1)
+        } else {
+          picked.delete(it.id)
+        }
+        updateSubmit()
+        render()
+      })
+
+      const cnt = document.createElement("div")
+      cnt.className = "count"
+      cnt.textContent = String(count)
+
+      const plus = document.createElement("button")
+      plus.className = "pill"
+      plus.type = "button"
+      plus.textContent = "+"
+      plus.addEventListener("click", e => {
+        e.stopPropagation()
+        const cur = picked.get(it.id) || 0
+        picked.set(it.id, cur + 1)
+        updateSubmit()
+        render()
+      })
+
+      controls.appendChild(minus)
+      controls.appendChild(cnt)
+      controls.appendChild(plus)
+
+      if (isSel) {
+        const badge = document.createElement("div")
+        badge.className = "sticky-note"
+        badge.textContent = "Added"
+        card.appendChild(badge)
+      }
+
+      card.addEventListener("click", () => {
+        const cur = picked.get(it.id) || 0
+        picked.set(it.id, cur + 1)
+        updateSubmit()
+        render()
+      })
+
+      card.appendChild(imgbox)
+      card.appendChild(title)
+      card.appendChild(cal)
+      card.appendChild(controls)
+      elGrid.appendChild(card)
+    })
+  }
+
+  document.addEventListener("turbo:load", () => {
+    render()
+    updateSubmit()
+  })
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      render()
+      updateSubmit()
+    })
+  } else {
+    render()
+    updateSubmit()
+  }
+
+  elSearch.addEventListener("input", e => {
+    query = e.target.value.trim()
+    render()
+  })
+
+  elSubmit.addEventListener("click", () => {
+    const parts = []
+    let total = 0
+    for (const [id, count] of picked.entries()) {
+      const it = ITEMS.find(x => x.id === id)
+      if (!it) continue
+      const label = count > 1 ? `${it.name} x${count}` : it.name
+      parts.push(label)
+      total += it.cal * count
+    }
+    const text = `${parts.join(", ")} (${total})`
+    console.log(text)
+  })
+</script>
