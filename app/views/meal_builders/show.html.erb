@@ -41,7 +41,7 @@
     <button id="save-items" class="primary" type="button" class="hidden">💾</button>
     <button id="add-item" class="primary" type="button" class="hidden">➕</button>
     <button id="quick-edit" class="primary" type="button" class="hidden">✍️</button>
-    <button id="page-edit" class="primary" type="button" class="hidden">✏️ Name</button>
+    <%= link_to "✏️ Edit", edit_meal_builder_path(@meal_builder), class: "btn primary hidden", id: "page-edit" %>
 
     <input id="search" type="text" placeholder="Search food..." autocomplete="off">
     <button id="submit" class="primary" disabled>Submit</button>

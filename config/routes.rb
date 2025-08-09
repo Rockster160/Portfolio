@@ -41,11 +41,14 @@ Rails.application.routes.draw do
   end
 
   resource :jarvis, only: [:show, :update], controller: :quick_actions, as: :user_dashboard do
-    get :meal_builder
-    post :meal_builder, action: :save_meal_builder
     get :sync_badge
     get :render_widget
   end
+
+  scope path: :jarvis do
+    resources :meal_builders
+  end
+
   resources :dashboards, only: [:show, :update], controller: :quick_actions do
     get "/create", on: :collection, action: :get_create
     get :sync_badge

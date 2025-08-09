@@ -1,0 +1,25 @@
+<%= meta_title "Meal Builders", include_name: false %>
+
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <% if user_signed_in? %>
+      <a href="<%= account_path %>" class="btn">Account</a>
+      <a href="<%= new_meal_builder_path %>" class="btn pull-right">New Meal Builder +</a>
+    <% else %>
+      <a href="<%= login_path %>" class="btn">Sign In</a>
+    <% end %>
+  </div>
+  <div class="lists-title">Meal Builders</div>
+  <div class="lists">
+    <div class="list-field">
+      <%= text_field_tag "meal_builder[name]", "", class: "filterable", placeholder: "Search Meal Builders" %>
+    </div>
+    <% @meal_builders.each do |builder| %>
+      <div class="list-item-container" data-list-id="<%= builder.id %>">
+        <a href="<%= meal_builder_path(builder) %>" class="list-item">
+          <span class="item-name"><%= builder.name %></span>
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>

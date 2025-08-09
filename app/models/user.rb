@@ -43,6 +43,7 @@ class User < ApplicationRecord
   has_many :user_survey_responses
   has_many :push_subs, class_name: "UserPushSubscription", dependent: :destroy
   has_many :user_dashboards, dependent: :destroy
+  has_many :meal_builders, dependent: :destroy
   has_one :money_bucket
   has_one :avatar, dependent: :destroy
   def avatar; super() || build_avatar; end

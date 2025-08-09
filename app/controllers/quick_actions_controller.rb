@@ -10,24 +10,6 @@ class QuickActionsController < ApplicationController
 
   helper_method :current_user, :user_signed_in?
 
-  def meal_builder
-    @items = [
-      { category: "Food", name: "Oatmeal Packet", cal: 140, img: nil },
-      { category: "Drink", name: "Orange Juice", cal: 110, img: nil },
-      { category: "Food", name: "Protein Bar", cal: 210, img: "🍫💪" },
-      { category: "Food", name: "Scrambled Eggs", cal: 180, img: nil },
-      { category: "Food", name: "Butter Toast", cal: 120, img: nil },
-      { category: "Drink", name: "Greek Yogurt", cal: 130, img: nil },
-      { category: "Food", name: "Banana", cal: 105, img: nil },
-      { category: "Drink", name: "Coffee w/ Cream", cal: 60, img: nil },
-      { category: "Food", name: "Cereal Bowl", cal: 190, img: nil },
-      { category: "Drink", name: "Milk 2%", cal: 120, img: nil }
-    ]
-  end
-
-  def save_meal_builder
-  end
-
   def get_create # *Sigh*... What am I even doing...?
     @page = current_user.user_dashboards.create!
 

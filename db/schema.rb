@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_06_19_171913) do
+ActiveRecord::Schema[7.1].define(version: 2025_08_09_073022) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -431,6 +431,18 @@ ActiveRecord::Schema[7.1].define(version: 2025_06_19_171913) do
     t.index ["user_id"], name: "index_log_trackers_on_user_id"
   end
 
+  create_table "meal_builders", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "name", null: false
+    t.text "parameterized_name", null: false
+    t.jsonb "items", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "name"], name: "index_meal_builders_on_user_id_and_name", unique: true
+    t.index ["user_id", "parameterized_name"], name: "index_meal_builders_on_user_id_and_parameterized_name", unique: true
+    t.index ["user_id"], name: "index_meal_builders_on_user_id"
+  end
+
   create_table "money_buckets", id: :serial, force: :cascade do |t|
     t.integer "user_id"
     t.text "bucket_json"
@@ -770,6 +782,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_06_19_171913) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "emails", "users"
+  add_foreign_key "meal_builders", "users"
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_grants", "users", column: "resource_owner_id"
   add_foreign_key "oauth_access_tokens", "oauth_applications", column: "application_id"
