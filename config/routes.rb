@@ -42,6 +42,7 @@ Rails.application.routes.draw do
 
   resource :jarvis, only: [:show, :update], controller: :quick_actions, as: :user_dashboard do
     get :meal_builder
+    post :meal_builder, action: :save_meal_builder
     get :sync_badge
     get :render_widget
   end

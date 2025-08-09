@@ -25,6 +25,9 @@ class QuickActionsController < ApplicationController
     ]
   end
 
+  def save_meal_builder
+  end
+
   def get_create # *Sigh*... What am I even doing...?
     @page = current_user.user_dashboards.create!
 
