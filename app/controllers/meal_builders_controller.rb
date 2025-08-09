@@ -21,7 +21,7 @@ class MealBuildersController < ApplicationController
     @meal_builder = current_user.meal_builders.new(meal_builder_params)
 
     if @meal_builder.save
-      redirect_to @meal_builder, notice: "Meal builder was successfully created."
+      redirect_to @meal_builder
     else
       render :form
     end
@@ -34,7 +34,7 @@ class MealBuildersController < ApplicationController
   def update
     if @meal_builder.update(meal_builder_params)
       respond_to do |format|
-        format.html { redirect_to @meal_builder, notice: "Meal builder was successfully updated." }
+        format.html { redirect_to @meal_builder }
         format.json { render json: @meal_builder, status: :ok }
       end
     else
@@ -44,7 +44,7 @@ class MealBuildersController < ApplicationController
 
   def destroy
     @meal_builder.destroy
-    redirect_to meal_builders_path, notice: "Meal builder was successfully deleted."
+    redirect_to meal_builders_path
   end
 
   private
