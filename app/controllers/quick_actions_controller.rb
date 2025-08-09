@@ -14,7 +14,7 @@ class QuickActionsController < ApplicationController
     @items = [
       { category: "Food", name: "Oatmeal Packet", cal: 140, img: nil },
       { category: "Drink", name: "Orange Juice", cal: 110, img: nil },
-      { category: "Food", name: "Protein Bar", cal: 210, img: nil },
+      { category: "Food", name: "Protein Bar", cal: 210, img: "🍫💪" },
       { category: "Food", name: "Scrambled Eggs", cal: 180, img: nil },
       { category: "Food", name: "Butter Toast", cal: 120, img: nil },
       { category: "Drink", name: "Greek Yogurt", cal: 130, img: nil },
