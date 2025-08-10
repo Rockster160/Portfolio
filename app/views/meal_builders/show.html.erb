@@ -44,9 +44,9 @@
     <button id="save-items" class="primary" type="button" class="hidden">💾</button>
     <button id="add-item" class="primary" type="button" class="hidden">➕</button>
     <button id="quick-edit" class="primary" type="button" class="hidden">✍️</button>
-    <%= link_to "✏️ Edit", edit_meal_builder_path(@meal_builder), class: "btn primary hidden", id: "page-edit" %>
 
     <input id="search" type="text" placeholder="Search food..." autocomplete="off">
+    <%= link_to "✏️ Edit Page", edit_meal_builder_path(@meal_builder), class: "btn primary hidden", id: "page-edit" %>
     <button id="submit" class="primary" disabled>Submit</button>
   </div>
   <div id="grid" class="grid"></div>
@@ -427,9 +427,8 @@
 
     // ---------- Render ----------
     const render = () => {
-      elToggleEdit.textContent = editMode ? "Exit" : "⚙️"
-
       document.body.classList.toggle("editing", editMode)
+      elToggleEdit.classList.toggle("hidden", editMode)
       elAddItem.classList.toggle("hidden", !editMode)
       elSaveItems.classList.toggle("hidden", !editMode)
       elQuickEdit?.classList.toggle("hidden", !editMode)
