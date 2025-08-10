@@ -62,21 +62,24 @@
     .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 20px 28px }
     .topbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px }
     input[type="text"] {
-      flex: 1; padding: 10px 12px; font-size: 16px; border: 1px solid #CCC;
+      flex: 1; padding: 10px 12px; border: 1px solid #CCC;
       border-radius: 8px; outline: none
     }
     button {
       padding: inherit;
     }
     button.primary {
-      padding: 6px 10px; font-size: 16px; border: none; border-radius: 8px;
+      padding: 6px 10px; border: none; border-radius: 8px;
       background: #2563EB; color: black; cursor: pointer
     }
     button.primary:disabled { opacity: .5; cursor: default }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
       gap: 12px
+    }
+    @media (max-width: 600px) {
+      .grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)) }
     }
     .card-styles {
       color: #ECF0F1;
@@ -88,7 +91,7 @@
     }
     .card {
       position: relative; border: 1px solid #E5E7EB; border-radius: 12px;
-      padding: 10px; display: flex; flex-direction: column; gap: 8px;
+      padding: 6px; display: flex; flex-direction: column; gap: 4px;
       align-items: center; justify-content: space-between; background: #00102B;
       transition: transform .08s ease, box-shadow .08s ease
     }
@@ -109,7 +112,7 @@
       width: 100%;
       height: 100%;
       font-style: normal;
-      font-size: 72px;
+      font-size: 64px;
       line-height: 1;
       white-space: pre;
       pointer-events: none;
@@ -127,15 +130,15 @@
     .title { text-align: center; font-size: 14px; line-height: 1.2 }
     .cal { font-size: 12px; color: #6B7280 }
     .controls {
-      display: flex; gap: 8px; align-items: center; justify-content: center;
-      margin-top: 2px
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%;
     }
     .pill {
-      min-width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D1D5DB;
+      min-width: 20px; height: 20px; border-radius: 999px; border: 1px solid #D1D5DB;
       background: #FFF; cursor: pointer; display: grid; place-items: center;
       font-weight: 600
     }
-    .count { min-width: 28px; text-align: center }
+    .count { min-width: 24px; text-align: center }
     .sticky-note {
       position: absolute; top: 8px; left: 8px; font-size: 12px;
       background: #22C55E; color: #FFF; padding: 2px 6px; border-radius: 999px
@@ -182,7 +185,7 @@
     }
     .cmodal h3 { margin: 0 0 10px 0; font-size: 18px }
     .cmodal-actions {
-      display: flex; align-items: center; gap: 8px; margin-top: 12px
+      display: flex; align-items: center; gap: 2px; margin-top: 12px
     }
     .cmodal .ok, .cmodal .danger, .cmodal button {
       border: none; border-radius: 8px; cursor: pointer
@@ -501,6 +504,7 @@
         minus.type = "button"
         minus.textContent = "-"
         minus.addEventListener("click", e => {
+          e.preventDefault()
           e.stopPropagation()
           const cur = picked.get(k) || 0
           if (cur > 1) picked.set(k, cur - 1)
@@ -518,6 +522,7 @@
         plus.type = "button"
         plus.textContent = "+"
         plus.addEventListener("click", e => {
+          e.preventDefault()
           e.stopPropagation()
           const cur = picked.get(k) || 0
           picked.set(k, cur + 1)
@@ -530,7 +535,8 @@
         controls.appendChild(plus)
 
         if (!editMode) {
-          card.addEventListener("click", () => {
+          card.addEventListener("click", (e) => {
+            e.preventDefault()
             const cur = picked.get(k) || 0
             picked.set(k, cur + 1)
             updateSubmit()
