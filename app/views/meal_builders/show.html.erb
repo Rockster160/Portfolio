@@ -191,7 +191,9 @@
     .hidden { display: none }
   </style>
 
-  <script>
+  <script type="module">
+    import { command } from "../../quick_actions/command.js";
+
     let ITEMS = JSON.parse(
       document.getElementById("items-data").textContent || "[]"
     )
@@ -576,7 +578,9 @@
         return `${category} ${parts.join(", ")} (${total})`
       })
 
-      console.log(lines.join("\n"))
+      lines.forEach(item => {
+        command.socket.send({ action: "command", words: `log ${item}` })
+      })
     })
 
     elToggleEdit.addEventListener("click", () => {
