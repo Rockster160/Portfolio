@@ -196,6 +196,7 @@
 
   <script type="module">
     import { command } from "../../quick_actions/command.js";
+    import { showFlash } from "../../quick_actions/flash.js";
 
     let ITEMS = JSON.parse(
       document.getElementById("items-data").textContent || "[]"
@@ -426,6 +427,8 @@
 
     // ---------- Render ----------
     const render = () => {
+      elToggleEdit.textContent = editMode ? "Exit" : "⚙️"
+
       document.body.classList.toggle("editing", editMode)
       elAddItem.classList.toggle("hidden", !editMode)
       elSaveItems.classList.toggle("hidden", !editMode)
@@ -588,14 +591,16 @@
         return `${category} ${parts.join(", ")} (${total})`
       })
 
+      showFlash("Submitting...")
       lines.forEach(item => {
         command.socket.send({ action: "command", words: `log ${item}` })
       })
+      picked.clear()
+      render()
     })
 
     elToggleEdit.addEventListener("click", () => {
       editMode = !editMode
-      elToggleEdit.textContent = editMode ? "Exit" : "⚙️"
       render()
     })
 
@@ -625,7 +630,12 @@
         credentials: "same-origin"
       })
 
-      if (res.ok) { location.reload(); return }
+      if (res.ok) {
+        showFlash("Saved! ✅")
+        editMode = false
+        render()
+        return
+      }
 
       const err = await res.text().catch(() => "")
       console.error("Save failed", res.status, err)
