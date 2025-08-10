@@ -11,6 +11,9 @@
       <div class="row">
         <input id="m-img" placeholder="Image URL or emoji">
       </div>
+      <div class="row">
+        <input id="m-tag" placeholder="Tag / helper text">
+      </div>
       <div class="cmodal-actions">
         <button id="m-delete" class="danger primary" type="button">Delete</button>
         <div class="spacer"></div>
@@ -23,7 +26,7 @@
   <div id="qmodal-backdrop" class="cmodal-backdrop hidden">
     <div class="cmodal">
       <h3>Quick Edit</h3>
-      <textarea id="q-text" rows="12"
+      <textarea id="q-text" rows="12" wrap="off"
         style="width:100%;padding:8px 10px;border:1px solid #CCC;border-radius:6px;
               font-family: ui-monospace, SFMono-Regular, Menlo, monospace"></textarea>
       <div class="cmodal-actions">
@@ -218,6 +221,7 @@
     const mCat = document.getElementById("m-cat")
     const mCal = document.getElementById("m-cal")
     const mImg = document.getElementById("m-img")
+    const mTag = document.getElementById("m-tag")
     const mSave = document.getElementById("m-save")
     const mCancel = document.getElementById("m-cancel")
     const mDelete = document.getElementById("m-delete")
@@ -251,7 +255,9 @@
     }
 
     const computeView = () => {
-      return ITEMS.filter(it => fuzzyMatch(query, `${it.category} ${it.name}`))
+      return ITEMS.filter(it =>
+        fuzzyMatch(query, `${it.category} ${it.name} ${it.tag || ""}`)
+      )
     }
     const keyOf = it => `${it.category}|${it.name}`
     const updateSubmit = () => { elSubmit.disabled = picked.size === 0 }
@@ -312,6 +318,7 @@
       mCal.value = item?.cal != null ? String(item.cal) : ""
       mCat.value = item?.category || "Food"
       mImg.value = item?.img || ""
+      mTag.value = item?.tag || ""
       mDelete.classList.toggle("hidden", isNewItem)
       elcModal.classList.remove("hidden")
       setTimeout(() => mName.focus(), 0)
@@ -331,13 +338,14 @@
       const calVal = parseInt(mCal.value || "0", 10)
       const cal = Math.max(0, Number.isFinite(calVal) ? calVal : 0)
       const img = mImg.value.trim()
+      const tag = mTag.value.trim()
       if (isNewItem) {
-        ITEMS.push({ category, name, cal, img })
+        ITEMS.push({ category, name, cal, img, tag })
       } else {
         const idx = ITEMS.findIndex(x =>
           x.name === currentEditingName && x.category === mCat.dataset.prevCategory
         )
-        if (idx >= 0) ITEMS[idx] = { ...ITEMS[idx], category, name, cal, img }
+        if (idx >= 0) ITEMS[idx] = { ...ITEMS[idx], category, name, cal, img, tag }
         const oldKey = `${mCat.dataset.prevCategory}|${currentEditingName}`
         const newKey = `${category}|${name}`
         const cur = picked.get(oldKey)
@@ -369,22 +377,24 @@
       return items.map(it => {
         const base = `${it.category} ${it.name} (${
           Math.max(0, parseInt(it.cal ?? 0, 10) || 0)
-        })`
-        return it.img ? `${base} ${it.img}` : base
+        })${it.img ? ` ${it.img}` : ""}`
+        return it.tag ? `${base} | ${it.tag}` : base
       }).join("\n")
     }
 
     const textToItems = text => {
       return text.split("\n").map(line => {
-        const s = line.trim()
-        if (!s) return null
-        const m = s.match(/^(\S+)\s+(.+?)\s*\((\d+)\)(?:\s+(.+))?$/)
+        const raw = line.trim()
+        if (!raw) return null
+        const [left, tagRaw] = raw.split("|", 2)
+        const m = left.trim().match(/^(\S+)\s+(.+?)\s*\((\d+)\)(?:\s+(.+))?$/)
         if (!m) return null
         return {
           category: m[1].trim(),
           name: m[2].trim(),
           cal: Math.max(0, parseInt(m[3], 10) || 0),
-          img: (m[4] || "").trim()
+          img: (m[4] || "").trim(),
+          tag: (tagRaw || "").trim()
         }
       }).filter(Boolean)
     }
@@ -596,7 +606,8 @@
         category: String(it.category || "Food").trim(),
         name: String(it.name || "Untitled").trim(),
         cal: Math.max(0, parseInt(it.cal ?? 0, 10) || 0),
-        img: (it.img || "").toString().trim()
+        img: (it.img || "").toString().trim(),
+        tag: (it.tag || "").toString().trim(),
       }))
     }
 
