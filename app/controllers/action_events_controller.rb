@@ -5,6 +5,7 @@ class ActionEventsController < ApplicationController
   def index
     @events = current_user.action_events
     @events = @events.query(params[:q]) if params[:q].present?
+    @events = @events.where(user: current_user)
     @events = @events.order(timestamp: :desc).page(params[:page]).per(50)
 
     serialize @events
