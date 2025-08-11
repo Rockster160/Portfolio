@@ -40,15 +40,24 @@
 
 <div class="wrap" data-save-url="<%= meal_builder_path(@meal_builder) %>">
   <div class="topbar">
-    <button id="toggle-edit" class="primary" type="button">⚙️</button>
-    <button id="save-items" class="primary" type="button" class="hidden">💾</button>
-    <button id="add-item" class="primary" type="button" class="hidden">➕</button>
-    <button id="quick-edit" class="primary" type="button" class="hidden">✍️</button>
+    <div class="row flex-between" data-editing=true class="hidden">
+      <button id="cancel-edit" class="primary" type="button">❌</button>
+      <%= link_to "🔄 Reload", meal_builder_path(@meal_builder), class: "btn primary" %>
+      <%= link_to "✏️ Edit Page", edit_meal_builder_path(@meal_builder), class: "btn primary", id: "page-edit" %>
+    </div>
 
-    <input id="search" type="search" placeholder="Search food..." autocomplete="off">
-    <%= link_to "✏️ Edit Page", edit_meal_builder_path(@meal_builder), class: "btn primary hidden", id: "page-edit" %>
-    <button id="submit" class="primary" disabled>Submit</button>
+    <div class="row">
+      <button id="toggle-edit" class="primary" type="button">⚙️</button>
+      <button id="save-items" class="primary" type="button" class="hidden">💾</button>
+      <button id="add-item" class="primary" type="button" class="hidden">➕</button>
+      <button id="quick-edit" class="primary" type="button" class="hidden">✍️</button>
+
+      <input id="search" type="search" placeholder="Search food..." autocomplete="off">
+
+      <button id="submit" class="primary" data-editing=false disabled>Submit</button>
+    </div>
   </div>
+
   <div id="grid" class="grid"></div>
 </div>
 
@@ -60,7 +69,7 @@
   <style>
     html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto; }
     .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 20px 28px }
-    .topbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px }
+    .topbar { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 10px }
     input[type="text"] {
       flex: 1; padding: 10px 12px; border: 1px solid #CCC;
       border-radius: 8px; outline: none
@@ -77,9 +86,6 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
       gap: 12px
-    }
-    @media (max-width: 600px) {
-      .grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)) }
     }
     .card-styles {
       color: #ECF0F1;
@@ -173,6 +179,9 @@
     .row input {
       flex: 1; padding: 8px 10px; border: 1px solid #CCC; border-radius: 6px
     }
+    .flex-between {
+      display: flex; justify-content: space-between; align-items: center
+    }
     .row .sm { max-width: 130px }
 
     .cmodal-backdrop {
@@ -194,6 +203,10 @@
     .cmodal .danger { background: #991B1B; color: #FFF }
     .cmodal .spacer { flex: 1 }
 
+    @media (max-width: 600px) {
+      .grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)) }
+    }
+
     .hidden { display: none }
   </style>
 
@@ -209,9 +222,12 @@
     let query = ""
     let editMode = false
 
+    let preEdit = ""
+
     const elGrid = document.getElementById("grid")
     const elSearch = document.getElementById("search")
     const elSubmit = document.getElementById("submit")
+    const elCancelEdit = document.getElementById("cancel-edit")
     const elToggleEdit = document.getElementById("toggle-edit")
     const elAddItem = document.getElementById("add-item")
     const elSaveItems = document.getElementById("save-items")
@@ -431,11 +447,12 @@
     // ---------- Render ----------
     const render = () => {
       document.body.classList.toggle("editing", editMode)
+      document.querySelectorAll("[data-editing=true]").forEach(el => el.classList.toggle("hidden", !editMode))
+      document.querySelectorAll("[data-editing=false]").forEach(el => el.classList.toggle("hidden", editMode))
       elToggleEdit.classList.toggle("hidden", editMode)
       elAddItem.classList.toggle("hidden", !editMode)
       elSaveItems.classList.toggle("hidden", !editMode)
       elQuickEdit?.classList.toggle("hidden", !editMode)
-      elPageEdit?.classList.toggle("hidden", !editMode)
 
       elGrid.innerHTML = ""
       const view = computeView()
@@ -605,7 +622,22 @@
     })
 
     elToggleEdit.addEventListener("click", () => {
+      if (!editMode) {
+        preEdit = itemsToText(ITEMS)
+      }
       editMode = !editMode
+      render()
+    })
+
+    elCancelEdit.addEventListener("click", () => {
+      const next = textToItems(preEdit)
+      const nextNames = new Set(next.map(i => i.name.toLowerCase()))
+      for (const k of Array.from(picked.keys())) {
+        if (!nextNames.has(k.toLowerCase())) picked.delete(k)
+      }
+      ITEMS = next
+
+      editMode = false
       render()
     })
 
@@ -622,6 +654,12 @@
     }
 
     elSaveItems.addEventListener("click", async () => {
+      if (preEdit === itemsToText(ITEMS)) {
+        editMode = false
+        render()
+        return
+      }
+
       const payload = { meal_builder: { items: normalizeItems(ITEMS) } }
 
       const res = await fetch(SAVE_ENDPOINT, {
