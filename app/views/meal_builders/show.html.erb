@@ -6,7 +6,7 @@
       <div class="row">
         <input id="m-cat" class="sm" placeholder="Category">
         <input id="m-name" placeholder="Name">
-        <input id="m-cal" class="sm" type="number" placeholder="Calories">
+        <input id="m-cal" class="sm basic" type="number" placeholder="Calories">
       </div>
       <div class="row">
         <input id="m-img" placeholder="Image URL or emoji">
@@ -45,7 +45,7 @@
     <button id="add-item" class="primary" type="button" class="hidden">➕</button>
     <button id="quick-edit" class="primary" type="button" class="hidden">✍️</button>
 
-    <input id="search" type="text" placeholder="Search food..." autocomplete="off">
+    <input id="search" type="search" placeholder="Search food..." autocomplete="off">
     <%= link_to "✏️ Edit Page", edit_meal_builder_path(@meal_builder), class: "btn primary hidden", id: "page-edit" %>
     <button id="submit" class="primary" disabled>Submit</button>
   </div>
