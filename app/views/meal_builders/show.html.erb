@@ -294,8 +294,8 @@
         }
         values[label] = parts[0];
       }
-      if ("RMR" in values) { values.RMR = Math.abs(values.RMR); }
-      if ("Burn" in values) { values.Burn = Math.abs(values.Burn); }
+      if ("RMR" in values) { values.RMR = -(values.RMR); }
+      if ("Burn" in values) { values.Burn = -(values.Burn); }
 
       const details = wrapper.querySelector("#cal-monitor-details")
 
