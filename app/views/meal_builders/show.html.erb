@@ -39,6 +39,21 @@
 <% end %>
 
 <div class="wrap" data-save-url="<%= meal_builder_path(@meal_builder) %>">
+  <div class="widget" data-task-id="calories" id="cal-monitor" style="font-weight: 500; color: #4B5563;">
+    <span class="lines hidden"></span>
+    <div id="cal-monitor-details" class="row flex-between">
+      <span>Week: <span id="cal-week">…</span></span>
+      <span>
+        Consume: <span id="cal-today">…</span> |
+        Burn: <span id="cal-burn">…</span> |
+        Deficit: <span id="cal-deficit">…</span>
+      </span>
+    </div>
+  </div>
+  <div class="row right" id="cal-summary" style="font-weight: 500; color: #4B5563;">
+    Total Calories: <span id="cal-total" style="margin-left: 6px">0</span>
+  </div>
+
   <div class="topbar">
     <div class="row flex-between" data-editing=true class="hidden">
       <button id="cancel-edit" class="primary" type="button">❌</button>
@@ -176,6 +191,7 @@
     .dragging { opacity: .3 }
 
     .row { display: flex; gap: 8px; width: 100% }
+    .row.right { justify-content: flex-end; }
     .row input {
       flex: 1; padding: 8px 10px; border: 1px solid #CCC; border-radius: 6px
     }
@@ -252,6 +268,25 @@
     const elQText = document.getElementById("q-text")
     const elQApply = document.getElementById("q-apply")
     const elQCancel = document.getElementById("q-cancel")
+
+    const caloriesMonitor = Monitor.find("calories")
+    const updateCals = () => {
+      const wrapper = caloriesMonitor.element
+      const lines = wrapper.querySelector(".lines").textContent
+      if (!lines) { return }
+      const match = lines.match(/Today:\s*(?<today>\d+)\s*(?<burn>-?\d+)\s*Deficit:\s*(?<deficit>-?\d+)\s*Week:\s*(?<week>-?\d+)/)
+      if (!match || !match.groups) { return }
+      const { today, burn, deficit, week } = match.groups
+
+      const details = wrapper.querySelector("#cal-monitor-details")
+
+      details.querySelector("#cal-today").textContent = today
+      details.querySelector("#cal-burn").textContent = burn
+      details.querySelector("#cal-deficit").textContent = deficit
+      details.querySelector("#cal-week").textContent = week
+    };
+    caloriesMonitor.callbacks.push(updateCals);
+    updateCals();
 
     const csrfToken = () => {
       const m = document.querySelector('meta[name="csrf-token"]')
@@ -588,6 +623,17 @@
 
         elGrid.appendChild(card)
       })
+
+      const elCalTotal = document.getElementById("cal-total")
+      if (elCalTotal) {
+        let total = 0
+        for (const [key, count] of picked.entries()) {
+          const [category, name] = key.split("|")
+          const item = ITEMS.find(x => x.category === category && x.name === name)
+          if (item) total += item.cal * count
+        }
+        elCalTotal.textContent = total
+      }
     }
 
     // ---------- Search / Submit / Edit toggle / Add / Save ----------
@@ -689,6 +735,15 @@
     document.addEventListener("DOMContentLoaded", () => {
       render()
       updateSubmit()
+    })
+
+    window.addEventListener("beforeunload", e => {
+      if (!editMode) return
+      const current = itemsToText(ITEMS)
+      if (current !== preEdit) {
+        e.preventDefault()
+        e.returnValue = ""
+      }
     })
   </script>
 <% end %>

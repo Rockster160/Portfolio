@@ -10,6 +10,7 @@ export class Monitor {
 
   constructor(id) {
     this.id = id
+    this.callbacks = []
 
     Monitor.#monitors[id] = this
   }
@@ -124,6 +125,7 @@ Monitor.socket = new AuthWS("MonitorChannel", {
     if (data.timestamp_format) { monitor.timestampFormat = data.timestamp_format }
     monitor.timestamp = data.timestamp * 1000
     monitor.content = toMd(data.result)
+    monitor.callbacks?.forEach(callback => callback(monitor))
   },
   onopen: function() {
     console.log("MonitorChannel.onopen");
@@ -168,5 +170,6 @@ window.addEventListener("load", function() {
     document.querySelectorAll(".widget[data-task-id] .loading:not(.hidden)").forEach(item => {
       Monitor.from(item.closest(".widget"))?.resync()
     })
+    document.dispatchEvent(new CustomEvent("monitor:load", { bubbles: true }));
   }, 500)
 })
