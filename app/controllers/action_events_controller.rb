@@ -183,20 +183,6 @@ class ActionEventsController < ApplicationController
 
   private
 
-  def safeparse_time(time)
-    return Time.current if time.blank?
-
-    if time.is_a?(String)
-      begin
-        return Time.parse(time)
-      rescue StandardError
-        return Time.current
-      end
-    else
-      time
-    end
-  end
-
   def event_params
     if params.key?(:action_event)
       prepared_params = form_event_params

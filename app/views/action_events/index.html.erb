@@ -5,10 +5,10 @@
 <% end %>
 
 <%= form_for ActionEvent.new do |f| %>
-  <%= f.text_field :name, placeholder: :name %>
-  <%= f.text_field :notes, placeholder: :notes %>
+  <%= f.text_field :name, placeholder: :name, value: f.object.name.presence || params[:name] %>
+  <%= f.text_field :notes, placeholder: :notes, value: f.object.notes.presence || params[:notes] %>
   <% Time.use_zone(User.timezone) do %>
-    <% f.object.timestamp ||= Time.current %>
+    <% f.object.timestamp ||= safeparse_time(params[:timestamp], Time.current) %>
     <%= f.datetime_local_field :timestamp, value: f.object.timestamp.strftime("%Y-%m-%dT%H:%M") %>
   <% end %>
   <%= f.submit %>
