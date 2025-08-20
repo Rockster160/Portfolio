@@ -303,7 +303,7 @@
       details.querySelector("#cal-burn").textContent = values.Burn
       details.querySelector("#cal-deficit").textContent = values.Deficit
       details.querySelector("#cal-deficit-icon").textContent = values.Deficit < 0 ? "❌" : "✅"
-      details.querySelector("#cal-week").textContent = values.Week
+      details.querySelector("#cal-week").textContent = `${values.Week > 0 ? "✅ +" : "❌ "}${values.Week}`
       details.querySelector("#cal-rmr").textContent = values.RMR
       calories_synced = true
     };
