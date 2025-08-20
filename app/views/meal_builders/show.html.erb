@@ -39,19 +39,25 @@
 <% end %>
 
 <div class="wrap" data-save-url="<%= meal_builder_path(@meal_builder) %>">
-  <div class="widget" data-task-id="calories" id="cal-monitor" style="font-weight: 500; color: #4B5563;">
-    <span class="lines hidden"></span>
-    <div id="cal-monitor-details" class="row flex-between">
-      <span>Week: <span id="cal-week">…</span></span>
-      <span>
-        Consume: <span id="cal-today">…</span> |
-        Burn: <span id="cal-burn">…</span> |
-        Deficit: <span id="cal-deficit">…</span>
-      </span>
+  <div class="summary-container">
+    <div class="widget" data-task-id="calories" id="cal-monitor">
+      <span class="lines hidden"></span>
+      <div id="cal-monitor-details" class="row flex-between">
+        <span>Week: <span id="cal-week">…</span></span>
+        <span>
+          🍰 <span id="cal-today">…</span> -
+          🔥 <span id="cal-burn">…</span> =
+          <span id="cal-deficit-icon"></span> <span id="cal-deficit">…</span>
+          <span style="font-weight: 300; color: #3D4855; font-size: 12px;">
+            /<span id="cal-rmr">…</span>
+          </span>
+        </span>
+      </div>
     </div>
-  </div>
-  <div class="row right" id="cal-summary" style="font-weight: 500; color: #4B5563;">
-    Total Calories: <span id="cal-total" style="margin-left: 6px">0</span>
+
+    <div class="text-right">
+      [<span id="selected-summary"></span>] (<span id="cal-total">0</span>)
+    </div>
   </div>
 
   <div class="topbar">
@@ -83,6 +89,9 @@
 
   <style>
     html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto; }
+    .summary-container {
+      font-weight: 500; color: #4B5563;
+    }
     .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 20px 28px }
     .topbar { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 10px }
     input[type="text"] {
@@ -190,6 +199,7 @@
 
     .dragging { opacity: .3 }
 
+    .text-right { text-align: right; }
     .row { display: flex; gap: 8px; width: 100% }
     .row.right { justify-content: flex-end; }
     .row input {
@@ -270,23 +280,40 @@
     const elQCancel = document.getElementById("q-cancel")
 
     const caloriesMonitor = Monitor.find("calories")
+    let calories_synced = false
     const updateCals = () => {
       const wrapper = caloriesMonitor.element
       const lines = wrapper.querySelector(".lines").textContent
       if (!lines) { return }
-      const match = lines.match(/Today:\s*(?<today>\d+)\s*(?<burn>-?\d+)\s*Deficit:\s*(?<deficit>-?\d+)\s*Week:\s*(?<week>-?\d+)/)
-      if (!match || !match.groups) { return }
-      const { today, burn, deficit, week } = match.groups
+      const regex = /(\w+):\s+([-\d]+(?: [-\d]+)?)/g;
+      const values = {};
+      for (const [, label, nums] of lines.matchAll(regex)) {
+        const parts = nums.split(/\s+/).map(Number);
+        if (parts.length > 1) {
+          values.Burn = parts[1];
+        }
+        values[label] = parts[0];
+      }
+      if ("RMR" in values) { values.RMR = Math.abs(values.RMR); }
+      if ("Burn" in values) { values.Burn = Math.abs(values.Burn); }
 
       const details = wrapper.querySelector("#cal-monitor-details")
 
-      details.querySelector("#cal-today").textContent = today
-      details.querySelector("#cal-burn").textContent = burn
-      details.querySelector("#cal-deficit").textContent = deficit
-      details.querySelector("#cal-week").textContent = week
+      details.querySelector("#cal-today").textContent = values.Today
+      details.querySelector("#cal-burn").textContent = values.Burn
+      details.querySelector("#cal-deficit").textContent = values.Deficit
+      details.querySelector("#cal-deficit-icon").textContent = values.Deficit < 0 ? "❌" : "✅"
+      details.querySelector("#cal-week").textContent = values.Week
+      details.querySelector("#cal-rmr").textContent = values.RMR
+      calories_synced = true
     };
     caloriesMonitor.callbacks.push(updateCals);
     updateCals();
+    setTimeout(() => {
+      if (!calories_synced) {
+        caloriesMonitor.resync()
+      }
+    }, 500)
 
     const csrfToken = () => {
       const m = document.querySelector('meta[name="csrf-token"]')
@@ -625,14 +652,25 @@
       })
 
       const elCalTotal = document.getElementById("cal-total")
+      const elSelectedSummary = document.getElementById("selected-summary")
       if (elCalTotal) {
-        let total = 0
+        let totalCal = 0
+        const byCat = new Map()
         for (const [key, count] of picked.entries()) {
           const [category, name] = key.split("|")
           const item = ITEMS.find(x => x.category === category && x.name === name)
-          if (item) total += item.cal * count
+          if (!item) continue
+
+          totalCal += item.cal * count
+          const entry = byCat.get(category) || { parts: [], total: 0 }
+          entry.parts.push(count > 1 ? `${name} x${count}` : name)
+          byCat.set(category, entry)
         }
-        elCalTotal.textContent = total
+        elCalTotal.textContent = totalCal
+        const foods = Array.from(byCat.entries()).map(([category, { parts, total }]) => {
+          return `${category} ${parts.join(", ")}`
+        })
+        elSelectedSummary.textContent = foods.join(" | ")
       }
     }
 

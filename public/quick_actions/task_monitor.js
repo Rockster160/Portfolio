@@ -119,6 +119,7 @@ Monitor.socket = new AuthWS("MonitorChannel", {
       return monitor.error = true
     }
     if (!data.timestamp) { return }
+    // Maybe? Track the timestamp and then only update data if the new timestamp is after.
 
     monitor.loading = false
     monitor.blip = data.blip
