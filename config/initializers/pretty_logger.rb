@@ -19,7 +19,7 @@
       case current_user.id
       when 1 then colorize(:rocco, "[R]")
       when 4 then colorize(:purple, "[M]")
-      when 58128 then colorize(:rocco, "[Her ♥]")
+      when 58128 then "\e[94m[Her \e[95m♥\e[94m]\e[0m"
       when 34226 then colorize(:pink, "[S]") # Saya
       when 37764 then colorize(:yellow, "[C]") # Carlos
       else colorize(:olive, "[#{name}]")
