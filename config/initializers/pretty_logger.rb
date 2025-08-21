@@ -19,7 +19,7 @@
       case current_user.id
       when 1 then colorize(:rocco, "[R]")
       when 4 then colorize(:purple, "[M]")
-      when 58128 then colorize(:light_blue, "[AlchemiBluum 💕]")
+      when 58128 then colorize(:rocco, "[Her ♥]")
       when 34226 then colorize(:pink, "[S]") # Saya
       when 37764 then colorize(:yellow, "[C]") # Carlos
       else colorize(:olive, "[#{name}]")
