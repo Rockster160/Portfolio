@@ -23,6 +23,10 @@ Rails.application.routes.draw do
   get "playground" => "index#playground"
   resource :ping, only: :create
 
+  namespace :internal do
+    get "auth", to: "auth#check"
+  end
+
   namespace :api do
     namespace :v1 do
       post :alexa, controller: :alexa
