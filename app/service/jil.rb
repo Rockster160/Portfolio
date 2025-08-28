@@ -5,7 +5,7 @@ class Jil
   end
 
   def self.trigger_async(from_user, scope, data={})
-    ::Jil::Schedule.add_schedule(user, ::Time.current, trigger, data)
+    ::Jil::Schedule.add_schedule(from_user, ::Time.current, trigger, data)
   end
 
   def self.trigger_now(user, scope, data={})
