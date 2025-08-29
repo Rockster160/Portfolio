@@ -51,12 +51,11 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   end
 
   def update!(event_data, details)
-    events.find(event_data[:id]).tap { |event|
-      evt_data = params(details)
-      if event.update(evt_data)
-        event_callbacks(event, :changed, evt_data[:timestamp].present?)
-      end
-    }
+    event = load_event(event_data)
+    evt_data = params(details)
+    if event.update(evt_data)
+      event_callbacks(event, :changed, evt_data[:timestamp].present?)
+    end
   end
 
   def destroy(event_data)
@@ -115,8 +114,11 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
 
   def load_event(jil_event)
     return jil_event if jil_event.is_a?(::ActionEvent)
+    jil_params = cast(jil_event)
+    id = jil_params[:id]
+    return @jil.user.action_events.new(jil_params) if id.blank?
 
-    @jil.user.action_events.find(cast(jil_event)[:id])
+    @jil.user.action_events.find(id)
   end
 
   def events
