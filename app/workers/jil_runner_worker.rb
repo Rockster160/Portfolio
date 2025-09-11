@@ -19,12 +19,12 @@ class JilRunnerWorker
         task.execute
       end
 
-      # # Execute all ScheduledTriggers that are ready
+      # Execute all ScheduledTriggers that are ready
       user.scheduled_triggers.ready.order(:execute_at).each do |schedule|
         executed_any = true
         schedule.started!
 
-        ::Jil.trigger_now(schedule.user, schedule.trigger, schedule.data)
+        ::Jil.trigger_now(schedule.user, schedule.trigger, { timestamp: schedule.execute_at }.merge(schedule.data))
 
         schedule.completed!
         ::Jil::Schedule.broadcast(schedule, :completed)
