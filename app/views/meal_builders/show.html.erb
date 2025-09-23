@@ -13,6 +13,8 @@
       </div>
       <div class="row">
         <input id="m-tag" placeholder="Tag / helper text">
+        <input id="m-alias" placeholder="Alias">
+        <input id="m-desc" placeholder="Description">
       </div>
       <div class="cmodal-actions">
         <button id="m-delete" class="danger primary" type="button">Delete</button>
@@ -158,7 +160,7 @@
     }
     .imgbox img { width: 100%; height: 100%; object-fit: cover }
     .title { text-align: center; font-size: 14px; line-height: 1.2 }
-    .cal { font-size: 12px; color: #6B7280 }
+    .cal, .desc { font-size: 12px; color: #6B7280 }
     .controls {
       display: flex; align-items: center; justify-content: space-between;
       width: 100%;
@@ -268,6 +270,8 @@
     const mCal = document.getElementById("m-cal")
     const mImg = document.getElementById("m-img")
     const mTag = document.getElementById("m-tag")
+    const mAlias = document.getElementById("m-alias")
+    const mDesc  = document.getElementById("m-desc")
     const mSave = document.getElementById("m-save")
     const mCancel = document.getElementById("m-cancel")
     const mDelete = document.getElementById("m-delete")
@@ -401,6 +405,8 @@
       mCat.value = item?.category || "Food"
       mImg.value = item?.img || ""
       mTag.value = item?.tag || ""
+      mAlias.value = item?.alias || ""
+      mDesc.value  = item?.description || ""
       mDelete.classList.toggle("hidden", isNewItem)
       elcModal.classList.remove("hidden")
       setTimeout(() => mName.focus(), 0)
@@ -421,13 +427,16 @@
       const cal = Math.max(0, Number.isFinite(calVal) ? calVal : 0)
       const img = mImg.value.trim()
       const tag = mTag.value.trim()
+      const alias = mAlias.value.trim()
+      const description = mDesc.value.trim()
+
       if (isNewItem) {
-        ITEMS.push({ category, name, cal, img, tag })
+        ITEMS.push({ category, name, cal, img, tag, alias, description })
       } else {
         const idx = ITEMS.findIndex(x =>
           x.name === currentEditingName && x.category === mCat.dataset.prevCategory
         )
-        if (idx >= 0) ITEMS[idx] = { ...ITEMS[idx], category, name, cal, img, tag }
+        if (idx >= 0) ITEMS[idx] = { ...ITEMS[idx], category, name, cal, img, tag, alias, description }
         const oldKey = `${mCat.dataset.prevCategory}|${currentEditingName}`
         const newKey = `${category}|${name}`
         const cur = picked.get(oldKey)
@@ -459,8 +468,13 @@
       return items.map(it => {
         const base = `${it.category} ${it.name} (${
           Math.max(0, parseInt(it.cal ?? 0, 10) || 0)
-        })${it.img ? ` ${it.img}` : ""}`
-        return it.tag ? `${base} | ${it.tag}` : base
+        }) ${it.img.trim()}`
+
+        const tagPart = (it.tag?.trim()) ? ` | ${it.tag.trim()}` : ""
+        const aliasPart = (it.alias?.trim()) ? ` [${it.alias.trim()}]` : ""
+        const descPart = (it.description?.trim()) ? ` > ${it.description.trim()}` : ""
+
+        return `${base}${tagPart}${aliasPart}${descPart}`
       }).join("\n")
     }
 
@@ -469,14 +483,27 @@
         const raw = line.trim()
         if (!raw) return null
         const [left, tagRaw] = raw.split("|", 2)
-        const m = left.trim().match(/^(\S+)\s+(.+?)\s*\((\d+)\)(?:\s+(.+))?$/)
+        const rx = new RegExp([
+          /^ *(?<category>\S+)\s+/,
+          /(?<name>.+?)\s*/,
+          /\(\s*(?<cal>\d+)\s*\)\s*/,
+          /(?<img>.+?)?\s*/,
+          /(?:\|\s*(?<tag>.+?))?\s*/,
+          /(?:\[\s*(?<alias>.+?)\s*\])?\s*/,
+          /(?:>\s*(?<desc>.+?))?\s*$/,
+        ].map(pattern => pattern.source).join(""), "")
+        const m = left.trim().match(rx)
         if (!m) return null
+
+        const { category, name, cal, img, tag, alias, desc } = m.groups
         return {
-          category: m[1].trim(),
-          name: m[2].trim(),
-          cal: Math.max(0, parseInt(m[3], 10) || 0),
-          img: (m[4] || "").trim(),
-          tag: (tagRaw || "").trim()
+          category: category.trim(),
+          name: name.trim(),
+          cal: Math.max(0, parseInt(cal, 10) || 0),
+          img: (img || "").trim(),
+          tag: (tag || "").trim(),
+          alias: (alias || "").trim(),
+          desc: (desc || "").trim()
         }
       }).filter(Boolean)
     }
@@ -565,7 +592,7 @@
 
         const title = document.createElement("div")
         title.className = "title"
-        title.textContent = it.name
+        title.textContent = it.alias?.trim() || it.name
 
         const cal = document.createElement("div")
         cal.className = "cal"
@@ -574,6 +601,10 @@
         const cat = document.createElement("div")
         cat.className = "cal"
         cat.textContent = it.category
+
+        const desc = document.createElement("div")
+        desc.className = "desc"
+        desc.textContent = it.description || ""
 
         const controls = document.createElement("div")
         controls.className = "controls"
@@ -626,6 +657,7 @@
         card.appendChild(imgbox)
         card.appendChild(title)
         // card.appendChild(cat)
+        if (it.description) card.appendChild(desc)
         card.appendChild(cal)
         card.appendChild(controls)
 
@@ -734,6 +766,8 @@
         cal: Math.max(0, parseInt(it.cal ?? 0, 10) || 0),
         img: (it.img || "").toString().trim(),
         tag: (it.tag || "").toString().trim(),
+        alias: (it.alias || "").toString().trim(),
+        description: (it.description || "").toString().trim()
       }))
     }
 
