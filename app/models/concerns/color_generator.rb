@@ -83,7 +83,11 @@ module ColorGenerator
     end
 
     def contrast_text_color_on_background(background_hex)
-      black, white = "#000", "#FFF"
+      # black, white = "#000", "#FFF"
+      # black, white = "#000", "#FFF"
+      white = "#ECF0F1" # $grey-light
+      black = "#3C4F63" # $text-color -- darken($grey-blue, 20%) -- #6481A1
+
       return white unless background_hex.present?
       color_hex = background_hex.gsub("#", "")
       return white unless color_hex.length == 6 || color_hex.length == 3
