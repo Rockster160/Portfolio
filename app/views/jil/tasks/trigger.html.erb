@@ -1,0 +1,45 @@
+<%= meta_title @task.name, include_name: false %>
+
+<div class="skinny-container lists-index-container">
+  <div class="btn-container flex-justify-space-between">
+    <a href="<%= jil_tasks_path %>" class="btn">All Tasks</a>
+    <a href="<%= jil_task_path(@task) %>" class="btn">Edit Task</a>
+  </div>
+
+  <div class="execute-btn-wrapper">
+    <%= link_to run_jil_task_path(@task), method: :post, remote: true, class: "btn execute-btn" do %>
+      <div class="">Trigger Now</div>
+    <% end %>
+  </div>
+</div>
+
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const executeBtn = document.querySelector(".execute-btn-wrapper .execute-btn");
+    if (executeBtn) {
+      executeBtn.addEventListener("click", function() {
+        executeBtn.style.pointerEvents = "none";
+        executeBtn.classList.add("disabled");
+      });
+    }
+  });
+
+  document.addEventListener("ajax:success", function(event) {
+    const wrapper = event.target.closest(".execute-btn-wrapper");
+    const executeBtn = wrapper ? wrapper.querySelector(".execute-btn") : null;
+
+    if (executeBtn) {
+      executeBtn.style.pointerEvents = "";
+      executeBtn.classList.remove("disabled");
+    }
+
+    if (wrapper) {
+      const msg = document.createElement("div");
+      msg.textContent = "Triggered!";
+      msg.className = "execute-success-msg";
+      wrapper.appendChild(msg);
+      setTimeout(() => msg.remove(), 1500);
+    }
+  }, true);
+</script>

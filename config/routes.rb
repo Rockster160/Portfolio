@@ -166,6 +166,7 @@ Rails.application.routes.draw do
 
   namespace :jil do
     get :/, action: :index, controller: :tasks
+    get "t/:id" => "tasks#trigger"
     resources :tasks do
       post :run, on: :member
     end

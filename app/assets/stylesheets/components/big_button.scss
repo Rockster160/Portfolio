@@ -1,0 +1,15 @@
+.execute-btn-wrapper {
+  text-align: center;
+
+  .execute-btn {
+    margin: 0 auto;
+    margin-top: 25%;
+    width: 200px;
+    height: 200px;
+    border-radius: 200px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5em;
+  }
+}

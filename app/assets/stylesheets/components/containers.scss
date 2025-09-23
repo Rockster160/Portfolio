@@ -40,6 +40,11 @@
   }
 }
 
+.flex-justify-space-between {
+  display: flex;
+  justify-content: space-between;
+}
+
 .flex-vert-align {
   display: flex;
   vertical-align: middle;

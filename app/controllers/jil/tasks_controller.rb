@@ -12,6 +12,10 @@ class Jil::TasksController < ApplicationController
     render "form", layout: "jil"
   end
 
+  def trigger
+    @task = current_user.tasks.find(params[:id])
+  end
+
   def new
     @task = current_user.tasks.new
 
@@ -39,7 +43,7 @@ class Jil::TasksController < ApplicationController
 
   def run
     @task = current_user.tasks.find_by(id: params[:id]) unless params[:id] == "new"
-    code = params[:code]
+    code = params[:code].presence || @task&.code
     data = params[:data]
 
     ::Jil::Executor.async_call(current_user, code, data || {}, task: @task, auth: :run)
