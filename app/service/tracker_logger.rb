@@ -19,6 +19,7 @@ module TrackerLogger
   end
 
   def trackable?(request)
+    return false unless Rails.env.production?
     return false if request.env["REQUEST_PATH"]&.include?("log_tracker")
     # TODO: Should check Dashboard UserAgent -- OR! Include some kind of param/token/header
     #   that disables the log tracker

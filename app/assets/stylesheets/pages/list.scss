@@ -1,5 +1,7 @@
 html:has(.ctr-tasks.act-index) {
-  &.dark-mode, &, body {
+  &.dark-mode,
+  &,
+  body {
     overscroll-behavior: auto none;
     background: #21374F;
 
@@ -9,27 +11,31 @@ html:has(.ctr-tasks.act-index) {
       background: #013080;
 
       &:hover {
-        background: darken(#013080, 8%)
+        background: darken(#013080, 8%);
       }
     }
   }
 }
 
-
-.list-container, .lists-index-container {
+.list-container,
+.lists-index-container {
   padding-bottom: 40px;
   color: $blue-d5;
   font-family: "Comic Sans MS", sans-serif;
   font-size: 16px;
   font-weight: bold;
 
-  &.no-padding { padding: 0; }
+  &.no-padding {
+    padding: 0;
+  }
 
   .btn-container {
     padding: 0 3px;
   }
 
-  .important-container, .list-item-container, .list-item-options {
+  .important-container,
+  .list-item-container,
+  .list-item-options {
     position: relative;
     color: $text-color;
     user-select: none;
@@ -50,7 +56,9 @@ html:has(.ctr-tasks.act-index) {
       width: 30px;
       height: 100%;
 
-      &:active { cursor: grabbing; }
+      &:active {
+        cursor: grabbing;
+      }
     }
 
     .settings-btn {
@@ -176,7 +184,8 @@ html:has(.ctr-tasks.act-index) {
     color: $blue-d5;
   }
 
-  .list-title, .lists-title {
+  .list-title,
+  .lists-title {
     padding: 10px 0;
     font-size: 24px;
     text-align: center;
@@ -215,10 +224,22 @@ html:has(.ctr-tasks.act-index) {
     border-bottom: 1px solid $text-color;
     padding-bottom: 10px;
 
-    .list-item-handle { display: none; }
+    .list-item-handle {
+      display: none;
+    }
   }
-  .important-list-items, .list-items, .lists {
-    input[type=checkbox] { display: none; }
+  .list-section-tab .section-header {
+    font-size: 20px;
+    text-align: center;
+    font-weight: bold;
+    padding: 8px 0;
+  }
+  .important-list-items,
+  .list-items,
+  .lists {
+    input[type="checkbox"] {
+      display: none;
+    }
     .list-item {
       display: block;
       position: relative;
@@ -232,29 +253,33 @@ html:has(.ctr-tasks.act-index) {
       color: $text-color;
       text-decoration: none;
 
-      .checkbox-wrapper {}
+      .checkbox-wrapper {
+      }
       .item-name {
         .markdown-container {
           font-family: "Comic Sans MS", sans-serif;
         }
       }
       &:hover {
-
         text-decoration: none;
-        &:not(.nohover) { background: darken($blue-l5, 10%); }
+        &:not(.nohover) {
+          background: darken($blue-l5, 10%);
+        }
       }
     }
     &:not(.survey-questions) {
-      label { background: $blue-l5; }
+      label {
+        background: $blue-l5;
+      }
 
-      input[type=checkbox]:checked + label {
+      input[type="checkbox"]:checked + label {
         border-color: red;
         background: pink;
         color: red;
         text-decoration: line-through;
       }
       .list-item-options {
-        input[type=checkbox]:checked + label {
+        input[type="checkbox"]:checked + label {
           border-color: $base-blue;
           background: lighten($base-blue, 30%);
           color: $base-blue;
@@ -276,24 +301,39 @@ html:has(.ctr-tasks.act-index) {
 }
 
 @keyframes pulse {
-  0%   { transform: scale(1);   }
-  25%  { transform: scale(1.1); }
-  50%  { transform: scale(1.3); }
-  75%  { transform: scale(1.1); }
-  100% { transform: scale(1);   }
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+  75% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .dark-mode {
-  .important-container, .list-item-container, .list-item-options {
+  .important-container,
+  .list-item-container,
+  .list-item-options {
     color: $blue-l5;
     .list-item-config {
       color: $blue-l5;
     }
   }
-  .list-container, .lists-index-container {
+  .list-container,
+  .lists-index-container {
     color: $grey-light;
 
-    .important-list-items, .list-items, .lists {
+    .important-list-items,
+    .list-items,
+    .lists {
       border-color: $grey-light;
 
       .list-item {
@@ -307,7 +347,7 @@ html:has(.ctr-tasks.act-index) {
       }
 
       &:not(.survey-questions) {
-        input[type=checkbox]:checked + label {
+        input[type="checkbox"]:checked + label {
           background: pink;
 
           .list-item-access {
@@ -316,7 +356,7 @@ html:has(.ctr-tasks.act-index) {
         }
       }
       .list-item-options {
-        input[type=checkbox]:checked + label {
+        input[type="checkbox"]:checked + label {
           border-color: $base-blue;
           background: lighten($base-blue, 30%);
         }
