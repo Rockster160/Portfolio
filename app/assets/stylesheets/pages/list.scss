@@ -240,47 +240,24 @@ html:has(.ctr-tasks.act-index) {
       text-align: center;
       font-weight: bold;
       padding: 8px 0;
-    }
+      margin: 0 30px;
 
-    .section-outside-drop {
-      height: 14px;
-      margin: 2px 0 10px;
-      pointer-events: auto;
+      .list-item-handle {
+        position: absolute;
+        left: 0;
+        width: 30px;
+        height: 100%;
+        cursor: grab;
+        &:active {
+          cursor: grabbing;
+        }
+      }
     }
   }
-  .drag-placeholder {
+
+  .drag-section-placeholder {
     border: 2px dashed #BBB;
-    margin: 4px 0;
-    background: transparent;
-  }
-  /* room at bucket bottom only while dragging */
-  .section-items.__drag-open {
-    padding-bottom: 12px;
-  }
-  .section-items.__empty-target {
-    min-height: 28px;
-    outline: 2px dashed #BBB;
-  }
-
-  /* visual affordances only while hovering */
-  .__top-drop {
-    height: 12px;
-    margin-bottom: 6px;
-  }
-  .section-outside-hover {
-    outline: 2px dashed #BBB;
-  }
-  .section-hover {
-    outline: 2px dashed var(--accent, #7AA7FF);
-  }
-  .section-outside-hover {
-    outline: 2px dashed #BBB;
-  }
-
-  /* transient drop stripe after a section */
-  .__below-drop {
-    height: 12px;
-    margin: 4px 0;
+    margin: 6px 0;
   }
 
   .drag-placeholder {
@@ -288,16 +265,22 @@ html:has(.ctr-tasks.act-index) {
     margin: 4px 0;
     background: transparent;
   }
-  .section-hover {
-    outline: 1px solid #C7C7C7;
-  } /* subtle, not dashed */
-  .section-outside-hover {
-    outline: 1px solid #E0E0E0;
-  } /* subtle, not dashed */
+
   .section-items.__empty-target {
-    outline: 1px dashed #BBB;
     min-height: 28px;
   }
+
+  .__after-section-anchor,
+  .__section-top-anchor {
+    height: 1px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .list-section-tab.__pe-none {
+    pointer-events: none;
+  }
+
   .important-list-items,
   .list-items,
   .lists {
@@ -371,7 +354,7 @@ html:has(.ctr-tasks.act-index) {
     padding-bottom: 8px;
   }
   .list-item {
-    background: green;
+    // background: green;
   }
   .list-item-access {
     // top: 5px;

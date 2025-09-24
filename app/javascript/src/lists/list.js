@@ -123,180 +123,137 @@ function initSortables() {
     if ($(this).data("ui-sortable")) $(this).sortable("destroy")
   })
 
-  $(".list-items, .section-items").sortable({
-    connectWith: ".list-items, .section-items",
-    items: "> .list-item-container",
+  let draggingSection = false
+  const CONNECT_ALL = ".section-items, .list-items"
+  const CONNECT_ROOT_ONLY = ".list-items"
+
+  function toggleEmptyHints(on) {
+    if (on) {
+      $(".section-items").each(function() {
+        if ($(this).children(".list-item-container").length == 0) {
+          $(this).addClass("__empty-target")
+        }
+      })
+    } else {
+      $(".section-items").removeClass("__empty-target")
+    }
+  }
+
+  function addAnchors() {
+    // root edges
+    if ($(".list-items > .__root-top-anchor").length == 0) {
+      $('<div class="__root-top-anchor" aria-hidden="true">')
+        .prependTo(".list-items")
+    }
+    if ($(".list-items > .__root-bottom-anchor").length == 0) {
+      $('<div class="__root-bottom-anchor" aria-hidden="true">')
+        .appendTo(".list-items")
+    }
+    // between sections
+    $(".list-section-tab").each(function() {
+      if ($(this).next().hasClass("__after-section-anchor")) return
+      $('<div class="__after-section-anchor" aria-hidden="true">')
+        .insertAfter($(this))
+    })
+    // into section (top)
+    $(".section-items").each(function() {
+      if ($(this).children(".__section-top-anchor").length) return
+      $('<div class="__section-top-anchor" aria-hidden="true">')
+        .prependTo($(this))
+    })
+  }
+
+  function removeAnchors() {
+    $(".__root-top-anchor, .__root-bottom-anchor, .__after-section-anchor, .__section-top-anchor").remove()
+  }
+
+  // ROOT: sections + items
+  $(".list-items").sortable({
+    connectWith: CONNECT_ALL,
+    // include anchors as positions (not draggable—no handle inside)
+    items: "> .list-section-tab, > .list-item-container, > .__root-top-anchor, > .__root-bottom-anchor, > .__after-section-anchor",
     handle: ".list-item-handle",
     cancel: "input,textarea,button,.list-item-field,.list-item-category-field",
     tolerance: "pointer",
-    // helper: "clone", appendTo: "body",
-    zIndex: 10000,
     forcePlaceholderSize: true,
     placeholder: "drag-placeholder",
 
     start: function(e, ui) {
-      $(".list-item-container .list-item-field:not(.hidden)").blur()
-      beginDragUX()
+      draggingSection = ui.item.hasClass("list-section-tab")
       $(document).on("mousemove touchmove", __trackPointer)
-      ui.placeholder.height(ui.item.outerHeight())
+      addAnchors()
+      $(".list-section-tab").addClass("__pe-none") // let hits fall to anchors/buckets
+      toggleEmptyHints(true)
+
+      if (draggingSection) {
+        $(".list-items").sortable("option", "connectWith", CONNECT_ROOT_ONLY)
+        $(".section-items").sortable("option", "disabled", true)
+        ui.placeholder
+          .addClass("drag-section-placeholder")
+          .height(ui.item.find(".section-header").outerHeight() || ui.item.outerHeight())
+      } else {
+        ui.placeholder.height(ui.item.outerHeight())
+      }
     },
 
+    // no detach() calls here — let Sortable place the placeholder using anchors
+
     update: function(evt, ui) {
-      // honor "drop after section" stripe intent (from earlier patch)
-      let $item = $(ui.item)
-      let afterSid = $item.data("__dropAfterSection")
-      if (afterSid) {
-        let $tab = $('.list-section-tab[data-section-id="' + afterSid + '"]')
-        $item.detach().insertAfter($tab)
-        $item.removeData("__dropAfterSection")
-      }
       if (ui.sender) return
       persistLater()
     },
 
-    receive: function() { persistLater() },
+    stop: function(e, ui) {
+      $(document).off("mousemove touchmove", __trackPointer)
+      $(".list-section-tab").removeClass("__pe-none")
+      toggleEmptyHints(false)
+      if (draggingSection) {
+        $(".list-items").sortable("option", "connectWith", CONNECT_ALL)
+        $(".section-items").sortable("option", "disabled", false)
+      }
+      draggingSection = false
+      removeAnchors()
+      document.dispatchEvent(new Event("lists:persist-order"))
+    }
+  })
+
+  // SECTION buckets: items only
+  $(".section-items").sortable({
+    connectWith: CONNECT_ALL,
+    items: "> .list-item-container, > .__section-top-anchor", // anchors allowed, sections not
+    handle: ".list-item-handle",
+    cancel: "input,textarea,button,.list-item-field,.list-item-category-field",
+    tolerance: "pointer",
+    dropOnEmpty: true,
+    forcePlaceholderSize: true,
+    placeholder: "drag-placeholder",
+
+    start: function(e, ui) {
+      $(document).on("mousemove touchmove", __trackPointer)
+      addAnchors()
+      $(".list-section-tab").addClass("__pe-none")
+      toggleEmptyHints(true)
+      ui.placeholder.height(ui.item.outerHeight())
+    },
+
+    receive: function(e, ui) {
+      // backstop: if a section somehow arrives, bounce it
+      if (ui.item.hasClass("list-section-tab")) {
+        $(this).sortable("cancel")
+        return
+      }
+      persistLater()
+    },
+
+    update: function(evt, ui) { if (!ui.sender) persistLater() },
 
     stop: function(e, ui) {
-      let $item = $(ui.item)
-
-      // snap to edges if pointer is above top / below bottom of root
-      if (!__maybeSnapToEdges($item)) {
-        // if we dropped on a section header and it’s empty, drop "into" it
-        __maybeSnapIntoEmptySection($item)
-      }
-
       $(document).off("mousemove touchmove", __trackPointer)
+      $(".list-section-tab").removeClass("__pe-none")
+      toggleEmptyHints(false)
+      removeAnchors()
       document.dispatchEvent(new Event("lists:persist-order"))
-      endDragUX()
     }
-  })
-}
-
-function beginDragUX() {
-  if (!$(".list-items").children(".__top-drop").length) {
-    let $top = $('<div class="__top-drop" aria-hidden="true">').prependTo(".list-items")
-    $top.droppable({
-      accept: ".list-item-container",
-      tolerance: "pointer",
-      greedy: true,
-      hoverClass: "section-outside-hover",
-      drop: function(evt, ui) {
-        ui.draggable.detach().insertAfter($top) // insert at top
-        document.dispatchEvent(new Event("lists:persist-order"))
-        document.dispatchEvent(new Event("lists:rebind"))
-      }
-    })
-  }
-  // make tabs droppable only during a drag
-  $(".list-section-tab").each(function() {
-    let $tab = $(this)
-    if ($tab.data("__tabDropInit")) return
-    $tab.data("__tabDropInit", true)
-
-    $tab.droppable({
-      accept: ".list-item-container",
-      tolerance: "pointer",
-      greedy: true,
-      hoverClass: "section-hover",
-      drop: function(evt, ui) {
-        let $bucket = $tab.children(".section-items").first()
-        ui.draggable.detach().prependTo($bucket)
-        document.dispatchEvent(new Event("lists:persist-order"))
-        document.dispatchEvent(new Event("lists:rebind"))
-      }
-    })
-    $(".section-items:empty").addClass("__empty-target")
-  })
-
-  // create a temporary "below section" drop zone after each tab
-  $(".list-section-tab").each(function() {
-    let $tab = $(this)
-    if ($tab.next().hasClass("__below-drop")) {
-      $tab.next().addClass("__active")
-      return
-    }
-
-    let $dz = $('<div class="__below-drop __active" aria-hidden="true">')
-      .insertAfter($tab)
-
-    $dz.droppable({
-      accept: ".list-item-container",
-      tolerance: "pointer",
-      greedy: true,
-      hoverClass: "section-outside-hover",
-      drop: function(evt, ui) {
-        // mark intent: place after this section (outside)
-        ui.draggable.data("__dropAfterSection", $tab.data("sectionId"))
-      }
-    })
-  })
-}
-
-function endDragUX() {
-  // remove temporary spacing and dropzones
-  $(".section-items").removeClass("__drag-open")
-  $(".list-section-tab").each(function() {
-    let $tab = $(this)
-    if ($tab.data("ui-droppable")) { $tab.droppable("destroy") }
-    $tab.removeData("__tabDropInit")
-  })
-  $(".__top-drop").each(function() {
-    let $el = $(this)
-    if ($el.data("ui-droppable")) $el.droppable("destroy")
-    $el.remove()
-  })
-  $(".__below-drop").each(function() {
-    let $dz = $(this)
-    if ($dz.data("ui-droppable")) { $dz.droppable("destroy") }
-    $dz.remove()
-  })
-  $(".section-items").removeClass("__drag-open __empty-target")
-}
-
-function initDroppables() {
-  // drop on the tab puts item at top of its section
-  $(".list-section-tab").each(function() {
-    let $tab = $(this)
-    if ($tab.data("droppableInit")) return
-    $tab.data("droppableInit", true)
-
-    $tab.droppable({
-      accept: ".list-item-container",
-      tolerance: "pointer",
-      greedy: true,
-      hoverClass: "section-hover",
-      drop: function(evt, ui) {
-        let $bucket = $tab.children(".section-items").first()
-        ui.draggable.detach().prependTo($bucket)
-        document.dispatchEvent(new Event("lists:persist-order"))
-        // rebind because DOM moved
-        document.dispatchEvent(new Event("lists:rebind"))
-      }
-    })
-  })
-
-  // create a slim dropzone *after* each section to drop outside/below it
-  $(".list-section-tab").each(function() {
-    let $tab = $(this)
-    if ($tab.next().hasClass("section-outside-drop")) return
-
-    let sid = $tab.data("sectionId")
-    let $dz = $('<div class="section-outside-drop" aria-hidden="true">')
-      .attr("data-section-id", sid)
-      .insertAfter($tab)
-
-    $dz.droppable({
-      accept: ".list-item-container",
-      tolerance: "pointer",
-      greedy: true,
-      hoverClass: "section-outside-hover",
-      drop: function(evt, ui) {
-        // insert immediately after the section tab (outside the section)
-        ui.draggable.detach().insertAfter($tab)
-        document.dispatchEvent(new Event("lists:persist-order"))
-        document.dispatchEvent(new Event("lists:rebind"))
-      }
-    })
   })
 }
 
@@ -323,7 +280,6 @@ $(document).ready(function() {
     }
   })
   initSortables()
-  initDroppables()
 
   $(".new-list-item-form").submit(function(e) {
     e.preventDefault()
@@ -447,6 +403,5 @@ $(document).ready(function() {
   setImportantItems()
   document.addEventListener("lists:rebind", function() {
     initSortables()
-    initDroppables()
   })
 })
