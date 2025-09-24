@@ -22,6 +22,59 @@ $(document).ready(function() {
     }
   }
 
+  function reorderBuckets() {
+    // never touch .list-items top-level; only reorder inside each section
+    $(".section-items").each(function() {
+      let $bucket = $(this)
+      let $items = $bucket.children(".list-item-container")
+
+      let ordered = $items.sort(function(a, b) {
+        let aOrder = parseInt($(a).attr("data-sort-order"))
+        if ($(a).find(".list-item-checkbox").prop("checked")) aOrder += 0.1
+        let bOrder = parseInt($(b).attr("data-sort-order"))
+        if ($(b).find(".list-item-checkbox").prop("checked")) bOrder += 0.1
+        if (aOrder < bOrder) return 1
+        if (aOrder > bOrder) return -1
+        return 0
+      })
+
+      // keep only items, keep section DOM intact
+      ordered.each(function() { $(this).appendTo($bucket) })
+    })
+  }
+
+  function parseIncoming(html) {
+    // wrap so .find() can see top-level siblings
+    let $wrap = $("<div>").html(html)
+
+    // prefer a real .list-items root; else use the wrapper
+    let $root = $wrap.find(".list-items").first()
+    if ($root.length == 0) { $root = $wrap }
+
+    // include descendants AND any top-level .list-item-container in $root
+    let incomingItems = {}
+    $root.find(".list-item-container")
+        .add($root.filter(".list-item-container"))
+        .each(function() {
+          incomingItems[String($(this).data("itemId"))] = $(this)
+        })
+
+    // find the target bucket for an incoming item
+    let targetFor = function($incomingItem) {
+      let sid = $incomingItem.closest(".list-section-tab").data("sectionId")
+      if (sid == null || sid === "") return $(".list-items")
+      let $tab = $('.list-section-tab[data-section-id="' + sid + '"]')
+      let $bucket = $tab.children(".section-items").first()
+      return $bucket.length ? $bucket : $(".list-items")
+    }
+
+    return { $root, incomingItems, targetFor }
+  }
+
+  function ensureParent($el, $targetBucket) {
+    if (!$el.parent().is($targetBucket)) { $el.appendTo($targetBucket) }
+  }
+
   listWS = consumer.subscriptions.create({
     channel: "ListHtmlChannel",
     channel_id: "list_" + list_id
@@ -35,72 +88,87 @@ $(document).ready(function() {
       $(".list-error").removeClass("hidden")
     },
     received: function(data) {
-      var updated_list = $(data.list_html)
-      var updated_list_ids = updated_list.map(function() { return $(this).attr("data-item-id") })
+      let { $root: $incRoot, incomingItems, targetFor } = parseIncoming(data.list_html)
+      let incIds = Object.keys(incomingItems)
 
+      // 3a) Resolve placeholders by name (keeps the "quick add" feel)
       $(".item-placeholder").each(function() {
-        let item = this
-        let name = $(item).find(".item-name").text()
+        let $ph = $(this)
+        let name = $ph.find(".item-name").text()
+        let $match = null
 
-        let new_item = updated_list.find(function() {
-          return $(this).find(".item-name").text() == name
+        $.each(incomingItems, function(_, $inc) {
+          if ($inc.find(".item-name").text() == name) { $match = $inc; return false }
         })
-        if (new_item) {
-          item.replaceWith(new_item)
-          // $(item).attr("data-item-id", $(new_item).attr("data-item-id")).removeClass("item-placeholder")
+
+        if ($match) {
+          let $target = targetFor($match)
+          ensureParent($match, $target)
+          $ph.replaceWith($match)
         }
       })
 
-      var new_items = updated_list.filter(function() {
-        var item_id = $(this).attr("data-item-id")
-        if (item_id == undefined || item_id.length == 0) { return false }
+      // 3b) Upsert every incoming item and move it to the correct bucket
+      incIds.forEach(function(id) {
+        let $inc = incomingItems[id]
+        if (!id) return
 
-        var matching_items = $('.list-items .list-item-container[data-item-id=' + item_id + ']')
-        // Add Config icons
-        if ($(this).find(".list-item-config .important").length > 0) {
-          if (matching_items.find(".list-item-config .important").length == 0) { matching_items.find(".list-item-config").append($("<div>", {class: "important"})) }
-        } else {
-          matching_items.find(".list-item-config .important").remove()
-        }
-        if ($(this).find(".list-item-config .locked").length > 0) {
-          if (matching_items.find(".list-item-config .locked").length == 0) { matching_items.find(".list-item-config").append($("<div>", {class: "locked"})) }
-        } else {
-          matching_items.find(".list-item-config .locked").remove()
-        }
-        if ($(this).find(".list-item-config .recurring").length > 0) {
-          if (matching_items.find(".list-item-config .recurring").length == 0) { matching_items.find(".list-item-config").append($("<div>", {class: "recurring"})) }
-        } else {
-          matching_items.find(".list-item-config .recurring").remove()
-        }
-        // Update Category of existing item
-        var new_category = $(this).find(".list-item-config .category").text() || ""
-        matching_items.find(".list-item-config .category").text(new_category)
-        // Update sort order of already found item
-        matching_items.attr("data-sort-order", $(this).attr("data-sort-order"))
-        // Update name correctly
-        matching_items.find(".item-name").html($(this).find(".item-name").html()) // .replace("<", "&lt;")
+        let $targetBucket = targetFor($inc)
+        let $curr = $('.list-item-container[data-item-id="' + id + '"]')
 
-        // Define whether it's checked or not - Only update if not locked
-        if ($(this).find(".list-item-config .locked").length == 0) {
-          matching_items.find(".list-item-checkbox").prop("checked", $(this).find(".list-item-checkbox").prop("checked"))
+        if ($curr.length == 0) {
+          // brand new item: insert in the right bucket
+          ensureParent($inc, $targetBucket)
+          $targetBucket.append($inc)
+          return
         }
-        return matching_items.length == 0
+
+        // update existing item’s attrs/content (keep your icon + field logic)
+        // icons
+        ["important", "locked", "recurring"].forEach(function(cls) {
+          let has = $inc.find(".list-item-config ." + cls).length > 0
+          let $cfg = $curr.find(".list-item-config")
+          if (has) {
+            if ($cfg.find("." + cls).length == 0) { $cfg.append($("<div>", { class: cls })) }
+          } else {
+            $cfg.find("." + cls).remove()
+          }
+        })
+
+        // category
+        let newCat = $inc.find(".list-item-config .category").text() || ""
+        $curr.find(".list-item-config .category").text(newCat)
+
+        // sort order
+        $curr.attr("data-sort-order", $inc.attr("data-sort-order"))
+
+        // name (html to preserve highlights/emojis)
+        $curr.find(".item-name").html($inc.find(".item-name").html())
+
+        // checked state (skip if locked)
+        if ($inc.find(".list-item-config .locked").length == 0) {
+          $curr.find(".list-item-checkbox")
+            .prop("checked", $inc.find(".list-item-checkbox").prop("checked"))
+        }
+
+        // move between buckets if needed
+        ensureParent($curr, $targetBucket)
       })
-      $(".list-items").append(new_items)
 
-      $(".list-items .list-item-container").each(function() {
-        var current_item = $(this)
-        var item_id = current_item.attr("data-item-id")
+      // 3c) Mark locally present items missing from server as checked (soft deleted)
+      $(".list-item-container").each(function() {
         if ($(this).find(".list-item-config .locked").length > 0) { return }
-        if (!updated_list_ids.toArray().includes(item_id)) {
-          // Item does not exist, check to show it's deleted.
-          $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]").prop("checked", true)
+        let id = $(this).data("itemId")
+        if (!incIds.includes(String(id))) {
+          $('.list-item-container[data-item-id="' + id + '"] input[type=checkbox]')
+            .prop("checked", true)
         }
       })
 
       clearRemovedItems()
       setImportantItems()
-      reorderList()
+      reorderBuckets() // was reorderList()
+      document.dispatchEvent(new Event("lists:rebind"))
     }
   })
 

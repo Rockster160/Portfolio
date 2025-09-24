@@ -3,6 +3,7 @@
 <% template ||= false %>
 
 <div class="list-item-container" data-editable data-sort-order="<%= item.sort_order %>" data-item-id="<%= item.id %>" data-item-url="<%= list_list_item_path(list, item) unless template %>" data-updated="<%= item.updated_at.to_i %>">
+  <span class="section-border" style="<%= "border-color: #{section.color};" if defined?(section) && section.present? %>"></span>
   <% unless template %>
     <div class="list-item-config">
       <% if item.important? %>

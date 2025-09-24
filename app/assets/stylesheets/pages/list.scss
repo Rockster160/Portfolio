@@ -99,6 +99,9 @@ html:has(.ctr-tasks.act-index) {
       font-size: 12px;
     }
 
+    .list-item-access {
+      // position: relative;
+    }
     .list-item-config {
       position: absolute;
       top: 2px;
@@ -228,11 +231,72 @@ html:has(.ctr-tasks.act-index) {
       display: none;
     }
   }
-  .list-section-tab .section-header {
-    font-size: 20px;
-    text-align: center;
-    font-weight: bold;
-    padding: 8px 0;
+  .list-section-tab {
+    border-radius: 8px;
+    margin: 8px 0;
+
+    .section-header {
+      font-size: 20px;
+      text-align: center;
+      font-weight: bold;
+      padding: 8px 0;
+    }
+
+    .section-outside-drop {
+      height: 14px;
+      margin: 2px 0 10px;
+      pointer-events: auto;
+    }
+  }
+  .drag-placeholder {
+    border: 2px dashed #BBB;
+    margin: 4px 0;
+    background: transparent;
+  }
+  /* room at bucket bottom only while dragging */
+  .section-items.__drag-open {
+    padding-bottom: 12px;
+  }
+  .section-items.__empty-target {
+    min-height: 28px;
+    outline: 2px dashed #BBB;
+  }
+
+  /* visual affordances only while hovering */
+  .__top-drop {
+    height: 12px;
+    margin-bottom: 6px;
+  }
+  .section-outside-hover {
+    outline: 2px dashed #BBB;
+  }
+  .section-hover {
+    outline: 2px dashed var(--accent, #7AA7FF);
+  }
+  .section-outside-hover {
+    outline: 2px dashed #BBB;
+  }
+
+  /* transient drop stripe after a section */
+  .__below-drop {
+    height: 12px;
+    margin: 4px 0;
+  }
+
+  .drag-placeholder {
+    border: 2px dashed #BBB;
+    margin: 4px 0;
+    background: transparent;
+  }
+  .section-hover {
+    outline: 1px solid #C7C7C7;
+  } /* subtle, not dashed */
+  .section-outside-hover {
+    outline: 1px solid #E0E0E0;
+  } /* subtle, not dashed */
+  .section-items.__empty-target {
+    outline: 1px dashed #BBB;
+    min-height: 28px;
   }
   .important-list-items,
   .list-items,
@@ -293,6 +357,35 @@ html:has(.ctr-tasks.act-index) {
       padding: 15px 40px 15px 10px;
     }
   }
+}
+
+.list-container
+  .list-items
+  .list-section-tab
+  .section-items
+  .list-item-container {
+  padding-left: 8px;
+  padding-right: 8px;
+
+  &:last-of-type {
+    padding-bottom: 8px;
+  }
+  .list-item {
+    background: green;
+  }
+  .list-item-access {
+    // top: 5px;
+  }
+  .list-item-config {
+    //   top: 10px;
+    left: 10px;
+  }
+  // .category-btn {
+  //   top: 10px;
+  // }
+  // .settings-btn {
+  //   top: 35px;
+  // }
 }
 
 .list-container .list-items .list-item-container.item-placeholder .list-item {

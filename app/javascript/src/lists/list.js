@@ -44,6 +44,262 @@ clearRemovedItems = function() {
   }
 }
 
+let __dragPos = { x: 0, y: 0 }
+function __trackPointer(e) {
+  let t = e.touches && e.touches[0]
+  __dragPos.x = (t ? t.pageX : e.pageX)
+  __dragPos.y = (t ? t.pageY : e.pageY)
+}
+
+function __maybeSnapToEdges($item) {
+  let $root = $(".list-items")
+  if ($root.length == 0) return false
+
+  let r = $root[0].getBoundingClientRect()
+  let y = __dragPos.y - window.scrollY
+  let threshold = 24
+
+  if (y < r.top + threshold) {
+    $item.detach().prependTo($root)
+    return true
+  }
+  if (y > r.bottom - threshold) {
+    $item.detach().appendTo($root)
+    return true
+  }
+  return false
+}
+
+function __maybeSnapIntoEmptySection($item) {
+  let cx = __dragPos.x - window.scrollX
+  let cy = __dragPos.y - window.scrollY
+  let el = document.elementFromPoint(cx, cy)
+  let $tab = $(el).closest(".list-section-tab")
+  if ($tab.length == 0) return false
+
+  let $bucket = $tab.children(".section-items").first()
+  if ($bucket.children(".list-item-container").length == 0) {
+    $item.detach().prependTo($bucket)
+    return true
+  }
+  return false
+}
+
+function buildFullOrder() {
+  let out = []
+  $(".list-items").children(".list-item-container, .list-section-tab").each(function() {
+    let $el = $(this)
+    if ($el.is(".list-item-container")) {
+      out.push({ type: "item", id: $el.data("itemId") })
+      return
+    }
+    let sid = $el.data("sectionId")
+    let items = $el.find("> .section-items > .list-item-container")
+      .map(function() { return { type: "item", id: $(this).data("itemId") } })
+      .toArray()
+    out.push({ type: "section", id: sid, items })
+  })
+  return out
+}
+
+function debounce(fn, ms) {
+  let t
+  return function() { clearTimeout(t); t = setTimeout(fn, ms) }
+}
+const persistLater = debounce(function() {
+  let url = $(".list-items").data("updateUrl")
+  if (!url) return
+  $.ajax({
+    url,
+    type: "POST",
+    data: JSON.stringify({ ordered: buildFullOrder() }),
+    contentType: "application/json; charset=UTF-8",
+    dataType: "json"
+  })
+}, 60)
+
+function initSortables() {
+  $(".list-items, .section-items").each(function() {
+    if ($(this).data("ui-sortable")) $(this).sortable("destroy")
+  })
+
+  $(".list-items, .section-items").sortable({
+    connectWith: ".list-items, .section-items",
+    items: "> .list-item-container",
+    handle: ".list-item-handle",
+    cancel: "input,textarea,button,.list-item-field,.list-item-category-field",
+    tolerance: "pointer",
+    // helper: "clone", appendTo: "body",
+    zIndex: 10000,
+    forcePlaceholderSize: true,
+    placeholder: "drag-placeholder",
+
+    start: function(e, ui) {
+      $(".list-item-container .list-item-field:not(.hidden)").blur()
+      beginDragUX()
+      $(document).on("mousemove touchmove", __trackPointer)
+      ui.placeholder.height(ui.item.outerHeight())
+    },
+
+    update: function(evt, ui) {
+      // honor "drop after section" stripe intent (from earlier patch)
+      let $item = $(ui.item)
+      let afterSid = $item.data("__dropAfterSection")
+      if (afterSid) {
+        let $tab = $('.list-section-tab[data-section-id="' + afterSid + '"]')
+        $item.detach().insertAfter($tab)
+        $item.removeData("__dropAfterSection")
+      }
+      if (ui.sender) return
+      persistLater()
+    },
+
+    receive: function() { persistLater() },
+
+    stop: function(e, ui) {
+      let $item = $(ui.item)
+
+      // snap to edges if pointer is above top / below bottom of root
+      if (!__maybeSnapToEdges($item)) {
+        // if we dropped on a section header and it’s empty, drop "into" it
+        __maybeSnapIntoEmptySection($item)
+      }
+
+      $(document).off("mousemove touchmove", __trackPointer)
+      document.dispatchEvent(new Event("lists:persist-order"))
+      endDragUX()
+    }
+  })
+}
+
+function beginDragUX() {
+  if (!$(".list-items").children(".__top-drop").length) {
+    let $top = $('<div class="__top-drop" aria-hidden="true">').prependTo(".list-items")
+    $top.droppable({
+      accept: ".list-item-container",
+      tolerance: "pointer",
+      greedy: true,
+      hoverClass: "section-outside-hover",
+      drop: function(evt, ui) {
+        ui.draggable.detach().insertAfter($top) // insert at top
+        document.dispatchEvent(new Event("lists:persist-order"))
+        document.dispatchEvent(new Event("lists:rebind"))
+      }
+    })
+  }
+  // make tabs droppable only during a drag
+  $(".list-section-tab").each(function() {
+    let $tab = $(this)
+    if ($tab.data("__tabDropInit")) return
+    $tab.data("__tabDropInit", true)
+
+    $tab.droppable({
+      accept: ".list-item-container",
+      tolerance: "pointer",
+      greedy: true,
+      hoverClass: "section-hover",
+      drop: function(evt, ui) {
+        let $bucket = $tab.children(".section-items").first()
+        ui.draggable.detach().prependTo($bucket)
+        document.dispatchEvent(new Event("lists:persist-order"))
+        document.dispatchEvent(new Event("lists:rebind"))
+      }
+    })
+    $(".section-items:empty").addClass("__empty-target")
+  })
+
+  // create a temporary "below section" drop zone after each tab
+  $(".list-section-tab").each(function() {
+    let $tab = $(this)
+    if ($tab.next().hasClass("__below-drop")) {
+      $tab.next().addClass("__active")
+      return
+    }
+
+    let $dz = $('<div class="__below-drop __active" aria-hidden="true">')
+      .insertAfter($tab)
+
+    $dz.droppable({
+      accept: ".list-item-container",
+      tolerance: "pointer",
+      greedy: true,
+      hoverClass: "section-outside-hover",
+      drop: function(evt, ui) {
+        // mark intent: place after this section (outside)
+        ui.draggable.data("__dropAfterSection", $tab.data("sectionId"))
+      }
+    })
+  })
+}
+
+function endDragUX() {
+  // remove temporary spacing and dropzones
+  $(".section-items").removeClass("__drag-open")
+  $(".list-section-tab").each(function() {
+    let $tab = $(this)
+    if ($tab.data("ui-droppable")) { $tab.droppable("destroy") }
+    $tab.removeData("__tabDropInit")
+  })
+  $(".__top-drop").each(function() {
+    let $el = $(this)
+    if ($el.data("ui-droppable")) $el.droppable("destroy")
+    $el.remove()
+  })
+  $(".__below-drop").each(function() {
+    let $dz = $(this)
+    if ($dz.data("ui-droppable")) { $dz.droppable("destroy") }
+    $dz.remove()
+  })
+  $(".section-items").removeClass("__drag-open __empty-target")
+}
+
+function initDroppables() {
+  // drop on the tab puts item at top of its section
+  $(".list-section-tab").each(function() {
+    let $tab = $(this)
+    if ($tab.data("droppableInit")) return
+    $tab.data("droppableInit", true)
+
+    $tab.droppable({
+      accept: ".list-item-container",
+      tolerance: "pointer",
+      greedy: true,
+      hoverClass: "section-hover",
+      drop: function(evt, ui) {
+        let $bucket = $tab.children(".section-items").first()
+        ui.draggable.detach().prependTo($bucket)
+        document.dispatchEvent(new Event("lists:persist-order"))
+        // rebind because DOM moved
+        document.dispatchEvent(new Event("lists:rebind"))
+      }
+    })
+  })
+
+  // create a slim dropzone *after* each section to drop outside/below it
+  $(".list-section-tab").each(function() {
+    let $tab = $(this)
+    if ($tab.next().hasClass("section-outside-drop")) return
+
+    let sid = $tab.data("sectionId")
+    let $dz = $('<div class="section-outside-drop" aria-hidden="true">')
+      .attr("data-section-id", sid)
+      .insertAfter($tab)
+
+    $dz.droppable({
+      accept: ".list-item-container",
+      tolerance: "pointer",
+      greedy: true,
+      hoverClass: "section-outside-hover",
+      drop: function(evt, ui) {
+        // insert immediately after the section tab (outside the section)
+        ui.draggable.detach().insertAfter($tab)
+        document.dispatchEvent(new Event("lists:persist-order"))
+        document.dispatchEvent(new Event("lists:rebind"))
+      }
+    })
+  })
+}
+
 $(document).ready(function() {
   if ($(".ctr-lists, .ctr-list_items").length == 0) { return }
 
@@ -66,23 +322,8 @@ $(document).ready(function() {
       $.post(url, args)
     }
   })
-  $(".list-items").sortable({
-    handle: ".list-item-handle",
-    start: function() {
-      $(".list-item-container .list-item-field:not(.hidden)").blur()
-    },
-    update: function(evt, ui) {
-      var max_num = $(this).children().count
-      var list_item_order = $(this).children().map(function() {
-        $(this).attr("data-sort-order", max_num -= 1)
-        return $(this).attr("data-item-id")
-      })
-
-      var url = $(this).attr("data-update-url")
-      var args = { list_item_order: list_item_order.toArray() }
-      $.post(url, args)
-    }
-  })
+  initSortables()
+  initDroppables()
 
   $(".new-list-item-form").submit(function(e) {
     e.preventDefault()
@@ -204,4 +445,8 @@ $(document).ready(function() {
   })
 
   setImportantItems()
+  document.addEventListener("lists:rebind", function() {
+    initSortables()
+    initDroppables()
+  })
 })

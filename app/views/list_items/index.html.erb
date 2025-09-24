@@ -1,3 +1,7 @@
-<% list.ordered_items.each do |item| %>
-  <%= render template: "list_items/show", locals: { list: list, item: item }, layout: false %>
+<% list.sectioned_objects.each do |obj| %>
+  <% if obj[:type] == :item %>
+    <%= render template: "list_items/show", locals: { list: list, item: obj[:object] }, layout: false %>
+  <% elsif obj[:type] == :section %>
+    <%= render template: "sections/show", locals: { list: list, obj: obj }, layout: false %>
+  <% end %>
 <% end %>

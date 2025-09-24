@@ -86,14 +86,45 @@ class ListsController < ApplicationController
   private
 
   def reorder_list
-    return if params[:list_item_order].blank?
+    # ordered = [
+    #   {type: :section, id: 1, items: [
+    #     {type: :item, id: 321},
+    #     {type: :item, id: 223},
+    #     {type: :item, id: 12},
+    #   ]},
+    #   {type: :item, id: 123},
+    #   {type: :item, id: 124},
+    #   {type: :section, id: 2, items: [
+    #     {type: :item, id: 18},
+    #     {type: :item, id: 20},
+    #     {type: :item, id: 89},
+    #   ]},
+    #   {type: :item, id: 126},
+    # ]
+    objects = params[:ordered].presence&.map { |h| h.permit!.to_unsafe_h } || []
 
-    new_order = params[:list_item_order]
-    @list.list_items.with_deleted.update_all(sort_order: nil)
-    new_order.reverse.each_with_index do |list_item_id, idx|
-      list_item = @list.list_items.with_deleted.find_by(id: list_item_id)
-      next unless list_item.present?
-      list_item.update(sort_order: idx, do_not_broadcast: true)
+    counter = -1
+    objects.reverse.each do |obj_data|
+      object = (
+        if obj_data[:type].to_sym == :section
+          @list.sections.find_by(id: obj_data[:id])
+        elsif obj_data[:type].to_sym == :item
+          @list.list_items.with_deleted.find_by(id: obj_data[:id])
+        end
+      )
+      next unless object.present?
+
+      object.section_id = nil if obj_data[:type].to_sym == :item
+      object.update(sort_order: counter+=1, do_not_broadcast: true)
+
+      next unless obj_data[:type].to_sym == :section
+      (obj_data[:items] || []).reverse.each do |item_data|
+        item = @list.list_items.with_deleted.find_by(id: item_data[:id])
+        next unless item.present?
+
+        item.section_id = obj_data[:id]
+        item.update(sort_order: counter+=1, do_not_broadcast: true)
+      end
     end
   end
 

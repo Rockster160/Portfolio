@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_08_09_073022) do
+ActiveRecord::Schema[7.1].define(version: 2025_09_24_013029) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -387,8 +387,10 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_09_073022) do
     t.datetime "schedule_next", precision: nil
     t.integer "timezone"
     t.integer "amount"
+    t.bigint "section_id"
     t.index ["deleted_at"], name: "index_list_items_on_deleted_at"
     t.index ["list_id"], name: "index_list_items_on_list_id"
+    t.index ["section_id"], name: "index_list_items_on_section_id"
   end
 
   create_table "lists", id: :serial, force: :cascade do |t|
@@ -620,6 +622,16 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_09_073022) do
     t.index ["user_id"], name: "index_scheduled_triggers_on_user_id"
   end
 
+  create_table "sections", force: :cascade do |t|
+    t.text "name", null: false
+    t.text "color", null: false
+    t.integer "sort_order", null: false
+    t.bigint "list_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["list_id"], name: "index_sections_on_list_id"
+  end
+
   create_table "survey_question_answer_results", id: :serial, force: :cascade do |t|
     t.integer "survey_id"
     t.integer "survey_result_id"
@@ -782,6 +794,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_09_073022) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "emails", "users"
+  add_foreign_key "list_items", "sections"
   add_foreign_key "meal_builders", "users"
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_grants", "users", column: "resource_owner_id"
@@ -790,4 +803,5 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_09_073022) do
   add_foreign_key "page_tags", "pages"
   add_foreign_key "page_tags", "tags"
   add_foreign_key "pages", "users"
+  add_foreign_key "sections", "lists"
 end

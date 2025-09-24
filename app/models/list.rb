@@ -16,6 +16,7 @@ class List < ApplicationRecord
   attr_accessor :do_not_broadcast, :response
   has_many :list_items, -> { ordered }, dependent: :destroy
   has_many :deleted_list_items, -> { ordered.with_deleted }, class_name: "ListItem", dependent: :destroy
+  has_many :sections, -> { order(sort_order: :desc) }, dependent: :destroy
   has_many :user_lists, dependent: :destroy
   has_many :users, through: :user_lists
 
@@ -111,10 +112,46 @@ class List < ApplicationRecord
     }
   end
 
+  def max_sort_order
+    [list_items.with_deleted.maximum(:sort_order).to_i, sections.maximum(:sort_order).to_i].max
+  end
+
+  def sectioned_objects
+    objects = []
+    to_be_sorted = []
+    mapped_sections = {}
+    (ordered_items + sections.ordered).sort_by(&:sort_order).reverse.each do |obj|
+      if obj.is_a?(ListItem)
+        if obj.section_id.blank?
+          objects << { type: :item, object: obj }
+        else
+          to_be_sorted << obj
+        end
+      elsif obj.is_a?(Section)
+        mapped_sections[obj.id] = { type: :section, object: obj, items: [] }
+        objects << mapped_sections[obj.id]
+      end
+    end
+
+    to_be_sorted.each do |item|
+      mapped_sections[item.section_id][:items] << item if mapped_sections[item.section_id].present?
+    end
+
+    objects
+  end
+
+  def show_sectioned_objects
+    sectioned_objects.map { |obj|
+      obj.deep_transform_values { |v|
+        v.is_a?(ApplicationRecord) ? "#{v.id}: #{v.name}" : v
+      }
+    }
+  end
+
   def ordered_items
-    items = list_items.ordered
+    items = list_items
     items = items.with_deleted if show_deleted?
-    items
+    items.ordered
   end
 
   def owner

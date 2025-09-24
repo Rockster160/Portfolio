@@ -16,6 +16,39 @@
     <div class="text-center">
       <a href="<%= list_user_lists_path(@list) %>" class="btn">List Users</a>
     </div>
+
+    <div class="list-sections-form">
+      <%= form_for([@list, Section.new], html: {class: "new-section-form"}) do |f| %>
+        <div class="form-title">Sections</div>
+
+        <div class="form-fields">
+          <div class="flex-fields">
+            <div class="form-field">
+              <%= f.label :name %>
+              <%= f.text_field :name, required: true %>
+            </div>
+            <div class="form-field">
+              <%= f.label :color %>
+              <%= f.color_field :color, required: true %>
+            </div>
+            <div class="form-field" style="align-self: flex-end; margin-bottom: 20px;">
+              <%= f.submit "Add Section", class: "btn" %>
+            </div>
+          </div>
+
+          <div class="existing-sections">
+            <% @list.sections.each do |section| %>
+              <div class="section-row" style="border-left: 6px solid <%= section.color %>; padding-left: 8px; margin-bottom: 4px;">
+                <span class="section-name"><%= section.name %></span>
+                <span class="section-color">(<%= section.color %>)</span>
+                <%#= link_to "Edit", edit_list_section_path(@list, section), class: "btn btn-xs" %>
+                <%= link_to "Delete", list_section_path(@list, section), method: :delete, data: {confirm: "Delete section?"}, class: "btn btn-xs btn-danger" %>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
   <% end %>
 
   <%= form_for @list do |f| %>

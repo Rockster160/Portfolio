@@ -17,11 +17,13 @@
 #  created_at     :datetime
 #  updated_at     :datetime
 #  list_id        :integer
+#  section_id     :bigint
 #
 
 class ListItem < ApplicationRecord
   attr_accessor :do_not_broadcast
   belongs_to :list
+  belongs_to :section, optional: true
 
   before_save :set_sort_order, :normalize_values
   after_commit :broadcast_commit
@@ -96,6 +98,7 @@ class ListItem < ApplicationRecord
         :id,
         :name,
         :category,
+        :section_id,
         :important,
         :permanent,
         :sort_order,
@@ -230,6 +233,7 @@ class ListItem < ApplicationRecord
       id:         id,
       name:       name,
       category:   category,
+      section_id: section_id,
       important:  important,
       permanent:  permanent,
       sort_order: sort_order,
@@ -240,7 +244,7 @@ class ListItem < ApplicationRecord
   private
 
   def set_sort_order
-    self.sort_order ||= list.list_items.with_deleted.maximum(:sort_order).to_i + 1
+    self.sort_order ||= list.max_sort_order + 1
   end
 
   def normalize_values

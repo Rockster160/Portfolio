@@ -1,0 +1,14 @@
+<% obj ||= { type: :section, object: section, items: section.items } %>
+<% section = obj[:object] %>
+
+<div class="list-section-tab" data-section-id="<%= section.id %>" style="background: <%= section.color %>; color: <%= section.contrast_color %>;">
+  <div class="section-header">
+    <span class="section-name"><%= section.name %></span>
+  </div>
+
+  <div class="section-items">
+    <% obj[:items].each do |item| %>
+      <%= render template: "list_items/show", locals: { list: list, item: item, section: section }, layout: false %>
+    <% end %>
+  </div>
+</div>
