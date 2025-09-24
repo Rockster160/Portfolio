@@ -1,0 +1,29 @@
+<%= meta_title "#{@section.name}", include_name: false %>
+<%= content_for(:favicon) { render "lists/favicon" } %>
+
+<div class="skinny-container list-container" data-list-id="<%= @list.id %>" data-section-id="<%= @section.id %>">
+  <div class="btn-container">
+    <a href="<%= list_path(@list) %>" class="btn">&larr; Back to List</a>
+    <%= link_to "Destroy", list_section_path(@list, @section, really_destroy: true), method: :delete, class: "btn danger pull-right", data: { confirm: "This will not remove any items in this section. This cannot be undone. Would you like to continue?" } %>
+  </div>
+  <div class="list-title"><%= @section.name %></div>
+  <div class="list-sections-form">
+    <%= form_for([@list, @section], html: {class: "update-section-form"}) do |f| %>
+      <div class="form-fields">
+        <div class="flex-fields">
+          <div class="form-field">
+            <%= f.label :name %>
+            <%= f.text_field :name, required: true %>
+          </div>
+          <div class="form-field">
+            <%= f.label :color %>
+            <%= f.color_field :color, required: true %>
+          </div>
+          <div class="form-field" style="align-self: flex-end; margin-bottom: 20px;">
+            <%= f.submit "Update Section", class: "btn" %>
+          </div>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</div>

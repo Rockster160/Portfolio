@@ -47,7 +47,7 @@ html:has(.ctr-tasks.act-index) {
     .list-item-handle {
       display: flex;
       position: absolute;
-      top: 0;
+      top: 2px;
       left: 0;
       align-items: center;
       justify-content: center;
@@ -236,21 +236,31 @@ html:has(.ctr-tasks.act-index) {
     margin: 8px 0;
 
     .section-header {
+      position: relative;
       font-size: 20px;
       text-align: center;
       font-weight: bold;
       padding: 8px 0;
       margin: 0 30px;
 
-      .list-item-handle {
+      & > .list-item-handle {
         position: absolute;
-        left: 0;
+        left: -30px;
         width: 30px;
         height: 100%;
         cursor: grab;
         &:active {
           cursor: grabbing;
         }
+      }
+
+      .settings-btn {
+        position: absolute;
+        top: 0;
+        right: -30px;
+        width: 40px;
+        line-height: 40px;
+        text-align: center;
       }
     }
   }
@@ -357,11 +367,14 @@ html:has(.ctr-tasks.act-index) {
     // background: green;
   }
   .list-item-access {
+    .list-item-handle {
+      left: 10px;
+    }
     // top: 5px;
   }
   .list-item-config {
     //   top: 10px;
-    left: 10px;
+    left: 15px;
   }
   // .category-btn {
   //   top: 10px;

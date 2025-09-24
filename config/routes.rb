@@ -140,7 +140,7 @@ Rails.application.routes.draw do
     end
     resources :user_lists, only: [:index, :create, :destroy], path: :users
     resources :list_items
-    resources :sections, only: [:create, :update, :destroy]
+    resources :sections, only: [:edit, :create, :update, :destroy]
   end
 
   resources :cards, only: [] do
