@@ -320,6 +320,7 @@ $(document).ready(function() {
       return false
     }
     var item_id = $(this).closest("[data-item-id]").attr("data-item-id")
+    if (!item_id) return
     $(".list-item-container[data-item-id=" + item_id + "] input[type=checkbox]").prop("checked", this.checked)
     listWS.perform("receive", { list_item: { id: item_id, checked: this.checked } })
     clearRemovedItems()

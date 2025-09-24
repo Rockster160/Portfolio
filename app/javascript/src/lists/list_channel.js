@@ -159,6 +159,7 @@ $(document).ready(function() {
       $(".list-item-container").each(function() {
         if ($(this).find(".list-item-config .locked").length > 0) { return }
         let id = $(this).data("itemId")
+        if (!id) return
         if (!incIds.includes(String(id))) {
           $('.list-item-container[data-item-id="' + id + '"] input[type=checkbox]')
             .prop("checked", true)
