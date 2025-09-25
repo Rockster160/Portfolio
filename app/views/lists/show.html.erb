@@ -14,32 +14,34 @@
 <% end %>
 
 <div class="skinny-container list-container" data-list-id="<%= @list.id %>">
-  <div class="btn-container">
-    <a href="<%= lists_path %>" class="btn">&larr; All Lists</a>
-    <a href="<%= edit_list_path(@list) %>" class="btn pull-right">Edit</a>
+  <div class="<%= "hidden" if params[:mode] == "kiosk" %>">
+    <div class="btn-container">
+      <a href="<%= lists_path %>" class="btn">&larr; All Lists</a>
+      <a href="<%= edit_list_path(@list) %>" class="btn pull-right">Edit</a>
+    </div>
+    <div class="list-title"><%= @list.name.titleize %></div>
+    <div class="list-description"><%= auto_link @list.description %></div>
+    <% if @list.collaborators.any? %>
+      <div class="collaborators pull-left text-left">
+        <p>Owned by: <%= @list.owner == current_user ? "You" : @list.owner.username %></p>
+        <p>
+          Collaborators:
+          <% last_idx = @list.collaborators.length-1 %>
+          <% @list.collaborators.each_with_index do |collab, idx| %>
+            <span class="<%= :invited if collab.invited? %>" title="<%= collab.invited? ? "Invited" : "" %>">
+              <%= fa(:plus) if collab.invited? %> <%= collab.display_name
+            %></span><%= ", " unless idx == last_idx %>
+          <% end %>
+        </p>
+      </div>
+    <% end %>
+    <a data-modal="#sort-list" class="btn pull-right">Sort</a>
+    <%= form_for [@list, @list.list_items.new], html: {class: "basic new-list-item-form"} do |f| %>
+      <div class="list-field">
+        <%= f.text_field :name, class: "new-list-item filterable", placeholder: "Add new item", autofocus: true %>
+      </div>
+    <% end %>
   </div>
-  <div class="list-title"><%= @list.name.titleize %></div>
-  <div class="list-description"><%= auto_link @list.description %></div>
-  <% if @list.collaborators.any? %>
-    <div class="collaborators pull-left text-left">
-      <p>Owned by: <%= @list.owner == current_user ? "You" : @list.owner.username %></p>
-      <p>
-        Collaborators:
-        <% last_idx = @list.collaborators.length-1 %>
-        <% @list.collaborators.each_with_index do |collab, idx| %>
-          <span class="<%= :invited if collab.invited? %>" title="<%= collab.invited? ? "Invited" : "" %>">
-            <%= fa(:plus) if collab.invited? %> <%= collab.display_name
-          %></span><%= ", " unless idx == last_idx %>
-        <% end %>
-      </p>
-    </div>
-  <% end %>
-  <a data-modal="#sort-list" class="btn pull-right">Sort</a>
-  <%= form_for [@list, @list.list_items.new], html: {class: "basic new-list-item-form"} do |f| %>
-    <div class="list-field">
-      <%= f.text_field :name, class: "new-list-item filterable", placeholder: "Add new item", autofocus: true %>
-    </div>
-  <% end %>
   <div class="list-error hidden">Disconnected...</div>
   <div class="important-list-items"></div>
   <template id="list-item-template">

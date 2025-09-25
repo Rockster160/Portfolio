@@ -111,10 +111,8 @@ $(document).ready(function() {
       // 3b) Upsert every incoming item and move it to the correct bucket
       incIds.forEach(function(id) {
         let $inc = incomingItems[id]
-        if (!id) return
-
         let $targetBucket = targetFor($inc)
-        let $curr = $('.list-item-container[data-item-id="' + id + '"]')
+        let $curr = $('.list-item-container[data-item-id="' + (id || "new") + '"]')
 
         if ($curr.length == 0) {
           // brand new item: insert in the right bucket
@@ -159,8 +157,7 @@ $(document).ready(function() {
       $(".list-item-container").each(function() {
         if ($(this).find(".list-item-config .locked").length > 0) { return }
         let id = $(this).data("itemId")
-        if (!id) return
-        if (!incIds.includes(String(id))) {
+        if (id && !incIds.includes(String(id))) {
           $('.list-item-container[data-item-id="' + id + '"] input[type=checkbox]')
             .prop("checked", true)
         }
