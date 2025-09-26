@@ -1,0 +1,352 @@
+plugins:
+  - rubocop-rails
+  - rubocop-rspec
+  - rubocop-factory_bot
+
+inherit_from:
+  # - .rubocop_todo.yml
+
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.2.2
+  SuggestExtensions: false
+  Exclude:
+    - ".pryrc"
+    - "_scripts/**/*"
+    - "db/schema.rb"
+    - "bin/**/*"
+    - "vendor/**/*"
+    - "node_modules/**/*"
+    - "tmp/**/*"
+    - "scripts/backfill_front_kb_inline_images.rb"
+    - "db/migrate/**/*" # Excluding migrations as they often need to be explicit
+    - "**/*.tt" # Excluding templates as Rubocop doesn't understand the syntax
+
+# Default Rails configurations
+Rails:
+  Enabled: true
+
+Rails/LexicallyScopedActionFilter:
+  Enabled: false
+
+Rails/Output:
+  AutoCorrect: false
+
+Rails/PluckInWhere:
+  Enabled: false
+
+Rails/IndexBy:
+  Enabled: false
+
+# FactoryBot configurations
+FactoryBot/SyntaxMethods:
+  Enabled: false
+
+Layout/ArgumentAlignment:
+  EnforcedStyle: with_fixed_indentation
+
+Layout/ArrayAlignment:
+  EnforcedStyle: with_fixed_indentation
+
+Layout/BlockAlignment:
+  EnforcedStyleAlignWith: start_of_block
+
+Layout/CaseIndentation:
+  EnforcedStyle: end
+
+Layout/DotPosition:
+  EnforcedStyle: leading
+
+Layout/EndAlignment:
+  EnforcedStyleAlignWith: variable
+
+Layout/ExtraSpacing:
+  AllowBeforeTrailingComments: true
+
+Layout/FirstArrayElementIndentation:
+  Enabled: false
+
+Layout/FirstArrayElementLineBreak:
+  Enabled: true
+  AllowMultilineFinalElement: true
+
+Layout/FirstHashElementIndentation:
+  EnforcedStyle: consistent
+
+Layout/FirstHashElementLineBreak:
+  Enabled: true
+  AllowMultilineFinalElement: true
+
+Layout/FirstMethodArgumentLineBreak:
+  Enabled: true
+  AllowMultilineFinalElement: true
+
+Layout/FirstMethodParameterLineBreak:
+  Enabled: true
+  AllowMultilineFinalElement: true
+
+Layout/HashAlignment:
+  EnforcedColonStyle: table
+  EnforcedHashRocketStyle: table
+  EnforcedLastArgumentHashStyle: always_inspect
+
+Layout/IndentationWidth:
+  Width: 2
+
+Layout/LineLength:
+  Max: 100
+  # Ignore long comments and strings in specs and configuration files
+  Exclude:
+    - "spec/**/*"
+    - "config/initializers/**/*"
+    - "app/models/concerns/**/*" # Complex SQL queries and associations
+    - "app/services/**/*" # Complex business logic and AI prompts
+    - "app/super_config/**/*" # Configuration DSL
+    - "app/validations/**/*" # Complex validation logic
+    - "lib/**/*" # Library code with complex logic
+    - "scripts/**/*" # Utility scripts
+    - "app/controllers/concerns/**/*" # Controller concerns with complex logic
+    - "app/jobs/**/*" # Background jobs with complex logic
+    - "app/mailers/**/*" # Email templates with long strings
+    - "app/models/**/*" # Models with complex queries and long strings
+
+Layout/MultilineArrayLineBreaks:
+  Enabled: true
+  AllowMultilineFinalElement: true
+
+Layout/MultilineHashKeyLineBreaks:
+  Enabled: true
+  AllowMultilineFinalElement: true
+
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented
+
+Layout/MultilineMethodDefinitionBraceLayout:
+  EnforcedStyle: same_line
+
+Layout/MultilineMethodParameterLineBreaks:
+  Enabled: true
+  AllowMultilineFinalElement: true
+
+Layout/MultilineOperationIndentation:
+  EnforcedStyle: indented
+
+Layout/ParameterAlignment:
+  EnforcedStyle: with_fixed_indentation
+
+Layout/SpaceAroundEqualsInParameterDefault:
+  EnforcedStyle: no_space
+
+Layout/SpaceBeforeBrackets:
+  Enabled: true # No Space
+
+Lint/UselessAssignment:
+  Enabled: false # Should rename to "_*", but this autocorrect renames to "_"
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+    - "config/routes.rb"
+    - "config/environments/*"
+    - "app/models/concerns/application_recordable.rb"
+
+Metrics/MethodLength:
+  Max: 20
+
+Metrics/ModuleLength:
+  Exclude:
+    - "app/models/concerns/application_recordable.rb"
+
+Metrics/ClassLength:
+  Enabled: false
+
+Naming/AsciiIdentifiers:
+  Enabled: false
+
+Naming/BlockForwarding:
+  Enabled: false
+
+RSpec/AnyInstance:
+  Enabled: false
+
+RSpec/DescribedClass:
+  Enabled: false
+
+RSpec/ExampleLength:
+  Enabled: false
+
+RSpec/IndexedLet:
+  Enabled: false
+
+RSpec/LetSetup:
+  Enabled: false
+
+RSpec/MessageSpies:
+  Enabled: false
+
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/MultipleMemoizedHelpers:
+  Enabled: false
+
+RSpec/StubbedMock:
+  Enabled: false
+
+Style/ClassAndModuleChildren:
+  Enabled: false
+
+Style/CommentedKeyword:
+  Enabled: false
+
+Style/ConditionalAssignment:
+  Enabled: false
+
+Style/Documentation:
+  Enabled: false
+
+Style/DoubleNegation:
+  Enabled: false
+
+Style/EmptyMethod:
+  Enabled: false
+
+Style/GuardClause:
+  Enabled: false
+
+Style/Lambda:
+  Enabled: false
+
+Style/MixinGrouping:
+  EnforcedStyle: grouped
+
+Style/MultilineBlockChain:
+  Enabled: false
+
+Style/MultilineMemoization:
+  EnforcedStyle: braces
+
+Style/ParallelAssignment:
+  Enabled: false
+
+Style/QuotedSymbols:
+  EnforcedStyle: double_quotes
+
+Style/RedundantConstantBase:
+  Enabled: false
+
+Style/RedundantParentheses:
+  Enabled: false
+
+Style/RedundantRegexpArgument:
+  Enabled: false
+
+Style/RedundantReturn:
+  Enabled: false
+
+Style/RegexpLiteral:
+  Enabled: false
+
+Style/RescueModifier:
+  Enabled: false
+
+Style/SoleNestedConditional:
+  Enabled: false
+
+Style/StringConcatenation:
+  Enabled: false # Do these manually since sometimes it makes more sense to use `+` for readability.
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes
+
+Style/SymbolArray:
+  Enabled: false
+
+Style/TrailingCommaInArguments:
+  EnforcedStyleForMultiline: comma
+
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: comma
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: comma
+
+Style/WordArray:
+  Enabled: false
+
+# Not alphabetized since it has a ton of options that make it hard to parse through
+Style/BlockDelimiters:
+  Enabled: true
+  EnforcedStyle: always_braces
+  AllowedMethods:
+    # Standard procedural methods
+    - new
+    - each
+    - foreach
+    - find_each
+    - each_key
+    - each_with_index
+    - with_index
+    - loop
+    - fetch
+    - times
+    - in_groups_of
+    - find_or_create_by!
+    # Top level methods
+    - transaction
+    - class_methods
+    - included
+    - define_method
+    - define_singleton_method
+    - with_lock
+    - task # Rake tasks
+    - has_many
+    # Helpers
+    - scope # Routes
+    - rescue_from # Controllers
+    - current! # Tenant
+    - thread_settings
+    - request # PaperTrail
+    - group # Gemfile
+    - disable_pre_and_post_calls
+    - with_advisory_lock!
+    - wrap # TransactionCallbacks
+    - txn # DB → TransactionCallbacks
+    - generate # CSV
+    - add_worksheet # Axlsx::Package workbook
+    - open # File
+    - open_buffer # Zip::File
+    - recursive_get # API calls
+    - allow # CORS
+    - use # GlobalID::Locator
+    - chunk # DebugValidationHelper
+    - inflections
+    - lowlevel_error_handler # Puma
+    - process_version # TriggerWorkflowJob
+    - scoped # Rollbar | Roll
+    - track_progress # SlackTrack
+    # Specs
+    - describe
+    - define
+    - factory
+    - trait
+    - describe
+    - transient
+    - register_request_matcher
+  AllowedPatterns:
+    - "^(setup|start|before|around|after|draw|configure(_client|_server)?).*$" # Rails
+    - "^(on_load|to_prepare|class_eval|subscribe|insert_before).*$" # ActiveSupport
+    - "(^|.*?_)with$"
+    - "^(send_message|update_message|monitor_progress|build|attachment)$" # SlackUtils / SlackBlockBuilder
+    - "^(resources?|collection|member|namespace)$" # routes
+    - "^(mail|(text_|html_)?part)$" # Mail
+    - "^(all_workflows|workflow|on_success|any_of)$" # Workflows
+    - "^(constructor|associations|fields|params|rule|array|hash|optional|required)$" # Validations
+    - "^(serializer|((\\w+)_)?validations)$" # SuperConfig
+    - "^(describe|context|to|it|raise_error)$" # Specs
+    - "^(cleaning|silence_output|measure_block|travel_to|perform_\\w+_jobs)$" # Spec procedurals
+    - "^(inject_into_file|gsub_file)$" # Generators
+  AllowBracesOnProceduralOneLiners: true
