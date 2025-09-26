@@ -5,41 +5,24 @@ $(document).ready(function() {
 
   var list_id = $(".list-container").attr("data-list-id")
 
-  reorderList = function() {
-    var original_order = $(".list-items .list-item-container").map(function() { return $(this).attr("data-item-id") })
-    var ordered_list = $(".list-items .list-item-container").sort(function(a, b) {
-      var contentA = parseInt($(a).attr("data-sort-order"))
-      if ($(a).find(".list-item-checkbox").prop("checked")) { contentA += 0.1 }
-      var contentB = parseInt($(b).attr("data-sort-order"))
-      if ($(b).find(".list-item-checkbox").prop("checked")) { contentB += 0.1 }
+  function getOrder($el) {
+    let v = parseInt($el.attr("data-sort-order")) || 0
+    if ($el.find(".list-item-checkbox").prop("checked")) v += 0.1
+    return v
+  }
 
-      return (contentA < contentB) ? 1 : ((contentA > contentB) ? -1 : 0)
+  function sortBucket($bucket) {
+    let items = $.makeArray($bucket.children(".list-item-container"))
+    items.sort(function(a, b) {
+      return getOrder($(b)) - getOrder($(a)) // descending
     })
-    var new_order = ordered_list.map(function() { return $(this).attr("data-item-id") })
-
-    if (!original_order.toArray().eq(new_order.toArray())) {
-      $(".list-items").html(ordered_list)
-    }
+    $(items).each(function() { $(this).appendTo($bucket) })
   }
 
   function reorderBuckets() {
-    // never touch .list-items top-level; only reorder inside each section
-    $(".section-items").each(function() {
-      let $bucket = $(this)
-      let $items = $bucket.children(".list-item-container")
-
-      let ordered = $items.sort(function(a, b) {
-        let aOrder = parseInt($(a).attr("data-sort-order"))
-        if ($(a).find(".list-item-checkbox").prop("checked")) aOrder += 0.1
-        let bOrder = parseInt($(b).attr("data-sort-order"))
-        if ($(b).find(".list-item-checkbox").prop("checked")) bOrder += 0.1
-        if (aOrder < bOrder) return 1
-        if (aOrder > bOrder) return -1
-        return 0
-      })
-
-      // keep only items, keep section DOM intact
-      ordered.each(function() { $(this).appendTo($bucket) })
+    sortBucket($(".list-items").first())        // sort un-sectioned items
+    $(".section-items").each(function() {        // then each section
+      sortBucket($(this))
     })
   }
 
@@ -165,7 +148,7 @@ $(document).ready(function() {
 
       clearRemovedItems()
       setImportantItems()
-      reorderBuckets() // was reorderList()
+      reorderBuckets()
       document.dispatchEvent(new Event("lists:rebind"))
     }
   })

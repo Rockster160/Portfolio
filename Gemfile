@@ -62,9 +62,9 @@ gem "with_advisory_lock"
 
 gem "doorkeeper", "5.8.1"
 gem "rubocop", "1.81"
+gem "rubocop-factory_bot", require: false
 gem "rubocop-rails", require: false
 gem "rubocop-rspec", require: false
-gem "rubocop-factory_bot", require: false
 
 # Dependency
 # > cap dependencies
