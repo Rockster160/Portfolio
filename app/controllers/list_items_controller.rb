@@ -18,17 +18,17 @@ class ListItemsController < ApplicationController
     @list = List.find(params[:list_id])
     create_params = list_item_params
     if create_params[:category].blank?
-      create_params[:name].match(/\A\s*\[(.+)\]\s*([^\(\[]+)\s*\z/m) do |m|
+      create_params[:name].match(/\A\s*\[(.+)\]\s*([^(\[]+)\s*\z/m) { |m|
         category, name = m[1], m[2]
         next if category.blank? || name.blank?
 
         create_params[:category] = category
         create_params[:name] = name
-      end
+      }
     end
 
     new_item = @list.list_items.by_name_then_update(create_params)
-    return render json: {errors: "Cannot create item without a name."} unless new_item.persisted?
+    return render json: { errors: "Cannot create item without a name." } unless new_item.persisted?
 
     if params[:as_json]
       render json: new_item
@@ -60,7 +60,8 @@ class ListItemsController < ApplicationController
   private
 
   def list_item_params
-    return {} unless params[:list_item].present?
+    return {} if params[:list_item].blank?
+
     params.require(:list_item).permit(
       :name,
       :checked,
@@ -76,16 +77,17 @@ class ListItemsController < ApplicationController
         :type,
         :meridian,
         :timezone,
-        weekly: [
-          day: []
+        {
+          weekly:  [day: []],
+          monthly: [
+            :type,
+            {
+              week: (-1..31).map { |t| { t.to_s => [] } },
+              day:  [],
+            },
         ],
-        monthly: [
-          :type,
-          week: (-1..31).map { |t| {t.to_s => []} },
-          day: []
-        ]
-      ]
+        },
+      ],
     )
   end
-
 end

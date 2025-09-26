@@ -160,6 +160,9 @@ Metrics/ModuleLength:
 Metrics/ClassLength:
   Enabled: false
 
+Metrics/MethodLength:
+  Enabled: false
+
 Naming/AsciiIdentifiers:
   Enabled: false
 
@@ -209,6 +212,9 @@ Style/DoubleNegation:
   Enabled: false
 
 Style/EmptyMethod:
+  Enabled: false
+
+Style/FrozenStringLiteralComment:
   Enabled: false
 
 Style/GuardClause:

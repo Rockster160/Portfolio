@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # puts Qr.to_s("rdjn.me/lll", light: "\e[100m  \e[0m", dark: "\e[0m  ", level: :l)
 # puts Qr.to_svg("rdjn.me/lll", level: :l)
 # File.open("qr.png", "wb") { |f| f.write(Qr.to_io("rdjn.me/lll", level: :l, size: 21).read) }
