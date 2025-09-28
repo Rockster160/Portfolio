@@ -12,8 +12,15 @@ function parseParams(str) {
   return data;
 }
 params = parseParams(window.location.search.slice(1))
-clearListActive = params.clear == "1"
-// import listWS from "./list_channel"
+listMode = params.mode || (params.clear == "1" ? "clear" : "normal")
+const second = 1000;
+const minute = second * 60;
+const hour = minute * 60;
+const resetModeTimes = {
+  kiosk: 1*hour,
+  clear: 3*second,
+}
+// kiosk | clear | normal
 
 $(document).on("keyup", "input.filterable", function() {
   var currentText = $(this).val().toLowerCase().replace(/^( *)|( *)$/g, "").replace(/ +/g, " ")
@@ -34,13 +41,18 @@ $(document).on("keyup", "input.filterable", function() {
 })
 
 clearRemovedItems = function() {
-  if (clearListActive) {
+  if (resetModeTimes[listMode]) {
     clearTimeout(clearListItemTimer)
     clearListItemTimer = setTimeout(function() {
       $(".list-item-checkbox:checked").each(function() {
-        $(this).closest(".list-item-container").remove()
+        const wrapper = $(this).closest(".list-item-container")
+        if (wrapper.find(".list-item-config .locked").length > 0) {
+          $(this).prop("checked", false)
+        } else {
+          wrapper.remove()
+        }
       })
-    }, 3000)
+    }, resetModeTimes[listMode])
   }
 }
 
