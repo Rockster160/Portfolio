@@ -18,13 +18,16 @@ class Section < ApplicationRecord
   has_many :list_items, dependent: :nullify
 
   scope :ordered, -> { order("sections.sort_order DESC") }
+  scope :where_soft_name, ->(name) {
+    where("LOWER(TRIM(REGEXP_REPLACE(name, '\\s+', ' ', 'g'))) = ?", name.to_s.downcase.squish)
+  }
 
   before_save :set_sort_order
 
   validates :name, presence: true
   validates :color, presence: true
 
-  def serialize(opts={})
+  def serialize(_opts={})
     super(
       only: [
         :id,

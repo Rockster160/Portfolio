@@ -20,10 +20,16 @@ class ListItemsController < ApplicationController
     if create_params[:category].blank?
       create_params[:name].match(/\A\s*\[(.+)\]\s*([^(\[]+)\s*\z/m) { |m|
         category, name = m[1], m[2]
-        next if category.blank? || name.blank?
+        next if name.blank?
 
-        create_params[:category] = category
-        create_params[:name] = name
+        section = @list.sections.where_soft_name(category)
+        if section.one?
+          create_params[:section_id] = section.first.id
+          create_params[:name] = name
+        elsif category.present?
+          create_params[:category] = category
+          create_params[:name] = name
+        end
       }
     end
 
