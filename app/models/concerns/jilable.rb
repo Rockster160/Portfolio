@@ -11,7 +11,7 @@ module Jilable
   def [](key)
     return @execution_attrs[key] if @execution_attrs.is_a?(Hash) && @execution_attrs.key?(key)
 
-    super(key)
+    super
   end
 
   def dig(*keys)

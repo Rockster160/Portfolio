@@ -143,6 +143,9 @@ Layout/SpaceBeforeBrackets:
 Lint/UselessAssignment:
   Enabled: false # Should rename to "_*", but this autocorrect renames to "_"
 
+Metrics/AbcSize:
+  Enabled: false
+
 Metrics/BlockLength:
   Exclude:
     - "spec/**/*"
@@ -156,6 +159,12 @@ Metrics/MethodLength:
 Metrics/ModuleLength:
   Exclude:
     - "app/models/concerns/application_recordable.rb"
+
+Metrics/PerceivedComplexity:
+  Enabled: false
+
+Metrics/CyclomaticComplexity:
+  Enabled: false
 
 Metrics/ClassLength:
   Enabled: false

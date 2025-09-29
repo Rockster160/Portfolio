@@ -93,7 +93,7 @@ class ListItem < ApplicationRecord
   end
 
   def serialize(opts={})
-    super(
+    super({
       only: [
         :id,
         :name,

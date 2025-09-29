@@ -68,7 +68,7 @@ class List < ApplicationRecord
 
   def serialize(opts={})
     serialized_opts = {
-      only: [
+      only:    [
         :id,
         :name,
         :description,
@@ -77,6 +77,14 @@ class List < ApplicationRecord
         :show_deleted,
       ],
       include: {
+        sections:   {
+          only: [
+            :id,
+            :name,
+            :color,
+            :sort_order,
+          ],
+        },
         list_items: {
           only: [
             :id,
@@ -102,13 +110,13 @@ class List < ApplicationRecord
 
   def legacy_serialize
     {
-      id: id,
-      name: name,
-      description: description,
-      important: important,
+      id:           id,
+      name:         name,
+      description:  description,
+      important:    important,
       show_deleted: show_deleted,
-      list_items: ordered_items.pluck(:name),
-      response: @response
+      list_items:   ordered_items.pluck(:name),
+      response:     @response
     }
   end
 
@@ -182,32 +190,27 @@ class List < ApplicationRecord
     list_items.with_deleted.maximum(:sort_order).to_i + 1
   end
 
-  def add(item_name)
-    list_items.add(item_name)
-  end
-
-  def remove(item_name)
-    list_items.remove(item_name)
-  end
-
-  def toggle(item_name)
-    list_items.toggle(item_name)
-  end
+  delegate :add, to: :list_items
+  delegate :remove, to: :list_items
+  delegate :toggle, to: :list_items
 
   def sort_items!(sort=nil, order=:asc)
     return unless sort.present?
+
     order = order.to_s.downcase.to_sym
     order = :asc unless order == :desc
-    items = case sort.to_s.downcase.to_sym
-    when :name
-      list_items.with_deleted.order("list_items.name #{order}")
-    when :reverse
-      list_items.with_deleted.order("list_items.sort_order ASC") # Order is backwards
-    when :category
-      list_items.with_deleted.order("list_items.category #{order} NULLS LAST")
-    when :shuffle
-      list_items.with_deleted.order("RANDOM()")
-    end
+    items = (
+      case sort.to_s.downcase.to_sym
+      when :name
+        list_items.with_deleted.order("list_items.name #{order}")
+      when :reverse
+        list_items.with_deleted.order("list_items.sort_order ASC") # Order is backwards
+      when :category
+        list_items.with_deleted.order("list_items.category #{order} NULLS LAST")
+      when :shuffle
+        list_items.with_deleted.order("RANDOM()")
+      end
+    )
 
     items&.reverse&.each_with_index do |list_item, idx|
       list_item.update(sort_order: idx, do_not_broadcast: true)
@@ -235,9 +238,9 @@ class List < ApplicationRecord
 
     case action
     when :add
-      items = item_names.map do |item_name|
+      items = item_names.map { |item_name|
         list_items.by_name_then_update(name: item_name)
-      end.select(&:persisted?)
+      }.select(&:persisted?)
       return "No items added." if items.none?
       return "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join("")}"
     when :remove
@@ -246,6 +249,7 @@ class List < ApplicationRecord
       item_names.each do |item_name|
         item = list_items.by_formatted_name(item_name)
         next unless item.present?
+
         if item.soft_destroy
           destroyed_items << item
         else

@@ -12,6 +12,15 @@ class ListsController < ApplicationController
     end
   end
 
+  def show
+    raise ActionController::RoutingError, "Not Found" unless @list.present?
+
+    respond_to do |format|
+      format.js { render json: @list.legacy_serialize }
+      format.html
+    end
+  end
+
   def reorder
     params[:list_ids].each_with_index do |list_id, idx|
       current_user.user_lists.find_by(list_id: list_id).update(sort_order: idx, do_not_broadcast: true)
@@ -41,15 +50,6 @@ class ListsController < ApplicationController
         format.js { render json: { errors: @list.errors.full_messages }, status: :forbidden }
         format.html { render :edit }
       end
-    end
-  end
-
-  def show
-    raise ActionController::RoutingError.new('Not Found') unless @list.present?
-
-    respond_to do |format|
-      format.js { render json: @list.legacy_serialize }
-      format.html
     end
   end
 

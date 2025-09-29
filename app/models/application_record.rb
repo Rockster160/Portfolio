@@ -110,6 +110,7 @@ class ApplicationRecord < ActiveRecord::Base
       next if value.is_a?(Tokenizing::Node)
       next unless operator.in?(text_operators + numeric_operators)
 
+      # rubocop:disable Lint/RedundantSplatExpansion
       if scope_method.present?
         search_scope.send(scope_method, *value).stripped_sql
       elsif column_data.type.in?(%i[string text])
@@ -147,6 +148,7 @@ class ApplicationRecord < ActiveRecord::Base
       end
     }
   end
+  # rubocop:enable Lint/RedundantSplatExpansion
 
   scope :assign, -> (data) {
     relation = all
