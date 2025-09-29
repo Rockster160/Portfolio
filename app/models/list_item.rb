@@ -104,7 +104,11 @@ class ListItem < ApplicationRecord
         :sort_order,
         :deleted_at,
       ],
-    )
+    }.merge(opts))
+  end
+
+  def jil_serialize(additional={})
+    serialize(include: { list: { only: [:id, :name, :description] } }).merge(additional)
   end
 
   def self.with_deleted

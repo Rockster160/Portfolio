@@ -32,6 +32,7 @@ class ListsController < ApplicationController
   def update
     if params[:get]
       @list.broadcast!
+      ::Jil.trigger(current_user, :list, @list.with_jil_attrs(action: :changed))
       return head :ok
     end
     if params[:sort]
@@ -62,6 +63,7 @@ class ListsController < ApplicationController
 
     if @list.persisted?
       current_user.user_lists.create(list_id: @list.id, is_owner: true, default: params[:default] == "true")
+      ::Jil.trigger(current_user, :list, @list.with_jil_attrs(action: :added))
       redirect_to @list
     else
       render :new
@@ -70,6 +72,7 @@ class ListsController < ApplicationController
 
   def destroy
     if @list.owned_by_user?(current_user) && @list.destroy
+      ::Jil.trigger(current_user, :list, @list.with_jil_attrs(action: :removed))
       redirect_to lists_path
     else
       redirect_to edit_list_path(@list)
