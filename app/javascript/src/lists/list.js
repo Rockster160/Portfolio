@@ -372,8 +372,12 @@ $(document).ready(function() {
       $itemField = $(this),
       args = {}
 
-    $itemName.data().raw = updatedName
-    $itemName.val(updatedName)
+    if ($(this).hasClass("list-item-field")) {
+      $itemName.data().raw = updatedName
+      $itemName.val(updatedName)
+    } else { // category edit
+    }
+
     $itemName.removeClass("hidden")
     $itemField.addClass("hidden")
 
