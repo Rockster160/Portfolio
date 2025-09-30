@@ -25,7 +25,22 @@ export class ListCell {
         }, function(msg) {
           if (!msg.list_data) { return }
 
-          var lines = Text.numberedList(msg.list_data.list_items)
+          const section_colors = {}
+          msg.list_data.sections.forEach((section) => {
+            section_colors[section.id] = section.color
+          })
+
+          const numbered_items = msg.list_data.items.map((item, idx) => {
+            let item_idx = `${idx+1}.`
+            if (item.section_id && section_colors[item.section_id]) {
+              item_idx = Text.bgColor(section_colors[item.section_id], item_idx)
+              // return Text.bgColor(section_colors[item.section_id], `${item_idx} ${item.name}`)
+            }
+
+            return `${item_idx} ${item.name}`
+          })
+
+          var lines = numbered_items
           if (cell.text() !== "Loading...") {
             if (cell.text().length < lines.join("\n").length) {
               beep(50, 1300, 0.1, "sine") // Added

@@ -93,6 +93,7 @@ class List < ApplicationRecord
             :important,
             :permanent,
             :sort_order,
+            :section_id,
             :deleted_at,
           ],
         }
