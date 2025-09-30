@@ -142,8 +142,8 @@ class Task < ApplicationRecord
     !!last_execution&.stop_propagation?
   end
 
-  def legacy_serialize
-    attributes.deep_symbolize_keys.except(:created_at, :updated_at, :code, :cron, :sort_order)
+  def serialize
+    super(except: [:created_at, :updated_at, :code, :cron, :sort_order])
   end
 
   def serialize_with_execution

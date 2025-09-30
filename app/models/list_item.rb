@@ -232,19 +232,6 @@ class ListItem < ApplicationRecord
     }
   end
 
-  def legacy_serialize
-    {
-      id:         id,
-      name:       name,
-      category:   category,
-      section_id: section_id,
-      important:  important,
-      permanent:  permanent,
-      sort_order: sort_order,
-      deleted_at: deleted_at,
-    }
-  end
-
   private
 
   def set_sort_order
@@ -261,7 +248,7 @@ class ListItem < ApplicationRecord
   def broadcast_commit
     return if do_not_broadcast
 
-    ActionCable.server.broadcast "list_#{self.list_id}_json_channel", { list_data: list.legacy_serialize, timestamp: Time.current.to_i }
+    ActionCable.server.broadcast "list_#{self.list_id}_json_channel", { list_data: list.serialize, timestamp: Time.current.to_i }
 
     list_item_attrs = self.attributes.symbolize_keys.slice(:important, :permanent, :category, :name)
     list_item_attrs.merge!(schedule: self.schedule_in_words)

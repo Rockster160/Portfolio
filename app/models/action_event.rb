@@ -30,12 +30,4 @@ class ActionEvent < ApplicationRecord
   scope :search_data_actions_all, ->(*qs) {
     where("data @> ?", { actions: Array.wrap(qs).flatten.compact }.to_json)
   }
-
-  def self.legacy_serialize
-    all.as_json(only: [:id, :name, :notes, :timestamp, :data]).map(&:with_indifferent_access)
-  end
-
-  def legacy_serialize
-    as_json(only: [:id, :name, :notes, :timestamp, :data]).with_indifferent_access
-  end
 end

@@ -7,7 +7,7 @@ class ListsController < ApplicationController
     @lists = current_user.ordered_lists
 
     respond_to do |format|
-      format.js { render json: @lists.legacy_serialize }
+      format.js { render json: @lists.serialize }
       format.html
     end
   end
@@ -16,7 +16,7 @@ class ListsController < ApplicationController
     raise ActionController::RoutingError, "Not Found" unless @list.present?
 
     respond_to do |format|
-      format.js { render json: @list.legacy_serialize }
+      format.js { render json: @list.serialize }
       format.html
     end
   end
@@ -45,7 +45,7 @@ class ListsController < ApplicationController
       @user_list&.update(default: params[:default] == "true") if params[:default].present?
       trigger(:changed, @list)
       respond_to do |format|
-        format.js { render json: @list.legacy_serialize }
+        format.js { render json: @list.serialize }
         format.html { redirect_to list_path(@list) }
       end
     else

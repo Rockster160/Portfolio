@@ -28,21 +28,6 @@ class Section < ApplicationRecord
   validates :name, presence: true
   validates :color, presence: true
 
-  def serialize(_opts={})
-    super(
-      only: [
-        :id,
-        :name,
-        :color,
-        :sort_order,
-      ],
-    )
-  end
-
-  def legacy_serialize
-    as_json(only: [:id, :name, :color, :sort_order])
-  end
-
   def contrast_color
     ColorGenerator.contrast_text_color_on_background(color)
   end
@@ -56,7 +41,7 @@ class Section < ApplicationRecord
   def broadcast_commit
     return if do_not_broadcast
 
-    ActionCable.server.broadcast "list_#{self.list_id}_json_channel", { list_data: list.legacy_serialize, timestamp: Time.current.to_i }
+    ActionCable.server.broadcast "list_#{self.list_id}_json_channel", { list_data: list.serialize, timestamp: Time.current.to_i }
 
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
     ActionCable.server.broadcast "list_#{self.list_id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }

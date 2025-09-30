@@ -62,8 +62,8 @@ class List < ApplicationRecord
     list.modify_from_message(msg)
   end
 
-  def self.legacy_serialize
-    all.map(&:legacy_serialize)
+  def self.serialize(opts={})
+    all.includes(:sections, :list_items).map { |list| list.serialize(opts) }
   end
 
   def serialize(opts={})
@@ -105,18 +105,6 @@ class List < ApplicationRecord
 
     super(serialized_opts).tap { |json|
       json[:items] = json.delete(:list_items) || json.delete(:deleted_list_items)
-    }
-  end
-
-  def legacy_serialize
-    {
-      id:           id,
-      name:         name,
-      description:  description,
-      important:    important,
-      show_deleted: show_deleted,
-      list_items:   ordered_items.pluck(:name),
-      response:     @response
     }
   end
 
@@ -321,7 +309,7 @@ class List < ApplicationRecord
   def broadcast!
     return if do_not_broadcast
 
-    ActionCable.server.broadcast "list_#{self.id}_json_channel", { list_data: legacy_serialize, timestamp: Time.current.to_i }
+    ActionCable.server.broadcast "list_#{self.id}_json_channel", { list_data: serialize, timestamp: Time.current.to_i }
 
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self }, layout: false
     ActionCable.server.broadcast "list_#{self.id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
