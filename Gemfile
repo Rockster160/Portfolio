@@ -94,6 +94,7 @@ group :development, :test do
   gem "pry-rails", "0.3.9"
   gem "rails_real_favicon", "0.1.1"
   gem "rspec-rails", "6.1.2"
+  gem "factory_bot_rails"
   gem "simplecov", "0.21.2", require: false, group: :test
   gem "spring", "4.0.0"
   gem "spring-commands-rspec", "1.0.4"

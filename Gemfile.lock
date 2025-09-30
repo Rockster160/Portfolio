@@ -189,6 +189,11 @@ GEM
       actionmailer (>= 5.2, < 8)
       activesupport (>= 5.2, < 8)
     execjs (2.10.0)
+    factory_bot (6.5.5)
+      activesupport (>= 6.1.0)
+    factory_bot_rails (6.5.1)
+      factory_bot (~> 6.5)
+      railties (>= 6.1.0)
     faker (2.21.0)
       i18n (>= 1.8.11, < 2)
     faraday (2.13.1)
@@ -596,6 +601,7 @@ DEPENDENCIES
   ed25519
   erubis (= 2.7.0)
   exception_notification (= 4.5.0)
+  factory_bot_rails
   faker (= 2.21.0)
   font-awesome-rails (= 4.7.0.8)
   fugit (= 1.5.3)
