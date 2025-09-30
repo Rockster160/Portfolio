@@ -5,6 +5,13 @@ $(document).ready(function() {
 
   var list_id = $(".list-container").attr("data-list-id")
 
+  function norm(s) { return (s || "").toLowerCase().trim().replace(/\s+/g, " ") }
+  function itemKey($el) {
+    let name = norm($el.find(".item-name").text())
+    let cat = norm($el.find(".list-item-config .category").text())
+    return cat + "|" + name
+  }
+
   function getOrder($el) {
     let v = parseInt($el.attr("data-sort-order")) || 0
     if ($el.is(".list-item-container") && $el.find(".list-item-checkbox").prop("checked")) {
@@ -129,25 +136,43 @@ $(document).ready(function() {
       // placeholders-by-name (unchanged)
       $(".item-placeholder").each(function() {
         let $ph = $(this)
-        let name = $ph.find(".item-name").text()
-        let $match = null
+        let key = itemKey($ph)
 
+        // If an existing DOM item already matches, drop the placeholder
+        let $existing = $(".list-item-container").not(".item-placeholder").filter(function() {
+          return itemKey($(this)) == key
+        }).first()
+        if ($existing.length) { $ph.remove(); return }
+
+        // Else, try to match an incoming item by key
+        let $match = null
         $.each(incomingItems, function(_, $inc) {
-          if ($inc.find(".item-name").text() == name) { $match = $inc; return false }
+          if (itemKey($inc) == key) { $match = $inc; return false }
         })
 
         if ($match) {
           let $target = targetFor($match)
           ensureParent($match, $target)
           $ph.replaceWith($match)
+        } else {
+          // Server didn't create it (likely a dupe) → remove placeholder
+          $ph.remove()
         }
       })
 
-      // upsert items + move to correct bucket (minor: same as yours)
+      // upsert items + move to correct bucket
       Object.keys(incomingItems).forEach(function(id) {
         let $inc = incomingItems[id]
         let $targetBucket = targetFor($inc)
-        let $curr = $('.list-item-container[data-item-id="' + (id || "new") + '"]')
+        let $curr = $('.list-item-container[data-item-id="' + id + '"]')
+
+        if ($curr.length == 0) {
+          // Try to find an existing DOM item with same key (handles dupes)
+          let key = itemKey($inc)
+          $curr = $(".list-item-container").not(".item-placeholder").filter(function() {
+            return itemKey($(this)) == key
+          }).first()
+        }
 
         if ($curr.length == 0) {
           ensureParent($inc, $targetBucket)
