@@ -39,6 +39,11 @@ Rails.application.routes.draw do
           patch :update, on: :collection
           delete :destroy, on: :collection
         end
+
+        resources :sections, only: [:index, :show, :update, :create, :destroy] do
+          patch :update, on: :collection
+          delete :destroy, on: :collection
+        end
         # resources :user_lists, only: [:index, :create, :destroy], path: :users
       end
     end

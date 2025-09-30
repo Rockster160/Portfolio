@@ -23,6 +23,7 @@ class Section < ApplicationRecord
   }
 
   before_save :set_sort_order
+  after_commit :broadcast_commit
 
   validates :name, presence: true
   validates :color, presence: true
@@ -50,5 +51,14 @@ class Section < ApplicationRecord
 
   def set_sort_order
     self.sort_order ||= list.max_sort_order + 1
+  end
+
+  def broadcast_commit
+    return if do_not_broadcast
+
+    ActionCable.server.broadcast "list_#{self.list_id}_json_channel", { list_data: list.legacy_serialize, timestamp: Time.current.to_i }
+
+    rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
+    ActionCable.server.broadcast "list_#{self.list_id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
   end
 end

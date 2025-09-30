@@ -6,6 +6,7 @@ class SectionsController < ApplicationController
     @section = @list.sections.new(section_params)
 
     if @section.save
+      trigger(:added, @section)
       redirect_to @list, notice: "Section created."
     else
       redirect_to @list, alert: @section.errors.full_messages.join(", ")
@@ -14,6 +15,7 @@ class SectionsController < ApplicationController
 
   def update
     if @section.update(section_params)
+      trigger(:changed, @section)
       redirect_to @list, notice: "Section updated."
     else
       redirect_to @list, alert: @section.errors.full_messages.join(", ")
@@ -22,10 +24,18 @@ class SectionsController < ApplicationController
 
   def destroy
     @section.destroy
+    trigger(:removed, @section)
     redirect_to @list, notice: "Section deleted."
   end
 
   private
+
+  def trigger(action, section)
+    # added | changed | removed
+    return if section.blank?
+
+    ::Jil.trigger(current_user, :section, section.with_jil_attrs(action: action))
+  end
 
   def set_list
     @list = List.find(params[:list_id])
