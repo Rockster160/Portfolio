@@ -352,36 +352,38 @@ html:has(.ctr-tasks.act-index) {
   }
 }
 
-.list-container
-  .list-items
-  .list-section-tab
-  .section-items
-  .list-item-container {
-  padding-left: 8px;
-  padding-right: 8px;
-
-  &:last-of-type {
+.list-container .list-items .list-section-tab .section-items {
+  &:not(:empty) {
     padding-bottom: 8px;
   }
-  .list-item {
-    // background: green;
-  }
-  .list-item-access {
-    .list-item-handle {
-      left: 10px;
+
+  .list-item-container {
+    padding-left: 8px;
+    padding-right: 8px;
+
+    &:last-of-type {
+      // margin-bottom: 8px;
     }
-    // top: 5px;
-  }
-  .list-item-config {
+    .list-item {
+      // background: green;
+    }
+    .list-item-access {
+      .list-item-handle {
+        left: 10px;
+      }
+      // top: 5px;
+    }
+    .list-item-config {
+      //   top: 10px;
+      left: 15px;
+    }
+    // .category-btn {
     //   top: 10px;
-    left: 15px;
+    // }
+    // .settings-btn {
+    //   top: 35px;
+    // }
   }
-  // .category-btn {
-  //   top: 10px;
-  // }
-  // .settings-btn {
-  //   top: 35px;
-  // }
 }
 
 .list-container .list-items .list-item-container.item-placeholder .list-item {

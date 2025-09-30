@@ -139,7 +139,7 @@ class List < ApplicationRecord
   def show_sectioned_objects
     sectioned_objects.map { |obj|
       obj.deep_transform_values { |v|
-        v.is_a?(ApplicationRecord) ? "#{v.id}: #{v.name}" : v
+        v.is_a?(ApplicationRecord) ? "[#{v.sort_order}] #{v.id}: #{v.name}" : v
       }
     }
   end
