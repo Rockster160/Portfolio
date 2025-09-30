@@ -33,26 +33,33 @@ class Api::V1::ListItemsController < Api::V1::BaseController
     new_item = current_item(:soft) || current_list_items.new
     new_item.update(create_params.merge(deleted_at: nil, sort_order: nil))
 
-    ::Jil.trigger(current_user, :item, new_item.jil_serialize(action: :created))
+    trigger(:added, new_item)
 
     serialize new_item
   end
 
   def update
     current_item.update(list_item_params)
-    ::Jil.trigger(current_user, :item, current_item.jil_serialize(action: :changed))
+    trigger(:changed, current_item)
 
     serialize current_item
   end
 
   def destroy
     current_item.soft_destroy unless current_item.permanent?
-    ::Jil.trigger(current_user, :item, current_item.jil_serialize(action: :removed))
+    trigger(:removed, current_item)
 
     serialize current_item
   end
 
   private
+
+  def trigger(action, item)
+    # added | changed | removed
+    return if item.blank?
+
+    ::Jil.trigger(current_user, :item, item.jil_serialize(action: action))
+  end
 
   def current_list
     @list ||= current_user.lists.find_by(id: params[:list_id]) || current_user.lists.by_param(params[:list_id]).take!

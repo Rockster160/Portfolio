@@ -36,7 +36,7 @@ class ListItemsController < ApplicationController
 
     return render json: { errors: "Cannot create item without a name." } unless success
 
-    ::Jil.trigger(current_user, :item, new_item.jil_serialize(action: :added)) # changed | removed
+    trigger(:added, new_item)
 
     if params[:as_json]
       render json: new_item
@@ -50,7 +50,7 @@ class ListItemsController < ApplicationController
     @existing_item = current_list_items.with_deleted.find_by(id: params[:id])
     @existing_item.update(list_item_params)
 
-    ::Jil.trigger(current_user, :item, @existing_item.jil_serialize(action: :changed))
+    trigger(:changed, @existing_item)
 
     render json: @existing_item
   end
@@ -60,7 +60,7 @@ class ListItemsController < ApplicationController
 
     if params[:really_destroy]
       @list_item.destroy
-      ::Jil.trigger(current_user, :item, @list_item.jil_serialize(action: :removed))
+      trigger(:removed, @list_item)
       redirect_to list_path(@list_item.list)
     else
       @list_item.soft_destroy unless @list_item.permanent?
@@ -69,6 +69,13 @@ class ListItemsController < ApplicationController
   end
 
   private
+
+  def trigger(action, item)
+    # added | changed | removed
+    return if item.blank?
+
+    ::Jil.trigger(current_user, :item, item.jil_serialize(action: action))
+  end
 
   def current_list
     @list ||= current_user.lists.find_by(id: params[:list_id]) || current_user.lists.by_param(params[:list_id]).take!

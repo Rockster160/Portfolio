@@ -32,16 +32,18 @@ class ListsController < ApplicationController
   def update
     if params[:get]
       @list.broadcast!
-      ::Jil.trigger(current_user, :list, @list.with_jil_attrs(action: :changed))
+      trigger(:changed, @list)
       return head :ok
     end
     if params[:sort]
       @list.sort_items!(params[:sort], params[:order])
+      trigger(:changed, @list)
       return head :ok
     end
 
     if @list.update(list_params)
       @user_list&.update(default: params[:default] == "true") if params[:default].present?
+      trigger(:changed, @list)
       respond_to do |format|
         format.js { render json: @list.legacy_serialize }
         format.html { redirect_to list_path(@list) }
@@ -63,7 +65,7 @@ class ListsController < ApplicationController
 
     if @list.persisted?
       current_user.user_lists.create(list_id: @list.id, is_owner: true, default: params[:default] == "true")
-      ::Jil.trigger(current_user, :list, @list.with_jil_attrs(action: :added))
+      trigger(:added, @list)
       redirect_to @list
     else
       render :new
@@ -72,7 +74,7 @@ class ListsController < ApplicationController
 
   def destroy
     if @list.owned_by_user?(current_user) && @list.destroy
-      ::Jil.trigger(current_user, :list, @list.with_jil_attrs(action: :removed))
+      trigger(:removed, @list)
       redirect_to lists_path
     else
       redirect_to edit_list_path(@list)
@@ -87,6 +89,13 @@ class ListsController < ApplicationController
   end
 
   private
+
+  def trigger(action, list)
+    # added | changed | removed
+    return if list.blank?
+
+    ::Jil.trigger(current_user, :list, list.with_jil_attrs(action: action))
+  end
 
   def reorder_list
     # ordered = [

@@ -31,8 +31,9 @@ class Api::V1::ListsController < Api::V1::BaseController
   end
 
   def create
-    new_list = current_user.lists.create(list_item_params)
+    new_list = current_user.lists.create(list_params)
     new_list.persisted? && current_user.user_lists.create(list_id: new_list.id, is_owner: true, default: params[:default] == "true")
+    trigger(:create, new_list)
 
     serialize new_list
   end
@@ -41,6 +42,7 @@ class Api::V1::ListsController < Api::V1::BaseController
     @list = current_list
 
     if @list.update(list_params)
+      trigger(:changed, @list)
       # @user_list&.update(default: params[:default] == "true") if params[:default].present?
     end
 
@@ -51,11 +53,19 @@ class Api::V1::ListsController < Api::V1::BaseController
     @list = current_list
 
     @list.destroy
+    trigger(:removed, @list)
 
     serialize @list
   end
 
   private
+
+  def trigger(action, list)
+    # added | changed | removed
+    return if list.blank?
+
+    ::Jil.trigger(current_user, :list, list.with_jil_attrs(action: action))
+  end
 
   def current_list
     @list ||= current_user.lists.find_by(id: params[:id]) || current_user.lists.by_param(params[:id]).take!
