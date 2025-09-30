@@ -60,7 +60,7 @@ class ListItemsController < ApplicationController
 
     if params[:really_destroy]
       @list_item.destroy
-      ::Jil.trigger(current_user, :item, @existing_item.jil_serialize(action: :removed))
+      ::Jil.trigger(current_user, :item, @list_item.jil_serialize(action: :removed))
       redirect_to list_path(@list_item.list)
     else
       @list_item.soft_destroy unless @list_item.permanent?
