@@ -27,7 +27,11 @@ class ListJsonChannel < ApplicationCable::Channel
 
       list.broadcast!
     elsif data[:move].present?
-      idx1, idx2 = data[:message].split("^").map { |s| s.to_i.then { |n| n < 0 ? n : (n - 1) } }
+      idx1, idx2 = data[:message].split("^").map { |s|
+        s.to_i.then { |n|
+          n.negative? ? n : (n - 1)
+        }
+      }
       idx2 ||= 0
       ordered = list.list_items.order(sort_order: :desc).ids
       ordered.insert(idx2, ordered.delete_at(idx1))

@@ -19,7 +19,13 @@ class Section < ApplicationRecord
 
   scope :ordered, -> { order("sections.sort_order DESC") }
   scope :where_soft_name, ->(name) {
-    where("LOWER(TRIM(REGEXP_REPLACE(name, '\\s+', ' ', 'g'))) = ?", name.to_s.downcase.squish)
+    soft_name = name.to_s.gsub(/[^\w\s\d]/, "").downcase.squish
+    next none if soft_name.blank?
+
+    where(
+      "LOWER(TRIM(REGEXP_REPLACE(REGEXP_REPLACE(name, '[^\\w\\s\\d]', '', 'g'), '\\s+', ' ', 'g'))) = ?",
+      soft_name,
+    )
   }
 
   before_save :set_sort_order
@@ -41,9 +47,9 @@ class Section < ApplicationRecord
   def broadcast_commit
     return if do_not_broadcast
 
-    ActionCable.server.broadcast "list_#{self.list_id}_json_channel", { list_data: list.serialize, timestamp: Time.current.to_i }
+    ActionCable.server.broadcast "list_#{list_id}_json_channel", { list_data: list.serialize, timestamp: Time.current.to_i }
 
-    rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
-    ActionCable.server.broadcast "list_#{self.list_id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
+    rendered_message = ListsController.render template: "list_items/index", locals: { list: list }, layout: false
+    ActionCable.server.broadcast "list_#{list_id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
   end
 end

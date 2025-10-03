@@ -60,16 +60,29 @@ class ListItem < ApplicationRecord
     end
   end
 
-  def self.add(item_name)
+  def self.add(full_item_name)
+    section = nil
+    if (section_name = full_item_name[/^\s*\[(.*?)\]/, 1]).present?
+      if (list_id = new.list_id).present? # extract list_id from scoped query
+        section = Section.where_soft_name(section_name).find_by(list_id: list_id)
+      end
+    end
+
+    item_name = full_item_name.sub(/\[#{section_name}\]\s*/, "").squish if section.present?
+    item_name ||= full_item_name
+
     old_item = by_data(item_name)
+    old_item ||= by_data(full_item_name) if item_name != full_item_name
+    old_item.section = section if old_item.present? && section.present?
 
     if old_item.present?
       if old_item.name != item_name || old_item.deleted_at? || old_item.sort_order != old_item.list.max_order
-        old_item.update({ name: item_name }.merge(deleted_at: nil, sort_order: nil))
+        old_item.update(name: item_name, deleted_at: nil, sort_order: nil)
       end
+      old_item.update(section: section) if old_item.section != section && section.present?
       old_item
     else
-      create(name: item_name)
+      create(name: item_name, section: section)
     end
   end
 
