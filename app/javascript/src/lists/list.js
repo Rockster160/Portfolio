@@ -17,9 +17,31 @@ const second = 1000;
 const minute = second * 60;
 const hour = minute * 60;
 const resetModeTimes = {
-  kiosk: 1*hour,
+  kiosk: 30*minute,
   clear: 3*second,
 }
+
+function parseDuration(str, fallback = 0) {
+  if (typeof str !== "string") return fallback
+
+  const regex = /(\d+)([hms])/g
+  let total = 0
+  let match
+
+  while ((match = regex.exec(str)) !== null) {
+    const value = parseInt(match[1], 10)
+    const unit = match[2]
+
+    if (unit === "h") total += value * hour
+    else if (unit === "m") total += value * minute
+    else if (unit === "s") total += value * second
+  }
+
+  return total || fallback
+}
+
+const resetTime = parseDuration(params.reset, resetModeTimes[listMode])
+console.log("List mode:", listMode, "reset every", resetTime, "ms")
 // kiosk | clear | normal
 
 $(document).on("keyup", "input.filterable", function() {
@@ -41,7 +63,8 @@ $(document).on("keyup", "input.filterable", function() {
 })
 
 clearRemovedItems = function() {
-  if (resetModeTimes[listMode]) {
+  if (resetTime) {
+    console.log("Clearing in", resetTime, "ms")
     clearTimeout(clearListItemTimer)
     clearListItemTimer = setTimeout(function() {
       $(".list-item-checkbox:checked").each(function() {
@@ -52,7 +75,7 @@ clearRemovedItems = function() {
           wrapper.remove()
         }
       })
-    }, resetModeTimes[listMode])
+    }, resetTime)
   }
 }
 

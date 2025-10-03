@@ -11,13 +11,13 @@ module LocalIpManager
     return if old_ip.to_s == new_ip.to_s
 
     if Rails.env.production?
-        # ardesian.duckdns.org
+      # ardesian.duckdns.org
       HTTParty.get(
         "https://www.duckdns.org/update?" + {
           domains: "ardesian",
-          token: DataStorage[:duckdns_token],
-          ip: new_ip
-        }.to_query
+          token:   DataStorage[:duckdns_token],
+          ip:      new_ip,
+        }.to_query,
       )
     end
 
