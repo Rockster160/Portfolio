@@ -13,7 +13,7 @@
 class MealBuilder < ApplicationRecord
   belongs_to :user
 
-  validates_presence_of :name, :parameterized_name
+  validates :name, :parameterized_name, presence: true
 
   before_validation -> { self.parameterized_name = name.parameterize }
 
@@ -24,20 +24,20 @@ class MealBuilder < ApplicationRecord
   end
 
   def items=(items_list)
-    return super(items_list) unless items_list.is_a?(String)
+    return super unless items_list.is_a?(String) # rubocop:disable Lint/ReturnInVoidContext
 
     self.items = items_list.split(/\r?\n\r?/).map { |line|
-      match = line.match(/^(?<category>[^ ]+)?\s+(?<name>[^()]+)\s*(?:\((?<cal>\d+)\))?\s*(?<img>[^\|]*?)(?:\|\s*(?<tag>.*?))?$/)
+      match = line.match(/^(?<category>[^ ]+)?\s+(?<name>[^()]+)\s*(?:\((?<cal>\d+)\))?\s*(?<img>[^|]*?)(?:\|\s*(?<tag>.*?))?$/)
 
-      if match
-        {
-          category: match[:category].presence || "Food",
-          name: match[:name].squish,
-          cal: match[:cal].to_i,
-          img: match[:img],
-          tag: match[:tag],
-        }
-      end
+      next unless match
+
+      {
+        category: match[:category].presence || "Food",
+        name:     match[:name].squish,
+        cal:      match[:cal].to_i,
+        img:      match[:img],
+        tag:      match[:tag],
+      }
     }.compact
   end
 

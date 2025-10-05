@@ -1,4 +1,3 @@
-
 Rails.application.routes.draw do
   use_doorkeeper
 
@@ -112,7 +111,7 @@ Rails.application.routes.draw do
   resource :nfc, only: [:show]
 
   resources :emails, except: [:destroy, :edit]
-  resources :log_trackers, only: [:index, :show ]
+  resources :log_trackers, only: [:index, :show]
   post "/ips/ban" => "log_trackers#ban", as: :ban_ip
 
   resources :surveys
@@ -126,6 +125,11 @@ Rails.application.routes.draw do
     get :feelings, on: :collection
   end
 
+  resource :inventory_management, controller: :inventory_management do
+    resources :boxes
+    resources :items, controller: :box_items
+  end
+
   resources :scheduled_tasks, path: :schedules
 
   resource :summoners_war do
@@ -136,7 +140,7 @@ Rails.application.routes.draw do
 
   get :account, controller: :users
   resources :api_keys, except: :show
-  resources :users, only: [ :new, :create, :update ]
+  resources :users, only: [:new, :create, :update]
   resources :lists do
     post :reorder, on: :collection
     member do
@@ -155,14 +159,14 @@ Rails.application.routes.draw do
   end
 
   get :random, controller: :random, action: :index
-  resources :gcode_splitter, only: [ :index ]
-  resources :colors, only: [ :index ]
-  resources :anonicons, only: [ :index, :show ], constraints: { id: /[0-9.a-zA-Z]+/ }
+  resources :gcode_splitter, only: [:index]
+  resources :colors, only: [:index]
+  resources :anonicons, only: [:index, :show], constraints: { id: /[0-9.a-zA-Z]+/ }
   get :"svg-editor", controller: :svg_editors, action: :show
 
   resource :rlcraft, only: [:show, :update]
 
-  resource :little_world, only: [ :show ] do
+  resource :little_world, only: [:show] do
     post :save_location
     get :player_login
     get :character_builder
@@ -209,7 +213,7 @@ Rails.application.routes.draw do
     post :export_to_list, on: :member
   end
 
-  resource :maze, only: [ :show ] do
+  resource :maze, only: [:show] do
     collection do
       post ":seed/solve", action: :solve
       match ":seed/solve", action: :preflight, via: :options
