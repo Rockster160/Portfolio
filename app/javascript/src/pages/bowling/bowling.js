@@ -1,31 +1,36 @@
-import Bowler from "./bowler"
-import Game from "./game"
-import { buttons } from "./buttons"
-import { events } from "./events"
-import { panel } from "./panel"
+import Bowler from "./bowler";
+import Game from "./game";
+import { buttons } from "./buttons";
+import { events } from "./events";
+import { panel } from "./panel";
 
-window.onload = function() {
+window.onload = function () {
   if (document.querySelector(".bowling-game-form")) {
-    new Game(document.querySelector(".bowling-game-form"))
+    new Game(document.querySelector(".bowling-game-form"));
 
-    buttons() // Event listeners for buttons and key presses
-    events() // Helpers for events, also game state event callbacks
-    panel() // Event listeners for sub menus and changing the bowler order and scores and such
-    game.start()
-    game.eachBowler(bowler => window[(bowler.bowlerName || "noname").trim().toLowerCase()] = bowler)
+    buttons(); // Event listeners for buttons and key presses
+    events(); // Helpers for events, also game state event callbacks
+    panel(); // Event listeners for sub menus and changing the bowler order and scores and such
+    game.start();
+    game.eachBowler(
+      (bowler) =>
+        (window[(bowler.bowlerName || "noname").trim().toLowerCase()] = bowler),
+    );
 
     // game.fillRandomUntil(9)
     // game.fillRandomUntil(9, "X")
 
-    game.nextShot()
+    game.nextShot();
   }
-}
+};
 
-window.onbeforeunload = function(evt) {
-  if (!game || game.saved) { return undefined }
+window.onbeforeunload = function (evt) {
+  if (!game || game.saved) {
+    return undefined;
+  }
 
-  return "onbeforeunload"
-}
+  return "onbeforeunload";
+};
 
 // ===== NOTE:
 // Maybe have a button next to pin fall (between it and "End Game") that opens a modal that shows enemy scores
@@ -84,13 +89,12 @@ window.onbeforeunload = function(evt) {
 //√ Delete score/frame button
 //√ Arrow keys should be able to go between shots/frames/bowlers
 
-
 // ===== Tests:
 // Pin Interface:
-  // Click + Drag across pins, should only toggle the same direction as the first pin
-  // Should NOT be able to toggle pins that are fallen "before" (first shot of the frame)
-  // Editing prior frames
-  // Editing future frames
+// Click + Drag across pins, should only toggle the same direction as the first pin
+// Should NOT be able to toggle pins that are fallen "before" (first shot of the frame)
+// Editing prior frames
+// Editing future frames
 // Scores for current frame, total, and handicap
 // Button interface for setting
 // Buggy
