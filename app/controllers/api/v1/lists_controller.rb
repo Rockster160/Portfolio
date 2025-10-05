@@ -32,7 +32,10 @@ class Api::V1::ListsController < Api::V1::BaseController
 
   def create
     new_list = current_user.lists.create(list_params)
-    new_list.persisted? && current_user.user_lists.create(list_id: new_list.id, is_owner: true, default: params[:default] == "true")
+    new_list.persisted? && current_user.user_lists.create(
+      list_id: new_list.id, is_owner: true,
+      default: params[:default] == "true"
+    )
     trigger(:create, new_list)
 
     serialize new_list
@@ -68,7 +71,7 @@ class Api::V1::ListsController < Api::V1::BaseController
   end
 
   def current_list
-    @list ||= current_user.lists.find_by(id: params[:id]) || current_user.lists.by_param(params[:id]).take!
+    @current_list ||= current_user.lists.find_by(id: params[:id]) || current_user.lists.by_param(params[:id]).take!
   end
 
   def list_params

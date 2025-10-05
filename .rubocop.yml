@@ -147,11 +147,12 @@ Metrics/AbcSize:
   Enabled: false
 
 Metrics/BlockLength:
-  Exclude:
-    - "spec/**/*"
-    - "config/routes.rb"
-    - "config/environments/*"
-    - "app/models/concerns/application_recordable.rb"
+  Enabled: false
+  # Exclude:
+  #   - "spec/**/*"
+  #   - "config/routes.rb"
+  #   - "config/environments/*"
+  #   - "app/models/concerns/application_recordable.rb"
 
 Metrics/MethodLength:
   Max: 20
@@ -321,6 +322,7 @@ Style/BlockDelimiters:
     - has_many
     # Helpers
     - scope # Routes
+    - constraints # Routes
     - rescue_from # Controllers
     - current! # Tenant
     - thread_settings

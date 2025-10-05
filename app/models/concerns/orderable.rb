@@ -9,8 +9,8 @@ module Orderable
     def self.orderable_vars
       {
         scope: @orderable_scope,
-        key: @orderable_by_key,
-        dir: @orderable_by_dir,
+        key:   @orderable_by_key,
+        dir:   @orderable_by_dir,
       }
     end
 
@@ -46,7 +46,7 @@ module Orderable
     end
 
     # Set default order column to `sort_order`
-    orderable_by(:sort_order) unless @orderable_by_key.present?
+    orderable_by(:sort_order) if @orderable_by_key.blank?
     before_save :set_orderable # Callback to set the order column
     scope :ordered, -> { # Add a scope that can be used to return in order
       order(orderable_vars[:key] => orderable_vars[:dir])
