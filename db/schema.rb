@@ -214,6 +214,12 @@ ActiveRecord::Schema[7.1].define(version: 2025_10_04_013350) do
   create_table "box_items", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.bigint "box_id", null: false
+    t.text "name", null: false
+    t.text "description"
+    t.integer "sort_order", null: false
+    t.jsonb "data", default: {}, null: false
+    t.text "notes"
+    t.jsonb "hierarchy", default: [], null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["box_id"], name: "index_box_items_on_box_id"

@@ -125,7 +125,7 @@ Rails.application.routes.draw do
     get :feelings, on: :collection
   end
 
-  resource :inventory_management, controller: :inventory_management do
+  resource :inventory, controller: :inventory_management do
     resources :boxes
     resources :items, controller: :box_items
   end

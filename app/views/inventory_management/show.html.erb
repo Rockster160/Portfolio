@@ -1,0 +1,70 @@
+<% content_for :title, "Inventory" %>
+<% content_for :modals do %>
+<% end %>
+
+<div class="inventory-wrapper">
+  <div class="tree">
+    <ul>
+      <% @boxes.each do |box| %>
+        <%= render partial: "inventory_management/box", locals: { box: box, preload: false } %>
+      <% end %>
+    </ul>
+  </div>
+</div>
+
+<%# <div class="wrap">                                                                     %>
+<%#   <div class="toolbar">                                                                %>
+<%#     <input id="q" type="search" placeholder="Filter visible nodes..." />               %>
+<%#     <button id="clr">Clear</button>                                                    %>
+<%#     <div style="flex: 1;"></div>                                                       %>
+<%#     <button id="newBox">New Box</button>                                               %>
+<%#     <button id="newItem">New Item</button>                                             %>
+<%#     <button id="expandAll">Expand All</button>                                         %>
+<%#     <button id="collapseAll">Collapse All</button>                                     %>
+<%#   </div>                                                                               %>
+
+<%#   <div id="tree" class="tree" role="tree"></div>                                       %>
+<%# </div>                                                                                 %>
+
+<%# <div id="ctx" class="ctx" role="menu" aria-hidden="true">                              %>
+<%#   <button data-action="edit">Edit</button>                                             %>
+<%#   <button data-action="add-item">Add new item into box</button>                        %>
+<%#   <button data-action="convert">Convert between item|box</button>                      %>
+<%#   <button data-action="open">Open in new tab</button>                                  %>
+<%#   <hr />                                                                               %>
+<%#   <button data-action="close">Close</button>                                           %>
+<%# </div>                                                                                 %>
+
+<%# <div id="modal" class="modal" aria-hidden="true">                                      %>
+<%#   <div class="sheet">                                                                  %>
+<%#     <h3 id="modalTitle">Edit</h3>                                                      %>
+<%#     <form id="editForm">                                                               %>
+<%#       <input type="hidden" name="id" />                                                %>
+<%#       <input type="hidden" name="kind" />                                              %>
+<%#       <div class="form-row">                                                           %>
+<%#         <label>Name</label>                                                            %>
+<%#         <input name="name" required />                                                 %>
+<%#       </div>                                                                           %>
+<%#       <div class="form-row">                                                           %>
+<%#         <label>Description</label>                                                     %>
+<%#         <textarea name="description" rows="3"></textarea>                              %>
+<%#       </div>                                                                           %>
+<%#       <div class="form-row">                                                           %>
+<%#         <label>Notes</label>                                                           %>
+<%#         <textarea name="notes" rows="3"></textarea>                                    %>
+<%#       </div>                                                                           %>
+<%#       <div class="form-row">                                                           %>
+<%#         <label>Tags (comma separated)</label>                                          %>
+<%#         <input name="tags" />                                                          %>
+<%#       </div>                                                                           %>
+<%#       <div class="form-row">                                                           %>
+<%#         <label>Data (JSON)</label>                                                     %>
+<%#         <textarea name="data" rows="6" placeholder='{"key":"value"}'></textarea>       %>
+<%#       </div>                                                                           %>
+<%#       <div class="actions">                                                            %>
+<%#         <button type="button" id="cancelEdit">Cancel</button>                          %>
+<%#         <button type="submit" id="saveEdit">Save</button>                              %>
+<%#       </div>                                                                           %>
+<%#     </form>                                                                            %>
+<%#   </div>                                                                               %>
+<%# </div>                                                                                 %>

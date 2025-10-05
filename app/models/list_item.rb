@@ -5,6 +5,7 @@
 #  id             :integer          not null, primary key
 #  amount         :integer
 #  category       :string
+#  completed_at   :datetime
 #  deleted_at     :datetime
 #  formatted_name :text
 #  important      :boolean          default(FALSE)

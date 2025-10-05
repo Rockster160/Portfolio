@@ -18,11 +18,18 @@ class Box < ApplicationRecord
   include Orderable
 
   belongs_to :user
+  belongs_to :parent, class_name: "Box", optional: true
   has_many :items, class_name: "BoxItem", dependent: :destroy
-  has_many :boxes, dependent: :destroy
+  has_many :boxes, dependent: :destroy, foreign_key: :parent_id
 
-  has_many :box_tags, dependent: :destroy
-  has_many :tags, through: :box_tags, source: :tag
+  before_save :set_hierarchy, if: :parent_id_changed?
+
+  # has_many :box_tags, dependent: :destroy
+  # has_many :tags, through: :box_tags, source: :tag
+
+  def contents
+    (boxes + items).sort_by(&:sort_order)
+  end
 
   def max_sort_order
     [
@@ -32,6 +39,12 @@ class Box < ApplicationRecord
   end
 
   def set_orderable
-    self[:sort_order] ||= (box&.max_sort_order || user.box_items.maximum(:sort_order).to_i) + 1
+    self[:sort_order] ||= (parent&.max_sort_order || user.box_items.maximum(:sort_order).to_i) + 1
+  end
+
+  private
+
+  def set_hierarchy
+    self.hierarchy = parent.hierarchy + [parent_id]
   end
 end

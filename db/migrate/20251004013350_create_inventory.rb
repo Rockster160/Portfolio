@@ -8,6 +8,7 @@ class CreateInventory < ActiveRecord::Migration[7.1]
       t.integer :sort_order, null: false
       t.jsonb :data, null: false, default: {}
       t.text :notes
+
       t.jsonb :hierarchy, null: false, default: []
 
       t.timestamps
@@ -15,7 +16,14 @@ class CreateInventory < ActiveRecord::Migration[7.1]
 
     create_table :box_items do |t|
       t.references :user, null: false, foreign_key: true
-      t.references :box, null: false, foreign_key: true
+      t.references :box, null: false, foreign_key: { to_table: :boxes }
+      t.text :name, null: false
+      t.text :description
+      t.integer :sort_order, null: false
+      t.jsonb :data, null: false, default: {}
+      t.text :notes
+
+      t.jsonb :hierarchy, null: false, default: []
 
       t.timestamps
     end

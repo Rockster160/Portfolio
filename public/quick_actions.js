@@ -7,3 +7,4 @@ import "./quick_actions/command.js";
 import "./quick_actions/buttons.js";
 import "./quick_actions/task_monitor.js";
 import "./quick_actions/watches.js";
+import "./quick_actions/inventory.js";

@@ -1,0 +1,33 @@
+<% preload ||= false %>
+
+<li data-type="box" data-id="<%= box.id %>">
+  <details <%= :open if false %>>
+    <summary>
+      <span class="item-name"><%= box.name %></span>
+      <span class="item-description"><%= box.description %></span>
+      <span class="item-actions">
+      </span>
+    </summary>
+    <ul>
+      <% if preload %>
+        <% box.contents.each do |content| %>
+          <% if content.is_a?(Box) %>
+            <%= render partial: "inventory_management/box", locals: { box: content, preload: false } %>
+          <% else %>
+            <li data-type="item" data-id="<%= content.id %>">
+              <span class="item-name"><%= content.name %></span>
+              <span class="item-description"><%= content.description %></span>
+              <span class="item-actions">
+              </span>
+            </li>
+          <% end %>
+        <% end %>
+        <% if box.contents.none? %>
+          <li class="empty-box">This box is empty.</li>
+        <% end %>
+      <% else %>
+        <li class="post-load-box">Loading...</li>
+      <% end %>
+    </ul>
+  </details>
+</li>
