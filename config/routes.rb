@@ -127,7 +127,6 @@ Rails.application.routes.draw do
 
   resource :inventory, controller: :inventory_management do
     resources :boxes
-    resources :items, controller: :box_items
   end
 
   resources :scheduled_tasks, path: :schedules
