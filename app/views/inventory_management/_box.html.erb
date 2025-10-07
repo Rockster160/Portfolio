@@ -1,6 +1,6 @@
 <% preload ||= false %>
 
-<li data-type="box" data-id="<%= box.id %>">
+<li data-type="box" data-id="<%= box.id %>" data-hierarchy="<%= box.hierarchy %>">
   <details <%= :open if false %>>
     <summary>
       <span class="item-name"><%= box.name %></span>
@@ -11,19 +11,19 @@
     <ul>
       <% if preload %>
         <% box.contents.each do |content| %>
-          <% if content.is_a?(Box) %>
-            <%= render partial: "inventory_management/box", locals: { box: content, preload: false } %>
-          <% else %>
-            <li data-type="item" data-id="<%= content.id %>">
+          <% if content.empty? %>
+            <li data-type="item" data-id="<%= content.id %>" data-hierarchy="<%= content.hierarchy %>">
               <span class="item-name"><%= content.name %></span>
               <span class="item-description"><%= content.description %></span>
               <span class="item-actions">
               </span>
             </li>
+          <% else %>
+            <%= render partial: "inventory_management/box", locals: { box: content, preload: false } %>
           <% end %>
         <% end %>
         <% if box.contents.none? %>
-          <li class="empty-box">This box is empty.</li>
+          <li class="empty-box">• &lt;empty&gt;</li>
         <% end %>
       <% else %>
         <li class="post-load-box">Loading...</li>

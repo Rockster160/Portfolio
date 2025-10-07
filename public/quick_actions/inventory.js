@@ -1,10 +1,7 @@
 const loadInventory = () => {
-  console.log("tick");
-
-  attachDetailsToggleListeners();
+  const searchWrapper = document.querySelector(".search-wrapper");
 
   function attachDetailsToggleListeners() {
-    console.log("attachDetailsToggleListeners");
     const detailsElements = document.querySelectorAll(
       ".inventory-wrapper details:not(.loaded):not(.pending-load)",
     );
@@ -59,6 +56,24 @@ const loadInventory = () => {
       });
     });
   }
+  attachDetailsToggleListeners();
+
+  function selectBox(li) {
+    document.querySelectorAll("li[data-type].selected").forEach((el) => {
+      el.classList.remove("selected");
+    });
+
+    li.classList.add("selected");
+    searchWrapper.querySelector("code.hierarchy").innerText =
+      li.dataset.hierarchy || "";
+  }
+
+  document.addEventListener("click", function (evt) {
+    const li = evt.target.closest("li[data-type]");
+    if (li) {
+      selectBox(li);
+    }
+  });
 };
 
 document.addEventListener("DOMContentLoaded", () => {

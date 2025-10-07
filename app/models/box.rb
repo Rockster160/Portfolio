@@ -2,49 +2,65 @@
 #
 # Table name: boxes
 #
-#  id          :bigint           not null, primary key
-#  data        :jsonb            not null
-#  description :text
-#  hierarchy   :jsonb            not null
-#  name        :text             not null
-#  notes       :text
-#  sort_order  :integer          not null
-#  created_at  :datetime         not null
-#  updated_at  :datetime         not null
-#  parent_id   :bigint
-#  user_id     :bigint           not null
+#  id             :bigint           not null, primary key
+#  data           :jsonb            not null
+#  description    :text
+#  empty          :boolean          default(TRUE), not null
+#  hierarchy_data :jsonb            not null
+#  hierarchy_ids  :jsonb            not null
+#  name           :text             not null
+#  notes          :text
+#  sort_order     :integer          not null
+#  created_at     :datetime         not null
+#  updated_at     :datetime         not null
+#  parent_id      :bigint
+#  user_id        :bigint           not null
 #
 class Box < ApplicationRecord
   include Orderable
 
+  attr_accessor :reset_hierarchy
+
   belongs_to :user
   belongs_to :parent, class_name: "Box", optional: true
-  has_many :items, class_name: "BoxItem", dependent: :destroy
-  has_many :boxes, dependent: :destroy, foreign_key: :parent_id
+  has_many :boxes, dependent: :destroy, foreign_key: :parent_id, inverse_of: :parent
 
-  before_save :set_hierarchy, if: :parent_id_changed?
+  before_save :set_hierarchy, if: :reset_hierarchy?
+  before_save :cascade_hierarchy, if: :hierarchy_ids_changed?
 
-  # has_many :box_tags, dependent: :destroy
-  # has_many :tags, through: :box_tags, source: :tag
+  orderable sort_order: :asc, scope: ->(box) {
+    box.parent&.boxes || box.user.boxes.where(parent_id: nil)
+  }
+
+  json_attributes :data, :hierarchy_data
 
   def contents
-    (boxes + items).sort_by(&:sort_order)
+    boxes.ordered
   end
 
-  def max_sort_order
-    [
-      boxes.maximum(:sort_order).to_i,
-      items.maximum(:sort_order).to_i,
-    ].max
-  end
-
-  def set_orderable
-    self[:sort_order] ||= (parent&.max_sort_order || user.box_items.maximum(:sort_order).to_i) + 1
+  def hierarchy
+    (hierarchy_data.pluck(:name) + [name]).join(" > ")
   end
 
   private
 
+  def reset_hierarchy?
+    return true if reset_hierarchy
+    return true if parent_id_changed?
+    return true if new_record?
+
+    false
+  end
+
   def set_hierarchy
-    self.hierarchy = parent.hierarchy + [parent_id]
+    self.hierarchy_data = parent.hierarchy_data + [{ id: parent.id, name: parent.name }] if parent
+    self.hierarchy_ids = ((parent&.hierarchy_ids || []) + [parent_id]).compact
+    parent.update!(empty: false) if parent && parent.empty?
+  end
+
+  def cascade_hierarchy
+    contents.each do |b|
+      b.update(reset_hierarchy: true)
+    end
   end
 end

@@ -39,6 +39,12 @@
 
         summary {
           border-bottom: 1px solid var(--border);
+          padding: 10px;
+
+          &:hover {
+            cursor: pointer;
+            background: var(--border);
+          }
         }
 
         li[data-type="item"] {
@@ -47,7 +53,13 @@
         }
       }
       li[data-type="box"] {
-        padding: 10px;
+      }
+      li[data-type].selected {
+        &[data-type="item"],
+        &[data-type="root"],
+        &[data-type="box"] > details > summary {
+          background-color: var(--blue);
+        }
       }
       .item-name {
         display: inline-block;

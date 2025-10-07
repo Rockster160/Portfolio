@@ -211,30 +211,6 @@ ActiveRecord::Schema[7.1].define(version: 2025_10_04_013350) do
     t.index ["league_id"], name: "index_bowling_sets_on_league_id"
   end
 
-  create_table "box_items", force: :cascade do |t|
-    t.bigint "user_id", null: false
-    t.bigint "box_id", null: false
-    t.text "name", null: false
-    t.text "description"
-    t.integer "sort_order", null: false
-    t.jsonb "data", default: {}, null: false
-    t.text "notes"
-    t.jsonb "hierarchy", default: [], null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["box_id"], name: "index_box_items_on_box_id"
-    t.index ["user_id"], name: "index_box_items_on_user_id"
-  end
-
-  create_table "box_tags", force: :cascade do |t|
-    t.bigint "box_id", null: false
-    t.bigint "tag_id", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["box_id"], name: "index_box_tags_on_box_id"
-    t.index ["tag_id"], name: "index_box_tags_on_tag_id"
-  end
-
   create_table "boxes", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.bigint "parent_id"
@@ -243,7 +219,9 @@ ActiveRecord::Schema[7.1].define(version: 2025_10_04_013350) do
     t.integer "sort_order", null: false
     t.jsonb "data", default: {}, null: false
     t.text "notes"
-    t.jsonb "hierarchy", default: [], null: false
+    t.boolean "empty", default: true, null: false
+    t.jsonb "hierarchy_ids", default: [], null: false
+    t.jsonb "hierarchy_data", default: [], null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["parent_id"], name: "index_boxes_on_parent_id"
@@ -401,24 +379,6 @@ ActiveRecord::Schema[7.1].define(version: 2025_10_04_013350) do
     t.text "results"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
-  end
-
-  create_table "inventory_tags", force: :cascade do |t|
-    t.bigint "user_id", null: false
-    t.text "name", null: false
-    t.text "color", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_inventory_tags_on_user_id"
-  end
-
-  create_table "item_tags", force: :cascade do |t|
-    t.bigint "item_id", null: false
-    t.bigint "tag_id", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["item_id"], name: "index_item_tags_on_item_id"
-    t.index ["tag_id"], name: "index_item_tags_on_tag_id"
   end
 
   create_table "lines", id: :serial, force: :cascade do |t|
@@ -861,16 +821,9 @@ ActiveRecord::Schema[7.1].define(version: 2025_10_04_013350) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
-  add_foreign_key "box_items", "boxes"
-  add_foreign_key "box_items", "users"
-  add_foreign_key "box_tags", "boxes"
-  add_foreign_key "box_tags", "tags"
   add_foreign_key "boxes", "boxes", column: "parent_id"
   add_foreign_key "boxes", "users"
   add_foreign_key "emails", "users"
-  add_foreign_key "inventory_tags", "users"
-  add_foreign_key "item_tags", "box_items", column: "item_id"
-  add_foreign_key "item_tags", "tags"
   add_foreign_key "list_items", "sections"
   add_foreign_key "meal_builders", "users"
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"

@@ -3,14 +3,32 @@
 <% end %>
 
 <div class="inventory-wrapper">
+  <div class="search-wrapper">
+    <code class="hierarchy"></code>
+    <input type="text" name="search" value="">
+  </div>
+
   <div class="tree">
     <ul>
+      <li data-type="root" data-id="" data-hierarchy="Everything">
+        <summary>Everything</summary>
+      </li>
       <% @boxes.each do |box| %>
         <%= render partial: "inventory_management/box", locals: { box: box, preload: false } %>
       <% end %>
     </ul>
   </div>
 </div>
+
+<%# <div id="ctx" class="ctx" role="menu" aria-hidden="true">                              %>
+<%#   <button data-action="edit">Edit</button>                                             %>
+<%#   <button data-action="add-item">Add new item into box</button>                        %>
+<%#   <button data-action="convert">Convert between item|box</button>                      %>
+<%#   <button data-action="open">Open in new tab</button>                                  %>
+<%#   <hr />                                                                               %>
+<%#   <button data-action="reload">Reload Box</button>                                     %>
+<%#   <button data-action="close">Close</button>                                           %>
+<%# </div>                                                                                 %>
 
 <%# <div class="wrap">                                                                     %>
 <%#   <div class="toolbar">                                                                %>
@@ -24,15 +42,6 @@
 <%#   </div>                                                                               %>
 
 <%#   <div id="tree" class="tree" role="tree"></div>                                       %>
-<%# </div>                                                                                 %>
-
-<%# <div id="ctx" class="ctx" role="menu" aria-hidden="true">                              %>
-<%#   <button data-action="edit">Edit</button>                                             %>
-<%#   <button data-action="add-item">Add new item into box</button>                        %>
-<%#   <button data-action="convert">Convert between item|box</button>                      %>
-<%#   <button data-action="open">Open in new tab</button>                                  %>
-<%#   <hr />                                                                               %>
-<%#   <button data-action="close">Close</button>                                           %>
 <%# </div>                                                                                 %>
 
 <%# <div id="modal" class="modal" aria-hidden="true">                                      %>

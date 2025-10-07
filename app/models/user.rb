@@ -45,10 +45,9 @@ class User < ApplicationRecord
   has_many :user_dashboards, dependent: :destroy
   has_many :meal_builders, dependent: :destroy
   has_many :boxes, dependent: :destroy
-  has_many :box_items, dependent: :destroy
   has_one :money_bucket
   has_one :avatar, dependent: :destroy
-  def avatar; super() || build_avatar; end
+  def avatar = super || build_avatar
   # has_one :user_dashboard, dependent: :destroy
   # def user_dashboard; super() || build_user_dashboard; end
   has_many :caches, class_name: "UserCache"
@@ -61,20 +60,21 @@ class User < ApplicationRecord
   has_secure_password validations: false
 
   after_save :confirm_guest
-  validates_uniqueness_of :phone, allow_nil: true
+  validates :phone, uniqueness: { allow_nil: true }
   validate :proper_fields_present?
 
   scope :by_username, ->(username) { where("LOWER(username) = ?", username.to_s.downcase) }
 
-  enum role: {
+  enum :role, {
     guest:    5,
     standard: 0,
-    admin:    10
+    admin:    10,
   }
 
   def self.me
     @@me ||= admin.first
   end
+
   def me? = id == 1
 
   def self.auth_from_basic(basic_auth)
@@ -94,9 +94,14 @@ class User < ApplicationRecord
 
   def self.find_or_create_by_filtered_params(raw_params)
     return User.new if raw_params.blank?
+
     user_scope = User.all
-    user_scope = user_scope.where("lower(username) = ?", raw_params[:username].to_s.downcase.squish) if raw_params[:username].present?
-    user_scope = user_scope.where(phone: raw_params[:phone].gsub(/[^0-9]/, "").last(10)) if raw_params[:phone].present?
+    if raw_params[:username].present?
+      user_scope = user_scope.where("lower(username) = ?", raw_params[:username].to_s.downcase.squish)
+    end
+    if raw_params[:phone].present?
+      user_scope = user_scope.where(phone: raw_params[:phone].gsub(/[^0-9]/, "").last(10))
+    end
     user_scope = user_scope.where(raw_params.except(:username, :phone))
     user_scope.first || User.new(raw_params)
   end
@@ -114,20 +119,20 @@ class User < ApplicationRecord
   end
 
   def account_has_data?
-    self.class.reflections.values.find do |reflection|
+    self.class.reflections.values.find { |reflection|
       next unless reflection.is_a?(ActiveRecord::Reflection::HasManyReflection)
 
       send(reflection.name).any?
-    end.present?
+    }.present?
   end
 
   def merge_account(guest_account)
-    self.class.reflections.values.each do |reflection|
+    self.class.reflections.each_value { |reflection|
       next unless reflection.is_a?(ActiveRecord::Reflection::HasManyReflection)
 
       fk = reflection.options[:foreign_key] || :user_id
-      guest_account.send(reflection.name).update_all(fk => self.id)
-    end
+      guest_account.send(reflection.name).update_all(fk => id)
+    }
 
     guest_account.destroy
   end
@@ -135,26 +140,27 @@ class User < ApplicationRecord
   def self.timezone(&block)
     return "America/Denver" unless block_given?
 
-    Time.use_zone(timezone) do
+    Time.use_zone(timezone) {
       block.call
-    end
+    }
   end
+
   def timezone(&block)
     return "America/Denver" unless block_given?
 
-    Time.use_zone(timezone) do
+    Time.use_zone(timezone) {
       block.call
-    end
+    }
   end
 
   def parse_time(time_str, format=nil)
-    timezone do
+    timezone {
       if format.nil?
         Time.zone.parse(time_str)
       else
         Time.strptime(time_str, format)
       end
-    end
+    }
     # parse_time("02/06/25 4:52pm", "%m/%d/%y %I:%M%p")
   end
 
@@ -185,17 +191,17 @@ class User < ApplicationRecord
 
   def assign_invitation_token
     self.invitation_token ||= loop do
-      lower_alpha = ('a'..'z').to_a
-      upper_alpha = ('A'..'Z').to_a
+      lower_alpha = ("a".."z").to_a
+      upper_alpha = ("A".."Z").to_a
       numeric = (0..9).to_a
       alpha_num = (lower_alpha + upper_alpha + numeric)
-      token = "#{alpha_num.sample(3).join('')}-#{alpha_num.sample(3).join('')}"
+      token = "#{alpha_num.sample(3).join}-#{alpha_num.sample(3).join}"
       break token unless self.class.where(invitation_token: token).any?
     end
   end
 
   def display_name
-    username.presence || phone.gsub(/[^\d]/, '').presence || "<User:#{id}>"
+    username.presence || phone.gsub(/[^\d]/, "").presence || "<User:#{id}>"
   end
 
   def default_list
@@ -217,7 +223,7 @@ class User < ApplicationRecord
   def invite!(list)
     user_lists.create(list_id: list.id)
     return unless Rails.env.production?
-    return unless phone.present?
+    return if phone.blank?
 
     message = "You've been added to the list: \"#{list.name.titleize}\". Click the link below to join:\n"
     if invited?
@@ -242,13 +248,11 @@ class User < ApplicationRecord
   def confirm_guest
     return unless guest?
 
-    if self.username.present?
-      update(role: :standard)
-    end
+    update(role: :standard) if username.present?
   end
 
   def proper_fields_present?
-    return if guest?
+    return false if guest?
 
     if invited?
       if phone.blank? && username.blank?
@@ -272,13 +276,12 @@ class User < ApplicationRecord
 
   def valid_presence?(sym, error_sym=nil)
     error_sym ||= sym
-    unless send(sym).present?
-      errors.add(error_sym, "must be present.")
-    end
+    errors.add(error_sym, "must be present.") if send(sym).blank?
   end
 
   def format_phone
-    return unless phone.present?
+    return if phone.blank?
+
     stripped_phone = phone.gsub(/[^0-9]/, "").last(10)
 
     if stripped_phone.length == 10
@@ -292,21 +295,18 @@ class User < ApplicationRecord
 
   def correct_current_password
     return unless should_require_current_password
-    unless authenticate(current_password)
-      errors.add(:current_password, "wasn't right.")
-    end
+
+    errors.add(:current_password, "wasn't right.") unless authenticate(current_password)
   end
 
   def confirmation_matches_password
-    unless @password == @password_confirmation
-      errors.add(:password, "must match confirmation.")
-    end
+    errors.add(:password, "must match confirmation.") unless @password == @password_confirmation
   end
 
   def username_constraints
     self.username = username.to_s.squish
 
-    if User.by_username(username).where.not(id: self.id).any?
+    if User.by_username(username).where.not(id: id).any?
       errors.add(:base, "Sorry! That username has already been taken.")
       return
     end
@@ -317,5 +317,4 @@ class User < ApplicationRecord
       errors.add(:username, "can only contain alphanumeric characters.")
     end
   end
-
 end
