@@ -11,6 +11,12 @@ class BoxesController < ApplicationController
     render partial: "inventory_management/box", locals: { box: current_box, preload: true }
   end
 
+  def create
+    box = current_user.boxes.create!(box_params)
+
+    serialize box
+  end
+
   # def reorder
   #   params[:box_ids].each_with_index do |box_id, idx|
   #     current_user.user_boxes.find_by(box_id: box_id).update(sort_order: idx)
@@ -44,9 +50,13 @@ class BoxesController < ApplicationController
 
   private
 
-  # def box_params
-  #   params.require(:box).permit(:name, :description, :other_attributes)
-  # end
+  def box_params
+    params.require(:box).permit(:name, :description, :parent_id).tap { |whitelist|
+      if whitelist[:parent_id].present? && current_user.boxes.where(id: whitelist[:parent_id]).empty?
+        whitelist[:parent_id] = nil
+      end
+    }
+  end
 
   def current_box
     current_user.boxes.find(params[:id])

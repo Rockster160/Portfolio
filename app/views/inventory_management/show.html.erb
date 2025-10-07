@@ -4,12 +4,22 @@
 
 <div class="inventory-wrapper">
   <div class="search-wrapper">
-    <code class="hierarchy"></code>
-    <input type="text" name="search" value="">
+    <div class="current">
+      <span>Adding to: <code class="hierarchy">Everything</code></span>
+      <button type="button" class="edit-button">Edit</button>
+    </div>
+    <%= form_with(model: [:inventory, Box.new], html: { class: "basic inventory-inline-form" }) do |f| %>
+      <%= f.hidden_field :parent_id %>
+      <%= f.text_field :name, placeholder: "Search | Add Items" %>
+      <%= f.submit "Add" %>
+      <template id="box-template">
+        <%= render partial: "inventory_management/box", locals: { box: Box.new } %>
+      </template>
+    <% end %>
   </div>
 
   <div class="tree">
-    <ul>
+    <ul role="tree" aria-label="Inventory Tree">
       <li data-type="root" data-id="" data-hierarchy="Everything">
         <summary>Everything</summary>
       </li>

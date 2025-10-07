@@ -28,7 +28,7 @@ class Box < ApplicationRecord
   before_save :set_hierarchy, if: :reset_hierarchy?
   before_save :cascade_hierarchy, if: :hierarchy_ids_changed?
 
-  orderable sort_order: :asc, scope: ->(box) {
+  orderable sort_order: :desc, scope: ->(box) {
     box.parent&.boxes || box.user.boxes.where(parent_id: nil)
   }
 
@@ -40,6 +40,10 @@ class Box < ApplicationRecord
 
   def hierarchy
     (hierarchy_data.pluck(:name) + [name]).join(" > ")
+  end
+
+  def serialize(opts={})
+    super.merge(hierarchy: hierarchy)
   end
 
   private

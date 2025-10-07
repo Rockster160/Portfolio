@@ -10,7 +10,7 @@ class InventoryManagementController < ApplicationController
   end
 
   def show
-    @boxes = current_user.boxes.where(parent_id: nil).order(:sort_order)
+    @boxes = current_user.boxes.where(parent_id: nil).ordered
   end
 
   def new
