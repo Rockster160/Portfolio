@@ -1,4 +1,5 @@
 import { hideModal } from "./modal.js";
+import { showFlash } from "./flash.js";
 
 const loadInventory = () => {
   const tree = document.querySelector(".tree");
@@ -12,6 +13,27 @@ const loadInventory = () => {
   function upsertBox(box) {
     const existingLi = tree.querySelector(`li[data-id='${box.id}']`);
     if (existingLi) {
+      if (box.deleted) {
+        const parentLi = existingLi.closest(
+          `li[data-id='${existingLi.dataset.parentId}']`,
+        );
+        const ul = parentLi
+          ? parentLi.querySelector(`ul[data-box-id='${parentLi.dataset.id}']`)
+          : null;
+        existingLi.remove();
+        if (ul && ul.children.length === 0) {
+          const emptyLi = document.createElement("li");
+          emptyLi.classList.add("empty-box");
+          emptyLi.innerHTML = "• &lt;empty&gt;";
+          ul.appendChild(emptyLi);
+          if (parentLi) {
+            parentLi.dataset.type = "item";
+          }
+        }
+        return;
+      }
+
+      // Not deleted, update existing
       existingLi.dataset.type = box.empty ? "item" : "box";
       existingLi.dataset.sortOrder = box.sort_order;
       existingLi.querySelector(".item-name").innerText = box.name;
@@ -72,7 +94,8 @@ const loadInventory = () => {
         if (response.ok) {
           return response.json();
         } else {
-          throw new Error("Network response was not ok");
+          // TODO: Controller should render JSON errors
+          throw new Error("Invalid box (ensure name is entered)");
         }
       })
       .then((data) => {
@@ -82,7 +105,8 @@ const loadInventory = () => {
         hideModal("edit-modal");
       })
       .catch((error) => {
-        console.error("There was a problem with the fetch operation:", error);
+        showFlash(error.message);
+        // console.error("There was a problem with the fetch operation:", error);
       });
   });
 
@@ -90,6 +114,42 @@ const loadInventory = () => {
     const li = evt.target.closest("li[data-type]");
     if (li) {
       selectBox(li);
+    }
+
+    const btn = evt.target.closest(".delete-button");
+    if (btn) {
+      if (
+        !confirm(
+          "Are you sure you want to delete this box and ALL of it's contents? This is PERMANENT and CANNOT be undone.",
+        )
+      ) {
+        return;
+      }
+      evt.preventDefault();
+      fetch(editBoxForm.action, {
+        method: "DELETE",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ box_id: editBoxForm.box_id.value }),
+      })
+        .then((response) => {
+          if (response.ok) {
+            return response.json();
+          } else {
+            throw new Error("Network response was not ok");
+          }
+        })
+        .then((data) => {
+          const box = data.data;
+          upsertBox(box);
+          editBoxForm.reset();
+          hideModal("edit-modal");
+        })
+        .catch((error) => {
+          console.error("There was a problem with the fetch operation:", error);
+        });
     }
   });
 

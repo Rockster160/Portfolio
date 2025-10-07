@@ -34,6 +34,8 @@ class Box < ApplicationRecord
 
   json_attributes :data, :hierarchy_data
 
+  validates :name, presence: true
+
   def contents
     boxes.ordered
   end

@@ -4,6 +4,7 @@
   --muted: #A7B1C2;
   --text: #E8EEF9;
   --grey-blue: #6481A1;
+  --grey-dark: #34495E;
   --blue: #4DA3FF;
   --border: #2B3240;
   --radius: 12px;
@@ -75,7 +76,8 @@
             &[data-type="item"],
             &[data-type="root"],
             &[data-type="box"] > details > summary {
-              background-color: var(--grey-blue);
+              // hovered (inactive) -- Also shows when hovering a NESTED item
+              background-color: var(--border);
             }
           }
 
@@ -83,8 +85,10 @@
             &[data-type="item"],
             &[data-type="root"],
             &[data-type="box"] > details > summary {
-              background-color: var(--border);
+              // no hover (selected)
+              background-color: var(--grey-dark);
 
+              // directly hovered (selected)
               &:hover {
                 background-color: var(--grey-blue);
               }
@@ -123,6 +127,19 @@
       .item-actions {
       }
     }
+  }
+
+  .modal-content {
+    display: flex;
+    flex-direction: column;
+
+    form {
+      flex: 1;
+    }
+  }
+
+  .text-right {
+    text-align: right;
   }
 
   // -----------------------------------------------------------------------------------------------

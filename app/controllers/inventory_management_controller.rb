@@ -21,8 +21,12 @@ class InventoryManagementController < ApplicationController
     serialize box
   end
 
-  # def destroy
-  # end
+  def destroy
+    box = current_user.boxes.find(params[:box_id])
+    box.destroy!
+
+    serialize box, merge: { deleted: true }
+  end
 
   private
 

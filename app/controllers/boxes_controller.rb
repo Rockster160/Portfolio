@@ -8,14 +8,6 @@ class BoxesController < ApplicationController
 
   private
 
-  def box_params
-    params.require(:box).permit(:name, :description, :parent_id).tap { |whitelist|
-      if whitelist[:parent_id].present? && current_user.boxes.where(id: whitelist[:parent_id]).empty?
-        whitelist[:parent_id] = nil
-      end
-    }
-  end
-
   def current_box
     current_user.boxes.find(params[:id])
   end

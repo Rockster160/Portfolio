@@ -8,7 +8,7 @@ module SerializeHelper
     render json: { data: json.as_json }, **opts
   end
 
-  def serialize(data, opts={})
+  def serialize(data, opts={}, merge: {})
     errors = []
 
     case data
@@ -21,14 +21,14 @@ module SerializeHelper
       data = data.serialize(opts)
     end
 
-    respond_to do |format|
+    respond_to { |format|
       format.html
       format.json {
         render(
-          json: { data: data.as_json, errors: errors },
+          json:   { data: data.as_json.merge(merge), errors: errors },
           status: errors.any? ? :unprocessable_entity : :ok,
         )
       }
-    end
+    }
   end
 end
