@@ -1,5 +1,6 @@
 class Jil::Methods::Date < Jil::Methods::Base
-  TIMEPIECES = %w[second minute hour day week month year wday yday].freeze
+  TIME_INDICES = %w[wday mday yday zday].freeze
+  TIMEPIECES = %w[second minute hour day week month year].freeze
 
   def cast(value)
     case value
@@ -20,9 +21,13 @@ class Jil::Methods::Date < Jil::Methods::Base
   end
 
   def piece(date, timepiece)
-    return unless timepiece.gsub(/s$/, "").in?(TIMEPIECES)
+    return unless timepiece.gsub(/s$/, "").in?(TIMEPIECES + TIME_INDICES)
 
-    cast(date).send(timepiece)
+    if timepiece == "zday"
+      cast(date).to_date.jd
+    else
+      cast(date).send(timepiece)
+    end
   end
 
   def ago(num, interval)
