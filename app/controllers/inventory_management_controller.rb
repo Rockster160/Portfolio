@@ -15,8 +15,27 @@ class InventoryManagementController < ApplicationController
   end
 
   def update
-    box = current_user.boxes.find(params[:box_id])
-    box.update!(box_params)
+    if params[:box_id].present?
+      box = current_user.boxes.find(params[:box_id])
+      box.update!(box_params)
+    end
+
+    if params[:child_ids].present?
+      parent_scope = (
+        if params[:parent_id].present?
+          current_user.boxes.where(id: params[:parent_id])
+        else
+          current_user.boxes.where(parent_id: nil)
+        end
+      )
+      boxes = parent_scope.where(id: params[:child_ids])
+      ordered_boxes = params[:child_ids].map { |id| boxes.detect { |b| b.id == id.to_i } }.compact
+
+      box_count = ordered_boxes.size
+      ordered_boxes.each_with_index do |box, idx|
+        box.update!(sort_order: box_count - idx)
+      end
+    end
 
     serialize box
   end

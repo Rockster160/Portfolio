@@ -169,6 +169,94 @@ const loadInventory = () => {
     return !!li && li.dataset?.type === "root";
   }
 
+  function containerRows(containerUl) {
+    return [...containerUl.children]
+      .filter((n) => n.matches("li[data-type]"))
+      .filter((n) => !isRootLi(n));
+  }
+
+  function safeInsert(containerUl, node, insertRef, indexHint) {
+    if (!containerUl) return;
+    let ref =
+      insertRef && insertRef.parentElement === containerUl ? insertRef : null;
+
+    if (!ref && Number.isInteger(indexHint)) {
+      const rows = containerRows(containerUl);
+      const i = Math.max(0, Math.min(indexHint, rows.length));
+      ref = rows[i] || null;
+    }
+
+    if (ref) containerUl.insertBefore(node, ref);
+    else containerUl.appendChild(node);
+  }
+
+  function containerDropInfo(evt, containerUl) {
+    // parent <li> (or the root <li>)
+    const parentLi =
+      containerUl.closest("li[data-type]") ||
+      document.querySelector(".tree li[data-type='root']");
+
+    // All real rows in this container (exclude root sentinel if top-level)
+    const rows = [...containerUl.children]
+      .filter((n) => n.matches("li[data-type]"))
+      .filter((n) => !isRootLi(n));
+
+    if (rows.length === 0) {
+      return { parentLi, insertRef: null, insertAt: 0, y: evt.clientY };
+    }
+
+    // find index by mouse vertical midpoints
+    const y = evt.clientY;
+    let insertAt = rows.length;
+    for (let i = 0; i < rows.length; i += 1) {
+      const r = rows[i].getBoundingClientRect();
+      const mid = r.top + r.height / 2;
+      if (y < mid) {
+        insertAt = i;
+        break;
+      }
+    }
+    const insertRef = rows[insertAt] || null;
+    return { parentLi, insertRef, insertAt, y };
+  }
+
+  function placeContainerGuide(containerUl, insertAt) {
+    // draw a horizontal guide spanning the container
+    const guide =
+      document.querySelector(".drop-guide") ||
+      (() => {
+        const g = document.createElement("div");
+        g.className = "drop-guide";
+        document.body.appendChild(g);
+        return g;
+      })();
+
+    // choose y from neighbor row or container bounds
+    const rows = [...containerUl.children]
+      .filter((n) => n.matches("li[data-type]"))
+      .filter((n) => !isRootLi(n));
+
+    let y;
+    if (rows.length === 0) {
+      const cr = containerUl.getBoundingClientRect();
+      y = cr.top + 6;
+    } else if (insertAt === 0) {
+      const r0 = rows[0].getBoundingClientRect();
+      y = r0.top - 2;
+    } else if (insertAt >= rows.length) {
+      const rn = rows[rows.length - 1].getBoundingClientRect();
+      y = rn.bottom - 2;
+    } else {
+      const r = rows[insertAt].getBoundingClientRect();
+      y = r.top - 2;
+    }
+
+    const wr = containerUl.getBoundingClientRect();
+    guide.style.left = `${wr.left}px`;
+    guide.style.width = `${wr.width}px`;
+    guide.style.top = `${y}px`;
+  }
+
   function targetUlFor(li) {
     if (li.dataset.type === "root") {
       return document.querySelector(".tree ul[role=tree]");
@@ -185,6 +273,12 @@ const loadInventory = () => {
     if (targetLi === dragEl) return false;
     if (isDescendant(targetLi, dragEl)) return false;
     return true;
+  }
+
+  function buildChildIds(containerUl) {
+    return containerRows(containerUl)
+      .map((n) => parseInt(n.dataset.id, 10))
+      .filter((n) => Number.isFinite(n));
   }
 
   function isDescendant(child, ancestor) {
@@ -251,16 +345,11 @@ const loadInventory = () => {
     ensureDraggableRoots();
 
     let dragEl = null;
-    let lastTarget = null;
-    let lastSlot = null;
     let guide = null;
+    let intoRow = null;
 
-    function clearGuides() {
-      lastTarget?.classList.remove("drop-target");
-      lastTarget = null;
-      lastSlot = null;
-      guide?.remove();
-      guide = null;
+    function rootLi() {
+      return document.querySelector(".tree li[data-type='root']");
     }
 
     function ensureGuide() {
@@ -271,35 +360,26 @@ const loadInventory = () => {
       return guide;
     }
 
-    function placeGuide(slot, targetLi) {
+    function clearGuide() {
+      guide?.remove();
+      guide = null;
+    }
+
+    function setGuideAt(y, left, width) {
       const g = ensureGuide();
-      const summary =
-        targetLi.querySelector(":scope > details > summary") ||
-        targetLi.querySelector(":scope > summary") ||
-        targetLi;
-      const r = summary.getBoundingClientRect();
+      g.style.top = `${y}px`;
+      g.style.left = `${left}px`;
+      g.style.width = `${width}px`;
+    }
 
-      // Root is always INTO, but keep a subtle underline for feedback
-      if (targetLi.dataset.type === "root") slot = "into";
-
-      if (slot === "before") {
-        g.style.left = `${r.left}px`;
-        g.style.width = `${r.width}px`;
-        g.style.top = `${r.top - 2}px`;
-      } else if (slot === "after") {
-        g.style.left = `${r.left}px`;
-        g.style.width = `${r.width}px`;
-        g.style.top = `${r.bottom - 2}px`;
-      } else {
-        g.style.left = `${r.left + 12}px`;
-        g.style.width = `${r.width - 24}px`;
-        g.style.top = `${r.top + r.height - 6}px`;
-      }
+    function clearInto() {
+      intoRow?.classList.remove("into-target");
+      intoRow = null;
     }
 
     document.addEventListener("dragstart", (evt) => {
       const li = evt.target.closest("li[data-type]");
-      if (!li || li.dataset.type === "root") return;
+      if (!li || isRootLi(li)) return;
       dragEl = li;
       li.classList.add("dragging");
       evt.dataTransfer.setData("text/plain", li.dataset.id || "");
@@ -309,94 +389,165 @@ const loadInventory = () => {
     document.addEventListener("dragend", () => {
       dragEl?.classList.remove("dragging");
       dragEl = null;
-      clearGuides();
+      clearInto();
+      clearGuide();
     });
 
     document.addEventListener("dragover", (evt) => {
-      const targetLi = evt.target.closest("li[data-type]");
-      if (!dragEl || !targetLi || !canDrop(dragEl, targetLi)) return;
-      evt.preventDefault();
+      if (!dragEl) return;
 
-      let slot = slotFromEvent(evt, targetLi);
-      if (targetLi.dataset.type === "root") slot = "into";
+      // Prefer row targeting (before/after/into)
+      const row = evt.target.closest("li[data-type]");
+      if (row && row !== dragEl && !row.contains(dragEl)) {
+        evt.preventDefault();
 
-      if (lastTarget !== targetLi || lastSlot !== slot) {
-        clearGuides();
-        targetLi.classList.add("drop-target");
-        placeGuide(slot, targetLi);
-        lastTarget = targetLi;
-        lastSlot = slot;
+        let slot = slotFromEvent(evt, row);
+        if (isRootLi(row)) slot = "into"; // root acts like its container top
+
+        const summary =
+          row.querySelector(":scope > details > summary") ||
+          row.querySelector(":scope > summary") ||
+          row;
+        const r = summary.getBoundingClientRect();
+
+        if (slot === "before") {
+          clearInto();
+          setGuideAt(r.top - 2, r.left, r.width);
+        } else if (slot === "after") {
+          clearInto();
+          setGuideAt(r.bottom - 2, r.left, r.width);
+        } else {
+          clearGuide();
+          if (!isRootLi(row)) {
+            if (intoRow !== row) {
+              clearInto();
+              row.classList.add("into-target");
+              intoRow = row;
+            }
+          } else {
+            // "into" root → show top-of-top-level line for feedback
+            const topUl = document.querySelector(".tree ul[role=tree]");
+            const wr = topUl.getBoundingClientRect();
+            const firstReal = [...topUl.children].find(
+              (n) => n.matches("li[data-type]") && !isRootLi(n),
+            );
+            const y = firstReal
+              ? firstReal.getBoundingClientRect().top - 2
+              : wr.top + 6;
+            setGuideAt(y, wr.left, wr.width);
+          }
+        }
+
+        evt.dataTransfer.dropEffect = "move";
+        return;
       }
 
-      evt.dataTransfer.dropEffect = "move";
-    });
+      // Container whitespace: compute index by Y inside the UL
+      const ul = evt.target.closest("ul");
+      if (ul) {
+        const parentLi = ul.closest("li[data-type]") || rootLi();
+        if (parentLi && parentLi.contains(dragEl)) return;
 
-    document.addEventListener("dragleave", (evt) => {
-      const leaving = evt.target.closest("li[data-type]");
-      if (leaving && leaving === lastTarget) clearGuides();
+        evt.preventDefault();
+
+        const rows = containerRows(ul);
+        const wr = ul.getBoundingClientRect();
+        const y = evt.clientY;
+        let insertAt = rows.length;
+        for (let i = 0; i < rows.length; i += 1) {
+          const rr = rows[i].getBoundingClientRect();
+          if (y < rr.top + rr.height / 2) {
+            insertAt = i;
+            break;
+          }
+        }
+
+        const lineY =
+          rows.length === 0
+            ? wr.top + 6
+            : insertAt === 0
+            ? rows[0].getBoundingClientRect().top - 2
+            : insertAt >= rows.length
+            ? rows[rows.length - 1].getBoundingClientRect().bottom - 2
+            : rows[insertAt].getBoundingClientRect().top - 2;
+
+        clearInto();
+        setGuideAt(lineY, wr.left, wr.width);
+        evt.dataTransfer.dropEffect = "move";
+      }
     });
 
     document.addEventListener("drop", (evt) => {
-      const targetLi = evt.target.closest("li[data-type]");
-      if (!dragEl || !targetLi || !canDrop(dragEl, targetLi)) return;
+      if (!dragEl) return;
       evt.preventDefault();
 
-      let slot = slotFromEvent(evt, targetLi);
-      if (targetLi.dataset.type === "root") slot = "into";
+      let targetUl, parentLi, insertAt, insertRef;
 
-      let newParentLi;
-      let insertRef = null;
+      const row = evt.target.closest("li[data-type]");
+      if (row && row !== dragEl && !row.contains(dragEl)) {
+        let slot = slotFromEvent(evt, row);
+        if (isRootLi(row)) slot = "into";
 
-      if (slot === "into") {
-        newParentLi = targetLi;
+        if (slot === "before" || slot === "after") {
+          parentLi = row.parentElement.closest("li[data-type]") || rootLi();
+          targetUl =
+            parentLi.dataset?.type === "root"
+              ? document.querySelector(".tree ul[role=tree]")
+              : parentLi.querySelector(":scope > details > ul") ||
+                parentLi.querySelector(
+                  `ul[data-box-id='${parentLi.dataset.id}']`,
+                );
+          const rows = containerRows(targetUl);
+          const idx = rows.indexOf(row);
+          insertAt =
+            slot === "before"
+              ? Math.max(0, idx)
+              : Math.min(rows.length, idx + 1);
+          insertRef = rows[insertAt] || null;
+        } else {
+          // INTO row → top of its container
+          parentLi = row;
+          targetUl = targetUlFor(parentLi);
+          if (!targetUl) return;
+          const rows = containerRows(targetUl);
+          insertAt = 0;
+          insertRef = rows[0] || null;
+        }
       } else {
-        newParentLi =
-          targetLi.dataset.type === "root"
-            ? targetLi
-            : targetLi.closest("li[data-type]");
-        const containerUl = targetUlFor(newParentLi);
-        if (!containerUl) return;
+        // Container whitespace
+        targetUl =
+          evt.target.closest("ul") ||
+          document.querySelector(".tree ul[role=tree]");
+        parentLi = targetUl.closest("li[data-type]") || rootLi();
 
-        if (slot === "before") {
-          insertRef = targetLi;
-        } else {
-          const sibs = [...containerUl.children]
-            .filter((n) => n.matches("li[data-type]"))
-            // when parent is root, ignore the root row
-            .filter(
-              (n) =>
-                newParentLi.dataset.type !== "root" ||
-                n.dataset.type !== "root",
-            );
-          const idx = sibs.indexOf(targetLi);
-          insertRef = sibs[idx + 1] || null;
+        const rows = containerRows(targetUl);
+        const y = evt.clientY;
+        insertAt = rows.length;
+        for (let i = 0; i < rows.length; i += 1) {
+          const rr = rows[i].getBoundingClientRect();
+          if (y < rr.top + rr.height / 2) {
+            insertAt = i;
+            break;
+          }
         }
+        insertRef = rows[insertAt] || null;
       }
 
-      const oldParentLi =
-        dragEl.parentElement.closest("li[data-type]") ||
-        tree.querySelector("li[data-type='root']");
+      // Prevent dropping into own subtree
+      if (parentLi && parentLi.contains(dragEl)) return;
 
-      const parentUl = targetUlFor(newParentLi);
-      if (!parentUl) return;
+      const prevParentLi =
+        dragEl.parentElement.closest("li[data-type]") || rootLi();
 
-      if (insertRef) parentUl.insertBefore(dragEl, insertRef);
-      else {
-        if (newParentLi.dataset.type === "root") {
-          // append to end of top-level, not before the root sentinel
-          parentUl.appendChild(dragEl);
-        } else {
-          parentUl.appendChild(dragEl);
-        }
-      }
+      // Optimistic move
+      safeInsert(targetUl, dragEl, insertRef, insertAt);
 
-      updateBoxType(oldParentLi);
-      updateBoxType(newParentLi);
+      updateBoxType(prevParentLi);
+      updateBoxType(parentLi);
 
-      const insert_at = siblingIndex(dragEl);
-      const draggedId = dragEl.dataset.id;
-      const parentId =
-        newParentLi.dataset.type === "root" ? "" : newParentLi.dataset.id || "";
+      const movedId = dragEl.dataset.id;
+      const newParentId = isRootLi(parentLi) ? "" : parentLi.dataset.id || "";
+      const child_ids = buildChildIds(targetUl);
 
       fetch(editBoxForm.action, {
         method: "PATCH",
@@ -405,32 +556,23 @@ const loadInventory = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          box_id: draggedId,
-          parent_id: parentId,
-          insert_at,
+          box_id: movedId,
+          parent_id: newParentId,
+          child_ids,
         }),
       })
         .then((r) =>
           r.ok ? r.json() : Promise.reject(new Error("Update failed")),
         )
         .then((data) => {
-          const li = tree.querySelector(`li[data-id='${draggedId}']`);
-          const oldH = li?.dataset.hierarchy || "";
           upsertBox(data.data);
-          const newLi = tree.querySelector(`li[data-id='${draggedId}']`);
-          if (li && newLi) {
-            propagateHierarchyChange(
-              newLi,
-              oldH,
-              newLi.dataset.hierarchy || "",
-            );
-          }
         })
         .catch((err) => {
           showFlash(err.message || "Move failed");
         })
         .finally(() => {
-          clearGuides();
+          clearInto();
+          clearGuide();
           dragEl?.classList.remove("dragging");
           dragEl = null;
         });
