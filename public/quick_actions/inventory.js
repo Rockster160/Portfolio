@@ -156,15 +156,6 @@ const loadInventory = () => {
     return "into";
   }
 
-  function siblingIndex(li) {
-    const parentUl = li.parentElement;
-    const isRootParent = parentUl.matches("ul[role=tree]");
-    const rows = [...parentUl.children]
-      .filter((n) => n.matches("li[data-type]"))
-      .filter((n) => !isRootParent || n.dataset.type !== "root");
-    return rows.indexOf(li);
-  }
-
   function isRootLi(li) {
     return !!li && li.dataset?.type === "root";
   }
@@ -190,73 +181,6 @@ const loadInventory = () => {
     else containerUl.appendChild(node);
   }
 
-  function containerDropInfo(evt, containerUl) {
-    // parent <li> (or the root <li>)
-    const parentLi =
-      containerUl.closest("li[data-type]") ||
-      document.querySelector(".tree li[data-type='root']");
-
-    // All real rows in this container (exclude root sentinel if top-level)
-    const rows = [...containerUl.children]
-      .filter((n) => n.matches("li[data-type]"))
-      .filter((n) => !isRootLi(n));
-
-    if (rows.length === 0) {
-      return { parentLi, insertRef: null, insertAt: 0, y: evt.clientY };
-    }
-
-    // find index by mouse vertical midpoints
-    const y = evt.clientY;
-    let insertAt = rows.length;
-    for (let i = 0; i < rows.length; i += 1) {
-      const r = rows[i].getBoundingClientRect();
-      const mid = r.top + r.height / 2;
-      if (y < mid) {
-        insertAt = i;
-        break;
-      }
-    }
-    const insertRef = rows[insertAt] || null;
-    return { parentLi, insertRef, insertAt, y };
-  }
-
-  function placeContainerGuide(containerUl, insertAt) {
-    // draw a horizontal guide spanning the container
-    const guide =
-      document.querySelector(".drop-guide") ||
-      (() => {
-        const g = document.createElement("div");
-        g.className = "drop-guide";
-        document.body.appendChild(g);
-        return g;
-      })();
-
-    // choose y from neighbor row or container bounds
-    const rows = [...containerUl.children]
-      .filter((n) => n.matches("li[data-type]"))
-      .filter((n) => !isRootLi(n));
-
-    let y;
-    if (rows.length === 0) {
-      const cr = containerUl.getBoundingClientRect();
-      y = cr.top + 6;
-    } else if (insertAt === 0) {
-      const r0 = rows[0].getBoundingClientRect();
-      y = r0.top - 2;
-    } else if (insertAt >= rows.length) {
-      const rn = rows[rows.length - 1].getBoundingClientRect();
-      y = rn.bottom - 2;
-    } else {
-      const r = rows[insertAt].getBoundingClientRect();
-      y = r.top - 2;
-    }
-
-    const wr = containerUl.getBoundingClientRect();
-    guide.style.left = `${wr.left}px`;
-    guide.style.width = `${wr.width}px`;
-    guide.style.top = `${y}px`;
-  }
-
   function targetUlFor(li) {
     if (li.dataset.type === "root") {
       return document.querySelector(".tree ul[role=tree]");
@@ -267,28 +191,10 @@ const loadInventory = () => {
     );
   }
 
-  function canDrop(dragEl, targetLi) {
-    if (!dragEl || !targetLi) return false;
-    if (targetLi.dataset.type === "root") return true;
-    if (targetLi === dragEl) return false;
-    if (isDescendant(targetLi, dragEl)) return false;
-    return true;
-  }
-
   function buildChildIds(containerUl) {
     return containerRows(containerUl)
       .map((n) => parseInt(n.dataset.id, 10))
       .filter((n) => Number.isFinite(n));
-  }
-
-  function isDescendant(child, ancestor) {
-    if (!child || !ancestor) return false;
-    let n = child.parentElement;
-    while (n) {
-      if (n === ancestor) return true;
-      n = n.parentElement;
-    }
-    return false;
   }
 
   function ensureDraggableRoots() {
@@ -299,46 +205,6 @@ const loadInventory = () => {
         li.setAttribute("draggable", "true");
       }
     });
-  }
-
-  function getDropTarget(el) {
-    // only allow dropping into a box (its children ul) or the root
-    const li = el?.closest("li[data-type]");
-    if (!li) return null;
-    if (li.dataset.type === "box" || li.dataset.type === "root") return li;
-    return null;
-  }
-
-  function moveLiToTarget(li, targetLi) {
-    const isRoot = targetLi.dataset.type === "root";
-    const targetId = targetLi.dataset.id || "";
-    let targetUl;
-
-    if (isRoot) {
-      targetUl = tree.querySelector("ul[role=tree]");
-      // insert after the root row
-      const rootRow = targetUl.querySelector("li[data-type='root']");
-      rootRow.after(li);
-    } else {
-      targetUl =
-        targetLi.querySelector(`ul[data-box-id='${targetId}']`) ||
-        targetLi.querySelector(":scope > details > ul") ||
-        targetLi.querySelector("ul");
-      if (!targetUl) return;
-      // box now definitely isn't "empty"
-      targetLi.querySelector(".empty-box")?.remove();
-      targetLi.dataset.type = "box";
-      targetUl.appendChild(li);
-    }
-
-    // update hierarchy string on the moved li
-    const parentHierarchy = isRoot
-      ? "Everything"
-      : targetLi.dataset.hierarchy || "";
-    const name = li.querySelector(".item-name")?.innerText?.trim() || "";
-    li.dataset.parentId = targetId;
-    li.dataset.hierarchy =
-      parentHierarchy && name ? `${parentHierarchy} > ${name}` : name;
   }
 
   function attachDragAndDrop() {
@@ -981,7 +847,6 @@ const loadInventory = () => {
     li.classList.add("selected");
     inventoryForm.querySelector("#new_box_parent_id").value =
       li.dataset.id || "";
-    // searchField.focus();
     searchWrapper.querySelector("code.hierarchy").innerText =
       li.dataset.hierarchy || "";
 
@@ -998,8 +863,6 @@ const loadInventory = () => {
         details.querySelector(".item-description").innerText;
 
       editBoxForm.querySelector("input[name='box_id']").value = li.dataset.id;
-      // editBoxForm.querySelector("input[name='parent_id']").value =
-      //   li.dataset.parent_id;
       editBoxForm.querySelector("input[name='name']").value = boxName;
       editBoxForm.querySelector("input[name='notes']").value = boxNotes;
       editBoxForm.querySelector("textarea[name='description']").value =
