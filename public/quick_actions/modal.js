@@ -9,6 +9,10 @@ export function hideCurrentModal() {
   open_modals[open_modals.length - 1]?.classList?.remove("show");
 }
 
+export function openedModal() {
+  return document.querySelector(".modal.show");
+}
+
 document.addEventListener("click", function (evt) {
   if (evt.target.closest(".close")) {
     evt.target.closest(".modal").classList.remove("show");
