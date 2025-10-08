@@ -13,12 +13,18 @@ class ListsController < ApplicationController
   end
 
   def show
-    raise ActionController::RoutingError, "Not Found" unless @list.present?
+    raise ActionController::RoutingError, "Not Found" if @list.blank?
+
+    @tasks = Task.find(params[:t].split(",") || []) if params[:t].present?
 
     respond_to do |format|
       format.js { render json: @list.serialize }
       format.html
     end
+  end
+
+  def new
+    @list = List.new
   end
 
   def reorder
@@ -54,10 +60,6 @@ class ListsController < ApplicationController
         format.html { render :edit }
       end
     end
-  end
-
-  def new
-    @list = List.new
   end
 
   def create

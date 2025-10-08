@@ -14,6 +14,13 @@
 <% end %>
 
 <div class="skinny-container list-container" data-list-id="<%= @list.id %>">
+  <% if @tasks.present? %>
+    <div class="task-trigger-btns">
+      <% @tasks.each do |task| %>
+        <%= render partial: "jil/tasks/trigger", locals: { task: task } %>
+      <% end %>
+    </div>
+  <% end %>
   <div class="<%= "hidden" if params[:mode] == "kiosk" %>">
     <div class="btn-container">
       <a href="<%= lists_path %>" class="btn">&larr; All Lists</a>

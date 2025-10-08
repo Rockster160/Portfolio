@@ -13,3 +13,65 @@
     font-size: 1.5em;
   }
 }
+
+.task-trigger-btns {
+  display: flex;
+  justify-content: space-evenly;
+  flex-wrap: wrap;
+
+  .execute-btn-wrapper {
+    display: inline-block;
+    text-align: center;
+    position: relative;
+    transition: transform, box-shadow 0.1s ease;
+    margin-bottom: 30px;
+
+    .execute-btn {
+      width: 100px;
+      height: 95px;
+      font-size: 20px;
+      position: relative;
+      z-index: 1;
+      border: 2px solid $blue-d4;
+      box-shadow: 0 10px 0 $blue-d4;
+
+      &:hover {
+        transform: translateY(1px);
+        box-shadow: 0 9px 0 $blue-d4;
+      }
+      &:active {
+        transform: translateY(9px);
+        box-shadow: 0 1px 0 $blue-d4;
+      }
+    }
+    .execute-btn-base {
+      position: absolute;
+      bottom: -20px;
+      left: -10px;
+      right: -10px;
+      height: 120px;
+      background-color: $blue-d2;
+      border-radius: 8px;
+      border: 2px solid $blue-d4;
+    }
+    .message-wrapper {
+      display: inline-block;
+      position: absolute;
+      bottom: -20px;
+      left: 0;
+      right: 0;
+      font-size: 0.9em;
+      text-align: center;
+      z-index: 3;
+    }
+  }
+
+  .execute-btn.disabled {
+    background-color: $grey-blue;
+    // color: $white;
+    cursor: not-allowed;
+    border-color: $grey-blue;
+    transform: translateY(9px);
+    box-shadow: 0 1px 0 $blue-d4;
+  }
+}

@@ -1,0 +1,7 @@
+<div class="execute-btn-wrapper">
+  <%= link_to run_jil_task_path(task), method: :post, remote: true, class: "btn execute-btn" do %>
+    <div class="execute-btn-title"><%= task.name %></div>
+  <% end %>
+  <span class="execute-btn-base"></span>
+  <div class="message-wrapper"></div>
+</div>

@@ -27,7 +27,7 @@ class Jil::TasksController < ApplicationController
 
     render json: {
       data: @task.serialize,
-      url: jil_task_path(@task),
+      url:  jil_task_path(@task),
     }
   end
 
@@ -37,7 +37,7 @@ class Jil::TasksController < ApplicationController
 
     render json: {
       data: @task.serialize,
-      url: jil_task_path(@task),
+      url:  jil_task_path(@task),
     }
   end
 

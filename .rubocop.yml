@@ -324,6 +324,7 @@ Style/BlockDelimiters:
     - scope # Routes
     - constraints # Routes
     - rescue_from # Controllers
+    - respond_to # Controllers
     - current! # Tenant
     - thread_settings
     - request # PaperTrail
