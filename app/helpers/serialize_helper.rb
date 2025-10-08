@@ -21,11 +21,14 @@ module SerializeHelper
       data = data.serialize(opts)
     end
 
+    json = data.as_json
+    json.merge!(merge) if merge.present? && json.is_a?(::Hash)
+
     respond_to { |format|
       format.html
       format.json {
         render(
-          json:   { data: data.as_json.merge(merge), errors: errors },
+          json:   { data: data, errors: errors },
           status: errors.any? ? :unprocessable_entity : :ok,
         )
       }
