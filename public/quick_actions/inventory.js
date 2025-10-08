@@ -755,10 +755,9 @@ const loadInventory = () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            box_id: newParentId,
+            box_id: movedId,
             parent_id: newParentId,
             child_ids,
-            moved_id: movedId,
           }),
         })
           .then((r) =>
