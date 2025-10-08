@@ -1,5 +1,5 @@
 class Jil::Methods::Date < Jil::Methods::Base
-  TIMEPIECES = %w[second minute hour day wday week month year].freeze
+  TIMEPIECES = %w[second minute hour day week month year wday yday].freeze
 
   def cast(value)
     case value

@@ -23,7 +23,7 @@ class InventoryManagementController < ApplicationController
     if params[:child_ids].present?
       parent_scope = (
         if params[:parent_id].present?
-          current_user.boxes.where(id: params[:parent_id])
+          current_user.boxes.where(parent_id: params[:parent_id])
         else
           current_user.boxes.where(parent_id: nil)
         end

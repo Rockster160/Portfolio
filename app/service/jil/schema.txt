@@ -102,7 +102,7 @@
   #now
   #ago(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"] "ago")
   #from_now(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"] "from now")
-  .piece(["second" "minute" "hour" "day" "wday" "week" "month" "year"])::Numeric
+  .piece(["second" "minute" "hour" "day" "week" "month" "year" "wday" "yday"])::Numeric
   .adjust(["+", "-"], Duration|Numeric)
   .add(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
   .subtract(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
