@@ -1,4 +1,4 @@
-import { hideModal } from "./modal.js";
+import { hideModal, openedModal } from "./modal.js";
 import { showFlash } from "./flash.js";
 
 const loadInventory = () => {
@@ -839,6 +839,13 @@ const loadInventory = () => {
     })();
   }
 
+  document.addEventListener("keypress", (evt) => {
+    if (evt.target.matches("input, textarea")) return;
+    if (openedModal()) return;
+
+    searchField.focus();
+  });
+
   document.addEventListener("submit", (evt) => {
     const form = evt.target;
     if (!form) return;
@@ -975,7 +982,7 @@ const loadInventory = () => {
     li.classList.add("selected");
     inventoryForm.querySelector("#new_box_parent_id").value =
       li.dataset.id || "";
-    searchField.focus();
+    // searchField.focus();
     searchWrapper.querySelector("code.hierarchy").innerText =
       li.dataset.hierarchy || "";
 
