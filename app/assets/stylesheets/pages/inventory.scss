@@ -142,6 +142,24 @@
     text-align: right;
   }
 
+  .inventory-wrapper .tree li.drop-target > details > summary,
+  .inventory-wrapper .tree li.drop-target[data-type="root"] > summary {
+    outline: 2px dashed var(--blue);
+    outline-offset: 2px;
+  }
+
+  .inventory-wrapper .tree li.dragging {
+    opacity: 0.5;
+  }
+
+  .drop-guide {
+    position: fixed;
+    height: 2px;
+    background: var(--blue);
+    pointer-events: none;
+    z-index: 9999;
+  }
+
   // -----------------------------------------------------------------------------------------------
   // -----------------------------------------------------------------------------------------------
 
