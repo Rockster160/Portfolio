@@ -577,6 +577,266 @@ const loadInventory = () => {
           dragEl = null;
         });
     });
+
+    // --- Touch shim: long-press to start drag on mobile (iOS/Android) ---
+    (() => {
+      if (!window.matchMedia("(pointer: coarse)").matches) return;
+
+      let touchDrag = false;
+      let pressTimer = null;
+      let startEl = null;
+
+      const LONG_PRESS_MS = 220;
+
+      const pt = (e) => e.touches?.[0] || e.changedTouches?.[0];
+
+      function handleTouchOver(x, y) {
+        // reuse your existing visuals by calling the same logic the mouse path uses
+        const el = document.elementFromPoint(x, y);
+        const fake = {
+          clientX: x,
+          clientY: y,
+          target: el,
+          preventDefault() {},
+        };
+        document.dispatchEvent(new Event("mousemove")); // keeps iOS from freezing caret
+        // call the same handlers by directly running the bodies:
+        // we can simulate by triggering the 'dragover' path:
+        // reusing your code: just call the function we already attached
+        // -> we can't call anonymous listeners, so inline the minimal core here:
+
+        const row = el?.closest?.("li[data-type]");
+        if (row && row !== dragEl && !row.contains(dragEl)) {
+          let slot = slotFromEvent(fake, row);
+          if (isRootLi(row)) slot = "into";
+
+          const summary =
+            row.querySelector(":scope > details > summary") ||
+            row.querySelector(":scope > summary") ||
+            row;
+          const r = summary.getBoundingClientRect();
+
+          if (slot === "before") {
+            // show line above row
+            // setGuideAt / clearInto are in closure
+            clearInto();
+            setGuideAt(r.top - 2, r.left, r.width);
+          } else if (slot === "after") {
+            clearInto();
+            setGuideAt(r.bottom - 2, r.left, r.width);
+          } else {
+            clearGuide();
+            if (!isRootLi(row)) {
+              if (intoRow !== row) {
+                clearInto();
+                row.classList.add("into-target");
+                intoRow = row;
+              }
+            } else {
+              const topUl = document.querySelector(".tree ul[role=tree]");
+              const wr = topUl.getBoundingClientRect();
+              const firstReal = [...topUl.children].find(
+                (n) => n.matches("li[data-type]") && !isRootLi(n),
+              );
+              const yTop = firstReal
+                ? firstReal.getBoundingClientRect().top - 2
+                : wr.top + 6;
+              setGuideAt(yTop, wr.left, wr.width);
+            }
+          }
+          return;
+        }
+
+        const ul = el?.closest?.("ul");
+        if (ul) {
+          const rows = containerRows(ul);
+          const wr = ul.getBoundingClientRect();
+          let insertAt = rows.length;
+          for (let i = 0; i < rows.length; i += 1) {
+            const rr = rows[i].getBoundingClientRect();
+            if (y < rr.top + rr.height / 2) {
+              insertAt = i;
+              break;
+            }
+          }
+          const lineY =
+            rows.length === 0
+              ? wr.top + 6
+              : insertAt === 0
+              ? rows[0].getBoundingClientRect().top - 2
+              : insertAt >= rows.length
+              ? rows[rows.length - 1].getBoundingClientRect().bottom - 2
+              : rows[insertAt].getBoundingClientRect().top - 2;
+
+          clearInto();
+          setGuideAt(lineY, wr.left, wr.width);
+        }
+      }
+
+      function handleTouchDrop(x, y) {
+        const el = document.elementFromPoint(x, y);
+        const row = el?.closest?.("li[data-type]");
+        const ulFrom = (node) =>
+          node
+            ?.closest?.("li[data-type]")
+            ?.querySelector?.(":scope > details > ul") ||
+          node
+            ?.closest?.("li[data-type]")
+            ?.querySelector?.(
+              `ul[data-box-id='${node.closest("li[data-type]")?.dataset.id}']`,
+            ) ||
+          document.querySelector(".tree ul[role=tree]");
+
+        let targetUl, parentLi, insertAt, insertRef;
+
+        if (row && row !== dragEl && !row.contains(dragEl)) {
+          let slot = slotFromEvent({ clientY: y }, row);
+          if (isRootLi(row)) slot = "into";
+
+          if (slot === "before" || slot === "after") {
+            parentLi =
+              row.parentElement.closest("li[data-type]") ||
+              document.querySelector(".tree li[data-type='root']");
+            targetUl =
+              parentLi.dataset?.type === "root"
+                ? document.querySelector(".tree ul[role=tree]")
+                : ulFrom(parentLi);
+            const rows = containerRows(targetUl);
+            const idx = rows.indexOf(row);
+            insertAt =
+              slot === "before"
+                ? Math.max(0, idx)
+                : Math.min(rows.length, idx + 1);
+            insertRef = rows[insertAt] || null;
+          } else {
+            parentLi = row;
+            targetUl = ulFrom(parentLi);
+            const rows = containerRows(targetUl);
+            insertAt = 0;
+            insertRef = rows[0] || null;
+          }
+        } else {
+          targetUl =
+            el?.closest?.("ul") ||
+            document.querySelector(".tree ul[role=tree]");
+          parentLi =
+            targetUl.closest("li[data-type]") ||
+            document.querySelector(".tree li[data-type='root']");
+          const rows = containerRows(targetUl);
+          insertAt = rows.length;
+          for (let i = 0; i < rows.length; i += 1) {
+            const rr = rows[i].getBoundingClientRect();
+            if (y < rr.top + rr.height / 2) {
+              insertAt = i;
+              break;
+            }
+          }
+          insertRef = rows[insertAt] || null;
+        }
+
+        if (parentLi && parentLi.contains(dragEl)) return;
+
+        const prevParentLi =
+          dragEl.parentElement.closest("li[data-type]") ||
+          document.querySelector(".tree li[data-type='root']");
+
+        safeInsert(targetUl, dragEl, insertRef, insertAt);
+        updateBoxType(prevParentLi);
+        updateBoxType(parentLi);
+
+        const movedId = dragEl.dataset.id;
+        const newParentId = isRootLi(parentLi) ? "" : parentLi.dataset.id || "";
+        const child_ids = buildChildIds(targetUl);
+
+        fetch(editBoxForm.action, {
+          method: "PATCH",
+          headers: {
+            accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            box_id: newParentId,
+            parent_id: newParentId,
+            child_ids,
+            moved_id: movedId,
+          }),
+        })
+          .then((r) =>
+            r.ok ? r.json() : Promise.reject(new Error("Update failed")),
+          )
+          .then((data) => {
+            upsertBox(data.data);
+          })
+          .catch((err) => {
+            showFlash(err.message || "Move failed");
+          })
+          .finally(() => {
+            clearInto();
+            clearGuide();
+          });
+      }
+
+      document.addEventListener(
+        "touchstart",
+        (e) => {
+          const t = pt(e);
+          if (!t) return;
+          const li = e.target.closest?.("li[data-type]");
+          if (!li || isRootLi(li)) return;
+          startEl = li;
+          pressTimer = setTimeout(() => {
+            // begin pseudo-drag
+            dragEl = startEl;
+            dragEl.classList.add("dragging");
+            touchDrag = true;
+            handleTouchOver(t.clientX, t.clientY);
+          }, LONG_PRESS_MS);
+        },
+        { passive: true },
+      );
+
+      document.addEventListener(
+        "touchmove",
+        (e) => {
+          const t = pt(e);
+          if (!t) return;
+          if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+          }
+          if (!touchDrag) return;
+          e.preventDefault();
+          handleTouchOver(t.clientX, t.clientY);
+        },
+        { passive: false },
+      );
+
+      document.addEventListener("touchend", (e) => {
+        const t = pt(e);
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
+        }
+        if (!touchDrag) return;
+        e.preventDefault();
+        handleTouchDrop(t.clientX, t.clientY);
+        dragEl?.classList.remove("dragging");
+        dragEl = null;
+        touchDrag = false;
+      });
+
+      document.addEventListener("touchcancel", () => {
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
+        }
+        touchDrag = false;
+        clearInto();
+        clearGuide();
+        dragEl?.classList.remove("dragging");
+        dragEl = null;
+      });
+    })();
   }
 
   document.addEventListener("submit", (evt) => {
