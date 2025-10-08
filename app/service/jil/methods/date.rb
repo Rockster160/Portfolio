@@ -1,9 +1,9 @@
 class Jil::Methods::Date < Jil::Methods::Base
-  TIMEPIECES = %w(second minute hour day week month year)
+  TIMEPIECES = %w[second minute hour day wday week month year].freeze
 
   def cast(value)
     case value
-    when Numeric then value < 10**10 ? Time.at(value) : Time.at(value/1000.to_f)
+    when Numeric then value < 10**10 ? Time.zone.at(value) : Time.zone.at(value / 1000.to_f)
     when String then value.in_time_zone(@jil.user.timezone)
     else value.to_datetime.in_time_zone(@jil.user.timezone)
     end
@@ -64,17 +64,17 @@ class Jil::Methods::Date < Jil::Methods::Base
     return unless direction.in?([:beginning, :end, :nearest])
 
     if direction.to_sym == :nearest
-      lower = TIMEPIECES[TIMEPIECES.index(interval.to_s)-1].to_sym
+      lower = TIMEPIECES[TIMEPIECES.index(interval.to_s) - 1].to_sym
       maxes = {
         second: 60,
         minute: 60,
-        hour: 24,
-        day: 7,
-        week: Date.new(date.year, date.month, -1).day,
-        month: 12,
+        hour:   24,
+        day:    7,
+        week:   Date.new(date.year, date.month, -1).day,
+        month:  12,
       }
 
-      direction = date.send(lower) > maxes[lower]/2.to_f ? :end : :beginning
+      direction = date.send(lower) > maxes[lower] / 2.to_f ? :end : :beginning
     end
 
     cast(date).send("#{direction}_of_#{interval}")
