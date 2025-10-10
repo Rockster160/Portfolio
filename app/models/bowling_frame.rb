@@ -26,7 +26,7 @@ class BowlingFrame < ApplicationRecord
   # throwN == COUNT of how many pins were knocked down (For the shot itself- a spare will never be 10)
   # throwN_remaining == string list/array of the pins that are left AFTER the designated roll
 
-  enum strike_point: {
+  enum :strike_point, {
     pocket:   0,
     brooklyn: 1,
   }
@@ -53,7 +53,7 @@ class BowlingFrame < ApplicationRecord
     return [] if throw1_remaining.nil?
     return [[throw1_fallen, throw2_fallen]] if throw3_remaining.nil?
 
-    [].tap do |fall|
+    [].tap { |fall|
       if throw1_remaining == "[]" # Strike
         fall << [throw1_fallen]
 
@@ -67,7 +67,7 @@ class BowlingFrame < ApplicationRecord
         fall << [throw1_fallen, throw2_fallen]
         fall << [throw3_fallen]
       end
-    end
+    }
   end
 
   def fallen(remaining)

@@ -27,10 +27,10 @@ class Jarvis::Log < Jarvis::Action
 
   def create_event
     @evt_data = {
-      name: @evt[:name].tap { |n| n[0] = n[0].upcase },
-      notes: @evt[:notes].presence,
+      name:      @evt[:name].tap { |n| n[0] = n[0].upcase },
+      notes:     @evt[:notes].presence,
       timestamp: @evt[:timestamp].presence,
-      user_id: @user.id,
+      user_id:   @user.id,
     }.compact
 
     @event = ActionEvent.create(@evt_data)
@@ -52,10 +52,10 @@ class Jarvis::Log < Jarvis::Action
         elsif @evt_data[:timestamp].yesterday?
           "Yesterday"
         else
-          @evt_data[:timestamp].to_formatted_s(:short)
+          @evt_data[:timestamp].to_fs(:short)
         end
       )
-      evt_words << "[#{day} #{@event.timestamp.to_formatted_s(:short_time)}]"
+      evt_words << "[#{day} #{@event.timestamp.to_fs(:short_time)}]"
     end
 
     evt_words.join(" ")

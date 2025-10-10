@@ -3,10 +3,12 @@ class Jil::Methods::Hash < Jil::Methods::Base
     tz = ::Tokenizer.new(raw.to_s.gsub(/\\(["'\\])/, '\1'), only: { "\"" => "\"", "'" => "'" })
     # TODO: Deal with hash rocket syntax
     # Also make sure to handle symbols: `"[:a]"` → `"[\"a\"]"`
-    processed = tz.untokenize(tz.tokenized_text.gsub(/(\w+): /, '"\1": ').gsub("nil", "null")) do |str|
+    processed = tz.untokenize(
+      tz.tokenized_text.gsub(/(\w+): /, '"\1": ').gsub("nil", "null"),
+    ) { |str|
       str.gsub(/^'(.*?)'$/, '"\1"')
         .gsub(/(\\*)\\\n/, "\\n") # TODO: negative lookbehind to make sure it's not escaped
-    end
+    }
 
     ::JSON.parse(processed).then { |j| j.is_a?(Hash) ? j.with_indifferent_access : j }
   end
@@ -18,9 +20,9 @@ class Jil::Methods::Hash < Jil::Methods::Base
     when ::Array
       cast(value.each_with_object({}) { |item, obj|
         if item.is_a?(::Jil::Parser) && item.objname == :Keyval
-          evalargs(item.args).tap { |k,v| obj[k] = v }
+          evalargs(item.args).tap { |k, v| obj[k] = v }
         elsif item.is_a?(::Array) && item.length == 2
-          item.tap { |k,v| obj[k] = v }
+          item.tap { |k, v| obj[k] = v }
         elsif item.is_a?(::Array)
           item
         elsif item.is_a?(::Hash)
@@ -79,7 +81,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
     when :filter
       @jil.enumerate_hash(token_val(line.objname), method) { |ctx|
         evalarg(line.arg, ctx)
-      }.to_h { |(k,v),i| [k,v] }.with_indifferent_access
+      }.to_h { |(k, v), _i| [k, v] }.with_indifferent_access
     else
       if line.objname.match?(/^[A-Z]/)
         send(method, token_val(line.objname), enum_content(line.args))
@@ -91,10 +93,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
     end
   end
 
-  def parse(raw)
-    self.class.parse(raw)
-    # TODO: Rescue and bubble better error
-  end
+  delegate :parse, to: :class
 
   def hash_wrap(array)
     return array.to_h if array.first.is_a?(::Array) && array.first.length == 2
@@ -110,7 +109,7 @@ class Jil::Methods::Hash < Jil::Methods::Base
 
   def splat(line)
     hash = token_val(line.objname)
-    line.args.flatten.each_with_object({}) { |(arg, idx), obj|
+    line.args.flatten.each_with_object({}) { |(arg, _idx), obj|
       @jil.cast(hash[@jil.cast(arg.arg, :String)], arg.cast).tap { |val|
         obj[arg.varname] = set_value(arg.varname, val, type: arg.cast)
       }

@@ -37,9 +37,9 @@ class Jarvis::Navigate < Jarvis::Action
       words = "#{end_word} #{words}"
     end
 
-    words = words.gsub(/(.+)(#{@rx.words(drive_commands)})/) do |found|
-      "#{Regexp.last_match(1)}"
-    end
+    words = words.gsub(/(.+)(#{@rx.words(drive_commands)})/) { |_found|
+      Regexp.last_match(1).to_s
+    }
 
     words = words.gsub(@rx.words(drive_commands), "")
     words = words.gsub(@rx.words(:the, :set, :to, :is, :my, :me, :us), "")

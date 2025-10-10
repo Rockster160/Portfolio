@@ -25,31 +25,29 @@ class Shape
     spikes:                   [[0, 0], [1, 0], [0.75, 0.5], [0.5, 0], [0.25, 0.5]],
     long_spikes:              [[0, 0], [1, 0], [0.75, 1], [0.5, 0], [0.25, 1]],
 
-    diamond:                  [[0, 0.25], [0.5, 0], [1, 0.25], [0.5, 0.5]]
-  }
+    diamond:                  [[0, 0.25], [0.5, 0], [1, 0.25], [0.5, 0.5]],
+  }.freeze
 
   def initialize(shape, rotation=0)
     @relative_poly_coords = POLYGONS[shape] || []
-    self.rotate(rotation)
+    rotate(rotation)
   end
 
   def rotate(turns=0)
-    turns.times do |t|
-      self.relative_poly_coords = relative_poly_coords.map do |old_x, old_y|
+    turns.times do |_t|
+      self.relative_poly_coords = relative_poly_coords.map { |old_x, old_y|
         [(-(old_y - 0.5)) + 0.5, ((old_x - 0.5)) + 0.5]
-      end
+      }
     end
     self
   end
-
 end
 
 class AnoniconGenerator
   attr_reader :src, :raw
 
   def self.generate(str)
-    identicon = new(Digest::MD5.hexdigest(str.to_s))
-    identicon
+    new(Digest::MD5.hexdigest(str.to_s))
   end
 
   def initialize(digest)
@@ -97,15 +95,14 @@ class AnoniconGenerator
 
   def draw_at(x, y, shape)
     return if shape.relative_poly_coords.none?
+
     ox, oy = (x * @chunk_size), (y * @chunk_size)
     if (x == 1 || y == 1) && !(x == 1 && y == 1)
       color = @middle_color
-    elsif
-      color = @corner_color
+    elsif (color = @corner_color)
     end
     @png.polygon(shape.relative_poly_coords.map { |rel_x, rel_y| [(rel_x * @chunk_size) + ox, (rel_y * @chunk_size) + oy] }, color, color)
   end
-
 end
 
 module Anonicon

@@ -15,6 +15,10 @@ class ContactsController < ApplicationController
     render :form
   end
 
+  def edit
+    render :form
+  end
+
   def create
     @contact = current_user.contacts.new(contact_params)
 
@@ -23,10 +27,6 @@ class ContactsController < ApplicationController
     else
       render :form
     end
-  end
-
-  def edit
-    render :form
   end
 
   def update
@@ -41,7 +41,8 @@ class ContactsController < ApplicationController
     if @contact.destroy
       redirect_to contacts_path
     else
-      redirect_to @contact, alert: "Failed to delete contact: #{@contact.errors.full_messages.join("\n")}"
+      redirect_to @contact,
+        alert: "Failed to delete contact: #{@contact.errors.full_messages.join("\n")}"
     end
   end
 

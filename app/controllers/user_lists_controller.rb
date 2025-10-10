@@ -5,7 +5,11 @@ class UserListsController < ApplicationController
 
   def create
     @user = User.find(params[:id]) # Using id here for easier lookup
-    return redirect_to lists_path, alert: "You do not have permission to add users to this list." unless @current_list_user.is_owner?
+    unless @current_list_user.is_owner?
+      return redirect_to lists_path,
+        alert: "You do not have permission to add users to this list."
+    end
+
     @user_list = @user.user_lists.find_or_create_by(list_id: @list.id)
 
     redirect_to @list
@@ -15,7 +19,10 @@ class UserListsController < ApplicationController
     @user = User.find(params[:id]) # Using id here for easier lookup
     @user_list = @user.user_lists.find_by(list_id: @list.id)
 
-    return redirect_to list_user_lists_path(@list), alert: "List must have an owner." if @user_list.is_owner?
+    if @user_list.is_owner?
+      return redirect_to list_user_lists_path(@list),
+        alert: "List must have an owner."
+    end
 
     @user_list.destroy if @current_list_user.is_owner? || @user_list == @current_list_user
     if @current_list_user == @user_list && @user_list.destroyed?
@@ -32,11 +39,12 @@ class UserListsController < ApplicationController
   end
 
   def set_list
-    @list = current_user.lists.find_by(id: params[:list_id]) || current_user.lists.select { |list| list.name.parameterize == params[:id] }.first
+    @list = current_user.lists.find_by(id: params[:list_id]) || current_user.lists.select { |list|
+      list.name.parameterize == params[:id]
+    }.first
   end
 
   def color_scheme
     session[:color_scheme] = params[:style] if params[:style].present?
   end
-
 end

@@ -9,6 +9,7 @@ class SafeJsonSerializer
     json = safe_str.present? ? JSON.parse(safe_str, symbolize_names: true) : str
 
     return json if json.is_a?(::Hash) || json.is_a?(::Array)
+
     start_str == json ? json : ::SafeJsonSerializer.load(json)
   rescue JSON::ParserError
     str

@@ -1,6 +1,5 @@
 class ReceiveEmailWorker
-  include Sidekiq::Worker
-  include ::Memoizable
+  include ::Memoizable, Sidekiq::Worker
 
   def perform(bucket, object_key, trigger=true)
     @bucket = bucket
@@ -9,14 +8,14 @@ class ReceiveEmailWorker
     ::ActiveRecord::Base.transaction do
       @email = user.emails.find_by(mail_id: mail.message_id, timestamp: mail.date)
       @email ||= user.emails.create!(
-        mail_id: mail.message_id.presence || "no-message-id-#{::SecureRandom.hex(4)}",
-        timestamp: mail.date,
-        direction: :inbound,
-        inbound_mailboxes: internal_mailboxes,
+        mail_id:            mail.message_id.presence || "no-message-id-#{::SecureRandom.hex(4)}",
+        timestamp:          mail.date,
+        direction:          :inbound,
+        inbound_mailboxes:  internal_mailboxes,
         outbound_mailboxes: external_mailboxes,
-        subject: mail.subject,
-        blurb: parser.condensed_text.first(500),
-        has_attachments: mail.has_attachments?,
+        subject:            mail.subject,
+        blurb:              parser.condensed_text.first(500),
+        has_attachments:    mail.has_attachments?,
       ).tap { |created_email|
         warn_blank_message_id(created_email) if mail.message_id.blank?
       }
@@ -29,6 +28,7 @@ class ReceiveEmailWorker
     # TODO: If using UUID, should specifically trigger ONLY that Task with the email as input.
     tasks = ::Jil.trigger_now(user, :email, @email)
     return if tasks.any?(&:stop_propagation?)
+
     @email.reload # Since Jil updates them out of scope
     return if @email.archived? # Task might have archived this. No need to do further logic if so.
 
@@ -37,15 +37,15 @@ class ReceiveEmailWorker
       parse_amazon && @email.archive! # Auto archive Amazon emails
     end
 
-    notify_slack if !@email.archived?
+    notify_slack unless @email.archived?
   end
 
   def amazon_update?
-    ([
+    [
       "auto-confirm@amazon.com",
       "order-update@amazon.com",
       "shipment-tracking@amazon.com",
-    ] & external_addresses).any?
+    ].intersect?(external_addresses)
   end
 
   def parse_amazon
@@ -58,8 +58,8 @@ class ReceiveEmailWorker
   💾(:text_content) { parser.text_part }
   💾(:internal_mailboxes) { parser.to }
   💾(:external_mailboxes) { parser.from }
-  💾(:internal_addresses) { internal_mailboxes.map { |address| address[:address] } }
-  💾(:external_addresses) { external_mailboxes.map { |address| address[:address] } }
+  💾(:internal_addresses) { internal_mailboxes.pluck(:address) }
+  💾(:external_addresses) { external_mailboxes.pluck(:address) }
   💾(:stored_blob) {
     blob = ::ActiveStorage::Blob.find_by(key: @object_key)
     next blob if blob.present?
@@ -69,11 +69,11 @@ class ReceiveEmailWorker
     filename = "email-#{SecureRandom.hex(4)}.eml"
 
     ::ActiveStorage::Blob.create_before_direct_upload!(
-      filename: filename,
-      byte_size: byte_size,
-      checksum: checksum,
+      filename:     filename,
+      byte_size:    byte_size,
+      checksum:     checksum,
       content_type: "message/rfc822",
-      key: @object_key,
+      key:          @object_key,
       service_name: :s3_emails,
     )
   }
@@ -109,7 +109,10 @@ class ReceiveEmailWorker
     message_parts << "_#{@email.subject}_"
     message_parts << "<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>"
     message_parts << ">>> #{clean_text.truncate(2000)}"
-    SlackNotifier.notify(message_parts.join("\n"), channel: "#portfolio", username: "Mail-Bot", icon_emoji: ":mailbox:")
+    SlackNotifier.notify(
+      message_parts.join("\n"), channel: "#portfolio", username: "Mail-Bot",
+      icon_emoji: ":mailbox:"
+    )
   end
 
   def warn_blank_message_id(email)
@@ -128,8 +131,8 @@ class ReceiveEmailWorker
     )
     SlackNotifier.notify(
       desc + "\n" \
-      "Message ID blank! `[#{mail.message_id.class}](#{mail.message_id.inspect})`\n" \
-      "```ReceiveEmailWorker.new.perform(\"#{@bucket}\", \"#{@object_key}\")```",
+             "Message ID blank! `[#{mail.message_id.class}](#{mail.message_id.inspect})`\n" \
+             "```ReceiveEmailWorker.new.perform(\"#{@bucket}\", \"#{@object_key}\")```",
     )
   end
 end

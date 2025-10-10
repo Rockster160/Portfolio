@@ -13,9 +13,9 @@ module ChatGPT
     @last_ask = str
     response = client.chat(
       parameters: {
-        model: "gpt-3.5-turbo", # Required.
+        model:    "gpt-3.5-turbo", # Required.
         messages: [{ role: "user", content: str }], # Required.
-      }
+      },
     )
     @last_chat_data = response
     @last_response = response.dig("choices", 0, "message", "content")
@@ -26,11 +26,11 @@ module ChatGPT
     begin
       resp = client.images.generate(
         parameters: {
-          model: "dall-e-3",
+          model:  "dall-e-3",
           prompt: "#{prompt}\n\n#{item}",
-          n: 1, # number of images to generate
-          size: "1024x1024"
-        }
+          n:      1, # number of images to generate
+          size:   "1024x1024",
+        },
       )
       url = resp.dig("data", 0, "url").tap { sleep 0.5 } # Give the image a moment to save the image
     rescue Faraday::BadRequestError => e
@@ -39,14 +39,14 @@ module ChatGPT
     end
   end
 
-  def short_name_from_order(order_title, item=nil) # item for stubbing in specs
+  def short_name_from_order(order_title, _item=nil) # item for stubbing in specs
     prompt = "I've ordered an item online. The title is much longer than I'd like it. " \
-    "I know the item I ordered, but sometimes I order multiple items so I need some way to " \
-    "identify this specific item and list it. Please remove all product and brand information, "\
-    "sizing data, colors, and any other modifiers that describe the item but not the name itself. "\
-    "Assume I already know the item so I don't need a lot of info, just the most basic item name."\
-    "Return only the item name in as few letters and characters as possible. "\
-    "The title will be displayed in a list that only allows 20 characters:"
+             "I know the item I ordered, but sometimes I order multiple items so I need some way to " \
+             "identify this specific item and list it. Please remove all product and brand information, " \
+             "sizing data, colors, and any other modifiers that describe the item but not the name itself. " \
+             "Assume I already know the item so I don't need a lot of info, just the most basic item name." \
+             "Return only the item name in as few letters and characters as possible. " \
+             "The title will be displayed in a list that only allows 20 characters:"
 
     ask("#{prompt} #{order_title}")&.then { |title|
       # Maybe remove numbers and their attached words?
@@ -60,8 +60,8 @@ module ChatGPT
   def order_with_timestamp(email_text)
     now = Time.current.in_time_zone(User.timezone)
     res = ask(
-      "Assuming today is #{now}, respond with nothing but the order id and the" \
-      " expected delivery timestamp formatted in iso8601 from the following email:\n#{email_text}"
+      "Assuming today is #{now}, respond with nothing but the order id and the " \
+      "expected delivery timestamp formatted in iso8601 from the following email:\n#{email_text}",
     )
 
     # "Order ID: 111-3842886-2135464\nExpected Delivery Timestamp: 2023-07-25T22:00:00-0600"
@@ -75,13 +75,13 @@ module ChatGPT
   def calorie_explain(item, color: false)
     prompt = (
       "Take your best guess at the calorie count for the provided dish." \
-      "Take your time and research online, especially when given a restaurant." \
-      "Assume a single serving unless there are multipliers in the text" \
-      "and explain each portion that adds into the final result."
+        "Take your time and research online, especially when given a restaurant." \
+        "Assume a single serving unless there are multipliers in the text" \
+        "and explain each portion that adds into the final result."
     )
 
     ask("#{prompt}\n\n> #{item}").then { |res|
-      !color ? res : res.gsub(/\b([\d+,])\b/, "\e[94m\\1\e[0m")
+      color ? res.gsub(/\b([\d+,])\b/, "\e[94m\\1\e[0m") : res
     }
   end
 
@@ -89,8 +89,8 @@ module ChatGPT
   def calorie_check(item)
     prompt = (
       "Please respond only with the number of calories." \
-      "Take your best guess at the calorie count for the provided dish." \
-      "Assume a single serving unless there are multipliers in the text"
+        "Take your best guess at the calorie count for the provided dish." \
+        "Assume a single serving unless there are multipliers in the text"
     )
 
     res = ask("#{prompt}: #{item}")
@@ -106,7 +106,7 @@ module ChatGPT
     filename = item.parameterize.tr("-", "_")
     raw_filepath = "#{tmp}#{filename}-raw.png"
     URI.open(url) do |img|
-      File.open(raw_filepath, "wb") { |f| f.write(img.read) }
+      File.binwrite(raw_filepath, img.read)
     end
 
     magick_opts = [

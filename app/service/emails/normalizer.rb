@@ -80,7 +80,7 @@ module Emails::Normalizer
   end
 
   def email_text(html)
-    body_html = (::Nokogiri::HTML(html).at("body")&.inner_html&.presence || html&.presence || "")
+    body_html = (::Nokogiri::HTML(html).at("body")&.inner_html.presence || html.presence || "")
       .gsub("<br>", "\n")
       .gsub("<br/>", "\n")
       .gsub("<br />", "\n")

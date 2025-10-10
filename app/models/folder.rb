@@ -12,8 +12,7 @@
 #  user_id            :bigint
 #
 class Folder < ApplicationRecord
-  include Orderable
-  include Folderable
+  include Folderable, Orderable
 
   belongs_to :folder, optional: true
   belongs_to :user

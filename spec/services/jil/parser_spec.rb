@@ -1,5 +1,6 @@
 RSpec.describe Jil::Parser do
   include ActiveJob::TestHelper
+
   let(:parsed) { described_class.from_code(code) }
   let(:code) { "" }
 
@@ -8,7 +9,7 @@ RSpec.describe Jil::Parser do
 
     it "parses" do
       expect(parsed.length).to eq(15)
-      expect(parsed.all? { |line| line.is_a?(Jil::Parser)}).to be(true)
+      expect(parsed.all? { |line| line.is_a?(Jil::Parser) }).to be(true)
 
       if_block = parsed[10]
       expect(if_block.methodname).to eq(:if)

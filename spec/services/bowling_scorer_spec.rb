@@ -41,7 +41,7 @@ RSpec.describe BowlingScorer do
     context "with an open frame" do
       let(:frame_params) {
         {
-          frame_num: "1",
+          frame_num:        "1",
           throw1_remaining: "[5,6,8,9,10]",
           throw2_remaining: "[10]",
           throw3_remaining: nil,
@@ -50,15 +50,15 @@ RSpec.describe BowlingScorer do
 
       specify {
         expect(convert).to eq({
-          frame_num: "1",
-          spare: false,
-          strike: false,
-          split: false,
-          strike_point: nil,
-          throw1: 5,
-          throw2: 4,
-          throw3: nil,
-          throw1_remaining: [5,6,8,9,10],
+          frame_num:        "1",
+          spare:            false,
+          strike:           false,
+          split:            false,
+          strike_point:     nil,
+          throw1:           5,
+          throw2:           4,
+          throw3:           nil,
+          throw1_remaining: [5, 6, 8, 9, 10],
           throw2_remaining: [10],
           throw3_remaining: nil,
         })
@@ -68,7 +68,7 @@ RSpec.describe BowlingScorer do
     context "with a spare" do
       let(:frame_params) {
         {
-          frame_num: "1",
+          frame_num:        "1",
           throw1_remaining: "[5,6,8,9,10]",
           throw2_remaining: "[]",
           throw3_remaining: nil,
@@ -77,15 +77,15 @@ RSpec.describe BowlingScorer do
 
       specify {
         expect(convert).to eq({
-          frame_num: "1",
-          spare: true,
-          strike: false,
-          split: false,
-          strike_point: nil,
-          throw1: 5,
-          throw2: 5,
-          throw3: nil,
-          throw1_remaining: [5,6,8,9,10],
+          frame_num:        "1",
+          spare:            true,
+          strike:           false,
+          split:            false,
+          strike_point:     nil,
+          throw1:           5,
+          throw2:           5,
+          throw3:           nil,
+          throw1_remaining: [5, 6, 8, 9, 10],
           throw2_remaining: [],
           throw3_remaining: nil,
         })
@@ -95,7 +95,7 @@ RSpec.describe BowlingScorer do
     context "with a strike" do
       let(:frame_params) {
         {
-          frame_num: "1",
+          frame_num:        "1",
           throw1_remaining: "[]",
           throw2_remaining: nil,
           throw3_remaining: nil,
@@ -104,14 +104,14 @@ RSpec.describe BowlingScorer do
 
       specify {
         expect(convert).to eq({
-          frame_num: "1",
-          spare: false,
-          strike: true,
-          split: false,
-          strike_point: nil,
-          throw1: 10,
-          throw2: nil,
-          throw3: nil,
+          frame_num:        "1",
+          spare:            false,
+          strike:           true,
+          split:            false,
+          strike_point:     nil,
+          throw1:           10,
+          throw2:           nil,
+          throw3:           nil,
           throw1_remaining: [],
           throw2_remaining: nil,
           throw3_remaining: nil,
@@ -124,22 +124,22 @@ RSpec.describe BowlingScorer do
         let(:frame_params) {
           {
             frame_num: "1",
-            throw1: "5",
-            throw2: "4",
-            throw3: ""
+            throw1:    "5",
+            throw2:    "4",
+            throw3:    "",
           }
         }
 
         specify {
           expect(convert).to eq({
-            frame_num: "1",
-            spare: false,
-            strike: false,
-            split: false,
-            strike_point: nil,
-            throw1: 5,
-            throw2: 4,
-            throw3: nil,
+            frame_num:        "1",
+            spare:            false,
+            strike:           false,
+            split:            false,
+            strike_point:     nil,
+            throw1:           5,
+            throw2:           4,
+            throw3:           nil,
             throw1_remaining: nil,
             throw2_remaining: nil,
             throw3_remaining: nil,
@@ -151,22 +151,22 @@ RSpec.describe BowlingScorer do
         let(:frame_params) {
           {
             frame_num: "1",
-            throw1: "5",
-            throw2: "/",
-            throw3: ""
+            throw1:    "5",
+            throw2:    "/",
+            throw3:    "",
           }
         }
 
         specify {
           expect(convert).to eq({
-            frame_num: "1",
-            spare: true,
-            strike: false,
-            split: false,
-            strike_point: nil,
-            throw1: 5,
-            throw2: 5,
-            throw3: nil,
+            frame_num:        "1",
+            spare:            true,
+            strike:           false,
+            split:            false,
+            strike_point:     nil,
+            throw1:           5,
+            throw2:           5,
+            throw3:           nil,
             throw1_remaining: nil,
             throw2_remaining: nil,
             throw3_remaining: nil,
@@ -178,22 +178,22 @@ RSpec.describe BowlingScorer do
         let(:frame_params) {
           {
             frame_num: "1",
-            throw1: "X",
-            throw2: "",
-            throw3: ""
+            throw1:    "X",
+            throw2:    "",
+            throw3:    "",
           }
         }
 
         specify {
           expect(convert).to eq({
-            frame_num: "1",
-            spare: false,
-            strike: true,
-            split: false,
-            strike_point: nil,
-            throw1: 10,
-            throw2: nil,
-            throw3: nil,
+            frame_num:        "1",
+            spare:            false,
+            strike:           true,
+            split:            false,
+            strike_point:     nil,
+            throw1:           10,
+            throw2:           nil,
+            throw3:           nil,
             throw1_remaining: nil,
             throw2_remaining: nil,
             throw3_remaining: nil,

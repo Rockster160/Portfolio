@@ -29,16 +29,18 @@ class ScheduledTrigger < ApplicationRecord
 
   def self.break_searcher(search_string)
     return all if search_string.squish.then { |str| str.blank? || str == "*" }
+
     trigger, _rest = search_string.split(":", 2)
 
     schedules = ::ScheduledTrigger.where(trigger: trigger)
-    schedules.select do |schedule|
+    schedules.select { |schedule|
       ::SearchBreakMatcher.new(search_string, { trigger => schedule.data }).match?
-    end
+    }
   end
 
   def ready?
     return false if started?
+
     execute_at < 5.seconds.from_now # offset for minor async issues
   end
 

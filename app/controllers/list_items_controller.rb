@@ -78,7 +78,7 @@ class ListItemsController < ApplicationController
   end
 
   def current_list
-    @list ||= current_user.lists.find_by(id: params[:list_id]) || current_user.lists.by_param(params[:list_id]).take!
+    @current_list ||= current_user.lists.find_by(id: params[:list_id]) || current_user.lists.by_param(params[:list_id]).take!
   end
 
   def current_list_items
@@ -91,7 +91,8 @@ class ListItemsController < ApplicationController
     @item ||= current_list_items.by_formatted_name(name) if name.present?
     @item ||= current_list_items.by_formatted_name(params[:id])
     return @item if mode == :soft
-    @item ||= current_list_items.find(params[:id] || name)
+
+    @current_item ||= current_list_items.find(params[:id] || name)
   end
 
   def list_item_params

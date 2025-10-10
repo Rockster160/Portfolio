@@ -1,5 +1,6 @@
 RSpec.describe Jil::Methods::Prompt do
   include ActiveJob::TestHelper
+
   let(:execute) { Jil::Executor.call(user, code, input_data) }
   let(:user) { User.me }
   let(:code) {
@@ -26,43 +27,44 @@ RSpec.describe Jil::Methods::Prompt do
   #   #choices(String:"Question Text" content(String))
   #   #scale(String:"Question Text" BR Numeric?:"Min" Numeric?:"Max" Numeric?:"Default")
 
-  context "#create" do
+  describe "#create" do
     it "creates a PromptQuestion" do
       expect_successful_jil
       prompt = Prompt.last
       expect(ctx.dig(:vars, :t33bc)).to match_hash({
         class: :PromptQuestion,
         value: {
-          type: :scale,
+          type:     :scale,
           question: "Sleep Quality",
-          min: 0,
-          max: 100,
-          default: 50,
-        }
+          min:      0,
+          max:      100,
+          default:  50,
+        },
       })
       expect(ctx.dig(:vars, :wa0d7)).to match_hash({
         class: :Prompt,
         value: {
-          id: prompt.id,
+          id:       prompt.id,
           question: "Good morning! How was your sleep?",
-          params: nil,
-          options: [
+          params:   nil,
+          options:  [
             {
-              type: "scale",
+              type:     "scale",
               question: "Sleep Quality",
-              min: 0,
-              max: 100,
-              default: 50
-            }, {
-              type: "scale",
+              min:      0,
+              max:      100,
+              default:  50,
+            },
+            {
+              type:     "scale",
               question: "Sleep Length",
-              min: 0,
-              max: 100,
-              default: 50,
+              min:      0,
+              max:      100,
+              default:  50,
             },
           ],
           response: nil,
-          url: "http://localhost:3141/prompts/#{prompt.id}",
+          url:      "http://localhost:3141/prompts/#{prompt.id}",
         },
       })
       expect(ctx[:output]).to eq([])

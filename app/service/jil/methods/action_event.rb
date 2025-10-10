@@ -1,5 +1,5 @@
 class Jil::Methods::ActionEvent < Jil::Methods::Base
-  PERMIT_ATTRS = [:name, :notes, :data, :timestamp]
+  PERMIT_ATTRS = [:name, :notes, :data, :timestamp].freeze
 
   def cast(value)
     case value
@@ -19,9 +19,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     scoped = scoped.where(user: @jil.user)
 
     order = [:asc, :desc].include?(order.to_s.downcase.to_sym) ? order.to_s.downcase.to_sym : :desc
-    scoped = scoped.order(timestamp: order)
-
-    scoped
+    scoped.order(timestamp: order)
   end
 
   def add(name)
@@ -53,24 +51,25 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   def update!(event_data, details)
     event = load_event(event_data)
     evt_data = params(details)
-    if event.update(evt_data)
-      event_callbacks(event, :changed, evt_data[:timestamp].present?)
-    end
+    event_callbacks(event, :changed, evt_data[:timestamp].present?) if event.update(evt_data)
   end
 
   def destroy(event_data)
     event = load_event(event_data)
     event.destroy.tap { |bool|
       if bool
-        event_callbacks(event, :removed) do |removed_event|
+        event_callbacks(event, :removed) { |removed_event|
           # Reset following event streak info
           matching_events = ActionEvent
             .where(user_id: removed_event.user_id)
             .ilike(name: removed_event.name)
             .where.not(id: removed_event.id)
-          following = matching_events.where("timestamp > ?", removed_event.timestamp).order(:timestamp).first
+          following = matching_events.where(
+            "timestamp > ?",
+            removed_event.timestamp,
+          ).order(:timestamp).first
           UpdateActionStreak.perform_async(following.id) if following.present?
-        end
+        }
       end
     }
   end
@@ -84,7 +83,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   end
 
   def timestamp(timestamp)
-    return if timestamp.year < 0 # Invalid date should just leave blank
+    return if timestamp.year.negative? # Invalid date should just leave blank
 
     { timestamp: timestamp }
   end
@@ -104,6 +103,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   def params(details)
     Array.wrap(details).tap { |d|
       next unless d.length == 1 && d.first.is_a?(ActionEvent)
+
       return details.first.serialize.except(:id)
     }
 
@@ -114,6 +114,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
 
   def load_event(jil_event)
     return jil_event if jil_event.is_a?(::ActionEvent)
+
     jil_params = cast(jil_event)
     id = jil_params[:id]
     return @jil.user.action_events.new(jil_params) if id.blank?

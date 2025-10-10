@@ -4,7 +4,7 @@ module EventAnalyzer
   def durations_between(shower_action)
     ::ActionEvent.order(created_at: :desc)
       .search_data_actions_all(shower_action)
-      .each_cons(2).each_with_object({}) { |(a, b), obj|
+      .each_cons(2).with_object({}) { |(a, b), obj|
         obj[a.timestamp] = duration(a.timestamp - b.timestamp)
       }
   end

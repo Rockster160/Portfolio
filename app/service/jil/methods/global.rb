@@ -25,13 +25,15 @@ class Jil::Methods::Global < Jil::Methods::Base
     when :presence
       val = evalarg(line.arg).presence
       case val
-      when Date then val.year > 0
+      when Date then val.year.positive?
       end
     when :block then evalargs(line.arg).last
     when :comment then evalarg(line.arg)
     when :loop then @jil.enumerate_loop { |ctx| evalarg(line.arg, ctx) }
     when :times
-      @jil.enumerate_array(0...evalarg(line.args.first), :map) { |ctx| evalarg(line.args.last, ctx) }
+      @jil.enumerate_array(0...evalarg(line.args.first), :map) { |ctx|
+        evalarg(line.args.last, ctx)
+      }
     when :dowhile
       @jil.enumerate_loop { |ctx|
         val = evalarg(line.arg, ctx)
@@ -60,14 +62,15 @@ class Jil::Methods::Global < Jil::Methods::Base
     begin
       json = ::Jil::Methods::Hash.parse(str)
       return recurse ? looksLike(json, false) : :String
-    rescue => e
+    rescue StandardError => e
     end
     return :Boolean if ["true", "false", "t", "f"].include?(str.downcase)
+
     return :Numeric if Integer(str) rescue false
     return :Numeric if Float(str) rescue false
     # FIXME: "'6'" is considered a date because it looks like '6
     return :Date if Date.parse(str) rescue false
-    return :Date if Time.parse(str) rescue false
+    return :Date if Time.zone.parse(str) rescue false
     :String
   end
 
@@ -131,7 +134,8 @@ class Jil::Methods::Global < Jil::Methods::Base
           @jil.cast(headers.presence || {}, :Hash).merge(params: params),
         )
       when :POST, :PATCH, :PUT, :DELETE
-        ::RestClient.send(method.to_s.downcase,
+        ::RestClient.send(
+          method.to_s.downcase,
           url,
           @jil.cast(params.presence || {}, :Hash).to_json,
           @jil.cast(headers.presence || {}, :Hash),
@@ -142,9 +146,9 @@ class Jil::Methods::Global < Jil::Methods::Base
     body = ::JSON.parse(body) rescue body if res.headers[:content_type]&.match?(/json/)
 
     {
-      code: res.code,
+      code:    res.code,
       headers: res.headers,
-      body: body,
+      body:    body,
     }
   end
 
@@ -152,7 +156,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     friend = @jil.user.contacts.name_find(contact)&.friend if contact.is_a?(::String)
     friend ||= @jil.user.contacts.find_by(id: contact[:id])&.friend if contact.is_a?(::Hash)
 
-    return unless friend&.contacts&.where(friend_id: @jil.user.id, permit_relay: true).present?
+    return if friend&.contacts&.where(friend_id: @jil.user.id, permit_relay: true).blank?
 
     ::Jil.trigger_now(friend, :relay, @jil.cast(data, :Hash).merge(from: @jil.user.username))
     nil

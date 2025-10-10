@@ -9,12 +9,13 @@ class Api
     res = RestClient::Request.execute(method: :get, url: url, headers: headers)
     output("Response Headers", res.headers)
     return res if opts[:return_full_response]
+
     JSON.parse(res.body, symbolize_names: true).tap { |json| output(:Response, json) }
   rescue JSON::ParserError
     res&.body
-  rescue RestClient::ExceptionWithResponse => res_exc
-    pst "\e[31m  > #{res_exc} [#{res_exc.message}](#{res_exc.http_body})\e[0m"
-    raise res_exc
+  rescue RestClient::ExceptionWithResponse => e
+    pst "\e[31m  > #{e} [#{e.message}](#{e.http_body})\e[0m"
+    raise e
   rescue StandardError => e
     pst "\e[31m  [ERROR]> #{e.message}\e[0m"
     raise e
@@ -32,12 +33,13 @@ class Api
     res = RestClient.post(url, params, headers)
     output("Response Headers", res.headers)
     return res if opts[:return_full_response]
+
     JSON.parse(res.body, symbolize_names: true).tap { |json| output(:Response, json) }
   rescue JSON::ParserError
     res&.body
-  rescue RestClient::ExceptionWithResponse => res_exc
-    pst "\e[31m  > #{res_exc} [#{res_exc.message}](#{res_exc.http_body})\e[0m"
-    raise res_exc
+  rescue RestClient::ExceptionWithResponse => e
+    pst "\e[31m  > #{e} [#{e.message}](#{e.http_body})\e[0m"
+    raise e
   rescue StandardError => e
     pst "\e[31m  [ERROR]> #{e.message}\e[0m"
     raise e
@@ -45,42 +47,42 @@ class Api
     res&.body
   end
 
-  def self.put(uri, params={}, headers={}, opts={})
+  def self.put(uri, params={}, headers={}, _opts={})
     request(url: uri, payload: params, headers: headers, method: :put)
   end
 
-  def self.patch(uri, params={}, headers={}, opts={})
+  def self.patch(uri, params={}, headers={}, _opts={})
     request(url: uri, payload: params, headers: headers, method: :patch)
   end
 
-  def self.delete(uri, params={}, headers={}, opts={})
+  def self.delete(uri, params={}, headers={}, _opts={})
     request(url: uri, payload: params, headers: headers, method: :delete)
   end
 
   def self.request(url:, **opts)
     return get(url, opts.delete(:params), opts.delete(:headers), opts) if opts[:method] == :get
+
     return_full_response = opts.delete(:return_full_response)
     method = opts[:method] || :get
     pst "  \e[33mREQ:#{method.to_s.upcase} #{url}\e[0m"
     output(:Payload, opts[:payload]) if opts[:payload]
     output(:Headers, opts[:headers]) if opts[:headers]
-    if opts[:payload].is_a?(::Hash) && opts[:headers][:content_type] == "application/json"
-      opts[:payload] = opts[:payload].to_json
-    end
+    opts[:payload] = opts[:payload].to_json if opts[:payload].is_a?(::Hash) && opts[:headers][:content_type] == "application/json"
     res = ::RestClient::Request.execute(
       method: method,
-      url: url,
+      url:    url,
       # ssl_ca_file: opts[:ssl_ca_file],
-      **opts
+      **opts,
     )
     output("Response Headers", res.headers)
     return res if return_full_response
+
     JSON.parse(res.body, symbolize_names: true).tap { |json| output(:Response, json) }
   rescue JSON::ParserError
     res&.body
-  rescue RestClient::ExceptionWithResponse => res_exc
-    pst "\e[31m  > #{res_exc} [#{res_exc.message}](#{res_exc.http_body})\e[0m"
-    raise res_exc
+  rescue RestClient::ExceptionWithResponse => e
+    pst "\e[31m  > #{e} [#{e.message}](#{e.http_body})\e[0m"
+    raise e
   rescue StandardError => e
     pst "\e[31m  [ERROR]> #{e.message}\e[0m"
     raise e
@@ -89,7 +91,7 @@ class Api
   end
 
   def self.output(name, json)
-    return if json.to_s.gsub(/\s/, "").length == 0 # .blank?
+    return if json.to_s.gsub(/\s/, "").empty? # .blank?
 
     padded = "  #{name}  "
     pst "  \e[90m#{padded.center(60, "=")}\e[0m"
@@ -100,7 +102,7 @@ class Api
     return obj.to_s unless obj.is_a?(::Hash) || obj.is_a?(::Array)
 
     ::CodeRay.scan(obj, :ruby).terminal.gsub(
-      /\e\[32m\e\[1;32m\"\e\[0m\e\[32m(\w+)\e\[1;32m\"\e\[0m\e\[32m\e\[0m=>/, ("\e[36m" + '\1: ' + "\e[0m")
+      /\e\[32m\e\[1;32m"\e\[0m\e\[32m(\w+)\e\[1;32m"\e\[0m\e\[32m\e\[0m=>/, ("\e[36m" + '\1: ' + "\e[0m")
     ).gsub(
       /\e\[36m:(\w+)\e\[0m=>/i, ("\e[36m" + '\1: ' + "\e[0m") # hashrocket(sym) to colon(sym)
     ).gsub(
@@ -110,7 +112,7 @@ class Api
     )
   end
 
-  def initialize(base_url, always_params = {}, always_headers = {})
+  def initialize(base_url, always_params={}, always_headers={})
     @base_url = base_url.gsub(/\/*$/, "")
     @always_params = always_params
     @always_headers = always_headers
@@ -122,7 +124,5 @@ class Api
     puts str
   end
 
-  def pst(str)
-    self.class.pst(str)
-  end
+  delegate :pst, to: :class
 end

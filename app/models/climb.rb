@@ -20,12 +20,12 @@ class Climb < ApplicationRecord
     pull = include_current ? 4 : 5
     not_empty.order(timestamp: :desc).limit(pull).pluck(:total_pennies).then { |a|
       a.shift unless include_current
-      ((a.any? ? a.sum.to_f / a.length : 0)/100.0).round(2)
+      ((a.any? ? a.sum.to_f / a.length : 0) / 100.0).round(2)
     }
   end
 
   def self.alltime_avg
-    (not_empty.average(:total_pennies).to_f/100.0).round(2)
+    (not_empty.average(:total_pennies).to_f / 100.0).round(2)
   end
 
   def self.best
@@ -46,14 +46,14 @@ class Climb < ApplicationRecord
 
   def total
     if total_pennies.present?
-      (total_pennies/100.0).then { |n| n.to_i == n ? n.to_i : n }
+      (total_pennies / 100.0).then { |n| n.to_i == n ? n.to_i : n }
     else
       calculate_total
     end
   end
 
   def total=(new_total)
-    self.total_pennies = (new_total*100).round
+    self.total_pennies = (new_total * 100).round
     new_total
   end
 
@@ -62,11 +62,11 @@ class Climb < ApplicationRecord
   end
 
   def calculate_total
-    self.total = (scores || data&.split(" "))&.sum { |v| score_for(v) } || 0
+    self.total = (scores || data&.split)&.sum { |v| score_for(v) } || 0
   end
 
   def score_for(v_index)
-    v, partial = v_index.to_s.split(/[\.\%]/).map(&:to_i)
-    (::Calculator.fibonacci(v+2) * (partial && partial > 0 ? "0.#{partial.to_i}".to_f : 1)).round(2)
+    v, partial = v_index.to_s.split(/[.%]/).map(&:to_i)
+    (::Calculator.fibonacci(v + 2) * (partial && partial.positive? ? "0.#{partial.to_i}".to_f : 1)).round(2)
   end
 end

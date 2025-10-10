@@ -12,7 +12,7 @@ class GoogleNestDevice
   )
 
   # Allows calling methods directly from the class rather than `GoogleNestDevice.new.start` -> `GoogleNestDevice.start`
-  def self.method_missing(method, *args, &block)
+  def self.method_missing(method, *_args)
     nest = new
     nest.send(method)
     nest
@@ -21,17 +21,16 @@ class GoogleNestDevice
   def initialize(subscription=nil, args={})
     @subscription = subscription || GoogleNestControl.new
     set_all(args)
-    self
   end
 
   def set_all(args)
     args&.each do |k, v|
-      self.instance_variable_set("@#{k}".to_sym, v)
+      instance_variable_set(:"@#{k}", v)
     end
     self
   end
 
-  def to_json
+  def to_json(*_args)
     {
       key:          @key,
       name:         @name,

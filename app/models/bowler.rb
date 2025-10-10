@@ -21,7 +21,8 @@
 
 class Bowler < ApplicationRecord
   attr_accessor :temp_id
-  belongs_to :league, class_name: "BowlingLeague", foreign_key: :league_id, inverse_of: :bowlers
+
+  belongs_to :league, class_name: "BowlingLeague", inverse_of: :bowlers
   has_many :bowler_sets, dependent: :destroy
   has_many :sets, through: :bowler_sets
   has_many :games, class_name: "BowlingGame", dependent: :destroy, inverse_of: :bowler
@@ -36,7 +37,7 @@ class Bowler < ApplicationRecord
       total_pins:   pins_at_time.then { |n| n.zero? ? first_set_games.sum(:score) : n },
       total_points: games.points + winning_sets.count,
       high_game:    games_present.maximum(:score),
-      high_series:  games_present.group_by(&:set_id).map { |setid, set_games| set_games.sum(&:score) }.max,
+      high_series:  games_present.group_by(&:set_id).map { |_setid, set_games| set_games.sum(&:score) }.max,
     )
   end
 
@@ -49,13 +50,13 @@ class Bowler < ApplicationRecord
 
   def games_at_time(time=Time.current)
     total_games_offset.to_i +
-      games_present.where("bowling_games.created_at <= ?", time)
+      games_present.where(bowling_games: { created_at: ..time })
         .then { |g| g.none? ? first_set_games : g }.count
   end
 
   def pins_at_time(time=Time.current)
     total_pins_offset.to_i +
-      games_present.where("bowling_games.created_at <= ?", time)
+      games_present.where(bowling_games: { created_at: ..time })
         .then { |g| g.none? ? first_set_games : g }.sum(:score)
   end
 
@@ -64,22 +65,22 @@ class Bowler < ApplicationRecord
   end
 
   def average
-    @average ||= begin
+    @average ||= (
       return unless total_games&.positive?
 
       (total_pins.to_i / total_games.to_f).floor
-    end
+    )
   end
 
   def handicap
-    @handicap ||= begin
+    @handicap ||= (
       league&.handicap_from_average(average)
-    end
+    )
   end
 
   def absent_score
-    @absent_score ||= begin
+    @absent_score ||= (
       league&.absent_score(average)
-    end
+    )
   end
 end

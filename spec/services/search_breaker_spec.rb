@@ -5,13 +5,13 @@ RSpec.describe SearchBreaker do
 
   let(:delims) {
     {
-      any: ["ANY", "ANY:"],
-      not: "!",
-      contains: ":",
+      any:          ["ANY", "ANY:"],
+      not:          "!",
+      contains:     ":",
       not_contains: "!:",
-      not_exact: "!::",
-      exact: "::",
-      similar: "~",
+      not_exact:    "!::",
+      exact:        "::",
+      similar:      "~",
 
       # any: "ANY",
       # not: "!",
@@ -26,7 +26,6 @@ RSpec.describe SearchBreaker do
     }
   }
 
-
   context "with different types of delimiters" do
     let(:q) {
       'name:thing has:"bigger string" search each ~sorta word !bad notes!:z name::thing ANY:(includes:dog includes:cat)'
@@ -38,32 +37,32 @@ RSpec.describe SearchBreaker do
       # Parens get separated out and parsed as a new breaker
       {
         keys: {
-          "name" => {
+          "name"   => {
             contains: ["thing"],
-            exact: ["thing"]
+            exact:    ["thing"],
           },
-          "has" => {
+          "has"    => {
             contains: ["bigger string"],
           },
           "search" => {},
-          "each" => {},
-          "word" => {},
-          "notes" => {
+          "each"   => {},
+          "word"   => {},
+          "notes"  => {
             not_contains: ["z"],
-          }
+          },
         },
         vals: {
           similar: ["sorta"],
-          not: ["bad"],
-          any: [
+          not:     ["bad"],
+          any:     [
             {
               keys: {
                 "includes" => {
-                  contains: ["dog", "cat"]
-                }
-              }
-            }
-          ]
+                  contains: ["dog", "cat"],
+                },
+              },
+            },
+          ],
         },
       }
     }
@@ -89,8 +88,8 @@ RSpec.describe SearchBreaker do
     let(:expected) {
       {
         keys: {
-          "tell" => { similar: ["/(?<direction>open|close|toggle)( (?:the|my))? garage/"] }
-        }
+          "tell" => { similar: ["/(?<direction>open|close|toggle)( (?:the|my))? garage/"] },
+        },
       }
     }
 
@@ -105,20 +104,20 @@ RSpec.describe SearchBreaker do
       {
         keys: {
           "websocket" => { contains: ["*", "garage"] },
-          "event" => {
+          "event"     => {
             contains: [
-              { keys: { "name" => { contains: ["food"]} } },
-              { vals: { any: [{ keys: { "name" => { exact: ["food", "drink"] } } }] } }
+              { keys: { "name" => { contains: ["food"] } } },
+              { vals: { any: [{ keys: { "name" => { exact: ["food", "drink"] } } }] } },
             ],
           },
-          "travel" => {
+          "travel"    => {
             contains: [
               "arrived",
               "departed",
-              { keys: { "arrived" => { exact: ["Delton"] } } }
-            ]
+              { keys: { "arrived" => { exact: ["Delton"] } } },
+            ],
           },
-        }
+        },
       }
     }
 

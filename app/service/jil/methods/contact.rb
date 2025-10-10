@@ -1,5 +1,5 @@
 class Jil::Methods::Contact < Jil::Methods::Base
-  PERMIT_ATTRS = [:name, :nickname, :username, :permit_relay, :phone, :data]
+  PERMIT_ATTRS = [:name, :nickname, :username, :permit_relay, :phone, :data].freeze
 
   def cast(value)
     case value

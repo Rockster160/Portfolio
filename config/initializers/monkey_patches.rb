@@ -1,1 +1,1 @@
-Dir[Rails.root.join('lib/core_extensions/*.rb')].each { |file| require file }
+Rails.root.glob("lib/core_extensions/*.rb").each { |file| require file }

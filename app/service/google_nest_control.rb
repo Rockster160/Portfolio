@@ -2,8 +2,8 @@ class GoogleNestControl
   PROJECT_ID = ENV.fetch("PORTFOLIO_GCP_PROJECT_ID")
   CLIENT_ID = ENV.fetch("PORTFOLIO_GCP_CLIENT_ID")
   CLIENT_SECRET = ENV.fetch("PORTFOLIO_GCP_CLIENT_SECRET")
-  REDIRECT_URI = "https://ardesian.com/nest_subscribe"
-  BASE_URL = "https://smartdevicemanagement.googleapis.com/v1"
+  REDIRECT_URI = "https://ardesian.com/nest_subscribe".freeze
+  BASE_URL = "https://smartdevicemanagement.googleapis.com/v1".freeze
 
   attr_accessor :access_token, :refresh_token
 
@@ -47,19 +47,19 @@ class GoogleNestControl
   end
 
   def devices
-    @devices ||= begin
+    @devices ||= (
       raise "No access token" if @access_token.blank?
 
       json = request(:get, "enterprises/#{PROJECT_ID}/devices")
 
-      devices = json[:devices]&.map do |device_data|
+      devices = json[:devices]&.map { |device_data|
         GoogleNestDevice.new(self).set_all(serialize_device(device_data))
-      end || []
+      } || []
       DataStorage[:nest_devices] = devices.each_with_object({}) { |device, obj|
         obj[device.name] = device.to_json
       }
       devices
-    end
+    )
   end
 
   def reload(device)
@@ -75,7 +75,7 @@ class GoogleNestControl
     success = command(
       device,
       command: "sdm.devices.commands.ThermostatMode.SetMode",
-      params: { mode: mode }
+      params:  { mode: mode },
     )[:code] == 200
 
     device.current_mode = mode.downcase.to_sym if success
@@ -89,7 +89,7 @@ class GoogleNestControl
     success = command(
       device,
       command: "sdm.devices.commands.ThermostatTemperatureSetpoint.Set#{mode.titleize}",
-      params: { "#{mode.downcase}Celsius": f_to_c(temp) }
+      params:  { "#{mode.downcase}Celsius": f_to_c(temp) },
     )[:code] == 200
 
     device.set_temp(mode.downcase.to_sym, temp) if success
@@ -104,11 +104,15 @@ class GoogleNestControl
     res = RestClient.post("https://www.googleapis.com/oauth2/v4/token", params)
     json = JSON.parse(res.body, symbolize_names: true)
 
-    @refresh_token = DataStorage[:google_nest_refresh_token] = json[:refresh_token] if json[:refresh_token].present?
-    @access_token = DataStorage[:google_nest_access_token] = "#{json[:token_type]} #{json[:access_token]}"
-  rescue RestClient::ExceptionWithResponse => err
-    raise err
-  rescue JSON::ParserError => err
+    if json[:refresh_token].present?
+      @refresh_token = DataStorage[:google_nest_refresh_token] =
+        json[:refresh_token]
+    end
+    @access_token = DataStorage[:google_nest_access_token] =
+      "#{json[:token_type]} #{json[:access_token]}"
+  rescue RestClient::ExceptionWithResponse => e
+    raise e
+  rescue JSON::ParserError => e
     SlackNotifier.notify("Failed to auth Google Nest:\nCode: #{res.code}\n```#{res.body}```")
   end
 
@@ -126,31 +130,32 @@ class GoogleNestControl
   def request(method, url, params={})
     raise "Should not request in tests!" if Rails.env.test?
     raise "Cannot request without access token" if @access_token.blank?
+
     retries ||= 0
 
     res = (
       if method == :get
         ::RestClient.get(
           "#{BASE_URL}/#{url}",
-          base_headers.merge(params: params)
+          base_headers.merge(params: params),
         )
       elsif method == :post
         ::RestClient.post(
           "#{BASE_URL}/#{url}",
           params.to_json,
-          base_headers
+          base_headers,
         )
       end
     )
 
     JSON.parse(res.body, symbolize_names: true).merge(code: res.code)
-  rescue ::RestClient::ExceptionWithResponse => err
+  rescue ::RestClient::ExceptionWithResponse => e
     retries += 1
-    return refresh && retry if retries < 2 && err.response.code == 401
+    return refresh && retry if retries < 2 && e.response.code == 401
 
     ::SlackNotifier.notify("Failed to request from GoogleNestControl##{method}(#{url}):\nCode: #{res&.code}\n```#{params}```\n```#{res&.body}```")
-    raise err
-  rescue JSON::ParserError => err
+    raise e
+  rescue JSON::ParserError => e
     ::SlackNotifier.notify("Failed to parse json from GoogleNestControl##{method}(#{url}):\nCode: #{res&.code}\n```#{params}```\n```#{res&.body}```")
     raise "Failed to parse json from GoogleNestControl##{method}"
   end
@@ -158,7 +163,7 @@ class GoogleNestControl
   def base_headers
     {
       "Content-Type": "application/json",
-      "Authorization": @access_token,
+      Authorization:  @access_token,
     }
   end
 
@@ -168,26 +173,52 @@ class GoogleNestControl
 
   def serialize_device(device_data)
     {
-      key:      device_data.dig(:name),
-      name:     device_data.dig(:parentRelations, 0, :displayName),
-      humidity: device_data.dig(:traits, :"sdm.devices.traits.Humidity", :ambientHumidityPercent).to_i,
-      current_mode: device_data.dig(:traits, :"sdm.devices.traits.ThermostatMode", :mode)&.downcase&.to_sym,
-      current_temp: c_to_f(device_data.dig(:traits, :"sdm.devices.traits.Temperature", :ambientTemperatureCelsius)),
-      hvac:     device_data.dig(:traits, :"sdm.devices.traits.ThermostatHvac", :status) == "ON",
-      heat_set: c_to_f(device_data.dig(:traits, :"sdm.devices.traits.ThermostatTemperatureSetpoint", :heatCelsius)),
-      cool_set: c_to_f(device_data.dig(:traits, :"sdm.devices.traits.ThermostatTemperatureSetpoint", :coolCelsius)),
+      key:          device_data[:name],
+      name:         device_data.dig(:parentRelations, 0, :displayName),
+      humidity:     device_data.dig(
+        :traits,
+        :"sdm.devices.traits.Humidity",
+        :ambientHumidityPercent,
+      ).to_i,
+      current_mode: device_data.dig(
+        :traits,
+        :"sdm.devices.traits.ThermostatMode",
+        :mode,
+      )&.downcase&.to_sym,
+      current_temp: c_to_f(
+        device_data.dig(
+          :traits,
+          :"sdm.devices.traits.Temperature",
+          :ambientTemperatureCelsius,
+        ),
+      ),
+      hvac:         device_data.dig(:traits, :"sdm.devices.traits.ThermostatHvac", :status) == "ON",
+      heat_set:     c_to_f(
+        device_data.dig(
+          :traits,
+          :"sdm.devices.traits.ThermostatTemperatureSetpoint",
+          :heatCelsius,
+        ),
+      ),
+      cool_set:     c_to_f(
+        device_data.dig(
+          :traits,
+          :"sdm.devices.traits.ThermostatTemperatureSetpoint",
+          :coolCelsius,
+        ),
+      ),
     }
   end
 
   def c_to_f(c)
     return if c.blank?
 
-    ((c * (9/5.to_f)) + 32).round
+    ((c * (9 / 5.to_f)) + 32).round
   end
 
   def f_to_c(ftemp)
     return if ftemp.blank?
 
-    ((ftemp - 32) * (5/9.to_f))
+    ((ftemp - 32) * (5 / 9.to_f))
   end
 end

@@ -10,22 +10,22 @@ module Bowling
         @bowler.recalculate_scores
         template = BowlersController.render partial: "bowling/bowling_games/bowling_game_form", locals: {
           bowler: @bowler,
-          game: BowlingGame.new(game_num: params.dig(:bowler, :game_num), bowler: @bowler),
+          game:   BowlingGame.new(game_num: params.dig(:bowler, :game_num), bowler: @bowler),
         }
 
         respond_to do |format|
           format.json {
             render json: {
-              html: template,
+              html:   template,
               bowler: {
-                id: @bowler.id,
-                name: @bowler.name,
-                average: @bowler.average,
-                handicap: @bowler.handicap,
+                id:           @bowler.id,
+                name:         @bowler.name,
+                average:      @bowler.average,
+                handicap:     @bowler.handicap,
                 absent_score: @bowler.absent_score,
-                usbc_name: @bowler.usbc_full_name,
-                usbc_number: @bowler.usbc_number,
-              }
+                usbc_name:    @bowler.usbc_full_name,
+                usbc_number:  @bowler.usbc_number,
+              },
             }
           }
         end
@@ -57,12 +57,12 @@ module Bowling
     end
 
     def set_league
-      @league ||= begin
+      @set_league ||= (
         league_id = params.dig(:bowler, :league_id)
 
         # BowlingLeague.find(league_id)
         current_user.bowling_leagues.find(league_id)
-      end
+      )
     end
   end
 end

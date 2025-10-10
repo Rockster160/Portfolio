@@ -78,9 +78,8 @@ module Bowling
           :usbc_full_name,
           :total_games_offset,
           :total_pins_offset,
-        ]
+        ],
       )
     end
-
   end
 end

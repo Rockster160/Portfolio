@@ -34,23 +34,24 @@ class Monster < ApplicationRecord
   # RES
   # ACC
 
-  enum element: {
+  enum :element, {
     fire:  0,
     water: 1,
     wind:  2,
     light: 3,
-    dark:  4
+    dark:  4,
   }
 
-  enum archetype: {
+  enum :archetype, {
     attack:   0,
     hp:       1,
     support:  2,
     defense:  3,
-    material: 4
+    material: 4,
   }
 
-  def short_code; self.class.short_code; end
+  delegate :short_code, to: :class
+
   def self.short_code(attr_name)
     case attr_name.to_s.gsub(" ", "_").to_sym
     when :HP,       :health      then :HP
@@ -64,7 +65,8 @@ class Monster < ApplicationRecord
     end
   end
 
-  def long_code; self.class.long_code; end
+  delegate :long_code, to: :class
+
   def self.long_code(attr_name)
     case attr_name.to_s.gsub(" ", "_").to_sym
     when :HP,       :health      then :health
@@ -94,5 +96,4 @@ class Monster < ApplicationRecord
   def reload_data
     MonsterScraper.update_monster_data(self)
   end
-
 end

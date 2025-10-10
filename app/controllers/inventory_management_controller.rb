@@ -51,9 +51,7 @@ class InventoryManagementController < ApplicationController
 
   def box_params
     params.permit(:name, :notes, :description, :parent_id).tap { |whitelist|
-      if whitelist[:parent_id].present? && current_user.boxes.where(id: whitelist[:parent_id]).empty?
-        whitelist[:parent_id] = nil
-      end
+      whitelist[:parent_id] = nil if whitelist[:parent_id].present? && current_user.boxes.where(id: whitelist[:parent_id]).empty?
     }
   end
 end

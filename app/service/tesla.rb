@@ -2,12 +2,12 @@ class Tesla
   attr_accessor :id, :controller
 
   # Allows calling methods directly from the class rather than `Tesla.new.start` -> `Tesla.start`
-  def self.method_missing(method, *args, &block)
-    (@instance ||= new).send(method, *args)
+  def self.method_missing(method, *)
+    (@instance ||= new).send(method, *)
   end
 
-  def method_missing(method, *args, &block)
-    @controller.send(method, *args, &block)
+  def method_missing(method, *, &)
+    @controller.send(method, *, &)
   end
 
   def initialize(controller=nil)

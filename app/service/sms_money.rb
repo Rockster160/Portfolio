@@ -4,11 +4,10 @@ class SmsMoney
 
     if body.squish.match?(/\?|balance|bal|current/)
       # Check other bucket words
-      money_bucket.manager.to_words
     else
       money_bucket.update(adjust: body)
 
-      money_bucket.manager.to_words
     end
+    money_bucket.manager.to_words
   end
 end

@@ -15,18 +15,20 @@
 class Oauth::VenmoApi < Oauth::Base
   include ::ActionView::Helpers::NumberHelper
 
-  VENMO_BALANCE_ID = 1653332309442560599
-  MACU_ID = 1653333114748928453
-  CHASE_ID = 4195446905898258092
+  VENMO_BALANCE_ID = 1_653_332_309_442_560_599
+  MACU_ID = 1_653_333_114_748_928_453
+  CHASE_ID = 4_195_446_905_898_258_092
   constants(api_url: "https://api.venmo.com/v1")
 
   # ========== Via Name ==========
   def send_by_name(name, amount, note)
     send_money(venmo_id_from_name(name), amount, note)
   end
+
   def request_by_name(name, amount, note)
     request_money(venmo_id_from_name(name), amount, note)
   end
+
   def charge_by_name(name, amount, note)
     charge_money(venmo_id_from_name(name), amount, note)
   end
@@ -35,9 +37,11 @@ class Oauth::VenmoApi < Oauth::Base
   def send_to_contact(contact, amount, note)
     send_money(venmo_id_from_contact(contact), amount, note)
   end
+
   def request_from_contact(contact, amount, note)
     request_money(venmo_id_from_contact(contact), amount, note)
   end
+
   def charge_contact(contact, amount, note)
     charge_money(venmo_id_from_contact(contact), amount, note)
   end
@@ -45,6 +49,7 @@ class Oauth::VenmoApi < Oauth::Base
   # ========== Via Venmo User ID ==========
   def send_money(id, amount, note) = charge_money(id, amount.abs, note)
   def request_money(id, amount, note) = charge_money(id, -(amount.abs), note)
+
   # positive = send money
   # negative = request money
   def charge_money(id, amount, note, source: :venmo)
@@ -52,9 +57,9 @@ class Oauth::VenmoApi < Oauth::Base
 
     if Rails.env.production?
       post(:payments, {
-        user_id: id,
-        note: note,
-        amount: amount,
+        user_id:  id,
+        note:     note,
+        amount:   amount,
         metadata: { quasi_cash_disclaimer_viewed: true },
         audience: :public,
       }.tap { |params|
@@ -110,7 +115,8 @@ class Oauth::VenmoApi < Oauth::Base
   end
 
   def search(name)
-    return unless name.present?
+    return if name.blank?
+
     # Should paginate this
     get(:users, { query: name })[:data].then { |users|
       break users.first if users.length == 1
@@ -132,7 +138,7 @@ class Oauth::VenmoApi < Oauth::Base
     user = search(contact.raw[:name])
     user ||= search(contact.name)
     user ||= search(contact.nickname)
-    return Jarvis.ping("Unable to find Venmo id for #{contact.name}.") unless user.present?
+    return Jarvis.ping("Unable to find Venmo id for #{contact.name}.") if user.blank?
 
     contact_mapping.merge!(contact.id => user[:id])
     cache_set(:contact_ids, contact_mapping)

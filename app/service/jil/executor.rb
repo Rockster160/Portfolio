@@ -1,6 +1,5 @@
 class Jil::Executor
-  attr_accessor :user, :ctx, :lines
-  attr_accessor :input_data
+  attr_accessor :user, :ctx, :lines, :input_data
 
   # def self.async_trigger(user, trigger, trigger_data={}, at: nil)
   #   ::User.ids(user).each do |user_id|
@@ -24,7 +23,9 @@ class Jil::Executor
       lines = caller.select { |line|
         line.include?(Rails.root.to_s) || line.include?("_scripts")
       }.map { |line|
-        line.gsub(/^.*?#{Rails.root}/, "").gsub(/(app)?\/app\//, "app/").gsub(":in `", " `").gsub(/(:\d+) .*?$/, '\1')
+        line.gsub(/^.*?#{Rails.root}/, "").gsub(/(app)?\/app\//, "app/").gsub(":in `", " `").gsub(
+          /(:\d+) .*?$/, '\1'
+        )
       }.join("\n")
       msg = "No trigger:```\n#{lines}\n```"
       msg += "\n\n```\n#{JSON.pretty_generate(raw_trigger_data)}\n```" if raw_trigger_data.present?
@@ -32,7 +33,9 @@ class Jil::Executor
       return
     end
 
-    ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(PrettyLogger.pretty_message({ trigger => raw_trigger_data }), 1000))
+    ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(
+      PrettyLogger.pretty_message({ trigger => raw_trigger_data }), 1000
+    ))
 
     trigger_data = TriggerData.parse(raw_trigger_data, as: user)
 
@@ -41,22 +44,23 @@ class Jil::Executor
     stopped = false
     user_tasks.by_listener(trigger).filter_map { |task|
       next if stopped
+
       ran = nil
       begin
         ran = task.match_run(trigger, trigger_data) && task
-      rescue => exc
+      rescue StandardError => e
         unless Rails.env.production?
           load("/Users/rocco/.pryrc")
-          source_puts "[#{exc.class}] #{exc.message}".red
-          source_puts focused_backtrace($is_ocs ? exc : exc.backtrace).join("\n").grey
+          source_puts "[#{e.class}] #{e.message}".red
+          source_puts focused_backtrace($is_ocs ? e : e.backtrace).join("\n").grey
         end
         nil # Generic rescue
       end
       ran&.tap { stopped = true if ran.stop_propagation? }
-    }.tap { |tasks|
+    }.tap { |_tasks|
       if !stopped && trigger.to_sym == :command
         trigger_data.deep_symbolize_keys!
-        words = trigger_data.dig(:words) || trigger_data.dig(:command, :words)
+        words = trigger_data[:words] || trigger_data.dig(:command, :words)
         ::Jarvis.command(user, words)
       end
     }
@@ -80,7 +84,10 @@ class Jil::Executor
     @user = user
     @ctx = { vars: {}, return_val: nil, state: :running, output: [] }
     @input_data = input_data || {}
-    @execution = ::Execution.create(user: user, code: code, ctx: @ctx, task: task, input_data: TriggerData.serialize(input_data))
+    @execution = ::Execution.create(
+      user: user, code: code, ctx: @ctx, task: task,
+      input_data: TriggerData.serialize(input_data)
+    )
     ::Execution.order(started_at: :desc).where(user: user, task: task).offset(5).compact_all
     @lines = ::Jil::Parser.from_code(code)
   end
@@ -95,11 +102,11 @@ class Jil::Executor
 
   def broadcast!
     data = {
-      line: @ctx[:line],
-      error: @ctx[:error] || [],
-      output: @ctx[:output] || [],
-      state: @ctx[:state],
-      result: @ctx[:return_val],
+      line:      @ctx[:line],
+      error:     @ctx[:error] || [],
+      output:    @ctx[:output] || [],
+      state:     @ctx[:state],
+      result:    @ctx[:return_val],
       timestamp: @execution&.last_completion_time || "Waiting...",
     }
     ::TasksChannel.send_to(@user, @execution&.task&.uuid || :new, data)
@@ -117,7 +124,7 @@ class Jil::Executor
       # rescue ::Jil::ExecutionError => e
       #   @ctx[:error] = e.message
       #   state = :failed
-      rescue => e
+      rescue StandardError => e
         @ctx[:error] = "[#{@ctx[:line]}] [#{e.class}] #{e.message}"
         @ctx[:error_line] = e.backtrace.find { |l| l.include?("/app/") }
         state = :failed
@@ -161,9 +168,8 @@ class Jil::Executor
       if line.objname.match?(/^[A-Z]/) # upcase for class or downcase for instance
         klass_from_obj(line.objname)
       else
-        unless @ctx&.dig(:vars)&.key?(line.objname.to_sym)
-          raise ::Jil::ExecutionError, "Variable not found: [#{line.objname}]"
-        end
+        raise ::Jil::ExecutionError, "Variable not found: [#{line.objname}]" unless @ctx&.dig(:vars)&.key?(line.objname.to_sym)
+
         klass_from_obj(@ctx.dig(:vars, line.objname.to_sym))
       end
     )
@@ -174,14 +180,16 @@ class Jil::Executor
       value: cast(obj.base_execute(line), line.cast, current_ctx),
     }.tap { |line_val|
       if line.shown?
-        @ctx[:output] << "[#{line.varname}][#{line_val[:class]}]#{::Jil::Methods::String.new(self, @ctx).cast(line_val[:value]).gsub(/^"|"$/, "")}"
+        @ctx[:output] << "[#{line.varname}][#{line_val[:class]}]#{::Jil::Methods::String.new(self, @ctx).cast(line_val[:value]).gsub(
+          /^"|"$/, ""
+        )}"
       end
     }
   end
 
-  def enumerate_hash(hash, method, &block)
+  def enumerate_hash(hash, method)
     lctx = { break: false, next: false, state: :running, line: @ctx[:line] }
-    hash.each_with_index.send(method) do |(key, val), idx|
+    hash.each_with_index.send(method) { |(key, val), idx|
       if idx > 1000
         # This should be able to be increased on some functions.
         raise ::Jil::ExecutionError, "Too many Hash iterations!"
@@ -195,12 +203,12 @@ class Jil::Executor
       lctx[:index] = idx
 
       yield(lctx)
-    end
+    }
   end
 
-  def enumerate_array(array, method, &block)
+  def enumerate_array(array, method)
     lctx = { break: false, next: false, state: :running, line: @ctx[:line] }
-    array.each_with_index.send(method) do |val, idx|
+    array.each_with_index.send(method) { |val, idx|
       if idx > 1000
         # This should be able to be increased on some functions.
         raise ::Jil::ExecutionError, "Too many Array iterations!"
@@ -213,10 +221,10 @@ class Jil::Executor
       lctx[:index] = idx
 
       yield(lctx)
-    end
+    }
   end
 
-  def enumerate_loop(&block)
+  def enumerate_loop
     lctx = { break: false, next: false, state: :running, line: @ctx[:line] }
     idx = -1
     last_val = nil
@@ -277,7 +285,7 @@ class Jil::Executor
     return value unless value.is_a?(::String)
 
     YAML.safe_load(value, [::Symbol], aliases: true)
-  rescue
+  rescue StandardError
     value
   end
 end

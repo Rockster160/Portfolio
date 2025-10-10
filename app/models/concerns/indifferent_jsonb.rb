@@ -3,7 +3,7 @@
 module IndifferentJsonb
   extend ActiveSupport::Concern
 
-  class_methods do # rubocop:disable Metrics/BlockLength
+  class_methods do
     def indifferent_jsonb(*columns)
       columns.each do |col|
         ivar_ref = "@indifferent_#{col}"
@@ -31,9 +31,7 @@ module IndifferentJsonb
         define_method("#{col}=") do |new_data|
           new_json = JSON.parse(new_data&.to_json || "{}")
 
-          if new_data.is_a?(Hash)
-            new_json.reverse_merge!(send(col)).compact
-          end
+          new_json.reverse_merge!(send(col)).compact if new_data.is_a?(Hash)
 
           instance_variable_set(ivar_ref, nil) # reset ivar to re-pull next time
           super(new_json)

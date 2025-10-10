@@ -30,8 +30,7 @@ class RlcraftsController < ApplicationController
       :y_coord,
       :title,
       :location_type,
-      :description
+      :description,
     )
   end
-
 end

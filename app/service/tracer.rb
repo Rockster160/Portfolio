@@ -14,8 +14,8 @@ class Tracer
 
   attr_accessor :events
 
-  def self.trace(&block)
-    new.trace(&block)
+  def self.trace(&)
+    new.trace(&)
   end
 
   def initialize
@@ -27,12 +27,12 @@ class Tracer
 
     trace_point = TracePoint.new(:call, :return) do |tp|
       @events << {
-        event:   tp.event,                                                    # :call or :return
-        time:    Process.clock_gettime(Process::CLOCK_MONOTONIC),             # high-res timestamp
-        class:   tp.defined_class.to_s.gsub(/#<Class:(.*?)>/, '\1').gsub(/\(.*?\)/, ""),
-        method:  tp.method_id,
-        path:    tp.path,
-        lineno:  tp.lineno
+        event:  tp.event,                                                    # :call or :return
+        time:   Process.clock_gettime(Process::CLOCK_MONOTONIC),             # high-res timestamp
+        class:  tp.defined_class.to_s.gsub(/#<Class:(.*?)>/, '\1').gsub(/\(.*?\)/, ""),
+        method: tp.method_id,
+        path:   tp.path,
+        lineno: tp.lineno,
       }
     end
 
@@ -58,7 +58,7 @@ class Tracer
         **base_frame.slice(:method, :path, :lineno),
         **analyze_numbers(frames.map { |f| f[:duration] }),
         earliest: times.min,
-        latest: times.max,
+        latest:   times.max,
       }
     }
   end
@@ -75,11 +75,11 @@ class Tracer
     sum    = numbers.sum
     mean   = sum.to_f / count
     median =
-    if count.odd?
-      sorted[count / 2]
-    else
-      (sorted[count / 2 - 1] + sorted[count / 2]) / 2.0
-    end
+      if count.odd?
+        sorted[count / 2]
+      else
+        (sorted[(count / 2) - 1] + sorted[count / 2]) / 2.0
+      end
     freq      = numbers.tally
     max_freq  = freq.values.max
     mode      = freq.select { |_, v| v == max_freq }.keys
@@ -87,14 +87,14 @@ class Tracer
     std_dev   = Math.sqrt(variance)
 
     {
-      count:               count,              # number of elements
-      sum:                 sum,                # total
-      mean:                mean,               # average
-      median:              median,             # middle value
-      mode:                mode,               # most frequent value(s)
-      variance:            variance,           # average squared deviation
-      standard_deviation:  std_dev,            # dispersion measure
-      range:               sorted.last - sorted.first  # span
+      count:              count,              # number of elements
+      sum:                sum,                # total
+      mean:               mean,               # average
+      median:             median,             # middle value
+      mode:               mode,               # most frequent value(s)
+      variance:           variance,           # average squared deviation
+      standard_deviation: std_dev,            # dispersion measure
+      range:              sorted.last - sorted.first,  # span
     }
   end
 
@@ -113,11 +113,11 @@ class Tracer
         total = e[:time] - frame[:time]                # total time including children
         self_tm = total - frame[:child_time]             # subtract time spent in subcalls
         exclusive_times << {
-          method: "#{frame[:class]}##{frame[:method]}",
+          method:   "#{frame[:class]}##{frame[:method]}",
           duration: self_tm,
-          total:  total,
-          start: frame[:time],
-          path:  "#{frame[:path]}:#{frame[:lineno]}",
+          total:    total,
+          start:    frame[:time],
+          path:     "#{frame[:path]}:#{frame[:lineno]}",
         }
         # add this frame’s total into parent’s child_time
         stack.last[:child_time] += total if stack.any?

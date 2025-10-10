@@ -10,8 +10,8 @@ module Jarvis::Regex
     return if md.nil?
 
     {
-      match_list: md.to_a,
-      named_captures: md.named_captures.symbolize_keys
+      match_list:     md.to_a,
+      named_captures: md.named_captures.symbolize_keys,
     }
   end
 
@@ -26,7 +26,7 @@ module Jarvis::Regex
   end
 
   def words(*words, suffix: nil, prefix: nil)
-    Regexp.new("(?:\\b#{prefix}(?:#{words.flatten.compact.uniq.join('|')})#{suffix}\\b)", :i)
+    Regexp.new("(?:\\b#{prefix}(?:#{words.flatten.compact.uniq.join("|")})#{suffix}\\b)", :i)
   end
 
   def address

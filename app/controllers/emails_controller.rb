@@ -16,7 +16,7 @@ class EmailsController < ApplicationController
 
   def new
     @email = current_user.sent_emails.new(email_params)
-    @email.from_user ||= current_user.email.in?(::Email.registered_domains) ? current_user.email : "#{(current_user.username.presence || 'contact')}@ardesian.com"
+    @email.from_user ||= current_user.email.in?(::Email.registered_domains) ? current_user.email : "#{(current_user.username.presence || "contact")}@ardesian.com"
   end
 
   def create
@@ -52,7 +52,9 @@ class EmailsController < ApplicationController
   end
 
   def email_params
-    params.fetch(:email, {}).permit(:html_body, :from_user, :from_domain, :to, :subject, tempfiles: [])
+    params.fetch(:email, {}).permit(
+      :html_body, :from_user, :from_domain, :to, :subject,
+      tempfiles: []
+    )
   end
-
 end

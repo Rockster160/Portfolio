@@ -12,7 +12,7 @@ class ActionEventsController < ApplicationController
   end
 
   def calendar
-    Time.use_zone(current_user.timezone) do
+    Time.use_zone(current_user.timezone) {
       @today = Time.current.to_date
       @date = safeparse_time(params[:date]).to_date.end_of_week(:sunday)
       @week = @date.then { |t| (t - 6.days)..t }
@@ -27,11 +27,11 @@ class ActionEventsController < ApplicationController
       (0..23).each do |hour|
         @cal_events << [hour, *@week.map { |day| grouped_events[[day, hour]] }]
       end
-    end
+    }
   end
 
   def feelings
-    Time.use_zone(current_user.timezone) do
+    Time.use_zone(current_user.timezone) {
       @today = Time.current.to_date
 
       if params[:start_date].present? && params[:end_date].present?
@@ -40,17 +40,19 @@ class ActionEventsController < ApplicationController
         @range = (start_date.beginning_of_month..end_date.end_of_month)
       else
         @date = safeparse_time(params[:date]).to_date
-        @range = @date.then { |t| t.beginning_of_month..t.end_of_month }
+        @range = @date.then(&:all_month)
       end
 
       @events = current_user.action_events.where(name: "Feeling").order(timestamp: :asc)
       @events = @events.where(timestamp: @range)
-      @chart_data = @events.map { |evt| { id: evt.id, timestamp: evt.timestamp.to_i, data: evt.data } }
-    end
+      @chart_data = @events.map { |evt|
+        { id: evt.id, timestamp: evt.timestamp.to_i, data: evt.data }
+      }
+    }
   end
 
   def pullups
-    Time.use_zone(current_user.timezone) do
+    Time.use_zone(current_user.timezone) {
       @today = Time.current.to_date
       goal = 1000
 
@@ -60,7 +62,7 @@ class ActionEventsController < ApplicationController
         @range = (start_date.beginning_of_month..end_date.end_of_month)
       else
         @date = safeparse_time(params[:date]).to_date
-        @range = @date.then { |t| t.beginning_of_month..t.end_of_month }
+        @range = @date.then(&:all_month)
       end
 
       @events = current_user.action_events
@@ -70,23 +72,23 @@ class ActionEventsController < ApplicationController
       @events = @events.where(name: "Pullups").order(timestamp: :asc)
 
       grouped_events = @events.group_by { |evt| evt.timestamp.to_date }
-      @range_data = @range.each_with_object({}) { |date, obj| obj[date] = grouped_events[date] }
+      @range_data = @range.index_with { |date| grouped_events[date] }
 
       months = {}.tap { |month_hash|
         current_date = @range.first
         while current_date <= @range.last
           month_hash[current_date.strftime("%Y-%m")] = {
             goal: goal,
-            days: 1+Time.days_in_month(current_date.month, current_date.year),
+            days: 1 + Time.days_in_month(current_date.month, current_date.year),
           }
           current_date = current_date.next_month
         end
       }
       @chart_data = {
-        labels: @range_data.map { |date, evts| date.strftime("%a %-m/%-d/%y") },
+        labels:   @range_data.map { |date, _evts| date.strftime("%a %-m/%-d/%y") },
         datasets: [
           {
-            data: @range_data.map.with_index { |(date, evts), idx|
+            data:            @range_data.map.with_index { |(date, evts), _idx|
               next if date > @today
 
               month_data = months[date.strftime("%Y-%m")]
@@ -95,17 +97,22 @@ class ActionEventsController < ApplicationController
               month_data[:goal] -= (evts&.sum { |evt| evt.notes.to_i } || 0)
 
               next remaining_goal if days_in_month.zero?
+
               (remaining_goal / days_in_month).clamp(0, goal)
             },
-            type: :line,
-            borderColor: "rgba(255, 160, 1, 0.5)",
+            type:            :line,
+            borderColor:     "rgba(255, 160, 1, 0.5)",
             backgroundColor: "rgba(255, 160, 1, 0.5)",
           },
           {
-            data: @range_data.map { |date, evts| evts&.sum { |evt| evt.notes.to_i } || 0 },
+            data:            @range_data.map { |_date, evts|
+              evts&.sum { |evt|
+                evt.notes.to_i
+              } || 0
+            },
             backgroundColor: "#0160FF",
           },
-        ]
+        ],
       }
 
       if @date == @today
@@ -115,15 +122,15 @@ class ActionEventsController < ApplicationController
       end
 
       current = @events.where("notes ~ '\\d+'").sum("notes::integer")
-      total_goal = months.length*goal
+      total_goal = months.length * goal
       total_remaining = total_goal - current
       @stats = {
-        remaining: total_remaining,
-        current: current,
-        goal: total_goal,
-        daily_need: days_left > 0 ? total_remaining / days_left.to_f : 0,
+        remaining:  total_remaining,
+        current:    current,
+        goal:       total_goal,
+        daily_need: days_left.positive? ? total_remaining / days_left.to_f : 0,
       }
-    end
+    }
   end
 
   def create
@@ -132,21 +139,19 @@ class ActionEventsController < ApplicationController
     ActionEventBroadcastWorker.perform_async(event.id)
 
     respond_to do |format|
-      format.json do
+      format.json {
         if event.persisted?
           head :ok
         else
           SlackNotifier.notify(event.errors.full_messages.join("\n"))
           head :unprocessable_entity
         end
-      end
+      }
 
-      format.html do
-        unless event.valid?
-          flash[:alert] = "Failed to create event: #{event.errors.full_messages.join(' | ')}"
-        end
+      format.html {
+        flash[:alert] = "Failed to create event: #{event.errors.full_messages.join(" | ")}" unless event.valid?
         redirect_to action_events_path
-      end
+      }
     end
   end
 
@@ -178,7 +183,7 @@ class ActionEventsController < ApplicationController
 
     ActionEventBroadcastWorker.perform_async
     ::RecentEventsBroadcast.call if event.present?
-    redirect_to request.referrer || action_events_path
+    redirect_to request.referer || action_events_path
   end
 
   private
@@ -193,9 +198,9 @@ class ActionEventsController < ApplicationController
     prepared_params.merge!(user: current_user)
 
     prepared_params.tap { |whitelist|
-      if whitelist[:notes].to_s.match?(/^(\-|\+)\d+/)
-        offset_time = whitelist[:notes][/^(\-|\+)\d+/].to_i
-        whitelist[:notes] = whitelist[:notes].sub(/^(\-|\+)\d+ ?/, "")
+      if whitelist[:notes].to_s.match?(/^(-|\+)\d+/)
+        offset_time = whitelist[:notes][/^(-|\+)\d+/].to_i
+        whitelist[:notes] = whitelist[:notes].sub(/^(-|\+)\d+ ?/, "")
         time = safeparse_time(whitelist[:timestamp])
         whitelist[:timestamp] = time + offset_time.minutes
       end
@@ -203,8 +208,11 @@ class ActionEventsController < ApplicationController
   end
 
   def raw_event_params
-    params.to_unsafe_h.slice(:name, :timestamp, :notes, :data).tap do |whitelist|
-      (params[:event_name].presence || params.dig(:action_event, :event_name)).presence&.tap { |name|
+    params.to_unsafe_h.slice(:name, :timestamp, :notes, :data).tap { |whitelist|
+      (params[:event_name].presence || params.dig(
+        :action_event,
+        :event_name,
+      )).presence&.tap { |name|
         whitelist[:name] ||= name
       }
       whitelist.delete(:data).presence&.tap { |data|
@@ -215,11 +223,9 @@ class ActionEventsController < ApplicationController
           }
         }
         json = BetterJsonSerializer.load(raw_json)
-        if json.is_a?(::Hash) || json.is_a?(::Array)
-          whitelist[:data] = json
-        end
+        whitelist[:data] = json if json.is_a?(::Hash) || json.is_a?(::Array)
       }
-    end
+    }
   end
 
   def form_event_params
@@ -228,11 +234,14 @@ class ActionEventsController < ApplicationController
       :notes,
       :timestamp,
       :data,
-    ).tap do |whitelist|
-      (params[:event_name].presence || params.dig(:action_event, :event_name)).presence&.tap { |name|
+    ).tap { |whitelist|
+      (params[:event_name].presence || params.dig(
+        :action_event,
+        :event_name,
+      )).presence&.tap { |name|
         whitelist[:name] ||= name
       }
       whitelist[:timestamp] = whitelist[:timestamp].presence || Time.current
-    end
+    }
   end
 end

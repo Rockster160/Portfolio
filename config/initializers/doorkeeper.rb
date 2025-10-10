@@ -6,13 +6,13 @@ Doorkeeper.configure do
   orm :active_record
 
   # This block will be called to check whether the resource owner is authenticated or not.
-  resource_owner_authenticator do
+  resource_owner_authenticator {
     Auth.new(session, request).current_user || (store_previous_url && redirect_to(login_url))
-  end
+  }
 
-  admin_authenticator do |_routes|
+  admin_authenticator { |_routes|
     current_admin || redirect_to(account_url, alert: "Sorry, you do not have access to this page.")
-  end
+  }
 
   skip_authorization { true } # Alexa is the only client for now
 

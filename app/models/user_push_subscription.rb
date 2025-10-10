@@ -23,8 +23,6 @@ class UserPushSubscription < ApplicationRecord
     endpoint.present? && p256dh.present? && auth.present?
   end
 
-  private
-
   # def set_sub_auth
   #   return if sub_auth.present?
   #

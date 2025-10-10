@@ -9,12 +9,13 @@
 
 RSpec.describe AmazonEmailParser do
   include ActiveSupport::Testing::TimeHelpers
+
   def parse(email_id)
     email = double(
       "Email",
-      id: email_id,
+      id:      email_id,
       to_html: html_fixture("email_body_#{email_id}", raw: true),
-      subject: "Whatever"
+      subject: "Whatever",
     )
     AmazonEmailParser.parse(email)
   end
@@ -28,31 +29,26 @@ RSpec.describe AmazonEmailParser do
   end
 
   before do
-    allow(AmazonOrder).to receive(:broadcast) do |*args| # Stub websockets
-    end
-    allow(RestClient).to receive(:get) do |*args| # Stub external requests
-    end
-    allow(Jarvis).to receive(:cmd) do |*args| # Stub external requests
-    end
+    allow(AmazonOrder).to receive(:broadcast).and_return(nil)
+    allow(RestClient).to receive(:get).and_return(nil)
+    allow(Jarvis).to receive(:cmd).and_return(nil)
     allow(ChatGPT).to receive(:short_name_from_order) do |*args| # Stub GPT requests
       name_mapping.dig(args.second&.item_id&.to_sym, :short)
     end
-    allow(SlackNotifier).to receive(:err) do |*args| # Stub Slack messages
-    end
-    allow_any_instance_of(AmazonEmailParser).to receive(:retrieve_full_name) do |instance, *args|
-      # TODO: Fix this stub
-    end
+    allow(SlackNotifier).to receive(:err).and_return(nil)
+    allow_any_instance_of(AmazonEmailParser).to receive(:retrieve_full_name).and_return(nil)
   end
 
   context "standard item" do
     before { parse(3564) }
+
     let(:name_mapping) {
       {
         B07F19DK3S: {
-          date: "2024-04-28",
+          date:   "2024-04-28",
           listed: "WYNNsky Low Pressure Pencil...",
-          full: "WYNNsky Low Pressure Pencil Tire Gauge 1-20 PSI for Golf Carts, ATV'S and Air Springs",
-          short: "Tire Gauge",
+          full:   "WYNNsky Low Pressure Pencil Tire Gauge 1-20 PSI for Golf Carts, ATV'S and Air Springs",
+          short:  "Tire Gauge",
         },
       }
     }
@@ -140,31 +136,32 @@ RSpec.describe AmazonEmailParser do
 
   context "with an email including multiple items" do
     before { parse(3563) }
+
     let(:name_mapping) {
       {
         B00AV283TC: {
-          date: "2024-05-02",
+          date:   "2024-05-02",
           listed: "Bath & Body Works Signature...",
-          full: "Bath & Body Works Signature Collection Body Lotion Dark Kiss, 8 Fl Oz (Pack of 3)",
-          short: "Body Lotion",
+          full:   "Bath & Body Works Signature Collection Body Lotion Dark Kiss, 8 Fl Oz (Pack of 3)",
+          short:  "Body Lotion",
         },
         B014UJIIQY: {
-          date: "2024-04-28",
+          date:   "2024-04-28",
           listed: "Bath & Body Works Dark Kiss...",
-          full: "Bath & Body Works Dark Kiss Ultra Shea Body Cream, 8 Ounce",
-          short: "Shea Body Cream",
+          full:   "Bath & Body Works Dark Kiss Ultra Shea Body Cream, 8 Ounce",
+          short:  "Shea Body Cream",
         },
         B0090U7O00: {
-          date: "2024-04-28",
+          date:   "2024-04-28",
           listed: "Bath & Body Works Dark Kiss...",
-          full: "Bath & Body Works Dark Kiss Shower Gel, 10 Ounce",
-          short: "Shower Gel",
+          full:   "Bath & Body Works Dark Kiss Shower Gel, 10 Ounce",
+          short:  "Shower Gel",
         },
         B0090U6RK8: {
-          date: "2024-04-30",
+          date:   "2024-04-30",
           listed: "Bath & Body Works Dark Kiss...",
-          full: "Bath & Body Works Dark Kiss Fine Fragrance Mist, 8 Ounce",
-          short: "Fragrance Mist",
+          full:   "Bath & Body Works Dark Kiss Fine Fragrance Mist, 8 Ounce",
+          short:  "Fragrance Mist",
         },
       }
     }

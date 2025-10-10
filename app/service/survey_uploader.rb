@@ -42,9 +42,12 @@ class SurveyUploader
 
       groups&.each do |gname, gdetails|
         group = survey.survey_results.create(name: gname)
-        next unless gdetails.present?
+        next if gdetails.blank?
 
-        group.survey_result_details.create(survey: survey, description: gdetails.gsub("\\n", "\n").gsub("\\t", "\t"))
+        group.survey_result_details.create(
+          survey:      survey,
+          description: gdetails.gsub("\\n", "\n").gsub("\\t", "\t"),
+        )
       end
 
       survey_data&.each_with_index do |(sq_name, sq_data), sq_idx|
@@ -57,10 +60,10 @@ class SurveyUploader
             group = survey.survey_results.find_or_create_by(name: sqa_g)
 
             group.survey_question_answer_results.create(
-              survey: survey,
-              survey_question: sq,
+              survey:                 survey,
+              survey_question:        sq,
               survey_question_answer: sqa,
-              value: sqa_v
+              value:                  sqa_v,
             )
           end
         end

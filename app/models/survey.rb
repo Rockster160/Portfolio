@@ -23,7 +23,7 @@ class Survey < ApplicationRecord
 
   before_save :set_slug
 
-  enum score_type: {
+  enum :score_type, {
     aggregate:  0, # give a percentage of each result type
     accumulate: 1, # a summation of each result type
   }
@@ -39,6 +39,7 @@ class Survey < ApplicationRecord
     self.slug ||= loop do
       slug = "#{"#{i}-" if i > 1}#{name.parameterize}"
       break slug unless self.class.where(slug: slug).any?
+
       i += 1
     end
   end

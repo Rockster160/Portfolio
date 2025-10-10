@@ -24,7 +24,7 @@ class Jil::Methods::Monitor < Jil::Methods::Base
       case data[:timestamp]
       when TrueClass then ::Time.current.to_i
       when FalseClass then false
-      else data[:timestamp].to_i.then { |n| n == 0 ? ::Time.current.to_i : n }
+      else data[:timestamp].to_i.then { |n| n.zero? ? ::Time.current.to_i : n }
       end
     )
     data[:loading] = loading
@@ -34,7 +34,10 @@ class Jil::Methods::Monitor < Jil::Methods::Base
   end
 
   def refresh(name, data)
-    ::Jil.trigger(@jil.user, :monitor, { id: name, refresh: true }.reverse_merge(data.presence || {}))
+    ::Jil.trigger(
+      @jil.user, :monitor,
+      { id: name, refresh: true }.reverse_merge(data.presence || {})
+    )
     { id: name }
   end
 

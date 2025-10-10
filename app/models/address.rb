@@ -28,13 +28,15 @@ class Address < ApplicationRecord
   end
 
   def lat=(val)
-    return super(nil) if val.to_i == 0
-    super(val)
+    return super(nil) if val.to_i.zero?
+
+    super
   end
 
   def lng=(val)
-    return super(nil) if val.to_i == 0
-    super(val)
+    return super(nil) if val.to_i.zero?
+
+    super
   end
 
   def loc=(*new_loc)

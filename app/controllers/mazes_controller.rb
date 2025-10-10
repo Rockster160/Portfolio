@@ -3,7 +3,7 @@ class MazesController < ApplicationController
   before_action :set_cors_headers
 
   def show
-    @seed = (params[:seed] || rand(999999)).to_i
+    @seed = (params[:seed] || rand(999_999)).to_i
     headers["X-Maze-Seed"] = @seed
 
     generate_maze
@@ -43,17 +43,17 @@ class MazesController < ApplicationController
   def generate_maze
     srand(@seed)
 
-    width = params[:width].to_i > 0 ? params[:width].to_i : (rand(20) + 10)
-    height = params[:height].to_i > 0 ? params[:height].to_i : (rand(20) + 10)
+    width = params[:width].to_i.positive? ? params[:width].to_i : (rand(10..29))
+    height = params[:height].to_i.positive? ? params[:height].to_i : (rand(10..29))
     width = [3, width, 50].sort[1]
     height = [3, height, 50].sort[1]
 
     options = {
-      seed: @seed,
+      seed:      @seed,
       start_str: params[:start_str]&.first,
-      end_str: params[:end_str]&.first,
-      path: params[:path]&.first,
-      wall: params[:wall]&.first
+      end_str:   params[:end_str]&.first,
+      path:      params[:path]&.first,
+      wall:      params[:wall]&.first,
     }
 
     @maze = Maze.new(width, height, options)

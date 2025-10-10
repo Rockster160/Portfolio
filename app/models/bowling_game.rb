@@ -54,24 +54,25 @@ class BowlingGame < ApplicationRecord
     @new_attributes&.dig(:league_id) || set&.league_id || bowler&.league_id
   end
 
-  def score = super().to_i
+  def score = super.to_i
+
   def total_score
     score.to_i + handicap.to_i
   end
 
   def frames
-    @frames ||= (super.to_s.split("|").presence || Array.new(10)).map { |roll| roll.to_s.split("") }
+    @frames ||= (super.to_s.split("|").presence || Array.new(10)).map { |roll| roll.to_s.chars }
   end
 
   def frames=(frames_arr)
     if frames_arr.is_a?(Hash)
-      scores = frames_arr.map do |_idx, tosses|
-        tosses.join("")
-      end.join("|")
+      scores = frames_arr.map { |_idx, tosses|
+        tosses.join
+      }.join("|")
 
       super(scores)
     else
-      super(frames_arr)
+      super
     end
   end
 
@@ -90,7 +91,7 @@ class BowlingGame < ApplicationRecord
   end
 
   def rolls_string
-    frame_details.map(&:rolls).flatten.map { |r| r.nil? ? " " : r }.join("")
+    frame_details.map(&:rolls).flatten.map { |r| r.nil? ? " " : r }.join
   end
 
   def output
@@ -100,19 +101,19 @@ class BowlingGame < ApplicationRecord
   private
 
   def save_cached_details
-    (@cached_frame_details || {}).each do |_idx, frame_params|
+    (@cached_frame_details || {}).each_value { |frame_params|
       frame_attrs = BowlingScorer.params_to_attributes(frame_params)
 
       db_frame = new_frames.find_or_initialize_by(frame_num: frame_attrs[:frame_num])
 
       db_frame.update!(frame_attrs)
-    end
+    }
     new_frames.reload
     if !completed? && (absent? || (new_frames.length == 10 && new_frames.all?(&:complete?)))
       CustomLog.log("(#{id}) Complete!")
       update(completed: true)
     elsif !completed?
-      CustomLog.log("(#{id}) Incomplete! #{new_frames.map {|f| [f.id, f.complete?, f.rolls]} }")
+      CustomLog.log("(#{id}) Incomplete! #{new_frames.map { |f| [f.id, f.complete?, f.rolls] }}")
     end
   end
 end

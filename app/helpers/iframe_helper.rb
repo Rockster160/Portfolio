@@ -3,9 +3,9 @@ module IframeHelper
     content_tag(
       :iframe,
       body,
-      class: "display-email-container",
+      class:  "display-email-container",
       srcDoc: body.gsub(/<script/i, "&lt;script"),
-      onload: "resizeIframe(self)"
+      onload: "resizeIframe(self)",
     )
   end
 end

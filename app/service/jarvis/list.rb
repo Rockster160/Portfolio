@@ -1,7 +1,7 @@
 class Jarvis::List < Jarvis::Action
   def attempt
     return unless valid_words?
-    return unless @user.present?
+    return if @user.blank?
 
     List.find_and_modify(@user, @msg).presence || true
   end

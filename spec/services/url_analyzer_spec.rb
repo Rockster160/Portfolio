@@ -2,6 +2,7 @@ RSpec.describe UrlAnalyzer do
   include ActiveJob::TestHelper
 
   subject { described_class.new(url) }
+
   let(:url) { "github.com" }
 
   def pretty_hash(obj)
@@ -14,17 +15,11 @@ RSpec.describe UrlAnalyzer do
     )
   end
 
-  describe "#params" do
-  end
-
-  describe "#path_param" do
-  end
-
   describe "#analyze" do
     context "localhost" do
       let(:url) { "localhost" }
 
-      specify do
+      specify {
         expect(subject.analyze).to eq({
           origin:    "localhost",
           site:      "localhost",
@@ -42,13 +37,13 @@ RSpec.describe UrlAnalyzer do
           hash:      nil,
           fragment:  nil,
         })
-      end
+      }
     end
 
     context "local with params" do
       let(:url) { "localhost:3000/orgs/1234/companies/33231/users/42?foo=bar" }
 
-      specify do
+      specify {
         expect(subject.analyze).to eq({
           origin:    "localhost:3000",
           site:      "localhost",
@@ -66,19 +61,19 @@ RSpec.describe UrlAnalyzer do
           hash:      nil,
           fragment:  nil,
         })
-      end
+      }
 
-      specify do
+      specify {
         expect(subject.path_param(:orgs)).to eq("1234")
         expect(subject.path_param(:companies)).to eq("33231")
         expect(subject.path_param(:users)).to eq("42")
-      end
+      }
     end
 
     context "complex site example" do
       let(:url) { "http://example.com?user[name]=John&user[age]=30&products[0][name]=Book&products[0][price]=12.99&products[1][name]=Pen&products[1][price]=1.49" }
 
-      specify do
+      specify {
         expect(subject.analyze).to eq({
           origin:    "http://example.com",
           site:      "http://example.com",
@@ -96,29 +91,29 @@ RSpec.describe UrlAnalyzer do
           hash:      nil,
           fragment:  nil,
         })
-      end
+      }
 
-      specify do
+      specify {
         expect(subject.params.deep_symbolize_keys).to eq({
           products: {
-            :"0" => {
+            "0": {
               name: "Book", price: "12.99"
             },
-            :"1" => {
+            "1": {
               name: "Pen", price: "1.49"
-            }
+            },
           },
-          user: {
+          user:     {
             age: "30", name: "John"
-          }
+          },
         })
-      end
+      }
     end
 
     context "complex site example" do
       let(:url) { "http://example.com?user[name]=John&user[age]=30&products[][name]=Book&products[][price]=12.99&products[][name]=Pen&products[][price]=1.49" }
 
-      specify do
+      specify {
         expect(subject.analyze).to eq({
           origin:    "http://example.com",
           site:      "http://example.com",
@@ -136,25 +131,25 @@ RSpec.describe UrlAnalyzer do
           hash:      nil,
           fragment:  nil,
         })
-      end
+      }
 
-      specify do
+      specify {
         expect(subject.params.deep_symbolize_keys).to eq({
           products: [
             { name: "Book", price: "12.99" },
             { name: "Pen", price: "1.49" },
           ],
-          user: {
+          user:     {
             age: "30", name: "John"
-          }
+          },
         })
-      end
+      }
     end
 
     context "basic_domain" do
       let(:url) { "github.com" }
 
-      specify do
+      specify {
         expect(subject.analyze).to eq({
           origin:    "github.com",
           site:      "github.com",
@@ -172,13 +167,13 @@ RSpec.describe UrlAnalyzer do
           hash:      nil,
           fragment:  nil,
         })
-      end
+      }
     end
 
     context "subdomain_domain" do
       let(:url) { "cats.github.com" }
 
-      specify do
+      specify {
         expect(subject.analyze).to eq({
           origin:    "cats.github.com",
           site:      "cats.github.com",
@@ -196,13 +191,13 @@ RSpec.describe UrlAnalyzer do
           hash:      nil,
           fragment:  nil,
         })
-      end
+      }
     end
 
     context "uk_tld" do
       let(:url) { "github.org.au" }
 
-      specify do
+      specify {
         expect(subject.analyze).to eq({
           origin:    "github.org.au",
           site:      "github.org.au",
@@ -220,13 +215,13 @@ RSpec.describe UrlAnalyzer do
           hash:      nil,
           fragment:  nil,
         })
-      end
+      }
     end
 
     context "subdomain_uk_tld" do
       let(:url) { "helix.clip.orca.co.uk" }
 
-      specify do
+      specify {
         expect(subject.analyze).to eq({
           origin:    "helix.clip.orca.co.uk",
           site:      "helix.clip.orca.co.uk",
@@ -244,7 +239,7 @@ RSpec.describe UrlAnalyzer do
           hash:      nil,
           fragment:  nil,
         })
-      end
+      }
     end
   end
 end

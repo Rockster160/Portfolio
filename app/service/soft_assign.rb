@@ -1,5 +1,5 @@
 class SoftAssign
-  PROTECTED_ATTRS = [:id, :created_at, :updated_at]
+  PROTECTED_ATTRS = [:id, :created_at, :updated_at].freeze
 
   def self.call(obj, attrs)
     new(obj, attrs).call
@@ -12,9 +12,7 @@ class SoftAssign
 
   def call
     @attrs.symbolize_keys.except(*PROTECTED_ATTRS).each do |key, value|
-      if @obj.respond_to?("#{key}=")
-        @obj.send("#{key}=", value)
-      end
+      @obj.send("#{key}=", value) if @obj.respond_to?("#{key}=")
     end
     @obj
   end

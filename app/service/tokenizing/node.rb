@@ -48,7 +48,7 @@
 # BUG: Things like ! and - affect only the next item without the previous one.
 #   They will need special handling. Hacking - for now, but it's not ideal because it breaks dates.
 class Tokenizing::Node
-  KEYWORDS = %w(NOT ! - OR AND) # priority order?
+  KEYWORDS = %w[NOT ! - OR AND].freeze # priority order?
 
   attr_accessor :field, :operator, :conditions
 
@@ -84,7 +84,7 @@ class Tokenizing::Node
         return parse_sections(
           sections.map { |section|
             tz.untokenize(section).then { |sec| keyword?(sec) ? sec.upcase.to_sym : sec }
-          }
+          },
         )
       else
         tokens = Tokenizing::Breaker.breakdown(tokens).map { |token|
@@ -142,7 +142,10 @@ class Tokenizing::Node
 
     conditions << node if node.field || node.conditions.any?
 
-    Tokenizing::Node.new(operator: :AND, conditions: conditions).compact(compress: compress, top: top)
+    Tokenizing::Node.new(operator: :AND, conditions: conditions).compact(
+      compress: compress,
+      top:      top,
+    )
   end
 
   def self.unwrap(str, wraps={ "(" => ")", "[" => "]", "{" => "}" })
@@ -164,7 +167,7 @@ class Tokenizing::Node
   def self.parse_sections(tokens)
     while tokens.include?(:NOT) || tokens.include?(:-) || tokens.include?(:!)
       idx = tokens.index(:NOT) || tokens.index(:-) || tokens.index(:!)
-      min, max = idx, idx+1
+      min, max = idx, idx + 1
       max += 1 while max < tokens.length && tokens[max].is_a?(Symbol) # Other Keyword
       next tokens.delete_at(idx) if idx >= tokens.length
 
@@ -173,10 +176,10 @@ class Tokenizing::Node
 
     while tokens.include?(:OR)
       idx = tokens.index(:OR)
-      min, max = idx-1, idx+1
+      min, max = idx - 1, idx + 1
       min -= 1 while min >= 0 && tokens[min].is_a?(Symbol) # Other Keyword
       max += 1 while max < tokens.length && tokens[max].is_a?(Symbol) # Other Keyword
-      next tokens.delete_at(idx) if min < 0 || max >= tokens.length
+      next tokens.delete_at(idx) if min.negative? || max >= tokens.length
 
       a, *_or, b = tokens[min..max]
       tokens[min..max] = Tokenizing::Node.new(operator: :OR, conditions: unwrap_parse([a, b]))
@@ -184,10 +187,10 @@ class Tokenizing::Node
 
     while tokens.include?(:AND)
       idx = tokens.index(:AND)
-      min, max = idx-1, idx+1
+      min, max = idx - 1, idx + 1
       min -= 1 while min >= 0 && tokens[min].is_a?(Symbol) # Other Keyword
       max += 1 while max < tokens.length && tokens[max].is_a?(Symbol) # Other Keyword
-      next tokens.delete_at(idx) if min < 0 || max >= tokens.length
+      next tokens.delete_at(idx) if min.negative? || max >= tokens.length
 
       a, *_and, b = tokens[min..max]
       tokens[min..max] = Tokenizing::Node.new(operator: :AND, conditions: unwrap_parse([a, b]))
@@ -221,7 +224,7 @@ class Tokenizing::Node
 
     @conditions = @conditions.flat_map { |node|
       if node.is_a?(Tokenizing::Node)
-        if (operator == :AND || operator == :OR) && node.operator == operator && field == node.field
+        if ([:AND, :OR].include?(operator)) && node.operator == operator && field == node.field
           node.conditions.map { |cond| cond.is_a?(Tokenizing::Node) ? cond.compact : cond }
         elsif node.field.nil? && node.operator.nil?
           node.conditions.map { |cond| cond.is_a?(Tokenizing::Node) ? cond.compact : cond }
@@ -238,13 +241,11 @@ class Tokenizing::Node
     elsif conditions.one?
       condition = conditions.first
 
-      if field.nil? && (operator == :AND || operator == :OR)
+      if field.nil? && ([:AND, :OR].include?(operator))
         return condition.is_a?(Tokenizing::Node) ? condition.compact : condition
       end
 
-      unless conditions.first.is_a?(Tokenizing::Node)
-        @conditions = condition
-      end
+      @conditions = condition unless conditions.first.is_a?(Tokenizing::Node)
     end
 
     self
@@ -252,8 +253,8 @@ class Tokenizing::Node
 
   def as_json
     {
-      field: field,
-      operator: operator,
+      field:      field,
+      operator:   operator,
       conditions: conditions.as_json,
     }
   end
@@ -266,7 +267,7 @@ class Tokenizing::Node
     if conditions.is_a?(Array)
       [
         { field: field, operator: operator },
-        *Array.wrap(conditions).map { |cond| cond.is_a?(Tokenizing::Node) ? cond.flatten : cond }
+        *Array.wrap(conditions).map { |cond| cond.is_a?(Tokenizing::Node) ? cond.flatten : cond },
       ].flatten
     else
       [as_json]

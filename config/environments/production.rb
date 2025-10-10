@@ -55,14 +55,14 @@ Rails.application.configure do
   config.log_level = :error
 
   # Prepend all log lines with the following tags.
-  config.log_tags = [ :request_id ]
+  config.log_tags = [:request_id]
 
   # Use a different cache store in production.
   # config.cache_store = :mem_cache_store
   config.cache_store = :redis_cache_store, {
     host: "localhost",
     port: 6379,
-    db: 0
+    db:   0,
   }
 
   # Use a real queuing backend for Active Job (and separate queues per environment).
@@ -90,7 +90,7 @@ Rails.application.configure do
   # config.logger = ActiveSupport::TaggedLogging.new(Syslog::Logger.new "app-name")
 
   if ENV["RAILS_LOG_TO_STDOUT"].present?
-    logger           = ActiveSupport::Logger.new(STDOUT)
+    logger           = ActiveSupport::Logger.new($stdout)
     logger.formatter = config.log_formatter
     config.logger    = ActiveSupport::TaggedLogging.new(logger)
   end
@@ -100,26 +100,26 @@ Rails.application.configure do
 
   # ============================================================
 
-  config.action_cable.url = 'wss://ardesian.com/cable'
-  config.action_cable.allowed_request_origins = ['https://ardesian.com']
+  config.action_cable.url = "wss://ardesian.com/cable"
+  config.action_cable.allowed_request_origins = ["https://ardesian.com"]
   config.web_socket_server_url = "wss://ardesian.com/cable"
   config.action_cable.disable_request_forgery_protection = true
 
   routes.default_url_options = { protocol: "https://", host: "ardesian.com", port: nil }
 
-  config.action_mailer.default_url_options = { host: 'ardesian.com' }
+  config.action_mailer.default_url_options = { host: "ardesian.com" }
   config.action_mailer.raise_delivery_errors = true
   config.action_mailer.perform_deliveries = true
   ActionMailer::Base.delivery_method = :smtp
   ActionMailer::Base.smtp_settings = {
     address:              "email-smtp.us-east-1.amazonaws.com",
     port:                 587,
-    user_name:            ENV["PORTFOLIO_SMTP_USERNAME"],
-    password:             ENV["PORTFOLIO_SMTP_PASSWORD"],
+    user_name:            ENV.fetch("PORTFOLIO_SMTP_USERNAME", nil),
+    password:             ENV.fetch("PORTFOLIO_SMTP_PASSWORD", nil),
     authentication:       :plain,
-    enable_starttls_auto: true
+    enable_starttls_auto: true,
   }
 end
 
-require "#{Rails.root}/lib/custom_notifier"
+require Rails.root.join("lib/custom_notifier").to_s
 Rails.application.config.middleware.use ExceptionNotification::Rack, custom: {}

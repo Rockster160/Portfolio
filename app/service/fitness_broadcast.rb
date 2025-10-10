@@ -15,7 +15,7 @@ class FitnessBroadcast
       (6.days.ago.to_date)..(Time.current.to_date)
     }
     @range = Time.use_zone(@user.timezone) {
-      (@days.first.beginning_of_day+TIME_OFFSET)..(@days.last.end_of_day+TIME_OFFSET)
+      (@days.first.beginning_of_day + TIME_OFFSET)..(@days.last.end_of_day + TIME_OFFSET)
     }
   end
 
@@ -29,7 +29,7 @@ class FitnessBroadcast
 
   def allday(date)
     Time.use_zone(@user.timezone) {
-      (date.beginning_of_day+TIME_OFFSET)..(date.end_of_day+TIME_OFFSET)
+      (date.beginning_of_day + TIME_OFFSET)..(date.end_of_day + TIME_OFFSET)
     }
   end
 
@@ -117,7 +117,7 @@ class FitnessBroadcast
   def calories
     calorie_event_names = ["food", "soda", "drink", "alcohol", "treat", "snack", "workout", "z"]
     cal_query = calorie_event_names.map { |n| "name::#{n}" }.join(" OR ")
-    "🔥 " + dates do |date|
+    "🔥 " + dates { |date|
       cal_events = query(cal_query, date)
       total = -1800
       cal_events.each do |event|
@@ -126,45 +126,45 @@ class FitnessBroadcast
         calories *= -1 if event.name == "Workout"
         total += calories
       end
-      total < 0 ? colorize(:✓, :green) : colorize(:𐄂, :red)
-    end
+      total.negative? ? colorize(:✓, :green) : colorize(:𐄂, :red)
+    }
   end
 
   def need(num=1)
     {
-      green: num..,
+      green:  num..,
       orange: num >= 2 ? (1...num) : nil,
-      red: 0,
-      icons: { ✓: num.., 𐄂: 0 }
+      red:    0,
+      icons:  { ✓: num.., 𐄂: 0 },
     }.compact_blank
   end
 
   def want(num=1)
     {
       green: num..,
-      grey: ...num,
-      icons: { ✓: num.., 𐄂: ...num }
+      grey:  ...num,
+      icons: { ✓: num.., 𐄂: ...num },
     }.compact_blank
   end
 
   def bad(num=1)
     {
-      green: 0,
+      green:  0,
       orange: num >= 2 ? (1...num) : nil,
-      red: num..,
-      icons: { ✓: 0, 𐄂: num }
+      red:    num..,
+      icons:  { ✓: 0, 𐄂: num },
     }.compact_blank
   end
 
   def row(ico, q, expected)
-    ico.presence&.then { |i| "#{i} " } + dates(ico) do |date|
+    ico.presence&.then { |i| "#{i} " }&.+ dates(ico) do |date|
       status(date, q, expected)
     end
   end
 
   def status(date, q, color_map)
     count = query(q, date).count
-    icon = count == 0 ? "-" : count
+    icon = count.zero? ? "-" : count
     color_map[:icons].each do |ico, range|
       icon = ico if range.is_a?(Integer) && count == range
       icon = ico if range.is_a?(Range) && count.in?(range)
@@ -173,6 +173,7 @@ class FitnessBroadcast
     color_name = color_map[:default] || :grey
     color_map.except(:icons).each do |col, range|
       next if col == :default
+
       color_name = col if range.is_a?(Integer) && count == range
       color_name = col if range.is_a?(Range) && count.in?(range)
     end
@@ -186,16 +187,16 @@ class FitnessBroadcast
 
   def colorize(str, color_name)
     color = {
-      green: "#148F14",
+      green:  "#148F14",
       orange: "#FFA001",
       yellow: "#FFEE14",
-      red: "#F81414",
+      red:    "#F81414",
     }[color_name] || color_name
 
     "[color #{color}]#{str.to_s.rjust(3)}[/color]"
   end
 
-  def dates(ico="", &block)
+  def dates(_ico="", &block)
     @days.then { |r| (r.first.to_date)..(r.last.to_date) }.map { |date|
       block.call(date).to_s.rjust(3)
     }.reverse.join(" ")

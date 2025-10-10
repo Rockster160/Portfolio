@@ -12,20 +12,20 @@ config_opts = {
 Sidekiq.configure_server { |config|
   config.redis = config_opts
 
-  config.client_middleware do |chain|
+  config.client_middleware { |chain|
     chain.add SidekiqUniqueJobs::Middleware::Client
-  end
+  }
 
-  config.server_middleware do |chain|
+  config.server_middleware { |chain|
     chain.add SidekiqUniqueJobs::Middleware::Server
-  end
+  }
 
   SidekiqUniqueJobs::Server.configure(config)
 }
 Sidekiq.configure_client { |config|
   config.redis = config_opts
 
-  config.client_middleware do |chain|
+  config.client_middleware { |chain|
     chain.add SidekiqUniqueJobs::Middleware::Client
-  end
+  }
 }

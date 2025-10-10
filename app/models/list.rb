@@ -14,13 +14,14 @@
 
 class List < ApplicationRecord
   attr_accessor :do_not_broadcast, :response
+
   has_many :list_items, -> { ordered }, dependent: :destroy
   has_many :deleted_list_items, -> { ordered.with_deleted }, class_name: "ListItem", dependent: :destroy
   has_many :sections, -> { order(sort_order: :desc) }, dependent: :destroy
   has_many :user_lists, dependent: :destroy
   has_many :users, through: :user_lists
 
-  validates_presence_of :name
+  validates :name, presence: true
 
   before_save -> { self.parameterized_name = name.parameterize }
 
@@ -38,11 +39,11 @@ class List < ApplicationRecord
     list_rx = /\b(list)\b/
     list_intro = name =~ intro_regexp
 
-    found_list = user.ordered_lists.find do |try_list|
+    found_list = user.ordered_lists.find { |try_list|
       found_msg = name =~ /( #{intro_regexp})?( #{my_rx})?( ?\b#{Regexp.quote(try_list.name.gsub(/[^a-z0-9 ]/i, ""))}\b)( #{list_rx})?/i
 
       found_msg.present? && found_msg >= 0
-    end
+    }
   end
 
   def self.find_and_modify(user, msg)
@@ -50,7 +51,8 @@ class List < ApplicationRecord
 
     list = by_name_for_user(msg, user) || user.default_list
 
-    return "List not found" unless list.present?
+    return "List not found" if list.blank?
+
     intro_regexp = /\b(to|for|from|on|in|into)\b/
     my_rx = /\b(the|my)\b/
     list_rx = /\b(list)\b/
@@ -63,7 +65,7 @@ class List < ApplicationRecord
   end
 
   def self.serialize(opts={})
-    all.includes(:sections, :list_items).map { |list| list.serialize(opts) }
+    includes(:sections, :list_items).map { |list| list.serialize(opts) }
   end
 
   def serialize(opts={})
@@ -96,13 +98,11 @@ class List < ApplicationRecord
             :section_id,
             :deleted_at,
           ],
-        }
-      }
+        },
+      },
     }
 
-    if opts[:with_deleted]
-      serialized_opts[:include][:deleted_list_items] = serialized_opts[:include].delete(:list_items)
-    end
+    serialized_opts[:include][:deleted_list_items] = serialized_opts[:include].delete(:list_items) if opts[:with_deleted]
 
     super(serialized_opts).tap { |json|
       json[:items] = json.delete(:list_items) || json.delete(:deleted_list_items)
@@ -168,11 +168,11 @@ class List < ApplicationRecord
   end
 
   def add_items(*item_names)
-    [item_names].flatten.map do |item_hash|
-      next unless item_hash&.dig(:name).present?
+    [item_names].flatten.map { |item_hash|
+      next if item_hash&.dig(:name).blank?
 
       list_items.by_name_then_update(item_hash)
-    end
+    }
   end
 
   def max_order
@@ -184,7 +184,7 @@ class List < ApplicationRecord
   delegate :toggle, to: :list_items
 
   def sort_items!(sort=nil, order=:asc)
-    return unless sort.present?
+    return if sort.blank?
 
     order = order.to_s.downcase.to_sym
     order = :asc unless order == :desc
@@ -221,6 +221,7 @@ class List < ApplicationRecord
 
   def modify_from_message(msg)
     return "List doesn't exist yet" unless persisted?
+
     msg = msg.to_s
     response_messages = []
     action, item_names = split_action_and_items_from_msg(msg)
@@ -231,13 +232,14 @@ class List < ApplicationRecord
         list_items.by_name_then_update(name: item_name)
       }.select(&:persisted?)
       return "No items added." if items.none?
-      return "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join("")}"
+
+      return "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join}"
     when :remove
       not_destroyed = []
       destroyed_items = []
       item_names.each do |item_name|
         item = list_items.by_formatted_name(item_name)
-        next unless item.present?
+        next if item.blank?
 
         if item.soft_destroy
           destroyed_items << item
@@ -248,7 +250,7 @@ class List < ApplicationRecord
       response = []
 
       response << "Could not remove #{not_destroyed.to_sentence} from #{name}." if not_destroyed.any?
-      response << "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join("")}"
+      response << "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join}"
       response << "<No items>" if ordered_items.none?
       return response.join("\n") if response.any?
     when :clear
@@ -256,7 +258,7 @@ class List < ApplicationRecord
       return "Removed all items from #{name}: \n - #{items.map(&:name).join("\n - ")}"
     else
       if (items = ordered_items).any?
-        return "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join("")}"
+        return "#{name}:#{ordered_items.map { |item| "\n - #{item.name}" }.join}"
       else
         return "There are no items in #{name}."
       end
@@ -310,9 +312,9 @@ class List < ApplicationRecord
   def broadcast!
     return if do_not_broadcast
 
-    ActionCable.server.broadcast "list_#{self.id}_json_channel", { list_data: serialize, timestamp: Time.current.to_i }
+    ActionCable.server.broadcast "list_#{id}_json_channel", { list_data: serialize, timestamp: Time.current.to_i }
 
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self }, layout: false
-    ActionCable.server.broadcast "list_#{self.id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
+    ActionCable.server.broadcast "list_#{id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
   end
 end

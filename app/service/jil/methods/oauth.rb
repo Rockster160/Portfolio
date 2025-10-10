@@ -77,7 +77,7 @@ class Jil::Methods::Oauth < Jil::Methods::Base
     {
       message:  e.message,
       status:   e.try(:http_code) || 500,
-      response: safe_json(e.try(:response)&.body)
+      response: safe_json(e.try(:response)&.body),
     }
   end
 

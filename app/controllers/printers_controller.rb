@@ -38,11 +38,11 @@ class PrintersController < ApplicationController
       :job,
       :on,
       :off,
-      :extrude, #(amount)
-      :move, #(coords)
-      :tool_temp, #(new_temp)
-      :bed_temp, #(new_temp)
-      :command, #(gcode)
+      :extrude, # (amount)
+      :move, # (coords)
+      :tool_temp, # (new_temp)
+      :bed_temp, # (new_temp)
+      :command, # (gcode)
     ]
   end
 end

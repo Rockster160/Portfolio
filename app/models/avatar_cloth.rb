@@ -18,5 +18,4 @@ class AvatarCloth < ApplicationRecord
   def self.to_components
     all.map { |cloth| { gender: cloth.gender, placement: cloth.placement, garment: cloth.garment, color: cloth.color } }
   end
-
 end

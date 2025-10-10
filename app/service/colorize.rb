@@ -1,7 +1,7 @@
 module Colorize
   module_function
 
-  def colorize(str, color, opts={})
+  def colorize(str, color, _opts={})
     "#{color_code(color)}#{str}#{reset_code}"
   end
 
@@ -23,7 +23,7 @@ module Colorize
   end
 
   def rgb_to_code(rgb)
-    return unless rgb.present?
+    return if rgb.blank?
 
     r, g, b = *rgb
     "\e[38;2;#{r};#{g};#{b}m"
@@ -34,7 +34,7 @@ module Colorize
     if hex_without_hash.length == 6
       return hex_without_hash.scan(/.{2}/).map { |rgb| rgb.to_i(16) }
     elsif hex_without_hash.length == 3
-      return hex_without_hash.split('').map { |rgb| "#{rgb}#{rgb}".to_i(16) }
+      return hex_without_hash.chars.map { |rgb| "#{rgb}#{rgb}".to_i(16) }
     else
       return nil
     end
@@ -77,7 +77,7 @@ module Colorize
     }
   end
 
-  color_list.keys.each do |color_key|
+  color_list.each_key do |color_key|
     Colorize.define_singleton_method(color_key) do |str|
       Colorize.color(color_key, str, reset: true)
     end
@@ -88,10 +88,12 @@ class String
   def colorize(color)
     Colorize.colorize(self, color)
   end
+
   def uncolor
-    self.gsub(/\e\[.*?m/, "")
+    gsub(/\e\[.*?m/, "")
   end
 end
+
 # Quick helper method so that colors show their pigment preview
 def rgb(*arr)
   arr

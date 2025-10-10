@@ -1,4 +1,3 @@
-
 module AuthHelpers
   def sign_in(user)
     # Use controller's session and cookies in controller specs

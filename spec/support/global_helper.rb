@@ -30,12 +30,13 @@ module GlobalHelper
   end
 
   def fixture(path)
-    File.read(::Rails.root.join("spec/fixtures/#{path}"))
+    ::Rails.root.join("spec/fixtures/#{path}").read
   end
 
   def expect_successful_jil
     if ctx[:error_line].present?
-      load("/Users/rocco/.pryrc"); source_puts [ctx[:error_line], ctx[:error]].compact.join("\n")
+      load("/Users/rocco/.pryrc")
+      source_puts [ctx[:error_line], ctx[:error]].compact.join("\n")
     end
     expect([ctx[:error_line], ctx[:error]].compact.join("\n")).to be_blank
   end

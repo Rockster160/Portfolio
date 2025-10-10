@@ -1,5 +1,6 @@
 RSpec.describe Jil::Methods::String do
   include ActiveJob::TestHelper
+
   let(:execute) { Jil::Executor.call(user, code, input_data) }
   let(:user) { User.me }
   let(:code) { "" }
@@ -22,7 +23,7 @@ RSpec.describe Jil::Methods::String do
     context "new" do
       let(:code) {
         <<-JIL
-          na887 = Text.new(\"Hello, world!\")::Text
+          na887 = Text.new("Hello, world!")::Text
         JIL
       }
 
@@ -40,7 +41,7 @@ RSpec.describe Jil::Methods::String do
     context "new" do
       let(:code) {
         <<-JIL
-          na887 = String.new(\"Hello, world!\")::String
+          na887 = String.new("Hello, world!")::String
         JIL
       }
 
@@ -57,8 +58,8 @@ RSpec.describe Jil::Methods::String do
       context "with matching" do
         let(:code) {
           <<-JIL
-            na887 = String.new(\"Hello, world!\")::String
-            na885 = na887.match(\"Hello\")::Boolean
+            na887 = String.new("Hello, world!")::String
+            na885 = na887.match("Hello")::Boolean
           JIL
         }
 
@@ -75,8 +76,8 @@ RSpec.describe Jil::Methods::String do
       context "with similar" do
         let(:code) {
           <<-JIL
-            na887 = String.new(\"Hello, world!\")::String
-            na885 = na887.match(\"hello\")::Boolean
+            na887 = String.new("Hello, world!")::String
+            na885 = na887.match("hello")::Boolean
           JIL
         }
 
@@ -93,8 +94,8 @@ RSpec.describe Jil::Methods::String do
       context "with no match" do
         let(:code) {
           <<-JIL
-            na887 = String.new(\"Hello, world!\")::String
-            na885 = na887.match(\"Goodbye\")::Boolean
+            na887 = String.new("Hello, world!")::String
+            na885 = na887.match("Goodbye")::Boolean
           JIL
         }
 
@@ -111,8 +112,8 @@ RSpec.describe Jil::Methods::String do
       context "with regex" do
         let(:code) {
           <<-JIL
-            na887 = String.new(\"[Backyard] has detected a person  2024/09/27 11:48:28\")::String
-            na885 = na887.match(\"/\\\\[?(\\\\w+)\\\\]? has detected (?:an? )?(\\\\w+)/i\")::Array
+            na887 = String.new("[Backyard] has detected a person  2024/09/27 11:48:28")::String
+            na885 = na887.match("/\\\\[?(\\\\w+)\\\\]? has detected (?:an? )?(\\\\w+)/i")::Array
           JIL
         }
 
@@ -120,7 +121,7 @@ RSpec.describe Jil::Methods::String do
           expect_successful_jil
           expect(ctx[:vars]).to match_hash({
             na887: { class: :String, value: "[Backyard] has detected a person  2024/09/27 11:48:28" },
-            na885: { class: :Array, value: ["[Backyard] has detected a person","Backyard","person"] },
+            na885: { class: :Array, value: ["[Backyard] has detected a person", "Backyard", "person"] },
           })
           expect(ctx[:output]).to eq([])
         end
@@ -131,8 +132,8 @@ RSpec.describe Jil::Methods::String do
       context "with text" do
         let(:code) {
           <<-JIL
-            na887 = String.new(\"Hello, world!\")::String
-            na885 = na887.scan(\"Hello\")::Array
+            na887 = String.new("Hello, world!")::String
+            na885 = na887.scan("Hello")::Array
           JIL
         }
 
@@ -150,8 +151,8 @@ RSpec.describe Jil::Methods::String do
     context "split" do
       let(:code) {
         <<-JIL
-          na887 = String.new(\"Hello, world!\")::String
-          na885 = na887.split(\"\")::Array
+          na887 = String.new("Hello, world!")::String
+          na885 = na887.split("")::Array
         JIL
       }
 
@@ -159,7 +160,7 @@ RSpec.describe Jil::Methods::String do
         expect_successful_jil
         expect(ctx[:vars]).to match_hash({
           na887: { class: :String, value: "Hello, world!" },
-          na885: { class: :Array, value: "Hello, world!".split("") },
+          na885: { class: :Array, value: "Hello, world!".chars },
         })
         expect(ctx[:output]).to eq([])
       end
@@ -167,6 +168,7 @@ RSpec.describe Jil::Methods::String do
 
     context "format" do
       let(:start_string) { "hello, World!" }
+
       [
         [:lower,   "hello, world!"],
         [:upper,   "HELLO, WORLD!"],
@@ -181,8 +183,8 @@ RSpec.describe Jil::Methods::String do
         context formatter.to_s do
           let(:code) {
             <<-JIL
-              na887 = String.new(\"#{from || start_string}\")::String
-              na885 = na887.format(\"#{formatter}\")::String
+              na887 = String.new("#{from || start_string}")::String
+              na885 = na887.format("#{formatter}")::String
             JIL
           }
 
@@ -202,8 +204,8 @@ RSpec.describe Jil::Methods::String do
       context "replace with string" do
         let(:code) {
           <<-JIL
-            na887 = String.new(\"Hello, world!\")::String
-            na885 = na887.replace(\"Hello\", \"Goodbye\")::String
+            na887 = String.new("Hello, world!")::String
+            na885 = na887.replace("Hello", "Goodbye")::String
           JIL
         }
 
@@ -220,8 +222,8 @@ RSpec.describe Jil::Methods::String do
       context "replace with regex" do
         let(:code) {
           <<-JIL
-            na887 = String.new(\"Hello, world!\")::String
-            na885 = na887.replace(\"/Hello,?\\s* /\", \"\")::String
+            na887 = String.new("Hello, world!")::String
+            na885 = na887.replace("/Hello,?\\s* /", "")::String
           JIL
         }
 
@@ -239,8 +241,8 @@ RSpec.describe Jil::Methods::String do
     context "add" do
       let(:code) {
         <<-JIL
-          na887 = String.new(\"Hello, world!\")::String
-          na885 = na887.add(\" Goodbye, world!\")::String
+          na887 = String.new("Hello, world!")::String
+          na885 = na887.add(" Goodbye, world!")::String
         JIL
       }
 
@@ -257,7 +259,7 @@ RSpec.describe Jil::Methods::String do
     context "length" do
       let(:code) {
         <<-JIL
-          na887 = String.new(\"Hello, world!\")::String
+          na887 = String.new("Hello, world!")::String
           na885 = na887.length()::Numeric
         JIL
       }

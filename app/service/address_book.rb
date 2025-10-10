@@ -70,9 +70,7 @@ class AddressBook
     }
     return address if address.present?
 
-    if data.is_a?(String) && data.match?(::Jarvis::Regex.address)
-      address = data[::Jarvis::Regex.address]&.squish.presence
-    end
+    address = data[::Jarvis::Regex.address]&.squish.presence if data.is_a?(String) && data.match?(::Jarvis::Regex.address)
     address ||= contact_by_name(data)&.primary_address&.street
     address ||= nearest_from_name(data)
     address.gsub("\n", ", ").squish if address.is_a?(String)
@@ -92,8 +90,8 @@ class AddressBook
       ::PrettyLogger.info("\b[AddressCache] Traveltime #{to},#{from},#{at}")
       params = {
         destinations: to,
-        origins: from,
-        key: ENV["PORTFOLIO_GMAPS_PAID_KEY"],
+        origins:      from,
+        key:          ENV.fetch("PORTFOLIO_GMAPS_PAID_KEY", nil),
         arrival_time: at.presence&.to_i,
       }.compact_blank.to_query
       url = "https://maps.googleapis.com/maps/api/distancematrix/json?#{params}"
@@ -117,24 +115,25 @@ class AddressBook
     Rails.cache.fetch("nearest_from_name(#{name},#{loc.join(",")})") {
       ::PrettyLogger.info("\b[AddressCache] Nearest name #{name},#{loc.join(",")}")
       params = {
-        input: name,
-        inputtype: :textquery,
-        fields: [:formatted_address, :geometry].join(","),
+        input:        name,
+        inputtype:    :textquery,
+        fields:       [:formatted_address, :geometry].join(","),
         locationbias: "point:#{loc.join(",")}",
-        key: ENV["PORTFOLIO_GMAPS_PAID_KEY"],
+        key:          ENV.fetch("PORTFOLIO_GMAPS_PAID_KEY", nil),
       }.to_query
 
       url = "https://maps.googleapis.com/maps/api/place/findplacefromtext/json?#{params}"
       res = RestClient.get(url)
       json = JSON.parse(res.body, symbolize_names: true)
 
-      json.dig(:candidates)
+      json[:candidates]
     }.then { |candidates|
       if candidates&.one?
         candidates.first
       else
         candidates.sort_by { |candidate|
           next if candidate&.dig(:geometry, :location).blank?
+
           distance(loc, candidate.dig(:geometry, :location).values)
         }.compact.first
       end
@@ -174,17 +173,19 @@ class AddressBook
   def geocode(address)
     return if address.blank?
 
-    nonnil_cache("geocode(#{address})") do
+    nonnil_cache("geocode(#{address})") {
       ::PrettyLogger.info("\b[AddressCache] Geocoding #{address}")
       encoded = CGI.escape(address)
-      url = "https://maps.googleapis.com/maps/api/geocode/json?address=#{encoded}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
+      url = "https://maps.googleapis.com/maps/api/geocode/json?address=#{encoded}&key=#{ENV.fetch(
+        "PORTFOLIO_GMAPS_PAID_KEY", nil
+      )}"
       res = RestClient.get(url)
       json = JSON.parse(res.body, symbolize_names: true)
 
       json.dig(:results, 0, :geometry, :location)&.then { |loc_data|
         [loc_data[:lat], loc_data[:lng]]
       }
-    end
+    }
   end
 
   # Get address from [lat,lng]
@@ -192,9 +193,11 @@ class AddressBook
     return "Herriman" unless Rails.env.production?
     return if loc.compact.blank?
 
-    nonnil_cache("reverse_geocode(#{loc.map { |l| l.round(2) }.join(",")},#{get})") do
+    nonnil_cache("reverse_geocode(#{loc.map { |l| l.round(2) }.join(",")},#{get})") {
       ::PrettyLogger.info("\b[AddressCache] Reverse Geocoding #{loc.join(",")},#{get}")
-      url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=#{loc.join(",")}&key=#{ENV["PORTFOLIO_GMAPS_PAID_KEY"]}"
+      url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=#{loc.join(",")}&key=#{ENV.fetch(
+        "PORTFOLIO_GMAPS_PAID_KEY", nil
+      )}"
       res = RestClient.get(url)
       json = JSON.parse(res.body, symbolize_names: true)
 
@@ -206,7 +209,7 @@ class AddressBook
       when :address
         json.dig(:results, 0, :formatted_address)
       end
-    end
+    }
   rescue StandardError => e
     ::SlackNotifier.err(e, "reverse_geocode failed: (#{loc}): [#{e.class}]:#{e.message}")
     nil

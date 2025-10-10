@@ -64,12 +64,17 @@ class WebhooksController < ApplicationController
       exe = task.match_run(:webhook, { params: json_params }, force: true)
 
       if exe.nil?
-        render json: { data: nil, task: nil, notice: "Task found, but input data does not match listener." }
+        render json: {
+          data:   nil,
+          task:   nil,
+          notice: "Task found, but input data does not match listener.",
+        }
       else
         render json: { data: task.last_result, task: task.serialize_with_execution }
       end
     else
-      render json: { data: nil, task: nil, notice: "No task found by that uuid." }, status: :not_found
+      render json: { data: nil, task: nil, notice: "No task found by that uuid." },
+        status: :not_found
     end
   end
 
@@ -128,6 +133,7 @@ class WebhooksController < ApplicationController
 
   def local_ping
     return head :ok unless current_user == User.me
+
     LocalIpManager.local_ip = request.remote_ip
 
     head :ok
@@ -137,7 +143,10 @@ class WebhooksController < ApplicationController
     return head :no_content unless printer_authed?
 
     LocalIpManager.local_ip = request.remote_ip
-    ActionCable.server.broadcast(:printer_callback_channel, { printer_data: params.permit!.to_h.except(:apiSecret) })
+    ActionCable.server.broadcast(
+      :printer_callback_channel,
+      { printer_data: params.permit!.to_h.except(:apiSecret) },
+    )
     PrinterNotify.notify(params)
     Jil.trigger(User.me, :printer, params.permit!.to_h)
 
@@ -206,6 +215,7 @@ class WebhooksController < ApplicationController
   def push_notification_subscribe
     Rails.logger.info("Received subscription request! [#{current_user&.username}] (#{request.headers["JarvisPushVersion"].inspect})")
     return head :ok unless request.headers["JarvisPushVersion"].to_s == "2"
+
     # return head :ok unless request.headers["UserJWT"].present?
     # user = jwt_user(request.headers["UserJWT"])
     Rails.logger.info("Sub version 2! #{current_user&.username}")
@@ -217,7 +227,7 @@ class WebhooksController < ApplicationController
     push_sub = current_user.push_subs.find_or_initialize_by(endpoint: params[:endpoint])
     push_sub.assign_attributes({
       registered_at: Time.current,
-      **keys
+      **keys,
     })
     Rails.logger.info("Initialized!")
 
@@ -233,17 +243,17 @@ class WebhooksController < ApplicationController
   private
 
   def json_params
-    @json_params ||= begin
-      json = params.to_unsafe_h.except(:controller, :action)
-      return json unless json.keys.length == 2 # uuid and broken json
+    return @json_params if defined?(@json_params)
 
-      json_key = json.except(:uuid).keys.first
-      return json unless json[json_key].nil?
+    json = params.to_unsafe_h.except(:controller, :action)
+    return (@json_params = json) unless json.keys.length == 2 # uuid and broken json
 
-      json.except(json_key).merge(JSON.parse(json_key, symbolize_names: true))
-    rescue JSON::ParserError
-      json
-    end
+    json_key = json.except(:uuid).keys.first
+    return (@json_params = json) unless json[json_key].nil?
+
+    @json_params = json.except(json_key).merge(JSON.parse(json_key, symbolize_names: true))
+  rescue JSON::ParserError
+    @json_params = json
   end
 
   def none_unless_user
@@ -259,7 +269,6 @@ class WebhooksController < ApplicationController
   end
 
   def post_params
-    Rails.logger.warn "#{params.permit!.to_h}"
+    ::Rails.logger.warn(params.permit!.to_h.to_s)
   end
-
 end

@@ -7,20 +7,20 @@ module Jarvis::Text
     "Check.",
     "It's done.",
     "It is complete.",
-  ]
+  ].freeze
   IM_HERE_DIRECT_RESPONSES = [
     "At your service, sir.",
-    "Good --time--, sir."
-  ]
+    "Good --time--, sir.",
+  ].freeze
   IM_HERE_QUESTION_RESPONSES = [
     "For you sir, always.",
     "At your service, sir.",
     "Yes, sir.",
-    "Good --time--, sir."
-  ]
+    "Good --time--, sir.",
+  ].freeze
   APPRECIATE_RESPONSES = [
-    "You're welcome, sir."
-  ]
+    "You're welcome, sir.",
+  ].freeze
 
   def affirmative
     decorate(AFFIRMATIVE_RESPONSES.sample)

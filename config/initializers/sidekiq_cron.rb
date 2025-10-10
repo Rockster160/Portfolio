@@ -19,19 +19,19 @@ monthly_1st_at_midnight = "0 6 1 * *"
 
 cron_jobs = [
   {
-    name: "Clean up Guests",
+    name:  "Clean up Guests",
     class: "CleanGuestsWorker",
-    cron: daily_9pm
+    cron:  daily_9pm,
   },
   {
-    name: "Reschedule Items",
+    name:  "Reschedule Items",
     class: "RescheduleItemsWorker",
-    cron: every_minute
+    cron:  every_minute,
   },
   {
-    name: "Trigger Jil Cron",
+    name:  "Trigger Jil Cron",
     class: "JilScheduleWorker",
-    cron: every_minute
+    cron:  every_minute,
   },
 ]
 
@@ -43,9 +43,9 @@ if Rails.env.production?
     #   cron: every_5_minutes,
     # },
     {
-      name: "DropLogTrackers",
+      name:  "DropLogTrackers",
       class: "DropLogTrackersWorker",
-      cron: monthly_1st_at_midnight,
+      cron:  monthly_1st_at_midnight,
     },
   ]
 elsif Rails.env.development?

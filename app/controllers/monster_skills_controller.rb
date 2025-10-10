@@ -1,3 +1,2 @@
 class MonsterSkillsController < ApplicationController
-
 end

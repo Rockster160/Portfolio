@@ -14,8 +14,8 @@
 #
 class Page < ApplicationRecord
   attr_accessor :skip_broadcast
-  include Orderable
-  include Folderable
+
+  include Folderable, Orderable
 
   belongs_to :folder, optional: true, touch: true
   belongs_to :user
@@ -29,7 +29,7 @@ class Page < ApplicationRecord
   validates :parameterized_name, uniqueness: { scope: :user_id }
 
   def timestamp=(new_timestamp)
-    self.updated_at = Time.at(new_timestamp.to_i)
+    self.updated_at = Time.zone.at(new_timestamp.to_i)
   end
 
   def folder_name=(new_folder_name)
@@ -57,7 +57,7 @@ class Page < ApplicationRecord
     unique_name = base_name
     counter = 0
     while Page.where(user_id: user_id, parameterized_name: unique_name).where.not(id: id).any?
-      unique_name = "#{base_name}-#{id}#{"-#{counter}" if counter > 0}"
+      unique_name = "#{base_name}-#{id}#{"-#{counter}" if counter.positive?}"
       counter += 1
     end
 

@@ -1,5 +1,6 @@
 RSpec.describe Jil::Methods::Global do
   include ActiveJob::TestHelper
+
   let(:execute) { ::Jil::Executor.call(user, code, input_data) }
   let(:user) { User.me }
   let(:code) {
@@ -35,8 +36,8 @@ RSpec.describe Jil::Methods::Global do
 
   # times
 
-  context "#loop, Next, Break, Index, Return" do
-    #dowhile(enum_content)::Numeric
+  describe "#loop, Next, Break, Index, Return" do
+    # dowhile(enum_content)::Numeric
     let(:code) {
       <<-'JIL'
         outer_counter = Numeric.new(0)::Numeric
@@ -88,7 +89,7 @@ RSpec.describe Jil::Methods::Global do
         "Outer 2",
         "Post Next 1",
         "Inner 1",
-        "Post Next 3"
+        "Post Next 3",
       ])
     end
   end
@@ -119,7 +120,7 @@ RSpec.describe Jil::Methods::Global do
     it "modifies variables inline, but does not change the external cache values" do
       expect_successful_jil
       expect(ctx[:vars]).to match_hash({
-        abc: { class: :Any, value: "123" },
+        abc:   { class: :Any, value: "123" },
         s1e23: { class: :Numeric, value: 128 },
         cf84b: { class: :Numeric, value: 326 },
         w9886: { class: :Numeric, value: 326 },
@@ -137,20 +138,7 @@ RSpec.describe Jil::Methods::Global do
     end
   end
 
-  context "#request" do # Working, just commented out to avoid needless requests
-    # let(:code) { 'ee984 = Global.request("GET", "https://a.4cdn.org/boards.json", "", "")::Hash' }
-    #
-    # it "hits an endpoint and returns the data" do
-    #   expect_successful_jil
-    #
-    #   data = ctx.dig(:vars, :ee984)
-    #   expect(data[:class]).to eq(:Hash)
-    #   expect(data[:value].keys.map(&:to_sym)).to match_array([:code, :body, :headers])
-    #   expect(data.dig(:value, :body).class).to eq(::ActiveSupport::HashWithIndifferentAccess)
-    # end
-  end
-
-  context "#command" do
+  describe "#command" do
     let(:code) { 'ee984 = Global.command("Add whatever")::String' }
 
     before do
@@ -161,12 +149,12 @@ RSpec.describe Jil::Methods::Global do
       expect_successful_jil
 
       expect(ctx[:vars]).to match_hash({
-        ee984: { class: :String, value: "TODO:\n - whatever" }
+        ee984: { class: :String, value: "TODO:\n - whatever" },
       })
     end
   end
 
-  context "#trigger command" do
+  describe "#trigger command" do
     let(:code) {
       <<-JIL
         k16d3 = Global.trigger("command", "", {
@@ -186,7 +174,7 @@ RSpec.describe Jil::Methods::Global do
     end
   end
 
-  context "#broadcast_websocket" do
+  describe "#broadcast_websocket" do
     let(:code) {
       <<-JIL
         v305d = Hash.new({
@@ -200,14 +188,14 @@ RSpec.describe Jil::Methods::Global do
       expect_successful_jil
 
       expect(ctx[:vars]).to match_hash({
-        i785d: { class: :Keyval,  value: {"action"=>"open"} },
-        v305d: { class: :Hash,    value: {"action"=>"open"} },
+        i785d: { class: :Keyval,  value: { "action"=>"open" } },
+        v305d: { class: :Hash,    value: { "action"=>"open" } },
         ldfd0: { class: :Numeric, value: 0 },
       })
     end
   end
 
-  context "#trigger" do
+  describe "#trigger" do
     let(:task_code) {
       <<-JIL
         r5ee3 = Array.new({
@@ -237,10 +225,10 @@ RSpec.describe Jil::Methods::Global do
       expect_successful_jil
 
       expect(ctx[:vars]).to match_hash({
-        d8e4a: { class: :Keyval,  value: {"foo": "listener"} },
-        ne65c: { class: :Keyval,  value: {"data": {"foo": "listener"}} },
-        qe8be: { class: :Keyval,  value: {"nest": {"data": {"foo": "listener"}}} },
-        e2e54: { class: :Hash,    value: {"nest": {"data": {"foo": "listener"}}} },
+        d8e4a: { class: :Keyval,  value: { foo: "listener" } },
+        ne65c: { class: :Keyval,  value: { data: { foo: "listener" } } },
+        qe8be: { class: :Keyval,  value: { nest: { data: { foo: "listener" } } } },
+        e2e54: { class: :Hash,    value: { nest: { data: { foo: "listener" } } } },
         z54c9: { class: :Numeric, value: 1 },
       })
       expect(::Execution.count).to eq(2)

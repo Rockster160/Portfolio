@@ -1,5 +1,6 @@
 class MazeRunner
-  class MazeRunnerError < StandardError;end
+  class MazeRunnerError < StandardError; end
+
   def initialize(maze)
     @x = (maze.start_x * 2) + 1
     @y = (maze.start_y * 2) + 1
@@ -17,7 +18,7 @@ class MazeRunner
   end
 
   def at(x, y)
-    @maze[y][x*2]
+    @maze[y][x * 2]
   end
 
   def move(str)
@@ -27,7 +28,7 @@ class MazeRunner
       D: [0, 1],
       L: [-1, 0],
     }
-    str.to_s.split("").each do |dir|
+    str.to_s.chars.each do |dir|
       rx, ry = dirs[dir.upcase.to_sym]
       raise MazeRunnerError, "Invalid character" if rx.nil? || ry.nil?
 
@@ -43,9 +44,10 @@ class MazeRunner
     @maze.map.with_index { |row, cy|
       row.scan(/../).map.with_index { |cell, cx|
         next "• " if cy == @y && cx == @x
+
         # next "\e[45;36m• \e[0m" if cy == @y && cx == @x
         cell
-      }.join("")
+      }.join
     }
   end
 end

@@ -16,7 +16,7 @@ class SurveyResultDetail < ApplicationRecord
   belongs_to :survey
   belongs_to :survey_result
 
-  enum conditional: {
+  enum :conditional, {
     full:          0,
     equal:         1,
     greater:       2,

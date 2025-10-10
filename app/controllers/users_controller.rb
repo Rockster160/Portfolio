@@ -48,7 +48,7 @@ class UsersController < ApplicationController
       :dark_mode,
       :password,
       :password_confirmation,
-      :current_password
-    ).reject { |_, v| v.blank? }
+      :current_password,
+    ).compact_blank
   end
 end

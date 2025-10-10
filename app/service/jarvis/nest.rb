@@ -8,9 +8,7 @@ class Jarvis::Nest < Jarvis::Action
     raise Jarvis::Error.not_allowed unless @user&.admin?
 
     response = NestCommand.command(parse_cmd)
-    if Rails.env.production?
-      NestCommandWorker.perform_in(10.seconds, :update)
-    end
+    NestCommandWorker.perform_in(10.seconds, :update) if Rails.env.production?
 
     return response.presence || "Sent to Nest"
   end

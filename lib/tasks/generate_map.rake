@@ -1,5 +1,5 @@
 namespace :generate do
-  task :map do
+  task map: :environment do
     # N=NW
     # n=N
     # E=NE
@@ -14,14 +14,15 @@ namespace :generate do
     # 4=grass-4
     @max = 63
     def generateGrass(x, y)
-      return "N" if x == 0 && y == 0
-      return "E" if x == @max && y == 0
+      return "N" if x.zero? && y.zero?
+      return "E" if x == @max && y.zero?
       return "S" if x == @max && y == @max
-      return "W" if x == 0 && y == @max
-      return "n" if y == 0
+      return "W" if x.zero? && y == @max
+      return "n" if y.zero?
       return "e" if x == @max
       return "s" if y == @max
-      return "w" if x == 0
+      return "w" if x.zero?
+
       rand_block = rand(15)
       return "1" if rand_block <= 5
       return "2" if rand_block <= 9
@@ -29,18 +30,19 @@ namespace :generate do
       return "4" if rand_block <= 14
     end
 
-    grass = 64.times.map do |y|
-      64.times.map do |x|
+    grass = 64.times.map { |y|
+      64.times.map { |x|
         generateGrass(x, y)
-      end.join("")
-    end.join(",")
+      }.join
+    }.join(",")
 
-    spikes = collision = 64.times.map do |y|
-      64.times.map do |x|
-        next "0" if x == 0 || y == 0 || x == @max || y == @max
-        rand(15) == 0 ? "1" : "0"
-      end.join("")
-    end.join(",")
+    spikes = collision = 64.times.map { |y|
+      64.times.map { |x|
+        next "0" if x.zero? || y.zero? || x == @max || y == @max
+
+        rand(15).zero? ? "1" : "0"
+      }.join
+    }.join(",")
 
     collision = spikes
 

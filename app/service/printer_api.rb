@@ -2,10 +2,10 @@ module PrinterApi
   module_function
 
   BASE_HEADERS = {
-    "User-Agent": "PortfolioBot/1.0",
+    "User-Agent":   "PortfolioBot/1.0",
     "Content-Type": "application/json",
-    "Authorization": "Basic #{Base64.encode64("Rockster160:#{DataStorage[:printer_password]}")}",
-  }
+    Authorization:  "Basic #{Base64.encode64("Rockster160:#{DataStorage[:printer_password]}")}",
+  }.freeze
 
   def update_ngrok(base_url)
     DataStorage[:printer_needs_reset] = false
@@ -26,9 +26,9 @@ module PrinterApi
 
   def move(coords)
     if coords.is_a?(String)
-      coords = [:x, :y, :z].each_with_object({}) do |axis, obj|
-        obj[axis] = coords.match(/#{axis}:? (\-?\d+)/i).to_a[1].to_i.presence
-      end
+      coords = [:x, :y, :z].index_with { |axis|
+        coords.match(/#{axis}:? (-?\d+)/i).to_a[1].to_i.presence
+      }
     end
 
     # coords are x, y, z hash with pos/neg values
@@ -93,22 +93,18 @@ module PrinterApi
         DataStorage[:printer_ngrok_base_url],
         :api,
         (endpoint == :job ? nil : :printer),
-        endpoint.presence
+        endpoint.presence,
       ].compact.join("/"),
-      BASE_HEADERS
+      BASE_HEADERS,
     )
 
     JSON.parse(res.body, symbolize_names: true)
-  rescue RestClient::Exception => err
-    if !DataStorage[:printer_needs_reset]
-      SlackNotifier.notify("Failed to request from PrinterControl#get(#{endpoint}):\nErr: #{err}\n```#{err.message}```")
-    end
+  rescue RestClient::Exception => e
+    SlackNotifier.notify("Failed to request from PrinterControl#get(#{endpoint}):\nErr: #{e}\n```#{e.message}```") unless DataStorage[:printer_needs_reset]
     DataStorage[:printer_needs_reset] = true
     {}
-  rescue JSON::ParserError => err
-    if !DataStorage[:printer_needs_reset]
-      SlackNotifier.notify("Failed to parse json from PrinterControl#get(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```")
-    end
+  rescue JSON::ParserError => e
+    SlackNotifier.notify("Failed to parse json from PrinterControl#get(#{endpoint}):\nCode: #{res.code}\n```#{res.body}```") unless DataStorage[:printer_needs_reset]
     DataStorage[:printer_needs_reset] = true
     {}
   end
@@ -119,21 +115,18 @@ module PrinterApi
     res = RestClient.post(
       "#{DataStorage[:printer_ngrok_base_url]}/api/printer/#{endpoint}",
       params.to_json,
-      BASE_HEADERS
+      BASE_HEADERS,
     )
 
     return {} if res.code == 204
+
     JSON.parse(res.body, symbolize_names: true)
-  rescue RestClient::Exception => err
-    if !DataStorage[:printer_needs_reset]
-      SlackNotifier.notify("Failed to request from PrinterControl#post(#{endpoint}, #{params}):\nErr: #{err}\n```#{err.message}```")
-    end
+  rescue RestClient::Exception => e
+    SlackNotifier.notify("Failed to request from PrinterControl#post(#{endpoint}, #{params}):\nErr: #{e}\n```#{e.message}```") unless DataStorage[:printer_needs_reset]
     DataStorage[:printer_needs_reset] = true
     {}
-  rescue JSON::ParserError => err
-    if !DataStorage[:printer_needs_reset]
-      SlackNotifier.notify("Failed to parse json from PrinterControl#post(#{endpoint}, #{params}):\nCode: #{res.code}\n```#{res.body}```")
-    end
+  rescue JSON::ParserError => e
+    SlackNotifier.notify("Failed to parse json from PrinterControl#post(#{endpoint}, #{params}):\nCode: #{res.code}\n```#{res.body}```") unless DataStorage[:printer_needs_reset]
     DataStorage[:printer_needs_reset] = true
     {}
   end

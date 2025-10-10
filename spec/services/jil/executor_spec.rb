@@ -1,5 +1,6 @@
 RSpec.describe Jil::Executor do
   include ActiveJob::TestHelper
+
   let(:execute) { described_class.call(user, code, input_data) }
   let(:user) { User.me }
   let(:code) { "" }
@@ -60,10 +61,10 @@ RSpec.describe Jil::Executor do
   describe "Btn Receiver" do
     let!(:receiver) {
       Task.create(
-        name: "Btn Receiver",
+        name:     "Btn Receiver",
         listener: "websocket:receive",
-        code: receiver_code,
-        user: User.me,
+        code:     receiver_code,
+        user:     User.me,
       )
     }
     let(:receiver_code) {
@@ -135,13 +136,13 @@ RSpec.describe Jil::Executor do
     describe "with an irrelevant trigger" do
       let(:trigger_data) {
         {
-          channel: "SocketChannel",
-          user_id: 1,
-          channel_id: "garage",
-          state: "closed",
+          channel:          "SocketChannel",
+          user_id:          1,
+          channel_id:       "garage",
+          state:            "closed",
           connection_state: "receive",
-          match_list: [],
-          named_captures: {},
+          match_list:       [],
+          named_captures:   {},
         }
       }
 
@@ -158,13 +159,13 @@ RSpec.describe Jil::Executor do
     describe "with a relevant trigger" do
       let(:trigger_data) {
         {
-          channel: "SocketChannel",
-          user_id: 1,
-          channel_id: "teeth",
-          btn_id: "teeth",
+          channel:          "SocketChannel",
+          user_id:          1,
+          channel_id:       "teeth",
+          btn_id:           "teeth",
           connection_state: "receive",
-          match_list: [],
-          named_captures: {},
+          match_list:       [],
+          named_captures:   {},
         }
       }
 
@@ -183,10 +184,10 @@ RSpec.describe Jil::Executor do
   describe "Duration" do
     let!(:func) {
       Task.create(
-        name: "Duration",
+        name:     "Duration",
         listener: 'function("From" Date?:Start "To" Date:End "Figs" Numeric(1):SigFigs)::String',
-        code: func_code,
-        user: User.me,
+        code:     func_code,
+        user:     User.me,
       )
     }
     let(:func_code) {
@@ -239,14 +240,14 @@ RSpec.describe Jil::Executor do
     }
     let(:code) {
       <<-JIL
-        time = String.new("#{Time.new(2024, 7, 22, 9, 19, 17)}")::Date
+        time = String.new("#{Time.zone.local(2024, 7, 22, 9, 19, 17)}")::Date
         dur = Custom.Duration("", time, 1)::String
         abc = Global.return(dur)::String
       JIL
     }
 
     it "returns the duration" do
-      travel_to(Time.new(2024, 7, 22, 8, 43, 34)) do
+      travel_to(Time.zone.local(2024, 7, 22, 8, 43, 34)) do
         exe = execute
         val = exe.ctx[:return_val]
         expect(val).to eq("35m")

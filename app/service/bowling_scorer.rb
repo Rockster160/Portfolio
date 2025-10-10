@@ -23,11 +23,11 @@ module BowlingScorer
 
     {
       frame_num: num,
-      spare: spare,
-      strike: strike,
-      throw1: tosses[0],
-      throw2: tosses[1],
-      throw3: tosses[2],
+      spare:     spare,
+      strike:    strike,
+      throw1:    tosses[0],
+      throw2:    tosses[1],
+      throw3:    tosses[2],
     }
   end
 
@@ -37,22 +37,22 @@ module BowlingScorer
     strike = false
 
     toss1, toss2, toss3 = 3.times.map { |t|
-      throw_remaining = JSON.parse(frame_params["throw#{t+1}_remaining".to_sym]) rescue nil
-      toss = frame_params["throw#{t+1}".to_sym].to_s
+      throw_remaining = JSON.parse(frame_params[:"throw#{t + 1}_remaining"]) rescue nil
+      toss = frame_params[:"throw#{t + 1}"].to_s
       score = toss.gsub("-", "0").gsub("X", "10")
       spare = toss == "/"
       strike = toss == "X"
       if score == "/"
-        prev_score = frame_params["throw#{t}".to_sym].to_s.gsub("-", "0").to_i
+        prev_score = frame_params[:"throw#{t}"].to_s.gsub("-", "0").to_i
         score = 10 - prev_score
       end
 
       {
-        na: throw_remaining.nil?,
+        na:     throw_remaining.nil?,
         closed: spare || strike || throw_remaining == [],
-        count: throw_remaining&.count || 10, # 10 so that `nil` becomes 10 remaining
-        pins: throw_remaining,
-        score: score.presence&.to_i
+        count:  throw_remaining&.count || 10, # 10 so that `nil` becomes 10 remaining
+        pins:   throw_remaining,
+        score:  score.presence&.to_i,
       }
     }
 
@@ -78,17 +78,17 @@ module BowlingScorer
     split ||= frame_params[:frame_num] == 10 && toss1[:closed] && split?(toss2[:pins])
 
     {
-      frame_num: frame_params[:frame_num],
-      spare: spare,
-      strike: strike,
-      split: split,
-      throw1: toss1[:score],
-      throw2: toss2[:score],
-      throw3: toss3[:score],
+      frame_num:        frame_params[:frame_num],
+      spare:            spare,
+      strike:           strike,
+      split:            split,
+      throw1:           toss1[:score],
+      throw2:           toss2[:score],
+      throw3:           toss3[:score],
       throw1_remaining: toss1[:pins],
       throw2_remaining: toss2[:pins],
       throw3_remaining: toss3[:pins],
-      strike_point: frame_params[:strike_point]
+      strike_point:     frame_params[:strike_point],
     }
   end
 
@@ -107,12 +107,12 @@ module BowlingScorer
     ]
 
     columns.map { |col|
-      (col & pins).any? ? "1" : "0"
-    }.join("").match?(/10+1/)
+      col.intersect?(pins) ? "1" : "0"
+    }.join.match?(/10+1/)
   end
 
   def game_to_throws(game) # LaneTalk style flat array of each throw
-    game.frame_details.map(&:rolls).map.with_index { |f,i|
+    game.frame_details.map(&:rolls).map.with_index { |f, i|
       i < 9 && f[0] == "X" ? ["X", ""] : f.compact # Convert non-10th strikes to [X, ""]
     }.flatten.map { |n|
       n == n.to_i.to_s ? n.to_i : n # Convert numbers to ints
@@ -131,22 +131,22 @@ module BowlingScorer
         toss_score = score_from_toss(toss_idx, tosses)
         score += toss_score
 
-        if frame_idx != 9 # tenth frame
-          if toss == "X" || toss == "/"
-            next_frame_tosses = tosses_from_frame(frames[frame_idx + 1])
+        next unless frame_idx != 9 # tenth frame
 
-            score += score_from_toss(0, next_frame_tosses) || 0
-          end
-          if toss == "X"
-            next_frame_tosses = tosses_from_frame(frames[frame_idx + 1])
+        if ["X", "/"].include?(toss)
+          next_frame_tosses = tosses_from_frame(frames[frame_idx + 1])
 
-            if next_frame_tosses[1].nil?
-              next_frame_tosses = tosses_from_frame(frames[frame_idx + 2])
-              score += score_from_toss(0, next_frame_tosses) || 0
-            else
-              score += score_from_toss(1, next_frame_tosses) || 0
-            end
-          end
+          score += score_from_toss(0, next_frame_tosses) || 0
+        end
+        next unless toss == "X"
+
+        next_frame_tosses = tosses_from_frame(frames[frame_idx + 1])
+
+        if next_frame_tosses[1].nil?
+          next_frame_tosses = tosses_from_frame(frames[frame_idx + 2])
+          score += score_from_toss(0, next_frame_tosses) || 0
+        else
+          score += score_from_toss(1, next_frame_tosses) || 0
         end
       end
       # puts "#{frame_idx + 1}: #{score}"
@@ -156,11 +156,12 @@ module BowlingScorer
   end
 
   def tosses_from_frame(bowl_frame)
-    bowl_frame.is_a?(String) ? bowl_frame.split("") : bowl_frame
+    bowl_frame.is_a?(String) ? bowl_frame.chars : bowl_frame
   end
 
   def score_from_toss(toss_idx, tosses)
     return if tosses.nil?
+
     toss = tosses[toss_idx]
 
     return if toss.nil?

@@ -37,8 +37,8 @@ RSpec.describe Task do
         { user: admin, listener: "tell:\"Do the things\"" },
         { user: admin, listener: "tell:~/Checkup/" },
         { user: admin, listener: "tell:ANY(~/Checkup/ ~/Result/)" },
-        { user: admin, listener: "event:/food|drink|snack|treat|alcohol/ note:/(?<text>.*?)(\((?<cals>\d+) ?cals?\))?/" },
-        { user: admin, listener: "event:note:/(?<text>.*?)(\((?<cals>\d+) ?cals?\))?/" },
+        { user: admin, listener: "event:/food|drink|snack|treat|alcohol/ note:/(?<text>.*?)(((?<cals>\d+) ?cals?))?/" },
+        { user: admin, listener: "event:note:/(?<text>.*?)(((?<cals>\d+) ?cals?))?/" },
         { user: admin, listener: "event:/food|drink|snack|treat|alcohol/" },
         { user: admin, listener: "tell:OR(/is the garage (open|closed)/ /check garage/)" },
         { user: admin, listener: "shortcut:data" },
@@ -46,7 +46,7 @@ RSpec.describe Task do
       ])
 
       @listeners = []
-      allow_any_instance_of(Task).to receive(:execute) do |task, data|
+      allow_any_instance_of(Task).to receive(:execute) do |task, _data|
         @listeners << task.listener
       end
     end
@@ -75,7 +75,7 @@ RSpec.describe Task do
         "shortcut",
         "shortcut:data",
       ])
-      expect_trigger_listeners(admin, :shortcut, { shortcut: [{data: nil}] }, [
+      expect_trigger_listeners(admin, :shortcut, { shortcut: [{ data: nil }] }, [
         "shortcut",
         "shortcut:data",
       ])
@@ -116,10 +116,10 @@ RSpec.describe Task do
       ])
       expect_trigger_listeners(admin, :event, { name: "Wordle", notes: "food" }, [
         "event:/food|drink|snack|treat|alcohol/",
-        "event:note:/(?<text>.*?)(((?<cals>d+) ?cals?))?/"
+        "event:note:/(?<text>.*?)(((?<cals>d+) ?cals?))?/",
       ])
       expect_trigger_listeners(admin, :event, { name: "soda" }, [
-        "event:name:ANY(food soda drink alcohol treat snack)"
+        "event:name:ANY(food soda drink alcohol treat snack)",
       ])
       expect_trigger_listeners(admin, :email, { from: "shipping@amazon.com", to: "rocco@ardesian.com", subject: "Your item has been Delivered!", text_body: "We delivered your Awesome Socks today!" }, [
         "email:from:amazon subject:ANY(\"has been\" \"is now\" delayed)",
@@ -146,7 +146,7 @@ RSpec.describe Task do
         "tell:/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/",
       ])
       expect_trigger_listeners(admin, :tell, "Do the things", [
-        "tell:\"Do the things\""
+        "tell:\"Do the things\"",
       ])
       expect_trigger_listeners(admin, :tell, "Do the things twice", [
         "tell:\"Do the things\"",

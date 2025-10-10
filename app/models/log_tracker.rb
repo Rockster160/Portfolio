@@ -29,16 +29,18 @@ class LogTracker < ApplicationRecord
   end
   search_terms(
     :url,
-    ip: :ip_address,
+    ip:     :ip_address,
     method: :http_method,
-    user: "users.username",
+    user:   "users.username",
   )
 
   scope :by_fuzzy_text, ->(text) {
-    where("
+    where(
+      "
       url ILIKE :text OR
       http_method ILIKE :text
-    ", text: "%#{text}%")
+    ", text: "%#{text}%"
+    )
   }
   scope :by_ip, ->(ip) { where(ip_address: ip) }
   scope :not_me, -> { where.not(user_id: 1) }
@@ -60,12 +62,13 @@ class LogTracker < ApplicationRecord
   end
 
   def short_location
-    return nil unless location.present?
+    return nil if location.blank?
+
     [location.country_code.presence, location.region_code.presence, location.city.presence].join(", ")
   end
 
   def banned?
-    return false unless ip_address.present?
+    return false if ip_address.blank?
 
     BannedIp.where(ip: ip_address).any?
   end
@@ -83,12 +86,12 @@ class LogTracker < ApplicationRecord
   end
 
   def set_ip_count
-    now = self.created_at || DateTime.current
-    self.ip_count = LogTracker.where.not(id: self.id).where("created_at < ?", now).where(ip_address: self.ip_address).count
+    now = created_at || DateTime.current
+    self.ip_count = LogTracker.where.not(id: id).where(created_at: ...now).where(ip_address: ip_address).count
   end
 
   def broadcast_creation
-    rendered_message = LogTrackersController.render partial: 'log_trackers/logger_row', locals: { logger: self }
+    rendered_message = LogTrackersController.render partial: "log_trackers/logger_row", locals: { logger: self }
     ActionCable.server.broadcast(:logger_channel, { message: rendered_message })
   end
 end

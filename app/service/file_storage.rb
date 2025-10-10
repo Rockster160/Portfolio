@@ -1,9 +1,12 @@
 module FileStorage
   module_function
 
-  CREDENTIALS = Aws::Credentials.new(ENV["PORTFOLIO_S3_ACCESS_KEY"], ENV["PORTFOLIO_S3_SECRET_KEY"])
-  DEFAULT_REGION = "us-east-1"
-  DEFAULT_BUCKET = "ardesian-storage"
+  CREDENTIALS = Aws::Credentials.new(
+    ENV.fetch("PORTFOLIO_S3_ACCESS_KEY", nil),
+    ENV.fetch("PORTFOLIO_S3_SECRET_KEY", nil),
+  )
+  DEFAULT_REGION = "us-east-1".freeze
+  DEFAULT_BUCKET = "ardesian-storage".freeze
 
   def use_live_s3?
     Rails.env.production?
@@ -16,9 +19,9 @@ module FileStorage
   end
 
   def upload(file_data, filename: nil, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    filename = filename || "file-#{Time.current.strftime("%Y-%m-%d-%H-%M-%S")}"
+    filename ||= "file-#{Time.current.strftime("%Y-%m-%d-%H-%M-%S")}"
 
-    if !use_live_s3?
+    unless use_live_s3?
       file_path = "downloads/#{bucket}/#{filename}"
       puts "\e[35m[FileStorage] Saving file locally: #{file_path}\e[0m"
       FileUtils.mkdir_p(File.dirname(file_path))
@@ -31,7 +34,7 @@ module FileStorage
   end
 
   def download(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    if !use_live_s3?
+    unless use_live_s3?
       begin
         return File.read("downloads/#{bucket}/#{filename}")
       rescue Errno::ENOENT

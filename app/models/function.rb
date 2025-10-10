@@ -31,11 +31,11 @@ class Function < ApplicationRecord
   def split_args
     return {} if arguments.blank?
 
-    arguments.split(",").each_with_object({}) do |arg, h|
+    arguments.split(",").each_with_object({}) { |arg, h|
       arg, default = arg.split("=").map(&:squish)
 
       h[arg] = default.to_s
-    end
+    }
   end
 
   def line_count

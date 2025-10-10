@@ -17,13 +17,11 @@ class Jarvis::ScheduleParser < Jarvis::Action
       "today at #{@scheduled_time.strftime("%-l:%M%P")}"
     elsif @scheduled_time.tomorrow?
       "tomorrow at #{@scheduled_time.strftime("%-l:%M%P")}"
-    else
+    elsif Time.current.year == @scheduled_time.year
       # Maybe even say things like "next Wednesday at ..."
-      if Time.current.year == @scheduled_time.year
-        "on #{@scheduled_time.strftime("%a, %b %-d at %-l:%M%P")}"
-      else
-        "on #{@scheduled_time.strftime("%a, %b %-d, %Y at %-l:%M%P")}"
-      end
+      "on #{@scheduled_time.strftime("%a, %b %-d at %-l:%M%P")}"
+    else
+      "on #{@scheduled_time.strftime("%a, %b %-d, %Y at %-l:%M%P")}"
     end
   end
 

@@ -4,7 +4,7 @@ module ExceptionNotifier
     end
 
     def call(exception, options={})
-      exception_name = "#{exception.class.to_s =~ /^[aeiou]/i ? "An" : "A"} `#{exception.class.to_s}`"
+      exception_name = "#{exception.class.to_s =~ /^[aeiou]/i ? "An" : "A"} `#{exception.class}`"
 
       if options[:env].nil?
         text = "#{exception_name} occurred in background\n"
@@ -19,16 +19,14 @@ module ExceptionNotifier
           text = "[#{request&.ip || "?.?.?.?"}] #{exception_name} occurred"
         end
         text += " from `#{env["REQUEST_METHOD"]} <#{env["REQUEST_URI"]}>`"
-        if kontroller
-          text += " was processed by `#{kontroller.controller_name}##{kontroller.action_name}`"
-        end
+        text += " was processed by `#{kontroller.controller_name}##{kontroller.action_name}`" if kontroller
         params = data[:params] || request&.params
         if params
           params = params.permit!.to_h if params.is_a?(::ActionController::Parameters)
           begin
             text += "\n```\n#{JSON.pretty_generate(params)}\n```\n"
           rescue StandardError
-            str = "#{params}".truncate(2000)
+            str = params.to_s.truncate(2000)
             text += "\n```\n#{str}\n```\n"
           end
         end
@@ -45,14 +43,14 @@ module ExceptionNotifier
       end
 
       exception_message = fields.map { |h| "*#{h[:title]}*\n#{h[:value]}" }.join("\n\n")
-      attchs = [color: "danger", text: exception_message, mrkdwn_in: %w(text fields)]
+      attchs = [color: "danger", text: exception_message, mrkdwn_in: %w[text fields]]
 
       environ = Rails.env.production? ? "*[PROD]*" : "_[#{Rails.env.upcase}]_"
       ::SlackNotifier.notify(text, channel: "#portfolio", username: "Portfolio-Bot#{environ}", icon_emoji: ":blackmage::", attachments: attchs)
     end
 
     def focused_trace(trace, before: 10, after: 5)
-      return [] if !trace
+      return [] unless trace
 
       trace.select { |line|
         line.to_s.include?(Rails.root.to_s)

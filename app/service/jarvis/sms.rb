@@ -10,9 +10,7 @@ class Jarvis::Sms < Jarvis::Action
 
     parse_text_words
 
-    if @rx.match_any_words?(@msg, :remind)
-      @user.default_list.add_items(name: @args)
-    end
+    @user.default_list.add_items(name: @args) if @rx.match_any_words?(@msg, :remind)
 
     if @rx.match_any_words?(@msg, :remind, :ping, :tell)
       ::WebPushNotifications.send_to(@user, { title: @args })
@@ -32,13 +30,13 @@ class Jarvis::Sms < Jarvis::Action
   def parse_text_words
     @args = @msg.gsub(/#{pre_words}* ?#{sms_words} ?#{post_words}*/i, "")
     @args = @args.squish.presence&.tap { |words| words[0] = words[0]&.upcase }
-    @args = @args || "You asked me to text you, sir."
+    @parse_text_words ||= "You asked me to text you, sir."
   end
 
   def sms_words
     @rx.words(
       *self.class.reserved_words,
-      suffix: "s\?",
+      suffix: "s?",
     )
   end
 

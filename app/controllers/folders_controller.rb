@@ -16,6 +16,10 @@ class FoldersController < ApplicationController
     render :form
   end
 
+  def edit
+    render :form
+  end
+
   def create
     @folder = current_user.folders.new(folder_params)
 
@@ -24,10 +28,6 @@ class FoldersController < ApplicationController
     else
       render :form
     end
-  end
-
-  def edit
-    render :form
   end
 
   def update
@@ -42,7 +42,8 @@ class FoldersController < ApplicationController
     if @folder.destroy
       redirect_to folders_path
     else
-      redirect_to @folder, alert: "Failed to delete folder: #{@folder.errors.full_messages.join("\n")}"
+      redirect_to @folder,
+        alert: "Failed to delete folder: #{@folder.errors.full_messages.join("\n")}"
     end
   end
 

@@ -15,7 +15,7 @@ module Portfolio
 
     config.global_id.app = "Jarvis"
 
-    config.secret_key_base = ENV["PORTFOLIO_SECRET"]
+    config.secret_key_base = ENV.fetch("PORTFOLIO_SECRET", nil)
     config.active_record.belongs_to_required_by_default = true
     config.action_controller.default_protect_from_forgery = true
     config.assets.quiet = true

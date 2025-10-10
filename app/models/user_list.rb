@@ -26,13 +26,12 @@ class UserList < ApplicationRecord
 
     if default?
       other_user_lists.where(default: true).update_all(default: false)
-    else
-      self.default = true if other_user_lists.where(default: true).none?
+    elsif other_user_lists.where(default: true).none?
+      self.default = true
     end
   end
 
   def set_sort_order
     self.sort_order ||= user.user_lists.where.not(id: [nil, id]).max_by(&:sort_order).try(:sort_order).to_i + 1
   end
-
 end

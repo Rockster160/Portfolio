@@ -24,5 +24,4 @@ class MonsterSkill < ApplicationRecord
   def set_sort_order
     self.sort_order ||= monster.monster_skills.count
   end
-
 end

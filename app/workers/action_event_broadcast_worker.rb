@@ -4,9 +4,7 @@ class ActionEventBroadcastWorker
   def perform(event_id=nil, trigger=true)
     event = ::ActionEvent.find_by(id: event_id)
 
-    if event.present? && trigger
-      ::UpdateActionStreak.perform_async(event_id)
-    end
+    ::UpdateActionStreak.perform_async(event_id) if event.present? && trigger
 
     return unless event&.user&.me?
 

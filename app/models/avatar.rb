@@ -15,12 +15,16 @@
 
 class Avatar < ApplicationRecord
   include CharacterBuilderHelper
+
   belongs_to :user, optional: true
   has_many :clothes, class_name: "AvatarCloth"
 
   after_initialize :set_uuid
 
-  scope :logged_in, -> { return none;where(uuid: Rails.cache.read("player_list").to_a) }
+  scope :logged_in, -> {
+    return none
+    where(uuid: Rails.cache.read("player_list").to_a)
+  }
   scope :from_session, -> { where(from_session: true) }
   scope :not_session, -> { where("from_session = false OR from_session IS NULL") }
 
@@ -46,13 +50,14 @@ class Avatar < ApplicationRecord
 
   def outfit
     return unless clothes.many?
+
     building_outfit = {
-      gender: nil,
-      body: nil,
+      gender:   nil,
+      body:     nil,
       clothing: {
         # back: { garment: "", color: "" },
         # beard: { garment: "", color: "" },
-      }
+      },
     }
     components.each do |component|
       if component[:placement] == "body"
@@ -94,10 +99,10 @@ class Avatar < ApplicationRecord
 
   def set_uuid
     return if uuid.present?
+
     self.uuid = loop do
-      new_uuid = rand(100000..999999)
+      new_uuid = rand(100_000..999_999)
       break new_uuid if Avatar.where(uuid: new_uuid).none?
     end
   end
-
 end
