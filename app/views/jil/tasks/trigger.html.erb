@@ -24,6 +24,7 @@
     }
   });
 
+
   document.addEventListener("ajax:success", function(event) {
     const wrapper = event.target.closest(".execute-btn-wrapper");
     const executeBtn = wrapper ? wrapper.querySelector(".execute-btn") : null;
