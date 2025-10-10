@@ -84,7 +84,7 @@ class WebhooksController < ApplicationController
     DataStorage[:tesla_forbidden] = false
 
     TeslaCommand.quick_command(:reload)
-    LocalIpManager.local_ip = request.remote_ip
+    # LocalIpManager.local_ip = request.remote_ip
     ::PrettyLogger.info("[Reloaded Tesla Connection]")
 
     head :ok
