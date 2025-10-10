@@ -3,13 +3,13 @@ class ListItemsController < ApplicationController
   before_action :authorize_user_or_guest
 
   def show
-    @list_item = current_list_items.with_deleted.find(params[:id])
+    @list_item = current_list_items.find(params[:id])
 
     render json: @list_item
   end
 
   def edit
-    @list_item = current_list_items.with_deleted.find(params[:id])
+    @list_item = current_list_items.find(params[:id])
   end
 
   def create
@@ -47,7 +47,7 @@ class ListItemsController < ApplicationController
 
   def update
     current_list = List.find(params[:list_id])
-    @existing_item = current_list_items.with_deleted.find_by(id: params[:id])
+    @existing_item = current_list_items.find_by(id: params[:id])
     @existing_item.update(list_item_params)
 
     trigger(:changed, @existing_item)
@@ -56,7 +56,7 @@ class ListItemsController < ApplicationController
   end
 
   def destroy
-    @list_item = ListItem.with_deleted.find(params[:id])
+    @list_item = current_list_items.find(params[:id])
 
     if params[:really_destroy]
       @list_item.destroy
@@ -78,7 +78,10 @@ class ListItemsController < ApplicationController
   end
 
   def current_list
-    @current_list ||= current_user.lists.find_by(id: params[:list_id]) || current_user.lists.by_param(params[:list_id]).take!
+    @list ||= @current_list ||= (
+      current_user.lists.find_by(id: params[:list_id]) ||
+        current_user.lists.by_param(params[:list_id]).take!
+    )
   end
 
   def current_list_items
