@@ -8,10 +8,8 @@
 
   <div class="list-title"><%= @task.name %></div>
 
-  <div class="execute-btn-wrapper">
-    <%= link_to run_jil_task_path(@task), method: :post, remote: true, class: "btn execute-btn" do %>
-      <div class="">Trigger Now</div>
-    <% end %>
+  <div class="task-trigger-btns">
+    <%= render partial: "jil/tasks/trigger", locals: { task: @task, title: "Trigger Now" } %>
   </div>
 </div>
 

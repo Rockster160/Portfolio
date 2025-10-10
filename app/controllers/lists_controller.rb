@@ -29,10 +29,28 @@ class ListsController < ApplicationController
 
   def reorder
     params[:list_ids].each_with_index do |list_id, idx|
-      current_user.user_lists.find_by(list_id: list_id).update(sort_order: idx, do_not_broadcast: true)
+      current_user.user_lists.find_by(list_id: list_id).update(
+        sort_order:       idx,
+        do_not_broadcast: true,
+      )
     end
 
     redirect_to lists_path
+  end
+
+  def create
+    @list = List.create(list_params)
+
+    if @list.persisted?
+      current_user.user_lists.create(
+        list_id: @list.id, is_owner: true,
+        default: params[:default] == "true"
+      )
+      trigger(:added, @list)
+      redirect_to @list
+    else
+      render :new
+    end
   end
 
   def update
@@ -59,18 +77,6 @@ class ListsController < ApplicationController
         format.js { render json: { errors: @list.errors.full_messages }, status: :forbidden }
         format.html { render :edit }
       end
-    end
-  end
-
-  def create
-    @list = List.create(list_params)
-
-    if @list.persisted?
-      current_user.user_lists.create(list_id: @list.id, is_owner: true, default: params[:default] == "true")
-      trigger(:added, @list)
-      redirect_to @list
-    else
-      render :new
     end
   end
 
@@ -126,18 +132,19 @@ class ListsController < ApplicationController
           @list.list_items.with_deleted.find_by(id: obj_data[:id])
         end
       )
-      next unless object.present?
+      next if object.blank?
 
       object.section_id = nil if obj_data[:type].to_sym == :item
-      object.update(sort_order: counter+=1, do_not_broadcast: true)
+      object.update(sort_order: counter += 1, do_not_broadcast: true)
 
       next unless obj_data[:type].to_sym == :section
+
       (obj_data[:items] || []).reverse.each do |item_data|
         item = @list.list_items.with_deleted.find_by(id: item_data[:id])
-        next unless item.present?
+        next if item.blank?
 
         item.section_id = obj_data[:id]
-        item.update(sort_order: counter+=1, do_not_broadcast: true)
+        item.update(sort_order: counter += 1, do_not_broadcast: true)
       end
     end
   end
@@ -148,6 +155,7 @@ class ListsController < ApplicationController
 
     return if @list.present?
     return store_and_login if guest_account?
+
     redirect_to lists_path, alert: "You do not have permission to view this list."
   end
 
@@ -157,15 +165,17 @@ class ListsController < ApplicationController
 
   def list_params
     if params[:list].present?
-      params.require(:list).permit(:name, :description, :important, :show_deleted, :default, :message, :add, :remove).tap do |whitelist|
+      params.require(:list).permit(
+        :name, :description, :important, :show_deleted, :default,
+        :message, :add, :remove
+      ).tap { |whitelist|
         whitelist[:add] ||= params[:add] if params[:add].present?
         whitelist[:remove] ||= params[:remove] if params[:remove].present?
         whitelist[:message] ||= params[:message] if params[:message].present?
-      end
+      }
     else
       params.permit(:message, :add, :remove)
       # params[:message].present? ? { message: params[:message] } : {}
     end
   end
-
 end
