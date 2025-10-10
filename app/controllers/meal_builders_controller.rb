@@ -17,6 +17,10 @@ class MealBuildersController < ApplicationController
     render :form
   end
 
+  def edit
+    render :form
+  end
+
   def create
     @meal_builder = current_user.meal_builders.new(meal_builder_params)
 
@@ -25,10 +29,6 @@ class MealBuildersController < ApplicationController
     else
       render :form
     end
-  end
-
-  def edit
-    render :form
   end
 
   def update
@@ -54,12 +54,12 @@ class MealBuildersController < ApplicationController
   end
 
   def meal_builder_params
-    params.require(:meal_builder).permit(:name).tap do |whitelisted|
+    params.require(:meal_builder).permit(:name).tap { |whitelisted|
       if params[:meal_builder][:items].is_a?(String)
         whitelisted[:items] = params[:meal_builder][:items]
       else
         whitelisted[:items] = params[:meal_builder][:items].map(&:permit!)
       end
-    end
+    }
   end
 end

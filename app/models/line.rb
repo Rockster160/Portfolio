@@ -11,8 +11,6 @@
 #
 
 class Line < ApplicationRecord
-
   belongs_to :flash_card
-  default_scope { order('id ASC') }
-  
+  default_scope { order(:id) }
 end

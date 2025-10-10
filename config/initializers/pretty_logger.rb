@@ -1,7 +1,7 @@
 # Override default from PrettyLogger
 ::PrettyLogger::RequestLogger.class_eval do
   def instance
-    if Rails.env.development? || Rails.env.test?
+    if Rails.env.local?
       @instance ||= ::ActiveSupport::Logger.new("log/custom.log")
     else
       @instance ||= ::ActiveSupport::Logger.new("/home/deploy/apps/portfolio/shared/log/custom.log")
@@ -9,7 +9,7 @@
   end
 
   def pretty_user
-    return colorize(:grey, "[#{request.ip}]\n") unless current_user.present?
+    return colorize(:grey, "[#{request.ip}]\n") if current_user.blank?
     return colorize(:grey, "Guest:#{current_user.id}\n") if current_user.guest?
 
     name = current_user.try(:username).presence
@@ -19,9 +19,9 @@
       case current_user.id
       when 1 then colorize(:rocco, "[R]")
       when 4 then colorize(:purple, "[M]")
-      when 58128 then "\e[94m[Her \e[95m♥\e[94m]\e[0m"
-      when 34226 then colorize(:pink, "[S]") # Saya
-      when 37764 then colorize(:yellow, "[C]") # Carlos
+      when 58_128 then "\e[94m[Her \e[95m♥\e[94m]\e[0m"
+      when 34_226 then colorize(:pink, "[S]") # Saya
+      when 37_764 then colorize(:yellow, "[C]") # Carlos
       else colorize(:olive, "[#{name}]")
       end
     )

@@ -21,7 +21,11 @@ module Bowling
           @set.save_scores # Don't save until the set is complete since handicap changes after the series
           render status: :created, json: game_data.merge({ redirect: bowling_set_path(@set) })
         else
-          render status: :created, json: game_data.merge({ redirect: new_bowling_game_path(series: @set, game: @set.games_complete + 1) })
+          render status: :created,
+            json: game_data.merge({ redirect: new_bowling_game_path(
+              series: @set,
+              game:   @set.games_complete + 1,
+            ) })
         end
       else
         # puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
@@ -38,10 +42,11 @@ module Bowling
         # jil_trigger(:bowling, {})
         started_frame_9 = params.dig(:bowling_set, :games_attributes).values&.any? { |game|
           next false unless game[:game_num] == "3"
+
           game.dig(:frames_details, "8", :throw1).present? # 8 is index, so frame 9
         }
         if started_frame_9 && current_user.admin?
-          if !User.me.caches.get(:bowlingCarStarted)
+          unless User.me.caches.get(:bowlingCarStarted)
             User.me.caches.set(:bowlingCarStarted, true)
             Jarvis.say("Starting car for 9th frame")
             Jarvis.command(current_user, "Take me home") if Rails.env.production?
@@ -53,7 +58,11 @@ module Bowling
           @set.future_save # Special method to update future stats in case an old game changed
           render status: :created, json: game_data.merge({ redirect: bowling_set_path(@set) })
         else
-          render status: :created, json: game_data.merge({ redirect: new_bowling_game_path(series: @set, game: @set.games_complete + 1) })
+          render status: :created,
+            json: game_data.merge({ redirect: new_bowling_game_path(
+              series: @set,
+              game:   @set.games_complete + 1,
+            ) })
         end
       else
         # puts "\e[33m[LOGIT] | Error creating: \n#{@set.errors.full_messages}\e[0m"
@@ -66,7 +75,8 @@ module Bowling
 
         redirect_to bowling_league_path(@set.league)
       else
-        redirect_to bowling_set_path(@set), alert: "Failed to destroy set: #{@set.errors.full_messages.join("\n")}"
+        redirect_to bowling_set_path(@set),
+          alert: "Failed to destroy set: #{@set.errors.full_messages.join("\n")}"
       end
     end
 
@@ -86,6 +96,7 @@ module Bowling
     def game_num
       return params[:game].to_i if params[:game].present?
       return params[:game_num].to_i if params[:game_num].present?
+
       game = params.dig(:bowling_set, :games_attributes)&.values&.first || {}
 
       (game[:game_num].presence || 1).to_i
@@ -94,11 +105,11 @@ module Bowling
     def game_data
       {
         league_id: @league.id,
-        set_id: @set.id,
-        game_num: game_num,
-        bowlers: @set.games_for_display(game_num).joins(:bowler).map { |game|
+        set_id:    @set.id,
+        game_num:  game_num,
+        bowlers:   @set.games_for_display(game_num).joins(:bowler).map { |game|
           { id: game.bowler.id, name: game.bowler.name, bowler_game_id: game.id }
-        }
+        },
       }
     end
 
@@ -120,40 +131,42 @@ module Bowling
         :lane_number,
       ).merge({
         games_attributes: (
-          params.dig(:bowling_set, :games_attributes).values.map { |g| g.permit(
-            :id,
-            :set_id,
-            :absent,
-            :bowler_id,
-            :bowler_name,
-            :game_num,
-            :handicap,
-            :position,
-            :card_point,
-            :score,
-            frames: 10.times.map { |idx| { idx.to_s.to_sym => [] } },
-            frames_details: [
-              :frame_num,
-              :throw1,
-              :throw2,
-              :throw3,
-              :throw1_remaining,
-              :throw2_remaining,
-              :throw3_remaining,
-              :strike_point,
-            ]
-          )}
-        )
+          params.dig(:bowling_set, :games_attributes).values.map { |g|
+            g.permit(
+              :id,
+              :set_id,
+              :absent,
+              :bowler_id,
+              :bowler_name,
+              :game_num,
+              :handicap,
+              :position,
+              :card_point,
+              :score,
+              frames:         10.times.map { |idx| { idx.to_s.to_sym => [] } },
+              frames_details: [
+                :frame_num,
+                :throw1,
+                :throw2,
+                :throw3,
+                :throw1_remaining,
+                :throw2_remaining,
+                :throw3_remaining,
+                :strike_point,
+              ],
+            )
+          }
+        ),
       })
     end
 
     def find_or_create_league
-      @league ||= begin
+      @find_or_create_league ||= (
         league_id = params.dig(:bowling_set, :league_id)
         return current_user.bowling_leagues.find(league_id) if league_id.present?
 
         BowlingLeague.create_default(current_user)
-      end
+      )
     end
   end
 end

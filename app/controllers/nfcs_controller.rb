@@ -3,8 +3,8 @@ class NfcsController < ApplicationController
 
   def show
     @nfc = params[:nfc] || "--"
-    return unless params[:nfc].present?
+    return if params[:nfc].blank?
 
-    ActionCable.server.broadcast :nfc_channel, {message: params[:nfc].to_s}
+    ActionCable.server.broadcast :nfc_channel, { message: params[:nfc].to_s }
   end
 end

@@ -51,14 +51,19 @@ class JarvisController < ApplicationController
   end
 
   def parsed_message
-    @parsed_message ||= begin
-      return "" if params[:message].blank?
-      return params[:message].split("|") unless params[:message].include?("{")
-
-      JSON.parse(params[:message], symbolize_names: true)
-    rescue JSON::ParserError
-      params[:message]
-    end
+    @parsed_message ||= (
+      begin
+        if params[:message].blank?
+          ""
+        elsif params[:message].exclude?("{")
+          params[:message].split("|")
+        else
+          JSON.parse(params[:message], symbolize_names: true)
+        end
+      rescue JSON::ParserError
+        params[:message]
+      end
+    )
   end
 
   def handle_data(data)
@@ -69,12 +74,12 @@ class JarvisController < ApplicationController
   def alexa_response(words)
     words = words.to_s.presence || "No response from Jarvis"
     {
-      version: "1.0",
+      version:  "1.0",
       # sessionAttributes: {
       #   key: "value"
       # },
       response: {
-        outputSpeech: {
+        outputSpeech:     {
           type: "PlainText",
           text: words.split("\n").first(2).join("\n"), # Only return the first item
           # playBehavior: "REPLACE_ENQUEUED"
@@ -101,8 +106,8 @@ class JarvisController < ApplicationController
         #     (...properties depend on the directive type)
         #   }
         # ],
-        shouldEndSession: true
-      }
+        shouldEndSession: true,
+      },
     }
   end
 end

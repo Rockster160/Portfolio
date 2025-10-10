@@ -13,10 +13,10 @@ RSpec.describe ReceiveEmailWorker, type: :worker do
   it "creates an Email with attached blob and correct attributes" do
     expect {
       described_class.new.perform(bucket, object_key)
-    }.to change { Email.count }.by(1)
+    }.to change(Email, :count).by(1)
 
     email = Email.last
-    expect(email.outbound_mailboxes).to match_array([mail.from_address.to_s])
+    expect(email.outbound_mailboxes).to contain_exactly(mail.from_address.to_s)
     expect(email.inbound_mailboxes).to match_array(mail.to_addresses.map(&:to_s))
     expect(email.subject).to eq(mail.subject)
     expect(email.user_id).to eq(user.id)

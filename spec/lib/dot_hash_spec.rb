@@ -18,7 +18,7 @@ RSpec.describe DotHash do
       nested = DotHash.from_branch(flat)
 
       expected = {
-        event: {"dot.data": { custom: { nested_key: "fuzzy_val thing" } }}
+        event: { "dot.data": { custom: { nested_key: "fuzzy_val thing" } } },
       }
 
       expect(nested).to eq(expected)
@@ -30,10 +30,7 @@ RSpec.describe DotHash do
       flat = { foo: { bar: 1, baz: { qux: 2 } } }
       streams = DotHash.every_stream(flat)
 
-      expect(streams).to match_array([
-        ["foo", "bar", 1],
-        ["foo", "baz", "qux", 2]
-      ])
+      expect(streams).to contain_exactly(["foo", "bar", 1], ["foo", "baz", "qux", 2])
     end
   end
 

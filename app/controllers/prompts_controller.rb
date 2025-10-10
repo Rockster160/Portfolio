@@ -9,7 +9,7 @@ class PromptsController < ApplicationController
   end
 
   def update
-    data = params.dig(:prompt, :response)&.permit!&.to_h || {}
+    data = params.dig(:prompt, :response)&.permit!.to_h
     @prompt.update(response: data)
     jil_trigger(:prompt, @prompt.with_jil_attrs(status: :complete))
 
@@ -35,6 +35,7 @@ class PromptsController < ApplicationController
 
     return if @prompt.present?
     return store_and_login if guest_account?
+
     redirect_to prompts_path, alert: "You do not have permission to view this prompt."
   end
 end

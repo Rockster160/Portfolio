@@ -72,7 +72,7 @@ class Jarvis::Tesla < Jarvis::Action
     end
 
     words = words.gsub(@rx.words(:car, :tesla), "")
-    words = words.gsub(/where\'?s?( is)?/, "find")
+    words = words.gsub(/where'?s?( is)?/, "find")
     words = words.gsub(/[^a-z0-9 ]/i, "")
 
     if @rx.match_any_words?(words, :open, :vent)
@@ -80,10 +80,10 @@ class Jarvis::Tesla < Jarvis::Action
       words = "#{words} open"
     end
 
-    words = words.gsub(/(.+)(#{@rx.words(car_soft_commands)})/) do |found|
+    words = words.gsub(/(.+)(#{@rx.words(car_soft_commands)})/) { |_found|
       cmd = Regexp.last_match(2)
-      "#{Regexp.last_match(1)}"
-    end
+      Regexp.last_match(1).to_s
+    }
 
     words = words.gsub(@rx.words(:the, :set, :to, :is, :my, :me), "").squish
 

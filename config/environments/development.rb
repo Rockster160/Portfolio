@@ -25,7 +25,7 @@ Rails.application.configure do
 
     config.cache_store = :memory_store
     config.public_file_server.headers = {
-      "Cache-Control" => "public, max-age=#{2.days.to_i}"
+      "Cache-Control" => "public, max-age=#{2.days.to_i}",
     }
   else
     config.action_controller.perform_caching = false
@@ -70,7 +70,7 @@ Rails.application.configure do
   # config.action_cable.disable_request_forgery_protection = true
 
   # ========================================
-  config.action_dispatch.default_headers['X-Frame-Options'] = "ALLOWALL"
+  config.action_dispatch.default_headers["X-Frame-Options"] = "ALLOWALL"
   config.action_cable.url = "ws://localhost:3141/cable"
   config.web_socket_server_url = "ws://localhost:3141/cable"
   config.action_cable.disable_request_forgery_protection = true
@@ -88,8 +88,8 @@ Rails.application.configure do
   config.active_job.queue_name_delimiter = "."
   config.active_job.default_queue_name = "default"
   config.active_job.custom_queues = {
-    critical: 1,       # Custom queue with a priority of 1
-    tesla_local: 5     # Custom queue with a priority of 5
+    critical:    1,       # Custom queue with a priority of 1
+    tesla_local: 5,     # Custom queue with a priority of 5
   }
 
   config.hosts = nil

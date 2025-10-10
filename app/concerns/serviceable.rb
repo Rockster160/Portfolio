@@ -9,6 +9,7 @@ module Serviceable
     def self.attributes(*args)
       arg_keys = args.map { |arg| arg.is_a?(Hash) ? arg.keys : arg }.flatten
       attr_accessor(*arg_keys)
+
       self.private_attributes = *arg_keys
       self.default_attributes = args.find { |arg| arg.is_a? Hash } || {}
     end

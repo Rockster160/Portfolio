@@ -17,22 +17,23 @@ class Oauth::Base
   # auth_params
   # exchange_params
 
-  USER_AGENT = "Jarvis-1.0"
+  USER_AGENT = "Jarvis-1.0".freeze
 
   def self.default_service_name = name.split("::").last.underscore
+
   def self.defaults(service=nil)
     service ||= default_service_name
     {
-      service: service,
-      oauth_url: "", # First interaction - give the user this url to click/open
-      exchange_url: "", # Second interaction - use the code from the first interaction to get the access_token
-      api_url: "", # All future interactions: Base url for all api requests
-      client_id: nil,
-      client_secret: nil,
-      scopes: [],
-      redirect_uri: "https://ardesian.com/webhooks/oauth/#{service}",
-      storage_key: service,
-      auth_params: {},
+      service:         service,
+      oauth_url:       "", # First interaction - give the user this url to click/open
+      exchange_url:    "", # Second interaction - use the code from the first interaction to get the access_token
+      api_url:         "", # All future interactions: Base url for all api requests
+      client_id:       nil,
+      client_secret:   nil,
+      scopes:          [],
+      redirect_uri:    "https://ardesian.com/webhooks/oauth/#{service}",
+      storage_key:     service,
+      auth_params:     {},
       exchange_params: {},
     }
   end
@@ -40,6 +41,7 @@ class Oauth::Base
   def self.constants(hash)
     @constants = hash
   end
+
   def self.preset_constants(service=nil)
     (@constants || {}).reverse_merge(defaults(service))
   end
@@ -47,6 +49,7 @@ class Oauth::Base
   def self.from_jwt(token)
     decoded = JWT.decode(token, Rails.application.secret_key_base, true, algorithm: "HS256")
     return unless decoded.is_a?(Array) && decoded.first.is_a?(Hash)
+
     json = decoded.first.deep_symbolize_keys
     return unless json[:timestamp].to_i > 10.minutes.ago.to_i
     return unless json[:service].to_s == key
@@ -78,11 +81,11 @@ class Oauth::Base
   def auth_url
     params = {
       response_type: :code,
-      client_id: client_id,
-      state: jwt,
-      redirect_uri: redirect_uri,
-      scope: scopes,
-      access_type: :offline,
+      client_id:     client_id,
+      state:         jwt,
+      redirect_uri:  redirect_uri,
+      scope:         scopes,
+      access_type:   :offline,
     }.merge(auth_params).compact_blank
 
     "#{oauth_url}?#{params.to_query}"
@@ -99,12 +102,14 @@ class Oauth::Base
   end
 
   def auth(params={})
-    Api.post(params.delete(:exchange_url) || exchange_url, {
-      client_id: client_id,
-      client_secret: client_secret,
-      redirect_uri: redirect_uri,
-      scope: scopes,
-    }.merge(params), { user_agent: USER_AGENT }).tap { |json|
+    Api.post(
+      params.delete(:exchange_url) || exchange_url, {
+        client_id:     client_id,
+        client_secret: client_secret,
+        redirect_uri:  redirect_uri,
+        scope:         scopes,
+      }.merge(params), { user_agent: USER_AGENT }
+    ).tap { |json|
       next if json.nil?
 
       cache.skip_save_set = true
@@ -133,10 +138,10 @@ class Oauth::Base
     begin
       attempt += 1
       Api.request(
-        url: url(path),
+        url:     url(path),
         payload: params.presence || {},
         headers: base_headers.merge(headers.presence || {}),
-        method: method,
+        method:  method,
         **opts,
       )
     rescue RestClient::Unauthorized
@@ -144,34 +149,45 @@ class Oauth::Base
 
       refresh
       retry
-    # rescue RestClient::BadRequest => e
-    # TODO: Rescue other RestClient errors and bubble up as a response
-    #   raise
+      # rescue RestClient::BadRequest => e
+      # TODO: Rescue other RestClient errors and bubble up as a response
+      #   raise
     end
   end
 
   def jwt
-    payload = { user_id: @user.id, service: service, timestamp: Time.now.to_i, nonce: SecureRandom.hex(16) }
+    payload = {
+      user_id:   @user.id,
+      service:   service,
+      timestamp: Time.now.to_i,
+      nonce:     SecureRandom.hex(16),
+    }
     JWT.encode(payload, Rails.application.secret_key_base, "HS256")
   end
 
   def cache_set(key, val) = cache.dig_set(@storage_key, key, val) && val
   def cache_get(key) = cache.dig(@storage_key, key)
+
   def access_token=(new_token)
     cache_set(:access_token, new_token)
   end
+
   def refresh_token=(new_token)
     cache_set(:refresh_token, new_token)
   end
+
   def id_token=(new_token)
     cache_set(:id_token, new_token)
   end
+
   def client_id=(new_token)
     @client_id = cache_set(:client_id, new_token)
   end
+
   def client_secret=(new_token)
     @client_secret = cache_set(:client_secret, new_token)
   end
+
   def access_token = cache_get(:access_token)
   def refresh_token = cache_get(:refresh_token)
   def id_token = cache_get(:id_token)
@@ -180,8 +196,8 @@ class Oauth::Base
 
   def refresh(params={})
     auth({
-      grant_type: :refresh_token,
-      refresh_token: refresh_token || access_token
+      grant_type:    :refresh_token,
+      refresh_token: refresh_token || access_token,
     }.merge(params))
 
     self
@@ -189,9 +205,9 @@ class Oauth::Base
 
   def base_headers(include_access_token: true)
     {
-      user_agent: USER_AGENT,
-      content_type: "application/json",
-      Authorization: include_access_token && access_token.present? ? "Bearer #{access_token}" : nil
+      user_agent:    USER_AGENT,
+      content_type:  "application/json",
+      Authorization: include_access_token && access_token.present? ? "Bearer #{access_token}" : nil,
     }.compact_blank
   end
 end

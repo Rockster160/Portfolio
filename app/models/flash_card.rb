@@ -12,8 +12,7 @@
 #
 
 class FlashCard < ApplicationRecord
-
-  default_scope { order('id ASC') }
+  default_scope { order(:id) }
 
   has_many :lines, dependent: :destroy
   belongs_to :batch
@@ -29,9 +28,6 @@ class FlashCard < ApplicationRecord
   end
 
   def createLines
-    while self.lines.count < 8
-      self.lines.create(text: "", center: false)
-    end
+    lines.create(text: "", center: false) while lines.count < 8
   end
-
 end

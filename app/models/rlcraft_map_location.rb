@@ -14,9 +14,7 @@
 
 class RlcraftMapLocation < ApplicationRecord
   def self.graphable_data
-    find_each.map do |location|
-      location.to_graphable_data
-    end
+    find_each.map(&:to_graphable_data)
   end
 
   def self.location_types
@@ -29,19 +27,19 @@ class RlcraftMapLocation < ApplicationRecord
       "Green Dragon",
       "White Dragon",
       "Blue Dragon",
-      "Other"
+      "Other",
     ]
   end
 
   def to_graphable_data
     {
-      id: id,
-      x: x_coord,
-      y: y_coord,
-      type: location_type.presence,
-      title: title.presence,
+      id:          id,
+      x:           x_coord,
+      y:           y_coord,
+      type:        location_type.presence,
+      title:       title.presence,
       description: description.presence,
-      removed: destroyed?
+      removed:     destroyed?,
     }
   end
 end

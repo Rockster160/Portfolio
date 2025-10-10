@@ -27,7 +27,7 @@ class Execution < ApplicationRecord
       .group(:id)
   }
 
-  enum auth_type: {
+  enum :auth_type, {
     guest:    1, # + guest user id
     userpass: 2, # + user id
     run:      3, # + user id
@@ -37,7 +37,7 @@ class Execution < ApplicationRecord
     exec:     7, # + source task id
   }
 
-  enum status: {
+  enum :status, {
     started:   0,
     cancelled: 1,
     success:   2,
@@ -45,7 +45,7 @@ class Execution < ApplicationRecord
   }
 
   def self.compact_all
-    where("code IS NOT NULL").update_all(ctx: nil, code: nil, input_data: nil)
+    where.not(code: nil).update_all(ctx: nil, code: nil, input_data: nil)
   end
 
   def self.average_duration(count)
@@ -63,7 +63,7 @@ class Execution < ApplicationRecord
       :code,
       :ctx,
     ]).merge(
-      ctx.deep_symbolize_keys.slice(:error, :output, :line)
+      ctx.deep_symbolize_keys.slice(:error, :output, :line),
     )
   end
 
@@ -86,7 +86,7 @@ class Execution < ApplicationRecord
   end
 
   def last_completion_time
-    Time.use_zone(user.timezone) { finished_at&.to_formatted_s(:compact_week_month_time_sec) }
+    Time.use_zone(user.timezone) { finished_at&.to_fs(:compact_week_month_time_sec) }
   end
 
   def stop_propagation?

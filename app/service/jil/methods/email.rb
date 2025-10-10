@@ -49,7 +49,7 @@ class Jil::Methods::Email < Jil::Methods::Base
 
   def archive(email_data, boolean)
     email(email_data).then { |e|
-      next false unless e.id.present?
+      next false if e.id.blank?
 
       e.archive(boolean)
     }

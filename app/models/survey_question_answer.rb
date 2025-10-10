@@ -22,9 +22,9 @@ class SurveyQuestionAnswer < ApplicationRecord
   private
 
   def set_position
-    self.position ||= begin
+    self.position ||= (
       last_pos = survey_question.survey_question_answers.maximum(:position) || -1
       last_pos + 1
-    end
+    )
   end
 end

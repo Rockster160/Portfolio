@@ -1,7 +1,7 @@
 class SlackAttachmentBuilder
-  def self.build(&block)
+  def self.build(&)
     builder = new
-    builder.instance_eval(&block) if block_given?
+    builder.instance_eval(&) if block_given?
     builder.blocks
   end
 
@@ -31,25 +31,25 @@ class SlackAttachmentBuilder
 
   def fields(*fields)
     @blocks << {
-      type: :section,
-      fields: fields.map do |field|
+      type:   :section,
+      fields: fields.map { |field|
         {
           type: :mrkdwn,
           text: field.to_s,
         }
-      end,
+      },
     }
   end
 
   def context(*elements)
     @blocks << {
-      type: :context,
-      elements: elements.map do |element|
+      type:     :context,
+      elements: elements.map { |element|
         {
           type: :mrkdwn,
           text: element.to_s,
         }
-      end,
+      },
     }
   end
 
@@ -59,47 +59,47 @@ class SlackAttachmentBuilder
 
   def button(str, url)
     @blocks << # This only supports a single inline button. Will have to refactor if we want multiple.
-    {
-      type: :actions,
-      elements: [
-        {
-          type: :button,
-          text: {
-            type: :plain_text,
-            text: str,
+      {
+        type:     :actions,
+        elements: [
+          {
+            type: :button,
+            text: {
+              type: :plain_text,
+              text: str,
+            },
+            url:  url,
           },
-          url: url,
-        },
-      ],
-    }
+        ],
+      }
   end
 
   def buttons(*buttons)
     @blocks << {
-      type: :actions,
-      elements: buttons.map do |str, url|
+      type:     :actions,
+      elements: buttons.map { |str, url|
         {
           type: :button,
           text: {
             type: :plain_text,
             text: str,
           },
-          url: url,
+          url:  url,
         }
-      end,
+      },
     }
   end
 
   def progress(percent, width=40)
-    filled_pixels = ((percent / 100.0) * (width-1)).ceil.clamp(0, width)
+    filled_pixels = ((percent / 100.0) * (width - 1)).ceil.clamp(0, width)
     filled_pixels += 1 if percent >= 100
     empty_pixels = width - filled_pixels
 
-    progress_bar = "▰"*filled_pixels + "▱"*empty_pixels
+    progress_bar = ("▰" * filled_pixels) + ("▱" * empty_pixels)
     text("[#{progress_bar}] #{percent.round}%")
   end
 
-  def link(str, url = nil)
+  def link(str, url=nil)
     @blocks << url ||= str
     "<#{url}|#{str}>"
   end

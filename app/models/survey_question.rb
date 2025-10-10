@@ -20,12 +20,12 @@ class SurveyQuestion < ApplicationRecord
 
   before_save :set_position
 
-  enum format: {
+  enum :format, {
     select_one:  0,
     select_many: 1,
     scale:       2,
   }
-  enum score_split_question: { # What does this mean?
+  enum :score_split_question, { # What does this mean?
     whole:   0,
     divided: 1,
   }
@@ -41,9 +41,9 @@ class SurveyQuestion < ApplicationRecord
   private
 
   def set_position
-    self.position ||= begin
+    self.position ||= (
       last_pos = survey.survey_questions.maximum(:position) || -1
       last_pos + 1
-    end
+    )
   end
 end

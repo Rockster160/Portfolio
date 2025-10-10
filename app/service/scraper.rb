@@ -6,16 +6,16 @@ module Scraper
   module_function
 
   # USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36"
-  USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36"
+  USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36".freeze
 
   def driver(headless=false)
-    @driver ||= begin
+    @driver ||= (
       options = Selenium::WebDriver::Chrome::Options.new
       options.add_argument("--headless") if headless
       options.add_argument("--user-agent=#{USER_AGENT}")
 
       Selenium::WebDriver.for :chrome, options: options
-    end
+    )
   end
 
   def screenshot!(filename=nil)

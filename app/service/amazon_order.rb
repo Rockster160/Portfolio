@@ -52,6 +52,7 @@ class AmazonOrder
   def self.find(order_id, item_id=nil)
     all.find { |order|
       next unless order.order_id == order_id
+
       item_id.nil? || order.item_id == item_id
     }
   end
@@ -76,7 +77,7 @@ class AmazonOrder
     @email_ids = []
     @just_added = false # Gets overridden
     order_hash.each do |key, val|
-      self.send("#{key}=".to_sym, val) if self.respond_to?(key)
+      send(:"#{key}=", val) if respond_to?(key)
     end
   end
 
@@ -99,21 +100,22 @@ class AmazonOrder
   end
 
   def delivery_time
-    return unless @delivery_date.present?
+    return if @delivery_date.blank?
+
     start_time, end_time = time_range.to_s.split("-")
     time = start_time.present? ? " #{start_time.to_s[/\d+/]}#{start_time.to_s[/\wm/i] || end_time.to_s[/\wm/i]}" : nil
 
-    User.timezone do
+    User.timezone {
       Time.zone.parse("#{@delivery_date}#{time}").then { |t|
         time.nil? ? t.end_of_day : t
       }
-    end
+    }
   rescue ArgumentError, Date::Error
     nil
   end
 
   def destroy
-    @@all = AmazonOrder.all.select { |order| order.item_id != item_id }
+    @@all = AmazonOrder.all.reject { |order| order.item_id == item_id }
     self
   end
 
@@ -124,16 +126,16 @@ class AmazonOrder
 
   def serialize
     {
-      order_id: order_id,
-      item_id: item_id,
-      listed_name: listed_name,
-      full_name: full_name,
-      name: name,
+      order_id:      order_id,
+      item_id:       item_id,
+      listed_name:   listed_name,
+      full_name:     full_name,
+      name:          name,
       delivery_date: delivery_date,
-      time_range: time_range,
-      delivered: delivered,
-      email_ids: email_ids,
-      errors: errors,
+      time_range:    time_range,
+      delivered:     delivered,
+      email_ids:     email_ids,
+      errors:        errors,
     }
   end
 end

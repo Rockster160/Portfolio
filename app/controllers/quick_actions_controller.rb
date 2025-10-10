@@ -1,6 +1,5 @@
 class QuickActionsController < ApplicationController
-  include AuthHelper
-  include QuickActionsHelper
+  include QuickActionsHelper, AuthHelper
 
   layout "quick_actions"
 
@@ -45,21 +44,21 @@ class QuickActionsController < ApplicationController
     widget_data = params.permit!.to_h.except(:action, :controller)
     widget_html = render_to_string(
       partial: widget_data[:type],
-      locals: { widget_data: widget_data, hex: widget_hex }
+      locals:  { widget_data: widget_data, hex: widget_hex },
     )
     modal_html = (
       case widget_data[:type].to_sym
       when :buttons
         render_to_string(
           partial: "widget_modal",
-          locals: { widget_data: widget_data, modal_id: "modal-#{widget_hex}" }
+          locals:  { widget_data: widget_data, modal_id: "modal-#{widget_hex}" },
         )
-      # Command modal currently expects modal to be present on load
-      # when :jarvis
-      #   render_to_string(
-      #     partial: "widget_modal",
-      #     locals: { widget_data: widget_data, modal_id: "modal-#{widget_hex}" }
-      #   )
+        # Command modal currently expects modal to be present on load
+        # when :jarvis
+        #   render_to_string(
+        #     partial: "widget_modal",
+        #     locals: { widget_data: widget_data, modal_id: "modal-#{widget_hex}" }
+        #   )
       end
     )
 

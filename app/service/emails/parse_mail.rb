@@ -2,6 +2,7 @@
 
 class Emails::ParseMail
   include ::Memoizable, ::Serviceable
+
   attributes :mail, params: {}
 
   def call
@@ -59,7 +60,7 @@ class Emails::ParseMail
       parts_hash[key] = (target_parts.presence || flat_parts).map { |part|
         extracted_part = key == :text ? part_text(part) : part_html(part)
         ::SafeEncode.call(extracted_part)
-      }.reject(&:blank?).join
+      }.compact_blank.join
     }
   }
   💾(:attachments) { mail.attachments || [] }

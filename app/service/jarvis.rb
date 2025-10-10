@@ -7,9 +7,7 @@
 # [/] Blocked Internally - Needs other features
 # [X] Blocked Externally - Cannot be built
 
-
 # =============================== Bugs ===============================
-
 
 # ============================== TODO ================================
 # [ ] Do stuff when I get home
@@ -45,7 +43,6 @@
 # [*] > What was the last thing I ate?
 # [*] Somehow automate running specs to notify when there is a failing one Githook -> server -> test env on server?
 
-
 # =============================== JarvisTasks ===============================
 # [ ] Add some sort of interface for managing automations
 #     * "X minutes before events called Y run Z"
@@ -53,7 +50,6 @@
 # [*] Scrape a site. Provide a URL and some selectors and then set an interval and have it alert you when your requested check happens.
 # [*] Sending good morning/day summary text
 # [*] Check for hard freeze next day / next week
-
 
 # =============================== Desired examples ===============================
 # [/] get the car|house|home, how's the car, tell me about the car, give me the car
@@ -72,18 +68,23 @@
 #    > You'll need to leave for PT by 9:55
 
 class Jarvis
-  MY_NUMBER = "3852599640"
+  MY_NUMBER = "3852599640".freeze
 
   def self.log(*messages)
     PrettyLogger.log(*messages)
   end
 
   def self.command(user, words)
-    return unless words.present?
+    return if words.blank?
 
     res, res_data = new(user, words).command
 
-    JarvisChannel.broadcast_to(user, { say: res, data: res_data }) if user.persisted? && res.present?
+    if user.persisted? && res.present?
+      JarvisChannel.broadcast_to(
+        user,
+        { say: res, data: res_data },
+      )
+    end
     return res if res_data.blank?
 
     [res, res_data]
@@ -91,7 +92,7 @@ class Jarvis
 
   def self.broadcast(user, msg, channel=:ws)
     return unless user.persisted?
-    return unless msg.present?
+    return if msg.blank?
 
     case channel
     when :ping then ::WebPushNotifications.send_to(user, { title: msg })
@@ -106,6 +107,7 @@ class Jarvis
   def self.cmd(msg)
     command(User.me, msg)
   end
+
   def self.say(msg, channel=:ws)
     broadcast(User.me, msg, channel)
   end
@@ -119,14 +121,14 @@ class Jarvis
   end
 
   def self.send(data, channel=:ws)
-    return unless data.present?
+    return if data.blank?
     return say(data, channel) if channel != :ws
 
     ActionCable.server.broadcast(:jarvis_channel, { data: data })
   end
 
   def self.reserved_words
-    @@reserved_words ||= actions.flat_map { |action| action.reserved_words }
+    @@reserved_words ||= actions.flat_map(&:reserved_words)
   end
 
   delegate :actions, to: :class
@@ -159,21 +161,23 @@ class Jarvis
   def command
     time_str, scheduled_time = ::Jarvis::Times.extract_time(@words.downcase.squish)
     remaining_words = @words
-    if scheduled_time
-      remaining_words = @words.sub(Regexp.new("(?:\b(?:at|on)\b )?#{time_str}", :i), "").squish
-    end
+    remaining_words = @words.sub(Regexp.new("(?:\b(?:at|on)\b )?#{time_str}", :i), "").squish if scheduled_time
     timestamp = (scheduled_time || Time.current).in_time_zone(@user.timezone).iso8601
-    tasks = ::Jil.trigger_now(@user, :tell, { words: remaining_words, timestamp: timestamp, full: @words })
+    tasks = ::Jil.trigger_now(
+      @user, :tell,
+      { words: remaining_words, timestamp: timestamp, full: @words }
+    )
     return tasks.last.last_message if tasks.any?(&:stop_propagation?)
+
     tasks.select { |t| t.trigger_type == :tell }.last&.tap { |task|
       return task.last_message
     }
 
     current_reserved_words = Jarvis.reserved_words.dup
-    actions.lazy.map do |action_klass| # lazy map means stop at the first one that returns a truthy value
+    actions.lazy.map { |action_klass| # lazy map means stop at the first one that returns a truthy value
       action_klass.attempt(@user, @words, current_reserved_words)
-    end.compact_blank.first || tasks.last&.last_message
-  rescue Jarvis::Error => err
-    err.message
+    }.compact_blank.first || tasks.last&.last_message
+  rescue Jarvis::Error => e
+    e.message
   end
 end

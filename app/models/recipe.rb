@@ -41,7 +41,7 @@ class Recipe < ApplicationRecord
   end
 
   def export_to_list(list)
-    items = ingredients_list.map { |ingredient| {name: "#{ingredient} (#{title})"} }
+    items = ingredients_list.map { |ingredient| { name: "#{ingredient} (#{title})" } }
     list.add_items(items)
   end
 
@@ -58,6 +58,7 @@ class Recipe < ApplicationRecord
     self.friendly_url = loop do
       iteration_url = [try_url, iteration].compact.join("-")
       break iteration_url if self.class.where(friendly_url: iteration_url).where.not(id: id).none?
+
       iteration ||= 1
       iteration += 1
     end

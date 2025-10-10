@@ -1,5 +1,4 @@
 class SummonersWarsController < ApplicationController
-
   def show
     # Should probably be searchable
     @monsters = Monster.where.not(name: nil).order(:name)
@@ -14,5 +13,4 @@ class SummonersWarsController < ApplicationController
     json = JSON.parse(File.read(player_file)).deep_symbolize_keys
     @player_data = json
   end
-
 end

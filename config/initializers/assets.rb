@@ -7,15 +7,15 @@ Rails.application.config.assets.version = "1.0"
 # Rails.application.config.assets.paths << Emoji.images_path
 # Add Yarn node_modules folder to the asset load path.
 Rails.application.config.assets.paths << Rails.root.join("node_modules")
-Rails.application.config.assets.paths << Rails.root.join("app", "assets", "fonts")
+Rails.application.config.assets.paths << Rails.root.join("app/assets/fonts")
 Rails.application.config.assets.paths << Rails.root.join("*.svg")
-Rails.application.config.assets.precompile += %w( support/* )
-Rails.application.config.assets.precompile += %w( pages/random/* )
-Rails.application.config.assets.precompile += %w( individual/**/* )
-Rails.application.config.assets.precompile += %w( quick_actions.css )
+Rails.application.config.assets.precompile += %w[support/*]
+Rails.application.config.assets.precompile += %w[pages/random/*]
+Rails.application.config.assets.precompile += %w[individual/**/*]
+Rails.application.config.assets.precompile += %w[quick_actions.css]
 # Jil specific JS
-Rails.application.config.assets.precompile += %w( jil.js )
-Rails.application.config.assets.precompile += %w( jil.css )
+Rails.application.config.assets.precompile += %w[jil.js]
+Rails.application.config.assets.precompile += %w[jil.css]
 
 # Precompile additional assets.
 # application.js, application.css, and all non-JS/CSS in the app/assets

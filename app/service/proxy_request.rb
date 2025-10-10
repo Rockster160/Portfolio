@@ -28,18 +28,18 @@ class ProxyRequest
 
   def request_with_header_params
     RestClient::Request.execute(
-      method: @method,
-      url: @url,
-      headers: @headers.merge(params: @params)
+      method:  @method,
+      url:     @url,
+      headers: @headers.merge(params: @params),
     )
   end
 
   def request_with_payload
     RestClient::Request.execute(
-      method: @method,
-      url: @url,
+      method:  @method,
+      url:     @url,
       payload: @params.to_json,
-      headers: @headers
+      headers: @headers,
     )
   end
 

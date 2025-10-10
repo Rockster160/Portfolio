@@ -5,13 +5,14 @@ module PrinterNotify
     @params = params
     @fields = []
 
-    if @params[:topic] == "Print Started"
+    case @params[:topic]
+    when "Print Started"
       return # no-op - should push to printer websocket
-    elsif @params[:topic] == "Print Progress"
+    when "Print Progress"
       return # no-op - should push to printer websocket
-    elsif @params[:topic] == "Print Done"
+    when "Print Done"
       push_to_slack(complete_attachment)
-       # should push to printer websocket
+    # should push to printer websocket
     else
       push_to_slack(fail_attachment)
     end
@@ -24,22 +25,22 @@ module PrinterNotify
   def complete_attachment
     [
       {
-        color: "#0E60ED",
+        color:  "#0E60ED",
         fields: build_complete_fields,
-      }
+      },
     ]
   end
 
   def fail_attachment
     [
       {
-        color: :danger,
-        title: @params[:topic],
+        color:  :danger,
+        title:  @params[:topic],
         fields: [
           { title: "Name", value: print_name, short: true },
           { title: "Progress", value: dig(:progress, :completion) || "", short: true },
-        ]
-      }
+        ],
+      },
     ]
   end
 
@@ -55,7 +56,7 @@ module PrinterNotify
   def dig(*keys)
     obj = @params
     keys.each { |key|
-      obj = obj.dig(key).then { |val|
+      obj = obj[key].then { |val|
         val.is_a?(String) && val.starts_with?("{") ? JSON.parse(val, symbolize_names: true) : val
       }
     }
@@ -66,7 +67,7 @@ module PrinterNotify
     full = dig(:extra, :name) || ""
     ext = full[/-?(\d+D)?(\d+H)?(\d+M)?.gcode/].to_s
 
-    full[0..-ext.length - 1]
+    full[0..(-ext.length - 1)]
   end
 
   def actual_complete_time
@@ -101,11 +102,14 @@ module PrinterNotify
 
     [
       hours.to_s.rjust(2, "0"),
-      minutes.to_s.rjust(2, "0")
+      minutes.to_s.rjust(2, "0"),
     ].join(":") + ":00"
   end
 
   def push_to_slack(attchs)
-    SlackNotifier.notify("*#{message}*", channel: '#portfolio', username: 'Printer-Bot', icon_emoji: ':printer:', attachments: attchs)
+    SlackNotifier.notify(
+      "*#{message}*", channel: "#portfolio", username: "Printer-Bot",
+      icon_emoji: ":printer:", attachments: attchs
+    )
   end
 end

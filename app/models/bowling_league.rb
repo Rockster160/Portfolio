@@ -28,7 +28,7 @@ class BowlingLeague < ApplicationRecord
   accepts_nested_attributes_for :bowlers, allow_destroy: true
 
   def self.create_default(user)
-    formatted_date = Time.current.in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:short_day_month)
+    formatted_date = Time.current.in_time_zone("Mountain Time (US & Canada)").to_fs(:short_day_month)
 
     create(name: formatted_date, user: user, hdcp_base: "", hdcp_factor: "")
   end
@@ -75,6 +75,7 @@ class BowlingLeague < ApplicationRecord
   def absent_score(average)
     return if average.blank? || absent_calculation.blank?
     return if absent_calculation.gsub("AVG", "").match?(/[a-z]/i)
+
     # AVG - 10
     eval(absent_calculation.gsub("AVG", average.to_s)).floor
   end

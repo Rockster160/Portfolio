@@ -8,16 +8,16 @@ module BowlingExporter
           # bowler_sets
           # games
         },
-        sets: {
+        sets:    {
           include: {
             bowler_sets: {},
-            games: {
-              except: :frame_details,
+            games:       {
+              except:  :frame_details,
               include: :new_frames,
             },
-          }
+          },
         },
-      }
+      },
     ).deep_symbolize_keys
   end
 

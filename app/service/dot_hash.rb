@@ -14,12 +14,12 @@ class DotHash < ::Hash
   #  IN={"event.dot\\.data.custom.nested_key"=>"fuzzy_val thing"}
   # OUT={event: {"dot.data": {custom: {nested_key: "fuzzy_val thing"}}}}
   def self.from_branch(hash)
-    DotHash.new(hash).each_with_object(DotHash.new) do |(key, value), result|
+    DotHash.new(hash).each_with_object(DotHash.new) { |(key, value), result|
       parts = key.to_s.split(/(?<!\\)\./).map { |part| part.gsub(/\\\./, ".") }
       last_key = parts.pop
       nested = parts.inject(result) { |h, k| h[k.to_sym] ||= DotHash.new }
       nested[last_key.to_sym] = DotHash.from(value)
-    end
+    }
   end
 
   def initialize(hash={})
@@ -38,7 +38,7 @@ class DotHash < ::Hash
   end
 
   def every_branch
-    branches.map { |k,v| DotHash.from_branch({ k => v }) }
+    branches.map { |k, v| DotHash.from_branch({ k => v }) }
   end
 
   def every_stream
@@ -50,29 +50,29 @@ class DotHash < ::Hash
   def branches(hash=:nothing_passed)
     hash = self if hash == :nothing_passed
     if hash.is_a?(::Hash)
-      return hash if hash.none? { |k, v| v.is_a?(::Hash) || v.is_a?(::Array) }
+      return hash if hash.none? { |_k, v| v.is_a?(::Hash) || v.is_a?(::Array) }
     elsif hash.is_a?(::Array)
-      hash = hash.each_with_index.with_object(DotHash.new) do |(bval, idx), obj|
-        obj["#{idx}"] = bval
-      end
+      hash = hash.each_with_index.with_object(DotHash.new) { |(bval, idx), obj|
+        obj[idx.to_s] = bval
+      }
     else
       return hash
     end
 
-    hash.each_with_object(DotHash.new) do |(k, v), obj|
+    hash.each_with_object(DotHash.new) { |(k, v), obj|
       format_key = k.to_s.gsub(/(?<!\\)\./, "\\.") # Escape dots in keys
 
       bdata = branches(v)
       case bdata
       when ::Hash
-        obj["#{format_key}"] = "" if bdata.blank?
+        obj[format_key.to_s] = "" if bdata.blank?
         bdata.each do |bkey, bval|
           obj["#{format_key}.#{bkey}"] = bval
         end
       else
-        obj["#{format_key}"] = bdata
+        obj[format_key.to_s] = bdata
       end
-    end
+    }
   end
 end
 

@@ -6,13 +6,13 @@ module FancyRenderJson
 
   INDENT = "  ".freeze
   COLOR_MAP = {
-    key: :yellow,
-    string: :lime,
-    symbol: :orange,
+    key:     :yellow,
+    string:  :lime,
+    symbol:  :orange,
     boolean: :cyan,
     numeric: :magenta,
-    date: :blue,
-    null: :grey,
+    date:    :blue,
+    null:    :grey,
     unknown: :red,
   }.freeze
 
@@ -33,7 +33,7 @@ module FancyRenderJson
     when Hash, BetterJson
       return pretty(obj, depth) unless depth.nil?
 
-      "{" + obj.map { |k,v|
+      "{" + obj.map { |k, v|
         "#{k.to_s.colorize(COLOR_MAP[:key])}: #{format(v)}"
       }.join(", ") + "}"
     else
@@ -42,12 +42,14 @@ module FancyRenderJson
   end
 
   def pretty(hash, depth=0)
-    curdent = INDENT*depth
+    curdent = INDENT * depth
 
     [
       "{",
-      *hash.map { |k, v| "#{INDENT}\"#{k.to_s.colorize(COLOR_MAP[:key])}\": #{format(v, depth+1)}," },
-      "}"
+      *hash.map { |k, v|
+        "#{INDENT}\"#{k.to_s.colorize(COLOR_MAP[:key])}\": #{format(v, depth + 1)},"
+      },
+      "}",
     ].join("\n#{curdent}")
   end
 end
@@ -57,11 +59,11 @@ class BetterJson
 
   # ===== Hacky overwrite methods
   # Allow dot access for nested keys
-  def method_missing(method, *args, &block)
+  def method_missing(method, *, &)
     if @hash.key?(method.to_s.to_sym)
       @hash[method.to_s.to_sym]
     else
-      @hash.send(method, *args, &block)
+      @hash.send(method, *, &)
     end
   end
 
@@ -92,27 +94,27 @@ class BetterJson
   delegate(
     :to_json,
     :as_json,
-    to: :hash
+    to: :hash,
   )
   # / ===== Hacky overwrite methods
 
-  def initialize(*args)
-    @hash = HashWithIndifferentAccess.new(*args)
+  def initialize(*)
+    @hash = ActiveSupport::HashWithIndifferentAccess.new(*)
   end
 
   # Break into dot keys to value
   def branches(branchobj=nil)
     branchobj ||= self
     return branchobj unless branchobj.is_a?(Hash) || branchobj.is_a?(Array)
-    return branchobj if branchobj.is_a?(Hash) && branchobj.none? { |k, v| v.is_a?(Hash) }
+    return branchobj if branchobj.is_a?(Hash) && branchobj.none? { |_k, v| v.is_a?(Hash) }
 
     # Hash with hashes
     if branchobj.is_a?(Array)
-      branchobj = branchobj.each_with_index.with_object({}) do |(bval, idx), obj|
-        obj["#{idx}"] = bval
-      end
+      branchobj = branchobj.each_with_index.with_object({}) { |(bval, idx), obj|
+        obj[idx.to_s] = bval
+      }
     end
-    branchobj.each_with_object({}) do |(k, v), obj|
+    branchobj.each_with_object({}) { |(k, v), obj|
       next obj[k.to_s] = v if v.nil? || v == false # Falsey things will act weird in #branches
 
       bdata = branches(v)
@@ -122,19 +124,20 @@ class BetterJson
           obj["#{k}.#{bkey}"] = bval
         end
       else
-        obj["#{k}"] = bdata
+        obj[k.to_s] = bdata
       end
-    end
+    }
   end
 end
 
 class Hash
   def better
-    JSON.parse(self.to_json, object_class: BetterJson)
+    JSON.parse(to_json, object_class: BetterJson)
   end
 end
+
 class Array
   def better
-    JSON.parse(self.to_json, object_class: BetterJson)
+    JSON.parse(to_json, object_class: BetterJson)
   end
 end

@@ -8,16 +8,16 @@ require "rest-client"
 require "json"
 require "coderay"
 
-require_relative "../app/service/api.rb"
+require_relative "../app/service/api"
 
 require "pry-rails"
 
 if REAL_TESLA_ENDPOINTS
-  OAUTH_BASE_URL = "https://auth.tesla.com" # no slash
-  TARGET_BASE_URL = "https://localhost:8752" # no slash
+  OAUTH_BASE_URL = "https://auth.tesla.com".freeze # no slash
+  TARGET_BASE_URL = "https://localhost:8752".freeze # no slash
 else
-  OAUTH_BASE_URL = "http://localhost:3141/tesla"
-  TARGET_BASE_URL = "http://localhost:3141/tesla"
+  OAUTH_BASE_URL = "http://localhost:3141/tesla".freeze
+  TARGET_BASE_URL = "http://localhost:3141/tesla".freeze
 end
 
 # Create a Rails-like object for the API to define whether to show debugging
@@ -32,7 +32,7 @@ Rails = Object.new.tap { |obj|
 }
 class String
   def presence
-    to_s.gsub(/\s/, "").length == 0 ? nil : self
+    to_s.gsub(/\s/, "").empty? ? nil : self
   rescue ArgumentError
     self
   end
@@ -48,7 +48,7 @@ termoverrides = {
     escape:    "\e[1;32m",
   },
   symbol: {
-    self: "\e[36m",
+    self:      "\e[36m",
     delimiter: "\e[1;36m",
   },
   # attribute_name: "\e[36m",
@@ -57,7 +57,6 @@ termoverrides = {
 termoverrides.each do |key, val|
   ::CodeRay::Encoders::Terminal::TOKEN_COLORS[key] = val
 end
-
 
 class ProxyServer < Sinatra::Base
   set :port, 3142
@@ -85,18 +84,18 @@ class ProxyServer < Sinatra::Base
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[32m Success\e[0m"
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m | #{res}\e[0m"
       status res.code
-      headers res.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase }
+      headers(res.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase })
       res.body.presence || "{}"
-    rescue RestClient::ExceptionWithResponse => res_exc
-      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[37m request:#{res_exc.response.request.url}\e[0m"
+    rescue RestClient::ExceptionWithResponse => e
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[37m request:#{e.response.request.url}\e[0m"
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[31m Error\e[0m"
-      response = res_exc.response
+      response = e.response
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m status: #{response.code}\e[0m"
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m body: #{response.body}\e[0m"
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m headers: #{response.headers.to_h}\e[0m"
 
       status response.code
-      headers response.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase }
+      headers(response.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase })
       response.body.presence || "{}"
     end
   end
@@ -112,32 +111,32 @@ class ProxyServer < Sinatra::Base
 
     begin
       res = Api.request(
-        method: :post,
-        url: "#{TARGET_BASE_URL}#{request.path_info}",
-        payload: data,
-        headers: proxy_headers,
-        ssl_ca_file: "/Users/rocco/code/Portfolio/_scripts/tesla_keys/cert.pem",
+        method:               :post,
+        url:                  "#{TARGET_BASE_URL}#{request.path_info}",
+        payload:              data,
+        headers:              proxy_headers,
+        ssl_ca_file:          "/Users/rocco/code/Portfolio/_scripts/tesla_keys/cert.pem",
         return_full_response: true,
       )
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[32m Success\e[0m"
 
       status res.code
-      headers res.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase }
+      headers(res.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase })
       res.body.presence || "{}"
-    rescue RestClient::ExceptionWithResponse => res_exc
-      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[37m request:#{res_exc.response.request.url}\e[0m"
+    rescue RestClient::ExceptionWithResponse => e
+      puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[37m request:#{e.response.request.url}\e[0m"
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[31m Error\e[0m"
-      response = res_exc.response
+      response = e.response
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m status: #{response.code}\e[0m"
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m body: #{response.body}\e[0m"
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[33m headers: #{response.headers.to_h}\e[0m"
 
       status response.code
-      headers response.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase }
+      headers(response.headers.transform_keys { |k| k.to_s.gsub("_", "-").upcase })
       response.body.presence || "{}"
     end
   end
 end
 
-ProxyServer.run! if __FILE__ == $0
+ProxyServer.run! if __FILE__ == $PROGRAM_NAME
 exit

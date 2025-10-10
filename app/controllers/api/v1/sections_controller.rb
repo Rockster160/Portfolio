@@ -34,11 +34,12 @@ class Api::V1::SectionsController < Api::V1::BaseController
 
   def trigger(action, section)
     return if section.blank?
+
     ::Jil.trigger(current_user, :section, section.with_jil_attrs(action: action))
   end
 
   def current_list
-    @list ||= current_user.lists.find_by(id: params[:list_id]) || current_user.lists.by_param(params[:list_id]).take!
+    @current_list ||= current_user.lists.find_by(id: params[:list_id]) || current_user.lists.by_param(params[:list_id]).take!
   end
 
   def current_list_sections
@@ -46,7 +47,7 @@ class Api::V1::SectionsController < Api::V1::BaseController
   end
 
   def current_section
-    @section ||= current_list_sections.find(params[:id])
+    @current_section ||= current_list_sections.find(params[:id])
   end
 
   def section_params

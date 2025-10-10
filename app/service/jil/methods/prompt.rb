@@ -33,8 +33,8 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   def create(title, data, questions, deliver)
     prompts.create(
       question: title,
-      params: @jil.cast(data.presence, :Hash).presence,
-      options: questions,
+      params:   @jil.cast(data.presence, :Hash).presence,
+      options:  questions,
     ).tap { |prompt|
       ::Jil.trigger(@jil.user, :prompt, prompt.with_jil_attrs(state: :create))
       broadcast_push(prompt) if deliver
@@ -45,36 +45,36 @@ class Jil::Methods::Prompt < Jil::Methods::Base
 
   def text(text, default)
     {
-      type: :text,
+      type:     :text,
       question: text,
-      default: default,
+      default:  default,
     }
   end
 
   def checkbox(text, default)
     {
-      type: :checkbox,
+      type:     :checkbox,
       question: text,
-      default: default,
+      default:  default,
     }
   end
 
   def choices(text, options, selected=[])
     {
-      type: :choices,
+      type:     :choices,
       question: text,
       selected: selected,
-      choices: options,
+      choices:  options,
     }
   end
 
   def scale(text, min, max, default)
     {
-      type: :scale,
+      type:     :scale,
       question: text,
-      min: min,
-      max: max,
-      default: default,
+      min:      min,
+      max:      max,
+      default:  default,
     }
   end
 
@@ -85,7 +85,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
 
     WebPushNotifications.send_to(@jil.user, {
       title: prompt.question,
-      url: Rails.application.routes.url_helpers.prompt_url(prompt),
+      url:   Rails.application.routes.url_helpers.prompt_url(prompt),
       badge: @jil.user.prompts.unanswered.reload.count,
     })
   end

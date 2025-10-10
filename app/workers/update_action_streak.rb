@@ -7,7 +7,7 @@ class UpdateActionStreak
       .where(user_id: event.user_id)
       .ilike(name: event.name)
       .where.not(id: event.id)
-    previous = matching_events.where("timestamp < ?", event.timestamp).order(:timestamp).last
+    previous = matching_events.where(timestamp: ...event.timestamp).order(:timestamp).last
 
     if previous.nil?
       event.update(streak_length: 1)
@@ -15,7 +15,7 @@ class UpdateActionStreak
       earliest_nil = matching_events.where(streak_length: nil).order(:timestamp).first
       return UpdateActionStreak.perform_async(earliest_nil.id)
     else
-      Time.use_zone(event.user.timezone) do
+      Time.use_zone(event.user.timezone) {
         yesterday = (event.timestamp - 1.day).in_time_zone.beginning_of_day
         today = event.timestamp.in_time_zone.beginning_of_day
         if previous.timestamp > today # Happened Today
@@ -27,7 +27,7 @@ class UpdateActionStreak
         else
           ::SlackNotifier.err("Exception hit: No condition found current(#{event.timestamp}) previous(#{previous.timestamp})")
         end
-      end
+      }
     end
 
     following = matching_events.where("timestamp > ?", event.timestamp).order(:timestamp).first

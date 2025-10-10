@@ -1,1 +1,1 @@
-COMMIT_SHA = File.read(Rails.root.join("REVISION")).strip rescue "--"
+COMMIT_SHA = Rails.root.join("REVISION").read.strip rescue "--"

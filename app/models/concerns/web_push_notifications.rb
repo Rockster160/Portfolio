@@ -4,7 +4,8 @@ module WebPushNotifications
 
   def send_to(user, payload={})
     return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
-    return "Failed to push - user not found" unless user.present?
+    return "Failed to push - user not found" if user.blank?
+
     push_sub = user.primary_push_sub
     return "Failed to push - push_sub not set up" unless push_sub&.pushable?
     # example payload = {
@@ -19,15 +20,15 @@ module WebPushNotifications
     return if payload.deep_symbolize_keys[:title].blank?
 
     WebPush.payload_send(
-      message: format_payload(user, payload).to_json,
+      message:  format_payload(user, payload).to_json,
       endpoint: push_sub.endpoint,
-      p256dh: push_sub.p256dh,
-      auth: push_sub.auth,
-      vapid: {
-        subject: "mailto:rocco@ardesian.com",
-        public_key: ENV["PORTFOLIO_VAPID_PUB"],
-        private_key: ENV["PORTFOLIO_VAPID_SEC"]
-      }
+      p256dh:   push_sub.p256dh,
+      auth:     push_sub.auth,
+      vapid:    {
+        subject:     "mailto:rocco@ardesian.com",
+        public_key:  ENV.fetch("PORTFOLIO_VAPID_PUB", nil),
+        private_key: ENV.fetch("PORTFOLIO_VAPID_SEC", nil),
+      },
     )
     return "Push success"
   rescue WebPush::Unauthorized => e

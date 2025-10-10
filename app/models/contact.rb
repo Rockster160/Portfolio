@@ -27,7 +27,7 @@ class Contact < ApplicationRecord
 
   json_serialize :raw, coder: ::BetterJsonSerializer
 
-  validates_uniqueness_of :apple_contact_id, allow_nil: true
+  validates :apple_contact_id, uniqueness: { allow_nil: true }
 
   after_save :store_primary_address
 
@@ -37,15 +37,16 @@ class Contact < ApplicationRecord
 
   def self.name_find(name)
     name = name.to_s.downcase
-    return unless name.present?
+    return if name.blank?
+
     # Exact match (no casing)
     found = find_by("name ILIKE ?", name)
     found ||= find_by("nickname ILIKE ?", name)
     found ||= friends.find_by("friends.username ILIKE ?", name)
     # Exact match without 's and/or house|place
-    found ||= find_by("name ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
-    found ||= find_by("nickname ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
-    found ||= friends.find_by("friends.username ILIKE :name", name: name.gsub(/\'?s? ?(house|place)?$/, ""))
+    found ||= find_by("name ILIKE :name", name: name.gsub(/'?s? ?(house|place)?$/, ""))
+    found ||= find_by("nickname ILIKE :name", name: name.gsub(/'?s? ?(house|place)?$/, ""))
+    found ||= friends.find_by("friends.username ILIKE :name", name: name.gsub(/'?s? ?(house|place)?$/, ""))
     # Match without special chars
     found ||= find_by("REGEXP_REPLACE(name, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
     found ||= find_by("REGEXP_REPLACE(nickname, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
@@ -58,13 +59,13 @@ class Contact < ApplicationRecord
 
   def serialize
     {
-      id: id,
-      name: name,
-      nickname: nickname,
-      username: username,
+      id:           id,
+      name:         name,
+      nickname:     nickname,
+      username:     username,
       permit_relay: friend_id.presence && permit_relay,
-      phone: phone,
-      data: data,
+      phone:        phone,
+      data:         data,
     }
   end
 
@@ -72,9 +73,7 @@ class Contact < ApplicationRecord
     addresses.find_by(primary: true) || addresses.first
   end
 
-  def primary_address=(new_address)
-    @primary_address = new_address
-  end
+  attr_writer :primary_address
 
   def friend?
     friend_id?
@@ -94,28 +93,29 @@ class Contact < ApplicationRecord
     json = raw.deep_symbolize_keys
 
     raw[:addresses]&.each do |raw_address|
-      addresses.find_or_create_by(street: raw_address) do |addr|
+      addresses.find_or_create_by(street: raw_address) { |addr|
         addr.user = user
         lat, lng = AddressBook.new(user).loc_from_address(raw_address) || []
         addr.lat = lat
         addr.lng = lng
-      end
+      }
     end
 
     update(
-      name: json[:name]&.split(" ", 2)&.first, # Should include aliases and allow last names?
-      phone: json[:phones]&.first&.dig(:value)&.gsub(/[^\d]/, "")&.last(10),
+      name:     json[:name]&.split(" ", 2)&.first, # Should include aliases and allow last names?
+      phone:    json[:phones]&.first&.dig(:value)&.gsub(/[^\d]/, "")&.last(10),
       nickname: json[:nickname],
     )
   end
 
   def store_primary_address
-    return unless @primary_address.present?
+    return if @primary_address.blank?
+
     # Basically just used for specs
     addresses.find_or_initialize_by(street: @primary_address[:street]).update(
       primary: true,
-      user: user,
-      loc: @primary_address[:loc],
+      user:    user,
+      loc:     @primary_address[:loc],
     )
   end
 end

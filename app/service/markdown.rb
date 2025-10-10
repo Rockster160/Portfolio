@@ -1,6 +1,5 @@
 class Markdown
-  include ActionView::Helpers::TagHelper
-  include ActionView::Helpers::UrlHelper
+  include ActionView::Helpers::UrlHelper, ActionView::Helpers::TagHelper
 
   attr_accessor :text
 
@@ -14,41 +13,49 @@ class Markdown
   def to_html
     @text = ::ERB::Util.html_escape(@text)
     replace(
-      /\r/ => "",
+      /\r/                                           => "",
       /```(?<language>\w*)\n?(?<content>.*?)\n?```/m => code_block_wrapper,
-      /^# (.*?)$/           => wrap('\1', :h1),
-      /^## (.*?)$/          => wrap('\1', :h2),
-      /^### (.*?)$/         => wrap('\1', :h3),
-      /^#### (.*?)$/        => wrap('\1', :h4),
-      /^##### (.*?)$/       => wrap('\1', :h5),
-      /^###### (.*?)$/      => wrap('\1', :h6),
-      /^: (.*?) :$/ => wrap('\1', :div, style: "text-align: center;"),
-      /^\s*(-{3,}|={3,}|—{1,})\s*$/ => tag(:hr),
-      /`(.*?)`/             => wrap('\1', :code),
-      /\b\*(.*?)\*\b/       => wrap('\1', :strong),
-      /\b_(.*?)_\b/         => wrap('\1', :em),
-      /~(.*?)~/             => wrap('\1', :del),
-      /\[\[\s*([^\]]*?)\s*\]\]\((.*?)\)/  => color_wrapper,
-      /\[\[\s*([^\]]*?)\s*\]\]/           => color_wrapper,
-      /!\[(.*?)\]\((.*?)\)/ => wrap(nil, :img, src: '\2', alt: '\1'),
-      /\[(.*?)\]\((.*?)\)/  => wrap('\1', :a, href: '\2', target: :_blank),
-      /\[(\w\s)*\]/                    => internal_link_wrapper,
-      /^( *\* (?:.*?\n))+/m            => ul_wrapper,
-      /^( *1[\.\)-:]? +(?:.*?\n))+/m   => ol_wrapper,
-      /^ *(\|([^\n]+?\|)+ *(\n|\z))+/m => table_wrapper,
-      /\n{3,}/m => ->(match) { "\n\n" + "</br>"*(match[0].length-2) },
+      /^# (.*?)$/                                    => wrap('\1', :h1),
+      /^## (.*?)$/                                   => wrap('\1', :h2),
+      /^### (.*?)$/                                  => wrap('\1', :h3),
+      /^#### (.*?)$/                                 => wrap('\1', :h4),
+      /^##### (.*?)$/                                => wrap('\1', :h5),
+      /^###### (.*?)$/                               => wrap('\1', :h6),
+      /^: (.*?) :$/                                  => wrap(
+        '\1', :div,
+        style: "text-align: center;"
+      ),
+      /^\s*(-{3,}|={3,}|—{1,})\s*$/                  => tag.hr,
+      /`(.*?)`/                                      => wrap('\1', :code),
+      /\b\*(.*?)\*\b/                                => wrap('\1', :strong),
+      /\b_(.*?)_\b/                                  => wrap('\1', :em),
+      /~(.*?)~/                                      => wrap('\1', :del),
+      /\[\[\s*([^\]]*?)\s*\]\]\((.*?)\)/             => color_wrapper,
+      /\[\[\s*([^\]]*?)\s*\]\]/                      => color_wrapper,
+      /!\[(.*?)\]\((.*?)\)/                          => wrap(nil, :img, src: '\2', alt: '\1'),
+      /\[(.*?)\]\((.*?)\)/                           => wrap('\1', :a, href: '\2', target: :_blank),
+      /\[(\w\s)*\]/                                  => internal_link_wrapper,
+      /^( *\* (?:.*?\n))+/m                          => ul_wrapper,
+      /^( *1[.)-:]? +(?:.*?\n))+/m                   => ol_wrapper,
+      /^ *(\|([^\n]+?\|)+ *(\n|\z))+/m               => table_wrapper,
+      /\n{3,}/m                                      => ->(match) {
+        "\n\n" + ("</br>" * (match[0].length - 2))
+      },
     )
 
     # Wrap plain text in paragraphs
     rsub(/\n\n([^\n].*?[^\n]?)\n\n/, wrap('\1', :p) + "\n\n") # Wrap paragraphs
     @text.gsub!(/\n\n(.+)\z/m, wrap('\1', :p)) # Wrap last paragraph
-    @text.gsub!(/\n/, tag(:br)) # Line breaks
+    @text.gsub!(/\n/, tag.br) # Line breaks
 
     # linkify urls, but tokenize links and images so we don't double-link
     tokenize_tags(:a, :img)
-    @text.gsub!(/\b(https?:\/\/[^\s\n\r<]+)\b/) { |found|
+    @text.gsub!(/\b(https?:\/\/[^\s\n\r<]+)\b/) { |_found|
       link = Regexp.last_match[1]
-      wrap(link.split("?").first.gsub(/^(https?:\/\/)?(www\.)?/, "").gsub(/\/$/, "") || link, :a, href: link, target: :_blank)
+      wrap(
+        link.split("?").first.gsub(/^(https?:\/\/)?(www\.)?/, "").gsub(/\/$/, "") || link, :a,
+        href: link, target: :_blank
+      )
     }
 
     # Tokenized blocks are stand-alone, so they don't need to be wrapped in paragraphs
@@ -62,7 +69,7 @@ class Markdown
   def replace(replacements)
     replacements.each do |pattern, replacement|
       if replacement.is_a?(Proc)
-        @text.gsub!(pattern) { |found| replacement.call(Regexp.last_match) }
+        @text.gsub!(pattern) { |_found| replacement.call(Regexp.last_match) }
       else
         @text.gsub!(pattern, replacement)
       end
@@ -88,7 +95,7 @@ class Markdown
         pair_data = find_unescaped_pair(@text, pair_open, pair_close, after: last_idx)
         break if pair_data.nil?
 
-        internal_range = (pair_data[:start_idx_end]+1...pair_data[:end_idx_start])
+        internal_range = ((pair_data[:start_idx_end] + 1)...pair_data[:end_idx_start])
         external_range = (pair_data[:start_idx_start]..pair_data[:end_idx_end])
 
         if tag.present?
@@ -107,39 +114,51 @@ class Markdown
   def find_unescaped_pair(str, pair_open, pair_close=nil, after: -1)
     pair_close ||= pair_open
 
-    first_idx_start, first_idx_end, first_match = find_unescaped_index(str, pair_open, after: after)&.values
+    first_idx_start, first_idx_end, first_match = find_unescaped_index(
+      str, pair_open,
+      after: after
+    )&.values
     return if first_idx_start.nil?
 
-    next_idx_start, next_idx_end, last_match = find_unescaped_index(str, pair_close, after: first_idx_start)&.values
+    next_idx_start, next_idx_end, last_match = find_unescaped_index(
+      str, pair_close,
+      after: first_idx_start
+    )&.values
     return if next_idx_start.nil?
 
     {
       start_idx_start: first_idx_start,
-      start_idx_end: first_idx_end,
-      first_match: first_match,
-      wrap_begin: str[first_idx_start..first_idx_end],
-      content: str[first_idx_end+1...next_idx_start],
-      wrap_end: str[next_idx_start..next_idx_end],
-      last_match: last_match,
-      end_idx_start: next_idx_start,
-      end_idx_end: next_idx_end,
+      start_idx_end:   first_idx_end,
+      first_match:     first_match,
+      wrap_begin:      str[first_idx_start..first_idx_end],
+      content:         str[(first_idx_end + 1)...next_idx_start],
+      wrap_end:        str[next_idx_start..next_idx_end],
+      last_match:      last_match,
+      end_idx_start:   next_idx_start,
+      end_idx_end:     next_idx_end,
     }
   end
 
   # returns [start_index, end_index]
   def find_unescaped_index(str, char, after: -1)
     # if regex, don't escape
-    str.enum_for(:scan, /(?:#{char.is_a?(String) ? Regexp.escape(char) : char})/m).find { |m|
+    str.enum_for(:scan, /(?:#{char.is_a?(String) ? Regexp.escape(char) : char})/m).find { |_m|
       idx = Regexp.last_match.begin(0)
       next unless idx > after
 
       escapes = str[...idx][/\\*\z/].length
-      return { start_idx: idx, end_idx: idx+Regexp.last_match.to_s.length-1, match: Regexp.last_match } if escapes.even?
+      if escapes.even?
+        return {
+          start_idx: idx,
+          end_idx:   idx + Regexp.last_match.to_s.length - 1,
+          match:     Regexp.last_match,
+        }
+      end
     }
   end
 
   def color_wrapper
-    -> (match) {
+    ->(match) {
       color = match[1]
       content = match[2].presence || match[1]
       contrast = ColorGenerator.contrast_text_color_on_background(color) # Must be hex
@@ -169,9 +188,9 @@ class Markdown
   end
 
   def ol_wrapper
-    -> (match) {
+    ->(match) {
       content = match[0]
-      lines = content.split("\n").map { |li| wrap(li[/^\s*1[\.\)-:]? +(.*?)$/, 1] || li, :li) }
+      lines = content.split("\n").map { |li| wrap(li[/^\s*1[.)-:]? +(.*?)$/, 1] || li, :li) }
       wrap(lines, :ol) + "\n"
     }
   end
@@ -185,8 +204,8 @@ class Markdown
   end
 
   def internal_link_wrapper
-    -> (match) {
-      next match[0] unless @user.present?
+    ->(match) {
+      next match[0] if @user.blank?
 
       name = match[0].strip
       page = @user.pages.ilike(name: name).take

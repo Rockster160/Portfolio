@@ -1,13 +1,14 @@
 class JilRunnerWorker
   include Sidekiq::Worker
+
   sidekiq_options retry: false
 
   def perform(user_id)
     return if User.advisory_lock_exists?("jil_runner_#{user_id}")
 
-    User.with_advisory_lock("jil_runner_#{user_id}", 5.seconds) do
+    User.with_advisory_lock("jil_runner_#{user_id}", 5.seconds) {
       execute_continually(User.find(user_id))
-    end
+    }
   end
 
   def execute_continually(user)
@@ -24,7 +25,10 @@ class JilRunnerWorker
         executed_any = true
         schedule.started!
 
-        ::Jil.trigger_now(schedule.user, schedule.trigger, { timestamp: schedule.execute_at }.merge(schedule.data))
+        ::Jil.trigger_now(
+          schedule.user, schedule.trigger,
+          { timestamp: schedule.execute_at }.merge(schedule.data)
+        )
 
         schedule.completed!
         ::Jil::Schedule.broadcast(schedule, :completed)

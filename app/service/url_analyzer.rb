@@ -3,11 +3,11 @@ class UrlAnalyzer
     (?<origin>
       (?<site>
         (?:(?<protocol>(?<scheme>\w+):)\/\/)?
-        (?<hostname>[^\/:\?\#]*)
+        (?<hostname>[^\/:?\#]*)
       )
       (?::(?<port>\d{1,5}))?
     )
-    (?<pathname>\/(?:[^\?\#]*)\/(?<filename>[^\?]*))?
+    (?<pathname>\/(?:[^?\#]*)\/(?<filename>[^?]*))?
     (?<search>\?(?<query>[^\#]*))?
     (?<hash>\#(?<fragment>.*?$))?
   /x
@@ -31,25 +31,25 @@ class UrlAnalyzer
   end
 
   def analyze
-    @analyze ||= begin
+    @analyze ||= (
       {
-        origin:   @matchdata[:origin],
-        site:     @matchdata[:site],
-        protocol: @matchdata[:protocol],
-        scheme:   @matchdata[:scheme],
-        hostname: @matchdata[:hostname],
-        port:     @matchdata[:port],
+        origin:    @matchdata[:origin],
+        site:      @matchdata[:site],
+        protocol:  @matchdata[:protocol],
+        scheme:    @matchdata[:scheme],
+        hostname:  @matchdata[:hostname],
+        port:      @matchdata[:port],
         subdomain: nil,
         domain:    nil,
         tld:       nil,
-        pathname: @matchdata[:pathname],
-        filename: @matchdata[:filename],
-        search:   @matchdata[:search],
-        query:    @matchdata[:query],
-        hash:     @matchdata[:hash],
-        fragment: @matchdata[:fragment],
+        pathname:  @matchdata[:pathname],
+        filename:  @matchdata[:filename],
+        search:    @matchdata[:search],
+        query:     @matchdata[:query],
+        hash:      @matchdata[:hash],
+        fragment:  @matchdata[:fragment],
       }.tap { |data| data.merge!([:subdomain, :domain, :tld].zip(break_domains).to_h) }
-    end
+    )
   end
 
   def params
@@ -57,13 +57,13 @@ class UrlAnalyzer
   end
 
   def path_param(key)
-    return unless analyze[:pathname].present?
+    return if analyze[:pathname].blank?
 
     paths = analyze[:pathname][1..].split("/")
     idx = paths.index(key.to_s)
     return unless (0...paths.length).cover?(idx)
 
-    paths[idx+1]
+    paths[idx + 1]
   end
 
   private
@@ -72,6 +72,7 @@ class UrlAnalyzer
     # subd, domain, tld
     ds = @matchdata[:hostname].split(".")
     return [nil, *ds] if ds.length <= 2
+
     # at least 3...
 
     end_tlds = ds[-2..].any? { |d| d.length <= 2 } ? ds[-2..] : ds[-1..]

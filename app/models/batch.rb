@@ -9,7 +9,5 @@
 #
 
 class Batch < ApplicationRecord
-
   has_many :flash_cards
-  
 end

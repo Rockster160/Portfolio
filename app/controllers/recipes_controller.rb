@@ -15,6 +15,10 @@ class RecipesController < ApplicationController
     render :form
   end
 
+  def edit
+    render :form
+  end
+
   def create
     @recipe = current_user.recipes.new(recipe_params)
 
@@ -23,10 +27,6 @@ class RecipesController < ApplicationController
     else
       render :form
     end
-  end
-
-  def edit
-    render :form
   end
 
   def update
@@ -41,7 +41,8 @@ class RecipesController < ApplicationController
     if @recipe.destroy
       redirect_to recipes_path
     else
-      redirect_to @recipe, alert: "Failed to delete recipe: #{@recipe.errors.full_messages.join("\n")}"
+      redirect_to @recipe,
+        alert: "Failed to delete recipe: #{@recipe.errors.full_messages.join("\n")}"
     end
   end
 
@@ -77,7 +78,7 @@ class RecipesController < ApplicationController
       :kitchen_of,
       :ingredients,
       :instructions,
-      :public
+      :public,
     )
   end
 end

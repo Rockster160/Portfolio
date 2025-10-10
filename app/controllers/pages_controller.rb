@@ -15,6 +15,10 @@ class PagesController < ApplicationController
     render :form
   end
 
+  def edit
+    render :form
+  end
+
   def create
     @page = current_user.pages.new
     @page.assign_attributes(page_params) # Separate from new to allow setting user
@@ -27,10 +31,6 @@ class PagesController < ApplicationController
     else
       render :form
     end
-  end
-
-  def edit
-    render :form
   end
 
   def update

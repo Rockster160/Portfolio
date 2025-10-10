@@ -14,6 +14,6 @@ class Jarvis::Talk < Jarvis::Action
   end
 
   # def complete
-    # ["Check", "Will do, sir.", "As you wish.", "Yes, sir."]
+  # ["Check", "Will do, sir.", "As you wish.", "Yes, sir."]
   # end
 end

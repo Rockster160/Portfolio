@@ -30,9 +30,7 @@ module AuthHelper
   end
 
   def unauthorize_user
-    if current_user.present?
-      redirect_to previous_url
-    end
+    redirect_to previous_url if current_user.present?
   end
 
   def previous_url(fallback=nil)
@@ -59,7 +57,7 @@ module AuthHelper
   end
 
   def authorize_user_or_guest
-    unless current_user.present?
+    if current_user.blank?
       store_previous_url
       create_guest_user
 
@@ -86,13 +84,13 @@ module AuthHelper
   end
 
   def current_user
-    @_current_user ||= begin
+    @current_user ||= (
       if request.headers["HTTP_AUTHORIZATION"].present?
         auth_from_headers
       else
         auth_from_session
       end
-    end
+    )
   end
 
   def create_guest_user
@@ -123,7 +121,7 @@ module AuthHelper
 
   def auth_from_headers
     raw_auth = request.headers["HTTP_AUTHORIZATION"]
-    return unless raw_auth.present?
+    return if raw_auth.blank?
 
     # Had issues where some clients were mixing up bearer vs basic
     # Just made this work for whatever prefix
@@ -157,7 +155,7 @@ module AuthHelper
       cookies.signed[key].presence || cookies.permanent[key].presence
       # There is a crazy bug right now where our cookies got messed up and are returning nil
     rescue NoMethodError
-    #   cookies[key] rescue nil
+      #   cookies[key] rescue nil
     end
   end
 
@@ -168,7 +166,7 @@ module AuthHelper
       cookies.signed[key] = value
       cookies.permanent[key] = value
     rescue NoMethodError
-    #   (cookies[key] = value) rescue nil
+      #   (cookies[key] = value) rescue nil
     end
   end
 
@@ -179,7 +177,7 @@ module AuthHelper
     )
 
     if current_user_id.present?
-      user = User.find_by_id(current_user_id)
+      user = User.find_by(id: current_user_id)
       return sign_out if user.nil?
 
       session[:current_user_id] = current_user_id
@@ -189,6 +187,6 @@ module AuthHelper
   end
 
   def current_ip
-    @current_ip ||= request.try(:remote_ip) || request.env['HTTP_X_REAL_IP'] || request.env['REMOTE_ADDR']
+    @current_ip ||= request.try(:remote_ip) || request.env["HTTP_X_REAL_IP"] || request.env["REMOTE_ADDR"]
   end
 end

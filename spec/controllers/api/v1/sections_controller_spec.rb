@@ -24,9 +24,9 @@ RSpec.describe Api::V1::SectionsController, type: :controller do
 
   describe "POST #create" do
     it "creates a new section" do
-      expect do
+      expect {
         post :create, params: { list_id: list.id, name: "Test Section", color: "#FF0000", sort_order: 1 }, format: :json
-      end.to change(Section, :count).by(1)
+      }.to change(Section, :count).by(1)
     end
   end
 
@@ -39,9 +39,9 @@ RSpec.describe Api::V1::SectionsController, type: :controller do
 
   describe "DELETE #destroy" do
     it "removes the section" do
-      expect do
+      expect {
         delete :destroy, params: { list_id: list.id, id: section.id }, format: :json
-      end.to change(Section, :count).by(-1)
+      }.to change(Section, :count).by(-1)
     end
   end
 end

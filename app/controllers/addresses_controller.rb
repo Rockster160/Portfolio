@@ -14,6 +14,10 @@ class AddressesController < ApplicationController
     render :form
   end
 
+  def edit
+    render :form
+  end
+
   def create
     @address = @contact.addresses.new(address_params.merge(user: current_user))
 
@@ -22,10 +26,6 @@ class AddressesController < ApplicationController
     else
       render :form
     end
-  end
-
-  def edit
-    render :form
   end
 
   def update
@@ -40,7 +40,8 @@ class AddressesController < ApplicationController
     if @address.destroy
       redirect_to [:edit, @contact]
     else
-      redirect_to [:edit, @contact, @address], alert: "Failed to delete address: #{@address.errors.full_messages.join("\n")}"
+      redirect_to [:edit, @contact, @address],
+        alert: "Failed to delete address: #{@address.errors.full_messages.join("\n")}"
     end
   end
 

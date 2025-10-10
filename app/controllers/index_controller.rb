@@ -35,7 +35,7 @@ class IndexController < ApplicationController
   private
 
   def opening_garage?(user, body)
-    return unless user.id.in?(whitelisted_garage_ids)
+    return false unless user.id.in?(whitelisted_garage_ids)
 
     direction = :open if body.match?(/\b(open)\b/)
     direction = :close if body.match?(/\b(close|shut)\b/)
@@ -49,7 +49,7 @@ class IndexController < ApplicationController
   def whitelisted_garage_ids
     [
       4, # Mom
-      58128, # Chelsea
+      58_128, # Chelsea
     ]
   end
 end

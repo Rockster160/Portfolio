@@ -1,16 +1,16 @@
+inherit_from: .rubocop_todo.yml
+
 plugins:
   - rubocop-rails
   - rubocop-rspec
   - rubocop-factory_bot
-
-inherit_from:
-  # - .rubocop_todo.yml
 
 AllCops:
   NewCops: enable
   TargetRubyVersion: 3.2.2
   SuggestExtensions: false
   Exclude:
+    - "monster_seed.rb"
     - ".pryrc"
     - "_scripts/**/*"
     - "db/schema.rb"
@@ -25,6 +25,12 @@ AllCops:
 # Default Rails configurations
 Rails:
   Enabled: true
+
+Rails/I18nLocaleTexts:
+  Enabled: false
+
+Lint/DuplicateBranch:
+  IgnoreDuplicateElseBranch: true
 
 Rails/LexicallyScopedActionFilter:
   Enabled: false

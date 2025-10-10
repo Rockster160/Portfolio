@@ -26,5 +26,4 @@ class Jil::Methods::Function < Jil::Methods::Base
       @ctx[:next] = false
     }
   end
-
 end

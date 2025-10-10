@@ -1,5 +1,6 @@
 RSpec.describe Jil::Methods::Boolean do
   include ActiveJob::TestHelper
+
   let(:execute) { Jil::Executor.call(user, code, input_data) }
   let(:user) { User.me }
   let(:code) { "" }

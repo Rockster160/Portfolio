@@ -1,4 +1,5 @@
 class TeslaError < StandardError; end
+
 class TeslaControl
   attr_accessor :api
 
@@ -14,9 +15,7 @@ class TeslaControl
     @api = ::Oauth::TeslaApi.new(user)
   end
 
-  def code=(new_code)
-    @api.code = new_code
-  end
+  delegate :code=, to: :@api
 
   def authorize
     @api.auth_url
@@ -24,7 +23,7 @@ class TeslaControl
 
   def refresh
     @api.proxy_refresh
-  rescue => e
+  rescue StandardError => e
     err("Refresh Error", e)
     raise
   end
@@ -33,7 +32,7 @@ class TeslaControl
     direction = parse_to(direction, :open, :close)
     return proxy_command(:actuate_trunk, which_trunk: :rear) if direction == :toggle
 
-    state = vehicle_data.dig(:vehicle_state, :rt).to_i > 0 ? :open : :close
+    state = vehicle_data.dig(:vehicle_state, :rt).to_i.positive? ? :open : :close
     return if state == direction
 
     proxy_command(:actuate_trunk, which_trunk: :rear)
@@ -45,7 +44,7 @@ class TeslaControl
 
     data = vehicle_data
     windows = [:fd, :fp, :rd, :rp]
-    is_open = windows.any? { |window| data.dig(:vehicle_state, "#{window}_window".to_sym).to_i > 0 }
+    is_open = windows.any? { |window| data.dig(:vehicle_state, :"#{window}_window").to_i.positive? }
     state = direction == :toggle && !is_open ? :vent : :close
 
     proxy_command(:window_control, proxy_command: state, lat: loc[0], lon: loc[1])
@@ -80,10 +79,10 @@ class TeslaControl
     # For whatever reason, the below does nothing.
     # command(:navigation_gps_request, { lat: loc[0], lon: loc[1], order: 1 })
     address_params = {
-      type: :share_ext_content_raw,
-      locale: :"en-US",
+      type:         :share_ext_content_raw,
+      locale:       :"en-US",
       timestamp_ms: (Time.current.to_f * 1000).round,
-      value: { "android.intent.extra.TEXT": address },
+      value:        { "android.intent.extra.TEXT": address },
     }
 
     command(:navigation_request, address_params)
@@ -92,7 +91,7 @@ class TeslaControl
   def set_temp(temp_F)
     temp_F = temp_F.to_f.clamp(59..82)
     # Tesla expects temp in Celsius
-    temp_C = ((temp_F - 32) * (5/9.to_f)).round(1)
+    temp_C = ((temp_F - 32) * (5 / 9.to_f)).round(1)
     proxy_command(:set_temps, driver_temp: temp_C, passenger_temp: temp_C)
     # For some reason sometimes when setting temp while car is sleeping, it instead sets to TEMP_MIN
     # To counter that, wait 5 seconds after proxy_command is performed and attempt to set the temp again
@@ -118,44 +117,43 @@ class TeslaControl
 
   def vehicle_data(wake: false)
     return @vehicle_data = cached_vehicle_data unless perform_requests?
+    return @vehicle_data if defined?(@vehicle_data)
 
-    @vehicle_data ||= begin
-      cached_vehicle_data
-      # get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
-      #   car_data = json.is_a?(::Hash) && json.dig(:response)
-      #   cached_data = cached_vehicle_data
-      #   break cached_data unless car_data.present?
+    @vehicle_data ||= cached_vehicle_data
+    # get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
+    #   car_data = json.is_a?(::Hash) && json.dig(:response)
+    #   cached_data = cached_vehicle_data
+    #   break cached_data unless car_data.present?
 
-      #   car_data[:timestamp] = car_data.dig(:vehicle_state, :timestamp) # Bubble up to higher key
+    #   car_data[:timestamp] = car_data.dig(:vehicle_state, :timestamp) # Bubble up to higher key
 
-      #   User.me.caches.set(:car_data, car_data)
-      #   break car_data if car_data[:state] == "asleep"
+    #   User.me.caches.set(:car_data, car_data)
+    #   break car_data if car_data[:state] == "asleep"
 
-      #   if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
-      #     list = User.me.list_by_name(:Chores)
-      #     [:fl, :fr, :rl, :rr].each do |tire|
-      #       tirename = tire.to_s.split("").then { |dir, side|
-      #         [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
-      #       }.join(" ")
+    #   if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
+    #     list = User.me.list_by_name(:Chores)
+    #     [:fl, :fr, :rl, :rr].each do |tire|
+    #       tirename = tire.to_s.split("").then { |dir, side|
+    #         [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
+    #       }.join(" ")
 
-      #       if car_data.dig(:vehicle_state, "tpms_soft_warning_#{tire}".to_sym)
-      #         list.add("#{tirename} tire pressure low")
-      #       else
-      #         list.remove("#{tirename} tire pressure low")
-      #       end
+    #       if car_data.dig(:vehicle_state, "tpms_soft_warning_#{tire}".to_sym)
+    #         list.add("#{tirename} tire pressure low")
+    #       else
+    #         list.remove("#{tirename} tire pressure low")
+    #       end
 
-      #       if car_data.dig(:vehicle_state, "tpms_hard_warning_#{tire}".to_sym)
-      #         User.me.list_by_name(:TODO).add("#{tirename} tire pressure low")
-      #       else
-      #         User.me.list_by_name(:TODO).remove("#{tirename} tire pressure low")
-      #       end
-      #     end
-      #   end
-      # } || cached_vehicle_data
-    rescue => e
-      err("Vehicle Data Error", e)
-      cached_vehicle_data
-    end
+    #       if car_data.dig(:vehicle_state, "tpms_hard_warning_#{tire}".to_sym)
+    #         User.me.list_by_name(:TODO).add("#{tirename} tire pressure low")
+    #       else
+    #         User.me.list_by_name(:TODO).remove("#{tirename} tire pressure low")
+    #       end
+    #     end
+    #   end
+    # } || cached_vehicle_data
+  rescue StandardError => e
+    err("Vehicle Data Error", e)
+    cached_vehicle_data
   end
 
   def loc
@@ -180,7 +178,7 @@ class TeslaControl
     json = JSON.parse(exc.response.body, symbolize_names: true)
     case json[:error]
     when "vehicle unavailable: vehicle is offline or asleep" then 408
-    else 500.tap { info("Unknown Status", "#{json[:error]}") }
+    else 500.tap { info("Unknown Status", (json[:error]).to_s) }
     end
   rescue JSON::ParserError
     500
@@ -191,8 +189,8 @@ class TeslaControl
     begin
       tries += 1
       block.call if tries <= max_attempts
-    rescue RestClient::ExceptionWithResponse => res_exc
-      case tesla_exc_code(res_exc)
+    rescue RestClient::ExceptionWithResponse => e
+      case tesla_exc_code(e)
       when 401, 403
         if tries > 1 # Should only need to refresh on the first attempt
           info("Failed to reauthorize")
@@ -217,10 +215,10 @@ class TeslaControl
         info("Trying again after wakeup!")
         retry
       else
-        err("RestClient Wakeup Error", res_exc)
+        err("RestClient Wakeup Error", e)
         raise
       end
-    rescue => e
+    rescue StandardError => e
       err("Wakeup Error", e)
     end
   end
@@ -238,20 +236,20 @@ class TeslaControl
   def proxy_command(cmd, params={})
     TeslaCommand.broadcast(loading: true)
     wakeup_retry {
-      info("#{cmd}")
+      info(cmd.to_s)
       proxy_post_vehicle("command/#{cmd}", params)
     }
-  rescue => e
+  rescue StandardError => e
     err("Proxy Command Error", e)
   end
 
   def command(cmd, params={})
     TeslaCommand.broadcast(loading: true)
     wakeup_retry {
-      info("#{cmd}")
+      info(cmd.to_s)
       post_vehicle("command/#{cmd}", params)
     }
-  rescue => e
+  rescue StandardError => e
     err("Command Error", e)
   end
 
@@ -265,20 +263,20 @@ class TeslaControl
   end
 
   def proxy_post_vehicle(endpoint, params={})
-  return dev_output(:PROXY_POST, "vehicles/#{vin}/#{endpoint}", params) unless perform_requests?
-  raise "Should not POST in tests!" if Rails.env.test?
+    return dev_output(:PROXY_POST, "vehicles/#{vin}/#{endpoint}", params) unless perform_requests?
+    raise "Should not POST in tests!" if Rails.env.test?
 
     @api.proxy_post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
-      info("Response", "#{res}")
+      info("Response", res.to_s)
     }
   end
 
   def post_vehicle(endpoint, params={})
-  return dev_output(:POST, "vehicles/#{vin}/#{endpoint}", params) unless perform_requests?
-  raise "Should not POST in tests!" if Rails.env.test?
+    return dev_output(:POST, "vehicles/#{vin}/#{endpoint}", params) unless perform_requests?
+    raise "Should not POST in tests!" if Rails.env.test?
 
     @api.post("vehicles/#{vin}/#{endpoint}", params).tap { |res|
-      info("Response", "#{res}")
+      info("Response", res.to_s)
     }
   end
 

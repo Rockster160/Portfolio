@@ -8,6 +8,7 @@ class OldTokenizer
 
   def self.protect(str, *rxs, &block)
     return str if str.blank?
+
     str = str.dup
     tz = new(str)
     rxs.each { |rx| tz.tokenize!(str, rx) }
@@ -16,12 +17,14 @@ class OldTokenizer
 
   def self.split(str, *rxs, by: " ", unwrap: false)
     return str if str.blank?
+
     str = str.dup
     tz = new(str)
     rxs.each { |rx| tz.tokenize!(str, rx) }
     str.split(by).map { |sub_str|
       tz.untokenize(sub_str).then { |wrapped_str|
         next wrapped_str unless unwrap
+
         rxs.lazy.map { |rx| wrapped_str[rx, 1] }.find(&:itself) || wrapped_str
       }
     }
@@ -48,7 +51,7 @@ class OldTokenizer
 
   def stepper(str)
     tokenized = tokenize(str, OldTokenizer.wrap_regex("\""))
-    tokenized = tokenize(tokenized, OldTokenizer.wrap_regex("\'"))
+    tokenized = tokenize(tokenized, OldTokenizer.wrap_regex("'"))
     loop do
       # break unless tokenized.match(/\(([^(){}]*)\)/) || tokenized.match(/\{([^(){}]*)\}/)
       pre_str = tokenized.dup
@@ -60,10 +63,10 @@ class OldTokenizer
   end
 
   def tokenize!(full, regex)
-    full.gsub!(regex) do |found|
+    full.gsub!(regex) { |found|
       @stored_strings << found
-      token(@stored_strings.length-1)
-    end
+      token(@stored_strings.length - 1)
+    }
   end
 
   def tokenize(full, regex)
@@ -75,6 +78,7 @@ class OldTokenizer
     loop do
       i += 1
       break if levels && i > levels
+
       start = full.dup
       @stored_strings.each_with_index do |stored, idx|
         full.gsub!(token(idx), stored)

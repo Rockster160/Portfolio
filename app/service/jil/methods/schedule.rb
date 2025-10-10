@@ -1,5 +1,5 @@
 class Jil::Methods::Schedule < Jil::Methods::Base
-  PERMIT_ATTRS = [:name, :execute_at, :trigger, :data]
+  PERMIT_ATTRS = [:name, :execute_at, :trigger, :data].freeze
   def cast(value)
     case value
     when ::ScheduledTrigger then value

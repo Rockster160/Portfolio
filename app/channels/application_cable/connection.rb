@@ -26,7 +26,7 @@ module ApplicationCable
     # ws://url/cable headers: { Authorization: "Bearer <b64(username:password)>" }
     def user_from_headers
       raw_auth = request.headers["HTTP_AUTHORIZATION"] || request.parameters["Authorization"]
-      return unless raw_auth.present?
+      return if raw_auth.blank?
 
       # Had issues where some clients were mixing up bearer vs basic
       # Just made this work for whatever prefix

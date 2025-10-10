@@ -15,9 +15,7 @@ module Memoizable
   included do
     class << self
       def memoize(memo_key, &block)
-        if instance_methods(false).include?(memo_key)
-          raise "Attempted to memoize [#{memo_key}], but has already been defined!"
-        end
+        raise "Attempted to memoize [#{memo_key}], but has already been defined!" if instance_methods(false).include?(memo_key)
 
         define_method(memo_key) do
           memo(memo_key: memo_key, &block)

@@ -1,5 +1,5 @@
 namespace :outfits do
-  task :generate do
+  task generate: :environment do
     images = Dir.glob("../Portfolio/app/assets/images/rpg/**/*.png")
     permitted = {}
     images.each do |img_path|

@@ -20,6 +20,6 @@ class MoneyBucketsController < ApplicationController
   end
 
   def set_bucket
-    @money_bucket ||= current_user.money_bucket || current_user.create_money_bucket
+    @set_bucket ||= current_user.money_bucket || current_user.create_money_bucket
   end
 end

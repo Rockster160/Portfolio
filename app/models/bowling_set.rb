@@ -16,13 +16,13 @@ class BowlingSet < ApplicationRecord
 
   has_many :bowler_sets,
     foreign_key: :set_id,
-    inverse_of: :set,
-    dependent: :destroy
+    inverse_of:  :set,
+    dependent:   :destroy
   has_many :games,
-    class_name: "BowlingGame",
+    class_name:  "BowlingGame",
     foreign_key: :set_id,
-    inverse_of: :set,
-    dependent: :destroy
+    inverse_of:  :set,
+    dependent:   :destroy
   has_many :bowlers, through: :games
   has_many :frames, through: :games, source: :new_frames
 
@@ -34,14 +34,14 @@ class BowlingSet < ApplicationRecord
     Bowler.joins(:games)
       .select("bowlers.*, MAX(bowling_games.position) as game_pos")
       .where(bowling_games: { set_id: id })
-      .order("game_pos ASC")
+      .order(:game_pos)
       .group("bowlers.id")
   end
 
   def future_save
     save_scores
-    league.bowler_sets.where("bowler_sets.created_at >= ?", created_at).find_each(&:recalc)
-    league.sets.where("bowling_sets.created_at >= ?", created_at).find_each(&:save_scores)
+    league.bowler_sets.where(bowler_sets: { created_at: created_at.. }).find_each(&:recalc)
+    league.sets.where(bowling_sets: { created_at: created_at.. }).find_each(&:save_scores)
   end
 
   def string_games
@@ -61,16 +61,18 @@ class BowlingSet < ApplicationRecord
     if bowlers.distinct.many?
       # Now, with updated handicaps, find the high bowler for each game.
       games.update_all(game_point: false) # Reset previous game points if they were ever set
-      games.group_by(&:game_num).each do |pos, grouped_games|
-        high_score = grouped_games.map { |game| game.total_score }.max
+      games.group_by(&:game_num).each_value { |grouped_games|
+        high_score = grouped_games.map(&:total_score).max
         # Ties count as a point for each
-        grouped_games.each { |game| game.update(game_point: true) if game.total_score == high_score }
-      end
+        grouped_games.each { |game|
+          game.update(game_point: true) if game.total_score == high_score
+        }
+      }
 
       # Find the bowler who won the total pins
-      totals = games.group_by(&:bowler_id).map do |bowler_id, grouped_games|
+      totals = games.group_by(&:bowler_id).map { |bowler_id, grouped_games|
         [bowler_id, grouped_games.sum(&:total_score)]
-      end
+      }
       high_total = totals.map(&:last).max
       found_winner_ids = totals.select { |id_score| id_score.last == high_total }
       update(winner: ",#{found_winner_ids.map(&:first).join(",")},")
@@ -130,13 +132,13 @@ class BowlingSet < ApplicationRecord
     return if @stored_games.blank?
 
     @stored_games.each do |game_attrs|
-      game_attrs.delete(:id) unless game_attrs[:id].present?
+      game_attrs.delete(:id) if game_attrs[:id].blank?
       game_attrs[:set_id] = game_attrs[:set_id].presence || id
       game_attrs[:bowler_id] = game_attrs[:bowler_id].presence || bowler_by_name(game_attrs[:bowler_name]).id
-      game ||= self.games.find_by(game_attrs.slice(:id)) if game_attrs[:id].present?
-      game ||= self.games.find_or_initialize_by(game_attrs.slice(:bowler_id, :game_num))
+      game ||= games.find_by(game_attrs.slice(:id)) if game_attrs[:id].present?
+      game ||= games.find_or_initialize_by(game_attrs.slice(:bowler_id, :game_num))
       game.update(game_attrs)
     end
-    self.games.reload
+    games.reload
   end
 end

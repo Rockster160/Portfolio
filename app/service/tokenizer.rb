@@ -2,19 +2,19 @@ class Tokenizer
   # PRIORITY_PAIRS = { ... } - Add double quotes here, and run this instead of `tokenize_quotes`
   TOKEN_REGEX = /__TOKEN\d+__/
   WRAP_PAIRS = {
-    "(" => ")",
-    "[" => "]",
-    "{" => "}",
+    "("  => ")",
+    "["  => "]",
+    "{"  => "}",
     "\"" => "\"",
-    "'" => "'",
-    "/" => "/"
-  }
+    "'"  => "'",
+    "/"  => "/",
+  }.freeze
 
   attr_accessor :raw, :text, :tokenized_text, :tokens
 
   def self.split(text, untokenize: true, unwrap: false)
     tz = new(text)
-    tz.tokenized_text.split(" ").map { |str|
+    tz.tokenized_text.split.map { |str|
       untokenize ? tz.untokenize(str, unwrap: unwrap) : str
     }
   end
@@ -28,6 +28,7 @@ class Tokenizer
 
   def self.unescaped_split(str, char)
     return [] if str.blank? || char.blank?
+
     str, char = str.to_s.dup, char.to_s.dup
     raise "Can only split on a single character, not a string" if char.length > 1
 
@@ -83,6 +84,7 @@ class Tokenizer
           block ? block.call(val) : val
         }
       }
+
       i += 1
     end
     untokenized
@@ -98,23 +100,24 @@ class Tokenizer
   end
 
   def tokenize(str, until_char=nil, idx=0, nest=0, pairs: @pairs)
-    h = "#{"> "*nest}[#{[rand(16).to_s(16), rand(16).to_s(16)].join.upcase}]"
+    h = "#{"> " * nest}[#{[rand(16).to_s(16), rand(16).to_s(16)].join.upcase}]"
     buffer = ""
 
     # logit "#{h}:#{idx}:tokenize:#{until_char}"
     loop do
       if idx >= str.length
         return unless until_char.nil? # Unmatched char, exit without replacing
+
         break
       end
 
-      top = nest == 0
+      top = nest.zero?
       char = str[idx]
-      next_escaped = char == "\\" && idx < str.length && str[...idx+1][/\\*$/].length.odd?
+      next_escaped = char == "\\" && idx < str.length && str[...(idx + 1)][/\\*$/].length.odd?
 
       if next_escaped
         # Remove the escape and add the next character instead
-        buffer << "\\" + str[idx+1]
+        buffer << ("\\" + str[idx + 1])
         idx += 1 # Extra increment to skip next character
       elsif char == until_char
         # Found closing char, time to exit
@@ -127,7 +130,7 @@ class Tokenizer
           buffer << char
         else
           # logit "#{h}:#{idx}:open:#{char}"
-          wrapped, next_idx = tokenize(str, pairs[char], idx+1, nest+1)
+          wrapped, next_idx = tokenize(str, pairs[char], idx + 1, nest + 1)
 
           if wrapped.nil?
             # logit "#{h}:#{idx}:\e[31m No close '#{char}'"

@@ -1,9 +1,11 @@
 class ApplicationController < ActionController::Base
-  include AuthHelper
-  include SerializeHelper
+  include SerializeHelper, AuthHelper
+
   # Prevent CSRF attacks by raising an exception.
   # For APIs, you may want to use :null_session instead.
-  protect_from_forgery with: :exception, if: -> { current_user&.id != 1 } # Hack- skip CSRF if it's me
+  protect_from_forgery with: :exception, if: -> {
+    current_user&.id != 1
+  } # Hack- skip CSRF if it's me
   helper_method :current_user, :user_signed_in?, :guest_account?
 
   # skip_before_action :pretty_logit # Defined by gem
@@ -28,7 +30,7 @@ class ApplicationController < ActionController::Base
 
   def flash_message
     flash.now[params[:flash_type].to_sym] = params[:message]
-    render partial: 'layouts/flashes'
+    render partial: "layouts/flashes"
   end
 
   private
@@ -45,17 +47,17 @@ class ApplicationController < ActionController::Base
   end
 
   def see_current_user
-    Rails.logger.silence do
+    Rails.logger.silence {
       store_previous_url
 
       if user_signed_in?
         current_user.see!
-        request.env['exception_notifier.exception_data'] = {
+        request.env["exception_notifier.exception_data"] = {
           current_user: current_user,
-          params: params
+          params:       params,
         }
       end
-    end
+    }
   end
 
   def current_ip_spamming?
@@ -89,8 +91,8 @@ class ApplicationController < ActionController::Base
 
   def rescue_bad_params
     render(
-      json: {
-        error: "The request params are in an unexpected format. Please try again with valid JSON.",
+      json:   {
+        error:  "The request params are in an unexpected format. Please try again with valid JSON.",
         params: request.body.read(1005).truncate(1000),
       },
       status: :unprocessable_entity,
@@ -98,8 +100,8 @@ class ApplicationController < ActionController::Base
   end
 
   def use_timezone
-    Time.use_zone(current_user&.timezone || User.timezone) do
+    Time.use_zone(current_user&.timezone || User.timezone) {
       yield if block_given?
-    end
+    }
   end
 end

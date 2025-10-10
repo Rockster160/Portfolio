@@ -3,6 +3,7 @@ module TriggerData
 
   def parse(input, as: nil)
     return input if input.is_a?(::ApplicationRecord)
+
     input = input.permit!.to_h.except(:controller, :action) if input.is_a?(::ActionController::Parameters)
     input = input.to_h if input.is_a?(::ActiveSupport::HashWithIndifferentAccess)
 

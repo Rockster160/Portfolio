@@ -1,5 +1,6 @@
 module TeslaCommand
   module_function
+
   extend ActionView::Helpers::DateHelper
 
   TEMP_MIN = 59
@@ -143,10 +144,10 @@ module TeslaCommand
       @response = "Finding car..."
       unless quick
         loc = TeslaControl.me.loc
-        Jarvis.say("http://maps.apple.com/?ll=#{loc.join(',')}&q=#{loc.join(',')}", :sms)
+        Jarvis.say("http://maps.apple.com/?ll=#{loc.join(",")}&q=#{loc.join(",")}", :sms)
       end
     else
-      @response = "Not sure how to tell car: #{[cmd, opt].map(&:presence).compact.join('|')}"
+      @response = "Not sure how to tell car: #{[cmd, opt].map(&:presence).compact.join("|")}"
     end
 
     res = @response # Local variable since modules share ivars
@@ -173,7 +174,8 @@ module TeslaCommand
 
   def cToF(c)
     return unless c
-    (c * (9/5.to_f)).round + 32
+
+    (c * (9 / 5.to_f)).round + 32
   end
 
   def format_data(extra_data={})
@@ -184,22 +186,22 @@ module TeslaCommand
 
     {
       forbidden: DataStorage[:tesla_forbidden],
-      loading: !!data[:loading],
-      sleeping: data[:state] == "asleep" || !!data[:sleeping],
-      charge: data.dig(:charge_state, :battery_level),
-      miles: data.dig(:charge_state, :battery_range)&.floor,
-      charging: {
-        state: data.dig(:charge_state, :charging_state),
+      loading:   !!data[:loading],
+      sleeping:  data[:state] == "asleep" || !!data[:sleeping],
+      charge:    data.dig(:charge_state, :battery_level),
+      miles:     data.dig(:charge_state, :battery_range)&.floor,
+      charging:  {
+        state:  data.dig(:charge_state, :charging_state),
         active: data.dig(:charge_state, :charging_state) != "Complete", # FIXME
-        speed: data.dig(:charge_state, :charge_rate),
-        eta: data.dig(:charge_state, :minutes_to_full_charge),
+        speed:  data.dig(:charge_state, :charge_rate),
+        eta:    data.dig(:charge_state, :minutes_to_full_charge),
       },
-      climate: {
-        on: data.dig(:climate_state, :is_climate_on),
-        set: cToF(data.dig(:climate_state, :driver_temp_setting)),
+      climate:   {
+        on:      data.dig(:climate_state, :is_climate_on),
+        set:     cToF(data.dig(:climate_state, :driver_temp_setting)),
         current: cToF(data.dig(:climate_state, :inside_temp)),
       },
-      open: {
+      open:      {
         ft:        data.dig(:vehicle_state, :ft), # Frunk
         df:        data.dig(:vehicle_state, :df), # Driver Door
         fd_window: data.dig(:vehicle_state, :fd_window), # Driver Window
@@ -211,13 +213,13 @@ module TeslaCommand
         rp_window: data.dig(:vehicle_state, :rp_window), # Rear Passenger Window
         rt:        data.dig(:vehicle_state, :rt), # Trunk
       },
-      locked: data.dig(:vehicle_state, :locked),
-      drive: drive_data(data).merge(speed: data.dig(:drive_state, :speed).to_i),
-      loc: [
+      locked:    data.dig(:vehicle_state, :locked),
+      drive:     drive_data(data).merge(speed: data.dig(:drive_state, :speed).to_i),
+      loc:       [
         data.dig(:drive_state, :latitude),
         data.dig(:drive_state, :longitude),
       ],
-      timestamp: data.dig(:timestamp).to_i / 1000
+      timestamp: data[:timestamp].to_i / 1000,
     }
   end
 
@@ -226,16 +228,23 @@ module TeslaCommand
       data.dig(:drive_state, :latitude),
       data.dig(:drive_state, :longitude),
     ]
-    is_driving = data.dig(:drive_state, :speed).to_i > 0
+    is_driving = data.dig(:drive_state, :speed).to_i.positive?
 
     place = address_book.find_contact_near(loc)
     action = is_driving ? :Near : :At
     return { action: action, location: place[:name] } if place.present?
 
     action = is_driving ? :Driving : :Stopped
-    city = address_book.reverse_geocode(loc, get: is_driving ? :city : :name) if loc.compact.length == 2
+    if loc.compact.length == 2
+      city = address_book.reverse_geocode(
+        loc,
+        get: is_driving ? :city : :name,
+      )
+    end
     return { action: action, location: city } if city.present?
 
-    { action: action, location: loc.compact.map { |v| v&.round(2) }&.join(",").presence || "<Unknown>" }
+    { action: action, location: loc.compact.map { |v|
+      v&.round(2)
+    }&.join(",").presence || "<Unknown>" }
   end
 end

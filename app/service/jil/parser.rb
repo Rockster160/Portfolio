@@ -14,19 +14,19 @@ class Jil::Parser
     ::(?<cast>[A-Z][_0-9A-Za-z]*)
   /xm
   COLORS = {
-    syntax: 37,
-    err: 31,
-    comment: "3;90",
-    objname: 31,
-    castto: 90,
-    varname: 94,
-    variable: 94,
+    syntax:     37,
+    err:        31,
+    comment:    "3;90",
+    objname:    31,
+    castto:     90,
+    varname:    94,
+    variable:   94,
     methodname: 37,
-    const: 96,
-    cast: "3;36",
-    constant: 35,
-    string: 32,
-    numeric: 33,
+    const:      96,
+    cast:       "3;36",
+    constant:   35,
+    string:     32,
+    numeric:    33,
   }.freeze
 
   def self.from_code(code)
@@ -38,7 +38,7 @@ class Jil::Parser
     tk ||= Tokenizer.new(code)
     escaped ||= tk.tokenized_text
 
-    escaped.scan(ESCAPED_REGEX)&.map.with_index { |(whitespace, comment, show, varname, objname, methodname, arg_code, cast), idx|
+    escaped.scan(ESCAPED_REGEX)&.map&.with_index { |(whitespace, comment, show, varname, objname, methodname, arg_code, cast), _idx|
       args = tk.untokenize(arg_code, 1, unwrap: true).split(/,? +\r?\n?/).map { |nested|
         piece = tk.untokenize(nested)
 
@@ -47,7 +47,7 @@ class Jil::Parser
           next breakdown(tk.untokenize(nested, 1), tk, &perline)
         end
 
-        next piece if piece.match?(/\A\".*?\"\z/) # Do not parse strings in order to retain quotes.
+        next piece if piece.match?(/\A".*?"\z/) # Do not parse strings in order to retain quotes.
 
         ::JSON.parse(piece) rescue piece # Parse object literal to extra raw nums, bools, etc.
       }
@@ -58,7 +58,7 @@ class Jil::Parser
     }
   end
 
-  def self.syntax_highlighting(code, tk=nil)
+  def self.syntax_highlighting(code, _tk=nil)
     col = ->(color, text) { "\e[#{COLORS[color]}m#{text}\e[0m\e[#{COLORS[:syntax]}m" }
 
     breakdown(code) { |line|
@@ -84,8 +84,8 @@ class Jil::Parser
             ].join("\n")
           else
             case arg.to_s
-            when /\A\".*?\"\z/
-              col[:string, arg].gsub(/(#\{\s*)(\w+)(\s*\})/) { |found|
+            when /\A".*?"\z/
+              col[:string, arg].gsub(/(#\{\s*)(\w+)(\s*\})/) { |_found|
                 _, start, word, finish = Regexp.last_match.to_a
                 [
                   col[:syntax, start],
@@ -99,7 +99,7 @@ class Jil::Parser
             when /^\w+$/ then col[:variable, arg]
             else col[:err, "<dunno>[Invalid String?]#{arg.inspect}</dunno>"]
             end
-          # else col[:err, "<dunno>[#{arg.class}]#{arg.inspect}</dunno>"]
+            # else col[:err, "<dunno>[#{arg.class}]#{arg.inspect}</dunno>"]
           end
         }.join(", "),
         ")",

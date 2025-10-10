@@ -1,10 +1,10 @@
 class VehiclesController < ApplicationController
   skip_before_action :verify_authenticity_token
   def command
-    head 401
+    head :unauthorized
   end
 
   def token
-    head 200
+    head :ok
   end
 end

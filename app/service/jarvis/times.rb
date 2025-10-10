@@ -1,5 +1,5 @@
 # NOT WORKING:
-  # ... on the 16th
+# ... on the 16th
 
 module Jarvis::Times
   module_function
@@ -32,23 +32,21 @@ module Jarvis::Times
 
     # Need to clean up a little bit for Chronic syntax
     time_str = time_str.to_s.gsub(/an? (#{time_words_regex})/, '1 \1') # an hour → 1 hour
-    time_str = time_str.gsub(/^(.*?)(at \d+(?::\d+)?(?: ?(?:a|p)m)?)(.*?)$/) do |found|
+    time_str = time_str.gsub(/^(.*?)(at \d+(?::\d+)?(?: ?(?:a|p)m)?)(.*?)$/) { |_found|
       # If two day words are found here, only 1 is moved to the front
       "#{Regexp.last_match(1)} #{Regexp.last_match(3)} #{Regexp.last_match(2)}"
-    end
+    }
     time_str = time_str.gsub(/(#{drx})( #{time_words_regex})? and (?:a )?half/, '\1.5 \2') # 3 and a half hours → 3.5 hours
     time_str = time_str.to_s.gsub(/ ?\b(at|on)\b ?/, " ").squish
     [pre_sub, safe_date_parse(time_str.squish, chronic_opts)].then { |pre_text, parsed_time|
       if parsed_time.present?
-        if time_str.include?("morning") && parsed_time.hour == 21
-          parsed_time += 12.hours
-        end
+        parsed_time += 12.hours if time_str.include?("morning") && parsed_time.hour == 21
       else
         m = time_str.match(/(#{drx})\s+(#{rel_words_regex})#{and_some}/)
         parsed_time = m&.to_a&.then { |_, n1, t1, n2, t2|
           interval = (n1 || 1).to_f.send(t1 || :hours)
           interval += n2.to_i.send(t2 || :minutes)
-          interval = chronic_opts[:context] == :past ? -interval : interval
+          interval = -interval if chronic_opts[:context] == :past
           Time.current + interval
         }
       end
@@ -70,7 +68,7 @@ module Jarvis::Times
       time -= skip while chronic_opts[:context] == :past && time > Time.current
       time
     }
-  rescue => e
+  rescue StandardError => e
     ### Rescue various Chronic errors, specifically
     # -- https://github.com/mojombo/chronic/issues/415
     #   ::Chronic.parse("3 hours and 30 minutes before")

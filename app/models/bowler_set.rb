@@ -39,6 +39,7 @@ class BowlerSet < ApplicationRecord
 
   def avg_diff
     return "N/A" if ending_avg.nil? || starting_avg.nil?
+
     diff = ending_avg - starting_avg
 
     if diff.positive?
@@ -57,32 +58,32 @@ class BowlerSet < ApplicationRecord
   end
 
   def starting_average
-    @average ||= begin
+    @starting_average ||= (
       return unless game_count&.positive?
 
       (pin_count.to_i / game_count.to_f).floor
-    end
+    )
   end
 
   def ending_average
-    @ending_average ||= begin
+    @ending_average ||= (
       ending_games = bowler.games_at_time(set.games.maximum(:created_at))
       ending_pins = bowler.pins_at_time(set.games.maximum(:created_at))
       return unless ending_games&.positive?
 
       (ending_pins.to_i / ending_games.to_f).floor
-    end
+    )
   end
 
   def calc_handicap
-    @handicap ||= begin
+    @calc_handicap ||= (
       league&.handicap_from_average(starting_average)
-    end
+    )
   end
 
   def calc_absent_score
-    @absent_score ||= begin
+    @calc_absent_score ||= (
       league&.absent_score(starting_average)
-    end
+    )
   end
 end

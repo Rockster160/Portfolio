@@ -1,11 +1,10 @@
 module CharacterBuilderHelper
-
   def option_builder_json
     outfits = CharacterBuilder.default_outfits
     male = outfits[:male]
     female = outfits[:female]
     {
-      male: {
+      male:   {
         skin_tone:   male[:body].try(:uniq),
         hair:        male[:hair].try(:keys).try(:uniq),
         hair_color:  male[:hair].try(:values).try(:flatten).try(:uniq),
@@ -22,7 +21,7 @@ module CharacterBuilderHelper
         belt:        male[:belt].try(:values).try(:flatten).try(:uniq),
         # hands:       male[:hands].try(:values).try(:flatten).try(:uniq),
         legs:        male[:legs].try(:values).try(:flatten).try(:uniq),
-        feet:        male[:feet].try(:values).try(:flatten).try(:uniq)
+        feet:        male[:feet].try(:values).try(:flatten).try(:uniq),
       },
       female: {
         skin_tone:   female[:body].try(:uniq),
@@ -41,8 +40,8 @@ module CharacterBuilderHelper
         belt:        female[:belt].try(:values).try(:flatten).try(:uniq),
         # hands:       female[:hands].try(:values).try(:flatten).try(:uniq),
         legs:        female[:legs].try(:values).try(:flatten).try(:uniq),
-        feet:        female[:feet].try(:values).try(:flatten).try(:uniq)
-      }
+        feet:        female[:feet].try(:values).try(:flatten).try(:uniq),
+      },
     }
   end
 
@@ -62,21 +61,22 @@ module CharacterBuilderHelper
     specified_clothing = [:gender, :body, :hair, :beard, :beard_color, :hair, :hair_color, :ears, :nose]
     non_specific_nested_clothing = gender_hash.except(*specified_clothing)
     non_specific_nested_clothing.each do |garment, color|
-      next unless color.present?
+      next if color.blank?
+
       garment_scope = gender_scope[garment]
-      matching_garments = garment_scope.select { |garment_cloth, type_colors| type_colors.include?(color) }
+      matching_garments = garment_scope.select { |_garment_cloth, type_colors| type_colors.include?(color) }
       next unless matching_garments.any?
+
       garment_cloth, type_colors = matching_garments.first
       clothing[garment] = { garment: garment_cloth, color: color }
     end
 
     {
-      gender: gender,
-      body: body,
-      clothing: clothing
+      gender:   gender,
+      body:     body,
+      clothing: clothing,
     }
-  rescue
+  rescue StandardError
     CharacterBuilder.new({}).tap(&:change_random)
   end
-
 end

@@ -29,8 +29,8 @@ set :bundle_flags, "--deployment --quiet"
 set :bundle_env_variables, { "BUNDLE_FORCE_RUBY_PLATFORM" => "true" }
 
 set :default_env, {
-  path: "/home/deploy/.rbenv/plugins/ruby-build/bin:/home/deploy/.rbenv/shims:/home/deploy/.rbenv/bin:$PATH",
-  rbenv_root: "/home/deploy/.rbenv"
+  path:       "/home/deploy/.rbenv/plugins/ruby-build/bin:/home/deploy/.rbenv/shims:/home/deploy/.rbenv/bin:$PATH",
+  rbenv_root: "/home/deploy/.rbenv",
 }
 set :rbenv_roles, :all
 set :rbenv_ruby, "3.2.2"
@@ -58,7 +58,8 @@ set :rbenv_custom_path, "/home/deploy/.rbenv"
 append :linked_files, "config/database.yml", ".env", ".env.production"
 
 # Default value for linked_dirs is []
-append :linked_dirs, "log", "tmp/pids", "tmp/cache", "tmp/sockets", "public/system", "vendor", "storage"
+append :linked_dirs, "log", "tmp/pids", "tmp/cache", "tmp/sockets", "public/system", "vendor",
+  "storage"
 
 # Default value for default_env is {}
 # set :default_env, { path: "/opt/ruby/bin:$PATH" }

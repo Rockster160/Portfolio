@@ -11,24 +11,48 @@ class Jil::Methods::Numeric < Jil::Methods::Base
   end
 
   def self.op(val1, operator, val2)
-    raise ::Jil::ExecutionError, "invalid operator" unless operator.in?(["+", "-", "*", "/", "%", "^log"])
+    raise ::Jil::ExecutionError, "invalid operator" unless operator.in?([
+      "+",
+      "-",
+      "*",
+      "/",
+      "%",
+      "^log",
+])
 
     return cast(val1) / cast(val2).to_f if operator == "/"
+
     cast(val1).send(operator, cast(val2))
   end
 
   def op(val1, operator, val2)
-    raise ::Jil::ExecutionError, "invalid operator" unless operator.in?(["+", "-", "*", "/", "%", "^log"])
+    raise ::Jil::ExecutionError, "invalid operator" unless operator.in?([
+      "+",
+      "-",
+      "*",
+      "/",
+      "%",
+      "^log",
+])
 
     return cast(val1) / cast(val2).to_f if operator == "/"
+
     cast(val1).send(operator, cast(val2))
   end
 
   def op!(val1, operator, val2)
-    raise ::Jil::ExecutionError, "invalid operator" unless operator.in?(["+=", "-=", "*=", "/=", "%="])
+    raise ::Jil::ExecutionError, "invalid operator" unless operator.in?([
+      "+=",
+      "-=",
+      "*=",
+      "/=",
+      "%=",
+])
+
     operator = operator[0] # Remove the `=`
 
     return cast(val1) / cast(val2).to_f if operator == "/"
+
     cast(val1).send(operator, cast(val2))
   end
 
@@ -37,7 +61,7 @@ class Jil::Methods::Numeric < Jil::Methods::Base
   end
 
   def random(min, max, decimals)
-    random_number = min + rand * (max - min)
+    random_number = min + (rand * (max - min))
     random_number.round(decimals)
   end
 end

@@ -20,7 +20,7 @@ class SearchBreakMatcher
     not_exact:    "::!",
     regex:        ["~", ":~"],
     any:          ["ANY", "ANY:", "OR", "OR:"],
-  }
+  }.freeze
   # These could be actual/custom Objects that return the expected data based on calls.
   # That would solve the issues of having conflicting keys.
   # We could also store the "top" level data as the object with the current dug match for filtering.
@@ -79,23 +79,24 @@ class SearchBreakMatcher
   # {piece} -- [String, {breaker}]
 
   def breaker_matches?(breaker, stream, delim=:exact)
-    if breaker.is_a?(::String) || breaker.is_a?(::Symbol)
-      return matching_stream_values(breaker, delim, stream).compact.any?
-    end
+    return matching_stream_values(breaker, delim, stream).compact.any? if breaker.is_a?(::String) || breaker.is_a?(::Symbol)
 
     ((breaker[:keys]&.flat_map { |val, broken| # val="event" && broken[:contains] = [{piece}]
       matching_streams = matching_stream_values(val, delim, stream) # This should iterate through every stream value and return the list that follows AFTER the matching key
       matching_streams.flat_map { |downstream|
         next true if broken.blank?
+
         broken.flat_map { |down_delim, breakers|
           breakers.filter_map { |down_breaker|
-            breaker_matches?(down_breaker, downstream, down_delim)#.tap { |b| source_puts b }
+            breaker_matches?(down_breaker, downstream, down_delim) # .tap { |b| source_puts b }
           }
         }
       }
     }&.compact || []) + (breaker[:vals]&.flat_map { |delim, piece|
       case piece
-      when ::Array then piece.filter_map { |nested_breaker| breaker_matches?(nested_breaker, stream, delim) }
+      when ::Array then piece.filter_map { |nested_breaker|
+        breaker_matches?(nested_breaker, stream, delim)
+      }
       # when ::String, ::Symbol then valstr_matches(piece, delim, stream)
       else
         # binding.pry
@@ -110,7 +111,7 @@ class SearchBreakMatcher
   def matching_stream_values(val, delim, stream)
     stream.filter_map.with_index { |drop, idx|
       # TODO: Handle not_<delim>
-      stream[(idx+1)..] if delim_match?(val, delim, drop)
+      stream[(idx + 1)..] if delim_match?(val, delim, drop)
       # nil means no match, but an empty array means it successfully matched, but there is no lower data, so any further checks will fail
     }
   end

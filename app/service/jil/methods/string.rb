@@ -7,7 +7,7 @@ class Jil::Methods::String < Jil::Methods::Base
     when ::ApplicationRecord then cast(value.serialize)
     # when ::String then value
     else
-      value.to_s.gsub(/^\"|\"$/, "").gsub(/#\{\s*(.*?)\s*\}/) { |found|
+      value.to_s.gsub(/^"|"$/, "").gsub(/#\{\s*(.*?)\s*\}/) { |_found|
         token = Regexp.last_match[1]
         var = @jil.ctx&.dig(:vars, token.to_sym) || {}
         cast(var[:value]).tap { |val|
@@ -21,7 +21,7 @@ class Jil::Methods::String < Jil::Methods::Base
     case line.methodname
     when :format then format(token_val(line.objname), cast(evalarg(line.arg)))
     when :replace then token_val(line.objname).gsub(*strreg_args(line.args))
-    when :add then [token_val(line.objname), *strreg_args(line.args)].join("")
+    when :add then [token_val(line.objname), *strreg_args(line.args)].join
     when :match
       md = token_val(line.objname).match(to_regex(evalarg(line.arg)))
       case line.cast

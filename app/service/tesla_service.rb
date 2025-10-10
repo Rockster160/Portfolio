@@ -1,26 +1,26 @@
 class TeslaService
   # https://github.com/teslamotors/fleet-telemetry/blob/main/protos/vehicle_data.proto
-  def self.fields(interval)
+  def self.fields(_interval)
     {
-      VehicleName:                               1.second,
-      ChargeState:                               1.second,
-      VehicleSpeed:                              1.minute,
-      Odometer:                                  30.minutes,
-      Location:                                  1.minute,
-      GpsState:                                  1.minute,
-      GpsHeading:                                1.minute,
-      DoorState:                                 1.minute,
-      Locked:                                    1.minute,
-      FdWindow:                                  30.seconds,
-      FpWindow:                                  30.seconds,
-      RdWindow:                                  30.seconds,
-      RpWindow:                                  30.seconds,
-      TpmsPressureFl:                            1.hour,
-      TpmsPressureFr:                            1.hour,
-      TpmsPressureRl:                            1.hour,
-      TpmsPressureRr:                            1.hour,
-      InsideTemp:                                30.minutes,
-      OutsideTemp:                               30.minutes,
+      VehicleName:    1.second,
+      ChargeState:    1.second,
+      VehicleSpeed:   1.minute,
+      Odometer:       30.minutes,
+      Location:       1.minute,
+      GpsState:       1.minute,
+      GpsHeading:     1.minute,
+      DoorState:      1.minute,
+      Locked:         1.minute,
+      FdWindow:       30.seconds,
+      FpWindow:       30.seconds,
+      RdWindow:       30.seconds,
+      RpWindow:       30.seconds,
+      TpmsPressureFl: 1.hour,
+      TpmsPressureFr: 1.hour,
+      TpmsPressureRl: 1.hour,
+      TpmsPressureRr: 1.hour,
+      InsideTemp:     30.minutes,
+      OutsideTemp:    30.minutes,
       # ChargeState:                               1.second,
       # VehicleSpeed:                              1.minute,
       # Odometer:                                  30.minutes,
@@ -150,6 +150,6 @@ class TeslaService
       # SettingChargeUnit:                         30.minutes,
       # ClimateSeatCoolingFrontLeft:               30.minutes,
       # ClimateSeatCoolingFrontRight:              30.minutes,
-    }.to_h { |k, v| [k, { interval_seconds: v }] }
+    }.transform_values { |v| { interval_seconds: v } }
   end
 end

@@ -23,6 +23,7 @@
 
 class ListItem < ApplicationRecord
   attr_accessor :do_not_broadcast
+
   belongs_to :list
   belongs_to :section, optional: true
 
@@ -77,9 +78,7 @@ class ListItem < ApplicationRecord
     old_item.section = section if old_item.present? && section.present?
 
     if old_item.present?
-      if old_item.name != item_name || old_item.deleted_at? || old_item.sort_order != old_item.list.max_order
-        old_item.update(name: item_name, deleted_at: nil, sort_order: nil)
-      end
+      old_item.update(name: item_name, deleted_at: nil, sort_order: nil) if old_item.name != item_name || old_item.deleted_at? || old_item.sort_order != old_item.list.max_order
       old_item.update(section: section) if old_item.section != section && section.present?
       old_item
     else
@@ -150,6 +149,7 @@ class ListItem < ApplicationRecord
   def schedule=(schedule_params)
     self.schedule_next = nil
     return super(nil) if schedule_params.blank?
+
     interval = schedule_params["interval"].to_i
     interval = 1 if interval <= 0
     timezone = schedule_params["timezone"].to_i
@@ -160,8 +160,8 @@ class ListItem < ApplicationRecord
     repeat_type = schedule_params["type"].to_sym if schedule_params["type"].in?(["minutely", "hourly", "daily", "weekly", "monthly"])
     return if repeat_type.nil?
 
-    full_timezone = "#{timezone.positive? ? '+' : '-'}#{timezone.abs.to_s.rjust(4, '0')}"
-    schedule_start = Time.parse("#{hour}:#{minute} #{meridian} #{full_timezone}")
+    full_timezone = "#{timezone.positive? ? "+" : "-"}#{timezone.abs.to_s.rjust(4, "0")}"
+    schedule_start = Time.zone.parse("#{hour}:#{minute} #{meridian} #{full_timezone}")
     new_schedule = IceCube::Schedule.new(schedule_start)
     rule = IceCube::Rule.send(repeat_type, interval)
 
@@ -174,9 +174,9 @@ class ListItem < ApplicationRecord
         if interval_details[:type] == "daily"
           rule.day_of_month(*interval_details[:day].map(&:to_i)) if interval_details.key?(:day)
         elsif interval_details[:type] == "weekly"
-          deep_numerify_keys = interval_details[:week]&.each_with_object({}) do |(day_of_week, idxs_of_week), deep_numerify|
+          deep_numerify_keys = interval_details[:week]&.each_with_object({}) { |(day_of_week, idxs_of_week), deep_numerify|
             deep_numerify[day_of_week.to_i] = idxs_of_week.map(&:to_i)
-          end
+          }
           rule.day_of_week(deep_numerify_keys) if interval_details.key?(:week)
         end
       end
@@ -192,22 +192,23 @@ class ListItem < ApplicationRecord
 
   def schedule
     return if super.nil?
+
     @schedule ||= IceCube::Schedule.from_yaml(super) rescue nil
   end
 
   def default_schedule_options
     {
-      interval: 1,
-      type: :daily,
-      minute: "00",
-      week_days: [],
-      days_of_week: [],
-      days_of_month: []
+      interval:      1,
+      type:          :daily,
+      minute:        "00",
+      week_days:     [],
+      days_of_week:  [],
+      days_of_month: [],
     }
   end
 
   def schedule_options
-    @schedule_options ||= begin
+    @schedule_options ||= (
       options = {}
       rule = schedule.try(:rrules).try(:first).try(:to_hash) || {}
       options[:interval] = rule[:interval]
@@ -224,12 +225,13 @@ class ListItem < ApplicationRecord
         options[:timezone] = timezone
       end
 
-      options.reject { |k,v| v.blank? }.reverse_merge(default_schedule_options)
-    end
+      options.compact_blank.reverse_merge(default_schedule_options)
+    )
   end
 
   def schedule_in_words
     return "No schedule set - This item is not recurring." if schedule.nil?
+
     words = schedule.to_s
     # Remove redundant text here, if it gets annoying.
     "#{words} at #{schedule.start_time.strftime("%-l:%M %p %Z")}"
@@ -242,7 +244,7 @@ class ListItem < ApplicationRecord
   def options
     {
       important: "When set, this item will automatically appear at the top of the list regardless of the sort order.",
-      permanent: "When set, this item will not be removed from list when checking it. Instead, it will appear toggled/selected on your page, but when reloading the page the item will still be present. This also prevents the item from being removed on other user's pages that are sharing the list.  (Does not work if a schedule is set.)"
+      permanent: "When set, this item will not be removed from list when checking it. Instead, it will appear toggled/selected on your page, but when reloading the page the item will still be present. This also prevents the item from being removed on other user's pages that are sharing the list.  (Does not work if a schedule is set.)",
     }
   end
 
@@ -254,22 +256,22 @@ class ListItem < ApplicationRecord
 
   def normalize_values
     self.formatted_name = name.downcase.gsub(/[ '",.]/i, "")
-    self.category = self.category.squish.titleize.presence if self.category
-    self.permanent = false if self.schedule.present?
+    self.category = category.squish.titleize.presence if category
+    self.permanent = false if schedule.present?
     true
   end
 
   def broadcast_commit
     return if do_not_broadcast
 
-    ActionCable.server.broadcast "list_#{self.list_id}_json_channel", { list_data: list.serialize, timestamp: Time.current.to_i }
+    ActionCable.server.broadcast "list_#{list_id}_json_channel", { list_data: list.serialize, timestamp: Time.current.to_i }
 
-    list_item_attrs = self.attributes.symbolize_keys.slice(:important, :permanent, :category, :name)
-    list_item_attrs.merge!(schedule: self.schedule_in_words)
-    list_item_attrs.merge!(countdown: (self.schedule_next.to_f * 1000).round) unless self.schedule.nil?
-    ActionCable.server.broadcast "list_item_#{self.id}_channel", { list_item: list_item_attrs }
+    list_item_attrs = attributes.symbolize_keys.slice(:important, :permanent, :category, :name)
+    list_item_attrs.merge!(schedule: schedule_in_words)
+    list_item_attrs.merge!(countdown: (schedule_next.to_f * 1000).round) unless schedule.nil?
+    ActionCable.server.broadcast "list_item_#{id}_channel", { list_item: list_item_attrs }
 
-    rendered_message = ListsController.render template: "list_items/index", locals: { list: self.list }, layout: false
-    ActionCable.server.broadcast "list_#{self.list_id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
+    rendered_message = ListsController.render template: "list_items/index", locals: { list: list }, layout: false
+    ActionCable.server.broadcast "list_#{list_id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
   end
 end

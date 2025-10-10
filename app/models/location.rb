@@ -24,6 +24,7 @@ class Location < ApplicationRecord
   def geolocate
     located = Geolocate.lookup(ip) rescue nil
     return unless located
+
     self.ip = located.ip
     self.country_code = located.country_code
     self.country_name = located.country_name
@@ -38,5 +39,4 @@ class Location < ApplicationRecord
     save
   end
   # l = Location.create(ip: "91.230.47.3")
-
 end

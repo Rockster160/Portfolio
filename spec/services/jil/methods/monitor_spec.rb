@@ -1,5 +1,6 @@
 RSpec.describe Jil::Methods::Monitor do
   include ActiveJob::TestHelper
+
   let(:execute) { Jil::Executor.call(user, code, input_data) }
   let(:user) { User.me }
   let(:code) {
@@ -25,7 +26,7 @@ RSpec.describe Jil::Methods::Monitor do
   #   #blip(Numeric?)
   #   #data(Hash)
 
-  context "#broadcast" do
+  describe "#broadcast" do
     it "broadcasts the relevant data to the channel" do
       expect_successful_jil
 

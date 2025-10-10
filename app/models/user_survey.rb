@@ -24,25 +24,25 @@ class UserSurvey < ApplicationRecord
   def aggregate_results
     count_data = grouped_responses.count
     total = count_data.values.sum
-    count_data.map do |survey_result_id, result_count|
+    count_data.map { |survey_result_id, result_count|
       result = survey.survey_results.find(survey_result_id)
       {
-        name: result.name,
+        name:        result.name,
         # TODO: Don't grab the first one. Do conditional logic to find which description to show
         description: result.survey_result_details.first&.description,
-        percentage: ((result_count / total.to_f) * 100).round,
+        percentage:  ((result_count / total.to_f) * 100).round,
       }
-    end.sort_by { |data| -data[:percentage] }
+    }.sort_by { |data| -data[:percentage] }
   end
 
   def accumulate_results
     grouped_responses.sum(:value).map { |survey_result_id, result_count|
       result = survey.survey_results.find(survey_result_id)
       {
-        name: result.name,
+        name:        result.name,
         # TODO: Don't grab the first one. Do conditional logic to find which description to show
         description: result.survey_result_details.first&.description,
-        amount: result_count,
+        amount:      result_count,
       }
     }.sort_by { |data| -data[:amount] }
   end

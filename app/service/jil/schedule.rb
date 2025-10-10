@@ -8,13 +8,13 @@ module Jil::Schedule
   end
 
   def add_schedule(user, execute_at, trigger, data)
-    return unless trigger.present?
+    return if trigger.blank?
 
     schedule = ::ScheduledTrigger.create!(
-      user_id: ::User.id(user),
-      trigger: trigger,
+      user_id:    ::User.id(user),
+      trigger:    trigger,
       execute_at: execute_at.presence || ::Time.current,
-      data: data,
+      data:       data,
     )
 
     add_job(schedule) unless far_future?(schedule)
@@ -51,7 +51,7 @@ module Jil::Schedule
   def add_job(schedule)
     schedule.update!(
       # Offset 1 second to make up for async slowness
-      jid: ::JilRunnerWorker.perform_at(schedule.execute_at-1.second, schedule.user.id),
+      jid: ::JilRunnerWorker.perform_at(schedule.execute_at - 1.second, schedule.user.id),
     )
   end
 
@@ -68,6 +68,6 @@ module Jil::Schedule
   end
 
   def similar_time?(time1, time2, coverage=6.seconds)
-    time1.then { |t| ((t-coverage)..(t+coverage)) }.cover?(time2)
+    time1.then { |t| ((t - coverage)..(t + coverage)) }.cover?(time2)
   end
 end

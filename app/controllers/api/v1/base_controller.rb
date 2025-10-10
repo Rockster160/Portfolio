@@ -9,7 +9,8 @@ class Api::V1::BaseController < ApplicationController
     if current_user.nil?
       render_json error: "Please sign in before continuing.", status: :unauthorized
     elsif current_user.guest?
-      render_json error: "Please finish setting up your account before continuing.", status: :unauthorized
+      render_json error: "Please finish setting up your account before continuing.",
+        status: :unauthorized
     end
   end
 
@@ -21,7 +22,7 @@ class Api::V1::BaseController < ApplicationController
     end
   end
 
-  def not_found_response(exception)
+  def not_found_response(_exception)
     errors = ["#{controller_name.singularize.titleize} not found"]
     render json: { errors: errors }, status: :not_found
   end

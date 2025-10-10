@@ -7,14 +7,14 @@ class Auth
   end
 
   def session
-    (defined?(super) ? super() : nil) || @_auth_session
+    (defined?(super) ? super : nil) || @_auth_session
   end
 
   def request
-    (defined?(super) ? super() : nil) || @_auth_request
+    (defined?(super) ? super : nil) || @_auth_request
   end
 
   def cookies
-    defined?(super) ? super() : nil
+    defined?(super) ? super : nil
   end
 end

@@ -15,7 +15,7 @@ class FlashcardsController < ApplicationController
       @card = FlashCard.first
       @read_card = true
     end
-    @read_card = params[:status] == 'true' if params[:status]
+    @read_card = params[:status] == "true" if params[:status]
     @all = FlashCard.all.sort_by(&:id)
     @card_num = @all.index(@card) + 1
     respond_to do |format|
@@ -44,7 +44,13 @@ class FlashcardsController < ApplicationController
   def save_card
     line_indices = @card.lines.map(&:id)
     @card.update(title: params[:title], body: params[:body])
-    center = params[:center] ? params[:center].map { |should_center_line| should_center_line[0].to_i } : []
+    center = if params[:center]
+      params[:center].map { |should_center_line|
+        should_center_line[0].to_i
+      }
+    else
+      []
+    end
     params[:line].each do |line|
       this_line = @card.lines.find(line_indices[line[0].to_i])
       this_line.update(text: line[1], center: center.include?(line[0].to_i))
@@ -58,5 +64,4 @@ class FlashcardsController < ApplicationController
     next_card
     old_card.destroy
   end
-
 end

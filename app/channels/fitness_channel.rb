@@ -4,7 +4,7 @@ class FitnessChannel < ApplicationCable::Channel
     stream_from "fitness_channel"
   end
 
-  def request(data)
+  def request(_data)
     ::FitnessBroadcast.broadcast
   end
 end

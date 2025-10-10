@@ -10,6 +10,7 @@
 #
 class UserDashboard < ApplicationRecord
   include IndifferentJsonb
+
   belongs_to :user
 
   indifferent_jsonb :blocks
@@ -20,7 +21,7 @@ class UserDashboard < ApplicationRecord
 
   def default_blocks
     [
-      { type: :command }
+      { type: :command },
     ]
   end
 end

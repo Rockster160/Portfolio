@@ -55,7 +55,7 @@ class UserCache < ApplicationRecord
     new_data.each do |key, val|
       user.caches.set(key, val)
     end
-    self.destroy unless new_data.stringify_keys.include?(self.key.to_s)
+    destroy unless new_data.stringify_keys.include?(self.key.to_s)
   end
 
   def get(*steps)
@@ -79,10 +79,11 @@ class UserCache < ApplicationRecord
   def dig_set(*steps, val)
     steps = steps.flatten.map(&:presence).compact.map { |s| s.to_s.to_sym }
     raise "Not working with numerics" if steps.any? { |step| step.is_a?(Numeric) }
+
     hash = (self.data ||= {})
     self.data = val if steps.none?
     steps.each_with_index { |step, idx|
-      if idx < steps.length-1
+      if idx < steps.length - 1
         # hash[step] ||= step.is_a?(Numeric) ? [] : {}
         hash[step] ||= {}
         hash = hash[step]

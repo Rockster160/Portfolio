@@ -21,7 +21,7 @@ class MoneyBucket < ApplicationRecord
   end
 
   def balance_dollars
-    balance.to_f/100
+    balance.to_f / 100
   end
 
   def adjust=(new_adjust)
@@ -36,9 +36,7 @@ class MoneyBucket < ApplicationRecord
     manager.withdraw(new_withdraw) if new_withdraw.present?
   end
 
-  def buckets
-    manager.buckets
-  end
+  delegate :buckets, to: :manager
 
   def buckets=(attributes)
     self.bucket_json = manager.json_from_form_data(attributes)

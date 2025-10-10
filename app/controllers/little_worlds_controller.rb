@@ -1,6 +1,7 @@
 class LittleWorldsController < ApplicationController
   skip_before_action :verify_authenticity_token
   include CharacterBuilderHelper
+
   helper CharacterBuilderHelper
 
   def show
@@ -32,7 +33,10 @@ class LittleWorldsController < ApplicationController
   def character_builder
     @outfits = CharacterBuilder.default_outfits
     @character = find_avatar(session_first: true).character
-    flash.now[:notice] = "Avatar from session loaded. Click 'Load' in order to load your saved Avatar." if user_signed_in?
+    if user_signed_in?
+      flash.now[:notice] =
+        "Avatar from session loaded. Click 'Load' in order to load your saved Avatar."
+    end
   end
 
   def change_clothes
@@ -51,14 +55,22 @@ class LittleWorldsController < ApplicationController
     session_avatar.update_by_builder(character)
     current_user.update_avatar(character) if should_save
 
-    respond_to { |format| format.json { render json: { json: character.to_json, html: character.to_html } } }
+    respond_to { |format|
+      format.json {
+        render json: { json: character.to_json, html: character.to_html }
+      }
+    }
   end
 
   def load_character
     avatar = find_avatar(session_first: false)
     character = avatar.character
 
-    respond_to { |format| format.json { render json: { json: character.to_json, html: character.to_html } } }
+    respond_to { |format|
+      format.json {
+        render json: { json: character.to_json, html: character.to_html }
+      }
+    }
   end
 
   private
@@ -85,5 +97,4 @@ class LittleWorldsController < ApplicationController
   def location_params
     params.require(:avatar).permit(:location_x, :location_y, :timestamp)
   end
-
 end

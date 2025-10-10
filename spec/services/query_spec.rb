@@ -1,7 +1,7 @@
 RSpec.describe ApplicationRecord, type: :model do
   def query(str)
     sql = ActionEvent.query(str).to_sql
-    sql[/\ASELECT \"action_events\"\.\* FROM \"action_events\" WHERE \((.*?)\)\z/, 1].gsub("action_events.", "")
+    sql[/\ASELECT "action_events"\.\* FROM "action_events" WHERE \((.*?)\)\z/, 1].gsub("action_events.", "")
   end
 
   def expect_matching(sql, expected_sql)
@@ -60,7 +60,7 @@ RSpec.describe ApplicationRecord, type: :model do
 
     it "returns records on/after day" do
       sql = query("wordle timestamp>='2020-01-01'")
-      expect_matching sql, <<~SQL
+      expect_matching sql, <<~SQL.squish
         (
           (
             ("name"::TEXT ILIKE '%wordle%' OR "notes"::TEXT ILIKE '%wordle%')
@@ -74,7 +74,7 @@ RSpec.describe ApplicationRecord, type: :model do
 
     it "returns records during month" do
       sql = query("wordle timestamp>='7-17'")
-      expect_matching sql, <<~SQL
+      expect_matching sql, <<~SQL.squish
         (
           (
             ("name"::TEXT ILIKE '%wordle%' OR "notes"::TEXT ILIKE '%wordle%')

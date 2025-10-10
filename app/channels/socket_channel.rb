@@ -5,17 +5,17 @@ class SocketChannel < ApplicationCable::Channel
   CONNECTION_PING_INTERVAL = 3.seconds
   periodically every: CONNECTION_PING_INTERVAL do
     @driver&.ping
-    if Time.now - @_last_request_at > @_timeout
+    if Time.zone.now - @_last_request_at > @_timeout
       # close_connection
       # self.disconnect
       connection.close
     end
   end
   def connection_watcher
-    @_last_request_at ||= Time.now
+    @_last_request_at ||= Time.zone.now
     @_timeout = CONNECTION_TIMEOUT
     @driver = connection.instance_variable_get("@websocket").possible?&.instance_variable_get("@driver")
-    @driver.on(:pong) { @_last_request_at = Time.now }
+    @driver.on(:pong) { @_last_request_at = Time.zone.now }
   end
 
   def self.send_to(user, channel, data)
@@ -42,7 +42,7 @@ class SocketChannel < ApplicationCable::Channel
 
   def trigger(data, state)
     data.try(:deep_symbolize_keys!)
-    return unless params[:channel_id].present?
+    return if params[:channel_id].blank?
 
     receive_data = data.reverse_merge(params).except(:action).merge(connection_state: state || "unset")
     pretty_log_data(receive_data)

@@ -19,7 +19,8 @@
 #
 class Task < ApplicationRecord
   include ::Orderable
-  belongs_to :user, required: true
+
+  belongs_to :user, optional: false
 
   before_save :set_next_cron
   after_create { reload } # Needed to retrieve the generated uuid on the current instance in memory
@@ -27,7 +28,7 @@ class Task < ApplicationRecord
 
   has_many :executions
 
-  enum last_status: ::Execution.statuses
+  enum :last_status, ::Execution.statuses
 
   scope :enabled, -> { where(enabled: true) }
   scope :pending, -> { where(next_trigger_at: ..Time.current) }
@@ -49,7 +50,8 @@ class Task < ApplicationRecord
   }
 
   def self.links
-    ids.each { |id| puts "https://ardesian.com/jil/tasks/#{id}" };nil
+    ids.each { |id| puts "https://ardesian.com/jil/tasks/#{id}" }
+    nil
   end
 
   def self.last_exe
@@ -61,8 +63,8 @@ class Task < ApplicationRecord
       ctx = ctx.deep_symbolize_keys
       {
         timestamp: Time.zone.parse(ctx[:time_complete]),
-        error: ctx[:error],
-        line: ctx[:error_line],
+        error:     ctx[:error],
+        line:      ctx[:error_line],
       }
     }
   end
@@ -94,13 +96,15 @@ class Task < ApplicationRecord
     tasks = user.present? ? user.tasks.enabled.functions : none
     funcs = "[Custom]\n" + tasks.filter_map { |task|
       match = task.listener.match(func_regex)
-      next unless match.present?
+      next if match.blank?
 
       [
         "  #",
         task.name.gsub(/\W+/, "").gsub(" ", "_"),
-        "(", match[:args], ")::#{match[:cast] || :Any}",
-      ].join("")
+        "(",
+        match[:args],
+        ")::#{match[:cast] || :Any}",
+      ].join
     }.join("\n")
 
     (funcs + "\n" + File.read("app/service/jil/schema.txt")).html_safe
@@ -163,10 +167,12 @@ class Task < ApplicationRecord
     serialized_data = TriggerData.serialize(trigger_data, use_global_id: false)
     did_match = listener_match?(trigger) { |sub_listener|
       next true if sub_listener == trigger
+
       matcher = ::SearchBreakMatcher.new(sub_listener, { trigger => serialized_data })
       matcher.match?.tap { |m| first_match ||= matcher if m }
     }
     return if !did_match && !force
+
     ::Jarvis.log("[#{id}]\e[35m#{listener}")
 
     # pretty_log(trigger, trigger_data) if Rails.env.development?

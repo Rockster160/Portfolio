@@ -11,6 +11,12 @@ class ApiKeysController < ApplicationController
     render :form
   end
 
+  def edit
+    @api_key = current_user.api_keys.find(params[:id])
+
+    render :form
+  end
+
   def create
     @api_key = current_user.api_keys.new
 
@@ -19,12 +25,6 @@ class ApiKeysController < ApplicationController
     else
       redirect_to :api_keys, alert: "Failed to create"
     end
-  end
-
-  def edit
-    @api_key = current_user.api_keys.find(params[:id])
-
-    render :form
   end
 
   def update

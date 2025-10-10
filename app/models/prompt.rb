@@ -17,12 +17,12 @@ class Prompt < ApplicationRecord
 
   scope :unanswered, -> { where(response: nil) }
 
-  enum answer_type: {
+  enum :answer_type, {
     single: 0,
     many:   1,
   }
 
   def serialize(opts={})
-    super(opts).merge(url: Rails.application.routes.url_helpers.prompt_url(self))
+    super.merge(url: Rails.application.routes.url_helpers.prompt_url(self))
   end
 end

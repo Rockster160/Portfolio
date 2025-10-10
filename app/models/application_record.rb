@@ -2,8 +2,7 @@ class ApplicationRecord < ActiveRecord::Base
   self.abstract_class = true
   attr_accessor :new_attributes
 
-  include Jilable
-  include Jsonable
+  include Jsonable, Jilable
 
   # TODO: Support `started_at: :start` to tweak the helper methods to be `start!` instead of `started!`
   def self.timestamp_bool(*cols)
@@ -27,13 +26,13 @@ class ApplicationRecord < ActiveRecord::Base
     # where(build_query(hash, "NOT ILIKE", join), *hash.values)
     where(
       # Dumb PG removes empty values when querying for a NOT for some reason
-      hash.map { |k, v| "(\"#{k.to_s.gsub(".", "\".\"")}\"::TEXT NOT ILIKE ? OR \"#{k.to_s.gsub(".", "\".\"")}\" IS NULL)" }.join(" #{join} "),
-      *hash.values
+      hash.map { |k, _v| "(\"#{k.to_s.gsub(".", "\".\"")}\"::TEXT NOT ILIKE ? OR \"#{k.to_s.gsub(".", "\".\"")}\" IS NULL)" }.join(" #{join} "),
+      *hash.values,
     )
   end
 
   def self.build_query(hash, point, join_with=:AND)
-    hash.map { |k, v| "\"#{k.to_s.gsub(".", "\".\"")}\"::TEXT #{point} ?" }.join(" #{join_with} ")
+    hash.map { |k, _v| "\"#{k.to_s.gsub(".", "\".\"")}\"::TEXT #{point} ?" }.join(" #{join_with} ")
   end
 
   def self.search_scope
@@ -43,7 +42,7 @@ class ApplicationRecord < ActiveRecord::Base
 
   def self.search_terms(*set_terms)
     # alias => column
-    @search_terms ||= begin
+    @search_terms ||= (
       terms = {}
       set_terms.each do |set_term|
         case set_term
@@ -52,12 +51,13 @@ class ApplicationRecord < ActiveRecord::Base
         end
       end
       terms
-    end
+    )
   end
 
   def self.search_indexed(word)
     search_terms.values.filter_map { |column|
       next column if column.to_s.include?(".")
+
       column_data = columns.find { |c| c.name == column.to_s }
       next column if column_data&.type.in?(%i[string text])
     }.index_with(word)
@@ -65,7 +65,7 @@ class ApplicationRecord < ActiveRecord::Base
 
   def self.stripped_sql
     all.to_sql.gsub(/(?: AND )?SELECT "#{table_name}"\.\* FROM "#{table_name}"(?: WHERE )?/, "")
-      .gsub(/ ?LEFT OUTER JOIN \"\w+\" ON \"\w+\".\"id\" = \"#{table_name}\".\"\w+\" WHERE/, "")
+      .gsub(/ ?LEFT OUTER JOIN "\w+" ON "\w+"."id" = "#{table_name}"."\w+" WHERE/, "")
   end
 
   def self.raw_sql(q, *data)
@@ -79,15 +79,13 @@ class ApplicationRecord < ActiveRecord::Base
 
   def self.node_sql(node, parent_node=nil)
     field = (parent_node&.field || node.field).to_sym
-    unless search_terms.key?(field)
-      return search_scope.search(field).stripped_sql
-    end
+    return search_scope.search(field).stripped_sql unless search_terms.key?(field)
 
     column = search_terms[field]
     column_data = nil
     scope_method = nil
 
-    if !column.to_s.include?(".") && !column_names.include?(column.to_s)
+    if column.to_s.exclude?(".") && column_names.exclude?(column.to_s)
       scope_method = column
       column = nil
     elsif column.to_s.include?(".")
@@ -141,6 +139,7 @@ class ApplicationRecord < ActiveRecord::Base
       end
     }.compact_blank.then { |values|
       next values.first unless values.many?
+
       case node.operator
       when :AND then "((#{values.join(") AND (")}))"
       when :OR then "((#{values.join(") OR (")}))"
@@ -150,7 +149,7 @@ class ApplicationRecord < ActiveRecord::Base
   end
   # rubocop:enable Lint/RedundantSplatExpansion
 
-  scope :assign, -> (data) {
+  scope :assign, ->(data) {
     relation = all
     # prev = relation.instance_variable_get(:@assigned_data) || {}
     relation.instance_variable_set(:@assigned_data, data)
@@ -203,10 +202,10 @@ class ApplicationRecord < ActiveRecord::Base
     # Reduce parens:
     tz = Tokenizer.new(sql)
     str = tz.tokenized_text
-    sql = tz.untokenize do |val|
+    sql = tz.untokenize { |val|
       /\A\((\w+)\)\z/.tap { |rx| val = val.gsub(rx, '\1') while val.match?(rx) }
       val
-    end
+    }
     next if sql.blank?
 
     where(sql)
@@ -237,7 +236,7 @@ class ApplicationRecord < ActiveRecord::Base
   }
 
   class << self
-    alias_method :json_serialize, :serialize
+    alias json_serialize serialize
   end
 
   def self.serialize(opts={})
@@ -246,28 +245,28 @@ class ApplicationRecord < ActiveRecord::Base
 
   def serialize(opts={})
     as_json(
-      opts.reverse_merge(except: [:created_at, :updated_at])
+      opts.reverse_merge(except: [:created_at, :updated_at]),
     ).merge(@execution_attrs || {}).with_indifferent_access
   end
 
   def new(attrs={})
     @new_attributes = attrs
-    super(attrs)
+    super
   end
 
   def assign_attributes(attrs={})
     @new_attributes = attrs
-    super(attrs)
+    super
   end
 
   def create(attrs={})
     @new_attributes = attrs
-    super(attrs)
+    super
   end
 
   def update(attrs={})
     @new_attributes = attrs
-    super(attrs)
+    super
   end
 
   def error_messages

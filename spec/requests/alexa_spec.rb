@@ -3,17 +3,17 @@ RSpec.describe Api::V1::AlexaController, type: :controller do
   let!(:shopping_list) { user.lists.create!(name: "Shopping") }
   let(:house) {
     ::Doorkeeper::Application.create!(
-      name: "Alexa Skill",
+      name:         "Alexa Skill",
       redirect_uri: "https://alexa.com",
-      scopes: :access,
+      scopes:       :access,
     )
   }
   let!(:door) {
     ::Doorkeeper::AccessToken.create(
-      application: house,
+      application:       house,
       resource_owner_id: user.id,
-      scopes: :access
-    ).tap { |d| d.update!(token: ENV["TEST_EXAMPLE_ALEXA_TOKEN"]) }
+      scopes:            :access,
+    ).tap { |d| d.update!(token: ENV.fetch("TEST_EXAMPLE_ALEXA_TOKEN", nil)) }
   }
   let(:responses) {
     {

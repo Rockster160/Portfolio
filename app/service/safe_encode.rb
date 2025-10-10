@@ -2,6 +2,7 @@
 
 class SafeEncode
   include ::Serviceable
+
   attributes :obj
 
   def call

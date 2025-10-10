@@ -33,10 +33,10 @@ class ClimbsController < ApplicationController
     @climb.add(params[:v_index])
 
     data = {
-      last: params[:v_index],
-      score: @climb.score,
-      climbs: @climb.scores,
-      recent_avg: current_user.climbs.recent_avg.round(2),
+      last:        params[:v_index],
+      score:       @climb.score,
+      climbs:      @climb.scores,
+      recent_avg:  current_user.climbs.recent_avg.round(2),
       alltime_avg: current_user.climbs.alltime_avg.round(2),
     }
 
@@ -51,12 +51,14 @@ class ClimbsController < ApplicationController
 
     respond_to do |format|
       format.html { redirect_to :climbs }
-      format.json { render json: {
-        score: @climb.score,
-        climbs: @climb.scores,
-        recent_avg: current_user.climbs.recent_avg.round(2),
-        alltime_avg: current_user.climbs.alltime_avg.round(2),
-      } }
+      format.json {
+        render json: {
+          score:       @climb.score,
+          climbs:      @climb.scores,
+          recent_avg:  current_user.climbs.recent_avg.round(2),
+          alltime_avg: current_user.climbs.alltime_avg.round(2),
+        }
+      }
     end
   end
 

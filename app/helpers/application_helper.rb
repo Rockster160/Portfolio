@@ -1,8 +1,9 @@
 module ApplicationHelper
   def render_modal(id, title, additional_classes="", &block)
-    render layout: "layouts/modal", locals: { id: id, title: title, additional_classes: additional_classes } do
-      block.call
-    end
+    render layout: "layouts/modal",
+      locals: { id: id, title: title, additional_classes: additional_classes } do
+        block.call
+      end
   end
 
   def posi_checker(str)
@@ -17,7 +18,7 @@ module ApplicationHelper
 
   def pretty(language, file_path)
     file_contents = File.read("lib/assets/code_snippets/#{file_path}")
-    file_contents.gsub!('`', '\\\\`')
+    file_contents.gsub!("`", '\\\\`')
     # "bsh", "c", "cc", "cpp", "cs", "csh", "cyc", "cv", "htm", "html", "java",
     #   "js", "m", "mxml", "perl", "pl", "pm", "py", "rb", "sh", "xhtml", "xml", "xsl"
     "<pre class=\"prettyprint lang-#{language} language-#{language}\">#{file_contents}</pre>"
@@ -67,7 +68,7 @@ module ApplicationHelper
 
     if time.is_a?(String)
       begin
-        return Time.parse(time)
+        return Time.zone.parse(time)
       rescue StandardError
         return fallback
       end

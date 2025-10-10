@@ -3,12 +3,12 @@ module SearchBreaker
   module_function
 
   RX = {
-    quot_str:        /^\"(.*?)\"$/,
-    single_quot_str: /^\'(.*?)\'$/,
+    quot_str:        /^"(.*?)"$/,
+    single_quot_str: /^'(.*?)'$/,
     rx_str:          /^\/(.*?)\/$/,
     paren_wrap:      /^\((.*?)\)$/,
     start:           /(?:^|\b)/,
-  }
+  }.freeze
 
   # SearchBreaker needs a "direct" match for finding a key/value that's immediately following the previous.
   #   `deploy:>:start` # maybe?
@@ -34,9 +34,7 @@ module SearchBreaker
       vals: {},
     }
 
-    if delims_with_aliases.none? { |dk, d| str.include?(d) }
-      return { keys: { str => {} } }
-    end
+    return { keys: { str => {} } } if delims_with_aliases.none? { |_dk, d| str.include?(d) }
 
     delim_regex = delim_escaped_regex(delims_with_aliases)
     tr.tokenized_text.split(/\s+/).each_with_object(out) { |tz_piece, obj|
@@ -46,7 +44,7 @@ module SearchBreaker
       tz_key, delim, tz_val = tz_piece.split(delim_regex, 2)
       key = tr.untokenize(tz_key)
       val = tr.untokenize(tz_val)
-      delim_key = delims_with_aliases.find { |dk, d| delim.downcase == d.downcase }[0]
+      delim_key = delims_with_aliases.find { |_dk, d| delim.downcase == d.downcase }[0]
 
       key, val = [key, val].map { |part| unwrap(part, quotes: false) }
       val = broken_or_val(val, delimiters) # Recursive search breaker
@@ -64,11 +62,11 @@ module SearchBreaker
   end
 
   def delim_escaped_regex(delimiters)
-    sorted_delims = delimiters.sort_by { |dk, d| -d.length } # Longest first
-    sorted_delims.map { |dk, d|
+    sorted_delims = delimiters.sort_by { |_dk, d| -d.length } # Longest first
+    sorted_delims.map { |_dk, d|
       ::Regexp.escape(d)
     }.join("|").then { |delims|
-      ::Regexp.new(/#{RX[:start]}(#{delims})/i)
+      /#{RX[:start]}(#{delims})/i
     }
   end
 

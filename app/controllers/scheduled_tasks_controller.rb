@@ -16,21 +16,19 @@ class ScheduledTasksController < ApplicationController
     ::Jil::Schedule.broadcast(event, :created)
 
     respond_to do |format|
-      format.json do
+      format.json {
         if event.persisted?
           head :ok
         else
           SlackNotifier.notify(event.errors.full_messages.join("\n"))
           head :unprocessable_entity
         end
-      end
+      }
 
-      format.html do
-        unless event.valid?
-          flash[:alert] = "Failed to create event: #{event.errors.full_messages.join(' | ')}"
-        end
+      format.html {
+        flash[:alert] = "Failed to create event: #{event.errors.full_messages.join(" | ")}" unless event.valid?
         redirect_to action_events_path
-      end
+      }
     end
   end
 
@@ -48,7 +46,7 @@ class ScheduledTasksController < ApplicationController
       ::Jil::Schedule.broadcast(event, :canceled)
     }
 
-    redirect_to request.referrer || action_events_path
+    redirect_to request.referer || action_events_path
   end
 
   private
@@ -58,7 +56,7 @@ class ScheduledTasksController < ApplicationController
 
     if time.is_a?(String)
       begin
-        return Time.parse(time)
+        return Time.zone.parse(time)
       rescue StandardError
         return Time.current
       end
@@ -68,16 +66,16 @@ class ScheduledTasksController < ApplicationController
   end
 
   def event_params
-    (params[:action_event] || params).to_unsafe_h.slice(:name, :trigger, :execute_at, :data).tap do |whitelist|
+    (params[:action_event] || params).to_unsafe_h.slice(
+      :name, :trigger, :execute_at,
+      :data
+    ).tap { |whitelist|
       whitelist[:execute_at] = safeparse_time(whitelist[:execute_at])
       whitelist.delete(:data).presence&.tap { |json|
         json = json.to_s.gsub(/\n?\s*(\w+):/, ' "\1":')
         json = BetterJsonSerializer.load(json)
-        if json.is_a?(::Hash) || json.is_a?(::Array)
-          whitelist[:data] = json
-        end
+        whitelist[:data] = json if json.is_a?(::Hash) || json.is_a?(::Array)
       }
-    end
+    }
   end
-
 end

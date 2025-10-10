@@ -1,8 +1,9 @@
 class Users::SessionsController < ApplicationController
   skip_before_action :verify_authenticity_token
   skip_before_action :show_guest_banner
-  before_action :unauthorize_user, :set_invitation_token, except: [ :destroy ], unless: :guest_account?
-  before_action :authorize_user_or_guest, only: [ :destroy ]
+  before_action :unauthorize_user, :set_invitation_token, except: [:destroy],
+    unless: :guest_account?
+  before_action :authorize_user_or_guest, only: [:destroy]
 
   def new
     @user = User.new
@@ -32,7 +33,7 @@ class Users::SessionsController < ApplicationController
 
   def set_invitation_token
     @invitation_token ||= params.dig(:user, :invitation_token) || params[:invitation_token]
-    @invitation_hash = @invitation_token.present? ? {invitation_token: @invitation_token} : nil
+    @invitation_hash = @invitation_token.present? ? { invitation_token: @invitation_token } : nil
   end
 
   def merge_user_accounts
@@ -43,7 +44,7 @@ class Users::SessionsController < ApplicationController
 
   def move_user_lists_to_user
     if @invitation_token.present?
-      temp_user = User.where.not(invitation_token: nil).find_by_invitation_token(@invitation_token)
+      temp_user = User.where.not(invitation_token: nil).find_by(invitation_token: @invitation_token)
       temp_user.user_lists.each do |user_list|
         @user.user_lists.find_or_create_by(list_id: user_list.list_id)
       end
@@ -54,5 +55,4 @@ class Users::SessionsController < ApplicationController
   def user_params
     params.require(:user).permit(:username, :password)
   end
-
 end
