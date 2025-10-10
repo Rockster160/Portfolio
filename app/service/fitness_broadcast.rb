@@ -157,9 +157,10 @@ class FitnessBroadcast
   end
 
   def row(ico, q, expected)
-    ico.presence&.then { |i| "#{i} " }&.+ dates(ico) do |date|
-      status(date, q, expected)
-    end
+    [
+      ico.presence&.then { |i| "#{i} " },
+      *dates(ico) { |date| status(date, q, expected) },
+    ].inject(&:+)
   end
 
   def status(date, q, color_map)
