@@ -100,7 +100,7 @@ class CharacterBuilder
 
   def self.character_outfits
     @@character_outfits ||= (
-      ActiveSupport::HashWithIndifferentAccess.new(JSON.parse(File.read("lib/assets/valid_character_outfits.rb")))
+      eval(File.read("lib/assets/valid_character_outfits.rb")).with_indifferent_access
     )
   end
 
