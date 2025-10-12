@@ -61,7 +61,7 @@ class Jil::Methods::Array < Jil::Methods::Base
     when :del! then token_val(line.objname).delete_at(@jil.cast(evalarg(line.arg), :Numeric))
     when :each, :map, :any?, :none?, :all?
       @jil.enumerate_array(token_val(line.objname), method) { |ctx| evalarg(line.arg, ctx) }
-    when :select, :sort_by
+    when :select, :reject, :sort_by
       @jil.enumerate_array(token_val(line.objname), method) { |ctx|
         evalarg(line.arg, ctx)
       }.map(&:first).then { |arr|

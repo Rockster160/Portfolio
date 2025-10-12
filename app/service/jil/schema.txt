@@ -156,6 +156,7 @@
   .shuffle
   .each(enum_content)
   .select(enum_content)::Array
+  .reject(enum_content)::Array
   .map(enum_content)
   .compact()
   .find(enum_content)::Any

@@ -349,12 +349,12 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
 
   let getGarage = function () {
     cell.recent_garage = false;
-    cell.garage_socket.send({ request: "get" });
+    cell.garage_monitor?.resync();
 
     // If no response within 10 seconds, forget the current state
     clearTimeout(cell.garage_timeout);
     cell.garage_timeout = setTimeout(function () {
-      cell.garage_socket.send({ request: "get" });
+      cell.garage_monitor?.resync();
       console.log("Timed out waiting for garage response");
       cell.data.garage.state = "unknown";
       renderLines();
@@ -434,11 +434,11 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
     );
     cell.device_battery_socket.send({ action: "request" });
 
-    cell.garage_socket = Monitor.subscribe("garage", {
+    cell.garage_monitor = Monitor.subscribe("garage", {
       connected: function () {
         console.log("socket Connected");
         setTimeout(function () {
-          cell.garage_socket.send({ request: "get" });
+          cell.garage_monitor?.resync();
         }, 1000);
         // can also set the arrow?
         // this.send({ request: "open" })
@@ -581,7 +581,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
         Order.add(msg.replace(/^add\s*/i, ""));
       } else if (/\b(open|close|toggle|garage)\b/.test(msg)) {
         // open/close
-        cell.garage_socket.send({
+        cell.garage_monitor.send({
           channel: "garage",
           request: msg.match(/\b(open|close|toggle)\b/)[0],
         });
