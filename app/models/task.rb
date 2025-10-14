@@ -114,6 +114,16 @@ class Task < ApplicationRecord
     listener.to_s.split(":", 2).first.presence&.to_sym
   end
 
+  def monitor
+    return unless listener.to_s.starts_with?("monitor:")
+
+    listener.to_s.gsub(/^monitor::?/i, "")
+  end
+
+  def monitor?
+    trigger_type == :monitor
+  end
+
   def average_duration(count)
     executions.finished.order(:finished_at).limit(count).map(&:duration).then { |a| a.sum.to_f / a.length }
   end
@@ -167,6 +177,10 @@ class Task < ApplicationRecord
     serialized_data = TriggerData.serialize(trigger_data, use_global_id: false)
     did_match = listener_match?(trigger) { |sub_listener|
       next true if sub_listener == trigger
+
+      if trigger == :monitor && trigger_data.is_a?(::Hash)
+        next true if sub_listener.match?(/\A\s*monitor::?#{trigger_data[:channel]}\s*\z/)
+      end
 
       matcher = ::SearchBreakMatcher.new(sub_listener, { trigger => serialized_data })
       matcher.match?.tap { |m| first_match ||= matcher if m }

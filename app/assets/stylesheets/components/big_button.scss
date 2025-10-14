@@ -11,6 +11,10 @@
   transition: transform, box-shadow 0.1s ease;
   margin-bottom: 30px;
 
+  --btn-color: #0150D5;
+  --btn-color-d2: color-mix(in srgb, var(--btn-color) 90%, black);
+  --btn-color-d4: color-mix(in srgb, var(--btn-color-d2) 70%, black);
+
   .execute-btn {
     width: 100px;
     height: 95px;
@@ -18,9 +22,9 @@
     border-radius: 500px;
     position: relative;
     z-index: 1;
-    border: 2px solid $blue-d4;
-    box-shadow: 0 10px 0 $blue-d4;
-    background-color: $blue-d1;
+    border: 2px solid var(--btn-color-d4);
+    box-shadow: 0 10px 0 var(--btn-color-d4);
+    background-color: var(--btn-color);
     display: flex;
     font-size: 14px;
     justify-content: center;
@@ -33,16 +37,16 @@
 
     &:hover {
       transform: translateY(1px);
-      box-shadow: 0 9px 0 $blue-d4;
+      box-shadow: 0 9px 0 var(--btn-color-d4);
     }
     &:active {
       transform: translateY(9px);
-      box-shadow: 0 1px 0 $blue-d4;
+      box-shadow: 0 1px 0 var(--btn-color-d4);
     }
     &.disabled {
       background-color: $grey-blue;
       cursor: not-allowed;
-      border-color: $blue-d4;
+      border-color: var(--btn-color-d4);
       transform: translateY(9px);
       box-shadow: 0 1px 0 $grey-blue;
     }
@@ -54,9 +58,9 @@
     left: -10px;
     right: -10px;
     height: 120px;
-    background-color: $blue-d2;
+    background-color: var(--btn-color-d2);
     border-radius: 8px;
-    border: 2px solid $blue-d4;
+    border: 2px solid var(--btn-color-d4);
   }
 
   .message-wrapper {

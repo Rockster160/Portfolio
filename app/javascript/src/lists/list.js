@@ -44,7 +44,6 @@ function parseDuration(str, fallback = 0) {
 }
 
 const resetTime = parseDuration(params.reset, resetModeTimes[listMode]);
-console.log("List mode:", listMode, "reset every", resetTime, "ms");
 // kiosk | clear | normal
 
 $(document).on("keyup", "input.filterable", function () {

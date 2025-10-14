@@ -1,8 +1,8 @@
 <% title ||= task.name %>
-<div class="execute-btn-wrapper">
+<%= content_tag(:div, class: "execute-btn-wrapper", data: task.monitor? ? { task_id: task.id, type: :monitor, monitor: task.monitor } : {}) do %>
   <%= link_to run_jil_task_path(task), method: :post, remote: true, class: "execute-btn" do %>
     <div class="execute-btn-title"><%= title %></div>
   <% end %>
   <span class="execute-btn-base"></span>
   <div class="message-wrapper"></div>
-</div>
+<% end %>

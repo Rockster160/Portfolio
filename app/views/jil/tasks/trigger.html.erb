@@ -15,15 +15,45 @@
 
 <script>
   document.addEventListener("DOMContentLoaded", function() {
-    const executeBtn = document.querySelector(".execute-btn-wrapper .execute-btn");
+    const executeWrapper = document.querySelector(".execute-btn-wrapper");
+    const executeBtn = executeWrapper.querySelector(".execute-btn");
     if (executeBtn) {
       executeBtn.addEventListener("click", function() {
         executeBtn.style.pointerEvents = "none";
         executeBtn.classList.add("disabled");
       });
+    } else {
+      return
+    }
+
+    if (executeWrapper.dataset.type === "monitor") {
+      const monitorKey = executeWrapper.dataset.monitor
+      let monitor = undefined
+      let synced = false
+      let syncInterval = undefined
+      monitor = Monitor.subscribe(monitorKey, {
+        connected: function() {
+          monitor?.resync()
+          syncInterval = setInterval(() => {
+            if (!synced) {
+              console.log("resyncing monitor...");
+              monitor?.resync()
+            }
+          }, 1000);
+        },
+        received: function(json) {
+          synced = true
+          clearInterval(syncInterval)
+          if (json?.data?.text) {
+            executeBtn.querySelector(".execute-btn-title").textContent = json.data.text
+          }
+          if (json?.data?.color) {
+            executeWrapper.style.setProperty("--btn-color", json.data.color)
+          }
+        },
+      })
     }
   });
-
 
   document.addEventListener("ajax:success", function(event) {
     const wrapper = event.target.closest(".execute-btn-wrapper");
