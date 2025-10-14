@@ -73,54 +73,72 @@ class QrLabel < Qr
     "?" => "11111.11111.11111.11111.11111.11111.11111",
   }.freeze
 
-  def self.card(url, title:, dpi: 300, pad_mm: 0.8, title_scale: 3, url_scale: 2)
-    new(url.gsub(/https?:\/\//, "")).card(url, title: title, dpi: dpi, pad_mm: pad_mm, title_scale: title_scale, url_scale: url_scale)
+  def self.card(url, title:, dpi: 203, pad_mm: 0.8, title_scale: 3, url_scale: 2)
+    new(url.gsub(/https?:\/\//, "").gsub(":3141", "")).card(
+      url.gsub(/https?:\/\//, "").gsub(":3141", ""),
+      title:       title,
+      dpi:         dpi,
+      pad_mm:      pad_mm,
+      title_scale: title_scale,
+      url_scale:   url_scale,
+    )
   end
 
   def card(url, title:, dpi:, pad_mm:, title_scale:, url_scale:)
-    w_px = (1.57 * dpi).round
-    h_px = (1.18 * dpi).round
+    w_px = (1.18 * dpi).round
+    h_px = (1.57 * dpi).round
     pad  = (pad_mm * dpi / INCH_TO_MM).round
 
-    qr_size = h_px - (pad * 2)
+    inner_w = w_px - (pad * 2)
+    inner_h = h_px - (pad * 2)
+    qr_text_gap = 6
+
     qr_img = @qr.as_png(
-      size:           qr_size,
+      size:           w_px - pad,
       border_modules: 0,
-      color_mode:     ChunkyPNG::COLOR_GRAYSCALE,
+      color_mode:     ::ChunkyPNG::COLOR_GRAYSCALE,
       color:          "black",
       fill:           "white",
     )
 
-    # build horizontal text block (then rotate 90° clockwise)
-    text_block_w = h_px - (pad * 2) # becomes rotated height
     text_img = render_text_block(
       title:       title,
       url:         url,
-      max_width:   text_block_w,
+      max_width:   inner_w,
       title_scale: title_scale.floor,
       url_scale:   url_scale.floor,
-      gap:         6,
+      gap:         qr_text_gap,
     )
-    text_img = text_img.rotate_right
 
-    # compose on sticker canvas
-    col_w = w_px - qr_img.width - (pad * 3)
-    if text_img.width > col_w
+    avail_h = inner_h - qr_img.height - qr_text_gap
+    if text_img.width > inner_w || text_img.height > avail_h
       # if too wide, shrink scales proportionally (integer floor)
-      shrink = [1, (col_w.to_f / text_img.width)].max
-      new_t = [(title_scale * shrink).floor, 1].max
-      new_u = [(url_scale * shrink).floor, 1].max
+      w_ratio = inner_w.to_f / text_img.width
+      h_ratio = avail_h.to_f / text_img.height
+      shrink  = [w_ratio, h_ratio, 1.0].min
+      new_t   = (title_scale * shrink).floor.clamp(1, title_scale)
+      new_u   = (url_scale * shrink).floor.clamp(1, url_scale)
       text_img = render_text_block(
-        title: title, url: url, max_width: text_block_w,
-        title_scale: new_t, url_scale: new_u, gap: 6
-      ).rotate_right
+        title:       title,
+        url:         url,
+        max_width:   inner_w,
+        title_scale: new_t,
+        url_scale:   new_u,
+        gap:         qr_text_gap,
+      )
     end
 
-    canvas = ChunkyPNG::Image.new(w_px, h_px, ChunkyPNG::Color::WHITE)
-    canvas.replace(qr_img, pad, pad)
+    canvas = ::ChunkyPNG::Image.new(w_px, h_px, ::ChunkyPNG::Color::WHITE)
 
-    x_text = pad + qr_img.width + pad + ((col_w - text_img.width) / 2)
-    y_text = pad + ((h_px - (pad * 2) - text_img.height) / 2) + pad
+    # Center horizontally
+    x_qr   = pad + ((inner_w - qr_img.width) / 2)
+    x_text = pad + ((inner_w - text_img.width) / 2)
+
+    # Text goes at the top, QR below
+    y_qr   = h_px - pad - qr_img.height
+    y_text = (y_qr / 2) - (text_img.height / 2) + (pad / 2)
+
+    canvas.replace(qr_img, x_qr, y_qr)
     canvas.replace(text_img, x_text, y_text)
 
     canvas.to_blob
@@ -136,7 +154,7 @@ class QrLabel < Qr
     url_img   = render_lines(url_lines, url_scale, max_width)
 
     h = title_img.height + gap + url_img.height
-    out = ChunkyPNG::Image.new(max_width, h, ChunkyPNG::Color::WHITE)
+    out = ::ChunkyPNG::Image.new(max_width, h, ::ChunkyPNG::Color::WHITE)
     out.replace(title_img, 0, 0)
     out.replace(url_img, 0, title_img.height + gap)
     out
@@ -145,7 +163,7 @@ class QrLabel < Qr
   def render_lines(lines, scale, max_width)
     line_h = 7 * scale
     total_h = (lines.size * line_h) + ((lines.size - 1) * scale)
-    img = ChunkyPNG::Image.new(max_width, total_h, ChunkyPNG::Color::WHITE)
+    img = ::ChunkyPNG::Image.new(max_width, total_h, ::ChunkyPNG::Color::WHITE)
 
     y = 0
     lines.each do |line|
@@ -191,7 +209,7 @@ class QrLabel < Qr
   end
 
   def draw_text(img, text, x, y, scale)
-    color = ChunkyPNG::Color::BLACK
+    color = ::ChunkyPNG::Color::BLACK
     text.chars.each do |ch|
       pattern = FONT_5x7[ch] || FONT_5x7["?"]
       cols = pattern.split(".").first.size

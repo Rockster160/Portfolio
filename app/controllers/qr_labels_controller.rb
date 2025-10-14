@@ -9,6 +9,8 @@ class QrLabelsController < ApplicationController
   end
 
   def show
+    return render blank_response if @qr.blank?
+
     inline_response
   end
 
@@ -20,15 +22,15 @@ class QrLabelsController < ApplicationController
 
   def set_qr
     if params[:box_id].present?
-      box = current_user.boxes.find_by_key(params[:box_id])
-      @url = box_url(box, host: "rdjn.me").gsub(/https?:\/\//, "")
+      box = current_user.boxes.from_key(params[:box_id])
+      @url = box_url(box, host: "rdjn.me").gsub(/https?:\/\//, "").gsub(":3141", "")
       @title = box.name
     end
 
     @url ||= params[:url]
     @title ||= params[:title]
 
-    return blank_response if @url.blank? || @title.blank?
+    return if @url.blank? || @title.blank?
 
     @qr = QrLabel.card(@url, title: @title)
   end

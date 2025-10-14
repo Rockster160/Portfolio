@@ -9,7 +9,7 @@ class InventoryManagementController < ApplicationController
   end
 
   def box # boxes#show
-    @box = current_user.boxes.find_by_key(params[:id])
+    @box = current_user.boxes.from_key(params[:id])
     @boxes = [@box]
     @crumbs = @box.hierarchy_data || []
     @open = 1

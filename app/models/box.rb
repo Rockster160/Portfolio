@@ -38,7 +38,7 @@ class Box < ApplicationRecord
 
   validates :name, presence: true
 
-  def self.find_by_key(keys)
+  def self.from_key(keys)
     if keys.is_a?(::Array)
       keys = keys.map { |k| k.upcase.gsub("0", "O").gsub("1", "I") }
       ilike(param_key: keys)
@@ -84,6 +84,7 @@ class Box < ApplicationRecord
       random_key = param_length.times.map { chars.sample }.join
 
       break random_key unless ::Box.exists?(param_key: random_key)
+
       SlackNotifier.notify("Regenerating box param_key collision: #{random_key}. Total boxes: #{::Box.count}.")
     end
   end
