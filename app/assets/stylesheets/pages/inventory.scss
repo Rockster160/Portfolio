@@ -11,7 +11,7 @@
   --indent: 16px;
 }
 
-.ctr-inventory_management.act-show {
+.ctr-inventory_management {
   &,
   body {
     height: 100%;
@@ -20,6 +20,17 @@
   }
   * {
     box-sizing: border-box;
+  }
+
+  a {
+    text-decoration: underline;
+    color: var(--text);
+
+    &:active,
+    &:hover {
+      color: var(--text);
+      text-decoration: underline;
+    }
   }
 
   .search-wrapper {
