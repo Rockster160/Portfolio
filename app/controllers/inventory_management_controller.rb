@@ -8,6 +8,15 @@ class InventoryManagementController < ApplicationController
     @boxes = current_user.boxes.where(parent_id: nil).ordered
   end
 
+  def box # boxes#show
+    @box = current_user.boxes.find(params[:id])
+    @boxes = [@box]
+    @crumbs = @box.hierarchy_data
+    @open = true
+
+    render :show
+  end
+
   def create
     box = current_user.boxes.create!(box_params)
 

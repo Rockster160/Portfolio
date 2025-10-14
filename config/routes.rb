@@ -128,6 +128,7 @@ Rails.application.routes.draw do
   resource :inventory, controller: :inventory_management do
     resources :boxes
   end
+  get "/b/:id" => "inventory_management#box", as: :box
 
   resources :scheduled_tasks, path: :schedules
 

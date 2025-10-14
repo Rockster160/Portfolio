@@ -19,7 +19,12 @@
   <div class="tree">
     <ul role="tree" aria-label="Inventory Tree">
       <li data-type="root" data-id="" data-hierarchy="Everything">
-        <summary>Everything</summary>
+        <summary>
+          Everything
+          <% @crumbs&.each do |crumb| %>
+            <span class="crumb">&gt; <%= link_to crumb[:name], box_path(crumb[:id]) %></span>
+          <% end %>
+        </summary>
       </li>
       <% @boxes.each do |box| %>
         <%= render partial: "inventory_management/box", locals: { box: box, preload: false } %>
