@@ -1,3 +1,4 @@
+<% level ||= 0 %>
 <% content_for :title, "Inventory" %>
 
 <div class="inventory-wrapper">
@@ -19,15 +20,19 @@
   <div class="tree">
     <ul role="tree" aria-label="Inventory Tree">
       <li data-type="root" data-id="" data-hierarchy="Everything">
-        <summary>
-          Everything
-          <% @crumbs&.each do |crumb| %>
-            <span class="crumb">&gt; <%= link_to crumb[:name], box_path(crumb[:id]) %></span>
+        <div class="root-wrapper">
+          <% if @crumbs.nil? %>
+            Everything
+          <% else %>
+            <%= link_to "Everything", inventory_path %>
+            <% @crumbs&.each do |crumb| %>
+              <span class="crumb">&gt; <%= link_to crumb[:name], box_path(crumb[:id]) %></span>
+            <% end %>
           <% end %>
-        </summary>
+        </div>
       </li>
       <% @boxes.each do |box| %>
-        <%= render partial: "inventory_management/box", locals: { box: box, preload: false } %>
+        <%= render partial: "inventory_management/box", locals: { box: box } %>
       <% end %>
     </ul>
   </div>

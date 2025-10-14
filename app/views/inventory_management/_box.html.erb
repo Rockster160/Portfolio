@@ -1,18 +1,18 @@
-<% preload ||= false %>
+<% preload ||= nil %>
+<% open_box = @open.to_i >= box.level %>
+<% preload = open_box if preload.nil? %>
 
 <li data-type="<%= box.empty? ? :item : :box %>" data-id="<%= box.id %>" data-parent-id="<%= box.parent_id %>" data-sort-order="<%= box.sort_order %>" data-hierarchy="<%= box.hierarchy %>">
-  <details <%= :open if false %>>
+  <details <%= :open if open_box %>>
     <summary>
       <span class="item-name"><%= box.name %></span>
       <span class="item-notes"><%= box.notes %></span>
       <span class="item-description hidden"><%= box.description %></span>
-      <span class="item-actions">
-      </span>
     </summary>
     <ul data-box-id="<%= box.id %>">
       <% if preload %>
         <% box.contents.each do |content| %>
-          <%= render partial: "inventory_management/box", locals: { box: content, preload: false } %>
+          <%= render partial: "inventory_management/box", locals: { box: content, level: content.level } %>
         <% end %>
         <% if box.contents.none? %>
           <li class="empty-box">• &lt;empty&gt;</li>
@@ -22,4 +22,8 @@
       <% end %>
     </ul>
   </details>
+
+  <span class="item-actions">
+    <%= svg(:gear, class: :edit_box) %>
+  </span>
 </li>

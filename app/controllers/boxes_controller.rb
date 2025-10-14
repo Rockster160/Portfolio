@@ -3,7 +3,8 @@ class BoxesController < ApplicationController
   before_action :authorize_user_or_guest
 
   def show
-    render partial: "inventory_management/box", locals: { box: current_box, preload: true }
+    @open = current_box.level
+    render partial: "inventory_management/box", locals: { box: current_box }
   end
 
   private

@@ -75,12 +75,27 @@
         list-style: none;
         padding-inline-start: 30px;
 
-        summary {
+        summary,
+        .root-wrapper {
           padding: 10px;
         }
 
         li[data-type] {
+          display: flex;
           border-bottom: 1px solid var(--border);
+
+          details {
+            flex: 1;
+          }
+
+          .item-actions:not(:empty) {
+            padding: 8px;
+
+            svg {
+              fill: var(--text);
+              height: 18px;
+            }
+          }
 
           &:hover {
             cursor: pointer;
@@ -134,8 +149,6 @@
         font-size: 12px;
         color: var(--muted);
         padding: 4px 0 6px;
-      }
-      .item-actions {
       }
     }
   }

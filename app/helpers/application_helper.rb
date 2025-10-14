@@ -48,7 +48,7 @@ module ApplicationHelper
   def svg(svg_path, options={})
     Rails.cache.fetch("#{svg_path}.#{options.to_json}") do
       options[:nocomment] = true if options[:nocomment].nil?
-      options[:title] ||= svg_path.split("/").last
+      options[:title] ||= svg_path.to_s.split("/").last
       svg_html = inline_svg_tag("#{svg_path}.svg", options)
 
       if svg_html.include?("<!-- SVG file not found:")

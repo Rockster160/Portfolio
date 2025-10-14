@@ -40,6 +40,10 @@ class Box < ApplicationRecord
     boxes.ordered
   end
 
+  def level
+    hierarchy_ids.size + 1
+  end
+
   def hierarchy
     (hierarchy_data.pluck(:name) + [name]).join(" > ")
   end

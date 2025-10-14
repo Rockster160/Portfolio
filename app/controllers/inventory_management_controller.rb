@@ -11,8 +11,8 @@ class InventoryManagementController < ApplicationController
   def box # boxes#show
     @box = current_user.boxes.find(params[:id])
     @boxes = [@box]
-    @crumbs = @box.hierarchy_data
-    @open = true
+    @crumbs = @box.hierarchy_data || []
+    @open = 1
 
     render :show
   end

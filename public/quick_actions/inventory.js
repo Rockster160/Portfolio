@@ -1,4 +1,4 @@
-import { hideModal, openedModal } from "./modal.js";
+import { showModal, hideModal, openedModal } from "./modal.js";
 import { showFlash } from "./flash.js";
 
 const loadInventory = () => {
@@ -486,9 +486,16 @@ const loadInventory = () => {
   });
 
   document.addEventListener("click", function (evt) {
+    const cog = evt.target.closest(".edit_box");
+    if (cog) {
+      selectBox(cog.closest("li[data-type]"));
+      showModal("edit-modal");
+      return;
+    }
+
     const li = evt.target.closest("li[data-type]");
     if (li) {
-      selectBox(li);
+      return selectBox(li);
     }
 
     const btn = evt.target.closest(".delete-button");
@@ -525,6 +532,8 @@ const loadInventory = () => {
         .catch((error) => {
           console.error("There was a problem with the fetch operation:", error);
         });
+
+      return;
     }
   });
 
@@ -595,8 +604,6 @@ const loadInventory = () => {
       editModalBtn.disabled = true;
     } else {
       editModalBtn.disabled = false;
-      console.log(editModal);
-      console.log(editBoxForm);
       const details = li.querySelector(":scope > details > summary");
       const boxName = details.querySelector(".item-name").innerText;
       const boxNotes = details.querySelector(".item-notes").innerText;
@@ -613,7 +620,7 @@ const loadInventory = () => {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
-  if (document.querySelector(".ctr-inventory_management.act-show")) {
+  if (document.querySelector(".ctr-inventory_management")) {
     loadInventory();
   }
 });
