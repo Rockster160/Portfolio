@@ -20,7 +20,7 @@ class QrLabelsController < ApplicationController
 
   def set_qr
     if params[:box_id].present?
-      box = current_user.boxes.find(params[:box_id])
+      box = current_user.boxes.find_by_key(params[:box_id])
       @url = box_url(box, host: "rdjn.me").gsub(/https?:\/\//, "")
       @title = box.name
     end

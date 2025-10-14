@@ -2,7 +2,7 @@
 <% open_box = @open.to_i >= box.level %>
 <% preload = open_box if preload.nil? %>
 
-<li data-type="<%= box.empty? ? :item : :box %>" data-id="<%= box.id %>" data-parent-id="<%= box.parent_id %>" data-sort-order="<%= box.sort_order %>" data-hierarchy="<%= box.hierarchy %>">
+<li data-type="<%= box.empty? ? :item : :box %>" data-id="<%= box.id %>" data-key="<%= box.param_key %>" data-parent-id="<%= box.parent_id %>" data-sort-order="<%= box.sort_order %>" data-hierarchy="<%= box.hierarchy %>">
   <details <%= :open if open_box %>>
     <summary>
       <span class="item-name"><%= box.name %></span>

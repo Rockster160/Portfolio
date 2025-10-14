@@ -611,12 +611,12 @@ const loadInventory = () => {
         details.querySelector(".item-description").innerText;
 
       const copyUrl = editBoxForm.querySelector(".copy-url input.url");
-      copyUrl.value = `${copyUrl.placeholder.replace(":id", li.dataset.id)}`;
+      copyUrl.value = `${copyUrl.placeholder.replace(":id", li.dataset.key)}`;
       const qrBtn = editBoxForm.querySelector(".copy-url .qr-btn");
       if (qrBtn) {
         qrBtn.href = `${qrBtn.attributes.placeholder.value.replace(
           "%3Abox_id",
-          li.dataset.id,
+          li.dataset.key,
         )}`;
       }
       editBoxForm.querySelector("input[name='box_id']").value = li.dataset.id;
