@@ -46,6 +46,9 @@
       <%= form_with(url: :inventory, method: :patch, local: true, html: { class: "basic inventory-inline-form", id: "editBoxForm" }) do |f| %>
         <div class="copy-url">
           <input readonly class="url" type="text" value="" placeholder="rdjn.me/b/:id">
+          <% if current_user.admin? %>
+            <%= link_to "QR", "#", placeholder: qr_labels_path(box_id: ":box_id"), target: :_blank, class: "btn qr-btn" %>
+          <% end %>
         </div>
         <%= f.hidden_field :box_id %>
         <%#= f.hidden_field :parent_id %>

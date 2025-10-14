@@ -19,6 +19,7 @@ class Qr
   def self.to_io(str, opts={}) = new(str, opts).to_io(opts)
   def self.to_svg(str, opts={}) = new(str, opts).to_svg(opts)
   def self.to_png(str, opts={}) = new(str, opts).to_png(opts)
+  def self.to_html(str, opts={}) = new(str, opts).to_html(opts)
 
   def initialize(str, opts={})
     @qr = ::RQRCode::QRCode.new(str, opts)
@@ -29,8 +30,10 @@ class Qr
     # }
   end
 
-  def to_html
-    # <img src="data:image/png;base64,<%= qr.as_png.to_s %>" />
+  def to_html(opts={})
+    png_str = ::Base64.strict_encode64(@qr.as_png(opts).to_s)
+
+    "<img src=\"data:image/png;base64,#{png_str}\" />".html_safe # rubocop:disable Rails/OutputSafety
   end
 
   def to_svg(opts={})

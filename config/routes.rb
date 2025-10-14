@@ -162,6 +162,7 @@ Rails.application.routes.draw do
   resources :gcode_splitter, only: [:index]
   resources :colors, only: [:index]
   resources :anonicons, only: [:index, :show], constraints: { id: /[0-9.a-zA-Z]+/ }
+  resources :qr_labels, only: [:index, :show]
   get :"svg-editor", controller: :svg_editors, action: :show
 
   resource :rlcraft, only: [:show, :update]
@@ -182,6 +183,7 @@ Rails.application.routes.draw do
     end
     resources :user_cache, path: :cache
   end
+  get "t/:id" => "jil/tasks#trigger"
   # Must be after `jil` namespace so it doesn't overwrite existing routes
   post "jil/:uuid" => "webhooks#execute_task"
   get "jil/:uuid" => "webhooks#execute_task"

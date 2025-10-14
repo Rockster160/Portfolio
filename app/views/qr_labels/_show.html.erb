@@ -1,0 +1,2 @@
+<% base64 = ::Base64.strict_encode64(@qr) %>
+<%= image_tag "data:image/png;base64,#{base64}", style: "max-width: 100%;" %>

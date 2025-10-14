@@ -612,6 +612,13 @@ const loadInventory = () => {
 
       const copyUrl = editBoxForm.querySelector(".copy-url input.url");
       copyUrl.value = `${copyUrl.placeholder.replace(":id", li.dataset.id)}`;
+      const qrBtn = editBoxForm.querySelector(".copy-url .qr-btn");
+      if (qrBtn) {
+        qrBtn.href = `${qrBtn.attributes.placeholder.value.replace(
+          "%3Abox_id",
+          li.dataset.id,
+        )}`;
+      }
       editBoxForm.querySelector("input[name='box_id']").value = li.dataset.id;
       editBoxForm.querySelector("input[name='name']").value = boxName;
       editBoxForm.querySelector("input[name='notes']").value = boxNotes;

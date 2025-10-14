@@ -1,0 +1,26 @@
+<%= meta_title "QR Label Maker" %>
+
+<div class="skinny-container">
+  <%= form_tag qr_labels_path, id: "anonicon-form" do |f| %>
+    <div class="form-title">
+        QR Label
+    </div>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= label_tag :url, "URL" %>
+        <%= text_field_tag :url, @url || params[:url], placeholder: "rdjn.me/t/191" %>
+        <%= label_tag :title %>
+        <%= text_field_tag :title, @title || params[:title], placeholder: "Log Chore: Mail" %>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= submit_tag "Generate!" %>
+    </div>
+
+    <div class="anonicon-container text-center">
+      <%= render partial: "show" if @qr %>
+    </div>
+  <% end %>
+</div>
