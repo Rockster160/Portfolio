@@ -62,7 +62,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 console.log("resyncing monitor...");
                 executeWrapper.monitor?.resync();
               }
-            }, 1000);
+            }, 3000);
           },
           received: function (json) {
             synced = true;
