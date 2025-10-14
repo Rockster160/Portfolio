@@ -46,7 +46,7 @@ class Jil::TasksController < ApplicationController
     code = params[:code].presence || @task&.code
     data = params[:data]
 
-    ::Jil::Executor.async_call(current_user, code, data || {}, task: @task, auth: :run)
+    ::Jil::Executor.async_call(current_user, code, data || { execute: true }, task: @task, auth: :run)
 
     head :ok
   end

@@ -38,5 +38,44 @@ document.addEventListener("ajax:success", (e) => {
 
 document.addEventListener("ajax:error", (e) => {
   const btn = e.target.closest(".execute-btn");
+  console.log("Error executing trigger:", e);
   reenable(btn);
+});
+
+document.addEventListener("DOMContentLoaded", function () {
+  document
+    .querySelectorAll(".execute-btn-wrapper")
+    .forEach((executeWrapper) => {
+      const executeBtn = executeWrapper.querySelector(".execute-btn");
+      if (
+        executeWrapper.dataset.type === "monitor" &&
+        !executeWrapper.monitor
+      ) {
+        const monitorKey = executeWrapper.dataset.monitor;
+        let synced = false;
+        let syncInterval = undefined;
+        executeWrapper.monitor = Monitor.subscribe(monitorKey, {
+          connected: function () {
+            executeWrapper.monitor?.resync();
+            syncInterval = setInterval(() => {
+              if (!synced) {
+                console.log("resyncing monitor...");
+                executeWrapper.monitor?.resync();
+              }
+            }, 1000);
+          },
+          received: function (json) {
+            synced = true;
+            clearInterval(syncInterval);
+            if (json?.data?.text) {
+              executeBtn.querySelector(".execute-btn-title").textContent =
+                json.data.text;
+            }
+            if (json?.data?.color) {
+              executeWrapper.style.setProperty("--btn-color", json.data.color);
+            }
+          },
+        });
+      }
+    });
 });
