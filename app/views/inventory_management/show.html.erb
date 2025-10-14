@@ -44,6 +44,9 @@
     <div class="close"><i class="ti ti-fa-close"></i></div>
     <div class="modal-content">
       <%= form_with(url: :inventory, method: :patch, local: true, html: { class: "basic inventory-inline-form", id: "editBoxForm" }) do |f| %>
+        <div class="copy-url">
+          <input readonly class="url" type="text" value="" placeholder="rdjn.me/b/:id">
+        </div>
         <%= f.hidden_field :box_id %>
         <%#= f.hidden_field :parent_id %>
         <%= f.text_field :name, placeholder: "Item Name" %>

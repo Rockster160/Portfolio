@@ -486,7 +486,7 @@ const loadInventory = () => {
   });
 
   document.addEventListener("click", function (evt) {
-    const cog = evt.target.closest(".edit_box");
+    const cog = evt.target.closest(".edit-box");
     if (cog) {
       selectBox(cog.closest("li[data-type]"));
       showModal("edit-modal");
@@ -610,6 +610,8 @@ const loadInventory = () => {
       const boxDescription =
         details.querySelector(".item-description").innerText;
 
+      const copyUrl = editBoxForm.querySelector(".copy-url input.url");
+      copyUrl.value = `${copyUrl.placeholder.replace(":id", li.dataset.id)}`;
       editBoxForm.querySelector("input[name='box_id']").value = li.dataset.id;
       editBoxForm.querySelector("input[name='name']").value = boxName;
       editBoxForm.querySelector("input[name='notes']").value = boxNotes;

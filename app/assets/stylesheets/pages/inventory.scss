@@ -91,9 +91,11 @@
           .item-actions:not(:empty) {
             padding: 8px;
 
-            svg {
+            .edit-box {
               fill: var(--text);
               height: 18px;
+              // color: var(--text);
+              // font-size: 24px;
             }
           }
 
@@ -159,6 +161,16 @@
 
     form {
       flex: 1;
+    }
+
+    .copy-url {
+      text-align: center;
+
+      input {
+        display: inline-block;
+        max-width: 300px;
+        margin: 0 auto;
+      }
     }
   }
 
