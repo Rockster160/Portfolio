@@ -44,9 +44,9 @@ class Jil::TasksController < ApplicationController
   def run
     @task = current_user.tasks.find_by(id: params[:id]) unless params[:id] == "new"
     code = params[:code].presence || @task&.code
-    data = params[:data]
+    data = params[:data].presence&.permit!&.to_unsafe_h
 
-    ::Jil::Executor.async_call(current_user, code, data || { execute: true }, task: @task, auth: :run)
+    ::Jil::Executor.async_call(current_user, code, data || {}, task: @task, auth: :run)
 
     head :ok
   end
