@@ -6,7 +6,7 @@ class IndexController < ApplicationController
     from_number = params["From"]
     body = params["Body"]
     squish_number = from_number.gsub(/[^0-9]/, "").last(10)
-    from_user = current_user || User.find_by(phone: squish_number)
+    from_user = User.find_by(phone: squish_number)
 
     if from_user.present?
       ::Jil.trigger_async(from_user, :sms, { from: from_number, to: params["To"], body: body })

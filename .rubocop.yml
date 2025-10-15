@@ -18,7 +18,6 @@ AllCops:
     - "vendor/**/*"
     - "node_modules/**/*"
     - "tmp/**/*"
-    - "scripts/backfill_front_kb_inline_images.rb"
     - "db/migrate/**/*" # Excluding migrations as they often need to be explicit
     - "**/*.tt" # Excluding templates as Rubocop doesn't understand the syntax
 
@@ -159,9 +158,6 @@ Metrics/BlockLength:
   #   - "config/routes.rb"
   #   - "config/environments/*"
   #   - "app/models/concerns/application_recordable.rb"
-
-Metrics/MethodLength:
-  Max: 20
 
 Metrics/ModuleLength:
   Exclude:
