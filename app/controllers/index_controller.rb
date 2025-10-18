@@ -9,7 +9,7 @@ class IndexController < ApplicationController
     from_user = User.find_by(phone: squish_number)
 
     if from_user.present?
-      ::Jil.trigger_async(from_user, :sms, { from: from_number, to: params["To"], body: body })
+      ::Jil.trigger(from_user, :sms, { from: from_number, to: params["To"], body: body })
       return head :ok if opening_garage?(from_user, body)
 
       # TODO: If data has anything, interpret that and include with sms
