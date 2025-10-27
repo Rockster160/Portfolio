@@ -244,4 +244,18 @@ class ActionEventsController < ApplicationController
       whitelist[:timestamp] = whitelist[:timestamp].presence || Time.current
     }
   end
+
+  def safeparse_time(time, fallback=::Time.current)
+    return fallback if time.blank?
+
+    if time.is_a?(String)
+      begin
+        return Time.zone.parse(time)
+      rescue StandardError
+        return fallback
+      end
+    else
+      time
+    end
+  end
 end
