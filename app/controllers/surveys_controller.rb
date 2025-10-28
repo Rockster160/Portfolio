@@ -9,7 +9,7 @@ class SurveysController < ApplicationController
   def show
     surveys = Survey.includes(survey_questions: :survey_question_answers)
     @survey = surveys.find_by(slug: params[:id])
-    @show ||= surveys.find(params[:id])
+    @survey ||= surveys.find(params[:id])
   end
 
   def update

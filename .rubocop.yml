@@ -181,6 +181,9 @@ Naming/AsciiIdentifiers:
 Naming/BlockForwarding:
   Enabled: false
 
+Naming/MemoizedInstanceVariableName:
+  Enabled: false
+
 RSpec/AnyInstance:
   Enabled: false
 
