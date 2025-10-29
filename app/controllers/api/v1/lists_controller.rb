@@ -1,6 +1,7 @@
 class Api::V1::ListsController < Api::V1::BaseController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
+  before_action :set_default_format
 
   def index
     @lists = current_user.ordered_lists
@@ -62,6 +63,10 @@ class Api::V1::ListsController < Api::V1::BaseController
   end
 
   private
+
+  def set_default_format
+    request.format = :json unless params[:format]
+  end
 
   def trigger(action, list)
     # added | changed | removed

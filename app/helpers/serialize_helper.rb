@@ -8,7 +8,7 @@ module SerializeHelper
     render json: { data: json.as_json }, **opts
   end
 
-  def serialize(data, opts={}, merge: {})
+  def serialize(data, merge: {}, **opts)
     errors = []
 
     case data
