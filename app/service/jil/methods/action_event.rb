@@ -3,6 +3,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
 
   def cast(value)
     case value
+    when ::Numeric then find(value)
     when ::ActionEvent then value
     when ::ActiveRecord::Relation then cast(value.one? ? value.first : value.to_a)
     else ::SoftAssign.call(::ActionEvent.new, @jil.cast(value, :Hash))
