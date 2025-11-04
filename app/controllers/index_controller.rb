@@ -15,6 +15,7 @@ class IndexController < ApplicationController
       # TODO: If data has anything, interpret that and include with sms
       response, data = Jarvis.command(from_user, body)
       SmsWorker.perform_async(from_number, response)
+      Jarvis.say("SMS from #{from_user.username}: #{body}")
     else
       Jarvis.say("SMS from #{from_number}: #{body}")
       # SmsWorker.perform_async(from_number, "Sorry- I'm not sure who you are. Please log in and add your phone number before using SMS.")
