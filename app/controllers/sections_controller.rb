@@ -23,6 +23,7 @@ class SectionsController < ApplicationController
   end
 
   def destroy
+    ListItem.where(section_id: @section.id).update_all(section_id: nil)
     @section.destroy
     trigger(:removed, @section)
     redirect_to @list, notice: "Section deleted."
