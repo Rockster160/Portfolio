@@ -1,223 +1,336 @@
-import consumer from "./../channels/consumer"
+import consumer from "./../channels/consumer";
 
-$(document).ready(function() {
-  if ($(".ctr-lists.act-show").length == 0) { return }
+document.addEventListener("DOMContentLoaded", () => {
+  const listsRoot = document.querySelector(".ctr-lists.act-show");
+  if (!listsRoot) return;
 
-  var list_id = $(".list-container").attr("data-list-id")
+  const listContainer = document.querySelector(".list-container");
+  if (!listContainer) return;
 
-  function norm(s) { return (s || "").toLowerCase().trim().replace(/\s+/g, " ") }
-  function itemKey($el) {
-    let name = norm($el.find(".item-name").text())
-    let cat = norm($el.find(".list-item-config .category").text())
-    return cat + "|" + name
+  const listId = listContainer.getAttribute("data-list-id");
+
+  function norm(s) {
+    return (s || "").toLowerCase().trim().replace(/\s+/g, " ");
   }
 
-  function getOrder($el) {
-    let v = parseInt($el.attr("data-sort-order")) || 0
-    if ($el.is(".list-item-container") && $el.find(".list-item-checkbox").prop("checked")) {
-      v += 0.1
+  function itemKey(el) {
+    const name = norm(el.querySelector(".item-name")?.textContent || "");
+    const cat = norm(
+      el.querySelector(".list-item-config .category")?.textContent || "",
+    );
+    return cat + "|" + name;
+  }
+
+  function getOrder(el) {
+    const raw = el.getAttribute("data-sort-order");
+    let v = Number.parseInt(raw || "0", 10) || 0;
+
+    if (el.classList.contains("list-item-container")) {
+      const cb = el.querySelector(".list-item-checkbox");
+      if (cb && cb.checked) v += 0.1;
     }
-    return v
+
+    return v;
   }
 
-  function sortBucket($bucket) {
-    let items = $.makeArray($bucket.children(".list-item-container"))
-    items.sort(function(a, b) {
-      return getOrder($(b)) - getOrder($(a))
-    })
-    $(items).each(function() { $(this).appendTo($bucket) })
-  }
-
-  function reorderAll() {
-    sortTopLevel()
-    $(".section-items").each(function() {
-      sortBucket($(this))
-    })
+  function sortBucket(bucket) {
+    const items = Array.from(
+      bucket.querySelectorAll(":scope > .list-item-container"),
+    );
+    items.sort((a, b) => getOrder(b) - getOrder(a));
+    items.forEach((item) => bucket.appendChild(item));
   }
 
   function sortTopLevel() {
-    let $root = $(".list-items").first()
-    let kids = $.makeArray(
-      $root.children(".list-item-container, .list-section-tab")
-    )
-    kids.sort(function(a, b) {
-      return getOrder($(b)) - getOrder($(a))
-    })
-    $(kids).each(function() { $(this).appendTo($root) })
+    const root = document.querySelector(".list-items");
+    if (!root) return;
+
+    const kids = Array.from(
+      root.querySelectorAll(
+        ":scope > .list-item-container, :scope > .list-section-tab",
+      ),
+    );
+    kids.sort((a, b) => getOrder(b) - getOrder(a));
+    kids.forEach((kid) => root.appendChild(kid));
+  }
+
+  function reorderAll() {
+    sortTopLevel();
+    document.querySelectorAll(".section-items").forEach((bucket) => {
+      sortBucket(bucket);
+    });
   }
 
   function upsertSections(incomingSections) {
-    Object.keys(incomingSections).forEach(function(sid) {
-      let $inc = incomingSections[sid]
-      let $curr = $('.list-section-tab[data-section-id="' + sid + '"]')
+    Object.keys(incomingSections).forEach((sid) => {
+      const inc = incomingSections[sid];
+      const curr = document.querySelector(
+        '.list-section-tab[data-section-id="' + sid + '"]',
+      );
 
-      if ($curr.length == 0) {
-        // brand new section: append whole thing to top-level
-        $(".list-items").first().append($inc)
-        return
+      if (!curr) {
+        const root = document.querySelector(".list-items");
+        if (root) root.appendChild(inc);
+        return;
       }
 
-      // keep the existing .section-items bucket to avoid losing bindings
-      let $currBucket = $curr.children(".section-items").first()
-      let $incBucket = $inc.children(".section-items").first()
+      const currBucket = curr.querySelector(":scope > .section-items");
+      const incBucket = inc.querySelector(":scope > .section-items");
 
-      // update sort order + header text/color
-      $curr.attr("data-sort-order", $inc.attr("data-sort-order"))
+      curr.setAttribute(
+        "data-sort-order",
+        inc.getAttribute("data-sort-order") || "0",
+      );
 
-      let incName = $inc.find(".section-header .section-name").text()
+      const incName = inc.querySelector(".section-header .section-name");
       if (incName) {
-        $curr.find(".section-header .section-name").text(incName)
+        const currName = curr.querySelector(".section-header .section-name");
+        if (currName) currName.textContent = incName.textContent;
       }
 
-      // optional color sync if you use a color attr/class
-      let incColor = $inc.attr("data-color")
-      if (incColor) { $curr.attr("data-color", incColor) }
+      const incColor = inc.getAttribute("data-color");
+      if (incColor) curr.setAttribute("data-color", incColor);
 
-      // ensure a bucket exists, prefer current one with its bindings
-      if ($currBucket.length == 0 && $incBucket.length) {
-        $curr.append($("<div>", { class: "section-items" }))
+      if (!currBucket && incBucket) {
+        const bucket = document.createElement("div");
+        bucket.className = "section-items";
+        curr.appendChild(bucket);
       }
-    })
+    });
   }
 
   function parseIncoming(html) {
-    let $wrap = $("<div>").html(html)
-    let $root = $wrap.find(".list-items").first()
-    if ($root.length == 0) { $root = $wrap }
+    const wrap = document.createElement("div");
+    wrap.innerHTML = html;
 
-    let incomingItems = {}
-    $root.find(".list-item-container")
-        .add($root.filter(".list-item-container"))
-        .each(function() {
-          incomingItems[String($(this).data("itemId"))] = $(this)
-        })
+    let root = wrap.querySelector(".list-items");
+    if (!root) root = wrap;
 
-    let incomingSections = {}
-    $root.find(".list-section-tab")
-        .add($root.filter(".list-section-tab"))
-        .each(function() {
-          incomingSections[String($(this).data("sectionId"))] = $(this)
-        })
+    const incomingItems = {};
+    const itemNodes = Array.from(root.querySelectorAll(".list-item-container"));
+    if (root.classList.contains("list-item-container")) {
+      itemNodes.unshift(root);
+    }
+    itemNodes.forEach((el) => {
+      const id = String(el.dataset.itemId || "");
+      if (id) incomingItems[id] = el;
+    });
 
-    let targetFor = function($incomingItem) {
-      let sid = $incomingItem.closest(".list-section-tab").data("sectionId")
-      if (sid == null || sid === "") return $(".list-items").first()
-      let $tab = $('.list-section-tab[data-section-id="' + sid + '"]')
-      let $bucket = $tab.children(".section-items").first()
-      return $bucket.length ? $bucket : $(".list-items").first()
+    const incomingSections = {};
+    const sectionNodes = Array.from(root.querySelectorAll(".list-section-tab"));
+    if (root.classList.contains("list-section-tab")) {
+      sectionNodes.unshift(root);
+    }
+    sectionNodes.forEach((el) => {
+      const id = String(el.dataset.sectionId || "");
+      if (id) incomingSections[id] = el;
+    });
+
+    function targetFor(incomingItem) {
+      const rootList = document.querySelector(".list-items");
+      if (!rootList) return document.body;
+
+      const section = incomingItem.closest(".list-section-tab");
+      const sid = section?.dataset.sectionId;
+      if (!sid) return rootList;
+
+      const tab = document.querySelector(
+        '.list-section-tab[data-section-id="' + sid + '"]',
+      );
+      if (!tab) return rootList;
+
+      const bucket = tab.querySelector(":scope > .section-items");
+      return bucket || rootList;
     }
 
-    return { $root, incomingItems, incomingSections, targetFor }
+    return { root, incomingItems, incomingSections, targetFor };
   }
 
-  function ensureParent($el, $targetBucket) {
-    if (!$el.parent().is($targetBucket)) { $el.appendTo($targetBucket) }
+  function ensureParent(el, targetBucket) {
+    if (!targetBucket) return;
+    if (el.parentElement !== targetBucket) {
+      targetBucket.appendChild(el);
+    }
   }
 
-  listWS = consumer.subscriptions.create({
-    channel: "ListHtmlChannel",
-    channel_id: "list_" + list_id
-  }, {
-    connected: function() {
-      var url = $(".list-items").attr("data-update-url")
-      $.post(url, {}).done(function() { $(".list-error").addClass("hidden") })
-      // $.rails.refreshCSRFTokens()
+  function csrfToken() {
+    const meta = document.querySelector("meta[name=csrf-token]");
+    return meta?.getAttribute("content") || "";
+  }
+
+  window.listWS = consumer.subscriptions.create(
+    {
+      channel: "ListHtmlChannel",
+      channel_id: "list_" + listId,
     },
-    disconnected: function() {
-      $(".list-error").removeClass("hidden")
-    },
-    received: function(data) {
-      let { $root: $incRoot, incomingItems, incomingSections, targetFor } =
-        parseIncoming(data.list_html)
-      let incIds = Object.keys(incomingItems)
+    {
+      connected() {
+        const url = document
+          .querySelector(".list-items")
+          ?.getAttribute("data-update-url");
 
-      upsertSections(incomingSections)  // ⬅️ make sure sections exist/update first
+        if (!url) return;
 
-      // placeholders-by-name (unchanged)
-      $(".item-placeholder").each(function() {
-        let $ph = $(this)
-        let key = itemKey($ph)
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "X-CSRF-Token": csrfToken(),
+            "X-Requested-With": "XMLHttpRequest",
+            Accept: "text/javascript, application/json, text/html, */*",
+            "Content-Type": "application/json",
+          },
+          body: "{}",
+        }).then((resp) => {
+          if (!resp.ok) return;
+          const err = document.querySelector(".list-error");
+          if (err) err.classList.add("hidden");
+        });
+      },
 
-        // If an existing DOM item already matches, drop the placeholder
-        let $existing = $(".list-item-container").not(".item-placeholder").filter(function() {
-          return itemKey($(this)) == key
-        }).first()
-        if ($existing.length) { $ph.remove(); return }
+      disconnected() {
+        const err = document.querySelector(".list-error");
+        if (err) err.classList.remove("hidden");
+      },
 
-        // Else, try to match an incoming item by key
-        let $match = null
-        $.each(incomingItems, function(_, $inc) {
-          if (itemKey($inc) == key) { $match = $inc; return false }
-        })
+      received(data) {
+        if (!data || !data.list_html) return;
 
-        if ($match) {
-          let $target = targetFor($match)
-          ensureParent($match, $target)
-          $ph.replaceWith($match)
-        } else {
-          // Server didn't create it (likely a dupe) → remove placeholder
-          $ph.remove()
-        }
-      })
+        const {
+          root: incRoot,
+          incomingItems,
+          incomingSections,
+          targetFor,
+        } = parseIncoming(data.list_html);
 
-      // upsert items + move to correct bucket
-      Object.keys(incomingItems).forEach(function(id) {
-        let $inc = incomingItems[id]
-        let $targetBucket = targetFor($inc)
-        let $curr = $('.list-item-container[data-item-id="' + id + '"]')
+        if (!incRoot) return;
 
-        if ($curr.length == 0) {
-          // Try to find an existing DOM item with same key (handles dupes)
-          let key = itemKey($inc)
-          $curr = $(".list-item-container").not(".item-placeholder").filter(function() {
-            return itemKey($(this)) == key
-          }).first()
-        }
+        const incIds = Object.keys(incomingItems);
 
-        if ($curr.length == 0) {
-          ensureParent($inc, $targetBucket)
-          $targetBucket.append($inc)
-          return
-        }
+        upsertSections(incomingSections);
 
-        ;["important", "locked", "recurring"].forEach(function(cls) {
-          let has = $inc.find(".list-item-config ." + cls).length > 0
-          let $cfg = $curr.find(".list-item-config")
-          if (has) {
-            if ($cfg.find("." + cls).length == 0) { $cfg.append($("<div>", { class: cls })) }
-          } else {
-            $cfg.find("." + cls).remove()
+        // resolve placeholders by name/category first
+        document.querySelectorAll(".item-placeholder").forEach((ph) => {
+          const key = itemKey(ph);
+
+          const existing = Array.from(
+            document.querySelectorAll(".list-item-container"),
+          )
+            .filter((el) => !el.classList.contains("item-placeholder"))
+            .find((el) => itemKey(el) === key);
+
+          if (existing) {
+            ph.remove();
+            return;
           }
-        })
 
-        let newCat = $inc.find(".list-item-config .category").text() || ""
-        $curr.find(".list-item-config .category").text(newCat)
+          let match = null;
+          Object.values(incomingItems).some((inc) => {
+            if (itemKey(inc) === key) {
+              match = inc;
+              return true;
+            }
+            return false;
+          });
 
-        $curr.attr("data-sort-order", $inc.attr("data-sort-order"))
-        $curr.find(".item-name").html($inc.find(".item-name").html())
+          if (match) {
+            const targetBucket = targetFor(match);
+            ensureParent(match, targetBucket);
+            ph.replaceWith(match);
+          } else {
+            ph.remove();
+          }
+        });
 
-        if ($inc.find(".list-item-config .locked").length == 0) {
-          $curr.find(".list-item-checkbox")
-            .prop("checked", $inc.find(".list-item-checkbox").prop("checked"))
+        Object.keys(incomingItems).forEach((id) => {
+          const inc = incomingItems[id];
+          if (!inc) return;
+
+          const targetBucket = targetFor(inc);
+          let curr = document.querySelector(
+            '.list-item-container[data-item-id="' + id + '"]',
+          );
+
+          if (!curr) {
+            const key = itemKey(inc);
+            curr =
+              Array.from(document.querySelectorAll(".list-item-container"))
+                .filter((el) => !el.classList.contains("item-placeholder"))
+                .find((el) => itemKey(el) === key) || null;
+          }
+
+          if (!curr) {
+            ensureParent(inc, targetBucket);
+            return;
+          }
+
+          const cfg = curr.querySelector(".list-item-config");
+
+          ["important", "locked", "recurring"].forEach((cls) => {
+            const has = !!inc.querySelector(".list-item-config ." + cls);
+            if (!cfg) return;
+
+            if (has) {
+              if (!cfg.querySelector("." + cls)) {
+                const div = document.createElement("div");
+                div.className = cls;
+                cfg.appendChild(div);
+              }
+            } else {
+              cfg.querySelectorAll("." + cls).forEach((el) => el.remove());
+            }
+          });
+
+          const incCat = inc.querySelector(".list-item-config .category");
+          if (incCat && cfg) {
+            const currCat = cfg.querySelector(".category");
+            if (currCat) currCat.textContent = incCat.textContent;
+          }
+
+          curr.setAttribute(
+            "data-sort-order",
+            inc.getAttribute("data-sort-order") || "0",
+          );
+
+          const incName = inc.querySelector(".item-name");
+          const currName = curr.querySelector(".item-name");
+          if (incName && currName) currName.innerHTML = incName.innerHTML;
+
+          const incLocked = inc.querySelector(".list-item-config .locked");
+          if (!incLocked) {
+            const incCb = inc.querySelector(".list-item-checkbox");
+            const currCb = curr.querySelector(".list-item-checkbox");
+            if (incCb && currCb) currCb.checked = incCb.checked;
+          }
+
+          ensureParent(curr, targetBucket);
+        });
+
+        // auto-check items that disappeared from the payload
+        document.querySelectorAll(".list-item-container").forEach((el) => {
+          const locked = el.querySelector(".list-item-config .locked");
+          if (locked) return;
+
+          const id = el.dataset.itemId;
+          if (!id) return;
+          if (incIds.includes(String(id))) return;
+
+          const cb = el.querySelector("input[type=checkbox]");
+          if (cb) cb.checked = true;
+        });
+
+        if (typeof clearRemovedItems === "function") {
+          clearRemovedItems();
         }
 
-        ensureParent($curr, $targetBucket)
-      })
-
-      $(".list-item-container").each(function() {
-        if ($(this).find(".list-item-config .locked").length > 0) { return }
-        let id = $(this).data("itemId")
-        if (id && !incIds.includes(String(id))) {
-          $('.list-item-container[data-item-id="' + id + '"] input[type=checkbox]')
-            .prop("checked", true)
+        if (typeof setImportantItems === "function") {
+          setImportantItems();
         }
-      })
 
-      clearRemovedItems()
-      setImportantItems()
-      reorderAll()
-      document.dispatchEvent(new Event("lists:rebind"))
-    }
-  })
+        reorderAll();
 
-})
+        // let drag/drop bindings reattach without duplicating state
+        document.dispatchEvent(new Event("lists:rebind"));
+      },
+    },
+  );
+});
