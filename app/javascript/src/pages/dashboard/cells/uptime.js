@@ -261,9 +261,9 @@ import { dash_colors, scaleVal } from "../vars";
           cell.flash();
           if (data.loading) {
           } else {
-            console.log(data);
+            // console.log(data);
             cell.data.mc_online_line = data.result;
-            console.log("line", cell.data.mc_online_line);
+            // console.log("line", cell.data.mc_online_line);
             renderCell();
           }
         },
