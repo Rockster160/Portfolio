@@ -58,13 +58,13 @@ class Box < ApplicationRecord
     hierarchy_ids.size + 1
   end
 
-  def hierarchy
-    (hierarchy_data.pluck(:name) + [name]).join(" > ")
-  end
+  # def hierarchy
+  #   (hierarchy_data.pluck(:name) + [name]).join(" > ")
+  # end
 
-  def serialize(opts={})
-    super.merge(hierarchy: hierarchy)
-  end
+  # def serialize(opts={})
+  #   super.merge(hierarchy: hierarchy)
+  # end
 
   def to_param
     if param_key.blank?
@@ -103,6 +103,7 @@ class Box < ApplicationRecord
   def set_hierarchy
     self.hierarchy_data = parent.hierarchy_data + [{ id: parent.id, name: parent.name }] if parent
     self.hierarchy_ids = ((parent&.hierarchy_ids || []) + [parent_id]).compact
+    self.hierarchy = (hierarchy_data.pluck(:name) + [name]).join(" > ")
     parent.update!(empty: false) if parent && parent.empty?
   end
 
