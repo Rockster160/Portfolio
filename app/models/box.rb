@@ -6,6 +6,7 @@
 #  data           :jsonb            not null
 #  description    :text
 #  empty          :boolean          default(TRUE), not null
+#  hierarchy      :text
 #  hierarchy_data :jsonb            not null
 #  hierarchy_ids  :jsonb            not null
 #  name           :text             not null
@@ -33,6 +34,8 @@ class Box < ApplicationRecord
   orderable sort_order: :desc, scope: ->(box) {
     box.parent&.boxes || box.user.boxes.where(parent_id: nil)
   }
+
+  search_terms :id, :name, :hierarchy, :description, :notes
 
   json_attributes :data, :hierarchy_data
 

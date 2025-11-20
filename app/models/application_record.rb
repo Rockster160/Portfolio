@@ -160,11 +160,13 @@ class ApplicationRecord < ActiveRecord::Base
   end
 
   scope :search, ->(q) {
+    raise "No `search_terms` defined for #{name}" if search_terms.blank?
     next none if search_terms.blank?
 
     search_scope.ilike(search_indexed("%#{q}%"), :OR)
   }
   scope :unsearch, ->(q) {
+    raise "No `search_terms` defined for #{name}" if search_terms.blank?
     next none if search_terms.blank?
 
     not_ilike(search_indexed("%#{q}%"), :AND)
