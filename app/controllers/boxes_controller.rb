@@ -7,6 +7,7 @@ class BoxesController < ApplicationController
     # Query needs to be first!
     @boxes = @boxes.query(params[:q]) if params[:q].present?
 
+    # Add option to filter items vs boxes
     @boxes = @boxes.where(empty: true)
     @boxes = @boxes.within(params[:within]) if params[:within].present?
 
