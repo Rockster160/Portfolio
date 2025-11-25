@@ -2,14 +2,17 @@
 <% content_for :title, "Inventory" %>
 
 <div class="inventory-wrapper">
-  <div class="search-wrapper">
+  <div class="inventory-nav">
     <div class="current">
       <span>Adding to: <code class="hierarchy">Everything</code></span>
-      <button type="button" class="edit-button" disabled data-modal="edit-modal">Edit</button>
+      <span>
+        <button type="button" class="edit-button" disabled data-modal="edit-modal">Edit</button>
+        <button type="button" class="search-button" data-modal="search-modal"><%= fa :search %> Search</button>
+      </span>
     </div>
-    <%= form_with(url: :inventory, html: { class: "basic inventory-inline-form" }) do |f| %>
+    <%= form_with(url: :inventory, html: { class: "basic new-item-form inventory-inline-form" }) do |f| %>
       <%= f.hidden_field :parent_id, id: :new_box_parent_id %>
-      <%= f.text_field :name, placeholder: "Search | Add Items", id: :new_box_name %>
+      <%= f.text_field :name, placeholder: "Add Items", id: :new_box_name %>
       <%= f.submit "Add" %>
       <template id="box-template">
         <%= render partial: "inventory_management/box", locals: { box: Box.new } %>
@@ -68,37 +71,18 @@
     </div>
   </div>
 
-  <div id="edit-modal" class="modal" aria-hidden="true">
-    <div class="sheet">
-      <h3 id="modalTitle">Edit</h3>
-      <form id="editForm">
-        <input type="hidden" name="id" />
-        <input type="hidden" name="kind" />
-        <div class="form-row">
-          <label>Name</label>
-          <input name="name" required />
-        </div>
-        <div class="form-row">
-          <label>Description</label>
-          <textarea name="description" rows="3"></textarea>
-        </div>
-        <div class="form-row">
-          <label>Notes</label>
-          <textarea name="notes" rows="3"></textarea>
-        </div>
-        <div class="form-row">
-          <label>Tags (comma separated)</label>
-          <input name="tags" />
-        </div>
-        <div class="form-row">
-          <label>Data (JSON)</label>
-          <textarea name="data" rows="6" placeholder='{"key":"value"}'></textarea>
-        </div>
-        <div class="actions">
-          <button type="button" id="cancelEdit">Cancel</button>
-          <button type="submit" id="saveEdit">Save</button>
-        </div>
-      </form>
+  <div class="modal widget-modal" id="search-modal" tabindex="-1">
+    <div class="status"></div>
+    <div class="close"><i class="ti ti-fa-close"></i></div>
+    <div class="modal-content">
+      <%= form_with(url: [:inventory, :boxes], html: { class: "basic search-form inventory-inline-form" }) do |f| %>
+        <div class="search-breadcrumbs"></div>
+        <%= f.text_field :name, placeholder: "Search" %>
+        <template id="box-search-result-template">
+          <%= render partial: "inventory_management/box_result", locals: { box: Box.new } %>
+        </template>
+        <div class="search-results"></div>
+      <% end %>
     </div>
   </div>
 <% end %>

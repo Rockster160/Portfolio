@@ -3,12 +3,18 @@ import { showFlash } from "./flash.js";
 
 const loadInventory = () => {
   const tree = document.querySelector(".tree");
-  const searchWrapper = document.querySelector(".search-wrapper");
-  const inventoryForm = document.querySelector(".inventory-inline-form");
-  const searchField = inventoryForm.querySelector("#new_box_name");
+  const searchWrapper = document.querySelector(".inventory-nav");
+  const inventoryForm = document.querySelector(".new-item-form");
+  const newBoxField = inventoryForm.querySelector("#new_box_name");
   const editModalBtn = document.querySelector(".edit-button");
   const editModal = document.querySelector("#edit-modal");
   const editBoxForm = document.querySelector("#editBoxForm");
+
+  const searchModal = document.querySelector("#search-modal");
+  const searchModalForm = searchModal?.querySelector("form");
+  const searchModalField = searchModal?.querySelector("input#name");
+  const searchResults = searchModal?.querySelector(".search-results");
+  const breadcrumbWrapper = document.querySelector(".search-breadcrumbs");
 
   function upsertBox(box) {
     const existingLi = tree.querySelector(`li[data-id='${box.id}']`);
@@ -136,9 +142,133 @@ const loadInventory = () => {
     // refresh the header if the selected row is inside this subtree
     const selected = document.querySelector("li[data-type].selected");
     if (selected && parentLi.contains(selected)) {
-      const codeEl = document.querySelector(".search-wrapper code.hierarchy");
+      const codeEl = document.querySelector(".inventory-nav code.hierarchy");
       if (codeEl) codeEl.innerText = selected.dataset.hierarchy || "";
     }
+  }
+
+  function buildBreadcrumbs(li) {
+    breadcrumbWrapper.innerHTML = "";
+
+    const container = document.createElement("div");
+    container.className = "breadcrumbs";
+
+    const ul = document.createElement("ul");
+    container.appendChild(ul);
+
+    // ALWAYS include "Everything"
+    ul.appendChild(makeBreadcrumb("Everything", "", !li));
+
+    if (li && li.dataset.hierarchy) {
+      const parts = li.dataset.hierarchy.split(" > ");
+      const chain = ancestorIdChain(li);
+
+      parts.forEach((name, idx) => {
+        const selected = idx === parts.length - 1;
+        ul.appendChild(makeBreadcrumb(name, chain[idx], selected));
+      });
+    }
+
+    breadcrumbWrapper.appendChild(container);
+  }
+
+  function makeBreadcrumb(label, id, selected) {
+    const li = document.createElement("li");
+    li.className = "crumb";
+
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "crumb";
+    input.value = id;
+    if (selected) input.checked = true;
+
+    const span = document.createElement("span");
+    span.className = "crumb-label";
+    span.innerText = label;
+
+    li.appendChild(input);
+    li.appendChild(span);
+
+    // Make *entire pill* clickable
+    li.addEventListener("click", () => {
+      input.checked = true;
+      breadcrumbWrapper.dispatchEvent(new Event("change"));
+    });
+
+    return li;
+  }
+
+  function ancestorIdChain(li) {
+    const chain = [];
+    let cur = li;
+    while (cur && !isRootLi(cur)) {
+      chain.unshift(cur.dataset.id);
+      cur = tree.querySelector(`li[data-id='${cur.dataset.parentId}']`);
+    }
+    return chain;
+  }
+
+  let searchTimer;
+
+  function triggerSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(runSearch, 300);
+  }
+
+  function runSearch() {
+    const q = searchModalField.value.trim();
+    const parentId =
+      breadcrumbWrapper.querySelector("input[name='crumb']:checked")?.value ||
+      "";
+
+    if (!q) {
+      searchResults.innerHTML = "";
+      return;
+    }
+
+    fetch(
+      `${searchModalForm.action}?q=${encodeURIComponent(q)}&within=${parentId}`,
+      {
+        headers: { accept: "application/json" },
+      },
+    )
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => renderSearchResults(data))
+      .catch(() => showFlash("Search failed"));
+  }
+
+  function renderSearchResults(data) {
+    searchResults.innerHTML = "";
+
+    const template = searchModal.querySelector("#box-search-result-template");
+    if (!template) return;
+
+    data.data.forEach((box) => {
+      const clone = template.content.cloneNode(true);
+      const li = clone.querySelector(".search-result");
+
+      li.dataset.id = box.id;
+      li.dataset.type = box.empty ? "item" : "box";
+
+      clone.querySelector(".item-hierarchy").innerText = box.hierarchy || "";
+      clone.querySelector(".item-name").innerText = box.name;
+      clone.querySelector(".item-description").innerText =
+        box.description || "";
+
+      const tagEl = clone.querySelector(".item-tags");
+      tagEl.innerHTML = "";
+
+      if (Array.isArray(box.tags)) {
+        box.tags.forEach((tag) => {
+          const span = document.createElement("span");
+          span.className = "tag";
+          span.innerText = tag;
+          tagEl.appendChild(span);
+        });
+      }
+
+      searchResults.appendChild(clone);
+    });
   }
 
   function slotFromEvent(evt, targetLi) {
@@ -449,7 +579,7 @@ const loadInventory = () => {
     if (evt.target.matches("input, textarea")) return;
     if (openedModal()) return;
 
-    searchField.focus();
+    newBoxField.focus();
   });
 
   document.addEventListener("submit", (evt) => {
@@ -483,6 +613,22 @@ const loadInventory = () => {
         showFlash(error.message);
         // console.error("There was a problem with the fetch operation:", error);
       });
+  });
+
+  console.log(searchModal);
+
+  searchModal.addEventListener("modal:show", function () {
+    const selected = document.querySelector("li[data-type].selected");
+    buildBreadcrumbs(selected);
+    searchModal.querySelector(".modal-content").prepend(breadcrumbWrapper);
+    showModal("search-modal");
+    setTimeout(() => searchModalField.focus(), 50);
+  });
+
+  searchModalField?.addEventListener("input", triggerSearch);
+
+  breadcrumbWrapper.addEventListener("change", () => {
+    triggerSearch();
   });
 
   document.addEventListener("click", function (evt) {

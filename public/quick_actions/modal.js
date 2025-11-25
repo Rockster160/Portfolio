@@ -1,8 +1,18 @@
 export function showModal(id) {
-  document.querySelector(`#${id}`)?.classList?.add("show");
+  const modal = document.querySelector(`#${id}`);
+  if (!modal?.classList.contains("show")) {
+    modal?.classList?.add("show");
+    console.log("Dispatch", modal);
+    modal.dispatchEvent(new CustomEvent("modal:show", { bubbles: true }));
+  }
 }
 export function hideModal(id) {
-  document.querySelector(`#${id}`)?.classList?.remove("show");
+  const modal = document.querySelector(`#${id}`);
+  if (modal?.classList.contains("show")) {
+    modal?.classList?.remove("show");
+    console.log("Dispatch", modal);
+    modal.dispatchEvent(new CustomEvent("modal:hide", { bubbles: true }));
+  }
 }
 export function hideCurrentModal() {
   let open_modals = document.querySelectorAll(".modal.show");

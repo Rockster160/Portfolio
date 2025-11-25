@@ -35,6 +35,10 @@ class Box < ApplicationRecord
     box.parent&.boxes || box.user.boxes.where(parent_id: nil)
   }
 
+  scope :within, ->(*box_ids) {
+    where("hierarchy_ids @> ?", Array.wrap(box_ids).map(&:to_i).to_json)
+  }
+
   search_terms :id, :name, :hierarchy, :description, :notes
 
   json_attributes :data, :hierarchy_data
