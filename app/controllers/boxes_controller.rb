@@ -4,7 +4,10 @@ class BoxesController < ApplicationController
 
   def index
     @boxes = current_user.boxes
+    # Query needs to be first!
     @boxes = @boxes.query(params[:q]) if params[:q].present?
+
+    @boxes = @boxes.where(empty: true)
     @boxes = @boxes.within(params[:within]) if params[:within].present?
 
     serialize @boxes
