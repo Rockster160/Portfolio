@@ -109,7 +109,7 @@ class WebhooksController < ApplicationController
   end
 
   def battery
-    data = params.slice(:Phone, :iPad, :Watch, :Pencil).transform_values { |v|
+    data = params.slice(:Phone, :iPad, :Watch, :Pencil, :Trackpad).transform_values { |v|
       { val: v, time: Time.current.to_i }
     }
     json = DataStorage[:device_battery] || {}

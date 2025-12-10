@@ -298,6 +298,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       Watch: "[ico ti ti-oct-watch]",
       iPad: "[ico ti ti-mdi-tablet_ipad]",
       Pencil: "[ico ti ti-mdi-pencil]",
+      TrackPad: "[ico ti ti-mdi-mouse]",
     };
     let battery_line = [];
     for (let [name, icon] of Object.entries(battery_icons)) {
@@ -427,6 +428,9 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
         }
         if (msg.Pencil) {
           cell.data.device_battery.Pencil = msg.Pencil;
+        }
+        if (msg.TrackPad) {
+          cell.data.device_battery.TrackPad = msg.TrackPad;
         }
 
         renderLines();
