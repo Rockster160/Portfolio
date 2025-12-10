@@ -2,7 +2,7 @@
 #
 # Table name: boxes
 #
-#  id             :bigint           not null, primary key
+#  id             :bigint           not null
 #  data           :jsonb            not null
 #  description    :text
 #  empty          :boolean          default(TRUE), not null
@@ -11,32 +11,36 @@
 #  hierarchy_ids  :jsonb            not null
 #  name           :text             not null
 #  notes          :text
-#  param_key      :text
+#  param_key      :text             primary key
+#  parent_key     :text
 #  sort_order     :integer          not null
 #  created_at     :datetime         not null
 #  updated_at     :datetime         not null
-#  parent_id      :bigint
 #  user_id        :bigint           not null
 #
 class Box < ApplicationRecord
+  self.primary_key = "param_key"
+
   include Orderable
 
   attr_accessor :reset_hierarchy
 
   belongs_to :user
-  belongs_to :parent, class_name: "Box", optional: true
-  has_many :boxes, dependent: :destroy, foreign_key: :parent_id, inverse_of: :parent
+  belongs_to :parent, class_name: "Box", primary_key: :param_key, foreign_key: :parent_key, optional: true, inverse_of: :boxes
+  has_many :boxes, primary_key: :param_key, foreign_key: :parent_key, inverse_of: :parent, dependent: :destroy
+  # belongs_to :parent, class_name: "Box", optional: true
+  # has_many :boxes, dependent: :destroy, foreign_key: :parent_id, inverse_of: :parent
 
   before_save :set_param_key, if: :new_record?
   before_save :set_hierarchy, if: :reset_hierarchy?
   before_save :cascade_hierarchy, if: :hierarchy_ids_changed?
 
   orderable sort_order: :desc, scope: ->(box) {
-    box.parent&.boxes || box.user.boxes.where(parent_id: nil)
+    box.parent&.boxes || box.user.boxes.where(parent_key: nil)
   }
 
   scope :within, ->(*box_ids) {
-    where("hierarchy_ids @> ?", Array.wrap(box_ids).map(&:to_i).to_json)
+    where("hierarchy_ids @> ?", Array.wrap(box_ids).to_json)
   }
 
   search_terms :id, :name, :hierarchy, :description, :notes
@@ -52,6 +56,15 @@ class Box < ApplicationRecord
     else
       ilike(param_key: keys.upcase.gsub("0", "O").gsub("1", "I")).take!
     end
+  end
+
+  def self.full_reset
+    Box.update_all(hierarchy: nil, hierarchy_data: [], hierarchy_ids: [])
+    reset = ->(box) {
+      box.update!(reset_hierarchy: true, empty: box.boxes.empty?)
+      box.boxes.each { |b| reset.call(b) }
+    }
+    Box.where(parent_key: nil).find_each { |box| reset.call(box) }
   end
 
   def contents
@@ -97,16 +110,16 @@ class Box < ApplicationRecord
   end
 
   def reset_hierarchy?
-    return true if reset_hierarchy
-    return true if parent_id_changed?
+    return true if @reset_hierarchy
+    return true if parent_key_changed?
     return true if new_record?
 
     false
   end
 
   def set_hierarchy
-    self.hierarchy_data = parent.hierarchy_data + [{ id: parent.id, name: parent.name }] if parent
-    self.hierarchy_ids = ((parent&.hierarchy_ids || []) + [parent_id]).compact
+    self.hierarchy_data = parent.hierarchy_data + [{ id: parent.param_key, name: parent.name }] if parent
+    self.hierarchy_ids = ((parent&.hierarchy_ids || []) + [parent&.param_key]).compact
     self.hierarchy = (hierarchy_data.pluck(:name) + [name]).join(" > ")
     parent.update!(empty: false) if parent && parent.empty?
   end

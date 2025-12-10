@@ -10,8 +10,9 @@
         <button type="button" class="search-button" data-modal="search-modal"><%= fa :search %> Search</button>
       </span>
     </div>
+
     <%= form_with(url: :inventory, html: { class: "basic new-item-form inventory-inline-form" }) do |f| %>
-      <%= f.hidden_field :parent_id, id: :new_box_parent_id %>
+      <%= f.hidden_field :parent_key, id: :new_box_parent_key %>
       <%= f.text_field :name, placeholder: "Add Items", id: :new_box_name %>
       <%= f.submit "Add" %>
       <template id="box-template">
@@ -48,13 +49,14 @@
     <div class="modal-content">
       <%= form_with(url: :inventory, method: :patch, local: true, html: { class: "basic inventory-inline-form", id: "editBoxForm" }) do |f| %>
         <div class="copy-url">
-          <input readonly class="url" type="text" value="" placeholder="rdjn.me/b/:id">
+          <% host = Rails.env.development? ? "localhost:3141" : "rdjn.me" %>
+          <input readonly class="url" type="text" value="" placeholder="<%= host %>/b/:id">
           <% if current_user.admin? %>
             <%= link_to "QR", "#", placeholder: qr_labels_path(box_id: ":box_id"), target: :_blank, class: "btn qr-btn" %>
           <% end %>
         </div>
         <%= f.hidden_field :box_id %>
-        <%#= f.hidden_field :parent_id %>
+        <%#= f.hidden_field :parent_key %>
         <%= f.text_field :name, placeholder: "Item Name" %>
         <%= f.text_field :notes, placeholder: "Quick Notes" %>
         <%= f.text_area :description, placeholder: "Description" %>

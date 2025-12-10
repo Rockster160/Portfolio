@@ -5,7 +5,7 @@ class InventoryManagementController < ApplicationController
   layout "quick_actions"
 
   def show
-    @boxes = current_user.boxes.where(parent_id: nil).ordered
+    @boxes = current_user.boxes.where(parent_key: nil).ordered
   end
 
   def box # boxes#show
@@ -31,10 +31,10 @@ class InventoryManagementController < ApplicationController
 
     if params[:child_ids].present?
       parent_scope = (
-        if params[:parent_id].present?
-          current_user.boxes.where(parent_id: params[:parent_id])
+        if params[:parent_key].present?
+          current_user.boxes.where(parent_key: params[:parent_key])
         else
-          current_user.boxes.where(parent_id: nil)
+          current_user.boxes.where(parent_key: nil)
         end
       )
       boxes = parent_scope.where(id: params[:child_ids])
@@ -52,6 +52,7 @@ class InventoryManagementController < ApplicationController
   def destroy
     box = current_user.boxes.find(params[:box_id])
     box.destroy!
+    box.parent.update!(empty: true) if box.parent && box.parent.boxes.empty?
 
     serialize box, merge: { deleted: true }
   end
@@ -59,8 +60,8 @@ class InventoryManagementController < ApplicationController
   private
 
   def box_params
-    params.permit(:name, :notes, :description, :parent_id).tap { |whitelist|
-      whitelist[:parent_id] = nil if whitelist[:parent_id].present? && current_user.boxes.where(id: whitelist[:parent_id]).empty?
+    params.permit(:name, :notes, :description, :parent_key).tap { |whitelist|
+      whitelist[:parent_key] = nil if whitelist[:parent_key].present? && current_user.boxes.where(param_key: whitelist[:parent_key]).empty?
     }
   end
 end

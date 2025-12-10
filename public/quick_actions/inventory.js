@@ -21,7 +21,7 @@ const loadInventory = () => {
     if (existingLi) {
       if (box.deleted) {
         const parentLi = existingLi.closest(
-          `li[data-id='${existingLi.dataset.parentId}']`,
+          `li[data-id='${existingLi.dataset.parentKey}']`,
         );
         const ul = parentLi
           ? parentLi.querySelector(`ul[data-box-id='${parentLi.dataset.id}']`)
@@ -34,7 +34,7 @@ const loadInventory = () => {
       }
 
       const oldHierarchy = existingLi.dataset.hierarchy || "";
-      const oldParentId = existingLi.dataset.parentId || "";
+      const oldParentKey = existingLi.dataset.parentKey || "";
 
       if (!isRootLi(existingLi)) {
         existingLi.dataset.type = box.empty ? "item" : "box";
@@ -45,13 +45,13 @@ const loadInventory = () => {
       existingLi.querySelector(".item-description").innerText =
         box.description || "";
       existingLi.dataset.hierarchy = box.hierarchy;
-      existingLi.dataset.parentId = box.parent_id || "";
+      existingLi.dataset.parentKey = box.parent_key || "";
 
-      if (oldParentId !== (box.parent_id || "")) {
+      if (oldParentKey !== (box.parent_key || "")) {
         const oldParent =
-          tree.querySelector(`li[data-id='${oldParentId}']`) || null;
+          tree.querySelector(`li[data-id='${oldParentKey}']`) || null;
         const newParent =
-          tree.querySelector(`li[data-id='${box.parent_id}']`) ||
+          tree.querySelector(`li[data-id='${box.parent_key}']`) ||
           tree.querySelector("li[data-type='root']");
         updateBoxType(oldParent);
         updateBoxType(newParent);
@@ -70,16 +70,16 @@ const loadInventory = () => {
       const li = clone.querySelector("li");
       li.dataset.id = box.id;
       li.dataset.hierarchy = box.hierarchy;
-      li.dataset.parentId = box.parent_id || "";
+      li.dataset.parentKey = box.parent_key || "";
       li.querySelector(".item-name").innerText = box.name;
       li.querySelector(".item-notes").innerText = box.notes || "";
       li.querySelector(".item-description").innerText = box.description || "";
       li.querySelector("ul[data-box-id='']").dataset.boxId = box.id;
       li.dataset.type = box.empty ? "item" : "box";
 
-      const parentLi = tree.querySelector(`li[data-id='${box.parent_id}']`);
+      const parentLi = tree.querySelector(`li[data-id='${box.parent_key}']`);
       const ul = parentLi
-        ? parentLi.querySelector(`ul[data-box-id='${box.parent_id}']`)
+        ? parentLi.querySelector(`ul[data-box-id='${box.parent_key}']`)
         : tree.querySelector("ul[role=tree]");
 
       if (ul) {
@@ -147,7 +147,7 @@ const loadInventory = () => {
     }
   }
 
-  function buildBreadcrumbs(li) {
+  function buildBreadcrumbs(selectedLi) {
     breadcrumbWrapper.innerHTML = "";
 
     const container = document.createElement("div");
@@ -156,18 +156,28 @@ const loadInventory = () => {
     const ul = document.createElement("ul");
     container.appendChild(ul);
 
-    // ALWAYS include "Everything"
-    ul.appendChild(makeBreadcrumb("Everything", "", !li));
+    // Always start with "Everything"
+    ul.appendChild(
+      makeBreadcrumb("Everything", "", !selectedLi && pageHierarchy === ""),
+    );
 
-    if (li && li.dataset.hierarchy) {
-      const parts = li.dataset.hierarchy.split(" > ");
-      const chain = ancestorIdChain(li);
+    // Choose hierarchy source:
+    // 1. selected row if you're selecting inside the tree
+    // 2. pageHierarchy if you're inside a box page
+    let parts = [];
+    let ids = [];
 
-      parts.forEach((name, idx) => {
-        const selected = idx === parts.length - 1;
-        ul.appendChild(makeBreadcrumb(name, chain[idx], selected));
-      });
+    if (selectedLi && selectedLi.dataset.hierarchy) {
+      parts = selectedLi.dataset.hierarchy.split(" > ");
+      ids = ancestorIdChain(selectedLi);
+    } else if (pageHierarchy) {
+      parts = pageHierarchyParts;
+      ids = pageHierarchyIds;
     }
+
+    parts.forEach((name, idx) => {
+      ul.appendChild(makeBreadcrumb(name, ids[idx], idx === parts.length - 1));
+    });
 
     breadcrumbWrapper.appendChild(container);
   }
@@ -203,7 +213,9 @@ const loadInventory = () => {
     let cur = li;
     while (cur && !isRootLi(cur)) {
       chain.unshift(cur.dataset.id);
-      cur = tree.querySelector(`li[data-id='${cur.dataset.parentId}']`);
+
+      debugger;
+      cur = tree.querySelector(`li[data-id='${cur.dataset.parentKey}']`);
     }
     return chain;
   }
@@ -217,7 +229,7 @@ const loadInventory = () => {
 
   function runSearch() {
     const q = searchModalField.value.trim();
-    const parentId =
+    const parentKey =
       breadcrumbWrapper.querySelector("input[name='crumb']:checked")?.value ||
       "";
 
@@ -227,7 +239,9 @@ const loadInventory = () => {
     }
 
     fetch(
-      `${searchModalForm.action}?q=${encodeURIComponent(q)}&within=${parentId}`,
+      `${searchModalForm.action}?q=${encodeURIComponent(
+        q,
+      )}&within=${parentKey}`,
       {
         headers: { accept: "application/json" },
       },
@@ -246,6 +260,10 @@ const loadInventory = () => {
     data.data.forEach((box) => {
       const clone = template.content.cloneNode(true);
       const li = clone.querySelector(".search-result");
+
+      li.addEventListener("click", () => {
+        window.location.href = `/b/${box.param_key}`;
+      });
 
       li.dataset.id = box.id;
       li.dataset.type = box.empty ? "item" : "box";
@@ -542,7 +560,7 @@ const loadInventory = () => {
       updateBoxType(parentLi);
 
       const movedId = dragEl.dataset.id;
-      const newParentId = isRootLi(parentLi) ? "" : parentLi.dataset.id || "";
+      const newParentKey = isRootLi(parentLi) ? "" : parentLi.dataset.id || "";
       const child_ids = buildChildIds(targetUl);
 
       fetch(editBoxForm.action, {
@@ -553,7 +571,7 @@ const loadInventory = () => {
         },
         body: JSON.stringify({
           box_id: movedId,
-          parent_id: newParentId,
+          parent_key: newParentKey,
           child_ids,
         }),
       })
@@ -615,7 +633,21 @@ const loadInventory = () => {
       });
   });
 
-  console.log(searchModal);
+  // If we are on a box page, read its hierarchy for default search scope
+  const pageHierarchy =
+    document.querySelector(".inventory-nav code.hierarchy")?.innerText.trim() ||
+    "";
+  const pageHierarchyParts = pageHierarchy ? pageHierarchy.split(" > ") : [];
+  const pageHierarchyIds = [];
+
+  if (pageHierarchy && tree) {
+    // Convert “A > B > C” into parent-key chain
+    let cur = tree.querySelector(`li[data-hierarchy='${pageHierarchy}']`);
+    while (cur && !isRootLi(cur)) {
+      pageHierarchyIds.unshift(cur.dataset.id);
+      cur = tree.querySelector(`li[data-id='${cur.dataset.parentKey}']`);
+    }
+  }
 
   searchModal.addEventListener("modal:show", function () {
     const selected = document.querySelector("li[data-type].selected");
@@ -741,7 +773,7 @@ const loadInventory = () => {
     });
 
     li.classList.add("selected");
-    inventoryForm.querySelector("#new_box_parent_id").value =
+    inventoryForm.querySelector("#new_box_parent_key").value =
       li.dataset.id || "";
     searchWrapper.querySelector("code.hierarchy").innerText =
       li.dataset.hierarchy || "";
