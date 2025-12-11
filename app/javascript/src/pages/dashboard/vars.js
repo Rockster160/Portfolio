@@ -5,6 +5,11 @@ export let text_height = 0.9 * 16;
 export let single_width = 32;
 export let cells = [];
 export let registered_cells = {};
+export let muted = false;
+
+export let toggleMute = function () {
+  return (muted = !muted);
+};
 
 // https://lospec.com/palette-list/endesga-32
 export let dash_colors = {
@@ -69,6 +74,9 @@ let audioCtx = new (window.AudioContext ||
 // `type` of tone. Possible values are sine, square, sawtooth, triangle, and custom. Default is sine.
 // `callback` to use at end of tone
 export let beep = function (duration, frequency, volume, type, callback) {
+  if (muted) {
+    return;
+  }
   var oscillator = audioCtx.createOscillator();
   var gainNode = audioCtx.createGain();
 
