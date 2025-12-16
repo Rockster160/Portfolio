@@ -2,6 +2,11 @@
   display: flex;
   justify-content: space-evenly;
   flex-wrap: wrap;
+
+  .flex-break {
+    flex-basis: 100%;
+    height: 0;
+  }
 }
 
 .execute-btn-wrapper {
@@ -10,6 +15,7 @@
   position: relative;
   transition: transform, box-shadow 0.1s ease;
   margin-bottom: 30px;
+  width: 120px;
 
   --btn-color: #0150D5;
   --btn-color-d2: color-mix(in srgb, var(--btn-color) 90%, black);
@@ -30,6 +36,7 @@
     justify-content: center;
     align-items: center;
     text-decoration: none;
+    left: 10px;
 
     .execute-btn-title {
       margin-top: -2px;
@@ -55,8 +62,8 @@
   .execute-btn-base {
     position: absolute;
     bottom: -20px;
-    left: -10px;
-    right: -10px;
+    left: 0;
+    right: 0;
     height: 120px;
     background-color: var(--btn-color-d2);
     border-radius: 8px;

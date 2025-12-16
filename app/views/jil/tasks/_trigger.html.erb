@@ -6,3 +6,31 @@
   <span class="execute-btn-base"></span>
   <div class="message-wrapper"></div>
 <% end %>
+
+<%#
+
+*ja794 = Global.input_data()::Hash
+
+# -- Runs when the button is pressed --
+zc186 = Global.if({
+  *x8561 = ja794.get("execute")::Boolean
+}, {
+  sd7de = ActionEvent.create({
+    p6a8a = ActionEventData.name("Whisper")::ActionEventData
+    g0449 = ActionEventData.notes("1")::ActionEventData
+  })::ActionEvent
+}, {})::Any
+
+# -- Runs every time the button reconnects or monitor broadcasts --
+c8c98 = Global.get_cache("eevee", "home")::Boolean
+color = Global.ternary(c8c98, "green", "red")::String
+text = Global.ternary(c8c98, "Eevee Home!", "Eevee Gone")::String
+data = Hash.new({
+  h270d = Keyval.new("text", text)::Keyval
+  haab2 = Keyval.new("color", color)::Keyval
+})::Hash
+v62df = Monitor.broadcast("eevee-btn", {
+  lbdb7 = MonitorData.data(data)::MonitorData
+}, false)::Monitor
+
+%>

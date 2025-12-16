@@ -17,6 +17,9 @@
   <% if @tasks.present? %>
     <div class="task-trigger-btns">
       <% @tasks.each do |task| %>
+        <% if params[:t].match?(/\|#{task.id}\b/) %>
+          <div class="flex-break"></div>
+        <% end %>
         <%= render partial: "jil/tasks/trigger", locals: { task: task } %>
       <% end %>
     </div>

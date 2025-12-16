@@ -15,7 +15,7 @@ class ListsController < ApplicationController
   def show
     raise ActionController::RoutingError, "Not Found" if @list.blank?
 
-    @tasks = current_user.tasks.find(params[:t].split(",") || []) if params[:t].present?
+    @tasks = current_user.tasks.find(params[:t].split(/[,|]/) || []) if params[:t].present?
 
     respond_to do |format|
       format.js { render json: @list.serialize }
