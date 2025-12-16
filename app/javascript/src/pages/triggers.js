@@ -74,6 +74,12 @@ document.addEventListener("DOMContentLoaded", function () {
             if (json?.data?.color) {
               executeWrapper.style.setProperty("--btn-color", json.data.color);
             }
+            if (json?.data?.fontSize) {
+              executeWrapper.style.setProperty(
+                "--btn-size",
+                json.data.fontSize,
+              );
+            }
           },
         });
       }

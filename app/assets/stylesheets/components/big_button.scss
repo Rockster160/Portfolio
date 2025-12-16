@@ -17,6 +17,7 @@
   margin-bottom: 30px;
   width: 120px;
 
+  --btn-size: 14px;
   --btn-color: #0150D5;
   --btn-color-d2: color-mix(in srgb, var(--btn-color) 90%, black);
   --btn-color-d4: color-mix(in srgb, var(--btn-color-d2) 70%, black);
@@ -32,7 +33,7 @@
     box-shadow: 0 10px 0 var(--btn-color-d4);
     background-color: var(--btn-color);
     display: flex;
-    font-size: 14px;
+    font-size: var(--btn-size);
     justify-content: center;
     align-items: center;
     text-decoration: none;
