@@ -38,7 +38,7 @@ class NestCommand
   rescue StandardError => e
     ActionCable.server.broadcast(:nest_channel, { failed: true })
     if e.message == "400 Bad Request"
-      RefreshNestMessageWorker.perform_async
+      # RefreshNestMessageWorker.perform_async
     else
       backtrace = e.backtrace.map { |l|
         l.include?("/app/") ? l.gsub("`", "'").gsub(/^.*\/app\//, "") : nil
