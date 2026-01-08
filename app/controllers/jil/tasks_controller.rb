@@ -41,6 +41,20 @@ class Jil::TasksController < ApplicationController
     }
   end
 
+  def duplicate
+    original_task = current_user.tasks.find(params[:id])
+    @task = original_task.dup
+    @task.update!(
+      name:            "#{@task.name} (Copy)",
+      last_status:     nil,
+      last_trigger_at: nil,
+      sort_order:      nil,
+      uuid:            nil,
+    )
+
+    redirect_to jil_task_path(@task)
+  end
+
   def run
     @task = current_user.tasks.find_by(id: params[:id]) unless params[:id] == "new"
     code = params[:code].presence || @task&.code

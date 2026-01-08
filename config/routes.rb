@@ -180,6 +180,7 @@ Rails.application.routes.draw do
     get "t/:id" => "tasks#trigger"
     resources :tasks do
       post :run, on: :member
+      post :duplicate, on: :member
     end
     resources :user_cache, path: :cache
   end
