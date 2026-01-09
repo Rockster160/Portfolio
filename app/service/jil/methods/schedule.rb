@@ -48,7 +48,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
     scoped = scoped.where(user: @jil.user)
 
     order = [:asc, :desc].include?(order.to_s.downcase.to_sym) ? order.to_s.downcase.to_sym : :desc
-    scoped.order(timestamp: order)
+    scoped.order(execute_at: order)
   end
 
   def create(details)
