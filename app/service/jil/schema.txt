@@ -27,6 +27,7 @@
   #get_cache(String:"Cache Key" Any)::Any // Could Cache.get be a non-object Class? Doesn't show up in return-types, but is still a class for organization
   !#dig_cache(String:"Cache Key" content(Keyval [Keyval.new]))::Any
   #set_cache(String:"Cache Key" Any "=" Any)::Any
+  #del_cache(String:"Cache Key" Any)::Boolean
   #exit
   #print(Text)::String
   #comment(Text)::None

@@ -99,6 +99,20 @@ class Jil::Methods::Global < Jil::Methods::Base
     @jil.user.caches.dig_set(*([key, var].compact_blank), val) && val
   end
 
+  def del_cache(key, var)
+    if var.blank?
+      @jil.user.caches.find_by(key: key)&.destroy
+    else
+      c = @jil.user.caches.find_by(key: key)
+      if c.present?
+        data = c.data || {}
+        data.delete(var.to_s)
+        c.update(data: data)
+      end
+    end
+    true
+  end
+
   def ref(var)
     var
   end
