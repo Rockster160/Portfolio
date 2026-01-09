@@ -200,6 +200,10 @@ class Task < ApplicationRecord
   private
 
   def set_next_cron
+    prior_trigger = next_trigger_at
     self.next_trigger_at = cron.present? ? ::CronParse.next(cron, user) : nil
+    if prior_trigger != next_trigger_at
+      ::Jil.trigger(user, :task, with_jil_attrs(changed: { next_trigger_at: next_trigger_at }))
+    end
   end
 end
