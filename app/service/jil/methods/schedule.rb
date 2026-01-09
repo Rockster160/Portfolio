@@ -55,11 +55,11 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   end
 
   def update!(schedule, details)
-    schedules.find(schedule[:id]).tap { |s|
+    schedules.find_by(id: schedule[:id])&.tap { |s|
       s.update(params(details))
       ::Jil::Schedule.update(s)
       ::Jil::Schedule.broadcast(s, :updated)
-    }
+    } || false
   end
 
   def cancel!(schedule)
@@ -67,7 +67,6 @@ class Jil::Methods::Schedule < Jil::Methods::Base
       ::Jil::Schedule.cancel(s)
       s.destroy
       ::Jil::Schedule.broadcast(s, :canceled)
-      s.id = nil
     }&.merge(canceled: true)
   end
 
@@ -94,7 +93,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   private
 
   def schedules
-    @jil.user.scheduled_triggers
+    @jil.user.scheduled_triggers.not_started
   end
 
   def params(details)
