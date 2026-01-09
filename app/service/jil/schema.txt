@@ -280,7 +280,7 @@
   #data(Hash)
 [Schedule]
   #find(Numeric)
-  #search(Text("*"))::Array # Using listener syntax trigger:word::data
+  #search(Text("*") "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # Using listener syntax trigger:word::data
   #create(content(ScheduleData))
   .update!(content(ScheduleData))
   .cancel!::Boolean

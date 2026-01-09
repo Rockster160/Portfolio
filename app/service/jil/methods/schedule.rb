@@ -42,8 +42,13 @@ class Jil::Methods::Schedule < Jil::Methods::Base
     schedules.find_by(id: id)
   end
 
-  def search(name)
-    schedules.break_searcher(name)
+  def search(q, limit, order)
+    limit = (limit.presence || 50).to_i.clamp(1..100)
+    scoped = schedules.break_searcher(q).page(1).per(limit)
+    scoped = scoped.where(user: @jil.user)
+
+    order = [:asc, :desc].include?(order.to_s.downcase.to_sym) ? order.to_s.downcase.to_sym : :desc
+    scoped.order(timestamp: order)
   end
 
   def create(details)

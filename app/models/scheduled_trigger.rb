@@ -32,7 +32,7 @@ class ScheduledTrigger < ApplicationRecord
 
     trigger, _rest = search_string.split(":", 2)
 
-    schedules = ::ScheduledTrigger.where(trigger: trigger)
+    schedules = where(trigger: trigger)
     schedules.select { |schedule|
       ::SearchBreakMatcher.new(search_string, { trigger => schedule.data }).match?
     }
