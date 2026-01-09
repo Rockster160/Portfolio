@@ -229,9 +229,13 @@
   #checkbox(String:"Question Text" BR "Default" Boolean)
   #choices(String:"Question Text" content(String))
   #scale(String:"Question Text" BR Numeric(0):"Min" Numeric(100):"Max" Numeric?(50):"Default")
-*[Task]
-  !#find(String|Numeric)
-  !#search(String)::Array
+[Task]
+  #find(String|Numeric)
+  #search(Text("*") "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array
+  .id::String
+  .name::String
+  .uuid::String
+  .next_trigger_at::Date
   !.enable(Boolean(true))::Boolean
   !.run(Date?)
 [Email]
