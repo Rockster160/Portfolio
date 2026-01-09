@@ -44,13 +44,12 @@ class Jil::TasksController < ApplicationController
   def duplicate
     original_task = current_user.tasks.find(params[:id])
     @task = original_task.dup
-    @task.update!(
-      name:            "#{@task.name} (Copy)",
-      last_status:     nil,
-      last_trigger_at: nil,
-      sort_order:      nil,
-      uuid:            nil,
-    )
+    @task.name =            "#{@task.name} (Copy)"
+    @task.last_status =     nil
+    @task.last_trigger_at = nil
+    @task.sort_order =      nil
+    @task.uuid =            nil
+    @task.save!
 
     redirect_to jil_task_path(@task)
   end
