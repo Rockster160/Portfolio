@@ -15,10 +15,12 @@
         <% end %>
         </br>
         </br>
-        <div class="btns text-right">
-          <%= link_to "Duplicate", duplicate_jil_task_path(@task), class: :btn, method: :post %>
-        </div>
-        </br>
+        <% if @task.persisted? %>
+          <div class="btns text-right">
+            <%= link_to "Duplicate", duplicate_jil_task_path(@task), class: :btn, method: :post %>
+          </div>
+          </br>
+        <% end %>
         <code spellcheck=false contenteditable=true data-language=jil class="code-preview"></code>
       </div>
     </div>
