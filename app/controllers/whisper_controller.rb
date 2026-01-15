@@ -8,6 +8,6 @@ class WhisperController < ApplicationController
       230, # Gone Toggle
       225, # Sleep
     ]
-    @tasks = Task.where(id: task_ids).order(Arel.sql("FIELD(id, #{task_ids.join(", ")})"))
+    @tasks = Task.where(id: task_ids).sort_by { |t| task_ids.index(t.id) }
   end
 end
