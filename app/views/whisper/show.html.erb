@@ -1,0 +1,31 @@
+<%= meta_title "Whisper", include_name: false %>
+
+<div class="whisper-container" data-birth-date="2025-10-14" data-monitor-channel="whisper-durations">
+  <div class="whisper-header">
+    <span class="whisper-name">Whisper</span>
+    <div class="whisper-age-line">
+      <span class="whisper-emoji">🐶</span>
+      <span class="whisper-age"></span>
+    </div>
+  </div>
+
+  <div class="whisper-durations"></div>
+
+  <div class="task-trigger-btns whisper-buttons">
+    <% @tasks.each do |task| %>
+      <%= render partial: "jil/tasks/trigger", locals: { task: task } %>
+    <% end %>
+  </div>
+
+  <div class="ctr-lists act-show">
+    <div class="skinny-container list-container" data-list-id="<%= @list.id %>">
+      <div class="list-error hidden">Disconnected...</div>
+      <template id="list-item-template">
+        <%= render template: "list_items/show", locals: { list: @list, template: true }, layout: false %>
+      </template>
+      <div class="list-items" data-update-url="<%= receive_update_list_path(@list) %>">
+        <%= render template: "list_items/index", locals: { list: @list } %>
+      </div>
+    </div>
+  </div>
+</div>

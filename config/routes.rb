@@ -22,6 +22,8 @@ Rails.application.routes.draw do
   get "playground" => "index#playground"
   resource :ping, only: :create
 
+  resource :whisper, only: [:show], controller: :whisper
+
   namespace :internal do
     get "auth", to: "auth#check"
   end

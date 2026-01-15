@@ -77,6 +77,12 @@ export let beep = function (duration, frequency, volume, type, callback) {
   if (muted) {
     return;
   }
+  if (volume <= 0) {
+    setTimeout(function () {
+      if (callback) callback();
+    }, duration);
+    return;
+  }
   var oscillator = audioCtx.createOscillator();
   var gainNode = audioCtx.createGain();
 
@@ -113,3 +119,6 @@ export let beeps = function (beepsArray) {
 
   playNextBeep();
 };
+
+window.beep = beep;
+window.beeps = beeps;
