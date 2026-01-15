@@ -39,7 +39,8 @@ class List < ApplicationRecord
     list_rx = /\b(list)\b/
     list_intro = name =~ intro_regexp
 
-    found_list = user.ordered_lists.find { |try_list|
+    found_list = user.ordered_lists.ilike(name: name.to_s.squish).first
+    found_list ||= user.ordered_lists.find { |try_list|
       found_msg = name =~ /( #{intro_regexp})?( #{my_rx})?( ?\b#{Regexp.quote(try_list.name.gsub(/[^a-z0-9 ]/i, ""))}\b)( #{list_rx})?/i
 
       found_msg.present? && found_msg >= 0
