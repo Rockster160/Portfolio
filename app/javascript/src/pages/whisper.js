@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const birthDate = container.dataset.birthDate;
   const monitorChannel = container.dataset.monitorChannel;
   const durationsContainer = container.querySelector(".whisper-durations");
+  const statusContainer = container.querySelector(".whisper-status");
 
   let timers = [];
   let completedAlertBeeper = undefined;
@@ -205,14 +206,26 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function updateStatus(status) {
+    if (statusContainer) {
+      statusContainer.textContent = status || "";
+    }
+  }
+
   Monitor.subscribe(monitorChannel, {
     connected: function () {
       this.refresh();
     },
     received: function (data) {
-      const timersData = data?.data?.timers;
-      if (Array.isArray(timersData)) {
-        syncTimerRings(timersData);
+      const monitorData = data?.data;
+      if (!monitorData) return;
+
+      if (monitorData.status !== undefined) {
+        updateStatus(monitorData.status);
+      }
+
+      if (Array.isArray(monitorData.timers)) {
+        syncTimerRings(monitorData.timers);
         updateAllDurations();
       }
     },

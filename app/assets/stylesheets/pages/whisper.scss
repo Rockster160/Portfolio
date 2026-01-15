@@ -36,6 +36,16 @@
   }
 }
 
+.whisper-status {
+  text-align: center;
+  font-size: 2rem;
+  color: #A0A0A0;
+
+  &:empty {
+    display: none;
+  }
+}
+
 .whisper-durations {
   display: flex;
   justify-content: space-around;
