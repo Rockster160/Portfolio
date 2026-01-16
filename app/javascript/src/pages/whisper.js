@@ -18,25 +18,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const CIRCUMFERENCE = 2 * Math.PI * 45;
 
   function playAlertBeeps() {
-    // Tamagotchi-style beeps
-    const volume = 0.2;
+    const swell = [
+      [60, 440, 0.01, "sine"],
+      [60, 440, 0.03, "sine"],
+      [60, 440, 0.06, "sine"],
+      [60, 440, 0.09, "sine"],
+      [60, 440, 0.07, "sine"],
+      [60, 440, 0.04, "sine"],
+    ];
+
     beeps([
-      // triple beep
-      [130, 2100, volume, "square"],
-      [60, 0, 0, null],
-      [130, 2100, volume, "square"],
-      [60, 0, 0, null],
-      [130, 2100, volume, "square"],
-
-      // pause
-      [360, 0, 0, null],
-
-      // triple beep again
-      [130, 2100, volume, "square"],
-      [60, 0, 0, null],
-      [130, 2100, volume, "square"],
-      [60, 0, 0, null],
-      [130, 2100, volume, "square"],
+      ...swell,
+      [200, 0, 0, null],
+      ...swell,
+      [500, 0, 0, null],
+      ...swell,
+      [200, 0, 0, null],
+      ...swell,
     ]);
   }
 
@@ -77,7 +75,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const m = Math.floor(abs / 60);
     const s = Math.floor(abs % 60);
     const sign = seconds < 0 ? "-" : "";
-    return `${sign}${m}:${s.toString().padStart(2, "0")}`;
+    // return `${sign}${m}:${s.toString().padStart(2, "0")}`;
+    return `${sign}${m}m`;
   }
 
   function createRingElement(key, label) {
@@ -91,7 +90,7 @@ document.addEventListener("DOMContentLoaded", () => {
       </svg>
       <div class="ring-content">
         <div class="ring-label">${label || key}</div>
-        <div class="ring-timer">0:00</div>
+        <div class="ring-timer">0m</div>
       </div>
     `;
     return ring;
@@ -110,7 +109,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function syncTimers(newTimers) {
     const newKeys = newTimers.map((t) => t.key);
-    const itemClass = timerMode === "clock" ? ".duration-clock" : ".duration-ring";
+    const itemClass =
+      timerMode === "clock" ? ".duration-clock" : ".duration-ring";
     const labelClass = timerMode === "clock" ? ".clock-label" : ".ring-label";
     const existingItems = durationsContainer.querySelectorAll(itemClass);
 
