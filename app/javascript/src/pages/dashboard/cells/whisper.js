@@ -123,7 +123,15 @@ import { dash_colors } from "../vars";
 
     // Line 1: Status | Emoji + Age
     const status = cell.data.status || "";
-    lines.push(Text.justify(cell_width, "🐶", status, calculateAge()));
+    const ageStr = calculateAge();
+    lines.push(
+      Text.justify(
+        cell_width,
+        "🐶".padEnd(ageStr.length),
+        status,
+        Text.color(dash_colors.grey, ageStr),
+      ),
+    );
 
     // Line 2: Blank
     lines.push("");
