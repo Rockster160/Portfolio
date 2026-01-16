@@ -193,7 +193,7 @@ document.addEventListener("DOMContentLoaded", () => {
       },
 
       received(data) {
-        if (!data || !data.list_html) return;
+        if (!data || typeof data.list_html !== "string") return;
 
         const {
           root: incRoot,
