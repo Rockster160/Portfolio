@@ -80,6 +80,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 json.data.fontSize,
               );
             }
+            const subtextEl = executeBtn.querySelector(".execute-btn-subtext");
+            if (subtextEl) {
+              subtextEl.textContent = json?.data?.subtext || "";
+            }
           },
         });
       }

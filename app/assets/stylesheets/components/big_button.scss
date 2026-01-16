@@ -43,6 +43,21 @@
       margin-top: -2px;
     }
 
+    .execute-btn-subtext {
+      position: absolute;
+      bottom: -25px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      opacity: 0.7;
+      white-space: nowrap;
+      z-index: 2;
+
+      &:empty {
+        display: none;
+      }
+    }
+
     &:hover {
       transform: translateY(1px);
       box-shadow: 0 9px 0 var(--btn-color-d4);
