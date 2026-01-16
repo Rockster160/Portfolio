@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const monitorChannel = container.dataset.monitorChannel;
   const durationsContainer = container.querySelector(".whisper-durations");
   const statusContainer = container.querySelector(".whisper-status");
+  const timerMode = params.timer || "ring"; // "ring" (default) or "clock"
 
   let timers = [];
   let completedAlertBeeper = undefined;
@@ -96,51 +97,90 @@ document.addEventListener("DOMContentLoaded", () => {
     return ring;
   }
 
-  function syncTimerRings(newTimers) {
-    const newKeys = newTimers.map((t) => t.key);
-    const existingRings = durationsContainer.querySelectorAll(".duration-ring");
+  function createClockElement(key, label) {
+    const item = document.createElement("div");
+    item.className = "duration-clock";
+    item.dataset.durationKey = key;
+    item.innerHTML = `
+      <span class="clock-label">${label || key}:</span>
+      <span class="clock-time"></span>
+    `;
+    return item;
+  }
 
-    // Remove rings not in new data
-    existingRings.forEach((ring) => {
-      if (!newKeys.includes(ring.dataset.durationKey)) {
-        ring.remove();
+  function syncTimers(newTimers) {
+    const newKeys = newTimers.map((t) => t.key);
+    const itemClass = timerMode === "clock" ? ".duration-clock" : ".duration-ring";
+    const labelClass = timerMode === "clock" ? ".clock-label" : ".ring-label";
+    const existingItems = durationsContainer.querySelectorAll(itemClass);
+
+    // Remove items not in new data
+    existingItems.forEach((item) => {
+      if (!newKeys.includes(item.dataset.durationKey)) {
+        item.remove();
       }
     });
 
-    // Add/reorder rings
+    // Add/reorder items
     newTimers.forEach((timerData, index) => {
-      let ring = durationsContainer.querySelector(
+      let item = durationsContainer.querySelector(
         `[data-duration-key="${timerData.key}"]`,
       );
 
-      if (!ring) {
-        // Create new ring
-        ring = createRingElement(timerData.key, timerData.label);
+      if (!item) {
+        // Create new item based on mode
+        item =
+          timerMode === "clock"
+            ? createClockElement(timerData.key, timerData.label)
+            : createRingElement(timerData.key, timerData.label);
       }
 
       // Update label if changed
-      const labelEl = ring.querySelector(".ring-label");
-      if (
-        labelEl &&
-        timerData.label &&
-        labelEl.textContent !== timerData.label
-      ) {
-        labelEl.textContent = timerData.label;
+      const labelEl = item.querySelector(labelClass);
+      if (labelEl && timerData.label) {
+        const expectedLabel =
+          timerMode === "clock" ? `${timerData.label}:` : timerData.label;
+        if (labelEl.textContent !== expectedLabel) {
+          labelEl.textContent = expectedLabel;
+        }
       }
 
       // Ensure correct order by appending (moves existing or adds new)
       const currentAtIndex = durationsContainer.children[index];
-      if (currentAtIndex !== ring) {
+      if (currentAtIndex !== item) {
         if (currentAtIndex) {
-          durationsContainer.insertBefore(ring, currentAtIndex);
+          durationsContainer.insertBefore(item, currentAtIndex);
         } else {
-          durationsContainer.appendChild(ring);
+          durationsContainer.appendChild(item);
         }
       }
     });
 
     // Update timers array
     timers = newTimers;
+  }
+
+  function updateClockDisplay(timerData) {
+    const clockEl = durationsContainer.querySelector(
+      `[data-duration-key="${timerData.key}"]`,
+    );
+    if (!clockEl) return;
+
+    const nowSec = Math.floor(Time.msSinceEpoch() / 1000);
+    const next = timerData.next || nowSec;
+    const remaining = next - nowSec;
+
+    const timeEl = clockEl.querySelector(".clock-time");
+    if (timeEl) {
+      timeEl.textContent = Time.local(next * 1000);
+      if (remaining <= 0) {
+        timeEl.classList.add("overdue");
+      } else {
+        timeEl.classList.remove("overdue");
+      }
+    }
+
+    return remaining;
   }
 
   function updateDurationRing(timerData) {
@@ -190,7 +230,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let anyOverdue = false;
 
     timers.forEach((timerData) => {
-      const remaining = updateDurationRing(timerData);
+      const remaining =
+        timerMode === "clock"
+          ? updateClockDisplay(timerData)
+          : updateDurationRing(timerData);
       if (remaining !== undefined && remaining <= 0) {
         anyOverdue = true;
       }
@@ -225,7 +268,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (Array.isArray(monitorData.timers)) {
-        syncTimerRings(monitorData.timers);
+        syncTimers(monitorData.timers);
         updateAllDurations();
       }
     },
