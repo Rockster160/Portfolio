@@ -13,11 +13,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const timerMode = params.timer || "ring"; // "ring" (default) or "clock"
 
   let timers = [];
-  let completedAlertBeeper = undefined;
+  let timerAlarms = {}; // Per-timer alarm intervals
 
   const CIRCUMFERENCE = 2 * Math.PI * 45;
 
-  function playAlertBeeps() {
+  function playDefaultBeeps() {
     const swell = [
       [60, 440, 0.01, "sine"],
       [60, 440, 0.03, "sine"],
@@ -36,6 +36,36 @@ document.addEventListener("DOMContentLoaded", () => {
       [200, 0, 0, null],
       ...swell,
     ]);
+  }
+
+  function playNapBeeps() {
+    beeps([
+      [400, 392, 0.1, "sine"],
+      [400, 349, 0.09, "sine"],
+      [400, 330, 0.08, "sine"],
+      [400, 294, 0.07, "sine"],
+      [600, 262, 0.06, "sine"],
+    ]);
+  }
+
+  function playWakeBeeps() {
+    beeps([
+      [400, 262, 0.06, "sine"],
+      [400, 294, 0.07, "sine"],
+      [400, 330, 0.08, "sine"],
+      [400, 349, 0.09, "sine"],
+      [600, 392, 0.1, "sine"],
+    ]);
+  }
+
+  function playAlertForKey(key) {
+    if (key === "nap") {
+      playNapBeeps();
+    } else if (key === "wake") {
+      playWakeBeeps();
+    } else {
+      playDefaultBeeps();
+    }
   }
 
   // Age calculation - date-based, increments on the 14th of each month
@@ -227,7 +257,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateAllDurations() {
-    let anyOverdue = false;
+    const overdueKeys = new Set();
 
     timers.forEach((timerData) => {
       const remaining =
@@ -235,18 +265,28 @@ document.addEventListener("DOMContentLoaded", () => {
           ? updateClockDisplay(timerData)
           : updateDurationRing(timerData);
       if (remaining !== undefined && remaining <= 0) {
-        anyOverdue = true;
+        overdueKeys.add(timerData.key);
       }
     });
 
-    // Manage alert beeper
-    if (anyOverdue && !completedAlertBeeper) {
-      playAlertBeeps();
-      completedAlertBeeper = setInterval(playAlertBeeps, Time.minutes(5));
-    } else if (!anyOverdue && completedAlertBeeper) {
-      clearInterval(completedAlertBeeper);
-      completedAlertBeeper = undefined;
-    }
+    // Manage per-timer alarms
+    overdueKeys.forEach((key) => {
+      if (!timerAlarms[key]) {
+        playAlertForKey(key);
+        timerAlarms[key] = setInterval(
+          () => playAlertForKey(key),
+          Time.minutes(5),
+        );
+      }
+    });
+
+    // Clear alarms for timers no longer overdue
+    Object.keys(timerAlarms).forEach((key) => {
+      if (!overdueKeys.has(key)) {
+        clearInterval(timerAlarms[key]);
+        delete timerAlarms[key];
+      }
+    });
   }
 
   function updateStatus(status) {
