@@ -1,0 +1,626 @@
+<% content_for :title, @list_builder.name %>
+<% content_for :modals do %>
+  <div id="cmodal-backdrop" class="cmodal-backdrop hidden">
+    <div class="cmodal">
+      <h3 id="cmodal-title">Edit Item</h3>
+      <div class="row">
+        <input id="m-name" placeholder="Name">
+      </div>
+      <div class="row">
+        <input id="m-img" placeholder="Image URL or emoji">
+      </div>
+      <div class="cmodal-actions">
+        <button id="m-delete" class="danger primary" type="button">Delete</button>
+        <div class="spacer"></div>
+        <button id="m-cancel" class="primary" type="button">Cancel</button>
+        <button id="m-save" class="ok primary" type="button">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="qmodal-backdrop" class="cmodal-backdrop hidden">
+    <div class="cmodal">
+      <h3>Quick Edit</h3>
+      <textarea id="q-text" rows="12" wrap="off"
+        style="width:100%;padding:8px 10px;border:1px solid #CCC;border-radius:6px;
+              font-family: ui-monospace, SFMono-Regular, Menlo, monospace"></textarea>
+      <div class="cmodal-actions">
+        <div class="spacer"></div>
+        <button id="q-cancel" class="primary" type="button">Cancel</button>
+        <button id="q-apply" class="ok primary" type="button">Apply</button>
+      </div>
+    </div>
+  </div>
+<% end %>
+
+<div class="wrap"
+     data-save-url="<%= list_builder_path(@list_builder) %>"
+     data-toggle-url="<%= toggle_item_list_builder_path(@list_builder) %>"
+     data-list-id="<%= @list_builder.list_id %>">
+  <div class="summary-container">
+    <div class="text-right">
+      List: <strong><%= @list_builder.list.name %></strong> |
+      Selected: <span id="selected-count">0</span> items
+    </div>
+  </div>
+
+  <div class="topbar">
+    <div class="row flex-between" data-editing=true class="hidden">
+      <button id="cancel-edit" class="primary" type="button">Cancel</button>
+      <%= link_to "Reload", list_builder_path(@list_builder), class: "btn primary" %>
+      <%= link_to "Edit Page", edit_list_builder_path(@list_builder), class: "btn primary", id: "page-edit" %>
+    </div>
+
+    <div class="row">
+      <button id="toggle-edit" class="primary" type="button">⚙️</button>
+      <button id="save-items" class="primary" type="button" class="hidden">💾</button>
+      <button id="add-item" class="primary" type="button" class="hidden">➕</button>
+      <button id="quick-edit" class="primary" type="button" class="hidden">✍️</button>
+
+      <input id="search" type="search" placeholder="Search items..." autocomplete="off">
+    </div>
+  </div>
+
+  <div id="grid" class="grid"></div>
+</div>
+
+<% content_for :after_body do %>
+  <script id="items-data" type="application/json">
+    <%= raw(@list_builder.items.to_json) %>
+  </script>
+  <script id="list-items-data" type="application/json">
+    <%= raw(@list_builder.list.list_items.pluck(:name).to_json) %>
+  </script>
+
+  <style>
+    html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto; }
+    .summary-container {
+      font-weight: 500; color: #ECF0F1;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 20px 28px }
+    .topbar { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 10px }
+    input[type="text"] {
+      flex: 1; padding: 10px 12px; border: 1px solid #CCC;
+      border-radius: 8px; outline: none
+    }
+    button {
+      padding: inherit;
+    }
+    button.primary {
+      padding: 6px 10px; border: none; border-radius: 8px;
+      background: #2563EB; color: black; cursor: pointer
+    }
+    button.primary:disabled { opacity: .5; cursor: default }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 12px
+    }
+    .card {
+      position: relative; border: 1px solid #E5E7EB; border-radius: 12px;
+      padding: 6px; display: flex; flex-direction: column; gap: 4px;
+      align-items: center; justify-content: space-between; background: #00102B;
+      transition: transform .08s ease, box-shadow .08s ease;
+      cursor: pointer;
+    }
+    .card:hover { transform: translateY(-1px); box-shadow: 0 2px 10px #0001 }
+    .card.selected { outline: 2px solid #22C55E; background: #0C3A30 }
+    .imgbox {
+      display: grid;
+      place-items: center;
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 10px; background: #D5E5FF;
+      overflow: hidden;
+    }
+
+    .imgbox i.emoji {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      font-style: normal;
+      font-size: 64px;
+      line-height: 1;
+      white-space: pre;
+      pointer-events: none;
+    }
+
+    .imgbox i.emoji span {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      line-height: 1;
+      pointer-events: none;
+    }
+    .imgbox img { width: 100%; height: 100%; object-fit: cover }
+    .title { text-align: center; font-size: 14px; line-height: 1.2; color: #ECF0F1; }
+
+    .editing .card { cursor: grab }
+    .editing .card:active { cursor: grabbing }
+
+    .card-overlay {
+      position: absolute; inset: 0;
+      background: #0008; border-radius: 12px;
+      display: grid; place-items: center; text-align: center;
+      color: #ECF0F1; font-weight: 600; font-size: 14px;
+      pointer-events: auto
+    }
+    .card-overlay .hint {
+      padding: 6px 10px; border-radius: 999px;
+      background: #2563EB; color: #FFF
+    }
+
+    .drag-placeholder {
+      border: 2px dashed #93C5FD;
+      background: #EFF6FF;
+      border-radius: 12px;
+      height: 100%;
+      min-height: 160px;
+    }
+
+    .dragging { opacity: .3 }
+
+    .sticky-note {
+      position: absolute; top: 8px; left: 8px; font-size: 12px;
+      background: #22C55E; color: #FFF; padding: 2px 6px; border-radius: 999px
+    }
+
+    .text-right { text-align: right; }
+    .row { display: flex; gap: 8px; width: 100% }
+    .row.right { justify-content: flex-end; }
+    .row input {
+      flex: 1; padding: 8px 10px; border: 1px solid #CCC; border-radius: 6px
+    }
+    .flex-between {
+      display: flex; justify-content: space-between; align-items: center
+    }
+
+    .cmodal-backdrop {
+      position: fixed; inset: 0; background: #0008;
+      display: grid; place-items: center; z-index: 1000
+    }
+    .cmodal {
+      width: min(560px, 92vw); background: #00102B; color: #ECF0F1;
+      border: 1px solid #D5E5FF; border-radius: 12px; padding: 16px
+    }
+    .cmodal h3 { margin: 0 0 10px 0; font-size: 18px }
+    .cmodal-actions {
+      display: flex; align-items: center; gap: 2px; margin-top: 12px
+    }
+    .cmodal .ok, .cmodal .danger, .cmodal button {
+      border: none; border-radius: 8px; cursor: pointer
+    }
+    .cmodal .ok { background: #2563EB; color: #FFF }
+    .cmodal .danger { background: #991B1B; color: #FFF }
+    .cmodal .spacer { flex: 1 }
+
+    @media (max-width: 600px) {
+      .grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)) }
+    }
+
+    .hidden { display: none }
+  </style>
+
+  <script type="module">
+    import { showFlash } from "../../quick_actions/flash.js";
+
+    let ITEMS = JSON.parse(
+      document.getElementById("items-data").textContent || "[]"
+    )
+    let LIST_ITEMS = new Set(JSON.parse(
+      document.getElementById("list-items-data").textContent || "[]"
+    ).map(name => name.toLowerCase()))
+
+    let query = ""
+    let editMode = false
+    let preEdit = ""
+
+    const elGrid = document.getElementById("grid")
+    const elSearch = document.getElementById("search")
+    const elCancelEdit = document.getElementById("cancel-edit")
+    const elToggleEdit = document.getElementById("toggle-edit")
+    const elAddItem = document.getElementById("add-item")
+    const elSaveItems = document.getElementById("save-items")
+    const elQuickEdit = document.getElementById("quick-edit")
+    const elPageEdit = document.getElementById("page-edit")
+    const SAVE_ENDPOINT = document.querySelector(".wrap")?.dataset.saveUrl
+    const TOGGLE_ENDPOINT = document.querySelector(".wrap")?.dataset.toggleUrl
+    const LIST_ID = document.querySelector(".wrap")?.dataset.listId
+
+    const elcModal = document.getElementById("cmodal-backdrop")
+    const mTitle = document.getElementById("cmodal-title")
+    const mName = document.getElementById("m-name")
+    const mImg = document.getElementById("m-img")
+    const mSave = document.getElementById("m-save")
+    const mCancel = document.getElementById("m-cancel")
+    const mDelete = document.getElementById("m-delete")
+    let currentEditingName = null
+    let isNewItem = false
+
+    const elQModal = document.getElementById("qmodal-backdrop")
+    const elQText = document.getElementById("q-text")
+    const elQApply = document.getElementById("q-apply")
+    const elQCancel = document.getElementById("q-cancel")
+
+    const csrfToken = () => {
+      const m = document.querySelector('meta[name="csrf-token"]')
+      return m ? m.content : ""
+    }
+
+    const fuzzyMatch = (needle, hay) => {
+      if (!needle) return true
+      let i = 0, j = 0
+      const n = needle.toLowerCase(), h = hay.toLowerCase()
+      while (i < n.length && j < h.length) { if (n[i] === h[j]) i++; j++ }
+      return i === n.length
+    }
+
+    const splitGraphemes = s => {
+      if (window.Intl && Intl.Segmenter) {
+        const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" })
+        return Array.from(seg.segment(s), x => x.segment)
+      }
+      return Array.from(s)
+    }
+
+    const computeView = () => {
+      return ITEMS.filter(it =>
+        fuzzyMatch(query, it.name)
+      )
+    }
+
+    const isSelected = (name) => LIST_ITEMS.has(name.toLowerCase())
+
+    const upsertItem = (name, attrs) => {
+      const idx = ITEMS.findIndex(x => x.name === name)
+      if (idx === -1) return
+      ITEMS[idx] = { ...ITEMS[idx], ...attrs }
+    }
+
+    const deleteItem = name => {
+      ITEMS = ITEMS.filter(x => x.name !== name)
+    }
+
+    // ---------- Drag & drop with placeholder (name-based) ----------
+    let dragFromIdx = null
+    let placeholder = null
+
+    const startDrag = (fromIdx, card) => {
+      dragFromIdx = fromIdx
+      card.classList.add("dragging")
+      placeholder = document.createElement("div")
+      placeholder.className = "card drag-placeholder"
+      placeholder.style.height = `${card.offsetHeight}px`
+      elGrid.insertBefore(placeholder, card.nextSibling)
+    }
+
+    const finishDrag = draggedCard => {
+      if (dragFromIdx == null || !placeholder) return
+      const cards = Array.from(elGrid.querySelectorAll(".card"))
+      const toIdx = cards.indexOf(placeholder)
+      const moved = ITEMS.splice(dragFromIdx, 1)[0]
+      const insertAt = Math.max(0, Math.min(toIdx, ITEMS.length))
+      ITEMS.splice(insertAt, 0, moved)
+      draggedCard.classList.remove("dragging")
+      placeholder.remove()
+      placeholder = null
+      dragFromIdx = null
+      render()
+    }
+
+    // ---------- Edit Modal ----------
+    const opencModal = item => {
+      currentEditingName = item?.name || null
+      isNewItem = !item
+      mTitle.textContent = isNewItem ? "Add Item" : "Edit Item"
+      mName.value = item?.name || ""
+      mImg.value = item?.img || ""
+      mDelete.classList.toggle("hidden", isNewItem)
+      elcModal.classList.remove("hidden")
+      setTimeout(() => mName.focus(), 0)
+    }
+
+    const closecModal = () => {
+      elcModal.classList.add("hidden")
+      currentEditingName = null
+      isNewItem = false
+    }
+
+    mCancel.addEventListener("click", () => closecModal())
+
+    mSave.addEventListener("click", () => {
+      const name = mName.value.trim() || "Untitled"
+      const img = mImg.value.trim()
+
+      if (isNewItem) {
+        ITEMS.push({ name, img })
+      } else {
+        const idx = ITEMS.findIndex(x => x.name === currentEditingName)
+        if (idx >= 0) ITEMS[idx] = { ...ITEMS[idx], name, img }
+      }
+      closecModal()
+      render()
+    })
+
+    mDelete.addEventListener("click", () => {
+      if (!currentEditingName) return
+      deleteItem(currentEditingName)
+      closecModal()
+      render()
+    })
+
+    elcModal.addEventListener("click", e => {
+      if (e.target === elcModal) closecModal()
+    })
+
+    // ---------- Quick Edit ----------
+    const itemsToText = items => {
+      return items.map(it => {
+        const imgPart = (it.img?.trim()) ? ` | ${it.img.trim()}` : ""
+        return `${it.name}${imgPart}`
+      }).join("\n")
+    }
+
+    const textToItems = text => {
+      return text.split("\n").map(line => {
+        const raw = line.trim()
+        if (!raw) return null
+        const [name, img] = raw.split("|", 2)
+        return {
+          name: name.trim(),
+          img: (img || "").trim()
+        }
+      }).filter(Boolean)
+    }
+
+    const openQuickEdit = () => {
+      if (!elQModal) return
+      elQText.value = itemsToText(ITEMS)
+      elQModal.classList.remove("hidden")
+      setTimeout(() => elQText.focus(), 0)
+    }
+
+    const closeQuickEdit = () => { elQModal?.classList.add("hidden") }
+
+    elQuickEdit?.addEventListener("click", openQuickEdit)
+    elQCancel?.addEventListener("click", closeQuickEdit)
+    elQApply?.addEventListener("click", () => {
+      ITEMS = textToItems(elQText.value)
+      closeQuickEdit()
+      render()
+    })
+    elQModal?.addEventListener("click", e => {
+      if (e.target === elQModal) closeQuickEdit()
+    })
+
+    // ---------- Toggle item on list ----------
+    const toggleItem = async (itemName) => {
+      const res = await fetch(TOGGLE_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken(),
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ item_name: itemName }),
+        credentials: "same-origin"
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        const lowerName = itemName.toLowerCase()
+        if (data.status === "added") {
+          LIST_ITEMS.add(lowerName)
+          showFlash(`Added "${itemName}"`)
+        } else {
+          LIST_ITEMS.delete(lowerName)
+          showFlash(`Removed "${itemName}"`)
+        }
+        render()
+      } else {
+        const err = await res.text().catch(() => "")
+        console.error("Toggle failed", res.status, err)
+        showFlash("Toggle failed")
+      }
+    }
+
+    // ---------- Render ----------
+    const render = () => {
+      document.body.classList.toggle("editing", editMode)
+      document.querySelectorAll("[data-editing=true]").forEach(el => el.classList.toggle("hidden", !editMode))
+      document.querySelectorAll("[data-editing=false]").forEach(el => el.classList.toggle("hidden", editMode))
+      elToggleEdit.classList.toggle("hidden", editMode)
+      elAddItem.classList.toggle("hidden", !editMode)
+      elSaveItems.classList.toggle("hidden", !editMode)
+      elQuickEdit?.classList.toggle("hidden", !editMode)
+
+      elGrid.innerHTML = ""
+      const view = computeView()
+
+      let selectedCount = 0
+
+      view.forEach((it, index) => {
+        const isSel = isSelected(it.name)
+        if (isSel) selectedCount++
+
+        const card = document.createElement("div")
+        card.className = `card${isSel ? " selected" : ""}`
+        card.dataset.name = it.name
+        card.dataset.index = String(index)
+
+        if (editMode) {
+          card.setAttribute("draggable", "true")
+          card.addEventListener("dragstart", e => startDrag(index, card))
+          card.addEventListener("dragend", e => finishDrag(card))
+          card.addEventListener("dragover", e => e.preventDefault())
+          card.addEventListener("dragenter", e => {
+            e.preventDefault()
+            const rect = card.getBoundingClientRect()
+            const before = (e.clientY - rect.top) < rect.height / 2
+            if (!placeholder) return
+            if (before) elGrid.insertBefore(placeholder, card)
+            else elGrid.insertBefore(placeholder, card.nextSibling)
+          })
+        }
+
+        const imgbox = document.createElement("div")
+        imgbox.className = "imgbox"
+        if (it.img && /^(https?:|\/)/.test(it.img)) {
+          const img = document.createElement("img")
+          img.src = it.img
+          img.alt = it.name
+          imgbox.appendChild(img)
+        } else {
+          const emoji = document.createElement("i")
+          emoji.className = "emoji"
+          const raw = it.img && it.img.trim() ? it.img : "📦"
+          splitGraphemes(raw).forEach(g => {
+            const span = document.createElement("span")
+            span.textContent = g
+            emoji.appendChild(span)
+          })
+          imgbox.appendChild(emoji)
+        }
+
+        const title = document.createElement("div")
+        title.className = "title"
+        title.textContent = it.name
+
+        if (!editMode) {
+          card.addEventListener("click", (e) => {
+            e.preventDefault()
+            toggleItem(it.name)
+          })
+        }
+
+        card.appendChild(imgbox)
+        card.appendChild(title)
+
+        if (editMode) {
+          const overlay = document.createElement("div")
+          overlay.className = "card-overlay"
+          const hint = document.createElement("div")
+          hint.className = "hint"
+          hint.textContent = "✏️"
+          overlay.appendChild(hint)
+          overlay.addEventListener("click", e => {
+            e.preventDefault()
+            opencModal(it)
+          })
+          card.appendChild(overlay)
+        } else if (isSel) {
+          const badge = document.createElement("div")
+          badge.className = "sticky-note"
+          badge.textContent = "On List"
+          card.appendChild(badge)
+        }
+
+        elGrid.appendChild(card)
+      })
+
+      document.getElementById("selected-count").textContent = selectedCount
+    }
+
+    // ---------- Search / Edit toggle / Add / Save ----------
+    elSearch.addEventListener("input", e => {
+      query = e.target.value.trim()
+      render()
+    })
+
+    elToggleEdit.addEventListener("click", () => {
+      if (!editMode) {
+        preEdit = itemsToText(ITEMS)
+      }
+      editMode = !editMode
+      render()
+    })
+
+    elCancelEdit.addEventListener("click", () => {
+      ITEMS = textToItems(preEdit)
+      editMode = false
+      render()
+    })
+
+    elAddItem.addEventListener("click", () => opencModal(null))
+
+    const normalizeItems = items => {
+      return items.map(it => ({
+        name: String(it.name || "Untitled").trim(),
+        img: (it.img || "").toString().trim()
+      }))
+    }
+
+    elSaveItems.addEventListener("click", async () => {
+      if (preEdit === itemsToText(ITEMS)) {
+        editMode = false
+        render()
+        return
+      }
+
+      const payload = { list_builder: { items: normalizeItems(ITEMS) } }
+
+      const res = await fetch(SAVE_ENDPOINT, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken(),
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(payload),
+        credentials: "same-origin"
+      })
+
+      if (res.ok) {
+        showFlash("Saved!")
+        editMode = false
+        render()
+        return
+      }
+
+      const err = await res.text().catch(() => "")
+      console.error("Save failed", res.status, err)
+      alert("Save failed")
+    })
+
+    // ---------- ActionCable subscription for real-time sync ----------
+    const setupCable = () => {
+      if (!window.App || !window.App.cable) {
+        setTimeout(setupCable, 100)
+        return
+      }
+
+      App.cable.subscriptions.create(
+        { channel: "ListJsonChannel", channel_id: `list_${LIST_ID}` },
+        {
+          received(data) {
+            if (data.list_data && data.list_data.items) {
+              LIST_ITEMS = new Set(
+                data.list_data.items
+                  .filter(item => !item.deleted_at)
+                  .map(item => item.name.toLowerCase())
+              )
+              render()
+            }
+          }
+        }
+      )
+    }
+    setupCable()
+
+    // ---------- Boot ----------
+    document.addEventListener("DOMContentLoaded", () => {
+      render()
+    })
+
+    window.addEventListener("beforeunload", e => {
+      if (!editMode) return
+      const current = itemsToText(ITEMS)
+      if (current !== preEdit) {
+        e.preventDefault()
+        e.returnValue = ""
+      }
+    })
+  </script>
+<% end %>

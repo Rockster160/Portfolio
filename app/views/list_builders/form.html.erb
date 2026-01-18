@@ -1,0 +1,36 @@
+<div class="wide-container">
+  <%= form_with(model: @list_builder, local: true) do |form| %>
+    <div class="form-title">
+      <% if @list_builder.new_record? %>
+        New List Builder
+      <% else %>
+        Edit List Builder
+        <%= link_to "Destroy", list_builder_path(@list_builder), method: :delete, class: "btn danger pull-right", data: { confirm: "Are you sure? This cannot be undone." } %>
+      <% end %>
+    </div>
+
+    <%= render partial: "layouts/error_container", locals: { resource: @list_builder } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= form.label :name %>
+        <%= form.text_field :name %>
+      </div>
+
+      <div class="form-field">
+        <%= form.label :list_id, "Connected List" %>
+        <%= form.collection_select :list_id, @lists, :id, :name, { prompt: "Select a list..." }, { class: "form-select" } %>
+      </div>
+
+      <div class="form-field">
+        <%= form.label :items, "Items" %>
+        <%= form.text_area :items, rows: [@list_builder.items.length, 5].max, value: @list_builder.listify_items %>
+        <small>Enter items in rows like "Item Name | emoji or image url"</small>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= form.submit %>
+    </div>
+  <% end %>
+</div>

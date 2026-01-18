@@ -57,6 +57,9 @@ Rails.application.routes.draw do
 
   scope path: :jarvis do
     resources :meal_builders
+    resources :list_builders do
+      post :toggle_item, on: :member
+    end
   end
 
   resources :dashboards, only: [:show, :update], controller: :quick_actions do

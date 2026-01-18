@@ -1,0 +1,85 @@
+class ListBuildersController < ApplicationController
+  skip_before_action :verify_authenticity_token
+  before_action :authorize_user_or_guest
+  before_action :set_list_builder, only: [:show, :edit, :update, :destroy, :toggle_item]
+
+  layout "quick_actions", only: [:show]
+
+  def index
+    @list_builders = current_user.list_builders.includes(:list).order(created_at: :desc)
+  end
+
+  def show
+  end
+
+  def new
+    @list_builder = current_user.list_builders.new
+    @lists = current_user.ordered_lists
+    render :form
+  end
+
+  def edit
+    @lists = current_user.ordered_lists
+    render :form
+  end
+
+  def create
+    @list_builder = current_user.list_builders.new(list_builder_params)
+
+    if @list_builder.save
+      redirect_to @list_builder
+    else
+      @lists = current_user.ordered_lists
+      render :form
+    end
+  end
+
+  def update
+    if @list_builder.update(list_builder_params)
+      respond_to do |format|
+        format.html { redirect_to @list_builder }
+        format.json { render json: @list_builder, status: :ok }
+      end
+    else
+      @lists = current_user.ordered_lists
+      render :form
+    end
+  end
+
+  def destroy
+    @list_builder.destroy
+    redirect_to list_builders_path
+  end
+
+  def toggle_item
+    item_name = params[:item_name].to_s.strip
+    return head(:bad_request) if item_name.blank?
+
+    list = @list_builder.list
+    existing_item = list.list_items.by_formatted_name(item_name)
+
+    if existing_item
+      existing_item.soft_destroy
+      render json: { status: "removed", item_name: item_name }
+    else
+      list.list_items.add(item_name)
+      render json: { status: "added", item_name: item_name }
+    end
+  end
+
+  private
+
+  def set_list_builder
+    @list_builder = current_user.list_builders.find_by!(parameterized_name: params[:id])
+  end
+
+  def list_builder_params
+    params.require(:list_builder).permit(:name, :list_id).tap { |whitelisted|
+      if params[:list_builder][:items].is_a?(String)
+        whitelisted[:items] = params[:list_builder][:items]
+      elsif params[:list_builder][:items].present?
+        whitelisted[:items] = params[:list_builder][:items].map(&:permit!)
+      end
+    }
+  end
+end

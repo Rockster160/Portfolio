@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_11_25_152648) do
+ActiveRecord::Schema[7.1].define(version: 2026_01_17_171929) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -390,6 +390,20 @@ ActiveRecord::Schema[7.1].define(version: 2025_11_25_152648) do
     t.boolean "center"
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
+  end
+
+  create_table "list_builders", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "list_id", null: false
+    t.text "name", null: false
+    t.text "parameterized_name", null: false
+    t.jsonb "items", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["list_id"], name: "index_list_builders_on_list_id"
+    t.index ["user_id", "name"], name: "index_list_builders_on_user_id_and_name", unique: true
+    t.index ["user_id", "parameterized_name"], name: "index_list_builders_on_user_id_and_parameterized_name", unique: true
+    t.index ["user_id"], name: "index_list_builders_on_user_id"
   end
 
   create_table "list_items", id: :serial, force: :cascade do |t|
@@ -815,6 +829,8 @@ ActiveRecord::Schema[7.1].define(version: 2025_11_25_152648) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "boxes", "users"
   add_foreign_key "emails", "users"
+  add_foreign_key "list_builders", "lists"
+  add_foreign_key "list_builders", "users"
   add_foreign_key "list_items", "sections"
   add_foreign_key "meal_builders", "users"
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"

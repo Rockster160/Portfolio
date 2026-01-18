@@ -20,6 +20,7 @@ class List < ApplicationRecord
   has_many :sections, -> { order(sort_order: :desc) }, dependent: :destroy
   has_many :user_lists, dependent: :destroy
   has_many :users, through: :user_lists
+  has_many :list_builders, dependent: :destroy
 
   validates :name, presence: true
 

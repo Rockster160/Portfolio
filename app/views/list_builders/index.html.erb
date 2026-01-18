@@ -1,0 +1,26 @@
+<%= meta_title "List Builders", include_name: false %>
+
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <% if user_signed_in? %>
+      <a href="<%= account_path %>" class="btn">Account</a>
+      <a href="<%= new_list_builder_path %>" class="btn pull-right">New List Builder +</a>
+    <% else %>
+      <a href="<%= login_path %>" class="btn">Sign In</a>
+    <% end %>
+  </div>
+  <div class="lists-title">List Builders</div>
+  <div class="lists">
+    <div class="list-field">
+      <%= text_field_tag "list_builder[name]", "", class: "filterable", placeholder: "Search List Builders" %>
+    </div>
+    <% @list_builders.each do |builder| %>
+      <div class="list-item-container" data-list-id="<%= builder.id %>">
+        <a href="<%= list_builder_path(builder) %>" class="list-item">
+          <span class="item-name"><%= builder.name %></span>
+          <span class="item-description"><%= builder.list.name %></span>
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>
