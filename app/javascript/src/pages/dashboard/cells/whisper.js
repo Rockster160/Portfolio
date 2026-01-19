@@ -49,7 +49,7 @@ import { dash_colors } from "../vars";
   function formatRemaining(seconds) {
     const abs = Math.abs(seconds);
     const m = Math.floor(abs / 60);
-    const sign = seconds < 0 ? "-" : "";
+    const sign = seconds < 0 && m != 0 ? "-" : "";
     return `${sign}${m}m`;
   }
 
@@ -79,9 +79,14 @@ import { dash_colors } from "../vars";
     );
 
     const fillCells = Math.round(barWidth * progress);
-    const color = isOverdue ? dash_colors.red : dash_colors.green;
-    const filled = Text.bgColor(color, textContent.slice(0, fillCells));
-    const empty = Text.bgColor(dash_colors.grey, textContent.slice(fillCells));
+    const filled = Text.bgColor(
+      dash_colors.green,
+      textContent.slice(0, fillCells),
+    );
+    const empty = Text.bgColor(
+      isOverdue ? dash_colors.red : dash_colors.darkgrey,
+      textContent.slice(fillCells),
+    );
 
     return " " + filled + empty;
   }
