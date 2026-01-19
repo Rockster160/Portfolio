@@ -17,14 +17,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const CIRCUMFERENCE = 2 * Math.PI * 45;
 
+  const volume = 0.9;
+
   function playDefaultBeeps() {
     const swell = [
-      [60, 440, 0.01, "sine"],
-      [60, 440, 0.03, "sine"],
-      [60, 440, 0.06, "sine"],
-      [60, 440, 0.09, "sine"],
-      [60, 440, 0.07, "sine"],
-      [60, 440, 0.04, "sine"],
+      [60, 440, volume - 0.08, "sine"],
+      [60, 440, volume - 0.06, "sine"],
+      [60, 440, volume - 0.03, "sine"],
+      [60, 440, volume, "sine"],
+      [60, 440, volume - 0.02, "sine"],
+      [60, 440, volume - 0.05, "sine"],
     ];
 
     beeps([
@@ -40,21 +42,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function playNapBeeps() {
     beeps([
-      [400, 392, 0.1, "sine"],
-      [400, 349, 0.09, "sine"],
-      [400, 330, 0.08, "sine"],
-      [400, 294, 0.07, "sine"],
-      [600, 262, 0.06, "sine"],
+      [400, 392, volume, "sine"],
+      [400, 349, volume, "sine"],
+      [400, 330, volume - 0.01, "sine"],
+      [400, 294, volume - 0.02, "sine"],
+      [600, 262, volume - 0.03, "sine"],
     ]);
   }
 
   function playWakeBeeps() {
     beeps([
-      [400, 262, 0.06, "sine"],
-      [400, 294, 0.07, "sine"],
-      [400, 330, 0.08, "sine"],
-      [400, 349, 0.09, "sine"],
-      [600, 392, 0.1, "sine"],
+      [400, 262, volume - 0.03, "sine"],
+      [400, 294, volume - 0.02, "sine"],
+      [400, 330, volume - 0.01, "sine"],
+      [400, 349, volume, "sine"],
+      [600, 392, volume, "sine"],
     ]);
   }
 
