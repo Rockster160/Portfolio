@@ -7,8 +7,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!container) return;
 
   const monitorChannel = container.dataset.monitorChannel;
-  // October 14, 2025 at 3am Denver (MDT = UTC-6)
-  const birth = new Date("2025-10-14T09:00:00.000Z");
+  const birthDateMs = 1760432400000; // October 14, 2025 at 3am Denver (MDT = UTC-6)
+  const birth = new Date(birthDateMs);
   const durationsContainer = container.querySelector(".whisper-durations");
   const statusContainer = container.querySelector(".whisper-status");
   const timerMode = params.timer || "ring"; // "ring" (default) or "clock"
@@ -23,13 +23,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let shouldPlayHappyBirthday = false;
   let lastWeeks = null;
   let lastStatus = null;
-
-  function isDenver3amPassed(date) {
-    const denverTime = new Date(
-      date.toLocaleString("en-US", { timeZone: "America/Denver" }),
-    );
-    return denverTime.getHours() >= 3;
-  }
 
   function playDefaultBeeps() {
     const swell = [
@@ -132,32 +125,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Age calculation - date-based, increments on the 14th of each month
-  // Weeks counter only increments at 3am Denver time
   function updateAge() {
-    const now = Time.now();
+    const nowMs = Time.msSinceEpoch();
+    const now = new Date(nowMs);
+    const elapsedMs = nowMs - birthDateMs;
+
+    const weeks = Math.floor(elapsedMs / Time.week());
 
     let totalMonths =
       (now.getFullYear() - birth.getFullYear()) * 12 +
       (now.getMonth() - birth.getMonth());
-
     if (now.getDate() < birth.getDate()) {
       totalMonths--;
     }
-
     const years = Math.floor(totalMonths / 12);
     const months = totalMonths % 12;
-    const rawWeeks = Math.floor((now - birth) / Time.week());
-
-    // Only increment weeks after 3am Denver
-    let weeks;
-    if (lastWeeks === null) {
-      weeks = rawWeeks;
-    } else if (rawWeeks > lastWeeks) {
-      weeks = isDenver3amPassed(now) ? rawWeeks : lastWeeks;
-    } else {
-      weeks = rawWeeks;
-    }
 
     // Set birthday flag when weeks changes
     if (lastWeeks !== null && weeks > lastWeeks) {

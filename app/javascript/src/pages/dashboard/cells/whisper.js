@@ -7,7 +7,7 @@ import { dash_colors } from "../vars";
   var cell = undefined;
   const cell_width = 32;
   const half_width = 16;
-  const birthDate = "2025-10-14";
+  const birthDateMs = 1760432400000; // October 14, 2025 at 3am Denver (MDT = UTC-6)
 
   const buttonMonitors = [
     "whisper-btn-1",
@@ -19,7 +19,7 @@ import { dash_colors } from "../vars";
   ];
 
   function calculateAge() {
-    const birth = new Date(birthDate);
+    const birth = new Date(birthDateMs);
     const now = Time.now();
 
     let totalMonths =
