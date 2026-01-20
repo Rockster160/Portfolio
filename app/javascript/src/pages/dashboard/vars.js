@@ -106,7 +106,16 @@ export let beep = function (duration, frequency, volume, type, callback) {
   oscillator.stop(audioCtx.currentTime + (duration || 500) / 1000);
 };
 
-export let beeps = function (beepsArray) {
+let beepsQueue = [];
+let beepsPlaying = false;
+
+function processBeepsQueue() {
+  if (beepsPlaying || beepsQueue.length === 0) {
+    return;
+  }
+
+  beepsPlaying = true;
+  const beepsArray = beepsQueue.shift();
   let currentIndex = 0;
 
   function playNextBeep() {
@@ -114,10 +123,18 @@ export let beeps = function (beepsArray) {
       const [duration, frequency, volume, type] = beepsArray[currentIndex];
       beep(duration, frequency, volume, type, playNextBeep);
       currentIndex++;
+    } else {
+      beepsPlaying = false;
+      processBeepsQueue();
     }
   }
 
   playNextBeep();
+}
+
+export let beeps = function (beepsArray) {
+  beepsQueue.push(beepsArray);
+  processBeepsQueue();
 };
 
 window.beep = beep;
