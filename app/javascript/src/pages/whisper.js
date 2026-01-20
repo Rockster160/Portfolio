@@ -19,6 +19,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const volume = 0.9;
 
+  let shouldPlayHappyBirthday = false;
+  let lastWeeks = null;
+  let lastStatus = null;
+
+  function isDenver3amPassed(date) {
+    const denverTime = new Date(
+      date.toLocaleString("en-US", { timeZone: "America/Denver" }),
+    );
+    return denverTime.getHours() >= 3;
+  }
+
   function playDefaultBeeps() {
     const swell = [
       [60, 440, volume - 0.08, "sine"],
@@ -60,6 +71,56 @@ document.addEventListener("DOMContentLoaded", () => {
     ]);
   }
 
+  function playHappyBirthdayBeeps() {
+    // Happy Birthday melody
+    // Notes: G4=392, A4=440, B4=494, C5=523, D5=587, E5=659, F5=698, G5=784
+    const G4 = 392,
+      A4 = 440,
+      B4 = 494,
+      C5 = 523,
+      D5 = 587,
+      E5 = 659,
+      F5 = 698,
+      G5 = 784;
+    const dur = 300;
+    const shortDur = 200;
+
+    beeps([
+      // Happy birthday to you
+      [shortDur, G4, volume, "sine"],
+      [shortDur, G4, volume, "sine"],
+      [dur, A4, volume, "sine"],
+      [dur, G4, volume, "sine"],
+      [dur, C5, volume, "sine"],
+      [dur * 2, B4, volume, "sine"],
+      [200, 0, 0, null],
+      // Happy birthday to you
+      [shortDur, G4, volume, "sine"],
+      [shortDur, G4, volume, "sine"],
+      [dur, A4, volume, "sine"],
+      [dur, G4, volume, "sine"],
+      [dur, D5, volume, "sine"],
+      [dur * 2, C5, volume, "sine"],
+      [200, 0, 0, null],
+      // Happy birthday dear Whisper
+      [shortDur, G4, volume, "sine"],
+      [shortDur, G4, volume, "sine"],
+      [dur, G5, volume, "sine"],
+      [dur, E5, volume, "sine"],
+      [dur, C5, volume, "sine"],
+      [dur, B4, volume, "sine"],
+      [dur * 2, A4, volume, "sine"],
+      [200, 0, 0, null],
+      // Happy birthday to you
+      [shortDur, F5, volume, "sine"],
+      [shortDur, F5, volume, "sine"],
+      [dur, E5, volume, "sine"],
+      [dur, C5, volume, "sine"],
+      [dur, D5, volume, "sine"],
+      [dur * 2, C5, volume, "sine"],
+    ]);
+  }
+
   function playAlertForKey(key) {
     if (key === "nap") {
       playNapBeeps();
@@ -71,6 +132,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Age calculation - date-based, increments on the 14th of each month
+  // Weeks counter only increments at 3am Denver time
   function updateAge() {
     const birth = new Date(birthDate);
     const now = Time.now();
@@ -85,7 +147,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const years = Math.floor(totalMonths / 12);
     const months = totalMonths % 12;
-    const weeks = Math.floor((now - birth) / Time.week());
+    const rawWeeks = Math.floor((now - birth) / Time.week());
+
+    // Only increment weeks after 3am Denver
+    let weeks;
+    if (lastWeeks === null) {
+      weeks = rawWeeks;
+    } else if (rawWeeks > lastWeeks) {
+      weeks = isDenver3amPassed(now) ? rawWeeks : lastWeeks;
+    } else {
+      weeks = rawWeeks;
+    }
+
+    // Set birthday flag when weeks changes
+    if (lastWeeks !== null && weeks > lastWeeks) {
+      shouldPlayHappyBirthday = true;
+    }
+    lastWeeks = weeks;
 
     let ageStr;
     if (years === 0) {
@@ -295,6 +373,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (statusContainer) {
       statusContainer.textContent = status || "";
     }
+
+    // Play happy birthday when status changes to awake on her birthday
+    const statusChanged = status !== lastStatus;
+    const isAwake = /awake/i.test(status);
+    if (statusChanged && isAwake && shouldPlayHappyBirthday) {
+      shouldPlayHappyBirthday = false;
+      playHappyBirthdayBeeps();
+    }
+    lastStatus = status;
   }
 
   Monitor.subscribe(monitorChannel, {
@@ -318,7 +405,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Start timers
   updateAge();
-  setInterval(updateAge, Time.hour());
+  setInterval(updateAge, Time.minute());
   setInterval(updateAllDurations, Time.second());
   updateAllDurations();
 });
