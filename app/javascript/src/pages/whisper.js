@@ -6,8 +6,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const container = document.querySelector(".whisper-container");
   if (!container) return;
 
-  const birthDate = container.dataset.birthDate;
   const monitorChannel = container.dataset.monitorChannel;
+  // October 14, 2025 at 3am Denver (MDT = UTC-6)
+  const birth = new Date("2025-10-14T09:00:00.000Z");
   const durationsContainer = container.querySelector(".whisper-durations");
   const statusContainer = container.querySelector(".whisper-status");
   const timerMode = params.timer || "ring"; // "ring" (default) or "clock"
@@ -134,7 +135,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // Age calculation - date-based, increments on the 14th of each month
   // Weeks counter only increments at 3am Denver time
   function updateAge() {
-    const birth = new Date(birthDate);
     const now = Time.now();
 
     let totalMonths =
