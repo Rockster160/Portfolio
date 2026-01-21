@@ -158,8 +158,8 @@ class Task < ApplicationRecord
     !!last_execution&.stop_propagation?
   end
 
-  def serialize
-    super(except: [:created_at, :updated_at, :code, :cron, :sort_order])
+  def serialize(opts={})
+    super(opts.reverse_merge(except: [:created_at, :updated_at, :code, :cron, :sort_order]))
   end
 
   def serialize_with_execution

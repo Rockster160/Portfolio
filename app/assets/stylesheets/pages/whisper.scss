@@ -5,12 +5,40 @@
 }
 
 .whisper-container {
+  position: relative;
   max-width: 600px;
   margin: 0 auto;
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 30px;
+}
+
+.whisper-mute-toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  color: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  font-size: 1rem;
+  transition: color 0.2s;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .mute-icon-off {
+    display: none;
+  }
+
+  &.muted {
+    .mute-icon-on {
+      display: none;
+    }
+    .mute-icon-off {
+      display: inline;
+    }
+  }
 }
 
 .whisper-header {

@@ -1,7 +1,14 @@
 <%= meta_title "Whisper", include_name: false %>
 <%= content_for(:favicon) { render "whisper/favicon" } %>
+<%= content_for(:meta) do %>
+  <script src="https://kit.fontawesome.com/b00e44a575.js" crossorigin="anonymous"></script>
+<% end %>
 
 <div class="whisper-container" data-birth-date="2025-10-14" data-monitor-channel="whisper-durations">
+  <span class="whisper-mute-toggle" title="Toggle sound">
+    <span class="mute-icon-on"><%= fa(:volume_high) %></span>
+    <span class="mute-icon-off"><%= fa(:volume_xmark) %></span>
+  </span>
   <div class="whisper-header">
     <span class="whisper-name">Whisper</span>
     <div class="whisper-age-line">

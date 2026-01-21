@@ -42,6 +42,7 @@ module ApplicationHelper
   end
 
   def fa(type)
+    # Font Awesome
     "<i class=\"fa fa-#{type.to_s.gsub("_", "-")}\"></i>".html_safe
   end
 

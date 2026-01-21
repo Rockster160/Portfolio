@@ -24,7 +24,29 @@ document.addEventListener("DOMContentLoaded", () => {
   let lastWeeks = null;
   let lastStatus = null;
 
+  // Mute functionality
+  const muteBtn = container.querySelector(".whisper-mute-toggle");
+  let isMuted = localStorage.getItem("whisper-muted") === "true";
+
+  function updateMuteButton() {
+    if (muteBtn) {
+      muteBtn.classList.toggle("muted", isMuted);
+    }
+  }
+
+  function toggleMute() {
+    isMuted = !isMuted;
+    localStorage.setItem("whisper-muted", isMuted);
+    updateMuteButton();
+  }
+
+  if (muteBtn) {
+    muteBtn.addEventListener("click", toggleMute);
+    updateMuteButton();
+  }
+
   function playDefaultBeeps() {
+    if (isMuted) return;
     const swell = [
       [60, 440, volume - 0.08, "sine"],
       [60, 440, volume - 0.06, "sine"],
@@ -46,6 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function playNapBeeps() {
+    if (isMuted) return;
     beeps([
       [400, 392, volume, "sine"],
       [400, 349, volume, "sine"],
@@ -56,6 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function playWakeBeeps() {
+    if (isMuted) return;
     beeps([
       [400, 262, volume - 0.03, "sine"],
       [400, 294, volume - 0.02, "sine"],
@@ -66,6 +90,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function playHappyBirthdayBeeps() {
+    if (isMuted) return;
     // Happy Birthday melody
     // Notes: G4=392, A4=440, B4=494, C5=523, D5=587, E5=659, F5=698, G5=784
     const G4 = 392,
@@ -166,8 +191,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const abs = Math.abs(seconds);
     const m = Math.floor(abs / 60);
     const s = Math.floor(abs % 60);
-    const sign = seconds < 0 ? "-" : "";
-    // return `${sign}${m}:${s.toString().padStart(2, "0")}`;
+    const sign = seconds < 0 && m != 0 ? "-" : "";
+
+    if (seconds > 0 && seconds < 60) {
+      return `:${s}s`;
+    }
     return `${sign}${m}m`;
   }
 
