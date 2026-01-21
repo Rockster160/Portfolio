@@ -101,6 +101,18 @@ body:has(.env-banner) {
   color: var(--body-bg);
   font-weight: bold;
   text-align: center;
+
+  .shared-badge {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: $base-blue;
+    color: white;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
 }
 body:has(.env-banner) .title-bar {
   top: 10px;
@@ -345,6 +357,11 @@ select {
   color: lightgrey;
   font-size: 12px;
 
+  &[readonly] {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
   &::placeholder {
     opacity: 0.4;
     color: lightgrey;
@@ -516,6 +533,14 @@ input[type="submit"] {
 .wrapper {
   margin: 0 auto;
   width: 100%;
+
+  &.readonly {
+    .statements,
+    .content-dropdown {
+      pointer-events: none;
+      opacity: 0.8;
+    }
+  }
 
   .statements {
     margin: 0 auto;
@@ -939,6 +964,60 @@ input.text-security {
       color: white; /* True Text color */
       text-align: left;
       content: "true";
+    }
+  }
+}
+
+.shared-users-section {
+  label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--syntax-base);
+    font-size: 14px;
+  }
+
+  .shared-users-form {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+
+    input {
+      flex: 1;
+      padding: 5px;
+      font-size: 14px;
+    }
+
+    .btn {
+      padding: 5px 12px;
+      font-size: 12px;
+    }
+  }
+
+  .shared-users-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 5px;
+      border-radius: 4px;
+      background: var(--input-bg);
+      padding: 5px 10px;
+      font-size: 14px;
+
+      .remove-shared {
+        cursor: pointer;
+        color: $danger;
+        font-size: 18px;
+        font-weight: bold;
+
+        &:hover {
+          color: lighten($danger, 15%);
+        }
+      }
     }
   }
 }

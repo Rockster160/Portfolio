@@ -13,7 +13,7 @@ class Jil::Methods::Monitor < Jil::Methods::Base
   #   #data(Hash)
 
   def loading(name, bool)
-    ::MonitorChannel.broadcast_to(@jil.user, id: name, channel: name, loading: bool)
+    broadcast_to_all_users(id: name, channel: name, loading: bool)
     { id: name, channel: name }
   end
 
@@ -30,7 +30,7 @@ class Jil::Methods::Monitor < Jil::Methods::Base
     )
     data[:loading] = loading
 
-    ::MonitorChannel.broadcast_to(@jil.user, data)
+    broadcast_to_all_users(data)
     { id: name, channel: name }
   end
 
@@ -62,5 +62,13 @@ class Jil::Methods::Monitor < Jil::Methods::Base
 
   def data(data={})
     { data: data }
+  end
+
+  private
+
+  def broadcast_to_all_users(data)
+    task = @jil.broadcast_task
+    users = task.present? ? task.broadcast_users.to_a : [@jil.user]
+    users.each { |user| ::MonitorChannel.broadcast_to(user, data) }
   end
 end

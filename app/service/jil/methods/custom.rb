@@ -16,6 +16,6 @@ class Jil::Methods::Custom < Jil::Methods::Base
     task = @jil.user.tasks.enabled.functions.by_method_name(line.methodname).take
     raise ::Jil::ExecutionError, "Undefined Method #{line.methodname}" if task.blank?
 
-    task.execute(params: evalargs(line.args))&.result
+    task.execute({ params: evalargs(line.args) }, broadcast_task: @jil.broadcast_task)&.result
   end
 end

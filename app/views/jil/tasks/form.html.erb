@@ -1,5 +1,8 @@
 <div class="title-bar">
   <span class="task-name"><%= @task.name %></span>
+  <% if @readonly %>
+    <span class="shared-badge">Shared (Read Only)</span>
+  <% end %>
 </div>
 
 <%= form_for [:jil, @task], html: { id: "task_form" } do |f| %>
@@ -8,20 +11,38 @@
       <div class="status"></div>
       <div class="close"><i class="ti ti-fa-close"></i></div>
       <div class="modal-content">
-        Enabled:
-        <%= f.label :enabled, class: :switch do %>
-          <%= f.check_box :enabled %>
-          <span class="slider"></span>
-        <% end %>
-        </br>
-        </br>
-        <% if @task.persisted? %>
-          <div class="btns text-right">
-            <%= link_to "Duplicate", duplicate_jil_task_path(@task), class: :btn, method: :post %>
-          </div>
+        <% unless @readonly %>
+          Enabled:
+          <%= f.label :enabled, class: :switch do %>
+            <%= f.check_box :enabled %>
+            <span class="slider"></span>
+          <% end %>
           </br>
+          </br>
+          <% if @task.persisted? %>
+            <div class="btns text-right">
+              <%= link_to "Duplicate", duplicate_jil_task_path(@task), class: :btn, method: :post %>
+            </div>
+            </br>
+            <div class="shared-users-section">
+              <label>Share with:</label>
+              <div class="shared-users-form">
+                <input type="text" id="shared-username" placeholder="Username" />
+                <button type="button" class="btn btn-add-shared">Add</button>
+              </div>
+              <ul class="shared-users-list">
+                <% @task.shared_users.each do |user| %>
+                  <li data-user-id="<%= user.id %>">
+                    <%= user.username %>
+                    <span class="remove-shared" data-user-id="<%= user.id %>">&times;</span>
+                  </li>
+                <% end %>
+              </ul>
+            </div>
+            </br>
+          <% end %>
         <% end %>
-        <code spellcheck=false contenteditable=true data-language=jil class="code-preview"></code>
+        <code spellcheck=false contenteditable=<%= !@readonly %> data-language=jil class="code-preview"></code>
       </div>
     </div>
   </div>
@@ -34,21 +55,21 @@
       </div>
       <br>
       <%= f.hidden_field :uuid, disabled: true %>
-      <%= f.text_field :name, placeholder: :Title %>
-      <%= f.text_field :cron, placeholder: :Cron %>
-      <%= f.text_field :listener, placeholder: :Listener %>
+      <%= f.text_field :name, placeholder: :Title, readonly: @readonly %>
+      <%= f.text_field :cron, placeholder: :Cron, readonly: @readonly %>
+      <%= f.text_field :listener, placeholder: :Listener, readonly: @readonly %>
 
       <div class="btns">
         <div class="btn btn-run" href="<%= run_jil_task_path(@task.id || :new) %>">Run</div>
         <div class="btn btn-history disabled">History</div>
         <div class="btn btn-config" data-modal="#config-modal">Config</div>
-        <div class="btn btn-save">Save</div>
+        <div class="btn btn-save <%= 'disabled' if @readonly %>">Save</div>
       </div>
     </div>
   </div>
 <% end %>
 
-<div class="wrapper">
+<div class="wrapper <%= 'readonly' if @readonly %>">
   <div id="reference-dropdown" class="hidden"><ul></ul></div>
 
   <div class="content-dropdown"><div class="reference"></div></div>
@@ -93,5 +114,65 @@
 <script type="text/javascript">
   window.load_code = <%= raw @task.id.present? ? "String.raw`#{@task.code.gsub(/\`/, "\\\\`")}`" : "undefined" %>;
   window.load_schema = `<%= Task.schema(current_user) %>`
+  window.readonly = <%= @readonly || false %>;
 </script>
 <%= javascript_include_tag "jil", type: "module", defer: true %>
+
+<% if @task.persisted? %>
+<script type="text/javascript">
+  document.addEventListener("DOMContentLoaded", function() {
+    const sharedUsersUrl = "<%= shared_users_jil_task_path(@task) %>";
+    const csrfToken = document.querySelector("meta[name='csrf-token']")?.content;
+    const usernameInput = document.getElementById("shared-username");
+    const addBtn = document.querySelector(".btn-add-shared");
+    const usersList = document.querySelector(".shared-users-list");
+
+    if (!addBtn || !usernameInput || !usersList) return;
+
+    async function updateSharedUsers(params) {
+      const response = await fetch(sharedUsersUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken
+        },
+        body: JSON.stringify(params)
+      });
+      return response.json();
+    }
+
+    function renderUsersList(users) {
+      usersList.innerHTML = users.map(user =>
+        `<li data-user-id="${user.id}">
+          ${user.username}
+          <span class="remove-shared" data-user-id="${user.id}">&times;</span>
+        </li>`
+      ).join("");
+    }
+
+    addBtn.addEventListener("click", async function() {
+      const username = usernameInput.value.trim();
+      if (!username) return;
+
+      const data = await updateSharedUsers({ username });
+      renderUsersList(data.shared_users);
+      usernameInput.value = "";
+    });
+
+    usernameInput.addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addBtn.click();
+      }
+    });
+
+    usersList.addEventListener("click", async function(e) {
+      if (e.target.classList.contains("remove-shared")) {
+        const userId = e.target.dataset.userId;
+        const data = await updateSharedUsers({ remove: userId });
+        renderUsersList(data.shared_users);
+      }
+    });
+  });
+</script>
+<% end %>

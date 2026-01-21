@@ -106,6 +106,10 @@ export function redo() {
 export const saveBtn = new SaveBtn(document.querySelector(".btn-save"));
 saveBtn
   .onClick(async () => {
+    if (window.readonly) {
+      Toast.error("Cannot save: this is a shared task (read-only)");
+      throw new Error("Cannot save shared task");
+    }
     formSubmitting = true;
     const code = Statement.toCode();
     if (isNewTask && jilTaskNameField.value.trim().length == 0) {
@@ -192,13 +196,15 @@ runBtn
 const enabledCheckbox = document.querySelector(
   "input[name='task[enabled]'][type=checkbox]",
 );
-function setEnabled() {
-  document
-    .querySelector(".disabled-label")
-    .classList.toggle("hidden", enabledCheckbox.checked);
+if (enabledCheckbox) {
+  function setEnabled() {
+    document
+      .querySelector(".disabled-label")
+      .classList.toggle("hidden", enabledCheckbox.checked);
+  }
+  enabledCheckbox.addEventListener("change", setEnabled);
+  setEnabled(); // Set initial state
 }
-enabledCheckbox.addEventListener("change", setEnabled);
-setEnabled(); // Set initial state
 
 jilTaskNameField.addEventListener("change", () => {
   document.querySelector(".task-name").innerText = jilTaskNameField.value;

@@ -157,6 +157,16 @@ html:has(.ctr-tasks.act-index) {
         color: rgba($danger, 0.8);
       }
 
+      .status.shared {
+        position: absolute;
+        right: 10px;
+        font-size: 8px;
+      }
+
+      .status.disabled + .status.shared {
+        right: 55px;
+      }
+
       .recurring {
         position: relative;
         width: 14px;

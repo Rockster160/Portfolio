@@ -186,6 +186,7 @@ Rails.application.routes.draw do
     resources :tasks do
       post :run, on: :member
       post :duplicate, on: :member
+      post :shared_users, on: :member
     end
     resources :user_cache, path: :cache
   end

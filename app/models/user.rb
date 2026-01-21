@@ -46,6 +46,8 @@ class User < ApplicationRecord
   has_many :meal_builders, dependent: :destroy
   has_many :list_builders, dependent: :destroy
   has_many :boxes, dependent: :destroy
+  has_many :shared_tasks, dependent: :destroy
+  has_many :accessible_shared_tasks, through: :shared_tasks, source: :task
   has_one :money_bucket
   has_one :avatar, dependent: :destroy
   def avatar = super || build_avatar
@@ -203,6 +205,14 @@ class User < ApplicationRecord
 
   def default_list
     (user_lists.find_by(default: true) || user_lists.first).try(:list)
+  end
+
+  def accessible_tasks
+    Task.joins(
+      <<-SQL.squish,
+        LEFT JOIN shared_tasks ON shared_tasks.task_id = tasks.id AND shared_tasks.user_id = #{id}
+      SQL
+    ).where("tasks.user_id = :id OR shared_tasks.user_id = :id", id: id).distinct
   end
 
   def primary_push_sub

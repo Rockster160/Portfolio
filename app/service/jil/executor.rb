@@ -1,5 +1,5 @@
 class Jil::Executor
-  attr_accessor :user, :ctx, :lines, :input_data
+  attr_accessor :user, :ctx, :lines, :input_data, :task, :execution, :broadcast_task
 
   # def self.async_trigger(user, trigger, trigger_data={}, at: nil)
   #   ::User.ids(user).each do |user_id|
@@ -39,8 +39,7 @@ class Jil::Executor
 
     trigger_data = TriggerData.parse(raw_trigger_data, as: user)
 
-    user_id = user.id
-    user_tasks = ::Task.enabled.ordered.where(user_id: user_id).distinct
+    user_tasks = user.accessible_tasks.enabled.ordered
     stopped = false
     user_tasks.by_listener(trigger).filter_map { |task|
       next if stopped
@@ -72,16 +71,18 @@ class Jil::Executor
     ::JilExecuteWorker.perform_async(user.id, code, input_data, task&.id, auth)
   end
 
-  def self.call(user, code, input_data={}, task: nil, auth: nil)
-    new(user, code, input_data, task: task).execute_all
+  def self.call(user, code, input_data={}, task: nil, auth: nil, broadcast_task: nil)
+    new(user, code, input_data, task: task, broadcast_task: broadcast_task).execute_all
   end
 
-  def initialize(user, code, input_data={}, task: nil, auth: nil)
+  def initialize(user, code, input_data={}, task: nil, auth: nil, broadcast_task: nil)
     # @debug = true && !Rails.env.production?
     load("/Users/rocco/.pryrc") if @debug
 
     # Need to store auth, but need to remember to pass the id as well
     @user = user
+    @task = task
+    @broadcast_task = broadcast_task || task
     @ctx = { vars: {}, return_val: nil, state: :running, output: [] }
     @input_data = input_data || {}
     @execution = ::Execution.create(

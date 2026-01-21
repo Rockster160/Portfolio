@@ -27,6 +27,8 @@ class Task < ApplicationRecord
   orderable sort_order: :desc, scope: ->(task) { task.user.tasks }
 
   has_many :executions
+  has_many :shared_tasks, dependent: :destroy
+  has_many :shared_users, through: :shared_tasks, source: :user
 
   enum :last_status, ::Execution.statuses
 
@@ -193,8 +195,19 @@ class Task < ApplicationRecord
     execute(trigger_data.merge(first_match&.regex_match_data || { match_list: [], named_captures: {} }))
   end
 
-  def execute(data={})
-    ::Jil::Executor.call(user, code, data, task: self).tap { @last_execution = nil }
+  def execute(data={}, broadcast_task: nil)
+    ::Jil::Executor.call(user, code, data, task: self, broadcast_task: broadcast_task || self).tap { @last_execution = nil }
+  end
+
+  def accessible_by?(user)
+    return false unless user
+
+    user_id == user.id || shared_users.exists?(user.id)
+  end
+
+  def broadcast_users
+    shared_ids = SharedTask.where(task_id: id).pluck(:user_id)
+    User.where(id: [user_id] + shared_ids)
   end
 
   private
