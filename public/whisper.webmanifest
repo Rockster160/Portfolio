@@ -15,7 +15,7 @@
       "purpose": "maskable"
     }
   ],
-  "id": "whisper/?source=pwa",
+  "id": "whisper",
   "start_url": "/whisper?source=pwa",
   "background_color": "#11346F",
   "display": "standalone",

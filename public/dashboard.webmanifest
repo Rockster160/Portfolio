@@ -13,7 +13,7 @@
       "type": "image/png"
     }
   ],
-  "id": "dashboard/?source=pwa",
+  "id": "dashboard",
   "start_url": "/dashboard?source=pwa",
   "background_color": "#112435",
   "display": "standalone",

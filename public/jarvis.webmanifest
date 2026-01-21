@@ -13,8 +13,8 @@
       "type": "image/png"
     }
   ],
-  "id": "jarvis/?source=pwa",
-  "start_url": "jarvis/?source=pwa",
+  "id": "jarvis",
+  "start_url": "/jarvis?source=pwa",
   "background_color": "#000712",
   "display": "standalone",
   "scope": "/jarvis",
