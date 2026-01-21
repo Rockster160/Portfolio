@@ -132,7 +132,7 @@ import { dash_colors } from "../vars";
     lines.push(
       Text.justify(
         cell_width,
-        "🐶".padEnd(ageStr.length),
+        "[img /whisper.png]      ".padEnd(ageStr.length),
         status,
         Text.color(dash_colors.grey, ageStr),
       ),
