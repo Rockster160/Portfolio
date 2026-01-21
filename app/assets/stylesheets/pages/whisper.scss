@@ -24,9 +24,16 @@
     align-items: center;
     justify-content: center;
 
-    .whisper-emoji {
-      margin: 0 10px;
-      font-size: 4rem;
+    // .whisper-emoji {
+    //   margin: 0 10px;
+    //   font-size: 4rem;
+    // }
+    .whisper-icon {
+      img {
+        width: 48px;
+        height: 48px;
+        margin: 0 10px;
+      }
     }
 
     .whisper-age {
