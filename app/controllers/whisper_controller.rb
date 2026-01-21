@@ -1,4 +1,6 @@
 class WhisperController < ApplicationController
+  before_action :authorize_user
+
   def show
     @list = current_user.ordered_lists.find(360)
     # @list.users << chels
