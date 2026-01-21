@@ -1,4 +1,4 @@
-# load("/Users/rocco/.pryrc"); pretty_puts(node.as_json)
+# load("/Users/zoro/.pryrc"); pretty_puts(node.as_json)
 RSpec.describe Tokenizing::Node, type: :model do
   describe ".parse" do
     it "parses complex expressions with AND, OR, and nested conditions" do

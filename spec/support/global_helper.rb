@@ -35,7 +35,7 @@ module GlobalHelper
 
   def expect_successful_jil
     if ctx[:error_line].present?
-      load("/Users/rocco/.pryrc")
+      load("/Users/zoro/.pryrc")
       source_puts [ctx[:error_line], ctx[:error]].compact.join("\n")
     end
     expect([ctx[:error_line], ctx[:error]].compact.join("\n")).to be_blank

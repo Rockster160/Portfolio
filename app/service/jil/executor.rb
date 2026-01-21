@@ -49,7 +49,7 @@ class Jil::Executor
         ran = task.match_run(trigger, trigger_data) && task
       rescue StandardError => e
         unless Rails.env.production?
-          load("/Users/rocco/.pryrc")
+          load("/Users/zoro/.pryrc")
           source_puts "[#{e.class}] #{e.message}".red
           source_puts focused_backtrace($is_ocs ? e : e.backtrace).join("\n").grey
         end
@@ -77,7 +77,7 @@ class Jil::Executor
 
   def initialize(user, code, input_data={}, task: nil, auth: nil, broadcast_task: nil)
     # @debug = true && !Rails.env.production?
-    load("/Users/rocco/.pryrc") if @debug
+    load("/Users/zoro/.pryrc") if @debug
 
     # Need to store auth, but need to remember to pass the id as well
     @user = user

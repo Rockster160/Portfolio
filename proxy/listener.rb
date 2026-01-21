@@ -115,7 +115,7 @@ class ProxyServer < Sinatra::Base
         url:                  "#{TARGET_BASE_URL}#{request.path_info}",
         payload:              data,
         headers:              proxy_headers,
-        ssl_ca_file:          "/Users/rocco/code/Portfolio/_scripts/tesla_keys/cert.pem",
+        ssl_ca_file:          "/Users/zoro/code/Portfolio/_scripts/tesla_keys/cert.pem",
         return_full_response: true,
       )
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[32m Success\e[0m"

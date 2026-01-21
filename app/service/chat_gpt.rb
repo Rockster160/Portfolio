@@ -98,7 +98,7 @@ module ChatGPT
   end
 
   def generate_sd_icon(item)
-    tmp = "/Users/rocco/code/Portfolio/tmp/"
+    tmp = "/Users/zoro/code/Portfolio/tmp/"
 
     prompt = "Simple, minimal, easily distinguishable, square icon for StreamDeck action button: "
     url = generate_image("#{prompt}\n\n#{item}")
@@ -132,4 +132,4 @@ end
 #   -trim +repage \
 #   soda_can_inner.png
 
-# magick /Users/rocco/Downloads/soda_can_edges.png -fuzz 20% -trim +repage /Users/rocco/Downloads/soda_can_clean.png
+# magick /Users/zoro/Downloads/soda_can_edges.png -fuzz 20% -trim +repage /Users/zoro/Downloads/soda_can_clean.png

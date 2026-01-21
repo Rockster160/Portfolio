@@ -1,6 +1,6 @@
 `ruby proxy/listener.rb`
 ```
-cd /Users/rocco/code/vehicle-command
+cd /Users/zoro/code/vehicle-command
 go run ./cmd/tesla-http-proxy/main.go -tls-key /home/rocco/tesla_keys/tls.pem -cert /home/rocco/tesla_keys/cert.pem -key-file /home/rocco/tesla_keys/private_key.pem -port 8752 -verbose
 ```
 Do both within systemD eventually
