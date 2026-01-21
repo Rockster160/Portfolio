@@ -1,0 +1,25 @@
+{
+  "short_name": "Whisper",
+  "name": "Whisper",
+  "icons": [
+    {
+      "src": "/whisper_favicon/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/whisper_favicon/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "whisper/?source=pwa",
+  "start_url": "/whisper?source=pwa",
+  "background_color": "#11346F",
+  "display": "standalone",
+  "scope": "/whisper",
+  "theme_color": "#11346F",
+  "description": "Dog Timer & Management"
+}

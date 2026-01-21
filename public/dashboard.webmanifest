@@ -1,6 +1,6 @@
 {
-  "short_name": "Jarvis",
-  "name": "Jarvis",
+  "short_name": "Dashboard",
+  "name": "Dashboard",
   "icons": [
     {
       "src": "/favicon/android-chrome-192x192.png",
@@ -13,15 +13,11 @@
       "type": "image/png"
     }
   ],
-  "id": "jarvis/?source=pwa",
-  "start_url": "jarvis/?source=pwa",
-  "background_color": "#000712",
+  "id": "dashboard/?source=pwa",
+  "start_url": "/dashboard?source=pwa",
+  "background_color": "#112435",
   "display": "standalone",
-  "scope": "/jarvis",
-  "theme_color": "#000712",
-  "shortcuts": [
-  ],
-  "description": "Jarvis Quick Access",
-  "screenshots": [
-  ]
+  "scope": "/dashboard",
+  "theme_color": "#112435",
+  "description": "Personal Dashboard"
 }
