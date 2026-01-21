@@ -1,5 +1,5 @@
 <%= meta_title "#{@list_item.name}", include_name: false %>
-<%= content_for(:favicon) { render "lists/favicon" } %>
+<%= content_for(:favicon) { render "lists/favicon", list: @list } %>
 <%= render partial: "schedule" %>
 
 <div class="skinny-container list-container" data-list-id="<%= @list.id %>" data-list-item-id="<%= @list_item.id %>">

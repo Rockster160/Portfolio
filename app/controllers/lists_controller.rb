@@ -1,7 +1,7 @@
 class ListsController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest, :color_scheme
-  before_action :set_list, only: [:edit, :update, :show, :destroy, :users, :modify_from_message]
+  before_action :set_list, only: [:edit, :update, :show, :destroy, :users, :modify_from_message, :manifest]
 
   def index
     @lists = current_user.ordered_lists
@@ -21,6 +21,29 @@ class ListsController < ApplicationController
       format.js { render json: @list.serialize }
       format.html
     end
+  end
+
+  def manifest
+    pwa_params = params.permit(:mode, :reset, :t, :clear).to_h.compact
+    query_string = pwa_params.any? ? "?#{pwa_params.to_query}&source=pwa" : "?source=pwa"
+
+    manifest = {
+      short_name:       @list.name.truncate(12),
+      name:             @list.name,
+      icons:            [
+        { src: "/favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
+        { src: "/favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
+      ],
+      id:               "list-#{@list.id}",
+      start_url:        "/lists/#{@list.id}#{query_string}",
+      background_color: "#000712",
+      display:          :standalone,
+      scope:            "/lists/#{@list.id}",
+      theme_color:      "#000712",
+      description:      @list.description.presence || "List: #{@list.name}",
+    }
+
+    render json: manifest, content_type: "application/manifest+json"
   end
 
   def new

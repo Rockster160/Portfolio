@@ -1,8 +1,16 @@
 <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'list_favicon/apple-touch-icon.png' %>">
 <link rel="icon" type="image/png" href="<%= asset_path 'list_favicon/favicon-32x32.png' %>" sizes="32x32">
 <link rel="icon" type="image/png" href="<%= asset_path 'list_favicon/favicon-16x16.png' %>" sizes="16x16">
-<link rel="manifest" href="<%= asset_path 'list_favicon/manifest.json' %>">
-<link rel="mask-icon" href="<%= asset_path 'list_favicon/safari-pinned-tab.svg' %>" color="#5bbad5">
+<% if defined?(list) && list.present? %>
+  <% pwa_params = params.permit(:mode, :reset, :t, :clear).to_h.compact %>
+  <link rel="manifest" href="<%= manifest_list_path(list, pwa_params) %>">
+  <meta name="apple-mobile-web-app-title" content="<%= list.name.truncate(12) %>">
+<% else %>
+  <link rel="manifest" href="<%= asset_path 'list_favicon/manifest.json' %>">
+<% end %>
+<link rel="mask-icon" href="<%= asset_path 'list_favicon/safari-pinned-tab.svg' %>" color="#5BBAD5">
 <link rel="shortcut icon" href="<%= asset_path 'list_favicon/favicon.ico' %>">
 <meta name="msapplication-config" content="<%= asset_path 'list_favicon/browserconfig.xml' %>">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#000712">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">

@@ -149,6 +149,7 @@ Rails.application.routes.draw do
   resources :lists do
     post :reorder, on: :collection
     member do
+      get :manifest
       post :modify_from_message
       post :receive_update
     end

@@ -1,5 +1,5 @@
 <%= meta_title "#{@section.name}", include_name: false %>
-<%= content_for(:favicon) { render "lists/favicon" } %>
+<%= content_for(:favicon) { render "lists/favicon", list: @list } %>
 
 <div class="skinny-container list-container" data-list-id="<%= @list.id %>" data-section-id="<%= @section.id %>">
   <div class="btn-container">

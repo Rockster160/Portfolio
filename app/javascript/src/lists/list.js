@@ -16,6 +16,8 @@ function parseParams(str) {
 }
 params = parseParams(window.location.search.slice(1));
 listMode = params.mode || (params.clear == "1" ? "clear" : "normal");
+// ?mode=kiosk | clear | normal
+// ?reset=30s | 5m | etc.
 const second = 1000;
 const minute = second * 60;
 const hour = minute * 60;
