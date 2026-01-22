@@ -66,6 +66,30 @@ class OperationQueue {
 
   constructor(inventory) {
     this.inventory = inventory;
+    this.createPendingIndicator();
+  }
+
+  createPendingIndicator() {
+    if (document.getElementById("pending-indicator")) return;
+    const indicator = document.createElement("div");
+    indicator.id = "pending-indicator";
+    indicator.className = "pending-indicator hidden";
+    indicator.innerHTML = '<span class="pending-dot"></span><span class="pending-text">Syncing...</span>';
+    document.body.appendChild(indicator);
+  }
+
+  updatePendingIndicator() {
+    const indicator = document.getElementById("pending-indicator");
+    if (!indicator) return;
+
+    const hasPending = this.pendingItems.size > 0 || this.queue.length > 0;
+    indicator.classList.toggle("hidden", !hasPending);
+
+    if (hasPending) {
+      const count = this.pendingItems.size + this.queue.length;
+      indicator.querySelector(".pending-text").textContent =
+        count === 1 ? "Syncing 1 change..." : `Syncing ${count} changes...`;
+    }
   }
 
   generateTempId() {
@@ -79,6 +103,7 @@ class OperationQueue {
     }
     operation.retryCount = 0;
     this.queue.push(operation);
+    this.updatePendingIndicator();
     this.process();
     return operation.tempId;
   }
@@ -111,7 +136,10 @@ class OperationQueue {
   }
 
   async execute(operation) {
-    const { type, url, method, body } = operation;
+    const { type, url, method, body, getBody } = operation;
+
+    // Support dynamic body computation (for nested items with temp parent keys)
+    const requestBody = getBody ? getBody() : body;
 
     const response = await fetch(url, {
       method: method || "POST",
@@ -119,7 +147,7 @@ class OperationQueue {
         accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: requestBody ? JSON.stringify(requestBody) : undefined,
     });
 
     if (!response.ok) {
@@ -149,6 +177,7 @@ class OperationQueue {
     }
 
     this.pendingItems.delete(tempId);
+    this.updatePendingIndicator();
 
     // Call the operation's success callback if provided
     if (operation.onSuccess) {
@@ -180,6 +209,7 @@ class OperationQueue {
     }
 
     this.pendingItems.delete(operation.tempId);
+    this.updatePendingIndicator();
     showFlash(error.message || "Operation failed");
 
     if (operation.onError) {
@@ -189,6 +219,7 @@ class OperationQueue {
 
   registerPending(tempId, element, operation) {
     this.pendingItems.set(tempId, { element, operation });
+    this.updatePendingIndicator();
   }
 }
 
@@ -442,17 +473,22 @@ const loadInventory = () => {
           if (data.type === "welcome") return;
           if (data.type === "confirm_subscription") return;
 
-          // Only process messages from InventoryChannel
-          if (data.identifier) {
-            const identifier = JSON.parse(data.identifier);
-            if (identifier.channel !== "InventoryChannel") return;
-          }
+          // STRICT: Only process messages that explicitly come from InventoryChannel
+          // Messages without identifier or from other channels are ignored
+          if (!data.identifier) return;
+          const identifier = JSON.parse(data.identifier);
+          if (identifier.channel !== "InventoryChannel") return;
 
-          if (data.message && data.message.box) {
-            handleRemoteUpdate(data.message);
+          // Additional validation: message must have box object with expected properties
+          if (data.message && data.message.box && typeof data.message.box === "object") {
+            const box = data.message.box;
+            // Must have either id or param_key, and must not look like list data
+            if ((box.id || box.param_key) && !box.hasOwnProperty("important") && !box.hasOwnProperty("permanent")) {
+              handleRemoteUpdate(data.message);
+            }
           }
         } catch (e) {
-          // Silently ignore parse errors for non-inventory messages
+          // Silently ignore parse errors
         }
       };
 
@@ -636,7 +672,18 @@ const loadInventory = () => {
       : name;
     li.dataset.parentKey = parentKey || "";
     li.querySelector(".item-name").innerText = name;
-    li.querySelector("ul[data-box-id='']").dataset.boxId = tempId;
+
+    // Set up the inner ul and remove any loading placeholder
+    const innerUl = li.querySelector("ul[data-box-id='']");
+    innerUl.dataset.boxId = tempId;
+    innerUl.innerHTML = '<li class="empty-box">• &lt;empty&gt;</li>';
+
+    // Mark the details as loaded (no need to fetch since this is a new empty item)
+    const innerDetails = li.querySelector("details");
+    if (innerDetails) {
+      innerDetails.classList.add("loaded");
+    }
+
     li.dataset.type = "item";
     li.classList.add("pending");
 
@@ -649,9 +696,16 @@ const loadInventory = () => {
 
     if (ul) {
       if (parentLi) {
-        parentLi.querySelector(".empty-box")?.remove();
-        updateBoxType(parentLi);
+        // Remove empty placeholder from direct children only
+        ul.querySelector(":scope > .empty-box")?.remove();
         ul.prepend(li);
+        // Update parent type AFTER child is added
+        updateBoxType(parentLi);
+        // Expand the parent box to show the new item
+        const parentDetails = parentLi.querySelector(":scope > details");
+        if (parentDetails && !parentDetails.open) {
+          parentDetails.open = true;
+        }
       } else {
         const rootEl = ul.querySelector("[data-type=root]");
         if (rootEl) {
@@ -670,17 +724,19 @@ const loadInventory = () => {
   function updateBoxType(li) {
     if (!li || isRootLi(li)) return;
     const ul = targetUlFor(li);
-    const hasKids = !!ul && ul.querySelector("li[data-type]");
+    // Only check direct children for data-type items
+    const hasKids = !!ul && ul.querySelector(":scope > li[data-type]");
     li.dataset.type = hasKids ? "box" : "item";
 
     if (!ul) return;
-    if (!hasKids && !ul.querySelector(".empty-box")) {
+    // Only target direct child empty-box elements
+    if (!hasKids && !ul.querySelector(":scope > .empty-box")) {
       const emptyLi = document.createElement("li");
       emptyLi.classList.add("empty-box");
       emptyLi.innerHTML = "• &lt;empty&gt;";
       ul.appendChild(emptyLi);
     } else if (hasKids) {
-      ul.querySelector(".empty-box")?.remove();
+      ul.querySelector(":scope > .empty-box")?.remove();
     }
   }
 
@@ -729,6 +785,15 @@ const loadInventory = () => {
       return { path, items };
     }
 
+    // Pattern: "Path > Path > Path" - nested containers (no colon)
+    if (input.includes(">")) {
+      const parts = input.split(/\s*>\s*/).filter((i) => i);
+      // All parts become nested path, last one is the final item
+      const path = parts.slice(0, -1);
+      const items = [parts[parts.length - 1]];
+      return { path, items };
+    }
+
     // Pattern: "Item1, Item2, Item3" - multiple items in current selection
     if (input.includes(",")) {
       const items = input.split(/\s*,\s*/).filter((i) => i);
@@ -739,60 +804,145 @@ const loadInventory = () => {
     return { path: [], items: [input] };
   }
 
-  async function createItemsWithPath(parsed, parentKey) {
+  function createItemsWithPath(parsed, parentKey) {
     let currentParentKey = parentKey;
+    let currentParentLi = parentKey ? tree.querySelector(`li[data-id='${parentKey}']`) : null;
+    const createdItems = [];
 
     // Create path containers if needed
     for (const pathPart of parsed.path) {
       // Check if this container already exists
-      const existingContainer = findBoxByNameInParent(
-        pathPart,
-        currentParentKey,
-      );
+      const existingContainer = findBoxByNameInParent(pathPart, currentParentKey);
       if (existingContainer) {
         currentParentKey = existingContainer.dataset.id;
+        currentParentLi = existingContainer;
         continue;
       }
 
-      // Create the container
-      const result = createBoxOptimistically(pathPart, currentParentKey);
+      // Create the container - pass the parent li directly for reliable nesting
+      const result = createBoxOptimisticallyWithParent(pathPart, currentParentKey, currentParentLi);
       if (result) {
-        const operation = {
-          type: "create",
-          url: inventoryForm.action,
-          method: "POST",
-          body: { name: pathPart, parent_key: currentParentKey || "" },
-          onSuccess: (data) => {
-            if (data.data) {
-              currentParentKey = data.data.param_key || data.data.id;
-            }
-          },
-        };
-        operation.tempId = result.tempId;
-        operationQueue.registerPending(result.tempId, result.li, operation);
-        await operationQueue.execute(operation);
-        operationQueue.reconcile(
-          result.tempId,
-          await Promise.resolve({ data: { id: currentParentKey } }),
-        );
+        createdItems.push({
+          tempId: result.tempId,
+          serverParentKey: currentParentKey,
+          li: result.li,
+        });
+        // Use this element as the parent for the next nested item
+        currentParentKey = result.tempId;
+        currentParentLi = result.li;
       }
     }
 
-    // Create all items
+    // Create all leaf items
     for (const itemName of parsed.items) {
-      const result = createBoxOptimistically(itemName, currentParentKey);
+      const result = createBoxOptimisticallyWithParent(itemName, currentParentKey, currentParentLi);
       if (result) {
-        const operation = {
-          type: "create",
-          url: inventoryForm.action,
-          method: "POST",
-          body: { name: itemName, parent_key: currentParentKey || "" },
-          tempId: result.tempId, // Must be set before registerPending
-        };
-        operationQueue.registerPending(result.tempId, result.li, operation);
-        operationQueue.add(operation);
+        createdItems.push({
+          tempId: result.tempId,
+          serverParentKey: currentParentKey,
+          li: result.li,
+        });
       }
     }
+
+    // Queue all operations sequentially
+    const tempToServerKey = new Map();
+
+    createdItems.forEach((item) => {
+      const resolveParentKey = () => {
+        if (!item.serverParentKey) return "";
+        if (item.serverParentKey.startsWith("temp_")) {
+          return tempToServerKey.get(item.serverParentKey) || item.serverParentKey;
+        }
+        return item.serverParentKey;
+      };
+
+      const operation = {
+        type: "create",
+        url: inventoryForm.action,
+        method: "POST",
+        getBody: () => ({
+          name: item.li.querySelector(".item-name")?.innerText,
+          parent_key: resolveParentKey(),
+        }),
+        tempId: item.tempId,
+        onSuccess: (data) => {
+          if (data.data) {
+            tempToServerKey.set(item.tempId, data.data.param_key || data.data.id);
+          }
+        },
+      };
+
+      operationQueue.registerPending(item.tempId, item.li, operation);
+      operationQueue.add(operation);
+    });
+  }
+
+  // Version that accepts parent li directly for reliable nesting
+  function createBoxOptimisticallyWithParent(name, parentKey, parentLi) {
+    const template = inventoryForm.querySelector("#box-template");
+    if (!template) return null;
+
+    const tempId = operationQueue.generateTempId();
+    const clone = template.content.cloneNode(true);
+    const li = clone.querySelector("li");
+
+    li.dataset.id = tempId;
+    li.dataset.hierarchy = parentLi
+      ? `${parentLi.dataset.hierarchy || ""} > ${name}`
+      : parentKey
+        ? `${tree.querySelector(`li[data-id='${parentKey}']`)?.dataset.hierarchy || ""} > ${name}`
+        : name;
+    li.dataset.parentKey = parentKey || "";
+    li.querySelector(".item-name").innerText = name;
+
+    // Set up the inner ul and remove any loading placeholder
+    const innerUl = li.querySelector("ul[data-box-id='']");
+    innerUl.dataset.boxId = tempId;
+    innerUl.innerHTML = '<li class="empty-box">• &lt;empty&gt;</li>';
+
+    // Mark the details as loaded (no need to fetch since this is a new empty item)
+    const innerDetails = li.querySelector("details");
+    if (innerDetails) {
+      innerDetails.classList.add("loaded");
+    }
+
+    li.dataset.type = "item";
+    li.classList.add("pending");
+
+    // Find the target ul - use parentLi directly if provided
+    const ul = parentLi
+      ? parentLi.querySelector(`:scope > details > ul`)
+      : parentKey
+        ? tree.querySelector(`li[data-id='${parentKey}']`)?.querySelector(`:scope > details > ul`)
+        : tree.querySelector("ul[role=tree]");
+
+    if (ul) {
+      if (parentLi || parentKey) {
+        const actualParentLi = parentLi || tree.querySelector(`li[data-id='${parentKey}']`);
+        // Remove empty placeholder from direct children only
+        ul.querySelector(":scope > .empty-box")?.remove();
+        ul.prepend(li);
+        // Update parent type AFTER child is added
+        updateBoxType(actualParentLi);
+        // Expand the parent box to show the new item
+        const parentDetails = actualParentLi?.querySelector(":scope > details");
+        if (parentDetails && !parentDetails.open) {
+          parentDetails.open = true;
+        }
+      } else {
+        const rootEl = ul.querySelector("[data-type=root]");
+        if (rootEl) {
+          rootEl.after(li);
+        } else {
+          ul.prepend(li);
+        }
+      }
+      attachDetailsToggleListeners();
+      ensureDraggableRoots();
+    }
+
+    return { li, tempId };
   }
 
   function findBoxByNameInParent(name, parentKey) {
@@ -1538,6 +1688,17 @@ const loadInventory = () => {
     item.remove();
     updateBoxType(parentLi);
 
+    // Select the parent box after deletion
+    if (parentLi) {
+      if (isRootLi(parentLi)) {
+        // If parent is root, just clear the selection display
+        inventoryForm.querySelector("#new_box_parent_key").value = "";
+        searchWrapper.querySelector("code.hierarchy").innerText = "Everything";
+      } else {
+        setFocusedItem(parentLi);
+      }
+    }
+
     fetch(editBoxForm.action, {
       method: "DELETE",
       headers: {
@@ -1590,8 +1751,24 @@ const loadInventory = () => {
   }
 
   document.addEventListener("keydown", (evt) => {
-    // Don't handle shortcuts when typing in inputs
-    if (evt.target.matches("input, textarea")) {
+    const isInNewItemField = evt.target === newBoxField;
+    const isInInput = evt.target.matches("input, textarea");
+
+    // Handle arrow up/down in the new item field - navigate items but keep focus
+    if (isInNewItemField && (evt.key === "ArrowUp" || evt.key === "ArrowDown")) {
+      evt.preventDefault();
+      evt.stopPropagation();
+      if (evt.key === "ArrowUp") {
+        navigateUp();
+      } else {
+        navigateDown();
+      }
+      // Keep focus in the text field but update visual selection
+      return;
+    }
+
+    // Don't handle other shortcuts when typing in inputs
+    if (isInInput) {
       // Escape from input field
       if (evt.key === "Escape") {
         evt.target.blur();
@@ -1902,10 +2079,22 @@ const loadInventory = () => {
       let loading = details.classList.contains("loading");
       let needsLoad =
         !loading && !!details.querySelector(":scope > ul > li.post-load-box");
+
+      // Don't try to lazy load items with temp IDs (they're pending server creation)
+      const wrapperIsPending = wrapper?.dataset.id?.startsWith("temp_") || wrapper?.classList.contains("pending");
+      if (wrapperIsPending) {
+        needsLoad = false;
+      }
+
       details.classList.add(needsLoad ? "pending-load" : "loaded");
 
       details.addEventListener("toggle", () => {
         if (!details.open) {
+          return;
+        }
+
+        // Skip loading for pending items with temp IDs
+        if (wrapper?.dataset.id?.startsWith("temp_") || wrapper?.classList.contains("pending")) {
           return;
         }
 

@@ -121,14 +121,14 @@ class Box < ApplicationRecord
 
     # For destroyed records, we need to build the data manually since serialize may not work
     data = {
-      box: {
-        id: id,
-        param_key: param_key,
+      box:       {
+        id:         id,
+        param_key:  param_key,
         parent_key: parent_key,
-        deleted: true
+        deleted:    true,
       },
-      action: :destroy,
-      timestamp: Time.current.to_i
+      action:    :destroy,
+      timestamp: Time.current.to_i,
     }
     ActionCable.server.broadcast("inventory_#{user_id}_channel", data)
   end
