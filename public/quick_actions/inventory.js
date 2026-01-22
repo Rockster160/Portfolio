@@ -519,11 +519,14 @@ const loadInventory = () => {
     if (!box.id && !box.param_key) return;
 
     // Don't process updates for items we just created (they have pending state)
-    // Check by real ID first
-    const existingPendingById = tree.querySelector(
-      `li.pending[data-id='${box.id}']`,
+    // Check by param_key first (DOM uses param_key in data-id/data-key)
+    const boxKey = box.param_key || box.id;
+    const existingPendingByKey = tree.querySelector(
+      `li.pending[data-key='${boxKey}']`,
+    ) || tree.querySelector(
+      `li.pending[data-id='${boxKey}']`,
     );
-    if (existingPendingById) return;
+    if (existingPendingByKey) return;
 
     // Also check for pending items with same name in same parent (temp IDs won't match real IDs)
     if (action === "create" || !action) {
@@ -559,21 +562,32 @@ const loadInventory = () => {
   // Box CRUD Operations
   // ============================================================================
 
-  function upsertBox(box) {
+  function upsertBox(box, options = {}) {
     // Validate box data - must have id and name to be valid inventory data
     if (!box || (!box.id && !box.param_key)) {
       return;
     }
+    // skipReposition: true = don't reposition element (used for local operations
+    // where optimistic move already placed it correctly)
+    const { skipReposition = false } = options;
+
+    // Use param_key for lookups since data-id in DOM contains param_key
+    // (Box model has self.primary_key = "param_key", so box.id in view returns param_key,
+    // but as_json serializes the actual id column which is a bigint)
+    const boxKey = box.param_key || box.id;
 
     // Handle deleted boxes early - don't create new elements for delete broadcasts
     if (box.deleted) {
-      const existingLi = tree.querySelector(`li[data-id='${box.id}']`);
+      const existingLi = tree.querySelector(`li[data-key='${boxKey}']`) ||
+                         tree.querySelector(`li[data-id='${boxKey}']`);
       if (existingLi) {
         const parentLi = existingLi.closest(
+          `li[data-key='${existingLi.dataset.parentKey}']`,
+        ) || existingLi.closest(
           `li[data-id='${existingLi.dataset.parentKey}']`,
         );
         const ul = parentLi
-          ? parentLi.querySelector(`ul[data-box-id='${parentLi.dataset.id}']`)
+          ? parentLi.querySelector(`ul[data-box-id='${parentLi.dataset.key || parentLi.dataset.id}']`)
           : null;
 
         // Save state for undo
@@ -588,10 +602,12 @@ const loadInventory = () => {
       return;
     }
 
-    const existingLi = tree.querySelector(`li[data-id='${box.id}']`);
+    const existingLi = tree.querySelector(`li[data-key='${boxKey}']`) ||
+                       tree.querySelector(`li[data-id='${boxKey}']`);
     if (existingLi) {
       const oldHierarchy = existingLi.dataset.hierarchy || "";
       const oldParentKey = existingLi.dataset.parentKey || "";
+      const oldSortOrder = parseInt(existingLi.dataset.sortOrder, 10) || 0;
 
       if (!isRootLi(existingLi)) {
         existingLi.dataset.type = box.empty ? "item" : "box";
@@ -604,14 +620,73 @@ const loadInventory = () => {
       existingLi.dataset.hierarchy = box.hierarchy;
       existingLi.dataset.parentKey = box.parent_key || "";
 
-      if (oldParentKey !== (box.parent_key || "")) {
-        const oldParent =
-          tree.querySelector(`li[data-id='${oldParentKey}']`) || null;
-        const newParent =
-          tree.querySelector(`li[data-id='${box.parent_key}']`) ||
-          tree.querySelector("li[data-type='root']");
-        updateBoxType(oldParent);
-        updateBoxType(newParent);
+      // Helper to get parent li (handles empty parent_key for top level)
+      const getParentLi = (parentKey) => {
+        if (!parentKey) return tree.querySelector("li[data-type='root']");
+        return tree.querySelector(`li[data-key='${parentKey}']`) ||
+               tree.querySelector(`li[data-id='${parentKey}']`) ||
+               tree.querySelector("li[data-type='root']");
+      };
+
+      // Helper to get target UL for a parent
+      const getTargetUl = (parentLi) => {
+        if (!parentLi) return tree.querySelector("ul[role='tree']");
+        if (parentLi.dataset.type === "root") return tree.querySelector("ul[role='tree']");
+        const key = parentLi.dataset.key || parentLi.dataset.id;
+        return parentLi.querySelector(":scope > details > ul") ||
+               parentLi.querySelector(`ul[data-box-id='${key}']`);
+      };
+
+      const oldParentLi = getParentLi(oldParentKey);
+      const parentChanged = oldParentKey !== (box.parent_key || "");
+      const sortOrderChanged = oldSortOrder !== box.sort_order;
+
+      // Check if new parent exists in DOM (don't fall back to root for non-root items)
+      const newParentLi = box.parent_key
+        ? (tree.querySelector(`li[data-key='${box.parent_key}']`) ||
+           tree.querySelector(`li[data-id='${box.parent_key}']`))
+        : tree.querySelector("li[data-type='root']");
+
+      // If new parent is NOT in DOM (not loaded due to lazy loading), ignore this update.
+      // The correct state will be loaded when the parent is expanded.
+      if (box.parent_key && !newParentLi) {
+        return;
+      }
+
+      // If parent changed OR sort_order changed, reposition the element
+      // Skip repositioning for local operations (optimistic move already placed it correctly)
+      if (!skipReposition && (parentChanged || sortOrderChanged)) {
+        const targetUl = getTargetUl(newParentLi);
+
+        if (targetUl) {
+          // Remove empty-box placeholder if present
+          const emptyPlaceholder = targetUl.querySelector(":scope > li.empty-box");
+          if (emptyPlaceholder) emptyPlaceholder.remove();
+
+          // Find correct position based on sort_order (DESC - higher values first)
+          const siblings = [...targetUl.querySelectorAll(":scope > li[data-type]:not([data-type='root'])")];
+          let insertBefore = null;
+          for (const sibling of siblings) {
+            if (sibling === existingLi) continue;
+            const siblingOrder = parseInt(sibling.dataset.sortOrder, 10) || 0;
+            if (box.sort_order > siblingOrder) {
+              insertBefore = sibling;
+              break;
+            }
+          }
+
+          // Move element to correct position
+          if (insertBefore) {
+            targetUl.insertBefore(existingLi, insertBefore);
+          } else {
+            targetUl.appendChild(existingLi);
+          }
+        }
+
+        if (parentChanged) {
+          updateBoxType(oldParentLi);
+          updateBoxType(newParentLi);
+        }
       }
 
       if (oldHierarchy && oldHierarchy !== box.hierarchy) {
@@ -624,6 +699,17 @@ const loadInventory = () => {
     // Create new element - requires name to be valid inventory data
     const template = inventoryForm.querySelector("#box-template");
     if (box && box.name && template) {
+      // If parent isn't loaded, don't create the element - it will be loaded when parent is expanded
+      const parentLi = box.parent_key
+        ? (tree.querySelector(`li[data-key='${box.parent_key}']`) ||
+           tree.querySelector(`li[data-id='${box.parent_key}']`))
+        : null;
+
+      // If box has a parent_key but parent isn't in DOM, skip creating (parent not loaded)
+      if (box.parent_key && !parentLi) {
+        return;
+      }
+
       const clone = template.content.cloneNode(true);
       const li = clone.querySelector("li");
       li.dataset.id = box.id;
@@ -637,7 +723,6 @@ const loadInventory = () => {
         box.param_key || box.id;
       li.dataset.type = box.empty ? "item" : "box";
 
-      const parentLi = tree.querySelector(`li[data-id='${box.parent_key}']`);
       const ul = parentLi
         ? parentLi.querySelector(`ul[data-box-id='${box.parent_key}']`)
         : tree.querySelector("ul[role=tree]");
@@ -1561,7 +1646,9 @@ const loadInventory = () => {
         onSuccess: (data) => {
           itemsToMove.forEach((item) => item.classList.remove("pending", "error"));
           if (data.data) {
-            upsertBox(data.data);
+            // Skip repositioning - optimistic move already placed it correctly
+            // (sibling sort_orders in DOM are stale, would cause incorrect placement)
+            upsertBox(data.data, { skipReposition: true });
           }
         },
         onError: (err) => {
@@ -2213,10 +2300,26 @@ const loadInventory = () => {
                   ul.appendChild(li);
                 }
               });
+
+              // Check if box is actually empty - if so, fix the empty attribute on server
+              if (cached.length === 0 && wrapper.dataset.type !== "item") {
+                fetch(editBoxForm.action, {
+                  method: "PATCH",
+                  headers: {
+                    accept: "application/json",
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    box_id: wrapper.dataset.key || wrapper.dataset.id,
+                    reset_empty: true,
+                  }),
+                }).catch(() => {}); // Silent fix
+              }
             }
             details.classList.remove("pending-load");
             details.classList.add("loaded");
             needsLoad = false;
+            updateBoxType(wrapper);
             attachDetailsToggleListeners();
             ensureDraggableRoots();
             return;
@@ -2243,6 +2346,24 @@ const loadInventory = () => {
               updateBoxType(wrapper);
               attachDetailsToggleListeners();
               ensureDraggableRoots();
+
+              // Check if box is actually empty - if so, fix the empty attribute on server
+              const loadedUl = details.querySelector(":scope > ul");
+              const hasChildren = loadedUl && loadedUl.querySelector(":scope > li[data-type]");
+              if (!hasChildren && wrapper.dataset.type !== "item") {
+                // Box was marked as having children but actually empty - fix it
+                fetch(editBoxForm.action, {
+                  method: "PATCH",
+                  headers: {
+                    accept: "application/json",
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    box_id: wrapper.dataset.key || wrapper.dataset.id,
+                    reset_empty: true,
+                  }),
+                }).catch(() => {}); // Silent fix
+              }
             })
             .catch((error) => {
               console.error("Error loading box contents:", error);

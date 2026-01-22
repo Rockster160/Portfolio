@@ -35,6 +35,12 @@ class InventoryManagementController < ApplicationController
         max_sort = siblings.maximum(:sort_order) || 0
         box.update!(sort_order: max_sort + 1)
       end
+
+      # Fix empty attribute if it's out of sync
+      if params[:reset_empty].present?
+        actual_empty = box.boxes.empty?
+        box.update!(empty: actual_empty) if box.empty != actual_empty
+      end
     end
 
     # Skip child_ids sorting when insert_at_top is used (lazy loading means child_ids is incomplete)
