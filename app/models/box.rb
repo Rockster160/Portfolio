@@ -34,6 +34,7 @@ class Box < ApplicationRecord
   before_save :set_param_key, if: :new_record?
   before_save :set_hierarchy, if: :reset_hierarchy?
   before_save :cascade_hierarchy, if: :hierarchy_ids_changed?
+  before_save -> { self.parent_key = parent_key.presence }, if: :parent_key_changed?
 
   orderable sort_order: :desc, scope: ->(box) {
     box.parent&.boxes || box.user.boxes.where(parent_key: nil)
@@ -55,10 +56,10 @@ class Box < ApplicationRecord
 
   def self.from_key(keys)
     if keys.is_a?(::Array)
-      keys = keys.map { |k| k.upcase.gsub("0", "O").gsub("1", "I") }
+      keys = keys.map { |k| k.to_s.upcase.gsub("0", "O").gsub("1", "I") }
       ilike(param_key: keys)
     else
-      ilike(param_key: keys.upcase.gsub("0", "O").gsub("1", "I")).take!
+      ilike(param_key: keys.to_s.upcase.gsub("0", "O").gsub("1", "I")).take!
     end
   end
 

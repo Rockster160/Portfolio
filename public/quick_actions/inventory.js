@@ -726,7 +726,16 @@ const loadInventory = () => {
     const ul = targetUlFor(li);
     // Only check direct children for data-type items
     const hasKids = !!ul && ul.querySelector(":scope > li[data-type]");
+    const wasBox = li.dataset.type === "box";
     li.dataset.type = hasKids ? "box" : "item";
+
+    // If box became empty (was box, now item), collapse it
+    if (wasBox && !hasKids) {
+      const details = li.querySelector(":scope > details");
+      if (details) {
+        details.open = false;
+      }
+    }
 
     if (!ul) return;
     // Only target direct child empty-box elements
@@ -1230,9 +1239,10 @@ const loadInventory = () => {
   }
 
   function buildChildIds(containerUl) {
+    // Use param_key (dataset.key) not numeric id, since Box.id returns param_key
     return containerRows(containerUl)
-      .map((n) => parseInt(n.dataset.id, 10))
-      .filter((n) => Number.isFinite(n));
+      .map((n) => n.dataset.key)
+      .filter((k) => k && !k.startsWith("temp-"));
   }
 
   function ensureDraggableRoots() {
@@ -1321,7 +1331,8 @@ const loadInventory = () => {
       if (!dragEl) return;
 
       const row = evt.target.closest("li[data-type]");
-      if (row && row !== dragEl && !row.contains(dragEl)) {
+      // Prevent dropping into descendants, but allow dropping into ancestors
+      if (row && row !== dragEl && !dragEl.contains(row)) {
         evt.preventDefault();
 
         let slot = slotFromEvent(evt, row);
@@ -1403,9 +1414,11 @@ const loadInventory = () => {
       evt.preventDefault();
 
       let targetUl, parentLi, insertAt, insertRef;
+      let isDropIntoBox = false; // Track if we're dropping INTO a box (not between items)
 
       const row = evt.target.closest("li[data-type]");
-      if (row && row !== dragEl && !row.contains(dragEl)) {
+      // Prevent dropping into descendants, but allow dropping into ancestors
+      if (row && row !== dragEl && !dragEl.contains(row)) {
         let slot = slotFromEvent(evt, row);
         if (isRootLi(row)) slot = "into";
 
@@ -1426,6 +1439,8 @@ const loadInventory = () => {
               : Math.min(rows.length, idx + 1);
           insertRef = rows[insertAt] || null;
         } else {
+          // Dropping INTO a box
+          isDropIntoBox = true;
           parentLi = row;
           targetUl = targetUlFor(parentLi);
           if (!targetUl) return;
@@ -1465,7 +1480,30 @@ const loadInventory = () => {
             .filter(Boolean)
         : [dragEl];
 
-      // Optimistic move
+      // When dropping INTO an unloaded box, remove the loading placeholder
+      // and mark as loaded to prevent lazy loading from wiping out the moved item
+      if (isDropIntoBox && targetUl) {
+        const placeholder = targetUl.querySelector(":scope > li.post-load-box");
+        if (placeholder) {
+          placeholder.remove();
+          // Mark the details as loaded so lazy loading doesn't trigger
+          const details = parentLi.querySelector(":scope > details");
+          if (details) {
+            details.classList.remove("pending-load");
+            details.classList.add("loaded");
+          }
+        }
+        // Also remove empty-box placeholder if present
+        const emptyPlaceholder = targetUl.querySelector(":scope > li.empty-box");
+        if (emptyPlaceholder) {
+          emptyPlaceholder.remove();
+        }
+      }
+
+      // Use param_key (dataset.key), not numeric id, for parent_key
+      const newParentKey = isRootLi(parentLi) ? "" : parentLi.dataset.key || "";
+
+      // Optimistic move - update DOM and parentKey attribute
       itemsToMove.forEach((item, idx) => {
         if (idx === 0) {
           safeInsert(targetUl, item, insertRef, insertAt);
@@ -1473,45 +1511,93 @@ const loadInventory = () => {
           const prev = itemsToMove[idx - 1];
           targetUl.insertBefore(item, prev.nextSibling);
         }
+        // Update parentKey optimistically
+        item.dataset.parentKey = newParentKey;
       });
 
       updateBoxType(prevParentLi);
       updateBoxType(parentLi);
 
+      // Expand the target box so user can see where item went
+      if (isDropIntoBox && !isRootLi(parentLi)) {
+        const details = parentLi.querySelector(":scope > details");
+        if (details && !details.open) {
+          details.open = true;
+        }
+      }
+
       const movedId = dragEl.dataset.id;
-      const newParentKey = isRootLi(parentLi) ? "" : parentLi.dataset.id || "";
+      const movedKey = dragEl.dataset.key;
       const child_ids = buildChildIds(targetUl);
 
-      fetch(editBoxForm.action, {
-        method: "PATCH",
-        headers: {
-          accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          box_id: movedId,
+      // Store previous state for rollback on error
+      const prevParentKey = dragEl.dataset.parentKey;
+      const prevNextSibling = dragEl.nextSibling;
+      const prevParentUl = prevParentLi ? targetUlFor(prevParentLi) : null;
+
+      // Mark moved items as pending
+      itemsToMove.forEach((item) => item.classList.add("pending"));
+
+      // Build request body (use getBody for dynamic computation in case of retries)
+      const getBody = () => {
+        const body = {
+          box_id: movedKey || movedId,
           parent_key: newParentKey,
-          child_ids,
-        }),
-      })
-        .then((r) =>
-          r.ok ? r.json() : Promise.reject(new Error("Update failed")),
-        )
-        .then((data) => {
-          upsertBox(data.data);
-        })
-        .catch((err) => {
-          showFlash(err.message || "Move failed");
-        })
-        .finally(() => {
-          clearInto();
-          clearGuide();
-          document.querySelectorAll(".dragging").forEach((el) => {
-            el.classList.remove("dragging");
+          child_ids: buildChildIds(targetUl),
+        };
+        if (isDropIntoBox) {
+          body.insert_at_top = true;
+        }
+        return body;
+      };
+
+      // Create move operation for the queue
+      const moveOperation = {
+        type: "move",
+        url: editBoxForm.action,
+        method: "PATCH",
+        getBody,
+        tempId: `move_${movedId}_${Date.now()}`,
+        onSuccess: (data) => {
+          itemsToMove.forEach((item) => item.classList.remove("pending", "error"));
+          if (data.data) {
+            upsertBox(data.data);
+          }
+        },
+        onError: (err) => {
+          // Rollback: move items back to original position
+          itemsToMove.forEach((item) => {
+            item.classList.remove("pending");
+            item.classList.add("error");
+            item.dataset.parentKey = prevParentKey;
           });
-          dragEl = null;
-          selectionManager.clear();
-        });
+          if (prevParentUl) {
+            itemsToMove.forEach((item) => {
+              if (prevNextSibling) {
+                prevParentUl.insertBefore(item, prevNextSibling);
+              } else {
+                prevParentUl.appendChild(item);
+              }
+            });
+            updateBoxType(prevParentLi);
+            updateBoxType(parentLi);
+          }
+          showFlash(err.message || "Move failed - reverted");
+        },
+      };
+
+      // Register and add to queue for offline/retry support
+      operationQueue.registerPending(moveOperation.tempId, dragEl, moveOperation);
+      operationQueue.add(moveOperation);
+
+      // Clean up drag state
+      clearInto();
+      clearGuide();
+      document.querySelectorAll(".dragging").forEach((el) => {
+        el.classList.remove("dragging");
+      });
+      dragEl = null;
+      selectionManager.clear();
     });
   }
 

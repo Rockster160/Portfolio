@@ -27,9 +27,19 @@ class InventoryManagementController < ApplicationController
     if params[:box_id].present?
       box = current_user.boxes.find(params[:box_id])
       box.update!(box_params)
+
+      # When dropping INTO a box, set sort_order to appear at top
+      # (child_ids may be incomplete due to lazy loading)
+      if params[:insert_at_top].present?
+        siblings = box.parent&.boxes || current_user.boxes.where(parent_key: nil)
+        max_sort = siblings.maximum(:sort_order) || 0
+        box.update!(sort_order: max_sort + 1)
+      end
     end
 
-    if params[:child_ids].present?
+    # Skip child_ids sorting when insert_at_top is used (lazy loading means child_ids is incomplete)
+    # child_ids contains param_keys (not numeric ids) since Box.primary_key = "param_key"
+    if params[:child_ids].present? && !params[:insert_at_top].present?
       parent_scope = (
         if params[:parent_key].present?
           current_user.boxes.where(parent_key: params[:parent_key])
@@ -37,8 +47,8 @@ class InventoryManagementController < ApplicationController
           current_user.boxes.where(parent_key: nil)
         end
       )
-      boxes = parent_scope.where(id: params[:child_ids])
-      ordered_boxes = params[:child_ids].map { |id| boxes.detect { |b| b.id == id.to_i } }.compact
+      boxes = parent_scope.where(param_key: params[:child_ids])
+      ordered_boxes = params[:child_ids].map { |key| boxes.detect { |b| b.param_key == key } }.compact
 
       box_count = ordered_boxes.size
       ordered_boxes.each_with_index do |box, idx|

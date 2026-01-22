@@ -8,7 +8,7 @@ class BoxesController < ApplicationController
     @boxes = @boxes.query(params[:q]) if params[:q].present?
 
     # Add option to filter items vs boxes - can include containers with include_containers param
-    @boxes = @boxes.where(empty: true) unless params[:include_containers].present?
+    @boxes = @boxes.where(empty: true) if params[:include_containers].blank?
     @boxes = @boxes.within(params[:within]) if params[:within].present?
 
     # Include hierarchy_ids if with_ancestors is requested
@@ -35,15 +35,15 @@ class BoxesController < ApplicationController
 
       result[id] = box.contents.map { |child|
         {
-          id: child.id,
-          param_key: child.param_key,
-          name: child.name,
-          notes: child.notes,
+          id:          child.id,
+          param_key:   child.param_key,
+          name:        child.name,
+          notes:       child.notes,
           description: child.description,
-          hierarchy: child.hierarchy,
-          parent_key: child.parent_key,
-          empty: child.empty,
-          sort_order: child.sort_order
+          hierarchy:   child.hierarchy,
+          parent_key:  child.parent_key,
+          empty:       child.empty,
+          sort_order:  child.sort_order,
         }
       }
     end
