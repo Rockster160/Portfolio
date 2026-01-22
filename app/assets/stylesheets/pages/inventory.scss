@@ -84,6 +84,7 @@
         li[data-type] {
           display: flex;
           border-bottom: 1px solid var(--border);
+          scroll-margin-top: 110px; // Account for fixed nav bar when scrolling into view
 
           details {
             flex: 1;

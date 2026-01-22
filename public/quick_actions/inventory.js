@@ -1393,13 +1393,30 @@ const loadInventory = () => {
     return items[focusedIndex] || null;
   }
 
+  function scrollIntoViewWithOffset(element) {
+    // Account for fixed nav bar when determining if element is visible
+    const navBar = document.querySelector(".inventory-nav");
+    const navHeight = navBar ? navBar.offsetHeight + 10 : 110;
+    const rect = element.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+
+    if (rect.top < navHeight) {
+      // Element is behind or above the nav bar - use "start" which respects scroll-margin-top
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (rect.bottom > viewportHeight) {
+      // Element is below the viewport
+      element.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+    // Otherwise element is fully visible, no scroll needed
+  }
+
   function setFocusedItem(li, alsoSelect = true) {
     const items = getNavigableItems();
     focusedIndex = items.indexOf(li);
     items.forEach((item, idx) => {
       if (idx === focusedIndex) {
         item.classList.add("keyboard-focus");
-        item.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        scrollIntoViewWithOffset(item);
       } else {
         item.classList.remove("keyboard-focus");
       }
@@ -1433,11 +1450,62 @@ const loadInventory = () => {
     }
   }
 
+  function expandAllLoaded(item) {
+    // Expand this item and all already-loaded nested boxes
+    if (!item) item = getFocusedItem();
+    if (!item) return;
+
+    const details = item.querySelector(":scope > details");
+    if (details) {
+      details.open = true;
+      // Recursively expand all loaded children
+      const childBoxes = details.querySelectorAll("li[data-type='box']");
+      childBoxes.forEach((child) => {
+        const childDetails = child.querySelector(":scope > details");
+        if (childDetails && childDetails.classList.contains("loaded")) {
+          childDetails.open = true;
+        }
+      });
+    }
+  }
+
   function collapseFocused() {
     const item = getFocusedItem();
     if (!item) return;
     const details = item.querySelector(":scope > details");
+
+    // If this item has an open details, close it
     if (details && details.open) {
+      details.open = false;
+      return;
+    }
+
+    // Otherwise, move to parent box and close it
+    const parentLi = item.parentElement?.closest(
+      "li[data-type='box'], li[data-type='root']",
+    );
+    if (parentLi && !isRootLi(parentLi)) {
+      setFocusedItem(parentLi);
+      const parentDetails = parentLi.querySelector(":scope > details");
+      if (parentDetails && parentDetails.open) {
+        parentDetails.open = false;
+      }
+    }
+  }
+
+  function collapseAllNested(item) {
+    // Collapse this item and all nested boxes
+    if (!item) item = getFocusedItem();
+    if (!item) return;
+
+    const details = item.querySelector(":scope > details");
+    if (details) {
+      // First collapse all children recursively
+      const allNestedDetails = details.querySelectorAll("details");
+      allNestedDetails.forEach((d) => {
+        d.open = false;
+      });
+      // Then collapse this one
       details.open = false;
     }
   }
@@ -1543,19 +1611,31 @@ const loadInventory = () => {
     switch (evt.key) {
       case "ArrowUp":
         evt.preventDefault();
+        evt.stopPropagation();
         navigateUp();
         break;
       case "ArrowDown":
         evt.preventDefault();
+        evt.stopPropagation();
         navigateDown();
         break;
       case "ArrowRight":
         evt.preventDefault();
-        expandFocused();
+        evt.stopPropagation();
+        if (ctrlKey) {
+          expandAllLoaded();
+        } else {
+          expandFocused();
+        }
         break;
       case "ArrowLeft":
         evt.preventDefault();
-        collapseFocused();
+        evt.stopPropagation();
+        if (ctrlKey) {
+          collapseAllNested();
+        } else {
+          collapseFocused();
+        }
         break;
       case "Enter":
         evt.preventDefault();

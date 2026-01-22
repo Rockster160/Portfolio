@@ -12,9 +12,9 @@
       </span>
     </div>
 
-    <%= form_with(url: :inventory, html: { class: "basic new-item-form inventory-inline-form" }) do |f| %>
+    <%= form_with(url: :inventory, html: { class: "basic new-item-form inventory-inline-form", autocomplete: "off" }) do |f| %>
       <%= f.hidden_field :parent_key, id: :new_box_parent_key %>
-      <%= f.text_field :name, placeholder: "Add Items (or: Path > Path: Item1, Item2)", id: :new_box_name %>
+      <%= f.text_field :name, placeholder: "Add Items (or: Path > Path: Item1, Item2)", id: :new_box_name, autocomplete: "off", data: { "1p_ignore": true, "lpignore": true } %>
       <%= f.submit "Add" %>
       <template id="box-template">
         <%= render partial: "inventory_management/box", locals: { box: Box.new } %>
@@ -48,7 +48,7 @@
     <div class="status"></div>
     <div class="close"><i class="ti ti-fa-close"></i></div>
     <div class="modal-content">
-      <%= form_with(url: :inventory, method: :patch, local: true, html: { class: "basic inventory-inline-form", id: "editBoxForm" }) do |f| %>
+      <%= form_with(url: :inventory, method: :patch, local: true, html: { class: "basic inventory-inline-form", id: "editBoxForm", autocomplete: "off" }) do |f| %>
         <div class="copy-url">
           <% host = Rails.env.development? ? "localhost:3141" : "rdjn.me" %>
           <input readonly class="url" type="text" value="" placeholder="<%= host %>/b/:id">
@@ -58,9 +58,9 @@
         </div>
         <%= f.hidden_field :box_id %>
         <%#= f.hidden_field :parent_key %>
-        <%= f.text_field :name, placeholder: "Item Name" %>
-        <%= f.text_field :notes, placeholder: "Quick Notes" %>
-        <%= f.text_area :description, placeholder: "Description" %>
+        <%= f.text_field :name, placeholder: "Item Name", autocomplete: "off", data: { "1p_ignore": true, "lpignore": true } %>
+        <%= f.text_field :notes, placeholder: "Quick Notes", autocomplete: "off", data: { "1p_ignore": true, "lpignore": true } %>
+        <%= f.text_area :description, placeholder: "Description", autocomplete: "off", data: { "1p_ignore": true, "lpignore": true } %>
 
         <div class="text-right">
           <%= f.submit "Update" %>
@@ -78,9 +78,9 @@
     <div class="status"></div>
     <div class="close"><i class="ti ti-fa-close"></i></div>
     <div class="modal-content">
-      <%= form_with(url: [:inventory, :boxes], html: { class: "basic search-form inventory-inline-form" }) do |f| %>
+      <%= form_with(url: [:inventory, :boxes], html: { class: "basic search-form inventory-inline-form", autocomplete: "off" }) do |f| %>
         <div class="search-breadcrumbs"></div>
-        <%= f.text_field :name, placeholder: "Search" %>
+        <%= f.text_field :name, placeholder: "Search", autocomplete: "off", data: { "1p_ignore": true, "lpignore": true } %>
         <template id="box-search-result-template">
           <%= render partial: "inventory_management/box_result", locals: { box: Box.new } %>
         </template>
@@ -117,17 +117,19 @@
           <tbody>
             <tr><td><kbd>&uarr;</kbd> / <kbd>&darr;</kbd></td><td>Navigate items</td></tr>
             <tr><td><kbd>&rarr;</kbd></td><td>Expand selected</td></tr>
-            <tr><td><kbd>&larr;</kbd></td><td>Collapse selected</td></tr>
+            <tr><td><kbd>&larr;</kbd></td><td>Collapse / go to parent</td></tr>
+            <tr><td><kbd>Cmd+&rarr;</kbd></td><td>Expand all loaded children</td></tr>
+            <tr><td><kbd>Cmd+&larr;</kbd></td><td>Collapse all nested</td></tr>
             <tr><td><kbd>Enter</kbd></td><td>Select focused item</td></tr>
             <tr><td><kbd>Delete</kbd></td><td>Delete selected</td></tr>
             <tr><td><kbd>n</kbd></td><td>Focus new item field</td></tr>
             <tr><td><kbd>e</kbd></td><td>Edit selected</td></tr>
             <tr><td><kbd>/</kbd></td><td>Open search</td></tr>
             <tr><td><kbd>Esc</kbd></td><td>Clear selection / close modal</td></tr>
-            <tr><td><kbd>Ctrl+Z</kbd></td><td>Undo</td></tr>
-            <tr><td><kbd>Ctrl+Shift+Z</kbd></td><td>Redo</td></tr>
-            <tr><td><kbd>Ctrl+A</kbd></td><td>Select all siblings</td></tr>
-            <tr><td><kbd>Ctrl+Click</kbd></td><td>Multi-select</td></tr>
+            <tr><td><kbd>Cmd+Z</kbd></td><td>Undo</td></tr>
+            <tr><td><kbd>Cmd+Shift+Z</kbd></td><td>Redo</td></tr>
+            <tr><td><kbd>Cmd+A</kbd></td><td>Select all siblings</td></tr>
+            <tr><td><kbd>Cmd+Click</kbd></td><td>Multi-select</td></tr>
             <tr><td><kbd>Shift+Click</kbd></td><td>Range select</td></tr>
           </tbody>
         </table>
