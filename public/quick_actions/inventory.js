@@ -62,11 +62,37 @@ class OperationQueue {
   queue = [];
   processing = false;
   pendingItems = new Map(); // tempId -> { element, operation }
-  retryDelays = [1000, 2000, 5000]; // Exponential backoff
+  pendingRetries = new Map(); // tempId -> { timeoutId, operation }
+  retryDelays = [1000, 2000, 5000]; // Exponential backoff for transient errors
+  isOnline = true; // Track connection state
 
   constructor(inventory) {
     this.inventory = inventory;
     this.createPendingIndicator();
+  }
+
+  setOnline(online) {
+    const wasOffline = !this.isOnline;
+    this.isOnline = online;
+    this.updatePendingIndicator();
+
+    // If we just came back online, resume processing immediately
+    if (online && wasOffline) {
+      // Cancel any pending retry timeouts and add operations back to queue
+      for (const [tempId, { timeoutId, operation }] of this.pendingRetries) {
+        clearTimeout(timeoutId);
+        operation.retryCount = 0;
+        this.queue.push(operation);
+      }
+      this.pendingRetries.clear();
+
+      // Reset retry counts for already-queued operations
+      this.queue.forEach((op) => (op.retryCount = 0));
+
+      if (this.queue.length > 0) {
+        this.process();
+      }
+    }
   }
 
   createPendingIndicator() {
@@ -83,13 +109,27 @@ class OperationQueue {
     const indicator = document.getElementById("pending-indicator");
     if (!indicator) return;
 
-    const hasPending = this.pendingItems.size > 0 || this.queue.length > 0;
+    const totalPending =
+      this.pendingItems.size + this.queue.length + this.pendingRetries.size;
+    const hasPending = totalPending > 0;
     indicator.classList.toggle("hidden", !hasPending);
 
     if (hasPending) {
-      const count = this.pendingItems.size + this.queue.length;
-      indicator.querySelector(".pending-text").textContent =
-        count === 1 ? "Syncing 1 change..." : `Syncing ${count} changes...`;
+      if (!this.isOnline) {
+        indicator.querySelector(".pending-text").textContent =
+          totalPending === 1
+            ? "Offline - 1 change pending..."
+            : `Offline - ${totalPending} changes pending...`;
+        indicator.classList.add("offline");
+      } else {
+        indicator.querySelector(".pending-text").textContent =
+          totalPending === 1
+            ? "Syncing 1 change..."
+            : `Syncing ${totalPending} changes...`;
+        indicator.classList.remove("offline");
+      }
+    } else {
+      indicator.classList.remove("offline");
     }
   }
 
@@ -112,21 +152,59 @@ class OperationQueue {
   async process() {
     if (this.processing || this.queue.length === 0) return;
 
+    // If offline, don't process - queue will resume when we come back online
+    if (!this.isOnline) {
+      this.updatePendingIndicator();
+      return;
+    }
+
     this.processing = true;
 
     while (this.queue.length > 0) {
+      // Check online status before each operation
+      if (!this.isOnline) {
+        this.processing = false;
+        this.updatePendingIndicator();
+        return;
+      }
+
       const operation = this.queue.shift();
       try {
         const result = await this.execute(operation);
         this.reconcile(operation.tempId, result);
       } catch (error) {
+        // Check if session expired - don't retry, prompt reload
+        if (error.message.includes("Session expired")) {
+          this.handleSessionExpired();
+          this.processing = false;
+          return;
+        }
+
+        // Check if this is a network error (offline)
+        const isNetworkError =
+          error.message.includes("Failed to fetch") ||
+          error.message.includes("NetworkError") ||
+          error.message.includes("Network request failed");
+
+        if (isNetworkError) {
+          // Put operation back at front of queue and wait for reconnect
+          this.queue.unshift(operation);
+          this.setOnline(false);
+          this.processing = false;
+          return;
+        }
+
+        // For other errors, use retry logic
         if (operation.retryCount < this.retryDelays.length) {
           const delay = this.retryDelays[operation.retryCount];
           operation.retryCount++;
-          setTimeout(() => {
+          const timeoutId = setTimeout(() => {
+            this.pendingRetries.delete(operation.tempId);
             this.queue.unshift(operation);
             this.process();
           }, delay);
+          // Track the timeout so we can cancel it if we come back online
+          this.pendingRetries.set(operation.tempId, { timeoutId, operation });
         } else {
           this.handleError(operation, error);
         }
@@ -149,7 +227,18 @@ class OperationQueue {
         "Content-Type": "application/json",
       },
       body: requestBody ? JSON.stringify(requestBody) : undefined,
+      redirect: "manual", // Don't auto-follow redirects
     });
+
+    // Check for redirect (usually means session expired)
+    if (response.type === "opaqueredirect" || response.status === 0) {
+      throw new Error("Session expired - please refresh the page");
+    }
+
+    // Also check if we got redirected to login
+    if (response.redirected && response.url.includes("/login")) {
+      throw new Error("Session expired - please refresh the page");
+    }
 
     if (!response.ok) {
       throw new Error(`Operation failed: ${response.statusText}`);
@@ -216,6 +305,24 @@ class OperationQueue {
     if (operation.onError) {
       operation.onError(error);
     }
+  }
+
+  handleSessionExpired() {
+    // Clear queue - operations can't succeed without auth
+    this.queue = [];
+
+    // Show message and prompt reload
+    showFlash("Session expired. Please refresh the page to continue.");
+
+    // Mark all pending items as errors
+    for (const [tempId, { element }] of this.pendingItems) {
+      if (element) {
+        element.classList.remove("pending");
+        element.classList.add("error");
+      }
+    }
+    this.pendingItems.clear();
+    this.updatePendingIndicator();
   }
 
   registerPending(tempId, element, operation) {
@@ -485,6 +592,8 @@ const loadInventory = () => {
 
       ws.onopen = () => {
         wsReconnectAttempts = 0;
+        // Notify queue we're back online
+        operationQueue.setOnline(true);
         // Subscribe to inventory channel
         ws.send(
           JSON.stringify({
@@ -529,6 +638,9 @@ const loadInventory = () => {
       };
 
       ws.onclose = () => {
+        // Notify queue we're offline
+        operationQueue.setOnline(false);
+
         if (wsReconnectAttempts < wsMaxReconnectAttempts) {
           const delay = Math.min(
             1000 * Math.pow(2, wsReconnectAttempts),
@@ -539,13 +651,25 @@ const loadInventory = () => {
         }
       };
 
-      ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
+      ws.onerror = () => {
+        // onerror is always followed by onclose, so just let onclose handle it
       };
     } catch (error) {
-      console.error("WebSocket connection failed:", error);
+      operationQueue.setOnline(false);
     }
   }
+
+  // Also listen to browser online/offline events as backup
+  window.addEventListener("online", () => {
+    // Browser is back online, try to reconnect WebSocket
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      connectWebSocket();
+    }
+  });
+
+  window.addEventListener("offline", () => {
+    operationQueue.setOnline(false);
+  });
 
   function handleRemoteUpdate(data) {
     const { box, action } = data;
@@ -1008,6 +1132,9 @@ const loadInventory = () => {
     const tempToServerKey = new Map();
 
     createdItems.forEach((item) => {
+      // Capture name NOW, not at execution time (DOM might change if item is moved)
+      const itemName = item.li.querySelector(".item-name")?.innerText || "";
+
       const resolveParentKey = () => {
         if (!item.serverParentKey) return "";
         if (item.serverParentKey.startsWith("temp_")) {
@@ -1023,7 +1150,7 @@ const loadInventory = () => {
         url: inventoryForm.action,
         method: "POST",
         getBody: () => ({
-          name: item.li.querySelector(".item-name")?.innerText,
+          name: itemName,
           parent_key: resolveParentKey(),
         }),
         tempId: item.tempId,

@@ -323,21 +323,26 @@
      Optimistic UI / Pending Items
      ============================================ */
   .inventory-wrapper .tree li.pending {
-    opacity: 0.6;
     position: relative;
 
-    &::after {
+    // Only fade the immediate text content, not nested items
+    > details > summary > .item-name,
+    > details > summary > .item-description {
+      opacity: 0.6;
+    }
+
+    // Show spinner only on the pending item itself
+    > details > summary::after {
       content: "";
-      position: absolute;
-      top: 50%;
-      right: 10px;
-      width: 14px;
-      height: 14px;
-      margin-top: -7px;
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-left: 8px;
       border: 2px solid var(--muted);
       border-top-color: var(--blue);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
+      vertical-align: middle;
     }
   }
 
@@ -693,6 +698,15 @@
 
     .pending-text {
       color: var(--text);
+    }
+
+    &.offline {
+      border-color: var(--orange);
+
+      .pending-dot {
+        background: var(--orange);
+        animation: none;
+      }
     }
   }
 }
