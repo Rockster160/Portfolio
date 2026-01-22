@@ -5,15 +5,16 @@
   <div class="inventory-nav">
     <div class="current">
       <span>Adding to: <code class="hierarchy">Everything</code></span>
-      <span>
+      <span class="nav-actions">
         <button type="button" class="edit-button" disabled data-modal="edit-modal">Edit</button>
-        <button type="button" class="search-button" data-modal="search-modal"><%= fa :search %> Search</button>
+        <button type="button" class="search-button" data-modal="search-modal"><i class="ti ti-fa-search"></i> Search</button>
+        <button type="button" class="tools-button" data-modal="tools-modal"><i class="ti ti-fa-cog"></i></button>
       </span>
     </div>
 
     <%= form_with(url: :inventory, html: { class: "basic new-item-form inventory-inline-form" }) do |f| %>
       <%= f.hidden_field :parent_key, id: :new_box_parent_key %>
-      <%= f.text_field :name, placeholder: "Add Items", id: :new_box_name %>
+      <%= f.text_field :name, placeholder: "Add Items (or: Path > Path: Item1, Item2)", id: :new_box_name %>
       <%= f.submit "Add" %>
       <template id="box-template">
         <%= render partial: "inventory_management/box", locals: { box: Box.new } %>
@@ -85,6 +86,60 @@
         </template>
         <div class="search-results"></div>
       <% end %>
+    </div>
+  </div>
+
+  <div class="modal widget-modal" id="tools-modal" tabindex="-1">
+    <div class="status"></div>
+    <div class="close"><i class="ti ti-fa-close"></i></div>
+    <div class="modal-content tools-modal-content">
+      <h3>Import / Export</h3>
+      <div class="import-export-section">
+        <div class="export-options">
+          <h4>Export</h4>
+          <div class="btn-group">
+            <%= link_to "CSV", export_inventory_path(format: :csv), class: "btn btn-secondary" %>
+            <%= link_to "JSON", export_inventory_path(format: :json), class: "btn btn-secondary" %>
+          </div>
+        </div>
+        <div class="import-options">
+          <h4>Import</h4>
+          <%= form_with url: import_inventory_path, method: :post, multipart: true, class: "import-form", id: "import-form" do |f| %>
+            <%= f.file_field :file, accept: ".csv,.json", class: "file-input" %>
+            <%= f.submit "Import", class: "btn btn-primary" %>
+          <% end %>
+        </div>
+      </div>
+
+      <h3>Keyboard Shortcuts</h3>
+      <div class="keyboard-shortcuts">
+        <table class="shortcuts-table">
+          <tbody>
+            <tr><td><kbd>&uarr;</kbd> / <kbd>&darr;</kbd></td><td>Navigate items</td></tr>
+            <tr><td><kbd>&rarr;</kbd></td><td>Expand selected</td></tr>
+            <tr><td><kbd>&larr;</kbd></td><td>Collapse selected</td></tr>
+            <tr><td><kbd>Enter</kbd></td><td>Select focused item</td></tr>
+            <tr><td><kbd>Delete</kbd></td><td>Delete selected</td></tr>
+            <tr><td><kbd>n</kbd></td><td>Focus new item field</td></tr>
+            <tr><td><kbd>e</kbd></td><td>Edit selected</td></tr>
+            <tr><td><kbd>/</kbd></td><td>Open search</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Clear selection / close modal</td></tr>
+            <tr><td><kbd>Ctrl+Z</kbd></td><td>Undo</td></tr>
+            <tr><td><kbd>Ctrl+Shift+Z</kbd></td><td>Redo</td></tr>
+            <tr><td><kbd>Ctrl+A</kbd></td><td>Select all siblings</td></tr>
+            <tr><td><kbd>Ctrl+Click</kbd></td><td>Multi-select</td></tr>
+            <tr><td><kbd>Shift+Click</kbd></td><td>Range select</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Smart Add Syntax</h3>
+      <div class="smart-add-help">
+        <ul>
+          <li><code>Item1, Item2, Item3</code> &mdash; Add multiple items</li>
+          <li><code>Kitchen &gt; Drawer: Spoons, Forks</code> &mdash; Create path + items</li>
+        </ul>
+      </div>
     </div>
   </div>
 <% end %>

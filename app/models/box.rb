@@ -23,7 +23,7 @@ class Box < ApplicationRecord
 
   include Orderable
 
-  attr_accessor :reset_hierarchy
+  attr_accessor :reset_hierarchy, :do_not_broadcast
 
   belongs_to :user
   belongs_to :parent, class_name: "Box", primary_key: :param_key, foreign_key: :parent_key, optional: true, inverse_of: :boxes
@@ -38,6 +38,10 @@ class Box < ApplicationRecord
   orderable sort_order: :desc, scope: ->(box) {
     box.parent&.boxes || box.user.boxes.where(parent_key: nil)
   }
+
+  after_commit :broadcast_create, on: :create
+  after_commit :broadcast_update, on: :update
+  after_commit :broadcast_destroy, on: :destroy
 
   scope :within, ->(*box_ids) {
     where("hierarchy_ids @> ?", Array.wrap(box_ids).to_json)
@@ -79,9 +83,12 @@ class Box < ApplicationRecord
   #   (hierarchy_data.pluck(:name) + [name]).join(" > ")
   # end
 
-  # def serialize(opts={})
-  #   super.merge(hierarchy: hierarchy)
-  # end
+  def serialize(opts={})
+    result = super(opts.except(:include_hierarchy_ids))
+    # Always include hierarchy_ids when requested (for search results with clickable breadcrumbs)
+    result[:hierarchy_ids] = hierarchy_ids if opts[:include_hierarchy_ids]
+    result
+  end
 
   def to_param
     if param_key.blank?
@@ -92,7 +99,39 @@ class Box < ApplicationRecord
     param_key
   end
 
+  def broadcast!(action: :update, deleted: false)
+    return if do_not_broadcast
+
+    data = { box: serialize.merge(deleted: deleted), action: action, timestamp: Time.current.to_i }
+    ActionCable.server.broadcast("inventory_#{user_id}_channel", data)
+  end
+
   private
+
+  def broadcast_create
+    broadcast!(action: :create)
+  end
+
+  def broadcast_update
+    broadcast!(action: :update)
+  end
+
+  def broadcast_destroy
+    return if do_not_broadcast
+
+    # For destroyed records, we need to build the data manually since serialize may not work
+    data = {
+      box: {
+        id: id,
+        param_key: param_key,
+        parent_key: parent_key,
+        deleted: true
+      },
+      action: :destroy,
+      timestamp: Time.current.to_i
+    }
+    ActionCable.server.broadcast("inventory_#{user_id}_channel", data)
+  end
 
   def set_param_key
     param_length = 4 # 34^4 = 1,336,336 possible combinations.

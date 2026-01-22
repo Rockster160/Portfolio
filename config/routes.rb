@@ -131,7 +131,14 @@ Rails.application.routes.draw do
   end
 
   resource :inventory, controller: :inventory_management do
-    resources :boxes
+    resources :boxes do
+      collection do
+        get :batch
+      end
+    end
+    get :export
+    post :import
+    post :restore
   end
   get "/b/:id" => "inventory_management#box", as: :box
 

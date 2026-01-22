@@ -57,11 +57,107 @@ class InventoryManagementController < ApplicationController
     serialize box, merge: { deleted: true }
   end
 
+  def export
+    boxes = if params[:within].present?
+      current_user.boxes.within(params[:within])
+    else
+      current_user.boxes
+    end
+
+    format = params[:format] || "csv"
+
+    case format
+    when "json"
+      data = build_nested_export(boxes)
+      respond_to do |f|
+        f.json { render json: { data: data } }
+        f.html {
+          send_data data.to_json,
+            filename: "inventory_export_#{Time.current.strftime('%Y%m%d')}.json",
+            type: "application/json"
+        }
+      end
+    else # csv
+      csv_data = generate_csv_export(boxes)
+      respond_to do |f|
+        f.csv {
+          send_data csv_data,
+            filename: "inventory_export_#{Time.current.strftime('%Y%m%d')}.csv",
+            type: "text/csv"
+        }
+        f.html {
+          send_data csv_data,
+            filename: "inventory_export_#{Time.current.strftime('%Y%m%d')}.csv",
+            type: "text/csv"
+        }
+        f.json { render json: { data: csv_data } }
+      end
+    end
+  end
+
+  def import
+    file = params[:file]
+    format = params[:format] || (file&.original_filename&.end_with?(".json") ? "json" : "csv")
+    parent_key = params[:parent_key]
+
+    result = InventoryImporter.new(current_user, format: format, parent_key: parent_key).import(file)
+
+    if result[:success]
+      render json: { data: { imported: result[:count], boxes: result[:boxes].map(&:serialize) } }
+    else
+      render json: { error: result[:error] }, status: :unprocessable_entity
+    end
+  end
+
+  def restore
+    # Restore is a no-op for now since we don't have soft delete
+    # This endpoint exists for future undo functionality
+    box_id = params[:box_id]
+
+    # For now, just return an error since we can't actually restore
+    render json: { error: "Restore not available - item was permanently deleted" }, status: :unprocessable_entity
+  end
+
   private
 
   def box_params
     params.permit(:name, :notes, :description, :parent_key).tap { |whitelist|
       whitelist[:parent_key] = nil if whitelist[:parent_key].present? && current_user.boxes.where(param_key: whitelist[:parent_key]).empty?
     }
+  end
+
+  def build_nested_export(boxes)
+    root_boxes = boxes.where(parent_key: nil).ordered
+
+    build_children = ->(parent) {
+      {
+        param_key: parent.param_key,
+        name: parent.name,
+        notes: parent.notes,
+        description: parent.description,
+        children: parent.contents.map { |child| build_children.call(child) }
+      }
+    }
+
+    root_boxes.map { |box| build_children.call(box) }
+  end
+
+  def generate_csv_export(boxes)
+    require "csv"
+
+    CSV.generate(headers: true) do |csv|
+      csv << %w[param_key name notes description hierarchy parent_key]
+
+      boxes.ordered.each do |box|
+        csv << [
+          box.param_key,
+          box.name,
+          box.notes,
+          box.description,
+          box.hierarchy,
+          box.parent_key
+        ]
+      end
+    end
   end
 end

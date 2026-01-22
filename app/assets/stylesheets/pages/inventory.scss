@@ -317,4 +317,343 @@
       top: 12px;
     }
   }
+
+  /* ============================================
+     Optimistic UI / Pending Items
+     ============================================ */
+  .inventory-wrapper .tree li.pending {
+    opacity: 0.6;
+    position: relative;
+
+    &::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      width: 14px;
+      height: 14px;
+      margin-top: -7px;
+      border: 2px solid var(--muted);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .inventory-wrapper .tree li.error {
+    border-left: 3px solid #e74c3c;
+    background-color: rgba(231, 76, 60, 0.1);
+
+    .retry-btn {
+      font-size: 11px;
+      padding: 4px 8px;
+      margin-left: 8px;
+      background: #e74c3c;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+
+      &:hover {
+        background: #c0392b;
+      }
+    }
+  }
+
+  /* ============================================
+     Keyboard Focus / Navigation
+     ============================================ */
+  .inventory-wrapper .tree li.keyboard-focus {
+    &[data-type="item"],
+    &[data-type="box"] > details > summary {
+      outline: 2px solid var(--blue);
+      outline-offset: -2px;
+    }
+  }
+
+  /* ============================================
+     Bulk Selection
+     ============================================ */
+  .inventory-wrapper .tree li.bulk-selected {
+    &[data-type="item"],
+    &[data-type="box"] > details > summary {
+      background-color: rgba(77, 163, 255, 0.2) !important;
+      border-left: 3px solid var(--blue);
+    }
+  }
+
+  /* ============================================
+     Loading States
+     ============================================ */
+  .inventory-wrapper .tree details.loading > summary::after {
+    content: "";
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-left: 8px;
+    border: 2px solid var(--muted);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+  }
+
+  .inventory-wrapper .tree details.load-error > summary {
+    color: #e74c3c;
+
+    &::after {
+      content: " (load failed)";
+      font-size: 11px;
+      color: #e74c3c;
+    }
+  }
+
+  /* ============================================
+     Search Hierarchy Links
+     ============================================ */
+  #search-modal .search-results .item-hierarchy {
+    .hierarchy-link {
+      color: var(--blue);
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
+    .hierarchy-sep {
+      color: var(--muted);
+      margin: 0 2px;
+    }
+  }
+
+  /* ============================================
+     Tools Modal
+     ============================================ */
+  #tools-modal {
+    .modal-content {
+      background: var(--panel) !important;
+      color: var(--text) !important;
+    }
+
+    .tools-modal-content {
+      h3 {
+        font-size: 16px;
+        margin: 20px 0 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+
+        &:first-child {
+          margin-top: 0;
+        }
+      }
+
+      h4 {
+        font-size: 13px;
+        margin: 0 0 8px;
+        color: var(--muted);
+      }
+    }
+
+    .import-export-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+
+      @media (max-width: 500px) {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    // Override button styles for this modal
+    .btn,
+    .btn-secondary,
+    .btn-primary,
+    input[type="submit"] {
+      padding: 8px 16px !important;
+      border-radius: 6px !important;
+      font-size: 13px !important;
+      text-decoration: none !important;
+      cursor: pointer;
+      transition: background 0.2s;
+      box-shadow: none !important;
+      text-shadow: none !important;
+      margin: 0 !important;
+    }
+
+    .btn-secondary {
+      background: var(--bg) !important;
+      color: var(--text) !important;
+      border: 1px solid var(--border) !important;
+
+      &:hover {
+        background: var(--grey-dark) !important;
+      }
+    }
+
+    .btn-primary,
+    input[type="submit"] {
+      background: var(--blue) !important;
+      color: white !important;
+      border: 1px solid var(--blue) !important;
+
+      &:hover {
+        background: #3d93ef !important;
+      }
+    }
+
+    // Override form styles
+    .import-form {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin: 0 !important;
+      padding: 0 !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      overflow: visible !important;
+
+      .file-input {
+        flex: 1;
+        font-size: 12px;
+        border: 1px solid var(--border) !important;
+        background: var(--bg) !important;
+        color: var(--text) !important;
+        padding: 6px 8px !important;
+        border-radius: 4px !important;
+        margin: 0 !important;
+        width: auto !important;
+
+        &::file-selector-button {
+          background: var(--grey-dark);
+          color: var(--text);
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          padding: 4px 8px;
+          margin-right: 8px;
+          cursor: pointer;
+        }
+      }
+    }
+
+    .keyboard-shortcuts {
+      .shortcuts-table {
+        width: 100%;
+        border-collapse: collapse;
+
+        td {
+          padding: 6px 8px;
+          border-bottom: 1px solid var(--border);
+          font-size: 13px;
+          color: var(--text);
+
+          &:first-child {
+            width: 140px;
+            text-align: right;
+            padding-right: 16px;
+          }
+        }
+
+        kbd {
+          display: inline-block;
+          padding: 3px 6px;
+          font-family: monospace;
+          font-size: 12px;
+          background: var(--bg);
+          color: var(--text);
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          box-shadow: 0 1px 0 var(--border);
+        }
+      }
+    }
+
+    .smart-add-help {
+      ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+
+        li {
+          padding: 8px 0;
+          font-size: 13px;
+          color: var(--text);
+          border-bottom: 1px solid var(--border);
+
+          &:last-child {
+            border-bottom: none;
+          }
+
+          code {
+            background: var(--bg);
+            color: var(--muted);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+          }
+        }
+      }
+    }
+  }
+
+  /* ============================================
+     Nav Actions
+     ============================================ */
+  .inventory-nav .nav-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    button {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+
+      .ti {
+        font-size: 14px;
+      }
+    }
+
+    .tools-button {
+      padding: 8px 12px;
+    }
+  }
+
+  /* ============================================
+     Prefetching indicator
+     ============================================ */
+  .inventory-wrapper .tree details.prefetching > summary::after {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-left: 6px;
+    background: var(--blue);
+    border-radius: 50%;
+    opacity: 0.5;
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.8; }
+  }
+
+  /* ============================================
+     Item Description (hidden by default)
+     ============================================ */
+  .inventory-wrapper .tree .item-description {
+    display: none;
+  }
 }

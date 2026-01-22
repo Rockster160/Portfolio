@@ -1,10 +1,401 @@
 import { showModal, hideModal, openedModal } from "./modal.js";
 import { showFlash } from "./flash.js";
+// ============================================================================
+// History Management (Undo/Redo)
+// ============================================================================
+class History {
+  static states = [];
+  static savedIdx = 0;
+  static currentIdx = 0;
+  static maxStates = 50;
 
+  static deepEqual(dict1, dict2) {
+    return JSON.stringify(dict1) === JSON.stringify(dict2);
+  }
+
+  static add(newState) {
+    if (this.states.length > 0) {
+      const last = this.states[this.states.length - 1];
+      if (this.deepEqual(last, newState)) {
+        return false;
+      }
+    }
+    this.states = this.states
+      .slice(0, this.maxStates - 1)
+      .slice(0, this.currentIdx + 1);
+    this.states.push(newState);
+    this.currentIdx = this.states.length - 1;
+    return true;
+  }
+
+  static getState() {
+    return this.states[this.currentIdx];
+  }
+
+  static undo() {
+    if (this.currentIdx > 0) {
+      this.currentIdx--;
+    }
+    return this.getState();
+  }
+
+  static redo() {
+    if (this.currentIdx < this.states.length - 1) {
+      this.currentIdx++;
+    }
+    return this.getState();
+  }
+
+  static canUndo() {
+    return this.currentIdx > 0;
+  }
+
+  static canRedo() {
+    return this.currentIdx < this.states.length - 1;
+  }
+}
+
+// ============================================================================
+// Operation Queue for Async Processing
+// ============================================================================
+class OperationQueue {
+  queue = [];
+  processing = false;
+  pendingItems = new Map(); // tempId -> { element, operation }
+  retryDelays = [1000, 2000, 5000]; // Exponential backoff
+
+  constructor(inventory) {
+    this.inventory = inventory;
+  }
+
+  generateTempId() {
+    return `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  add(operation) {
+    // Only generate tempId if not already set (for optimistic updates)
+    if (!operation.tempId) {
+      operation.tempId = this.generateTempId();
+    }
+    operation.retryCount = 0;
+    this.queue.push(operation);
+    this.process();
+    return operation.tempId;
+  }
+
+  async process() {
+    if (this.processing || this.queue.length === 0) return;
+
+    this.processing = true;
+
+    while (this.queue.length > 0) {
+      const operation = this.queue.shift();
+      try {
+        const result = await this.execute(operation);
+        this.reconcile(operation.tempId, result);
+      } catch (error) {
+        if (operation.retryCount < this.retryDelays.length) {
+          const delay = this.retryDelays[operation.retryCount];
+          operation.retryCount++;
+          setTimeout(() => {
+            this.queue.unshift(operation);
+            this.process();
+          }, delay);
+        } else {
+          this.handleError(operation, error);
+        }
+      }
+    }
+
+    this.processing = false;
+  }
+
+  async execute(operation) {
+    const { type, url, method, body } = operation;
+
+    const response = await fetch(url, {
+      method: method || "POST",
+      headers: {
+        accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Operation failed: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  reconcile(tempId, serverData) {
+    const pending = this.pendingItems.get(tempId);
+    if (!pending) return;
+
+    const { element, operation } = pending;
+
+    if (element && serverData.data) {
+      // Update element with real server data
+      element.classList.remove("pending");
+      element.dataset.id = serverData.data.id || serverData.data.param_key;
+      element.dataset.key = serverData.data.param_key;
+
+      // Update the nested UL's data-box-id
+      const ul = element.querySelector("ul[data-box-id]");
+      if (ul) {
+        ul.dataset.boxId = serverData.data.param_key || serverData.data.id;
+      }
+    }
+
+    this.pendingItems.delete(tempId);
+
+    // Call the operation's success callback if provided
+    if (operation.onSuccess) {
+      operation.onSuccess(serverData);
+    }
+  }
+
+  handleError(operation, error) {
+    const pending = this.pendingItems.get(operation.tempId);
+    if (pending && pending.element) {
+      pending.element.classList.remove("pending");
+      pending.element.classList.add("error");
+
+      // Add retry button
+      const retryBtn = document.createElement("button");
+      retryBtn.className = "retry-btn";
+      retryBtn.innerHTML = "Retry";
+      retryBtn.onclick = (e) => {
+        e.stopPropagation();
+        pending.element.classList.remove("error");
+        pending.element.classList.add("pending");
+        retryBtn.remove();
+        operation.retryCount = 0;
+        this.add(operation);
+      };
+      pending.element
+        .querySelector(":scope > details > summary")
+        ?.appendChild(retryBtn);
+    }
+
+    this.pendingItems.delete(operation.tempId);
+    showFlash(error.message || "Operation failed");
+
+    if (operation.onError) {
+      operation.onError(error);
+    }
+  }
+
+  registerPending(tempId, element, operation) {
+    this.pendingItems.set(tempId, { element, operation });
+  }
+}
+
+// ============================================================================
+// Prefetch Cache for Lazy Loading
+// ============================================================================
+class PrefetchCache {
+  cache = new Map();
+  pending = new Set();
+  debounceTimer = null;
+  queuedIds = new Set();
+
+  async prefetch(boxId) {
+    if (this.cache.has(boxId) || this.pending.has(boxId)) return;
+
+    this.queuedIds.add(boxId);
+
+    // Debounce batch prefetch
+    clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => this.executeBatch(), 100);
+  }
+
+  async executeBatch() {
+    if (this.queuedIds.size === 0) return;
+
+    const ids = [...this.queuedIds];
+    this.queuedIds.clear();
+
+    ids.forEach((id) => this.pending.add(id));
+
+    try {
+      const response = await fetch(
+        `/inventory/boxes/batch?ids=${ids.join(",")}`,
+        {
+          headers: { accept: "application/json" },
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data) {
+          Object.entries(data.data).forEach(([id, children]) => {
+            this.cache.set(id, children);
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Prefetch failed:", error);
+    } finally {
+      ids.forEach((id) => this.pending.delete(id));
+    }
+  }
+
+  get(boxId) {
+    return this.cache.get(boxId);
+  }
+
+  has(boxId) {
+    return this.cache.has(boxId);
+  }
+
+  invalidate(boxId) {
+    this.cache.delete(boxId);
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
+
+// ============================================================================
+// Recently Viewed Tracker
+// ============================================================================
+class RecentlyViewed {
+  static storageKey = "inventory_recently_viewed";
+  static maxItems = 10;
+
+  static get() {
+    try {
+      return JSON.parse(localStorage.getItem(this.storageKey) || "[]");
+    } catch {
+      return [];
+    }
+  }
+
+  static add(box) {
+    if (!box || !box.id) return;
+
+    const recent = this.get().filter((item) => item.id !== box.id);
+    recent.unshift({
+      id: box.id,
+      param_key: box.param_key,
+      name: box.name,
+      hierarchy: box.hierarchy,
+      viewedAt: Date.now(),
+    });
+
+    localStorage.setItem(
+      this.storageKey,
+      JSON.stringify(recent.slice(0, this.maxItems)),
+    );
+  }
+
+  static clear() {
+    localStorage.removeItem(this.storageKey);
+  }
+}
+
+// ============================================================================
+// Multi-Select Manager
+// ============================================================================
+class SelectionManager {
+  selected = new Set();
+  lastSelected = null;
+
+  constructor(tree) {
+    this.tree = tree;
+  }
+
+  clear() {
+    this.selected.forEach((id) => {
+      const li = this.tree.querySelector(`li[data-id='${id}']`);
+      if (li) li.classList.remove("bulk-selected", "selected");
+    });
+    this.selected.clear();
+    this.lastSelected = null;
+  }
+
+  toggle(li) {
+    const id = li.dataset.id;
+    if (this.selected.has(id)) {
+      this.selected.delete(id);
+      li.classList.remove("bulk-selected");
+    } else {
+      this.selected.add(id);
+      li.classList.add("bulk-selected");
+    }
+    this.lastSelected = li;
+  }
+
+  selectRange(li) {
+    if (!this.lastSelected) {
+      this.toggle(li);
+      return;
+    }
+
+    const all = [
+      ...this.tree.querySelectorAll("li[data-type]:not([data-type='root'])"),
+    ];
+    const start = all.indexOf(this.lastSelected);
+    const end = all.indexOf(li);
+
+    if (start === -1 || end === -1) {
+      this.toggle(li);
+      return;
+    }
+
+    const [from, to] = start < end ? [start, end] : [end, start];
+    for (let i = from; i <= to; i++) {
+      const el = all[i];
+      if (!this.selected.has(el.dataset.id)) {
+        this.selected.add(el.dataset.id);
+        el.classList.add("bulk-selected");
+      }
+    }
+    this.lastSelected = li;
+  }
+
+  selectAllSiblings(li) {
+    if (!li) return;
+    const parentUl = li.parentElement;
+    if (!parentUl) return;
+
+    parentUl
+      .querySelectorAll(":scope > li[data-type]:not([data-type='root'])")
+      .forEach((sibling) => {
+        this.selected.add(sibling.dataset.id);
+        sibling.classList.add("bulk-selected");
+      });
+  }
+
+  getSelectedIds() {
+    return [...this.selected];
+  }
+
+  hasSelection() {
+    return this.selected.size > 0;
+  }
+
+  size() {
+    return this.selected.size;
+  }
+}
+
+// ============================================================================
+// Main Inventory Module
+// ============================================================================
 const loadInventory = () => {
   const tree = document.querySelector(".tree");
   const searchWrapper = document.querySelector(".inventory-nav");
   const inventoryForm = document.querySelector(".new-item-form");
+
+  // Defensive checks for required elements
+  if (!tree || !inventoryForm) {
+    return;
+  }
+
   const newBoxField = inventoryForm.querySelector("#new_box_name");
   const editModalBtn = document.querySelector(".edit-button");
   const editModal = document.querySelector("#edit-modal");
@@ -16,23 +407,153 @@ const loadInventory = () => {
   const searchResults = searchModal?.querySelector(".search-results");
   const breadcrumbWrapper = document.querySelector(".search-breadcrumbs");
 
+  // Initialize managers
+  const operationQueue = new OperationQueue(null);
+  const prefetchCache = new PrefetchCache();
+  const selectionManager = new SelectionManager(tree);
+
+  // WebSocket connection
+  let ws = null;
+  let wsReconnectAttempts = 0;
+  const wsMaxReconnectAttempts = 10;
+
+  function connectWebSocket() {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/cable`;
+
+    try {
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        wsReconnectAttempts = 0;
+        // Subscribe to inventory channel
+        ws.send(
+          JSON.stringify({
+            command: "subscribe",
+            identifier: JSON.stringify({ channel: "InventoryChannel" }),
+          }),
+        );
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "ping") return;
+          if (data.type === "welcome") return;
+          if (data.type === "confirm_subscription") return;
+
+          // Only process messages from InventoryChannel
+          if (data.identifier) {
+            const identifier = JSON.parse(data.identifier);
+            if (identifier.channel !== "InventoryChannel") return;
+          }
+
+          if (data.message && data.message.box) {
+            handleRemoteUpdate(data.message);
+          }
+        } catch (e) {
+          // Silently ignore parse errors for non-inventory messages
+        }
+      };
+
+      ws.onclose = () => {
+        if (wsReconnectAttempts < wsMaxReconnectAttempts) {
+          const delay = Math.min(
+            1000 * Math.pow(2, wsReconnectAttempts),
+            30000,
+          );
+          wsReconnectAttempts++;
+          setTimeout(connectWebSocket, delay);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+    } catch (error) {
+      console.error("WebSocket connection failed:", error);
+    }
+  }
+
+  function handleRemoteUpdate(data) {
+    const { box, action } = data;
+    if (!box) return;
+
+    // Validate this is inventory data (must have id or param_key)
+    if (!box.id && !box.param_key) return;
+
+    // Don't process updates for items we just created (they have pending state)
+    // Check by real ID first
+    const existingPendingById = tree.querySelector(
+      `li.pending[data-id='${box.id}']`,
+    );
+    if (existingPendingById) return;
+
+    // Also check for pending items with same name in same parent (temp IDs won't match real IDs)
+    if (action === "create" || !action) {
+      const parentSelector = box.parent_key
+        ? `ul[data-box-id='${box.parent_key}']`
+        : "ul[role=tree]";
+      const parentUl = tree.querySelector(parentSelector);
+      if (parentUl) {
+        const pendingItems = parentUl.querySelectorAll(":scope > li.pending");
+        for (const pending of pendingItems) {
+          const pendingName = pending.querySelector(".item-name")?.innerText;
+          if (pendingName === box.name) {
+            // This is our optimistic item - update it with real data instead of creating duplicate
+            pending.classList.remove("pending");
+            pending.dataset.id = box.id;
+            pending.dataset.key = box.param_key;
+            pending.dataset.hierarchy = box.hierarchy;
+            const ul = pending.querySelector("ul[data-box-id]");
+            if (ul) ul.dataset.boxId = box.param_key || box.id;
+            return;
+          }
+        }
+      }
+    }
+
+    upsertBox(box);
+  }
+
+  // Connect WebSocket on load
+  connectWebSocket();
+
+  // ============================================================================
+  // Box CRUD Operations
+  // ============================================================================
+
   function upsertBox(box) {
-    const existingLi = tree.querySelector(`li[data-id='${box.id}']`);
-    if (existingLi) {
-      if (box.deleted) {
+    // Validate box data - must have id and name to be valid inventory data
+    if (!box || (!box.id && !box.param_key)) {
+      return;
+    }
+
+    // Handle deleted boxes early - don't create new elements for delete broadcasts
+    if (box.deleted) {
+      const existingLi = tree.querySelector(`li[data-id='${box.id}']`);
+      if (existingLi) {
         const parentLi = existingLi.closest(
           `li[data-id='${existingLi.dataset.parentKey}']`,
         );
         const ul = parentLi
           ? parentLi.querySelector(`ul[data-box-id='${parentLi.dataset.id}']`)
           : null;
+
+        // Save state for undo
+        saveStateForUndo("delete", existingLi);
+
         existingLi.remove();
         if (ul && !ul.querySelector("li[data-type]")) {
           updateBoxType(parentLi);
         }
-        return;
       }
+      // Either way, return early - don't create elements for deleted items
+      return;
+    }
 
+    const existingLi = tree.querySelector(`li[data-id='${box.id}']`);
+    if (existingLi) {
       const oldHierarchy = existingLi.dataset.hierarchy || "";
       const oldParentKey = existingLi.dataset.parentKey || "";
 
@@ -64,17 +585,20 @@ const loadInventory = () => {
       return;
     }
 
+    // Create new element - requires name to be valid inventory data
     const template = inventoryForm.querySelector("#box-template");
-    if (box && template) {
+    if (box && box.name && template) {
       const clone = template.content.cloneNode(true);
       const li = clone.querySelector("li");
       li.dataset.id = box.id;
+      li.dataset.key = box.param_key;
       li.dataset.hierarchy = box.hierarchy;
       li.dataset.parentKey = box.parent_key || "";
       li.querySelector(".item-name").innerText = box.name;
       li.querySelector(".item-notes").innerText = box.notes || "";
       li.querySelector(".item-description").innerText = box.description || "";
-      li.querySelector("ul[data-box-id='']").dataset.boxId = box.id;
+      li.querySelector("ul[data-box-id='']").dataset.boxId =
+        box.param_key || box.id;
       li.dataset.type = box.empty ? "item" : "box";
 
       const parentLi = tree.querySelector(`li[data-id='${box.parent_key}']`);
@@ -96,6 +620,51 @@ const loadInventory = () => {
         li.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }
+  }
+
+  function createBoxOptimistically(name, parentKey) {
+    const template = inventoryForm.querySelector("#box-template");
+    if (!template) return null;
+
+    const tempId = operationQueue.generateTempId();
+    const clone = template.content.cloneNode(true);
+    const li = clone.querySelector("li");
+
+    li.dataset.id = tempId;
+    li.dataset.hierarchy = parentKey
+      ? `${tree.querySelector(`li[data-id='${parentKey}']`)?.dataset.hierarchy || ""} > ${name}`
+      : name;
+    li.dataset.parentKey = parentKey || "";
+    li.querySelector(".item-name").innerText = name;
+    li.querySelector("ul[data-box-id='']").dataset.boxId = tempId;
+    li.dataset.type = "item";
+    li.classList.add("pending");
+
+    const parentLi = parentKey
+      ? tree.querySelector(`li[data-id='${parentKey}']`)
+      : null;
+    const ul = parentLi
+      ? parentLi.querySelector(`ul[data-box-id='${parentKey}']`)
+      : tree.querySelector("ul[role=tree]");
+
+    if (ul) {
+      if (parentLi) {
+        parentLi.querySelector(".empty-box")?.remove();
+        updateBoxType(parentLi);
+        ul.prepend(li);
+      } else {
+        const rootEl = ul.querySelector("[data-type=root]");
+        if (rootEl) {
+          rootEl.after(li);
+        } else {
+          ul.prepend(li);
+        }
+      }
+      attachDetailsToggleListeners();
+      ensureDraggableRoots();
+    }
+
+    return { li, tempId };
   }
 
   function updateBoxType(li) {
@@ -128,7 +697,6 @@ const loadInventory = () => {
             : NodeFilter.FILTER_SKIP,
       },
     );
-    // skip the parent itself, start at first child
     walker.nextNode();
     let node = walker.currentNode;
     while (node) {
@@ -139,13 +707,163 @@ const loadInventory = () => {
       node = walker.nextNode();
     }
 
-    // refresh the header if the selected row is inside this subtree
     const selected = document.querySelector("li[data-type].selected");
     if (selected && parentLi.contains(selected)) {
       const codeEl = document.querySelector(".inventory-nav code.hierarchy");
       if (codeEl) codeEl.innerText = selected.dataset.hierarchy || "";
     }
   }
+
+  // ============================================================================
+  // Smart Parsing for Quick Add
+  // ============================================================================
+
+  function parseSmartInput(input) {
+    // Pattern: "Path > Path: Item1, Item2, Item3"
+    const pathMatch = input.match(/^(.+?):\s*(.+)$/);
+    if (pathMatch) {
+      const pathPart = pathMatch[1].trim();
+      const itemsPart = pathMatch[2].trim();
+      const path = pathPart.split(/\s*>\s*/);
+      const items = itemsPart.split(/\s*,\s*/).filter((i) => i);
+      return { path, items };
+    }
+
+    // Pattern: "Item1, Item2, Item3" - multiple items in current selection
+    if (input.includes(",")) {
+      const items = input.split(/\s*,\s*/).filter((i) => i);
+      return { path: [], items };
+    }
+
+    // Single item
+    return { path: [], items: [input] };
+  }
+
+  async function createItemsWithPath(parsed, parentKey) {
+    let currentParentKey = parentKey;
+
+    // Create path containers if needed
+    for (const pathPart of parsed.path) {
+      // Check if this container already exists
+      const existingContainer = findBoxByNameInParent(
+        pathPart,
+        currentParentKey,
+      );
+      if (existingContainer) {
+        currentParentKey = existingContainer.dataset.id;
+        continue;
+      }
+
+      // Create the container
+      const result = createBoxOptimistically(pathPart, currentParentKey);
+      if (result) {
+        const operation = {
+          type: "create",
+          url: inventoryForm.action,
+          method: "POST",
+          body: { name: pathPart, parent_key: currentParentKey || "" },
+          onSuccess: (data) => {
+            if (data.data) {
+              currentParentKey = data.data.param_key || data.data.id;
+            }
+          },
+        };
+        operation.tempId = result.tempId;
+        operationQueue.registerPending(result.tempId, result.li, operation);
+        await operationQueue.execute(operation);
+        operationQueue.reconcile(
+          result.tempId,
+          await Promise.resolve({ data: { id: currentParentKey } }),
+        );
+      }
+    }
+
+    // Create all items
+    for (const itemName of parsed.items) {
+      const result = createBoxOptimistically(itemName, currentParentKey);
+      if (result) {
+        const operation = {
+          type: "create",
+          url: inventoryForm.action,
+          method: "POST",
+          body: { name: itemName, parent_key: currentParentKey || "" },
+          tempId: result.tempId, // Must be set before registerPending
+        };
+        operationQueue.registerPending(result.tempId, result.li, operation);
+        operationQueue.add(operation);
+      }
+    }
+  }
+
+  function findBoxByNameInParent(name, parentKey) {
+    const parentLi = parentKey
+      ? tree.querySelector(`li[data-id='${parentKey}']`)
+      : null;
+    const ul = parentLi
+      ? parentLi.querySelector(`ul[data-box-id='${parentKey}']`)
+      : tree.querySelector("ul[role=tree]");
+
+    if (!ul) return null;
+
+    const items = ul.querySelectorAll(":scope > li[data-type]");
+    for (const item of items) {
+      const itemName = item.querySelector(".item-name")?.innerText;
+      if (itemName?.toLowerCase() === name.toLowerCase()) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  // ============================================================================
+  // Undo/Redo Support
+  // ============================================================================
+
+  function saveStateForUndo(action, element) {
+    const state = {
+      action,
+      timestamp: Date.now(),
+      data: {
+        id: element.dataset.id,
+        name: element.querySelector(".item-name")?.innerText,
+        notes: element.querySelector(".item-notes")?.innerText,
+        description: element.querySelector(".item-description")?.innerText,
+        parentKey: element.dataset.parentKey,
+        hierarchy: element.dataset.hierarchy,
+      },
+    };
+    History.add(state);
+  }
+
+  async function performUndo() {
+    const state = History.undo();
+    if (!state) return;
+
+    if (state.action === "delete") {
+      // Restore deleted item
+      const operation = {
+        type: "restore",
+        url: "/inventory/restore",
+        method: "POST",
+        body: { box_id: state.data.id },
+      };
+      operationQueue.add(operation);
+      showFlash("Restored item");
+    }
+  }
+
+  async function performRedo() {
+    const state = History.redo();
+    if (!state) {
+      showFlash("Nothing to redo");
+      return;
+    }
+    // Redo logic would go here
+  }
+
+  // ============================================================================
+  // Breadcrumbs and Search
+  // ============================================================================
 
   function buildBreadcrumbs(selectedLi) {
     breadcrumbWrapper.innerHTML = "";
@@ -156,14 +874,10 @@ const loadInventory = () => {
     const ul = document.createElement("ul");
     container.appendChild(ul);
 
-    // Always start with "Everything"
     ul.appendChild(
       makeBreadcrumb("Everything", "", !selectedLi && pageHierarchy === ""),
     );
 
-    // Choose hierarchy source:
-    // 1. selected row if you're selecting inside the tree
-    // 2. pageHierarchy if you're inside a box page
     let parts = [];
     let ids = [];
 
@@ -199,7 +913,6 @@ const loadInventory = () => {
     li.appendChild(input);
     li.appendChild(span);
 
-    // Make *entire pill* clickable
     li.addEventListener("click", () => {
       input.checked = true;
       breadcrumbWrapper.dispatchEvent(new Event("change"));
@@ -211,12 +924,12 @@ const loadInventory = () => {
   function ancestorIdChain(li) {
     const chain = [];
     let cur = li;
+
     while (cur && !isRootLi(cur)) {
       chain.unshift(cur.dataset.id);
-
-      debugger;
       cur = tree.querySelector(`li[data-id='${cur.dataset.parentKey}']`);
     }
+
     return chain;
   }
 
@@ -239,9 +952,7 @@ const loadInventory = () => {
     }
 
     fetch(
-      `${searchModalForm.action}?q=${encodeURIComponent(
-        q,
-      )}&within=${parentKey}`,
+      `${searchModalForm.action}?q=${encodeURIComponent(q)}&within=${parentKey}&with_ancestors=1`,
       {
         headers: { accept: "application/json" },
       },
@@ -268,7 +979,32 @@ const loadInventory = () => {
       li.dataset.id = box.id;
       li.dataset.type = box.empty ? "item" : "box";
 
-      clone.querySelector(".item-hierarchy").innerText = box.hierarchy || "";
+      // Show hierarchy as clickable breadcrumbs
+      const hierarchyEl = clone.querySelector(".item-hierarchy");
+      if (box.hierarchy) {
+        hierarchyEl.innerHTML = "";
+        const parts = box.hierarchy.split(" > ");
+        const ancestors = box.hierarchy_ids || [];
+        parts.forEach((part, idx) => {
+          if (idx > 0) {
+            const sep = document.createElement("span");
+            sep.className = "hierarchy-sep";
+            sep.innerText = " > ";
+            hierarchyEl.appendChild(sep);
+          }
+          const link = document.createElement("a");
+          link.href = ancestors[idx] ? `/b/${ancestors[idx]}` : "/inventory";
+          link.className = "hierarchy-link";
+          link.innerText = part;
+          link.onclick = (e) => {
+            e.stopPropagation();
+          };
+          hierarchyEl.appendChild(link);
+        });
+      } else {
+        hierarchyEl.innerText = box.hierarchy || "";
+      }
+
       clone.querySelector(".item-name").innerText = box.name;
       clone.querySelector(".item-description").innerText =
         box.description || "";
@@ -288,6 +1024,10 @@ const loadInventory = () => {
       searchResults.appendChild(clone);
     });
   }
+
+  // ============================================================================
+  // Drag and Drop
+  // ============================================================================
 
   function slotFromEvent(evt, targetLi) {
     const summary =
@@ -394,14 +1134,34 @@ const loadInventory = () => {
     document.addEventListener("dragstart", (evt) => {
       const li = evt.target.closest("li[data-type]");
       if (!li || isRootLi(li)) return;
-      dragEl = li;
-      li.classList.add("dragging");
+
+      // Handle multi-select drag
+      if (
+        selectionManager.hasSelection() &&
+        selectionManager.selected.has(li.dataset.id)
+      ) {
+        // Dragging selected items
+        dragEl = li;
+        li.classList.add("dragging");
+        selectionManager.selected.forEach((id) => {
+          const el = tree.querySelector(`li[data-id='${id}']`);
+          if (el) el.classList.add("dragging");
+        });
+      } else {
+        // Clear selection and drag single item
+        selectionManager.clear();
+        dragEl = li;
+        li.classList.add("dragging");
+      }
+
       evt.dataTransfer.setData("text/plain", li.dataset.id || "");
       evt.dataTransfer.effectAllowed = "move";
     });
 
     document.addEventListener("dragend", () => {
-      dragEl?.classList.remove("dragging");
+      document.querySelectorAll(".dragging").forEach((el) => {
+        el.classList.remove("dragging");
+      });
       dragEl = null;
       clearInto();
       clearGuide();
@@ -410,13 +1170,12 @@ const loadInventory = () => {
     document.addEventListener("dragover", (evt) => {
       if (!dragEl) return;
 
-      // Prefer row targeting (before/after/into)
       const row = evt.target.closest("li[data-type]");
       if (row && row !== dragEl && !row.contains(dragEl)) {
         evt.preventDefault();
 
         let slot = slotFromEvent(evt, row);
-        if (isRootLi(row)) slot = "into"; // root acts like its container top
+        if (isRootLi(row)) slot = "into";
 
         const summary =
           row.querySelector(":scope > details > summary") ||
@@ -439,7 +1198,6 @@ const loadInventory = () => {
               intoRow = row;
             }
           } else {
-            // "into" root → show top-of-top-level line for feedback
             const topUl = document.querySelector(".tree ul[role=tree]");
             const wr = topUl.getBoundingClientRect();
             const firstReal = [...topUl.children].find(
@@ -456,7 +1214,6 @@ const loadInventory = () => {
         return;
       }
 
-      // Container whitespace: compute index by Y inside the UL
       const ul = evt.target.closest("ul");
       if (ul) {
         const parentLi = ul.closest("li[data-type]") || rootLi();
@@ -480,10 +1237,10 @@ const loadInventory = () => {
           rows.length === 0
             ? wr.top + 6
             : insertAt === 0
-            ? rows[0].getBoundingClientRect().top - 2
-            : insertAt >= rows.length
-            ? rows[rows.length - 1].getBoundingClientRect().bottom - 2
-            : rows[insertAt].getBoundingClientRect().top - 2;
+              ? rows[0].getBoundingClientRect().top - 2
+              : insertAt >= rows.length
+                ? rows[rows.length - 1].getBoundingClientRect().bottom - 2
+                : rows[insertAt].getBoundingClientRect().top - 2;
 
         clearInto();
         setGuideAt(lineY, wr.left, wr.width);
@@ -519,7 +1276,6 @@ const loadInventory = () => {
               : Math.min(rows.length, idx + 1);
           insertRef = rows[insertAt] || null;
         } else {
-          // INTO row → top of its container
           parentLi = row;
           targetUl = targetUlFor(parentLi);
           if (!targetUl) return;
@@ -528,7 +1284,6 @@ const loadInventory = () => {
           insertRef = rows[0] || null;
         }
       } else {
-        // Container whitespace
         targetUl =
           evt.target.closest("ul") ||
           document.querySelector(".tree ul[role=tree]");
@@ -547,14 +1302,28 @@ const loadInventory = () => {
         insertRef = rows[insertAt] || null;
       }
 
-      // Prevent dropping INTO your own subtree (reordering in same parent is allowed)
       if (parentLi && dragEl.contains(parentLi)) return;
 
       const prevParentLi =
         dragEl.parentElement.closest("li[data-type]") || rootLi();
 
+      // Handle multi-select move
+      const itemsToMove = selectionManager.hasSelection()
+        ? selectionManager
+            .getSelectedIds()
+            .map((id) => tree.querySelector(`li[data-id='${id}']`))
+            .filter(Boolean)
+        : [dragEl];
+
       // Optimistic move
-      safeInsert(targetUl, dragEl, insertRef, insertAt);
+      itemsToMove.forEach((item, idx) => {
+        if (idx === 0) {
+          safeInsert(targetUl, item, insertRef, insertAt);
+        } else {
+          const prev = itemsToMove[idx - 1];
+          targetUl.insertBefore(item, prev.nextSibling);
+        }
+      });
 
       updateBoxType(prevParentLi);
       updateBoxType(parentLi);
@@ -587,24 +1356,317 @@ const loadInventory = () => {
         .finally(() => {
           clearInto();
           clearGuide();
-          dragEl?.classList.remove("dragging");
+          document.querySelectorAll(".dragging").forEach((el) => {
+            el.classList.remove("dragging");
+          });
           dragEl = null;
+          selectionManager.clear();
         });
     });
   }
 
-  document.addEventListener("keypress", (evt) => {
-    if (evt.target.matches("input, textarea")) return;
-    if (openedModal()) return;
+  // ============================================================================
+  // Keyboard Shortcuts
+  // ============================================================================
 
-    newBoxField.focus();
+  let focusedIndex = -1;
+
+  function getNavigableItems() {
+    // Only return visible items (not inside collapsed details)
+    return [
+      ...tree.querySelectorAll("li[data-type]:not([data-type='root'])"),
+    ].filter((li) => {
+      // Check if any ancestor details is closed
+      let parent = li.parentElement;
+      while (parent && parent !== tree) {
+        if (parent.tagName === "DETAILS" && !parent.open) {
+          return false;
+        }
+        parent = parent.parentElement;
+      }
+      return true;
+    });
+  }
+
+  function getFocusedItem() {
+    const items = getNavigableItems();
+    return items[focusedIndex] || null;
+  }
+
+  function setFocusedItem(li, alsoSelect = true) {
+    const items = getNavigableItems();
+    focusedIndex = items.indexOf(li);
+    items.forEach((item, idx) => {
+      if (idx === focusedIndex) {
+        item.classList.add("keyboard-focus");
+        item.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } else {
+        item.classList.remove("keyboard-focus");
+      }
+    });
+    // Also select the item so new items get added to the focused box
+    if (alsoSelect && li && !isRootLi(li)) {
+      selectBox(li);
+    }
+  }
+
+  function navigateUp() {
+    const items = getNavigableItems();
+    if (items.length === 0) return;
+    focusedIndex = Math.max(0, focusedIndex - 1);
+    setFocusedItem(items[focusedIndex]);
+  }
+
+  function navigateDown() {
+    const items = getNavigableItems();
+    if (items.length === 0) return;
+    focusedIndex = Math.min(items.length - 1, focusedIndex + 1);
+    setFocusedItem(items[focusedIndex]);
+  }
+
+  function expandFocused() {
+    const item = getFocusedItem();
+    if (!item) return;
+    const details = item.querySelector(":scope > details");
+    if (details && !details.open) {
+      details.open = true;
+    }
+  }
+
+  function collapseFocused() {
+    const item = getFocusedItem();
+    if (!item) return;
+    const details = item.querySelector(":scope > details");
+    if (details && details.open) {
+      details.open = false;
+    }
+  }
+
+  function selectFocused() {
+    const item = getFocusedItem();
+    if (item) {
+      selectBox(item);
+    }
+  }
+
+  function deleteBox(item) {
+    if (!item || isRootLi(item)) return;
+
+    const itemName = item.querySelector(".item-name")?.innerText || "this item";
+    if (
+      !confirm(
+        `Are you sure you want to delete "${itemName}" and ALL of its contents? This is PERMANENT.`,
+      )
+    ) {
+      return;
+    }
+
+    saveStateForUndo("delete", item);
+
+    // Optimistically remove the item
+    const parentLi = item.parentElement?.closest("li[data-type]");
+    const nextSibling = item.nextElementSibling;
+    const parentElement = item.parentElement;
+    item.remove();
+    updateBoxType(parentLi);
+
+    fetch(editBoxForm.action, {
+      method: "DELETE",
+      headers: {
+        accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ box_id: item.dataset.id }),
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("Delete failed");
+        return r.json();
+      })
+      .catch((err) => {
+        // Restore the item on failure
+        if (nextSibling) {
+          parentElement?.insertBefore(item, nextSibling);
+        } else {
+          parentElement?.appendChild(item);
+        }
+        updateBoxType(parentLi);
+        showFlash(err.message || "Delete failed");
+      });
+  }
+
+  function deleteFocused() {
+    deleteBox(getFocusedItem());
+  }
+
+  function openEditModal() {
+    showModal("edit-modal");
+    // Focus the name field after modal opens
+    setTimeout(() => {
+      editBoxForm.querySelector("input[name='name']")?.focus();
+    }, 50);
+  }
+
+  function closeEditModal() {
+    // Blur all fields before closing so keyboard shortcuts work
+    editModal?.querySelectorAll("input, textarea").forEach((el) => el.blur());
+    hideModal("edit-modal");
+    editBoxForm.reset();
+  }
+
+  function editFocused() {
+    const item = getFocusedItem();
+    if (item && !isRootLi(item)) {
+      selectBox(item);
+      openEditModal();
+    }
+  }
+
+  document.addEventListener("keydown", (evt) => {
+    // Don't handle shortcuts when typing in inputs
+    if (evt.target.matches("input, textarea")) {
+      // Escape from input field
+      if (evt.key === "Escape") {
+        evt.target.blur();
+        evt.preventDefault();
+      }
+      return;
+    }
+
+    // Don't handle shortcuts when modal is open (except Escape)
+    if (openedModal() && evt.key !== "Escape") {
+      return;
+    }
+
+    const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+    const ctrlKey = isMac ? evt.metaKey : evt.ctrlKey;
+
+    switch (evt.key) {
+      case "ArrowUp":
+        evt.preventDefault();
+        navigateUp();
+        break;
+      case "ArrowDown":
+        evt.preventDefault();
+        navigateDown();
+        break;
+      case "ArrowRight":
+        evt.preventDefault();
+        expandFocused();
+        break;
+      case "ArrowLeft":
+        evt.preventDefault();
+        collapseFocused();
+        break;
+      case "Enter":
+        evt.preventDefault();
+        selectFocused();
+        break;
+      case "Delete":
+      case "Backspace":
+        if (!ctrlKey) {
+          evt.preventDefault();
+          deleteFocused();
+        }
+        break;
+      case "n":
+        if (!ctrlKey) {
+          evt.preventDefault();
+          newBoxField.focus();
+        }
+        break;
+      case "e":
+        if (!ctrlKey) {
+          evt.preventDefault();
+          editFocused();
+        }
+        break;
+      case "/":
+        evt.preventDefault();
+        searchModal?.dispatchEvent(new Event("modal:show"));
+        break;
+      case "Escape":
+        selectionManager.clear();
+        tree.querySelectorAll(".keyboard-focus").forEach((el) => {
+          el.classList.remove("keyboard-focus");
+        });
+        focusedIndex = -1;
+        hideModal();
+        break;
+      case "z":
+        if (ctrlKey && !evt.shiftKey) {
+          evt.preventDefault();
+          performUndo();
+        } else if (ctrlKey && evt.shiftKey) {
+          evt.preventDefault();
+          performRedo();
+        }
+        break;
+      case "a":
+        if (ctrlKey) {
+          evt.preventDefault();
+          const focused = getFocusedItem();
+          if (focused) {
+            selectionManager.selectAllSiblings(focused);
+          }
+        }
+        break;
+      default:
+        // Any other key focuses the new item field (except modifiers)
+        if (
+          !ctrlKey &&
+          !evt.altKey &&
+          evt.key.length === 1 &&
+          evt.key !== " "
+        ) {
+          newBoxField.focus();
+        }
+    }
   });
+
+  // ============================================================================
+  // Form Handling
+  // ============================================================================
 
   document.addEventListener("submit", (evt) => {
     const form = evt.target;
     if (!form) return;
 
     evt.preventDefault();
+
+    // Handle new item form with smart parsing
+    if (form === inventoryForm) {
+      const inputValue = newBoxField.value.trim();
+      if (!inputValue) return;
+
+      const parentKey =
+        inventoryForm.querySelector("#new_box_parent_key")?.value || "";
+      const parsed = parseSmartInput(inputValue);
+
+      if (parsed.path.length > 0 || parsed.items.length > 1) {
+        // Complex input - use smart parsing
+        createItemsWithPath(parsed, parentKey);
+        form.reset();
+        return;
+      }
+
+      // Simple single item - use optimistic create
+      const result = createBoxOptimistically(parsed.items[0], parentKey);
+      if (result) {
+        const operation = {
+          type: "create",
+          url: form.action,
+          method: form.method,
+          body: { name: parsed.items[0], parent_key: parentKey },
+          tempId: result.tempId, // Must be set before registerPending
+        };
+        operationQueue.registerPending(result.tempId, result.li, operation);
+        operationQueue.add(operation);
+      }
+      form.reset();
+      return;
+    }
+
+    // Handle edit form
     const formData = new FormData(form);
     fetch(form.action, {
       method: form.method,
@@ -617,23 +1679,23 @@ const loadInventory = () => {
         if (response.ok) {
           return response.json();
         } else {
-          // TODO: Controller should render JSON errors
           throw new Error("Invalid box (ensure name is entered)");
         }
       })
       .then((data) => {
         const box = data.data;
         upsertBox(box);
-        form.reset();
-        hideModal("edit-modal");
+        closeEditModal();
       })
       .catch((error) => {
         showFlash(error.message);
-        // console.error("There was a problem with the fetch operation:", error);
       });
   });
 
-  // If we are on a box page, read its hierarchy for default search scope
+  // ============================================================================
+  // Page Context
+  // ============================================================================
+
   const pageHierarchy =
     document.querySelector(".inventory-nav code.hierarchy")?.innerText.trim() ||
     "";
@@ -641,7 +1703,6 @@ const loadInventory = () => {
   const pageHierarchyIds = [];
 
   if (pageHierarchy && tree) {
-    // Convert “A > B > C” into parent-key chain
     let cur = tree.querySelector(`li[data-hierarchy='${pageHierarchy}']`);
     while (cur && !isRootLi(cur)) {
       pageHierarchyIds.unshift(cur.dataset.id);
@@ -649,71 +1710,107 @@ const loadInventory = () => {
     }
   }
 
-  searchModal.addEventListener("modal:show", function () {
-    const selected = document.querySelector("li[data-type].selected");
-    buildBreadcrumbs(selected);
-    searchModal.querySelector(".modal-content").prepend(breadcrumbWrapper);
-    showModal("search-modal");
-    setTimeout(() => searchModalField.focus(), 50);
-  });
+  // ============================================================================
+  // Modal Handling
+  // ============================================================================
+
+  if (searchModal) {
+    searchModal.addEventListener("modal:show", function () {
+      const selected = document.querySelector("li[data-type].selected");
+      buildBreadcrumbs(selected);
+      searchModal.querySelector(".modal-content")?.prepend(breadcrumbWrapper);
+      showModal("search-modal");
+      if (searchModalField) {
+        setTimeout(() => searchModalField.focus(), 50);
+      }
+    });
+  }
 
   searchModalField?.addEventListener("input", triggerSearch);
 
-  breadcrumbWrapper.addEventListener("change", () => {
-    triggerSearch();
-  });
+  if (breadcrumbWrapper) {
+    breadcrumbWrapper.addEventListener("change", () => {
+      triggerSearch();
+    });
+  }
+
+  // ============================================================================
+  // Click Handling
+  // ============================================================================
 
   document.addEventListener("click", function (evt) {
     const cog = evt.target.closest(".edit-box");
     if (cog) {
       selectBox(cog.closest("li[data-type]"));
-      showModal("edit-modal");
+      openEditModal();
       return;
     }
 
     const li = evt.target.closest("li[data-type]");
-    if (li) {
-      return selectBox(li);
+    if (li && !isRootLi(li)) {
+      // Handle multi-select with Ctrl/Cmd or Shift
+      if (evt.ctrlKey || evt.metaKey) {
+        selectionManager.toggle(li);
+        return;
+      }
+      if (evt.shiftKey) {
+        selectionManager.selectRange(li);
+        return;
+      }
+
+      // Single click - clear selection and select
+      selectionManager.clear();
+      selectBox(li);
+      setFocusedItem(li);
+
+      // Track recently viewed
+      RecentlyViewed.add({
+        id: li.dataset.id,
+        param_key: li.dataset.key,
+        name: li.querySelector(".item-name")?.innerText,
+        hierarchy: li.dataset.hierarchy,
+      });
+
+      return;
     }
 
     const btn = evt.target.closest(".delete-button");
     if (btn) {
-      if (
-        !confirm(
-          "Are you sure you want to delete this box and ALL of it's contents? This is PERMANENT and CANNOT be undone.",
-        )
-      ) {
-        return;
-      }
       evt.preventDefault();
-      fetch(editBoxForm.action, {
-        method: "DELETE",
-        headers: {
-          accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ box_id: editBoxForm.box_id.value }),
-      })
-        .then((response) => {
-          if (response.ok) {
-            return response.json();
-          } else {
-            throw new Error("Network response was not ok");
-          }
-        })
-        .then((data) => {
-          const box = data.data;
-          upsertBox(box);
-          editBoxForm.reset();
-          hideModal("edit-modal");
-        })
-        .catch((error) => {
-          console.error("There was a problem with the fetch operation:", error);
-        });
+
+      const boxId = editBoxForm.box_id.value;
+      const existingLi = tree.querySelector(`li[data-id='${boxId}']`);
+
+      if (existingLi) {
+        closeEditModal();
+        deleteBox(existingLi);
+      }
 
       return;
     }
   });
+
+  // ============================================================================
+  // Prefetch on Hover
+  // ============================================================================
+
+  document.addEventListener("mouseover", (evt) => {
+    const li = evt.target.closest("li[data-type='box']");
+    if (!li) return;
+
+    const details = li.querySelector(":scope > details");
+    if (
+      details &&
+      !details.open &&
+      details.classList.contains("pending-load")
+    ) {
+      prefetchCache.prefetch(li.dataset.id);
+    }
+  });
+
+  // ============================================================================
+  // Details Toggle (Lazy Loading)
+  // ============================================================================
 
   function attachDetailsToggleListeners() {
     const detailsElements = document.querySelectorAll(
@@ -728,11 +1825,48 @@ const loadInventory = () => {
       details.classList.add(needsLoad ? "pending-load" : "loaded");
 
       details.addEventListener("toggle", () => {
-        if (!details.open) return;
+        if (!details.open) {
+          return;
+        }
 
         if (loading) {
           return;
         } else if (needsLoad) {
+          // Check prefetch cache first
+          const cached = prefetchCache.get(wrapper?.dataset.id);
+          if (cached) {
+            // Use cached data
+            const ul = details.querySelector(":scope > ul");
+            if (ul) {
+              ul.innerHTML = "";
+              cached.forEach((box) => {
+                const template = inventoryForm.querySelector("#box-template");
+                if (template) {
+                  const clone = template.content.cloneNode(true);
+                  const li = clone.querySelector("li");
+                  li.dataset.id = box.id;
+                  li.dataset.key = box.param_key;
+                  li.dataset.hierarchy = box.hierarchy;
+                  li.dataset.parentKey = box.parent_key || "";
+                  li.querySelector(".item-name").innerText = box.name;
+                  li.querySelector(".item-notes").innerText = box.notes || "";
+                  li.querySelector(".item-description").innerText =
+                    box.description || "";
+                  li.querySelector("ul[data-box-id='']").dataset.boxId =
+                    box.param_key || box.id;
+                  li.dataset.type = box.empty ? "item" : "box";
+                  ul.appendChild(li);
+                }
+              });
+            }
+            details.classList.remove("pending-load");
+            details.classList.add("loaded");
+            needsLoad = false;
+            attachDetailsToggleListeners();
+            ensureDraggableRoots();
+            return;
+          }
+
           loading = true;
           details.classList.add("loading");
           fetch(`/inventory/boxes/${wrapper.dataset.id}`)
@@ -747,7 +1881,7 @@ const loadInventory = () => {
               } else {
                 ul.innerHTML = html;
               }
-              details.classList.remove("pending-load");
+              details.classList.remove("pending-load", "loading");
               details.classList.add("loaded");
               needsLoad = false;
               loading = false;
@@ -757,8 +1891,9 @@ const loadInventory = () => {
             })
             .catch((error) => {
               console.error("Error loading box contents:", error);
-              details.classList.remove("pending-load");
+              details.classList.remove("pending-load", "loading");
               details.classList.add("load-error");
+              loading = false;
             });
         }
       });
@@ -766,6 +1901,10 @@ const loadInventory = () => {
   }
   attachDetailsToggleListeners();
   attachDragAndDrop();
+
+  // ============================================================================
+  // Box Selection
+  // ============================================================================
 
   function selectBox(li) {
     document.querySelectorAll("li[data-type].selected").forEach((el) => {
