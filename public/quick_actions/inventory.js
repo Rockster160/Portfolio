@@ -74,7 +74,8 @@ class OperationQueue {
     const indicator = document.createElement("div");
     indicator.id = "pending-indicator";
     indicator.className = "pending-indicator hidden";
-    indicator.innerHTML = '<span class="pending-dot"></span><span class="pending-text">Syncing...</span>';
+    indicator.innerHTML =
+      '<span class="pending-dot"></span><span class="pending-text">Syncing...</span>';
     document.body.appendChild(indicator);
   }
 
@@ -443,6 +444,33 @@ const loadInventory = () => {
   const prefetchCache = new PrefetchCache();
   const selectionManager = new SelectionManager(tree);
 
+  // Track recently moved items to skip repositioning on our own WebSocket updates
+  // Key: param_key, Value: timestamp when moved
+  const recentlyMovedItems = new Map();
+  const RECENTLY_MOVED_TTL = 5000; // 5 seconds
+
+  function markAsRecentlyMoved(paramKey) {
+    if (!paramKey) return;
+    recentlyMovedItems.set(paramKey, Date.now());
+    // Clean up old entries
+    for (const [key, time] of recentlyMovedItems) {
+      if (Date.now() - time > RECENTLY_MOVED_TTL) {
+        recentlyMovedItems.delete(key);
+      }
+    }
+  }
+
+  function wasRecentlyMoved(paramKey) {
+    if (!paramKey) return false;
+    const movedTime = recentlyMovedItems.get(paramKey);
+    if (!movedTime) return false;
+    if (Date.now() - movedTime > RECENTLY_MOVED_TTL) {
+      recentlyMovedItems.delete(paramKey);
+      return false;
+    }
+    return true;
+  }
+
   // WebSocket connection
   let ws = null;
   let wsReconnectAttempts = 0;
@@ -480,10 +508,18 @@ const loadInventory = () => {
           if (identifier.channel !== "InventoryChannel") return;
 
           // Additional validation: message must have box object with expected properties
-          if (data.message && data.message.box && typeof data.message.box === "object") {
+          if (
+            data.message &&
+            data.message.box &&
+            typeof data.message.box === "object"
+          ) {
             const box = data.message.box;
             // Must have either id or param_key, and must not look like list data
-            if ((box.id || box.param_key) && !box.hasOwnProperty("important") && !box.hasOwnProperty("permanent")) {
+            if (
+              (box.id || box.param_key) &&
+              !box.hasOwnProperty("important") &&
+              !box.hasOwnProperty("permanent")
+            ) {
               handleRemoteUpdate(data.message);
             }
           }
@@ -521,11 +557,9 @@ const loadInventory = () => {
     // Don't process updates for items we just created (they have pending state)
     // Check by param_key first (DOM uses param_key in data-id/data-key)
     const boxKey = box.param_key || box.id;
-    const existingPendingByKey = tree.querySelector(
-      `li.pending[data-key='${boxKey}']`,
-    ) || tree.querySelector(
-      `li.pending[data-id='${boxKey}']`,
-    );
+    const existingPendingByKey =
+      tree.querySelector(`li.pending[data-key='${boxKey}']`) ||
+      tree.querySelector(`li.pending[data-id='${boxKey}']`);
     if (existingPendingByKey) return;
 
     // Also check for pending items with same name in same parent (temp IDs won't match real IDs)
@@ -552,7 +586,10 @@ const loadInventory = () => {
       }
     }
 
-    upsertBox(box);
+    // Skip repositioning for items we recently moved locally
+    // (our own WebSocket broadcast would have stale sibling sort_orders)
+    const skipReposition = wasRecentlyMoved(boxKey);
+    upsertBox(box, { skipReposition });
   }
 
   // Connect WebSocket on load
@@ -578,16 +615,19 @@ const loadInventory = () => {
 
     // Handle deleted boxes early - don't create new elements for delete broadcasts
     if (box.deleted) {
-      const existingLi = tree.querySelector(`li[data-key='${boxKey}']`) ||
-                         tree.querySelector(`li[data-id='${boxKey}']`);
+      const existingLi =
+        tree.querySelector(`li[data-key='${boxKey}']`) ||
+        tree.querySelector(`li[data-id='${boxKey}']`);
       if (existingLi) {
-        const parentLi = existingLi.closest(
-          `li[data-key='${existingLi.dataset.parentKey}']`,
-        ) || existingLi.closest(
-          `li[data-id='${existingLi.dataset.parentKey}']`,
-        );
+        const parentLi =
+          existingLi.closest(
+            `li[data-key='${existingLi.dataset.parentKey}']`,
+          ) ||
+          existingLi.closest(`li[data-id='${existingLi.dataset.parentKey}']`);
         const ul = parentLi
-          ? parentLi.querySelector(`ul[data-box-id='${parentLi.dataset.key || parentLi.dataset.id}']`)
+          ? parentLi.querySelector(
+              `ul[data-box-id='${parentLi.dataset.key || parentLi.dataset.id}']`,
+            )
           : null;
 
         // Save state for undo
@@ -602,8 +642,9 @@ const loadInventory = () => {
       return;
     }
 
-    const existingLi = tree.querySelector(`li[data-key='${boxKey}']`) ||
-                       tree.querySelector(`li[data-id='${boxKey}']`);
+    const existingLi =
+      tree.querySelector(`li[data-key='${boxKey}']`) ||
+      tree.querySelector(`li[data-id='${boxKey}']`);
     if (existingLi) {
       const oldHierarchy = existingLi.dataset.hierarchy || "";
       const oldParentKey = existingLi.dataset.parentKey || "";
@@ -623,18 +664,23 @@ const loadInventory = () => {
       // Helper to get parent li (handles empty parent_key for top level)
       const getParentLi = (parentKey) => {
         if (!parentKey) return tree.querySelector("li[data-type='root']");
-        return tree.querySelector(`li[data-key='${parentKey}']`) ||
-               tree.querySelector(`li[data-id='${parentKey}']`) ||
-               tree.querySelector("li[data-type='root']");
+        return (
+          tree.querySelector(`li[data-key='${parentKey}']`) ||
+          tree.querySelector(`li[data-id='${parentKey}']`) ||
+          tree.querySelector("li[data-type='root']")
+        );
       };
 
       // Helper to get target UL for a parent
       const getTargetUl = (parentLi) => {
         if (!parentLi) return tree.querySelector("ul[role='tree']");
-        if (parentLi.dataset.type === "root") return tree.querySelector("ul[role='tree']");
+        if (parentLi.dataset.type === "root")
+          return tree.querySelector("ul[role='tree']");
         const key = parentLi.dataset.key || parentLi.dataset.id;
-        return parentLi.querySelector(":scope > details > ul") ||
-               parentLi.querySelector(`ul[data-box-id='${key}']`);
+        return (
+          parentLi.querySelector(":scope > details > ul") ||
+          parentLi.querySelector(`ul[data-box-id='${key}']`)
+        );
       };
 
       const oldParentLi = getParentLi(oldParentKey);
@@ -643,8 +689,8 @@ const loadInventory = () => {
 
       // Check if new parent exists in DOM (don't fall back to root for non-root items)
       const newParentLi = box.parent_key
-        ? (tree.querySelector(`li[data-key='${box.parent_key}']`) ||
-           tree.querySelector(`li[data-id='${box.parent_key}']`))
+        ? tree.querySelector(`li[data-key='${box.parent_key}']`) ||
+          tree.querySelector(`li[data-id='${box.parent_key}']`)
         : tree.querySelector("li[data-type='root']");
 
       // If new parent is NOT in DOM (not loaded due to lazy loading), ignore this update.
@@ -660,11 +706,17 @@ const loadInventory = () => {
 
         if (targetUl) {
           // Remove empty-box placeholder if present
-          const emptyPlaceholder = targetUl.querySelector(":scope > li.empty-box");
+          const emptyPlaceholder = targetUl.querySelector(
+            ":scope > li.empty-box",
+          );
           if (emptyPlaceholder) emptyPlaceholder.remove();
 
           // Find correct position based on sort_order (DESC - higher values first)
-          const siblings = [...targetUl.querySelectorAll(":scope > li[data-type]:not([data-type='root'])")];
+          const siblings = [
+            ...targetUl.querySelectorAll(
+              ":scope > li[data-type]:not([data-type='root'])",
+            ),
+          ];
           let insertBefore = null;
           for (const sibling of siblings) {
             if (sibling === existingLi) continue;
@@ -701,8 +753,8 @@ const loadInventory = () => {
     if (box && box.name && template) {
       // If parent isn't loaded, don't create the element - it will be loaded when parent is expanded
       const parentLi = box.parent_key
-        ? (tree.querySelector(`li[data-key='${box.parent_key}']`) ||
-           tree.querySelector(`li[data-id='${box.parent_key}']`))
+        ? tree.querySelector(`li[data-key='${box.parent_key}']`) ||
+          tree.querySelector(`li[data-id='${box.parent_key}']`)
         : null;
 
       // If box has a parent_key but parent isn't in DOM, skip creating (parent not loaded)
@@ -900,13 +952,18 @@ const loadInventory = () => {
 
   function createItemsWithPath(parsed, parentKey) {
     let currentParentKey = parentKey;
-    let currentParentLi = parentKey ? tree.querySelector(`li[data-id='${parentKey}']`) : null;
+    let currentParentLi = parentKey
+      ? tree.querySelector(`li[data-id='${parentKey}']`)
+      : null;
     const createdItems = [];
 
     // Create path containers if needed
     for (const pathPart of parsed.path) {
       // Check if this container already exists
-      const existingContainer = findBoxByNameInParent(pathPart, currentParentKey);
+      const existingContainer = findBoxByNameInParent(
+        pathPart,
+        currentParentKey,
+      );
       if (existingContainer) {
         currentParentKey = existingContainer.dataset.id;
         currentParentLi = existingContainer;
@@ -914,7 +971,11 @@ const loadInventory = () => {
       }
 
       // Create the container - pass the parent li directly for reliable nesting
-      const result = createBoxOptimisticallyWithParent(pathPart, currentParentKey, currentParentLi);
+      const result = createBoxOptimisticallyWithParent(
+        pathPart,
+        currentParentKey,
+        currentParentLi,
+      );
       if (result) {
         createdItems.push({
           tempId: result.tempId,
@@ -929,7 +990,11 @@ const loadInventory = () => {
 
     // Create all leaf items
     for (const itemName of parsed.items) {
-      const result = createBoxOptimisticallyWithParent(itemName, currentParentKey, currentParentLi);
+      const result = createBoxOptimisticallyWithParent(
+        itemName,
+        currentParentKey,
+        currentParentLi,
+      );
       if (result) {
         createdItems.push({
           tempId: result.tempId,
@@ -946,7 +1011,9 @@ const loadInventory = () => {
       const resolveParentKey = () => {
         if (!item.serverParentKey) return "";
         if (item.serverParentKey.startsWith("temp_")) {
-          return tempToServerKey.get(item.serverParentKey) || item.serverParentKey;
+          return (
+            tempToServerKey.get(item.serverParentKey) || item.serverParentKey
+          );
         }
         return item.serverParentKey;
       };
@@ -962,7 +1029,10 @@ const loadInventory = () => {
         tempId: item.tempId,
         onSuccess: (data) => {
           if (data.data) {
-            tempToServerKey.set(item.tempId, data.data.param_key || data.data.id);
+            tempToServerKey.set(
+              item.tempId,
+              data.data.param_key || data.data.id,
+            );
           }
         },
       };
@@ -1008,12 +1078,15 @@ const loadInventory = () => {
     const ul = parentLi
       ? parentLi.querySelector(`:scope > details > ul`)
       : parentKey
-        ? tree.querySelector(`li[data-id='${parentKey}']`)?.querySelector(`:scope > details > ul`)
+        ? tree
+            .querySelector(`li[data-id='${parentKey}']`)
+            ?.querySelector(`:scope > details > ul`)
         : tree.querySelector("ul[role=tree]");
 
     if (ul) {
       if (parentLi || parentKey) {
-        const actualParentLi = parentLi || tree.querySelector(`li[data-id='${parentKey}']`);
+        const actualParentLi =
+          parentLi || tree.querySelector(`li[data-id='${parentKey}']`);
         // Remove empty placeholder from direct children only
         ul.querySelector(":scope > .empty-box")?.remove();
         ul.prepend(li);
@@ -1304,7 +1377,8 @@ const loadInventory = () => {
       insertRef && insertRef.parentElement === containerUl ? insertRef : null;
 
     if (!ref && Number.isInteger(indexHint)) {
-      const rows = containerRows(containerUl);
+      // Filter out the node being moved - indexHint was calculated from filtered rows
+      const rows = containerRows(containerUl).filter((r) => r !== node);
       const i = Math.max(0, Math.min(indexHint, rows.length));
       ref = rows[i] || null;
     }
@@ -1467,12 +1541,19 @@ const loadInventory = () => {
 
         evt.preventDefault();
 
-        const rows = containerRows(ul);
+        // Filter out dragEl - matches drop handler logic for consistent guide position
+        const rows = containerRows(ul).filter((r) => r !== dragEl);
         const wr = ul.getBoundingClientRect();
         const y = evt.clientY;
+
+        // Helper to get the visual row element (summary for boxes, li for items)
+        const getVisualEl = (li) =>
+          li.querySelector(":scope > details > summary") || li;
+
         let insertAt = rows.length;
         for (let i = 0; i < rows.length; i += 1) {
-          const rr = rows[i].getBoundingClientRect();
+          // For boxes, use summary rect (not full li which includes expanded children)
+          const rr = getVisualEl(rows[i]).getBoundingClientRect();
           if (y < rr.top + rr.height / 2) {
             insertAt = i;
             break;
@@ -1483,10 +1564,11 @@ const loadInventory = () => {
           rows.length === 0
             ? wr.top + 6
             : insertAt === 0
-              ? rows[0].getBoundingClientRect().top - 2
+              ? getVisualEl(rows[0]).getBoundingClientRect().top - 2
               : insertAt >= rows.length
-                ? rows[rows.length - 1].getBoundingClientRect().bottom - 2
-                : rows[insertAt].getBoundingClientRect().top - 2;
+                ? getVisualEl(rows[rows.length - 1]).getBoundingClientRect()
+                    .bottom - 2
+                : getVisualEl(rows[insertAt]).getBoundingClientRect().top - 2;
 
         clearInto();
         setGuideAt(lineY, wr.left, wr.width);
@@ -1500,6 +1582,14 @@ const loadInventory = () => {
 
       let targetUl, parentLi, insertAt, insertRef;
       let isDropIntoBox = false; // Track if we're dropping INTO a box (not between items)
+
+      // Store original position for potential rollback
+      const originalParent = dragEl.parentElement;
+      const originalNextSibling = dragEl.nextSibling;
+      const originalParentKey = dragEl.dataset.parentKey;
+
+      // REMOVE dragEl from DOM first - this makes all position calculations clean
+      dragEl.remove();
 
       const row = evt.target.closest("li[data-type]");
       // Prevent dropping into descendants, but allow dropping into ancestors
@@ -1516,6 +1606,7 @@ const loadInventory = () => {
                 parentLi.querySelector(
                   `ul[data-box-id='${parentLi.dataset.id}']`,
                 );
+          // dragEl already removed, so rows is clean
           const rows = containerRows(targetUl);
           const idx = rows.indexOf(row);
           insertAt =
@@ -1528,7 +1619,11 @@ const loadInventory = () => {
           isDropIntoBox = true;
           parentLi = row;
           targetUl = targetUlFor(parentLi);
-          if (!targetUl) return;
+          if (!targetUl) {
+            // Restore dragEl on failure
+            originalParent.insertBefore(dragEl, originalNextSibling);
+            return;
+          }
           const rows = containerRows(targetUl);
           insertAt = 0;
           insertRef = rows[0] || null;
@@ -1539,11 +1634,16 @@ const loadInventory = () => {
           document.querySelector(".tree ul[role=tree]");
         parentLi = targetUl.closest("li[data-type]") || rootLi();
 
+        // dragEl already removed, so rows is clean
         const rows = containerRows(targetUl);
         const y = evt.clientY;
         insertAt = rows.length;
         for (let i = 0; i < rows.length; i += 1) {
-          const rr = rows[i].getBoundingClientRect();
+          // For boxes, use summary rect (not full li which includes expanded children)
+          const rowEl = rows[i];
+          const visualEl =
+            rowEl.querySelector(":scope > details > summary") || rowEl;
+          const rr = visualEl.getBoundingClientRect();
           if (y < rr.top + rr.height / 2) {
             insertAt = i;
             break;
@@ -1552,10 +1652,14 @@ const loadInventory = () => {
         insertRef = rows[insertAt] || null;
       }
 
-      if (parentLi && dragEl.contains(parentLi)) return;
+      if (parentLi && dragEl.contains(parentLi)) {
+        // Restore dragEl on failure
+        originalParent.insertBefore(dragEl, originalNextSibling);
+        return;
+      }
 
-      const prevParentLi =
-        dragEl.parentElement.closest("li[data-type]") || rootLi();
+      // Use originalParent since dragEl was removed from DOM
+      const prevParentLi = originalParent.closest("li[data-type]") || rootLi();
 
       // Handle multi-select move
       const itemsToMove = selectionManager.hasSelection()
@@ -1579,7 +1683,9 @@ const loadInventory = () => {
           }
         }
         // Also remove empty-box placeholder if present
-        const emptyPlaceholder = targetUl.querySelector(":scope > li.empty-box");
+        const emptyPlaceholder = targetUl.querySelector(
+          ":scope > li.empty-box",
+        );
         if (emptyPlaceholder) {
           emptyPlaceholder.remove();
         }
@@ -1588,16 +1694,25 @@ const loadInventory = () => {
       // Use param_key (dataset.key), not numeric id, for parent_key
       const newParentKey = isRootLi(parentLi) ? "" : parentLi.dataset.key || "";
 
-      // Optimistic move - update DOM and parentKey attribute
+      // Optimistic move - insert at calculated position
       itemsToMove.forEach((item, idx) => {
         if (idx === 0) {
-          safeInsert(targetUl, item, insertRef, insertAt);
+          // Insert at the exact index we calculated
+          const rows = containerRows(targetUl);
+          const refEl = rows[insertAt] || null;
+          if (refEl) {
+            targetUl.insertBefore(item, refEl);
+          } else {
+            targetUl.appendChild(item);
+          }
         } else {
           const prev = itemsToMove[idx - 1];
           targetUl.insertBefore(item, prev.nextSibling);
         }
         // Update parentKey optimistically
         item.dataset.parentKey = newParentKey;
+        // Mark as recently moved to skip repositioning on our own WebSocket broadcast
+        markAsRecentlyMoved(item.dataset.key);
       });
 
       updateBoxType(prevParentLi);
@@ -1615,10 +1730,16 @@ const loadInventory = () => {
       const movedKey = dragEl.dataset.key;
       const child_ids = buildChildIds(targetUl);
 
-      // Store previous state for rollback on error
-      const prevParentKey = dragEl.dataset.parentKey;
-      const prevNextSibling = dragEl.nextSibling;
-      const prevParentUl = prevParentLi ? targetUlFor(prevParentLi) : null;
+      // Update sort_order dataset for ALL items in the container based on new positions.
+      // This prevents WebSocket updates from repositioning siblings (sortOrderChanged will be false).
+      // Sort order is DESC - higher values appear first.
+      const allRows = containerRows(targetUl);
+      allRows.forEach((row, idx) => {
+        row.dataset.sortOrder = allRows.length - idx;
+      });
+
+      // Previous state for rollback was captured at start (originalParent, originalNextSibling)
+      const prevParentUl = originalParent;
 
       // Mark moved items as pending
       itemsToMove.forEach((item) => item.classList.add("pending"));
@@ -1644,7 +1765,9 @@ const loadInventory = () => {
         getBody,
         tempId: `move_${movedId}_${Date.now()}`,
         onSuccess: (data) => {
-          itemsToMove.forEach((item) => item.classList.remove("pending", "error"));
+          itemsToMove.forEach((item) =>
+            item.classList.remove("pending", "error"),
+          );
           if (data.data) {
             // Skip repositioning - optimistic move already placed it correctly
             // (sibling sort_orders in DOM are stale, would cause incorrect placement)
@@ -1656,12 +1779,12 @@ const loadInventory = () => {
           itemsToMove.forEach((item) => {
             item.classList.remove("pending");
             item.classList.add("error");
-            item.dataset.parentKey = prevParentKey;
+            item.dataset.parentKey = originalParentKey;
           });
           if (prevParentUl) {
             itemsToMove.forEach((item) => {
-              if (prevNextSibling) {
-                prevParentUl.insertBefore(item, prevNextSibling);
+              if (originalNextSibling) {
+                prevParentUl.insertBefore(item, originalNextSibling);
               } else {
                 prevParentUl.appendChild(item);
               }
@@ -1674,7 +1797,11 @@ const loadInventory = () => {
       };
 
       // Register and add to queue for offline/retry support
-      operationQueue.registerPending(moveOperation.tempId, dragEl, moveOperation);
+      operationQueue.registerPending(
+        moveOperation.tempId,
+        dragEl,
+        moveOperation,
+      );
       operationQueue.add(moveOperation);
 
       // Clean up drag state
@@ -1928,7 +2055,10 @@ const loadInventory = () => {
     const isInInput = evt.target.matches("input, textarea");
 
     // Handle arrow up/down in the new item field - navigate items but keep focus
-    if (isInNewItemField && (evt.key === "ArrowUp" || evt.key === "ArrowDown")) {
+    if (
+      isInNewItemField &&
+      (evt.key === "ArrowUp" || evt.key === "ArrowDown")
+    ) {
       evt.preventDefault();
       evt.stopPropagation();
       if (evt.key === "ArrowUp") {
@@ -2177,7 +2307,14 @@ const loadInventory = () => {
     }
 
     const li = evt.target.closest("li[data-type]");
-    if (li && !isRootLi(li)) {
+    if (li) {
+      // Root can be selected but not multi-selected
+      if (isRootLi(li)) {
+        selectionManager.clear();
+        selectBox(li);
+        return;
+      }
+
       // Handle multi-select with Ctrl/Cmd or Shift
       if (evt.ctrlKey || evt.metaKey) {
         selectionManager.toggle(li);
@@ -2254,7 +2391,9 @@ const loadInventory = () => {
         !loading && !!details.querySelector(":scope > ul > li.post-load-box");
 
       // Don't try to lazy load items with temp IDs (they're pending server creation)
-      const wrapperIsPending = wrapper?.dataset.id?.startsWith("temp_") || wrapper?.classList.contains("pending");
+      const wrapperIsPending =
+        wrapper?.dataset.id?.startsWith("temp_") ||
+        wrapper?.classList.contains("pending");
       if (wrapperIsPending) {
         needsLoad = false;
       }
@@ -2267,7 +2406,10 @@ const loadInventory = () => {
         }
 
         // Skip loading for pending items with temp IDs
-        if (wrapper?.dataset.id?.startsWith("temp_") || wrapper?.classList.contains("pending")) {
+        if (
+          wrapper?.dataset.id?.startsWith("temp_") ||
+          wrapper?.classList.contains("pending")
+        ) {
           return;
         }
 
@@ -2349,7 +2491,8 @@ const loadInventory = () => {
 
               // Check if box is actually empty - if so, fix the empty attribute on server
               const loadedUl = details.querySelector(":scope > ul");
-              const hasChildren = loadedUl && loadedUl.querySelector(":scope > li[data-type]");
+              const hasChildren =
+                loadedUl && loadedUl.querySelector(":scope > li[data-type]");
               if (!hasChildren && wrapper.dataset.type !== "item") {
                 // Box was marked as having children but actually empty - fix it
                 fetch(editBoxForm.action, {

@@ -45,7 +45,7 @@ class InventoryManagementController < ApplicationController
 
     # Skip child_ids sorting when insert_at_top is used (lazy loading means child_ids is incomplete)
     # child_ids contains param_keys (not numeric ids) since Box.primary_key = "param_key"
-    if params[:child_ids].present? && !params[:insert_at_top].present?
+    if params[:child_ids].present? && params[:insert_at_top].blank?
       parent_scope = (
         if params[:parent_key].present?
           current_user.boxes.where(parent_key: params[:parent_key])
@@ -89,8 +89,8 @@ class InventoryManagementController < ApplicationController
         f.json { render json: { data: data } }
         f.html {
           send_data data.to_json,
-            filename: "inventory_export_#{Time.current.strftime('%Y%m%d')}.json",
-            type: "application/json"
+            filename: "inventory_export_#{Time.current.strftime("%Y%m%d")}.json",
+            type:     "application/json"
         }
       end
     else # csv
@@ -98,13 +98,13 @@ class InventoryManagementController < ApplicationController
       respond_to do |f|
         f.csv {
           send_data csv_data,
-            filename: "inventory_export_#{Time.current.strftime('%Y%m%d')}.csv",
-            type: "text/csv"
+            filename: "inventory_export_#{Time.current.strftime("%Y%m%d")}.csv",
+            type:     "text/csv"
         }
         f.html {
           send_data csv_data,
-            filename: "inventory_export_#{Time.current.strftime('%Y%m%d')}.csv",
-            type: "text/csv"
+            filename: "inventory_export_#{Time.current.strftime("%Y%m%d")}.csv",
+            type:     "text/csv"
         }
         f.json { render json: { data: csv_data } }
       end
@@ -147,11 +147,11 @@ class InventoryManagementController < ApplicationController
 
     build_children = ->(parent) {
       {
-        param_key: parent.param_key,
-        name: parent.name,
-        notes: parent.notes,
+        param_key:   parent.param_key,
+        name:        parent.name,
+        notes:       parent.notes,
         description: parent.description,
-        children: parent.contents.map { |child| build_children.call(child) }
+        children:    parent.contents.map { |child| build_children.call(child) },
       }
     }
 
@@ -171,7 +171,7 @@ class InventoryManagementController < ApplicationController
           box.notes,
           box.description,
           box.hierarchy,
-          box.parent_key
+          box.parent_key,
         ]
       end
     end
