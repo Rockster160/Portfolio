@@ -36,6 +36,8 @@ class Jil::ExecutionsController < ApplicationController
         time_complete: ctx["time_complete"] ? format_timestamp(ctx["time_complete"]) : nil,
         return_val:    ctx["return_val"],
         output:        ctx["output"],
+        error:         ctx["error"],
+        error_line:    ctx["error_line"],
         other:         ctx.except("line", "state", "time_start", "time_complete", "return_val", "output", "error", "error_line"),
       }
     when "input_data"

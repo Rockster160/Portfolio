@@ -139,6 +139,10 @@
   <div class="modal-content-wrapper">
     <div class="modal-metadata"></div>
     <div class="modal-data-content"></div>
+    <div class="modal-error-section hidden">
+      <div class="modal-section-title">Error</div>
+      <div class="modal-error-content"></div>
+    </div>
     <div class="modal-output-section hidden">
       <div class="modal-section-title">Output</div>
       <div class="modal-output-content"></div>
@@ -542,6 +546,28 @@
       overflow-y: auto;
     }
 
+    .execution-modal .modal-error-section {
+      margin-top: 16px;
+    }
+
+    .execution-modal .modal-error-section.hidden {
+      display: none;
+    }
+
+    .execution-modal .modal-error-content {
+      background-color: #161B22;
+      color: var(--style-danger, #DC3545);
+      padding: 12px;
+      border-radius: 6px;
+      font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
     /* Jil Syntax Highlighting */
     .syntax--string { color: #26D926; }
     .syntax--commented { color: #6E7681; font-style: italic; }
@@ -627,10 +653,12 @@
       function renderCodeModal(data) {
         var metadata = document.querySelector(".modal-metadata");
         var content = document.querySelector(".modal-data-content");
+        var errorSection = document.querySelector(".modal-error-section");
         var outputSection = document.querySelector(".modal-output-section");
 
         metadata.innerHTML = "";
         content.innerHTML = "";
+        errorSection.classList.add("hidden");
         outputSection.classList.add("hidden");
 
         if (data.type === "code") {
@@ -678,6 +706,18 @@
             content.innerHTML = highlightJson(JSON.stringify(data.other, null, 2));
           } else {
             content.classList.add("hidden");
+          }
+
+          // Error
+          if (data.error) {
+            errorSection.classList.remove("hidden");
+            var errorText = data.error;
+            if (<%= current_user&.id || 0 %> === 1) { // Merge conflict with user ID 0 for guests
+              if (data.error_line !== undefined && data.error_line !== null) {
+                errorText = `${data.error_line}\n\n${errorText}`;
+              }
+            }
+            document.querySelector(".modal-error-content").textContent = errorText;
           }
 
           // Output

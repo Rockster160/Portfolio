@@ -39,7 +39,7 @@ class Jil::Methods::List < Jil::Methods::Base
   end
 
   def has_item?(list, item_name)
-    item = load_list(list).list_items.by_data(name: item_name)
+    item = load_list(list).list_items.by_formatted_name(item_name) # Will not find deleted items
     return false if item.nil?
 
     !item.deleted?
