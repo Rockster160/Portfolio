@@ -317,6 +317,19 @@
     .inventory-wrapper .tree li[data-type="item"]::before {
       top: 12px;
     }
+
+    /* Touch drag styling */
+    .inventory-wrapper .tree li.dragging {
+      opacity: 0.6;
+      background: var(--grey-dark);
+      transform: scale(0.98);
+      transition: transform 0.15s, opacity 0.15s;
+    }
+
+    /* Larger touch targets for item actions */
+    .inventory-wrapper .tree li .item-actions {
+      padding: 12px;
+    }
   }
 
   /* ============================================

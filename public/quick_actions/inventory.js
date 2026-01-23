@@ -1113,7 +1113,9 @@ const loadInventory = () => {
     }
 
     // Create all leaf items
-    for (const itemName of parsed.items) {
+    // Reverse the items so they appear in the order written (since each is prepended)
+    const reversedItems = [...parsed.items].reverse();
+    for (const itemName of reversedItems) {
       const result = createBoxOptimisticallyWithParent(
         itemName,
         currentParentKey,
@@ -1940,6 +1942,424 @@ const loadInventory = () => {
       dragEl = null;
       selectionManager.clear();
     });
+
+    // ==========================================================================
+    // Touch Support for Mobile Drag and Drop
+    // ==========================================================================
+    let touchDragEl = null;
+    let touchStartY = 0;
+    let touchStartX = 0;
+    let touchGuide = null;
+    let touchIntoRow = null;
+    let longPressTimer = null;
+    let isDragging = false;
+    const LONG_PRESS_DURATION = 400; // ms to trigger drag
+    const DRAG_THRESHOLD = 10; // px to confirm drag intent
+
+    function touchClearGuide() {
+      touchGuide?.remove();
+      touchGuide = null;
+    }
+
+    function touchSetGuideAt(y, left, width) {
+      if (!touchGuide) {
+        touchGuide = document.createElement("div");
+        touchGuide.className = "drop-guide";
+        document.body.appendChild(touchGuide);
+      }
+      touchGuide.style.top = `${y}px`;
+      touchGuide.style.left = `${left}px`;
+      touchGuide.style.width = `${width}px`;
+    }
+
+    function touchClearInto() {
+      touchIntoRow?.classList.remove("into-target");
+      touchIntoRow = null;
+    }
+
+    function cancelTouchDrag() {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      if (touchDragEl) {
+        touchDragEl.classList.remove("dragging");
+        selectionManager.selected.forEach((id) => {
+          const el = tree.querySelector(`li[data-id='${id}']`);
+          if (el) el.classList.remove("dragging");
+        });
+      }
+      touchDragEl = null;
+      isDragging = false;
+      touchClearGuide();
+      touchClearInto();
+    }
+
+    tree.addEventListener(
+      "touchstart",
+      (evt) => {
+        const li = evt.target.closest("li[data-type]");
+        if (!li || isRootLi(li)) return;
+
+        // Don't start drag if touching inside a control (button, input, etc.)
+        if (evt.target.closest("button, input, textarea, a, .item-actions")) {
+          return;
+        }
+
+        const touch = evt.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        touchDragEl = li;
+
+        // Start long-press timer
+        longPressTimer = setTimeout(() => {
+          if (!touchDragEl) return;
+
+          isDragging = true;
+          // Handle multi-select drag
+          if (
+            selectionManager.hasSelection() &&
+            selectionManager.selected.has(li.dataset.id)
+          ) {
+            li.classList.add("dragging");
+            selectionManager.selected.forEach((id) => {
+              const el = tree.querySelector(`li[data-id='${id}']`);
+              if (el) el.classList.add("dragging");
+            });
+          } else {
+            selectionManager.clear();
+            li.classList.add("dragging");
+          }
+
+          // Provide haptic feedback if available
+          if (navigator.vibrate) {
+            navigator.vibrate(50);
+          }
+        }, LONG_PRESS_DURATION);
+      },
+      { passive: true },
+    );
+
+    tree.addEventListener(
+      "touchmove",
+      (evt) => {
+        if (!touchDragEl) return;
+
+        const touch = evt.touches[0];
+        const dx = Math.abs(touch.clientX - touchStartX);
+        const dy = Math.abs(touch.clientY - touchStartY);
+
+        // If moved before long press, cancel drag
+        if (!isDragging && (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD)) {
+          cancelTouchDrag();
+          return;
+        }
+
+        if (!isDragging) return;
+
+        evt.preventDefault(); // Prevent scrolling while dragging
+
+        const clientY = touch.clientY;
+        const clientX = touch.clientX;
+
+        // Find element under touch point (excluding the dragged element)
+        const elemBelow = document.elementFromPoint(clientX, clientY);
+        if (!elemBelow) {
+          touchClearInto();
+          touchClearGuide();
+          return;
+        }
+
+        const row = elemBelow.closest("li[data-type]");
+        if (row && row !== touchDragEl && !touchDragEl.contains(row)) {
+          let slot = slotFromEvent({ clientY }, row);
+          if (isRootLi(row)) slot = "into";
+
+          const summary =
+            row.querySelector(":scope > details > summary") ||
+            row.querySelector(":scope > summary") ||
+            row;
+          const r = summary.getBoundingClientRect();
+
+          if (slot === "before") {
+            touchClearInto();
+            touchSetGuideAt(r.top - 2, r.left, r.width);
+          } else if (slot === "after") {
+            touchClearInto();
+            touchSetGuideAt(r.bottom - 2, r.left, r.width);
+          } else {
+            touchClearGuide();
+            if (!isRootLi(row)) {
+              if (touchIntoRow !== row) {
+                touchClearInto();
+                row.classList.add("into-target");
+                touchIntoRow = row;
+              }
+            } else {
+              const topUl = document.querySelector(".tree ul[role=tree]");
+              const wr = topUl.getBoundingClientRect();
+              const firstReal = [...topUl.children].find(
+                (n) => n.matches("li[data-type]") && !isRootLi(n),
+              );
+              const y = firstReal
+                ? firstReal.getBoundingClientRect().top - 2
+                : wr.top + 6;
+              touchSetGuideAt(y, wr.left, wr.width);
+            }
+          }
+          return;
+        }
+
+        const ul = elemBelow.closest("ul");
+        if (ul && ul !== touchDragEl.parentElement) {
+          const parentLi = ul.closest("li[data-type]") || rootLi();
+          if (parentLi && parentLi.contains(touchDragEl)) {
+            touchClearInto();
+            touchClearGuide();
+            return;
+          }
+
+          const rows = containerRows(ul).filter((r) => r !== touchDragEl);
+          const wr = ul.getBoundingClientRect();
+          const getVisualEl = (li) =>
+            li.querySelector(":scope > details > summary") || li;
+
+          let insertAt = rows.length;
+          for (let i = 0; i < rows.length; i++) {
+            const rr = getVisualEl(rows[i]).getBoundingClientRect();
+            if (clientY < rr.top + rr.height / 2) {
+              insertAt = i;
+              break;
+            }
+          }
+
+          const lineY =
+            rows.length === 0
+              ? wr.top + 6
+              : insertAt === 0
+                ? getVisualEl(rows[0]).getBoundingClientRect().top - 2
+                : insertAt >= rows.length
+                  ? getVisualEl(rows[rows.length - 1]).getBoundingClientRect()
+                      .bottom - 2
+                  : getVisualEl(rows[insertAt]).getBoundingClientRect().top - 2;
+
+          touchClearInto();
+          touchSetGuideAt(lineY, wr.left, wr.width);
+        }
+      },
+      { passive: false },
+    );
+
+    tree.addEventListener("touchend", (evt) => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+
+      if (!isDragging || !touchDragEl) {
+        touchDragEl = null;
+        isDragging = false;
+        return;
+      }
+
+      evt.preventDefault();
+
+      const touch = evt.changedTouches[0];
+      const clientX = touch.clientX;
+      const clientY = touch.clientY;
+
+      // Find drop target
+      const elemBelow = document.elementFromPoint(clientX, clientY);
+      if (!elemBelow) {
+        cancelTouchDrag();
+        return;
+      }
+
+      // Simulate a drop by dispatching a synthetic drop event data
+      // and calling the same logic as the mouse drop handler
+      const row = elemBelow.closest("li[data-type]");
+      const ul = elemBelow.closest("ul");
+
+      if (!row && !ul) {
+        cancelTouchDrag();
+        return;
+      }
+
+      // Build items to move (same as mouse handler)
+      const itemsToMove = selectionManager.hasSelection()
+        ? Array.from(selectionManager.selected)
+            .map((id) => tree.querySelector(`li[data-id='${id}']`))
+            .filter(Boolean)
+        : [touchDragEl];
+
+      // Store original position for potential rollback
+      const originalParent = touchDragEl.parentElement;
+      const originalNextSibling = touchDragEl.nextSibling;
+      const originalParentKey = touchDragEl.dataset.parentKey;
+
+      // Remove dragEl from DOM first
+      touchDragEl.remove();
+
+      let targetUl, parentLi, insertAt, insertRef;
+      let isDropIntoBox = false;
+
+      if (row && row !== touchDragEl && !touchDragEl.contains(row)) {
+        let slot = slotFromEvent({ clientY }, row);
+        if (isRootLi(row)) slot = "into";
+
+        if (slot === "into") {
+          isDropIntoBox = true;
+          parentLi = row;
+          targetUl = containerUlOf(parentLi);
+          insertRef = null;
+        } else {
+          parentLi = row.parentElement?.closest("li[data-type]") || rootLi();
+          targetUl = row.parentElement;
+          const rows = containerRows(targetUl).filter((r) => r !== touchDragEl);
+          const idx = rows.indexOf(row);
+          insertAt = slot === "before" ? idx : idx + 1;
+          insertRef = rows[insertAt] || null;
+        }
+      } else if (ul) {
+        parentLi = ul.closest("li[data-type]") || rootLi();
+        targetUl = ul;
+        const rows = containerRows(ul).filter((r) => r !== touchDragEl);
+        const getVisualEl = (li) =>
+          li.querySelector(":scope > details > summary") || li;
+
+        insertAt = rows.length;
+        for (let i = 0; i < rows.length; i++) {
+          const rr = getVisualEl(rows[i]).getBoundingClientRect();
+          if (clientY < rr.top + rr.height / 2) {
+            insertAt = i;
+            break;
+          }
+        }
+        insertRef = rows[insertAt] || null;
+      } else {
+        // Restore if no valid target
+        if (originalNextSibling) {
+          originalParent.insertBefore(touchDragEl, originalNextSibling);
+        } else {
+          originalParent.appendChild(touchDragEl);
+        }
+        cancelTouchDrag();
+        return;
+      }
+
+      if (!targetUl) {
+        // Restore
+        if (originalNextSibling) {
+          originalParent.insertBefore(touchDragEl, originalNextSibling);
+        } else {
+          originalParent.appendChild(touchDragEl);
+        }
+        cancelTouchDrag();
+        return;
+      }
+
+      // Insert items
+      const prevParentLi = originalParent?.closest("li[data-type]");
+      const newParentKey = parentLi.dataset.key || parentLi.dataset.id || "";
+
+      itemsToMove.forEach((item) => {
+        if (insertRef) {
+          targetUl.insertBefore(item, insertRef);
+        } else if (isDropIntoBox) {
+          targetUl.prepend(item);
+        } else {
+          targetUl.appendChild(item);
+        }
+        item.dataset.parentKey = newParentKey;
+      });
+
+      // Update parent box types
+      updateBoxType(prevParentLi);
+      updateBoxType(parentLi);
+
+      // Expand target box if dropped into
+      if (isDropIntoBox && !isRootLi(parentLi)) {
+        const details = parentLi.querySelector(":scope > details");
+        if (details && !details.open) {
+          details.open = true;
+        }
+      }
+
+      const movedId = touchDragEl.dataset.id;
+      const movedKey = touchDragEl.dataset.key;
+
+      // Update sort_order for all items
+      const allRows = containerRows(targetUl);
+      allRows.forEach((r, idx) => {
+        r.dataset.sortOrder = allRows.length - idx;
+      });
+
+      // Mark moved items as pending
+      itemsToMove.forEach((item) => item.classList.add("pending"));
+
+      // Build and queue request
+      const getBody = () => {
+        const body = {
+          box_id: movedKey || movedId,
+          parent_key: newParentKey,
+          child_ids: buildChildIds(targetUl),
+        };
+        if (isDropIntoBox) {
+          body.insert_at_top = true;
+        }
+        return body;
+      };
+
+      const moveOperation = {
+        type: "move",
+        url: editBoxForm.action,
+        method: "PATCH",
+        getBody,
+        tempId: `move_${movedId}_${Date.now()}`,
+        onSuccess: (data) => {
+          itemsToMove.forEach((item) =>
+            item.classList.remove("pending", "error"),
+          );
+          if (data.data) {
+            upsertBox(data.data, { skipReposition: true });
+          }
+        },
+        onError: (err) => {
+          itemsToMove.forEach((item) => {
+            item.classList.remove("pending");
+            item.classList.add("error");
+            item.dataset.parentKey = originalParentKey;
+          });
+          if (originalParent) {
+            itemsToMove.forEach((item) => {
+              if (originalNextSibling) {
+                originalParent.insertBefore(item, originalNextSibling);
+              } else {
+                originalParent.appendChild(item);
+              }
+            });
+            updateBoxType(prevParentLi);
+            updateBoxType(parentLi);
+          }
+          showFlash(err.message || "Move failed - reverted");
+        },
+      };
+
+      operationQueue.registerPending(
+        moveOperation.tempId,
+        touchDragEl,
+        moveOperation,
+      );
+      operationQueue.add(moveOperation);
+
+      // Clean up
+      cancelTouchDrag();
+      selectionManager.clear();
+    });
+
+    tree.addEventListener("touchcancel", () => {
+      cancelTouchDrag();
+    });
   }
 
   // ============================================================================
@@ -2004,18 +2424,40 @@ const loadInventory = () => {
     }
   }
 
-  function navigateUp() {
+  function navigateUp(extendSelection = false) {
     const items = getNavigableItems();
     if (items.length === 0) return;
+    const previousIndex = focusedIndex;
     focusedIndex = Math.max(0, focusedIndex - 1);
-    setFocusedItem(items[focusedIndex]);
+    const targetItem = items[focusedIndex];
+
+    if (extendSelection && targetItem) {
+      // Initialize selection with current item if nothing selected
+      if (selectionManager.selected.size === 0 && items[previousIndex]) {
+        selectionManager.toggle(items[previousIndex]);
+      }
+      selectionManager.toggle(targetItem);
+    }
+
+    setFocusedItem(targetItem, !extendSelection);
   }
 
-  function navigateDown() {
+  function navigateDown(extendSelection = false) {
     const items = getNavigableItems();
     if (items.length === 0) return;
+    const previousIndex = focusedIndex;
     focusedIndex = Math.min(items.length - 1, focusedIndex + 1);
-    setFocusedItem(items[focusedIndex]);
+    const targetItem = items[focusedIndex];
+
+    if (extendSelection && targetItem) {
+      // Initialize selection with current item if nothing selected
+      if (selectionManager.selected.size === 0 && items[previousIndex]) {
+        selectionManager.toggle(items[previousIndex]);
+      }
+      selectionManager.toggle(targetItem);
+    }
+
+    setFocusedItem(targetItem, !extendSelection);
   }
 
   function expandFocused() {
@@ -2151,7 +2593,97 @@ const loadInventory = () => {
   }
 
   function deleteFocused() {
+    // Check for bulk selection first
+    if (selectionManager.selected.size > 1) {
+      deleteSelectedItems();
+      return;
+    }
     deleteBox(getFocusedItem());
+  }
+
+  function deleteSelectedItems() {
+    const selectedIds = Array.from(selectionManager.selected);
+    const items = selectedIds
+      .map((id) => tree.querySelector(`li[data-id='${id}']`))
+      .filter((li) => li && !isRootLi(li));
+
+    if (items.length === 0) return;
+
+    // Build confirmation message
+    const names = items.map(
+      (li) => li.querySelector(".item-name")?.innerText || "item",
+    );
+    let message;
+    if (names.length <= 3) {
+      message = `Are you sure you want to delete "${names.join('", "')}" and ALL of their contents? This is PERMANENT.`;
+    } else {
+      const firstThree = names.slice(0, 3).join('", "');
+      const remaining = names.length - 3;
+      message = `Are you sure you want to delete "${firstThree}" and ${remaining} other item${remaining > 1 ? "s" : ""}, including ALL of their contents? This is PERMANENT.`;
+    }
+
+    if (!confirm(message)) {
+      return;
+    }
+
+    // Save state for undo (save first item as reference)
+    saveStateForUndo("bulk-delete", items[0]);
+
+    // Optimistically remove all items
+    const restorationInfo = items.map((item) => ({
+      item,
+      parentElement: item.parentElement,
+      nextSibling: item.nextElementSibling,
+      parentLi: item.parentElement?.closest("li[data-type]"),
+    }));
+
+    items.forEach((item) => {
+      const parentLi = item.parentElement?.closest("li[data-type]");
+      item.remove();
+      updateBoxType(parentLi);
+    });
+
+    // Clear selection
+    selectionManager.clear();
+
+    // Select parent of first item if available
+    const firstParent = restorationInfo[0]?.parentLi;
+    if (firstParent) {
+      if (isRootLi(firstParent)) {
+        inventoryForm.querySelector("#new_box_parent_key").value = "";
+        searchWrapper.querySelector("code.hierarchy").innerText = "Everything";
+      } else {
+        setFocusedItem(firstParent);
+      }
+    }
+
+    // Delete all items on server
+    Promise.all(
+      items.map((item) =>
+        fetch(editBoxForm.action, {
+          method: "DELETE",
+          headers: {
+            accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ box_id: item.dataset.id }),
+        }).then((r) => {
+          if (!r.ok) throw new Error(`Delete failed for ${item.dataset.id}`);
+          return r.json();
+        }),
+      ),
+    ).catch((err) => {
+      // Restore all items on failure
+      restorationInfo.forEach(({ item, parentElement, nextSibling, parentLi }) => {
+        if (nextSibling) {
+          parentElement?.insertBefore(item, nextSibling);
+        } else {
+          parentElement?.appendChild(item);
+        }
+        updateBoxType(parentLi);
+      });
+      showFlash(err.message || "Delete failed");
+    });
   }
 
   function openEditModal() {
@@ -2219,12 +2751,12 @@ const loadInventory = () => {
       case "ArrowUp":
         evt.preventDefault();
         evt.stopPropagation();
-        navigateUp();
+        navigateUp(evt.shiftKey);
         break;
       case "ArrowDown":
         evt.preventDefault();
         evt.stopPropagation();
-        navigateDown();
+        navigateDown(evt.shiftKey);
         break;
       case "ArrowRight":
         evt.preventDefault();
