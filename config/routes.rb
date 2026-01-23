@@ -191,10 +191,16 @@ Rails.application.routes.draw do
   namespace :jil do
     get :/, action: :index, controller: :tasks
     get "t/:id" => "tasks#trigger"
+    resources :executions, only: [:index, :show] do
+      post :replay, on: :member
+    end
     resources :tasks do
       post :run, on: :member
       post :duplicate, on: :member
       post :shared_users, on: :member
+      resources :executions, only: [:index, :show] do
+        post :replay, on: :member
+      end
     end
     resources :user_cache, path: :cache
   end

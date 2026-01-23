@@ -37,6 +37,24 @@ module ApplicationHelper
     distance_of_time_in_words(Time.current, time) + (time.future? ? " from now" : " ago")
   end
 
+  def format_duration(seconds)
+    return "--" if seconds.nil?
+
+    if seconds < 1
+      "#{(seconds * 1000).round}ms"
+    elsif seconds < 60
+      "#{seconds.round(2)}s"
+    elsif seconds < 3600
+      mins = (seconds / 60).floor
+      secs = (seconds % 60).round
+      "#{mins}m #{secs}s"
+    else
+      hours = (seconds / 3600).floor
+      mins = ((seconds % 3600) / 60).round
+      "#{hours}h #{mins}m"
+    end
+  end
+
   def i(type)
     "<i class=\"fa fa-#{type}\"></i>".html_safe
   end

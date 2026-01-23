@@ -61,7 +61,11 @@
 
       <div class="btns">
         <div class="btn btn-run" href="<%= run_jil_task_path(@task.id || :new) %>">Run</div>
-        <div class="btn btn-history disabled">History</div>
+        <% if @task.persisted? %>
+          <a class="btn btn-history" href="<%= jil_task_executions_path(@task) %>">History</a>
+        <% else %>
+          <div class="btn btn-history disabled">History</div>
+        <% end %>
         <div class="btn btn-config" data-modal="#config-modal">Config</div>
         <div class="btn btn-save <%= 'disabled' if @readonly %>">Save</div>
       </div>

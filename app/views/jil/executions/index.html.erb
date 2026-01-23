@@ -1,0 +1,745 @@
+<%= meta_title @task ? "#{@task.name} - Executions" : "Executions", include_name: false %>
+
+<div class="executions-index-container">
+  <div class="btn-container">
+    <% if @task %>
+      <a href="<%= jil_executions_path %>" class="btn">All Executions</a>
+      <a href="<%= jil_tasks_path %>" class="btn">All Tasks</a>
+    <% else %>
+      <a href="<%= jil_tasks_path %>" class="btn">Tasks</a>
+    <% end %>
+  </div>
+
+  <div class="lists-title">
+    <% if @task %>
+      <small>Executions:</small> <a href="<%= jil_task_path(@task) %>"><%= @task.name %></a>
+    <% else %>
+      <small>All Executions</small>
+    <% end %>
+  </div>
+
+  <div class="executions-filters">
+    <% statuses = %w[success failed cancelled started] %>
+    <% current_statuses = params[:status]&.split(",") || [] %>
+    <% statuses.each do |status| %>
+      <% active = current_statuses.include?(status) %>
+      <a href="<%= request.path %>?status=<%= active ? (current_statuses - [status]).join(",") : (current_statuses + [status]).join(",") %>"
+         class="btn btn-small status-filter <%= status %> <%= 'active' if active %>">
+        <%= status.capitalize %>
+      </a>
+    <% end %>
+    <% if params[:status].present? %>
+      <a href="<%= request.path %>" class="btn btn-small">Clear</a>
+    <% end %>
+  </div>
+
+  <div class="executions-table ttable wide striped">
+    <div class="trow title-row">
+      <div class="tcell">Status</div>
+      <% unless @task %>
+        <div class="tcell">Task</div>
+      <% end %>
+      <div class="tcell">Started</div>
+      <div class="tcell">Duration</div>
+      <div class="tcell">Trigger</div>
+      <div class="tcell">Data</div>
+      <div class="tcell">Actions</div>
+    </div>
+
+    <% @executions.each do |execution| %>
+      <div class="trow execution-row" data-execution-id="<%= execution.id %>">
+        <div class="tcell status-cell">
+          <span class="status-badge <%= execution.status %>"><%= execution.status %></span>
+          <% if execution.error.present? %>
+            <span class="error-indicator" title="<%= execution.error.truncate(100) %>">
+              <i class="fa fa-exclamation-triangle"></i>
+            </span>
+          <% end %>
+        </div>
+
+        <% unless @task %>
+          <div class="tcell task-cell">
+            <% if execution.task %>
+              <a href="<%= jil_task_path(execution.task) %>"><%= execution.task.name %></a>
+            <% else %>
+              <span class="no-task">Ad-hoc</span>
+            <% end %>
+          </div>
+        <% end %>
+
+        <div class="tcell time-cell">
+          <% if execution.started_at %>
+            <%= execution.started_at.in_time_zone(current_user.timezone).to_formatted_s(:compact_week_month_time) %>
+            <div class="relative-time">(<%= relative_time_in_words(execution.started_at) %>)</div>
+          <% else %>
+            --
+          <% end %>
+        </div>
+
+        <div class="tcell duration-cell">
+          <% if execution.duration %>
+            <%= format_duration(execution.duration) %>
+          <% elsif execution.started? %>
+            <span class="running">Running...</span>
+          <% else %>
+            --
+          <% end %>
+        </div>
+
+        <div class="tcell trigger-cell">
+          <span class="auth-type <%= execution.auth_type %>"><%= execution.auth_type || "unknown" %></span>
+        </div>
+
+        <div class="tcell data-cell">
+          <% compacted = execution.code.nil? %>
+          <% if compacted %>
+            <span class="compacted-indicator" title="Data compacted">
+              <i class="fa fa-archive"></i> Compacted
+            </span>
+          <% else %>
+            <% has_code = execution.code.present? %>
+            <%
+              input_data = execution.input_data
+              if input_data.is_a?(String)
+                has_input = input_data.present?
+              else
+                default_input = { "match_list" => [], "named_captures" => {} }
+                has_input = input_data.present? && input_data != {} && input_data != default_input && input_data.try(:symbolize_keys) != { match_list: [], named_captures: {} }
+              end
+            %>
+            <% has_ctx = execution.ctx.present? %>
+            <button class="btn btn-tiny data-btn <%= 'disabled' unless has_code %>" data-field="code" data-execution-id="<%= execution.id %>" title="View code" <%= 'disabled' unless has_code %>><i class="fa fa-code"></i></button>
+            <button class="btn btn-tiny data-btn <%= 'disabled' unless has_input %>" data-field="input_data" data-execution-id="<%= execution.id %>" title="View input" <%= 'disabled' unless has_input %>><i class="fa fa-sign-in"></i></button>
+            <button class="btn btn-tiny data-btn <%= 'disabled' unless has_ctx %>" data-field="ctx" data-execution-id="<%= execution.id %>" title="View context" <%= 'disabled' unless has_ctx %>><i class="fa fa-database"></i></button>
+          <% end %>
+        </div>
+
+        <div class="tcell actions-cell">
+          <% unless compacted %>
+            <%= button_to "Replay", replay_jil_execution_path(execution), method: :post, class: "btn btn-tiny btn-replay", title: "Re-run with same code and input" %>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+
+    <% if @executions.empty? %>
+      <div class="empty-message">No executions found</div>
+    <% end %>
+  </div>
+
+  <% if @executions.respond_to?(:total_pages) && @executions.total_pages > 1 %>
+    <div class="pagination-container">
+      <%= paginate @executions %>
+    </div>
+  <% end %>
+</div>
+
+<%= render_modal "execution-data-modal", "Execution Data", "execution-modal" do %>
+  <div class="modal-field-title"></div>
+  <div class="modal-content-wrapper">
+    <div class="modal-metadata"></div>
+    <div class="modal-data-content"></div>
+    <div class="modal-output-section hidden">
+      <div class="modal-section-title">Output</div>
+      <div class="modal-output-content"></div>
+    </div>
+  </div>
+<% end %>
+
+<%= content_for :head do %>
+  <style>
+    .executions-index-container {
+      max-width: 1400px;
+      width: 95%;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .executions-index-container .lists-title {
+      font-size: 24px;
+      margin-bottom: 15px;
+    }
+
+    .executions-index-container .lists-title a {
+      color: #5DADE2;
+      text-decoration: none;
+    }
+
+    .executions-index-container .lists-title a:hover {
+      text-decoration: underline;
+    }
+
+    .executions-filters {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .status-filter {
+      padding: 8px 16px;
+      border: 2px solid transparent;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+    .status-filter.success {
+      background-color: rgba(40, 167, 69, 0.3);
+      border-color: #28A745;
+      color: #28A745;
+    }
+    .status-filter.success:hover,
+    .status-filter.success.active {
+      background-color: #28A745;
+      color: white;
+    }
+    .status-filter.failed {
+      background-color: rgba(220, 53, 69, 0.3);
+      border-color: #DC3545;
+      color: #DC3545;
+    }
+    .status-filter.failed:hover,
+    .status-filter.failed.active {
+      background-color: #DC3545;
+      color: white;
+    }
+    .status-filter.cancelled {
+      background-color: rgba(108, 117, 125, 0.3);
+      border-color: #6C757D;
+      color: #9CA3AF;
+    }
+    .status-filter.cancelled:hover,
+    .status-filter.cancelled.active {
+      background-color: #6C757D;
+      color: white;
+    }
+    .status-filter.started {
+      background-color: rgba(0, 123, 255, 0.3);
+      border-color: #007BFF;
+      color: #007BFF;
+    }
+    .status-filter.started:hover,
+    .status-filter.started.active {
+      background-color: #007BFF;
+      color: white;
+    }
+
+    .executions-table {
+      font-size: 14px;
+      width: 100%;
+    }
+
+    .executions-table .trow {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .executions-table .title-row .tcell {
+      font-weight: bold;
+      font-size: 16px;
+      padding: 12px 15px;
+    }
+
+    .executions-table .tcell {
+      vertical-align: middle;
+      padding: 12px 15px;
+      white-space: nowrap;
+    }
+
+    .executions-table .status-cell {
+      white-space: nowrap;
+    }
+
+    .executions-table .task-cell {
+      white-space: normal;
+      word-wrap: break-word;
+    }
+
+    .executions-table .time-cell {
+      white-space: nowrap;
+    }
+
+    .executions-table .duration-cell {
+      white-space: nowrap;
+    }
+
+    .executions-table .trigger-cell {
+      white-space: nowrap;
+    }
+
+    .executions-table .data-cell {
+      white-space: nowrap;
+    }
+
+    .executions-table .actions-cell {
+      white-space: nowrap;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      vertical-align: middle;
+    }
+    .status-badge.success { background-color: #28A745; color: white; }
+    .status-badge.failed { background-color: #DC3545; color: white; }
+    .status-badge.cancelled { background-color: #6C757D; color: white; }
+    .status-badge.started { background-color: #007BFF; color: white; }
+
+    .error-indicator {
+      display: inline-block;
+      color: #DC3545;
+      margin-left: 8px;
+      cursor: help;
+      vertical-align: middle;
+    }
+
+    .task-cell a {
+      color: #5DADE2;
+      text-decoration: none;
+    }
+    .task-cell a:hover {
+      text-decoration: underline;
+    }
+    .task-cell .no-task {
+      color: #888;
+      font-style: italic;
+    }
+
+    .time-cell .relative-time {
+      font-size: 12px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .duration-cell .running {
+      color: #5DADE2;
+      font-style: italic;
+    }
+
+    .auth-type {
+      display: inline-block;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      background-color: #4A5568;
+      color: #E2E8F0;
+      text-transform: capitalize;
+    }
+    .auth-type.trigger { background-color: #5B21B6; color: #C4B5FD; }
+    .auth-type.run { background-color: #065F46; color: #6EE7B7; }
+    .auth-type.api_key { background-color: #92400E; color: #FCD34D; }
+    .auth-type.exec { background-color: #1E40AF; color: #93C5FD; }
+    .auth-type.jwt { background-color: #7C3AED; color: #DDD6FE; }
+    .auth-type.userpass { background-color: #0891B2; color: #A5F3FC; }
+    .auth-type.guest { background-color: #6B7280; color: #D1D5DB; }
+
+    .data-cell .btn,
+    .data-cell button {
+      display: inline-block;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .data-cell .btn:last-child,
+    .data-cell button:last-child {
+      margin-right: 0;
+    }
+
+    .compacted-indicator {
+      color: #888;
+      font-size: 12px;
+    }
+    .compacted-indicator i {
+      margin-right: 4px;
+    }
+
+    .btn-tiny {
+      padding: 4px 10px;
+      font-size: 12px;
+      min-width: auto;
+    }
+
+    .btn-tiny.disabled,
+    .btn-tiny:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    /* Reset form styling within table cells - button_to creates forms */
+    .executions-table form,
+    .executions-table .tcell form,
+    .executions-table form:not(.basic) {
+      display: inline;
+      background: none !important;
+      background-color: transparent !important;
+      margin: 0 !important;
+      margin-top: 0 !important;
+      padding: 0 !important;
+      box-shadow: none !important;
+      border: none !important;
+      border-radius: 0 !important;
+      overflow: visible !important;
+    }
+
+    /* Ensure buttons in cells don't get weird styling */
+    .executions-table .tcell button,
+    .executions-table .tcell .btn {
+      display: inline-block;
+      margin-top: 2px;
+      margin-bottom: 2px;
+      vertical-align: middle;
+    }
+
+    .executions-table .actions-cell .btn {
+      display: inline-block;
+    }
+
+
+    .btn-replay {
+      background-color: #17A2B8;
+      color: white;
+    }
+    .btn-replay:hover {
+      background-color: #138496;
+    }
+
+
+    .empty-message {
+      text-align: center;
+      padding: 40px 20px;
+      color: #888;
+      font-style: italic;
+      font-size: 16px;
+    }
+
+    .pagination-container {
+      margin-top: 25px;
+      text-align: center;
+    }
+
+    /* Modal styles */
+    .execution-modal .modal-content {
+      width: 900px;
+      max-width: 95vw;
+    }
+
+    .execution-modal .app-card-inner {
+      padding: 20px;
+    }
+
+    .execution-modal .modal-field-title {
+      font-weight: bold;
+      margin-bottom: 15px;
+      font-size: 18px;
+      color: #E2E8F0;
+    }
+
+    .execution-modal .modal-content-wrapper {
+      max-height: 65vh;
+      overflow: auto;
+      border-radius: 6px;
+    }
+
+    .execution-modal .modal-metadata {
+      margin-bottom: 12px;
+    }
+
+    .execution-modal .meta-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+    }
+
+    .execution-modal .meta-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .execution-modal .meta-table .meta-label {
+      color: #8B949E;
+      font-weight: 500;
+      width: 100px;
+      text-align: right;
+      padding-right: 16px;
+    }
+
+    .execution-modal .meta-table .meta-value {
+      color: #C9D1D9;
+    }
+
+    .execution-modal .meta-section-label {
+      color: #8B949E;
+      font-weight: 500;
+      margin-bottom: 8px;
+      margin-top: 12px;
+    }
+
+    .execution-modal .meta-code-block {
+      background-color: #0D1117;
+      color: #C9D1D9;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 8px;
+      margin-bottom: 8px;
+      font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .execution-modal .modal-data-content {
+      display: block;
+      background-color: #0D1117 !important;
+      color: #C9D1D9 !important;
+      padding: 16px !important;
+      border-radius: 6px;
+      border: none !important;
+      margin: 0;
+      white-space: pre-wrap !important;
+      word-wrap: break-word;
+      font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace !important;
+      font-size: 13px !important;
+      line-height: 1.6 !important;
+      tab-size: 2;
+      overflow-x: auto;
+      text-align: left;
+    }
+
+    .execution-modal .modal-data-content.hidden {
+      display: none;
+    }
+
+    .execution-modal .modal-output-section {
+      margin-top: 16px;
+    }
+
+    .execution-modal .modal-output-section.hidden {
+      display: none;
+    }
+
+    .execution-modal .modal-section-title {
+      color: #8B949E;
+      font-weight: 500;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .execution-modal .modal-output-content {
+      background-color: #161B22;
+      color: #8B949E;
+      padding: 12px;
+      border-radius: 6px;
+      font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    /* Jil Syntax Highlighting */
+    .syntax--string { color: #26D926; }
+    .syntax--commented { color: #6E7681; font-style: italic; }
+    .syntax--op { color: #DBDBDB; }
+    .syntax--cast { color: darkcyan; }
+    .syntax--methodname { color: #ABB2BF; }
+    .syntax--singleton { color: #26D9D9; }
+    .syntax--numeric { color: #EDDD3D; }
+    .syntax--constant { color: #C678DD; }
+    .syntax--varname { color: #276AD9; }
+    .syntax--variable { color: #276AD9; }
+
+    /* JSON Syntax Highlighting */
+    .json--key { color: #79C0FF; }
+    .json--string { color: #A5D6FF; }
+    .json--number { color: #EDDD3D; }
+    .json--constant { color: #C678DD; }
+  </style>
+<% end %>
+
+<%= content_for :after_body do %>
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      var fieldLabels = {
+        code: "Code",
+        input_data: "Input Data",
+        ctx: "Execution Context"
+      };
+
+      function openModal(selector) {
+        var modal = document.querySelector(selector);
+        if (!modal) return;
+
+        if (typeof showModal === "function") {
+          showModal(selector);
+        } else {
+          modal.classList.remove("hidden");
+          modal.classList.add("shown");
+          modal.style.opacity = "1";
+        }
+      }
+
+      // Simple Jil syntax highlighter
+      function highlightJil(code) {
+        if (!code) return "";
+        // Escape HTML first
+        var escaped = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        // Apply syntax highlighting
+        return escaped
+          // Strings (must be first to avoid conflicts)
+          .replace(/"([^"\\]|\\.)*"/g, '<span class="syntax--string">$&</span>')
+          // Comments
+          .replace(/^(\s*\/.*)/gm, '<span class="syntax--commented">$1</span>')
+          // Cast operator and type
+          .replace(/::(\w+)/g, '<span class="syntax--op">::</span><span class="syntax--cast">$1</span>')
+          // Method calls
+          .replace(/\.(\w+)\(/g, '.<span class="syntax--methodname">$1</span>(')
+          // Singletons/Classes (capitalized words before .)
+          .replace(/\b([A-Z]\w*)\./g, '<span class="syntax--singleton">$1</span>.')
+          // Numbers
+          .replace(/\b(\d+\.?\d*)\b/g, '<span class="syntax--numeric">$1</span>')
+          // Booleans and null
+          .replace(/\b(true|false|null)\b/g, '<span class="syntax--constant">$1</span>')
+          // Variable assignments (word before =)
+          .replace(/^(\s*)(\*?)(\w+)(\s*=\s*)/gm, '$1$2<span class="syntax--varname">$3</span>$4')
+          // Variable references (lowercase words that aren't methods)
+          .replace(/\(([a-z]\w*)\)/g, '(<span class="syntax--variable">$1</span>)');
+      }
+
+      // JSON syntax highlighter
+      function highlightJson(code) {
+        if (!code) return "";
+        var escaped = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        return escaped
+          .replace(/"([^"\\]|\\.)*"\s*:/g, '<span class="json--key">$&</span>')
+          .replace(/:\s*"([^"\\]|\\.)*"/g, function(match) {
+            return ': <span class="json--string">' + match.substring(2) + '</span>';
+          })
+          .replace(/:\s*(\d+\.?\d*)/g, ': <span class="json--number">$1</span>')
+          .replace(/:\s*(true|false|null)/g, ': <span class="json--constant">$1</span>');
+      }
+
+      function renderCodeModal(data) {
+        var metadata = document.querySelector(".modal-metadata");
+        var content = document.querySelector(".modal-data-content");
+        var outputSection = document.querySelector(".modal-output-section");
+
+        metadata.innerHTML = "";
+        content.innerHTML = "";
+        outputSection.classList.add("hidden");
+
+        if (data.type === "code") {
+          content.innerHTML = highlightJil(data.content);
+        } else if (data.type === "input_data") {
+          if (data.empty) {
+            content.textContent = "No input data";
+          } else if (data.format === "string") {
+            // Simple string value (e.g., trigger reference)
+            content.textContent = data.content;
+          } else {
+            content.innerHTML = highlightJson(data.content);
+          }
+        } else if (data.type === "ctx") {
+          var metaHtml = "";
+          var tableRows = "";
+
+          if (data.state) {
+            tableRows += '<tr><td class="meta-label">State</td><td class="meta-value">' + data.state + '</td></tr>';
+          }
+          if (data.line !== undefined && data.line !== null) {
+            tableRows += '<tr><td class="meta-label">Line</td><td class="meta-value">' + data.line + '</td></tr>';
+          }
+          if (data.time_start) {
+            tableRows += '<tr><td class="meta-label">Started</td><td class="meta-value">' + data.time_start + '</td></tr>';
+          }
+          if (data.time_complete) {
+            tableRows += '<tr><td class="meta-label">Completed</td><td class="meta-value">' + data.time_complete + '</td></tr>';
+          }
+
+          if (tableRows) {
+            metaHtml += '<table class="meta-table"><tbody>' + tableRows + '</tbody></table>';
+          }
+
+          if (data.return_val !== undefined && data.return_val !== null) {
+            var returnValStr = typeof data.return_val === "string" ? data.return_val : JSON.stringify(data.return_val, null, 2);
+            metaHtml += '<div class="meta-section-label">Return Value</div>';
+            metaHtml += '<div class="meta-code-block">' + highlightJson(returnValStr) + '</div>';
+          }
+
+          metadata.innerHTML = metaHtml;
+
+          // Other fields (excluding known ones)
+          if (data.other && Object.keys(data.other).length > 0) {
+            content.innerHTML = highlightJson(JSON.stringify(data.other, null, 2));
+          } else {
+            content.classList.add("hidden");
+          }
+
+          // Output
+          if (data.output && data.output.length > 0) {
+            outputSection.classList.remove("hidden");
+            document.querySelector(".modal-output-content").textContent = data.output.join("\n");
+          }
+        }
+      }
+
+      document.querySelectorAll(".data-btn").forEach(function(btn) {
+        btn.addEventListener("click", function(evt) {
+          evt.preventDefault();
+          if (this.disabled) return;
+
+          var executionId = this.dataset.executionId;
+          var field = this.dataset.field;
+
+          // Reset hidden state
+          document.querySelector(".modal-data-content").classList.remove("hidden");
+
+          fetch("/jil/executions/" + executionId + "?field=" + field)
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+              if (data.compacted) {
+                alert("This data has been compacted and is no longer available.");
+                return;
+              }
+
+              document.querySelector(".modal-field-title").textContent = fieldLabels[field] || field;
+              renderCodeModal(data);
+              openModal("#execution-data-modal");
+            })
+            .catch(function(err) {
+              console.error(err);
+              alert("Failed to load execution data.");
+            });
+        });
+      });
+
+      // Close modal when clicking outside
+      document.querySelectorAll(".modal-wrapper").forEach(function(modal) {
+        modal.addEventListener("click", function(evt) {
+          if (evt.target === modal) {
+            modal.classList.add("hidden");
+            modal.classList.remove("shown");
+          }
+        });
+      });
+
+      // Close button
+      document.querySelectorAll("[data-dismiss]").forEach(function(btn) {
+        btn.addEventListener("click", function(evt) {
+          evt.preventDefault();
+          var modalSelector = this.dataset.dismiss;
+          var modal = document.querySelector(modalSelector);
+          if (modal) {
+            modal.classList.add("hidden");
+            modal.classList.remove("shown");
+          }
+        });
+      });
+    });
+  </script>
+<% end %>
