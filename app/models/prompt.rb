@@ -23,6 +23,8 @@ class Prompt < ApplicationRecord
   }
 
   def serialize(opts={})
-    super.merge(url: Rails.application.routes.url_helpers.prompt_url(self))
+    super.merge(
+      url: persisted? ? Rails.application.routes.url_helpers.prompt_url(self) : nil,
+    )
   end
 end

@@ -72,7 +72,7 @@
   #random(Numeric(0):min "-" Numeric(10):max TAB "Decimal:" Numeric?(0):figures)
   #op(Numeric ["+" "-" "*" "/" "%" "^log"] Numeric)
   #evaluate(Text)
-  .round(Numeric(0))
+  .round("Decimals:" Numeric(0))
   .floor
   .ceil
   .op(["+" "-" "*" "/" "%" "^log"] Numeric)
@@ -222,6 +222,11 @@
   #find(String|Numeric)
   #all("complete?" Boolean(false))::Array
   #create("Title" TAB String BR "Data" TAB Hash? BR "Questions" content(PromptQuestion) "Deliver" BR Boolean(true))
+  .id::Numeric
+  .title::String
+  .data::Hash
+  .questions::Array
+  .response::Hash
   .update("Title" TAB String? BR "Data" TAB Hash? BR "Questions" content(PromptQuestion))::Boolean
   !.destroy::Boolean
   !.deliver::Boolean

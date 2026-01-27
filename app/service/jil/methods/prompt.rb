@@ -34,11 +34,29 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     prompts.create(
       question: title,
       params:   TriggerData.serialize(@jil.cast(data.presence, :Hash).presence),
-      options:  questions,
+      options:  Array.wrap(questions).flatten.select { |q| q.is_a?(Hash) },
     ).tap { |prompt|
       ::Jil.trigger(@jil.user, :prompt, prompt.with_jil_attrs(state: :create))
       broadcast_push(prompt) if deliver
     }
+  end
+
+  PERMIT_ATTRS = [:id, :title, :data, :questions, :response].freeze
+
+  def execute(line)
+    method_sym = line.methodname.to_s.underscore.gsub(/[^\w]/, "").to_sym
+    case method_sym
+    when *PERMIT_ATTRS
+      prompt = token_val(line.objname)
+      case method_sym
+      when :id        then prompt[:id]
+      when :title     then prompt[:question]
+      when :data      then prompt[:params]
+      when :questions then prompt[:options]
+      when :response  then prompt[:response]
+      end
+    else fallback(line)
+    end
   end
 
   def update(prompt_data, title, data, questions)
@@ -46,7 +64,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     attrs = {}
     attrs[:question] = title if title.present?
     attrs[:params] = TriggerData.serialize(@jil.cast(data, :Hash)) if data.present?
-    attrs[:options] = questions if questions.present?
+    attrs[:options] = Array.wrap(questions).flatten.select { |q| q.is_a?(Hash) } if questions.present?
     prompt.update(attrs)
   end
 
