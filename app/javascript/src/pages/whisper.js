@@ -47,23 +47,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function playDefaultBeeps() {
     if (isMuted) return;
-    const swell = [
-      [60, 440, volume - 0.08, "sine"],
-      [60, 440, volume - 0.06, "sine"],
-      [60, 440, volume - 0.03, "sine"],
-      [60, 440, volume, "sine"],
-      [60, 440, volume - 0.02, "sine"],
-      [60, 440, volume - 0.05, "sine"],
+
+    const rise = [
+      [250, 523, volume - 0.2, "sine"],
+      [300, 659, volume - 0.1, "sine"],
+      [350, 784, volume - 0.15, "sine"],
     ];
 
     beeps([
-      ...swell,
+      // Comment to prevent folding onto a single line
+      ...rise,
       [200, 0, 0, null],
-      ...swell,
-      [500, 0, 0, null],
-      ...swell,
+      ...rise,
       [200, 0, 0, null],
-      ...swell,
+      ...rise,
     ]);
   }
 
