@@ -12,15 +12,17 @@
         <% default = option[:default] %>
 
         <% base_key = "prompt[response][#{question}]" %>
-        <% if question.split(" | ").length == 2 %>
-          <p class="centered-options">
-            <% left, right = question.split(" | ") %>
-            <span><%= left %></span>
-            <span>|</span>
-            <span><%= right %></span>
-          </p>
-        <% else %>
-          <p class="text-center"><%= question %></p>
+        <% unless option[:type].to_sym == :hidden %>
+          <% if question.split(" | ").length == 2 %>
+            <p class="centered-options">
+              <% left, right = question.split(" | ") %>
+              <span><%= left %></span>
+              <span>|</span>
+              <span><%= right %></span>
+            </p>
+          <% else %>
+            <p class="text-center"><%= question %></p>
+          <% end %>
         <% end %>
         <% case option[:type].to_sym %>
         <% when :text %>
@@ -81,6 +83,69 @@
               </label>
             </div>
           <% end %>
+        <% when :date %>
+          <%=
+            content_tag(
+              :input,
+              nil,
+              value: @prompt.response&.dig(question).presence || default,
+              type: :date,
+              name: base_key,
+              class: "prompt-date-input",
+            )
+          %>
+        <% when :datetime %>
+          <%=
+            content_tag(
+              :input,
+              nil,
+              value: @prompt.response&.dig(question).presence || default,
+              type: "datetime-local",
+              name: base_key,
+              class: "prompt-datetime-input",
+            )
+          %>
+        <% when :time %>
+          <%=
+            content_tag(
+              :input,
+              nil,
+              value: @prompt.response&.dig(question).presence || default,
+              type: :time,
+              name: base_key,
+              class: "prompt-time-input",
+            )
+          %>
+        <% when :number %>
+          <%=
+            content_tag(
+              :input,
+              nil,
+              value: @prompt.response&.dig(question).presence || default,
+              type: :number,
+              name: base_key,
+              min: option[:min],
+              max: option[:max],
+              step: option[:step],
+              class: "prompt-number-input",
+            )
+          %>
+        <% when :select %>
+          <%= select_tag base_key,
+            options_for_select(
+              option[:choices],
+              @prompt.response&.dig(question).presence || default
+            ),
+            class: "prompt-select-input"
+          %>
+        <% when :textarea %>
+          <%= text_area_tag base_key,
+            @prompt.response&.dig(question).presence || default,
+            placeholder: default,
+            class: "prompt-textarea-input"
+          %>
+        <% when :hidden %>
+          <%= hidden_field_tag base_key, default %>
         <% else %>
           Unknown: <%= option[:type] %> (<%= option %>)
         <% end %>

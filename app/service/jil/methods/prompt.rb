@@ -33,12 +33,21 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   def create(title, data, questions, deliver)
     prompts.create(
       question: title,
-      params:   @jil.cast(data.presence, :Hash).presence,
+      params:   TriggerData.serialize(@jil.cast(data.presence, :Hash).presence),
       options:  questions,
     ).tap { |prompt|
       ::Jil.trigger(@jil.user, :prompt, prompt.with_jil_attrs(state: :create))
       broadcast_push(prompt) if deliver
     }
+  end
+
+  def update(prompt_data, title, data, questions)
+    prompt = load_prompt(prompt_data)
+    attrs = {}
+    attrs[:question] = title if title.present?
+    attrs[:params] = TriggerData.serialize(@jil.cast(data, :Hash)) if data.present?
+    attrs[:options] = questions if questions.present?
+    prompt.update(attrs)
   end
 
   # [PromptQuestion]
@@ -78,7 +87,88 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     }
   end
 
+  def date(text, default)
+    {
+      type:     :date,
+      question: text,
+      default:  format_date(default),
+    }
+  end
+
+  def datetime(text, default)
+    {
+      type:     :datetime,
+      question: text,
+      default:  format_datetime(default),
+    }
+  end
+
+  def time(text, default)
+    {
+      type:     :time,
+      question: text,
+      default:  format_time(default),
+    }
+  end
+
+  def number(text, default, min, max, step)
+    {
+      type:     :number,
+      question: text,
+      default:  default,
+      min:      min,
+      max:      max,
+      step:     step,
+    }
+  end
+
+  def select(text, options, default)
+    {
+      type:     :select,
+      question: text,
+      choices:  options,
+      default:  default,
+    }
+  end
+
+  def textarea(text, default)
+    {
+      type:     :textarea,
+      question: text,
+      default:  default,
+    }
+  end
+
+  def hidden(key, value)
+    {
+      type:     :hidden,
+      question: key,
+      default:  value,
+    }
+  end
+
   private
+
+  def format_date(value)
+    return value if value.is_a?(String)
+    return nil if value.blank?
+
+    value.to_date.strftime("%Y-%m-%d")
+  end
+
+  def format_datetime(value)
+    return value if value.is_a?(String)
+    return nil if value.blank?
+
+    value.in_time_zone(@jil.user.timezone).strftime("%Y-%m-%dT%H:%M")
+  end
+
+  def format_time(value)
+    return value if value.is_a?(String)
+    return nil if value.blank?
+
+    value.in_time_zone(@jil.user.timezone).strftime("%H:%M")
+  end
 
   def broadcast_push(prompt)
     return unless Rails.env.production?

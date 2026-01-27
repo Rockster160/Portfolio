@@ -8,6 +8,13 @@ class PromptsController < ApplicationController
     redirect_to @prompts.first if @prompts.one?
   end
 
+  def show
+    # Resolve any gid references in params and trigger prompt:load
+    resolved_params = TriggerData.parse(@prompt.params || {}, as: current_user)
+    jil_trigger(:prompt, @prompt.with_jil_attrs(state: :load, data: resolved_params))
+    @prompt.reload
+  end
+
   def update
     data = params.dig(:prompt, :response)&.permit!.to_h
     @prompt.update(response: data)

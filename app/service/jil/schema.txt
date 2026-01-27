@@ -218,18 +218,25 @@
   #notes(String)
   #timestamp(Date)
   #data(content(Hash|Keyval))
-[Prompt] # Need to fix these create/update
+[Prompt]
   #find(String|Numeric)
   #all("complete?" Boolean(false))::Array
   #create("Title" TAB String BR "Data" TAB Hash? BR "Questions" content(PromptQuestion) "Deliver" BR Boolean(true))
-  !.update("Title" TAB String BR "Data" TAB Hash? BR "Questions" content(PromptQuestion))::Boolean
+  .update("Title" TAB String? BR "Data" TAB Hash? BR "Questions" content(PromptQuestion))::Boolean
   !.destroy::Boolean
   !.deliver::Boolean
 *[PromptQuestion]
   #text(String:"Question Text" BR "Default" String)
+  #textarea(String:"Question Text" BR "Default" String)
+  #number(String:"Question Text" BR "Default" Numeric? "Min" Numeric? "Max" Numeric? "Step" Numeric?)
   #checkbox(String:"Question Text" BR "Default" Boolean)
   #choices(String:"Question Text" content(String))
+  #select(String:"Question Text" content(String) "Default" String?)
   #scale(String:"Question Text" BR Numeric(0):"Min" Numeric(100):"Max" Numeric?(50):"Default")
+  #date(String:"Question Text" BR "Default" Date?)
+  #datetime(String:"Question Text" BR "Default" Date?)
+  #time(String:"Question Text" BR "Default" Date?)
+  #hidden(String:"Key" Any:"Value")
 [Task]
   #find(String|Numeric)
   #search(Text("*") "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array
