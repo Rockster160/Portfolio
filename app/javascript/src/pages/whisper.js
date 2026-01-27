@@ -48,19 +48,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function playDefaultBeeps() {
     if (isMuted) return;
 
-    const rise = [
-      [250, 523, volume - 0.2, "sine"],
-      [300, 659, volume - 0.1, "sine"],
-      [350, 784, volume - 0.15, "sine"],
-    ];
-
     beeps([
-      // Comment to prevent folding onto a single line
-      ...rise,
-      [200, 0, 0, null],
-      ...rise,
-      [200, 0, 0, null],
-      ...rise,
+      [300, 131, volume - 0.2, "sine"],
+      [350, 165, volume - 0.1, "sine"],
+      [350, 196, volume - 0.15, "sine"],
+      [350, 165, volume - 0.1, "sine"],
+      [400, 131, volume - 0.2, "sine"],
     ]);
   }
 
