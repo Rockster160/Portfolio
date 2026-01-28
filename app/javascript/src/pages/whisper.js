@@ -49,11 +49,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isMuted) return;
 
     beeps([
-      [300, 131, volume - 0.2, "sine"],
-      [350, 165, volume - 0.1, "sine"],
-      [350, 196, volume - 0.15, "sine"],
-      [350, 165, volume - 0.1, "sine"],
-      [400, 131, volume - 0.2, "sine"],
+      [300, 262, volume - 0.2, "sine"],
+      [350, 330, volume - 0.1, "sine"],
+      [350, 392, volume - 0.15, "sine"],
+      [350, 330, volume - 0.1, "sine"],
+      [400, 262, volume - 0.2, "sine"],
     ]);
   }
 

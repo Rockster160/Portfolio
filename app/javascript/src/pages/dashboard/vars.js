@@ -89,9 +89,6 @@ export let beep = function (duration, frequency, volume, type, callback) {
   oscillator.connect(gainNode);
   gainNode.connect(audioCtx.destination);
 
-  if (volume) {
-    gainNode.gain.value = volume;
-  }
   if (frequency) {
     oscillator.frequency.value = frequency;
   }
@@ -102,8 +99,22 @@ export let beep = function (duration, frequency, volume, type, callback) {
     oscillator.onended = callback;
   }
 
-  oscillator.start(audioCtx.currentTime);
-  oscillator.stop(audioCtx.currentTime + (duration || 500) / 1000);
+  // Use envelope shaping to eliminate clicks/pops from abrupt audio changes
+  const attackTime = 0.01; // 10ms fade in
+  const releaseTime = 0.01; // 10ms fade out
+  const durationSec = (duration || 500) / 1000;
+  const startTime = audioCtx.currentTime;
+  const endTime = startTime + durationSec;
+  const targetVolume = volume || 1;
+
+  // Start at 0, ramp up quickly, hold, then ramp down to 0
+  gainNode.gain.setValueAtTime(0, startTime);
+  gainNode.gain.linearRampToValueAtTime(targetVolume, startTime + attackTime);
+  gainNode.gain.setValueAtTime(targetVolume, endTime - releaseTime);
+  gainNode.gain.linearRampToValueAtTime(0, endTime);
+
+  oscillator.start(startTime);
+  oscillator.stop(endTime);
 };
 
 let beepsQueue = [];
