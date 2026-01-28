@@ -61,7 +61,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     str = str.to_s
     begin
       json = ::Jil::Methods::Hash.parse(str)
-      return recurse ? looksLike(json, false) : :String
+      return recurse ? looksLike(json, recurse: false) : :String
     rescue StandardError => e
     end
     return :Boolean if ["true", "false", "t", "f"].include?(str.downcase)

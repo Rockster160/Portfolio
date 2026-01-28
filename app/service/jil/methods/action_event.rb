@@ -53,6 +53,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     event = load_event(event_data)
     evt_data = params(details)
     event_callbacks(event, :changed, evt_data[:timestamp].present?) if event.update(evt_data)
+    event
   end
 
   def destroy(event_data)
