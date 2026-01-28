@@ -28,7 +28,7 @@
   </div>
 
   <div class="ctr-lists act-show">
-    <div class="skinny-container list-container" data-list-id="<%= @list.id %>">
+    <div class="skinny-container list-container" data-list-id="<%= @list.id %>" data-list-mode="kiosk" data-list-reset="5m">
       <div class="list-error hidden">Disconnected...</div>
       <template id="list-item-template">
         <%= render template: "list_items/show", locals: { list: @list, template: true }, layout: false %>

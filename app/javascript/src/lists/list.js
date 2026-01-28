@@ -15,9 +15,7 @@ function parseParams(str) {
   return data;
 }
 params = parseParams(window.location.search.slice(1));
-listMode = params.mode || (params.clear == "1" ? "clear" : "normal");
-// ?mode=kiosk | clear | normal
-// ?reset=30s | 5m | etc.
+
 const second = 1000;
 const minute = second * 60;
 const hour = minute * 60;
@@ -45,8 +43,27 @@ function parseDuration(str, fallback = 0) {
   return total || fallback;
 }
 
-const resetTime = parseDuration(params.reset, resetModeTimes[listMode]);
-// kiosk | clear | normal
+// Check for data attributes on the list container (allows page-specific overrides)
+function getListSettings() {
+  const container = document.querySelector(".list-container[data-list-mode]");
+  const dataMode = container?.dataset.listMode;
+  const dataReset = container?.dataset.listReset;
+
+  const mode = params.mode || dataMode || (params.clear == "1" ? "clear" : "normal");
+  const reset = parseDuration(params.reset || dataReset, resetModeTimes[mode]);
+
+  return { mode, reset };
+}
+
+// ?mode=kiosk | clear | normal
+// ?reset=30s | 5m | etc.
+// Or use data-list-mode and data-list-reset attributes on .list-container
+let listMode, resetTime;
+document.addEventListener("DOMContentLoaded", function () {
+  const settings = getListSettings();
+  listMode = settings.mode;
+  resetTime = settings.reset;
+});
 
 $(document).on("keyup", "input.filterable", function () {
   var currentText = $(this)
