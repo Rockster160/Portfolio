@@ -91,7 +91,7 @@ class FitnessBroadcast
       "Vitamins",
       "Trintellix",
       "D-Amphetamine",
-    ].map { |name| "name::#{name}" }.join(" OR ")
+    ].map { |name| "name::\"#{name}\"" }.join(" OR ")
     row("💊", names, want)
   end
 
