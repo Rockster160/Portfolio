@@ -56,6 +56,25 @@ class Task < ApplicationRecord
     nil
   end
 
+  def self.s3_export(bucket: FileStorage::DEFAULT_BUCKET)
+    data = all.map(&:attributes)
+    key = "tasks/export-#{Time.current.strftime("%Y%m%d-%H%M%S")}.json"
+    ::FileStorage.upload(data.to_json, filename: key, bucket: bucket)
+    key
+  end
+
+  def self.s3_import(key, bucket: FileStorage::DEFAULT_BUCKET)
+    json = ::FileStorage.download(key, bucket: bucket)
+    data = JSON.parse(json)
+
+    data.map { |attrs|
+      task = find_or_initialize_by(uuid: attrs["uuid"])
+      task.assign_attributes(attrs.except("uuid"))
+      task.save!
+      task
+    }
+  end
+
   def self.last_exe
     ::Execution.finished.order(:finished_at).last
   end
