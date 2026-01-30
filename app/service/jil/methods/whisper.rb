@@ -4,37 +4,20 @@ class Jil::Methods::Whisper < Jil::Methods::Base
   end
 
   # [Whisper]
-  #   #notify(String:"Title" String?:"Body")
+  #   #notifySelf(String:"Title" String?:"Body")
   #   #notifyAll(String:"Title" String?:"Body")
 
-  def notify(title, body=nil)
-    return if Rails.env.development?
+  def notifySelf(title, body=nil)
+    payload = { title: title, users: [@jil.user] }
+    payload[:body] = body if body.present?
 
-    payload = build_payload(title, body)
-    WebPushNotifications.send_to(@jil.user, payload, channel: :whisper)
+    ::WebPushNotifications.send_to_whisper(payload)
   end
 
   def notifyAll(title, body=nil)
-    return if Rails.env.development?
-
-    payload = build_payload(title, body)
-    users = broadcast_users
-    WebPushNotifications.send_to_whisper(users, payload)
-  end
-
-  private
-
-  def build_payload(title, body)
-    payload = {
-      title: title,
-      icon:  "/whisper_favicon/whisper-detail.png",
-    }
+    payload = { title: title }
     payload[:body] = body if body.present?
-    payload
-  end
 
-  def broadcast_users
-    task = @jil.broadcast_task
-    task.present? ? task.broadcast_users.to_a : [@jil.user]
+    ::WebPushNotifications.send_to_whisper(payload)
   end
 end

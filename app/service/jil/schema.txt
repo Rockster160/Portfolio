@@ -296,7 +296,7 @@
   #blip(Numeric?)
   #data(Hash)
 [Whisper]
-  #notify(String:"Title" String?:"Body")
+  #notifySelf(String:"Title" String?:"Body")
   #notifyAll(String:"Title" String?:"Body")
 [Schedule]
   #find(Numeric)

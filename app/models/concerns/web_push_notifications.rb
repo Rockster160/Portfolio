@@ -1,11 +1,13 @@
 # WebPushNotifications.send_to(User.me, { title: "Hello, World", body: "This is a message from Jarvis" })
 # WebPushNotifications.send_to(User.me, { title: "Hello" }, channel: :whisper)
 # WebPushNotifications.broadcast_to_channel([user1, user2], { title: "Hello" }, channel: :whisper)
+# WebPushNotifications.send_to_whisper({ title: "Fed!" }) # sends to all whisper subscribers
+# WebPushNotifications.send_to_whisper({ title: "Fed!", users: [user1] }) # sends to specific users
 module WebPushNotifications
   module_function
 
   def send_to(user, payload={}, channel: :jarvis)
-    # return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
+    return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
     return "Failed to push - user not found" if user.blank?
 
     push_sub = user.primary_push_sub(channel: channel)
@@ -86,8 +88,20 @@ module WebPushNotifications
     Array.wrap(users).map { |user| send_to(user, payload, channel: channel) }
   end
 
-  # Convenience method for Whisper notifications
-  def send_to_whisper(users, payload={})
+  # Convenience method for Whisper notifications - sends to all whisper subscribers by default
+  def send_to_whisper(payload={})
+    payload = { title: payload } if payload.is_a?(::String)
+    payload = payload.deep_symbolize_keys
+    payload[:icon] ||= "/whisper_favicon/whisper-detail.png"
+
+    users = payload.delete(:users) || all_whisper_subscribers
     broadcast_to_channel(users, payload, channel: :whisper)
+  end
+
+  def all_whisper_subscribers
+    User.joins(:push_subs)
+      .where(user_push_subscriptions: { channel: :whisper })
+      .where.not(user_push_subscriptions: { registered_at: nil })
+      .distinct
   end
 end
