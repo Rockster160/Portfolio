@@ -296,8 +296,9 @@
   #blip(Numeric?)
   #data(Hash)
 [Whisper]
-  #notifySelf(String:"Title" String?:"Body")
-  #notifyAll(String:"Title" String?:"Body")
+  #notifySelf(String:"Title" String?:"Body" String?:"Tag")
+  #notifyAll(String:"Title" String?:"Body" String?:"Tag")
+  #dismiss(String:"Tag")
 [Schedule]
   #find(Numeric)
   #search(Text("*") "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # Using listener syntax trigger:word::data

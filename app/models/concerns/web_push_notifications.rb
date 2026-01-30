@@ -98,6 +98,11 @@ module WebPushNotifications
     broadcast_to_channel(users, payload, channel: :whisper)
   end
 
+  # Dismiss a Whisper notification by tag on all subscribers' devices
+  def dismiss_whisper(tag)
+    broadcast_to_channel(all_whisper_subscribers, { dismiss: true, tag: tag }, channel: :whisper)
+  end
+
   def all_whisper_subscribers
     User.joins(:push_subs)
       .where(user_push_subscriptions: { channel: :whisper })

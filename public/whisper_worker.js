@@ -11,6 +11,18 @@ self.addEventListener("activate", evt => {
 self.addEventListener("push", evt => {
   console.log("Whisper push notification received:", evt);
   const data = evt.data ? evt.data.json() : {};
+
+  // Handle dismiss request - close notification by tag instead of showing
+  if (data.dismiss && data.tag) {
+    evt.waitUntil(
+      self.registration.getNotifications({ tag: data.tag }).then(notifications => {
+        console.log(`Dismissing ${notifications.length} notification(s) with tag: ${data.tag}`);
+        notifications.forEach(n => n.close());
+      })
+    );
+    return;
+  }
+
   data.icon = data.icon || "/whisper_favicon/whisper-detail.png";
 
   if (data.title || data.body) {
