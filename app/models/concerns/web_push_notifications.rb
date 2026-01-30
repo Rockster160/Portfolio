@@ -21,7 +21,9 @@ module WebPushNotifications
     # }
 
     # Temp stub to see if empty notifications are what's breaking things.
-    return if payload.deep_symbolize_keys[:title].blank?
+    # Allow dismiss payloads through (they have no title but need to be sent)
+    payload = payload.deep_symbolize_keys
+    return if payload[:title].blank? && !payload[:dismiss]
 
     WebPush.payload_send(
       message:  format_payload(user, payload).to_json,
@@ -80,6 +82,8 @@ module WebPushNotifications
       :actions, # <Array of Strings> or <[{ action: "", title: "", icon: "" }]>
       # Information Option. No visual affect.
       :timestamp, # <Long>
+      # Custom
+      :dismiss, # <Boolean> - used to dismiss notifications by tag
     ]
   end
 
