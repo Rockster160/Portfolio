@@ -7,68 +7,119 @@ module FileStorage
   )
   DEFAULT_REGION = "us-east-1".freeze
   DEFAULT_BUCKET = "ardesian-storage".freeze
+  TMP_DIR = Rails.root.join("tmp/file_storage")
 
-  def use_live_s3?
-    Rails.env.production?
+  def mode=(new_mode)
+    @mode = new_mode.to_sym
   end
 
-  def object(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    Aws::S3::Resource.new(region: region, credentials: CREDENTIALS)
-      .bucket(bucket)
-      .object(filename)
-  end
+  def mode(new_mode=:_unused_without_block, &block)
+    if block_given?
+      if new_mode == :_unused_without_block
+        raise ArgumentError, "Must set a mode when calling with a block"
+      end
 
-  def upload(file_data, filename: nil, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    filename ||= "file-#{Time.current.strftime("%Y-%m-%d-%H-%M-%S")}"
-
-    unless use_live_s3?
-      file_path = "downloads/#{bucket}/#{filename}"
-      puts "\e[35m[FileStorage] Saving file locally: #{file_path}\e[0m"
-      FileUtils.mkdir_p(File.dirname(file_path))
-      return File.open(file_path, "w+") { |f| f.puts file_data }
+      previous_mode = @mode
+      @mode = new_mode
+      result = block.call
+      @mode = previous_mode
+      return result
     end
 
-    object(filename, bucket: bucket, region: region).tap { |obj|
-      obj.put(body: file_data)
-    }
+    return @mode if defined?(@mode) && @mode.present?
+
+    @mode ||= ENV["FILE_STORAGE_MODE"].presence&.to_sym
+    @mode ||= :s3 if ::Rails.env.production?
+    @mode ||= :local if ::Rails.env.development?
+    return @mode if @mode.present?
+
+    raise "FILE_STORAGE_MODE is not set"
+  end
+
+  def s3(filename, string_data=:_no_value_passed, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
+    if string_data == :_no_value_passed
+      download(filename, bucket: bucket, region: region) if exists?(filename, bucket: bucket, region: region)
+    elsif string_data.nil?
+      delete(filename, bucket: bucket, region: region)
+    else
+      upload(string_data, filename: filename, bucket: bucket, region: region)
+    end
+  end
+
+  def upload(file_data, filename: nil, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION, options: {})
+    filename ||= "file-#{Time.current.strftime("%Y-%m-%d-%H-%M-%S")}"
+
+    case mode
+    when :s3
+      s3_object(filename, bucket: bucket, region: region).put(body: file_data, **options)
+    else
+      FileUtils.mkdir_p("#{TMP_DIR}/#{bucket}")
+      File.binwrite(local_path_for(filename, bucket: bucket), file_data)
+    end
   end
 
   def download(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    unless use_live_s3?
-      begin
-        return File.read("downloads/#{bucket}/#{filename}")
-      rescue Errno::ENOENT
-        # Continue - load from S3
-      end
+    case mode
+    when :s3
+      s3_object(filename, bucket: bucket, region: region).get.body.read
+    else
+      File.binread(local_path_for(filename, bucket: bucket))
     end
-
-    object(filename, bucket: bucket, region: region).then { |obj|
-      obj.exists? ? obj.get.body.read : obj
-    }
-  end
-
-  def get_or_upload(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION, &block)
-    object(filename, bucket: bucket, region: region).tap { |obj|
-      return obj.presigned_url(:get, expires_in: 1.hour.to_i) if obj.exists?
-    }
-
-    data = block.call
-    FileStorage.upload(data, filename: filename, bucket: bucket, region: region)
-      .presigned_url(:get, expires_in: 1.hour.to_i)
-  end
-
-  def delete(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    object(filename, bucket: bucket, region: region)
-      .delete
   end
 
   def exists?(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    object(filename, bucket: bucket, region: region)
-      .exists?
+    case mode
+    when :s3
+      s3_object(filename, bucket: bucket, region: region).exists?
+    else
+      File.exist?(local_path_for(filename, bucket: bucket))
+    end
   end
 
-  def expiring_url(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
-    object(filename, bucket: bucket, region: region)
-      .presigned_url(:get, expires_in: 1.hour.to_i)
+  def delete(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
+    case mode
+    when :s3
+      s3_object(filename, bucket: bucket, region: region).delete
+    else
+      FileUtils.rm_f(local_path_for(filename, bucket: bucket))
+    end
+  end
+
+  def public_url(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
+    case mode
+    when :s3
+      s3_object(filename, bucket: bucket, region: region).public_url
+    else
+      local_path_for(filename, bucket: bucket).to_s
+    end
+  end
+
+  def expiring_url(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION, expires_in: 1.hour.to_i)
+    case mode
+    when :s3
+      s3_object(filename, bucket: bucket, region: region).presigned_url(:get, expires_in: expires_in)
+    else
+      public_url(filename, bucket: bucket, region: region)
+    end
+  end
+
+  def get_or_upload(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION, &block)
+    return expiring_url(filename, bucket: bucket, region: region) if exists?(filename, bucket: bucket, region: region)
+
+    data = block.call
+    upload(data, filename: filename, bucket: bucket, region: region)
+    expiring_url(filename, bucket: bucket, region: region)
+  end
+
+  def s3_object(filename, bucket: DEFAULT_BUCKET, region: DEFAULT_REGION)
+    options = { region: region, credentials: CREDENTIALS }
+    options[:http_wire_trace] = false
+    options[:ssl_verify_peer] = false unless ::Rails.env.production?
+
+    ::Aws::S3::Resource.new(**options).bucket(bucket).object(filename.to_s)
+  end
+
+  def local_path_for(filename, bucket: DEFAULT_BUCKET)
+    TMP_DIR.join(bucket, ::Digest::SHA1.hexdigest(filename.to_s.tr("/", "_")))
   end
 end
