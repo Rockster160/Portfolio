@@ -48,8 +48,8 @@ import { dash_colors } from "../vars";
 
   function formatRemaining(seconds) {
     const abs = Math.abs(seconds);
-    const m = Math.floor(abs / 60);
-    const s = Math.floor(abs % 60);
+    const m = Math.ceil(abs / 60);
+    const s = Math.ceil(abs % 60);
 
     if (seconds > 0 && seconds < 60) {
       return `:${s}s`;

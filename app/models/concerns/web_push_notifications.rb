@@ -12,6 +12,7 @@ module WebPushNotifications
 
     push_sub = user.primary_push_sub(channel: channel)
     return "Failed to push - push_sub not set up" unless push_sub&.pushable?
+
     # example payload = {
     #   title: "Ardesian",
     #   body: "You have a new message!",

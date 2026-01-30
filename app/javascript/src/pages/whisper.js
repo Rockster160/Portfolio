@@ -57,7 +57,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!notifyBtn) return;
 
     const status = await checkWhisperNotificationStatus();
-    notifyBtn.classList.remove("subscribed", "unsubscribed", "denied", "unsupported");
+    notifyBtn.classList.remove(
+      "subscribed",
+      "unsubscribed",
+      "denied",
+      "unsupported",
+    );
     notifyBtn.classList.add(status);
 
     switch (status) {
@@ -79,7 +84,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const status = await checkWhisperNotificationStatus();
 
     if (status === "denied") {
-      alert("Notifications are blocked. Please enable them in your browser settings.");
+      alert(
+        "Notifications are blocked. Please enable them in your browser settings.",
+      );
       return;
     }
 
@@ -231,8 +238,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function formatRemaining(seconds) {
     const abs = Math.abs(seconds);
-    const m = Math.floor(abs / 60);
-    const s = Math.floor(abs % 60);
+    const m = Math.ceil(abs / 60);
+    const s = Math.ceil(abs % 60);
     const sign = seconds < 0 && m != 0 ? "-" : "";
 
     if (seconds > 0 && seconds < 60) {
