@@ -14,10 +14,10 @@
   gap: 30px;
 }
 
+.whisper-notify-toggle,
 .whisper-mute-toggle {
   position: absolute;
   top: 20px;
-  right: 20px;
   color: rgba(255, 255, 255, 0.25);
   cursor: pointer;
   font-size: 1rem;
@@ -26,6 +26,43 @@
   &:hover {
     color: rgba(255, 255, 255, 0.5);
   }
+}
+
+.whisper-notify-toggle {
+  right: 50px;
+
+  .notify-icon-off {
+    display: none;
+  }
+
+  &.subscribed {
+    color: rgba(100, 200, 100, 0.6);
+
+    &:hover {
+      color: rgba(100, 200, 100, 0.8);
+    }
+  }
+
+  &.unsubscribed,
+  &.denied,
+  &.unsupported {
+    .notify-icon-on {
+      display: none;
+    }
+    .notify-icon-off {
+      display: inline;
+    }
+  }
+
+  &.denied,
+  &.unsupported {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+}
+
+.whisper-mute-toggle {
+  right: 20px;
 
   .mute-icon-off {
     display: none;

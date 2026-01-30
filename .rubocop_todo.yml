@@ -138,6 +138,7 @@ Naming/MethodName:
     - 'app/service/jil/methods/global.rb'
     - 'app/service/jil/methods/monitor.rb'
     - 'app/service/jil/methods/oauth.rb'
+    - 'app/service/jil/methods/whisper.rb'
     - 'app/service/number_parser.rb'
     - 'app/service/tesla_command.rb'
     - 'lib/tasks/generate_map.rake'

@@ -1,12 +1,14 @@
 # WebPushNotifications.send_to(User.me, { title: "Hello, World", body: "This is a message from Jarvis" })
+# WebPushNotifications.send_to(User.me, { title: "Hello" }, channel: :whisper)
+# WebPushNotifications.broadcast_to_channel([user1, user2], { title: "Hello" }, channel: :whisper)
 module WebPushNotifications
   module_function
 
-  def send_to(user, payload={})
-    return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
+  def send_to(user, payload={}, channel: :jarvis)
+    # return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
     return "Failed to push - user not found" if user.blank?
 
-    push_sub = user.primary_push_sub
+    push_sub = user.primary_push_sub(channel: channel)
     return "Failed to push - push_sub not set up" unless push_sub&.pushable?
     # example payload = {
     #   title: "Ardesian",
@@ -77,5 +79,15 @@ module WebPushNotifications
       # Information Option. No visual affect.
       :timestamp, # <Long>
     ]
+  end
+
+  # Broadcast to multiple users on a specific channel
+  def broadcast_to_channel(users, payload={}, channel:)
+    Array.wrap(users).map { |user| send_to(user, payload, channel: channel) }
+  end
+
+  # Convenience method for Whisper notifications
+  def send_to_whisper(users, payload={})
+    broadcast_to_channel(users, payload, channel: :whisper)
   end
 end

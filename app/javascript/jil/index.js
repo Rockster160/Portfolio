@@ -406,6 +406,9 @@ document.addEventListener("mousedown", function (event) {
   }
   if (event.button === 1) {
     // middle click
+    if (!confirm("Clear all code blocks?")) {
+      return;
+    }
     Statement.reloadFromText("");
     History.record();
   }

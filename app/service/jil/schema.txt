@@ -295,6 +295,9 @@
   #timestampFormat(["long", "short", "none"])
   #blip(Numeric?)
   #data(Hash)
+[Whisper]
+  #notify(String:"Title" String?:"Body")
+  #notifyAll(String:"Title" String?:"Body")
 [Schedule]
   #find(Numeric)
   #search(Text("*") "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # Using listener syntax trigger:word::data

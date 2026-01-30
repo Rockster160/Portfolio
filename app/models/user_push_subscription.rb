@@ -4,6 +4,7 @@
 #
 #  id            :integer          not null, primary key
 #  auth          :string
+#  channel       :string           default("jarvis"), not null
 #  endpoint      :string
 #  p256dh        :string
 #  registered_at :datetime
@@ -15,7 +16,15 @@
 
 # deprecated: sub_auth
 class UserPushSubscription < ApplicationRecord
+  CHANNELS = [:jarvis, :whisper].freeze
+
   belongs_to :user
+
+  validates :channel, inclusion: { in: CHANNELS.map(&:to_s) }
+
+  scope :for_channel, ->(channel) { where(channel: channel) }
+  scope :default_channel, -> { for_channel(:jarvis) }
+  scope :whisper, -> { for_channel(:whisper) }
 
   # before_save :set_sub_auth
 

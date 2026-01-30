@@ -90,6 +90,7 @@ Configured in `.rubocop.yml`:
 - 100 character line length
 - Double quotes for strings
 - Block braces style (always braces)
+- **Symbols over strings**: Always use symbols for keys, enums, identifiers, and similar. Strings should only be used for multi-word values and user-facing messages.
 
 ## Environment
 

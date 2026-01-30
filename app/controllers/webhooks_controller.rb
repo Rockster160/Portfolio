@@ -223,8 +223,9 @@ class WebhooksController < ApplicationController
 
     Rails.logger.info("Signed in!")
     keys = params.permit(keys: [:auth, :p256dh])[:keys].slice(:auth, :p256dh)
+    channel = params[:channel].presence || :jarvis
 
-    push_sub = current_user.push_subs.find_or_initialize_by(endpoint: params[:endpoint])
+    push_sub = current_user.push_subs.find_or_initialize_by(endpoint: params[:endpoint], channel: channel)
     push_sub.assign_attributes({
       registered_at: Time.current,
       **keys,

@@ -215,8 +215,12 @@ class User < ApplicationRecord
     ).where("tasks.user_id = :id OR shared_tasks.user_id = :id", id: id).distinct
   end
 
-  def primary_push_sub
-    push_subs.where.not(registered_at: nil).order(registered_at: :desc).first
+  def primary_push_sub(channel: :jarvis)
+    push_subs.for_channel(channel).where.not(registered_at: nil).order(registered_at: :desc).first
+  end
+
+  def all_push_subs_for_channel(channel)
+    push_subs.for_channel(channel).where.not(registered_at: nil)
   end
 
   def ordered_lists

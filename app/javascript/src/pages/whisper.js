@@ -1,6 +1,11 @@
 import { beeps } from "./dashboard/vars";
 import { Monitor } from "./dashboard/cells/monitor";
 import { Time } from "./dashboard/cells/_time";
+import {
+  checkWhisperNotificationStatus,
+  registerWhisperNotifications,
+  unregisterWhisperNotifications,
+} from "./whisper_push";
 
 document.addEventListener("DOMContentLoaded", () => {
   const container = document.querySelector(".whisper-container");
@@ -43,6 +48,53 @@ document.addEventListener("DOMContentLoaded", () => {
   if (muteBtn) {
     muteBtn.addEventListener("click", toggleMute);
     updateMuteButton();
+  }
+
+  // Notification toggle functionality
+  const notifyBtn = container.querySelector(".whisper-notify-toggle");
+
+  async function updateNotifyButton() {
+    if (!notifyBtn) return;
+
+    const status = await checkWhisperNotificationStatus();
+    notifyBtn.classList.remove("subscribed", "unsubscribed", "denied", "unsupported");
+    notifyBtn.classList.add(status);
+
+    switch (status) {
+      case "subscribed":
+        notifyBtn.title = "Notifications enabled (click to disable)";
+        break;
+      case "denied":
+        notifyBtn.title = "Notifications blocked by browser";
+        break;
+      case "unsupported":
+        notifyBtn.title = "Notifications not supported";
+        break;
+      default:
+        notifyBtn.title = "Enable notifications";
+    }
+  }
+
+  async function toggleNotifications() {
+    const status = await checkWhisperNotificationStatus();
+
+    if (status === "denied") {
+      alert("Notifications are blocked. Please enable them in your browser settings.");
+      return;
+    }
+
+    if (status === "subscribed") {
+      await unregisterWhisperNotifications();
+    } else {
+      await registerWhisperNotifications();
+    }
+
+    updateNotifyButton();
+  }
+
+  if (notifyBtn) {
+    notifyBtn.addEventListener("click", toggleNotifications);
+    updateNotifyButton();
   }
 
   function playDefaultBeeps() {
