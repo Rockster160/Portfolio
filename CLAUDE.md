@@ -74,7 +74,7 @@ tell:/open|close/ garage             # Regex match on spoken commands
 event:add name:ANY(food drink)       # Event logging triggers
 ```
 
-Built-in listeners: `[monitor]`, `[email]`, `[sms]`, `[websocket]`, `[event]`, `[list]`, `[contact]`, `[tell]`, `[prompt]`, `[relay]`, plus cron scheduling.
+Built-in listeners: `monitor`, `email`, `sms`, `websocket`, `event`, `list`, `contact`, `tell`, `prompt`, `relay`, plus cron scheduling.
 
 ## Key Models
 
