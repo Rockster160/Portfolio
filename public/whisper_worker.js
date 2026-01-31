@@ -1,11 +1,9 @@
 self.addEventListener("install", evt => {
   console.log("Whisper service worker installed:", evt);
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", evt => {
   console.log("Whisper service worker activated:", evt);
-  evt.waitUntil(clients.claim());
 });
 
 self.addEventListener("push", evt => {

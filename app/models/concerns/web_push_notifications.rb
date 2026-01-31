@@ -36,7 +36,17 @@ module WebPushNotifications
       },
     )
     return "Push success"
+  rescue WebPush::ExpiredSubscription, WebPush::InvalidSubscription => e
+    # Subscription is no longer valid (410 Gone or 404 Not Found)
+    # Mark it as unregistered so we don't keep trying
+    Rails.logger.warn("[WEBPUSH] Subscription expired for #{user.username} (#{channel}): #{e.class}")
+    push_sub.update(registered_at: nil)
+    "Failed to push - subscription expired"
   rescue WebPush::Unauthorized => e
+    Rails.logger.warn("[WEBPUSH] Unauthorized for #{user.username} (#{channel}): #{e.message}")
+    "Failed to push - (WebPush Error) [#{e.class}] #{e}"
+  rescue WebPush::ResponseError => e
+    Rails.logger.error("[WEBPUSH] Error for #{user.username} (#{channel}): [#{e.class}] #{e.message}")
     "Failed to push - (WebPush Error) [#{e.class}] #{e}"
   end
 

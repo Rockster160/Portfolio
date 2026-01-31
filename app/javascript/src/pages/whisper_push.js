@@ -28,14 +28,27 @@ async function getWhisperSubscription() {
 
 export async function checkWhisperNotificationStatus() {
   if (!("Notification" in window)) {
+    console.log("[WhisperPush] Notifications not supported");
     return "unsupported";
   }
 
   if (Notification.permission === "denied") {
+    console.log("[WhisperPush] Permission denied");
     return "denied";
   }
 
-  const subscription = await getWhisperSubscription();
+  // Check service worker registration (use scope, not script path)
+  const registration = await navigator.serviceWorker.getRegistration("/whisper");
+  console.log("[WhisperPush] Registration:", registration ? "found" : "not found");
+
+  if (!registration) {
+    return "unsubscribed";
+  }
+
+  // Check subscription
+  const subscription = await registration.pushManager.getSubscription();
+  console.log("[WhisperPush] Subscription:", subscription ? subscription.endpoint.slice(-20) : "none");
+
   return subscription ? "subscribed" : "unsubscribed";
 }
 
