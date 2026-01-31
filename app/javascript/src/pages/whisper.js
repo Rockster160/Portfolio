@@ -58,6 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const status = await checkWhisperNotificationStatus();
     notifyBtn.classList.remove(
+      "hidden",
       "subscribed",
       "unsubscribed",
       "denied",

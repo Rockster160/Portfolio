@@ -19,7 +19,8 @@ async function getWhisperSubscription() {
     return null;
   }
 
-  const registration = await navigator.serviceWorker.getRegistration("/whisper_worker.js");
+  // getRegistration takes a scope URL, not the script URL
+  const registration = await navigator.serviceWorker.getRegistration("/whisper");
   if (!registration) return null;
 
   return registration.pushManager.getSubscription();
