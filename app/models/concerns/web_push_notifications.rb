@@ -21,13 +21,11 @@ module WebPushNotifications
     #   url: "https://google.com"
     # }
 
-    # Temp stub to see if empty notifications are what's breaking things.
-    # Allow dismiss payloads through (they have no title but need to be sent)
     payload = payload.deep_symbolize_keys
     return if payload[:title].blank? && !payload[:dismiss]
 
     WebPush.payload_send(
-      message:  format_payload(user, payload).to_json,
+      message:  format_payload(user, payload, channel).to_json,
       endpoint: push_sub.endpoint,
       p256dh:   push_sub.p256dh,
       auth:     push_sub.auth,
@@ -54,15 +52,15 @@ module WebPushNotifications
     user.prompts.unanswered.reload.count
   end
 
-  def format_payload(user, payload)
+  def format_payload(user, payload, channel)
     extra_data = payload.deep_symbolize_keys!.slice!(*payload_keys)
 
-    extra_data[:count] ||= user_counts(user)
+    extra_data[:count] ||= user_counts(user) if channel.to_sym == :jarvis
 
     payload[:data] ||= {}
     payload[:data].merge!(extra_data)
 
-    payload
+    payload.compact_blank
   end
 
   def payload_keys
