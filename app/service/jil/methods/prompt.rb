@@ -193,9 +193,10 @@ class Jil::Methods::Prompt < Jil::Methods::Base
 
     WebPushNotifications.send_to(@jil.user, {
       title: prompt.question,
+      tag:   prompt.params&.symbolize_keys&.[](:tag),
       url:   Rails.application.routes.url_helpers.prompt_url(prompt),
       badge: @jil.user.prompts.unanswered.reload.count,
-    })
+    }.compact)
   end
 
   def load_prompt(prompt)

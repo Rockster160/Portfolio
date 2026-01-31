@@ -42,6 +42,10 @@ module WebPushNotifications
     "Failed to push - (WebPush Error) [#{e.class}] #{e}"
   end
 
+  def dismiss(user, tag, channel: :jarvis)
+    send_to(user, { dismiss: true, tag: tag }, channel: channel)
+  end
+
   def update_count(user, count=nil)
     send_to(user, { count: count || user_counts(user) })
   end

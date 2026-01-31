@@ -285,6 +285,13 @@
   #permitRelay?(Boolean)
   #phone(String)
   #data(content(Hash|Keyval))
+[PushNotification]
+  #notify(content(PushNotificationData))
+  #dismiss(String:Tag)
+*[PushNotificationData]
+  #tag(String)
+  #title(String)
+  #body(Text)
 [Monitor]
   #loading(String:Name Boolean(true))
   #broadcast(String:Name content(MonitorData) "Loading?" Boolean(false))
