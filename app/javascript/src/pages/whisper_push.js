@@ -20,6 +20,19 @@ async function getWhisperRegistration() {
   return navigator.serviceWorker.getRegistration("/whisper");
 }
 
+// Register service worker on page load to keep it alive (without subscribing)
+export async function ensureWhisperServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+
+  try {
+    await navigator.serviceWorker.register("/whisper_worker.js", {
+      scope: "/whisper",
+    });
+  } catch (e) {
+    // Ignore registration errors
+  }
+}
+
 async function getWhisperSubscription() {
   const registration = await getWhisperRegistration();
   if (!registration) return null;
@@ -37,6 +50,7 @@ export async function checkWhisperNotificationStatus() {
 
   try {
     const subscription = await getWhisperSubscription();
+    // Don't auto-unsubscribe on expiration - let server handle it
     return subscription ? "subscribed" : "unsubscribed";
   } catch (e) {
     return "unsubscribed";
@@ -49,10 +63,22 @@ export async function registerWhisperNotifications() {
   }
 
   try {
-    // Register the Whisper service worker
-    await navigator.serviceWorker.register("/whisper_worker.js", {
+    // Register the Whisper service worker and get the registration
+    const registration = await navigator.serviceWorker.register("/whisper_worker.js", {
       scope: "/whisper",
     });
+
+    // Wait for the worker to be active
+    if (registration.installing || registration.waiting) {
+      await new Promise(resolve => {
+        const worker = registration.installing || registration.waiting;
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "activated") resolve();
+        });
+        // Also resolve if already active
+        if (registration.active) resolve();
+      });
+    }
 
     // Request notification permission
     const permission = await Notification.requestPermission();
@@ -60,10 +86,7 @@ export async function registerWhisperNotifications() {
       return { success: false, error: "permission_denied" };
     }
 
-    // Wait for the service worker to be ready and get the active registration
-    const registration = await navigator.serviceWorker.ready;
-
-    // Subscribe to push notifications using the ready registration
+    // Subscribe to push notifications using the Whisper registration specifically
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),

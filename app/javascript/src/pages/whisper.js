@@ -5,11 +5,15 @@ import {
   checkWhisperNotificationStatus,
   registerWhisperNotifications,
   unregisterWhisperNotifications,
+  ensureWhisperServiceWorker,
 } from "./whisper_push";
 
 document.addEventListener("DOMContentLoaded", () => {
   const container = document.querySelector(".whisper-container");
   if (!container) return;
+
+  // Register service worker on every page load to keep it alive
+  ensureWhisperServiceWorker();
 
   const monitorChannel = container.dataset.monitorChannel;
   const birthDateMs = 1760432400000; // October 14, 2025 at 3am Denver (MDT = UTC-6)
