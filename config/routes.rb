@@ -104,6 +104,7 @@ Rails.application.routes.draw do
   get "webhooks/auth/:service" => "webhooks#auth"
   get "webhooks/oauth/:service" => "webhooks#auth"
   post "push_notification_subscribe" => "webhooks#push_notification_subscribe"
+  post "push_notification_unsubscribe" => "webhooks#push_notification_unsubscribe"
 
   get "dashboard" => "dashboard#show"
   resource :dashboard, controller: :dashboard, only: [:show] do

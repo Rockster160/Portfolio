@@ -1,4 +1,5 @@
 // Whisper Push Notification Module
+// Mirrors the Jarvis push subscription logic for consistency
 
 const VAPID_PUBLIC_KEY =
   "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
@@ -14,59 +15,44 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+async function getWhisperRegistration() {
+  if (!("serviceWorker" in navigator)) return null;
+  return navigator.serviceWorker.getRegistration("/whisper");
+}
+
 async function getWhisperSubscription() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-    return null;
-  }
-
-  // getRegistration takes a scope URL, not the script URL
-  const registration = await navigator.serviceWorker.getRegistration("/whisper");
+  const registration = await getWhisperRegistration();
   if (!registration) return null;
-
   return registration.pushManager.getSubscription();
 }
 
 export async function checkWhisperNotificationStatus() {
-  if (!("Notification" in window)) {
-    console.log("[WhisperPush] Notifications not supported");
+  if (!("serviceWorker" in navigator) || !("Notification" in window)) {
     return "unsupported";
   }
 
   if (Notification.permission === "denied") {
-    console.log("[WhisperPush] Permission denied");
     return "denied";
   }
 
-  // Check service worker registration (use scope, not script path)
-  const registration = await navigator.serviceWorker.getRegistration("/whisper");
-  console.log("[WhisperPush] Registration:", registration ? "found" : "not found");
-
-  if (!registration) {
+  try {
+    const subscription = await getWhisperSubscription();
+    return subscription ? "subscribed" : "unsubscribed";
+  } catch (e) {
     return "unsubscribed";
   }
-
-  // Check subscription
-  const subscription = await registration.pushManager.getSubscription();
-  console.log("[WhisperPush] Subscription:", subscription ? subscription.endpoint.slice(-20) : "none");
-
-  return subscription ? "subscribed" : "unsubscribed";
 }
 
 export async function registerWhisperNotifications() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-    console.warn("Push notifications not supported");
     return { success: false, error: "unsupported" };
   }
 
   try {
     // Register the Whisper service worker
-    const registration = await navigator.serviceWorker.register("/whisper_worker.js", {
+    await navigator.serviceWorker.register("/whisper_worker.js", {
       scope: "/whisper",
     });
-    console.log("Whisper service worker registered:", registration);
-
-    // Wait for the service worker to be ready
-    await navigator.serviceWorker.ready;
 
     // Request notification permission
     const permission = await Notification.requestPermission();
@@ -74,41 +60,39 @@ export async function registerWhisperNotifications() {
       return { success: false, error: "permission_denied" };
     }
 
-    // Subscribe to push notifications
+    // Wait for the service worker to be ready and get the active registration
+    const registration = await navigator.serviceWorker.ready;
+
+    // Subscribe to push notifications using the ready registration
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
 
-    // Send subscription to server with whisper channel
+    // Send subscription to server - use JSON.stringify(subscription) like Jarvis does
+    // This ensures proper base64url encoding of keys
+    const subscriptionData = subscription.toJSON();
+    subscriptionData.channel = "whisper";
+
     const response = await fetch("/push_notification_subscribe", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         JarvisPushVersion: "2",
       },
-      body: JSON.stringify({
-        endpoint: subscription.endpoint,
-        keys: {
-          p256dh: btoa(String.fromCharCode(...new Uint8Array(subscription.getKey("p256dh")))),
-          auth: btoa(String.fromCharCode(...new Uint8Array(subscription.getKey("auth")))),
-        },
-        channel: "whisper",
-      }),
+      body: JSON.stringify(subscriptionData),
+      credentials: "same-origin",
     });
 
     if (response.ok) {
-      console.log("Whisper push subscription saved");
       return { success: true };
     } else {
       // Server failed - roll back browser subscription to keep states in sync
-      console.error("Failed to save subscription:", response.status);
       await subscription.unsubscribe();
       return { success: false, error: "server_error" };
     }
   } catch (error) {
-    console.error("Error registering whisper notifications:", error);
-    // Try to clean up browser subscription on any error
+    // Clean up browser subscription on any error
     const sub = await getWhisperSubscription();
     if (sub) await sub.unsubscribe();
     return { success: false, error: error.message };
@@ -119,12 +103,23 @@ export async function unregisterWhisperNotifications() {
   try {
     const subscription = await getWhisperSubscription();
     if (subscription) {
+      // Notify server to clear the subscription
+      const subscriptionData = subscription.toJSON();
+      subscriptionData.channel = "whisper";
+
+      await fetch("/push_notification_unsubscribe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(subscriptionData),
+        credentials: "same-origin",
+      }).catch(() => {}); // Don't fail if server request fails
+
       await subscription.unsubscribe();
-      console.log("Whisper push subscription removed");
     }
     return { success: true };
   } catch (error) {
-    console.error("Error unregistering whisper notifications:", error);
     return { success: false, error: error.message };
   }
 }

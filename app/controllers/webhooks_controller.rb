@@ -241,6 +241,20 @@ class WebhooksController < ApplicationController
     end
   end
 
+  def push_notification_unsubscribe
+    return head :ok unless user_signed_in?
+
+    channel = params[:channel].presence || :jarvis
+    push_sub = current_user.push_subs.find_by(endpoint: params[:endpoint], channel: channel)
+
+    if push_sub
+      push_sub.update(registered_at: nil)
+      Rails.logger.info("[WEBPUSH] Unsubscribed #{current_user.username} from #{channel}")
+    end
+
+    head :ok
+  end
+
   private
 
   def json_params

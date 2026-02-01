@@ -104,7 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
     notifyBtn.addEventListener("click", toggleNotifications);
     updateNotifyButton();
 
-    // Check status when user returns to app (to show if subscription expired)
+    // Recheck when user returns to app
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
         updateNotifyButton();
