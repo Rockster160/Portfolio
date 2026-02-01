@@ -225,8 +225,10 @@ class WebhooksController < ApplicationController
     keys = params.permit(keys: [:auth, :p256dh])[:keys].slice(:auth, :p256dh)
     channel = params[:channel].presence || :jarvis
 
-    push_sub = current_user.push_subs.find_or_initialize_by(endpoint: params[:endpoint], channel: channel)
+    # One subscription per user per channel - find by channel only, update endpoint if changed
+    push_sub = current_user.push_subs.find_or_initialize_by(channel: channel)
     push_sub.assign_attributes({
+      endpoint:      params[:endpoint],
       registered_at: Time.current,
       **keys,
     })
@@ -245,7 +247,7 @@ class WebhooksController < ApplicationController
     return head :ok unless user_signed_in?
 
     channel = params[:channel].presence || :jarvis
-    push_sub = current_user.push_subs.find_by(endpoint: params[:endpoint], channel: channel)
+    push_sub = current_user.push_subs.find_by(channel: channel)
 
     if push_sub
       push_sub.update(registered_at: nil)
