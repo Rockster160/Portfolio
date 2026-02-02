@@ -85,18 +85,17 @@ module WebPushNotifications
       :vibrate, # <Array of Integers>
       :sound, # <URL String>
       :dir, # <String of [auto | ltr | rtl]>
-      # Behavioural Options
+      # Behavioral Options
       :tag, # <String>
       :data, # <Anything>
       :requireInteraction, # <boolean>
       :renotify, # <Boolean>
       :silent, # <Boolean>
-      # Both Visual & Behavioural Options
-      :actions, # <Array of Strings> or <[{ action: "", title: "", icon: "" }]>
-      # Information Option. No visual affect.
-      :timestamp, # <Long>
-      # Custom
       :dismiss, # <Boolean> - used to dismiss notifications by tag
+      # Both Visual & Behavioral Options
+      :actions, # <Array of Strings> or <[{ action: "", title: "", icon: "" }]>
+      # Information Option. No visual effect.
+      :timestamp, # <Long>
     ]
   end
 
