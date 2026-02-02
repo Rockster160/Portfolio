@@ -20,16 +20,47 @@ async function getWhisperRegistration() {
   return navigator.serviceWorker.getRegistration("/whisper");
 }
 
-// Register service worker on page load to keep it alive (without subscribing)
+// Ensure service worker is registered and handle subscription recovery
 export async function ensureWhisperServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
   try {
-    await navigator.serviceWorker.register("/whisper_worker.js", {
-      scope: "/whisper",
-    });
+    // Register if not already registered
+    let registration = await navigator.serviceWorker.getRegistration("/whisper");
+    if (!registration) {
+      registration = await navigator.serviceWorker.register("/whisper_worker.js", {
+        scope: "/whisper",
+      });
+    }
+
+    // Check subscription status
+    let subscription = await registration.pushManager.getSubscription();
+
+    // If permission granted but no subscription, iOS may have cleared it - resubscribe
+    if (!subscription && Notification.permission === "granted") {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+    }
+
+    // Sync subscription with server (handles new subscriptions or endpoint changes)
+    if (subscription) {
+      const subscriptionData = subscription.toJSON();
+      subscriptionData.channel = "whisper";
+
+      fetch("/push_notification_subscribe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          JarvisPushVersion: "2",
+        },
+        body: JSON.stringify(subscriptionData),
+        credentials: "same-origin",
+      }).catch(() => {}); // Fire and forget
+    }
   } catch (e) {
-    // Ignore registration errors
+    // Ignore errors
   }
 }
 
