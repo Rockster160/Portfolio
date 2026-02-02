@@ -136,7 +136,7 @@ class ActionEventsController < ApplicationController
   def create
     event = ActionEvent.create(event_params)
     ::Jil.trigger(current_user, :event, event.with_jil_attrs(action: :added))
-    ActionEventBroadcastWorker.perform_async(event.id)
+    ::ActionEventBroadcastWorker.perform_async(event.id)
 
     respond_to do |format|
       format.json {
@@ -160,7 +160,7 @@ class ActionEventsController < ApplicationController
 
     @event.update(event_params)
     ::Jil.trigger(current_user, :event, @event.with_jil_attrs(action: :changed))
-    ActionEventBroadcastWorker.perform_async(@event.id, false)
+    ::ActionEventBroadcastWorker.perform_async(@event.id, false)
   end
 
   def destroy
