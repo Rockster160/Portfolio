@@ -20,9 +20,15 @@ async function getWhisperRegistration() {
   return navigator.serviceWorker.getRegistration("/whisper");
 }
 
-// Ensure service worker is registered and handle subscription recovery
+// Ensure service worker is registered, handle subscription recovery, and return status
 export async function ensureWhisperServiceWorker() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return "unsupported";
+  }
+
+  if (Notification.permission === "denied") {
+    return "denied";
+  }
 
   try {
     // Register if not already registered
@@ -49,7 +55,7 @@ export async function ensureWhisperServiceWorker() {
       const subscriptionData = subscription.toJSON();
       subscriptionData.channel = "whisper";
 
-      fetch("/push_notification_subscribe", {
+      await fetch("/push_notification_subscribe", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -57,10 +63,14 @@ export async function ensureWhisperServiceWorker() {
         },
         body: JSON.stringify(subscriptionData),
         credentials: "same-origin",
-      }).catch(() => {}); // Fire and forget
+      });
+
+      return "subscribed";
     }
+
+    return "unsubscribed";
   } catch (e) {
-    // Ignore errors
+    return "unsubscribed";
   }
 }
 

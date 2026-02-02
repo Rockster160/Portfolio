@@ -8,12 +8,12 @@ import {
   ensureWhisperServiceWorker,
 } from "./whisper_push";
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const container = document.querySelector(".whisper-container");
   if (!container) return;
 
-  // Register service worker on every page load to keep it alive
-  ensureWhisperServiceWorker();
+  // Register service worker on every page load and recover subscription if needed
+  const initialStatus = await ensureWhisperServiceWorker();
 
   const monitorChannel = container.dataset.monitorChannel;
   const birthDateMs = 1760432400000; // October 14, 2025 at 3am Denver (MDT = UTC-6)
@@ -57,10 +57,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Notification toggle functionality
   const notifyBtn = container.querySelector(".whisper-notify-toggle");
 
-  async function updateNotifyButton() {
+  async function updateNotifyButton(existingStatus = null) {
     if (!notifyBtn) return;
 
-    const status = await checkWhisperNotificationStatus();
+    const status = existingStatus || (await checkWhisperNotificationStatus());
     notifyBtn.classList.remove(
       "hidden",
       "subscribed",
@@ -106,7 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (notifyBtn) {
     notifyBtn.addEventListener("click", toggleNotifications);
-    updateNotifyButton();
+    updateNotifyButton(initialStatus);
 
     // Recheck when user returns to app
     document.addEventListener("visibilitychange", () => {
