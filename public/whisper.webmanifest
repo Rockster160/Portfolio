@@ -16,10 +16,10 @@
     }
   ],
   "id": "whisper",
-  "start_url": "/whisper?source=pwa",
+  "start_url": "/?source=pwa",
   "background_color": "#11346F",
   "display": "standalone",
-  "scope": "/whisper",
+  "scope": "/",
   "theme_color": "#11346F",
   "description": "Dog Timer & Management"
 }

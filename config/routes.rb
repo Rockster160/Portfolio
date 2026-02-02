@@ -9,6 +9,10 @@ Rails.application.routes.draw do
     get "/sub" => "index#sub"
   end
 
+  constraints subdomain: "whisper" do
+    root "whisper#show", as: :whisper_root
+  end
+
   post "tesla/api/1/vehicles/:vin/command/:command" => "vehicles#command"
   post "tesla/oauth2/v3/token" => "vehicles#token"
 

@@ -17,7 +17,7 @@ function urlBase64ToUint8Array(base64String) {
 
 async function getWhisperRegistration() {
   if (!("serviceWorker" in navigator)) return null;
-  return navigator.serviceWorker.getRegistration("/whisper");
+  return navigator.serviceWorker.getRegistration("/");
 }
 
 // Ensure service worker is registered, handle subscription recovery, and return status
@@ -32,10 +32,10 @@ export async function ensureWhisperServiceWorker() {
 
   try {
     // Register if not already registered
-    let registration = await navigator.serviceWorker.getRegistration("/whisper");
+    let registration = await navigator.serviceWorker.getRegistration("/");
     if (!registration) {
       registration = await navigator.serviceWorker.register("/whisper_worker.js", {
-        scope: "/whisper",
+        scope: "/",
       });
     }
 
@@ -106,7 +106,7 @@ export async function registerWhisperNotifications() {
   try {
     // Register the Whisper service worker and get the registration
     const registration = await navigator.serviceWorker.register("/whisper_worker.js", {
-      scope: "/whisper",
+      scope: "/",
     });
 
     // Wait for the worker to be active

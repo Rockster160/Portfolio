@@ -45,13 +45,13 @@ self.addEventListener("notificationclick", (evt) => {
   console.log("Whisper notification clicked:", evt);
   evt.notification.close();
 
-  const targetUrl = evt.notification.data?.url || "/whisper";
+  const targetUrl = evt.notification.data?.url || "/";
 
   evt.waitUntil(
     clients.matchAll({ type: "window" }).then((clientList) => {
       // Try to focus an existing Whisper window
       for (const client of clientList) {
-        if (client.url.includes("/whisper") && "focus" in client) {
+        if ("focus" in client) {
           return client.focus();
         }
       }
