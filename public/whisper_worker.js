@@ -8,7 +8,14 @@ self.addEventListener("activate", (evt) => {
 
 self.addEventListener("push", (evt) => {
   console.log("Whisper push notification received:", evt);
-  const data = evt.data ? evt.data.json() : {};
+  let data = {};
+  try {
+    data = evt.data ? evt.data.json() : {};
+    console.log("Whisper push data:", JSON.stringify(data));
+  } catch (e) {
+    console.error("Failed to parse push data:", e, evt.data?.text());
+    return;
+  }
 
   // Handle dismiss request - close notification by tag instead of showing
   if (data.dismiss && data.tag) {
@@ -27,7 +34,7 @@ self.addEventListener("push", (evt) => {
 
   data.icon = data.icon || "/whisper_favicon/whisper-detail.png";
 
-  let badgeCount = parseInt(data.data.count);
+  let badgeCount = parseInt(data.data?.count || 0);
   if (navigator.setAppBadge) {
     if (badgeCount > 0) {
       navigator.setAppBadge(badgeCount);

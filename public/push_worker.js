@@ -27,7 +27,7 @@ self.addEventListener("push", (evt) => {
 
   data.icon = data.icon || "/favicon/favicon.ico";
 
-  let badgeCount = parseInt(data.data.count);
+  let badgeCount = parseInt(data.data?.count || 0);
   if (navigator.setAppBadge) {
     if (badgeCount > 0) {
       navigator.setAppBadge(badgeCount);

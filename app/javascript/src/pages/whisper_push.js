@@ -20,6 +20,9 @@ async function getWhisperRegistration() {
   return navigator.serviceWorker.getRegistration("/");
 }
 
+// Key for tracking explicit user opt-out (don't auto-recover if user chose to disable)
+const OPT_OUT_KEY = "whisper-push-opted-out";
+
 // Ensure service worker is registered, handle subscription recovery, and return status
 export async function ensureWhisperServiceWorker() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -43,7 +46,9 @@ export async function ensureWhisperServiceWorker() {
     let subscription = await registration.pushManager.getSubscription();
 
     // If permission granted but no subscription, iOS may have cleared it - resubscribe
-    if (!subscription && Notification.permission === "granted") {
+    // BUT only if the user didn't explicitly opt out
+    const userOptedOut = localStorage.getItem(OPT_OUT_KEY) === "true";
+    if (!subscription && Notification.permission === "granted" && !userOptedOut) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
@@ -52,6 +57,9 @@ export async function ensureWhisperServiceWorker() {
 
     // Sync subscription with server (handles new subscriptions or endpoint changes)
     if (subscription) {
+      // Clear opt-out flag since we have an active subscription
+      localStorage.removeItem(OPT_OUT_KEY);
+
       const subscriptionData = subscription.toJSON();
       subscriptionData.channel = "whisper";
 
@@ -104,6 +112,9 @@ export async function registerWhisperNotifications() {
   }
 
   try {
+    // Clear opt-out flag since user is explicitly enabling
+    localStorage.removeItem(OPT_OUT_KEY);
+
     // Register the Whisper service worker and get the registration
     const registration = await navigator.serviceWorker.register("/whisper_worker.js", {
       scope: "/",
@@ -165,6 +176,9 @@ export async function registerWhisperNotifications() {
 
 export async function unregisterWhisperNotifications() {
   try {
+    // Mark that user explicitly opted out - don't auto-recover
+    localStorage.setItem(OPT_OUT_KEY, "true");
+
     const subscription = await getWhisperSubscription();
     if (subscription) {
       // Notify server to clear the subscription
