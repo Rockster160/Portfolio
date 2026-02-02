@@ -20,7 +20,6 @@ class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 
   has_many :api_keys, dependent: :destroy
-  has_many :tasks, dependent: :destroy
   has_many :bowling_leagues, dependent: :destroy
   has_many :climbs, dependent: :destroy
   has_many :folders, dependent: :destroy
@@ -46,6 +45,8 @@ class User < ApplicationRecord
   has_many :meal_builders, dependent: :destroy
   has_many :list_builders, dependent: :destroy
   has_many :boxes, dependent: :destroy
+  has_many :tasks, dependent: :destroy
+  has_many :executions, dependent: :destroy
   has_many :shared_tasks, dependent: :destroy
   has_many :accessible_shared_tasks, through: :shared_tasks, source: :task
   has_one :money_bucket

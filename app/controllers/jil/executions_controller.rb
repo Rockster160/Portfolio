@@ -3,16 +3,10 @@ class Jil::ExecutionsController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def index
-    if params[:task_id].present?
-      @task = current_user.accessible_tasks.find(params[:task_id])
-      @executions = @task.executions
-    else
-      accessible_task_ids = current_user.accessible_tasks.pluck(:id)
-      @executions = Execution.where(user: current_user)
-        .or(Execution.where(task_id: accessible_task_ids))
-    end
+    @executions = current_user.executions.includes(:task)
 
-    @executions = @executions.includes(:task)
+    @executions = @executions.where(task_id: params[:task_id]) if params[:task_id].present?
+
     @executions = filter_executions(@executions) if params[:status].present?
     @executions = @executions.order(started_at: :desc).page(params[:page]).per(50)
   end
@@ -80,10 +74,7 @@ class Jil::ExecutionsController < ApplicationController
   private
 
   def find_execution(id)
-    accessible_task_ids = current_user.accessible_tasks.pluck(:id)
-    Execution.where(user: current_user)
-      .or(Execution.where(task_id: accessible_task_ids))
-      .find(id)
+    current_user.executions.find(id)
   end
 
   def filter_executions(executions)

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_01_30_163446) do
+ActiveRecord::Schema[7.1].define(version: 2026_02_02_161403) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -337,7 +337,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_30_163446) do
     t.datetime "updated_at", null: false
     t.integer "auth_type"
     t.integer "auth_type_id"
+    t.index ["status"], name: "index_executions_on_status"
+    t.index ["task_id", "started_at"], name: "index_executions_on_task_id_and_started_at", order: { started_at: :desc }
     t.index ["task_id"], name: "index_executions_on_task_id"
+    t.index ["user_id", "started_at"], name: "index_executions_on_user_id_and_started_at", order: { started_at: :desc }
     t.index ["user_id"], name: "index_executions_on_user_id"
   end
 
