@@ -12,8 +12,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   const container = document.querySelector(".whisper-container");
   if (!container) return;
 
-  // Register service worker on every page load and recover subscription if needed
-  const initialStatus = await ensureWhisperServiceWorker();
+  // Register service worker if not already (needed to receive pushes)
+  // But don't auto-recover subscriptions - matching Jarvis behavior
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistration("/").then((reg) => {
+      if (!reg) {
+        navigator.serviceWorker.register("/whisper_worker.js", { scope: "/" });
+      }
+    });
+  }
+
+  // Just check status - don't auto-recover
+  const initialStatus = await checkWhisperNotificationStatus();
 
   const monitorChannel = container.dataset.monitorChannel;
   const birthDateMs = 1760432400000; // October 14, 2025 at 3am Denver (MDT = UTC-6)
@@ -108,10 +118,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     notifyBtn.addEventListener("click", toggleNotifications);
     updateNotifyButton(initialStatus);
 
-    // Recheck when user returns to app
-    document.addEventListener("visibilitychange", () => {
+    // Just recheck status when user returns - don't auto-recover (matching Jarvis)
+    document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible") {
-        updateNotifyButton();
+        const status = await checkWhisperNotificationStatus();
+        updateNotifyButton(status);
       }
     });
   }
