@@ -265,7 +265,7 @@ class WebhooksController < ApplicationController
     error = params[:error]
     timestamp = params[:timestamp]
 
-    Rails.logger.info("[PUSH_DIAG] #{user} | #{event} | permission=#{permission} | optedOut=#{opted_out} | error=#{error} | #{timestamp}")
+    Rails.logger.error("[PUSH_DIAG] #{user} | #{event} | permission=#{permission} | optedOut=#{opted_out} | error=#{error} | #{timestamp}")
     head :ok
   end
 
