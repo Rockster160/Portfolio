@@ -17,16 +17,14 @@ self.addEventListener("push", (evt) => {
     return;
   }
 
-  // Handle dismiss request - replace with brief "done" notification (iOS requires visible notifications)
+  // Handle dismiss request - close notification by tag instead of showing
   if (data.dismiss && data.tag) {
     evt.waitUntil(
-      self.registration.showNotification("✓", {
-        tag: data.tag, // Same tag replaces the original notification
-        body: data.body || "Done",
-        icon: "/whisper_favicon/whisper-detail.png",
-        silent: true,
-        requireInteraction: false, // Auto-dismiss after system timeout
-      })
+      self.registration
+        .getNotifications({ tag: data.tag })
+        .then((notifications) => {
+          notifications.forEach((n) => n.close());
+        }),
     );
     return;
   }
