@@ -23,6 +23,26 @@ async function getWhisperRegistration() {
 // Key for tracking explicit user opt-out (don't auto-recover if user chose to disable)
 const OPT_OUT_KEY = "whisper-push-opted-out";
 
+// Send diagnostic info to server for debugging
+async function logPushDiagnostic(event, data = {}) {
+  try {
+    await fetch("/push_diagnostic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event,
+        permission: Notification.permission,
+        optedOut: localStorage.getItem(OPT_OUT_KEY),
+        timestamp: new Date().toISOString(),
+        ...data,
+      }),
+      credentials: "same-origin",
+    });
+  } catch (e) {
+    // ignore
+  }
+}
+
 // Ensure service worker is registered, handle subscription recovery, and return status
 export async function ensureWhisperServiceWorker() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -37,27 +57,47 @@ export async function ensureWhisperServiceWorker() {
     // Register if not already registered
     let registration = await navigator.serviceWorker.getRegistration("/");
     if (!registration) {
-      registration = await navigator.serviceWorker.register("/whisper_worker.js", {
-        scope: "/",
-      });
+      registration = await navigator.serviceWorker.register(
+        "/whisper_worker.js",
+        {
+          scope: "/",
+        },
+      );
     }
 
     // Check subscription status
     let subscription = await registration.pushManager.getSubscription();
+    const hadSubscription = !!subscription;
 
     // If permission granted but no subscription, iOS may have cleared it - resubscribe
     // BUT only if the user didn't explicitly opt out
     const userOptedOut = localStorage.getItem(OPT_OUT_KEY) === "true";
-    if (!subscription && Notification.permission === "granted" && !userOptedOut) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      });
+
+    if (
+      !subscription &&
+      Notification.permission === "granted" &&
+      !userOptedOut
+    ) {
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+        // Log successful recovery
+        logPushDiagnostic("auto_recovery_success");
+      } catch (subError) {
+        // Log failed recovery with error
+        logPushDiagnostic("auto_recovery_failed", { error: subError.message });
+      }
+    }
+
+    // Log state when there's no subscription and we didn't recover
+    if (!subscription && !hadSubscription) {
+      logPushDiagnostic("no_subscription", { userOptedOut });
     }
 
     // Sync subscription with server (handles new subscriptions or endpoint changes)
     if (subscription) {
-      // Clear opt-out flag since we have an active subscription
       localStorage.removeItem(OPT_OUT_KEY);
 
       const subscriptionData = subscription.toJSON();
@@ -78,6 +118,7 @@ export async function ensureWhisperServiceWorker() {
 
     return "unsubscribed";
   } catch (e) {
+    logPushDiagnostic("ensure_error", { error: e.message });
     return "unsubscribed";
   }
 }
@@ -99,7 +140,6 @@ export async function checkWhisperNotificationStatus() {
 
   try {
     const subscription = await getWhisperSubscription();
-    // Don't auto-unsubscribe on expiration - let server handle it
     return subscription ? "subscribed" : "unsubscribed";
   } catch (e) {
     return "unsubscribed";
@@ -116,13 +156,16 @@ export async function registerWhisperNotifications() {
     localStorage.removeItem(OPT_OUT_KEY);
 
     // Register the Whisper service worker and get the registration
-    const registration = await navigator.serviceWorker.register("/whisper_worker.js", {
-      scope: "/",
-    });
+    const registration = await navigator.serviceWorker.register(
+      "/whisper_worker.js",
+      {
+        scope: "/",
+      },
+    );
 
     // Wait for the worker to be active
     if (registration.installing || registration.waiting) {
-      await new Promise(resolve => {
+      await new Promise((resolve) => {
         const worker = registration.installing || registration.waiting;
         worker.addEventListener("statechange", () => {
           if (worker.state === "activated") resolve();

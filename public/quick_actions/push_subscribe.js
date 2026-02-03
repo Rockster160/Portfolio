@@ -33,10 +33,7 @@ export default function registerNotifications() {
         return registration.pushManager.subscribe(subscribeOptions);
       })
       .then((subscription) => {
-        console.log(
-          "[Pus h API] Push Notification Subscription:",
-          subscription,
-        );
+        console.log("[Push API] Push Notification Subscription:", subscription);
         // Send the subscription details to the server using fetch API
         return fetch("/push_notification_subscribe", {
           method: "POST",

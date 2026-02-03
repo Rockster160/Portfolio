@@ -257,6 +257,18 @@ class WebhooksController < ApplicationController
     head :ok
   end
 
+  def push_diagnostic
+    user = current_user&.username || "anonymous"
+    event = params[:event]
+    permission = params[:permission]
+    opted_out = params[:optedOut]
+    error = params[:error]
+    timestamp = params[:timestamp]
+
+    Rails.logger.info("[PUSH_DIAG] #{user} | #{event} | permission=#{permission} | optedOut=#{opted_out} | error=#{error} | #{timestamp}")
+    head :ok
+  end
+
   private
 
   def json_params
