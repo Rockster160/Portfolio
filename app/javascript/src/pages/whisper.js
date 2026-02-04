@@ -222,7 +222,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     let totalMonths =
       (now.getFullYear() - birth.getFullYear()) * 12 +
       (now.getMonth() - birth.getMonth());
-    if (now.getDate() < birth.getDate()) {
+    const birthTimeOfDay = birth.getHours() * 60 + birth.getMinutes();
+    const nowTimeOfDay = now.getHours() * 60 + now.getMinutes();
+    if (
+      now.getDate() < birth.getDate() ||
+      (now.getDate() === birth.getDate() && nowTimeOfDay < birthTimeOfDay)
+    ) {
       totalMonths--;
     }
     const years = Math.floor(totalMonths / 12);
@@ -235,17 +240,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     lastWeeks = weeks;
 
     let ageStr;
-    if (years === 0) {
-      ageStr = `${months}m`;
-    } else if (months === 0) {
-      ageStr = `${years}y`;
+    if (years < 1) {
+      // Before 1 year: show months (weeks)
+      ageStr = `${totalMonths}m (${weeks}w)`;
+    } else if (years < 2) {
+      // 1-2 years: show years (total months)
+      ageStr = `${years}y (${totalMonths}m)`;
     } else {
-      ageStr = `${years}y ${months}m`;
+      // 2+ years: show years and remainder months
+      ageStr = months === 0 ? `${years}y` : `${years}y ${months}m`;
     }
 
     const ageEl = container.querySelector(".whisper-age");
     if (ageEl) {
-      ageEl.textContent = `${ageStr} (${weeks}w)`;
+      ageEl.textContent = ageStr;
     }
   }
 

@@ -25,8 +25,10 @@ import { dash_colors } from "../vars";
     let totalMonths =
       (now.getFullYear() - birth.getFullYear()) * 12 +
       (now.getMonth() - birth.getMonth());
-
-    if (now.getDate() < birth.getDate()) {
+    const birthTimeOfDay = birth.getHours() * 60 + birth.getMinutes();
+    const nowTimeOfDay = now.getHours() * 60 + now.getMinutes();
+    if (now.getDate() < birth.getDate() ||
+        (now.getDate() === birth.getDate() && nowTimeOfDay < birthTimeOfDay)) {
       totalMonths--;
     }
 
@@ -35,15 +37,18 @@ import { dash_colors } from "../vars";
     const weeks = Math.floor((now - birth) / (7 * 24 * 60 * 60 * 1000));
 
     let ageStr;
-    if (years === 0) {
-      ageStr = `${months}m`;
-    } else if (months === 0) {
-      ageStr = `${years}y`;
+    if (years < 1) {
+      // Before 1 year: show months (total weeks)
+      ageStr = `${totalMonths}m (${weeks}w)`;
+    } else if (years < 2) {
+      // 1-2 years: show years (total months)
+      ageStr = `${years}y (${totalMonths}m)`;
     } else {
-      ageStr = `${years}y ${months}m`;
+      // 2+ years: show years and remainder months
+      ageStr = months === 0 ? `${years}y` : `${years}y ${months}m`;
     }
 
-    return `${ageStr} (${weeks}w)`;
+    return ageStr;
   }
 
   function formatRemaining(seconds) {
