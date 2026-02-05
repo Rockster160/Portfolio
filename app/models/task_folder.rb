@@ -18,6 +18,7 @@ class TaskFolder < ApplicationRecord
   belongs_to :parent, class_name: "TaskFolder", optional: true
   has_many :children, class_name: "TaskFolder", foreign_key: :parent_id, dependent: :destroy, inverse_of: :parent
   has_many :tasks, dependent: :nullify
+  has_many :active_tasks, -> { where(archived_at: nil) }, class_name: "Task"
 
   orderable sort_order: :desc, scope: ->(folder) {
     folder.parent ? folder.parent.children : folder.user.task_folders.where(parent_id: nil)

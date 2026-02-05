@@ -1,6 +1,6 @@
 <div class="task-row" data-type="task" data-id="<%= task.id %>" data-name="<%= task.name.downcase %>" data-status="<%= task.last_status || '' %>" data-last-run="<%= task.last_trigger_at&.to_i || 0 %>" data-next-run="<%= task.next_trigger_at&.to_i || 0 %>">
   <div class="col-handle">
-    <% unless defined?(shared) && shared %>
+    <% unless (defined?(shared) && shared) || task.archived? %>
       <span class="drag-handle"><i class="fa fa-ellipsis-v"></i></span>
     <% end %>
   </div>
@@ -8,6 +8,9 @@
     <a href="<%= jil_task_path(task) %>"><%= task.name %></a>
     <% if !task.enabled? %>
       <span class="badge badge-disabled">Disabled</span>
+    <% end %>
+    <% if task.archived? %>
+      <span class="badge badge-archived">Archived</span>
     <% end %>
     <% if defined?(shared) && shared %>
       <span class="badge badge-shared">Shared</span>

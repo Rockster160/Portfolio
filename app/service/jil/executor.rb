@@ -39,7 +39,7 @@ class Jil::Executor
 
     trigger_data = TriggerData.parse(raw_trigger_data, as: user)
 
-    user_tasks = user.accessible_tasks.enabled.ordered
+    user_tasks = user.accessible_tasks.active.enabled.ordered
     stopped = false
     user_tasks.by_listener(trigger).filter_map { |task|
       next if stopped

@@ -3,9 +3,16 @@ class Jil::TasksController < ApplicationController
   skip_before_action :verify_authenticity_token # User is authorized and we don't want to prevent JS
 
   def index
-    @folders = current_user.task_folders.includes(:children, :tasks).roots.ordered
-    @root_tasks = current_user.tasks.where(task_folder_id: nil).order(sort_order: :desc)
-    @shared_tasks = current_user.accessible_tasks.where.not(user_id: current_user.id)
+    if params[:archived].present?
+      @archived = true
+      @root_tasks = current_user.tasks.archived.order(archived_at: :desc)
+      @folders = TaskFolder.none
+      @shared_tasks = current_user.accessible_tasks.none
+    else
+      @folders = current_user.task_folders.includes(:children, tasks: []).roots.ordered
+      @root_tasks = current_user.tasks.active.where(task_folder_id: nil).order(sort_order: :desc)
+      @shared_tasks = current_user.accessible_tasks.active.where.not(user_id: current_user.id)
+    end
   end
 
   def reorder
@@ -102,6 +109,18 @@ class Jil::TasksController < ApplicationController
     ::Jil::Executor.async_call(run_as_user, code, data || {}, task: @task, auth: :run)
 
     head :ok
+  end
+
+  def archive
+    @task = current_user.tasks.find(params[:id])
+    @task.archive!
+    redirect_to jil_tasks_path
+  end
+
+  def unarchive
+    @task = current_user.tasks.find(params[:id])
+    @task.unarchive!
+    redirect_to jil_task_path(@task)
   end
 
   def shared_users

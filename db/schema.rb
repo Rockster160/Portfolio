@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_02_05_000001) do
+ActiveRecord::Schema[7.1].define(version: 2026_02_05_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -775,6 +775,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_02_05_000001) do
     t.integer "last_status"
     t.bigint "task_folder_id"
     t.integer "tree_order"
+    t.datetime "archived_at"
     t.index ["task_folder_id"], name: "index_tasks_on_task_folder_id"
     t.index ["user_id"], name: "index_tasks_on_user_id"
   end

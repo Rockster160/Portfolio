@@ -3,6 +3,7 @@
 # Table name: tasks
 #
 #  id              :bigint           not null, primary key
+#  archived_at     :datetime
 #  code            :text
 #  cron            :text
 #  enabled         :boolean          default(TRUE)
@@ -37,6 +38,8 @@ class Task < ApplicationRecord
 
   enum :last_status, ::Execution.statuses
 
+  scope :active, -> { where(archived_at: nil) }
+  scope :archived, -> { where.not(archived_at: nil) }
   scope :enabled, -> { where(enabled: true) }
   scope :pending, -> { where(next_trigger_at: ..Time.current) }
   scope :functions, -> {
@@ -60,7 +63,7 @@ class Task < ApplicationRecord
   # Higher tree_order = displayed first (DESC). 2 SELECTs + 1 UPDATE.
   def self.recompute_tree_order(user)
     all_folders = user.task_folders.to_a
-    all_tasks = user.tasks.to_a
+    all_tasks = user.tasks.active.to_a
     folders_by_parent = all_folders.group_by(&:parent_id)
     tasks_by_folder = all_tasks.group_by(&:task_folder_id)
 
@@ -155,7 +158,7 @@ class Task < ApplicationRecord
   end
 
   def self.schema(user=nil)
-    tasks = user.present? ? user.tasks.enabled.functions : none
+    tasks = user.present? ? user.tasks.active.enabled.functions : none
     funcs = "[Custom]\n" + tasks.filter_map { |task|
       match = task.listener.match(func_regex)
       next if match.blank?
@@ -219,7 +222,7 @@ class Task < ApplicationRecord
   end
 
   def serialize(opts={})
-    super(opts.reverse_merge(except: [:created_at, :updated_at, :code, :cron, :sort_order, :tree_order]))
+    super(opts.reverse_merge(except: [:created_at, :updated_at, :code, :cron, :sort_order, :tree_order, :archived_at]))
   end
 
   def serialize_with_execution
@@ -263,6 +266,20 @@ class Task < ApplicationRecord
     return false unless user
 
     user_id == user.id || shared_users.exists?(user.id)
+  end
+
+  def archived?
+    archived_at.present?
+  end
+
+  def archive!
+    update!(archived_at: Time.current, task_folder_id: nil)
+    Task.recompute_tree_order(user)
+  end
+
+  def unarchive!
+    update!(archived_at: nil)
+    Task.recompute_tree_order(user)
   end
 
   def broadcast_users

@@ -205,6 +205,8 @@ Rails.application.routes.draw do
       post :run, on: :member
       post :duplicate, on: :member
       post :shared_users, on: :member
+      post :archive, on: :member
+      post :unarchive, on: :member
       resources :executions, only: [:index, :show] do
         post :replay, on: :member
       end
