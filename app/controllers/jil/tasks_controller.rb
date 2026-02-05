@@ -3,7 +3,42 @@ class Jil::TasksController < ApplicationController
   skip_before_action :verify_authenticity_token # User is authorized and we don't want to prevent JS
 
   def index
-    @tasks = current_user.accessible_tasks.order("last_trigger_at DESC NULLS LAST")
+    @folders = current_user.task_folders.includes(:children, :tasks).roots.ordered
+    @root_tasks = current_user.tasks.where(task_folder_id: nil).order(sort_order: :desc)
+    @shared_tasks = current_user.accessible_tasks.where.not(user_id: current_user.id)
+  end
+
+  def reorder
+    if params[:item_id].present? && params[:item_type].present?
+      folder_id = params[:folder_id].presence
+      if params[:item_type] == "folder"
+        folder = current_user.task_folders.find(params[:item_id])
+        if folder_id.present? && (folder.id.to_s == folder_id.to_s || folder.ancestor_of?(current_user.task_folders.find(folder_id)))
+          render json: { error: "Cannot nest folder inside itself" }, status: :unprocessable_entity
+          return
+        end
+        folder.update_column(:parent_id, folder_id)
+      else
+        task = current_user.tasks.find(params[:item_id])
+        task.update_column(:task_folder_id, folder_id)
+      end
+    end
+
+    if params[:child_ids].present?
+      count = params[:child_ids].size
+      params[:child_ids].each_with_index do |child_key, idx|
+        type, id = child_key.split(":")
+        sort_value = count - idx
+        if type == "folder"
+          current_user.task_folders.where(id: id).update_all(sort_order: sort_value)
+        else
+          current_user.tasks.where(id: id).update_all(sort_order: sort_value)
+        end
+      end
+    end
+
+    Task.recompute_tree_order(current_user)
+    head :ok
   end
 
   def show
@@ -51,6 +86,7 @@ class Jil::TasksController < ApplicationController
       last_trigger_at: nil,
       sort_order:      nil,
       uuid:            nil,
+      task_folder_id:  original_task.task_folder_id,
     )
 
     redirect_to jil_task_path(@task)

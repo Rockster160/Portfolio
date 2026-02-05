@@ -15,6 +15,7 @@ Rails.application.config.assets.precompile += %w[individual/**/*]
 Rails.application.config.assets.precompile += %w[quick_actions.css]
 # Jil specific JS
 Rails.application.config.assets.precompile += %w[jil.js]
+Rails.application.config.assets.precompile += %w[sortable_standalone.js]
 Rails.application.config.assets.precompile += %w[jil.css]
 
 # Precompile additional assets.

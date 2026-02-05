@@ -1,0 +1,26 @@
+<% level ||= 0 %>
+<div class="folder-group" data-type="folder" data-id="<%= folder.id %>" data-name="<%= folder.name.downcase %>">
+  <div class="task-row folder-row">
+    <div class="col-handle">
+      <span class="drag-handle"><i class="fa fa-ellipsis-v"></i></span>
+    </div>
+    <div class="col-folder-name">
+      <span class="folder-toggle <%= 'collapsed' if folder.collapsed %>" data-folder-id="<%= folder.id %>">
+        <i class="fa fa-caret-<%= folder.collapsed ? 'right' : 'down' %>"></i>
+      </span>
+      <i class="fa fa-folder<%= folder.collapsed ? '' : '-open' %> folder-icon"></i>
+      <span class="folder-name" data-folder-id="<%= folder.id %>"><%= folder.name %></span>
+      <span class="folder-count">(<%= folder.tasks.count + folder.children.count %>)</span>
+      <span class="folder-actions">
+        <button class="btn-icon rename-folder" data-folder-id="<%= folder.id %>" title="Rename"><i class="fa fa-pencil"></i></button>
+        <button class="btn-icon delete-folder" data-folder-id="<%= folder.id %>" title="Delete"><i class="fa fa-trash"></i></button>
+      </span>
+    </div>
+  </div>
+  <div class="folder-children <%= 'hidden' if folder.collapsed %>" data-folder-id="<%= folder.id %>" style="padding-left: <%= (level + 1) * 20 %>px;">
+    <%= render "jil/tasks/folder_contents",
+      folders: folder.children.ordered,
+      tasks: folder.tasks.order(sort_order: :desc),
+      level: level + 1 %>
+  </div>
+</div>

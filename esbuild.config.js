@@ -4,7 +4,8 @@ const esbuild = require("esbuild");
 
 const configs = [
   { entry: "application.js", out: "app/assets/builds" },
-  { entry: "jil.js", out: "app/assets/builds" }
+  { entry: "jil.js", out: "app/assets/builds" },
+  { entry: "sortable_standalone.js", out: "app/assets/builds" }
 ];
 
 const isWatching = process.argv.includes("--watch");

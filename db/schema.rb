@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_02_02_161403) do
+ActiveRecord::Schema[7.1].define(version: 2026_02_05_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -747,6 +747,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_02_02_161403) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "task_folders", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "parent_id"
+    t.text "name", null: false
+    t.integer "sort_order"
+    t.boolean "collapsed", default: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["parent_id"], name: "index_task_folders_on_parent_id"
+    t.index ["user_id"], name: "index_task_folders_on_user_id"
+  end
+
   create_table "tasks", force: :cascade do |t|
     t.uuid "uuid", default: -> { "uuid_generate_v4()" }
     t.bigint "user_id"
@@ -761,6 +773,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_02_02_161403) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "last_status"
+    t.bigint "task_folder_id"
+    t.integer "tree_order"
+    t.index ["task_folder_id"], name: "index_tasks_on_task_folder_id"
     t.index ["user_id"], name: "index_tasks_on_user_id"
   end
 
@@ -858,4 +873,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_02_02_161403) do
   add_foreign_key "sections", "lists"
   add_foreign_key "shared_tasks", "tasks"
   add_foreign_key "shared_tasks", "users"
+  add_foreign_key "task_folders", "task_folders", column: "parent_id"
+  add_foreign_key "task_folders", "users"
+  add_foreign_key "tasks", "task_folders"
 end

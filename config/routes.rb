@@ -200,6 +200,7 @@ Rails.application.routes.draw do
     resources :executions, only: [:index, :show] do
       post :replay, on: :member
     end
+    post "tasks/reorder", to: "tasks#reorder", as: :reorder_tasks
     resources :tasks do
       post :run, on: :member
       post :duplicate, on: :member
@@ -207,6 +208,9 @@ Rails.application.routes.draw do
       resources :executions, only: [:index, :show] do
         post :replay, on: :member
       end
+    end
+    resources :task_folders, only: [:create, :update, :destroy] do
+      post :toggle_collapsed, on: :member
     end
     resources :user_cache, path: :cache
   end
