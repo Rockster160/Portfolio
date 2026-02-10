@@ -92,7 +92,7 @@ class Task < ApplicationRecord
     cases = ordered_task_ids.each_with_index.map { |id, idx|
       "WHEN #{id.to_i} THEN #{total - idx}"
     }.join(" ")
-    user.tasks.update_all("tree_order = CASE id #{cases} ELSE 0 END")
+    user.tasks.active.update_all("tree_order = CASE id #{cases} ELSE 0 END")
   end
 
   def self.links

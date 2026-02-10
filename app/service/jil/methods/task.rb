@@ -8,7 +8,7 @@ class Jil::Methods::Task < Jil::Methods::Base
   end
 
   def find(id)
-    @jil.user.tasks.find_by(id: id)
+    @jil.user.tasks.active.find_by(id: id)
   end
 
   def search(q, limit, order)
@@ -21,7 +21,7 @@ class Jil::Methods::Task < Jil::Methods::Base
     # next_trigger_at
     # uuid
     limit = (limit.presence || 50).to_i.clamp(1..100)
-    scoped = @jil.user.tasks.page(1).per(limit)
+    scoped = @jil.user.tasks.active.page(1).per(limit)
     scoped = scoped.where(user: @jil.user)
 
     scoped = scoped.enabled.where.not(next_trigger_at: nil) # TODO: Allow `q` to modify this filter
@@ -51,6 +51,6 @@ class Jil::Methods::Task < Jil::Methods::Base
   def task(task_data)
     return task_data if task_data.is_a?(::Task)
 
-    @jil.user.tasks.find_by(id: cast(task_data)[:id])
+    @jil.user.tasks.active.find_by(id: cast(task_data)[:id])
   end
 end
