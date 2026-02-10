@@ -63,6 +63,7 @@ Rails.application.routes.draw do
     resources :meal_builders
     resources :list_builders do
       post :toggle_item, on: :member
+      patch :update_stock, on: :member
     end
   end
 

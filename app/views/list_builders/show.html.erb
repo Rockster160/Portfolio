@@ -9,6 +9,10 @@
       <div class="row">
         <input id="m-img" placeholder="Image URL or emoji">
       </div>
+      <div class="row">
+        <input id="m-display" placeholder="Display name (optional)">
+        <input id="m-stock" class="sm basic" type="number" placeholder="Stock" min="0" style="max-width:80px">
+      </div>
       <div class="cmodal-actions">
         <button id="m-delete" class="danger primary" type="button">Delete</button>
         <div class="spacer"></div>
@@ -35,6 +39,8 @@
 
 <div class="wrap"
      data-save-url="<%= list_builder_path(@list_builder) %>"
+     data-stock-url="<%= update_stock_list_builder_path(@list_builder) %>"
+     data-builder-id="<%= @list_builder.id %>"
      data-list-id="<%= @list_builder.list_id %>">
   <div class="summary-container">
     <div id="ws-status" class="ws-disconnected hidden">Disconnected</div>
@@ -104,7 +110,7 @@
       cursor: pointer;
     }
     .card:hover { transform: translateY(-1px); box-shadow: 0 2px 10px #0001 }
-    .card.selected { opacity: 0.4 }
+    .card.selected { }
     .imgbox {
       display: grid;
       place-items: center;
@@ -169,8 +175,25 @@
 
     .on-list-badge {
       position: absolute; top: 8px; left: 8px; font-size: 12px;
+      background: #2D5F3E; color: #FFF; padding: 2px 6px; border-radius: 999px;
+    }
+    .out-badge {
+      position: absolute; top: 8px; right: 8px; font-size: 12px;
       background: #6B7280; color: #FFF; padding: 2px 6px; border-radius: 999px;
     }
+    .out-of-stock { opacity: 0.4 }
+
+    .controls {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%;
+    }
+    .pill {
+      min-width: 20px; height: 20px; border-radius: 999px; border: 1px solid #D1D5DB;
+      background: #FFF; cursor: pointer; display: grid; place-items: center;
+      font-weight: 600
+    }
+    .count { min-width: 24px; text-align: center; color: #ECF0F1 }
+
 
     .text-right { text-align: right; }
     .row { display: flex; gap: 8px; width: 100% }
@@ -232,13 +255,18 @@
     const elQuickEdit = document.getElementById("quick-edit")
     const elPageEdit = document.getElementById("page-edit")
     const elWsStatus = document.getElementById("ws-status")
-    const SAVE_ENDPOINT = document.querySelector(".wrap")?.dataset.saveUrl
-    const LIST_ID = document.querySelector(".wrap")?.dataset.listId
+    const wrapEl = document.querySelector(".wrap")
+    const SAVE_ENDPOINT = wrapEl?.dataset.saveUrl
+    const STOCK_ENDPOINT = wrapEl?.dataset.stockUrl
+    const BUILDER_ID = wrapEl?.dataset.builderId
+    const LIST_ID = wrapEl?.dataset.listId
 
     const elcModal = document.getElementById("cmodal-backdrop")
     const mTitle = document.getElementById("cmodal-title")
     const mName = document.getElementById("m-name")
     const mImg = document.getElementById("m-img")
+    const mDisplay = document.getElementById("m-display")
+    const mStock = document.getElementById("m-stock")
     const mSave = document.getElementById("m-save")
     const mCancel = document.getElementById("m-cancel")
     const mDelete = document.getElementById("m-delete")
@@ -273,7 +301,7 @@
 
     const computeView = () => {
       return ITEMS.filter(it =>
-        fuzzyMatch(query, it.name)
+        fuzzyMatch(query, it.display || it.name)
       )
     }
 
@@ -323,6 +351,8 @@
       mTitle.textContent = isNewItem ? "Add Item" : "Edit Item"
       mName.value = item?.name || ""
       mImg.value = item?.img || ""
+      mDisplay.value = item?.display || ""
+      mStock.value = item?.stock ?? 1
       mDelete.classList.toggle("hidden", isNewItem)
       elcModal.classList.remove("hidden")
       setTimeout(() => mName.focus(), 0)
@@ -339,12 +369,14 @@
     mSave.addEventListener("click", () => {
       const name = mName.value.trim() || "Untitled"
       const img = mImg.value.trim()
+      const display = mDisplay.value.trim() || undefined
+      const stock = parseInt(mStock.value, 10) || 0
 
       if (isNewItem) {
-        ITEMS.push({ name, img })
+        ITEMS.push({ name, img, display, stock })
       } else {
         const idx = ITEMS.findIndex(x => x.name === currentEditingName)
-        if (idx >= 0) ITEMS[idx] = { ...ITEMS[idx], name, img }
+        if (idx >= 0) ITEMS[idx] = { ...ITEMS[idx], name, img, display, stock }
       }
       closecModal()
       render()
@@ -364,19 +396,30 @@
     // ---------- Quick Edit ----------
     const itemsToText = items => {
       return items.map(it => {
-        const imgPart = (it.img?.trim()) ? ` | ${it.img.trim()}` : ""
-        return `${it.name}${imgPart}`
+        let parts = it.name
+        if (it.img?.trim()) parts += ` | ${it.img.trim()}`
+        if (it.display?.trim()) parts += ` | ${it.display.trim()}`
+        if ((it.stock || 0) > 0) parts += ` (${it.stock})`
+        return parts
       }).join("\n")
     }
 
     const textToItems = text => {
       return text.split("\n").map(line => {
-        const raw = line.trim()
+        let raw = line.trim()
         if (!raw) return null
-        const [name, img] = raw.split("|", 2)
+        let stock = 0
+        const sm = raw.match(/\((\d+)\)\s*$/)
+        if (sm) {
+          stock = parseInt(sm[1], 10)
+          raw = raw.replace(/\s*\(\d+\)\s*$/, "")
+        }
+        const parts = raw.split("|", 3)
         return {
-          name: name.trim(),
-          img: (img || "").trim()
+          name: parts[0].trim(),
+          img: (parts[1] || "").trim(),
+          display: (parts[2] || "").trim() || undefined,
+          stock: stock,
         }
       }).filter(Boolean)
     }
@@ -400,6 +443,54 @@
     elQModal?.addEventListener("click", e => {
       if (e.target === elQModal) closeQuickEdit()
     })
+
+    // ---------- Stock counters ----------
+    let pendingStock = {}
+    let inFlight = false
+    let debounceTimer = null
+    const DEBOUNCE_MS = 500
+
+    const adjustStock = (name, delta) => {
+      const item = ITEMS.find(i => i.name === name)
+      if (!item) return
+      item.stock = Math.max(0, (item.stock || 0) + delta)
+      pendingStock[name] = item.stock
+      scheduleStockSave()
+      render()
+    }
+
+    const scheduleStockSave = () => {
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(flushStock, DEBOUNCE_MS)
+    }
+
+    const flushStock = async (keepalive = false) => {
+      if (inFlight || Object.keys(pendingStock).length === 0) return
+      const batch = { ...pendingStock }
+      pendingStock = {}
+      inFlight = true
+      try {
+        const res = await fetch(STOCK_ENDPOINT, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfToken(),
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({ stock: batch }),
+          credentials: "same-origin",
+          keepalive,
+        })
+        if (!res.ok) {
+          Object.assign(pendingStock, batch)
+        }
+      } catch {
+        Object.assign(pendingStock, batch)
+      } finally {
+        inFlight = false
+        if (Object.keys(pendingStock).length > 0) scheduleStockSave()
+      }
+    }
 
     // ---------- Toggle item on list via websocket ----------
     let listSocket = null
@@ -437,7 +528,11 @@
         if (isSel) selectedCount++
 
         const card = document.createElement("div")
-        card.className = `card${isSel ? " selected" : ""}`
+        const stockVal = it.stock || 0
+        let cls = "card"
+        if (isSel) cls += " selected"
+        if (!editMode && stockVal === 0) cls += " out-of-stock"
+        card.className = cls
         card.dataset.name = it.name
         card.dataset.index = String(index)
 
@@ -477,7 +572,7 @@
 
         const title = document.createElement("div")
         title.className = "title"
-        title.textContent = it.name
+        title.textContent = it.display || it.name
 
         if (!editMode) {
           card.addEventListener("click", (e) => {
@@ -501,11 +596,35 @@
             opencModal(it)
           })
           card.appendChild(overlay)
-        } else if (isSel) {
-          const badge = document.createElement("div")
-          badge.className = "on-list-badge"
-          badge.textContent = "On List"
-          card.appendChild(badge)
+        } else {
+          if (isSel) {
+            const badge = document.createElement("div")
+            badge.className = "on-list-badge"
+            badge.textContent = "On List"
+            card.appendChild(badge)
+          }
+          if (stockVal === 0) {
+            const badge = document.createElement("div")
+            badge.className = "out-badge"
+            badge.textContent = "Out"
+            card.appendChild(badge)
+          }
+
+          const controls = document.createElement("div")
+          controls.className = "controls"
+          const minus = document.createElement("button")
+          minus.className = "pill"
+          minus.textContent = "−"
+          minus.addEventListener("click", e => { e.stopPropagation(); adjustStock(it.name, -1) })
+          const countEl = document.createElement("span")
+          countEl.className = "count"
+          countEl.textContent = stockVal
+          const plus = document.createElement("button")
+          plus.className = "pill"
+          plus.textContent = "+"
+          plus.addEventListener("click", e => { e.stopPropagation(); adjustStock(it.name, 1) })
+          controls.append(minus, countEl, plus)
+          card.appendChild(controls)
         }
 
         elGrid.appendChild(card)
@@ -537,10 +656,15 @@
     elAddItem.addEventListener("click", () => opencModal(null))
 
     const normalizeItems = items => {
-      return items.map(it => ({
-        name: String(it.name || "Untitled").trim(),
-        img: (it.img || "").toString().trim()
-      }))
+      return items.map(it => {
+        const obj = {
+          name: String(it.name || "Untitled").trim(),
+          img: (it.img || "").toString().trim(),
+          stock: it.stock || 0,
+        }
+        if (it.display) obj.display = it.display.toString().trim()
+        return obj
+      })
     }
 
     elSaveItems.addEventListener("click", async () => {
@@ -564,6 +688,8 @@
       })
 
       if (res.ok) {
+        const data = await res.json().catch(() => null)
+        if (data?.items) ITEMS = data.items
         showFlash("Saved!")
         editMode = false
         render()
@@ -581,6 +707,9 @@
       {
         onopen() {
           elWsStatus.classList.add("hidden")
+          listSocket.send({
+            subscribe: { channel: "ListBuilderChannel", channel_id: `builder_${BUILDER_ID}` }
+          })
         },
         onclose() {
           elWsStatus.classList.remove("hidden")
@@ -594,6 +723,10 @@
             )
             render()
           }
+          if (!editMode && msg.builder_items) {
+            ITEMS = msg.builder_items
+            render()
+          }
         }
       }
     )
@@ -604,6 +737,7 @@
     })
 
     window.addEventListener("beforeunload", e => {
+      if (Object.keys(pendingStock).length > 0) flushStock(true)
       if (!editMode) return
       const current = itemsToText(ITEMS)
       if (current !== preEdit) {

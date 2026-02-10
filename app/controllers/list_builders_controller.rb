@@ -1,7 +1,7 @@
 class ListBuildersController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
-  before_action :set_list_builder, only: [:show, :edit, :update, :destroy, :toggle_item]
+  before_action :set_list_builder, only: [:show, :edit, :update, :destroy, :toggle_item, :update_stock]
 
   layout "quick_actions", only: [:show]
 
@@ -35,15 +35,28 @@ class ListBuildersController < ApplicationController
   end
 
   def update
-    if @list_builder.update(list_builder_params)
-      respond_to do |format|
-        format.html { redirect_to @list_builder }
-        format.json { render json: @list_builder, status: :ok }
+    ListBuilder.with_advisory_lock("list_builder_items_#{@list_builder.id}") {
+      @list_builder.reload
+      current_stock = @list_builder.items.to_h { |i| [i[:name], i[:stock].to_i] }
+
+      @list_builder.assign_attributes(list_builder_params)
+
+      @list_builder.items.each do |item|
+        db_stock = current_stock[item[:name]].to_i
+        item[:stock] = db_stock if item[:stock].to_i.zero? && db_stock > 0
       end
-    else
-      @lists = current_user.ordered_lists
-      render :form
-    end
+
+      if @list_builder.save
+        @list_builder.broadcast!
+        respond_to do |format|
+          format.html { redirect_to @list_builder }
+          format.json { render json: { items: @list_builder.items }, status: :ok }
+        end
+      else
+        @lists = current_user.ordered_lists
+        render :form
+      end
+    }
   end
 
   def destroy
@@ -65,6 +78,21 @@ class ListBuildersController < ApplicationController
       list.list_items.add(item_name)
       render json: { status: "added", item_name: item_name }
     end
+  end
+
+  def update_stock
+    incoming = params.require(:stock).permit!.to_h.transform_values(&:to_i)
+
+    ListBuilder.with_advisory_lock("list_builder_items_#{@list_builder.id}") {
+      @list_builder.reload
+      @list_builder.items.each do |item|
+        item[:stock] = incoming[item[:name]] if incoming.key?(item[:name])
+      end
+      @list_builder.save!
+      @list_builder.broadcast!
+    }
+
+    render json: { stock: @list_builder.items.to_h { |i| [i[:name], i[:stock].to_i] } }
   end
 
   private
