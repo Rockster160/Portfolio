@@ -43,7 +43,7 @@ class ListBuildersController < ApplicationController
 
       @list_builder.items.each do |item|
         db_stock = current_stock[item[:name]].to_i
-        item[:stock] = db_stock if item[:stock].to_i.zero? && db_stock > 0
+        item[:stock] = db_stock if item[:stock].to_i.zero? && db_stock.positive?
       end
 
       if @list_builder.save
@@ -98,7 +98,11 @@ class ListBuildersController < ApplicationController
   private
 
   def set_list_builder
-    @list_builder = current_user.list_builders.find_by!(parameterized_name: params[:id])
+    @list_builder = ListBuilder.joins(
+      list: :user_lists,
+    ).where(
+      user_lists: { user_id: current_user.id },
+    ).find_by!(parameterized_name: params[:id])
   end
 
   def list_builder_params
