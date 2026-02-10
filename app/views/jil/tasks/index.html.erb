@@ -1,46 +1,700 @@
 <%= meta_title "Tasks", include_name: false %>
 
-<div class="skinny-container lists-index-container">
+<div class="tasks-index-container">
   <div class="btn-container">
     <a href="<%= account_path %>" class="btn">Account</a>
     <a href="<%= jil_executions_path %>" class="btn">Executions</a>
-    <a href="<%= new_jil_task_path %>" class="btn pull-right">New Task +</a>
-  </div>
-  <div class="lists-title">Tasks</div>
-  <div class="lists">
-    <div class="list-field">
-      <%= text_field_tag "task[name]", "", class: "filterable", placeholder: "Search Tasks" %>
-    </div>
-    <div class="important-list-items"></div>
-
-    <% @tasks.each do |task| %>
-      <div class="list-item-container" data-list-id="<%= task.uuid %>">
-        <div class="list-item-config">
-          <%= content_tag :div, [task.cron, task.listener].compact_blank.join(" | "), class: "category", style: "color: lime" %>
-          <%= content_tag :div, :Disabled, class: "status disabled" if !task.enabled? %>
-          <%= content_tag :div, :Shared, class: "status shared" if task.user_id != current_user.id %>
-        </div>
-        <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>
-        <a href="<%= jil_task_path(task) %>" class="list-item">
-          <span class="item-name"><%= task.name %></span>
-          <div class="list-item-brief">
-            <div class="left-brief">
-              <% if task.last_trigger_at.present? %>
-                <%= task.last_trigger_at.in_time_zone(current_user.timezone)&.to_formatted_s(:compact_week_month_time).gsub(":00 ", "") %>
-                (<%= relative_time_in_words(task.last_trigger_at) %>)
-              <% else %>
-                --Never Run--
-              <% end %>
-            </div>
-            <div class="right-brief">
-              <% if task.next_trigger_at.present? %>
-                <%= task.next_trigger_at.in_time_zone(current_user.timezone)&.to_formatted_s(:compact_week_month_time).gsub(":00 ", "") %>
-                (<%= relative_time_in_words(task.next_trigger_at) %>)
-              <% end %>
-            </div>
-          </div>
-        </a>
-      </div>
+    <% unless @archived %>
+      <button class="btn pull-right" id="new-folder-btn"><i class="fa fa-folder"></i> New Folder +</button>
+      <a href="<%= new_jil_task_path %>" class="btn pull-right">New Task +</a>
     <% end %>
   </div>
+
+  <% if @archived %>
+    <div class="lists-title">Archived Tasks <a href="<%= jil_tasks_path %>" class="btn btn-sm" style="font-size: 12px; margin-left: 10px;">Back to Tasks</a></div>
+  <% else %>
+    <div class="lists-title">Tasks</div>
+  <% end %>
+
+  <% unless @archived %>
+    <div class="search-bar">
+      <input type="text" id="task-search" class="search-input" placeholder="Search tasks..." />
+    </div>
+  <% end %>
+
+  <div class="tasks-table">
+    <div class="task-row title-row">
+      <% unless @archived %>
+        <div class="col-handle">
+          <span id="clear-sort" class="clear-sort hidden" title="Clear sort"><i class="fa fa-times"></i></span>
+        </div>
+      <% end %>
+      <div class="col-name sort-header" data-sort="name">Name <i class="fa fa-sort sort-icon"></i></div>
+      <div class="col-trigger">Trigger</div>
+      <div class="col-status sort-header" data-sort="status">Status <i class="fa fa-sort sort-icon"></i></div>
+      <div class="col-time sort-header" data-sort="last-run">Last Run <i class="fa fa-sort sort-icon"></i></div>
+      <div class="col-time sort-header" data-sort="next-run">Next Run <i class="fa fa-sort sort-icon"></i></div>
+    </div>
+
+    <div id="root-children" class="folder-children" data-folder-id="">
+      <% if @archived %>
+        <% @root_tasks.each do |task| %>
+          <%= render "jil/tasks/task_row", task: task %>
+        <% end %>
+      <% else %>
+        <%= render "jil/tasks/folder_contents",
+          folders: @folders,
+          tasks: @root_tasks,
+          level: 0 %>
+      <% end %>
+    </div>
+  </div>
+
+  <% if @shared_tasks.any? %>
+    <div class="lists-title shared-title">Shared Tasks</div>
+    <div class="tasks-table">
+      <div class="task-row title-row">
+        <div class="col-handle"></div>
+        <div class="col-name">Name</div>
+        <div class="col-trigger">Trigger</div>
+        <div class="col-status">Status</div>
+        <div class="col-time">Last Run</div>
+        <div class="col-time">Next Run</div>
+      </div>
+      <% @shared_tasks.each do |task| %>
+        <%= render "jil/tasks/task_row", task: task, shared: true %>
+      <% end %>
+    </div>
+  <% end %>
+
 </div>
+
+<%= content_for :head do %>
+  <style>
+    .tasks-index-container {
+      max-width: 1400px;
+      width: 95%;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .tasks-index-container .lists-title {
+      font-size: 24px;
+      margin-bottom: 15px;
+    }
+
+    .shared-title {
+      margin-top: 40px;
+    }
+
+    .search-bar {
+      margin-bottom: 15px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 15px;
+      font-size: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #E2E8F0;
+      box-sizing: border-box;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #5DADE2;
+    }
+
+    /* Flex-based table rows — compatible with nested folder containers */
+    .tasks-table {
+      font-size: 14px;
+      width: 100%;
+    }
+
+    .task-row {
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 0;
+    }
+
+    .task-row > div {
+      padding: 10px 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .task-row > .col-trigger {
+      white-space: normal;
+      word-break: break-word;
+      overflow: visible;
+    }
+
+    .title-row {
+      font-weight: bold;
+      font-size: 15px;
+      background-color: var(--base-blue, #1a2744);
+    }
+
+    .title-row > div {
+      padding: 12px 12px;
+    }
+
+    /* Striped rows */
+    .folder-children > .task-row:nth-child(odd),
+    .folder-children > .folder-group:nth-child(odd) > .task-row {
+      background-color: rgba(255, 255, 255, 0.03);
+    }
+
+    .folder-children > .task-row:nth-child(even),
+    .folder-children > .folder-group:nth-child(even) > .task-row {
+      background-color: rgba(255, 255, 255, 0.06);
+    }
+
+    /* Column widths */
+    .col-handle {
+      width: 36px;
+      flex-shrink: 0;
+      text-align: center;
+    }
+
+    .col-name {
+      flex: 1;
+      min-width: 150px;
+      white-space: normal !important;
+      word-wrap: break-word;
+    }
+
+    .col-trigger {
+      width: 220px;
+      flex-shrink: 0;
+      font-size: 12px;
+    }
+
+    .trigger-cron {
+      color: #F0C040;
+    }
+
+    .trigger-listener {
+      color: lime;
+    }
+
+    .col-status {
+      width: 90px;
+      flex-shrink: 0;
+      text-align: center;
+    }
+
+    .col-time {
+      width: 180px;
+      flex-shrink: 0;
+    }
+
+    .col-folder-name {
+      flex: 1;
+      min-width: 150px;
+      white-space: normal !important;
+    }
+
+    /* Drag handle */
+    .drag-handle {
+      cursor: grab;
+      color: #555;
+      font-size: 16px;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    .drag-handle:hover {
+      color: #aaa;
+    }
+
+    /* Links */
+    .col-name a {
+      color: #5DADE2;
+      text-decoration: none;
+    }
+
+    .col-name a:hover {
+      text-decoration: underline;
+    }
+
+    /* Status badge */
+    .status-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .status-badge.success { background-color: #28A745; color: white; }
+    .status-badge.failed { background-color: #DC3545; color: white; }
+    .status-badge.cancelled { background-color: #6C757D; color: white; }
+    .status-badge.started { background-color: #007BFF; color: white; }
+    .status-badge.none { color: #666; }
+
+    .relative-time {
+      font-size: 11px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .badge-disabled { background-color: #6C757D; color: white; }
+    .badge-shared { background-color: #5B21B6; color: #DDD6FE; }
+
+    /* Folder styles */
+    .folder-row {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .folder-toggle {
+      cursor: pointer;
+      display: inline-block;
+      width: 16px;
+      text-align: center;
+      margin-right: 4px;
+      color: #aaa;
+    }
+
+    .folder-toggle:hover {
+      color: #fff;
+    }
+
+    .folder-icon {
+      color: #F0C040;
+      margin-right: 6px;
+    }
+
+    .folder-name {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .folder-count {
+      color: #888;
+      font-size: 12px;
+      margin-left: 4px;
+    }
+
+    .folder-actions {
+      margin-left: 12px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .folder-row:hover .folder-actions {
+      opacity: 1;
+    }
+
+    .btn-icon {
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      padding: 2px 6px;
+      font-size: 12px;
+    }
+
+    .btn-icon:hover {
+      color: #fff;
+    }
+
+    .folder-children {
+      min-height: 2px;
+    }
+
+    .folder-children.hidden {
+      display: none;
+    }
+
+    /* Drag states */
+    .sortable-ghost {
+      opacity: 0.4;
+    }
+
+    .sortable-drag {
+      opacity: 0.9;
+      background: rgba(30, 60, 120, 0.9);
+    }
+
+    .folder-group {
+      border-left: 2px solid transparent;
+    }
+
+    .folder-group.sortable-ghost {
+      border-left-color: #5DADE2;
+    }
+
+    /* Sort headers */
+    .sort-header {
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .sort-header:hover {
+      color: #5DADE2;
+    }
+
+    .sort-icon {
+      font-size: 11px;
+      color: #555;
+      margin-left: 4px;
+    }
+
+    .sort-header.active .sort-icon {
+      color: #5DADE2;
+    }
+
+    .clear-sort {
+      cursor: pointer;
+      color: #DC3545;
+      font-size: 14px;
+    }
+
+    .clear-sort:hover {
+      color: #ff6b7a;
+    }
+
+    .clear-sort.hidden {
+      display: none;
+    }
+
+    /* Sort active: hide drag handles and flatten folders */
+    .sort-active .drag-handle {
+      display: none;
+    }
+
+    .sort-active .folder-group > .task-row.folder-row,
+    .sort-active .folder-children[data-folder-id]:not(#root-children) {
+      display: none;
+    }
+
+    .badge-archived { background-color: #856404; color: #FFF3CD; }
+
+    /* Search */
+    .search-hidden {
+      display: none !important;
+    }
+
+    /* Button bar */
+    .btn-container {
+      margin-bottom: 15px;
+    }
+
+    .btn-container .pull-right {
+      float: right;
+      margin-left: 10px;
+    }
+
+    .btn-container::after {
+      content: "";
+      display: table;
+      clear: both;
+    }
+
+    #new-folder-btn {
+      cursor: pointer;
+    }
+  </style>
+<% end %>
+
+<%= content_for :after_body do %>
+  <% unless @archived %>
+    <%= javascript_include_tag "sortable_standalone" %>
+  <% end %>
+  <script>
+    (function() {
+      var csrfToken = document.querySelector("meta[name='csrf-token']")?.content;
+      var isArchived = <%= @archived ? "true" : "false" %>;
+
+      if (!isArchived) {
+        if (!window.Sortable) { console.error("SortableJS failed to load"); return; }
+
+        function initSortable(container) {
+          new Sortable(container, {
+            group: "task-tree",
+            handle: ".drag-handle",
+            draggable: "> [data-type]",
+            animation: 150,
+            forceFallback: true,
+            fallbackOnBody: true,
+            swapThreshold: 0.65,
+            onEnd: function(evt) {
+              var toContainer = evt.to;
+              var folderId = toContainer.dataset.folderId || "";
+              var item = evt.item;
+              var itemType = item.dataset.type;
+              var itemId = item.dataset.id;
+
+              var childIds = [];
+              toContainer.querySelectorAll(":scope > .task-row[data-type='task'], :scope > .folder-group[data-type='folder']").forEach(function(el) {
+                childIds.push(el.dataset.type + ":" + el.dataset.id);
+              });
+
+              var fromContainer = evt.from;
+              if (fromContainer !== toContainer) {
+                var fromChildIds = [];
+                fromContainer.querySelectorAll(":scope > .task-row[data-type='task'], :scope > .folder-group[data-type='folder']").forEach(function(el) {
+                  fromChildIds.push(el.dataset.type + ":" + el.dataset.id);
+                });
+                fetch("<%= jil_reorder_tasks_path %>", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+                  body: JSON.stringify({ child_ids: fromChildIds })
+                });
+              }
+
+              fetch("<%= jil_reorder_tasks_path %>", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+                body: JSON.stringify({
+                  item_id: itemId,
+                  item_type: itemType,
+                  folder_id: folderId || null,
+                  child_ids: childIds
+                })
+              }).then(function(response) {
+                if (!response.ok) {
+                  response.json().then(function(data) {
+                    if (data.error) alert(data.error);
+                  });
+                  location.reload();
+                }
+              });
+            },
+            onMove: function(evt) {
+              if (evt.dragged.dataset.type === "folder") {
+                if (evt.dragged.contains(evt.to)) {
+                  return false;
+                }
+              }
+            }
+          });
+        }
+
+        document.querySelectorAll(".folder-children").forEach(initSortable);
+
+        // Toggle folder
+        document.addEventListener("click", function(evt) {
+          var toggle = evt.target.closest(".folder-toggle");
+          if (!toggle) return;
+
+          var folderId = toggle.dataset.folderId;
+          var folderGroup = toggle.closest(".folder-group");
+          var contents = folderGroup.querySelector(".folder-children[data-folder-id='" + folderId + "']");
+          var icon = toggle.querySelector("i");
+          var folderIcon = folderGroup.querySelector(".folder-icon");
+
+          if (contents.classList.contains("hidden")) {
+            contents.classList.remove("hidden");
+            icon.className = "fa fa-caret-down";
+            if (folderIcon) folderIcon.className = "fa fa-folder-open folder-icon";
+            toggle.classList.remove("collapsed");
+          } else {
+            contents.classList.add("hidden");
+            icon.className = "fa fa-caret-right";
+            if (folderIcon) folderIcon.className = "fa fa-folder folder-icon";
+            toggle.classList.add("collapsed");
+          }
+
+          fetch("<%= toggle_collapsed_jil_task_folder_path(':id') %>".replace(":id", folderId), {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken }
+          });
+        });
+
+        // New folder
+        document.getElementById("new-folder-btn").addEventListener("click", function() {
+          var name = prompt("Folder name:");
+          if (!name || !name.trim()) return;
+
+          fetch("<%= jil_task_folders_path %>", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+            body: JSON.stringify({ name: name.trim() })
+          }).then(function(response) {
+            if (response.ok) location.reload();
+          });
+        });
+
+        // Rename folder
+        document.addEventListener("click", function(evt) {
+          var btn = evt.target.closest(".rename-folder");
+          if (!btn) return;
+          evt.stopPropagation();
+
+          var folderId = btn.dataset.folderId;
+          var nameEl = document.querySelector(".folder-name[data-folder-id='" + folderId + "']");
+          var currentName = nameEl.textContent;
+          var newName = prompt("Rename folder:", currentName);
+          if (!newName || !newName.trim() || newName.trim() === currentName) return;
+
+          fetch("<%= jil_task_folder_path(':id') %>".replace(":id", folderId), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+            body: JSON.stringify({ name: newName.trim() })
+          }).then(function(response) {
+            if (response.ok) nameEl.textContent = newName.trim();
+          });
+        });
+
+        // Delete folder
+        document.addEventListener("click", function(evt) {
+          var btn = evt.target.closest(".delete-folder");
+          if (!btn) return;
+          evt.stopPropagation();
+
+          var folderId = btn.dataset.folderId;
+          if (!confirm("Delete this folder? Tasks inside will be moved to root.")) return;
+
+          fetch("<%= jil_task_folder_path(':id') %>".replace(":id", folderId), {
+            method: "DELETE",
+            headers: { "X-CSRF-Token": csrfToken }
+          }).then(function(response) {
+            if (response.ok) location.reload();
+          });
+        });
+
+        // Search
+        var searchInput = document.getElementById("task-search");
+        var savedCollapsedStates = {};
+
+        searchInput.addEventListener("input", function() {
+          var query = this.value.toLowerCase().trim();
+
+          if (query === "") {
+            document.querySelectorAll(".task-row[data-type='task']").forEach(function(el) {
+              el.classList.remove("search-hidden");
+            });
+            document.querySelectorAll(".folder-group").forEach(function(el) {
+              el.classList.remove("search-hidden");
+            });
+            Object.keys(savedCollapsedStates).forEach(function(folderId) {
+              var contents = document.querySelector(".folder-children[data-folder-id='" + folderId + "']");
+              if (contents && savedCollapsedStates[folderId]) {
+                contents.classList.add("hidden");
+              }
+            });
+            savedCollapsedStates = {};
+            return;
+          }
+
+          if (Object.keys(savedCollapsedStates).length === 0) {
+            document.querySelectorAll(".folder-children[data-folder-id]").forEach(function(el) {
+              if (el.dataset.folderId) {
+                savedCollapsedStates[el.dataset.folderId] = el.classList.contains("hidden");
+              }
+            });
+          }
+
+          document.querySelectorAll(".folder-children.hidden").forEach(function(el) {
+            if (el.dataset.folderId) el.classList.remove("hidden");
+          });
+
+          document.querySelectorAll(".task-row[data-type='task']").forEach(function(el) {
+            var name = el.dataset.name || "";
+            el.classList.toggle("search-hidden", !name.includes(query));
+          });
+
+          document.querySelectorAll(".folder-group").forEach(function(el) {
+            var folderName = el.dataset.name || "";
+            var hasVisibleTasks = el.querySelectorAll(".task-row[data-type='task']:not(.search-hidden)").length > 0;
+            var hasVisibleFolders = el.querySelectorAll(".folder-group:not(.search-hidden)").length > 0;
+            el.classList.toggle("search-hidden", !(folderName.includes(query) || hasVisibleTasks || hasVisibleFolders));
+          });
+        });
+      }
+
+      // Sort (works in both normal and archived modes)
+      var currentSort = null;
+      var currentDir = null;
+
+      var rootContainer = document.getElementById("root-children");
+      var clearSortBtn = document.getElementById("clear-sort");
+
+      document.querySelectorAll(".sort-header").forEach(function(header) {
+        header.addEventListener("click", function() {
+          var field = this.dataset.sort;
+          if (currentSort === field) {
+            currentDir = currentDir === "asc" ? "desc" : "asc";
+          } else {
+            currentSort = field;
+            currentDir = field === "name" ? "asc" : "desc";
+          }
+          applySort(currentSort, currentDir);
+        });
+      });
+
+      if (clearSortBtn) {
+        clearSortBtn.addEventListener("click", function() {
+          location.reload();
+        });
+      }
+
+      function applySort(field, dir) {
+        var allTasks = Array.from(document.querySelectorAll(".task-row[data-type='task']"));
+
+        allTasks.sort(function(a, b) {
+          var aVal, bVal;
+          if (field === "name") {
+            aVal = a.dataset.name || "";
+            bVal = b.dataset.name || "";
+            return dir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+          } else if (field === "status") {
+            aVal = a.dataset.status || "";
+            bVal = b.dataset.status || "";
+            return dir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+          } else if (field === "last-run") {
+            aVal = parseInt(a.dataset.lastRun) || 0;
+            bVal = parseInt(b.dataset.lastRun) || 0;
+            return dir === "asc" ? aVal - bVal : bVal - aVal;
+          } else if (field === "next-run") {
+            aVal = parseInt(a.dataset.nextRun) || 0;
+            bVal = parseInt(b.dataset.nextRun) || 0;
+            return dir === "asc" ? aVal - bVal : bVal - aVal;
+          }
+          return 0;
+        });
+
+        allTasks.forEach(function(row) { rootContainer.appendChild(row); });
+
+        document.querySelector(".tasks-table").classList.add("sort-active");
+
+        if (!isArchived) {
+          document.querySelectorAll(".folder-children").forEach(function(c) {
+            var instance = Sortable.get(c);
+            if (instance) instance.option("disabled", true);
+          });
+        }
+
+        document.querySelectorAll(".sort-header").forEach(function(h) {
+          h.classList.remove("active");
+          h.querySelector(".sort-icon").className = "fa fa-sort sort-icon";
+        });
+        var activeHeader = document.querySelector(".sort-header[data-sort='" + field + "']");
+        activeHeader.classList.add("active");
+        activeHeader.querySelector(".sort-icon").className = "fa fa-sort-" + (dir === "asc" ? "asc" : "desc") + " sort-icon";
+
+        if (clearSortBtn) clearSortBtn.classList.remove("hidden");
+      }
+    })();
+  </script>
+<% end %>

@@ -3,6 +3,7 @@
 # Table name: tasks
 #
 #  id              :bigint           not null, primary key
+#  archived_at     :datetime
 #  code            :text
 #  cron            :text
 #  enabled         :boolean          default(TRUE)
@@ -12,19 +13,24 @@
 #  name            :text
 #  next_trigger_at :datetime
 #  sort_order      :integer
+#  tree_order      :integer
 #  uuid            :uuid
 #  created_at      :datetime         not null
 #  updated_at      :datetime         not null
+#  task_folder_id  :bigint
 #  user_id         :bigint
 #
 class Task < ApplicationRecord
   include ::Orderable
 
   belongs_to :user, optional: false
+  belongs_to :task_folder, optional: true
 
   before_save :set_next_cron
   after_create { reload } # Needed to retrieve the generated uuid on the current instance in memory
   orderable sort_order: :desc, scope: ->(task) { task.user.tasks }
+  scope :ordered, -> { order(tree_order: :desc) } # Override Orderable: tree-aware global ordering
+  before_save -> { self.tree_order ||= (user&.tasks&.maximum(:tree_order) || 0) + 1 }
 
   has_many :executions
   has_many :shared_tasks, dependent: :destroy
@@ -32,6 +38,8 @@ class Task < ApplicationRecord
 
   enum :last_status, ::Execution.statuses
 
+  scope :active, -> { where(archived_at: nil) }
+  scope :archived, -> { where.not(archived_at: nil) }
   scope :enabled, -> { where(enabled: true) }
   scope :pending, -> { where(next_trigger_at: ..Time.current) }
   scope :functions, -> {
@@ -50,6 +58,42 @@ class Task < ApplicationRecord
   scope :by_code, ->(code) {
     ilike(code: "%#{code}%")
   }
+
+  # Walk the folder tree in display order and assign sequential tree_order values.
+  # Higher tree_order = displayed first (DESC). 2 SELECTs + 1 UPDATE.
+  def self.recompute_tree_order(user)
+    all_folders = user.task_folders.to_a
+    all_tasks = user.tasks.active.to_a
+    folders_by_parent = all_folders.group_by(&:parent_id)
+    tasks_by_folder = all_tasks.group_by(&:task_folder_id)
+
+    ordered_task_ids = []
+    walk = ->(parent_id) {
+      child_folders = (folders_by_parent[parent_id] || [])
+      child_tasks = (tasks_by_folder[parent_id] || [])
+      items = (
+        child_folders.map { |f| [:folder, f] } +
+        child_tasks.map { |t| [:task, t] }
+      ).sort_by { |_type, item| -(item.sort_order || 0) }
+
+      items.each do |type, item|
+        if type == :folder
+          walk.call(item.id)
+        else
+          ordered_task_ids << item.id
+        end
+      end
+    }
+
+    walk.call(nil)
+    return if ordered_task_ids.empty?
+
+    total = ordered_task_ids.size
+    cases = ordered_task_ids.each_with_index.map { |id, idx|
+      "WHEN #{id.to_i} THEN #{total - idx}"
+    }.join(" ")
+    user.tasks.active.update_all("tree_order = CASE id #{cases} ELSE 0 END")
+  end
 
   def self.links
     ids.each { |id| puts "https://ardesian.com/jil/tasks/#{id}" }
@@ -114,7 +158,7 @@ class Task < ApplicationRecord
   end
 
   def self.schema(user=nil)
-    tasks = user.present? ? user.tasks.enabled.functions : none
+    tasks = user.present? ? user.tasks.active.enabled.functions : none
     funcs = "[Custom]\n" + tasks.filter_map { |task|
       match = task.listener.match(func_regex)
       next if match.blank?
@@ -178,7 +222,7 @@ class Task < ApplicationRecord
   end
 
   def serialize(opts={})
-    super(opts.reverse_merge(except: [:created_at, :updated_at, :code, :cron, :sort_order]))
+    super(opts.reverse_merge(except: [:created_at, :updated_at, :code, :cron, :sort_order, :tree_order, :archived_at]))
   end
 
   def serialize_with_execution
@@ -222,6 +266,20 @@ class Task < ApplicationRecord
     return false unless user
 
     user_id == user.id || shared_users.exists?(user.id)
+  end
+
+  def archived?
+    archived_at.present?
+  end
+
+  def archive!
+    update!(archived_at: Time.current, task_folder_id: nil)
+    Task.recompute_tree_order(user)
+  end
+
+  def unarchive!
+    update!(archived_at: nil)
+    Task.recompute_tree_order(user)
   end
 
   def broadcast_users

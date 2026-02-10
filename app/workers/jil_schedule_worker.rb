@@ -8,7 +8,7 @@ class JilScheduleWorker
       ::Jil::Schedule.add_job(schedule)
     end
 
-    ::Task.enabled.pending.distinct.pluck(:user_id).each do |user_id|
+    ::Task.active.enabled.pending.distinct.pluck(:user_id).each do |user_id|
       next if User.advisory_lock_exists?("jil_runner_#{user_id}")
 
       ::JilRunnerWorker.perform_async(user_id)

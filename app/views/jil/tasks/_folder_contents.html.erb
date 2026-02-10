@@ -1,0 +1,8 @@
+<% items = (folders + tasks).sort_by { |item| -(item.sort_order || 0) } %>
+<% items.each do |item| %>
+  <% if item.is_a?(TaskFolder) %>
+    <%= render "jil/tasks/folder_row", folder: item, level: level %>
+  <% else %>
+    <%= render "jil/tasks/task_row", task: item %>
+  <% end %>
+<% end %>

@@ -15,7 +15,7 @@ class JilRunnerWorker
     loop do
       executed_any = false
 
-      user.tasks.ordered.enabled.pending.each do |task|
+      user.tasks.active.ordered.enabled.pending.each do |task|
         executed_any = true
         task.execute
       end
