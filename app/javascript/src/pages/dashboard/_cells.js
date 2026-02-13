@@ -32,7 +32,7 @@ Cell.register = function(init_data) {
   return cell
 }
 Cell.initByName = function(name, config) {
-  var cell_key = name.replace(/^\s*|\s*$/ig, "").replace(/\s+/ig, "_").replace(/[^a-z_]/ig, "").toLowerCase()
+  var cell_key = name.replace(/^\s*|\s*$/ig, "").replace(/[\s-]+/ig, "_").replace(/[^a-z_]/ig, "").toLowerCase()
   var cell = registered_cells[cell_key]
   delete registered_cells[cell_key]
   if (!cell) {
