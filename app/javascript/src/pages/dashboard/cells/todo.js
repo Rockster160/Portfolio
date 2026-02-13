@@ -1,7 +1,7 @@
 import { ListCell } from "./_list";
 
 (function () {
-  new ListCell("To Do Today");
+  new ListCell("To-do ✨");
   new ListCell("Tomorrow Ideas");
   // new ListCell("Things to Eat");
 
