@@ -1,4 +1,16 @@
 <% content_for :title, @list_builder.name %>
+<% content_for :favicon do %>
+  <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'list_favicon/apple-touch-icon.png' %>">
+  <link rel="icon" type="image/png" href="<%= asset_path 'list_favicon/favicon-32x32.png' %>" sizes="32x32">
+  <link rel="icon" type="image/png" href="<%= asset_path 'list_favicon/favicon-16x16.png' %>" sizes="16x16">
+  <link rel="manifest" href="<%= manifest_list_builder_path(@list_builder) %>">
+  <meta name="apple-mobile-web-app-title" content="<%= @list_builder.name.truncate(12) %>">
+  <link rel="mask-icon" href="<%= asset_path 'list_favicon/safari-pinned-tab.svg' %>" color="#5BBAD5">
+  <link rel="shortcut icon" href="<%= asset_path 'list_favicon/favicon.ico' %>">
+  <meta name="theme-color" content="#000712">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<% end %>
 <% content_for :modals do %>
   <div id="cmodal-backdrop" class="cmodal-backdrop hidden">
     <div class="cmodal">
@@ -12,6 +24,7 @@
       <div class="row">
         <input id="m-display" placeholder="Display name (optional)">
         <input id="m-stock" class="sm basic" type="number" placeholder="Stock" min="0" style="max-width:80px">
+        <input id="m-low" class="sm basic" type="number" placeholder="Low" min="0" style="max-width:80px">
       </div>
       <div class="cmodal-actions">
         <button id="m-delete" class="danger primary" type="button">Delete</button>
@@ -270,6 +283,7 @@
     const mImg = document.getElementById("m-img")
     const mDisplay = document.getElementById("m-display")
     const mStock = document.getElementById("m-stock")
+    const mLow = document.getElementById("m-low")
     const mSave = document.getElementById("m-save")
     const mCancel = document.getElementById("m-cancel")
     const mDelete = document.getElementById("m-delete")
@@ -356,6 +370,7 @@
       mImg.value = item?.img || ""
       mDisplay.value = item?.display || ""
       mStock.value = item?.stock ?? 1
+      mLow.value = item?.low != null ? item.low : ""
       mDelete.classList.toggle("hidden", isNewItem)
       elcModal.classList.remove("hidden")
       setTimeout(() => mName.focus(), 0)
@@ -374,12 +389,15 @@
       const img = mImg.value.trim()
       const display = mDisplay.value.trim() || undefined
       const stock = parseInt(mStock.value, 10) || 0
+      const lowRaw = mLow.value.trim()
+      const item = { name, img, display, stock }
+      if (lowRaw !== "") item.low = parseInt(lowRaw, 10) || 0
 
       if (isNewItem) {
-        ITEMS.push({ name, img, display, stock })
+        ITEMS.push(item)
       } else {
         const idx = ITEMS.findIndex(x => x.name === currentEditingName)
-        if (idx >= 0) ITEMS[idx] = { ...ITEMS[idx], name, img, display, stock }
+        if (idx >= 0) ITEMS[idx] = { ...ITEMS[idx], ...item }
       }
       closecModal()
       render()
@@ -399,7 +417,9 @@
     // ---------- Quick Edit ----------
     const itemsToText = items => {
       return items.map(it => {
-        let parts = it.name
+        let name = it.name
+        if (it.low != null) name += ` [${it.low}]`
+        let parts = name
         if (it.img?.trim()) parts += ` | ${it.img.trim()}`
         if (it.display?.trim()) parts += ` | ${it.display.trim()}`
         if ((it.stock || 0) > 0) parts += ` (${it.stock})`
@@ -418,12 +438,21 @@
           raw = raw.replace(/\s*\(\d+\)\s*$/, "")
         }
         const parts = raw.split("|", 3)
-        return {
-          name: parts[0].trim(),
+        let name = parts[0].trim()
+        let low = undefined
+        const lm = name.match(/\[(\d+)\]\s*$/)
+        if (lm) {
+          low = parseInt(lm[1], 10)
+          name = name.replace(/\s*\[\d+\]\s*$/, "").trim()
+        }
+        const item = {
+          name: name,
           img: (parts[1] || "").trim(),
           display: (parts[2] || "").trim() || undefined,
           stock: stock,
         }
+        if (low != null) item.low = low
+        return item
       }).filter(Boolean)
     }
 
@@ -532,10 +561,11 @@
 
         const card = document.createElement("div")
         const stockVal = it.stock || 0
+        const lowThreshold = it.low != null ? it.low : 1
         let cls = "card"
         if (isSel) cls += " selected"
         if (!editMode && stockVal === 0) cls += " out-of-stock"
-        else if (!editMode && stockVal === 1) cls += " low-stock"
+        else if (!editMode && lowThreshold > 0 && stockVal <= lowThreshold) cls += " low-stock"
         card.className = cls
         card.dataset.name = it.name
         card.dataset.index = String(index)
@@ -612,7 +642,7 @@
             badge.className = "out-badge"
             badge.textContent = "Out"
             card.appendChild(badge)
-          } else if (stockVal === 1) {
+          } else if (lowThreshold > 0 && stockVal <= lowThreshold) {
             const badge = document.createElement("div")
             badge.className = "low-badge"
             badge.textContent = "Low"
@@ -672,6 +702,7 @@
           stock: it.stock || 0,
         }
         if (it.display) obj.display = it.display.toString().trim()
+        if (it.low != null) obj.low = it.low
         return obj
       })
     }

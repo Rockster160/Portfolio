@@ -39,18 +39,28 @@ class ListBuilder < ApplicationRecord
       parts = stripped.split("|", 3)
       next if parts[0].blank?
 
+      name = parts[0].squish
+      low = nil
+      if (lm = name.match(/\[(\d+)\]\s*$/))
+        low = lm[1].to_i
+        name = name.sub(/\s*\[\d+\]\s*$/, "").squish
+      end
+
       {
-        name: parts[0].squish,
+        name: name,
         img: parts[1].to_s.strip,
         display: parts[2].to_s.strip.presence,
         stock: stock,
+        low: low,
       }.compact
     }.compact
   end
 
   def listify_items
     items.map { |item|
-      parts = [item[:name]]
+      name = item[:name]
+      name = "#{name} [#{item[:low]}]" if item.key?(:low)
+      parts = [name]
       parts << " | #{item[:img]}" if item[:img].present?
       parts << " | #{item[:display]}" if item[:display].present?
       parts << " (#{item[:stock]})" if item[:stock].to_i > 0

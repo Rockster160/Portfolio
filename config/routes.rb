@@ -62,6 +62,7 @@ Rails.application.routes.draw do
   scope path: :jarvis do
     resources :meal_builders
     resources :list_builders do
+      get :manifest, on: :member
       post :toggle_item, on: :member
       patch :update_stock, on: :member
     end

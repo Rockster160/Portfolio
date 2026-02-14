@@ -1,7 +1,7 @@
 class ListBuildersController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
-  before_action :set_list_builder, only: [:show, :edit, :update, :destroy, :toggle_item, :update_stock]
+  before_action :set_list_builder, only: [:show, :edit, :update, :destroy, :toggle_item, :update_stock, :manifest]
 
   layout "quick_actions", only: [:show]
 
@@ -10,6 +10,26 @@ class ListBuildersController < ApplicationController
   end
 
   def show
+  end
+
+  def manifest
+    manifest = {
+      short_name:       @list_builder.name.truncate(12),
+      name:             @list_builder.name,
+      icons:            [
+        { src: "/favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
+        { src: "/favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
+      ],
+      id:               "list-builder-#{@list_builder.id}",
+      start_url:        "/jarvis/list_builders/#{@list_builder.to_param}?source=pwa",
+      background_color: "#000712",
+      display:          :standalone,
+      scope:            "/jarvis/list_builders/#{@list_builder.to_param}",
+      theme_color:      "#000712",
+      description:      "List Builder: #{@list_builder.name}",
+    }
+
+    render json: manifest, content_type: "application/manifest+json"
   end
 
   def new
