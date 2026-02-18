@@ -259,14 +259,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function formatRemaining(seconds) {
-    const abs = Math.abs(seconds);
-    const m = Math.ceil(abs / 60);
-    const s = Math.ceil(abs % 60);
-    const sign = seconds < 0 && m != 0 ? "-" : "";
-
-    if (seconds > 0 && seconds < 60) {
-      return `:${s}s`;
+    if (seconds > 0 && seconds <= 60) {
+      return `:${Math.ceil(seconds)}s`;
     }
+
+    const abs = Math.abs(seconds);
+    const m = seconds < 0 ? Math.floor(abs / 60) : Math.ceil(abs / 60);
+    const sign = seconds < 0 && m !== 0 ? "-" : "";
+
     return `${sign}${m}m`;
   }
 
