@@ -101,7 +101,10 @@ class Task < ApplicationRecord
   end
 
   def self.s3_export(bucket: FileStorage::DEFAULT_BUCKET)
-    data = all.map(&:attributes)
+    data = {
+      folders: TaskFolder.all.map(&:attributes),
+      tasks:   all.map(&:attributes),
+    }
     key = "tasks/export-#{Time.current.strftime("%Y%m%d-%H%M%S")}.json"
     ::FileStorage.upload(data.to_json, filename: key, bucket: bucket)
     key
@@ -111,7 +114,32 @@ class Task < ApplicationRecord
     json = ::FileStorage.download(key, bucket: bucket)
     data = JSON.parse(json)
 
-    data.map { |attrs|
+    # Support legacy exports that are just an array of tasks
+    if data.is_a?(Array)
+      return data.map { |attrs|
+        task = find_or_initialize_by(uuid: attrs["uuid"])
+        task.assign_attributes(attrs.except("uuid"))
+        task.save!
+        task
+      }
+    end
+
+    # Import folders topologically — parents before children at any depth
+    folders = (data["folders"] || []).index_by { |f| f["id"] }
+    imported = Set.new
+    import_folder = ->(attrs) {
+      return if imported.include?(attrs["id"])
+
+      import_folder.call(folders[attrs["parent_id"]]) if attrs["parent_id"] && folders[attrs["parent_id"]]
+      folder = TaskFolder.find_or_initialize_by(id: attrs["id"])
+      folder.assign_attributes(attrs)
+      folder.save!
+      imported << attrs["id"]
+    }
+    folders.each_value { |attrs| import_folder.call(attrs) }
+
+    # Import tasks
+    (data["tasks"] || []).map { |attrs|
       task = find_or_initialize_by(uuid: attrs["uuid"])
       task.assign_attributes(attrs.except("uuid"))
       task.save!

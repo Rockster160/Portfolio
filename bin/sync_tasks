@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+
+serverdetails="rocco@165.227.15.235"
+server_dir="/home/deploy/apps/portfolio/current"
+server_rbenv="/home/rocco/.rbenv/bin/rbenv"
+
+if [ -n "$1" ]; then
+  EXPORT_FILE="$1"
+  echo "=== Using provided export file ==="
+else
+  echo "=== Exporting tasks from production ==="
+  EXPORT_FILE=$(ssh $serverdetails -p 22 -t \
+    "cd $server_dir && RAILS_ENV=production $server_rbenv exec bundle exec rails runner \"puts Task.s3_export\"" \
+    | tr -d '\r' | tail -1)
+
+  if [ -z "$EXPORT_FILE" ]; then
+    echo "ERROR: No filename returned from s3_export"
+    exit 1
+  fi
+fi
+
+echo "Export file: $EXPORT_FILE"
+echo ""
+echo "=== Importing tasks locally ==="
+cd /Users/zoro/code/Portfolio
+RAILS_ENV=development bundle exec rails runner "FileStorage.mode(:s3) { Task.s3_import('$EXPORT_FILE') }"
+
+echo ""
+echo "=== Done ==="
