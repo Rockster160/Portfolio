@@ -102,8 +102,9 @@ class Task < ApplicationRecord
 
   def self.s3_export(bucket: FileStorage::DEFAULT_BUCKET)
     data = {
-      folders: TaskFolder.all.map(&:attributes),
-      tasks:   all.map(&:attributes),
+      folders:      TaskFolder.all.map(&:attributes),
+      tasks:        all.map(&:attributes),
+      shared_tasks: SharedTask.all.map(&:attributes),
     }
     key = "tasks/export-#{Time.current.strftime("%Y%m%d-%H%M%S")}.json"
     ::FileStorage.upload(data.to_json, filename: key, bucket: bucket)
@@ -111,6 +112,10 @@ class Task < ApplicationRecord
   end
 
   def self.s3_import(key, bucket: FileStorage::DEFAULT_BUCKET)
+    if Rails.env.production? && ENV["SKIP_PROD"] != "true"
+      raise "DANGEROUS! DO NOT EXECUTE IN PROD! Pass `SKIP_PROD=true` to bypass"
+    end
+
     json = ::FileStorage.download(key, bucket: bucket)
     data = JSON.parse(json)
 
@@ -123,6 +128,11 @@ class Task < ApplicationRecord
         task
       }
     end
+
+    # Wipe existing data in FK-safe order
+    SharedTask.delete_all
+    Task.delete_all
+    TaskFolder.delete_all
 
     # Import folders topologically — parents before children at any depth
     folders = (data["folders"] || []).index_by { |f| f["id"] }
@@ -139,12 +149,21 @@ class Task < ApplicationRecord
     folders.each_value { |attrs| import_folder.call(attrs) }
 
     # Import tasks
-    (data["tasks"] || []).map { |attrs|
+    tasks = (data["tasks"] || []).map { |attrs|
       task = find_or_initialize_by(uuid: attrs["uuid"])
       task.assign_attributes(attrs.except("uuid"))
       task.save!
       task
     }
+
+    # Import shared_tasks
+    (data["shared_tasks"] || []).each { |attrs|
+      st = SharedTask.find_or_initialize_by(id: attrs["id"])
+      st.assign_attributes(attrs)
+      st.save!
+    }
+
+    tasks
   end
 
   def self.last_exe
