@@ -1,3 +1,9 @@
+// Allow native pull-to-refresh on Whisper pages (standalone PWA)
+html.html-ctr-whisper {
+  height: auto !important;
+  min-height: 100%;
+}
+
 .ctr-whisper {
   background: linear-gradient(135deg, #1A1A2E 0%, #16213E 50%, #0F3460 100%);
   min-height: 100vh;

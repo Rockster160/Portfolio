@@ -1,3 +1,9 @@
+// Allow native pull-to-refresh on list show pages (standalone PWA)
+html.html-ctr-lists.html-act-show {
+  height: auto !important;
+  min-height: 100%;
+}
+
 html:has(.ctr-tasks.act-index) {
   &.dark-mode,
   &,
