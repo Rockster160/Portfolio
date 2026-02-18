@@ -24,6 +24,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   let timers = [];
   let timerAlarms = {}; // Per-timer alarm intervals
+  let wasQuietActive = false;
 
   const CIRCUMFERENCE = 2 * Math.PI * 45;
 
@@ -416,8 +417,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     return remaining;
   }
 
+  function isQuietModeActive() {
+    const quietTimer = timers.find((t) => t.key === "quiet");
+    if (!quietTimer) return false;
+    const nowSec = Math.floor(Time.msSinceEpoch() / 1000);
+    const remaining = (quietTimer.next || nowSec) - nowSec;
+    return remaining > 0;
+  }
+
   function updateAllDurations() {
     const overdueKeys = new Set();
+    const quietActive = isQuietModeActive();
 
     timers.forEach((timerData) => {
       const remaining =
@@ -429,8 +439,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
-    // Manage per-timer alarms
+    // Manage per-timer alarms (suppressed during quiet mode)
     overdueKeys.forEach((key) => {
+      if (key === "quiet" || quietActive) return;
       if (!timerAlarms[key]) {
         playAlertForKey(key);
         timerAlarms[key] = setInterval(
@@ -440,13 +451,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
-    // Clear alarms for timers no longer overdue
+    // Clear alarms for timers no longer overdue, or all alarms during quiet mode
     Object.keys(timerAlarms).forEach((key) => {
-      if (!overdueKeys.has(key)) {
+      if (!overdueKeys.has(key) || quietActive) {
         clearInterval(timerAlarms[key]);
         delete timerAlarms[key];
       }
     });
+
+    // Re-sync when quiet mode ends
+    if (wasQuietActive && !quietActive) {
+      durationMonitor.refresh();
+    }
+    wasQuietActive = quietActive;
   }
 
   function updateStatus(status) {
@@ -464,7 +481,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     lastStatus = status;
   }
 
-  Monitor.subscribe(monitorChannel, {
+  const durationMonitor = Monitor.subscribe(monitorChannel, {
     connected: function () {
       this.refresh();
     },
