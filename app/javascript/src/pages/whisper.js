@@ -459,6 +459,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
+    // Grey out non-quiet rings during quiet mode
+    durationsContainer.querySelectorAll(".duration-ring").forEach((ring) => {
+      ring.classList.toggle("quieted", quietActive);
+    });
+
     // Re-sync when quiet mode ends
     if (wasQuietActive && !quietActive) {
       durationMonitor.refresh();

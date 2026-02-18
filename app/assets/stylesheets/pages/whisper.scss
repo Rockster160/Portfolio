@@ -154,6 +154,19 @@
     }
   }
 
+  &.quieted:not([data-duration-key="quiet"]) {
+    .ring-bg {
+      stroke: #1A1A2E;
+    }
+    .ring-progress {
+      stroke: #555;
+    }
+    .ring-progress.overdue {
+      stroke: #666;
+      animation: none;
+    }
+  }
+
   .ring-content {
     position: absolute;
     top: 50%;
