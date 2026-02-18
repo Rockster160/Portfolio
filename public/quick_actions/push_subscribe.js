@@ -1,6 +1,46 @@
 // import { registerNotifications } from "./push_subscribe.js";
 // document.on "click", ".subscribe", registerNotifications
 
+const VAPID_PUBLIC_KEY =
+  "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
+const OPT_OUT_KEY = "jarvis-push-opted-out";
+
+// Soft re-registration on page load to recover from iOS clearing subscriptions
+export async function ensureJarvisServiceWorker() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  if (Notification.permission !== "granted") return;
+  if (localStorage.getItem(OPT_OUT_KEY) === "true") return;
+
+  try {
+    let registration = await navigator.serviceWorker.getRegistration("/");
+    if (!registration) return; // Never registered before, don't force it
+
+    let subscription = await registration.pushManager.getSubscription();
+
+    // If permission granted but no subscription, iOS may have cleared it - resubscribe
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+    }
+
+    if (subscription) {
+      await fetch("/push_notification_subscribe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          JarvisPushVersion: "2",
+        },
+        body: JSON.stringify(subscription),
+        credentials: "same-origin",
+      });
+    }
+  } catch (e) {
+    // Silent failure - this is a soft recovery attempt
+  }
+}
+
 export default function registerNotifications() {
   if ("serviceWorker" in navigator && "PushManager" in window) {
     // Register the service worker
@@ -25,9 +65,7 @@ export default function registerNotifications() {
       .then((registration) => {
         const subscribeOptions = {
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(
-            "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=",
-          ),
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
         };
         // Subscribe to push notifications
         return registration.pushManager.subscribe(subscribeOptions);

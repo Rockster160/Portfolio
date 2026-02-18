@@ -8,3 +8,6 @@ import "./quick_actions/buttons.js";
 import "./quick_actions/task_monitor.js";
 import "./quick_actions/watches.js";
 import "./quick_actions/inventory.js";
+import { ensureJarvisServiceWorker } from "./quick_actions/push_subscribe.js";
+
+ensureJarvisServiceWorker();
