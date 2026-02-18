@@ -158,6 +158,146 @@ document.addEventListener("DOMContentLoaded", () => {
     return meta?.getAttribute("content") || "";
   }
 
+  function applyWsUpdate(data) {
+    if (!data || typeof data.list_html !== "string") return;
+
+    const {
+      root: incRoot,
+      incomingItems,
+      incomingSections,
+      targetFor,
+    } = parseIncoming(data.list_html);
+
+    if (!incRoot) return;
+
+    const incIds = Object.keys(incomingItems);
+
+    upsertSections(incomingSections);
+
+    // resolve placeholders by name/category first
+    document.querySelectorAll(".item-placeholder").forEach((ph) => {
+      const key = itemKey(ph);
+
+      const existing = Array.from(
+        document.querySelectorAll(".list-item-container"),
+      )
+        .filter((el) => !el.classList.contains("item-placeholder"))
+        .find((el) => itemKey(el) === key);
+
+      if (existing) {
+        ph.remove();
+        return;
+      }
+
+      let match = null;
+      Object.values(incomingItems).some((inc) => {
+        if (itemKey(inc) === key) {
+          match = inc;
+          return true;
+        }
+        return false;
+      });
+
+      if (match) {
+        const targetBucket = targetFor(match);
+        ensureParent(match, targetBucket);
+        ph.replaceWith(match);
+      } else {
+        ph.remove();
+      }
+    });
+
+    Object.keys(incomingItems).forEach((id) => {
+      const inc = incomingItems[id];
+      if (!inc) return;
+
+      const targetBucket = targetFor(inc);
+      let curr = document.querySelector(
+        '.list-item-container[data-item-id="' + id + '"]',
+      );
+
+      if (!curr) {
+        const key = itemKey(inc);
+        curr =
+          Array.from(document.querySelectorAll(".list-item-container"))
+            .filter((el) => !el.classList.contains("item-placeholder"))
+            .find((el) => itemKey(el) === key) || null;
+      }
+
+      if (!curr) {
+        ensureParent(inc, targetBucket);
+        return;
+      }
+
+      const cfg = curr.querySelector(".list-item-config");
+
+      ["important", "locked", "recurring"].forEach((cls) => {
+        const has = !!inc.querySelector(".list-item-config ." + cls);
+        if (!cfg) return;
+
+        if (has) {
+          if (!cfg.querySelector("." + cls)) {
+            const div = document.createElement("div");
+            div.className = cls;
+            cfg.appendChild(div);
+          }
+        } else {
+          cfg.querySelectorAll("." + cls).forEach((el) => el.remove());
+        }
+      });
+
+      const incCat = inc.querySelector(".list-item-config .category");
+      if (incCat && cfg) {
+        const currCat = cfg.querySelector(".category");
+        if (currCat) currCat.textContent = incCat.textContent;
+      }
+
+      curr.setAttribute(
+        "data-sort-order",
+        inc.getAttribute("data-sort-order") || "0",
+      );
+
+      const incName = inc.querySelector(".item-name");
+      const currName = curr.querySelector(".item-name");
+      if (incName && currName) currName.innerHTML = incName.innerHTML;
+
+      const incLocked = inc.querySelector(".list-item-config .locked");
+      if (!incLocked) {
+        const incCb = inc.querySelector(".list-item-checkbox");
+        const currCb = curr.querySelector(".list-item-checkbox");
+        if (incCb && currCb) currCb.checked = incCb.checked;
+      }
+
+      ensureParent(curr, targetBucket);
+    });
+
+    // auto-check items that disappeared from the payload
+    document.querySelectorAll(".list-item-container").forEach((el) => {
+      const locked = el.querySelector(".list-item-config .locked");
+      if (locked) return;
+
+      const id = el.dataset.itemId;
+      if (!id) return;
+      if (incIds.includes(String(id))) return;
+
+      const cb = el.querySelector("input[type=checkbox]");
+      if (cb) cb.checked = true;
+    });
+
+    if (typeof clearRemovedItems === "function") {
+      clearRemovedItems();
+    }
+
+    if (typeof setImportantItems === "function") {
+      setImportantItems();
+    }
+
+    reorderAll();
+
+    // let drag/drop bindings reattach without duplicating state
+    document.dispatchEvent(new Event("lists:rebind"));
+  }
+
   window.listWS = consumer.subscriptions.create(
     {
       channel: "ListHtmlChannel",
@@ -195,142 +335,21 @@ document.addEventListener("DOMContentLoaded", () => {
       received(data) {
         if (!data || typeof data.list_html !== "string") return;
 
-        const {
-          root: incRoot,
-          incomingItems,
-          incomingSections,
-          targetFor,
-        } = parseIncoming(data.list_html);
-
-        if (!incRoot) return;
-
-        const incIds = Object.keys(incomingItems);
-
-        upsertSections(incomingSections);
-
-        // resolve placeholders by name/category first
-        document.querySelectorAll(".item-placeholder").forEach((ph) => {
-          const key = itemKey(ph);
-
-          const existing = Array.from(
-            document.querySelectorAll(".list-item-container"),
-          )
-            .filter((el) => !el.classList.contains("item-placeholder"))
-            .find((el) => itemKey(el) === key);
-
-          if (existing) {
-            ph.remove();
-            return;
-          }
-
-          let match = null;
-          Object.values(incomingItems).some((inc) => {
-            if (itemKey(inc) === key) {
-              match = inc;
-              return true;
-            }
-            return false;
-          });
-
-          if (match) {
-            const targetBucket = targetFor(match);
-            ensureParent(match, targetBucket);
-            ph.replaceWith(match);
-          } else {
-            ph.remove();
-          }
-        });
-
-        Object.keys(incomingItems).forEach((id) => {
-          const inc = incomingItems[id];
-          if (!inc) return;
-
-          const targetBucket = targetFor(inc);
-          let curr = document.querySelector(
-            '.list-item-container[data-item-id="' + id + '"]',
-          );
-
-          if (!curr) {
-            const key = itemKey(inc);
-            curr =
-              Array.from(document.querySelectorAll(".list-item-container"))
-                .filter((el) => !el.classList.contains("item-placeholder"))
-                .find((el) => itemKey(el) === key) || null;
-          }
-
-          if (!curr) {
-            ensureParent(inc, targetBucket);
-            return;
-          }
-
-          const cfg = curr.querySelector(".list-item-config");
-
-          ["important", "locked", "recurring"].forEach((cls) => {
-            const has = !!inc.querySelector(".list-item-config ." + cls);
-            if (!cfg) return;
-
-            if (has) {
-              if (!cfg.querySelector("." + cls)) {
-                const div = document.createElement("div");
-                div.className = cls;
-                cfg.appendChild(div);
-              }
-            } else {
-              cfg.querySelectorAll("." + cls).forEach((el) => el.remove());
-            }
-          });
-
-          const incCat = inc.querySelector(".list-item-config .category");
-          if (incCat && cfg) {
-            const currCat = cfg.querySelector(".category");
-            if (currCat) currCat.textContent = incCat.textContent;
-          }
-
-          curr.setAttribute(
-            "data-sort-order",
-            inc.getAttribute("data-sort-order") || "0",
-          );
-
-          const incName = inc.querySelector(".item-name");
-          const currName = curr.querySelector(".item-name");
-          if (incName && currName) currName.innerHTML = incName.innerHTML;
-
-          const incLocked = inc.querySelector(".list-item-config .locked");
-          if (!incLocked) {
-            const incCb = inc.querySelector(".list-item-checkbox");
-            const currCb = curr.querySelector(".list-item-checkbox");
-            if (incCb && currCb) currCb.checked = incCb.checked;
-          }
-
-          ensureParent(curr, targetBucket);
-        });
-
-        // auto-check items that disappeared from the payload
-        document.querySelectorAll(".list-item-container").forEach((el) => {
-          const locked = el.querySelector(".list-item-config .locked");
-          if (locked) return;
-
-          const id = el.dataset.itemId;
-          if (!id) return;
-          if (incIds.includes(String(id))) return;
-
-          const cb = el.querySelector("input[type=checkbox]");
-          if (cb) cb.checked = true;
-        });
-
-        if (typeof clearRemovedItems === "function") {
-          clearRemovedItems();
+        // Defer DOM updates while a drag is in progress to avoid
+        // corrupting jQuery UI Sortable state (which causes items
+        // to freeze with position:absolute styling).
+        if (window.__listDragging) {
+          window.__pendingWsData = data;
+          return;
         }
 
-        if (typeof setImportantItems === "function") {
-          setImportantItems();
-        }
-
-        reorderAll();
-
-        // let drag/drop bindings reattach without duplicating state
-        document.dispatchEvent(new Event("lists:rebind"));
+        applyWsUpdate(data);
       },
     },
   );
+
+  // Replay deferred WebSocket data after a drag completes
+  document.addEventListener("lists:ws-replay", function (e) {
+    applyWsUpdate(e.detail);
+  });
 });

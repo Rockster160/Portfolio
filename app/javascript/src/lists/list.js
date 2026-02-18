@@ -110,6 +110,9 @@ clearRemovedItems = function () {
   }
 };
 
+window.__listDragging = false;
+let __pendingWsData = null;
+
 let __dragPos = { x: 0, y: 0 };
 function __trackPointer(e) {
   let t = e.touches && e.touches[0];
@@ -260,6 +263,7 @@ function initSortables() {
     placeholder: "drag-placeholder",
 
     start: function (e, ui) {
+      window.__listDragging = true;
       draggingSection = ui.item.hasClass("list-section-tab");
       $(document).on("mousemove touchmove", __trackPointer);
       addAnchors();
@@ -288,6 +292,7 @@ function initSortables() {
     },
 
     stop: function (e, ui) {
+      window.__listDragging = false;
       $(document).off("mousemove touchmove", __trackPointer);
       $(".list-section-tab").removeClass("__pe-none");
       toggleEmptyHints(false);
@@ -298,6 +303,13 @@ function initSortables() {
       draggingSection = false;
       removeAnchors();
       document.dispatchEvent(new Event("lists:persist-order"));
+      if (__pendingWsData) {
+        let data = __pendingWsData;
+        __pendingWsData = null;
+        document.dispatchEvent(
+          new CustomEvent("lists:ws-replay", { detail: data }),
+        );
+      }
     },
   });
 
@@ -313,6 +325,7 @@ function initSortables() {
     placeholder: "drag-placeholder",
 
     start: function (e, ui) {
+      window.__listDragging = true;
       $(document).on("mousemove touchmove", __trackPointer);
       addAnchors();
       $(".list-section-tab").addClass("__pe-none");
@@ -334,11 +347,19 @@ function initSortables() {
     },
 
     stop: function (e, ui) {
+      window.__listDragging = false;
       $(document).off("mousemove touchmove", __trackPointer);
       $(".list-section-tab").removeClass("__pe-none");
       toggleEmptyHints(false);
       removeAnchors();
       document.dispatchEvent(new Event("lists:persist-order"));
+      if (__pendingWsData) {
+        let data = __pendingWsData;
+        __pendingWsData = null;
+        document.dispatchEvent(
+          new CustomEvent("lists:ws-replay", { detail: data }),
+        );
+      }
     },
   });
 }
