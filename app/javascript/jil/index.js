@@ -235,10 +235,13 @@ Keyboard.on(["Meta+v", "Meta+Shift+v"], async (evt) => {
   }
 
   const statements = Statement.fromText(await navigator.clipboard.readText());
+  if (!statements?.length) {
+    return;
+  }
   if (evt.shiftKey) {
-    await window.selected.pasteAbove();
+    window.selected.pasteAbove(statements);
   } else {
-    await window.selected.pasteBelow();
+    window.selected.pasteBelow(statements);
   }
   History.record();
 });

@@ -537,15 +537,17 @@ export default class Statement {
     this.updateReferences();
   }
 
-  async pasteAbove() {
-    const statements = Statement.fromText(await navigator.clipboard.readText());
+  async pasteAbove(statements) {
+    statements = statements || Statement.fromText(await navigator.clipboard.readText());
+    if (!statements?.length) { return; }
     statements.forEach((statement) => {
       statement.moveBefore(this);
     });
     statements[statements.length - 1]?.select();
   }
-  async pasteBelow() {
-    const statements = Statement.fromText(await navigator.clipboard.readText());
+  async pasteBelow(statements) {
+    statements = statements || Statement.fromText(await navigator.clipboard.readText());
+    if (!statements?.length) { return; }
     statements.reverse().forEach((statement) => {
       statement.moveAfter(window.selected);
     });
