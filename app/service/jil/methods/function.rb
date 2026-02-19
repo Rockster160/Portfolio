@@ -15,7 +15,7 @@ class Jil::Methods::Function < Jil::Methods::Base
     @ctx[:args] = {}
     arg_list, content = token_val(line.objname).values
     arg_list.split(/[,\s]+/).each_with_index { |arg_name, idx|
-      break if idx > line.arg.length
+      break if idx >= line.arg.length
 
       @ctx[:args][arg_name.to_sym] = evalarg(line.arg[idx])
     }

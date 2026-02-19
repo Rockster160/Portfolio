@@ -290,8 +290,8 @@ class Task < ApplicationRecord
     did_match = listener_match?(trigger) { |sub_listener|
       next true if sub_listener == trigger
 
-      if trigger == :monitor && trigger_data.is_a?(::Hash)
-        next true if sub_listener.match?(/\A\s*monitor::?#{trigger_data[:channel]}\s*\z/)
+      if trigger == :monitor && trigger_data.is_a?(::Hash) && trigger_data[:channel].present?
+        next true if sub_listener.match?(/\A\s*monitor::?#{Regexp.escape(trigger_data[:channel].to_s)}\s*\z/)
       end
 
       matcher = ::SearchBreakMatcher.new(sub_listener, { trigger => serialized_data })

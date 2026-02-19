@@ -18,7 +18,7 @@ class Jil::Methods::Boolean < Jil::Methods::Base
       left, sign, right = evalargs(line.args)
       if sign.in?(["==", "!="])
         @jil.cast(left).send(sign, @jil.cast(right))
-      elsif sign.in?(["==", "!=", "<", "<=", ">", ">="])
+      elsif sign.in?(["<", "<=", ">", ">="])
         @jil.cast(left, :Numeric).send(sign, @jil.cast(right, :Numeric))
       end
     else

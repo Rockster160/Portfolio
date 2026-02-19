@@ -46,7 +46,7 @@ module TriggerData
     klass = klass_name.constantize
     reflection = ::User.reflections.values.find { |r| r.klass == klass }
 
-    me.send(reflection.name).find(id)
+    as.send(reflection.name).find(id)
   rescue NameError, ::ActiveRecord::RecordNotFound
     string
   end

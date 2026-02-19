@@ -11,7 +11,7 @@ class Jil::Methods::String < Jil::Methods::Base
         token = Regexp.last_match[1]
         var = @jil.ctx&.dig(:vars, token.to_sym) || {}
         cast(var[:value]).tap { |val|
-          jil.ctx[:output] << "Unfound token (#{token})" if val.blank?
+          @jil.ctx[:output] << "Unfound token (#{token})" if val.blank?
         }
       }
     end

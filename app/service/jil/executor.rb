@@ -48,12 +48,14 @@ class Jil::Executor
       begin
         ran = task.match_run(trigger, trigger_data) && task
       rescue StandardError => e
-        unless Rails.env.production?
+        if Rails.env.production?
+          Rails.logger.error("[Jil::Executor.trigger] Task##{task.id} #{e.class}: #{e.message}")
+        else
           load("/Users/zoro/.pryrc")
           source_puts "[#{e.class}] #{e.message}".red
           source_puts focused_backtrace($is_ocs ? e : e.backtrace).join("\n").grey
         end
-        nil # Generic rescue
+        nil
       end
       ran&.tap { stopped = true if ran.stop_propagation? }
     }.tap { |_tasks|

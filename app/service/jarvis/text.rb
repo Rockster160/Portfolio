@@ -42,7 +42,7 @@ module Jarvis::Text
     reversed_words = words.gsub(/\b(my)\b/i, "your")
     reversed_words = reversed_words.gsub(/\b(me|i)\b/i, "you")
     reversed_words = reversed_words.gsub(/[^a-z0-9]*$/, "").squish
-    reversed_words = reversed_words.tap { |line| line[0] = line[0].to_s.downcase }
+    reversed_words = reversed_words.tap { |line| line[0] = line[0].to_s.downcase if line.present? }
   end
 
   # ============== Support ============
@@ -53,8 +53,8 @@ module Jarvis::Text
 
   def current_time_decoration
     case Time.current.hour
-    when 0..4, 19..25 then :evening
-    when 5..12 then :morning
+    when 0..4, 19..23 then :evening
+    when 5..11 then :morning
     when 12..18 then :afternoon
     end
   end

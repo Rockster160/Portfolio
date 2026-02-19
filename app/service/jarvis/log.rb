@@ -27,7 +27,7 @@ class Jarvis::Log < Jarvis::Action
 
   def create_event
     @evt_data = {
-      name:      @evt[:name].tap { |n| n[0] = n[0].upcase },
+      name:      @evt[:name]&.tap { |n| n[0] = n[0].upcase if n.present? },
       notes:     @evt[:notes].presence,
       timestamp: @evt[:timestamp].presence,
       user_id:   @user.id,
