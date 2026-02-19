@@ -120,6 +120,33 @@ function __trackPointer(e) {
   __dragPos.y = t ? t.pageY : e.pageY;
 }
 
+let __scrollInterval = null;
+const SCROLL_SENSITIVITY = 60;
+const SCROLL_SPEED = 15;
+
+function __startAutoScroll() {
+  __stopAutoScroll();
+  __scrollInterval = setInterval(function () {
+    let y = __dragPos.y - window.scrollY;
+    let vh = window.innerHeight;
+
+    if (y < SCROLL_SENSITIVITY) {
+      let intensity = 1 - y / SCROLL_SENSITIVITY;
+      window.scrollBy(0, -SCROLL_SPEED * intensity);
+    } else if (y > vh - SCROLL_SENSITIVITY) {
+      let intensity = 1 - (vh - y) / SCROLL_SENSITIVITY;
+      window.scrollBy(0, SCROLL_SPEED * intensity);
+    }
+  }, 16);
+}
+
+function __stopAutoScroll() {
+  if (__scrollInterval) {
+    clearInterval(__scrollInterval);
+    __scrollInterval = null;
+  }
+}
+
 function __maybeSnapToEdges($item) {
   let $root = $(".list-items");
   if ($root.length == 0) return false;
@@ -266,6 +293,7 @@ function initSortables() {
       window.__listDragging = true;
       draggingSection = ui.item.hasClass("list-section-tab");
       $(document).on("mousemove touchmove", __trackPointer);
+      __startAutoScroll();
       addAnchors();
       $(".list-section-tab").addClass("__pe-none"); // let hits fall to anchors/buckets
       toggleEmptyHints(true);
@@ -294,6 +322,7 @@ function initSortables() {
     stop: function (e, ui) {
       window.__listDragging = false;
       $(document).off("mousemove touchmove", __trackPointer);
+      __stopAutoScroll();
       $(".list-section-tab").removeClass("__pe-none");
       toggleEmptyHints(false);
       if (draggingSection) {
@@ -327,6 +356,7 @@ function initSortables() {
     start: function (e, ui) {
       window.__listDragging = true;
       $(document).on("mousemove touchmove", __trackPointer);
+      __startAutoScroll();
       addAnchors();
       $(".list-section-tab").addClass("__pe-none");
       toggleEmptyHints(true);
@@ -349,6 +379,7 @@ function initSortables() {
     stop: function (e, ui) {
       window.__listDragging = false;
       $(document).off("mousemove touchmove", __trackPointer);
+      __stopAutoScroll();
       $(".list-section-tab").removeClass("__pe-none");
       toggleEmptyHints(false);
       removeAnchors();
