@@ -4,6 +4,8 @@ class UsersController < ApplicationController
 
   def new
     @user = User.new
+    @list = current_user.lists.find_by(id: params[:list_id]) if params[:list_id].present?
+    load_friends
   end
 
   def create
@@ -12,6 +14,7 @@ class UsersController < ApplicationController
     if !@user.persisted? && @list && (@user.phone.blank? && @user.email.blank?)
       # Inviting a user by list, but only giving a username, and that user doesn't exist
       @user.errors.add(:base, "No user found with that username")
+      load_friends
       return render :new
     end
     @user.assign_invitation_token unless @user.persisted?
@@ -20,6 +23,7 @@ class UsersController < ApplicationController
       @user.invite!(@list)
       redirect_to @list
     else
+      load_friends
       render :new
     end
   end
@@ -39,6 +43,13 @@ class UsersController < ApplicationController
   end
 
   private
+
+  def load_friends
+    return unless @list
+
+    existing_user_ids = @list.user_lists.pluck(:user_id)
+    @friends = current_user.contacts.where.not(friend_id: nil).where.not(friend_id: existing_user_ids).order(:name)
+  end
 
   def user_params
     params.require(:user).permit(
