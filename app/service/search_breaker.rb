@@ -63,11 +63,16 @@ module SearchBreaker
 
   def delim_escaped_regex(delimiters)
     sorted_delims = delimiters.sort_by { |_dk, d| -d.length } # Longest first
-    sorted_delims.map { |_dk, d|
-      ::Regexp.escape(d)
-    }.join("|").then { |delims|
-      /#{RX[:start]}(#{delims})/i
-    }
+    # Standalone negation delimiters (- and !) should only match when NOT
+    # preceded by a word character, to avoid splitting hyphenated identifiers
+    # like "hass-button" as "hass NOT button"
+    start_only, boundary = sorted_delims.partition { |dk, d| dk == :not && d.match?(/\A[!\-]\z/) }
+
+    parts = []
+    parts << "#{RX[:start]}(?:#{boundary.map { |_dk, d| ::Regexp.escape(d) }.join("|")})" if boundary.any?
+    parts << "(?<!\\w)(?:#{start_only.map { |_dk, d| ::Regexp.escape(d) }.join("|")})" if start_only.any?
+
+    Regexp.new("(#{parts.join("|")})", Regexp::IGNORECASE)
   end
 
   def broken_or_val(val, delimiters)

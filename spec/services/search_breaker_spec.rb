@@ -190,5 +190,22 @@ RSpec.describe SearchBreaker do
         expect(matcher?("event:ANY(blah nothing)", data)).to be(false)
       end
     end
+
+    context "with a hyphenated trigger key" do
+      let(:data) {
+        { "hass-button": { button_id: "abc123", type: "button1_long_press", entity_id: "sensor.shortcut_button_1", device_name: "Action Button 1" } }
+      }
+
+      it "treats hyphens in identifiers as literal, not as negation" do
+        expect(matcher?("hass-button", data)).to be(true)
+        expect(matcher?('hass-button:entity_id:"sensor.shortcut_button_1"', data)).to be(true)
+        expect(matcher?('hass-button:entity_id:"sensor.shortcut_button_2"', data)).to be(false)
+        expect(matcher?("hass-button:device_name:Action", data)).to be(true)
+        expect(matcher?("hass-button:type:long_press", data)).to be(true)
+        expect(matcher?("hass-button:type::button1_long_press", data)).to be(true)
+        expect(matcher?("hass-button:type::long_press", data)).to be(false)
+      end
+
+    end
   end
 end

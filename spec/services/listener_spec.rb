@@ -160,4 +160,58 @@ RSpec.describe Task do
       ])
     end
   end
+
+  context "with hyphenated trigger keys" do
+    let!(:tasks) {
+      Task.create([
+        { user: admin, listener: "hass-button" },
+        { user: admin, listener: 'hass-button:entity_id:"sensor.shortcut_button_1"' },
+        { user: admin, listener: "hass-button:type:long_press" },
+      ])
+    }
+
+    let(:trigger) { "hass-button" }
+    let(:trigger_data) {
+      {
+        button_id: "8f78df4c09395edf6060cae7c22df356",
+        type: "button1_long_press",
+        entity_id: "sensor.shortcut_button_1",
+        device_name: "Action Button 1",
+      }
+    }
+
+    def matching_listeners(trigger, data)
+      serialized = TriggerData.serialize(data, use_global_id: false)
+      admin.tasks.by_listener(trigger).select { |task|
+        task.listener_match?(trigger) { |sub|
+          next true if sub == trigger
+
+          SearchBreakMatcher.new(sub, { trigger => serialized }).match?
+        }
+      }.map(&:listener)
+    end
+
+    it "finds tasks via by_listener scope" do
+      found = admin.tasks.by_listener(trigger)
+      expect(found.pluck(:listener)).to match_array(tasks.map(&:listener))
+    end
+
+    it "matches all applicable listeners for button 1" do
+      expect(matching_listeners(trigger, trigger_data)).to match_array([
+        "hass-button",
+        'hass-button:entity_id:"sensor.shortcut_button_1"',
+        "hass-button:type:long_press",
+      ])
+    end
+
+    it "only matches the bare listener for a different button" do
+      other_data = trigger_data.merge(
+        entity_id: "sensor.shortcut_button_2",
+        type: "button2_short_press",
+      )
+      expect(matching_listeners(trigger, other_data)).to match_array([
+        "hass-button",
+      ])
+    end
+  end
 end
