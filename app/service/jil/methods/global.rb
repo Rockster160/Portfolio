@@ -166,16 +166,6 @@ class Jil::Methods::Global < Jil::Methods::Base
     }
   end
 
-  def relay(contact, data)
-    friend = @jil.user.contacts.name_find(contact)&.friend if contact.is_a?(::String)
-    friend ||= @jil.user.contacts.find_by(id: contact[:id])&.friend if contact.is_a?(::Hash)
-
-    return if friend&.contacts&.where(friend_id: @jil.user.id, permit_relay: true).blank?
-
-    ::Jil.trigger_now(friend, :relay, @jil.cast(data, :Hash).merge(from: @jil.user.username))
-    nil
-  end
-
   def triggerNow(scope, data)
     ::Jil.trigger_now(@jil.user, scope, data).map(&:serialize_with_execution)
   end

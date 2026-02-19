@@ -40,7 +40,6 @@
   #triggerNow(String TAB Hash)::Array
   !#triggerRaw(Hash)::Array # Should this just be a trigger class?
   !#triggerVia(String)::Array # "command.say.'blah blah blah'"
-  #relay(Contact|String content(Hash|Keyval [Keyval.new]))::None # String is contact name/username/alias/id
   #dowhile(enum_content)::Numeric
   #loop(enum_content)::Any
   #times(Numeric enum_content)::Numeric
@@ -269,6 +268,7 @@
   #find(String|Numeric)
   #search(String)::Array
   #create(content(ContactData))
+  #contact_relay(String content(Hash|Keyval [Keyval.new]))::Boolean
   .name::String
   .nickname::String
   .username::String
@@ -276,6 +276,7 @@
   .phone::String
   .data::Hash
   .update!(content(ContactData))
+  .relay(content(Hash|Keyval [Keyval.new]))::Boolean
   .get(String)::Any
   .set!(String " : " Any)
 *[ContactData]

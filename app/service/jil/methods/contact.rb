@@ -13,6 +13,7 @@ class Jil::Methods::Contact < Jil::Methods::Base
   #   #find(String|Numeric)
   #   #search(String)::Array
   #   #create(content(ContactData))
+  #   #contact_relay(String content(...))::Boolean
   #   .name::String
   #   .nickname::String
   #   .username::String
@@ -20,6 +21,7 @@ class Jil::Methods::Contact < Jil::Methods::Base
   #   .phone::String
   #   .data::Hash
   #   .update!(content(ContactData))
+  #   .relay(content(...))::Boolean
   #   .get(String)::Any
   #   .set!(String " : " Any)
   # *[ContactData]
@@ -70,6 +72,40 @@ class Jil::Methods::Contact < Jil::Methods::Base
 
   def set!(contact, key, value)
     @jil.user.contacts.find(contact[:id]).tap { |c| c.update(data: c.data.merge({ key => value })) }
+  end
+
+  # Relay sends data to a friend's Jil tasks, triggering any tasks they have
+  # listening for :relay events. The friend must have permit_relay enabled on
+  # their contact entry for you (bidirectional trust). A `from` key with your
+  # username is automatically merged into the data payload.
+  #
+  # Returns true if the relay was sent, false if the friend wasn't found or
+  # relay isn't permitted.
+  #
+  # Class method - look up contact by name/username/alias:
+  #   Contact.relay("Alice", {action: "unlock", code: "1234"})
+  #
+  # Instance method - relay to an already-resolved contact:
+  #   alice = Contact.find("Alice")
+  #   alice.relay({action: "unlock", code: "1234"})
+
+  def contact_relay(name, data)
+    friend = @jil.user.contacts.name_find(name)&.friend if name.is_a?(::String)
+    friend ||= @jil.user.contacts.find_by(id: name[:id])&.friend if name.is_a?(::Hash)
+
+    return false if friend&.contacts&.where(friend_id: @jil.user.id, permit_relay: true).blank?
+
+    ::Jil.trigger_now(friend, :relay, @jil.cast(data, :Hash).merge(from: @jil.user.username))
+    true
+  end
+
+  def relay(contact, data)
+    friend = @jil.user.contacts.find_by(id: contact[:id])&.friend
+
+    return false if friend&.contacts&.where(friend_id: @jil.user.id, permit_relay: true).blank?
+
+    ::Jil.trigger_now(friend, :relay, @jil.cast(data, :Hash).merge(from: @jil.user.username))
+    true
   end
 
   # [ContactData]
