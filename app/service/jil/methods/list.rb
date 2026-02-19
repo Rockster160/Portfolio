@@ -22,6 +22,10 @@ class Jil::Methods::List < Jil::Methods::Base
     # TODO: Rescue/handle no list found
   end
 
+  def list_toggle(list_name, item_name)
+    List.by_name_for_user(list_name, @jil.user).tap { |list| list.toggle(item_name) }
+  end
+
   def name(list)
     load_list(list).name
   end
@@ -32,6 +36,10 @@ class Jil::Methods::List < Jil::Methods::Base
 
   def remove(list, item_name)
     load_list(list).remove(item_name)
+  end
+
+  def toggle(list, item_name)
+    load_list(list).toggle(item_name)
   end
 
   def items(list)
@@ -62,6 +70,7 @@ end
 #   #find(String)
 #   #list_add(String:List String:Item)
 #   #list_remove(String:List String:Item)
+#   #list_toggle(String:List String:Item)
 #   #search(String)::Array
 #   #create(String)
 #   .name::String
@@ -69,5 +78,6 @@ end
 #   .destroy::Boolean
 #   .add(String)::Boolean
 #   .remove(String)::Boolean
+#   .toggle(String)::Boolean
 #   .items::Array
 #   .has_item?(String)::Boolean
