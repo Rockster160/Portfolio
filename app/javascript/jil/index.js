@@ -85,7 +85,15 @@ const moveSelectionDown = () => {
 };
 
 setup();
-// const shx = new SyntaxHighlighter(document.querySelector("code.code-preview"))
+
+// Collapse/expand content blocks
+document.querySelector(".statements")?.addEventListener("click", (evt) => {
+  let toggle = evt.target.closest(".content-collapse");
+  if (!toggle) { return; }
+  let content = toggle.closest(".content");
+  if (!content) { return; }
+  content.classList.toggle("collapsed");
+});
 
 // Add a new function below/above the current selected or hovered one
 Keyboard.on(["Enter", "Shift+Enter"], (evt) => {

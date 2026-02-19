@@ -58,6 +58,9 @@ export function field(arg) {
           data: { allowed: arg.allowedtypes },
         }),
       );
+      let toggle = element("div", { class: "content-collapse" });
+      toggle.innerHTML = '<i class="fa fa-chevron-down"></i>';
+      content.appendChild(toggle);
       let dropdown = element("div", { class: "content-dropdown below" });
       dropdown.appendChild(element("div", { class: "reference" }));
       if (arg.options) {

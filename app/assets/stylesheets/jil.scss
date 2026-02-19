@@ -597,6 +597,46 @@ input[type="submit"] {
             content: "";
           }
 
+          .content-collapse {
+            position: absolute;
+            left: -16px;
+            top: -2px;
+            cursor: pointer;
+            font-size: 9px;
+            color: var(--statement-border);
+            z-index: 1;
+            line-height: 1;
+
+            .fa {
+              transition: transform 0.15s ease;
+            }
+
+            &:hover {
+              color: #FFF;
+            }
+          }
+
+          &.collapsed {
+            > .statement-wrapper,
+            > .content-dropdown {
+              display: none;
+            }
+
+            > .content-collapse .fa {
+              transform: rotate(-90deg);
+            }
+
+            &:after {
+              content: "\2022 \2022 \2022";
+              display: block;
+              color: var(--statement-border);
+              font-size: 10px;
+              letter-spacing: 2px;
+              padding: 2px 0;
+              cursor: pointer;
+            }
+          }
+
           &.open {
             padding-bottom: 12px;
             min-height: 20px;

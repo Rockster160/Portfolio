@@ -5,6 +5,7 @@ export default function sortable(ele) {
   new Sortable(ele, {
     group: "blocks",
     handle: ".handle",
+    draggable: ".statement-wrapper",
     animation: 150,
     onStart: function(evt) {
       document.querySelectorAll(".content").forEach(item => {
@@ -16,6 +17,7 @@ export default function sortable(ele) {
           }
         }
         item.classList.add("open")
+        item.classList.remove("collapsed")
       })
     },
     onEnd: function(evt) {
