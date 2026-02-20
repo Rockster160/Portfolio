@@ -8,6 +8,6 @@ class TeslaChannel < ApplicationCable::Channel
   end
 
   def request
-    TeslaCommand.command(:request, nil, true)
+    # TeslaCommand.command(:request, nil, true)
   end
 end
