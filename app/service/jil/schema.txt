@@ -34,6 +34,7 @@
   #command(String)::String
   #commandAt(Date Text)::Schedule
   #request("Method" String BR "URL" String BR "Params" Hash BR "Headers" Hash)::Hash
+  #requestBody("URL" String BR "Params" Hash BR "Headers" Hash)::Hash
   #broadcast_websocket("Channel" TAB String BR "Data" TAB Hash)::Numeric
   #trigger(String TAB Date content(Keyval|Hash [Keyval.new]))::Schedule
   #triggerWith(String TAB Date BR "" TAB Hash)::Schedule

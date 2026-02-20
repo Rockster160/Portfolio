@@ -22,6 +22,7 @@ module LocalIpManager
     end
 
     DataStorage[:local_ip] = new_ip
+    User.me.caches.set(:local_ip, new_ip)
 
     Jarvis.say("Updated IP Addresses! #{new_ip}")
   end

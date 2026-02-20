@@ -166,6 +166,23 @@ class Jil::Methods::Global < Jil::Methods::Base
     }
   end
 
+  def requestBody(url, params, headers)
+    res = ::RestClient::Request.execute(
+      method: :get,
+      url: url,
+      payload: @jil.cast(params.presence || {}, :Hash).to_json,
+      headers: @jil.cast(headers.presence || {}, :Hash).merge(content_type: :json),
+    )
+    body = res.body
+    body = ::JSON.parse(body) rescue body if res.headers[:content_type]&.match?(/json/)
+
+    {
+      code:    res.code,
+      headers: res.headers,
+      body:    body,
+    }
+  end
+
   def triggerNow(scope, data)
     ::Jil.trigger_now(@jil.user, scope, data).map(&:serialize_with_execution)
   end
