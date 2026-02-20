@@ -30,7 +30,7 @@ class Oauth::TeslaApi < Oauth::Base
   constants(
     api_url:         "https://fleet-api.prd.na.vn.cloud.tesla.com/api/1/",
     oauth_url:       "https://auth.tesla.com/oauth2/v3/authorize",
-    exchange_url:    "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token",
+    exchange_url:    "https://auth.tesla.com/oauth2/v3/token",
     client_id:       ENV.fetch("PORTFOLIO_TESLA_CLIENT_ID"),
     client_secret:   ENV.fetch("PORTFOLIO_TESLA_CLIENT_SECRET"),
     scopes:          "openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds vehicle_location",

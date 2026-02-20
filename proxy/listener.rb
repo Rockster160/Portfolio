@@ -13,7 +13,7 @@ require_relative "../app/service/api"
 require "pry-rails"
 
 if REAL_TESLA_ENDPOINTS
-  OAUTH_BASE_URL = "https://fleet-auth.prd.vn.cloud.tesla.com".freeze # no slash
+  OAUTH_BASE_URL = "https://auth.tesla.com".freeze # no slash
   TARGET_BASE_URL = "https://localhost:8752".freeze # no slash
 else
   OAUTH_BASE_URL = "http://localhost:3141/tesla".freeze
