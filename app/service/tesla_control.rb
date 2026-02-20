@@ -120,37 +120,37 @@ class TeslaControl
     return @vehicle_data if defined?(@vehicle_data)
 
     @vehicle_data ||= cached_vehicle_data
-    # get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
-    #   car_data = json.is_a?(::Hash) && json.dig(:response)
-    #   cached_data = cached_vehicle_data
-    #   break cached_data unless car_data.present?
+    get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
+      car_data = json.is_a?(::Hash) && json.dig(:response)
+      cached_data = cached_vehicle_data
+      break cached_data unless car_data.present?
 
-    #   car_data[:timestamp] = car_data.dig(:vehicle_state, :timestamp) # Bubble up to higher key
+      car_data[:timestamp] = car_data.dig(:vehicle_state, :timestamp) # Bubble up to higher key
 
-    #   User.me.caches.set(:car_data, car_data)
-    #   break car_data if car_data[:state] == "asleep"
+      User.me.caches.set(:car_data, car_data)
+      break car_data if car_data[:state] == "asleep"
 
-    #   if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
-    #     list = User.me.list_by_name(:Chores)
-    #     [:fl, :fr, :rl, :rr].each do |tire|
-    #       tirename = tire.to_s.split("").then { |dir, side|
-    #         [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
-    #       }.join(" ")
+      if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
+        list = User.me.list_by_name(:Chores)
+        [:fl, :fr, :rl, :rr].each do |tire|
+          tirename = tire.to_s.split("").then { |dir, side|
+            [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
+          }.join(" ")
 
-    #       if car_data.dig(:vehicle_state, "tpms_soft_warning_#{tire}".to_sym)
-    #         list.add("#{tirename} tire pressure low")
-    #       else
-    #         list.remove("#{tirename} tire pressure low")
-    #       end
+          if car_data.dig(:vehicle_state, "tpms_soft_warning_#{tire}".to_sym)
+            list.add("#{tirename} tire pressure low")
+          else
+            list.remove("#{tirename} tire pressure low")
+          end
 
-    #       if car_data.dig(:vehicle_state, "tpms_hard_warning_#{tire}".to_sym)
-    #         User.me.list_by_name(:TODO).add("#{tirename} tire pressure low")
-    #       else
-    #         User.me.list_by_name(:TODO).remove("#{tirename} tire pressure low")
-    #       end
-    #     end
-    #   end
-    # } || cached_vehicle_data
+          if car_data.dig(:vehicle_state, "tpms_hard_warning_#{tire}".to_sym)
+            User.me.list_by_name(:TODO).add("#{tirename} tire pressure low")
+          else
+            User.me.list_by_name(:TODO).remove("#{tirename} tire pressure low")
+          end
+        end
+      end
+    } || cached_vehicle_data
   rescue StandardError => e
     err("Vehicle Data Error", e)
     cached_vehicle_data

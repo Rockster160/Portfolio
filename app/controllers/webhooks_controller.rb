@@ -19,7 +19,7 @@ class WebhooksController < ApplicationController
     # ::Oauth::MyApi.new(current_user).code = params[:code]
     if params[:issuer] == "https://auth.tesla.com/oauth2/v3"
       # FIXME: Should look up the user based on issuer or secret or something...
-      # ::TeslaControl.me.code = params[:code]
+      ::TeslaControl.me.code = params[:code]
     end
 
     case params[:service].to_s.to_sym
@@ -87,6 +87,15 @@ class WebhooksController < ApplicationController
     # LocalIpManager.local_ip = request.remote_ip
     ::PrettyLogger.info("[Reloaded Tesla Connection]")
 
+    head :ok
+  end
+
+  def tesla_telemetry
+    unless request.local? || request.remote_ip == "127.0.0.1"
+      return head :forbidden
+    end
+
+    TeslaTelemetry.process(json_params)
     head :ok
   end
 

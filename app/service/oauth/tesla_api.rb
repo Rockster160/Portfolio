@@ -30,10 +30,10 @@ class Oauth::TeslaApi < Oauth::Base
   constants(
     api_url:         "https://fleet-api.prd.na.vn.cloud.tesla.com/api/1/",
     oauth_url:       "https://auth.tesla.com/oauth2/v3/authorize",
-    exchange_url:    "https://auth.tesla.com/oauth2/v3/token",
+    exchange_url:    "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token",
     client_id:       ENV.fetch("PORTFOLIO_TESLA_CLIENT_ID"),
     client_secret:   ENV.fetch("PORTFOLIO_TESLA_CLIENT_SECRET"),
-    scopes:          "openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds",
+    scopes:          "openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds vehicle_location",
     redirect_uri:    "https://ardesian.com/webhooks/auth",
     storage_key:     :tesla_api,
     auth_params:     {
@@ -60,8 +60,9 @@ class Oauth::TeslaApi < Oauth::Base
       config: {
         alert_types: ["service"],
         fields:      TeslaService.fields(30.minutes),
-        ca:          File.read("_scripts/tesla_keys/cert.pem") + File.read("_scripts/tesla_keys/cert.pem"),
-        hostname:    "https://ardesian.com/jil/trigger/tesla",
+        ca:          File.read("_scripts/tesla_keys/cert.pem"),
+        hostname:    "ardesian.com",
+        port:        4443,
       },
     })
   end

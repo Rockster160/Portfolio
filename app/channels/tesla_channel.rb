@@ -8,7 +8,6 @@ class TeslaChannel < ApplicationCable::Channel
   end
 
   def request
-    # Uncomment after integration is fixed
-    # TeslaCommand.command(:request, nil, true)
+    TeslaCommand.command(:request, nil, true)
   end
 end

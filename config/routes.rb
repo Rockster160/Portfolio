@@ -88,6 +88,7 @@ Rails.application.routes.draw do
 
   resource :money_buckets, path: "/bucket"
 
+  post "webhooks/tesla_telemetry" => "webhooks#tesla_telemetry"
   post "webhooks/tesla_local" => "webhooks#tesla_local"
   post "jil/trigger/:trigger" => "webhooks#jil"
   post "jil/trigger" => "webhooks#jil"
