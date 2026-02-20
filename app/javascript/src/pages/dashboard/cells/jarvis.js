@@ -52,7 +52,7 @@ import { toggleMute } from "../vars";
           addHistory(msg.say);
         }
 
-        renderLines(history); // Remove loading spinner
+        renderLines(); // Remove loading spinner
       }
 
       this.flash();
