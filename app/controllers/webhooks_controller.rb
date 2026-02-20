@@ -17,10 +17,10 @@ class WebhooksController < ApplicationController
     # params[:service] # tesla_api, venmo_api, etc...
     # Find the Oauth for the issuer or other token, then find the current_user (maybe signed in?)
     # ::Oauth::MyApi.new(current_user).code = params[:code]
-    if params[:issuer] == "https://auth.tesla.com/oauth2/v3"
-      # FIXME: Should look up the user based on issuer or secret or something...
-      ::TeslaControl.me.code = params[:code]
-    end
+    # if params[:issuer] == "https://auth.tesla.com/oauth2/v3"
+    #   # FIXME: Should look up the user based on issuer or secret or something...
+    #   ::TeslaControl.me.code = params[:code]
+    # end
 
     case params[:service].to_s.to_sym
     when :spotify_api
