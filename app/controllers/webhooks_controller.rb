@@ -79,12 +79,12 @@ class WebhooksController < ApplicationController
   end
 
   def tesla_local
-    DataStorage[:tesla_access_token] = params[:access_token]
-    DataStorage[:tesla_refresh_token] = params[:refresh_token]
+    api = ::Oauth::TeslaApi.new(User.me)
+    api.access_token = params[:access_token] if params[:access_token].present?
+    api.refresh_token = params[:refresh_token] if params[:refresh_token].present?
     DataStorage[:tesla_forbidden] = false
 
     TeslaCommand.quick_command(:reload)
-    # LocalIpManager.local_ip = request.remote_ip
     ::PrettyLogger.info("[Reloaded Tesla Connection]")
 
     head :ok
