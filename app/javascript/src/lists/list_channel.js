@@ -324,6 +324,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (!resp.ok) return;
           const err = document.querySelector(".list-error");
           if (err) err.classList.add("hidden");
+          document.dispatchEvent(new Event("lists:process-queue"));
         });
       },
 

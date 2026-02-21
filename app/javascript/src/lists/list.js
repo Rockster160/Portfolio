@@ -43,6 +43,84 @@ function parseDuration(str, fallback = 0) {
   return total || fallback;
 }
 
+// --- Offline queue helpers ---
+function getQueue(listId) {
+  try {
+    return JSON.parse(localStorage.getItem("list_queue_" + listId)) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveQueue(listId, queue) {
+  localStorage.setItem("list_queue_" + listId, JSON.stringify(queue));
+}
+
+function addToQueue(listId, name) {
+  var queue = getQueue(listId);
+  queue.push(name);
+  saveQueue(listId, queue);
+  updateQueueIndicator(listId);
+}
+
+function processQueue(listId, actionUrl) {
+  var queue = getQueue(listId);
+  if (queue.length === 0) return;
+
+  var csrfMeta = document.querySelector("meta[name=csrf-token]");
+  var token = csrfMeta ? csrfMeta.getAttribute("content") : "";
+  var name = queue[0];
+
+  $.post(actionUrl, { "list_item[name]": name, authenticity_token: token })
+    .done(function () {
+      queue.shift();
+      saveQueue(listId, queue);
+      updateQueueIndicator(listId);
+      // Remove the queued placeholder for this item
+      $(".item-queued").each(function () {
+        if ($(this).find(".item-name").text() === name) {
+          $(this).remove();
+          return false;
+        }
+      });
+      // Process next item
+      processQueue(listId, actionUrl);
+    })
+    .fail(function () {
+      // Still offline — stop processing, items remain in queue
+    });
+}
+
+function updateQueueIndicator(listId) {
+  var queue = getQueue(listId);
+  var badge = document.querySelector(".list-queue-count");
+  if (!badge) return;
+
+  if (queue.length > 0) {
+    badge.textContent = queue.length + " queued";
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
+}
+
+function renderQueuedPlaceholders(listId) {
+  var queue = getQueue(listId);
+  if (queue.length === 0) return;
+
+  var template = document.getElementById("list-item-template");
+  if (!template) return;
+
+  queue.forEach(function (name) {
+    var clone = template.content.firstElementChild.cloneNode(true);
+    clone.querySelector(".item-name").innerText = name;
+    clone.classList.add("item-placeholder", "item-queued");
+    $(".list-items").prepend(clone);
+  });
+
+  updateQueueIndicator(listId);
+}
+
 // Check for data attributes on the list container (allows page-specific overrides)
 function getListSettings() {
   const container = document.querySelector(".list-container[data-list-mode]");
@@ -445,7 +523,6 @@ $(document).ready(function () {
       return window.location.reload(true);
     }
     $(window).animate({ scrollTop: window.scrollHeight }, 300);
-    $.post(this.action, $(this).serialize());
 
     // Add a placeholder
     let template = document.getElementById("list-item-template");
@@ -453,6 +530,13 @@ $(document).ready(function () {
     clone.querySelector(".item-name").innerText = input;
     clone.classList.add("item-placeholder");
     $(".list-items").prepend(clone);
+
+    var formAction = this.action;
+    var listId = $(".list-container").attr("data-list-id");
+    $.post(formAction, $(this).serialize()).fail(function () {
+      addToQueue(listId, input);
+      clone.classList.add("item-queued");
+    });
 
     $(".new-list-item").val("");
     return false;
@@ -591,4 +675,15 @@ $(document).ready(function () {
   document.addEventListener("lists:rebind", function () {
     initSortables();
   });
+
+  // Offline queue: render any queued items from previous session
+  var listId = $(".list-container").attr("data-list-id");
+  if (listId) {
+    renderQueuedPlaceholders(listId);
+
+    document.addEventListener("lists:process-queue", function () {
+      var formAction = $(".new-list-item-form").attr("action");
+      if (formAction) processQueue(listId, formAction);
+    });
+  }
 });

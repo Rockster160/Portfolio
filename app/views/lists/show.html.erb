@@ -53,6 +53,7 @@
     <% end %>
   </div>
   <div class="list-error hidden">Disconnected...</div>
+  <div class="list-queue-count hidden"></div>
   <div class="important-list-items"></div>
   <template id="list-item-template">
     <%= render template: "list_items/show", locals: { list: @list, template: true }, layout: false %>

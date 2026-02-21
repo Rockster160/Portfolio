@@ -407,6 +407,17 @@ html:has(.ctr-tasks.act-index) {
   background: rgba($blue-l5, 0.5);
 }
 
+.list-container .list-items .list-item-container.item-queued .list-item {
+  opacity: 0.6;
+}
+
+.list-queue-count {
+  text-align: center;
+  font-size: 13px;
+  color: $grey-blue;
+  padding: 4px 0;
+}
+
 @keyframes pulse {
   0% {
     transform: scale(1);
@@ -474,5 +485,8 @@ html:has(.ctr-tasks.act-index) {
     color: rgba($grey-light, 0.5);
     border-color: rgba($grey-light, 0.5);
     background: rgba($blue-d5, 0.5);
+  }
+  .list-container .list-items .list-item-container.item-queued .list-item {
+    opacity: 0.6;
   }
 }
