@@ -125,7 +125,9 @@ function processQueue(listId, actionUrl) {
   }
 
   if (entry.type === "create") {
-    $.post(actionUrl, { "list_item[name]": entry.name, authenticity_token: token })
+    var createData = { "list_item[name]": entry.name, authenticity_token: token };
+    if (entry.sectionId) createData["list_item[section_id]"] = entry.sectionId;
+    $.post(actionUrl, createData)
       .done(onSuccess)
       .fail(function () {
         // Still offline — stop processing
@@ -188,7 +190,16 @@ function renderQueuedPlaceholders(listId) {
       var clone = template.content.firstElementChild.cloneNode(true);
       clone.querySelector(".item-name").innerText = entry.name;
       clone.classList.add("item-placeholder", "item-queued");
-      $(".list-items").prepend(clone);
+      if (entry.sectionId) {
+        var $section = $(".list-section-tab[data-section-id='" + entry.sectionId + "'] .section-items");
+        if ($section.length) {
+          $section.prepend(clone);
+        } else {
+          $(".list-items").prepend(clone);
+        }
+      } else {
+        $(".list-items").prepend(clone);
+      }
     } else if (entry.type === "check") {
       var $item = $(".list-item-container[data-item-id='" + entry.id + "']");
       if ($item.length) {
@@ -277,7 +288,24 @@ clearRemovedItems = function () {
 };
 
 window.__listDragging = false;
+window.__activeSection = null; // { id, name, color }
 let __pendingWsData = null;
+
+function setActiveSection(id, name, color) {
+  window.__activeSection = { id: id, name: name, color: color };
+  var $indicator = $(".active-section-indicator");
+  $indicator.find(".active-section-name").text(name);
+  $indicator.css("background-color", color);
+  $indicator.removeClass("hidden");
+  $(".list-section-tab.section-active").removeClass("section-active");
+  $(".list-section-tab[data-section-id='" + id + "']").addClass("section-active");
+}
+
+function clearActiveSection() {
+  window.__activeSection = null;
+  $(".active-section-indicator").addClass("hidden");
+  $(".list-section-tab.section-active").removeClass("section-active");
+}
 
 let __dragPos = { x: 0, y: 0 };
 function __trackPointer(e) {
@@ -599,6 +627,28 @@ $(document).ready(function () {
   });
   initSortables();
 
+  // Active section: tap section header to select
+  $(document).on("click", ".section-header", function (e) {
+    if (window.__listDragging) return;
+    if ($(e.target).closest(".list-item-handle, .settings-btn").length) return;
+
+    var $tab = $(this).closest(".list-section-tab");
+    var sectionId = $tab.data("sectionId");
+
+    if (window.__activeSection && window.__activeSection.id === sectionId) {
+      clearActiveSection();
+    } else {
+      var name = $tab.find(".section-name").text();
+      var color = $tab.css("background-color");
+      setActiveSection(sectionId, name, color);
+    }
+  });
+
+  // Active section: dismiss pill
+  $(document).on("click", ".active-section-indicator", function () {
+    clearActiveSection();
+  });
+
   $(".new-list-item-form").submit(function (e) {
     e.preventDefault();
     let input = $(".new-list-item").val();
@@ -623,12 +673,25 @@ $(document).ready(function () {
     let clone = template.content.firstElementChild.cloneNode(true);
     clone.querySelector(".item-name").innerText = input;
     clone.classList.add("item-placeholder");
-    $(".list-items").prepend(clone);
+
+    var activeSection = window.__activeSection;
+    if (activeSection) {
+      var $sectionItems = $(".list-section-tab[data-section-id='" + activeSection.id + "'] .section-items");
+      $sectionItems.prepend(clone);
+    } else {
+      $(".list-items").prepend(clone);
+    }
 
     var formAction = this.action;
     var listId = $(".list-container").attr("data-list-id");
-    $.post(formAction, $(this).serialize()).fail(function () {
-      addToQueue(listId, { type: "create", name: input });
+    var formData = $(this).serialize();
+    if (activeSection) {
+      formData += "&list_item%5Bsection_id%5D=" + encodeURIComponent(activeSection.id);
+    }
+    $.post(formAction, formData).fail(function () {
+      var queueEntry = { type: "create", name: input };
+      if (activeSection) queueEntry.sectionId = activeSection.id;
+      addToQueue(listId, queueEntry);
       clone.classList.add("item-queued");
     });
 

@@ -108,6 +108,7 @@ class ListItemsController < ApplicationController
       :important,
       :permanent,
       :category,
+      :section_id,
       :schedule,
       schedule: [
         :interval,

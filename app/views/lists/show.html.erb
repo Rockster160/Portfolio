@@ -51,6 +51,10 @@
         <%= f.text_field :name, class: "new-list-item filterable", placeholder: "Add new item", autofocus: true %>
       </div>
     <% end %>
+    <div class="active-section-indicator hidden">
+      <span class="active-section-name"></span>
+      <span class="active-section-dismiss">&times;</span>
+    </div>
   </div>
   <div class="list-error hidden">Disconnected...</div>
   <div class="list-queue-count hidden"></div>

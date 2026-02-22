@@ -239,6 +239,31 @@ html:has(.ctr-tasks.act-index) {
     }
   }
 
+  .active-section-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    border-radius: 12px;
+    padding: 4px 10px;
+    min-height: 32px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #fff;
+    cursor: pointer;
+    transition: opacity 0.15s;
+
+    &.hidden {
+      display: none;
+    }
+
+    .active-section-dismiss {
+      font-size: 16px;
+      line-height: 1;
+      opacity: 0.8;
+    }
+  }
+
   .important-list-items {
     border-bottom: 1px solid $text-color;
     padding-bottom: 10px;
@@ -250,6 +275,10 @@ html:has(.ctr-tasks.act-index) {
   .list-section-tab {
     border-radius: 8px;
     margin: 8px 0;
+
+    &.section-active {
+      box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.3);
+    }
 
     .section-header {
       position: relative;
