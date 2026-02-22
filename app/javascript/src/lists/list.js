@@ -46,7 +46,14 @@ function parseDuration(str, fallback = 0) {
 // --- Offline queue helpers ---
 function getQueue(listId) {
   try {
-    return JSON.parse(localStorage.getItem("list_queue_" + listId)) || [];
+    var raw = JSON.parse(localStorage.getItem("list_queue_" + listId)) || [];
+    // Migrate old string-only format to typed objects
+    return raw.map(function (entry) {
+      if (typeof entry === "string") {
+        return { type: "create", name: entry };
+      }
+      return entry;
+    });
   } catch (e) {
     return [];
   }
@@ -56,9 +63,39 @@ function saveQueue(listId, queue) {
   localStorage.setItem("list_queue_" + listId, JSON.stringify(queue));
 }
 
-function addToQueue(listId, name) {
+function addToQueue(listId, entry) {
   var queue = getQueue(listId);
-  queue.push(name);
+
+  if (entry.type === "check") {
+    // Coalesce: replace existing check for same item
+    var replaced = false;
+    for (var i = 0; i < queue.length; i++) {
+      if (queue[i].type === "check" && queue[i].id === entry.id) {
+        queue[i] = entry;
+        replaced = true;
+        break;
+      }
+    }
+    if (!replaced) queue.push(entry);
+  } else if (entry.type === "edit") {
+    // Coalesce: replace existing edit for same item+field
+    var replaced = false;
+    for (var i = 0; i < queue.length; i++) {
+      if (queue[i].type === "edit" && queue[i].id === entry.id && queue[i].field === entry.field) {
+        queue[i] = entry;
+        replaced = true;
+        break;
+      }
+    }
+    if (!replaced) queue.push(entry);
+  } else if (entry.type === "reorder") {
+    // Coalesce: only keep one reorder marker
+    var hasReorder = queue.some(function (e) { return e.type === "reorder"; });
+    if (!hasReorder) queue.push(entry);
+  } else {
+    queue.push(entry);
+  }
+
   saveQueue(listId, queue);
   updateQueueIndicator(listId);
 }
@@ -69,26 +106,61 @@ function processQueue(listId, actionUrl) {
 
   var csrfMeta = document.querySelector("meta[name=csrf-token]");
   var token = csrfMeta ? csrfMeta.getAttribute("content") : "";
-  var name = queue[0];
+  var entry = queue[0];
 
-  $.post(actionUrl, { "list_item[name]": name, authenticity_token: token })
-    .done(function () {
-      queue.shift();
-      saveQueue(listId, queue);
-      updateQueueIndicator(listId);
-      // Remove the queued placeholder for this item
+  function onSuccess() {
+    queue.shift();
+    saveQueue(listId, queue);
+    updateQueueIndicator(listId);
+    // Remove queued placeholder for create entries
+    if (entry.type === "create") {
       $(".item-queued").each(function () {
-        if ($(this).find(".item-name").text() === name) {
+        if ($(this).find(".item-name").text() === entry.name) {
           $(this).remove();
           return false;
         }
       });
-      // Process next item
-      processQueue(listId, actionUrl);
-    })
-    .fail(function () {
-      // Still offline — stop processing, items remain in queue
+    }
+    processQueue(listId, actionUrl);
+  }
+
+  if (entry.type === "create") {
+    $.post(actionUrl, { "list_item[name]": entry.name, authenticity_token: token })
+      .done(onSuccess)
+      .fail(function () {
+        // Still offline — stop processing
+      });
+  } else if (entry.type === "check") {
+    listWS.perform("receive", { list_item: { id: entry.id, checked: entry.checked } });
+    // Fire-and-forget for WS — proceed immediately
+    onSuccess();
+  } else if (entry.type === "edit") {
+    var data = { list_item: {} };
+    data.list_item[entry.field] = entry.value;
+    $.ajax({ url: entry.url, type: "PUT", data: data })
+      .done(onSuccess)
+      .fail(function () {
+        // Still offline — stop processing
+      });
+  } else if (entry.type === "reorder") {
+    var reorderUrl = $(".list-items").data("updateUrl");
+    if (!reorderUrl) { onSuccess(); return; }
+    $.ajax({
+      url: reorderUrl,
+      type: "POST",
+      data: JSON.stringify({ ordered: buildFullOrder() }),
+      contentType: "application/json; charset=UTF-8",
+      dataType: "json",
+    }).done(function () {
+      window.__listReorderPending = false;
+      onSuccess();
+    }).fail(function () {
+      // Still offline — stop processing
     });
+  } else {
+    // Unknown type, skip
+    onSuccess();
+  }
 }
 
 function updateQueueIndicator(listId) {
@@ -109,13 +181,29 @@ function renderQueuedPlaceholders(listId) {
   if (queue.length === 0) return;
 
   var template = document.getElementById("list-item-template");
-  if (!template) return;
 
-  queue.forEach(function (name) {
-    var clone = template.content.firstElementChild.cloneNode(true);
-    clone.querySelector(".item-name").innerText = name;
-    clone.classList.add("item-placeholder", "item-queued");
-    $(".list-items").prepend(clone);
+  queue.forEach(function (entry) {
+    if (entry.type === "create") {
+      if (!template) return;
+      var clone = template.content.firstElementChild.cloneNode(true);
+      clone.querySelector(".item-name").innerText = entry.name;
+      clone.classList.add("item-placeholder", "item-queued");
+      $(".list-items").prepend(clone);
+    } else if (entry.type === "check") {
+      var $item = $(".list-item-container[data-item-id='" + entry.id + "']");
+      if ($item.length) {
+        $item.find("input[type=checkbox]").prop("checked", entry.checked);
+      }
+    } else if (entry.type === "edit") {
+      var $item = $(".list-item-container[data-item-id='" + entry.id + "']");
+      if ($item.length) {
+        if (entry.field === "name") {
+          $item.find(".item-name").text(entry.value);
+        } else if (entry.field === "category") {
+          $item.find(".list-item-config .category").text(entry.value);
+        }
+      }
+    }
   });
 
   updateQueueIndicator(listId);
@@ -297,6 +385,12 @@ const persistLater = debounce(function () {
     data: JSON.stringify({ ordered: buildFullOrder() }),
     contentType: "application/json; charset=UTF-8",
     dataType: "json",
+  }).fail(function () {
+    var listId = $(".list-container").attr("data-list-id");
+    if (listId) {
+      addToQueue(listId, { type: "reorder" });
+      window.__listReorderPending = true;
+    }
   });
 }, 60);
 
@@ -534,7 +628,7 @@ $(document).ready(function () {
     var formAction = this.action;
     var listId = $(".list-container").attr("data-list-id");
     $.post(formAction, $(this).serialize()).fail(function () {
-      addToQueue(listId, input);
+      addToQueue(listId, { type: "create", name: input });
       clone.classList.add("item-queued");
     });
 
@@ -560,9 +654,14 @@ $(document).ready(function () {
             "'] input[type=checkbox]",
         ).prop("checked", this.checked);
       }
-      listWS.perform("receive", {
-        list_item: { id: item_id, checked: this.checked },
-      });
+      if (window.__listWsConnected) {
+        listWS.perform("receive", {
+          list_item: { id: item_id, checked: this.checked },
+        });
+      } else {
+        var listId = $(".list-container").attr("data-list-id");
+        addToQueue(listId, { type: "check", id: item_id, checked: this.checked });
+      }
       clearRemovedItems();
     })
     .on("change", ".list-item-options .list-item-checkbox", function (evt) {
@@ -623,10 +722,14 @@ $(document).ready(function () {
       args.list_item = {};
       args.list_item[fieldName] = updatedName;
 
+      var itemId = $container.attr("data-item-id");
       $.ajax({
         url: submitUrl,
         type: "PUT",
         data: args,
+      }).fail(function () {
+        var listId = $(".list-container").attr("data-list-id");
+        addToQueue(listId, { type: "edit", id: itemId, url: submitUrl, field: fieldName, value: updatedName });
       });
     });
 

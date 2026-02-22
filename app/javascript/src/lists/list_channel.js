@@ -202,7 +202,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const targetBucket = targetFor(match);
         ensureParent(match, targetBucket);
         ph.replaceWith(match);
-      } else {
+      } else if (!ph.classList.contains("item-queued")) {
         ph.remove();
       }
     });
@@ -292,7 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setImportantItems();
     }
 
-    reorderAll();
+    if (!window.__listReorderPending) reorderAll();
 
     // let drag/drop bindings reattach without duplicating state
     document.dispatchEvent(new Event("lists:rebind"));
@@ -305,6 +305,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
     {
       connected() {
+        window.__listWsConnected = true;
         const url = document
           .querySelector(".list-items")
           ?.getAttribute("data-update-url");
@@ -329,6 +330,7 @@ document.addEventListener("DOMContentLoaded", () => {
       },
 
       disconnected() {
+        window.__listWsConnected = false;
         const err = document.querySelector(".list-error");
         if (err) err.classList.remove("hidden");
       },
