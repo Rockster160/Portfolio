@@ -140,7 +140,7 @@ class Box < ApplicationRecord
     # 34^4 =      1,336,336
     # 34^7 = 52,523,350,144
     self.param_key ||= loop do
-      chars = [*"A".."Z", *"2".."9"] # Exclude 0,1, map to O,I when we do lookup
+      chars = [*"A".."Z", *"2".."9"] # Exclude 0,1: map to O,I when we do lookup
       random_key = param_length.times.map { chars.sample }.join
 
       break random_key unless ::Box.exists?(param_key: random_key)
