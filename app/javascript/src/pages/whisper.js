@@ -152,6 +152,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     ]);
   }
 
+  function playAlarmBeeps() {
+    if (isMuted) return;
+    let whine = [
+      [120, 880, volume, "sine"],
+      [80, 840, volume - 0.05, "sine"],
+      [80, 800, volume - 0.1, "sine"],
+      [80, 760, volume - 0.2, "sine"],
+      [140, 680, volume - 0.35, "sine"],
+    ];
+    beeps([
+      ...whine,
+      // pause
+      [300, 0, 0, null],
+      ...whine,
+      // pause
+      [300, 0, 0, null],
+      ...whine,
+    ]);
+  }
+
   function playHappyBirthdayBeeps() {
     if (isMuted) return;
     // Happy Birthday melody
@@ -208,6 +228,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       playNapBeeps();
     } else if (key === "wake") {
       playWakeBeeps();
+    } else if (key === "birthday") {
+      playHappyBirthdayBeeps();
+    } else if (key === "alarm") {
+      playAlarmBeeps();
     } else {
       playDefaultBeeps();
     }
@@ -496,6 +520,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (monitorData.status !== undefined) {
         updateStatus(monitorData.status);
+      }
+
+      if (monitorData.sound) {
+        playAlertForKey(monitorData.sound);
       }
 
       if (Array.isArray(monitorData.timers)) {
