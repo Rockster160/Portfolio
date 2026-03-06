@@ -22,7 +22,6 @@ class Api::V1::AlexaController < Api::V1::BaseController
   end
 
   def alexa_response(words)
-    words = words.to_s.presence || "No response from Jarvis"
     speech = (
       if words == true
         {
@@ -30,6 +29,7 @@ class Api::V1::AlexaController < Api::V1::BaseController
           ssml: "<speak><audio src=\"soundbank://soundlibrary/ui/gameshow/amzn_ui_sfx_gameshow_neutral_response_01\"/></speak>",
         }
       else
+        words = words.to_s.presence || "No response from Jarvis"
         {
           type: "PlainText",
           text: words.split("\n").first(2).join(": "), # Only return the first item
