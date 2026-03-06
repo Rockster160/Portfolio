@@ -9,7 +9,7 @@ class Api::V1::AlexaController < Api::V1::BaseController
     Jarvis.say("Alexa via #{@current_user&.username}: #{alexa_command}") unless alexa_command.starts_with?("log")
     response = Jarvis.command(@current_user, alexa_command)
 
-    render json: alexa_response(response.presence || "Success")
+    render json: alexa_response(response.presence || true)
   end
 
   private
@@ -23,17 +23,26 @@ class Api::V1::AlexaController < Api::V1::BaseController
 
   def alexa_response(words)
     words = words.to_s.presence || "No response from Jarvis"
+    speech = (
+      if words == true
+        {
+          type: "SSML",
+          ssml: "<speak><audio src=\"soundbank://soundlibrary/ui/gameshow/amzn_ui_sfx_gameshow_neutral_response_01\"/></speak>",
+        }
+      else
+        {
+          type: "PlainText",
+          text: words.split("\n").first(2).join(": "), # Only return the first item
+        }
+      end
+    )
     {
       version:  "1.0",
       # sessionAttributes: {
       #   key: "value"
       # },
       response: {
-        outputSpeech:     {
-          type: "PlainText",
-          text: words.split("\n").first(2).join(": "), # Only return the first item
-          # playBehavior: "REPLACE_ENQUEUED"
-        },
+        outputSpeech:     speech,
         # card: {
         #   type: "Standard",
         #   title: "Title of the card",
