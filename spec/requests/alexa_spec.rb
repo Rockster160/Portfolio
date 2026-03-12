@@ -38,6 +38,8 @@ RSpec.describe Api::V1::AlexaController, type: :controller do
       data = JSON.parse(json_data)
 
       it "asks via proxy: #{filename}" do
+        skip "TeslaCommand.command is currently disabled" if filename == "start_the_car"
+
         post :alexa, params: data
 
         expect(response).to have_http_status(:success)

@@ -41,32 +41,16 @@ RSpec.describe Jil::Methods::Prompt do
           default:  50,
         },
       })
-      expect(ctx.dig(:vars, :wa0d7)).to match_hash({
-        class: :Prompt,
-        value: {
-          id:       prompt.id,
-          question: "Good morning! How was your sleep?",
-          params:   nil,
-          options:  [
-            {
-              type:     "scale",
-              question: "Sleep Quality",
-              min:      0,
-              max:      100,
-              default:  50,
-            },
-            {
-              type:     "scale",
-              question: "Sleep Length",
-              min:      0,
-              max:      100,
-              default:  50,
-            },
-          ],
-          response: nil,
-          url:      "http://localhost:3141/prompts/#{prompt.id}",
-        },
-      })
+      found = ctx.dig(:vars, :wa0d7, :value)
+      expect(found).to be_a(::Prompt)
+      expect(found.id).to eq(prompt.id)
+      expect(found.question).to eq("Good morning! How was your sleep?")
+      expect(found.params).to be_nil
+      expect(found.options).to eq([
+        { "type" => "scale", "question" => "Sleep Quality", "min" => 0, "max" => 100, "default" => 50 },
+        { "type" => "scale", "question" => "Sleep Length", "min" => 0, "max" => 100, "default" => 50 },
+      ])
+      expect(found.response).to be_nil
       expect(ctx[:output]).to eq([])
     end
   end

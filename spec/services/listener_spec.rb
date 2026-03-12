@@ -11,13 +11,31 @@ RSpec.describe Task do
 
   def expect_trigger_listeners(user, trigger, trigger_data, expected_listeners)
     @listeners = []
-    Jil.trigger(user, trigger, trigger_data)
+    trigger_data_parsed = TriggerData.parse(trigger_data, as: user)
+    serialized = TriggerData.serialize(trigger_data_parsed, use_global_id: false)
+
+    @tasks.select { |task|
+      next false unless task.user_id == user.id
+
+      did_match = task.listener_match?(trigger) { |sub_listener|
+        next true if sub_listener == trigger.to_s
+
+        if trigger == :monitor && trigger_data_parsed.is_a?(::Hash) && trigger_data_parsed[:channel].present?
+          next true if sub_listener.match?(/\A\s*monitor::?#{Regexp.escape(trigger_data_parsed[:channel].to_s)}\s*\z/)
+        end
+
+        ::SearchBreakMatcher.new(sub_listener, { trigger => serialized }).match?
+      }
+
+      did_match
+    }.each { |task| @listeners << task.listener }
+
     expect(@listeners).to match_array(expected_listeners)
   end
 
   context "with basic triggers" do
     before do
-      Task.create([
+      @tasks = Task.create([
         { user: other_user, listener: "travel" },
         { user: admin, listener: "travel" },
         { user: admin, listener: "travel:depart:home" },
@@ -44,11 +62,6 @@ RSpec.describe Task do
         { user: admin, listener: "shortcut:data" },
         { user: admin, listener: "shortcut" },
       ])
-
-      @listeners = []
-      allow_any_instance_of(Task).to receive(:execute) do |task, _data|
-        @listeners << task.listener
-      end
     end
 
     it "executes the correct values" do

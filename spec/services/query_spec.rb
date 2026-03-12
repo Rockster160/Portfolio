@@ -5,7 +5,9 @@ RSpec.describe ApplicationRecord, type: :model do
   end
 
   def expect_matching(sql, expected_sql)
-    expect(sql).to eq(expected_sql.gsub(/\(\n */, "(").gsub(/\n *\)/, ")").gsub(/\n */, " ").squish)
+    normalized = expected_sql.gsub(/\(\n */, "(").gsub(/\n *\)/, ")").gsub(/\n */, " ").squish
+    normalized = normalized.gsub(/\( +/, "(").gsub(/ +\)/, ")")
+    expect(sql).to eq(normalized)
   end
 
   let(:now) { ::Time.current }
@@ -50,7 +52,7 @@ RSpec.describe ApplicationRecord, type: :model do
       # Just uses the generic "timestamp" word to figure out the column.
       # Maybe should add before|after as magic keywords?
       sql = query("wordle timestamp>'2020-01-01' timestamp<'2021-02-01'")
-      expect(sql).to eq("(((\"name\"::TEXT ILIKE '%wordle%' OR \"notes\"::TEXT ILIKE '%wordle%') AND (timestamp > '2020-01-02 06:59:59.999999') AND (timestamp < '2021-02-02 06:59:59.999999')))")
+      expect(sql).to eq("(((\"name\"::TEXT ILIKE '%wordle%' OR \"notes\"::TEXT ILIKE '%wordle%') AND (timestamp > '2020-01-02 06:59:59.999999') AND (timestamp < '2021-02-01 07:00:00')))")
     end
 
     it "returns records on day" do

@@ -360,7 +360,7 @@ RSpec.describe Jil::Methods::Hash do
 
   describe ".shift!" do
     before do
-      code << "r817a = r5ee3.shift!()::Any"
+      code << "r817a = r5ee3.shift!(1)::Any"
     end
 
     it "removes the first value" do
@@ -370,7 +370,7 @@ RSpec.describe Jil::Methods::Hash do
         ydfcd: { class: :Boolean, value: false },
         xfaed: { class: :Numeric, value: 47 },
         r5ee3: { class: :Array, value: [false, 47] },
-        r817a: { class: :Any, value: "Hello, World!" },
+        r817a: { class: :Any, value: ["Hello, World!"] },
       })
       expect(ctx[:output]).to eq([])
     end
@@ -412,12 +412,12 @@ RSpec.describe Jil::Methods::Hash do
     end
   end
 
-  describe ".unshift!" do
+  describe ".prepend!" do
     before do
-      code << "r817a = r5ee3.unshift!(17)::Any"
+      code << "r817a = r5ee3.prepend!(17)::Any"
     end
 
-    it "adds to the end, modifying in place" do
+    it "adds to the beginning, modifying in place" do
       expect_successful_jil
       expect(ctx[:vars]).to match_hash({
         rb9ed: { class: :String, value: "Hello, World!" },
@@ -448,9 +448,9 @@ RSpec.describe Jil::Methods::Hash do
     end
   end
 
-  describe ".unshift" do
+  describe ".prepend" do
     before do
-      code << "r817a = r5ee3.unshift(17)::Array"
+      code << "r817a = r5ee3.prepend(17)::Array"
     end
 
     it "adds to the beginning" do

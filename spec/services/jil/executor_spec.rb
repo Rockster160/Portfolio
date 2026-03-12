@@ -151,8 +151,8 @@ RSpec.describe Jil::Executor do
 
         expect(ActionEvent.count).to eq(0)
         expect(exe.ctx.dig(:vars, :k6b27)).to be_present
-        expect(exe.ctx.dig(:input_data, :channel)).to eq("SocketChannel")
-        expect(exe.ctx.dig(:input_data, :channel_id)).to eq("garage")
+        expect(exe.input_data[:channel]).to eq("SocketChannel")
+        expect(exe.input_data[:channel_id]).to eq("garage")
       end
     end
 
@@ -175,8 +175,8 @@ RSpec.describe Jil::Executor do
         expect(ActionEvent.count).to eq(1)
         expect(ActionEvent.first.name).to eq("Teeth")
         expect(exe.ctx.dig(:vars, :k6b27)).not_to be_present
-        expect(exe.ctx.dig(:input_data, :channel)).to eq("SocketChannel")
-        expect(exe.ctx.dig(:input_data, :channel_id)).to eq("teeth")
+        expect(exe.input_data[:channel]).to eq("SocketChannel")
+        expect(exe.input_data[:channel_id]).to eq("teeth")
       end
     end
   end

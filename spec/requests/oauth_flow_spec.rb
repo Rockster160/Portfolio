@@ -11,9 +11,11 @@ RSpec.describe "OAuth Flow", type: :request do
   }
 
   before do
-    # request.headers["Content-Type"] = "application/json"
-    # request.headers["Accept"] = "application/json"
-    # Simulate a logged-in user
+    # Simulate a logged-in user via Auth helper which Doorkeeper uses
+    allow_any_instance_of(Auth)
+      .to receive(:current_user).and_return(user)
+    allow_any_instance_of(AuthHelper)
+      .to receive(:current_user).and_return(user)
     allow_any_instance_of(ApplicationController)
       .to receive(:current_user).and_return(user)
     allow_any_instance_of(Doorkeeper::AuthorizationsController)

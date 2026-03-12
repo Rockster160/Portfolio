@@ -23,19 +23,12 @@ RSpec.describe Jil::Methods::ActionEvent do
     it "returns the found event" do
       expect_successful_jil
 
-      ts = ctx.dig(:vars, :q9693, :value, "timestamp")
-      expect(ctx[:vars]).to match_hash({
-        q9693: {
-          class: :ActionEvent,
-          value: {
-            id:        event.id,
-            name:      "Food",
-            timestamp: ts,
-            notes:     "Dinner",
-            data:      { Calories: 400 },
-          },
-        },
-      })
+      found = ctx.dig(:vars, :q9693, :value)
+      expect(found).to be_a(::ActionEvent)
+      expect(found.id).to eq(event.id)
+      expect(found.name).to eq("Food")
+      expect(found.notes).to eq("Dinner")
+      expect(found.data).to eq({ "Calories" => 400 })
       expect(ctx[:output]).to eq([])
     end
   end
@@ -72,21 +65,12 @@ RSpec.describe Jil::Methods::ActionEvent do
     it "returns the found event" do
       expect_successful_jil
 
-      ts = ctx.dig(:vars, :q9693, :value, "timestamp")
-      id = ctx.dig(:vars, :q9693, :value, "id")
-      expect(DateTime.parse(ts).to_i).to be_within(5).of(::Time.current.to_i)
-      expect(ctx[:vars]).to match_hash({
-        q9693: {
-          class: :ActionEvent,
-          value: {
-            id:        id,
-            name:      "Thing",
-            timestamp: ts,
-            notes:     nil,
-            data:      nil,
-          },
-        },
-      })
+      found = ctx.dig(:vars, :q9693, :value)
+      expect(found).to be_a(::ActionEvent)
+      expect(found.name).to eq("Thing")
+      expect(found.timestamp.to_i).to be_within(5).of(::Time.current.to_i)
+      expect(found.notes).to be_nil
+      expect(found.data).to be_nil
       expect(ctx[:output]).to eq([])
     end
   end
@@ -104,19 +88,12 @@ RSpec.describe Jil::Methods::ActionEvent do
     it "returns the found event" do
       expect_successful_jil
 
-      ts = ctx.dig(:vars, :q9693, :value, "timestamp")
-      id = ctx.dig(:vars, :q9693, :value, "id")
-      expect(DateTime.parse(ts).to_i).to be_within(5).of(::Time.current.to_i)
-      expect(ctx.dig(:vars, :q9693)).to match_hash({
-        class: :ActionEvent,
-        value: {
-          id:        id,
-          name:      "Food",
-          timestamp: ts,
-          notes:     "Dinner",
-          data:      nil,
-        },
-      })
+      found = ctx.dig(:vars, :q9693, :value)
+      expect(found).to be_a(::ActionEvent)
+      expect(found.name).to eq("Food")
+      expect(found.notes).to eq("Dinner")
+      expect(found.timestamp.to_i).to be_within(5).of(::Time.current.to_i)
+      expect(found.data).to be_nil
       expect(ctx[:output]).to eq([])
     end
   end
