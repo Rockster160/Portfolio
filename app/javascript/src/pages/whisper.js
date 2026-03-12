@@ -154,21 +154,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function playAlarmBeeps() {
     if (isMuted) return;
-    let whine = [
-      [120, 880, volume, "sine"],
-      [80, 840, volume - 0.05, "sine"],
-      [80, 800, volume - 0.1, "sine"],
-      [80, 760, volume - 0.2, "sine"],
-      [140, 680, volume - 0.35, "sine"],
+    let pulse = [
+      [300, 440, volume - 0.3, "sine"],
+      [250, 392, volume - 0.4, "sine"],
+      [300, 440, volume - 0.3, "sine"],
     ];
     beeps([
-      ...whine,
-      // pause
-      [300, 0, 0, null],
-      ...whine,
-      // pause
-      [300, 0, 0, null],
-      ...whine,
+      // Pulse
+      ...pulse,
+      [400, 0, 0, null],
+      ...pulse,
     ]);
   }
 

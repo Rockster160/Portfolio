@@ -11,6 +11,7 @@ class WhisperController < ApplicationController
       230, # Gone Toggle
       225, # Sleep
       # 245, # Quiet - Needs more
+      275, # Outside Toggle
       208, # 1
       209, # 2
       # NOTE! When adding new tasks, ensure they are shared!
