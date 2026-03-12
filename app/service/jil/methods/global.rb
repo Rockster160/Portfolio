@@ -18,6 +18,7 @@ class Jil::Methods::Global < Jil::Methods::Base
       @jil.ctx[:state] = :return
       @jil.ctx[:return_val] = evalarg(line.arg)
     when :if, :ternary then logic_if(*line.args)
+    when :case then logic_case(*line.args)
     when :print
       evalarg(line.arg).tap { |str|
         @jil.ctx[:output] << ::Jil::Methods::String.new(@jil, @ctx).cast(str).gsub(/^"|"$/, "")
@@ -76,6 +77,21 @@ class Jil::Methods::Global < Jil::Methods::Base
 
   def logic_if(condition, do_result, else_result)
     evalarg(condition) ? evalarg(do_result) : evalarg(else_result)
+  end
+
+  def logic_case(value, when_blocks)
+    eval_val = evalarg(value)
+    else_block = nil
+    Array.wrap(when_blocks).each do |when_block|
+      match_val, content = when_block.args
+      evaluated_match = evalarg(match_val)
+      if evaluated_match == "else"
+        else_block = content
+        next
+      end
+      return evalarg(content) if evaluated_match == eval_val
+    end
+    evalarg(else_block) if else_block
   end
 
   def splatParams(line)

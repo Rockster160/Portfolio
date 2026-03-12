@@ -94,6 +94,74 @@ RSpec.describe Jil::Methods::Global do
     end
   end
 
+  describe "#case" do
+    let(:code) {
+      <<-'JIL'
+        val = String.new("banana")::String
+        result = Global.case(val, {
+          a1234 = Keyword.When("apple", {
+            b1234 = Global.print("it's an apple")::String
+          })::Any
+          c1234 = Keyword.When("banana", {
+            d1234 = Global.print("it's a banana")::String
+          })::Any
+          e1234 = Keyword.When("cherry", {
+            f1234 = Global.print("it's a cherry")::String
+          })::Any
+        })::Any
+      JIL
+    }
+
+    it "matches the correct branch" do
+      expect_successful_jil
+      expect(ctx[:output]).to eq(["it's a banana"])
+      expect(ctx.dig(:vars, :result, :value)).to eq("it's a banana")
+    end
+  end
+
+  describe "#case with no match" do
+    let(:code) {
+      <<-'JIL'
+        val = String.new("grape")::String
+        result = Global.case(val, {
+          a1234 = Keyword.When("apple", {
+            b1234 = Global.print("it's an apple")::String
+          })::Any
+          c1234 = Keyword.When("banana", {
+            d1234 = Global.print("it's a banana")::String
+          })::Any
+        })::Any
+      JIL
+    }
+
+    it "returns nil when no branch matches" do
+      expect_successful_jil
+      expect(ctx[:output]).to eq([])
+      expect(ctx.dig(:vars, :result, :value)).to be_nil
+    end
+  end
+
+  describe "#case with else" do
+    let(:code) {
+      <<-'JIL'
+        val = String.new("grape")::String
+        result = Global.case(val, {
+          a1234 = Keyword.When("apple", {
+            b1234 = Global.print("it's an apple")::String
+          })::Any
+          c1234 = Keyword.When("else", {
+            d1234 = Global.print("no match")::String
+          })::Any
+        })::Any
+      JIL
+    }
+
+    it "falls through to else" do
+      expect_successful_jil
+      expect(ctx[:output]).to eq(["no match"])
+    end
+  end
+
   context "cache and variables" do
     let(:code) {
       <<-JIL
