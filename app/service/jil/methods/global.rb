@@ -89,7 +89,16 @@ class Jil::Methods::Global < Jil::Methods::Base
         else_block = content
         next
       end
-      return evalarg(content) if evaluated_match == eval_val
+      if evaluated_match.is_a?(::String) && evaluated_match.match?(/^\s*\/.*?\/[img]*\s*$/)
+        pattern = evaluated_match[/^\s*\/(.*?)\/[img]*\s*$/, 1]
+        flags = evaluated_match[/\/([img]*)\s*$/, 1].to_s
+        rx_flags = 0
+        rx_flags |= Regexp::IGNORECASE if flags.include?("i")
+        rx_flags |= Regexp::MULTILINE if flags.include?("m")
+        return evalarg(content) if eval_val.to_s.match?(Regexp.new(pattern, rx_flags))
+      elsif evaluated_match == eval_val
+        return evalarg(content)
+      end
     end
     evalarg(else_block) if else_block
   end

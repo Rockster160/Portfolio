@@ -162,6 +162,30 @@ RSpec.describe Jil::Methods::Global do
     end
   end
 
+  describe "#case with regex" do
+    let(:code) {
+      <<-'JIL'
+        val = String.new("backyard")::String
+        result = Global.case(val, {
+          a1234 = Keyword.When("/front/", {
+            b1234 = Global.print("front match")::String
+          })::Any
+          c1234 = Keyword.When("/back/", {
+            d1234 = Global.print("back match")::String
+          })::Any
+          e1234 = Keyword.When("else", {
+            f1234 = Global.print("no match")::String
+          })::Any
+        })::Any
+      JIL
+    }
+
+    it "matches using regex" do
+      expect_successful_jil
+      expect(ctx[:output]).to eq(["back match"])
+    end
+  end
+
   context "cache and variables" do
     let(:code) {
       <<-JIL
