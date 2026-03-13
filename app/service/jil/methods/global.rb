@@ -19,6 +19,7 @@ class Jil::Methods::Global < Jil::Methods::Base
       @jil.ctx[:return_val] = evalarg(line.arg)
     when :if, :ternary then logic_if(*line.args)
     when :case then logic_case(*line.args)
+    when :try then logic_try(*line.args)
     when :print
       evalarg(line.arg).tap { |str|
         @jil.ctx[:output] << ::Jil::Methods::String.new(@jil, @ctx).cast(str).gsub(/^"|"$/, "")
@@ -29,7 +30,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     when :comment then evalarg(line.arg)
     when :loop then @jil.enumerate_loop { |ctx| evalarg(line.arg, ctx) }
     when :times
-      @jil.enumerate_array(0...evalarg(line.args.first), :map) { |ctx|
+      @jil.enumerate_array(0...@jil.cast(evalarg(line.args.first), :Numeric), :map) { |ctx|
         evalarg(line.args.last, ctx)
       }
     when :dowhile
@@ -98,6 +99,13 @@ class Jil::Methods::Global < Jil::Methods::Base
       end
     end
     evalarg(else_block) if else_block
+  end
+
+  def logic_try(try_block, catch_block)
+    evalarg(try_block)
+  rescue StandardError => e
+    set_value(:error, e.message, type: :String)
+    evalarg(catch_block)
   end
 
   def splatParams(line)

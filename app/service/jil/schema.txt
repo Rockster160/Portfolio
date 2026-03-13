@@ -20,6 +20,7 @@
   #functionParams(content([Keyword.Item]))::Array # Used in Function TASKS, not inline functions.
   #if("IF" content "DO" content "ELSE" content)::Any
   #case("CASE" Any content(Keyword [Keyword.When]))::Any
+  #try("TRY" content "CATCH" content)::Any
   #ternary(Boolean|Any " ? " Any " : " Any)::Any # Useful for setting vars
   #ref(Any)::Any // Variable reference, returns the variable itself, does NOT evaluate it.
   #get(String)::Any // Variable reference
@@ -63,6 +64,7 @@
   .format(["lower" "upper" "squish" "capital" "capitalize_first" "pascal" "title" "snake" "camel" "base64"])
   .replace(String "with" String)
   .add("+" String)
+  .contains?(String)::Boolean
   .length()::Numeric
 [Numeric]::number
   #new(Any::Numeric)
@@ -162,6 +164,7 @@
   .compact()
   .find(enum_content)::Any
   .include?(Any)::Boolean
+  .index(Any)::Numeric
   .first::Any
   .last::Any
   .any?(enum_content)::Boolean

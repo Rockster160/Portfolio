@@ -455,6 +455,139 @@ RSpec.describe "Jil Edge Cases" do
     end
   end
 
+  # ── Global.times casting ──────────────────────────────────────────
+
+  describe "Global.times casts arg to Numeric" do
+    it "works with a string literal" do
+      exe = jil(<<-'JIL')
+        result = Global.times("3", {
+          idx = Keyword.Index()::Numeric
+        })::Numeric
+      JIL
+      expect(exe.ctx.dig(:vars, :result, :value)).to eq(3)
+    end
+  end
+
+  # ── Global.try ───────────────────────────────────────────────────
+
+  describe "Global.try" do
+    it "returns try block value on success" do
+      exe = jil(<<-'JIL')
+        result = Global.try({
+          r = String.new("success")::String
+        }, {
+          r = String.new("caught")::String
+        })::Any
+      JIL
+      expect(exe.ctx.dig(:vars, :result, :value)).to eq("success")
+    end
+
+    it "catches errors and runs catch block" do
+      exe = jil(<<-'JIL')
+        result = Global.try({
+          bad = Global.request("GET", "http://not-a-real-host.invalid", "", "")::Hash
+        }, {
+          msg = Global.print("caught it")::String
+        })::Any
+      JIL
+      expect(exe.ctx[:output]).to include("caught it")
+      expect(exe.ctx[:error]).to be_blank
+    end
+
+    it "sets error variable in catch block" do
+      exe = jil(<<-'JIL')
+        result = Global.try({
+          bad = Global.request("GET", "http://not-a-real-host.invalid", "", "")::Hash
+        }, {
+          msg = Global.get("error")::String
+        })::Any
+      JIL
+      expect(exe.ctx.dig(:vars, :error, :value)).to be_a(String)
+      expect(exe.ctx.dig(:vars, :error, :value)).not_to be_empty
+    end
+
+    it "does not run catch block on success" do
+      exe = jil(<<-'JIL')
+        result = Global.try({
+          r = Numeric.new(42)::Numeric
+        }, {
+          r = Global.print("should not print")::String
+        })::Any
+      JIL
+      expect(exe.ctx[:output]).to eq([])
+      expect(exe.ctx.dig(:vars, :result, :value)).to eq(42)
+    end
+  end
+
+  # ── String.contains? ────────────────────────────────────────────
+
+  describe "String.contains?" do
+    it "returns true when substring is present" do
+      exe = jil(<<-'JIL')
+        s = String.new("hello world")::String
+        r = s.contains?("world")::Boolean
+      JIL
+      expect(exe.ctx.dig(:vars, :r, :value)).to eq(true)
+    end
+
+    it "returns false when substring is absent" do
+      exe = jil(<<-'JIL')
+        s = String.new("hello world")::String
+        r = s.contains?("xyz")::Boolean
+      JIL
+      expect(exe.ctx.dig(:vars, :r, :value)).to eq(false)
+    end
+
+    it "is case-sensitive" do
+      exe = jil(<<-'JIL')
+        s = String.new("Hello World")::String
+        r = s.contains?("hello")::Boolean
+      JIL
+      expect(exe.ctx.dig(:vars, :r, :value)).to eq(false)
+    end
+  end
+
+  # ── Array.index ──────────────────────────────────────────────────
+
+  describe "Array.index" do
+    it "returns the index of the found element" do
+      exe = jil(<<-'JIL')
+        arr = Array.new({
+          a1 = String.new("a")::String
+          a2 = String.new("b")::String
+          a3 = String.new("c")::String
+        })::Array
+        r = arr.index("b")::Numeric
+      JIL
+      expect(exe.ctx.dig(:vars, :r, :value)).to eq(1)
+    end
+
+    it "returns nil when element is not found" do
+      exe = jil(<<-'JIL')
+        arr = Array.new({
+          a1 = String.new("a")::String
+          a2 = String.new("b")::String
+        })::Array
+        r = arr.index("z")::Numeric
+      JIL
+      # nil cast to Numeric → 0
+      expect(exe.ctx.dig(:vars, :r, :value)).to eq(0)
+    end
+
+    it "works with numeric values" do
+      exe = jil(<<-'JIL')
+        arr = Array.new({
+          a1 = Numeric.new(10)::Numeric
+          a2 = Numeric.new(20)::Numeric
+          a3 = Numeric.new(30)::Numeric
+        })::Array
+        target = Numeric.new(20)::Numeric
+        r = arr.index(target)::Numeric
+      JIL
+      expect(exe.ctx.dig(:vars, :r, :value)).to eq(1)
+    end
+  end
+
   # ── Presence ─────────────────────────────────────────────────────
 
   describe "presence" do

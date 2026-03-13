@@ -29,6 +29,8 @@ class Jil::Methods::String < Jil::Methods::Base
       when :Hash then md&.named_captures&.symbolize_keys.presence
       else md.to_a[1].presence || md.to_a.first.presence
       end
+    when :contains?
+      token_val(line.objname).include?(evalarg(line.arg))
     when :split
       token_val(line.objname).split(to_regex(evalarg(line.arg)))
     else
