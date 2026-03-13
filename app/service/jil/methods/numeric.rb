@@ -21,6 +21,7 @@ class Jil::Methods::Numeric < Jil::Methods::Base
 ])
 
     return cast(val1) / cast(val2).to_f if operator == "/"
+    return Math.log(cast(val1)) / Math.log(cast(val2)) if operator == "^log"
 
     cast(val1).send(operator, cast(val2))
   end
@@ -36,6 +37,7 @@ class Jil::Methods::Numeric < Jil::Methods::Base
 ])
 
     return cast(val1) / cast(val2).to_f if operator == "/"
+    return Math.log(cast(val1)) / Math.log(cast(val2)) if operator == "^log"
 
     cast(val1).send(operator, cast(val2))
   end
@@ -52,6 +54,7 @@ class Jil::Methods::Numeric < Jil::Methods::Base
     operator = operator[0] # Remove the `=`
 
     return cast(val1) / cast(val2).to_f if operator == "/"
+    return Math.log(cast(val1)) / Math.log(cast(val2)) if operator == "^log"
 
     cast(val1).send(operator, cast(val2))
   end

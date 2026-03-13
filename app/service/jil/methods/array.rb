@@ -58,7 +58,9 @@ class Jil::Methods::Array < Jil::Methods::Base
       arr = token_val(line.objname)
       arr[@jil.cast(idx, :Numeric)] = val
       arr
-    when :del! then token_val(line.objname).delete_at(@jil.cast(evalarg(line.arg), :Numeric))
+    when :del!
+      token_val(line.objname).delete_at(@jil.cast(evalarg(line.arg), :Numeric))
+      token_val(line.objname)
     when :each, :map, :any?, :none?, :all?
       @jil.enumerate_array(token_val(line.objname), method) { |ctx| evalarg(line.arg, ctx) }
     when :select, :reject, :sort_by
@@ -70,21 +72,22 @@ class Jil::Methods::Array < Jil::Methods::Base
         evalarg(line.args.last).to_s.upcase.to_sym == :DESC ? arr.reverse : arr
       }
     when :sort
-      token_val(line.objname).sort_by.with_index { |val, idx|
+      sorted = token_val(line.objname).sort_by.with_index { |val, idx|
         case evalarg(line.arg).to_sym
         when :Ascending then val
-        when :Descending then -val
+        when :Descending then val
         when :Reverse then -idx
         when :Random then rand
         end
       }
+      evalarg(line.arg).to_sym == :Descending ? sorted.reverse : sorted
     when :sort_by!, :sort!
       token = line.objname.to_sym
       arr = token_val(token)
       set_value(token, execute(line, method.to_s[..-2].to_sym))
     when :find
       @jil.enumerate_array(token_val(line.objname), method) { |ctx|
-        evalarg(line.arg, ctx).presence
+        evalarg(line.arg, ctx)
       }&.first
     else
       if line.objname.match?(/^[A-Z]/)

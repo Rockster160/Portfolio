@@ -352,7 +352,7 @@ RSpec.describe Jil::Methods::Hash do
         ydfcd: { class: :Boolean, value: false },
         xfaed: { class: :Numeric, value: 47 },
         r5ee3: { class: :Array, value: ["Hello, World!", 47] },
-        r817a: { class: :Any, value: false },
+        r817a: { class: :Any, value: ["Hello, World!", 47] },
       })
       expect(ctx[:output]).to eq([])
     end

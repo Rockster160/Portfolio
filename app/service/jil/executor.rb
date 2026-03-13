@@ -288,7 +288,7 @@ class Jil::Executor
   def magic_cast(value)
     return value unless value.is_a?(::String)
 
-    YAML.safe_load(value, [::Symbol], aliases: true)
+    YAML.safe_load(value, permitted_classes: [::Symbol], aliases: true)
   rescue StandardError
     value
   end

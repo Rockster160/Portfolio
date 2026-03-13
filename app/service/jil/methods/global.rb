@@ -24,10 +24,7 @@ class Jil::Methods::Global < Jil::Methods::Base
         @jil.ctx[:output] << ::Jil::Methods::String.new(@jil, @ctx).cast(str).gsub(/^"|"$/, "")
       }
     when :presence
-      val = evalarg(line.arg).presence
-      case val
-      when Date then val.year.positive?
-      end
+      evalarg(line.arg).presence
     when :block then evalargs(line.arg).last
     when :comment then evalarg(line.arg)
     when :loop then @jil.enumerate_loop { |ctx| evalarg(line.arg, ctx) }
@@ -96,7 +93,7 @@ class Jil::Methods::Global < Jil::Methods::Base
         rx_flags |= Regexp::IGNORECASE if flags.include?("i")
         rx_flags |= Regexp::MULTILINE if flags.include?("m")
         return evalarg(content) if eval_val.to_s.match?(Regexp.new(pattern, rx_flags))
-      elsif evaluated_match == eval_val
+      elsif evaluated_match == eval_val || @jil.cast(evaluated_match) == @jil.cast(eval_val)
         return evalarg(content)
       end
     end
