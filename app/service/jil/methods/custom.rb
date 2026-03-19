@@ -16,6 +16,24 @@ class Jil::Methods::Custom < Jil::Methods::Base
     task = @jil.user.tasks.active.enabled.functions.by_method_name(line.methodname).take
     raise ::Jil::ExecutionError, "Undefined Method #{line.methodname}" if task.blank?
 
-    task.execute({ params: evalargs(line.args) }, broadcast_task: @jil.broadcast_task)&.result
+    input_data = build_function_params(line.args)
+    task.execute(input_data, broadcast_task: @jil.broadcast_task)&.result
+  end
+
+  private
+
+  def build_function_params(args)
+    content = args.flatten.select { |a| a.is_a?(::Jil::Parser) }
+    named_args = content.select { |p|
+      p.objname == :Keyword && p.methodname.to_s.match?(/\A[a-z_]/)
+    }
+
+    if named_args.present? && named_args.length == content.length
+      named_args.each_with_object({}) { |parser, hash|
+        hash[parser.methodname.to_s] = @jil.execute_block(parser)
+      }
+    else
+      { params: evalargs(args) }
+    end
   end
 end

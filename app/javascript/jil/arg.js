@@ -1,6 +1,7 @@
 import { unwrap } from "./form_helpers.js"
 import Tokenizer from "./tokenizer.js"
 import Schema from "./schema.js"
+import Method from "./method.js"
 
 export default class Arg {
   constructor(method, str) {
@@ -57,7 +58,28 @@ export default class Arg {
         let { allowedtypes, args, is_enum } = match.groups
         this.content = true
         if (allowedtypes) { this.allowedtypes = allowedtypes }
-        if (args) { this.options = Tokenizer.split(args, { by: /[, ]+/ }) }
+        if (args) {
+          this.options = Tokenizer.split(args, { by: /[, ]+/ }).map(item => {
+            let namedMatch = item.match(/^([a-z_]\w*):([A-Z]\w*)(?:\((.+)\))?$/)
+            if (namedMatch) {
+              let opt = { name: namedMatch[1], type: namedMatch[2] }
+              if (namedMatch[3]) { opt.defaultval = namedMatch[3] }
+              // Register as a Keyword singleton method for rendering
+              if (!Schema.types["Keyword"]?.singletons.find(s => s.name === opt.name)) {
+                let argDef = opt.defaultval ? `${opt.type}(${opt.defaultval})` : opt.type
+                Schema.types["Keyword"].addSingletonMethod(new Method({
+                  scope: "singleton",
+                  type: "Keyword",
+                  name: opt.name,
+                  args: argDef,
+                  returntype: opt.type,
+                }))
+              }
+              return opt
+            }
+            return item
+          })
+        }
         if (is_enum) { this.options = [...Schema.enumArgOptions, ...(this.options || [])] }
         return
       }

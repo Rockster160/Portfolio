@@ -109,10 +109,15 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def splatParams(line)
-    array = @jil.input_data&.dig(:params)
     line.args.flatten.map.with_index { |arg, idx|
-      @jil.cast(array[idx], arg.cast).tap { |val|
-        set_value(arg.varname, val, type: arg.cast)
+      val = if arg.is_a?(::Jil::Parser) && arg.methodname == :NamedArg
+        key = evalarg(arg.args.first)
+        @jil.input_data&.dig(key)
+      else
+        @jil.input_data&.dig(:params)&.at(idx)
+      end
+      @jil.cast(val, arg.cast).tap { |casted|
+        set_value(arg.varname, casted, type: arg.cast)
       }
     }.compact
   end

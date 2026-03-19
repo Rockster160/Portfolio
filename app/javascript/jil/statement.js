@@ -1,5 +1,6 @@
 import { fa, faStack } from "./icon.js";
 import {
+  field,
   genHex,
   genLetter,
   clamp,
@@ -7,6 +8,7 @@ import {
   hi,
   prettify,
 } from "./form_helpers.js";
+import Arg from "./arg.js";
 import Dropdown from "./dropdown.js";
 import Tokenizer from "./tokenizer.js";
 
@@ -482,6 +484,11 @@ export default class Statement {
       if (methodObj.upcoming) {
         this.addError("Method is not yet implemented.");
       }
+    } else if (this._type === "Keyword" && new_method.match(/^[a-z_]/)) {
+      // Named key argument — render a typed input based on return type
+      this.scope = "singleton";
+      let arg = Arg.fromType(this._returntype || "Any");
+      argsContainer.appendChild(field(arg));
     } else {
       this.addError(
         `Unable to call ${new_method} on ${this.refname}::${this.type}`,

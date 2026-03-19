@@ -122,7 +122,7 @@
 </template>
 
 <script type="text/javascript">
-  window.load_code = <%= raw @task.id.present? ? "String.raw`#{@task.code.gsub(/\`/, "\\\\`")}`" : "undefined" %>;
+  window.load_code = <%= raw @task.id.present? ? "String.raw`#{@task.code&.gsub(/\`/, "\\\\`")}`" : "undefined" %>;
   window.load_schema = `<%= Task.schema(current_user) %>`
   window.readonly = <%= @readonly || false %>;
 </script>

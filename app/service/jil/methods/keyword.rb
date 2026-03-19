@@ -21,9 +21,12 @@ class Jil::Methods::Keyword < Jil::Methods::Base
     when :When then nil # No-op, handled by Global#logic_case
     when :Arg then @ctx.dig(:args, evalarg(line.arg).to_s.to_sym)
     when :Item then nil # No-op, this is handled within the Array#splat method
+    when :NamedArg then nil # No-op, handled by Global#splatParams
     when :Key then @ctx[:key]
     when :Index then @ctx[:index]
     when :Value, :Object then @ctx[:value]
+    else
+      evalarg(line.arg) if line.args.present?
     end
   end
 end

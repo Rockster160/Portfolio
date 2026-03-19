@@ -1,5 +1,5 @@
 import { fa, faStack } from "./icon.js";
-import { element, unwrap, field } from "./form_helpers.js";
+import { element, unwrap, field, genLetter, genHex } from "./form_helpers.js";
 import Statement from "./statement.js";
 import Arg from "./arg.js";
 import Dropdown from "./dropdown.js";
@@ -457,6 +457,19 @@ document.addEventListener("click", function (evt) {
         }
 
         return JSON.parse(opts).map((opt) => {
+          if (typeof opt === "object" && opt.name) {
+            return {
+              text: `${opt.name} (${opt.type})`,
+              callback: () => {
+                let val = opt.defaultval != null ? `(${opt.defaultval})` : "()"
+                let varname = genLetter() + genHex(2);
+                let stmts = Statement.fromText(
+                  `${varname} = Keyword.${opt.name}${val}::${opt.type}`,
+                );
+                placeStatement(stmts[0], context, top);
+              },
+            };
+          }
           let method = Schema.methodFromStr(opt);
           if (method) {
             return {
