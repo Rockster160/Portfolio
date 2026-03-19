@@ -113,12 +113,13 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def splatParams(line)
-    line.args.flatten.map.with_index { |arg, idx|
+    pos_idx = 0
+    line.args.flatten.map { |arg|
       val = if arg.is_a?(::Jil::Parser) && arg.methodname == :NamedArg
         key = evalarg(arg.args.first)
         @jil.input_data&.dig(key)
       else
-        @jil.input_data&.dig(:params)&.at(idx)
+        @jil.input_data&.dig(:params)&.at(pos_idx).tap { pos_idx += 1 }
       end
       @jil.cast(val, arg.cast).tap { |casted|
         set_value(arg.varname, casted, type: arg.cast)
