@@ -19,6 +19,7 @@ class Jil::Methods::Keyword < Jil::Methods::Base
     # when :FuncReturn
     #   @ctx[:function_return] = evalarg(line.arg)
     when :When then nil # No-op, handled by Global#logic_case
+    when :Else then nil # No-op, handled by Global#logic_case
     when :Arg then @ctx.dig(:args, evalarg(line.arg).to_s.to_sym)
     when :Item then nil # No-op, this is handled within the Array#splat method
     when :NamedArg then nil # No-op, handled by Global#splatParams

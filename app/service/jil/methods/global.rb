@@ -81,6 +81,10 @@ class Jil::Methods::Global < Jil::Methods::Base
     eval_val = evalarg(value)
     else_block = nil
     Array.wrap(when_blocks).each do |when_block|
+      if when_block.methodname == :Else
+        else_block = when_block.args.first
+        next
+      end
       match_val, content = when_block.args
       evaluated_match = evalarg(match_val)
       if evaluated_match == "else"
