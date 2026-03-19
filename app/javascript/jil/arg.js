@@ -77,6 +77,21 @@ export default class Arg {
               }
               return opt
             }
+            let selectMatch = item.match(/^([a-z_]\w*):(\[.+\])(?:\((.+)\))?$/)
+            if (selectMatch) {
+              let opt = { name: selectMatch[1], type: "String", selectArgs: selectMatch[2] }
+              if (selectMatch[3]) { opt.defaultval = selectMatch[3] }
+              if (!Schema.types["Keyword"]?.singletons.find(s => s.name === opt.name)) {
+                Schema.types["Keyword"].addSingletonMethod(new Method({
+                  scope: "singleton",
+                  type: "Keyword",
+                  name: opt.name,
+                  args: opt.selectArgs,
+                  returntype: "String",
+                }))
+              }
+              return opt
+            }
             return item
           })
         }
