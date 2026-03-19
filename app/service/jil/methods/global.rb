@@ -43,7 +43,10 @@ class Jil::Methods::Global < Jil::Methods::Base
     when :function
       args, content = line.args
       { args: evalarg(args), content: content.map { |line| line.to_s.squish }.join("\n") }
-    else send(line.methodname, *evalargs(line.args))
+    else
+      raise ::Jil::ExecutionError, "Undefined Global method: #{line.methodname}" unless respond_to?(line.methodname)
+
+      send(line.methodname, *evalargs(line.args))
     end
   end
 
