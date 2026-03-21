@@ -1,6 +1,15 @@
 class PagesController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user_or_guest, :set_page
+  before_action :authorize_user_or_guest, :set_page, except: [:shared]
+
+  def shared
+    @page = Page.find_by!(share_token: params[:token])
+
+    respond_to do |format|
+      format.html { render :shared }
+      format.json { render json: @page.to_full_packet }
+    end
+  end
 
   def show
     respond_to do |format|
@@ -42,6 +51,16 @@ class PagesController < ApplicationController
     else
       render :form
     end
+  end
+
+  def toggle_sharing
+    if @page.shared?
+      @page.disable_sharing!
+    else
+      @page.enable_sharing!
+    end
+
+    redirect_to @page
   end
 
   def destroy

@@ -6,6 +6,7 @@
 #  content            :text
 #  name               :string
 #  parameterized_name :text
+#  share_token        :string
 #  sort_order         :integer
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
@@ -27,6 +28,18 @@ class Page < ApplicationRecord
   after_commit :broadcast_timestamp
 
   validates :parameterized_name, uniqueness: { scope: :user_id }
+
+  def shared?
+    share_token.present?
+  end
+
+  def enable_sharing!
+    update!(share_token: SecureRandom.urlsafe_base64(16)) unless shared?
+  end
+
+  def disable_sharing!
+    update!(share_token: nil)
+  end
 
   def timestamp=(new_timestamp)
     self.updated_at = Time.zone.at(new_timestamp.to_i)
