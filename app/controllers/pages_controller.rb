@@ -1,15 +1,6 @@
 class PagesController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user_or_guest, :set_page, except: [:shared]
-
-  def shared
-    @page = Page.find_by!(share_token: params[:token])
-
-    respond_to do |format|
-      format.html { render :shared }
-      format.json { render json: @page.to_full_packet }
-    end
-  end
+  before_action :authorize_user_or_guest, :set_page
 
   def show
     respond_to do |format|
@@ -25,6 +16,7 @@ class PagesController < ApplicationController
   end
 
   def edit
+    authorize_owner
     render :form
   end
 
@@ -43,6 +35,7 @@ class PagesController < ApplicationController
   end
 
   def update
+    authorize_owner
     if @page.update(page_params)
       respond_to do |format|
         format.html { redirect_to @page }
@@ -53,17 +46,25 @@ class PagesController < ApplicationController
     end
   end
 
-  def toggle_sharing
-    if @page.shared?
-      @page.disable_sharing!
-    else
-      @page.enable_sharing!
+  def shared_users
+    authorize_owner
+    username = params[:username].to_s.strip
+
+    if params[:remove].present?
+      user = User.find_by(id: params[:remove])
+      @page.shared_pages.where(user: user).destroy_all if user
+    elsif username.present?
+      user = User.by_username(username).first
+      if user && user.id != current_user.id
+        @page.shared_pages.find_or_create_by(user: user)
+      end
     end
 
-    redirect_to @page
+    render json: { shared_users: @page.shared_users.map { |u| { id: u.id, username: u.username } } }
   end
 
   def destroy
+    authorize_owner
     if @page.destroy
       redirect_to pages_path
     else
@@ -73,8 +74,17 @@ class PagesController < ApplicationController
 
   private
 
+  def authorize_owner
+    return if @page.user == current_user
+
+    redirect_to @page, alert: "You cannot make changes to this page."
+  end
+
   def set_page
-    @page = current_user.pages.find(params[:id]) if params[:id].present?
+    return unless params[:id].present?
+
+    @page = current_user.pages.find_by(id: params[:id])
+    @page ||= current_user.accessible_shared_pages.find(params[:id])
   end
 
   def page_params

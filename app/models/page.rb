@@ -6,7 +6,6 @@
 #  content            :text
 #  name               :string
 #  parameterized_name :text
-#  share_token        :string
 #  sort_order         :integer
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
@@ -22,6 +21,8 @@ class Page < ApplicationRecord
   belongs_to :user
   has_many :page_tags
   has_many :tags, through: :page_tags
+  has_many :shared_pages, dependent: :destroy
+  has_many :shared_users, through: :shared_pages, source: :user
 
   before_save :assign_parameterized_name
 
@@ -29,16 +30,10 @@ class Page < ApplicationRecord
 
   validates :parameterized_name, uniqueness: { scope: :user_id }
 
-  def shared?
-    share_token.present?
-  end
+  def accessible_by?(user)
+    return false unless user
 
-  def enable_sharing!
-    update!(share_token: SecureRandom.urlsafe_base64(16)) unless shared?
-  end
-
-  def disable_sharing!
-    update!(share_token: nil)
+    user_id == user.id || shared_users.exists?(user.id)
   end
 
   def timestamp=(new_timestamp)

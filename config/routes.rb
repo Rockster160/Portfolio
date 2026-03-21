@@ -246,10 +246,9 @@ Rails.application.routes.draw do
   end
   resources :folders
   resources :pages, except: :index do
-    post :toggle_sharing, on: :member
+    post :shared_users, on: :member
   end
   get "/pages", to: "folders#index"
-  get "/shared/pages/:token", to: "pages#shared", as: :shared_page
   resources :recipes, param: :friendly_id do
     post :export_to_list, on: :member
   end

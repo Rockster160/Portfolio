@@ -24,6 +24,8 @@ class User < ApplicationRecord
   has_many :climbs, dependent: :destroy
   has_many :folders, dependent: :destroy
   has_many :pages, dependent: :destroy
+  has_many :shared_pages, dependent: :destroy
+  has_many :accessible_shared_pages, through: :shared_pages, source: :page
   has_many :contacts, dependent: :destroy
   has_many :friends, through: :contacts
   has_many :addresses, dependent: :destroy

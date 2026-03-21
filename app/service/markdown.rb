@@ -27,6 +27,7 @@ class Markdown
       ),
       /^\s*(-{3,}|={3,}|—{1,})\s*$/                  => tag.hr,
       /`(.*?)`/                                      => wrap('\1', :code),
+      /\*\*(.+?)\*\*/                                => wrap('\1', :strong),
       /\b\*(.*?)\*\b/                                => wrap('\1', :strong),
       /\b_(.*?)_\b/                                  => wrap('\1', :em),
       /~(.*?)~/                                      => wrap('\1', :del),
@@ -35,8 +36,8 @@ class Markdown
       /!\[(.*?)\]\((.*?)\)/                          => wrap(nil, :img, src: '\2', alt: '\1'),
       /\[(.*?)\]\((.*?)\)/                           => wrap('\1', :a, href: '\2', target: :_blank),
       /\[(\w\s)*\]/                                  => internal_link_wrapper,
-      /^( *\* (?:.*?\n))+/m                          => ul_wrapper,
-      /^( *1[.)-:]? +(?:.*?\n))+/m                   => ol_wrapper,
+      /^(?: *\d+[.)-:]? +.*?(?:\n|\z)(?:[ \t]*[*-] .*?(?:\n|\z))*)+/m => ol_wrapper,
+      /^( *[*-] (?:.*?(?:\n|\z)))+/m                   => ul_wrapper,
       /^ *(\|([^\n]+?\|)+ *(\n|\z))+/m               => table_wrapper,
       /\n{3,}/m                                      => ->(match) {
         "\n\n" + ("</br>" * (match[0].length - 2))
@@ -189,17 +190,28 @@ class Markdown
 
   def ol_wrapper
     ->(match) {
-      content = match[0]
-      lines = content.split("\n").map { |li| wrap(li[/^\s*1[.)-:]? +(.*?)$/, 1] || li, :li) }
-      wrap(lines, :ol) + "\n"
+      items = []
+      match[0].split("\n").each do |line|
+        if line.match?(/^\s*\d+[.)-:]? +/)
+          items << { text: line[/^\s*\d+[.)-:]? +(.*?)$/, 1], subs: [] }
+        elsif line.match?(/^\s*[*-] /) && items.any?
+          items.last[:subs] << line[/^\s*[*-] (.*?)$/, 1]
+        end
+      end
+      lis = items.map { |item|
+        inner = item[:text]
+        inner += wrap(item[:subs].map { |s| wrap(s, :li) }, :ul) if item[:subs].any?
+        wrap(inner, :li)
+      }
+      tokenize(wrap(lis, :ol))
     }
   end
 
   def ul_wrapper
     ->(match) {
       content = match[0]
-      lines = content.split("\n").map { |li| wrap(li[/^\s*\* (.*?)$/, 1] || li, :li) }
-      wrap(lines, :ul) + "\n"
+      lines = content.split("\n").map { |li| wrap(li[/^\s*[*-] (.*?)$/, 1] || li, :li) }
+      tokenize(wrap(lines, :ul))
     }
   end
 

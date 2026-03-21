@@ -3,14 +3,10 @@
 <div class="wide-container">
   <div class="btn-container">
     <%= link_to "Back", @page.folder || :folders, class: :btn %>
-    <%= link_to "Edit", [:edit, @page], class: "btn pull-right" %>
-    <%= button_to @page.shared? ? "Unshare" : "Share", toggle_sharing_page_path(@page), class: "btn pull-right", style: "margin-right: 5px;" %>
+    <% if @page.user == current_user %>
+      <%= link_to "Edit", [:edit, @page], class: "btn pull-right" %>
+    <% end %>
   </div>
-  <% if @page.shared? %>
-    <div class="text-center" style="margin-bottom: 10px;">
-      <input type="text" id="share-link" value="<%= shared_page_url(token: @page.share_token) %>" readonly style="width: 80%; text-align: center;" onclick="this.select(); document.execCommand('copy');">
-    </div>
-  <% end %>
   <div class="breadcrumbs text-center">
     <%= link_to :root, :folders %>
     <% @page.breadcrumbs.reverse.each do |parent, idx| %>

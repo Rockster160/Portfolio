@@ -7,6 +7,22 @@
     <div class="text-center">
       <%= link_to "Delete", @page, class: "btn danger", method: :delete, data: { confirm: "Are you sure? This cannot be undone." } %>
     </div>
+
+    <div class="shared-users-section" style="margin-top: 15px;">
+      <label>Share with:</label>
+      <div style="display: flex; gap: 5px; margin-top: 5px;">
+        <input type="text" id="shared-username" placeholder="Username" />
+        <button type="button" class="btn btn-add-shared">Add</button>
+      </div>
+      <ul class="shared-users-list">
+        <% @page.shared_users.each do |user| %>
+          <li data-user-id="<%= user.id %>">
+            <%= user.username %>
+            <span class="remove-shared" data-user-id="<%= user.id %>">&times;</span>
+          </li>
+        <% end %>
+      </ul>
+    </div>
   <% end %>
   <%= form_for @page do |f| %>
     <div class="form-title"><%= @page.persisted? ? :Edit : :New %> Page</div>
@@ -36,3 +52,62 @@
     </div>
   <% end %>
 </div>
+
+<% if @page.persisted? %>
+<script type="text/javascript">
+  (function() {
+    const sharedUsersUrl = "<%= shared_users_page_path(@page) %>";
+    const csrfToken = document.querySelector("meta[name='csrf-token']")?.content;
+    const usernameInput = document.getElementById("shared-username");
+    const addBtn = document.querySelector(".btn-add-shared");
+    const usersList = document.querySelector(".shared-users-list");
+
+    if (!addBtn || !usernameInput || !usersList) return;
+
+    async function updateSharedUsers(params) {
+      const response = await fetch(sharedUsersUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken
+        },
+        body: JSON.stringify(params)
+      });
+      return response.json();
+    }
+
+    function renderUsersList(users) {
+      usersList.innerHTML = users.map(user =>
+        `<li data-user-id="${user.id}">
+          ${user.username}
+          <span class="remove-shared" data-user-id="${user.id}">&times;</span>
+        </li>`
+      ).join("");
+    }
+
+    addBtn.addEventListener("click", async function() {
+      const username = usernameInput.value.trim();
+      if (!username) return;
+
+      const data = await updateSharedUsers({ username });
+      renderUsersList(data.shared_users);
+      usernameInput.value = "";
+    });
+
+    usernameInput.addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addBtn.click();
+      }
+    });
+
+    usersList.addEventListener("click", async function(e) {
+      if (e.target.classList.contains("remove-shared")) {
+        const userId = e.target.dataset.userId;
+        const data = await updateSharedUsers({ remove: userId });
+        renderUsersList(data.shared_users);
+      }
+    });
+  })();
+</script>
+<% end %>

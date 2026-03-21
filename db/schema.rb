@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_21_194456) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_21_201652) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -579,9 +579,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_21_194456) do
     t.bigint "folder_id"
     t.text "parameterized_name"
     t.integer "sort_order"
-    t.string "share_token"
     t.index ["folder_id"], name: "index_pages_on_folder_id"
-    t.index ["share_token"], name: "index_pages_on_share_token", unique: true
     t.index ["user_id"], name: "index_pages_on_user_id"
   end
 
@@ -669,6 +667,16 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_21_194456) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["list_id"], name: "index_sections_on_list_id"
+  end
+
+  create_table "shared_pages", force: :cascade do |t|
+    t.bigint "page_id", null: false
+    t.bigint "user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["page_id", "user_id"], name: "index_shared_pages_on_page_id_and_user_id", unique: true
+    t.index ["page_id"], name: "index_shared_pages_on_page_id"
+    t.index ["user_id"], name: "index_shared_pages_on_user_id"
   end
 
   create_table "shared_tasks", force: :cascade do |t|
@@ -874,6 +882,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_21_194456) do
   add_foreign_key "page_tags", "tags"
   add_foreign_key "pages", "users"
   add_foreign_key "sections", "lists"
+  add_foreign_key "shared_pages", "pages"
+  add_foreign_key "shared_pages", "users"
   add_foreign_key "shared_tasks", "tasks"
   add_foreign_key "shared_tasks", "users"
   add_foreign_key "task_folders", "task_folders", column: "parent_id"
