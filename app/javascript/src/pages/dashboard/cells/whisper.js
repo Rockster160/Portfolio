@@ -27,8 +27,10 @@ import { dash_colors } from "../vars";
       (now.getMonth() - birth.getMonth());
     const birthTimeOfDay = birth.getHours() * 60 + birth.getMinutes();
     const nowTimeOfDay = now.getHours() * 60 + now.getMinutes();
-    if (now.getDate() < birth.getDate() ||
-        (now.getDate() === birth.getDate() && nowTimeOfDay < birthTimeOfDay)) {
+    if (
+      now.getDate() < birth.getDate() ||
+      (now.getDate() === birth.getDate() && nowTimeOfDay < birthTimeOfDay)
+    ) {
       totalMonths--;
     }
 
@@ -142,8 +144,8 @@ import { dash_colors } from "../vars";
     lines.push(
       Text.justify(
         cell_width,
-        "[img /whisper.png]      ".padEnd(ageStr.length),
-        status,
+        "[img /whisper.png]  ".padEnd(ageStr.length),
+        `${status} `,
         Text.color(dash_colors.grey, ageStr),
       ),
     );
