@@ -460,7 +460,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Manage per-timer alarms (suppressed during quiet mode)
     overdueKeys.forEach((key) => {
-      if (key === "quiet" || quietActive) return;
+      if (key === "quiet" || key === "out" || quietActive) return;
       if (!timerAlarms[key]) {
         playAlertForKey(key);
         timerAlarms[key] = setInterval(
