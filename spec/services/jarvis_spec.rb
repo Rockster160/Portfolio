@@ -471,6 +471,31 @@ RSpec.describe Jarvis do
       expect(@admin.action_events.pluck(:notes)).to include("sup")
       expect(@admin.action_events.pluck(:timestamp)).to include(Time.zone.local(2022, 6, 24, 4, 52))
     end
+
+    it "can add action events with data" do
+      expect(jarvis("log Game Slime Colony {Rocco: 73, Chelsea: 86}")).to eq("Logged Game (Slime Colony)")
+      event = @admin.action_events.last
+      expect(event.name).to eq("Game")
+      expect(event.notes).to eq("Slime Colony")
+      expect(event.data).to eq({ "Rocco" => 73, "Chelsea" => 86 })
+    end
+
+    it "can add action events with data and time" do
+      expect(jarvis("log Game Slime Colony {Rocco: 73} at 4:52")).to eq("Logged Game (Slime Colony) [Today 4:52 AM]")
+      event = @admin.action_events.last
+      expect(event.name).to eq("Game")
+      expect(event.notes).to eq("Slime Colony")
+      expect(event.data).to eq({ "Rocco" => 73 })
+      expect(event.timestamp).to eq(Time.zone.local(2022, 6, 24, 4, 52))
+    end
+
+    it "can add action events with data only" do
+      expect(jarvis("log Game {score: 100}")).to eq("Logged Game")
+      event = @admin.action_events.last
+      expect(event.name).to eq("Game")
+      expect(event.notes).to be_nil
+      expect(event.data).to eq({ "score" => 100 })
+    end
   end
 
   context "with scheduling" do
