@@ -150,6 +150,7 @@ class Jil::Methods::Global < Jil::Methods::Base
       if c.present?
         data = c.data || {}
         data.delete(var.to_s)
+        data.delete(var.to_s.to_sym)
         c.update(data: data)
       end
     end

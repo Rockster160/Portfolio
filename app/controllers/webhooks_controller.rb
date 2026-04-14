@@ -148,20 +148,6 @@ class WebhooksController < ApplicationController
     head :ok
   end
 
-  def notify
-    return head :no_content unless printer_authed?
-
-    LocalIpManager.local_ip = request.remote_ip
-    ActionCable.server.broadcast(
-      :printer_callback_channel,
-      { printer_data: params.permit!.to_h.except(:apiSecret) },
-    )
-    PrinterNotify.notify(params)
-    Jil.trigger(User.me, :printer, params.permit!.to_h)
-
-    head :ok
-  end
-
   def uptime
     # if params[:alertTypeFriendlyName] == "Down"
     #   User.me.list_by_name(:TODO).add("#{params[:monitorFriendlyName]} DOWN")
@@ -300,10 +286,6 @@ class WebhooksController < ApplicationController
 
   def none_unless_admin
     head :no_content unless user_signed_in? && current_user.admin?
-  end
-
-  def printer_authed?
-    params[:apiSecret] == ENV["PORTFOLIO_PRINTER_SECRET"]
   end
 
   def post_params

@@ -126,21 +126,24 @@ module AuthHelper
     # Had issues where some clients were mixing up bearer vs basic
     # Just made this work for whatever prefix
     type, auth_string = raw_auth.split(" ", 2)
-    basic_auth_string = Base64.decode64(auth_string.to_s)
 
+    # Try API key first — Base64-decoding hex keys can produce false
+    # colons, causing them to be misidentified as basic auth
+    api_user = ApiKey.find_by(key: auth_string)&.tap { |key|
+      @auth_type = :api_key
+      @auth_type_id = key.id
+      key.use!
+    }&.user
+    return api_user if api_user
+
+    basic_auth_string = Base64.decode64(auth_string.to_s)
     if basic_auth_string.include?(":")
       User.auth_from_basic(basic_auth_string)&.tap { |user|
         @auth_type = :username
         @auth_type_id = user.id
       }
-    else
-      ApiKey.find_by(key: auth_string)&.tap { |key|
-        @auth_type = :api_key
-        @auth_type_id = key.id
-        key.use!
-      }&.user
     end
-  rescue ActiveRecord::StatementInvalid # Sometimes decoding the auth string can result in weirdness
+  rescue ActiveRecord::StatementInvalid
     ApiKey.find_by(key: auth_string)&.tap { |key|
       @auth_type = :api_key
       @auth_type_id = key.id

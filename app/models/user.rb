@@ -212,11 +212,11 @@ class User < ApplicationRecord
   end
 
   def accessible_tasks
-    Task.joins(
+    Task.select("DISTINCT tasks.*").joins(
       <<-SQL.squish,
         LEFT JOIN shared_tasks ON shared_tasks.task_id = tasks.id AND shared_tasks.user_id = #{id}
       SQL
-    ).where("tasks.user_id = :id OR shared_tasks.user_id = :id", id: id).distinct
+    ).where("tasks.user_id = :id OR shared_tasks.user_id = :id", id: id)
   end
 
   def primary_push_sub(channel: :jarvis)
