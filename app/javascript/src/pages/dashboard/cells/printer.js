@@ -169,6 +169,9 @@ import { dash_colors, clamp } from "../vars";
         received: function (msg) {
           if (msg.data) {
             cell.data.monitor_data = msg.data;
+            // Record sync baseline so the timer can extrapolate
+            cell.data.sync_at = Date.now();
+            cell.data.sync_elapsed = msg.data.elapsed_sec || 0;
           }
 
           let status = (cell.data.monitor_data || {}).status;
@@ -176,7 +179,9 @@ import { dash_colors, clamp } from "../vars";
             if (!cell.data.interval_timer) {
               cell.data.interval_timer = setInterval(function () {
                 let d = cell.data.monitor_data;
-                d.elapsed_sec = (d.elapsed_sec || 0) + 1;
+                if (!d) { return; }
+                let secsSinceSync = Math.floor((Date.now() - cell.data.sync_at) / 1000);
+                d.elapsed_sec = cell.data.sync_elapsed + secsSinceSync;
                 d.remaining_sec = Math.max((d.est_sec || 0) - d.elapsed_sec, 0);
                 d.progress =
                   d.est_sec > 0
