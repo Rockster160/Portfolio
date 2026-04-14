@@ -48,8 +48,11 @@ import { dash_colors, clamp } from "../vars"
   }
 
   let lastUpdatedLine = function() {
-    if (!cell.data.lastUpdated) { return null }
-    let ago = Date.now() - cell.data.lastUpdated
+    let data = cell.data.monitor_data || {}
+    let updated = data.last_updated
+    if (!updated) { return null }
+    let updatedMs = new Date(updated).getTime()
+    let ago = Date.now() - updatedMs
     let label
     if (ago < Time.minutes(1)) { label = "just now" }
     else if (ago < Time.hours(1)) { label = Math.floor(ago / Time.minutes(1)) + "m ago" }

@@ -139,9 +139,10 @@ RSpec.describe "Printer Tasks", type: :request do
           af = Keyval.new("progress", 0)::Keyval
           ag = Keyval.new("elapsed_sec", 0)::Keyval
           ah = Keyval.new("remaining_sec", est_sec)::Keyval
+          ai = Keyval.new("last_updated", evtStart)::Keyval
         })::Hash
-        ai = Global.set_cache("printer", "current", cache_data)::Any
-        aj = Monitor.refresh("printer", "")::Hash
+        aj = Global.set_cache("printer", "current", cache_data)::Any
+        ak = Monitor.refresh("printer", "")::Hash
       JIL
     )
   }
@@ -162,10 +163,12 @@ RSpec.describe "Printer Tasks", type: :request do
         bb = Global.if({
           bc = current.presence()::Any
         }, {
+          now = Date.now()::Date
           bd = current.set!("progress", rounded_pct)::Hash
           be = current.set!("elapsed_sec", elapsed)::Hash
           bf = current.set!("remaining_sec", remaining)::Hash
-          bg = Global.set_cache("printer", "current", current)::Any
+          bg = current.set!("last_updated", now)::Hash
+          b0 = Global.set_cache("printer", "current", current)::Any
         }, {
           device = pd.get("device")::String
           start_time = Date.ago(elapsed, "seconds")::Date
@@ -191,8 +194,9 @@ RSpec.describe "Printer Tasks", type: :request do
             bu = Keyval.new("progress", rounded_pct)::Keyval
             bv = Keyval.new("elapsed_sec", elapsed)::Keyval
             bw = Keyval.new("remaining_sec", remaining)::Keyval
+            bx = Keyval.new("last_updated", start_time)::Keyval
           })::Hash
-          bx = Global.set_cache("printer", "current", new_cache)::Any
+          b0 = Global.set_cache("printer", "current", new_cache)::Any
         })::Any
         by = Monitor.refresh("printer", "")::Hash
       JIL
@@ -231,8 +235,9 @@ RSpec.describe "Printer Tasks", type: :request do
         cb = current.set!("progress", 100)::Hash
         cc = current.set!("elapsed_sec", elapsed)::Hash
         cd = current.set!("remaining_sec", 0)::Hash
-        ce = Global.set_cache("printer", "current", current)::Any
-        cf = Monitor.refresh("printer", "")::Hash
+        ce = current.set!("last_updated", actual_dur)::Hash
+        cf = Global.set_cache("printer", "current", current)::Any
+        cg = Monitor.refresh("printer", "")::Hash
       JIL
     )
   }
@@ -265,8 +270,10 @@ RSpec.describe "Printer Tasks", type: :request do
         d9 = current.set!("fail_event_id", fail_id)::Hash
         da = current.set!("error", error_msg)::Hash
         db = current.set!("elapsed_sec", elapsed)::Hash
-        dc = Global.set_cache("printer", "current", current)::Any
-        dd = Monitor.refresh("printer", "")::Hash
+        now = Date.now()::Date
+        dc = current.set!("last_updated", now)::Hash
+        dd = Global.set_cache("printer", "current", current)::Any
+        de = Monitor.refresh("printer", "")::Hash
       JIL
     )
   }
@@ -537,6 +544,7 @@ RSpec.describe "Printer Tasks", type: :request do
       expect(current).to include("event_id" => event.id, "status" => "printing")
       expect(current["start_time"]).to be_present
       expect(current["est_finish_time"]).to be_present
+      expect(current["last_updated"]).to be_present
     end
   end
 
