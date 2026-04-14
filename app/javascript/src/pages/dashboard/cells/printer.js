@@ -29,7 +29,7 @@ import { dash_colors, clamp } from "../vars"
   }
 
   let tempsLine = function() {
-    let temps = cell.data.temps
+    let temps = (cell.data.monitor_data || {}).temps
     if (!temps || !temps.updated_at) { return null }
 
     let updatedMs = new Date(temps.updated_at).getTime()
@@ -38,27 +38,13 @@ import { dash_colors, clamp } from "../vars"
 
     let nozzle = Emoji.pen + Math.round(temps.nozzle || 0) + "°"
     let bed = Emoji.printer + " " + Math.round(temps.bed || 0) + "°"
-    if (temps.nozzle_target > 0 && temps.nozzle_target > temps.nozzle + 0.5) {
+    if (temps.nozzle_target > 0 && temps.nozzle_target > (temps.nozzle || 0) + 0.5) {
       nozzle += " (" + Math.round(temps.nozzle_target) + ")"
     }
-    if (temps.bed_target > 0 && temps.bed_target > temps.bed + 0.5) {
+    if (temps.bed_target > 0 && temps.bed_target > (temps.bed || 0) + 0.5) {
       bed += " (" + Math.round(temps.bed_target) + ")"
     }
     return Text.center(nozzle + " | " + bed)
-  }
-
-  let lastUpdatedLine = function() {
-    let data = cell.data.monitor_data || {}
-    let updated = data.last_updated
-    if (!updated) { return null }
-    let updatedMs = new Date(updated).getTime()
-    let ago = Date.now() - updatedMs
-    let label
-    if (ago < Time.minutes(1)) { label = "just now" }
-    else if (ago < Time.hours(1)) { label = Math.floor(ago / Time.minutes(1)) + "m ago" }
-    else if (ago < Time.hours(24)) { label = Math.floor(ago / Time.hours(1)) + "h ago" }
-    else { label = Math.floor(ago / Time.hours(24)) + "d ago" }
-    return Text.justify("", Text.grey(label))
   }
 
   var renderLines = function() {
@@ -67,17 +53,16 @@ import { dash_colors, clamp } from "../vars"
     let status = data.status
     let lines = []
 
+    // Temps line
     let temps = tempsLine()
-    if (temps) {
-      lines.push(temps)
-    } else {
-      lines.push(Text.center(Emoji.pen + "?° | " + Emoji.printer + " ?°"))
-    }
+    lines.push(temps || Text.center(Emoji.pen + "?° | " + Emoji.printer + " ?°"))
+    lines.push("")
 
     if (!status || status == "idle") {
       lines.push(Text.center("Idle"))
-      lines.push(lastUpdatedLine())
-      cell.lines(lines.filter(l => l != null))
+      let lastUpdated = data.last_updated
+      lines.push(Text.justify("", lastUpdated ? Time.timeago(new Date(lastUpdated).getTime()) : ""))
+      cell.lines(lines)
       return
     }
 
@@ -86,9 +71,10 @@ import { dash_colors, clamp } from "../vars"
     if (status == "printing") {
       let progress = data.progress || 0
       lines.push(Text.progressBar(progress))
+      lines.push("")
 
       let elapsed = data.elapsed_sec || 0
-      let estimated = data.estimated_sec || 0
+      let estimated = data.est_sec || 0
       let remaining = data.remaining_sec || 0
 
       lines.push(Text.center(timestampToDuration(elapsed) + " / " + timestampToDuration(estimated)))
@@ -100,6 +86,7 @@ import { dash_colors, clamp } from "../vars"
       }
     } else if (status == "complete") {
       lines.push(Text.progressBar(100))
+      lines.push("")
       lines.push(Text.center("Done in " + timestampToDuration(data.elapsed_sec)))
     } else if (status == "failed") {
       lines.push(Text.center(Text.red("[FAILED]")))
@@ -111,8 +98,10 @@ import { dash_colors, clamp } from "../vars"
       }
     }
 
-    lines.push(lastUpdatedLine())
-    cell.lines(lines.filter(l => l != null))
+    let lastUpdated = data.last_updated
+    lines.push(Text.justify("", lastUpdated ? Time.timeago(new Date(lastUpdated).getTime()) : ""))
+
+    cell.lines(lines)
   }
 
   cell = Cell.register({
@@ -126,8 +115,6 @@ import { dash_colors, clamp } from "../vars"
         },
         received: function(msg) {
           if (msg.data) { cell.data.monitor_data = msg.data }
-          if (msg.temps) { cell.data.temps = msg.temps }
-          cell.data.lastUpdated = Time.msSinceEpoch()
 
           let status = (cell.data.monitor_data || {}).status
           if (status == "printing") {

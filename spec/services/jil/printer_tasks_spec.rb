@@ -309,9 +309,11 @@ RSpec.describe "Printer Tasks", type: :request do
       listener: "monitor:channel:printer",
       code:     <<~'JIL'.strip,
         current = Global.get_cache("printer", "current")::Hash
-        f1 = Monitor.broadcast("printer", {
-          f2 = MonitorData.timestamp(true)::MonitorData
-          f3 = MonitorData.data(current)::MonitorData
+        temps = Global.get_cache("printer", "temps")::Hash
+        f1 = current.set!("temps", temps)::Hash
+        f2 = Monitor.broadcast("printer", {
+          f3 = MonitorData.timestamp(true)::MonitorData
+          f4 = MonitorData.data(current)::MonitorData
         }, false)::Hash
       JIL
     )
