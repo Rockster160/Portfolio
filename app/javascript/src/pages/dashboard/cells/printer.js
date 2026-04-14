@@ -4,6 +4,7 @@ import { dash_colors, clamp } from "../vars";
 
 (function () {
   let cell = {};
+  const CELL_LINES = 9;
 
   class Printer {
     static post(command, args) {
@@ -43,8 +44,7 @@ import { dash_colors, clamp } from "../vars";
     }
 
     let updatedMs = new Date(temps.updated_at).getTime();
-    let stale = Date.now() - updatedMs > Time.hours(1);
-    if (stale) {
+    if (Date.now() - updatedMs > Time.hours(1)) {
       return null;
     }
 
@@ -62,6 +62,25 @@ import { dash_colors, clamp } from "../vars";
     return Text.center(nozzle + " | " + bed);
   };
 
+  let timeagoLine = function () {
+    let data = cell.data.monitor_data || {};
+    let lastUpdated = data.last_updated;
+    if (!lastUpdated) {
+      return "";
+    }
+    return Text.grey(
+      Text.justify("", Time.timeago(new Date(lastUpdated).getTime())),
+    );
+  };
+
+  let padLines = function (lines) {
+    // Pad to CELL_LINES so timestamp is always at the bottom
+    while (lines.length < CELL_LINES) {
+      lines.splice(lines.length - 1, 0, "");
+    }
+    return lines;
+  };
+
   var renderLines = function () {
     if (!cell) {
       return;
@@ -70,44 +89,49 @@ import { dash_colors, clamp } from "../vars";
     let status = data.status;
     let lines = [];
 
-    // Temps line
-    let temps = tempsLine();
+    // Line 1: Temps
     lines.push(
-      temps || Text.center(Emoji.pen + "?° | " + Emoji.printer + " ?°"),
+      tempsLine() || Text.center(Emoji.pen + "?° | " + Emoji.printer + " ?°"),
     );
+    // Line 2: spacer
     lines.push("");
 
     if (!status || status == "idle") {
       lines.push(Text.center("Idle"));
-      let lastUpdated = data.last_updated;
-      lines.push(
-        Text.justify(
-          "",
-          lastUpdated ? Time.timeago(new Date(lastUpdated).getTime()) : "",
-        ),
-      );
-      cell.lines(lines);
+      lines.push(timeagoLine());
+      cell.lines(padLines(lines));
       return;
     }
 
+    // Line 3: Print name
     lines.push(Text.center(data.print_name || "[Unknown]"));
+    // Line 4: Progress bar
+    lines.push(Text.progressBar(data.progress || 0));
 
-    if (status == "printing") {
-      let progress = data.progress || 0;
-      lines.push(Text.progressBar(progress));
+    // Line 5: status label or spacer
+    if (status == "complete") {
+      lines.push(Text.center(Text.green("[DONE]")));
+    } else if (status == "failed") {
+      lines.push(Text.center(Text.red("[FAILED]")));
+    } else {
       lines.push("");
+    }
 
-      let elapsed = data.elapsed_sec || 0;
-      let estimated = data.est_sec || 0;
+    // Line 6: elapsed / estimated
+    let elapsed = data.elapsed_sec || 0;
+    let estimated = data.est_sec || 0;
+    lines.push(
+      Text.center(
+        timestampToDuration(elapsed) + " / " + timestampToDuration(estimated),
+      ),
+    );
+
+    // Line 7: ETA (or error for failed)
+    if (status == "failed" && data.error) {
+      lines.push(Text.center(Text.grey(data.error)));
+    } else {
       let remaining = Math.max(estimated - elapsed, 0);
-
-      lines.push(
-        Text.center(
-          timestampToDuration(elapsed) + " / " + timestampToDuration(estimated),
-        ),
-      );
-
-      if (remaining > 0) {
+      if (remaining > 0 && status == "printing") {
         let eta = new Date(Date.now() + remaining * 1000);
         let etaStr = eta.toLocaleTimeString([], {
           hour: "numeric",
@@ -118,48 +142,25 @@ import { dash_colors, clamp } from "../vars";
             "ETA: " + etaStr + " (" + timestampToDuration(remaining) + ")",
           ),
         );
-      }
-    } else if (status == "complete") {
-      lines.push(Text.progressBar(100));
-      lines.push("");
-      lines.push(
-        Text.center("Done in " + timestampToDuration(data.elapsed_sec)),
-      );
-    } else if (status == "failed") {
-      lines.push(Text.center(Text.red("[FAILED]")));
-      if (data.error) {
-        lines.push(Text.center(Text.grey(data.error)));
-      } else {
-        lines.push("");
-      }
-      if (data.elapsed_sec) {
-        lines.push(
-          Text.center("After " + timestampToDuration(data.elapsed_sec)),
-        );
       } else {
         lines.push("");
       }
     }
 
-    lines.push(""); // Empty line for spacing
+    // Line 9 (last): timestamp — padLines fills any gap
+    lines.push(timeagoLine());
 
-    let lastUpdated = data.last_updated;
-    lines.push(
-      Text.grey(
-        Text.justify(
-          "",
-          lastUpdated ? Time.timeago(new Date(lastUpdated).getTime()) : "",
-        ),
-      ),
-    );
-
-    cell.lines(lines);
+    cell.lines(padLines(lines));
   };
 
   cell = Cell.register({
     title: "Printer",
-    text: "Idle",
+    text: "Loading...",
     data: {},
+    refreshInterval: Time.minutes(1),
+    reloader: function () {
+      renderLines(); // Keeps the timeago line ticking
+    },
     onload: function () {
       let monitor = Monitor.subscribe("printer", {
         connected: function () {
