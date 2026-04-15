@@ -15,7 +15,13 @@ class Api::V1::ListItemsController < Api::V1::BaseController
 
   def create
     create_params = list_item_params
-    if create_params[:category].blank?
+    if create_params[:section].blank?
+      section_param = create_params.delete(:section)
+      section = current_list.sections.where_soft_name(section_param).first
+      if section.present?
+        create_params[:section_id] = section.id
+      end
+    elsif create_params[:category].blank?
       create_params[:name].match(/\A\s*\[(.+)\]\s*([^(\[]+)\s*\z/m) { |m|
         category, name = m[1], m[2]
         next if name.blank?
@@ -87,6 +93,7 @@ class Api::V1::ListItemsController < Api::V1::BaseController
       :name,
       :checked,
       :category,
+      :section,
       :important,
       :permanent,
     )
