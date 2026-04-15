@@ -1,0 +1,25 @@
+Return-Path: <venmo@venmo.com>
+Received: from mail-out.venmo.com (mail-out.venmo.com [198.51.100.1])
+ by inbound-smtp.us-east-1.amazonaws.com with SMTP id test123
+ for rockster160@ardesian.com;
+ Tue, 15 Apr 2026 18:30:00 +0000 (UTC)
+Message-ID: <venmo-test-chelsea-payment@venmo.com>
+Date: Tue, 15 Apr 2026 18:30:00 +0000
+From: Venmo <venmo@venmo.com>
+To: rockster160@ardesian.com
+Subject: Chelsea Haven paid you $1.00
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="venmo_boundary_123"
+
+--venmo_boundary_123
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 7bit
+
+
+
+--venmo_boundary_123
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: 7bit
+
+<!DOCTYPE html><html><head><title>Chelsea Haven paid you $1.00</title></head><body><table class="body p2p-table"><tr><td><div class="card-container"><div class="content-container"><p class="text-center secondary-text title">Chelsea Haven paid you</p><div class="amount-container"><div class="amount-container__centered"><div class="amount-container__text-high">$</div><div class="amount-container__amount-text">1</div><span style="display:none">.</span><div class="amount-container__text-high">00</div></div></div> <p class="transaction-note secondary-text">Test note from Chelsea</p></div></div></td></tr></table></body></html>
+--venmo_boundary_123--

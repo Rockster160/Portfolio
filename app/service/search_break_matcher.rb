@@ -133,10 +133,12 @@ class SearchBreakMatcher
     when :exact then lower_val == lower_drop
     when :not, :not_exact then lower_val != lower_drop
     when :regex
-      ::Jarvis::Regex.match_data(drop, val)&.tap { |md|
-        @regex_match_data[:match_list] += md[:match_list]
-        @regex_match_data[:named_captures].reverse_merge!(md[:named_captures])
-      }.present?
+      rx = val.to_s[/^\s*\/(.*?)\/[img]*\s*$/, 1] || val.to_s
+      md = drop.to_s.match(Regexp.new(rx, Regexp::IGNORECASE | Regexp::MULTILINE))
+      md.present? && @regex_match_data.tap {
+        @regex_match_data[:match_list] += md.to_a
+        @regex_match_data[:named_captures].reverse_merge!(md.named_captures.symbolize_keys)
+      }
     when :any
       ::Tokenizer.split(val).any? { |single_val|
         unwrapped = SearchBreaker.unwrap(single_val)

@@ -39,6 +39,7 @@ address_book.json
 
 /_scripts
 _scripts/**/*
+lib/scripts
 
 /app/assets/builds/*
 !/app/assets/builds/.keep
