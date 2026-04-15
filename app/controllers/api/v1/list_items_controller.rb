@@ -15,7 +15,7 @@ class Api::V1::ListItemsController < Api::V1::BaseController
 
   def create
     create_params = list_item_params
-    if create_params[:section].blank?
+    if create_params.key?(:section)
       section_param = create_params.delete(:section)
       section = current_list.sections.where_soft_name(section_param).first
       if section.present?
