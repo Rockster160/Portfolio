@@ -83,7 +83,7 @@ class Api::V1::ListItemsController < Api::V1::BaseController
     @item = current_list_items.find_by(id: params[:id] || name)
     @item ||= current_list_items.by_formatted_name(name) if name.present?
     @item ||= current_list_items.by_formatted_name(params[:id])
-    return @item if mode == :soft
+    return @item if @item.present? || mode == :soft
 
     @current_item ||= current_list_items.find(params[:id] || name)
   end

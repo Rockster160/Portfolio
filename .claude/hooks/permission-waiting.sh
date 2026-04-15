@@ -15,4 +15,4 @@ grep -qxF "$SESSION_ID" "$CACHE_FILE" 2>/dev/null || echo "$SESSION_ID" >> "$CAC
 curl -s "https://ardesian.com/api/v1/lists/claude/list_items" \
   -H "Authorization: Bearer $JIL_CLAUDE_API_KEY" \
   -X POST -H "Content-Type: application/json" \
-  -d "{\"name\": \"$section_tail Permission\", \"section\": \"$list_section\"}"
+  -d "{\"name\": \">$section_tail Permission\", \"section\": \"$list_section\"}"

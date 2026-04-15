@@ -17,5 +17,5 @@ if grep -qxF "$SESSION_ID" "$CACHE_FILE" 2>/dev/null; then
   curl -s "https://ardesian.com/api/v1/lists/claude/list_items" \
     -H "Authorization: Bearer $JIL_CLAUDE_API_KEY" \
     -X DELETE -H "Content-Type: application/json" \
-    -d "{\"name\": \"$section_tail Permission\", \"section\": \"$list_section\"}"
+    -d "{\"name\": \">$section_tail Permission\", \"section\": \"$list_section\"}"
 fi
