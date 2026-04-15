@@ -45,7 +45,7 @@ class WebhooksController < ApplicationController
       ::Jil.trigger(
         current_user,
         params[:trigger],
-        json_params.except(:trigger),
+        json_params[:data].presence || json_params.except(:trigger),
       )
     else
       json_params.each do |trigger, data|

@@ -174,6 +174,13 @@ RSpec.describe Task do
     end
   end
 
+  context "TriggerData.parse" do
+    it "strips surrounding quotes from colon-separated values" do
+      result = TriggerData.parse('person:chelsea:"-15.20"')
+      expect(result).to eq({ person: { chelsea: "-15.20" } })
+    end
+  end
+
   context "with hyphenated trigger keys" do
     let!(:tasks) {
       Task.create([

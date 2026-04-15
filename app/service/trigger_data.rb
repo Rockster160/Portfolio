@@ -19,7 +19,8 @@ module TriggerData
     return { data: input } unless input.is_a?(::String)
     return { data: input } unless input.match?(/\w+(:\w+)+/)
 
-    TriggerData.parse(input.split(":").reverse.reduce { |value, key| { key.to_sym => value } })
+    segments = input.split(":").map { |s| s.match?(/\A"(.+)"\z/) ? s[1..-2] : s }
+    TriggerData.parse(segments.reverse.reduce { |value, key| { key.to_sym => value } })
   end
 
   def unwrap(json, as: nil)
