@@ -10,6 +10,15 @@ class ScheduledTasksController < ApplicationController
     serialize @events
   end
 
+  def show
+    @event = current_user.scheduled_triggers.find(params[:id])
+
+    respond_to do |format|
+      format.json { render json: @event }
+      format.html
+    end
+  end
+
   def create
     event = current_user.scheduled_triggers.create!(event_params)
     ::Jil::Schedule.update(event) # Schedules the job

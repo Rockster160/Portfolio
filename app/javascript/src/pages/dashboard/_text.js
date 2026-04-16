@@ -76,6 +76,7 @@ Text.trunc = function(str, num) {
 Text.clean = function(text) {
   text = Text.escape(text)
   text = Text.markup(text)
+  text = text.replaceAll(/<a\b[^>]*>(.*?)<\/a>/gi, "$1")
   text = text.replaceAll(/<e>.*?<\/e>/gi, "  ")
   text = text.replaceAll(/<i.*?>.*?<\/i>/gi, "  ")
   text = text.replaceAll(/<img.*?\>/gi, "  ")
@@ -121,6 +122,11 @@ Text.img = function(url) {
   if (!url || url.length < 1) { return url }
 
   return "[img " + url + "]"
+}
+Text.link = function(url, body, plain) {
+  if (!url || url.length < 1) { return body || "" }
+
+  return "[" + (plain ? "plain " : "") + url + "](" + (body || url) + ")"
 }
 Text.animate = function(text) {
   if (!text || text.length <= 1) { return text }
@@ -235,6 +241,8 @@ Text.markup = function(text) {
   text = text.replaceAll(/\[ani \"(.*?)\"\]/gi, "<textanimate steps=\"$1\"> </textanimate>")
   text = text.replaceAll(/\[img (.*?)\]/gi, "<span class=\"dashboard-img-wrapper\"><img src=\"$1\"\/></span>")
   text = text.replaceAll(/\[ico (.*?)\]/gi, "<i class=\"$1\"></i>")
+  text = text.replaceAll(/\[plain (.*?)\]\((.*?)\)/gi, "<a href=\"$1\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"dash-link dash-link-plain\">$2</a>")
+  text = text.replaceAll(/\[((?!plain )[^\]]*?)\]\((.*?)\)/gi, "<a href=\"$1\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"dash-link\">$2</a>")
 
   return text
 }

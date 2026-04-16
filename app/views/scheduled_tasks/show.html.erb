@@ -1,0 +1,50 @@
+<div class="container">
+  <h2>Scheduled Task</h2>
+
+  <div class="gtable gtable-2 striped bordered wide live-edit-events">
+    <div class="trow">
+      <div class="tcell text-right"><strong>Name</strong></div>
+      <div class="tcell">
+        <input data-update-url="<%= scheduled_task_path(@event) %>" name="name" value="<%= @event.name %>" class="invisi-field" style="width: 100%;" type="text">
+      </div>
+    </div>
+    <div class="trow">
+      <div class="tcell text-right"><strong>Trigger</strong></div>
+      <div class="tcell">
+        <input data-update-url="<%= scheduled_task_path(@event) %>" name="trigger" value="<%= @event.trigger %>" class="invisi-field" style="width: 100%;" type="text">
+      </div>
+    </div>
+    <div class="trow">
+      <div class="tcell text-right"><strong>Execute At</strong></div>
+      <div class="tcell">
+        <input data-update-url="<%= scheduled_task_path(@event) %>" name="execute_at" value="<%= @event.execute_at.in_time_zone("Mountain Time (US & Canada)").iso8601[0..-7] %>" class="invisi-field" style="width: 100%;" type="datetime-local">
+      </div>
+    </div>
+    <div class="trow">
+      <div class="tcell text-right"><strong>Data</strong></div>
+      <div class="tcell">
+        <% json = @event.data.present? ? h(JSON.pretty_generate(@event.data).gsub(/"(\w+)": /, '\1: ')) : "" %>
+        <div class="json-wrapper" style="min-height: <%= 2 + (json.count("\n") + 1) %>rem">
+          <textarea data-update-url="<%= scheduled_task_path(@event) %>" name="data" class="invisi-field" style="width: 100%;"><%= json %></textarea>
+        </div>
+      </div>
+    </div>
+    <% if @event.started_at.present? %>
+      <div class="trow">
+        <div class="tcell text-right"><strong>Started At</strong></div>
+        <div class="tcell"><%= @event.started_at.in_time_zone("Mountain Time (US & Canada)").strftime("%b %-d, %Y %-I:%M %p") %></div>
+      </div>
+    <% end %>
+    <% if @event.completed_at.present? %>
+      <div class="trow">
+        <div class="tcell text-right"><strong>Completed At</strong></div>
+        <div class="tcell"><%= @event.completed_at.in_time_zone("Mountain Time (US & Canada)").strftime("%b %-d, %Y %-I:%M %p") %></div>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="text-center" style="margin-top: 1rem;">
+    <%= link_to "Back to Schedules", scheduled_tasks_path, class: "btn" %>
+    <%= link_to "Delete", scheduled_task_path(@event), method: :delete, class: "btn btn-danger", data: { confirm: "Are you sure?" } %>
+  </div>
+</div>

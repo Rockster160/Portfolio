@@ -135,7 +135,9 @@ $(document).ready(function() {
     }, { once: true })
   })
 
-  $(document).on("click", ".dash-cell", function() {
+  $(document).on("click", ".dash-cell .dash-link", function(evt) {
+    evt.stopPropagation()
+  }).on("click", ".dash-cell", function() {
     var cell = Cell.from_ele(this)
     if (cell) { cell.active(true) }
   }).on("keyup", function(evt) {

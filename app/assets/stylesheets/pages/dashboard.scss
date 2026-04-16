@@ -194,6 +194,25 @@ $text-color: darken($grey-blue, 20%);
         width: $dash-font-width*2;
         font-size: $dash-font-height;
       }
+
+      .dash-link {
+        color: inherit;
+        text-decoration: underline;
+        cursor: pointer;
+
+        &:hover {
+          text-decoration: underline;
+          color: $active-bright;
+        }
+
+        &.dash-link-plain {
+          text-decoration: none;
+
+          &:hover {
+            text-decoration: underline;
+          }
+        }
+      }
     }
   }
 }
