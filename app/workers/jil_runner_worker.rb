@@ -6,7 +6,7 @@ class JilRunnerWorker
   def perform(user_id)
     return if User.advisory_lock_exists?("jil_runner_#{user_id}")
 
-    User.with_advisory_lock("jil_runner_#{user_id}", 5.seconds) {
+    User.with_advisory_lock("jil_runner_#{user_id}", 10.seconds) {
       execute_continually(User.find(user_id))
     }
   end

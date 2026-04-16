@@ -12,6 +12,7 @@ class JilScheduleWorker
       next if User.advisory_lock_exists?("jil_runner_#{user_id}")
 
       ::JilRunnerWorker.perform_async(user_id)
+      break # Only need to enqueue one runner per user, so break after the first
     end
   end
 end
