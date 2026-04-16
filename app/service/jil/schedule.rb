@@ -49,10 +49,27 @@ module Jil::Schedule
   end
 
   def add_job(schedule)
-    schedule.update!(
-      # Offset 1 second to make up for async slowness
-      jid: ::JilRunnerWorker.perform_at(schedule.execute_at - 1.second, schedule.user.id),
-    )
+    user_id = schedule.user_id
+    run_at = schedule.execute_at - 1.second
+
+    # Only enqueue if no JilRunnerWorker is already queued/scheduled for this user
+    unless runner_pending?(user_id, run_at)
+      schedule.update!(
+        jid: ::JilRunnerWorker.perform_at(run_at, user_id),
+      )
+    end
+  end
+
+  def runner_pending?(user_id, run_at)
+    # Check if already running
+    return true if ::User.advisory_lock_exists?("jil_runner_#{user_id}")
+
+    # Check Sidekiq scheduled set for a JilRunnerWorker within range
+    ::Sidekiq::ScheduledSet.new.any? { |j|
+      j.klass == ::JilRunnerWorker.name &&
+        j.args == [user_id] &&
+        similar_time?(j.at, run_at)
+    }
   end
 
   def existing_job(jid)

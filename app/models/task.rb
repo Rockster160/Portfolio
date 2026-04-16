@@ -116,7 +116,7 @@ class Task < ApplicationRecord
       raise "DANGEROUS! DO NOT EXECUTE IN PROD! Pass `SKIP_PROD=true` to bypass"
     end
 
-    json = ::FileStorage.download(key, bucket: bucket)
+    json = ::FileStorage.mode(:s3) { ::FileStorage.download(key, bucket: bucket) }
     data = JSON.parse(json)
 
     # Support legacy exports that are just an array of tasks
