@@ -1,20 +1,27 @@
-import { Time } from "./_time"
-import { Text } from "../_text"
-import { dash_colors } from "../vars"
+import { Time } from "./_time";
+import { Text } from "../_text";
+import { dash_colors } from "../vars";
 
-(function() {
-  let cell = undefined
+(function () {
+  let cell = undefined;
 
   function dateLine(date) {
-    return Text.center(` ${date.toDateString().replace(" 0", " ").replace(/ \d{4}/, "")} `, null, "-")
+    return Text.center(
+      ` ${date
+        .toDateString()
+        .replace(" 0", " ")
+        .replace(/ \d{4}/, "")} `,
+      null,
+      "-",
+    );
   }
 
   function timeFromDate(date) {
-    let hours = date.getHours()
-    const minutes = String(date.getMinutes()).padStart(2, "0")
-    const period = hours >= 12 ? "pm" : "am"
-    hours = (hours % 12) || 12
-    return `${hours}:${minutes}${period}`
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const period = hours >= 12 ? "pm" : "am";
+    hours = hours % 12 || 12;
+    return `${hours}:${minutes}${period}`;
   }
 
   const formatTime = (date, options) => {
@@ -22,65 +29,97 @@ import { dash_colors } from "../vars"
       hour: "numeric",
       minute: "numeric",
       hour12: true,
-      ...options
-    }).format(date).replace(" ", "").toLowerCase()
-  }
+      ...options,
+    })
+      .format(date)
+      .replace(" ", "")
+      .toLowerCase();
+  };
 
   function timezonesLine() {
-    const date = new Date()
+    const date = new Date();
 
     // const mdtTime = "M-" + formatTime(date, { timeZone: "America/Denver" })
-    const azTime = "A-" + formatTime(date, { timeZone: "US/Arizona" })
-    const utcTime = "UTC-" + formatTime(date, { timeZone: "UTC", hour12: false })
-    const iowaTime = "I-" + formatTime(date, { timeZone: "CST" })
+    const azTime = "A-" + formatTime(date, { timeZone: "US/Arizona" });
+    const utcTime =
+      "UTC-" + formatTime(date, { timeZone: "UTC", hour12: false });
+    const iowaTime = "I-" + formatTime(date, { timeZone: "CST" });
 
-    return Text.justify(azTime, utcTime, iowaTime)
+    return Text.justify(azTime, utcTime, iowaTime);
   }
 
   function renderLines() {
-    let lines = [timezonesLine()]
-    if (!cell.data.events) { return cell.lines(lines) }
+    let lines = [timezonesLine()];
+    if (!cell.data.events) {
+      return cell.lines(lines);
+    }
 
-    let lastDateLine = dateLine(new Date())
-    lines.push(lastDateLine)
-    cell.data.events.forEach(event => {
-      const { uid, name, unix, notes, location, calendar, start_time, end_time } = event
-      const time = new Date(start_time)
-      const eventDateLine = dateLine(time)
+    let lastDateLine = dateLine(new Date());
+    lines.push(lastDateLine);
+    cell.data.events.forEach((event) => {
+      const {
+        uid,
+        name,
+        unix,
+        notes,
+        location,
+        calendar,
+        start_time,
+        end_time,
+        all_day,
+      } = event;
+      const isAllDay = all_day === "true" || all_day === true;
+      const time = isAllDay
+        ? new Date(event.start_date || start_time)
+        : new Date(start_time);
+      const eventDateLine = dateLine(time);
 
       if (lastDateLine !== eventDateLine) {
-        lastDateLine = eventDateLine
-        lines.push("")
-        lines.push(lastDateLine)
+        lastDateLine = eventDateLine;
+        lines.push("");
+        lines.push(lastDateLine);
       }
 
-      let color = "lblue"
-      if (calendar == "rocco@oneclaimsolution.com") { color = "green" }
-      if (calendar == "Workout") { color = "orange" }
-      if (calendar == "Chelsea" || calendar == "Chelsea’s Calendar") { color = "chelsea" }
-      const nameLine = Text.color(dash_colors[color], `• ${name} `)
-
-      let timeStr = ""
-      timeStr = timeFromDate(time)
-      if (end_time) {
-        const endTime = new Date(end_time)
-        timeStr = `${timeStr}-${timeFromDate(endTime)}`
+      let color = "lblue";
+      if (calendar == "rocco@oneclaimsolution.com") {
+        color = "blue";
       }
-      timeStr = Text.yellow(timeStr)
-
-      lines.push(nameLine)
-      lines.push("    " + timeStr)
-      // lines.push(Text.justify(nameLine, timeStr))
-
-      if (location && !location.match(/zoom\.us|meet\.google|webinar/i)) {
-        lines.push("    " + Text.grey(location.replaceAll("\n", " ")))
+      if (calendar == "Workout") {
+        color = "orange";
       }
-    })
-    cell.lines(lines)
+      if (calendar == "Chelsea" || calendar == "Chelsea’s Calendar") {
+        color = "green";
+      }
+      if (calendar == "Our plans") {
+        color = "chelsea";
+      }
+
+      if (isAllDay) {
+        lines.push(Text.color(dash_colors["magenta"], `  ★ ${name}`));
+      } else {
+        const nameLine = Text.color(dash_colors[color], `• ${name} `);
+
+        let timeStr = timeFromDate(time);
+        if (end_time) {
+          const endTime = new Date(end_time);
+          timeStr = `${timeStr}-${timeFromDate(endTime)}`;
+        }
+        timeStr = Text.yellow(timeStr);
+
+        lines.push(nameLine);
+        lines.push("    " + timeStr);
+
+        if (location && !location.match(/zoom\.us|meet\.google|webinar/i)) {
+          lines.push("    " + Text.grey(location.replaceAll("\n", " ")));
+        }
+      }
+    });
+    cell.lines(lines);
   }
 
-  const ticker = () => setTimeout(() => ticker() && renderLines(), Time.msUntilNextMinute()+1)
-  ticker()
+  const ticker = () =>
+    setTimeout(() => ticker() && renderLines(), Time.msUntilNextMinute() + 1);
+  ticker();
 
   cell = Cell.register({
     title: "Calendar",
@@ -88,25 +127,25 @@ import { dash_colors } from "../vars"
     data: { events: [] },
     wrap: true,
     flash: false,
-    onload: function() {
+    onload: function () {
       cell.monitor = Monitor.subscribe("calendar", {
-        connected: function() {
-          cell.monitor?.resync()
+        connected: function () {
+          cell.monitor?.resync();
         },
-        disconnected: function() {},
-        received: function(json) {
+        disconnected: function () {},
+        received: function (json) {
           if (json.data.events) {
-            cell.flash()
-            cell.data.events = json.data.events
-            renderLines()
+            cell.flash();
+            cell.data.events = json.data.events;
+            renderLines();
           } else {
-            console.log("Unknown data for Monitor.events:", json)
+            console.log("Unknown data for Monitor.events:", json);
           }
         },
-      })
+      });
     },
-  })
-})()
+  });
+})();
 
 // CALENDAR_COLORS = {
 //   grey:     "#42464A",

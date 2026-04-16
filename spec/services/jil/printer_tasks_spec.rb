@@ -213,6 +213,7 @@ RSpec.describe "Printer Tasks", type: :request do
         print_name = pd.get("print_name")::String
         est_sec = pd.get("est_sec")::Numeric
         elapsed = pd.get("elapsed_sec")::Numeric
+        fil_len = pd.get("filament_length")::Numeric
         current = Global.get_cache("printer", "current")::Hash
         start_event_id = current.get("event_id")::Numeric
         start_time = current.get("start_time")::Date
@@ -226,6 +227,7 @@ RSpec.describe "Printer Tasks", type: :request do
             c5 = Keyval.new("estimated_seconds", est_sec)::Keyval
             c6 = Keyval.new("start_event_id", start_event_id)::Keyval
             c7 = Keyval.new("actual_duration", actual_duration)::Keyval
+            c7b = Keyval.new("filament_length", fil_len)::Keyval
           })::ActionEventData
         })::ActionEvent
         finish_id = event.id()::Numeric
@@ -236,6 +238,7 @@ RSpec.describe "Printer Tasks", type: :request do
         cc = current.set!("elapsed_sec", elapsed)::Hash
         cd = current.set!("remaining_sec", 0)::Hash
         ce = current.set!("last_updated", actual_dur)::Hash
+        cfl = current.set!("filament_length", fil_len)::Hash
         cf = Global.set_cache("printer", "current", current)::Any
         cg = Monitor.refresh("printer", "")::Hash
       JIL
@@ -608,6 +611,7 @@ RSpec.describe "Printer Tasks", type: :request do
       event = user.action_events.order(:id).last
       expect(event.name).to eq("PrintFinish")
       expect(event.data["actual_duration"]).to be_within(5).of(20 * 60)
+      expect(event.data["filament_length"]).to eq(954.19)
 
       user.caches.by(:printer).reload
       cache = user.caches.by(:printer).data
@@ -615,6 +619,7 @@ RSpec.describe "Printer Tasks", type: :request do
       expect(current["status"]).to eq("complete")
       expect(current["finish_event_id"]).to eq(event.id)
       expect(current["actual_duration"]).to be_present
+      expect(current["filament_length"]).to eq(954.19)
     end
   end
 
