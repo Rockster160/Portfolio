@@ -1,5 +1,37 @@
 var heldListItem, heldListItemTimer, clearListItemTimer, clearListActive;
 
+function isUrl(str) {
+  return /^https?:\/\/\S+$/.test(str.trim());
+}
+
+function markdownLinkPaste(evt) {
+  var input = evt.target;
+  var pasted = (evt.clipboardData || evt.originalEvent.clipboardData).getData("text");
+  if (!pasted) return;
+
+  var start = input.selectionStart;
+  var end = input.selectionEnd;
+  var selected = input.value.substring(start, end);
+
+  if (!selected || start === end) return;
+
+  var result;
+  if (isUrl(pasted.trim()) && !isUrl(selected)) {
+    // Highlighted text + pasted URL → [text](url)
+    result = "[" + selected + "](" + pasted.trim() + ")";
+  } else if (isUrl(selected) && !isUrl(pasted.trim())) {
+    // Highlighted URL + pasted text → [text](url)
+    result = "[" + pasted.trim() + "](" + selected + ")";
+  } else {
+    return;
+  }
+
+  evt.preventDefault();
+  input.value = input.value.substring(0, start) + result + input.value.substring(end);
+  var cursor = start + result.length;
+  input.setSelectionRange(cursor, cursor);
+}
+
 function parseParams(str) {
   var pieces = str.split("&"),
     data = {},
@@ -740,6 +772,9 @@ $(document).ready(function () {
     });
 
   $(document)
+    .on("paste", ".list-item-field, .new-list-item", function (evt) {
+      markdownLinkPaste(evt.originalEvent || evt);
+    })
     .on("keyup", ".list-item-field, .list-item-category-field", function (evt) {
       if (evt.which == keyEvent("ENTER")) {
         $(this).blur();
