@@ -498,6 +498,86 @@ RSpec.describe Jarvis do
     end
   end
 
+  context "with trigger via scheduled command" do
+    it "trigger works directly" do
+      expect(jarvis("trigger whisper-quiet")).to eq("Triggered whisper-quiet")
+    end
+
+    it "trigger works through the executor :command fallback" do
+      broadcasts = []
+      allow(JarvisChannel).to receive(:broadcast_to) { |_user, data| broadcasts << data }
+
+      schedule = @admin.scheduled_triggers.create!(
+        trigger: :command,
+        execute_at: Time.current,
+        data: { words: "trigger whisper-quiet" },
+      )
+
+      ::Jil.trigger_now(
+        schedule.user, schedule.trigger,
+        { timestamp: schedule.execute_at }.merge(schedule.data)
+      )
+
+      jarvis_response = broadcasts.find { |b| b[:say].present? }
+      expect(jarvis_response).to be_present, "Expected a Jarvis broadcast but got: #{broadcasts.inspect}"
+      expect(jarvis_response[:say]).to eq("Triggered whisper-quiet")
+    end
+
+    it "full roundtrip: schedule then execute via JilRunnerWorker path" do
+      broadcasts = []
+      allow(JarvisChannel).to receive(:broadcast_to) { |_user, data| broadcasts << data }
+
+      # Step 1: User says "trigger whisper-quiet in 5 minutes" — creates schedule
+      jarvis("trigger whisper-quiet in 5 minutes")
+      schedule = @admin.scheduled_triggers.not_started.order(:id).last
+      expect(schedule).to be_present
+      expect(schedule.trigger).to eq("command")
+      expect(schedule.data).to eq({ "words" => "trigger whisper-quiet" })
+
+      # Step 2: Simulate JilRunnerWorker executing the schedule
+      broadcasts.clear
+      schedule.started!
+      ::Jil.trigger_now(
+        schedule.user, schedule.trigger,
+        { timestamp: schedule.execute_at }.merge(schedule.data)
+      )
+      schedule.completed!
+
+      jarvis_response = broadcasts.find { |b| b[:say].present? }
+      expect(jarvis_response).to be_present, "Expected a Jarvis broadcast but got: #{broadcasts.inspect}"
+      expect(jarvis_response[:say]).to eq("Triggered whisper-quiet")
+    end
+
+    it "roundtrip at realistic time with real user data" do
+      # Use current time (no Timecop freeze) to match production conditions
+      Timecop.return
+
+      broadcasts = []
+      allow(JarvisChannel).to receive(:broadcast_to) { |_user, data| broadcasts << data }
+
+      # Schedule like ScheduleParser does
+      schedule = @admin.scheduled_triggers.create!(
+        trigger: :command,
+        execute_at: Time.current,
+        data: { words: "trigger whisper-quiet" },
+      )
+
+      # Execute like JilRunnerWorker does
+      schedule.started!
+      ::Jil.trigger_now(
+        schedule.user, schedule.trigger,
+        { timestamp: schedule.execute_at }.merge(schedule.data)
+      )
+      schedule.completed!
+
+      jarvis_response = broadcasts.find { |b| b[:say].present? }
+      expect(jarvis_response).to be_present
+      expect(jarvis_response[:say]).to eq("Triggered whisper-quiet")
+    ensure
+      Timecop.freeze(Time.zone.local(2022, 6, 24, 5, 45))
+    end
+  end
+
   context "with scheduling" do
     # now Time.local(2022, 6, 24, 5, 45)
     it "can schedule a job for later" do
