@@ -22,8 +22,8 @@ module Jil::Schedule
   end
 
   def broadcast(schedule, action)
-    # Do not broadcast immediate triggers since many times it's just used as a function call
-    return schedule if immediate?(schedule)
+    # Do not broadcast creation of immediate triggers since they're just function calls
+    return schedule if immediate?(schedule) && action.to_sym == :created
 
     ::Jil.trigger_now(schedule.user, :schedule, { schedule_id: schedule.id, action: action })
     schedule
