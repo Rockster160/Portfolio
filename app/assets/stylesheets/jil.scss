@@ -760,11 +760,11 @@ input[type="submit"] {
       }
     }
 
-    &.flash .statement {
+    &.flash > .statement {
       transition: background-color 0s ease-in;
       background-color: var(--statement-flash);
     }
-    &.flash.fade-out .statement {
+    &.flash.fade-out > .statement {
       transition: background-color 0.3s ease-out;
       background-color: initial;
     }
