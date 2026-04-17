@@ -134,8 +134,8 @@ let contrastText = function (hex, text) {
     }
 
     // Line 6: elapsed / estimated
-    let elapsed = data.elapsed_sec || 0;
-    let estimated = data.est_sec || 0;
+    let elapsed = Number(data.elapsed_sec) || 0;
+    let estimated = Number(data.est_sec) || 0;
     lines.push(
       Text.center(
         timestampToDuration(elapsed) + " / " + timestampToDuration(estimated),
@@ -187,7 +187,7 @@ let contrastText = function (hex, text) {
             cell.data.monitor_data = msg.data;
             // Record sync baseline so the timer can extrapolate
             cell.data.sync_at = Date.now();
-            cell.data.sync_elapsed = msg.data.elapsed_sec || 0;
+            cell.data.sync_elapsed = Number(msg.data.elapsed_sec) || 0;
           }
 
           let status = (cell.data.monitor_data || {}).status;
