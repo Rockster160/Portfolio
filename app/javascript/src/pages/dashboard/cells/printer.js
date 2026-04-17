@@ -103,8 +103,12 @@ import { dash_colors, clamp } from "../vars";
       return;
     }
 
-    // Line 3: Print name
-    lines.push(Text.center(data.print_name || "[Unknown]"));
+    // Line 3: Print name with filament color swatch
+    let printLabel = data.print_name || "[Unknown]";
+    if (data.filament_color) {
+      printLabel = `[color ${data.filament_color}]■[/color] ${printLabel}`;
+    }
+    lines.push(Text.center(printLabel));
     // Line 4: Progress bar
     lines.push(Text.progressBar(data.progress || 0));
 
@@ -179,8 +183,12 @@ import { dash_colors, clamp } from "../vars";
             if (!cell.data.interval_timer) {
               cell.data.interval_timer = setInterval(function () {
                 let d = cell.data.monitor_data;
-                if (!d) { return; }
-                let secsSinceSync = Math.floor((Date.now() - cell.data.sync_at) / 1000);
+                if (!d) {
+                  return;
+                }
+                let secsSinceSync = Math.floor(
+                  (Date.now() - cell.data.sync_at) / 1000,
+                );
                 d.elapsed_sec = cell.data.sync_elapsed + secsSinceSync;
                 d.remaining_sec = Math.max((d.est_sec || 0) - d.elapsed_sec, 0);
                 d.progress =

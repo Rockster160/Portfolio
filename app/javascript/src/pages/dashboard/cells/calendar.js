@@ -54,7 +54,8 @@ import { dash_colors } from "../vars";
       return cell.lines(lines);
     }
 
-    let lastDateLine = dateLine(new Date());
+    const now = new Date();
+    let lastDateLine = dateLine(now);
     lines.push(lastDateLine);
     cell.data.events.forEach((event) => {
       const {
@@ -72,6 +73,10 @@ import { dash_colors } from "../vars";
       const time = isAllDay
         ? new Date(event.start_date || start_time)
         : new Date(start_time);
+
+      // Skip past events (re-evaluated each minute by ticker)
+      const endRef = end_time ? new Date(end_time) : time;
+      if (!isAllDay && endRef < now) { return; }
       const eventDateLine = dateLine(time);
 
       if (lastDateLine !== eventDateLine) {

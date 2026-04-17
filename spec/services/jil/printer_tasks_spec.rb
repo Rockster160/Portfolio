@@ -162,7 +162,9 @@ RSpec.describe "Printer Tasks", type: :request do
         fil_length = s_data.get("filament_length")::Numeric
         a1 = s_data.set!("filament_name", new_fil)::Hash
         a2 = ActionEvent.update!(start_evt, {
-          a3 = ActionEventData.data(s_data)::ActionEventData
+          a3 = ActionEventData.data({
+            a3r = Global.ref(s_data)::Hash
+          })::ActionEventData
         })::ActionEvent
         fin_search = ActionEvent.search("name::PrintFinish", 50, "DESC")::Array
         fin_evt = fin_search.find({
@@ -194,7 +196,9 @@ RSpec.describe "Printer Tasks", type: :request do
           c3 = Custom.AdjustFilament(new_fil, neg_len)::Hash
           c4 = comp_data.set!("filament_name", new_fil)::Hash
           c5 = ActionEvent.update!(comp_evt, {
-            c6 = ActionEventData.data(comp_data)::ActionEventData
+            c6 = ActionEventData.data({
+              c6r = Global.ref(comp_data)::Hash
+            })::ActionEventData
           })::ActionEvent
         }, {
           cur = Global.get_cache("printer", "current")::Hash
@@ -222,6 +226,9 @@ RSpec.describe "Printer Tasks", type: :request do
         octo_est = pd.get("octo_est_sec")::Numeric
         fil_len = pd.get("filament_length")::Numeric
         act_fil = Global.get_cache("printer", "active_filament")::String
+        all_fils = Global.get_cache("printer", "filaments")::Hash
+        act_data = all_fils.get(act_fil)::Hash
+        act_color = act_data.get("color")::String
         event = ActionEvent.create({
           a1 = ActionEventData.name("PrintStart")::ActionEventData
           a2 = ActionEventData.notes(print_name)::ActionEventData
@@ -249,6 +256,7 @@ RSpec.describe "Printer Tasks", type: :request do
           ah = Keyval.new("remaining_sec", est_sec)::Keyval
           ai = Keyval.new("last_updated", evtStart)::Keyval
           af2 = Keyval.new("filament_name", act_fil)::Keyval
+          af3 = Keyval.new("filament_color", act_color)::Keyval
         })::Hash
         aj = Global.set_cache("printer", "current", cache_data)::Any
         ak = Monitor.refresh("printer", "")::Hash
@@ -936,8 +944,11 @@ RSpec.describe "Printer Tasks", type: :request do
   describe "Print Started with filament tracking" do
     before { started_task }
 
-    it "stores active filament on event and cache" do
-      user.caches.by(:printer).update!(data: { active_filament: "Red PLA" })
+    it "stores active filament name and color on event and cache" do
+      user.caches.by(:printer).update!(data: {
+        active_filament: "Red PLA",
+        filaments: { "Red PLA": { color: "#CC0000", remaining_mm: 335_000, remaining_g: 1000.0 } },
+      })
 
       trigger_printer(started_payload)
 
@@ -947,6 +958,7 @@ RSpec.describe "Printer Tasks", type: :request do
       cache = user.caches.by(:printer)
       cache.reload
       expect(cache.dig("current", "filament_name")).to eq("Red PLA")
+      expect(cache.dig("current", "filament_color")).to eq("#CC0000")
     end
   end
 
