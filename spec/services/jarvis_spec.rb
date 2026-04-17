@@ -411,6 +411,49 @@ RSpec.describe Jarvis do
       expect($ping_calls.last[0]).to be_a(User)
       expect($ping_calls.last[1][:title]).to be_nil
     end
+
+    it "does not trigger List when quoted content contains list keywords" do
+      @admin.lists.find_or_create_by(name: "Shopping")
+      result = jarvis('Ping me "add fries to shopping"')
+      expect(result).to eq("Sending you a ping saying: Add fries to shopping")
+      expect($ping_calls.last[1][:title]).to eq("Add fries to shopping")
+    end
+
+    it "does not trigger List when round/curly quotes are used" do
+      @admin.lists.find_or_create_by(name: "Shopping")
+      result = jarvis("Ping me \u201Cadd fries to shopping\u201D")
+      expect(result).to eq("Sending you a ping saying: Add fries to shopping")
+      expect($ping_calls.last[1][:title]).to eq("Add fries to shopping")
+    end
+
+    it "preserves lone double quotes in measurements" do
+      result = jarvis('Ping me Baby Gate 3\'4 ⅞"')
+      expect(result).to eq("Sending you a ping saying: Baby Gate 3'4 ⅞\"")
+      expect($ping_calls.last[1][:title]).to eq("Baby Gate 3'4 ⅞\"")
+    end
+
+    it "preserves multiple measurement quotes" do
+      result = jarvis('Ping me cut board 11" x 12 1/4"')
+      expect(result).to eq('Sending you a ping saying: Cut board 11" x 12 1/4"')
+      expect($ping_calls.last[1][:title]).to eq('Cut board 11" x 12 1/4"')
+    end
+
+    it "unwraps quotes but preserves inner measurement quotes" do
+      result = jarvis('Ping me "Not done: Baby Gate 3\'4 ⅞"')
+      expect(result).to eq("Sending you a ping saying: Not done: Baby Gate 3'4 ⅞")
+      expect($ping_calls.last[1][:title]).to eq("Not done: Baby Gate 3'4 ⅞")
+    end
+
+    it "schedules a ping with quoted content for later without triggering List" do
+      @admin.lists.find_or_create_by(name: "Shopping")
+      expect(::Jil::Schedule).to receive(:add_schedule).with(
+        @admin.id,
+        Time.zone.local(2022, 6, 24, 16, 30),
+        :command,
+        { words: 'ping me "add fries to shopping"' },
+      )
+      jarvis('ping me "add fries to shopping" at 4:30')
+    end
   end
 
   context "with printer" do
@@ -599,6 +642,16 @@ RSpec.describe Jarvis do
         { words: "Text me to do the laundry" },
       )
       expect(jarvis("Text me in 5 minutes to do the laundry")).to eq("I'll text you to do the laundry today at 5:50am")
+    end
+
+    it "can schedule a ping with unquoted content" do
+      expect(::Jil::Schedule).to receive(:add_schedule).with(
+        @admin.id,
+        Time.zone.local(2022, 6, 24, 16, 30),
+        :command,
+        { words: "ping me grab headphones" },
+      )
+      expect(jarvis("ping me grab headphones at 4:30")).to eq("I'll ping you grab headphones today at 4:30pm")
     end
 
     # Timestamps are defined as [year, month, day, hour, minute] arrays

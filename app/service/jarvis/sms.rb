@@ -29,7 +29,7 @@ class Jarvis::Sms < Jarvis::Action
 
   def parse_text_words
     @args = @msg.gsub(/#{pre_words}* ?#{sms_words} ?#{post_words}*/i, "")
-    @args = @args.squish.presence&.tap { |words| words[0] = words[0]&.upcase }
+    @args = @args.squish.sub(/\A["\u201C\u201D](.*)["\u201C\u201D]\z/m, '\1').presence&.tap { |words| words[0] = words[0]&.upcase }
     @parse_text_words ||= "You asked me to text you, sir."
   end
 

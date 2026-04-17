@@ -18,7 +18,12 @@ module Jarvis::Regex
   def match_any_words?(str, *words)
     return false if words.flatten.none?
 
-    str.match?(words(words))
+    # Strip quoted sections so quoted content doesn't trigger action matching.
+    # Only treats quotes as wrapping when the opening quote follows whitespace
+    # (not mid-word like 11"), and matches greedily to the FINAL closing quote.
+    # Supports straight quotes ("...") and round/curly quotes (\u201C...\u201D)
+    unquoted = str.gsub(/(?<!\S)["\u201C\u201D].*["\u201C\u201D]/m, " ")
+    unquoted.match?(words(words))
   end
 
   def uuid?(str)

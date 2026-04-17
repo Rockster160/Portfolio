@@ -266,5 +266,109 @@ RSpec.describe Task do
       expect(matched).to be true
       expect(captures[:direction]).to eq("Open")
     end
+
+    context "travel command regex" do
+      let(:travel_listener) { 'tell:OR(/^(?<preamble>.+?) (?:when|after|once|(?:the )?next time) (?:I )?(?<direction>get|go|arrive|leave|depart|come|head)(?: (?:to|at))? (?<destination>(?!back\b)\S+?)(?:\'s)? to (?<suffix>.+)$/ /^(?<command>.+?) (?:when|after|once|(?:the )?next time) (?:I )?(?<direction>get|go|arrive|leave|depart|come|head)(?: (?:to|at))? (?<destination>.+?)(?:\'s)?$/)' }
+
+      it "parses 'remind me to clean the house when I get home'" do
+        matched, captures = match_with_captures(travel_listener, :tell, "remind me to clean the house when I get home")
+        expect(matched).to be true
+        expect(captures[:command]).to eq("remind me to clean the house")
+        expect(captures[:direction]).to eq("get")
+        expect(captures[:destination]).to eq("home")
+      end
+
+      it "parses 'remind me when I get to Doug's to grab the Dehydrator'" do
+        matched, captures = match_with_captures(travel_listener, :tell, "remind me when I get to Doug's to grab the Dehydrator")
+        expect(matched).to be true
+        expect(captures[:preamble]).to eq("remind me")
+        expect(captures[:direction]).to eq("get")
+        expect(captures[:destination]).to eq("Doug")
+        expect(captures[:suffix]).to eq("grab the Dehydrator")
+      end
+
+      it "parses 'remind me to record climbs when I get to Momentum'" do
+        matched, captures = match_with_captures(travel_listener, :tell, "remind me to record climbs when I get to Momentum")
+        expect(matched).to be true
+        expect(captures[:command]).to eq("remind me to record climbs")
+        expect(captures[:direction]).to eq("get")
+        expect(captures[:destination]).to eq("Momentum")
+      end
+
+      it "parses 'ping me not done when I arrive home'" do
+        matched, captures = match_with_captures(travel_listener, :tell, "ping me not done when I arrive home")
+        expect(matched).to be true
+        expect(captures[:command]).to eq("ping me not done")
+        expect(captures[:direction]).to eq("arrive")
+        expect(captures[:destination]).to eq("home")
+      end
+
+      it "parses 'add dehydrator to list when I get to Doug's'" do
+        matched, captures = match_with_captures(travel_listener, :tell, "add dehydrator to list when I get to Doug's")
+        expect(matched).to be true
+        expect(captures[:command]).to eq("add dehydrator to list")
+        expect(captures[:direction]).to eq("get")
+        expect(captures[:destination]).to eq("Doug")
+      end
+
+      it "parses 'remind me to X next time I go to the store'" do
+        matched, captures = match_with_captures(travel_listener, :tell, "remind me to X next time I go to the store")
+        expect(matched).to be true
+        expect(captures[:command]).to eq("remind me to X")
+        expect(captures[:direction]).to eq("go")
+        expect(captures[:destination]).to eq("the store")
+      end
+
+      it "parses departure commands with 'leave'" do
+        matched, captures = match_with_captures(travel_listener, :tell, "close the garage when I leave home")
+        expect(matched).to be true
+        expect(captures[:command]).to eq("close the garage")
+        expect(captures[:direction]).to eq("leave")
+        expect(captures[:destination]).to eq("home")
+      end
+
+      it "parses departure commands with 'depart'" do
+        matched, captures = match_with_captures(travel_listener, :tell, "ping me when I depart work")
+        expect(matched).to be true
+        expect(captures[:command]).to eq("ping me")
+        expect(captures[:direction]).to eq("depart")
+        expect(captures[:destination]).to eq("work")
+      end
+
+      it "parses 'get back' as destination 'back'" do
+        matched, captures = match_with_captures(travel_listener, :tell, "remind me to check mail when I get back")
+        expect(matched).to be true
+        expect(captures[:command]).to eq("remind me to check mail")
+        expect(captures[:direction]).to eq("get")
+        expect(captures[:destination]).to eq("back")
+      end
+
+      it "parses 'get back to' with a destination (raw capture includes 'back to')" do
+        matched, captures = match_with_captures(travel_listener, :tell, "remind me to call mom when I get back to the office")
+        expect(matched).to be true
+        expect(captures[:command]).to eq("remind me to call mom")
+        expect(captures[:direction]).to eq("get")
+        # Raw capture includes "back to" — Jil code strips "back to " prefix
+        expect(captures[:destination]).to eq("back to the office")
+      end
+
+      it "parses 'after I arrive at' commands" do
+        matched, captures = match_with_captures(travel_listener, :tell, "start workout after I arrive at Momentum")
+        expect(matched).to be true
+        expect(captures[:command]).to eq("start workout")
+        expect(captures[:direction]).to eq("arrive")
+        expect(captures[:destination]).to eq("Momentum")
+      end
+
+      it "does not match normal commands without a travel phrase" do
+        matched, _captures = match_with_captures(travel_listener, :tell, "remind me to get milk")
+        expect(matched).to be false
+      end
+
+      it "does not match without a destination" do
+        matched, _captures = match_with_captures(travel_listener, :tell, "remind me when I arrive")
+        expect(matched).to be false
+      end
+    end
   end
 end
