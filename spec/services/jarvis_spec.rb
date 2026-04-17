@@ -508,9 +508,9 @@ RSpec.describe Jarvis do
       allow(JarvisChannel).to receive(:broadcast_to) { |_user, data| broadcasts << data }
 
       schedule = @admin.scheduled_triggers.create!(
-        trigger: :command,
+        trigger:    :command,
         execute_at: Time.current,
-        data: { words: "trigger whisper-quiet" },
+        data:       { words: "trigger whisper-quiet" },
       )
 
       ::Jil.trigger_now(
@@ -557,9 +557,9 @@ RSpec.describe Jarvis do
 
       # Schedule like ScheduleParser does
       schedule = @admin.scheduled_triggers.create!(
-        trigger: :command,
+        trigger:    :command,
         execute_at: Time.current,
-        data: { words: "trigger whisper-quiet" },
+        data:       { words: "trigger whisper-quiet" },
       )
 
       # Execute like JilRunnerWorker does

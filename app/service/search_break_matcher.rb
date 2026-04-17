@@ -134,7 +134,7 @@ class SearchBreakMatcher
     when :not, :not_exact then lower_val != lower_drop
     when :regex
       rx = val.to_s[/^\s*\/(.*?)\/[img]*\s*$/, 1] || val.to_s
-      md = drop.to_s.match(Regexp.new(rx, Regexp::IGNORECASE | Regexp::MULTILINE))
+      md = drop.to_s.strip.match(Regexp.new(rx, Regexp::IGNORECASE | Regexp::MULTILINE))
       md.present? && @regex_match_data.tap {
         @regex_match_data[:match_list] += md.to_a
         @regex_match_data[:named_captures].reverse_merge!(md.named_captures.symbolize_keys)

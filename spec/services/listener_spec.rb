@@ -53,8 +53,8 @@ RSpec.describe Task do
         { user: admin, listener: "tell:/(?<direction>open|close|toggle)( (?:the|my))? garage/" },
         { user: admin, listener: "tell:/Set the house( to)? (?<temp>\\d+)( degrees?) ?(this|that|other) ?(this|matters)?.*?/" },
         { user: admin, listener: "tell:\"Do the things\"" },
-        { user: admin, listener: "tell:~/Checkup/" },
-        { user: admin, listener: "tell:ANY(~/Checkup/ ~/Result/)" },
+        { user: admin, listener: "tell:~/^Checkup$/" },
+        { user: admin, listener: "tell:ANY(~/^Checkup$/ ~/^Result$/)" },
         { user: admin, listener: "event:/food|drink|snack|treat|alcohol/ note:/(?<text>.*?)(((?<cals>\d+) ?cals?))?/" },
         { user: admin, listener: "event:note:/(?<text>.*?)(((?<cals>\d+) ?cals?))?/" },
         { user: admin, listener: "event:/food|drink|snack|treat|alcohol/" },
@@ -164,12 +164,12 @@ RSpec.describe Task do
       expect_trigger_listeners(admin, :tell, "Do the things twice", [
         "tell:\"Do the things\"",
       ])
-      expect_trigger_listeners(admin, :tell, "checkup", [
-        "tell:~/Checkup/",
-        "tell:ANY(~/Checkup/ ~/Result/)",
+      expect_trigger_listeners(admin, :tell, " checkup  ", [
+        "tell:~/^Checkup$/",
+        "tell:ANY(~/^Checkup$/ ~/^Result$/)",
       ])
       expect_trigger_listeners(admin, :tell, "result", [
-        "tell:ANY(~/Checkup/ ~/Result/)",
+        "tell:ANY(~/^Checkup$/ ~/^Result$/)",
       ])
     end
   end
@@ -193,9 +193,9 @@ RSpec.describe Task do
     let(:trigger) { "hass-button" }
     let(:trigger_data) {
       {
-        button_id: "8f78df4c09395edf6060cae7c22df356",
-        type: "button1_long_press",
-        entity_id: "sensor.shortcut_button_1",
+        button_id:   "8f78df4c09395edf6060cae7c22df356",
+        type:        "button1_long_press",
+        entity_id:   "sensor.shortcut_button_1",
         device_name: "Action Button 1",
       }
     }
@@ -217,21 +217,54 @@ RSpec.describe Task do
     end
 
     it "matches all applicable listeners for button 1" do
-      expect(matching_listeners(trigger, trigger_data)).to match_array([
-        "hass-button",
-        'hass-button:entity_id:"sensor.shortcut_button_1"',
-        "hass-button:type:long_press",
-      ])
+      expect(matching_listeners(trigger, trigger_data)).to contain_exactly("hass-button", 'hass-button:entity_id:"sensor.shortcut_button_1"', "hass-button:type:long_press")
     end
 
     it "only matches the bare listener for a different button" do
       other_data = trigger_data.merge(
         entity_id: "sensor.shortcut_button_2",
-        type: "button2_short_press",
+        type:      "button2_short_press",
       )
-      expect(matching_listeners(trigger, other_data)).to match_array([
-        "hass-button",
-      ])
+      expect(matching_listeners(trigger, other_data)).to contain_exactly("hass-button")
+    end
+  end
+
+  context "with regex named captures" do
+    let(:log_listener) { 'tell:/^log(?: log)?(?:\s+(?<title>\w+)(?:-)?)(?:\s+(?<notes>.*?))?(?:\s+\((?<calories>(\d+))\))?(?:\s+\{(?<data>.*?)\})?$/' }
+
+    def match_with_captures(listener, trigger, data)
+      serialized = TriggerData.serialize(TriggerData.parse(data, as: admin), use_global_id: false)
+      matcher = SearchBreakMatcher.new(listener, { trigger => serialized })
+      [matcher.match?, matcher.regex_match_data[:named_captures]]
+    end
+
+    it "captures notes from 'log drink Mtn dew'" do
+      matched, captures = match_with_captures(log_listener, :tell, "log drink Mtn dew")
+      expect(matched).to be true
+      expect(captures[:title]).to eq("drink")
+      expect(captures[:notes]).to eq("Mtn dew")
+    end
+
+    it "captures notes and calories from 'log drink Mtn dew (170)'" do
+      matched, captures = match_with_captures(log_listener, :tell, "log drink Mtn dew (170)")
+      expect(matched).to be true
+      expect(captures[:title]).to eq("drink")
+      expect(captures[:notes]).to eq("Mtn dew")
+      expect(captures[:calories]).to eq("170")
+    end
+
+    it "captures title only from 'log food'" do
+      matched, captures = match_with_captures(log_listener, :tell, "log food")
+      expect(matched).to be true
+      expect(captures[:title]).to eq("food")
+      expect(captures[:notes]).to be_blank
+    end
+
+    it "captures garage direction" do
+      listener = "tell:/(?<direction>open|close|toggle)( (?:the|my))? garage/"
+      matched, captures = match_with_captures(listener, :tell, "Open the garage")
+      expect(matched).to be true
+      expect(captures[:direction]).to eq("Open")
     end
   end
 end
