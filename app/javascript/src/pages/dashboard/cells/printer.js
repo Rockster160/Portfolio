@@ -2,6 +2,18 @@ import { Text } from "../_text";
 import { Time } from "./_time";
 import { dash_colors, clamp } from "../vars";
 
+let contrastText = function (hex, text) {
+  // Parse hex to RGB and compute relative luminance
+  let c = hex.replace("#", "");
+  if (c.length === 3) c = c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
+  let r = parseInt(c.substring(0, 2), 16) / 255;
+  let g = parseInt(c.substring(2, 4), 16) / 255;
+  let b = parseInt(c.substring(4, 6), 16) / 255;
+  let lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  let fg = lum > 0.5 ? "#000000" : "#FFFFFF";
+  return Text.bgColor(hex, Text.color(fg, ` ${text} `));
+};
+
 (function () {
   let cell = {};
   const CELL_LINES = 9;
@@ -103,10 +115,10 @@ import { dash_colors, clamp } from "../vars";
       return;
     }
 
-    // Line 3: Print name with filament color swatch
+    // Line 3: Print name with filament color background
     let printLabel = data.print_name || "[Unknown]";
     if (data.filament_color) {
-      printLabel = `[color ${data.filament_color}]■[/color] ${printLabel}`;
+      printLabel = contrastText(data.filament_color, printLabel);
     }
     lines.push(Text.center(printLabel));
     // Line 4: Progress bar
