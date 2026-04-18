@@ -2,6 +2,7 @@
 <%= meta_description "#{@task.name} - Dynamic Form" %>
 
 <%= form_tag jil_form_path(@task), method: :post, class: "basic" do %>
+  <%= hidden_field_tag :original_params, @extra_params.to_json %>
   <div class="skinny-container lists-index-container">
     <div class="lists-title instructions"><%= @title %></div>
 

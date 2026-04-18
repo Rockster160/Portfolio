@@ -9,16 +9,22 @@ class Jil::FormsController < ApplicationController
     result = (executor.ctx[:return_val] || {})
     result = result.with_indifferent_access if result.is_a?(Hash)
 
+    if result[:redirect].present?
+      return redirect_to result[:redirect], notice: result[:notice]
+    end
+
     @title = result[:title].presence || @task.name
     @content = result[:content]
     @options = Array.wrap(result[:options]).flatten.select { |q| q.is_a?(Hash) }
+    @extra_params = extra_params
   end
 
   def submit
+    original = JSON.parse(params[:original_params] || "{}") rescue {}
     input_data = {
       form: true,
       response: params[:response]&.permit!&.to_h || {},
-      params: extra_params,
+      params: original,
     }
 
     executor = Jil::Executor.call(current_user, @task.code, input_data)
@@ -32,6 +38,7 @@ class Jil::FormsController < ApplicationController
       @title = result[:title].presence || @task.name
       @content = result[:content]
       @options = Array.wrap(result[:options]).flatten.select { |q| q.is_a?(Hash) }
+      @extra_params = extra_params
       render :show
     end
   end

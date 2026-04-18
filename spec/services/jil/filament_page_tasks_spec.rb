@@ -10,7 +10,9 @@ RSpec.describe "Filament Page Tasks" do
       color = data.get("color")::String
       rem_g = data.get("remaining_g")::Numeric
       rem_g_r = rem_g.round(0)::Numeric
-      row = String.new("| [[#{color}]](#{name}) | #{rem_g_r}g | [btn /jil/f/FORM_ID?name=#{name}](Edit) |")::String
+      is_active = Boolean.compare(name, "==", active)::Boolean
+      use_btn = Global.ternary(is_active, "★", "[btn /jil/f/FORM_ID?name=#{name}&do=set](Use)")::String
+      row = String.new("| [[#{color}]](#{name}) | #{rem_g_r}g | #{use_btn} | [btn /jil/f/FORM_ID?name=#{name}](Edit) |")::String
     })::Array
     table_body = rows.join("\n")::String
     has_active = active.presence()::Boolean
@@ -24,7 +26,7 @@ RSpec.describe "Filament Page Tasks" do
     }, {
       h3 = String.new("")::String
     })::String
-    content = String.new("#{header}| Filament | Remaining | [btn /jil/f/FORM_ID?name=](Add New) |\n| --- | --- | --- |\n#{table_body}")::String
+    content = String.new("#{header}| Filament | Remaining | | [btn /jil/f/FORM_ID?name=](Add New) |\n| --- | --- | --- | --- |\n#{table_body}")::String
     result = Hash.new({
       r1 = Keyval.new("title", "Filaments")::Keyval
       r2 = Keyval.new("content", content)::Keyval
@@ -36,6 +38,26 @@ RSpec.describe "Filament Page Tasks" do
     input = Global.input_data()::Hash
     input_params = input.get("params")::Hash
     fil_name = input_params.get("name")::String
+    input_action = input_params.get("do")::String
+    is_set_action = input_action.match("/^set$/")::Boolean
+    y1 = Global.if({
+      y2 = Global.ref(is_set_action)::Boolean
+    }, {
+      y3 = Global.set_cache("printer", "active_filament", fil_name)::Any
+      set_fils = Global.get_cache("printer", "filaments")::Hash
+      set_data = set_fils.get(fil_name)::Hash
+      set_color = set_data.get("color")::String
+      set_cur = Global.get_cache("printer", "current")::Hash
+      y4 = set_cur.set!("filament_name", fil_name)::Hash
+      y5 = set_cur.set!("filament_color", set_color)::Hash
+      y6 = Global.set_cache("printer", "current", set_cur)::Any
+      y7 = Monitor.refresh("printer", "")::Hash
+      set_redir = Hash.new({
+        y8 = Keyval.new("redirect", "/jil/p/PAGE_ID")::Keyval
+        y9 = Keyval.new("notice", "Switched to #{fil_name}")::Keyval
+      })::Hash
+      ya = Global.return(set_redir)::Hash
+    }, {})::Any
     response = input.get("response")::Hash
     has_response = response.presence()::Boolean
     z1 = Global.if({
@@ -202,6 +224,22 @@ RSpec.describe "Filament Page Tasks" do
 
       expect(result["title"]).to eq("Add Filament")
       expect(result["options"].first).to include("question" => "Name", "default" => "")
+    end
+
+    it "switches active filament via do=set" do
+      executor = Jil::Executor.call(user, form_code, {
+        params: { name: "Red PLA", do: "set" },
+      })
+      result = executor.ctx[:return_val]
+
+      expect(result["redirect"]).to be_present
+      expect(result["notice"]).to include("Red PLA")
+
+      cache = user.caches.by(:printer)
+      cache.reload
+      expect(cache.dig("active_filament")).to eq("Red PLA")
+      expect(cache.dig("current", "filament_name")).to eq("Red PLA")
+      expect(cache.dig("current", "filament_color")).to eq("#FF0000")
     end
 
     it "updates active_filament and current cache when renaming active filament" do
