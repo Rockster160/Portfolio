@@ -34,6 +34,7 @@ class Markdown
       /\[\[\s*([^\]]*?)\s*\]\]\((.*?)\)/             => color_wrapper,
       /\[\[\s*([^\]]*?)\s*\]\]/                      => color_wrapper,
       /!\[(.*?)\]\((.*?)\)/                          => wrap(nil, :img, src: '\2', alt: '\1'),
+      /\[btn (.*?)\]\((.*?)\)/                       => wrap('\2', :a, href: '\1', class: "btn"),
       /\[(.*?)\]\((.*?)\)/                           => wrap('\1', :a, href: '\2', target: :_blank),
       /\[(\w\s)*\]/                                  => internal_link_wrapper,
       /^(?: *\d+[.)-:]? +.*?(?:\n|\z)(?:[ \t]*[*-] .*?(?:\n|\z))*)+/m => ol_wrapper,
@@ -229,9 +230,16 @@ class Markdown
 
   def table_wrapper
     ->(match) {
-      rows = match[0].strip.split(/\s*\n\s*/).map { |row|
+      raw_rows = match[0].strip.split(/\s*\n\s*/)
+      has_header = raw_rows.length > 1 && raw_rows[1].match?(/^\s*\|[\s\-:|]+\|\s*$/)
+
+      rows = raw_rows.each_with_index.filter_map { |row, idx|
+        # Skip separator row
+        next if has_header && idx == 1
+
         row = row[/^\s*\|(.*?)\|\s*$/, 1] || row
-        cells = row.split(/\|/).map { |cell| wrap(cell.to_s.strip.html_safe, :td) }
+        cell_tag = has_header && idx == 0 ? :th : :td
+        cells = row.split(/\|/).map { |cell| wrap(cell.to_s.strip.html_safe, cell_tag) }
         wrap(cells, :tr)
       }
       wrap(rows, :table)

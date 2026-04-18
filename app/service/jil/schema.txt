@@ -206,6 +206,14 @@
   !.notes::String
   !.data::Hash
   !.destroy::Boolean
+[Section]
+  #find(String:List String:Section)
+  #create(String:List String:Name String:Color)
+  .id::Numeric
+  .name::String
+  .color::String
+  .update!(String?:Name String?:Color)::Boolean
+  .destroy::Boolean
 [ActionEvent]
   #find(String|Numeric)
   #search(Text "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array
@@ -246,6 +254,7 @@
   #date(String:"Question Text" BR "Default" Date?)
   #datetime(String:"Question Text" BR "Default" Date?)
   #time(String:"Question Text" BR "Default" Date?)
+  #color(String:"Question Text" BR "Default" String)
   #hidden(String:"Key" Any:"Value")
 [Task]
   #find(String|Numeric)

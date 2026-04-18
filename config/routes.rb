@@ -220,6 +220,9 @@ Rails.application.routes.draw do
     resources :user_cache, path: :cache
   end
   get "t/:id" => "jil/tasks#trigger"
+  get "jil/p/:id" => "jil/pages#show", as: :jil_page
+  get "jil/f/:id" => "jil/forms#show", as: :jil_form
+  post "jil/f/:id" => "jil/forms#submit"
   # Must be after `jil` namespace so it doesn't overwrite existing routes
   post "jil/:uuid" => "webhooks#execute_task"
   get "jil/:uuid" => "webhooks#execute_task"

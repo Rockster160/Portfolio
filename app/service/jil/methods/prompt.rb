@@ -157,6 +157,14 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     }
   end
 
+  def color(text, default)
+    {
+      type:     :color,
+      question: text,
+      default:  default.presence || "#000000",
+    }
+  end
+
   def hidden(key, value)
     {
       type:     :hidden,

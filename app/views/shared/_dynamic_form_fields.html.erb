@@ -1,0 +1,157 @@
+<%# Renders dynamic form fields from an options array (same format as Prompt#options) %>
+<%# Local vars: options (Array of Hashes), response (Hash, optional), field_prefix (String) %>
+<% options.presence&.each do |option| %>
+  <% option = option.deep_symbolize_keys %>
+  <% question = option[:question] %>
+  <% default = option[:default] %>
+
+  <% base_key = "#{field_prefix}[#{question}]" %>
+  <% unless option[:type].to_sym == :hidden %>
+    <% if question.split(" | ").length == 2 %>
+      <p class="centered-options">
+        <% left, right = question.split(" | ") %>
+        <span><%= left %></span>
+        <span>|</span>
+        <span><%= right %></span>
+      </p>
+    <% else %>
+      <p class="text-center"><%= question %></p>
+    <% end %>
+  <% end %>
+  <% case option[:type].to_sym %>
+  <% when :text %>
+    <%= text_field_tag base_key, response&.dig(question).presence || default, placeholder: default %>
+  <% when :scale %>
+    <%=
+      content_tag(
+        :input,
+        nil,
+        value: response&.dig(question).presence || default || -1,
+        type: :range,
+        name: base_key,
+        min: 0,
+        max: option[:max],
+        class: "list-item-range",
+      )
+    %>
+  <% when :checkbox %>
+    <div class="list-item-container">
+      <%= hidden_field_tag base_key, false %>
+      <%=
+        content_tag :input, "", {
+          type: :checkbox,
+          id: base_key,
+          name: base_key,
+          value: true,
+          class: "list-item-checkbox",
+          checked: response&.dig(question).then { |r| r.nil? ? default : r } == "true",
+        }
+      %>
+      <label for="<%= base_key %>" class="list-item">
+        <div class="checkbox-wrapper"></div>
+        <div class="item-name">
+          <%= question %>
+        </div>
+      </label>
+    </div>
+  <% when :choices %>
+    <% option[:choices].each_with_index do |option_text, idx| %>
+      <% base_params = "#{base_key}[]" %>
+      <% id = "#{base_params}#{idx}".gsub(/[^\w]/, "") %>
+      <div class="list-item-container">
+        <%=
+          content_tag :input, "", {
+            type: :checkbox,
+            id: id,
+            name: base_params,
+            value: option_text,
+            class: "list-item-checkbox",
+            checked: response&.dig(question)&.include?(option_text),
+          }
+        %>
+        <label for="<%= id %>" class="list-item">
+          <div class="checkbox-wrapper"></div>
+          <div class="item-name">
+            <%= option_text %>
+          </div>
+        </label>
+      </div>
+    <% end %>
+  <% when :date %>
+    <%=
+      content_tag(
+        :input,
+        nil,
+        value: response&.dig(question).presence || default,
+        type: :date,
+        name: base_key,
+        class: "prompt-date-input",
+      )
+    %>
+  <% when :datetime %>
+    <%=
+      content_tag(
+        :input,
+        nil,
+        value: response&.dig(question).presence || default,
+        type: "datetime-local",
+        name: base_key,
+        class: "prompt-datetime-input",
+      )
+    %>
+  <% when :time %>
+    <%=
+      content_tag(
+        :input,
+        nil,
+        value: response&.dig(question).presence || default,
+        type: :time,
+        name: base_key,
+        class: "prompt-time-input",
+      )
+    %>
+  <% when :color %>
+    <%=
+      content_tag(
+        :input,
+        nil,
+        value: response&.dig(question).presence || default || "#000000",
+        type: :color,
+        name: base_key,
+        class: "prompt-color-input",
+      )
+    %>
+  <% when :number %>
+    <%=
+      content_tag(
+        :input,
+        nil,
+        value: response&.dig(question).presence || default,
+        type: :number,
+        name: base_key,
+        min: option[:min],
+        max: option[:max],
+        step: option[:step],
+        class: "prompt-number-input",
+      )
+    %>
+  <% when :select %>
+    <%= select_tag base_key,
+      options_for_select(
+        option[:choices],
+        response&.dig(question).presence || default
+      ),
+      class: "prompt-select-input"
+    %>
+  <% when :textarea %>
+    <%= text_area_tag base_key,
+      response&.dig(question).presence || default,
+      placeholder: default,
+      class: "prompt-textarea-input"
+    %>
+  <% when :hidden %>
+    <%= hidden_field_tag base_key, default %>
+  <% else %>
+    Unknown: <%= option[:type] %> (<%= option %>)
+  <% end %>
+<% end %>

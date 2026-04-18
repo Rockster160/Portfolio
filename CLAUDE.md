@@ -96,6 +96,8 @@ Configured in `.rubocop.yml`:
 
 All Jil code MUST be validated with `Jil::Validator.validate!(code)` before being written to a prodExec script. Run the validator in specs or inline in the script itself. The validator catches: invalid casts, duplicate variables, undefined references, unknown classes, content-block/positional-arg mismatches (e.g. raw Keyval blocks as Prompt.create data), and bare variables where content blocks are expected.
 
+**Workflow:** FIRST validate the Jil code in a spec. THEN write the prodExec script containing the validated code. Do NOT write the script first and validate after — validation must pass before the script file is finalized.
+
 ## Environment
 
 Key env vars in `.env`: `PORTFOLIO_OPENAI_KEY`, `PORTFOLIO_TESLA_CLIENT_ID`, `PORTFOLIO_TWILIO_*`, `PORTFOLIO_S3_*`, `PORTFOLIO_SLACK_HOOK`

@@ -1,0 +1,32 @@
+<%= meta_title @title, include_name: false %>
+<%= meta_description "#{@task.name} - Dynamic Form" %>
+
+<%= form_tag jil_form_path(@task), method: :post, class: "basic" do %>
+  <div class="skinny-container lists-index-container">
+    <div class="lists-title instructions"><%= @title %></div>
+
+    <% if @content.present? %>
+      <div class="jil-page-content">
+        <%= Markdown.new(@content, user: current_user).to_html.html_safe %>
+      </div>
+    <% end %>
+
+    <% if @options.present? %>
+      <div class="list-items survey-questions">
+        <%= render "shared/dynamic_form_fields",
+          options: @options,
+          response: nil,
+          field_prefix: "response" %>
+      </div>
+    <% end %>
+  </div>
+
+  <% if @options.present? %>
+    <div class="skinny-container">
+      <div class="text-center">
+        <%= submit_tag "Submit", class: "btn wide" %>
+        <br><br><br>
+      </div>
+    </div>
+  <% end %>
+<% end %>

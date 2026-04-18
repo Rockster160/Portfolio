@@ -135,9 +135,9 @@ textarea {
     font-size: 18px;
 
     &[type="color"] {
-      height: 40px;
-      padding: 0;
-      width: 100px;
+      height: 44px;
+      padding: 4px;
+      cursor: pointer;
     }
   }
   &.invisi-field {
