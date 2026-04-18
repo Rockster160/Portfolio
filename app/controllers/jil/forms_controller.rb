@@ -22,9 +22,9 @@ class Jil::FormsController < ApplicationController
   def submit
     original = JSON.parse(params[:original_params] || "{}") rescue {}
     input_data = {
-      form: true,
-      response: params[:response]&.permit!&.to_h || {},
-      params: original,
+      form:     true,
+      response: params[:response]&.permit!.to_h,
+      params:   original,
     }
 
     executor = Jil::Executor.call(current_user, @task.code, input_data)

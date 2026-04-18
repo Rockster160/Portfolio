@@ -13,34 +13,34 @@ class Markdown
   def to_html
     @text = ::ERB::Util.html_escape(@text)
     replace(
-      /\r/                                           => "",
-      /```(?<language>\w*)\n?(?<content>.*?)\n?```/m => code_block_wrapper,
-      /^# (.*?)$/                                    => wrap('\1', :h1),
-      /^## (.*?)$/                                   => wrap('\1', :h2),
-      /^### (.*?)$/                                  => wrap('\1', :h3),
-      /^#### (.*?)$/                                 => wrap('\1', :h4),
-      /^##### (.*?)$/                                => wrap('\1', :h5),
-      /^###### (.*?)$/                               => wrap('\1', :h6),
-      /^: (.*?) :$/                                  => wrap(
+      /\r/                                                            => "",
+      /```(?<language>\w*)\n?(?<content>.*?)\n?```/m                  => code_block_wrapper,
+      /^# (.*?)$/                                                     => wrap('\1', :h1),
+      /^## (.*?)$/                                                    => wrap('\1', :h2),
+      /^### (.*?)$/                                                   => wrap('\1', :h3),
+      /^#### (.*?)$/                                                  => wrap('\1', :h4),
+      /^##### (.*?)$/                                                 => wrap('\1', :h5),
+      /^###### (.*?)$/                                                => wrap('\1', :h6),
+      /^: (.*?) :$/                                                   => wrap(
         '\1', :div,
         style: "text-align: center;"
       ),
-      /^\s*(-{3,}|={3,}|—{1,})\s*$/                  => tag.hr,
-      /`(.*?)`/                                      => wrap('\1', :code),
-      /\*\*(.+?)\*\*/                                => wrap('\1', :strong),
-      /\b\*(.*?)\*\b/                                => wrap('\1', :strong),
-      /\b_(.*?)_\b/                                  => wrap('\1', :em),
-      /~(.*?)~/                                      => wrap('\1', :del),
-      /\[\[\s*([^\]]*?)\s*\]\]\((.*?)\)/             => color_wrapper,
-      /\[\[\s*([^\]]*?)\s*\]\]/                      => color_wrapper,
-      /!\[(.*?)\]\((.*?)\)/                          => wrap(nil, :img, src: '\2', alt: '\1'),
-      /\[btn (.*?)\]\((.*?)\)/                       => wrap('\2', :a, href: '\1', class: "btn"),
-      /\[(.*?)\]\((.*?)\)/                           => wrap('\1', :a, href: '\2', target: :_blank),
-      /\[(\w\s)*\]/                                  => internal_link_wrapper,
+      /^\s*(-{3,}|={3,}|—{1,})\s*$/                                   => tag.hr,
+      /`(.*?)`/                                                       => wrap('\1', :code),
+      /\*\*(.+?)\*\*/                                                 => wrap('\1', :strong),
+      /\b\*(.*?)\*\b/                                                 => wrap('\1', :strong),
+      /\b_(.*?)_\b/                                                   => wrap('\1', :em),
+      /~(.*?)~/                                                       => wrap('\1', :del),
+      /\[\[\s*([^\]]*?)\s*\]\]\((.*?)\)/                              => color_wrapper,
+      /\[\[\s*([^\]]*?)\s*\]\]/                                       => color_wrapper,
+      /!\[(.*?)\]\((.*?)\)/                                           => wrap(nil, :img, src: '\2', alt: '\1'),
+      /\[btn (.*?)\]\((.*?)\)/                                        => wrap('\2', :a, href: '\1', class: "btn"),
+      /\[(.*?)\]\((.*?)\)/                                            => wrap('\1', :a, href: '\2', target: :_blank),
+      /\[(\w\s)*\]/                                                   => internal_link_wrapper,
       /^(?: *\d+[.)-:]? +.*?(?:\n|\z)(?:[ \t]*[*-] .*?(?:\n|\z))*)+/m => ol_wrapper,
-      /^( *[*-] (?:.*?(?:\n|\z)))+/m                   => ul_wrapper,
-      /^ *(\|([^\n]+?\|)+ *(\n|\z))+/m               => table_wrapper,
-      /\n{3,}/m                                      => ->(match) {
+      /^( *[*-] (?:.*?(?:\n|\z)))+/m                                  => ul_wrapper,
+      /^ *(\|([^\n]+?\|)+ *(\n|\z))+/m                                => table_wrapper,
+      /\n{3,}/m                                                       => ->(match) {
         "\n\n" + ("</br>" * (match[0].length - 2))
       },
     )
@@ -238,7 +238,7 @@ class Markdown
         next if has_header && idx == 1
 
         row = row[/^\s*\|(.*?)\|\s*$/, 1] || row
-        cell_tag = has_header && idx == 0 ? :th : :td
+        cell_tag = has_header && idx.zero? ? :th : :td
         cells = row.split(/\|/).map { |cell| wrap(cell.to_s.strip.html_safe, cell_tag) }
         wrap(cells, :tr)
       }
