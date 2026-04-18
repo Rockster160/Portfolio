@@ -163,7 +163,7 @@ let contrastText = function (hex, text) {
       }
     }
 
-    // Line 9 (last): timestamp — padLines fills any gap
+    // Line 9 (last): timestamp -  padLines fills any gap
     lines.push(timeagoLine());
 
     cell.lines(padLines(lines));

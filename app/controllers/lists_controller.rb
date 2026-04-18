@@ -177,6 +177,14 @@ class ListsController < ApplicationController
     @user_list = current_user.user_lists.find_by(list: @list)
 
     return if @list.present?
+
+    restricted_list = List.find_by(id: params[:id])
+    if restricted_list
+      @restricted_title = restricted_list.name
+      @restricted_description = restricted_list.description.presence || "Organize and track items in real time."
+      return render "application/restricted"
+    end
+
     return store_and_login if guest_account?
 
     redirect_to lists_path, alert: "You do not have permission to view this list."

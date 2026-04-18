@@ -570,7 +570,7 @@ RSpec.describe Jarvis do
       broadcasts = []
       allow(JarvisChannel).to receive(:broadcast_to) { |_user, data| broadcasts << data }
 
-      # Step 1: User says "trigger whisper-quiet in 5 minutes" — creates schedule
+      # Step 1: User says "trigger whisper-quiet in 5 minutes" -  creates schedule
       jarvis("trigger whisper-quiet in 5 minutes")
       schedule = @admin.scheduled_triggers.not_started.order(:id).last
       expect(schedule).to be_present

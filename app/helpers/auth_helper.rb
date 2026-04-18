@@ -127,7 +127,7 @@ module AuthHelper
     # Just made this work for whatever prefix
     type, auth_string = raw_auth.split(" ", 2)
 
-    # Try API key first — Base64-decoding hex keys can produce false
+    # Try API key first -  Base64-decoding hex keys can produce false
     # colons, causing them to be misidentified as basic auth
     api_user = ApiKey.find_by(key: auth_string)&.tap { |key|
       @auth_type = :api_key

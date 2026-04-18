@@ -1,10 +1,15 @@
 <!DOCTYPE html>
 <html style="height: 100%;" class="html-ctr-<%= controller_name %> html-act-<%= action_name %> <%= 'dark-mode' if !@skip_dark_mode && current_user.try(:dark_mode?) %>">
 <head>
-  <title><%= content_for(:title) || "JARVIS" %></title>
-  <%= action_cable_meta_tag %>
+  <% page_title = content_for(:title) || "JARVIS" %>
   <% description = content_for(:description) || "Jarvis actions" %>
+  <title><%= page_title %></title>
+  <%= action_cable_meta_tag %>
   <meta name="description" content="<%= description %>">
+  <meta property="og:title" content="<%= page_title %>">
+  <meta property="og:description" content="<%= description %>">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="<%= request.original_url %>">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <%= yield :meta %>
   <%= yield :head_before_scripts %>

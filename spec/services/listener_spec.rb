@@ -348,7 +348,7 @@ RSpec.describe Task do
         expect(matched).to be true
         expect(captures[:command]).to eq("remind me to call mom")
         expect(captures[:direction]).to eq("get")
-        # Raw capture includes "back to" — Jil code strips "back to " prefix
+        # Raw capture includes "back to" -  Jil code strips "back to " prefix
         expect(captures[:destination]).to eq("back to the office")
       end
 

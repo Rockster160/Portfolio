@@ -134,7 +134,7 @@ class Task < ApplicationRecord
     Task.delete_all
     TaskFolder.delete_all
 
-    # Import folders topologically — parents before children at any depth
+    # Import folders topologically -  parents before children at any depth
     folders = (data["folders"] || []).index_by { |f| f["id"] }
     imported = Set.new
     import_folder = ->(attrs) {

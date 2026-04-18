@@ -1,4 +1,5 @@
 <%= meta_title @task ? "#{@task.name} - Executions" : "Executions", include_name: false %>
+<%= meta_description @task ? "Run history and results for #{@task.name}." : "Run history and results for automation tasks." %>
 
 <div class="executions-index-container">
   <div class="btn-container">

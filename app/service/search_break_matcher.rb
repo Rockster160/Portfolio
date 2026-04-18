@@ -53,7 +53,7 @@ class SearchBreakMatcher
 
     calculate_matches
   rescue StandardError => e
-    Rails.logger.error("[SearchBreakMatcher] #{e.class}: #{e.message} — breaker=#{str_or_breaker.inspect}")
+    Rails.logger.error("[SearchBreakMatcher] #{e.class}: #{e.message} -  breaker=#{str_or_breaker.inspect}")
     raise unless Rails.env.production?
   end
 
@@ -147,7 +147,7 @@ class SearchBreakMatcher
     else false
     end
   rescue StandardError => e
-    Rails.logger.error("[SearchBreakMatcher#delim_match?] #{e.class}: #{e.message} — val=#{val.inspect}")
+    Rails.logger.error("[SearchBreakMatcher#delim_match?] #{e.class}: #{e.message} -  val=#{val.inspect}")
     raise unless Rails.env.production?
   end
 end

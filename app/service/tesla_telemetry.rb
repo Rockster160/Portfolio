@@ -23,7 +23,7 @@ class TeslaTelemetry
     OutsideTemp:    [:climate_state, :outside_temp],
   }.freeze
 
-  # Tire pressure threshold in PSI — below this triggers soft warning
+  # Tire pressure threshold in PSI -  below this triggers soft warning
   TIRE_PRESSURE_LOW = 39.0
 
   def self.process(data)
@@ -101,13 +101,19 @@ class TeslaTelemetry
   def handle_door_state
     return unless @data.key?(:DoorState)
 
-    # DoorState is a bitmask or structured value — map to individual door fields
+    # DoorState is a bitmask or structured value -  map to individual door fields
     value = @data[:DoorState]
     return unless value.is_a?(Hash)
 
     @car_data[:vehicle_state] ||= {}
-    { df: :DriverFront, pf: :PassengerFront, dr: :DriverRear, pr: :PassengerRear,
-      ft: :FrontTrunk, rt: :RearTrunk }.each do |cache_key, door_key|
+    {
+      df: :DriverFront,
+      pf: :PassengerFront,
+      dr: :DriverRear,
+      pr: :PassengerRear,
+      ft: :FrontTrunk,
+      rt: :RearTrunk,
+    }.each do |cache_key, door_key|
       @car_data[:vehicle_state][cache_key] = value[door_key] if value.key?(door_key)
     end
   end
@@ -131,7 +137,7 @@ class TeslaTelemetry
     return if new_charge_state == @prev_charge_state
 
     ::Jil.trigger(@user, :tesla_charge, {
-      state: new_charge_state,
+      state:    new_charge_state,
       previous: @prev_charge_state,
     })
   end
@@ -150,7 +156,7 @@ class TeslaTelemetry
     pressures.each do |tire, psi|
       next unless psi
 
-      tirename = tire.to_s.split("").then { |dir, side|
+      tirename = tire.to_s.chars.then { |dir, side|
         [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
       }.join(" ")
 

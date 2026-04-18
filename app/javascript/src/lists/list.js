@@ -6,7 +6,9 @@ function isUrl(str) {
 
 function markdownLinkPaste(evt) {
   var input = evt.target;
-  var pasted = (evt.clipboardData || evt.originalEvent.clipboardData).getData("text");
+  var pasted = (evt.clipboardData || evt.originalEvent.clipboardData).getData(
+    "text",
+  );
   if (!pasted) return;
 
   var start = input.selectionStart;
@@ -27,7 +29,8 @@ function markdownLinkPaste(evt) {
   }
 
   evt.preventDefault();
-  input.value = input.value.substring(0, start) + result + input.value.substring(end);
+  input.value =
+    input.value.substring(0, start) + result + input.value.substring(end);
   var cursor = start + result.length;
   input.setSelectionRange(cursor, cursor);
 }
@@ -113,7 +116,11 @@ function addToQueue(listId, entry) {
     // Coalesce: replace existing edit for same item+field
     var replaced = false;
     for (var i = 0; i < queue.length; i++) {
-      if (queue[i].type === "edit" && queue[i].id === entry.id && queue[i].field === entry.field) {
+      if (
+        queue[i].type === "edit" &&
+        queue[i].id === entry.id &&
+        queue[i].field === entry.field
+      ) {
         queue[i] = entry;
         replaced = true;
         break;
@@ -122,7 +129,9 @@ function addToQueue(listId, entry) {
     if (!replaced) queue.push(entry);
   } else if (entry.type === "reorder") {
     // Coalesce: only keep one reorder marker
-    var hasReorder = queue.some(function (e) { return e.type === "reorder"; });
+    var hasReorder = queue.some(function (e) {
+      return e.type === "reorder";
+    });
     if (!hasReorder) queue.push(entry);
   } else {
     queue.push(entry);
@@ -157,16 +166,21 @@ function processQueue(listId, actionUrl) {
   }
 
   if (entry.type === "create") {
-    var createData = { "list_item[name]": entry.name, authenticity_token: token };
+    var createData = {
+      "list_item[name]": entry.name,
+      authenticity_token: token,
+    };
     if (entry.sectionId) createData["list_item[section_id]"] = entry.sectionId;
     $.post(actionUrl, createData)
       .done(onSuccess)
       .fail(function () {
-        // Still offline — stop processing
+        // Still offline -  stop processing
       });
   } else if (entry.type === "check") {
-    listWS.perform("receive", { list_item: { id: entry.id, checked: entry.checked } });
-    // Fire-and-forget for WS — proceed immediately
+    listWS.perform("receive", {
+      list_item: { id: entry.id, checked: entry.checked },
+    });
+    // Fire-and-forget for WS -  proceed immediately
     onSuccess();
   } else if (entry.type === "edit") {
     var data = { list_item: {} };
@@ -174,23 +188,28 @@ function processQueue(listId, actionUrl) {
     $.ajax({ url: entry.url, type: "PUT", data: data })
       .done(onSuccess)
       .fail(function () {
-        // Still offline — stop processing
+        // Still offline -  stop processing
       });
   } else if (entry.type === "reorder") {
     var reorderUrl = $(".list-items").data("updateUrl");
-    if (!reorderUrl) { onSuccess(); return; }
+    if (!reorderUrl) {
+      onSuccess();
+      return;
+    }
     $.ajax({
       url: reorderUrl,
       type: "POST",
       data: JSON.stringify({ ordered: buildFullOrder() }),
       contentType: "application/json; charset=UTF-8",
       dataType: "json",
-    }).done(function () {
-      window.__listReorderPending = false;
-      onSuccess();
-    }).fail(function () {
-      // Still offline — stop processing
-    });
+    })
+      .done(function () {
+        window.__listReorderPending = false;
+        onSuccess();
+      })
+      .fail(function () {
+        // Still offline -  stop processing
+      });
   } else {
     // Unknown type, skip
     onSuccess();
@@ -223,7 +242,11 @@ function renderQueuedPlaceholders(listId) {
       clone.querySelector(".item-name").innerText = entry.name;
       clone.classList.add("item-placeholder", "item-queued");
       if (entry.sectionId) {
-        var $section = $(".list-section-tab[data-section-id='" + entry.sectionId + "'] .section-items");
+        var $section = $(
+          ".list-section-tab[data-section-id='" +
+            entry.sectionId +
+            "'] .section-items",
+        );
         if ($section.length) {
           $section.prepend(clone);
         } else {
@@ -258,7 +281,8 @@ function getListSettings() {
   const dataMode = container?.dataset.listMode;
   const dataReset = container?.dataset.listReset;
 
-  const mode = params.mode || dataMode || (params.clear == "1" ? "clear" : "normal");
+  const mode =
+    params.mode || dataMode || (params.clear == "1" ? "clear" : "normal");
   const reset = parseDuration(params.reset || dataReset, resetModeTimes[mode]);
 
   return { mode, reset };
@@ -330,7 +354,9 @@ function setActiveSection(id, name, color) {
   $indicator.css("background-color", color);
   $indicator.removeClass("hidden");
   $(".list-section-tab.section-active").removeClass("section-active");
-  $(".list-section-tab[data-section-id='" + id + "']").addClass("section-active");
+  $(".list-section-tab[data-section-id='" + id + "']").addClass(
+    "section-active",
+  );
 }
 
 function clearActiveSection() {
@@ -544,7 +570,7 @@ function initSortables() {
       }
     },
 
-    // no detach() calls here — let Sortable place the placeholder using anchors
+    // no detach() calls here -  let Sortable place the placeholder using anchors
 
     update: function (evt, ui) {
       if (ui.sender) return;
@@ -708,7 +734,11 @@ $(document).ready(function () {
 
     var activeSection = window.__activeSection;
     if (activeSection) {
-      var $sectionItems = $(".list-section-tab[data-section-id='" + activeSection.id + "'] .section-items");
+      var $sectionItems = $(
+        ".list-section-tab[data-section-id='" +
+          activeSection.id +
+          "'] .section-items",
+      );
       $sectionItems.prepend(clone);
     } else {
       $(".list-items").prepend(clone);
@@ -718,7 +748,8 @@ $(document).ready(function () {
     var listId = $(".list-container").attr("data-list-id");
     var formData = $(this).serialize();
     if (activeSection) {
-      formData += "&list_item%5Bsection_id%5D=" + encodeURIComponent(activeSection.id);
+      formData +=
+        "&list_item%5Bsection_id%5D=" + encodeURIComponent(activeSection.id);
     }
     $.post(formAction, formData).fail(function () {
       var queueEntry = { type: "create", name: input };
@@ -755,7 +786,11 @@ $(document).ready(function () {
         });
       } else {
         var listId = $(".list-container").attr("data-list-id");
-        addToQueue(listId, { type: "check", id: item_id, checked: this.checked });
+        addToQueue(listId, {
+          type: "check",
+          id: item_id,
+          checked: this.checked,
+        });
       }
       clearRemovedItems();
     })
@@ -827,7 +862,13 @@ $(document).ready(function () {
         data: args,
       }).fail(function () {
         var listId = $(".list-container").attr("data-list-id");
-        addToQueue(listId, { type: "edit", id: itemId, url: submitUrl, field: fieldName, value: updatedName });
+        addToQueue(listId, {
+          type: "edit",
+          id: itemId,
+          url: submitUrl,
+          field: fieldName,
+          value: updatedName,
+        });
       });
     });
 

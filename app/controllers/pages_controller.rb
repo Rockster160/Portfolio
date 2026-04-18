@@ -84,7 +84,15 @@ class PagesController < ApplicationController
     return unless params[:id].present?
 
     @page = current_user.pages.find_by(id: params[:id])
-    @page ||= current_user.accessible_shared_pages.find(params[:id])
+    @page ||= current_user.accessible_shared_pages.find_by(id: params[:id])
+
+    return if @page.present?
+
+    if Page.exists?(id: params[:id])
+      @restricted_title = "Page"
+      @restricted_description = "Sign in to view this document."
+      render "application/restricted"
+    end
   end
 
   def page_params

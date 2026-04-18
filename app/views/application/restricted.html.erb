@@ -1,0 +1,12 @@
+<%= meta_title @restricted_title, include_name: false %>
+<%= meta_description @restricted_description %>
+
+<div class="skinny-container" style="text-align: center; padding-top: 4em;">
+  <h2><%= @restricted_title %></h2>
+  <% if user_signed_in? && !guest_account? %>
+    <p>You do not have permission to view this content.</p>
+  <% else %>
+    <p>Sign in to view this content.</p>
+    <a href="<%= login_path %>" class="btn">Sign In</a>
+  <% end %>
+</div>

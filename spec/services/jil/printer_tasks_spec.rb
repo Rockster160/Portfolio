@@ -107,7 +107,7 @@ RSpec.describe "Printer Tasks", type: :request do
     user.tasks.create!(
       name:     "AdjustFilament",
       listener: 'function("Filament Name" TAB String BR "MM Delta" TAB Numeric)::Hash',
-      code:     <<~'JIL'.strip,
+      code:     <<~JIL.strip,
         a0 = Global.functionParams({
           fil_name = Keyword.Item()::String
           mm_delta = Keyword.Item()::Numeric
@@ -131,8 +131,8 @@ RSpec.describe "Printer Tasks", type: :request do
   let(:active_filament_names_task) {
     user.tasks.create!(
       name:     "ActiveFilamentNames",
-      listener: 'function()::Array',
-      code:     <<~'JIL'.strip,
+      listener: "function()::Array",
+      code:     <<~JIL.strip,
         a0 = Global.functionParams({})::Array
         filaments = Global.get_cache("printer", "filaments")::Hash
         all_names = filaments.keys()::Array
@@ -151,7 +151,7 @@ RSpec.describe "Printer Tasks", type: :request do
     user.tasks.create!(
       name:     "ChangeEventFilament",
       listener: 'function("Start Event ID" TAB Numeric BR "New Filament" TAB String)::Hash',
-      code:     <<~'JIL'.strip,
+      code:     <<~JIL.strip,
         a0 = Global.functionParams({
           start_id = Keyword.Item()::Numeric
           new_fil = Keyword.Item()::String
@@ -216,7 +216,7 @@ RSpec.describe "Printer Tasks", type: :request do
     user.tasks.create!(
       name:     "Printer - Started",
       listener: 'printer:topic:"Print Started"',
-      code:     <<~'JIL'.strip,
+      code:     <<~JIL.strip,
         *raw = Global.input_data()::Hash
         pd = Custom.ParsePrinterData(raw)::Hash
         print_name = pd.get("print_name")::String
@@ -268,7 +268,7 @@ RSpec.describe "Printer Tasks", type: :request do
     user.tasks.create!(
       name:     "Printer - Progress",
       listener: 'printer:topic:"Print Progress"',
-      code:     <<~'JIL'.strip,
+      code:     <<~JIL.strip,
         raw = Global.input_data()::Hash
         pd = Custom.ParsePrinterData(raw)::Hash
         print_name = pd.get("print_name")::String
@@ -324,7 +324,7 @@ RSpec.describe "Printer Tasks", type: :request do
     user.tasks.create!(
       name:     "Printer - Finished",
       listener: 'printer:topic:"Print Done"',
-      code:     <<~'JIL'.strip,
+      code:     <<~JIL.strip,
         raw = Global.input_data()::Hash
         pd = Custom.ParsePrinterData(raw)::Hash
         print_name = pd.get("print_name")::String
@@ -375,7 +375,7 @@ RSpec.describe "Printer Tasks", type: :request do
     user.tasks.create!(
       name:     "Printer - Failed",
       listener: "printer:topic:/Print (Failed|Cancelled)/",
-      code:     <<~'JIL'.strip,
+      code:     <<~JIL.strip,
         *raw = Global.input_data()::Hash
         pd = Custom.ParsePrinterData(raw)::Hash
         topic = pd.get("topic")::String
@@ -422,8 +422,8 @@ RSpec.describe "Printer Tasks", type: :request do
   let(:hass_temp_task) {
     user.tasks.create!(
       name:     "Printer - HASS Temps",
-      listener: 'hass-update:source:octoprint',
-      code:     <<~'JIL'.strip,
+      listener: "hass-update:source:octoprint",
+      code:     <<~JIL.strip,
         data = Global.input_data()::Hash
         bed = data.get("bed")::Numeric
         bed_target = data.get("bed_target")::Numeric
@@ -447,7 +447,7 @@ RSpec.describe "Printer Tasks", type: :request do
     user.tasks.create!(
       name:     "Printer - Monitor Load",
       listener: "monitor:channel:printer",
-      code:     <<~'JIL'.strip,
+      code:     <<~JIL.strip,
         current = Global.get_cache("printer", "current")::Hash
         temps = Global.get_cache("printer", "temps")::Hash
         f1 = current.set!("temps", temps)::Hash
@@ -638,12 +638,14 @@ RSpec.describe "Printer Tasks", type: :request do
     it "broadcasts cached print state on resync" do
       user.caches.by(:printer).update!(data: {
         "current" => {
-          "status" => "complete", "print_name" => "Slime",
-          "est_sec" => 1440, "event_id" => 1,
+          "status"     => "complete",
+          "print_name" => "Slime",
+          "est_sec"    => 1440,
+          "event_id"   => 1,
         },
       })
 
-      # Simulate what resync does — triggers monitor:channel:printer
+      # Simulate what resync does -  triggers monitor:channel:printer
       run_jil(monitor_load_task.code, { channel: "printer", resync: true })
 
       # The task executed without error (broadcast happened)
@@ -697,9 +699,11 @@ RSpec.describe "Printer Tasks", type: :request do
       before do
         user.caches.by(:printer).update!(data: {
           "current" => {
-            "print_name" => "Slime", "est_sec" => 1440, "event_id" => 1,
-            "status" => "printing",
-            "start_time" => 10.minutes.ago.iso8601,
+            "print_name"      => "Slime",
+            "est_sec"         => 1440,
+            "event_id"        => 1,
+            "status"          => "printing",
+            "start_time"      => 10.minutes.ago.iso8601,
             "est_finish_time" => 14.minutes.from_now.iso8601,
           },
         })
@@ -731,15 +735,20 @@ RSpec.describe "Printer Tasks", type: :request do
   end
 
   describe "Print Done webhook" do
-    before { finished_task; adjust_filament_task }
+    before {
+      finished_task
+      adjust_filament_task
+    }
 
     it "creates PrintFinish event and updates cache status to complete" do
       start_time = 20.minutes.ago
       start_event = user.action_events.create!(name: "PrintStart", notes: "Slime", timestamp: start_time)
       user.caches.by(:printer).update!(data: { "current" => {
-        "event_id" => start_event.id, "print_name" => "Slime", "est_sec" => 1440,
-        "status" => "printing",
-        "start_time" => start_time.iso8601,
+        "event_id"        => start_event.id,
+        "print_name"      => "Slime",
+        "est_sec"         => 1440,
+        "status"          => "printing",
+        "start_time"      => start_time.iso8601,
         "est_finish_time" => (start_time + 1440.seconds).iso8601,
       } })
 
@@ -763,13 +772,16 @@ RSpec.describe "Printer Tasks", type: :request do
       start_time = 20.minutes.ago
       start_event = user.action_events.create!(name: "PrintStart", notes: "Slime", timestamp: start_time)
       user.caches.by(:printer).update!(data: {
-        current: {
-          event_id: start_event.id, print_name: "Slime", est_sec: 1440,
-          status: "printing", filament_name: "Red PLA",
-          start_time: start_time.iso8601,
+        current:     {
+          event_id:        start_event.id,
+          print_name:      "Slime",
+          est_sec:         1440,
+          status:          "printing",
+          filament_name:   "Red PLA",
+          start_time:      start_time.iso8601,
           est_finish_time: (start_time + 1440.seconds).iso8601,
         },
-        filaments: {
+        filaments:   {
           "Red PLA": { color: "#FF0000", remaining_mm: 330_000, remaining_g: 985.1 },
         },
         mm_per_gram: 335,
@@ -788,14 +800,19 @@ RSpec.describe "Printer Tasks", type: :request do
   end
 
   describe "Print Failed webhook" do
-    before { failed_task; adjust_filament_task }
+    before {
+      failed_task
+      adjust_filament_task
+    }
 
     it "creates PrintFailed event and updates cache status to failed" do
       start_event = user.action_events.create!(name: "PrintStart", notes: "Slime")
       user.caches.by(:printer).update!(data: { "current" => {
-        "event_id" => start_event.id, "print_name" => "Slime", "est_sec" => 1440,
-        "status" => "printing",
-        "start_time" => 5.minutes.ago.iso8601,
+        "event_id"        => start_event.id,
+        "print_name"      => "Slime",
+        "est_sec"         => 1440,
+        "status"          => "printing",
+        "start_time"      => 5.minutes.ago.iso8601,
         "est_finish_time" => 19.minutes.from_now.iso8601,
       } })
 
@@ -815,13 +832,16 @@ RSpec.describe "Printer Tasks", type: :request do
     it "subtracts filament and stores filament_name and filament_length on event" do
       start_event = user.action_events.create!(name: "PrintStart", notes: "Slime")
       user.caches.by(:printer).update!(data: {
-        current: {
-          event_id: start_event.id, print_name: "Slime", est_sec: 1440,
-          status: "printing", filament_name: "Blue PETG",
-          start_time: 5.minutes.ago.iso8601,
+        current:     {
+          event_id:        start_event.id,
+          print_name:      "Slime",
+          est_sec:         1440,
+          status:          "printing",
+          filament_name:   "Blue PETG",
+          start_time:      5.minutes.ago.iso8601,
           est_finish_time: 19.minutes.from_now.iso8601,
         },
-        filaments: {
+        filaments:   {
           "Blue PETG": { color: "#0000FF", remaining_mm: 200_000, remaining_g: 597.0 },
         },
         mm_per_gram: 335,
@@ -845,7 +865,7 @@ RSpec.describe "Printer Tasks", type: :request do
 
     it "adjusts remaining_mm and syncs remaining_g" do
       user.caches.by(:printer).update!(data: {
-        filaments: { "Red PLA": { color: "#FF0000", remaining_mm: 335_000, remaining_g: 1000.0 } },
+        filaments:   { "Red PLA": { color: "#FF0000", remaining_mm: 335_000, remaining_g: 1000.0 } },
         mm_per_gram: 335,
       })
 
@@ -864,25 +884,28 @@ RSpec.describe "Printer Tasks", type: :request do
     it "returns only filaments with remaining > 0" do
       user.caches.by(:printer).update!(data: {
         filaments: {
-          "Red PLA": { remaining_mm: 100_000 },
-          Empty: { remaining_mm: 0 },
+          "Red PLA":   { remaining_mm: 100_000 },
+          Empty:       { remaining_mm: 0 },
           "Blue PETG": { remaining_mm: 50_000 },
         },
       })
 
-      run_jil('result = Custom.ActiveFilamentNames()::Array', {})
+      run_jil("result = Custom.ActiveFilamentNames()::Array", {})
       names = @ctx.dig(:vars, :result, :value)
       expect(names).to contain_exactly("Red PLA", "Blue PETG")
     end
   end
 
   describe "ChangeEventFilament function" do
-    before { change_event_filament_task; adjust_filament_task }
+    before {
+      change_event_filament_task
+      adjust_filament_task
+    }
 
     it "for completed print: adjusts both filaments and updates events" do
       user.caches.by(:printer).update!(data: {
-        filaments: {
-          "Red PLA": { color: "#FF0000", remaining_mm: 300_000, remaining_g: 895.5 },
+        filaments:   {
+          "Red PLA":   { color: "#FF0000", remaining_mm: 300_000, remaining_g: 895.5 },
           "Blue PETG": { color: "#0000FF", remaining_mm: 200_000, remaining_g: 597.0 },
         },
         mm_per_gram: 335,
@@ -890,11 +913,11 @@ RSpec.describe "Printer Tasks", type: :request do
 
       start_evt = user.action_events.create!(
         name: "PrintStart", notes: "Slime",
-        data: { filament_name: "Red PLA", filament_length: 1000 },
+        data: { filament_name: "Red PLA", filament_length: 1000 }
       )
       finish_evt = user.action_events.create!(
         name: "PrintFinish", notes: "Slime",
-        data: { start_event_id: start_evt.id, filament_name: "Red PLA", filament_length: 1000 },
+        data: { start_event_id: start_evt.id, filament_name: "Red PLA", filament_length: 1000 }
       )
 
       code = "result = Custom.ChangeEventFilament(#{start_evt.id}, \"Blue PETG\")::Hash"
@@ -916,12 +939,12 @@ RSpec.describe "Printer Tasks", type: :request do
     it "for ongoing print: updates cache but does not adjust filament amounts" do
       start_evt = user.action_events.create!(
         name: "PrintStart", notes: "Slime",
-        data: { filament_name: "Red PLA", filament_length: 1000 },
+        data: { filament_name: "Red PLA", filament_length: 1000 }
       )
       user.caches.by(:printer).update!(data: {
-        current: { status: "printing", filament_name: "Red PLA", event_id: start_evt.id },
-        filaments: {
-          "Red PLA": { remaining_mm: 300_000, remaining_g: 895.5 },
+        current:     { status: "printing", filament_name: "Red PLA", event_id: start_evt.id },
+        filaments:   {
+          "Red PLA":   { remaining_mm: 300_000, remaining_g: 895.5 },
           "Blue PETG": { remaining_mm: 200_000, remaining_g: 597.0 },
         },
         mm_per_gram: 335,
@@ -947,7 +970,7 @@ RSpec.describe "Printer Tasks", type: :request do
     it "stores active filament name and color on event and cache" do
       user.caches.by(:printer).update!(data: {
         active_filament: "Red PLA",
-        filaments: { "Red PLA": { color: "#CC0000", remaining_mm: 335_000, remaining_g: 1000.0 } },
+        filaments:       { "Red PLA": { color: "#CC0000", remaining_mm: 335_000, remaining_g: 1000.0 } },
       })
 
       trigger_printer(started_payload)

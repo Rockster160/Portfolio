@@ -485,7 +485,7 @@ export default class Statement {
         this.addError("Method is not yet implemented.");
       }
     } else if (this._type === "Keyword" && new_method.match(/^[a-z_]/)) {
-      // Named key argument — render a typed input based on return type
+      // Named key argument -  render a typed input based on return type
       this.scope = "singleton";
       let arg = Arg.fromType(this._returntype || "Any");
       argsContainer.appendChild(field(arg));
@@ -545,16 +545,22 @@ export default class Statement {
   }
 
   async pasteAbove(statements) {
-    statements = statements || Statement.fromText(await navigator.clipboard.readText());
-    if (!statements?.length) { return; }
+    statements =
+      statements || Statement.fromText(await navigator.clipboard.readText());
+    if (!statements?.length) {
+      return;
+    }
     statements.forEach((statement) => {
       statement.moveBefore(this);
     });
     statements[statements.length - 1]?.select();
   }
   async pasteBelow(statements) {
-    statements = statements || Statement.fromText(await navigator.clipboard.readText());
-    if (!statements?.length) { return; }
+    statements =
+      statements || Statement.fromText(await navigator.clipboard.readText());
+    if (!statements?.length) {
+      return;
+    }
     statements.reverse().forEach((statement) => {
       statement.moveAfter(window.selected);
     });
