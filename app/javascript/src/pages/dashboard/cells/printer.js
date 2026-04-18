@@ -184,10 +184,29 @@ let contrastText = function (hex, text) {
         },
         received: function (msg) {
           if (msg.data) {
+            let incoming = Number(msg.data.elapsed_sec) || 0;
+
+            // Only reset the sync baseline if:
+            // 1. We don't have one yet, OR
+            // 2. The incoming value differs from our extrapolation by more than 5s
+            //    (avoids resetting on stale resyncs/broadcasts)
+            if (cell.data.sync_at == null) {
+              cell.data.sync_at = Date.now();
+              cell.data.sync_elapsed = incoming;
+            } else {
+              let extrapolated = cell.data.sync_elapsed +
+                Math.floor((Date.now() - cell.data.sync_at) / 1000);
+              if (Math.abs(incoming - extrapolated) > 5) {
+                cell.data.sync_at = Date.now();
+                cell.data.sync_elapsed = incoming;
+              }
+            }
+
             cell.data.monitor_data = msg.data;
-            // Record sync baseline so the timer can extrapolate
-            cell.data.sync_at = Date.now();
-            cell.data.sync_elapsed = Number(msg.data.elapsed_sec) || 0;
+            // Keep elapsed_sec in sync with our extrapolation, not the broadcast
+            cell.data.monitor_data.elapsed_sec =
+              cell.data.sync_elapsed +
+              Math.floor((Date.now() - cell.data.sync_at) / 1000);
           }
 
           let status = (cell.data.monitor_data || {}).status;
