@@ -68,11 +68,12 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   end
 
   def cancel!(schedule)
-    schedules.find_by(id: schedule[:id])&.tap { |s|
+    schedules.find_by(id: schedule[:id])&.then { |s|
       ::Jil::Schedule.cancel(s)
       s.destroy
       ::Jil::Schedule.broadcast(s, :canceled)
-    }&.merge(canceled: true)
+      true
+    } || false
   end
 
   # [ScheduleData]
