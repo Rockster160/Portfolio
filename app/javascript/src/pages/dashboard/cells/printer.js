@@ -105,8 +105,6 @@ let contrastText = function (hex, text) {
     lines.push(
       tempsLine() || Text.center(Emoji.pen + "?° | " + Emoji.printer + " ?°"),
     );
-    // Line 2: spacer
-    lines.push("");
 
     if (!status || status == "idle") {
       lines.push(Text.center("???"));
@@ -115,20 +113,20 @@ let contrastText = function (hex, text) {
       return;
     }
 
-    // Line 3: Status (grey/muted)
+    // Line 2: Status (grey/muted)
     lines.push(Text.center(Text.grey(status || "Unknown")));
 
-    // Line 4: Print name with filament color background
+    // Line 3: Print name with filament color background
     let printLabel = data.print_name || "[Unknown]";
     if (data.filament_color) {
       printLabel = contrastText(data.filament_color, printLabel);
     }
     lines.push(Text.center(printLabel));
 
-    // Line 5: Progress bar
+    // Line 4: Progress bar
     lines.push(Text.progressBar(data.progress || 0));
 
-    // Line 6: Result indicator (only for terminal states)
+    // Line 5: Spacer | Result indicator (only for terminal states)
     let resultLabels = {
       complete: Text.green("[DONE]"),
       failed: Text.red("[FAIL]"),
@@ -141,7 +139,7 @@ let contrastText = function (hex, text) {
     let isDone = status == "complete" || status == "failed";
     let timeFmt = { hour: "numeric", minute: "2-digit" };
 
-    // Line 7: Duration
+    // Line 6: Duration
     if (isDone) {
       let actualDuration = Number(data.actual_duration) || elapsed;
       lines.push(Text.center(timestampToDuration(actualDuration)));
@@ -152,6 +150,9 @@ let contrastText = function (hex, text) {
         ),
       );
     }
+
+    // Line 7: Spacer
+    lines.push("");
 
     // Line 8: ETA or completion time
     if (isDone) {

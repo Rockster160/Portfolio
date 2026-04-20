@@ -94,9 +94,9 @@ Configured in `.rubocop.yml`:
 
 ## Jil Code Validation
 
-All Jil code MUST be validated with `Jil::Validator.validate!(code)` before being written to a prodExec script. Run the validator in specs or inline in the script itself. The validator catches: invalid casts, duplicate variables, undefined references, unknown classes, content-block/positional-arg mismatches (e.g. raw Keyval blocks as Prompt.create data), and bare variables where content blocks are expected.
+All Jil code MUST be validated with `Jil::Validator.validate!(code)` before being written to a prodExec script. The validator catches: invalid casts, duplicate variables, undefined references, unknown classes, content-block/positional-arg mismatches (e.g. raw Keyval blocks as Prompt.create data), and bare variables where content blocks are expected.
 
-**Workflow:** FIRST validate the Jil code in a spec. THEN write the prodExec script containing the validated code. Do NOT write the script first and validate after — validation must pass before the script file is finalized.
+**Workflow:** FIRST validate the Jil code in a spec. THEN write the prodExec script containing the validated code. Do NOT write the script first and validate after — validation must pass before the script file is finalized. Do NOT put the validator inside the script as a substitute — the script should never be created until validation has already passed in a spec.
 
 ## Environment
 
