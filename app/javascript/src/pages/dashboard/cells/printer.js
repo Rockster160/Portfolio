@@ -109,57 +109,73 @@ let contrastText = function (hex, text) {
     lines.push("");
 
     if (!status || status == "idle") {
-      lines.push(Text.center("Idle"));
+      lines.push(Text.center("???"));
       lines.push(timeagoLine());
       cell.lines(padLines(lines));
       return;
     }
 
-    // Line 3: Print name with filament color background
+    // Line 3: Status (grey/muted)
+    lines.push(Text.center(Text.grey(status || "Unknown")));
+
+    // Line 4: Print name with filament color background
     let printLabel = data.print_name || "[Unknown]";
     if (data.filament_color) {
       printLabel = contrastText(data.filament_color, printLabel);
     }
     lines.push(Text.center(printLabel));
-    // Line 4: Progress bar
+
+    // Line 5: Progress bar
     lines.push(Text.progressBar(data.progress || 0));
 
-    // Line 5: status label or spacer
-    if (status == "complete") {
-      lines.push(Text.center(Text.green("[DONE]")));
-    } else if (status == "failed") {
-      lines.push(Text.center(Text.red("[FAILED]")));
-    } else {
-      lines.push("");
-    }
+    // Line 6: Result indicator (only for terminal states)
+    let resultLabels = {
+      complete: Text.green("[DONE]"),
+      failed: Text.red("[FAIL]"),
+      paused: Text.color(dash_colors.yellow, "[STOP]"),
+    };
+    lines.push(Text.center(resultLabels[status] || ""));
 
-    // Line 6: elapsed / estimated
     let elapsed = Number(data.elapsed_sec) || 0;
     let estimated = Number(data.est_sec) || 0;
-    lines.push(
-      Text.center(
-        timestampToDuration(elapsed) + " / " + timestampToDuration(estimated),
-      ),
-    );
+    let isDone = status == "complete" || status == "failed";
+    let timeFmt = { hour: "numeric", minute: "2-digit" };
 
-    // Line 7: ETA (or error for failed)
-    if (status == "failed" && data.error) {
-      lines.push(Text.center(Text.grey(data.error)));
+    // Line 7: Duration
+    if (isDone) {
+      let actualDuration = Number(data.actual_duration) || elapsed;
+      lines.push(Text.center(timestampToDuration(actualDuration)));
+    } else {
+      lines.push(
+        Text.center(
+          timestampToDuration(elapsed) + " / " + timestampToDuration(estimated),
+        ),
+      );
+    }
+
+    // Line 8: ETA or completion time
+    if (isDone) {
+      let doneTime = data.last_updated ? new Date(data.last_updated) : null;
+      lines.push(
+        Text.center(
+          doneTime ? "At: " + doneTime.toLocaleTimeString([], timeFmt) : "",
+        ),
+      );
     } else {
       let remaining = Math.max(estimated - elapsed, 0);
-      if (remaining > 0 && status == "printing") {
+      if (remaining > 0) {
         let eta = new Date(Date.now() + remaining * 1000);
-        let etaStr = eta.toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        });
         lines.push(
           Text.center(
-            "ETA: " + etaStr + " (" + timestampToDuration(remaining) + ")",
+            "ETA: " +
+              eta.toLocaleTimeString([], timeFmt) +
+              " (" +
+              timestampToDuration(remaining) +
+              ")",
           ),
         );
       } else {
-        lines.push("");
+        lines.push(Text.center("ETA: --"));
       }
     }
 
@@ -194,7 +210,8 @@ let contrastText = function (hex, text) {
               cell.data.sync_at = Date.now();
               cell.data.sync_elapsed = incoming;
             } else {
-              let extrapolated = cell.data.sync_elapsed +
+              let extrapolated =
+                cell.data.sync_elapsed +
                 Math.floor((Date.now() - cell.data.sync_at) / 1000);
               if (Math.abs(incoming - extrapolated) > 5) {
                 cell.data.sync_at = Date.now();
