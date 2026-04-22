@@ -53,7 +53,8 @@ let contrastText = function (hex, text) {
     let ps = (cell.data.monitor_data || {}).printer_state;
     if (!ps || !ps.flags) return false;
     let flags = ps.flags;
-    if (Array.isArray(flags)) return flags.includes("operational") || flags.includes("printing");
+    if (Array.isArray(flags))
+      return flags.includes("operational") || flags.includes("printing");
     return false;
   };
 
@@ -78,8 +79,8 @@ let contrastText = function (hex, text) {
     let printerOn = isPrinterOn();
 
     let powerIcon = printerOn
-      ? Text.color(dash_colors.yellow, "[ico ti ti-iec-power]")
-      : Text.grey("[ico ti ti-iec-power]");
+      ? Text.color(dash_colors.yellow, "⏻")
+      : Text.grey("⏻");
 
     if (!temps || !temps.updated_at) {
       return Text.justify(powerIcon, "");
@@ -96,7 +97,7 @@ let contrastText = function (hex, text) {
     if (temps.bed_target > 0 && temps.bed_target > (temps.bed || 0) + 0.5) {
       bed += " (" + Math.round(temps.bed_target) + ")";
     }
-    return Text.justify(powerIcon, nozzle + " | " + bed);
+    return Text.justify(powerIcon, nozzle + " | " + bed, "  ");
   };
 
   let timeagoLine = function () {
@@ -128,12 +129,14 @@ let contrastText = function (hex, text) {
 
     // Line 1: Temps
     lines.push(
-      tempsLine() || Text.justify(Text.grey("[ico ti ti-iec-power]"), ""),
+      tempsLine() || Text.justify(Text.grey("⏻"), ""),
     );
 
     if (!status || status == "idle") {
       if (data.filament_color) {
-        lines.push(Text.center(contrastText(data.filament_color, "          ")));
+        lines.push(
+          Text.center(contrastText(data.filament_color, "          ")),
+        );
       } else {
         lines.push("");
       }
@@ -179,7 +182,9 @@ let contrastText = function (hex, text) {
       let actualDuration = Number(data.actual_duration) || elapsed;
       lines.push(
         Text.center(
-          timestampToDuration(actualDuration) + " / " + timestampToDuration(estimated),
+          timestampToDuration(actualDuration) +
+            " / " +
+            timestampToDuration(estimated),
         ),
       );
     } else {

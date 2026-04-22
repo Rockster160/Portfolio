@@ -10,8 +10,20 @@ $(document).ready(function() {
     channel_id: "list_item_" + list_id
   }, {
     connected: function() {
+      $(".list-error").addClass("hidden")
       var url = $(".list-items").attr("data-update-url")
-      $.get(url, {}).done(function() { $(".list-error").addClass("hidden") })
+      if (!url) return;
+
+      var refreshItem = function(attempt) {
+        $.get(url, {}).fail(function() {
+          if (attempt < 3) {
+            setTimeout(function() { refreshItem(attempt + 1) }, 2000 * attempt)
+          } else {
+            $(".list-error").text("Sync failed — please reload").removeClass("hidden")
+          }
+        })
+      }
+      refreshItem(1)
     },
     disconnected: function() {
       $(".list-error").removeClass("hidden")

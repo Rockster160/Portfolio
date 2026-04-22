@@ -306,27 +306,50 @@ document.addEventListener("DOMContentLoaded", () => {
     {
       connected() {
         window.__listWsConnected = true;
+        const err = document.querySelector(".list-error");
+        if (err) err.classList.add("hidden");
+
         const url = document
           .querySelector(".list-items")
           ?.getAttribute("data-update-url");
 
         if (!url) return;
 
-        fetch(url, {
-          method: "POST",
-          headers: {
-            "X-CSRF-Token": csrfToken(),
-            "X-Requested-With": "XMLHttpRequest",
-            Accept: "text/javascript, application/json, text/html, */*",
-            "Content-Type": "application/json",
-          },
-          body: "{}",
-        }).then((resp) => {
-          if (!resp.ok) return;
-          const err = document.querySelector(".list-error");
-          if (err) err.classList.add("hidden");
-          document.dispatchEvent(new Event("lists:process-queue"));
-        });
+        const refreshList = (attempt) => {
+          fetch(url, {
+            method: "POST",
+            headers: {
+              "X-CSRF-Token": csrfToken(),
+              "X-Requested-With": "XMLHttpRequest",
+              Accept: "text/javascript, application/json, text/html, */*",
+              "Content-Type": "application/json",
+            },
+            body: "{}",
+          }).then((resp) => {
+            if (resp.ok) {
+              document.dispatchEvent(new Event("lists:process-queue"));
+            } else if (attempt < 3) {
+              setTimeout(() => refreshList(attempt + 1), 2000 * attempt);
+            } else {
+              const e = document.querySelector(".list-error");
+              if (e) {
+                e.textContent = "Sync failed — please reload";
+                e.classList.remove("hidden");
+              }
+            }
+          }).catch(() => {
+            if (attempt < 3) {
+              setTimeout(() => refreshList(attempt + 1), 2000 * attempt);
+            } else {
+              const e = document.querySelector(".list-error");
+              if (e) {
+                e.textContent = "Sync failed — please reload";
+                e.classList.remove("hidden");
+              }
+            }
+          });
+        };
+        refreshList(1);
       },
 
       disconnected() {

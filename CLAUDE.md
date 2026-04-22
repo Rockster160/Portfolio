@@ -98,6 +98,8 @@ All Jil code MUST be validated with `Jil::Validator.validate!(code)` before bein
 
 **Workflow:** FIRST validate the Jil code in a spec. THEN write the prodExec script containing the validated code. Do NOT write the script first and validate after — validation must pass before the script file is finalized. Do NOT put the validator inside the script as a substitute — the script should never be created until validation has already passed in a spec.
 
+When presenting a prodExec command to the user, always confirm whether the current iteration of the code in the file has been validated. Example: "Validated ✓ — `prodExec lib/scripts/my_script.rb`"
+
 ## Environment
 
 Key env vars in `.env`: `PORTFOLIO_OPENAI_KEY`, `PORTFOLIO_TESLA_CLIENT_ID`, `PORTFOLIO_TWILIO_*`, `PORTFOLIO_S3_*`, `PORTFOLIO_SLACK_HOOK`
