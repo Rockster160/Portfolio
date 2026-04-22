@@ -10,10 +10,10 @@ class WhisperController < ApplicationController
       221, # Nap Toggle
       230, # Gone Toggle
       225, # Sleep
-      # 245, # Quiet - Needs more
       275, # Outside Toggle
-      208, # 1
-      209, # 2
+      # TODO: Replace with new task IDs after running prodExec whisper_new_buttons.rb
+      311, # Quiet Btn
+      312, # Nap Sound Btn
       # NOTE! When adding new tasks, ensure they are shared!
     ]
     # chels = User.find(58128)
