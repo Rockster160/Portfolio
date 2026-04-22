@@ -97,7 +97,7 @@ let contrastText = function (hex, text) {
     if (temps.bed_target > 0 && temps.bed_target > (temps.bed || 0) + 0.5) {
       bed += " (" + Math.round(temps.bed_target) + ")";
     }
-    return Text.justify(powerIcon, nozzle + " | " + bed, "  ");
+    return Text.justify(powerIcon, nozzle + " | " + bed, " ");
   };
 
   let timeagoLine = function () {
@@ -128,9 +128,7 @@ let contrastText = function (hex, text) {
     let lines = [];
 
     // Line 1: Temps
-    lines.push(
-      tempsLine() || Text.justify(Text.grey("⏻"), ""),
-    );
+    lines.push(tempsLine() || Text.justify(Text.grey("⏻"), ""));
 
     if (!status || status == "idle") {
       if (data.filament_color) {
