@@ -49,15 +49,40 @@ let contrastText = function (hex, text) {
     return parts.join("");
   };
 
+  let isPrinterOn = function () {
+    let ps = (cell.data.monitor_data || {}).printer_state;
+    if (!ps || !ps.flags) return false;
+    let flags = ps.flags;
+    if (Array.isArray(flags)) return flags.includes("operational") || flags.includes("printing");
+    return false;
+  };
+
+  let thermalStatus = function () {
+    if (!isPrinterOn()) return null;
+    let temps = (cell.data.monitor_data || {}).temps;
+    if (!temps) return null;
+
+    let nozDiff = (temps.nozzle_target || 0) - (temps.nozzle || 0);
+    let bedDiff = (temps.bed_target || 0) - (temps.bed || 0);
+
+    let heating = nozDiff > 5 || bedDiff > 5;
+    let cooling = !heating && (nozDiff < -5 || bedDiff < -5);
+
+    if (heating) return "preheating";
+    if (cooling) return "cooling down";
+    return null;
+  };
+
   let tempsLine = function () {
     let temps = (cell.data.monitor_data || {}).temps;
-    if (!temps || !temps.updated_at) {
-      return null;
-    }
+    let printerOn = isPrinterOn();
 
-    let updatedMs = new Date(temps.updated_at).getTime();
-    if (Date.now() - updatedMs > Time.hours(1)) {
-      return null;
+    let powerIcon = printerOn
+      ? Text.color(dash_colors.yellow, "[ico ti ti-iec-power]")
+      : Text.grey("[ico ti ti-iec-power]");
+
+    if (!temps || !temps.updated_at) {
+      return Text.justify(powerIcon, "");
     }
 
     let nozzle = Emoji.pen + Math.round(temps.nozzle || 0) + "°";
@@ -71,7 +96,7 @@ let contrastText = function (hex, text) {
     if (temps.bed_target > 0 && temps.bed_target > (temps.bed || 0) + 0.5) {
       bed += " (" + Math.round(temps.bed_target) + ")";
     }
-    return Text.center(nozzle + " | " + bed);
+    return Text.justify(powerIcon, nozzle + " | " + bed);
   };
 
   let timeagoLine = function () {
@@ -103,7 +128,7 @@ let contrastText = function (hex, text) {
 
     // Line 1: Temps
     lines.push(
-      tempsLine() || Text.center(Emoji.pen + "?° | " + Emoji.printer + " ?°"),
+      tempsLine() || Text.justify(Text.grey("[ico ti ti-iec-power]"), ""),
     );
 
     if (!status || status == "idle") {
@@ -118,8 +143,13 @@ let contrastText = function (hex, text) {
       return;
     }
 
-    // Line 2: Status (grey/muted)
-    lines.push(Text.center(Text.grey(status || "Unknown")));
+    // Line 2: Status (grey/muted) with optional thermal prefix
+    let thermal = thermalStatus();
+    let statusText = status || "Unknown";
+    if (thermal && isPrinterOn()) {
+      statusText = thermal + " - " + statusText;
+    }
+    lines.push(Text.center(Text.grey(statusText)));
 
     // Line 3: Print name with filament color background
     let printLabel = data.print_name || "[Unknown]";

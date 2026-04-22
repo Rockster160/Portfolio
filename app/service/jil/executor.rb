@@ -91,7 +91,14 @@ class Jil::Executor
       user: user, code: code, ctx: @ctx, task: task,
       input_data: TriggerData.serialize(input_data)
     )
-    ::Execution.order(started_at: :desc).where(user: user, task: task).offset(5).compact_all
+    ::Execution.where(
+      "id IN (
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (PARTITION BY status ORDER BY started_at DESC) AS rn
+          FROM executions WHERE user_id = :uid AND task_id = :tid
+        ) ranked WHERE rn > 10
+      )", uid: user.id, tid: task&.id
+    ).compact_all
     @lines = ::Jil::Parser.from_code(code)
   end
 
@@ -135,6 +142,7 @@ class Jil::Executor
         @ctx[:state] = :complete
         @ctx[:time_complete] = Time.current
         store_progress(finished_at: @ctx[:time_complete], status: state)
+        @execution.task&.update(last_status: state)
       end
       broadcast!
       self
