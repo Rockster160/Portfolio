@@ -60,16 +60,23 @@ let contrastText = function (hex, text) {
 
   let thermalStatus = function () {
     if (!isPrinterOn()) return null;
-    let temps = (cell.data.monitor_data || {}).temps;
+    let data = cell.data.monitor_data || {};
+    let temps = data.temps;
     if (!temps) return null;
 
     let nozDiff = (temps.nozzle_target || 0) - (temps.nozzle || 0);
     let bedDiff = (temps.bed_target || 0) - (temps.bed || 0);
+    let status = data.status;
 
     let heating = nozDiff > 5 || bedDiff > 5;
     let cooling = !heating && (nozDiff < -5 || bedDiff < -5);
 
-    if (heating) return "preheating";
+    if (heating) {
+      // During a print that hasn't begun extruding yet
+      if (status == "printing" && !data.print_began) return "preheating";
+      // Manual heating (no print)
+      if (status != "printing") return "heating";
+    }
     if (cooling) return "cooling down";
     return null;
   };
