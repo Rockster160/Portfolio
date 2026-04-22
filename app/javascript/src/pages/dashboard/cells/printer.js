@@ -144,10 +144,14 @@ let contrastText = function (hex, text) {
     let isDone = status == "complete" || status == "failed";
     let timeFmt = { hour: "numeric", minute: "2-digit" };
 
-    // Line 6: Duration
+    // Line 6: Duration — always {actual or elapsed} / {estimated}
     if (isDone) {
       let actualDuration = Number(data.actual_duration) || elapsed;
-      lines.push(Text.center(timestampToDuration(actualDuration)));
+      lines.push(
+        Text.center(
+          timestampToDuration(actualDuration) + " / " + timestampToDuration(estimated),
+        ),
+      );
     } else {
       lines.push(
         Text.center(
