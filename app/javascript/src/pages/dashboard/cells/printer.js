@@ -107,7 +107,12 @@ let contrastText = function (hex, text) {
     );
 
     if (!status || status == "idle") {
-      lines.push(Text.center("???"));
+      if (data.filament_color) {
+        lines.push(Text.center(contrastText(data.filament_color, "          ")));
+      } else {
+        lines.push("");
+      }
+      lines.push(Text.center(Text.grey("Idle")));
       lines.push(timeagoLine());
       cell.lines(padLines(lines));
       return;
