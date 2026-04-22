@@ -43,6 +43,23 @@
       margin-top: -2px;
     }
 
+    .stacked-emoji {
+      position: relative;
+      display: inline-block;
+      font-style: normal;
+      width: 1em;
+      height: 1em;
+      line-height: 1;
+
+      span {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        line-height: 1;
+      }
+    }
+
     .execute-btn-subtext {
       position: absolute;
       bottom: -25px;

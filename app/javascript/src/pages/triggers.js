@@ -42,6 +42,32 @@ document.addEventListener("ajax:error", (e) => {
   reenable(btn);
 });
 
+const splitGraphemes = (s) => {
+  if (window.Intl && Intl.Segmenter) {
+    const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+    return Array.from(seg.segment(s), (x) => x.segment);
+  }
+  return Array.from(s);
+};
+
+const setButtonText = (titleEl, text) => {
+  const stackMatch = text.match(/^\[stack (.+)\]$/);
+  if (stackMatch) {
+    const graphemes = splitGraphemes(stackMatch[1].trim());
+    titleEl.textContent = "";
+    const stack = document.createElement("i");
+    stack.className = "stacked-emoji";
+    graphemes.forEach((g) => {
+      const span = document.createElement("span");
+      span.textContent = g;
+      stack.appendChild(span);
+    });
+    titleEl.appendChild(stack);
+  } else {
+    titleEl.textContent = text;
+  }
+};
+
 document.addEventListener("DOMContentLoaded", function () {
   document
     .querySelectorAll(".execute-btn-wrapper")
@@ -68,8 +94,10 @@ document.addEventListener("DOMContentLoaded", function () {
             synced = true;
             clearInterval(syncInterval);
             if (json?.data?.text) {
-              executeBtn.querySelector(".execute-btn-title").textContent =
-                json.data.text;
+              setButtonText(
+                executeBtn.querySelector(".execute-btn-title"),
+                json.data.text,
+              );
             }
             if (json?.data?.color) {
               executeWrapper.style.setProperty("--btn-color", json.data.color);
