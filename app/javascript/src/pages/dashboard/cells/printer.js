@@ -50,11 +50,21 @@ let contrastText = function (hex, text) {
   };
 
   let isPrinterOn = function () {
-    let ps = (cell.data.monitor_data || {}).printer_state;
-    if (!ps || !ps.flags) return false;
-    let flags = ps.flags;
-    if (Array.isArray(flags))
-      return flags.includes("operational") || flags.includes("printing");
+    let data = cell.data.monitor_data || {};
+    let ps = data.printer_state;
+    // If OctoPrint has reported state, trust it
+    if (ps && ps.flags && Array.isArray(ps.flags)) {
+      if (ps.flags.includes("closedOrError")) return false;
+      if (ps.flags.includes("operational") || ps.flags.includes("printing")) return true;
+    }
+    // No OctoPrint state yet — fall back to HASS temps recency
+    if (!ps || !ps.flags) {
+      let temps = data.temps;
+      if (temps && temps.updated_at) {
+        let updatedMs = new Date(temps.updated_at).getTime();
+        if (Date.now() - updatedMs < Time.minutes(5)) return true;
+      }
+    }
     return false;
   };
 
@@ -69,16 +79,17 @@ let contrastText = function (hex, text) {
     let status = data.status;
 
     let heating = nozDiff > 5 || bedDiff > 5;
-    let aboveAmbient = (temps.nozzle || 0) > 25 || (temps.bed || 0) > 25;
-    let cooling = !heating && aboveAmbient && (nozDiff < -5 || bedDiff < -5);
 
     if (heating) {
-      // During a print that hasn't begun extruding yet
       if (status == "printing" && !data.print_began) return "preheating";
-      // Manual heating (no print)
       if (status != "printing") return "heating";
     }
-    if (cooling) return "cooling down";
+
+    // Cooling: temps > 35, targets are 0/off, printer is on, not heating
+    let above35 = (temps.nozzle || 0) > 35 || (temps.bed || 0) > 35;
+    let targetsOff = (temps.nozzle_target || 0) == 0 && (temps.bed_target || 0) == 0;
+    if (!heating && above35 && targetsOff) return "cooling down";
+
     return null;
   };
 
@@ -100,10 +111,10 @@ let contrastText = function (hex, text) {
       temps.nozzle_target > 0 &&
       temps.nozzle_target > (temps.nozzle || 0) + 0.5
     ) {
-      nozzle += " (" + Math.round(temps.nozzle_target) + ")";
+      nozzle += " " + Text.red("(" + Math.round(temps.nozzle_target) + ")");
     }
     if (temps.bed_target > 0 && temps.bed_target > (temps.bed || 0) + 0.5) {
-      bed += " (" + Math.round(temps.bed_target) + ")";
+      bed += " " + Text.red("(" + Math.round(temps.bed_target) + ")");
     }
     return Text.justify(powerIcon, nozzle + " | " + bed, " ");
   };
@@ -152,11 +163,16 @@ let contrastText = function (hex, text) {
       return;
     }
 
-    // Line 2: Status (grey/muted) with optional thermal prefix
+    // Line 2: Status
+    // If status is "printing" but print_began is false, it's preheating
     let thermal = thermalStatus();
-    let statusText = status || "Unknown";
-    if (thermal && isPrinterOn()) {
-      statusText = thermal + " - " + statusText;
+    let statusText;
+    if (status == "printing" && !data.print_began) {
+      statusText = "preheating";
+    } else if (thermal) {
+      statusText = thermal;
+    } else {
+      statusText = status || "Unknown";
     }
     lines.push(Text.center(Text.grey(statusText)));
 
