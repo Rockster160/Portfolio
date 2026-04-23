@@ -69,7 +69,8 @@ let contrastText = function (hex, text) {
     let status = data.status;
 
     let heating = nozDiff > 5 || bedDiff > 5;
-    let cooling = !heating && (nozDiff < -5 || bedDiff < -5);
+    let aboveAmbient = (temps.nozzle || 0) > 25 || (temps.bed || 0) > 25;
+    let cooling = !heating && aboveAmbient && (nozDiff < -5 || bedDiff < -5);
 
     if (heating) {
       // During a print that hasn't begun extruding yet
