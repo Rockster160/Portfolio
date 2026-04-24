@@ -128,13 +128,14 @@ class ApplicationRecord < ActiveRecord::Base
         when *%i[>=] then raw_sql("#{column} >= ?", parse_date(value, operator: operator))
         end
       elsif column_data.type.in?(%i[integer float decimal])
+        numeric = column_data.type == :integer ? value.to_i : value.to_f
         case operator
-        when *%i[= : ::] then raw_sql("#{column} = ?", value.to_f)
-        when *%i[!= !: !::] then raw_sql("#{column} != ?", value.to_f)
-        when *%i[<] then raw_sql("#{column} < ?", value.to_f)
-        when *%i[>] then raw_sql("#{column} > ?", value.to_f)
-        when *%i[<=] then raw_sql("#{column} <= ?", value.to_f)
-        when *%i[>=] then raw_sql("#{column} >= ?", value.to_f)
+        when *%i[= : ::] then raw_sql("#{column} = ?", numeric)
+        when *%i[!= !: !::] then raw_sql("#{column} != ?", numeric)
+        when *%i[<] then raw_sql("#{column} < ?", numeric)
+        when *%i[>] then raw_sql("#{column} > ?", numeric)
+        when *%i[<=] then raw_sql("#{column} <= ?", numeric)
+        when *%i[>=] then raw_sql("#{column} >= ?", numeric)
         end
       end
     }.compact_blank.then { |values|

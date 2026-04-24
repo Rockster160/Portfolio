@@ -100,7 +100,7 @@ RSpec.describe ApplicationRecord, type: :model do
 
     it "returns records matching the query with id range and NOT conditions" do
       sql = query("id < 20 id > 10 -(Potter OR Rowling)")
-      expect(sql).to eq("(((id < 20.0) AND (id > 10.0) AND (NOT ((\"name\"::TEXT ILIKE '%Potter%' OR \"notes\"::TEXT ILIKE '%Potter%') OR (\"name\"::TEXT ILIKE '%Rowling%' OR \"notes\"::TEXT ILIKE '%Rowling%')))))")
+      expect(sql).to eq("(((id < 20) AND (id > 10) AND (NOT ((\"name\"::TEXT ILIKE '%Potter%' OR \"notes\"::TEXT ILIKE '%Potter%') OR (\"name\"::TEXT ILIKE '%Rowling%' OR \"notes\"::TEXT ILIKE '%Rowling%')))))")
     end
 
     it "returns records matching the query with nested OR and NOT conditions" do
@@ -116,6 +116,26 @@ RSpec.describe ApplicationRecord, type: :model do
     it "returns based on a complex multi-query" do
       sql = query("timestamp>'2024-11-12T00:00:00-07:00' AND (name::(food OR drink OR treat OR snack OR soda) OR name::(workout OR Z OR Zish))")
       expect(sql).to eq("(((timestamp > '2024-11-12 07:00:00') AND (((name ILIKE 'food') OR (name ILIKE 'drink') OR (name ILIKE 'treat') OR (name ILIKE 'snack') OR (name ILIKE 'soda')) OR ((name ILIKE 'workout') OR (name ILIKE 'Z') OR (name ILIKE 'Zish')))))")
+    end
+
+    it "returns records matching id with colon operator" do
+      sql = query("id:44045")
+      expect(sql).to eq("((id = 44045))")
+    end
+
+    it "returns records matching id with double-colon operator" do
+      sql = query("id::44045")
+      expect(sql).to eq("((id = 44045))")
+    end
+
+    it "returns records matching multiple ids with OR" do
+      sql = query("(id::44045 OR id::44063 OR id::44119)")
+      expect(sql).to eq("(((id = 44045) OR (id = 44063) OR (id = 44119)))")
+    end
+
+    it "returns records matching multiple ids with field-level OR" do
+      sql = query("id::(44045 OR 44063 OR 44119)")
+      expect(sql).to eq("(((id = 44045) OR (id = 44063) OR (id = 44119)))")
     end
   end
 end

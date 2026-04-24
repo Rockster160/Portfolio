@@ -92,6 +92,80 @@ Configured in `.rubocop.yml`:
 - Block braces style (always braces)
 - **Symbols over strings**: Always use symbols for keys, enums, identifiers, and similar. Strings should only be used for multi-word values and user-facing messages.
 
+### Whitespace & Indentation (CRITICAL)
+
+These rules are non-negotiable and apply to ALL Ruby code:
+
+1. **No line should start or end with `.`** Keep chains on one line, use intermediate variable reassignment, or chain with consistent open/close blocks.
+   ```ruby
+   # WRONG
+   Prompt
+     .where(id: 44045)
+     .active.first
+
+   # RIGHT — single line
+   Prompt.active.where(id: 44045).first
+
+   # RIGHT — intermediate variable reassignment
+   scope = Prompt.active
+   scope = scope.where(id: 44045)
+   scope.first
+
+   # RIGHT — chained with consistent open/close blocks
+   @list = ListBuilder.joins(
+     list: :user_lists,
+   ).where(
+     user_lists: { user_id: current_user.id },
+   ).find_by!(
+     parameterized_name: params[:id],
+   )
+   ```
+
+2. **No skipped indent levels.** Applies everywhere: assignments, hash values, method args, conditions. Wrap multiline expressions in parentheses so indentation increments naturally.
+   ```ruby
+   # WRONG
+   result = if condition
+              something
+            else
+              other
+            end
+
+   # RIGHT
+   result = (
+     if condition
+       something
+     else
+       other
+     end
+   )
+   ```
+
+3. **Heredocs must have dedicated open/close lines** — never inline at the end of a method call, and never dangling after `=` on the next line.
+   ```ruby
+   # WRONG — inline
+   Jil::Executor.call(user, <<~'JIL')
+     code_here
+   JIL
+
+   # WRONG — dangling assignment
+   code =
+     <<~JIL
+       code_here
+     JIL
+
+   # RIGHT — method arg
+   Jil::Executor.call(user,
+     <<~'JIL',
+       code_here
+     JIL
+   )
+
+   # RIGHT — assignment on same line
+   code = <<~'JIL'
+     code_here
+   JIL
+   ```
+
 ## Jil Code Validation
 
 All Jil code MUST be validated with `Jil::Validator.validate!(code)` before being written to a prodExec script. The validator catches: invalid casts, duplicate variables, undefined references, unknown classes, content-block/positional-arg mismatches (e.g. raw Keyval blocks as Prompt.create data), and bare variables where content blocks are expected.

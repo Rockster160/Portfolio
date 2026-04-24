@@ -94,9 +94,28 @@ class Tokenizing::Node
     elsif tokens.is_a?(Array)
       return tokenize(tokens.first, compress: false, top: false) if tokens.one?
 
-      return parse_sections(
-        tokens.map { |section| keyword?(section) ? section.upcase.to_sym : section },
-      )
+      symbolized = tokens.map { |section| keyword?(section) ? section.upcase.to_sym : section }
+
+      # When operation tokens (::, :, <, >, etc.) are mixed with keyword tokens
+      # (OR, AND, NOT), group consecutive non-keyword tokens and parse each group
+      # as a string so field:op:value patterns are correctly recognized.
+      if symbolized.any? { |t| t.is_a?(String) && operation?(t) }
+        grouped = []
+        current_group = []
+        symbolized.each do |token|
+          if token.is_a?(Symbol)
+            grouped << tokenize(current_group.join(" "), compress: false, top: false) if current_group.any?
+            current_group = []
+            grouped << token
+          else
+            current_group << token
+          end
+        end
+        grouped << tokenize(current_group.join(" "), compress: false, top: false) if current_group.any?
+        return grouped.one? ? grouped.first : parse_sections(grouped)
+      end
+
+      return parse_sections(symbolized)
     end
 
     conditions = []
