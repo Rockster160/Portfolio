@@ -11,6 +11,7 @@ class Jil::Methods::Schedule < Jil::Methods::Base
   # [Schedule]
   #   #find(String|Numeric)
   #   #search # Using listener syntax trigger:word::data
+  #   #cancelByTag(String String)::Boolean
   #   .update!(content(ScheduleData))
   #   .cancel!::Boolean
   #   .id::String # String or Numeric?
@@ -74,6 +75,16 @@ class Jil::Methods::Schedule < Jil::Methods::Base
       ::Jil::Schedule.broadcast(s, :canceled)
       true
     } || false
+  end
+
+  def cancelByTag(trigger_name, tag) # rubocop:disable Naming/MethodName,Naming/PredicateMethod
+    matched = schedules.where(trigger: trigger_name).select { |s| s.data&.dig("tag") == tag }
+    matched.each { |s|
+      ::Jil::Schedule.cancel(s)
+      s.destroy
+      ::Jil::Schedule.broadcast(s, :canceled)
+    }
+    matched.any?
   end
 
   # [ScheduleData]
