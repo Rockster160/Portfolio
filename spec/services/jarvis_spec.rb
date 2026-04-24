@@ -444,6 +444,18 @@ RSpec.describe Jarvis do
       expect($ping_calls.last[1][:title]).to eq("Not done: Baby Gate 3'4 ⅞")
     end
 
+    it "does not schedule when time-like text is inside quotes" do
+      result = jarvis('Ping me "Not done: buy groceries at 3pm, finish report by tomorrow"')
+      expect(result).to eq("Sending you a ping saying: Not done: buy groceries at 3pm, finish report by tomorrow")
+      expect($ping_calls.last[1][:title]).to eq("Not done: buy groceries at 3pm, finish report by tomorrow")
+    end
+
+    it "does not schedule when quoted content contains newlines with time-like text" do
+      result = jarvis("Ping me \"Not done:\nbuy groceries at 3pm\nfinish report\"")
+      expect(result).to start_with("Sending you a ping saying:")
+      expect($ping_calls.last[1][:title]).to include("buy groceries at 3pm")
+    end
+
     it "schedules a ping with quoted content for later without triggering List" do
       @admin.lists.find_or_create_by(name: "Shopping")
       expect(::Jil::Schedule).to receive(:add_schedule).with(

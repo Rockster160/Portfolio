@@ -7,6 +7,8 @@ module Jarvis::Times
   def extract_time(words, chronic_opts={})
     rx = Jarvis::Regex
     drx = /\d+(?:\.\d+)?/
+    # Strip quoted sections so time-like text inside quotes isn't matched
+    words = words.gsub(/(?<!\S)["\u201C\u201D].*["\u201C\u201D]/m, " ").squish
     words = words.gsub(rx.words(:later), "today")
     month_words = Date::MONTHNAMES + Date::ABBR_MONTHNAMES
     month_words_regex = rx.words(month_words)
