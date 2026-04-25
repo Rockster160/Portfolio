@@ -1,0 +1,433 @@
+<%= meta_title @task ? "#{@task.name} - Dashboard" : "Execution Dashboard", include_name: false %>
+<%= meta_description "Visualize Jil task execution frequency to find runaway loops." %>
+
+<%
+  status_colors = {
+    "success"   => "#28A745",
+    "failed"    => "#DC3545",
+    "cancelled" => "#6C757D",
+    "started"   => "#007BFF",
+  }
+  bucket_label = case @bucket_seconds
+    when 60 then "per minute"
+    when 300 then "per 5 min"
+    when 900 then "per 15 min"
+    when 3600 then "per hour"
+    else "per #{@bucket_seconds}s"
+  end
+
+  histogram_buckets = @histogram.map { |r| r["bucket"] }.uniq.sort
+  histogram_by_bucket = @histogram.group_by { |r| r["bucket"] }
+  status_keys = %w[success failed cancelled started]
+  status_id_to_name = Execution.statuses.invert.transform_values(&:to_s)
+
+  dashboard_url = ->(opts) {
+    @task ? dashboard_jil_task_executions_path(@task, **opts) : dashboard_jil_executions_path(**opts)
+  }
+%>
+
+<div class="executions-index-container">
+  <div class="btn-container">
+    <% if @task %>
+      <a href="<%= jil_task_path(@task) %>" class="btn">Task</a>
+      <a href="<%= jil_task_executions_path(@task) %>" class="btn">History</a>
+      <a href="<%= dashboard_jil_executions_path %>" class="btn">All Tasks</a>
+    <% else %>
+      <a href="<%= jil_executions_path %>" class="btn">All Executions</a>
+      <a href="<%= jil_tasks_path %>" class="btn">Tasks</a>
+    <% end %>
+  </div>
+
+  <div class="lists-title">
+    <% if @task %>
+      <small>Dashboard:</small> <a href="<%= jil_task_path(@task) %>"><%= @task.name %></a>
+    <% else %>
+      <small>Execution Dashboard</small>
+    <% end %>
+  </div>
+
+  <div class="executions-filters">
+    <% Jil::ExecutionsController::WINDOW_OPTIONS.each do |key, opts| %>
+      <a href="<%= dashboard_url.call(window: key, rapid_threshold: @rapid_threshold) %>"
+         class="btn btn-small status-filter <%= 'active' if key == @window_key %>">
+        <%= opts[:label] %>
+      </a>
+    <% end %>
+    <span class="window-meta">
+      <strong><%= number_with_delimiter(@total_count) %></strong> executions in <%= @window_label.downcase %>
+    </span>
+  </div>
+
+  <div class="dashboard-section">
+    <div class="dashboard-section-title">Executions over time <small>(<%= bucket_label %>, stacked by status)</small></div>
+    <div class="chart-wrapper">
+      <canvas id="histogram-chart"></canvas>
+    </div>
+  </div>
+
+  <% if @task %>
+    <div class="dashboard-section breakdown-grid">
+      <div class="breakdown-card">
+        <div class="dashboard-section-title">Status breakdown</div>
+        <div class="breakdown-rows">
+          <% if @status_breakdown.empty? %>
+            <div class="empty-message">No executions in this window</div>
+          <% end %>
+          <% status_keys.each do |sk| %>
+            <% sid = Execution.statuses[sk] %>
+            <% count = @status_breakdown[sid].to_i %>
+            <% next if count.zero? %>
+            <div class="breakdown-row">
+              <span class="status-badge <%= sk %>"><%= sk %></span>
+              <span class="breakdown-count"><%= number_with_delimiter(count) %></span>
+              <span class="breakdown-pct">
+                <%= @total_count.positive? ? "#{((count.to_f / @total_count) * 100).round(1)}%" : "--" %>
+              </span>
+            </div>
+          <% end %>
+        </div>
+        <% if @avg_duration %>
+          <div class="breakdown-footer">
+            Avg duration: <strong><%= format_duration(@avg_duration) %></strong>
+          </div>
+        <% end %>
+      </div>
+
+      <div class="breakdown-card">
+        <div class="dashboard-section-title">Trigger source</div>
+        <div class="breakdown-rows">
+          <% if @auth_breakdown.empty? %>
+            <div class="empty-message">No executions in this window</div>
+          <% end %>
+          <% @auth_breakdown.sort_by { |_, v| -v }.each do |auth_id, count| %>
+            <% auth_name = Execution.auth_types.invert[auth_id] %>
+            <div class="breakdown-row">
+              <span class="auth-type <%= auth_name %>"><%= auth_name || "unknown" %></span>
+              <span class="breakdown-count"><%= number_with_delimiter(count) %></span>
+              <span class="breakdown-pct">
+                <%= @total_count.positive? ? "#{((count.to_f / @total_count) * 100).round(1)}%" : "--" %>
+              </span>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  <% else %>
+    <div class="dashboard-section">
+      <div class="dashboard-section-title">Top offenders <small>(by execution count)</small></div>
+      <div class="executions-table ttable wide striped">
+        <div class="trow title-row">
+          <div class="tcell">#</div>
+          <div class="tcell">Task</div>
+          <div class="tcell">Count</div>
+          <div class="tcell">Failed</div>
+          <div class="tcell">Avg Duration</div>
+          <div class="tcell">Last Run</div>
+        </div>
+        <% if @top_offenders.empty? %>
+          <div class="empty-message">No executions in this window</div>
+        <% end %>
+        <% @top_offenders.each_with_index do |row, idx| %>
+          <% task = @task_lookup[row.task_id] %>
+          <% count = row.execution_count.to_i %>
+          <% failed = row.failed_count.to_i %>
+          <% avg = row.avg_duration&.to_f %>
+          <% last_at = row.last_started_at %>
+          <% last_at = Time.zone.parse(last_at.to_s) if last_at && !last_at.is_a?(Time) %>
+          <div class="trow">
+            <div class="tcell rank-cell"><%= idx + 1 %></div>
+            <div class="tcell task-cell">
+              <% if task %>
+                <a href="<%= dashboard_jil_task_executions_path(task) %>"><%= task.name %></a>
+              <% elsif row.task_id %>
+                <span class="no-task">Task #<%= row.task_id %></span>
+              <% else %>
+                <span class="no-task">Ad-hoc</span>
+              <% end %>
+            </div>
+            <div class="tcell count-cell">
+              <strong><%= number_with_delimiter(count) %></strong>
+            </div>
+            <div class="tcell">
+              <% if failed > 0 %>
+                <span class="status-badge failed"><%= failed %></span>
+              <% else %>
+                <span class="dim">0</span>
+              <% end %>
+            </div>
+            <div class="tcell"><%= format_duration(avg) %></div>
+            <div class="tcell time-cell">
+              <% if last_at %>
+                <%= last_at.in_time_zone(current_user.timezone).to_formatted_s(:compact_week_month_time) %>
+                <div class="relative-time">(<%= relative_time_in_words(last_at) %>)</div>
+              <% else %>
+                --
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <div class="dashboard-section">
+    <div class="dashboard-section-title">
+      Rapid-fire detector <small>(consecutive runs &lt; <%= @rapid_threshold %>s apart)</small>
+    </div>
+    <form method="get" action="<%= dashboard_url.call({}) %>" class="threshold-form">
+      <input type="hidden" name="window" value="<%= @window_key %>">
+      <label for="rapid_threshold">Threshold (seconds):</label>
+      <input type="number" name="rapid_threshold" id="rapid_threshold" value="<%= @rapid_threshold %>" min="1" max="300" step="1">
+      <button type="submit" class="btn btn-small">Update</button>
+    </form>
+    <div class="executions-table ttable wide striped">
+      <div class="trow title-row">
+        <% unless @task %>
+          <div class="tcell">Task</div>
+        <% end %>
+        <div class="tcell">Rapid Pairs</div>
+        <div class="tcell">Min Gap</div>
+        <div class="tcell">Median Gap</div>
+        <div class="tcell">Last Run</div>
+      </div>
+      <% if @rapid_fire.empty? %>
+        <div class="empty-message">No rapid-fire patterns detected</div>
+      <% end %>
+      <% @rapid_fire.each do |row| %>
+        <% task = @task_lookup[row["task_id"]] %>
+        <% last_at = row["last_started_at"] %>
+        <% last_at = Time.zone.parse(last_at.to_s) if last_at && !last_at.is_a?(Time) %>
+        <div class="trow">
+          <% unless @task %>
+            <div class="tcell task-cell">
+              <% if task %>
+                <a href="<%= dashboard_jil_task_executions_path(task) %>"><%= task.name %></a>
+              <% else %>
+                <span class="no-task">Task #<%= row["task_id"] %></span>
+              <% end %>
+            </div>
+          <% end %>
+          <div class="tcell count-cell">
+            <strong><%= number_with_delimiter(row["rapid_count"].to_i) %></strong>
+          </div>
+          <div class="tcell"><%= format_duration(row["min_gap"].to_f) %></div>
+          <div class="tcell"><%= format_duration(row["median_gap"].to_f) %></div>
+          <div class="tcell time-cell">
+            <% if last_at %>
+              <%= last_at.in_time_zone(current_user.timezone).to_formatted_s(:compact_week_month_time) %>
+              <div class="relative-time">(<%= relative_time_in_words(last_at) %>)</div>
+            <% else %>
+              --
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</div>
+
+<script id="histogram-data" type="application/json">
+<%=
+  raw JSON.generate({
+    buckets: histogram_buckets.map { |b| (b.is_a?(Time) ? b : Time.zone.parse(b.to_s)).to_i * 1000 },
+    datasets: status_keys.map { |sk|
+      sid = Execution.statuses[sk]
+      {
+        status: sk,
+        color:  status_colors[sk],
+        data:   histogram_buckets.map { |b|
+          rows = histogram_by_bucket[b] || []
+          row = rows.find { |r| status_id_to_name[r["status"].to_i] == sk }
+          row ? row["count"].to_i : 0
+        },
+      }
+    },
+  })
+%>
+</script>
+
+<%= content_for :head do %>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+  <style>
+    .dashboard-section {
+      margin-bottom: 35px;
+    }
+
+    .dashboard-section-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 12px;
+      color: #E2E8F0;
+    }
+
+    .dashboard-section-title small {
+      font-weight: normal;
+      color: #888;
+      font-size: 13px;
+      margin-left: 6px;
+    }
+
+    .chart-wrapper {
+      background-color: #161B22;
+      border-radius: 6px;
+      padding: 16px;
+      height: 320px;
+      position: relative;
+    }
+
+    .window-meta {
+      margin-left: auto;
+      color: #C9D1D9;
+      font-size: 14px;
+    }
+
+    .window-meta strong {
+      color: #5DADE2;
+    }
+
+    .threshold-form {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      background: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      border: none !important;
+    }
+
+    .threshold-form label {
+      color: #C9D1D9;
+      font-size: 14px;
+    }
+
+    .threshold-form input[type="number"] {
+      width: 80px;
+    }
+
+    .rank-cell {
+      color: #888;
+      font-weight: bold;
+      width: 40px;
+    }
+
+    .count-cell strong {
+      color: #5DADE2;
+      font-size: 16px;
+    }
+
+    .dim {
+      color: #555;
+    }
+
+    .breakdown-grid {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: stretch;
+    }
+
+    .breakdown-card {
+      flex: 1;
+      background-color: #161B22;
+      border-radius: 6px;
+      padding: 16px 20px;
+      min-width: 0;
+    }
+
+    .breakdown-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .breakdown-row:last-child {
+      border-bottom: none;
+    }
+
+    .breakdown-rows {
+      margin-top: 8px;
+    }
+
+    .breakdown-count {
+      color: #C9D1D9;
+      font-weight: bold;
+      font-size: 16px;
+      margin-left: auto;
+    }
+
+    .breakdown-pct {
+      color: #8B949E;
+      font-size: 13px;
+      width: 56px;
+      text-align: right;
+    }
+
+    .breakdown-footer {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      color: #8B949E;
+      font-size: 13px;
+    }
+
+    .breakdown-footer strong {
+      color: #C9D1D9;
+    }
+  </style>
+<% end %>
+
+<%= content_for :after_body do %>
+  <script>
+    (function() {
+      var dataEl = document.getElementById("histogram-data");
+      if (!dataEl) return;
+      var payload = JSON.parse(dataEl.textContent);
+      var canvas = document.getElementById("histogram-chart");
+      if (!canvas || typeof Chart === "undefined") return;
+
+      var datasets = payload.datasets.map(function(ds) {
+        return {
+          label: ds.status,
+          data: payload.buckets.map(function(t, i) { return { x: t, y: ds.data[i] }; }),
+          backgroundColor: ds.color,
+          borderColor: ds.color,
+          borderWidth: 0,
+          stack: "executions",
+        };
+      });
+
+      new Chart(canvas, {
+        type: "bar",
+        data: { datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          scales: {
+            x: {
+              type: "time",
+              stacked: true,
+              ticks: { color: "#C9D1D9" },
+              grid: { color: "rgba(255,255,255,0.05)" },
+            },
+            y: {
+              stacked: true,
+              beginAtZero: true,
+              ticks: { color: "#C9D1D9", precision: 0 },
+              grid: { color: "rgba(255,255,255,0.05)" },
+              title: { display: true, text: "Executions", color: "#8B949E" },
+            },
+          },
+          plugins: {
+            legend: { labels: { color: "#C9D1D9" } },
+            tooltip: { mode: "index", intersect: false },
+          },
+        },
+      });
+    })();
+  </script>
+<% end %>

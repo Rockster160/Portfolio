@@ -202,6 +202,7 @@ Rails.application.routes.draw do
     get "t/:id" => "tasks#trigger"
     resources :executions, only: [:index, :show] do
       post :replay, on: :member
+      get :dashboard, on: :collection
     end
     post "tasks/reorder", to: "tasks#reorder", as: :reorder_tasks
     resources :tasks do
@@ -212,6 +213,7 @@ Rails.application.routes.draw do
       post :unarchive, on: :member
       resources :executions, only: [:index, :show] do
         post :replay, on: :member
+        get :dashboard, on: :collection
       end
     end
     resources :task_folders, only: [:create, :update, :destroy] do

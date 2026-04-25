@@ -9,6 +9,11 @@
     <% else %>
       <a href="<%= jil_tasks_path %>" class="btn">Tasks</a>
     <% end %>
+    <% if @task %>
+      <a href="<%= dashboard_jil_task_executions_path(@task) %>" class="btn">Dashboard</a>
+    <% else %>
+      <a href="<%= dashboard_jil_executions_path %>" class="btn">Dashboard</a>
+    <% end %>
   </div>
 
   <div class="lists-title">
