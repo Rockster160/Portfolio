@@ -2,19 +2,19 @@
 #
 # Table name: log_trackers
 #
-#  id          :integer          not null, primary key
-#  user_agent  :string
-#  ip_address  :string
+#  id          :bigint           not null, primary key
+#  body        :text
+#  headers     :text
 #  http_method :string
-#  url         :string
+#  ip_address  :string
+#  ip_count    :integer
 #  params      :string
-#  user_id     :integer
+#  url         :string
+#  user_agent  :string
 #  created_at  :datetime         not null
 #  updated_at  :datetime         not null
-#  ip_count    :integer
 #  location_id :integer
-#  headers     :text
-#  body        :text
+#  user_id     :integer
 #
 
 class LogTracker < ApplicationRecord
