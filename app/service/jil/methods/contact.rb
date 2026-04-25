@@ -95,7 +95,10 @@ class Jil::Methods::Contact < Jil::Methods::Base
 
     return false if friend&.contacts&.where(friend_id: @jil.user.id, permit_relay: true).blank?
 
-    ::Jil.trigger_now(friend, :relay, @jil.cast(data, :Hash).merge(from: @jil.user.username))
+    ::Jil.trigger(
+      friend, :relay, @jil.cast(data, :Hash).merge(from: @jil.user.username),
+      auth: :trigger, auth_id: @jil.task&.id,
+    )
     true
   end
 
@@ -104,7 +107,10 @@ class Jil::Methods::Contact < Jil::Methods::Base
 
     return false if friend&.contacts&.where(friend_id: @jil.user.id, permit_relay: true).blank?
 
-    ::Jil.trigger_now(friend, :relay, @jil.cast(data, :Hash).merge(from: @jil.user.username))
+    ::Jil.trigger(
+      friend, :relay, @jil.cast(data, :Hash).merge(from: @jil.user.username),
+      auth: :trigger, auth_id: @jil.task&.id,
+    )
     true
   end
 

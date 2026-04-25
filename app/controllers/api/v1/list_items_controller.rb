@@ -64,7 +64,7 @@ class Api::V1::ListItemsController < Api::V1::BaseController
     # added | changed | removed
     return if item.blank?
 
-    ::Jil.trigger(current_user, :item, item.jil_serialize(action: action))
+    jil_trigger(:item, item.jil_serialize(action: action))
   end
 
   def current_list

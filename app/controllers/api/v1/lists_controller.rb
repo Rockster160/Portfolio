@@ -72,7 +72,7 @@ class Api::V1::ListsController < Api::V1::BaseController
     # added | changed | removed
     return if list.blank?
 
-    ::Jil.trigger(current_user, :list, list.with_jil_attrs(action: action))
+    jil_trigger(:list, list.with_jil_attrs(action: action))
   end
 
   def current_list

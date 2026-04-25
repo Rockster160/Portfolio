@@ -36,7 +36,18 @@ class ApplicationController < ActionController::Base
   private
 
   def jil_trigger(scope, data={})
-    Jil.trigger(current_user, scope, data)
+    Jil.trigger(current_user, scope, data, auth: jil_auth_type, auth_id: jil_auth_id)
+  end
+
+  def jil_auth_type
+    return @auth_type if @auth_type
+    return :trigger if current_user.blank?
+
+    current_user.guest? ? :guest : :userpass
+  end
+
+  def jil_auth_id
+    @auth_type_id || current_user&.id
   end
 
   def tracker

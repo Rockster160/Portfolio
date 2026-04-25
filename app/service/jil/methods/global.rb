@@ -174,7 +174,10 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def commandAt(date, text)
-    ::Jil::Schedule.add_schedule(@jil.user, date, :command, { words: text })
+    ::Jil::Schedule.add_schedule(
+      @jil.user, date, :command, { words: text },
+      auth: :trigger, auth_id: @jil.task&.id
+    )
   end
 
   def broadcast_websocket(channel, data)
@@ -212,8 +215,8 @@ class Jil::Methods::Global < Jil::Methods::Base
 
   def requestBody(url, params, headers)
     res = ::RestClient::Request.execute(
-      method: :get,
-      url: url,
+      method:  :get,
+      url:     url,
       payload: @jil.cast(params.presence || {}, :Hash).to_json,
       headers: @jil.cast(headers.presence || {}, :Hash).merge(content_type: :json),
     )
@@ -228,15 +231,21 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def triggerNow(scope, data)
-    ::Jil.trigger_now(@jil.user, scope, data).map(&:serialize_with_execution)
+    ::Jil.trigger(@jil.user, scope, data, auth: :trigger, auth_id: @jil.task&.id).map(&:serialize_with_execution)
   end
 
   def triggerWith(scope, date, data)
-    ::Jil::Schedule.add_schedule(@jil.user, date, scope, @jil.cast(data, :Hash))
+    ::Jil::Schedule.add_schedule(
+      @jil.user, date, scope, @jil.cast(data, :Hash),
+      auth: :trigger, auth_id: @jil.task&.id
+    )
   end
 
   def trigger(scope, date, data)
-    ::Jil::Schedule.add_schedule(@jil.user, date, scope, @jil.cast(data, :Hash))
+    ::Jil::Schedule.add_schedule(
+      @jil.user, date, scope, @jil.cast(data, :Hash),
+      auth: :trigger, auth_id: @jil.task&.id
+    )
   end
 
   # times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric

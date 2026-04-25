@@ -35,7 +35,7 @@ class Api::V1::SectionsController < Api::V1::BaseController
   def trigger(action, section)
     return if section.blank?
 
-    ::Jil.trigger(current_user, :section, section.with_jil_attrs(action: action))
+    jil_trigger(:section, section.with_jil_attrs(action: action))
   end
 
   def current_list

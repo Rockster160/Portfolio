@@ -35,7 +35,7 @@ class SectionsController < ApplicationController
     # added | changed | removed
     return if section.blank?
 
-    ::Jil.trigger(current_user, :section, section.with_jil_attrs(action: action))
+    jil_trigger(:section, section.with_jil_attrs(action: action))
   end
 
   def set_list

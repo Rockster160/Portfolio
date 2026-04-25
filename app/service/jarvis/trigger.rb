@@ -16,7 +16,7 @@ class Jarvis::Trigger < Jarvis::Action
     scope, raw_data = raw.split(":", 2)
     data = raw_data.present? ? TriggerData.parse(raw_data, as: @user) : {}
 
-    ::Jil.trigger(@user, scope.strip, data)
+    ::Jil.trigger(@user, scope.strip, data, auth: :words)
     "Triggered #{scope.strip}"
   end
 

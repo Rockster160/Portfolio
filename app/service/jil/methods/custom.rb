@@ -17,7 +17,10 @@ class Jil::Methods::Custom < Jil::Methods::Base
     raise ::Jil::ExecutionError, "Undefined Method #{line.methodname}" if task.blank?
 
     input_data = build_function_params(line.args)
-    task.execute(input_data, broadcast_task: @jil.broadcast_task)&.result
+    task.execute(
+      input_data, broadcast_task: @jil.broadcast_task,
+      auth: :exec, auth_id: @jil.task&.id, trigger_scope: :exec
+    )&.result
   end
 
   private

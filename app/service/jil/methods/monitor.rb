@@ -37,7 +37,8 @@ class Jil::Methods::Monitor < Jil::Methods::Base
   def refresh(name, data)
     ::Jil.trigger(
       @jil.user, :monitor,
-      { id: name, channel: name, refresh: true }.reverse_merge(data.presence || {})
+      { id: name, channel: name, refresh: true }.reverse_merge(data.presence || {}),
+      auth: :trigger, auth_id: @jil.task&.id
     )
     { id: name, channel: name }
   end

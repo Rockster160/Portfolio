@@ -33,7 +33,7 @@ class WebhooksController < ApplicationController
   # /jil/webhook
   def jil_webhook
     json_params.each do |key, data|
-      ::Jil.trigger(current_user, key, data)
+      jil_trigger(key, data)
     end
 
     head :ok
@@ -42,14 +42,13 @@ class WebhooksController < ApplicationController
   # /jil/trigger/:trigger?
   def jil
     if params.key?(:trigger)
-      ::Jil.trigger(
-        current_user,
+      jil_trigger(
         params[:trigger],
         json_params[:data].presence || json_params.except(:trigger),
       )
     else
       json_params.each do |trigger, data|
-        ::Jil.trigger(current_user, trigger, data)
+        jil_trigger(trigger, data)
       end
     end
 
@@ -61,7 +60,10 @@ class WebhooksController < ApplicationController
     task = current_user.tasks.active.enabled.find_by(uuid: params[:uuid])
 
     if task.present?
-      exe = task.match_run(:webhook, { params: json_params }, force: true)
+      exe = task.match_run(
+        :webhook, { params: json_params },
+        force: true, auth: jil_auth_type, auth_id: jil_auth_id
+      )
 
       if exe.nil?
         render json: {

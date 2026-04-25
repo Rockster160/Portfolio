@@ -31,8 +31,8 @@ bundle exec rspec spec/path/file_spec.rb:42  # Single test at line
 bundle exec rubocop
 bundle exec rubocop -A                 # Auto-correct
 
-# Database
-bundle exec rake db:migrate
+# Database (ALWAYS use RAILS_ENV=test — never run in dev)
+RAILS_ENV=test bundle exec rake db:migrate
 bundle exec annotate                   # Update model annotations
 
 # Deployment (auto-deploys on master push via GitHub Actions)

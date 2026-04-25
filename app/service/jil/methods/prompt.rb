@@ -36,7 +36,10 @@ class Jil::Methods::Prompt < Jil::Methods::Base
       params:   TriggerData.serialize(@jil.cast(data.presence, :Hash).presence),
       options:  Array.wrap(questions).flatten.select { |q| q.is_a?(Hash) },
     ).tap { |prompt|
-      ::Jil.trigger(@jil.user, :prompt, prompt.with_jil_attrs(state: :create))
+      ::Jil.trigger(
+        @jil.user, :prompt, prompt.with_jil_attrs(state: :create),
+        auth: :trigger, auth_id: @jil.task&.id
+      )
       broadcast_push(prompt) if deliver
     }
   end

@@ -11,11 +11,12 @@ every_minute = "* * * * *"
 every_5_minutes = "*/5 * * * *"
 every_hour = "0 * * * *"
 every_3_daylight_hours = "0 5-21/3 * * * MST"
-daily_9pm = "0 3 * * *"
-thursdays_at_noon = "0 18 * * 4"
-mondays_at_noon = "0 18 * * 1"
-monthly_5th_at_11am = "0 17 5 * *"
-monthly_1st_at_midnight = "0 6 1 * *"
+daily_4am = "0 4 * * * MST"
+daily_9pm = "0 21 * * * MST"
+thursdays_at_noon = "0 12 * * 4 MST"
+mondays_at_noon = "0 12 * * 1 MST"
+monthly_5th_at_11am = "0 11 5 * * MST"
+monthly_1st_at_midnight = "0 0 1 * * MST"
 
 cron_jobs = [
   {

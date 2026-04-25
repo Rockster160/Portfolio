@@ -60,7 +60,7 @@ class Jarvis::Log < Jarvis::Action
   end
 
   def broadcast_event
-    ::Jil.trigger(@event.user, :event, @event.with_jil_attrs(action: :added))
+    ::Jil.trigger(@event.user, :event, @event.with_jil_attrs(action: :added), auth: :words)
     ActionEventBroadcastWorker.perform_async(@event.id)
 
     evt_words = ["Logged #{@event.name}"]

@@ -1,20 +1,22 @@
 module Jil::Schedule
   module_function
 
-  def add_schedules(users, execute_at, trigger, data)
+  def add_schedules(users, execute_at, trigger, data, auth: nil, auth_id: nil)
     Array.wrap(users).filter_map { |user|
-      add_schedule(user, execute_at, trigger, data)
+      add_schedule(user, execute_at, trigger, data, auth: auth, auth_id: auth_id)
     }
   end
 
-  def add_schedule(user, execute_at, trigger, data)
+  def add_schedule(user, execute_at, trigger, data, auth: nil, auth_id: nil)
     return if trigger.blank?
 
     schedule = ::ScheduledTrigger.create!(
-      user_id:    ::User.id(user),
-      trigger:    trigger,
-      execute_at: execute_at.presence || ::Time.current,
-      data:       data,
+      user_id:      ::User.id(user),
+      trigger:      trigger,
+      execute_at:   execute_at.presence || ::Time.current,
+      data:         data,
+      auth_type:    auth,
+      auth_type_id: auth_id,
     )
 
     add_job(schedule) unless far_future?(schedule)
@@ -25,7 +27,10 @@ module Jil::Schedule
     # Do not broadcast creation of immediate triggers since they're just function calls
     return schedule if immediate?(schedule) && action.to_sym == :created
 
-    ::Jil.trigger_now(schedule.user, :schedule, { schedule_id: schedule.id, action: action })
+    ::Jil.trigger(
+      schedule.user, :schedule, { schedule_id: schedule.id, action: action },
+      auth: schedule.auth_type || :trigger, auth_id: schedule.auth_type_id
+    )
     schedule
   end
 

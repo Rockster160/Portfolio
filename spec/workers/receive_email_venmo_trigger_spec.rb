@@ -32,7 +32,7 @@ RSpec.describe "Venmo Chelsea email trigger", type: :worker do
     email = Email.last
     expect(email.subject).to eq("Chelsea Haven paid you $1.00")
 
-    results = ::Jil.trigger_now(user, :email, email)
+    results = ::Jil.trigger(user, :email, email)
     triggered_names = results.map(&:name)
 
     expect(triggered_names).to include(task.name)

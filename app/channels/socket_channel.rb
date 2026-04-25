@@ -79,6 +79,6 @@ class SocketChannel < ApplicationCable::Channel
     receive_data = data.reverse_merge(params).except(:action).merge(connection_state: state || "unset")
     pretty_log_data(receive_data)
 
-    ::Jil.trigger(current_user, :websocket, receive_data)
+    ::Jil.trigger(current_user, :websocket, receive_data, auth: :userpass, auth_id: current_user.id)
   end
 end

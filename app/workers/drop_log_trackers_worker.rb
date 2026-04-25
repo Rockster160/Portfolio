@@ -4,6 +4,6 @@ class DropLogTrackersWorker
   sidekiq_options retry: false
 
   def perform
-    LogTracker.where(created_at: ..1.month.ago).delete_all
+    LogTracker.where(created_at: ..5.weeks.ago).delete_all
   end
 end

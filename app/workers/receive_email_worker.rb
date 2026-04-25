@@ -26,7 +26,7 @@ class ReceiveEmailWorker
     return unless trigger
 
     # TODO: If using UUID, should specifically trigger ONLY that Task with the email as input.
-    tasks = ::Jil.trigger_now(user, :email, @email)
+    tasks = ::Jil.trigger(user, :email, @email)
     return if tasks.any?(&:stop_propagation?)
 
     @email.reload # Since Jil updates them out of scope

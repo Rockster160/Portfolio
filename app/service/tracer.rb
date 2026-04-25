@@ -1,4 +1,4 @@
-# tracer = Tracer.trace { ::Jil.trigger_now(me, :email, email) }
+# tracer = Tracer.trace { ::Jil.trigger(me, :email, email) }
 # puts "Top 10 slowest methods:"
 # tracer.slowest(10).each { |method, time| puts "%0.8f s %s" % [time, method] }
 # ptable(tracer.table.map { |method, count, total, avg|

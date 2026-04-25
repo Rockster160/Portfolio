@@ -2,17 +2,18 @@
 #
 # Table name: executions
 #
-#  id           :bigint           not null, primary key
-#  auth_type    :integer
-#  finished_at  :datetime
-#  started_at   :datetime
-#  status       :integer          default("started")
-#  created_at   :datetime         not null
-#  updated_at   :datetime         not null
-#  auth_type_id :integer
-#  payload_id   :bigint
-#  task_id      :bigint
-#  user_id      :bigint
+#  id            :bigint           not null, primary key
+#  auth_type     :integer
+#  finished_at   :datetime
+#  started_at    :datetime
+#  status        :integer          default("started")
+#  trigger_scope :string
+#  created_at    :datetime         not null
+#  updated_at    :datetime         not null
+#  auth_type_id  :integer
+#  payload_id    :bigint
+#  task_id       :bigint
+#  user_id       :bigint
 #
 class Execution < ApplicationRecord
   belongs_to :user
@@ -37,6 +38,8 @@ class Execution < ApplicationRecord
     jwt:      5, # + user id
     trigger:  6, # + source task id | nil means internal trigger
     exec:     7, # + source task id
+    cron:     8, # nil - task self-fired via its own cron schedule
+    words:    9, # nil - voice/text command processed via Jarvis (always the owner)
   }
 
   enum :status, {
@@ -87,5 +90,29 @@ class Execution < ApplicationRecord
 
   def stop_propagation?
     !!(ctx || {}).deep_symbolize_keys[:stop_propagation]
+  end
+
+  AUTH_RECORD_CLASSES = {
+    guest:    "User",
+    userpass: "User",
+    run:      "User",
+    jwt:      "User",
+    api_key:  "ApiKey",
+    trigger:  "Task",
+    exec:     "Task",
+  }.freeze
+
+  def auth_record
+    return if auth_type_id.blank?
+
+    AUTH_RECORD_CLASSES[auth_type&.to_sym]&.safe_constantize&.find_by(id: auth_type_id)
+  end
+
+  def auth_label
+    return "unknown" if auth_type.blank? && auth_type_id.blank?
+
+    klass = AUTH_RECORD_CLASSES[auth_type&.to_sym]
+    label = klass.presence || auth_type
+    auth_type_id.present? ? "#{label}##{auth_type_id}" : label.to_s
   end
 end

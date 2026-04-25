@@ -10,6 +10,8 @@
 #  name         :text
 #  started_at   :datetime
 #  trigger      :text             not null
+#  auth_type    :integer
+#  auth_type_id :integer
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
 #  user_id      :bigint           not null
@@ -17,6 +19,8 @@
 class ScheduledTrigger < ApplicationRecord
   REDIS_OFFSET = 10.minutes
   belongs_to :user
+
+  enum :auth_type, ::Execution.auth_types
 
   timestamp_bool :execute_at, :completed_at, :started_at
 

@@ -97,7 +97,10 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   private
 
   def event_callbacks(event, action, update_streak=true, &callback)
-    ::Jil.trigger(@jil.user, :event, event.with_jil_attrs(action: action))
+    ::Jil.trigger(
+      @jil.user, :event, event.with_jil_attrs(action: action),
+      auth: :trigger, auth_id: @jil.task&.id
+    )
     callback&.call(event)
     ActionEventBroadcastWorker.perform_async(event.id, update_streak)
   end

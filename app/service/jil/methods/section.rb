@@ -26,7 +26,10 @@ class Jil::Methods::Section < Jil::Methods::Base
   def create(list_name, name, color)
     list = List.by_name_for_user(list_name, @jil.user)
     list.sections.create!(name: name, color: color).tap { |section|
-      ::Jil.trigger(@jil.user, :section, section.with_jil_attrs(action: :added))
+      ::Jil.trigger(
+        @jil.user, :section, section.with_jil_attrs(action: :added),
+        auth: :trigger, auth_id: @jil.task&.id
+      )
     }
   end
 
@@ -45,7 +48,10 @@ class Jil::Methods::Section < Jil::Methods::Base
     attrs[:name] = new_name if new_name.present?
     attrs[:color] = new_color if new_color.present?
     section.update!(attrs) if attrs.present?
-    ::Jil.trigger(@jil.user, :section, section.with_jil_attrs(action: :changed))
+    ::Jil.trigger(
+      @jil.user, :section, section.with_jil_attrs(action: :changed),
+      auth: :trigger, auth_id: @jil.task&.id
+    )
     section
   end
 
@@ -53,7 +59,10 @@ class Jil::Methods::Section < Jil::Methods::Base
     section = load_section(section_data)
     section.list_items.update_all(section_id: nil)
     section.destroy.tap {
-      ::Jil.trigger(@jil.user, :section, section.with_jil_attrs(action: :removed))
+      ::Jil.trigger(
+        @jil.user, :section, section.with_jil_attrs(action: :removed),
+        auth: :trigger, auth_id: @jil.task&.id
+      )
     }
   end
 

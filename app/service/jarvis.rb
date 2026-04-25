@@ -164,9 +164,10 @@ class Jarvis
     remaining_words = @words
     remaining_words = @words.sub(Regexp.new("(?:\b(?:at|on)\b )?#{time_str}", :i), "").squish if scheduled_time
     timestamp = (scheduled_time || Time.current).in_time_zone(@user.timezone).iso8601
-    tasks = ::Jil.trigger_now(
+    tasks = ::Jil.trigger(
       @user, :tell,
-      { words: remaining_words, timestamp: timestamp, full: @words }
+      { words: remaining_words, timestamp: timestamp, full: @words },
+      auth: :words,
     )
     return tasks.last.last_message if tasks.any?(&:stop_propagation?)
 

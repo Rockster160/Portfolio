@@ -17,7 +17,7 @@ class JilRunnerWorker
 
       user.tasks.active.ordered.enabled.pending.each do |task|
         executed_any = true
-        task.execute
+        task.execute(auth: :cron)
       end
 
       # Execute all ScheduledTriggers that are ready
@@ -25,9 +25,10 @@ class JilRunnerWorker
         executed_any = true
         schedule.started!
 
-        ::Jil.trigger_now(
+        ::Jil.trigger(
           schedule.user, schedule.trigger,
-          { timestamp: schedule.execute_at }.merge(schedule.data)
+          { timestamp: schedule.execute_at }.merge(schedule.data),
+          auth: schedule.auth_type || :trigger, auth_id: schedule.auth_type_id
         )
 
         schedule.completed!

@@ -40,6 +40,7 @@ class Jil::ExecutionsController < ApplicationController
     if @task
       @status_breakdown = scope.group(:status).count.transform_keys { |k| Execution.statuses[k] || k }
       @auth_breakdown = scope.group(:auth_type).count.transform_keys { |k| Execution.auth_types[k] || k }
+      @scope_breakdown = scope.group(:trigger_scope).count
       @avg_duration = scope.where.not(finished_at: nil).pick(
         Arel.sql("AVG(EXTRACT(EPOCH FROM (finished_at - started_at)))"),
       )&.to_f
@@ -166,7 +167,7 @@ class Jil::ExecutionsController < ApplicationController
     code = @execution.code
     input_data = @execution.input_data || {}
 
-    ::Jil::Executor.async_call(run_as_user, code, input_data, task: task, auth: :run)
+    ::Jil::Executor.async_call(run_as_user, code, input_data, task: task, auth: :run, auth_id: current_user.id)
 
     flash[:notice] = "Execution replayed successfully"
     redirect_back(fallback_location: task ? jil_task_executions_path(task) : jil_executions_path)

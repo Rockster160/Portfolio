@@ -10,7 +10,10 @@ class RecentEventsChannel < ApplicationCable::Channel
     event = current_user.action_events.create!(
       data.slice(:name, :notes, :timestamp),
     )
-    ::Jil.trigger(current_user, :event, event.with_jil_attrs(action: :added))
+    ::Jil.trigger(
+      current_user, :event, event.with_jil_attrs(action: :added),
+      auth: :userpass, auth_id: current_user.id
+    )
     ::ActionEventBroadcastWorker.perform_async(event.id)
   end
 end

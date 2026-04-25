@@ -111,6 +111,24 @@
           <% end %>
         </div>
       </div>
+
+      <div class="breakdown-card">
+        <div class="dashboard-section-title">Trigger scope</div>
+        <div class="breakdown-rows">
+          <% if @scope_breakdown.blank? %>
+            <div class="empty-message">No executions in this window</div>
+          <% end %>
+          <% @scope_breakdown.to_a.sort_by { |_, v| -v }.each do |scope_name, count| %>
+            <div class="breakdown-row">
+              <span class="trigger-scope <%= scope_name %>"><%= scope_name.presence || "unknown" %></span>
+              <span class="breakdown-count"><%= number_with_delimiter(count) %></span>
+              <span class="breakdown-pct">
+                <%= @total_count.positive? ? "#{((count.to_f / @total_count) * 100).round(1)}%" : "--" %>
+              </span>
+            </div>
+          <% end %>
+        </div>
+      </div>
     </div>
   <% else %>
     <div class="dashboard-section">

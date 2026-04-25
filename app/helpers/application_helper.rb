@@ -82,6 +82,17 @@ module ApplicationHelper
     end
   end
 
+  def execution_auth_link(execution)
+    label = execution.auth_label
+    record = execution.auth_record
+
+    case record
+    when ::Task   then link_to(label, jil_task_path(record.id), class: "auth-link task")
+    when ::ApiKey then link_to(label, edit_api_key_path(record.id), class: "auth-link api-key")
+    else label
+    end
+  end
+
   def safeparse_time(time, fallback=::Time.current)
     return fallback if time.blank?
 

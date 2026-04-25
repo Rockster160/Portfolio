@@ -568,7 +568,7 @@ RSpec.describe Jarvis do
         data:       { words: "trigger whisper-quiet" },
       )
 
-      ::Jil.trigger_now(
+      ::Jil.trigger(
         schedule.user, schedule.trigger,
         { timestamp: schedule.execute_at }.merge(schedule.data)
       )
@@ -592,7 +592,7 @@ RSpec.describe Jarvis do
       # Step 2: Simulate JilRunnerWorker executing the schedule
       broadcasts.clear
       schedule.started!
-      ::Jil.trigger_now(
+      ::Jil.trigger(
         schedule.user, schedule.trigger,
         { timestamp: schedule.execute_at }.merge(schedule.data)
       )
@@ -619,7 +619,7 @@ RSpec.describe Jarvis do
 
       # Execute like JilRunnerWorker does
       schedule.started!
-      ::Jil.trigger_now(
+      ::Jil.trigger(
         schedule.user, schedule.trigger,
         { timestamp: schedule.execute_at }.merge(schedule.data)
       )

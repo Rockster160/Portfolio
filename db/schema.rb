@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_04_25_174310) do
+ActiveRecord::Schema[7.1].define(version: 2026_04_25_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -342,8 +342,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_25_174310) do
     t.integer "auth_type"
     t.integer "auth_type_id"
     t.bigint "payload_id"
+    t.string "trigger_scope"
     t.index ["started_at"], name: "index_executions_on_started_at"
     t.index ["task_id", "started_at"], name: "index_executions_on_task_id_and_started_at", order: { started_at: :desc }
+    t.index ["trigger_scope"], name: "index_executions_on_trigger_scope"
     t.index ["user_id", "started_at"], name: "index_executions_on_user_id_and_started_at", order: { started_at: :desc }
   end
 
@@ -657,6 +659,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_25_174310) do
     t.text "name"
     t.datetime "started_at"
     t.datetime "completed_at"
+    t.integer "auth_type"
+    t.integer "auth_type_id"
     t.index ["user_id"], name: "index_scheduled_triggers_on_user_id"
   end
 

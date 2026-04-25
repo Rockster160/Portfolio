@@ -18,7 +18,7 @@ class Jil::Executor
   #   end
   # end
 
-  def self.trigger(user, trigger, raw_trigger_data={})
+  def self.trigger(user, trigger, raw_trigger_data={}, auth: :trigger, auth_id: nil)
     if trigger.blank?
       lines = caller.select { |line|
         line.include?(Rails.root.to_s) || line.include?("_scripts")
@@ -46,7 +46,7 @@ class Jil::Executor
 
       ran = nil
       begin
-        ran = task.match_run(trigger, trigger_data) && task
+        ran = task.match_run(trigger, trigger_data, auth: auth, auth_id: auth_id) && task
       rescue StandardError => e
         if Rails.env.production?
           Rails.logger.error("[Jil::Executor.trigger] Task##{task.id} #{e.class}: #{e.message}")
@@ -68,20 +68,23 @@ class Jil::Executor
   end
 
   # Used for directly executing code via UI
-  def self.async_call(user, code, input_data={}, task: nil, auth: nil)
+  def self.async_call(user, code, input_data={}, task: nil, auth: nil, auth_id: nil, trigger_scope: nil)
     # Might need to serialize objects into GID
-    ::JilExecuteWorker.perform_async(user.id, code, input_data, task&.id, auth)
+    ::JilExecuteWorker.perform_async(user.id, code, input_data, task&.id, auth, auth_id, trigger_scope)
   end
 
-  def self.call(user, code, input_data={}, task: nil, auth: nil, broadcast_task: nil)
-    new(user, code, input_data, task: task, broadcast_task: broadcast_task).execute_all
+  def self.call(user, code, input_data={}, task: nil, auth: nil, auth_id: nil, trigger_scope: nil, broadcast_task: nil)
+    new(
+      user, code, input_data,
+      task: task, auth: auth, auth_id: auth_id, trigger_scope: trigger_scope,
+      broadcast_task: broadcast_task
+    ).execute_all
   end
 
-  def initialize(user, code, input_data={}, task: nil, auth: nil, broadcast_task: nil)
+  def initialize(user, code, input_data={}, task: nil, auth: nil, auth_id: nil, trigger_scope: nil, broadcast_task: nil)
     # @debug = true && !Rails.env.production?
     load("/Users/zoro/.pryrc") if @debug
 
-    # Need to store auth, but need to remember to pass the id as well
     @user = user
     @task = task
     @broadcast_task = broadcast_task || task
@@ -90,7 +93,10 @@ class Jil::Executor
     payload = ::ExecutionPayload.create(
       code: code, ctx: @ctx, input_data: TriggerData.serialize(input_data),
     )
-    @execution = ::Execution.create(user: user, task: task, payload: payload)
+    @execution = ::Execution.create(
+      user: user, task: task, payload: payload,
+      auth_type: auth, auth_type_id: auth_id, trigger_scope: trigger_scope&.to_s
+    )
     @lines = ::Jil::Parser.from_code(code)
   end
 

@@ -5,7 +5,10 @@ class Jil::FormsController < ApplicationController
   def show
     input_data = { form: true, params: extra_params }
 
-    executor = Jil::Executor.call(current_user, @task.code, input_data)
+    executor = Jil::Executor.call(
+      current_user, @task.code, input_data,
+      task: @task, auth: jil_auth_type, auth_id: jil_auth_id, trigger_scope: :form
+    )
     result = (executor.ctx[:return_val] || {})
     result = result.with_indifferent_access if result.is_a?(Hash)
 
@@ -27,7 +30,10 @@ class Jil::FormsController < ApplicationController
       params:   original,
     }
 
-    executor = Jil::Executor.call(current_user, @task.code, input_data)
+    executor = Jil::Executor.call(
+      current_user, @task.code, input_data,
+      task: @task, auth: jil_auth_type, auth_id: jil_auth_id, trigger_scope: :form
+    )
     result = (executor.ctx[:return_val] || {})
     result = result.with_indifferent_access if result.is_a?(Hash)
 

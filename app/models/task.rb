@@ -284,7 +284,7 @@ class Task < ApplicationRecord
     }
   end
 
-  def match_run(trigger, trigger_data, force: false)
+  def match_run(trigger, trigger_data, force: false, auth: :trigger, auth_id: nil)
     first_match = nil
     serialized_data = TriggerData.serialize(trigger_data, use_global_id: false)
     did_match = listener_match?(trigger) { |sub_listener|
@@ -302,11 +302,18 @@ class Task < ApplicationRecord
     ::Jarvis.log("[#{id}]\e[35m#{listener}")
 
     # pretty_log(trigger, trigger_data) if Rails.env.development?
-    execute(trigger_data.merge(first_match&.regex_match_data || { match_list: [], named_captures: {} }))
+    execute(
+      trigger_data.merge(first_match&.regex_match_data || { match_list: [], named_captures: {} }),
+      auth: auth, auth_id: auth_id, trigger_scope: trigger.to_s,
+    )
   end
 
-  def execute(data={}, broadcast_task: nil)
-    ::Jil::Executor.call(user, code, data, task: self, broadcast_task: broadcast_task || self).tap { @last_execution = nil }
+  def execute(data={}, broadcast_task: nil, auth: :trigger, auth_id: nil, trigger_scope: nil)
+    ::Jil::Executor.call(
+      user, code, data,
+      task: self, broadcast_task: broadcast_task || self,
+      auth: auth, auth_id: auth_id, trigger_scope: trigger_scope
+    ).tap { @last_execution = nil }
   end
 
   def accessible_by?(user)

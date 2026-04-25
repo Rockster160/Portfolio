@@ -106,7 +106,7 @@ class Jil::TasksController < ApplicationController
     run_as_user = is_owner ? current_user : @task.user
     data = params[:data].presence&.permit!&.to_unsafe_h
 
-    ::Jil::Executor.async_call(run_as_user, code, data || {}, task: @task, auth: :run)
+    ::Jil::Executor.async_call(run_as_user, code, data || {}, task: @task, auth: :run, auth_id: current_user.id)
 
     head :ok
   end

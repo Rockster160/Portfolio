@@ -55,7 +55,7 @@
     <% @executions.each do |execution| %>
       <div class="trow execution-row" data-execution-id="<%= execution.id %>">
         <div class="tcell status-cell">
-          <span class="status-badge <%= execution.status %>"><%= execution.status %></span>
+          <span class="status-badge <%= execution.status %>" title="Execution #<%= execution.id %>"><%= execution.status %></span>
           <% if execution.error.present? %>
             <span class="error-indicator" title="<%= execution.error.truncate(100) %>">
               <i class="fa fa-exclamation-triangle"></i>
@@ -66,7 +66,7 @@
         <% unless @task %>
           <div class="tcell task-cell">
             <% if execution.task %>
-              <a href="<%= jil_task_path(execution.task) %>"><%= execution.task.name %></a>
+              <a href="<%= jil_task_path(execution.task) %>">#<%= execution.task.id %> <%= execution.task.name %></a>
             <% else %>
               <span class="no-task">Ad-hoc</span>
             <% end %>
@@ -94,6 +94,12 @@
 
         <div class="tcell trigger-cell">
           <span class="auth-type <%= execution.auth_type %>"><%= execution.auth_type || "unknown" %></span>
+          <% if execution.auth_type_id.present? %>
+            <%= execution_auth_link(execution) %>
+          <% end %>
+          <% if execution.trigger_scope.present? %>
+            <span class="trigger-scope <%= execution.trigger_scope %>"><%= execution.trigger_scope %></span>
+          <% end %>
         </div>
 
         <div class="tcell data-cell">
@@ -121,7 +127,9 @@
         </div>
 
         <div class="tcell actions-cell">
-          <% unless compacted %>
+          <% if compacted %>
+            <button class="btn btn-tiny btn-replay disabled" disabled title="Cannot replay: data compacted">Replay</button>
+          <% else %>
             <%= button_to "Replay", replay_jil_execution_path(execution), method: :post, class: "btn btn-tiny btn-replay", title: "Re-run with same code and input" %>
           <% end %>
         </div>
