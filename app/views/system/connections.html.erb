@@ -1,0 +1,495 @@
+<%= meta_title "System Connections", include_name: false %>
+<%= meta_description "Live database and WebSocket connection state." %>
+
+<%
+  state_colors = {
+    "active"               => "#28A745",
+    "idle"                 => "#6C757D",
+    "idle in transaction"  => "#FFC107",
+    "idle in transaction (aborted)" => "#DC3545",
+    "fastpath function call" => "#17A2B8",
+    "disabled"             => "#6C757D",
+    "unknown"              => "#6C757D",
+  }
+
+  parse_time = ->(t) {
+    next nil if t.blank?
+    t.is_a?(Time) ? t : (Time.zone.parse(t.to_s) rescue nil)
+  }
+%>
+
+<div class="system-page">
+  <div class="btn-container">
+    <a href="<%= system_path %>" class="btn">System Index</a>
+    <a href="/pghero/connections" class="btn">PgHero</a>
+    <a href="<%= request.path %>" class="btn btn-refresh">Refresh</a>
+  </div>
+
+  <div class="lists-title">
+    <small>System:</small> Connections
+  </div>
+
+  <div class="dashboard-section">
+    <div class="dashboard-section-title">
+      Database connections
+      <small>(<%= @db_connections.length %> total to <code><%= ActiveRecord::Base.connection_db_config.database %></code>)</small>
+    </div>
+
+    <div class="state-summary">
+      <% if @db_summary.empty? %>
+        <div class="empty-message">No data — pg_stat_activity returned no rows for this database</div>
+      <% end %>
+      <% @db_summary.sort_by { |_, count| -count }.each do |state, count| %>
+        <div class="state-card" style="border-color: <%= state_colors[state] || '#6C757D' %>">
+          <div class="state-name"><%= state %></div>
+          <div class="state-count"><%= count %></div>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="executions-table ttable wide striped" style="margin-top: 16px;">
+      <div class="trow title-row">
+        <div class="tcell">PID</div>
+        <div class="tcell">State</div>
+        <div class="tcell">Application</div>
+        <div class="tcell">Client</div>
+        <div class="tcell">Age</div>
+        <div class="tcell">Query</div>
+      </div>
+
+      <% if @db_connections.empty? %>
+        <div class="empty-message">No connections</div>
+      <% end %>
+
+      <% @db_connections.each do |row| %>
+        <% state = row["state"] || "unknown" %>
+        <% query_start = parse_time.call(row["query_start"]) %>
+        <% backend_start = parse_time.call(row["backend_start"]) %>
+        <% xact_start = parse_time.call(row["xact_start"]) %>
+        <% age_ref = state == "active" ? query_start : (xact_start || backend_start) %>
+        <% query = (row["query"] || "").strip %>
+        <% waiting = row["waiting"] %>
+        <div class="trow">
+          <div class="tcell"><code><%= row["pid"] %></code></div>
+          <div class="tcell">
+            <span class="state-badge" style="background-color: <%= state_colors[state] || '#6C757D' %>">
+              <%= state %>
+            </span>
+            <% if waiting %>
+              <span class="waiting-flag" title="<%= [row['wait_event_type'], row['wait_event']].compact.join(': ').presence || 'Waiting for a lock' %>">
+                <%= row["wait_event"].presence || "waiting" %>
+              </span>
+            <% end %>
+          </div>
+          <div class="tcell">
+            <div><%= row["application_name"].presence || "—" %></div>
+            <div class="muted"><%= row["usename"] %></div>
+          </div>
+          <div class="tcell muted"><%= row["client_addr"] || "local" %></div>
+          <div class="tcell">
+            <% if age_ref %>
+              <%= format_duration(Time.current - age_ref) %>
+            <% else %>
+              --
+            <% end %>
+          </div>
+          <div class="tcell query-cell">
+            <% if query.present? %>
+              <pre class="query-text"><%= query.length > 800 ? "#{query[0, 800]}…" : query %></pre>
+            <% else %>
+              <span class="muted">(no query)</span>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="dashboard-section">
+    <div class="dashboard-section-title">
+      WebSocket connections
+      <small>
+        (<%= @ws_connections.length %> served by this worker — pid <code><%= @ws_worker_pid %></code>)
+      </small>
+    </div>
+    <div class="muted scope-note">
+      ActionCable only exposes connections held by the current Ruby process.
+      With multiple Puma workers or app servers, this is a partial view.
+    </div>
+
+    <%
+      ws_by_user = @ws_connections.group_by { |c| c[:username] || "User ##{c[:user_id]}" || "guest" }
+      ws_by_channel = @ws_connections.flat_map { |c| c[:subscriptions].map { |s| s[:channel] } }.tally
+      sorted_conns = @ws_connections.sort_by { |c| c[:started_at] ? -c[:started_at].to_f : 0 }
+    %>
+
+    <% if @ws_connections.any? %>
+      <div class="state-summary" style="margin-top: 12px;">
+        <% ws_by_user.sort_by { |_, list| -list.length }.each do |label, list| %>
+          <div class="state-card" style="border-color: #1E40AF">
+            <div class="state-name"><%= label %></div>
+            <div class="state-count"><%= list.length %></div>
+          </div>
+        <% end %>
+        <% ws_by_channel.sort_by { |_, count| -count }.each do |channel, count| %>
+          <div class="state-card" style="border-color: #5B21B6">
+            <div class="state-name"><%= channel %></div>
+            <div class="state-count"><%= count %></div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+
+    <div class="executions-table ttable wide striped" style="margin-top: 16px;">
+      <div class="trow title-row">
+        <div class="tcell">User</div>
+        <div class="tcell">Page</div>
+        <div class="tcell">Connected</div>
+        <div class="tcell">Last Activity</div>
+        <div class="tcell">From</div>
+        <div class="tcell">Subscriptions &amp; Recent IDs</div>
+      </div>
+
+      <% if sorted_conns.empty? %>
+        <div class="empty-message">No WebSocket connections on this worker</div>
+      <% end %>
+
+      <% sorted_conns.each do |conn| %>
+        <% started = conn[:started_at] %>
+        <% started = Time.zone.at(started) if started.is_a?(Numeric) %>
+        <% last_tx = conn[:last_transmitted_at] %>
+        <% last_tx = Time.zone.at(last_tx) if last_tx.is_a?(Numeric) %>
+        <% ua = conn[:user_agent].to_s %>
+        <% ua_short = (
+          if ua.include?("Firefox") then "Firefox"
+          elsif ua.include?("Edg/") then "Edge"
+          elsif ua.include?("Chrome") then "Chrome"
+          elsif ua.include?("Safari") then "Safari"
+          elsif ua.present? then ua.truncate(40)
+          else "—"
+          end
+        ) %>
+        <% referer_short = (
+          if conn[:referer].present?
+            uri = URI.parse(conn[:referer]) rescue nil
+            uri ? "#{uri.path}#{uri.query ? '?' + uri.query : ''}" : conn[:referer]
+          end
+        ) %>
+        <% recent_ids_grouped = conn[:recent_ids].group_by { |r| r[:tag] }.transform_values { |list| { count: list.length, last_at: list.first[:at], channel: list.first[:channel] } } %>
+        <div class="trow">
+          <div class="tcell">
+            <% if conn[:username] || conn[:user_id] %>
+              <strong><%= conn[:username] || "User ##{conn[:user_id]}" %></strong>
+            <% else %>
+              <span class="muted">guest</span>
+            <% end %>
+            <div class="muted" title="<%= conn[:request_id] %>">
+              req <%= conn[:request_id].to_s[0, 8] %> · obj <%= conn[:object_id] %>
+            </div>
+          </div>
+          <div class="tcell page-cell">
+            <% if referer_short %>
+              <a href="<%= conn[:referer] %>" title="<%= conn[:referer] %>"><%= referer_short %></a>
+            <% else %>
+              <span class="muted">—</span>
+            <% end %>
+            <% if conn[:origin].present? && (URI.parse(conn[:origin]).host rescue nil) != (URI.parse(conn[:referer].to_s).host rescue nil) %>
+              <div class="muted">origin: <%= conn[:origin] %></div>
+            <% end %>
+          </div>
+          <div class="tcell">
+            <% if started %>
+              <%= started.in_time_zone(current_user.timezone).to_formatted_s(:compact_week_month_time) %>
+              <div class="muted"><%= format_duration(Time.current - started) %> ago</div>
+            <% else %>
+              --
+            <% end %>
+          </div>
+          <div class="tcell">
+            <% if last_tx %>
+              <%= format_duration(Time.current - last_tx) %> ago
+              <% if conn[:last_message_summary].present? %>
+                <div class="muted" title="message keys"><%= conn[:last_message_summary].truncate(60) %></div>
+              <% end %>
+            <% elsif conn[:transmissions_count].to_i.positive? %>
+              <span class="muted"><%= conn[:transmissions_count] %> messages</span>
+            <% else %>
+              <span class="muted">never</span>
+            <% end %>
+            <div class="muted tx-counts">
+              <span><%= number_with_delimiter(conn[:transmissions_count].to_i) %> msg</span>
+              · <span><%= number_with_delimiter(conn[:pings_count].to_i) %> ping</span>
+            </div>
+          </div>
+          <div class="tcell">
+            <div><%= conn[:remote_ip] || "—" %></div>
+            <div class="muted" title="<%= ua %>"><%= ua_short %></div>
+          </div>
+          <div class="tcell">
+            <% if conn[:subscriptions].any? %>
+              <% conn[:subscriptions].each do |sub| %>
+                <div class="sub-pill">
+                  <strong><%= sub[:channel] %></strong>
+                  <% if sub[:params].any? %>
+                    <% sub[:params].each do |k, v| %>
+                      <span class="param-pill"><%= k %>=<%= v.is_a?(Hash) || v.is_a?(Array) ? v.to_json : v %></span>
+                    <% end %>
+                  <% end %>
+                </div>
+              <% end %>
+            <% end %>
+            <% if recent_ids_grouped.any? %>
+              <div class="recent-ids-label">Recent IDs:</div>
+              <% recent_ids_grouped.sort_by { |_, info| -info[:last_at].to_f }.each do |tag, info| %>
+                <div class="id-pill" title="last seen <%= relative_time_in_words(info[:last_at]) %> via <%= info[:channel] %>">
+                  <%= tag %>
+                  <% if info[:count] > 1 %>
+                    <span class="muted">×<%= info[:count] %></span>
+                  <% end %>
+                </div>
+              <% end %>
+            <% elsif conn[:subscriptions].empty? %>
+              <span class="muted">none</span>
+            <% end %>
+            <details class="headers-details">
+              <summary>headers (<%= conn[:http_headers].keys.length %>)</summary>
+              <table class="headers-table">
+                <% conn[:http_headers].sort.each do |k, v| %>
+                  <tr><td class="hk"><%= k.sub("HTTP_", "").downcase.tr("_", "-") %></td><td class="hv"><%= v.to_s.truncate(160) %></td></tr>
+                <% end %>
+              </table>
+            </details>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</div>
+
+<%= content_for :head do %>
+  <style>
+    .system-page {
+      max-width: 1400px;
+      width: 95%;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .system-page .lists-title {
+      font-size: 24px;
+      margin: 10px 0 20px;
+    }
+
+    .system-page .dashboard-section {
+      margin-bottom: 35px;
+    }
+
+    .system-page .dashboard-section-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 12px;
+      color: #E2E8F0;
+    }
+
+    .system-page .dashboard-section-title small {
+      font-weight: normal;
+      color: #888;
+      font-size: 13px;
+      margin-left: 6px;
+    }
+
+    .state-summary {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .state-card {
+      background-color: #161B22;
+      border-left: 4px solid #6C757D;
+      border-radius: 4px;
+      padding: 12px 16px;
+      min-width: 140px;
+    }
+
+    .state-name {
+      color: #8B949E;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .state-count {
+      color: #C9D1D9;
+      font-size: 28px;
+      font-weight: bold;
+      line-height: 1;
+      margin-top: 4px;
+    }
+
+    .state-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: bold;
+      color: white;
+      text-transform: lowercase;
+    }
+
+    .waiting-flag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 2px 6px;
+      background-color: rgba(220, 53, 69, 0.2);
+      color: #DC3545;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .system-page .muted {
+      color: #6E7681;
+      font-size: 12px;
+    }
+
+    .scope-note {
+      margin-top: 4px;
+    }
+
+    .query-cell {
+      max-width: 600px;
+    }
+
+    .query-text {
+      background-color: #0D1117;
+      color: #C9D1D9;
+      padding: 8px 10px;
+      border-radius: 4px;
+      margin: 0;
+      font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+
+    .sub-pill {
+      display: inline-block;
+      background-color: #1E40AF;
+      color: #DBEAFE;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      margin-right: 6px;
+      margin-bottom: 4px;
+    }
+
+    .sub-pill .muted {
+      color: rgba(255, 255, 255, 0.6);
+      margin-left: 4px;
+    }
+
+    .param-pill {
+      display: inline-block;
+      background-color: rgba(255, 255, 255, 0.15);
+      padding: 1px 6px;
+      border-radius: 2px;
+      font-size: 11px;
+      margin-left: 4px;
+      font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+    }
+
+    .page-cell a {
+      color: #5DADE2;
+      text-decoration: none;
+      font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+      font-size: 13px;
+      word-break: break-all;
+    }
+
+    .page-cell a:hover {
+      text-decoration: underline;
+    }
+
+    .recent-ids-label {
+      color: #8B949E;
+      font-size: 11px;
+      margin-top: 8px;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .id-pill {
+      display: inline-block;
+      background-color: #065F46;
+      color: #6EE7B7;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      margin-right: 4px;
+      margin-bottom: 4px;
+      font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+    }
+
+    .id-pill .muted {
+      color: rgba(255, 255, 255, 0.6);
+      margin-left: 4px;
+      font-size: 11px;
+    }
+
+    .tx-counts {
+      margin-top: 4px;
+      font-size: 11px;
+    }
+
+    .headers-details {
+      margin-top: 10px;
+      font-size: 11px;
+    }
+
+    .headers-details summary {
+      color: #6E7681;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .headers-details summary:hover {
+      color: #C9D1D9;
+    }
+
+    .headers-table {
+      margin-top: 6px;
+      border-collapse: collapse;
+      font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+    }
+
+    .headers-table td {
+      padding: 2px 8px 2px 0;
+      vertical-align: top;
+    }
+
+    .headers-table .hk {
+      color: #79C0FF;
+      white-space: nowrap;
+    }
+
+    .headers-table .hv {
+      color: #C9D1D9;
+      word-break: break-all;
+    }
+
+    .btn-refresh {
+      margin-left: auto;
+    }
+
+    .system-page .btn-container {
+      display: flex;
+      align-items: center;
+    }
+  </style>
+<% end %>

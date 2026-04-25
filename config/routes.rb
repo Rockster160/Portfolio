@@ -275,5 +275,10 @@ Rails.application.routes.draw do
     mount ::Sidekiq::Web => "/sidekiq"
     mount ::PgHero::Engine, at: "pghero"
   end
+
+  constraints MeConstraint.new do
+    get "/system" => "system#index", as: :system
+    get "/system/connections" => "system#connections", as: :system_connections
+  end
   mount ::ActionCable.server => "/cable"
 end

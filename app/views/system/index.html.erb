@@ -1,0 +1,92 @@
+<%= meta_title "System", include_name: false %>
+<%= meta_description "System tools and dashboards." %>
+
+<%
+  links = [
+    { title: "Connections", path: system_connections_path, desc: "Live DB and WebSocket connections", icon: "plug" },
+    { title: "Execution Dashboard", path: dashboard_jil_executions_path, desc: "Top tasks, time-series, rapid-fire detector", icon: "tachometer" },
+    { title: "All Executions", path: jil_executions_path, desc: "Recent run history with filters", icon: "history" },
+    { title: "PgHero", path: "/pghero", desc: "Postgres performance, slow queries, indexes", icon: "database" },
+    { title: "Sidekiq", path: "/sidekiq", desc: "Background job queues, retries, scheduled", icon: "tasks" },
+    { title: "Tasks", path: jil_tasks_path, desc: "Jil automation task list", icon: "code" },
+  ]
+%>
+
+<div class="system-page">
+  <div class="lists-title">
+    <small>System</small>
+  </div>
+
+  <div class="system-grid">
+    <% links.each do |link| %>
+      <a class="system-card" href="<%= link[:path] %>">
+        <div class="system-card-icon"><i class="fa fa-<%= link[:icon] %>"></i></div>
+        <div class="system-card-body">
+          <div class="system-card-title"><%= link[:title] %></div>
+          <div class="system-card-desc"><%= link[:desc] %></div>
+        </div>
+      </a>
+    <% end %>
+  </div>
+</div>
+
+<%= content_for :head do %>
+  <style>
+    .system-page {
+      max-width: 1200px;
+      width: 95%;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .system-page .lists-title {
+      font-size: 24px;
+      margin-bottom: 24px;
+      color: #E2E8F0;
+    }
+
+    .system-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .system-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background-color: #161B22;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 18px 20px;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .system-card:hover {
+      border-color: #5DADE2;
+      transform: translateY(-1px);
+    }
+
+    .system-card-icon {
+      font-size: 28px;
+      color: #5DADE2;
+      width: 40px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .system-card-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #C9D1D9;
+    }
+
+    .system-card-desc {
+      font-size: 13px;
+      color: #8B949E;
+      margin-top: 2px;
+    }
+  </style>
+<% end %>

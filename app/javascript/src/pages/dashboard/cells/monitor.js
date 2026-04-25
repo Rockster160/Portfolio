@@ -92,6 +92,7 @@ export class Monitor {
 Monitor.socket = consumer.subscriptions.create(
   {
     channel: "MonitorChannel",
+    page: window.location.pathname + window.location.search,
   },
   {
     connected: function () {

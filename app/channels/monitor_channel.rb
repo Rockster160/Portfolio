@@ -11,6 +11,8 @@ class MonitorChannel < ApplicationCable::Channel
   def subscribed
     stream_for current_user
 
+    return unless current_user.me?
+
     last_sha = ::DataStorage[:last_sha]
     if last_sha != COMMIT_SHA
       ::DataStorage[:last_sha] = COMMIT_SHA
