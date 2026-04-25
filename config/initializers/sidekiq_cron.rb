@@ -46,7 +46,7 @@ if Rails.env.production?
     {
       name:  "DropLogTrackers",
       class: "DropLogTrackersWorker",
-      cron:  monthly_1st_at_midnight,
+      cron:  daily_4am,
     },
   ]
 elsif Rails.env.development?

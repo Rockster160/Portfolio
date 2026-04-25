@@ -458,7 +458,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_25_190000) do
     t.string "metro_code"
   end
 
-  create_table "log_trackers", id: :serial, force: :cascade do |t|
+  create_table "log_trackers", force: :cascade do |t|
     t.string "user_agent"
     t.string "ip_address"
     t.string "http_method"
@@ -471,6 +471,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_25_190000) do
     t.integer "location_id"
     t.text "headers"
     t.text "body"
+    t.index ["created_at"], name: "index_log_trackers_on_created_at"
+    t.index ["ip_address"], name: "index_log_trackers_on_ip_address"
     t.index ["user_id"], name: "index_log_trackers_on_user_id"
   end
 
