@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_03_21_201652) do
+ActiveRecord::Schema[7.1].define(version: 2026_04_25_174310) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -320,28 +320,31 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_21_201652) do
     t.datetime "updated_at", null: false
     t.text "mail_id", null: false
     t.index ["mail_id", "timestamp"], name: "index_emails_on_mail_id_and_timestamp"
-    t.index ["mail_id"], name: "index_emails_on_mail_id"
     t.index ["user_id"], name: "index_emails_on_user_id"
+  end
+
+  create_table "execution_payloads", force: :cascade do |t|
+    t.text "code"
+    t.jsonb "input_data"
+    t.jsonb "ctx"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "executions", force: :cascade do |t|
     t.bigint "user_id"
     t.bigint "task_id"
     t.integer "status", default: 0
-    t.jsonb "input_data"
-    t.text "code"
-    t.jsonb "ctx"
     t.datetime "started_at", default: -> { "now()" }
     t.datetime "finished_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "auth_type"
     t.integer "auth_type_id"
-    t.index ["status"], name: "index_executions_on_status"
+    t.bigint "payload_id"
+    t.index ["started_at"], name: "index_executions_on_started_at"
     t.index ["task_id", "started_at"], name: "index_executions_on_task_id_and_started_at", order: { started_at: :desc }
-    t.index ["task_id"], name: "index_executions_on_task_id"
     t.index ["user_id", "started_at"], name: "index_executions_on_user_id_and_started_at", order: { started_at: :desc }
-    t.index ["user_id"], name: "index_executions_on_user_id"
   end
 
   create_table "flash_cards", id: :serial, force: :cascade do |t|
@@ -406,7 +409,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_21_201652) do
     t.index ["list_id"], name: "index_list_builders_on_list_id"
     t.index ["user_id", "name"], name: "index_list_builders_on_user_id_and_name", unique: true
     t.index ["user_id", "parameterized_name"], name: "index_list_builders_on_user_id_and_parameterized_name", unique: true
-    t.index ["user_id"], name: "index_list_builders_on_user_id"
   end
 
   create_table "list_items", id: :serial, force: :cascade do |t|
@@ -479,7 +481,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_21_201652) do
     t.datetime "updated_at", null: false
     t.index ["user_id", "name"], name: "index_meal_builders_on_user_id_and_name", unique: true
     t.index ["user_id", "parameterized_name"], name: "index_meal_builders_on_user_id_and_parameterized_name", unique: true
-    t.index ["user_id"], name: "index_meal_builders_on_user_id"
   end
 
   create_table "money_buckets", id: :serial, force: :cascade do |t|
@@ -675,7 +676,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_21_201652) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["page_id", "user_id"], name: "index_shared_pages_on_page_id_and_user_id", unique: true
-    t.index ["page_id"], name: "index_shared_pages_on_page_id"
     t.index ["user_id"], name: "index_shared_pages_on_user_id"
   end
 
@@ -685,7 +685,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_21_201652) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["task_id", "user_id"], name: "index_shared_tasks_on_task_id_and_user_id", unique: true
-    t.index ["task_id"], name: "index_shared_tasks_on_task_id"
     t.index ["user_id"], name: "index_shared_tasks_on_user_id"
   end
 
@@ -828,7 +827,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_03_21_201652) do
     t.datetime "registered_at", precision: nil
     t.string "channel", default: "jarvis", null: false
     t.index ["user_id", "channel"], name: "index_user_push_subscriptions_on_user_id_and_channel"
-    t.index ["user_id"], name: "index_user_push_subscriptions_on_user_id"
   end
 
   create_table "user_survey_responses", id: :serial, force: :cascade do |t|

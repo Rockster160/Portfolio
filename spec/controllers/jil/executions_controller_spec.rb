@@ -29,7 +29,7 @@ RSpec.describe Jil::ExecutionsController, type: :controller do
       Execution.create!(
         user: user, task: task_b, status: :failed, auth_type: :trigger,
         started_at: now - 5.minutes, finished_at: now - 5.minutes + 0.5,
-        ctx: { error: "boom" }
+        payload: ExecutionPayload.create!(ctx: { error: "boom" })
       )
       # other_user: should be excluded
       Execution.create!(

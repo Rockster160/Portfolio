@@ -14,5 +14,9 @@ class JilScheduleWorker
       ::JilRunnerWorker.perform_async(user_id)
       break # Only need to enqueue one runner per user, so break after the first
     end
+
+    if ::Execution.exists?(started_at: 2.minutes.ago..)
+      ::ExecutionCompactWorker.perform_async
+    end
   end
 end

@@ -87,18 +87,10 @@ class Jil::Executor
     @broadcast_task = broadcast_task || task
     @ctx = { vars: {}, return_val: nil, state: :running, output: [] }
     @input_data = input_data || {}
-    @execution = ::Execution.create(
-      user: user, code: code, ctx: @ctx, task: task,
-      input_data: TriggerData.serialize(input_data)
+    payload = ::ExecutionPayload.create(
+      code: code, ctx: @ctx, input_data: TriggerData.serialize(input_data),
     )
-    ::Execution.where(
-      "id IN (
-        SELECT id FROM (
-          SELECT id, ROW_NUMBER() OVER (PARTITION BY status ORDER BY started_at DESC) AS rn
-          FROM executions WHERE user_id = :uid AND task_id = :tid
-        ) ranked WHERE rn > 10
-      )", uid: user.id, tid: task&.id
-    ).compact_all
+    @execution = ::Execution.create(user: user, task: task, payload: payload)
     @lines = ::Jil::Parser.from_code(code)
   end
 
@@ -107,7 +99,8 @@ class Jil::Executor
   end
 
   def store_progress(attrs={})
-    @execution.update(attrs.merge(ctx: @ctx.except(:vars)))
+    @execution.payload&.update(ctx: @ctx.except(:vars))
+    @execution.update(attrs) if attrs.any?
   end
 
   def broadcast!

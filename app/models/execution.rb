@@ -4,23 +4,25 @@
 #
 #  id           :bigint           not null, primary key
 #  auth_type    :integer
-#  code         :text
-#  ctx          :jsonb
 #  finished_at  :datetime
-#  input_data   :jsonb
 #  started_at   :datetime
 #  status       :integer          default("started")
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
 #  auth_type_id :integer
+#  payload_id   :bigint
 #  task_id      :bigint
 #  user_id      :bigint
 #
 class Execution < ApplicationRecord
   belongs_to :user
   belongs_to :task, optional: true
+  belongs_to :payload, class_name: "ExecutionPayload", optional: true, inverse_of: :execution
+
+  delegate :code, :ctx, :input_data, to: :payload, allow_nil: true
 
   scope :finished, -> { where.not(finished_at: nil) }
+  scope :compactable, -> { where.not(payload_id: nil) }
   scope :with_duration, -> {
     where.not(finished_at: nil, started_at: nil)
       .select("*, AVG(EXTRACT(EPOCH FROM (finished_at - started_at)) * 1000) AS duration")
@@ -44,10 +46,6 @@ class Execution < ApplicationRecord
     failed:    3,
   }
 
-  def self.compact_all
-    where.not(code: nil).update_all(ctx: nil, code: nil, input_data: nil)
-  end
-
   def self.average_duration(count)
     finished.order(:finished_at).limit(count).map(&:duration).then { |a| a.sum.to_f / a.length }
   end
@@ -59,11 +57,9 @@ class Execution < ApplicationRecord
       :updated_at,
       :task_id,
       :user_id,
-      :input_data,
-      :code,
-      :ctx,
+      :payload_id,
     ]).merge(
-      ctx.deep_symbolize_keys.slice(:error, :output, :line),
+      (ctx || {}).deep_symbolize_keys.slice(:error, :output, :line),
     )
   end
 
