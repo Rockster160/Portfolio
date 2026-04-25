@@ -270,6 +270,7 @@ Rails.application.routes.draw do
   end
 
   require "sidekiq/web"
+  require "sidekiq/cron/web"
   # constraints ->(req) { binding.pry } do
   constraints RoleConstraint.new(:admin) do
     mount ::Sidekiq::Web => "/sidekiq"
