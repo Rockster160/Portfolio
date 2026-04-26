@@ -114,39 +114,52 @@ import { beeps, beep } from "../vars"
     return `${day}/${formattedHours}:${formattedMinutes}${ampm}`
   }
 
+  let findOrCreateTimer = function(sha, message) {
+    let existing = cell.data.deploy_timers.find(t => t.sha === sha)
+    if (existing) { return existing }
+
+    let timer = new Timer({
+      name: (message || sha.slice(0, 7)).slice(0, 24),
+      sha: sha,
+      message: message,
+    })
+    timer.start.minutes += 2
+    timer.start.seconds += 50
+    timer.go()
+    cell.data.deploy_timers.unshift(timer)
+    cell.data.deploy_timers = cell.data.deploy_timers.slice(0, 5)
+    return timer
+  }
+
   let deployMonitor = function() {
-    Monitor.subscribe(cell.config.deploy_uuid, {
+    cell.monitor = Monitor.subscribe(cell.config.deploy_uuid, {
+      connected: function() {
+        cell.monitor?.resync()
+      },
       received: function(data) {
+        let json = data.data || {}
+        let sha = json.sha
+        if (!sha) { return }
+
+        cell.flash()
         if (!cell.data.monitor_schedule) {
           cell.data.monitor_schedule = setInterval(function() { render(cell) }, 1000)
         }
-        cell.flash()
-        let json = data.data || {}
-        if (json.status == "deploying") {
-          let timer = new Timer({ name: currentTime() })
-          timer.start.minutes += 2
-          timer.start.seconds += 50
-          timer.go()
-          cell.data.deploy_timers.unshift(timer)
-          cell.data.deploy_timers = cell.data.deploy_timers.slice(0, 5)
-          localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
-        }
-        if (json.status == "success") {
-          cell.data.deploy_timers.forEach(item => {
-            item.complete(true)
-          })
-          localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
+
+        let timer = findOrCreateTimer(sha, json.message)
+        let wasCompleted = timer.completed
+
+        if (json.status === "success") {
+          timer.complete(true)
+          if (!wasCompleted) { victoryBeep() }
           cell.data.monitor_schedule = clearInterval(cell.data.monitor_schedule)
-          victoryBeep()
-        }
-        if (json.status == "failed") {
-          cell.data.deploy_timers.forEach(item => {
-            item.error(true)
-          })
-          localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
+        } else if (json.status === "failed") {
+          timer.error(true)
+          if (!wasCompleted) { failureBeep() }
           cell.data.monitor_schedule = clearInterval(cell.data.monitor_schedule)
-          failureBeep()
         }
+
+        localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
         render(cell)
       },
     })
@@ -211,7 +224,9 @@ import { beeps, beep } from "../vars"
       deploy_timers: [],
     },
     onload: function() {
-      this.data.deploy_timers = Timer.loadFromJSON(JSON.parse(localStorage.getItem("deploy_timers") || "[]"))
+      let stored = JSON.parse(localStorage.getItem("deploy_timers") || "[]").filter(t => t.sha)
+      this.data.deploy_timers = Timer.loadFromJSON(stored)
+      localStorage.setItem("deploy_timers", JSON.stringify(this.data.deploy_timers))
       deployMonitor()
     },
     reloader: function() {

@@ -8,7 +8,9 @@ export class Timer {
   constructor(obj = {}) {
     this.completed = obj.completed || false
     this.acknowledged = obj.acknowledged || false
-    this.error = false
+    this.errored = obj.errored || false
+    this.sha = obj.sha || undefined
+    this.message = obj.message || undefined
     this.start = obj.start || {
       seconds: 0,
       minutes: 0,
@@ -49,7 +51,7 @@ export class Timer {
 
   error(acknowledge) {
     this.complete(acknowledge)
-    this.error = true
+    this.errored = true
   }
 
   go() {
@@ -126,7 +128,7 @@ export class Timer {
 
     const fill_cells = Math.round((cell_width - 2) * fill)
     let color = this.acknowledged ? dash_colors.green : dash_colors.yellow
-    if (this.error) { color = dash_colors.red }
+    if (this.errored) { color = dash_colors.red }
     const filled = Text.bgColor(color, text.slice(0, fill_cells))
     const empty = Text.bgColor(dash_colors.grey, text.slice(fill_cells, -2))
 
