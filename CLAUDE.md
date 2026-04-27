@@ -90,7 +90,7 @@ Configured in `.rubocop.yml`:
 - 100 character line length
 - Double quotes for strings
 - Block braces style (always braces)
-- **Symbols over strings**: Always use symbols for keys, enums, identifiers, and similar. Strings should only be used for multi-word values and user-facing messages.
+- **Symbols are the default — ALWAYS.** Strings are only for user-facing values: titles, descriptions, error messages, actual text rendered on a page, multi-word labels. Anything that functions as a key, identifier, enum, flag, type tag, icon name, status, scope, action, etc. MUST be a symbol — even if it ends up interpolated into a string or passed to the DB (both handle the symbol→string conversion automatically). Default to `:foo`; only reach for `"foo"` when the value is genuinely user-facing text.
 
 ### Whitespace & Indentation (CRITICAL)
 

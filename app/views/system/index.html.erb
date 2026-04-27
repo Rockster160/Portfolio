@@ -3,12 +3,13 @@
 
 <%
   links = [
-    { title: "Connections", path: system_connections_path, desc: "Live DB and WebSocket connections", icon: "plug" },
-    { title: "Execution Dashboard", path: dashboard_jil_executions_path, desc: "Top tasks, time-series, rapid-fire detector", icon: "tachometer" },
-    { title: "All Executions", path: jil_executions_path, desc: "Recent run history with filters", icon: "history" },
-    { title: "PgHero", path: "/pghero", desc: "Postgres performance, slow queries, indexes", icon: "database" },
-    { title: "Sidekiq", path: "/sidekiq", desc: "Background job queues, retries, scheduled", icon: "tasks" },
-    { title: "Tasks", path: jil_tasks_path, desc: "Jil automation task list", icon: "code" },
+    { title: "Connections", path: system_connections_path, desc: "Live DB and WebSocket connections", icon: :plug },
+    { title: "Execution Dashboard", path: dashboard_jil_executions_path, desc: "Top tasks, time-series, rapid-fire detector", icon: :tachometer },
+    { title: "All Executions", path: jil_executions_path, desc: "Recent run history with filters", icon: :history },
+    { title: "PgHero", path: "/pghero", desc: "Postgres performance, slow queries, indexes", icon: :database },
+    { title: "Sidekiq", path: "/sidekiq", desc: "Background job queues, retries, scheduled", icon: :tasks },
+    { title: "Tasks", path: jil_tasks_path, desc: "Jil automation task list", icon: :code },
+    { title: "Cache", path: jil_user_cache_index_path, desc: "User cache key/value store", icon: :archive },
   ]
 %>
 
