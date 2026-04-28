@@ -395,6 +395,10 @@
       display: none !important;
     }
 
+    .search-active .drag-handle {
+      display: none;
+    }
+
     /* Button bar */
     .btn-container {
       margin-bottom: 15px;
@@ -574,52 +578,122 @@
           });
         });
 
-        // Search
+        // Search — fuzzy match over name + listener; flatten/sort by score while active
         var searchInput = document.getElementById("task-search");
+        var originalPositions = null; // [{el, parent, nextSibling}, ...]
         var savedCollapsedStates = {};
+
+        function captureOriginalPositions() {
+          if (originalPositions) return;
+          originalPositions = [];
+          document.querySelectorAll(".task-row[data-type='task']").forEach(function(el) {
+            originalPositions.push({ el: el, parent: el.parentNode, nextSibling: el.nextSibling });
+          });
+          document.querySelectorAll(".folder-children[data-folder-id]").forEach(function(el) {
+            if (el.dataset.folderId) {
+              savedCollapsedStates[el.dataset.folderId] = el.classList.contains("hidden");
+            }
+          });
+        }
+
+        function restoreOriginalPositions() {
+          if (!originalPositions) return;
+          originalPositions.forEach(function(rec) {
+            rec.parent.insertBefore(rec.el, rec.nextSibling);
+            rec.el.classList.remove("search-hidden");
+          });
+          document.querySelectorAll(".folder-group").forEach(function(el) {
+            el.classList.remove("search-hidden");
+          });
+          Object.keys(savedCollapsedStates).forEach(function(folderId) {
+            var contents = document.querySelector(".folder-children[data-folder-id='" + folderId + "']");
+            if (contents && savedCollapsedStates[folderId]) contents.classList.add("hidden");
+          });
+          document.querySelector(".tasks-table").classList.remove("search-active");
+          document.querySelectorAll(".folder-children").forEach(function(c) {
+            var inst = window.Sortable && Sortable.get(c);
+            if (inst) inst.option("disabled", false);
+          });
+          originalPositions = null;
+          savedCollapsedStates = {};
+        }
+
+        // Fuzzy subsequence scorer. Returns -Infinity if not all query chars are found in order.
+        // Bonuses for: consecutive matches, word-boundary matches, prefix matches.
+        function fuzzyScore(query, target) {
+          if (!target) return -Infinity;
+          if (!query) return 0;
+          var qi = 0, ti = 0, score = 0, consecutive = 0, prevMatched = false;
+          while (qi < query.length && ti < target.length) {
+            if (query[qi] === target[ti]) {
+              var bonus = 1;
+              if (ti === 0) bonus += 5;
+              else {
+                var prev = target[ti - 1];
+                if (prev === " " || prev === "-" || prev === "_" || prev === ":" || prev === "/" || prev === ".") bonus += 3;
+              }
+              if (prevMatched) { consecutive += 1; bonus += consecutive * 2; }
+              else consecutive = 0;
+              score += bonus;
+              prevMatched = true;
+              qi += 1;
+            } else {
+              prevMatched = false;
+              consecutive = 0;
+              score -= 0.1;
+            }
+            ti += 1;
+          }
+          if (qi < query.length) return -Infinity;
+          // Prefer shorter targets (less leftover characters)
+          score -= (target.length - query.length) * 0.05;
+          return score;
+        }
+
+        function scoreTask(query, el) {
+          var name = el.dataset.name || "";
+          var listener = el.dataset.listener || "";
+          // Substring boost — direct contains is always a strong match
+          var nameScore = fuzzyScore(query, name);
+          if (name.indexOf(query) !== -1) nameScore = Math.max(nameScore, 100 + (query.length / Math.max(name.length, 1)) * 20);
+          var listenerScore = fuzzyScore(query, listener);
+          if (listener.indexOf(query) !== -1) listenerScore = Math.max(listenerScore, 100 + (query.length / Math.max(listener.length, 1)) * 20);
+          return Math.max(nameScore, listenerScore - 1); // slight name preference on ties
+        }
 
         searchInput.addEventListener("input", function() {
           var query = this.value.toLowerCase().trim();
 
           if (query === "") {
-            document.querySelectorAll(".task-row[data-type='task']").forEach(function(el) {
-              el.classList.remove("search-hidden");
-            });
-            document.querySelectorAll(".folder-group").forEach(function(el) {
-              el.classList.remove("search-hidden");
-            });
-            Object.keys(savedCollapsedStates).forEach(function(folderId) {
-              var contents = document.querySelector(".folder-children[data-folder-id='" + folderId + "']");
-              if (contents && savedCollapsedStates[folderId]) {
-                contents.classList.add("hidden");
-              }
-            });
-            savedCollapsedStates = {};
+            restoreOriginalPositions();
             return;
           }
 
-          if (Object.keys(savedCollapsedStates).length === 0) {
-            document.querySelectorAll(".folder-children[data-folder-id]").forEach(function(el) {
-              if (el.dataset.folderId) {
-                savedCollapsedStates[el.dataset.folderId] = el.classList.contains("hidden");
-              }
-            });
-          }
+          captureOriginalPositions();
 
-          document.querySelectorAll(".folder-children.hidden").forEach(function(el) {
-            if (el.dataset.folderId) el.classList.remove("hidden");
-          });
-
-          document.querySelectorAll(".task-row[data-type='task']").forEach(function(el) {
-            var name = el.dataset.name || "";
-            el.classList.toggle("search-hidden", !name.includes(query));
-          });
-
+          // Hide folder structure; flatten matches into root sorted by score
           document.querySelectorAll(".folder-group").forEach(function(el) {
-            var folderName = el.dataset.name || "";
-            var hasVisibleTasks = el.querySelectorAll(".task-row[data-type='task']:not(.search-hidden)").length > 0;
-            var hasVisibleFolders = el.querySelectorAll(".folder-group:not(.search-hidden)").length > 0;
-            el.classList.toggle("search-hidden", !(folderName.includes(query) || hasVisibleTasks || hasVisibleFolders));
+            el.classList.add("search-hidden");
+          });
+
+          var scored = [];
+          document.querySelectorAll(".task-row[data-type='task']").forEach(function(el) {
+            var s = scoreTask(query, el);
+            if (s > -Infinity) {
+              scored.push({ el: el, score: s });
+              el.classList.remove("search-hidden");
+            } else {
+              el.classList.add("search-hidden");
+            }
+          });
+
+          scored.sort(function(a, b) { return b.score - a.score; });
+          scored.forEach(function(rec) { rootContainer.appendChild(rec.el); });
+
+          document.querySelector(".tasks-table").classList.add("search-active");
+          document.querySelectorAll(".folder-children").forEach(function(c) {
+            var inst = window.Sortable && Sortable.get(c);
+            if (inst) inst.option("disabled", true);
           });
         });
       }
