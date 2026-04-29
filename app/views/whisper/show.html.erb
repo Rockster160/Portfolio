@@ -14,6 +14,16 @@
     <span class="mute-icon-on"><%= fa(:volume_high) %></span>
     <span class="mute-icon-off"><%= fa(:volume_xmark) %></span>
   </span>
+  <div class="whisper-menu" data-whisper-menu>
+    <span class="whisper-menu-toggle" title="More actions"><%= fa(:ellipsis_vertical) %></span>
+    <ul class="whisper-menu-items hidden">
+      <li>
+        <button type="button" class="whisper-menu-item" data-trigger="whisper-bath">
+          <%= fa(:bath) %><span>Bath</span>
+        </button>
+      </li>
+    </ul>
+  </div>
   <div class="whisper-header">
     <span class="whisper-name">Whisper</span>
     <div class="whisper-age-line">

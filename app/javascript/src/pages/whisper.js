@@ -118,6 +118,41 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Action menu (top-right dropdown)
+  const menu = container.querySelector("[data-whisper-menu]");
+  if (menu) {
+    const menuToggle = menu.querySelector(".whisper-menu-toggle");
+    const menuItems = menu.querySelector(".whisper-menu-items");
+
+    menuToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menuItems.classList.toggle("hidden");
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!menu.contains(e.target)) menuItems.classList.add("hidden");
+    });
+
+    menu.querySelectorAll("[data-trigger]").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const scope = btn.dataset.trigger;
+        btn.disabled = true;
+        try {
+          await fetch(`/jil/trigger/${encodeURIComponent(scope)}`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          });
+        } finally {
+          btn.disabled = false;
+          menuItems.classList.add("hidden");
+        }
+      });
+    });
+  }
+
   function playDefaultBeeps() {
     if (isMuted) return;
 
