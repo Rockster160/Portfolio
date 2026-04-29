@@ -139,7 +139,7 @@ module AuthHelper
     basic_auth_string = Base64.decode64(auth_string.to_s)
     if basic_auth_string.include?(":")
       User.auth_from_basic(basic_auth_string)&.tap { |user|
-        @auth_type = :username
+        @auth_type = :userpass
         @auth_type_id = user.id
       }
     end
