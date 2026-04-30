@@ -15,21 +15,36 @@ $text-color: darken($grey-blue, 20%);
 }
 
 @keyframes flashdash {
-  0%   { border-color: $passive; }
-  10%  { border-color: $active; }
-  100% { border-color: $passive; }
+  0% {
+    border-color: $passive;
+  }
+  10% {
+    border-color: $active;
+  }
+  100% {
+    border-color: $passive;
+  }
 }
 @keyframes flashdashactive {
-  0%   { border-color: $active; }
-  10%  { border-color: $active-bright; }
-  100% { border-color: $active; }
+  0% {
+    border-color: $active;
+  }
+  10% {
+    border-color: $active-bright;
+  }
+  100% {
+    border-color: $active;
+  }
 }
 
 .html-ctr-dashboard {
   background: $code-background;
   width: 100%;
   height: 100%;
-  &, * { box-sizing: border-box; }
+  &,
+  * {
+    box-sizing: border-box;
+  }
 
   .ctr-dashboard {
     margin: 0;
@@ -58,7 +73,7 @@ $text-color: darken($grey-blue, 20%);
   border-radius: 4px;
   background: $code-background;
 
-  input[type=text] {
+  input[type="text"] {
     margin: 4px auto;
     border: unset;
     background: $code-background;
@@ -101,7 +116,6 @@ $text-color: darken($grey-blue, 20%);
   }
 }
 
-
 .dashboard {
   row-gap: $dash-font-height;
   display: inline-grid;
@@ -118,6 +132,23 @@ $text-color: darken($grey-blue, 20%);
     padding: 5px 3px;
     width: 100%;
     height: 100%;
+
+    .ws-status-dot {
+      position: absolute;
+      top: -3px;
+      left: -3px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #FF3B30;
+      box-shadow: 0 0 4px rgba(255, 59, 48, 0.7);
+      display: none;
+      z-index: 2;
+      pointer-events: none;
+    }
+    &.ws-disconnected .ws-status-dot {
+      display: block;
+    }
 
     &.flash {
       animation: 1s ease-out flashdash;
@@ -171,12 +202,18 @@ $text-color: darken($grey-blue, 20%);
       .dashboard-img-wrapper img {
         position: absolute;
         margin: auto;
-        top: 0; left: 0; right: 0; bottom: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         max-width: 100%;
         max-height: 100%;
         overflow: hidden;
       }
-      i, e, es, .dashboard-img-wrapper {
+      i,
+      e,
+      es,
+      .dashboard-img-wrapper {
         position: relative;
         display: inline-block;
         width: $dash-font-width;
@@ -185,13 +222,14 @@ $text-color: darken($grey-blue, 20%);
         margin: 0;
         vertical-align: middle;
       }
-      e, .dashboard-img-wrapper {
-        width: $dash-font-width*2; // Double character width
+      e,
+      .dashboard-img-wrapper {
+        width: $dash-font-width * 2; // Double character width
         font-family: emoji;
         // font-size: $dash-font-height*0.75;
       }
       i {
-        width: $dash-font-width*2;
+        width: $dash-font-width * 2;
         font-size: $dash-font-height;
       }
 

@@ -10,6 +10,7 @@ import consumer from "./../../../channels/consumer";
 export class Monitor {
   static #connected = false;
   static #monitors = {};
+  static #cells = new Set();
 
   constructor(channel, callbacks) {
     this.channel = channel;
@@ -21,6 +22,10 @@ export class Monitor {
 
   static subscribe(channel, callbacks) {
     let monitor = new Monitor(channel, callbacks);
+    if (typeof Cell !== "undefined" && Cell.current) {
+      Monitor.#cells.add(Cell.current);
+      Cell.current.markWSConnected(Monitor.#connected);
+    }
     if (Monitor.#connected) {
       monitor.connected();
     } else {
@@ -28,6 +33,10 @@ export class Monitor {
     }
 
     return monitor;
+  }
+
+  static notifyCells() {
+    Monitor.#cells.forEach((cell) => cell.markWSConnected(Monitor.#connected));
   }
 
   send(data) {
@@ -98,11 +107,13 @@ Monitor.socket = consumer.subscriptions.create(
     connected: function () {
       console.log("MonitorChannel.onopen");
       Monitor.connected = true;
+      Monitor.notifyCells();
       Monitor.all().forEach((item) => item.connected());
     },
     disconnected: function () {
       console.log("MonitorChannel.onclose");
       Monitor.connected = false;
+      Monitor.notifyCells();
       Monitor.all().forEach((item) => item.disconnected());
     },
     received: function (data) {
