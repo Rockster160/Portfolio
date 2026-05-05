@@ -161,7 +161,7 @@ class WebhooksController < ApplicationController
       User.me.list_by_name(:TODO).remove("#{params[:monitorFriendlyName]} DOWN")
     end
 
-    ::ActionCable.server.broadcast :uptime_channel, {}
+    ::Jil.trigger(User.me, :monitor, { channel: :uptime, refresh: true })
 
     head :no_content
   end

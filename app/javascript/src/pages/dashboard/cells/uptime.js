@@ -246,6 +246,16 @@ import { dash_colors, scaleVal } from "../vars";
           }
         },
       });
+      cell.uptime_socket = Monitor.subscribe("uptime", {
+        received: function (data) {
+          if (data.loading) {
+            return;
+          }
+          if (data.data?.refresh) {
+            uptimeData(cell, true);
+          }
+        },
+      });
       cell.mc_online_socket = Monitor.subscribe("mconline", {
         connected: function () {
           console.log("mconline Connected");
