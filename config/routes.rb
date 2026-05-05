@@ -19,6 +19,7 @@ Rails.application.routes.draw do
   root "index#home"
   post "/talk" => "index#talk"
   get "/nest_subscribe" => "index#nest_subscribe"
+  post "/jarvis/command" => "jarvis#command"
   post "/jarvis" => "jarvis#command"
   post "proxy" => "proxy#proxy"
   post "/printer_control" => "printers#control"
@@ -106,7 +107,8 @@ Rails.application.routes.draw do
 
   get "webhooks/uptime" => "webhooks#uptime"
   post "webhooks/uptime" => "webhooks#uptime"
-  post "webhooks/command" => "webhooks#command"
+  # Deprecated. This is list specific. Bad!
+  post "webhooks/command" => "webhooks#list_command"
   get "webhooks/auth" => "webhooks#auth"
   get "webhooks/auth/:service" => "webhooks#auth"
   get "webhooks/oauth/:service" => "webhooks#auth"

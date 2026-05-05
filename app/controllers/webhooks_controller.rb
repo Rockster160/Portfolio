@@ -31,6 +31,10 @@ class WebhooksController < ApplicationController
   end
 
   # /jil/webhook
+  def command
+  end
+
+  # /jil/webhook
   def jil_webhook
     json_params.each do |key, data|
       jil_trigger(key, data)
@@ -201,7 +205,7 @@ class WebhooksController < ApplicationController
     head :no_content
   end
 
-  def command
+  def list_command
     List.find_and_modify(current_user, params[:command])
   end
 

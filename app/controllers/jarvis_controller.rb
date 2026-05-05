@@ -53,15 +53,16 @@ class JarvisController < ApplicationController
   def parsed_message
     @parsed_message ||= (
       begin
-        if params[:message].blank?
+        cmd = params[:message].presence || params[:command].presence || request.raw_post.presence || ""
+        if cmd.blank?
           ""
-        elsif params[:message].exclude?("{")
-          params[:message].split("|")
+        elsif cmd.exclude?("{")
+          cmd.split("|")
         else
-          JSON.parse(params[:message], symbolize_names: true)
+          JSON.parse(cmd, symbolize_names: true)
         end
       rescue JSON::ParserError
-        params[:message]
+        cmd
       end
     )
   end
