@@ -54,21 +54,18 @@ import { dash_colors, scaleVal } from "../vars";
   // A server's stats are considered "fresh" if it's reported within this window.
   let stale_after_seconds = 5 * 60;
 
-  let batteryScale = function (val, min, max) {
-    let rounded = Math.round(scaleVal(val, min, max, 1, 8));
-    let capped = [rounded, 1, 8].sort(function (a, b) {
-      return a - b;
-    })[1];
-    return ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"][capped - 1];
+  let col_width = 4;
+  let formatStat = function (scale, value, formatter) {
+    if (value == null || isNaN(value)) {
+      return Text.grey("?".padStart(col_width));
+    }
+    let label = formatter(value).padStart(col_width);
+    return Text.color(scale(value).hex, label);
   };
 
-  let formatScale = function (scale, icon, value) {
-    if (value == null) {
-      return icon + Text.grey("?");
-    }
-    let bar = batteryScale(value, ...scale());
-    return icon + Text.color(scale(value).hex, bar);
-  };
+  let pct = (v) => `${Math.round(v)}%`;
+  let secs = (v) => `${Math.round(v)}s`;
+  let load_fmt = (v) => v.toFixed(2);
 
   let last_uptime_poll = 0;
   let uptime_poll_throttle_ms = 15 * 1000;
@@ -110,8 +107,15 @@ import { dash_colors, scaleVal } from "../vars";
     let uptime_data = cell.data.uptime_data || {};
     let servers = cell.data.servers || {};
 
+    let header = Text.grey(
+      ["lat", "cpu", "mem", "load", "disk"]
+        .map((h) => h.padStart(col_width))
+        .join(" "),
+    );
+    lines.push(Text.justify("", header));
+
     // Source of truth for which servers exist is UptimeRobot.
-    // Server stats come from the Monitor broadcast — show "?" when stale or absent.
+    // Server stats come from the Monitor broadcast — values render grey "?" when stale or absent.
     for (let [name, status_data] of Object.entries(uptime_data)) {
       let stats_data = servers[name] || {};
       let fresh =
@@ -128,24 +132,20 @@ import { dash_colors, scaleVal } from "../vars";
 
       let mem_pct =
         fresh && stats_data.memory_total_mb
-          ? Math.round(
-              (stats_data.memory_used_mb / stats_data.memory_total_mb) * 100,
-            )
+          ? (stats_data.memory_used_mb / stats_data.memory_total_mb) * 100
           : null;
 
-      let stats;
-      if (!fresh) {
-        let icons = ["󰔛 ", " ", " ", " ", " "];
-        stats = icons.map((i) => i + Text.grey("?")).join("  ");
-      } else {
-        stats = [
-          formatScale(latency_scale, "󰔛 ", stats_data.latency),
-          formatScale(cpu_scale, " ", stats_data.cpu),
-          formatScale(mem_scale, " ", mem_pct),
-          formatScale(load_scale, " ", stats_data.load),
-          formatScale(disk_scale, " ", stats_data.disk),
-        ].join("  ");
-      }
+      let stats = (
+        fresh
+          ? [
+              formatStat(latency_scale, stats_data.latency, secs),
+              formatStat(cpu_scale, stats_data.cpu, pct),
+              formatStat(mem_scale, mem_pct, pct),
+              formatStat(load_scale, stats_data.load, load_fmt),
+              formatStat(disk_scale, stats_data.disk, pct),
+            ]
+          : Array(5).fill(Text.grey("?".padStart(col_width)))
+      ).join(" ");
 
       lines.push(Text.justify(colored_name, stats));
     }
