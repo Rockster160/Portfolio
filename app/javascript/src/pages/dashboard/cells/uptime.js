@@ -1,71 +1,41 @@
 import { Text } from "../_text";
 import { Time } from "./_time";
 import { ColorGenerator } from "./color_generator";
-import { dash_colors, scaleVal } from "../vars";
+import { dash_colors } from "../vars";
 
 (function () {
   let cell;
-  let cpu_scale = ColorGenerator.colorScale(
-    (function () {
-      let scale = {};
-      scale[dash_colors.green] = 50;
-      scale[dash_colors.yellow] = 80;
-      scale[dash_colors.red] = 100;
-      return scale;
-    })(),
-  );
-  let mem_scale = ColorGenerator.colorScale(
-    (function () {
-      let scale = {};
-      scale[dash_colors.green] = 70;
-      scale[dash_colors.yellow] = 90;
-      scale[dash_colors.red] = 100;
-      return scale;
-    })(),
-  );
-  let load_scale = ColorGenerator.colorScale(
-    (function () {
-      let scale = {};
-      scale[dash_colors.green] = 1;
-      scale[dash_colors.yellow] = 2;
-      scale[dash_colors.red] = 4;
-      return scale;
-    })(),
-  );
-  let disk_scale = ColorGenerator.colorScale(
-    (function () {
-      let scale = {};
-      scale[dash_colors.green] = 70;
-      scale[dash_colors.yellow] = 85;
-      scale[dash_colors.red] = 100;
-      return scale;
-    })(),
-  );
-  let latency_scale = ColorGenerator.colorScale(
-    (function () {
-      let scale = {};
-      scale[dash_colors.green] = 1;
-      scale[dash_colors.yellow] = 10;
-      scale[dash_colors.red] = 30;
-      return scale;
-    })(),
-  );
 
   // A server's stats are considered "fresh" if it's reported within this window.
   let stale_after_seconds = 5 * 60;
 
-  let col_width = 4;
-  let formatStat = function (scale, value, formatter) {
-    if (value == null || isNaN(value)) {
-      return Text.grey("?".padStart(col_width));
-    }
-    let label = formatter(value).padStart(col_width);
-    return Text.color(scale(value).hex, label);
+  let name_width = 11;
+  let col_width = 3;
+
+  let scaleOf = function (green, yellow, red) {
+    let scale = {};
+    scale[dash_colors.green] = green;
+    scale[dash_colors.yellow] = yellow;
+    scale[dash_colors.red] = red;
+    return ColorGenerator.colorScale(scale);
   };
 
-  let pct = (v) => `${Math.round(v)}%`;
-  let secs = (v) => `${Math.round(v)}s`;
-  let load_fmt = (v) => v.toFixed(2);
+  let latency_scale = scaleOf(1, 10, 30);
+  let cpu_scale = scaleOf(50, 80, 100);
+  let mem_scale = scaleOf(70, 90, 100);
+  let load_scale = scaleOf(1, 2, 4);
+  let disk_scale = scaleOf(70, 85, 100);
+
+  let formatStat = function (scale, value, formatter) {
+    let num = parseFloat(value);
+    if (isNaN(num)) {
+      return Text.grey("?".padStart(col_width));
+    }
+    return Text.color(scale(num).hex, formatter(num).padStart(col_width));
+  };
+
+  let int_fmt = (v) => `${Math.round(v)}`;
+  let load_fmt = (v) => v.toFixed(1);
 
   let last_uptime_poll = 0;
   let uptime_poll_throttle_ms = 15 * 1000;
@@ -101,21 +71,25 @@ import { dash_colors, scaleVal } from "../vars";
     });
   };
 
+  let padName = function (label) {
+    let visible = label.length;
+    let padding = Math.max(0, name_width - visible);
+    return label + " ".repeat(padding);
+  };
+
   var uptimeLines = function () {
     let lines = [];
     let now = new Date().getTime() / 1000;
     let uptime_data = cell.data.uptime_data || {};
     let servers = cell.data.servers || {};
 
-    let header = Text.grey(
-      ["lat", "cpu", "mem", "load", "disk"]
-        .map((h) => h.padStart(col_width))
-        .join(" "),
-    );
-    lines.push(Text.justify("", header));
+    let header_cols = ["lat", "cpu", "mem", "ld", "dsk"]
+      .map((h) => h.padStart(col_width))
+      .join(" ");
+    lines.push(" ".repeat(name_width) + " " + Text.grey(header_cols));
 
-    // Source of truth for which servers exist is UptimeRobot.
-    // Server stats come from the Monitor broadcast — values render grey "?" when stale or absent.
+    // UptimeRobot is the source of truth for which servers exist.
+    // Stats come from the Monitor broadcast — values render grey "?" when stale or absent.
     for (let [name, status_data] of Object.entries(uptime_data)) {
       let stats_data = servers[name] || {};
       let fresh =
@@ -128,26 +102,25 @@ import { dash_colors, scaleVal } from "../vars";
           ? dash_colors.green
           : dash_colors.grey
         : dash_colors.red;
-      let colored_name = Text.color(dot_color, "• " + name);
+      let label = "• " + name;
+      let name_cell = Text.color(dot_color, padName(label));
 
       let mem_pct =
         fresh && stats_data.memory_total_mb
           ? (stats_data.memory_used_mb / stats_data.memory_total_mb) * 100
           : null;
 
-      let stats = (
-        fresh
-          ? [
-              formatStat(latency_scale, stats_data.latency, secs),
-              formatStat(cpu_scale, stats_data.cpu, pct),
-              formatStat(mem_scale, mem_pct, pct),
-              formatStat(load_scale, stats_data.load, load_fmt),
-              formatStat(disk_scale, stats_data.disk, pct),
-            ]
-          : Array(5).fill(Text.grey("?".padStart(col_width)))
-      ).join(" ");
+      let stat_cells = fresh
+        ? [
+            formatStat(latency_scale, stats_data.latency, int_fmt),
+            formatStat(cpu_scale, stats_data.cpu, int_fmt),
+            formatStat(mem_scale, mem_pct, int_fmt),
+            formatStat(load_scale, stats_data.load, load_fmt),
+            formatStat(disk_scale, stats_data.disk, int_fmt),
+          ]
+        : Array(5).fill(Text.grey("?".padStart(col_width)));
 
-      lines.push(Text.justify(colored_name, stats));
+      lines.push(name_cell + " " + stat_cells.join(" "));
     }
 
     return lines;

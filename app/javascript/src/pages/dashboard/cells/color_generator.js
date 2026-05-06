@@ -101,12 +101,17 @@ export class ColorGenerator {
   }
 
   fadeTo(new_color, steps) {
-    steps = Math.abs(Math.round(steps || 256)) - 1
+    steps = Math.abs(Math.round(steps || 256))
     let [r1, g1, b1] = this.rgb
+    if (steps <= 1) {
+      // 0 → empty, 1 → just `this` (avoids divide-by-zero in the interpolation below).
+      return steps === 0 ? [] : [ColorGenerator.fromRGB(r1, g1, b1)]
+    }
     let [r2, g2, b2] = new_color.rgb
-    let [rsteps, gsteps, bsteps] = [(r2 - r1) / steps, (g2 - g1) / steps, (b2 - b1) / steps]
+    let intervals = steps - 1
+    let [rsteps, gsteps, bsteps] = [(r2 - r1) / intervals, (g2 - g1) / intervals, (b2 - b1) / intervals]
 
-    return Array(steps + 1).fill().map(function(_, step) {
+    return Array(steps).fill().map(function(_, step) {
       return ColorGenerator.fromRGB(r1 + (rsteps * step), g1 + (gsteps * step), b1 + (bsteps * step))
     })
   }
