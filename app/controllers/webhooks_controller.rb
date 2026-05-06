@@ -167,10 +167,13 @@ class WebhooksController < ApplicationController
   end
 
   def report
-    ::Jil.trigger(
-      User.me, :monitor,
-      { channel: :uptime, report: params[:report]&.to_unsafe_h },
-    )
+    now = Time.current.to_i
+    stamped = (params[:report]&.to_unsafe_h || {}).transform_values { |data|
+      data.is_a?(Hash) ? data.merge(timestamp: now) : data
+    }
+
+    ::Jil.trigger(User.me, :monitor, { channel: :uptime, report: stamped })
+
     head :no_content
   end
 
