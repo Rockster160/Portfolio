@@ -8,168 +8,146 @@ import { dash_colors, scaleVal } from "../vars";
   let cpu_scale = ColorGenerator.colorScale(
     (function () {
       let scale = {};
-      scale[dash_colors.green] = 5;
-      scale[dash_colors.yellow] = 10;
-      scale[dash_colors.red] = 20;
+      scale[dash_colors.green] = 50;
+      scale[dash_colors.yellow] = 80;
+      scale[dash_colors.red] = 100;
       return scale;
     })(),
   );
   let mem_scale = ColorGenerator.colorScale(
     (function () {
       let scale = {};
-      scale[dash_colors.green] = 50;
-      scale[dash_colors.yellow] = 75;
-      scale[dash_colors.red] = 80;
+      scale[dash_colors.green] = 70;
+      scale[dash_colors.yellow] = 90;
+      scale[dash_colors.red] = 100;
       return scale;
     })(),
   );
   let load_scale = ColorGenerator.colorScale(
     (function () {
       let scale = {};
-      scale[dash_colors.green] = 80;
-      scale[dash_colors.yellow] = 150;
-      scale[dash_colors.red] = 250;
+      scale[dash_colors.green] = 1;
+      scale[dash_colors.yellow] = 2;
+      scale[dash_colors.red] = 4;
+      return scale;
+    })(),
+  );
+  let disk_scale = ColorGenerator.colorScale(
+    (function () {
+      let scale = {};
+      scale[dash_colors.green] = 70;
+      scale[dash_colors.yellow] = 85;
+      scale[dash_colors.red] = 100;
       return scale;
     })(),
   );
   let latency_scale = ColorGenerator.colorScale(
     (function () {
       let scale = {};
-      scale[dash_colors.green] = 10;
-      scale[dash_colors.yellow] = 60;
-      scale[dash_colors.red] = 100;
+      scale[dash_colors.green] = 1;
+      scale[dash_colors.yellow] = 10;
+      scale[dash_colors.red] = 30;
       return scale;
     })(),
   );
 
-  var uptimeData = function (cell, flash = false) {
-    var api_key = cell.config.uptime_apikey;
-    var url = "https://api.uptimerobot.com/v2/getMonitors";
-    $.post(
-      url,
-      { api_key: api_key, custom_uptime_ratios: "7" },
-      function (data) {
-        let uptime_data = cell.data.uptime_data;
-        data.monitors.forEach(function (monitor) {
-          uptime_data[monitor.friendly_name] = {};
-          uptime_data[monitor.friendly_name].status =
-            {
-              2: "ok",
-              8: "hm",
-              9: "bad",
-            }[monitor.status] || "?";
+  // A server's stats are considered "fresh" if it's reported within this window.
+  let stale_after_seconds = 5 * 60;
 
-          uptime_data[monitor.friendly_name].weekly = parseInt(
-            monitor.custom_uptime_ratio.split(".")[0],
-          );
+  let batteryScale = function (val, min, max) {
+    let rounded = Math.round(scaleVal(val, min, max, 1, 8));
+    let capped = [rounded, 1, 8].sort(function (a, b) {
+      return a - b;
+    })[1];
+    return ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"][capped - 1];
+  };
+
+  let formatScale = function (scale, icon, value) {
+    if (value == null) {
+      return icon + Text.grey("?");
+    }
+    let bar = batteryScale(value, ...scale());
+    return icon + Text.color(scale(value).hex, bar);
+  };
+
+  let last_uptime_poll = 0;
+  let uptime_poll_throttle_ms = 15 * 1000;
+
+  var uptimeRobotPoll = function ({ force = false, flash = false } = {}) {
+    let api_key = cell.config.uptime_apikey;
+    if (!api_key) {
+      return;
+    }
+    let now = Date.now();
+    if (!force && now - last_uptime_poll < uptime_poll_throttle_ms) {
+      return;
+    }
+    last_uptime_poll = now;
+    $.post(
+      "https://api.uptimerobot.com/v2/getMonitors",
+      { api_key: api_key },
+      function (data) {
+        let next = {};
+        (data.monitors || []).forEach(function (monitor) {
+          next[monitor.friendly_name] = {
+            status: { 2: "up", 8: "hm", 9: "down" }[monitor.status] || "?",
+          };
         });
-        renderCell(cell);
+        cell.data.uptime_data = next;
+        renderCell();
         if (flash) {
           cell.flash();
         }
       },
     ).fail(function (data) {
-      cell.uptime_lines = ["Failed to retrieve:", JSON.stringify(data)];
-      renderCell(cell);
+      cell.lines(["Failed to retrieve UptimeRobot:", JSON.stringify(data)]);
     });
   };
 
-  var uptimeLines = function (cell) {
-    let mixed = {};
+  var uptimeLines = function () {
     let lines = [];
-    for (let [name, data] of Object.entries(cell.data.uptime_data || {})) {
-      mixed[name] = mixed[name] || {};
-      mixed[name] = { ...mixed[name], ...data };
-    }
-    for (let [name, data] of Object.entries(cell.data.load_data || {})) {
-      mixed[name] = mixed[name] || {};
-      mixed[name] = { ...mixed[name], ...data };
-    }
+    let now = new Date().getTime() / 1000;
+    let uptime_data = cell.data.uptime_data || {};
+    let servers = cell.data.servers || {};
 
-    let batteryScale = function (val, min, max) {
-      let rounded = Math.round(scaleVal(val, min, max, 1, 8));
-      let capped = [rounded, 1, 8].sort(function (a, b) {
-        return a - b;
-      })[1];
-      switch (capped) {
-        case 1:
-          return "▁";
-        case 2:
-          return "▂";
-        case 3:
-          return "▃";
-        case 4:
-          return "▄";
-        case 5:
-          return "▅";
-        case 6:
-          return "▆";
-        case 7:
-          return "▇";
-        case 8:
-          return "█";
-      }
-    };
+    // Source of truth for which servers exist is UptimeRobot.
+    // Server stats come from the Monitor broadcast — show "?" when stale or absent.
+    for (let [name, status_data] of Object.entries(uptime_data)) {
+      let stats_data = servers[name] || {};
+      let fresh =
+        stats_data.timestamp &&
+        now - stats_data.timestamp < stale_after_seconds;
+      let up = status_data.status === "up";
 
-    let formatScale = function (scale, text, b1, b2, b3) {
-      let bs = [b1, b2, b3]
-        .filter(function (b) {
-          return b != undefined;
-        })
-        .map(function (b) {
-          let battery = batteryScale(b, ...scale());
+      let dot_color = up
+        ? fresh
+          ? dash_colors.green
+          : dash_colors.grey
+        : dash_colors.red;
+      let colored_name = Text.color(dot_color, "• " + name);
 
-          return Text.color(scale(b).hex, battery);
-        })
-        .join("");
+      let mem_pct =
+        fresh && stats_data.memory_total_mb
+          ? Math.round(
+              (stats_data.memory_used_mb / stats_data.memory_total_mb) * 100,
+            )
+          : null;
 
-      return text + bs;
-    };
-
-    for (let [name, data] of Object.entries(mixed)) {
-      let status_color =
-        data.status == "ok" ? dash_colors.green : dash_colors.red;
-      let colored_name = Text.color(status_color, "• " + name);
-      let stats = [];
-      let two_minutes_ago = new Date().getTime() / 1000 - 2 * 60 * 60;
-      let cpu_icon = " ";
-      let mem_icon = " ";
-      let load_icon = " ";
-      let latency_icon = "󰔛 ";
-
-      if (data.latency && data.timestamp > two_minutes_ago) {
-        stats.push(
-          formatScale(latency_scale, latency_icon, data.latency.seconds),
-        );
+      let stats;
+      if (!fresh) {
+        let icons = ["󰔛 ", " ", " ", " ", " "];
+        stats = icons.map((i) => i + Text.grey("?")).join("  ");
       } else {
-        stats.push(latency_icon + Text.grey("?"));
-      }
-      if (data.cpu && data.timestamp > two_minutes_ago) {
-        stats.push(formatScale(cpu_scale, cpu_icon, 100 - data.cpu.idle));
-      } else {
-        stats.push(cpu_icon + Text.grey("?"));
-      }
-      if (data.memory && data.timestamp > two_minutes_ago) {
-        let ratio = Math.round((data.memory.used / data.memory.total) * 100);
-        stats.push(formatScale(mem_scale, mem_icon, ratio));
-      } else {
-        stats.push(mem_icon + Text.grey("?"));
-      }
-      if (data.load && data.timestamp > two_minutes_ago) {
-        stats.push(
-          formatScale(
-            load_scale,
-            load_icon,
-            data.load.one,
-            data.load.five,
-            data.load.ten,
-          ),
-        );
-      } else {
-        stats.push(load_icon + Text.grey("???"));
+        stats = [
+          formatScale(latency_scale, "󰔛 ", stats_data.latency),
+          formatScale(cpu_scale, " ", stats_data.cpu),
+          formatScale(mem_scale, " ", mem_pct),
+          formatScale(load_scale, " ", stats_data.load),
+          formatScale(disk_scale, " ", stats_data.disk),
+        ].join("  ");
       }
 
-      lines.push(Text.justify(colored_name, stats.join("  ")));
+      lines.push(Text.justify(colored_name, stats));
     }
 
     return lines;
@@ -205,7 +183,6 @@ import { dash_colors, scaleVal } from "../vars";
   };
 
   var mcOnline = function () {
-    let data = cell.data.mc_online_line;
     return [Text.center(cell.data.mc_online_line || "")];
   };
 
@@ -213,7 +190,7 @@ import { dash_colors, scaleVal } from "../vars";
     if (!cell) {
       return;
     }
-    cell.lines([...uptimeLines(cell), ...mcOnline(cell), ...wsConns()]);
+    cell.lines([...uptimeLines(), ...mcOnline(), ...wsConns()]);
   };
 
   let tickTimer = undefined;
@@ -223,8 +200,8 @@ import { dash_colors, scaleVal } from "../vars";
     text: "Loading...",
     data: {
       uptime_data: {},
+      servers: {},
       ws_conns: [],
-      load_data: {},
       mc_online_line: ". . . . .",
     },
     onload: function () {
@@ -238,64 +215,63 @@ import { dash_colors, scaleVal } from "../vars";
           renderCell();
         },
         received: function (data) {
-          cell.flash();
           if (data.loading) {
-          } else {
-            cell.data.ws_conns = data.data.connections;
-            renderCell();
+            return;
           }
+          cell.flash();
+          cell.data.ws_conns = data.data.connections;
+          renderCell();
         },
       });
       cell.uptime_socket = Monitor.subscribe("uptime", {
+        connected: function () {
+          setTimeout(function () {
+            cell.uptime_socket?.resync();
+          }, 1000);
+        },
+        disconnected: function () {
+          renderCell();
+        },
         received: function (data) {
           if (data.loading) {
             return;
           }
-          if (data.data?.refresh) {
-            uptimeData(cell, true);
+          cell.flash();
+          if (data.data) {
+            cell.data.servers = data.data;
           }
+          uptimeRobotPoll({ flash: true });
+          renderCell();
         },
       });
       cell.mc_online_socket = Monitor.subscribe("mconline", {
         connected: function () {
-          console.log("mconline Connected");
           setTimeout(function () {
             cell.mc_online_socket?.resync();
           }, 1000);
         },
         disconnected: function () {
-          console.log("mconline Disconnected");
           renderCell();
         },
         received: function (data) {
-          cell.flash();
           if (data.loading) {
-          } else {
-            // console.log(data);
-            cell.data.mc_online_line = data.result;
-            // console.log("line", cell.data.mc_online_line);
-            renderCell();
+            return;
           }
+          cell.flash();
+          cell.data.mc_online_line = data.result;
+          renderCell();
         },
       });
+      uptimeRobotPoll({ force: true });
       clearInterval(tickTimer);
-      tickTimer = setInterval(() => renderCell(cell), 1000);
+      tickTimer = setInterval(() => renderCell(), 1000);
     },
-    // started: function() {
-    // cell.uptime_socket.reopen()
-    // },
-    // stopped: function() {
-    // cell.uptime_socket.close()
-    // },
-    // socket: Server.socket("LoadtimeChannel", function(msg) {
-    //   this.data.load_data = msg
-    //   renderCell(this)
-    // }),
     refreshInterval: Time.minutes(10),
     reloader: function () {
-      uptimeData(cell);
+      uptimeRobotPoll({ force: true });
+      cell.uptime_socket?.refresh();
       cell.websockets_socket?.resync();
-      // cell.ws.send("request")
+      cell.mc_online_socket?.resync();
     },
   });
 })();

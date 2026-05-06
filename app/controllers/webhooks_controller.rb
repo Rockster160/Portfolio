@@ -167,41 +167,10 @@ class WebhooksController < ApplicationController
   end
 
   def report
-    # gathered = params[:report]&.to_unsafe_h&.each_with_object({}) do |(name, report_data), obj|
-    #   obj[name] = { timestamp: Time.current.to_i }
-    #   report_data.each do |key, data|
-    #     case key
-    #     when "memory"
-    #       # ["Mem:", "3951", "1103", "1100", "143", "1748", "2405"]
-    #       _, total, used, free, shared, buff, available = data.split(/\s+/)
-    #       obj[name][:memory] = {
-    #         used: used.to_i,
-    #         free: free.to_i,
-    #         total: total.to_i,
-    #       }
-    #     when "load"
-    #       # 0.03 0.03 0.00 1/196 4114
-    #       one, five, ten, pids, _ = data.split(/\s+/)
-    #       obj[name][:load] = {
-    #         one: (one.to_f * 100).round,
-    #         five: (five.to_f * 100).round,
-    #         ten: (ten.to_f * 100).round,
-    #       }
-    #     when "cpu"
-    #       obj[name][:cpu] = {
-    #         idle: data.to_i,
-    #       }
-    #     when "latency"
-    #       obj[name][:latency] = {
-    #         seconds: data.to_i,
-    #       }
-    #     end
-    #   end
-    # end
-
-    # TODO! Change this to Jil!
-    # LoadtimeBroadcast.call(gathered)
-
+    ::Jil.trigger(
+      User.me, :monitor,
+      { channel: :uptime, report: params[:report]&.to_unsafe_h },
+    )
     head :no_content
   end
 
