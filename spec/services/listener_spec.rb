@@ -174,6 +174,100 @@ RSpec.describe Task do
     end
   end
 
+  context "Task 336 — Chelsea Withdraw" do
+    let(:current_prod_listener) {
+      '/^(?:(?:chelsea|withdraw|pull) ){2}\$?(?<amount>[\d,.]+)$/'
+    }
+    let(:fixed_listener) {
+      'tell:/^(?:(?:chelsea|withdraw|pull) ){2}\$?(?<amount>[\d,.]+)$/'
+    }
+
+    before do
+      @tasks = Task.create([
+        { user: admin, listener: current_prod_listener },
+      ])
+    end
+
+    it "current prod listener does NOT trigger on 'chelsea withdraw 180' (missing tell: prefix)" do
+      expect_trigger_listeners(admin, :tell, "chelsea withdraw 180", [])
+    end
+
+    it "by_listener(:tell) does not include the bare-regex listener" do
+      expect(admin.tasks.by_listener(:tell).pluck(:listener)).not_to include(current_prod_listener)
+    end
+
+    context "with tell: prefix restored" do
+      before do
+        @tasks = Task.create([
+          { user: admin, listener: fixed_listener },
+        ])
+      end
+
+      it "triggers on 'chelsea withdraw 180'" do
+        expect_trigger_listeners(admin, :tell, "chelsea withdraw 180", [fixed_listener])
+      end
+
+      it "triggers on 'chelsea withdraw $180'" do
+        expect_trigger_listeners(admin, :tell, "chelsea withdraw $180", [fixed_listener])
+      end
+
+      it "triggers on 'chelsea pull 1,200.50'" do
+        expect_trigger_listeners(admin, :tell, "chelsea pull 1,200.50", [fixed_listener])
+      end
+
+      it "captures amount" do
+        serialized = TriggerData.serialize(TriggerData.parse("chelsea withdraw 180", as: admin), use_global_id: false)
+        matcher = SearchBreakMatcher.new(fixed_listener, { tell: serialized })
+        expect(matcher.match?).to be true
+        expect(matcher.regex_match_data[:named_captures][:amount]).to eq("180")
+      end
+    end
+
+    context "with optional note capture" do
+      let(:note_listener) {
+        'tell:/^(?:(?:chelsea|withdraw|pull) ){2}\$?(?<amount>[\d,.]+)(?:\s+(?<note>.+))?$/'
+      }
+
+      before do
+        @tasks = Task.create([
+          { user: admin, listener: note_listener },
+        ])
+      end
+
+      def captures_for(input)
+        serialized = TriggerData.serialize(TriggerData.parse(input, as: admin), use_global_id: false)
+        matcher = SearchBreakMatcher.new(note_listener, { tell: serialized })
+        expect(matcher.match?).to be(true), "Expected listener to match #{input.inspect}"
+        matcher.regex_match_data[:named_captures]
+      end
+
+      it "still triggers on 'chelsea withdraw 180' (no note)" do
+        expect_trigger_listeners(admin, :tell, "chelsea withdraw 180", [note_listener])
+        captures = captures_for("chelsea withdraw 180")
+        expect(captures[:amount]).to eq("180")
+        expect(captures[:note]).to be_nil
+      end
+
+      it "captures a single-word note: 'chelsea withdraw 180 Yoga'" do
+        captures = captures_for("chelsea withdraw 180 Yoga")
+        expect(captures[:amount]).to eq("180")
+        expect(captures[:note]).to eq("Yoga")
+      end
+
+      it "captures a multi-word note: 'chelsea withdraw 180 Yoga Barn'" do
+        captures = captures_for("chelsea withdraw 180 Yoga Barn")
+        expect(captures[:amount]).to eq("180")
+        expect(captures[:note]).to eq("Yoga Barn")
+      end
+
+      it "captures with $ and note: 'chelsea pull $1,200.50 rent split'" do
+        captures = captures_for("chelsea pull $1,200.50 rent split")
+        expect(captures[:amount]).to eq("1,200.50")
+        expect(captures[:note]).to eq("rent split")
+      end
+    end
+  end
+
   context "TriggerData.parse" do
     it "strips surrounding quotes from colon-separated values" do
       result = TriggerData.parse('person:chelsea:"-15.20"')
