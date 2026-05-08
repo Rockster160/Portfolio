@@ -39,7 +39,7 @@ class FitnessBroadcast
       days,
       wordle,
       drugs,
-      treat,
+      animal_crossing,
       water,
       workout,
       teeth,
@@ -95,8 +95,8 @@ class FitnessBroadcast
     row("💊", names, want)
   end
 
-  def treat
-    row("[img /can.png]", "name::Soda OR name::Treat", bad)
+  def animal_crossing
+    row("[img /Animal_Crossing_Leaf.svg]", "name::AnimalCrossing", need)
   end
 
   def water
