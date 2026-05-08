@@ -76,7 +76,9 @@ import { dash_colors } from "../vars";
 
       // Skip past events (re-evaluated each minute by ticker)
       const endRef = end_time ? new Date(end_time) : time;
-      if (!isAllDay && endRef < now) { return; }
+      if (!isAllDay && endRef < now) {
+        return;
+      }
       const eventDateLine = dateLine(time);
 
       if (lastDateLine !== eventDateLine) {
@@ -100,22 +102,41 @@ import { dash_colors } from "../vars";
       }
 
       if (isAllDay) {
-        lines.push(Text.color(dash_colors["magenta"], `  ★ ${name}`));
+        lines.push(Text.color(dash_colors["magenta"], `★ ${name}`));
       } else {
-        const nameLine = Text.color(dash_colors[color], `• ${name} `);
-
         let timeStr = timeFromDate(time);
         if (end_time) {
           const endTime = new Date(end_time);
           timeStr = `${timeStr}-${timeFromDate(endTime)}`;
         }
-        timeStr = Text.yellow(timeStr);
+        timeStr = Text.yellow(`• ${timeStr}`);
 
+        const nameLine = Text.color(dash_colors[color], name);
+
+        lines.push(timeStr);
         lines.push(nameLine);
-        lines.push("    " + timeStr);
 
         if (location && !location.match(/zoom\.us|meet\.google|webinar/i)) {
-          lines.push("    " + Text.grey(location.replaceAll("\n", " ")));
+          const cleanLocation = location
+            .replaceAll("\n", " ")
+            .replaceAll(/\s{2,}/g, " ")
+            .replace(
+              /,?\s*UT\b(\s+\d{5}(-\d{4})?)?\s*,?\s*(?:USA|United States)?\s*$/i,
+              "",
+            )
+            .replace(/,?\s*UT\b\s*$/i, "")
+            .trim()
+            .replace(/,\s*$/, "");
+          lines.push(Text.grey(cleanLocation));
+        }
+
+        const isWorkCalendar = calendar == "rocco@oneclaimsolution.com";
+        if (notes && !isWorkCalendar) {
+          notes
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0)
+            .forEach((line) => lines.push(line));
         }
       }
     });
