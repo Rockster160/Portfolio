@@ -1,0 +1,786 @@
+[
+  {
+    "section": "8",
+    "num": "2",
+    "name": "Alert",
+    "category": "Keyword",
+    "definition": "The Alert keyword represents a static ability. Alert means “This character ignores the challenging restriction of Evasive.”\n\nA character doesn’t gain Evasive from having the Alert keyword. They can still gain Evasive from another ability or effect."
+  },
+  {
+    "section": "8",
+    "num": "3",
+    "name": "Bodyguard",
+    "category": "Keyword",
+    "definition": "The Bodyguard keyword represents two abilities.\n\nThe first of these is a static ability that functions while the character is being played. This ability means “This character may enter play with the exerted state rather than the ready state.”\n\nThe second is a static ability that creates a challenging restriction. This ability means “If an opponent would choose one of your characters to challenge, they must choose this character or another character with Bodyguard if able.”"
+  },
+  {
+    "section": "8",
+    "num": "4",
+    "name": "Boost",
+    "category": "Keyword",
+    "definition": "The Boost keyword represents an activated ability with a specified duration. Boost N {I} means “Once during your turn, you may pay N {I} to put the top card of your deck facedown under this card.”\n\nNo player can look at the front of a card that has been put facedown under another card at any time, not even their own.\n\nIf a card is under another card, it’s not considered to be in play. Putting a card under another card with Boost doesn’t count as playing that card."
+  },
+  {
+    "section": "8",
+    "num": "5",
+    "name": "Challenger",
+    "category": "Keyword",
+    "definition": "The Challenger keyword represents a static ability that functions while a character is challenging. Challenger +N means “While this character is challenging, they gain +N {S}.” Because this is a +N ability, it stacks with other Challenger effects.\n\nA character with Challenger doesn’t gain +N {S} if they’re being challenged."
+  },
+  {
+    "section": "8",
+    "num": "6",
+    "name": "Evasive",
+    "category": "Keyword",
+    "definition": "The Evasive keyword represents a static ability that creates a challenging restriction. Evasive means “This [Type] can’t be challenged except by a character with Evasive.”"
+  },
+  {
+    "section": "8",
+    "num": "7",
+    "name": "Reckless",
+    "category": "Keyword",
+    "definition": "The Reckless keyword represents two static abilities.\n\nThe first ability means “This character can’t quest.”\n\nThe second ability means “You can’t declare the end of your turn if this character is ready and can challenge an opposing character or location.”\n\nA player can still exert a character with Reckless to use abilities or sing songs if able."
+  },
+  {
+    "section": "8",
+    "num": "8",
+    "name": "Resist",
+    "category": "Keyword",
+    "definition": "The Resist keyword represents a static ability that modifies the amount of damage dealt to the card with the keyword. Resist +N means “Damage that would be dealt to this character or location is reduced by N.” Resist is a damage reduction (see 4.6.6.1). Because this is a +N ability, this stacks with other Resist effects.\n\nIf damage dealt to this character or location is reduced to 0, no damage is considered to have been dealt.\n\nDamage put or moved onto a character with Resist isn’t affected by the ability."
+  },
+  {
+    "section": "8",
+    "num": "9",
+    "name": "Rush",
+    "category": "Keyword",
+    "definition": "The Rush keyword represents a static ability. Rush means “This character can challenge as though they were in play at the beginning of your turn.”"
+  },
+  {
+    "section": "8",
+    "num": "10",
+    "name": "Shift",
+    "category": "Keyword",
+    "definition": "The Shift keyword represents a static ability of paying an alternate cost to play a character instead of paying the character’s ink cost. Shift means “If you have a character in play with the same name as this card, you may play this character by paying their Shift cost instead of their ink cost. If you do, put this card on top of another character you have in play with the same name.” This is called shifting.\n\nIf a shifted character is put on top of an exerted character, the shifted character enters play exerted.\n\nIf an effect on a shifted character causes it to enter play exerted, it becomes exerted as it enters play, even if the character it was on top of is ready.\n\nIf a shifted character is put on top of a dry character, the shifted character enters play dry. If a shifted character is put on top of a drying character, the shifted character enters play drying.\n\nA player can use a shifted character to perform all turn actions of the character it was put on top of. The shifted character doesn’t gain the text of the character it’s put on top of (e.g., an activated ability), but it does keep any effects that apply to that character when the shifted character enters play. A player can exert a shifted character to sing a song if the character it was put on top of was dry when the shifted character entered play.\n\nA shifted character retains whatever damage is on the character it’s put on top of.\n\nWhen a shifted character leaves play, all cards in its stack (i.e., all cards under it) move to the same zone as the shifted character card does, and the cards are no longer considered to be in a stack (see 5.1.1.7).\n\nThe Shift keyword has two variants: [Classification] Shift and Universal Shift. These variant keywords are Shift abilities and follow all rules for the Shift keyword with the following exceptions.\n\n[Classification] Shift means “If you have a character in play with the [Classification] specified by this ability, you may play this character by paying their Shift cost instead of their ink cost. If you do, put this card on top of another character you have in play with the specified classification.”\n\nUniversal Shift means, “If you have a character in play, you may play this character by paying their Shift cost instead of their ink cost. If you do, put this card on top of another character you have in play.”"
+  },
+  {
+    "section": "8",
+    "num": "11",
+    "name": "Singer",
+    "category": "Keyword",
+    "definition": "The Singer keyword represents a static ability that allows a player to pay an alternate cost to sing a song. Singer N means “This character can {E} to pay the alternate cost of a song card as though they had cost N instead of their normal ink cost.”\n\nThis character counts as cost N only to sing songs and only during the process of playing a card. The character’s ink cost doesn’t change."
+  },
+  {
+    "section": "8",
+    "num": "12",
+    "name": "Sing Together",
+    "category": "Keyword",
+    "definition": "The Sing Together keyword represents a static ability that allows a player to pay an alternate cost to sing a song with one or more of their or their teammates’ characters. Sing Together N means “Instead of paying the ink cost of this card, you can {E} a number of your or your teammates’ characters with total ink cost N or greater to play this card without paying its ink cost,” where N is the ink cost of the song.\n\nWhen playing a song using Sing Together, add the ink costs of one or more of your ready characters together. If the total meets or exceeds the cost listed for Sing Together, the character or characters can sing the song.\n\nCharacters that have the triggered ability condition “Whenever this character sings a song” and are one of the characters singing the song with Sing Together, the condition is met, and the triggered ability is added to the bag to resolve."
+  },
+  {
+    "section": "8",
+    "num": "13",
+    "name": "Support",
+    "category": "Keyword",
+    "definition": "The Support keyword represents a triggered ability. Support means “Whenever this character quests, you may add this character’s {S} to another chosen character’s {S} this turn.”"
+  },
+  {
+    "section": "8",
+    "num": "14",
+    "name": "Vanish",
+    "category": "Keyword",
+    "definition": "The Vanish keyword represents a triggered ability. Vanish means “When this character is chosen by an opponent as part of resolving an action’s effect, banish this character.”\n\nThe Vanish triggered ability resolves after the action’s effect resolves. If the character has moved to a different zone before the triggered ability resolves, it resolves with no effect."
+  },
+  {
+    "section": "8",
+    "num": "15",
+    "name": "Ward",
+    "category": "Keyword",
+    "definition": "The Ward keyword represents a static ability. Ward means “Your opponents can’t choose this card when resolving an effect.”\n\nEffects that don’t require the player to choose still affect a character with Ward."
+  },
+  {
+    "section": "11",
+    "num": "1",
+    "name": "ability",
+    "category": "Glossary Term",
+    "definition": "Special rules explaining what the card can do that differs from the game rules, such as an effect that resolves as a result of the card being played."
+  },
+  {
+    "section": "11",
+    "num": "2",
+    "name": "action card",
+    "category": "Glossary Term",
+    "definition": "A type of card that gives its player an immediate one-time advantage. When an action card is played, its player resolves its effects and then puts it in their discard pile."
+  },
+  {
+    "section": "11",
+    "num": "3",
+    "name": "action, game",
+    "category": "Glossary Term",
+    "definition": "When a player does something in game that’s part of a normal turn, such as draw a card, exert a character, declare a challenging character, etc., it’s a game action. A game action is singular."
+  },
+  {
+    "section": "11",
+    "num": "4",
+    "name": "action, turn",
+    "category": "Glossary Term",
+    "definition": "One of a set of game actions with predefined processes that arrive at a specific outcome."
+  },
+  {
+    "section": "11",
+    "num": "5",
+    "name": "activate",
+    "category": "Glossary Term",
+    "definition": "To use an activated ability of a card."
+  },
+  {
+    "section": "11",
+    "num": "6",
+    "name": "activated ability",
+    "category": "Glossary Term",
+    "definition": "An ability that a player may use after paying its cost. An activated ability can’t be used if its cost can’t be paid. Activated abilities of items may be used during the turn the item is played."
+  },
+  {
+    "section": "11",
+    "num": "7",
+    "name": "active player",
+    "category": "Glossary Term",
+    "definition": "The player who has started their turn. When a player ends their turn, they’re no longer the active player."
+  },
+  {
+    "section": "11",
+    "num": "8",
+    "name": "alter a starting hand",
+    "category": "Glossary Term",
+    "definition": "When a player chooses to modify their starting hand at the beginning of the game after each player has drawn their starting hand. Each player may take any number of those cards, put them on the bottom of their deck without revealing them, draw until they have 7 cards in their hand, and reshuffle their deck. A player can’t alter their starting hand more than once in a game."
+  },
+  {
+    "section": "11",
+    "num": "9",
+    "name": "alternate cost",
+    "category": "Glossary Term",
+    "definition": "A cost the active player can choose to pay to play a card instead of paying that card’s ink cost."
+  },
+  {
+    "section": "11",
+    "num": "10",
+    "name": "applied static ability",
+    "category": "Glossary Term",
+    "definition": "A static ability generated from a resolved effect that applies only to cards in play at the time that effect is resolved."
+  },
+  {
+    "section": "11",
+    "num": "11",
+    "name": "bag",
+    "category": "Glossary Term",
+    "definition": "A non-physical zone where triggered abilities wait before determining how their effects resolve. Whenever a triggered ability’s condition is met, the ability is added to the bag."
+  },
+  {
+    "section": "11",
+    "num": "12",
+    "name": "banish/banished",
+    "category": "Glossary Term",
+    "definition": "When a character, item, or location is put from play into their player’s discard pile, either as a result of abilities or effects or—in the case of characters and locations—when the card has damage equal to or greater that its Willpower {W}. A character, item, or location put into their player’s discard this way is considered to be banished."
+  },
+  {
+    "section": "11",
+    "num": "13",
+    "name": "card type",
+    "category": "Glossary Term",
+    "definition": "The type that each card has, such as character, action, item, or location. A card’s type determines the rules for how to play it."
+  },
+  {
+    "section": "11",
+    "num": "14",
+    "name": "challenge",
+    "category": "Glossary Term",
+    "definition": "When a player exerts one of their dry characters and chooses an exerted opposing character or an opposing location. Each character deals damage equal to their Strength {S} to the other character or the location."
+  },
+  {
+    "section": "11",
+    "num": "15",
+    "name": "challenging/challenged character",
+    "category": "Glossary Term",
+    "definition": "A challenging character is the character declared by the active player to challenge an opposing character or location. A challenged character is the opposing character who is being challenged. Both the challenging and challenged characters are considered “in a challenge” for the duration of the challenge."
+  },
+  {
+    "section": "11",
+    "num": "16",
+    "name": "challenging/challenged player",
+    "category": "Glossary Term",
+    "definition": "A challenging player is the player who declared a challenging character. A challenged player is the player whose character is challenged."
+  },
+  {
+    "section": "11",
+    "num": "17",
+    "name": "character",
+    "category": "Glossary Term",
+    "definition": "A card that has at least one of the classifications listed in 6.1.2.2 on its classification line and also has both {S} and {W} characteristics. A character that’s played is put into the Play zone and remains there until it’s banished or removed from play by a game effect. A player may have multiple copies of a character with the same name in their deck but can’t have more than 4 copies with the same full name."
+  },
+  {
+    "section": "11",
+    "num": "18",
+    "name": "classification",
+    "category": "Glossary Term",
+    "definition": "A category that identifies some characteristics of the card and may be referenced in rules of other cards. A card’s classification is located to the right of its ink type symbol."
+  },
+  {
+    "section": "11",
+    "num": "19",
+    "name": "condition",
+    "category": "Glossary Term",
+    "definition": "A game state that is checked to be true or false or met or unmet."
+  },
+  {
+    "section": "11",
+    "num": "20",
+    "name": "conditional static ability",
+    "category": "Glossary Term",
+    "definition": "A static ability that only applies if a condition within the text of that ability is true or false."
+  },
+  {
+    "section": "11",
+    "num": "21",
+    "name": "continuous static ability",
+    "category": "Glossary Term",
+    "definition": "A static ability that affects all cards in play that ability can effect. This type of static ability lasts for as long as its duration is active and is functional only while it exists."
+  },
+  {
+    "section": "11",
+    "num": "22",
+    "name": "cost",
+    "category": "Glossary Term",
+    "definition": "What is required in order to play a card or use an activated ability. This may be an ink cost or an alternate cost such as exerting a character. An activated ability can’t be used if its full cost can’t be paid."
+  },
+  {
+    "section": "11",
+    "num": "23",
+    "name": "damage",
+    "category": "Glossary Term",
+    "definition": "Damage on a character or location is represented by damage counters and counts against its Willpower {W}. Damage is dealt by characters in challenges and by some effects. When a card with damage moves from in play to any other zone, the damage ceases to exist."
+  },
+  {
+    "section": "11",
+    "num": "24",
+    "name": "damage counter",
+    "category": "Glossary Term",
+    "definition": "A counter put on a character or location card to show how much damage it has. A single damage counter normally represents 1 damage; any damage counter intended to represent more than 1 damage counts as a separate damage counter for each 1 damage it represents. If an effect puts a damage counter onto a character or location, it doesn’t count as damage dealt to the character or location and isn’t affected by modifications to damage dealt."
+  },
+  {
+    "section": "11",
+    "num": "25",
+    "name": "damaged/undamaged",
+    "category": "Glossary Term",
+    "definition": "A character or location with 1 or more damage is considered damaged. A character or location with no damage on it is considered undamaged."
+  },
+  {
+    "section": "11",
+    "num": "26",
+    "name": "deck",
+    "category": "Glossary Term",
+    "definition": "A set of cards a player uses in the game. The parameters of the deck are defined by the format being played. For example, in Core Constructed a deck consists of 60 or more cards, up to two ink types, and up to 4 cards with the same name and version (together known as a full name). Other formats may have different construction rules. There's no upper limit to the number of cards in a deck. The deck is a private zone."
+  },
+  {
+    "section": "11",
+    "num": "27",
+    "name": "delayed triggered ability",
+    "category": "Glossary Term",
+    "definition": "A triggered ability generated to resolve at a specific moment later in the game."
+  },
+  {
+    "section": "11",
+    "num": "28",
+    "name": "discard",
+    "category": "Glossary Term",
+    "definition": "noun. The single faceup pile where actions are put after they’ve finished resolving and where other cards are put after being banished or discarded. When a player puts a card from their hand into their discard, they’re discarding that card. The discard is considered a public zone."
+  },
+  {
+    "section": "11",
+    "num": "29",
+    "name": "Also called the “discard pile.”",
+    "category": "Glossary Term",
+    "definition": "verb. When a player chooses 1 or more cards from their hand and puts them into their discard. A player can discard only from their hand. If a player is instructed by the text of an ability or effect to discard their hand, the player can choose to discard a hand that has 0 cards in it."
+  },
+  {
+    "section": "11",
+    "num": "30",
+    "name": "draw",
+    "category": "Glossary Term",
+    "definition": "When a player takes the top card of their deck and puts that card into their hand. A player can draw only from their deck."
+  },
+  {
+    "section": "11",
+    "num": "31",
+    "name": "Draw step",
+    "category": "Glossary Term",
+    "definition": "The third step of the Start-of-Turn Phase of a player’s turn, when the player puts the top card of their deck into their hand. Once all effects have been resolved and there are no more waiting to be added, the game moves into the Main Phase. On the first turn of the game, the active player skips this step."
+  },
+  {
+    "section": "11",
+    "num": "32",
+    "name": "dry",
+    "category": "Glossary Term",
+    "definition": "A character that was in play at the start of its player’s current turn is considered to be dry."
+  },
+  {
+    "section": "11",
+    "num": "33",
+    "name": "drying",
+    "category": "Glossary Term",
+    "definition": "A character that was played after the start of its player’s current turn is considered to be drying. Drying characters can’t quest, challenge, or {E} to pay any cost. Non-activated abilities on drying characters, including abilities that trigger “When you play this character,” are still in effect while the character is drying. Drying characters may still be affected by card effects."
+  },
+  {
+    "section": "11",
+    "num": "34",
+    "name": "duration",
+    "category": "Glossary Term",
+    "definition": "A specified length of in-game time that describes how long an ability or effect applies."
+  },
+  {
+    "section": "11",
+    "num": "35",
+    "name": "effect",
+    "category": "Glossary Term",
+    "definition": "What happens as a result of resolving an action or ability."
+  },
+  {
+    "section": "11",
+    "num": "36",
+    "name": "End-of-Turn Phase",
+    "category": "Glossary Term",
+    "definition": "The turn structure’s third phase, which begins when the active player declares the end of their turn."
+  },
+  {
+    "section": "11",
+    "num": "37",
+    "name": "exert",
+    "category": "Glossary Term",
+    "definition": "To turn a card sideways, such as to quest, challenge, or pay the cost of a card or ability. Some abilities use the {E} symbol to show that the card must be exerted as part of the ability’s cost. While a card is exerted, its player may still use abilities on it that don’t require them to {E}."
+  },
+  {
+    "section": "11",
+    "num": "38",
+    "name": "exerted",
+    "category": "Glossary Term",
+    "definition": "A card that is or has been turned sideways."
+  },
+  {
+    "section": "11",
+    "num": "39",
+    "name": "facedown",
+    "category": "Glossary Term",
+    "definition": "A card in the play area with its back facing up toward the players and its front facing down toward the play surface. No player can look at the front of a facedown card at any time, not even their own. A facedown card is never considered to be in play."
+  },
+  {
+    "section": "11",
+    "num": "40",
+    "name": "faceup",
+    "category": "Glossary Term",
+    "definition": "A card in the play area with its back facing down toward the play surface and its front facing up toward the players. A faceup card is publicly known and can be looked at by any player at any time."
+  },
+  {
+    "section": "11",
+    "num": "41",
+    "name": "floating triggered ability",
+    "category": "Glossary Term",
+    "definition": "A triggered ability generated to exist for a specified duration."
+  },
+  {
+    "section": "11",
+    "num": "42",
+    "name": "for free",
+    "category": "Glossary Term",
+    "definition": "A player who plays a card or uses an activated ability for free can’t choose any other alternate cost for playing the card or activating the ability. An activated ability for free must still pay {E}."
+  },
+  {
+    "section": "11",
+    "num": "43",
+    "name": "full name",
+    "category": "Glossary Term",
+    "definition": "For cards that have a version in addition to a name, the combination of the two."
+  },
+  {
+    "section": "11",
+    "num": "44",
+    "name": "game state check",
+    "category": "Glossary Term",
+    "definition": "The check the game performs to verify a set of conditions and the required actions when one or more of those conditions are met. This check occurs at the end of each step, after each action or ability is finished resolving, and after each effect in the bag is finished resolving (see 1.8)."
+  },
+  {
+    "section": "11",
+    "num": "45",
+    "name": "hand",
+    "category": "Glossary Term",
+    "definition": "The zone where cards drawn by a player are held."
+  },
+  {
+    "section": "11",
+    "num": "46",
+    "name": "Illuminary icon",
+    "category": "Glossary Term",
+    "definition": "The icon on the back of a standard Disney Lorcana card."
+  },
+  {
+    "section": "11",
+    "num": "47",
+    "name": "in a stack",
+    "category": "Glossary Term",
+    "definition": "Two or more cards that are in play and in a single pile comprising a top card and all cards under it. If the top card in a stack moves to a specific zone, all cards under that card move to the same zone, and the cards are no longer considered to be in a stack."
+  },
+  {
+    "section": "11",
+    "num": "48",
+    "name": "in play",
+    "category": "Glossary Term",
+    "definition": "A card in the Play zone without any cards on top of it. If a card is under another card, it’s not considered to be in play. If a card is facedown, under another card, or in any zone other than the Play zone, it’s not considered to be in play."
+  },
+  {
+    "section": "11",
+    "num": "49",
+    "name": "ink",
+    "category": "Glossary Term",
+    "definition": "noun. The resource that players use to pay the cost of playing cards and using certain abilities. A player’s ink is represented by the cards they’ve put into their inkwell, also called ink cards. verb. When a player puts a card from their hand into their inkwell as a turn action, also called inking a card. A player can ink only 1 card during their turn, and that card must have the inkwell symbol around its cost to indicate that it’s inkable."
+  },
+  {
+    "section": "11",
+    "num": "50",
+    "name": "ink type",
+    "category": "Glossary Term",
+    "definition": "The ink type of a card as shown by the ink type symbol at the left edge of the card, just above the text box. The six ink types are Amber, Amethyst, Emerald, Ruby, Sapphire, and Steel, and each has its own symbol on the cards. A deck can have up to two ink types."
+  },
+  {
+    "section": "11",
+    "num": "51",
+    "name": "inkwell",
+    "category": "Glossary Term",
+    "definition": "The private zone where a player puts their ink cards, facedown. Each card in a player’s inkwell represents 1 {I}, no matter what’s on the front of the card, and players can’t look at the front of the cards in any inkwell."
+  },
+  {
+    "section": "11",
+    "num": "52",
+    "name": "inkwell symbol {C}",
+    "category": "Glossary Term",
+    "definition": "A circular symbol that’s present around a card’s cost if that card can be inked, or put into its player’s inkwell and used as ink."
+  },
+  {
+    "section": "11",
+    "num": "53",
+    "name": "is/was damaged",
+    "category": "Glossary Term",
+    "definition": "Takes/took damage."
+  },
+  {
+    "section": "11",
+    "num": "54",
+    "name": "item",
+    "category": "Glossary Term",
+    "definition": "A card that lists “Item” on its classification line. When a player plays an item, they put it in their Play zone, where it remains until it’s banished or removed from play by a game effect. Items can be exerted during the turn they’re played. A player can’t have more than 4 copies of an item with the same full name in their deck."
+  },
+  {
+    "section": "11",
+    "num": "55",
+    "name": "keyword ability",
+    "category": "Glossary Term",
+    "definition": "An ability or abilities represented by a short, bolded name that’s the same wherever the ability appears. Examples of keyword abilities include Bodyguard, Challenger, Evasive, Reckless, and Rush."
+  },
+  {
+    "section": "11",
+    "num": "56",
+    "name": "location",
+    "category": "Glossary Term",
+    "definition": "A card that lists “Location” on its classification line. When a player plays a location, they put it in their Play zone. Locations have a cost to play, a move cost to move a character to the location, and Willpower {W}. Locations can be dealt damage and can be challenged; when a location has damage equal to or greater than its Willpower {W} that location is banished. A location may have a Lore value {L}, which is how much lore its player gains at the start of their turn during the Set step. If a location has an activated ability, that ability can be used the same turn the location comes into play. A player may have multiple copies of a location with the same name in their deck but can’t have more than 4 copies with the same full name."
+  },
+  {
+    "section": "11",
+    "num": "57",
+    "name": "lore",
+    "category": "Glossary Term",
+    "definition": "The resource players race to gain as they play. The first player to reach 20 lore wins the game."
+  },
+  {
+    "section": "11",
+    "num": "58",
+    "name": "Lore value {L}",
+    "category": "Glossary Term",
+    "definition": "A card characteristic that indicates the amount of lore its player can gain from it each turn. On a character, this lore is gained by questing. On a location, this lore is gained at the start of the player’s turn during the Set step."
+  },
+  {
+    "section": "11",
+    "num": "59",
+    "name": "Main Phase",
+    "category": "Glossary Term",
+    "definition": "The second phase of the turn structure, when a player can take any of the Main Phase turn actions (see 3.3, “Main Phase”)."
+  },
+  {
+    "section": "11",
+    "num": "60",
+    "name": "move cost {M}",
+    "category": "Glossary Term",
+    "definition": "The cost to move one of your characters to one of your locations."
+  },
+  {
+    "section": "11",
+    "num": "61",
+    "name": "multiplayer game",
+    "category": "Glossary Term",
+    "definition": "A game played with three or more players."
+  },
+  {
+    "section": "11",
+    "num": "62",
+    "name": "name",
+    "category": "Glossary Term",
+    "definition": "A card’s name appears in large text above its classification line. On actions, items, and locations, the name is located in the center of the card. On characters, the name is located on the left of the card, across from its {S} and {W}. A character’s or location’s name and version together make up the card’s full name."
+  },
+  {
+    "section": "11",
+    "num": "63",
+    "name": "on top",
+    "category": "Glossary Term",
+    "definition": "When a card has 1 or more cards under it."
+  },
+  {
+    "section": "11",
+    "num": "64",
+    "name": "opponent",
+    "category": "Glossary Term",
+    "definition": "Anyone a player is playing against. Also known as opposing player."
+  },
+  {
+    "section": "11",
+    "num": "65",
+    "name": "opposing character",
+    "category": "Glossary Term",
+    "definition": "A character played by an opponent."
+  },
+  {
+    "section": "11",
+    "num": "66",
+    "name": "opposing player",
+    "category": "Glossary Term",
+    "definition": "Anyone a player is playing against. Also known as opponent."
+  },
+  {
+    "section": "11",
+    "num": "67",
+    "name": "passing the bag",
+    "category": "Glossary Term",
+    "definition": "The process in which multiple players with triggered abilities in the bag determine the order in which players resolve those abilities (see 6.7)."
+  },
+  {
+    "section": "11",
+    "num": "68",
+    "name": "phase",
+    "category": "Glossary Term",
+    "definition": "One of the three main parts of a turn. The phases of a player’s turn are the Start-of-Turn Phase, Main Phase, and End-of-Turn Phase."
+  },
+  {
+    "section": "11",
+    "num": "69",
+    "name": "play",
+    "category": "Glossary Term",
+    "definition": "The act of playing a card. A card can be played only from a player’s hand. If the card played is an action, the player reveals the card, pays its cost, puts it into play, resolves its effects, and then discards it. If the card played is a character, item, or location, the player reveals the card, pays its cost, and puts that card into play."
+  },
+  {
+    "section": "11",
+    "num": "70",
+    "name": "player",
+    "category": "Glossary Term",
+    "definition": "Anyone playing the game."
+  },
+  {
+    "section": "11",
+    "num": "71",
+    "name": "private zone",
+    "category": "Glossary Term",
+    "definition": "A zone where the cards aren’t publicly known. Players can’t look at them unless directed by a game rule (e.g., drawing a card) or an effect. Players can count the number of cards in a private zone at any time. While a private zone is revealed, it’s not considered private."
+  },
+  {
+    "section": "11",
+    "num": "72",
+    "name": "public zone",
+    "category": "Glossary Term",
+    "definition": "A zone where the cards are publicly known. Players can look at or count the cards in any public zone at any time."
+  },
+  {
+    "section": "11",
+    "num": "73",
+    "name": "quest",
+    "category": "Glossary Term",
+    "definition": "When a player exerts a character to gain lore equal to that character’s Lore value {L}. A character can’t quest the same turn it’s played."
+  },
+  {
+    "section": "11",
+    "num": "74",
+    "name": "ready",
+    "category": "Glossary Term",
+    "definition": "verb. To put a card in the ready position (upright). A player readies all of their exerted cards in the Ready step of their turn. adjective. A card that’s currently in the ready position."
+  },
+  {
+    "section": "11",
+    "num": "75",
+    "name": "Ready step",
+    "category": "Glossary Term",
+    "definition": "The first step of the Start-of-Turn Phase of a player’s turn, when effects that apply “during your turn” start applying and the active player readies all their exerted cards. Effects with the duration “until the start of your next turn” end. Effects that trigger “at the start of your turn” trigger. However, they wait until the Set step to start resolving."
+  },
+  {
+    "section": "11",
+    "num": "76",
+    "name": "reminder text",
+    "category": "Glossary Term",
+    "definition": "Italicized text following a keyword or other rules text and enclosed in parentheses. It’s not rules text and serves only as a memory aid."
+  },
+  {
+    "section": "11",
+    "num": "77",
+    "name": "replacement effect",
+    "category": "Glossary Term",
+    "definition": "An effect generated by some abilities that replaces one effect with another."
+  },
+  {
+    "section": "11",
+    "num": "78",
+    "name": "reveal",
+    "category": "Glossary Term",
+    "definition": "Showing the face of a card or cards from a private zone to all other players. The player can reveal cards only from the group of cards described in the effect. The revealed cards remain revealed for as long as the effect that caused them to be revealed is resolving. Being revealed doesn’t move cards from the zone they’re in."
+  },
+  {
+    "section": "11",
+    "num": "79",
+    "name": "self-replacement effect",
+    "category": "Glossary Term",
+    "definition": "An ability that has a replacement effect that partially or completely replaces its own ability or abilities."
+  },
+  {
+    "section": "11",
+    "num": "80",
+    "name": "sequential effect",
+    "category": "Glossary Term",
+    "definition": "An effect that requires a player to make a decision or pay a cost in order to resolve it. Such an effect is normally written as “[A] to [B], “[A] or [B],” or “[A]. If you do, [B].” Set step The second step of the Start-of-Turn Phase of a player’s turn, when characters that are in play are no longer drying and can quest, challenge, or {E} to pay costs for activated abilities or song cards. During this step, the active player gains lore from locations they have in play with a {L} characteristic. Effects that occur “At the start of your turn” and abilities that triggered during the Ready step are added to the bag, then all triggers are resolved."
+  },
+  {
+    "section": "11",
+    "num": "81",
+    "name": "shuffle",
+    "category": "Glossary Term",
+    "definition": "To randomize the order of cards in a deck."
+  },
+  {
+    "section": "11",
+    "num": "82",
+    "name": "simultaneous turns",
+    "category": "Glossary Term",
+    "definition": "A turn in some multiplayer formats, in which all players on the same team progress through the phases and steps of the game at the same time. Triggered abilities and effects are added to the bag by the team as a whole, and the team chooses the order they resolve in."
+  },
+  {
+    "section": "11",
+    "num": "83",
+    "name": "sing/singing",
+    "category": "Glossary Term",
+    "definition": "When a player {E} a character to pay an alternate cost to play a song. That character’s cost must be equal to or greater than the song’s ink cost."
+  },
+  {
+    "section": "11",
+    "num": "84",
+    "name": "skip",
+    "category": "Glossary Term",
+    "definition": "When a specific step or phase doesn’t happen."
+  },
+  {
+    "section": "11",
+    "num": "85",
+    "name": "song",
+    "category": "Glossary Term",
+    "definition": "A type of action that can be played by paying the song’s ink cost or by exerting a character or characters to sing it."
+  },
+  {
+    "section": "11",
+    "num": "86",
+    "name": "stack",
+    "category": "Glossary Term",
+    "definition": "noun. A number of cards set on top of each other, such as a character with Shift and the character it was played onto. When cards in a stack leave play, they all go to the same zone as the top card and are no longer considered to be in a stack. verb. To combine multiple instances of an effect. Keyword abilities that stack are followed by “+[N].” Start-of-Turn Phase The first phase of the turn, in which a player resets their cards for the turn. This is when all effects that end at the start of the player’s turn end and when effects that occur or begin at the start of their turn happen. The Start-of-Turn Phase has three steps: Ready, Set, and Draw."
+  },
+  {
+    "section": "11",
+    "num": "87",
+    "name": "starting hand",
+    "category": "Glossary Term",
+    "definition": "The initial 7 cards that a player draws at the start of the game, before they choose whether to alter their hand."
+  },
+  {
+    "section": "11",
+    "num": "88",
+    "name": "starting player",
+    "category": "Glossary Term",
+    "definition": "The player who takes the first turn of the game, determined randomly before the game begins. The starting player doesn’t draw on that turn."
+  },
+  {
+    "section": "11",
+    "num": "89",
+    "name": "static ability",
+    "category": "Glossary Term",
+    "definition": "An effect that could alter characteristics of a card, game rule, or game state. A static ability is continuously active, either for a fixed length of time or for as long as the card generating the effect is in play."
+  },
+  {
+    "section": "11",
+    "num": "90",
+    "name": "Strength {S}",
+    "category": "Glossary Term",
+    "definition": "The amount of damage a character deals in a challenge. A character’s Strength {S} may be referenced in abilities or effects."
+  },
+  {
+    "section": "11",
+    "num": "91",
+    "name": "take/took damage",
+    "category": "Glossary Term",
+    "definition": "Whenever damage is (or was) dealt to, put on, or moved to a character or location."
+  },
+  {
+    "section": "11",
+    "num": "92",
+    "name": "triggered ability",
+    "category": "Glossary Term",
+    "definition": "An ability that causes an effect to be added to the bag when a particular condition is met. Triggered abilities start with “When,” “Whenever,” “At the start of,” or “At the end of” and describe the game state that causes the abilities to trigger and the effects of the abilities. When an ability triggers, its effect is added to the bag to be resolved."
+  },
+  {
+    "section": "11",
+    "num": "93",
+    "name": "turn",
+    "category": "Glossary Term",
+    "definition": "The unit of time each player takes to complete the following three phases: Start-of-Turn Phase, Main Phase, and End-of-Turn Phase. Each player takes their turn before passing the turn to the next player."
+  },
+  {
+    "section": "11",
+    "num": "94",
+    "name": "turn action",
+    "category": "Glossary Term",
+    "definition": "An action that the game allows a player to take during the Main Phase of their turn. A player may take any number of turn actions on their turn, in any order. Turn actions include putting a card into the inkwell, playing a card, questing, challenging, moving a character to a location, and using activated abilities."
+  },
+  {
+    "section": "11",
+    "num": "95",
+    "name": "under",
+    "category": "Glossary Term",
+    "definition": "When a card has one or more cards on top of it. A card that’s under another card and in the Play zone isn’t considered to be in play. Any player can look at a faceup card that’s under another card at any time. No player can look at the front of a facedown card that’s under another card at any time, not even their own."
+  },
+  {
+    "section": "11",
+    "num": "96",
+    "name": "version",
+    "category": "Glossary Term",
+    "definition": "A descriptor that can differentiate cards with the same name for purposes building a deck. A character’s or location’s name and version together constitute the card’s full name."
+  },
+  {
+    "section": "11",
+    "num": "97",
+    "name": "Willpower {W}",
+    "category": "Glossary Term",
+    "definition": "How much damage it takes to banish a character or location."
+  },
+  {
+    "section": "11",
+    "num": "98",
+    "name": "zone",
+    "category": "Glossary Term",
+    "definition": "A physical or non-physical space used for gameplay purposes. Whether a zone is public or is private determines what information can be shared about the cards there. Each player’s zones are: deck, hand, play, inkwell, discard, and bag. All zones are considered separate from one another."
+  }
+]

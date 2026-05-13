@@ -1,0 +1,328 @@
+<%
+  data = JSON.parse(File.read(Rails.root.join(local_assigns.fetch(:data_path))))
+  title = local_assigns.fetch(:title)
+  subtitle = local_assigns.fetch(:subtitle)
+  placeholder = local_assigns.fetch(:placeholder)
+%>
+
+<% content_for :title, title %>
+
+<% content_for :head do %>
+  <style media="screen">
+    .glossary {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px 16px 64px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .glossary h1 {
+      margin: 0 0 4px;
+      font-size: 28px;
+    }
+    .glossary .glossary-subtitle {
+      color: #888;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    .glossary-search-bar {
+      position: sticky;
+      top: 0;
+      background: var(--glossary-bg, #fff);
+      z-index: 10;
+      padding: 12px 0;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 16px;
+    }
+    .dark-mode .glossary-search-bar { --glossary-bg: #1a1a1a; }
+    #glossary-search {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 16px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+    .dark-mode #glossary-search {
+      background: #2a2a2a;
+      color: #eee;
+      border-color: #555;
+    }
+    .glossary-stats {
+      font-size: 12px;
+      color: #888;
+      margin-top: 6px;
+    }
+    .glossary-section { margin-top: 24px; }
+    .glossary-section-title {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #888;
+      margin: 0 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #ddd;
+    }
+    .glossary-section[data-empty="true"] { display: none; }
+    .glossary-results {
+      display: grid;
+      gap: 12px;
+    }
+    .glossary-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 14px 16px;
+      background: #fafafa;
+    }
+    .dark-mode .glossary-card {
+      background: #2a2a2a;
+      border-color: #444;
+    }
+    .glossary-card-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+    .glossary-card-name {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0;
+    }
+    .glossary-card-meta {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    .glossary-card-def {
+      font-size: 14px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .glossary-card-def p { margin: 0 0 8px; }
+    .glossary-card-def p:last-child { margin-bottom: 0; }
+    mark.glossary-hl {
+      background: #ffe066;
+      color: inherit;
+      padding: 0 1px;
+      border-radius: 2px;
+    }
+    mark.glossary-hl-fuzzy {
+      background: #ffd6a5;
+      color: inherit;
+    }
+    .dark-mode mark.glossary-hl { background: #b8860b; color: #fff; }
+    .dark-mode mark.glossary-hl-fuzzy { background: #8b5a2b; color: #fff; }
+  </style>
+<% end %>
+
+<div class="glossary">
+  <h1><%= title %></h1>
+  <div class="glossary-subtitle"><%= subtitle %></div>
+
+  <div class="glossary-search-bar">
+    <input type="text" id="glossary-search" autofocus autocomplete="off" placeholder="<%= placeholder %>">
+    <div class="glossary-stats" id="glossary-stats"></div>
+  </div>
+
+  <section class="glossary-section" data-section="name">
+    <h2 class="glossary-section-title">Name matches</h2>
+    <div class="glossary-results" id="glossary-name-results"></div>
+  </section>
+
+  <section class="glossary-section" data-section="definition">
+    <h2 class="glossary-section-title">Definition matches</h2>
+    <div class="glossary-results" id="glossary-def-results"></div>
+  </section>
+</div>
+
+<script type="application/json" id="glossary-data">
+<%= raw data.to_json.gsub("</", "<\\/") %>
+</script>
+
+<% content_for :after_body do %>
+  <script type="text/javascript">
+    (function() {
+      var KEYWORDS = JSON.parse(document.getElementById("glossary-data").textContent);
+      KEYWORDS.sort(function(a, b) { return a.name.localeCompare(b.name); });
+
+      var searchEl = document.getElementById("glossary-search");
+      var nameResultsEl = document.getElementById("glossary-name-results");
+      var defResultsEl = document.getElementById("glossary-def-results");
+      var nameSection = document.querySelector('.glossary-section[data-section="name"]');
+      var defSection = document.querySelector('.glossary-section[data-section="definition"]');
+      var statsEl = document.getElementById("glossary-stats");
+
+      function escapeHtml(s) {
+        return s.replace(/[&<>"']/g, function(c) {
+          return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+      }
+
+      function norm(s) { return s.toLowerCase(); }
+
+      function substringMatch(target, query) {
+        return norm(target).indexOf(norm(query));
+      }
+
+      // Fuzzy: all query chars appear in order in target. Returns matched indices + gap count.
+      function fuzzyMatch(target, query) {
+        var t = norm(target), q = norm(query);
+        if (q.length === 0) return { indices: [], gaps: 0 };
+        var indices = [], qi = 0;
+        for (var ti = 0; ti < t.length && qi < q.length; ti++) {
+          if (t.charAt(ti) === q.charAt(qi)) { indices.push(ti); qi++; }
+        }
+        if (qi < q.length) return null;
+        var gaps = indices[indices.length - 1] - indices[0] - (indices.length - 1);
+        return { indices: indices, gaps: gaps };
+      }
+
+      function highlightSubstring(target, start, length, cls) {
+        return escapeHtml(target.slice(0, start))
+          + '<mark class="' + cls + '">' + escapeHtml(target.slice(start, start + length)) + '</mark>'
+          + escapeHtml(target.slice(start + length));
+      }
+
+      function highlightIndices(target, indices, cls) {
+        if (!indices || indices.length === 0) return escapeHtml(target);
+        var set = {};
+        for (var i = 0; i < indices.length; i++) set[indices[i]] = true;
+        var html = "", i2 = 0;
+        while (i2 < target.length) {
+          if (set[i2]) {
+            var j = i2;
+            while (j < target.length && set[j]) j++;
+            html += '<mark class="' + cls + '">' + escapeHtml(target.slice(i2, j)) + '</mark>';
+            i2 = j;
+          } else {
+            html += escapeHtml(target.charAt(i2));
+            i2++;
+          }
+        }
+        return html;
+      }
+
+      function highlightBest(target, query) {
+        if (!query) return { html: escapeHtml(target), kind: "none", score: 0 };
+        var subIdx = substringMatch(target, query);
+        if (subIdx >= 0) {
+          return {
+            html: highlightSubstring(target, subIdx, query.length, "glossary-hl"),
+            kind: "substring",
+            score: 10000 - subIdx,
+          };
+        }
+        var fm = fuzzyMatch(target, query);
+        if (fm) {
+          return {
+            html: highlightIndices(target, fm.indices, "glossary-hl-fuzzy"),
+            kind: "fuzzy",
+            score: 5000 - fm.gaps - fm.indices[0],
+          };
+        }
+        return { html: escapeHtml(target), kind: "none", score: 0 };
+      }
+
+      function buildCard(kw, nameHtml, defHtml) {
+        var card = document.createElement("div");
+        card.className = "glossary-card";
+
+        var header = document.createElement("div");
+        header.className = "glossary-card-header";
+
+        var nameEl = document.createElement("h3");
+        nameEl.className = "glossary-card-name";
+        nameEl.innerHTML = nameHtml;
+
+        var metaEl = document.createElement("span");
+        metaEl.className = "glossary-card-meta";
+        metaEl.textContent = kw.category + " · " + kw.section + "." + kw.num;
+
+        header.appendChild(nameEl);
+        header.appendChild(metaEl);
+        card.appendChild(header);
+
+        var defEl = document.createElement("div");
+        defEl.className = "glossary-card-def";
+        var paragraphs = defHtml.split(/\n\n+/);
+        for (var i = 0; i < paragraphs.length; i++) {
+          var p = document.createElement("p");
+          p.innerHTML = paragraphs[i];
+          defEl.appendChild(p);
+        }
+        card.appendChild(defEl);
+        return card;
+      }
+
+      function render(query) {
+        query = query.trim();
+        nameResultsEl.innerHTML = "";
+        defResultsEl.innerHTML = "";
+
+        if (query === "") {
+          for (var i = 0; i < KEYWORDS.length; i++) {
+            var kw = KEYWORDS[i];
+            nameResultsEl.appendChild(buildCard(kw, escapeHtml(kw.name), escapeHtml(kw.definition)));
+          }
+          nameSection.dataset.empty = "false";
+          defSection.dataset.empty = "true";
+          statsEl.textContent = KEYWORDS.length + " entries";
+          return;
+        }
+
+        var nameMatches = [], defMatches = [];
+
+        for (var i = 0; i < KEYWORDS.length; i++) {
+          var kw = KEYWORDS[i];
+          var nameRes = highlightBest(kw.name, query);
+          if (nameRes.kind !== "none") {
+            nameMatches.push({ kw: kw, nameRes: nameRes, defHtml: escapeHtml(kw.definition) });
+            continue;
+          }
+          var defRes = highlightBest(kw.definition, query);
+          if (defRes.kind !== "none") {
+            defMatches.push({ kw: kw, nameHtml: escapeHtml(kw.name), defRes: defRes });
+          }
+        }
+
+        function kindRank(k) { return k === "substring" ? 2 : (k === "fuzzy" ? 1 : 0); }
+        nameMatches.sort(function(a, b) {
+          var dk = kindRank(b.nameRes.kind) - kindRank(a.nameRes.kind);
+          if (dk !== 0) return dk;
+          return b.nameRes.score - a.nameRes.score;
+        });
+        defMatches.sort(function(a, b) {
+          var dk = kindRank(b.defRes.kind) - kindRank(a.defRes.kind);
+          if (dk !== 0) return dk;
+          return b.defRes.score - a.defRes.score;
+        });
+
+        for (var i = 0; i < nameMatches.length; i++) {
+          var m = nameMatches[i];
+          nameResultsEl.appendChild(buildCard(m.kw, m.nameRes.html, m.defHtml));
+        }
+        for (var i = 0; i < defMatches.length; i++) {
+          var m = defMatches[i];
+          defResultsEl.appendChild(buildCard(m.kw, m.nameHtml, m.defRes.html));
+        }
+
+        nameSection.dataset.empty = nameMatches.length === 0 ? "true" : "false";
+        defSection.dataset.empty = defMatches.length === 0 ? "true" : "false";
+
+        var total = nameMatches.length + defMatches.length;
+        if (total === 0) {
+          statsEl.textContent = "No matches for “" + query + "”";
+        } else {
+          statsEl.textContent = nameMatches.length + " name match" + (nameMatches.length === 1 ? "" : "es")
+            + " · " + defMatches.length + " definition match" + (defMatches.length === 1 ? "" : "es");
+        }
+      }
+
+      searchEl.addEventListener("input", function() { render(this.value); });
+      render("");
+    })();
+  </script>
+<% end %>

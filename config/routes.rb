@@ -3,6 +3,8 @@ Rails.application.routes.draw do
 
   get "/blockly" => "index#blockly"
   get "/icons" => "index#icons"
+  get "/mtg-glossary" => "index#mtg_glossary"
+  get "/lorcana-glossary" => "index#lorcana_glossary"
   get "/privacy-policy" => "index#privacy_policy"
 
   constraints subdomain: "sub" do
