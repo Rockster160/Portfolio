@@ -10,37 +10,43 @@
 <% content_for :head do %>
   <style media="screen">
     .glossary {
+      --glossary-pad-x: 16px;
+      --glossary-bg: #fff;
       max-width: 960px;
       margin: 0 auto;
-      padding: 24px 16px 64px;
+      padding: 16px var(--glossary-pad-x) 64px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      box-sizing: border-box;
+      overflow-wrap: anywhere;
     }
+    .dark-mode .glossary { --glossary-bg: #1a1a1a; }
     .glossary h1 {
       margin: 0 0 4px;
-      font-size: 28px;
+      font-size: 24px;
     }
     .glossary .glossary-subtitle {
       color: #888;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       font-size: 14px;
     }
     .glossary-search-bar {
       position: sticky;
       top: 0;
-      background: var(--glossary-bg, #fff);
+      background: var(--glossary-bg);
       z-index: 10;
-      padding: 12px 0;
+      padding: 10px var(--glossary-pad-x);
+      margin: 0 calc(var(--glossary-pad-x) * -1) 16px;
       border-bottom: 1px solid #ddd;
-      margin-bottom: 16px;
     }
-    .dark-mode .glossary-search-bar { --glossary-bg: #1a1a1a; }
     #glossary-search {
       width: 100%;
-      padding: 12px 14px;
+      padding: 11px 14px;
       font-size: 16px;
       border: 1px solid #bbb;
       border-radius: 6px;
       box-sizing: border-box;
+      background: #fff;
+      color: #222;
     }
     .dark-mode #glossary-search {
       background: #2a2a2a;
@@ -52,26 +58,28 @@
       color: #888;
       margin-top: 6px;
     }
-    .glossary-section { margin-top: 24px; }
+    .glossary-section { margin-top: 20px; }
     .glossary-section-title {
-      font-size: 14px;
+      font-size: 13px;
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: #888;
-      margin: 0 0 12px;
+      margin: 0 0 10px;
       padding-bottom: 6px;
       border-bottom: 1px solid #ddd;
     }
     .glossary-section[data-empty="true"] { display: none; }
     .glossary-results {
       display: grid;
-      gap: 12px;
+      gap: 10px;
     }
     .glossary-card {
       border: 1px solid #ddd;
       border-radius: 8px;
-      padding: 14px 16px;
+      padding: 12px 14px;
       background: #fafafa;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .dark-mode .glossary-card {
       background: #2a2a2a;
@@ -81,25 +89,25 @@
       display: flex;
       align-items: baseline;
       justify-content: space-between;
-      gap: 12px;
+      flex-wrap: wrap;
+      gap: 4px 12px;
       margin-bottom: 6px;
     }
     .glossary-card-name {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 600;
       margin: 0;
+      min-width: 0;
     }
     .glossary-card-meta {
       font-size: 11px;
       color: #888;
       text-transform: uppercase;
       letter-spacing: 0.06em;
-      white-space: nowrap;
     }
     .glossary-card-def {
       font-size: 14px;
       line-height: 1.5;
-      white-space: pre-wrap;
     }
     .glossary-card-def p { margin: 0 0 8px; }
     .glossary-card-def p:last-child { margin-bottom: 0; }
@@ -115,6 +123,11 @@
     }
     .dark-mode mark.glossary-hl { background: #b8860b; color: #fff; }
     .dark-mode mark.glossary-hl-fuzzy { background: #8b5a2b; color: #fff; }
+    @media (max-width: 480px) {
+      .glossary { --glossary-pad-x: 12px; padding-top: 12px; }
+      .glossary h1 { font-size: 22px; }
+      .glossary-card-name { font-size: 16px; }
+    }
   </style>
 <% end %>
 
