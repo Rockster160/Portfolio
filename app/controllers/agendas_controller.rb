@@ -84,7 +84,7 @@ class AgendasController < ApplicationController
       @agenda.broadcast!
       respond_to do |format|
         format.json { render json: { id: @agenda.id, slug: @agenda.parameterized_name } }
-        format.html { redirect_to agendas_path }
+        format.html { redirect_to manage_agenda_path }
       end
     else
       render json: { errors: @agenda.errors.full_messages }, status: :unprocessable_entity
@@ -96,7 +96,7 @@ class AgendasController < ApplicationController
       @agenda.broadcast!
       respond_to do |format|
         format.json { render json: { id: @agenda.id, slug: @agenda.parameterized_name } }
-        format.html { redirect_to agendas_path, notice: "Agenda updated." }
+        format.html { redirect_to manage_agenda_path, notice: "Agenda updated." }
       end
     else
       respond_to do |format|
@@ -108,6 +108,24 @@ class AgendasController < ApplicationController
 
   def destroy
     @agenda.destroy
+    head :no_content
+  end
+
+  # POST /agenda/test_push — fires a single push to the current user's
+  # :agenda subscription so they can verify end-to-end delivery from the
+  # /agenda/manage page's "Send test" button.
+  def test_push
+    ::WebPushNotifications.send_to(
+      current_user,
+      {
+        title: "Notifications are working!",
+        body:  "You'll get a buzz like this when your tasks and events come due.",
+        icon:  "/favicon/android-chrome-192x192.png",
+        tag:   "agenda-test-push",
+        data:  { url: "/agenda" },
+      },
+      channel: :agenda,
+    )
     head :no_content
   end
 

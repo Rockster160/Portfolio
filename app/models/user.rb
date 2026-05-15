@@ -39,6 +39,7 @@ class User < ApplicationRecord
   has_many :agendas, dependent: :destroy
   has_many :agenda_shares, dependent: :destroy
   has_many :shared_agendas, through: :agenda_shares, source: :agenda
+  has_many :agenda_notification_settings, dependent: :destroy
   has_many :emails, dependent: :destroy
   has_many :scheduled_triggers, dependent: :destroy
   has_many :prompts, dependent: :destroy

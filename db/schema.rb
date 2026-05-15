@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_14_000004) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_15_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -86,11 +86,29 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_14_000004) do
     t.datetime "updated_at", null: false
     t.string "color"
     t.text "trigger_expression"
+    t.datetime "notified_at"
     t.index ["agenda_id", "start_at"], name: "index_agenda_items_on_agenda_id_and_start_at"
     t.index ["agenda_id"], name: "index_agenda_items_on_agenda_id"
     t.index ["agenda_schedule_id", "start_at"], name: "index_agenda_items_on_agenda_schedule_id_and_start_at"
     t.index ["agenda_schedule_id"], name: "index_agenda_items_on_agenda_schedule_id"
     t.index ["completed_at"], name: "index_agenda_items_on_completed_at"
+    t.index ["notified_at"], name: "index_agenda_items_on_notified_at"
+  end
+
+  create_table "agenda_notification_settings", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "agenda_id", null: false
+    t.boolean "notify_task_oneoff", default: true, null: false
+    t.boolean "notify_task_recurring", default: true, null: false
+    t.boolean "notify_event_oneoff", default: true, null: false
+    t.boolean "notify_event_recurring", default: true, null: false
+    t.boolean "notify_trigger_oneoff", default: false, null: false
+    t.boolean "notify_trigger_recurring", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["agenda_id"], name: "index_agenda_notification_settings_on_agenda_id"
+    t.index ["user_id", "agenda_id"], name: "index_agenda_notification_settings_on_user_id_and_agenda_id", unique: true
+    t.index ["user_id"], name: "index_agenda_notification_settings_on_user_id"
   end
 
   create_table "agenda_schedules", force: :cascade do |t|
@@ -935,6 +953,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_14_000004) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "agenda_items", "agenda_schedules"
   add_foreign_key "agenda_items", "agendas"
+  add_foreign_key "agenda_notification_settings", "agendas"
+  add_foreign_key "agenda_notification_settings", "users"
   add_foreign_key "agenda_schedules", "agendas"
   add_foreign_key "agenda_shares", "agendas"
   add_foreign_key "agenda_shares", "users"

@@ -45,15 +45,114 @@
     gap: 8px;
   }
 
-  .agenda-card {
+  // Compact one-line notification status. Just a small label + button at
+  // the top of the manage page — no banner, no card chrome. Per-agenda
+  // kind/recurrence toggles below carry the rest of the notification UI.
+  .agenda-push-status {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 4px 8px 4px 0;
+    font-size: 12px;
+    opacity: 0.85;
+
+    &.hidden { display: none; }
+    &[data-state="subscribed"] .agenda-push-status-icon { color: rgb(80, 200, 120); opacity: 1; }
+    &[data-state="denied"]     .agenda-push-status-icon { color: rgb(220, 100, 100); opacity: 0.7; }
+
+    .agenda-push-status-icon { font-size: 12px; opacity: 0.6; }
+    .agenda-push-status-label { flex: 1; opacity: 0.7; }
+
+    // Reset the global gradient button look — these are inline link-buttons,
+    // not affordance-heavy CTAs.
+    .agenda-push-status-btn,
+    .agenda-push-test-btn {
+      flex-shrink: 0;
+      background: transparent !important;
+      background-image: none !important;
+      color: inherit !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+      font-size: 12px !important;
+      font-weight: 500 !important;
+      padding: 2px 6px !important;
+      margin: 0 !important;
+      border-radius: 4px !important;
+      cursor: pointer;
+      opacity: 0.75;
+      &:hover:not(:disabled) { opacity: 1; background: rgba(255, 255, 255, 0.06) !important; }
+      &:disabled { cursor: default; opacity: 0.45; }
+      &.hidden { display: none; }
+    }
+  }
+
+  .agenda-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
     padding: 12px 14px;
     background: rgba(255, 255, 255, 0.04);
     border-radius: 8px;
     color: inherit;
     min-width: 0; // allow children to shrink rather than overflow
+
+    .agenda-card-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .agenda-card-notif {
+      padding-left: 24px; // visual indent under the swatch
+      font-size: 12px;
+      opacity: 0.85;
+
+      .agenda-card-notif-header {
+        opacity: 0.6;
+        margin-bottom: 6px;
+        i { margin-right: 4px; }
+      }
+
+      // 3 columns × 4 rows. First column is the kind label, next two are the
+      // one-off and recurring toggles for that kind.
+      .agenda-card-notif-grid {
+        display: grid;
+        grid-template-columns: auto 1fr 1fr;
+        column-gap: 12px;
+        row-gap: 2px;
+        align-items: center;
+        max-width: 280px;
+      }
+
+      .agenda-card-notif-axis {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        opacity: 0.5;
+        text-align: center;
+      }
+      .agenda-card-notif-axis:first-child { text-align: left; }
+
+      .agenda-card-notif-kind {
+        font-weight: 500;
+        opacity: 0.85;
+      }
+
+      .agenda-card-notif-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+        transition: background 0.1s ease;
+        &:hover { background: rgba(255, 255, 255, 0.05); }
+        input { cursor: pointer; }
+      }
+    }
 
     .agenda-card-swatch {
       width: 12px;
@@ -146,6 +245,29 @@
     font-size: 14px;
     border-radius: 4px;
     &:hover { opacity: 1; background: rgba(255, 255, 255, 0.04); }
+  }
+
+  // Pending-ops badge — small refresh-icon + count pill. Only visible when
+  // the offline queue is non-empty; sits next to the title so the user can
+  // glance at it without anything else changing layout.
+  .agenda-pending-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 200, 100, 0.1);
+    border: 1px solid rgba(255, 200, 100, 0.3);
+    color: rgba(255, 200, 100, 0.9);
+    margin-left: 4px;
+    line-height: 1.2;
+    i { font-size: 10px; animation: agenda-pending-spin 1.6s linear infinite; }
+    &.hidden { display: none; }
+  }
+  @keyframes agenda-pending-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
   }
 
   .agenda-page-title {

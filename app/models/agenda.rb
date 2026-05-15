@@ -26,6 +26,7 @@ class Agenda < ApplicationRecord
   has_many :shared_users, through: :agenda_shares, source: :user
   has_many :editor_shares, -> { where(permission: :editor) }, class_name: "AgendaShare"
   has_many :editor_users, through: :editor_shares, source: :user
+  has_many :agenda_notification_settings, dependent: :destroy
 
   validates :name, presence: true
   validates :parameterized_name, presence: true, uniqueness: { scope: :user_id }

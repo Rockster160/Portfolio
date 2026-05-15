@@ -70,13 +70,30 @@
     try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); }
     catch (_) { return []; }
   }
-  function saveQueue(q) { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
+  function saveQueue(q) {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+    updatePendingBadge();
+  }
   function enqueue(op) {
     const q = getQueue();
     const idx = q.findIndex((p) => p.dedup_key === op.dedup_key);
     if (idx >= 0) q[idx] = op;
     else q.push(op);
     saveQueue(q);
+  }
+
+  // Subtle pending-ops badge — shown in the page header whenever the offline
+  // queue has ANY items. Updates after every saveQueue() so the count tracks
+  // enqueues and dequeues in real time. Hidden cleanly when the queue drains.
+  function updatePendingBadge() {
+    const badge = document.querySelector(".agenda-pending-badge");
+    if (!badge) return;
+    let count = 0;
+    try { count = (JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]")).length; }
+    catch (_) { count = 0; }
+    const numEl = badge.querySelector(".agenda-pending-badge-count");
+    if (numEl) numEl.textContent = count > 0 ? ` ${count}` : "";
+    badge.classList.toggle("hidden", count === 0);
   }
   // Drain the offline queue. Critical safety property: each op is only
   // removed from localStorage AFTER the server responds with `res.ok`.
@@ -1540,6 +1557,7 @@
     } else {
       initChecks(root);
     }
+    updatePendingBadge();
     const checkRollover = scheduleAutoDateAdvance(root);
 
     // Foreground re-sync. Mobile browsers (especially iOS Safari) suspend the

@@ -11,6 +11,7 @@
 #  location           :string
 #  name               :string           not null
 #  notes              :text
+#  notified_at        :datetime
 #  start_at           :datetime         not null
 #  trigger_expression :text
 #  created_at         :datetime         not null
@@ -60,6 +61,11 @@ class AgendaItem < ApplicationRecord
   # disappears from its old one. Single-agenda edits only need to broadcast
   # the one agenda; that path runs through controller-level broadcasts.
   after_update :broadcast_agenda_change!, if: :saved_change_to_agenda_id?
+
+  # Rescheduling to a future time re-arms the notification — without this,
+  # `notified_at` from the original start_at would block the buzz at the new
+  # time. Backdated edits don't re-arm (don't ping users for past events).
+  before_save :clear_notified_at_on_future_reschedule
 
   search_terms(
     :id, :name, :notes, :location,
@@ -231,6 +237,21 @@ class AgendaItem < ApplicationRecord
     update!(completed_at: nil)
   end
 
+  # Notification-broadcast guard for SendDueAgendaNotificationsWorker.
+  # `notified_at` is a single timestamp: once we've fanned the notification
+  # out to every then-eligible user for this item, we mark and never retry.
+  # If a user turns on notifications AFTER the broadcast attempt, they miss
+  # this item — no retroactive pings for past events.
+  def notified?
+    notified_at.present?
+  end
+
+  def mark_notified!
+    return if notified?
+
+    update!(notified_at: Time.current)
+  end
+
   # Cancels a single materialized occurrence of a recurring item: adds its
   # date to the schedule's excluded_dates so it won't regenerate as a phantom,
   # then destroys this row.
@@ -366,6 +387,14 @@ class AgendaItem < ApplicationRecord
     old_id = saved_changes[:agenda_id].first
     old_agenda = Agenda.find_by(id: old_id)
     Agenda.broadcast_changes!([old_agenda, agenda].compact)
+  end
+
+  def clear_notified_at_on_future_reschedule
+    return unless will_save_change_to_start_at?
+    return if notified_at.nil?
+    return if start_at.nil? || start_at <= Time.current
+
+    self.notified_at = nil
   end
 
   def end_at_after_start_at

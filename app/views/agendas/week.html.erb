@@ -13,9 +13,10 @@
 
   <header class="agenda-page-header">
     <h1 class="agenda-page-title">Agenda</h1>
+    <span class="agenda-pending-badge hidden" aria-live="polite" title="Pending sync"><i class="fa fa-refresh"></i><span class="agenda-pending-badge-count"></span></span>
     <%= render "agendas/filter", agendas: @agendas %>
     <button type="button" class="agenda-add-btn" data-modal="#agenda-add-modal" aria-label="Add to agenda"><i class="fa fa-plus"></i></button>
-    <a href="<%= agendas_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
+    <a href="<%= manage_agenda_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
   </header>
 
   <nav class="agenda-date-bar">

@@ -178,21 +178,28 @@ Rails.application.routes.draw do
     resources :sections, only: [:edit, :create, :update, :destroy]
   end
 
-  # What users navigate to. Singular — they're looking at "the agenda" (their
-  # schedule), not browsing a list of agenda entities. Helpers are named after
-  # the view, NOT `:agenda` — that name belongs to `resources :agendas` below
-  # for the member routes (PATCH/DELETE /agendas/:id). When both claimed the
-  # same name, Rails silently dropped the resourceful helper, breaking the
-  # edit form ("Unauthorized" — it was POST-as-PATCH submitting to /agenda).
-  get  "/agenda"          => "agendas#day",      as: :day
-  get  "/agenda/week"     => "agendas#week",     as: :week
-  get  "/agenda/calendar" => "agendas#calendar", as: :calendar
+  # Everything users NAVIGATE to lives under /agenda/* so the PWA scope
+  # ("/agenda" in agenda.webmanifest) covers all of it — manage, edit, new,
+  # share routes don't pop the user out of the installed app.
+  #
+  # Helpers are named after the VIEW (not the resource) for the singular
+  # routes so they don't collide with the resourceful agenda_path(record).
+  get "/agenda"          => "agendas#day",      as: :day
+  get "/agenda/week"     => "agendas#week",     as: :week
+  get "/agenda/calendar" => "agendas#calendar", as: :calendar
+  get "/agenda/manage"   => "agendas#index",    as: :manage_agenda
+  post "/agenda/test_push" => "agendas#test_push", as: :test_push_agenda
 
-  # Plural — managing the underlying agenda entities (create / edit / share / delete).
-  resources :agendas, only: [:index, :new, :create, :edit, :update, :destroy] do
+  # Resourceful CRUD remapped onto /agenda/* (was /agendas/*). `except: :index`
+  # because /agenda/manage above is the index. `except: :show` because there
+  # is no "view one agenda" page — the day view shows them all aggregated.
+  resources :agendas, path: "agenda", except: [:show, :index] do
     resources :shares, only: [:create, :update, :destroy], controller: :agenda_shares
+    resource :notification_setting, only: [:update], controller: :agenda_notification_settings
   end
 
+  # Fetch-only endpoints — never navigated to, so they can sit outside the
+  # PWA scope without breaking the installed-app experience.
   resources :agenda_items, only: [:create, :update, :destroy]
   resources :agenda_schedules, only: [:create, :update, :destroy]
 

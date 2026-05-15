@@ -8,23 +8,58 @@
     <a href="<%= new_agenda_path %>" class="agendas-index-new" aria-label="New agenda"><i class="fa fa-plus"></i></a>
   </header>
 
+  <%# Compact one-line push toggle. Per-agenda kind/recurrence toggles on
+      the cards below only matter once notifications are enabled here.
+      Registration MUST happen from this user-gesture handler — the browser
+      ignores Notification.requestPermission() outside of one. %>
+  <div class="agenda-push-status hidden"
+       data-state="loading"
+       data-test-push-url="<%= test_push_agenda_path %>">
+    <i class="fa fa-bell-o agenda-push-status-icon"></i>
+    <span class="agenda-push-status-label"></span>
+    <button type="button" class="agenda-push-test-btn hidden">Send test</button>
+    <button type="button" class="agenda-push-status-btn"></button>
+  </div>
+
   <ul class="agendas-list">
     <% @agendas.each do |agenda| %>
       <% mine = (agenda.user_id == current_user.id) %>
-      <li class="agenda-card" style="--card-color: <%= agenda.color %>;">
-        <span class="agenda-card-swatch" aria-hidden="true"></span>
-        <span class="agenda-card-main">
-          <span class="agenda-card-name"><%= agenda.name %></span>
-          <span class="agenda-card-meta">
-            <%= pluralize(agenda.agenda_items.where(start_at: Date.current.all_day).count, "item") %> today
-            <% unless mine %>
-              · <span class="agenda-card-shared">shared by <%= agenda.user.username %></span>
-            <% end %>
+      <% setting = AgendaNotificationSetting.for(current_user, agenda) %>
+      <li class="agenda-card"
+          style="--card-color: <%= agenda.color %>;"
+          data-notification-url="<%= agenda_notification_setting_path(agenda) %>">
+        <div class="agenda-card-row">
+          <span class="agenda-card-swatch" aria-hidden="true"></span>
+          <span class="agenda-card-main">
+            <span class="agenda-card-name"><%= agenda.name %></span>
+            <span class="agenda-card-meta">
+              <%= pluralize(agenda.agenda_items.where(start_at: Date.current.all_day).count, "item") %> today
+              <% unless mine %>
+                · <span class="agenda-card-shared">shared by <%= agenda.user.username %></span>
+              <% end %>
+            </span>
           </span>
-        </span>
-        <% if mine %>
-          <a href="<%= edit_agenda_path(agenda) %>" class="agenda-card-edit" aria-label="Edit <%= agenda.name %>"><i class="fa fa-pencil"></i></a>
-        <% end %>
+          <% if mine %>
+            <a href="<%= edit_agenda_path(agenda) %>" class="agenda-card-edit" aria-label="Edit <%= agenda.name %>"><i class="fa fa-pencil"></i></a>
+          <% end %>
+        </div>
+        <div class="agenda-card-notif" aria-label="Notification preferences for <%= agenda.name %>">
+          <div class="agenda-card-notif-header"><i class="fa fa-bell-o"></i> Notify me for</div>
+          <div class="agenda-card-notif-grid">
+            <div class="agenda-card-notif-axis"></div>
+            <div class="agenda-card-notif-axis">One-off</div>
+            <div class="agenda-card-notif-axis">Recurring</div>
+            <% %w[task event trigger].each do |kind| %>
+              <div class="agenda-card-notif-kind"><%= kind.capitalize %>s</div>
+              <% %w[oneoff recurring].each do |recurrence| %>
+                <% attr = "notify_#{kind}_#{recurrence}" %>
+                <label class="agenda-card-notif-toggle">
+                  <input type="checkbox" data-notify-attr="<%= attr %>" <%= "checked" if setting.send(attr) %>>
+                </label>
+              <% end %>
+            <% end %>
+          </div>
+        </div>
       </li>
     <% end %>
     <% if @agendas.empty? %>
@@ -34,3 +69,144 @@
     <% end %>
   </ul>
 </div>
+
+<% content_for :after_body do %>
+<script type="text/javascript">
+  (function () {
+    const root = document.querySelector(".agendas-index-container");
+    if (!root) return;
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+
+    // ---------- Browser push subscription ----------
+    const pushPanel = root.querySelector(".agenda-push-status");
+    const pushLabel = pushPanel?.querySelector(".agenda-push-status-label");
+    const pushBtn   = pushPanel?.querySelector(".agenda-push-status-btn");
+    const pushTest  = pushPanel?.querySelector(".agenda-push-test-btn");
+
+    function setPushState(state) {
+      if (!pushPanel) return;
+      pushPanel.dataset.state = state;
+      pushPanel.classList.remove("hidden");
+      pushTest?.classList.toggle("hidden", state !== "subscribed");
+      switch (state) {
+        case "subscribed":
+          pushLabel.textContent = "Notifications on";
+          pushBtn.textContent   = "Turn off";
+          pushBtn.disabled      = false;
+          break;
+        case "unsubscribed":
+          pushLabel.textContent = "Notifications off";
+          pushBtn.textContent   = "Enable";
+          pushBtn.disabled      = false;
+          break;
+        case "denied":
+          pushLabel.textContent = "Blocked in browser settings";
+          pushBtn.textContent   = "Blocked";
+          pushBtn.disabled      = true;
+          break;
+        case "unsupported":
+          pushPanel.classList.add("hidden"); // hide entirely on unsupported browsers
+          break;
+        default:
+          pushLabel.textContent = "…";
+          pushBtn.textContent   = "";
+          pushBtn.disabled      = true;
+      }
+    }
+
+    pushTest?.addEventListener("click", async () => {
+      const url = pushPanel.dataset.testPushUrl;
+      const original = pushTest.textContent;
+      pushTest.disabled = true;
+      pushTest.textContent = "Sending…";
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "X-CSRF-Token": csrf, "X-Requested-With": "XMLHttpRequest" },
+        });
+        pushTest.textContent = res.ok ? "Sent! Check your device." : "Couldn't send";
+      } catch (_e) {
+        pushTest.textContent = "Couldn't send";
+      } finally {
+        setTimeout(() => {
+          pushTest.textContent = original;
+          pushTest.disabled = false;
+        }, 2500);
+      }
+    });
+
+    // `application.js` is loaded with `defer`, so its `window.AgendaPush`
+    // export isn't ready when this inline script (which runs during HTML
+    // parsing) first executes. Poll briefly until the bundle has run.
+    async function waitForAgendaPush(maxAttempts = 40) {
+      for (let i = 0; i < maxAttempts; i++) {
+        if (window.AgendaPush) return true;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return false;
+    }
+
+    async function refreshPushState() {
+      const ready = await waitForAgendaPush();
+      if (!ready) {
+        setPushState("unsupported");
+        return;
+      }
+      const status = await window.AgendaPush.check();
+      setPushState(status);
+    }
+
+    pushBtn?.addEventListener("click", async () => {
+      const state = pushPanel.dataset.state;
+      pushBtn.disabled = true;
+      if (state === "subscribed") {
+        await window.AgendaPush.unregister();
+      } else {
+        // MUST run from this user-gesture handler so the browser shows the
+        // permission prompt (it ignores requestPermission calls otherwise).
+        const result = await window.AgendaPush.register();
+        if (!result.success && result.error === "permission_denied") {
+          setPushState("denied");
+          return;
+        }
+      }
+      await refreshPushState();
+    });
+
+    refreshPushState();
+
+    root.addEventListener("change", async (e) => {
+      const cb = e.target.closest("input[data-notify-attr]");
+      if (!cb) return;
+      const card = cb.closest(".agenda-card[data-notification-url]");
+      if (!card) return;
+      // Send all six toggles together — the server upserts a row keyed on
+      // (user, agenda), so we always represent the full state.
+      const checkboxes = card.querySelectorAll("input[data-notify-attr]");
+      const payload = { agenda_notification_setting: {} };
+      checkboxes.forEach((box) => {
+        payload.agenda_notification_setting[box.dataset.notifyAttr] = box.checked;
+      });
+      try {
+        await fetch(card.dataset.notificationUrl, {
+          method:      "PATCH",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type":     "application/json",
+            "Accept":           "application/json",
+            "X-CSRF-Token":     csrf,
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch (err) {
+        // Network failure — revert the toggle so the visible state matches
+        // the server. The user can retry.
+        cb.checked = !cb.checked;
+        console.error("Couldn't update notification preference:", err);
+      }
+    });
+  })();
+</script>
+<% end %>

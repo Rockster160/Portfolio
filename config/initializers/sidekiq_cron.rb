@@ -35,6 +35,11 @@ cron_jobs = [
     class: "FireDueAgendaTriggersWorker",
     cron:  every_minute,
   },
+  {
+    name:  "Send Due Agenda Notifications",
+    class: "SendDueAgendaNotificationsWorker",
+    cron:  every_minute,
+  },
 ]
 
 if Rails.env.production?

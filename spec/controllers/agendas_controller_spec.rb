@@ -76,6 +76,16 @@ RSpec.describe AgendasController, type: :controller do
     end
   end
 
+  describe "POST #test_push" do
+    it "fires a single push to the user's :agenda subscription" do
+      expect(WebPushNotifications).to receive(:send_to).with(
+        user, hash_including(title: "Notifications are working!"), channel: :agenda,
+      )
+      post :test_push
+      expect(response).to have_http_status(:no_content)
+    end
+  end
+
   describe "auto-default agenda on first visit" do
     it "creates one for a user with zero agendas when they hit /agenda" do
       user.agendas.destroy_all
