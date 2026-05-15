@@ -172,20 +172,6 @@ html:has(.ctr-tasks.act-index) {
       .status.disabled + .status.shared {
         right: 55px;
       }
-
-      .recurring {
-        position: relative;
-        width: 14px;
-
-        &:after {
-          position: absolute;
-          top: 0;
-          left: 0;
-          font-family: "FontAwesome";
-          text-align: center;
-          content: "\f021";
-        }
-      }
     }
   }
 

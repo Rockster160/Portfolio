@@ -36,6 +36,9 @@ class User < ApplicationRecord
   has_many :recipe_shares, class_name: "RecipeShare", foreign_key: :shared_to_id
   has_many :shared_recipes, through: :recipe_shares, source: :shared_to
   has_many :lists, through: :user_lists
+  has_many :agendas, dependent: :destroy
+  has_many :agenda_shares, dependent: :destroy
+  has_many :shared_agendas, through: :agenda_shares, source: :agenda
   has_many :emails, dependent: :destroy
   has_many :scheduled_triggers, dependent: :destroy
   has_many :prompts, dependent: :destroy
@@ -67,6 +70,7 @@ class User < ApplicationRecord
   has_secure_password validations: false
 
   after_save :confirm_guest
+  after_save :ensure_default_agenda
   validates :phone, uniqueness: { allow_nil: true }
   validate :proper_fields_present?
 
@@ -83,6 +87,49 @@ class User < ApplicationRecord
   end
 
   def me? = id == 1
+
+  # Owned agendas + agendas shared with this user.
+  def accessible_agendas
+    Agenda.where(user_id: id).or(Agenda.where(id: shared_agendas.select(:id)))
+  end
+
+  # Owned + editable-shared. Used to gate item/schedule mutations.
+  def editable_agendas
+    Agenda.where(user_id: id).or(
+      Agenda.where(id: agenda_shares.editor.select(:agenda_id)),
+    )
+  end
+
+  def accessible_agenda_items
+    AgendaItem.where(agenda_id: accessible_agendas.select(:id))
+  end
+
+  def editable_agenda_items
+    AgendaItem.where(agenda_id: editable_agendas.select(:id))
+  end
+
+  # Aggregate items (real + phantoms) across every accessible agenda, sorted
+  # by start_at. Sum of N two-query loads, where N = accessible_agendas.count.
+  # Acceptable for the typical handful of agendas a user has.
+  def agenda_items_for_range(from, to)
+    accessible_agendas.find_each.flat_map { |a| a.items_for_range(from, to) }.sort_by(&:start_at)
+  end
+
+  def agenda_items_for(date)
+    agenda_items_for_range(date, date)
+  end
+
+  def agenda_visible_items_for(date)
+    agenda_items_for(date).select { |item| item.visible_on?(date) }
+  end
+
+  def agenda_carry_over_items
+    cutoff = Date.current.in_time_zone(timezone).beginning_of_day
+    accessible_agenda_items
+      .where(kind: :task, completed_at: nil)
+      .where(start_at: ...cutoff)
+      .order(:start_at)
+  end
 
   def self.auth_from_basic(basic_auth)
     username, password = basic_auth.split(":", 2)
@@ -264,6 +311,19 @@ class User < ApplicationRecord
     return unless guest?
 
     update(role: :standard) if username.present?
+  end
+
+  # Every real (non-guest) user gets a starter agenda named after their
+  # username. Saves the user from staring at an empty "Create your first one."
+  # screen on signup, and gives shared/aggregated views something to render
+  # immediately. Guests skip this (they're temporary). Existing users with no
+  # agendas get one the next time they save (cheap idempotent backfill).
+  def ensure_default_agenda
+    return if guest?
+    return if username.blank?
+    return if agendas.exists?
+
+    agendas.create(name: username)
   end
 
   def proper_fields_present?

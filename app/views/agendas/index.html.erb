@@ -1,0 +1,31 @@
+<%= meta_title "Manage agendas", include_name: false %>
+
+<div class="skinny-container agendas-index-container">
+  <div class="btn-container">
+    <a href="<%= agenda_path %>" class="btn">Back to Agenda</a>
+    <a href="<%= new_agenda_path %>" class="btn pull-right">New Agenda +</a>
+  </div>
+  <div class="agendas-title">My Agendas</div>
+  <div class="agendas">
+    <% @agendas.each do |agenda| %>
+      <% mine = (agenda.user_id == current_user.id) %>
+      <div class="agenda-card" style="border-left-color: <%= agenda.color %>;">
+        <span class="agenda-name"><%= agenda.name %></span>
+        <span class="agenda-count">
+          <%= agenda.agenda_items.where(start_at: Date.current.all_day).count %> today
+          <% unless mine %>
+            <span class="agenda-shared-tag" title="Shared by <%= agenda.user.username %>">shared</span>
+          <% end %>
+        </span>
+        <% if mine %>
+          <a href="<%= edit_agenda_path(agenda) %>" class="agenda-card-link">Edit</a>
+        <% end %>
+      </div>
+    <% end %>
+    <% if @agendas.empty? %>
+      <div class="agenda-empty">
+        No agendas yet. <a href="<%= new_agenda_path %>">Create your first one.</a>
+      </div>
+    <% end %>
+  </div>
+</div>

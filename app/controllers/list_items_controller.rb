@@ -109,25 +109,6 @@ class ListItemsController < ApplicationController
       :permanent,
       :category,
       :section_id,
-      :schedule,
-      schedule: [
-        :interval,
-        :hour,
-        :minute,
-        :type,
-        :meridian,
-        :timezone,
-        {
-          weekly:  [day: []],
-          monthly: [
-            :type,
-            {
-              week: (-1..31).map { |t| { t.to_s => [] } },
-              day:  [],
-            },
-        ],
-        },
-      ],
     )
   end
 end

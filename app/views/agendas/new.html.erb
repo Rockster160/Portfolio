@@ -1,0 +1,28 @@
+<%= meta_title "New Agenda", include_name: false %>
+
+<div class="agenda-settings-page" style="--agenda-color: <%= Agenda::DEFAULT_COLOR %>;">
+  <header class="agenda-settings-header">
+    <a href="<%= agenda_path %>" class="agenda-settings-back"><i class="fa fa-chevron-left"></i> Back</a>
+  </header>
+
+  <h1 class="agenda-settings-title">New agenda</h1>
+
+  <%= form_with(model: @agenda, url: agendas_path, local: true, class: "basic agenda-form agenda-settings-form") do |f| %>
+    <div class="ff">
+      <label>Name</label>
+      <%= f.text_field :name, autofocus: true, required: true %>
+    </div>
+
+    <div class="ff">
+      <label>Color</label>
+      <div class="color-row">
+        <%= f.color_field :color, class: "agenda-color-input", value: Agenda::DEFAULT_COLOR %>
+        <span class="color-hex"><%= Agenda::DEFAULT_COLOR %></span>
+      </div>
+    </div>
+
+    <div class="agenda-form-actions">
+      <%= f.submit "Create agenda", class: "af-btn af-btn-primary" %>
+    </div>
+  <% end %>
+</div>

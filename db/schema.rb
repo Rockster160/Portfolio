@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_04_25_190000) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_14_000004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -69,6 +69,70 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_25_190000) do
     t.datetime "updated_at", null: false
     t.index ["contact_id"], name: "index_addresses_on_contact_id"
     t.index ["user_id"], name: "index_addresses_on_user_id"
+  end
+
+  create_table "agenda_items", force: :cascade do |t|
+    t.bigint "agenda_id", null: false
+    t.bigint "agenda_schedule_id"
+    t.integer "kind", null: false
+    t.datetime "start_at", null: false
+    t.datetime "end_at"
+    t.datetime "completed_at"
+    t.datetime "detached_at"
+    t.string "name", null: false
+    t.text "notes"
+    t.string "location"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "color"
+    t.text "trigger_expression"
+    t.index ["agenda_id", "start_at"], name: "index_agenda_items_on_agenda_id_and_start_at"
+    t.index ["agenda_id"], name: "index_agenda_items_on_agenda_id"
+    t.index ["agenda_schedule_id", "start_at"], name: "index_agenda_items_on_agenda_schedule_id_and_start_at"
+    t.index ["agenda_schedule_id"], name: "index_agenda_items_on_agenda_schedule_id"
+    t.index ["completed_at"], name: "index_agenda_items_on_completed_at"
+  end
+
+  create_table "agenda_schedules", force: :cascade do |t|
+    t.bigint "agenda_id", null: false
+    t.string "name", null: false
+    t.integer "kind", null: false
+    t.time "start_time", null: false
+    t.integer "duration_minutes"
+    t.date "starts_on", null: false
+    t.date "until_on"
+    t.jsonb "recurrence", default: {}, null: false
+    t.text "notes"
+    t.string "location"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "color"
+    t.text "trigger_expression"
+    t.integer "occurrence_count"
+    t.index ["agenda_id"], name: "index_agenda_schedules_on_agenda_id"
+  end
+
+  create_table "agenda_shares", force: :cascade do |t|
+    t.bigint "agenda_id", null: false
+    t.bigint "user_id", null: false
+    t.integer "permission", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["agenda_id", "user_id"], name: "index_agenda_shares_on_agenda_id_and_user_id", unique: true
+    t.index ["agenda_id"], name: "index_agenda_shares_on_agenda_id"
+    t.index ["user_id"], name: "index_agenda_shares_on_user_id"
+  end
+
+  create_table "agendas", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "name", null: false
+    t.string "parameterized_name", null: false
+    t.string "color"
+    t.integer "sort_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "parameterized_name"], name: "index_agendas_on_user_id_and_parameterized_name", unique: true
+    t.index ["user_id"], name: "index_agendas_on_user_id"
   end
 
   create_table "api_keys", force: :cascade do |t|
@@ -423,10 +487,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_25_190000) do
     t.datetime "deleted_at", precision: nil
     t.boolean "important", default: false
     t.boolean "permanent", default: false
-    t.string "schedule"
     t.string "category"
-    t.datetime "schedule_next", precision: nil
-    t.integer "timezone"
     t.integer "amount"
     t.bigint "section_id"
     t.index ["deleted_at"], name: "index_list_items_on_deleted_at"
@@ -872,6 +933,12 @@ ActiveRecord::Schema[7.1].define(version: 2026_04_25_190000) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "agenda_items", "agenda_schedules"
+  add_foreign_key "agenda_items", "agendas"
+  add_foreign_key "agenda_schedules", "agendas"
+  add_foreign_key "agenda_shares", "agendas"
+  add_foreign_key "agenda_shares", "users"
+  add_foreign_key "agendas", "users"
   add_foreign_key "boxes", "users"
   add_foreign_key "emails", "users"
   add_foreign_key "list_builders", "lists"

@@ -206,6 +206,47 @@
   !.notes::String
   !.data::Hash
   !.destroy::Boolean
+[Agenda]
+  #find(String:Name)
+  #add_task(String:Agenda String:Name String:When)
+  #add_event(String:Agenda String:Name String:Start String:End)
+  #search(Text:Query "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # All agenda items across the user's agendas
+  .id::Numeric
+  .name::String
+  .color::String
+  .items(String?:Date)::Array
+  .schedules::Array
+  .find_items(String:Query "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # Items scoped to this agenda
+  .update!(content(AgendaData))::Hash
+  .destroy::Boolean
+*[AgendaData]
+  #name(String)
+  #color(String)
+*[AgendaItem]
+  .id::Numeric
+  .name::String
+  .kind::String
+  .color::String
+  .start_at::Date
+  .end_at::Date
+  .completed_at::Date
+  .notes::String
+  .location::String
+  .trigger_expression::String
+  .agenda::Hash
+  .completed?::Boolean
+  .recurring?::Boolean
+  .complete::Boolean
+  .uncomplete::Boolean
+  .update!(content(AgendaItemData))::Hash
+  .destroy::Boolean
+*[AgendaItemData]
+  #name(String)
+  #notes(String)
+  #location(String)
+  #start_at(Date)
+  #end_at(Date)
+  #color(String)
 [Section]
   #find(String:List String:Section)
   #create(String:List String:Name String:Color)

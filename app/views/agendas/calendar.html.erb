@@ -1,0 +1,77 @@
+<%= meta_title @month.strftime("%B %Y"), include_name: false %>
+
+<div class="agenda-calendar-page"
+     data-current-date="<%= @month.iso8601 %>">
+
+  <header class="agenda-page-header">
+    <h1 class="agenda-page-title">Agenda</h1>
+    <button type="button" class="agenda-add-btn" data-modal="#agenda-add-modal" aria-label="Add to agenda"><i class="fa fa-plus"></i></button>
+    <a href="<%= agendas_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
+  </header>
+
+  <nav class="agenda-date-bar">
+    <% prev_month = (@month - 1.month).strftime("%Y-%m") %>
+    <% next_month = (@month + 1.month).strftime("%Y-%m") %>
+    <a class="date-nav prev" href="<%= calendar_path(month: prev_month) %>" aria-label="Previous month"><i class="fa fa-chevron-left"></i></a>
+    <span class="date-label"><%= @month.strftime("%B %Y") %></span>
+    <% unless @month == Date.current.beginning_of_month %>
+      <a class="date-today" href="<%= calendar_path %>">This month</a>
+    <% end %>
+    <a class="date-nav next" href="<%= calendar_path(month: next_month) %>" aria-label="Next month"><i class="fa fa-chevron-right"></i></a>
+  </nav>
+
+  <div class="cal-view-toggle">
+    <a href="<%= agenda_path %>" class="cal-toggle-btn">Day</a>
+    <a href="<%= calendar_path %>" class="cal-toggle-btn active">Month</a>
+  </div>
+
+  <div class="cal-grid">
+    <% %w[Sun Mon Tue Wed Thu Fri Sat].each do |wd| %>
+      <div class="cal-weekday-head"><%= wd %></div>
+    <% end %>
+
+    <% (@first_visible..@last_visible).each do |day| %>
+      <% items = @items_by_date[day] || [] %>
+      <% in_month = (day.month == @month.month) %>
+      <% is_today = (day == Date.current) %>
+      <div class="cal-day <%= 'is-today' if is_today %> <%= 'other-month' unless in_month %>"
+           data-date="<%= day.iso8601 %>"
+           role="button"
+           tabindex="0">
+        <a class="cal-day-num" href="<%= agenda_path(date: day.iso8601) %>"><%= day.day %></a>
+        <% items.first(4).each do |item| %>
+          <button type="button"
+                  class="cal-item"
+                  data-edit-item
+                  data-item-id="<%= item.display_id %>"
+                  data-item-url="<%= agenda_item_path(item.display_id) %>"
+                  data-phantom="<%= item.phantom? %>"
+                  data-recurring="<%= item.recurring? %>"
+                  data-kind="<%= item.kind %>"
+                  data-color="<%= item.display_color %>"
+                  data-agenda-id="<%= item.agenda_id %>"
+                  data-agenda-name="<%= item.agenda.name %>"
+                  data-agenda-color="<%= item.agenda.color %>"
+                  data-start-at="<%= item.start_at.iso8601 %>"
+                  data-end-at="<%= item.end_at&.iso8601 %>"
+                  data-name="<%= item.name %>"
+                  data-notes="<%= item.notes %>"
+                  data-location="<%= item.location %>"
+                  data-trigger-expression="<%= item.trigger_expression %>"
+                  data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
+                  style="--item-color: <%= item.display_color %>; --agenda-color: <%= item.agenda.color %>;"
+                  title="<%= item.agenda.name %> · <%= item.start_at.in_time_zone(current_user.timezone).strftime('%-l:%M %p') %> — <%= item.name %>">
+            <span class="cal-item-time"><%= item.start_at.in_time_zone(current_user.timezone).strftime("%-l%P") %></span>
+            <span class="cal-item-name"><%= item.name %></span>
+          </button>
+        <% end %>
+        <% if items.size > 4 %>
+          <span class="cal-more">+<%= items.size - 4 %> more</span>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+
+  <%= render "agenda_items/add_modal", agendas: @agendas, date: Date.current %>
+  <%= render "agenda_items/edit_modal", agendas: @agendas %>
+</div>

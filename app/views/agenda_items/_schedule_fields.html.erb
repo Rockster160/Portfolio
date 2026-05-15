@@ -1,0 +1,90 @@
+<%# Shared recurrence/schedule field block — included in both add + edit modals.
+    Uses class names without form-specific prefixes; JS scopes queries to the
+    parent form so the same classes can co-exist in two modals. %>
+
+<div class="ff add-repeat-field">
+  <label>Repeats</label>
+  <select class="add-freq">
+    <option value="never">Never</option>
+    <option value="daily">Daily</option>
+    <option value="weekdays">Weekdays</option>
+    <option value="weekly">Weekly</option>
+    <option value="monthly">Monthly</option>
+    <option value="yearly">Yearly</option>
+    <option value="custom">Every</option>
+  </select>
+</div>
+
+<div class="ff add-weekly hidden">
+  <label>Days of week</label>
+  <div class="wd-chips">
+    <% [[:mon, "M"], [:tue, "T"], [:wed, "W"], [:thu, "T"], [:fri, "F"], [:sat, "S"], [:sun, "S"]].each do |key, label| %>
+      <button type="button" class="wd-chip" data-day="<%= key %>"><%= label %></button>
+    <% end %>
+  </div>
+</div>
+
+<div class="ff add-monthly hidden">
+  <label>Days of month</label>
+  <div class="md-chips">
+    <% (1..31).each do |day| %>
+      <button type="button" class="md-chip" data-day="<%= day %>"><%= day %></button>
+    <% end %>
+    <button type="button" class="md-chip md-chip-last" data-day="-1">Last</button>
+  </div>
+</div>
+
+<div class="ff add-custom hidden">
+  <label>Every</label>
+  <div class="custom-inline">
+    <input type="number" class="add-interval" min="1" value="1">
+    <select class="add-unit">
+      <option value="day">days</option>
+      <option value="week">weeks</option>
+      <option value="month">months</option>
+    </select>
+  </div>
+</div>
+
+<div class="ff add-month-mode hidden">
+  <label>On</label>
+  <div class="month-mode-options">
+    <label class="month-mode-option">
+      <input type="radio" name="<%= local_assigns[:scope_name] || 'add-month-mode' %>" class="add-month-mode-radio" value="day-of-month" checked>
+      <span>Day <strong class="month-day-label">14</strong> of the month</span>
+    </label>
+    <label class="month-mode-option">
+      <input type="radio" name="<%= local_assigns[:scope_name] || 'add-month-mode' %>" class="add-month-mode-radio" value="nth-weekday">
+      <span>The</span>
+      <select class="add-set-pos">
+        <option value="1">first</option>
+        <option value="2">second</option>
+        <option value="3">third</option>
+        <option value="4">fourth</option>
+        <option value="-1">last</option>
+      </select>
+      <select class="add-set-wday">
+        <option value="mon">Monday</option>
+        <option value="tue">Tuesday</option>
+        <option value="wed">Wednesday</option>
+        <option value="thu">Thursday</option>
+        <option value="fri">Friday</option>
+        <option value="sat">Saturday</option>
+        <option value="sun">Sunday</option>
+      </select>
+    </label>
+  </div>
+</div>
+
+<div class="ff add-ends-field hidden">
+  <label>Stops</label>
+  <div class="ends-row">
+    <select class="add-end-mode">
+      <option value="never">Never</option>
+      <option value="until">On date</option>
+      <option value="count">After N occurrences</option>
+    </select>
+    <input type="date" class="add-until hidden">
+    <input type="number" class="add-count hidden" min="1" value="10" placeholder="N">
+  </div>
+</div>

@@ -1,0 +1,119 @@
+<%# Shared form fields for the add + edit modals. Locals:
+    - agendas       (required) — array of accessible agendas for the picker
+    - default_agenda_id (optional) — preselected in :add mode
+    - mode          :add | :edit
+    - default_date  ISO date string (used as initial Date value in :add mode)
+
+    Both modals render IDENTICAL fields. :edit adds the hidden item-id field
+    and the "Apply changes to" scope radios (shown for recurring items via JS).
+    Action buttons live in the modal wrappers. %>
+
+<% mode ||= :add %>
+<% default_date_value = local_assigns[:default_date].presence || Date.current.iso8601 %>
+<% default_agenda_id ||= local_assigns[:default_agenda_id] || agendas.first&.id %>
+<% default_color = (agendas.find { |a| a.id == default_agenda_id } || agendas.first)&.color || Agenda::DEFAULT_COLOR %>
+
+<% if mode == :edit %>
+  <input type="hidden" class="add-item-id">
+<% end %>
+
+<%# Custom agenda picker — native <option> styling is unreliable across
+    browsers (Safari/macOS ignores it entirely), so we build our own. Toggle
+    looks like a compact colored pill; menu is a floating list where EVERY
+    option shows its agenda color via a dot + tinted row. Hidden input under
+    the hood preserves the existing form submission contract (`.add-agenda-id`
+    still holds the selected id). %>
+<% picked = agendas.find { |a| a.id == default_agenda_id } || agendas.first %>
+<div class="ff agenda-pick" style="--picked-agenda-color: <%= picked&.color || Agenda::DEFAULT_COLOR %>;">
+  <button type="button" class="agenda-pick-toggle" aria-haspopup="listbox" aria-expanded="false">
+    <span class="agenda-pick-dot" aria-hidden="true"></span>
+    <span class="agenda-pick-label"><%= picked&.name %></span>
+    <i class="fa fa-caret-down agenda-pick-caret" aria-hidden="true"></i>
+  </button>
+  <ul class="agenda-pick-menu hidden" role="listbox">
+    <% agendas.each do |a| %>
+      <li role="option"
+          data-id="<%= a.id %>"
+          data-color="<%= a.color %>"
+          data-name="<%= a.name %>"
+          style="--option-color: <%= a.color %>;"
+          <%= "aria-selected='true' class='selected'" if a.id == picked&.id %>>
+        <span class="agenda-pick-dot" aria-hidden="true"></span>
+        <span class="agenda-pick-name"><%= a.name %></span>
+      </li>
+    <% end %>
+  </ul>
+  <input type="hidden" class="add-agenda-id" value="<%= picked&.id %>">
+</div>
+
+<div class="ff">
+  <label>Name</label>
+  <input type="text" class="add-name" placeholder="Event Name" autocomplete="off" required>
+</div>
+
+<div class="ff add-trigger-field hidden">
+  <label>Trigger expression</label>
+  <input type="text" class="add-trigger-expression" placeholder="goodMorning or scope:key:value" autocomplete="off">
+  <small class="trigger-hint">
+    Fires a Jil scope: <code>scope</code> or <code>scope:key:value</code>. Quote segments with spaces.<br>
+    Run a Jarvis command instead: <code>command:"Remind me to wash dishes"</code>.<br>
+    Outer quotes protect colons: <code>command:"Remind me at 9:00am to do X"</code>.<br>
+    Inner quotes survive verbatim: <code>command:Remind me to "add water to plants"</code>.
+  </small>
+</div>
+
+<div class="ff-pair">
+  <div class="ff">
+    <label>Kind</label>
+    <div class="kind-toggle">
+      <button type="button" class="kind-btn active" data-kind="task">Task</button>
+      <button type="button" class="kind-btn" data-kind="event">Event</button>
+      <button type="button" class="kind-btn" data-kind="trigger">Trigger</button>
+    </div>
+  </div>
+  <div class="ff">
+    <label>Color</label>
+    <div class="color-row">
+      <input type="color" class="add-color color-swatch-input" value="<%= default_color %>">
+      <span class="color-hex color-hex-preview"><%= default_color %></span>
+    </div>
+  </div>
+</div>
+
+<div class="ff">
+  <label>Date</label>
+  <input type="date" class="add-date" value="<%= default_date_value %>">
+</div>
+
+<div class="ff-pair">
+  <div class="ff">
+    <label>Start</label>
+    <input type="time" class="add-start" value="09:00">
+  </div>
+  <div class="ff add-end-field hidden">
+    <label>End</label>
+    <input type="time" class="add-end" value="10:00">
+  </div>
+</div>
+
+<div class="ff">
+  <label>Location</label>
+  <input type="text" class="add-location" autocomplete="off">
+</div>
+
+<div class="ff">
+  <label>Notes</label>
+  <textarea class="add-notes" rows="3"></textarea>
+</div>
+
+<% if mode == :edit %>
+  <div class="ff add-scope-field hidden">
+    <label>Apply changes to</label>
+    <div class="scope-radios">
+      <label><input type="radio" name="scope" value="occurrence"> This occurrence</label>
+      <label><input type="radio" name="scope" value="series" checked> This and all future</label>
+    </div>
+  </div>
+<% end %>
+
+<%= render "agenda_items/schedule_fields", scope_name: "month-mode" %>

@@ -1,0 +1,78 @@
+<%= meta_title "Agenda", include_name: false %>
+
+<div class="agenda-page"
+     data-current-date="<%= @date.iso8601 %>">
+
+  <header class="agenda-page-header">
+    <h1 class="agenda-page-title">Agenda</h1>
+    <button type="button" class="agenda-add-btn" data-modal="#agenda-add-modal" aria-label="Add to agenda"><i class="fa fa-plus"></i></button>
+    <a href="<%= agendas_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
+  </header>
+
+  <nav class="agenda-date-bar">
+    <a class="date-nav prev" href="<%= agenda_path(date: (@date - 1).iso8601) %>" aria-label="Previous day"><i class="fa fa-chevron-left"></i></a>
+    <span class="date-label"><%= @date.strftime("%a, %b %-d, %Y") %></span>
+    <% if @date != Date.current %>
+      <a class="date-today" href="<%= agenda_path %>">Today</a>
+    <% end %>
+    <a class="date-nav next" href="<%= agenda_path(date: (@date + 1).iso8601) %>" aria-label="Next day"><i class="fa fa-chevron-right"></i></a>
+  </nav>
+
+  <div class="cal-view-toggle">
+    <a href="<%= agenda_path %>" class="cal-toggle-btn active">Day</a>
+    <a href="<%= calendar_path %>" class="cal-toggle-btn">Month</a>
+  </div>
+
+  <div class="agenda-error hidden">Disconnected — changes will sync when reconnected.</div>
+
+  <% if @agendas.empty? %>
+    <div class="agenda-empty">
+      No agendas yet. <a href="<%= new_agenda_path %>">Create your first one.</a>
+    </div>
+  <% else %>
+    <% carry_over = current_user.agenda_carry_over_items.to_a %>
+    <% if carry_over.any? %>
+      <section class="agenda-section section-carry">
+        <header class="section-header">Carry over <span class="section-count"><%= carry_over.size %></span></header>
+        <div class="agenda-items">
+          <% carry_over.each do |item| %>
+            <%= render "agenda_items/item", item: item %>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+    <% is_today = (@date == Date.current) %>
+    <% primary_label   = is_today ? "Today"    : @date.strftime("%A, %b %-d") %>
+    <% secondary_label = is_today ? "Tomorrow" : (@date + 1).strftime("%A, %b %-d") %>
+
+    <section class="agenda-section section-today">
+      <header class="section-header"><%= primary_label %></header>
+      <div class="agenda-items" data-section="today">
+        <% today_items = current_user.agenda_visible_items_for(@date) %>
+        <% if today_items.empty? %>
+          <div class="agenda-empty">Nothing scheduled.</div>
+        <% end %>
+        <% today_items.each do |item| %>
+          <%= render "agenda_items/item", item: item %>
+        <% end %>
+      </div>
+    </section>
+
+    <section class="agenda-section section-tomorrow">
+      <header class="section-header"><%= secondary_label %></header>
+      <div class="agenda-items preview" data-section="tomorrow">
+        <% tomorrow_items = current_user.agenda_visible_items_for(@date + 1) %>
+        <% if tomorrow_items.empty? %>
+          <div class="agenda-empty muted">Nothing scheduled yet.</div>
+        <% end %>
+        <% tomorrow_items.each do |item| %>
+          <%= render "agenda_items/item", item: item, preview: true %>
+        <% end %>
+      </div>
+    </section>
+
+    <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>
+    <%= render "agenda_items/edit_modal", agendas: @agendas %>
+  <% end %>
+</div>

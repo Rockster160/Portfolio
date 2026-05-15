@@ -1,0 +1,1150 @@
+.agendas-index-container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+  min-height: 100vh;
+  box-sizing: border-box;
+
+  .agendas-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 16px 0 12px;
+  }
+
+  .agendas {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .agenda-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    border-left: 3px solid $base-blue;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 4px;
+    text-decoration: none;
+    color: inherit;
+
+    &:hover { background: rgba(255, 255, 255, 0.08); }
+
+    .agenda-name { font-size: 16px; font-weight: 500; }
+    .agenda-count { font-size: 12px; opacity: 0.55; }
+  }
+
+  .agenda-empty {
+    padding: 24px 16px;
+    text-align: center;
+    opacity: 0.55;
+  }
+}
+
+.agenda-page,
+.agenda-calendar-page {
+  --agenda-color: #{$base-blue};
+  margin: 0 auto;
+  padding: 12px 16px 80px;
+  // html is `height: 100%` from the inline style in application.html.erb but
+  // body has no min-height — when content is shorter than viewport, body ends
+  // and the html canvas paints below it. Force the container to fill the
+  // viewport so the body always extends to the bottom and there's no seam.
+  min-height: 100vh;
+  box-sizing: border-box;
+
+  .agenda-page-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 4px 0 10px;
+  }
+
+  .agenda-page-back,
+  .agenda-page-cog {
+    color: inherit;
+    opacity: 0.55;
+    padding: 6px 10px;
+    text-decoration: none;
+    font-size: 14px;
+    border-radius: 4px;
+    &:hover { opacity: 1; background: rgba(255, 255, 255, 0.04); }
+  }
+
+  .agenda-page-title {
+    flex: 1;
+    margin: 0 8px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--agenda-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // Aggressive override of the global `button` styles (forms.scss line 180-)
+  // which apply padding: 6px 24px, gradient bg, font-weight: bold to ALL buttons.
+  .agenda-add-btn {
+    box-sizing: border-box;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 50% !important;
+    background: var(--agenda-color) !important;
+    background-image: none !important;
+    color: #fff !important;
+    border: 0;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    font-family: inherit !important;
+    font-weight: normal !important;
+    font-size: 13px !important;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: filter 0.15s ease;
+
+    &:hover { filter: brightness(1.15); }
+  }
+
+  .agenda-date-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin: 4px 0 14px;
+    font-size: 14px;
+
+    .date-nav {
+      color: inherit;
+      opacity: 0.55;
+      padding: 6px 10px;
+      text-decoration: none;
+      &:hover { opacity: 1; }
+    }
+    .date-label { font-weight: 600; min-width: 170px; text-align: center; }
+    .date-today {
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: inherit;
+      text-decoration: none;
+      &:hover { background: rgba(255, 255, 255, 0.14); }
+    }
+  }
+
+  .agenda-error {
+    background: rgba(255, 90, 90, 0.12);
+    color: #ff9b9b;
+    font-size: 12px;
+    text-align: center;
+    padding: 6px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+
+  .agenda-section {
+    margin-bottom: 16px;
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      opacity: 0.55;
+      margin: 0 0 6px;
+      padding-left: 2px;
+    }
+
+    .section-count {
+      font-size: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      padding: 1px 7px;
+      opacity: 0.8;
+    }
+
+    &.section-carry .section-header { color: #ffb663; opacity: 0.85; }
+    &.section-tomorrow { opacity: 0.72; }
+  }
+
+  .agenda-items {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .agenda-empty {
+    padding: 10px 8px;
+    opacity: 0.45;
+    font-style: italic;
+    font-size: 13px;
+    &.muted { font-size: 12px; }
+  }
+
+  .agenda-item {
+    display: flex;
+    align-items: stretch; // children fill the row's full height — keeps the
+                          // <label> click target the same shape as the row.
+    padding: 0 10px;      // vertical padding moves into the label so the
+                          // label's hit-rect covers the row's full height.
+                          // (This was the root cause of the "click only works
+                          // in the very center of the row" bug — the label
+                          // used to be content-height, leaving dead bands of
+                          // row padding that ate clicks.)
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.025);
+    border-left: 3px solid var(--item-color, var(--agenda-color));
+    transition: background 0.1s ease, opacity 0.1s ease;
+
+    // Pending-state visuals: shown after the user submits an edit or delete,
+    // cleared when the server's WS broadcast confirms (re-render) or when the
+    // request errors out (handled in JS).
+    &.is-pending {
+      opacity: 0.6;
+      animation: agenda-pulse 1.5s ease-in-out infinite;
+    }
+    &.is-pending-delete {
+      border-left-color: #ff7575 !important;
+      background: rgba(255, 90, 90, 0.08) !important;
+      animation: agenda-pulse 1.5s ease-in-out infinite;
+      .agenda-item-name { text-decoration: line-through; opacity: 0.5; }
+    }
+
+    &:hover { background: rgba(255, 255, 255, 0.06); }
+
+    &.preview {
+      padding: 0 10px;
+      font-size: 13px;
+      background: transparent;
+      border-left-style: dotted;
+    }
+
+    &.kind-task { border-left-style: dashed; }
+
+    &.crossed-out {
+      .agenda-item-name, .agenda-item-time {
+        text-decoration: line-through;
+        opacity: 0.5;
+      }
+    }
+
+    &.phantom .agenda-item-name { font-style: italic; }
+
+    .agenda-item-check {
+      margin: 0 10px 0 0;
+      transform: scale(1.1);
+      cursor: pointer;
+      align-self: center; // checkbox stays compact; only the label stretches.
+    }
+
+    .agenda-item-body {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+      padding: 10px 0; // own the row's vertical padding so the label's click
+                       // area = the full row height. Plain <div> in preview
+                       // mode, <label for="…"> when interactive (toggles the
+                       // checkbox natively — touch scroll is preserved).
+      cursor: pointer;
+    }
+    &.preview .agenda-item-body { cursor: default; padding: 5px 0; }
+
+    // Subtle dot showing which agenda an item belongs to. Inherits the agenda
+    // colour via --agenda-color (set per item). Falls back to invisible when
+    // the user only has one agenda — same colour everywhere, low contrast.
+    .agenda-item-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--agenda-color, transparent);
+      flex-shrink: 0;
+      align-self: center;
+      opacity: 0.7;
+    }
+
+    .agenda-item-time {
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      opacity: 0.7;
+      min-width: 110px;
+      flex-shrink: 0;
+      .time-sep { margin: 0 2px; opacity: 0.5; }
+    }
+
+    .agenda-item-name {
+      flex: 1;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .agenda-item-loc { font-size: 12px; opacity: 0.55; flex-shrink: 0; }
+    .agenda-item-badge { font-size: 10px; opacity: 0.4; flex-shrink: 0; }
+
+    // Pencil button — comfortable touch target (≥40×row-height), low-opacity
+    // by default so it doesn't compete with the row content. Brightens on
+    // hover. Override global button chrome (gradient, padding, etc.).
+    .agenda-item-edit {
+      align-self: stretch;            // tall click target = row full height
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;                // mobile-friendly touch target
+      box-sizing: border-box;
+      padding: 0 14px !important;
+      margin: 0 -10px 0 4px !important; // bleed into row's horizontal padding
+      background: transparent !important;
+      background-image: none !important;
+      color: inherit !important;
+      border: 0 !important;
+      border-radius: 0 4px 4px 0 !important; // match row's right corners
+      box-shadow: none !important;
+      text-shadow: none !important;
+      font-family: inherit !important;
+      font-weight: normal !important;
+      font-size: 13px !important;
+      opacity: 0.35;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: opacity 0.15s ease, background 0.15s ease;
+
+      i { line-height: 1; }
+
+      &:hover, &:focus-visible {
+        opacity: 1;
+        background: rgba(255, 255, 255, 0.08) !important;
+        outline: none;
+      }
+    }
+  }
+}
+
+// =================== Agenda modals — full override of app card chrome ===================
+
+#agenda-add-modal,
+#agenda-item-edit {
+  .modal-content {
+    width: 460px;
+  }
+
+  // Replace the gradient blue card with a flat dark surface.
+  .app-card-container {
+    background: #141a26 !important;
+    background-image: none !important;
+    box-shadow: 0 14px 50px rgba(0, 0, 0, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 10px !important;
+    font-family: inherit !important;
+    margin-top: 0 !important;
+    overflow: hidden;
+  }
+
+  .app-card-title {
+    background: rgba(255, 255, 255, 0.03) !important;
+    color: inherit !important;
+    padding: 12px 16px !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .close-btn {
+      color: inherit !important;
+      opacity: 0.4;
+      float: none;
+      line-height: 1;
+      &:hover { opacity: 1; }
+
+      .fa-2x {
+        font-size: 16px !important;
+      }
+    }
+  }
+
+  .app-card-body { margin: 0 !important; padding: 0 !important; }
+  .app-card-inner { margin: 0 !important; padding: 0 !important; }
+}
+
+.agenda-form {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  color: inherit;
+
+  .ff {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .ff > label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.55;
+    color: inherit;
+  }
+
+  .ff-pair {
+    display: flex;
+    gap: 10px;
+    > .ff { flex: 1; min-width: 130px; }
+  }
+
+  // Compact, custom agenda picker. Looks like a colored pill; clicking
+  // expands a floating list where every option shows its agenda color via
+  // a dot + tinted row. No label — the color IS the label.
+  .ff.agenda-pick {
+    flex-direction: row;
+    align-items: center;
+    align-self: flex-start; // pill width = content, not stretched to row.
+    position: relative;     // anchor for absolutely-positioned menu.
+
+    // Shared swatch (used in toggle + each option). Color comes from the
+    // nearest CSS var: --picked-agenda-color on the wrapper for the toggle,
+    // or --option-color on the <li> for each option. Inset ring gives the
+    // swatch shape against very dark/light agenda colors.
+    .agenda-pick-dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--option-color, var(--picked-agenda-color, currentColor));
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+      flex-shrink: 0;
+    }
+
+    .agenda-pick-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px 5px 10px !important;
+      margin: 0 !important;
+      height: auto !important;
+      line-height: 1.3 !important;
+      font-size: 13px !important;
+      font-weight: 500 !important;
+      font-family: inherit !important;
+      color: var(--picked-agenda-color, inherit) !important;
+      background: rgba(255, 255, 255, 0.04) !important;
+      background-image: none !important;
+      border: 1px solid rgba(255, 255, 255, 0.14) !important;
+      border-radius: 6px !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+      cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease;
+
+      &:hover, &[aria-expanded="true"] {
+        background: rgba(255, 255, 255, 0.07) !important;
+        border-color: rgba(255, 255, 255, 0.22) !important;
+      }
+
+      .agenda-pick-caret { opacity: 0.55; font-size: 10px; margin-left: 2px; }
+    }
+
+    .agenda-pick-menu {
+      // Fixed positioning so the menu floats above the modal (which has
+      // overflow: hidden on its container). JS sets top/left/min-width based
+      // on the toggle button's bounding rect when opening.
+      position: fixed;
+      max-width: 260px;
+      max-height: 240px;
+      overflow-y: auto;
+      list-style: none;
+      margin: 0;
+      padding: 4px;
+      background: #1f1f23;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      z-index: 10000;
+
+      &.hidden { display: none; }
+
+      // Swatch + name. Text in normal/inherit color (never tinted), so we
+      // never have to worry about contrast against arbitrary agenda colors.
+      // The colored dot communicates the agenda; the name stays readable.
+      li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        line-height: 1.3;
+        color: inherit;
+        transition: background 0.12s ease;
+      }
+      li .agenda-pick-name { font-weight: 500; }
+      li:hover { background: rgba(255, 255, 255, 0.07); }
+      li.selected {
+        background: rgba(255, 255, 255, 0.05);
+        font-weight: 600;
+      }
+      li.selected .agenda-pick-name::after {
+        content: "\f00c"; // fa-check
+        font-family: FontAwesome;
+        margin-left: 8px;
+        opacity: 0.6;
+        font-size: 11px;
+      }
+    }
+  }
+
+  // Shared base for every input/select so date, time, datetime-local and select
+  // all render at the same visible height. Explicit height + line-height avoids
+  // descender clipping on `appearance: none` selects (the y in "Every"/"days"
+  // was being cut because the UA chrome's vertical breathing room is removed).
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  select {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: inherit !important;
+    height: 38px !important;
+    padding: 0 10px !important;
+    line-height: 36px !important;
+    border-radius: 4px !important;
+    font-size: 14px !important;
+    font-family: inherit !important;
+    width: 100%;
+    box-sizing: border-box;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    color-scheme: dark;
+
+    &:focus {
+      outline: none;
+      border-color: var(--agenda-color, #{$base-blue}) !important;
+    }
+  }
+
+  textarea {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: inherit !important;
+    padding: 9px 10px !important;
+    line-height: 1.45 !important;
+    border-radius: 4px !important;
+    font-size: 14px !important;
+    font-family: inherit !important;
+    width: 100%;
+    box-sizing: border-box;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    color-scheme: dark;
+    min-height: 60px;
+
+    &:focus {
+      outline: none;
+      border-color: var(--agenda-color, #{$base-blue}) !important;
+    }
+  }
+
+  // Native <select> with appearance: none — reserve right padding for our
+  // CSS-painted chevron, and re-affirm a generous line-height so descenders
+  // (y, g, p, q) aren't clipped at the bottom of the box.
+  select {
+    padding-right: 32px !important;
+    line-height: 36px !important;
+    background-image: linear-gradient(45deg, transparent 50%, rgba(255, 255, 255, 0.6) 50%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.6) 50%, transparent 50%) !important;
+    background-position:
+      calc(100% - 16px) calc(50% - 2px),
+      calc(100% - 11px) calc(50% - 2px) !important;
+    background-size: 5px 5px, 5px 5px !important;
+    background-repeat: no-repeat !important;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+  }
+
+  // Reset the aggressive global button style entirely.
+  button {
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    background-image: none;
+    color: inherit !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+    border: 0;
+    border-radius: 4px;
+    font-family: inherit;
+    font-weight: normal;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .kind-toggle {
+    display: inline-flex;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    overflow: hidden;
+    align-self: flex-start;
+  }
+
+  .kind-btn {
+    padding: 8px 18px !important;
+    font-size: 13px;
+
+    &.active {
+      background: var(--agenda-color, #{$base-blue}) !important;
+      color: #fff !important;
+    }
+
+    &:hover:not(.active) { background: rgba(255, 255, 255, 0.05); }
+  }
+
+  .wd-chips {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .wd-chip {
+    width: 32px;
+    height: 32px;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font-size: 12px;
+    padding: 0 !important;
+
+    &.active {
+      background: var(--agenda-color, #{$base-blue}) !important;
+      border-color: var(--agenda-color, #{$base-blue});
+      color: #fff !important;
+    }
+  }
+
+  .md-chips {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    max-width: 280px;
+  }
+
+  .md-chip {
+    height: 30px;
+    border-radius: 4px !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font-size: 12px;
+    padding: 0 !important;
+    font-variant-numeric: tabular-nums;
+
+    &.active {
+      background: var(--agenda-color, #{$base-blue}) !important;
+      border-color: var(--agenda-color, #{$base-blue});
+      color: #fff !important;
+    }
+
+    &.md-chip-last {
+      grid-column: span 4;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+  }
+
+  .custom-inline {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    > input { width: 80px !important; flex: 0 0 auto; }
+    > select { flex: 1; }
+  }
+
+  .color-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .ends-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+
+    select { width: auto !important; flex: 0 0 auto; }
+    input  { width: auto !important; flex: 1; min-width: 100px; }
+  }
+
+  .color-swatch-input {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 38px !important;
+    height: 38px !important;
+    padding: 0 !important;
+    border: 2px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    cursor: pointer;
+    box-shadow: none !important;
+    flex-shrink: 0;
+    line-height: normal !important;
+
+    &::-webkit-color-swatch-wrapper { padding: 0; }
+    &::-webkit-color-swatch { border: none; border-radius: 50%; }
+    &::-moz-color-swatch { border: none; border-radius: 50%; }
+  }
+
+  .color-hex-preview {
+    font-family: monospace;
+    font-size: 13px;
+    opacity: 0.65;
+    text-transform: uppercase;
+  }
+
+  .trigger-hint {
+    font-size: 11px;
+    opacity: 0.55;
+    line-height: 1.4;
+    margin-top: 4px;
+
+    code {
+      background: rgba(255, 255, 255, 0.07);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-family: monospace;
+    }
+  }
+
+  .month-mode-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .month-mode-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+
+    input[type="radio"] {
+      width: auto !important;
+      height: auto !important;
+      margin: 0;
+    }
+
+    select {
+      width: auto !important;
+      min-width: 90px;
+    }
+
+    .month-day-label {
+      font-weight: 600;
+      color: var(--agenda-color, #{$base-blue});
+    }
+  }
+
+  .scope-radios {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      color: inherit;
+    }
+  }
+}
+
+.agenda-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin: 4px -16px -16px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.af-btn {
+  padding: 8px 18px !important;
+  border-radius: 4px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+}
+
+.af-btn-primary {
+  background: var(--agenda-color, #{$base-blue}) !important;
+  color: #fff !important;
+}
+
+.af-btn-secondary {
+  background: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  &:hover { background: rgba(255, 255, 255, 0.05) !important; }
+}
+
+.af-btn-danger {
+  background: rgba(190, 30, 30, 0.85) !important;
+  color: #fff !important;
+  margin-right: auto !important;
+  &:hover { background: rgba(220, 40, 40, 0.95) !important; }
+}
+
+// =================== Agenda settings pages (new / edit) ===================
+
+.agenda-settings-page {
+  --agenda-color: #{$base-blue};
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px 16px 80px;
+  min-height: 100vh;
+  box-sizing: border-box;
+
+  .agenda-settings-header {
+    margin: 4px 0 14px;
+  }
+
+  .agenda-settings-back {
+    color: inherit;
+    opacity: 0.55;
+    text-decoration: none;
+    padding: 6px 10px;
+    margin-left: -10px;
+    border-radius: 4px;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    &:hover { opacity: 1; background: rgba(255, 255, 255, 0.04); }
+  }
+
+  .agenda-settings-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0 0 16px;
+    color: inherit;
+  }
+
+  .agenda-settings-form {
+    padding: 0;
+    gap: 14px;
+
+    .agenda-form-actions {
+      margin: 8px 0 0;
+      padding: 0;
+      border-top: 0;
+      background: transparent;
+    }
+  }
+
+  .color-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .agenda-color-input {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 38px !important;
+    height: 38px !important;
+    padding: 0 !important;
+    border: 2px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    cursor: pointer;
+    box-shadow: none !important;
+    flex-shrink: 0;
+
+    &::-webkit-color-swatch-wrapper { padding: 0; }
+    &::-webkit-color-swatch { border: none; border-radius: 50%; }
+    &::-moz-color-swatch { border: none; border-radius: 50%; }
+  }
+
+  .color-hex {
+    font-family: monospace;
+    font-size: 13px;
+    opacity: 0.65;
+    text-transform: uppercase;
+  }
+
+  .agenda-shares {
+    margin-top: 36px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+    h3 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      opacity: 0.7;
+      margin: 0 0 10px;
+    }
+
+    .agenda-share-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 16px;
+    }
+
+    .agenda-share-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+
+      .share-username { flex: 1; font-weight: 500; }
+      .share-permission {
+        font-size: 11px;
+        text-transform: uppercase;
+        opacity: 0.6;
+      }
+    }
+
+    .agenda-share-remove-form {
+      background: transparent !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: inline-block;
+    }
+  }
+
+  .agenda-danger {
+    margin-top: 48px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+    h3 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #ff9b9b;
+      opacity: 0.75;
+      margin: 0 0 10px;
+    }
+  }
+
+  .agenda-danger-form {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: inline-block;
+  }
+}
+
+// =================== Calendar month view ===================
+
+.agenda-page { max-width: 640px; }
+.agenda-calendar-page { max-width: 1100px; }
+
+.cal-view-toggle {
+  display: inline-flex;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 0 auto 14px;
+  align-self: center;
+  width: fit-content;
+
+  display: flex;
+  justify-content: center;
+}
+
+.cal-toggle-btn {
+  padding: 6px 16px;
+  font-size: 12px;
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.55;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 600;
+
+  &.active {
+    background: var(--agenda-color);
+    color: #fff;
+    opacity: 1;
+  }
+
+  &:hover:not(.active) { opacity: 1; background: rgba(255, 255, 255, 0.04); }
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  font-size: 12px;
+}
+
+.cal-weekday-head {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.5;
+  padding: 4px 6px;
+  text-align: center;
+}
+
+.cal-day {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  min-height: 96px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.1s ease;
+
+  &:hover { background: rgba(255, 255, 255, 0.05); }
+
+  &.other-month {
+    opacity: 0.4;
+    background: transparent;
+    .cal-day-num { font-weight: normal; }
+  }
+
+  &.is-today {
+    border-color: var(--agenda-color);
+    .cal-day-num {
+      background: var(--agenda-color);
+      color: #fff;
+    }
+  }
+}
+
+.cal-day-num {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  margin-bottom: 2px;
+  line-height: 1.4;
+
+  &:hover { background: rgba(255, 255, 255, 0.1); }
+}
+
+// .cal-item is a <button> for keyboard/a11y; need to override the global
+// button cascade (forms.scss:180) hard.
+.cal-item {
+  padding: 2px 6px !important;
+  margin: 0 !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+  background-image: none !important;
+  color: inherit !important;
+  border: 0 !important;
+  border-left: 2px solid var(--item-color, var(--agenda-color)) !important;
+  border-radius: 3px !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  font-family: inherit !important;
+  font-weight: normal !important;
+  font-size: 11px !important;
+  line-height: 1.35;
+  text-align: left;
+
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  width: 100%;
+  cursor: pointer;
+  overflow: hidden;
+
+  &:hover { background: rgba(255, 255, 255, 0.08) !important; }
+
+  .cal-item-time {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.65;
+    flex-shrink: 0;
+  }
+
+  .cal-item-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.cal-more {
+  font-size: 10px;
+  opacity: 0.55;
+  padding: 0 4px;
+}
+
+@media (max-width: 640px) {
+  .cal-day {
+    min-height: 72px;
+    padding: 4px;
+  }
+  .cal-item-time { display: none; }
+  .cal-item { font-size: 10px; }
+}
+
+@keyframes agenda-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 0.4; }
+}
+
+.agenda-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 9999;
+
+  &.show { opacity: 1; }
+  &.error { background: rgba(190, 30, 30, 0.95); }
+}

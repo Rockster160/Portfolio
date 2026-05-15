@@ -1,0 +1,11 @@
+<%= render_modal("agenda-item-edit", "Edit item") do %>
+  <form class="basic agenda-form agenda-edit-form">
+
+    <%= render "agenda_items/form_fields", agendas: agendas, mode: :edit %>
+
+    <div class="agenda-form-actions">
+      <button type="button" class="af-btn af-btn-danger add-delete">Delete</button>
+      <button type="submit" class="af-btn af-btn-primary add-save">Save</button>
+    </div>
+  </form>
+<% end %>

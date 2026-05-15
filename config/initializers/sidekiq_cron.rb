@@ -4,7 +4,8 @@ return unless defined?(Puma)
 return if Rails.env.test?
 return if Rails.const_defined?("Console")
 return if Rails.const_defined?("Rails::Command::RunnerCommand")
-return unless Rails.env.production?
+
+# return unless Rails.env.production?
 
 # Based on UTC time
 every_minute = "* * * * *"
@@ -25,13 +26,13 @@ cron_jobs = [
     cron:  daily_9pm,
   },
   {
-    name:  "Reschedule Items",
-    class: "RescheduleItemsWorker",
+    name:  "Trigger Jil Cron",
+    class: "JilScheduleWorker",
     cron:  every_minute,
   },
   {
-    name:  "Trigger Jil Cron",
-    class: "JilScheduleWorker",
+    name:  "Fire Due Agenda Triggers",
+    class: "FireDueAgendaTriggersWorker",
     cron:  every_minute,
   },
 ]

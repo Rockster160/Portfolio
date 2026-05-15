@@ -11,7 +11,6 @@
       <% end %>
       <%= content_tag :div, item.category, class: "category" %>
       <%= content_tag :div, nil,           class: "locked"    if item.permanent? %>
-      <%= content_tag :div, nil,           class: "recurring" if item.schedule? %>
     </div>
     <div class="list-item-access">
       <div class="list-item-handle"><i class="fa fa-ellipsis-v"></i></div>

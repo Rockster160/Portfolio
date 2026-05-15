@@ -1,0 +1,18 @@
+<%= render_modal("agenda-add-modal", "Add to agenda") do %>
+  <form class="basic agenda-form agenda-add-form"
+        data-item-url="<%= agenda_items_path %>"
+        data-schedule-url="<%= agenda_schedules_path %>"
+        data-default-date="<%= date.iso8601 %>">
+
+    <%= render "agenda_items/form_fields",
+        agendas: agendas,
+        default_agenda_id: local_assigns[:default_agenda_id],
+        mode: :add,
+        default_date: date.iso8601 %>
+
+    <div class="agenda-form-actions">
+      <button type="button" class="af-btn af-btn-secondary" data-dismiss="#agenda-add-modal">Cancel</button>
+      <button type="submit" class="af-btn af-btn-primary">Add</button>
+    </div>
+  </form>
+<% end %>

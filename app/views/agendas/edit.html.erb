@@ -1,0 +1,133 @@
+<%= meta_title "Edit #{@agenda.name}", include_name: false %>
+
+<div class="agenda-settings-page" style="--agenda-color: <%= @agenda.color %>;">
+  <header class="agenda-settings-header">
+    <a href="<%= agendas_path %>" class="agenda-settings-back"><i class="fa fa-chevron-left"></i> Manage agendas</a>
+  </header>
+
+  <h1 class="agenda-settings-title">Edit agenda</h1>
+
+  <%= form_with(model: @agenda, url: agenda_path(@agenda), method: :patch, local: true, class: "basic agenda-form agenda-settings-form") do |f| %>
+    <div class="ff">
+      <label>Name</label>
+      <%= f.text_field :name, required: true %>
+    </div>
+
+    <div class="ff">
+      <label>Color</label>
+      <div class="color-row">
+        <%= f.color_field :color, class: "agenda-color-input" %>
+        <span class="color-hex"><%= @agenda.color %></span>
+      </div>
+    </div>
+
+    <div class="agenda-form-actions">
+      <%= f.submit "Save", class: "af-btn af-btn-primary" %>
+    </div>
+  <% end %>
+
+  <% friends = current_user.friends.where.not(id: @agenda.agenda_shares.pluck(:user_id)) %>
+  <section class="agenda-shares" data-shared-users-url="<%= agenda_shares_path(@agenda) %>">
+    <h3>Share with</h3>
+
+    <ul class="shared-users-list">
+      <% @agenda.agenda_shares.includes(:user).each do |share| %>
+        <li data-share-id="<%= share.id %>" data-user-id="<%= share.user_id %>" data-share-url="<%= agenda_share_path(@agenda, share) %>">
+          <span class="share-username">
+            <%= current_user.contacts.find_by(friend_id: share.user_id)&.nickname.presence || share.user.username %>
+          </span>
+          <select class="share-permission-select">
+            <option value="editor" <%= "selected" if share.editor? %>>Editor</option>
+            <option value="viewer" <%= "selected" if share.viewer? %>>Viewer</option>
+          </select>
+          <span class="remove-shared" aria-label="Remove">&times;</span>
+        </li>
+      <% end %>
+    </ul>
+
+    <% if friends.any? %>
+      <div class="shared-users-form">
+        <select class="friend-picker">
+          <option value="">Pick a friend…</option>
+          <% friends.each do |friend| %>
+            <% nick = current_user.contacts.find_by(friend_id: friend.id)&.nickname %>
+            <option value="<%= friend.id %>"><%= nick.presence || friend.username %></option>
+          <% end %>
+        </select>
+        <select class="permission-picker">
+          <option value="editor" selected>Editor</option>
+          <option value="viewer">Viewer</option>
+        </select>
+        <button type="button" class="af-btn af-btn-primary btn-add-shared">Share</button>
+      </div>
+    <% elsif @agenda.agenda_shares.empty? %>
+      <p class="muted">No friends yet — add contacts first to share agendas with them.</p>
+    <% else %>
+      <p class="muted">Everyone you can share with is already added.</p>
+    <% end %>
+  </section>
+
+  <section class="agenda-danger">
+    <h3>Danger zone</h3>
+    <%= button_to "Delete agenda", agenda_path(@agenda),
+        method:        :delete,
+        form:          { class: "basic agenda-danger-form" },
+        class:         "af-btn af-btn-danger",
+        data:          { confirm: "Delete this agenda and all its items? This cannot be undone." } %>
+  </section>
+</div>
+
+<% content_for :after_body do %>
+<script type="text/javascript">
+  (function () {
+    const root = document.querySelector(".agenda-shares");
+    if (!root) return;
+    const sharesUrl = root.dataset.sharedUsersUrl;
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+    const friendPicker = root.querySelector(".friend-picker");
+    const permPicker = root.querySelector(".permission-picker");
+    const addBtn = root.querySelector(".btn-add-shared");
+    const list = root.querySelector(".shared-users-list");
+
+    function ajax(method, url, body) {
+      return fetch(url, {
+        method,
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "X-CSRF-Token": csrf,
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    }
+
+    addBtn?.addEventListener("click", async () => {
+      const userId = friendPicker?.value;
+      if (!userId) return;
+      const permission = permPicker?.value || "editor";
+      const res = await ajax("POST", sharesUrl, { agenda_share: { user_id: userId, permission } });
+      if (res.ok) window.location.reload(); // Simple — server rerenders friend list + shares.
+    });
+
+    list?.addEventListener("click", async (e) => {
+      const row = e.target.closest("li[data-share-url]");
+      if (!row) return;
+      if (e.target.classList.contains("remove-shared")) {
+        const res = await ajax("DELETE", row.dataset.shareUrl);
+        if (res.ok) row.remove();
+      }
+    });
+
+    list?.addEventListener("change", async (e) => {
+      if (!e.target.classList.contains("share-permission-select")) return;
+      const row = e.target.closest("li[data-share-url]");
+      if (!row) return;
+      await ajax("PATCH", row.dataset.shareUrl, {
+        agenda_share: { permission: e.target.value },
+      });
+    });
+  })();
+</script>
+<% end %>

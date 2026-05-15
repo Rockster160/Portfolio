@@ -31,15 +31,16 @@ class Execution < ApplicationRecord
   }
 
   enum :auth_type, {
-    guest:    1, # + guest user id
-    userpass: 2, # + user id
-    run:      3, # + user id
-    api_key:  4, # + api key id
-    jwt:      5, # + user id
-    trigger:  6, # + source task id | nil means internal trigger
-    exec:     7, # + source task id
-    cron:     8, # nil - task self-fired via its own cron schedule
-    words:    9, # nil - voice/text command processed via Jarvis (always the owner)
+    guest:    1,  # + guest user id
+    userpass: 2,  # + user id
+    run:      3,  # + user id
+    api_key:  4,  # + api key id
+    jwt:      5,  # + user id
+    trigger:  6,  # + source task id | nil means internal trigger
+    exec:     7,  # + source task id
+    cron:     8,  # nil - task self-fired via its own cron schedule
+    words:    9,  # nil - voice/text command processed via Jarvis (always the owner)
+    agenda:   10, # + agenda_item id - fired by an AgendaItem with kind=trigger
   }
 
   enum :status, {

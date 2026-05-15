@@ -178,6 +178,19 @@ Rails.application.routes.draw do
     resources :sections, only: [:edit, :create, :update, :destroy]
   end
 
+  # What users navigate to. Singular — they're looking at "the agenda" (their
+  # schedule), not browsing a list of agenda entities.
+  get  "/agenda"          => "agendas#day",      as: :agenda
+  get  "/agenda/calendar" => "agendas#calendar", as: :calendar
+
+  # Plural — managing the underlying agenda entities (create / edit / share / delete).
+  resources :agendas, only: [:index, :new, :create, :edit, :update, :destroy] do
+    resources :shares, only: [:create, :update, :destroy], controller: :agenda_shares
+  end
+
+  resources :agenda_items, only: [:create, :update, :destroy]
+  resources :agenda_schedules, only: [:create, :update, :destroy]
+
   resources :cards, only: [] do
     collection do
       get :deck

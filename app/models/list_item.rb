@@ -10,10 +10,7 @@
 #  important      :boolean          default(FALSE)
 #  name           :text
 #  permanent      :boolean          default(FALSE)
-#  schedule       :string
-#  schedule_next  :datetime
 #  sort_order     :integer
-#  timezone       :integer
 #  created_at     :datetime
 #  updated_at     :datetime
 #  list_id        :integer
@@ -145,105 +142,10 @@ class ListItem < ApplicationRecord
     end
   end
 
-  def schedule=(schedule_params)
-    self.schedule_next = nil
-    return super(nil) if schedule_params.blank?
-
-    interval = schedule_params["interval"].to_i
-    interval = 1 if interval <= 0
-    timezone = schedule_params["timezone"].to_i
-    self.timezone = timezone
-    meridian = schedule_params["meridian"] || "AM"
-    hour = schedule_params["hour"].to_i
-    minute = schedule_params["minute"].to_i
-    repeat_type = schedule_params["type"].to_sym if schedule_params["type"].in?(["minutely", "hourly", "daily", "weekly", "monthly"])
-    return if repeat_type.nil?
-
-    full_timezone = "#{timezone.positive? ? "+" : "-"}#{timezone.abs.to_s.rjust(4, "0")}"
-    schedule_start = Time.zone.parse("#{hour}:#{minute} #{meridian} #{full_timezone}")
-    new_schedule = IceCube::Schedule.new(schedule_start)
-    rule = IceCube::Rule.send(repeat_type, interval)
-
-    interval_details = schedule_params[repeat_type]
-    if interval_details.present?
-      case repeat_type
-      when :weekly
-        rule.day(*interval_details[:day].to_a.map(&:to_i))
-      when :monthly
-        if interval_details[:type] == "daily"
-          rule.day_of_month(*interval_details[:day].map(&:to_i)) if interval_details.key?(:day)
-        elsif interval_details[:type] == "weekly"
-          deep_numerify_keys = interval_details[:week]&.each_with_object({}) { |(day_of_week, idxs_of_week), deep_numerify|
-            deep_numerify[day_of_week.to_i] = idxs_of_week.map(&:to_i)
-          }
-          rule.day_of_week(deep_numerify_keys) if interval_details.key?(:week)
-        end
-      end
-    end
-
-    new_schedule.add_recurrence_rule(rule)
-
-    @schedule = nil
-    @schedule_options = nil
-    super(new_schedule.to_yaml)
-    set_next_occurrence
-  end
-
-  def schedule
-    return if super.nil?
-
-    @schedule ||= IceCube::Schedule.from_yaml(super) rescue nil
-  end
-
-  def default_schedule_options
-    {
-      interval:      1,
-      type:          :daily,
-      minute:        "00",
-      week_days:     [],
-      days_of_week:  [],
-      days_of_month: [],
-    }
-  end
-
-  def schedule_options
-    @schedule_options ||= (
-      options = {}
-      rule = schedule.try(:rrules).try(:first).try(:to_hash) || {}
-      options[:interval] = rule[:interval]
-      options[:days_of_week] = rule.dig(:validations, :day_of_week)
-      options[:days_of_month] = rule.dig(:validations, :day_of_month)
-      options[:week_days] = rule.dig(:validations, :day)
-      options[:type] = rule[:rule_type].to_s.gsub(/IceCube::|Rule/, "").downcase
-
-      start_time = schedule.start_time rescue nil
-      if start_time
-        options[:hour] = start_time.hour > 12 ? start_time.hour - 12 : start_time.hour
-        options[:minute] = start_time.min.to_s.rjust(2, "0")
-        options[:meridian] = start_time.hour >= 12 ? "PM" : "AM"
-        options[:timezone] = timezone
-      end
-
-      options.compact_blank.reverse_merge(default_schedule_options)
-    )
-  end
-
-  def schedule_in_words
-    return "No schedule set - This item is not recurring." if schedule.nil?
-
-    words = schedule.to_s
-    # Remove redundant text here, if it gets annoying.
-    "#{words} at #{schedule.start_time.strftime("%-l:%M %p %Z")}"
-  end
-
-  def set_next_occurrence
-    self.schedule_next = schedule.try(:next_occurrence)
-  end
-
   def options
     {
       important: "When set, this item will automatically appear at the top of the list regardless of the sort order.",
-      permanent: "When set, this item will not be removed from list when checking it. Instead, it will appear toggled/selected on your page, but when reloading the page the item will still be present. This also prevents the item from being removed on other user's pages that are sharing the list.  (Does not work if a schedule is set.)",
+      permanent: "When set, this item will not be removed from list when checking it. Instead, it will appear toggled/selected on your page, but when reloading the page the item will still be present. This also prevents the item from being removed on other user's pages that are sharing the list.",
     }
   end
 
@@ -256,7 +158,6 @@ class ListItem < ApplicationRecord
   def normalize_values
     self.formatted_name = name.downcase.gsub(/[ '",.]/i, "")
     self.category = category.squish.titleize.presence if category
-    self.permanent = false if schedule.present?
     true
   end
 
@@ -266,8 +167,6 @@ class ListItem < ApplicationRecord
     ActionCable.server.broadcast "list_#{list_id}_json_channel", { list_data: list.serialize, timestamp: Time.current.to_i }
 
     list_item_attrs = attributes.symbolize_keys.slice(:important, :permanent, :category, :name)
-    list_item_attrs.merge!(schedule: schedule_in_words)
-    list_item_attrs.merge!(countdown: (schedule_next.to_f * 1000).round) unless schedule.nil?
     ActionCable.server.broadcast "list_item_#{id}_channel", { list_item: list_item_attrs }
 
     rendered_message = ListsController.render template: "list_items/index", locals: { list: list }, layout: false
