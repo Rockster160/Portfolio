@@ -78,14 +78,68 @@
     else q.push(op);
     saveQueue(q);
   }
-  function processQueue() {
-    const q = getQueue();
-    if (q.length === 0) return Promise.resolve();
-    saveQueue([]);
-    return q.reduce(
-      (p, op) => p.then(() => ajax(op.method, op.url, op.body).catch(() => enqueue(op))),
-      Promise.resolve(),
-    );
+  // Drain the offline queue. Critical safety property: each op is only
+  // removed from localStorage AFTER the server responds with `res.ok`.
+  // Previous shape (`saveQueue([])` upfront then re-enqueue on failure) had
+  // a window where a tab close mid-drain could lose unreplayed ops. This
+  // version processes one op at a time, removing the head only when the
+  // server confirms — a tab close or network drop mid-flight leaves the
+  // op queued for the next drain.
+  //
+  // ALL ops POST/PATCH/DELETE over HTTP — the WS channel is read-only for
+  // signaling. Every write gets an HTTP response we can verify, so we
+  // never lose data to a "I sent it but did the server hear me?" gap.
+  let _processing = false;
+  async function processQueue() {
+    if (_processing) return; // single-flight
+    _processing = true;
+    try {
+      while (true) {
+        const q = getQueue();
+        if (q.length === 0) return;
+        const op = q[0];
+        let res;
+        try {
+          res = await fetch(op.url, {
+            method:      op.method,
+            credentials: "same-origin",
+            headers: {
+              "Content-Type":     "application/json",
+              "Accept":           "application/json",
+              "X-CSRF-Token":     csrfToken(),
+              "X-Requested-With": "XMLHttpRequest",
+            },
+            body: op.body ? JSON.stringify(op.body) : undefined,
+          });
+        } catch (_e) {
+          // Network drop — leave op queued, retry on next online / WS connect.
+          return;
+        }
+        if (!res.ok) {
+          if (res.status >= 400 && res.status < 500) {
+            // 4xx is permanent — dropping prevents infinite loop. Log loudly.
+            const dropped = getQueue();
+            if (dropped[0] && dropped[0].dedup_key === op.dedup_key) {
+              dropped.shift();
+              saveQueue(dropped);
+            }
+            console.error(`Dropped queued op (server ${res.status}):`, op);
+            continue;
+          }
+          // 5xx — transient. Leave it for retry, stop draining now.
+          return;
+        }
+        // Server ack'd. Pop the head off persistent storage. Re-read first
+        // in case another op was enqueued concurrently.
+        const after = getQueue();
+        if (after[0] && after[0].dedup_key === op.dedup_key) {
+          after.shift();
+          saveQueue(after);
+        }
+      }
+    } finally {
+      _processing = false;
+    }
   }
   window.addEventListener("online", processQueue);
 
@@ -167,6 +221,50 @@
   }
 
 
+  // Drops an optimistic .is-pending placeholder into whichever day section
+  // an item belongs to (based on its start_at relative to the page's
+  // currentDate). The placeholder gets swept away the next time a WS
+  // broadcast triggers refreshView (which calls replaceSection on the
+  // day-N divs). If the post fails AND gets queued, the placeholder stays
+  // — accurately reflecting that the item really IS pending sync.
+  function insertPendingPlaceholder(data) {
+    const root = $(".agenda-page");
+    if (!root) return; // calendar view has no day sections
+    const currentDate = root.dataset.currentDate;
+    if (!currentDate) return;
+    const itemDate = (data.start_at || "").split("T")[0];
+    if (!itemDate) return;
+    const offset = Math.round(
+      (new Date(itemDate + "T12:00:00") - new Date(currentDate + "T12:00:00")) / 86400000,
+    );
+    if (offset < 0) return; // earlier than the visible window
+    const section = $(`[data-section="day-${offset}"]`);
+    if (!section) return; // beyond the visible window
+    section.querySelector(".agenda-empty")?.remove();
+
+    const placeholder = renderItem({
+      ...data,
+      id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      color: data.color || data.agenda_color || "#0160FF",
+      completed_at: null,
+      phantom: false,
+      crossed_out: false,
+      recurring: false,
+      editable: false, // can't be edited until real
+    }, { preview: offset > 0 });
+    placeholder.classList.add("is-pending");
+
+    // Time-sorted insert so it appears in the right slot.
+    const startTs = new Date(data.start_at).getTime();
+    const existing = Array.from(section.querySelectorAll(".agenda-item"));
+    const next = existing.find((el) => {
+      const t = new Date(el.dataset.startAt).getTime();
+      return Number.isFinite(t) && t > startTs;
+    });
+    if (next) section.insertBefore(placeholder, next);
+    else section.appendChild(placeholder);
+  }
+
   function replaceSection(container, items, opts = {}) {
     if (!container) return;
     container.innerHTML = "";
@@ -184,12 +282,19 @@
     if (!root) return;
     if (String(data.date) !== root.dataset.currentDate) return;
 
-    replaceSection($('[data-section="today"]'), data.today || []);
-    replaceSection($('[data-section="tomorrow"]'), data.tomorrow || [], { preview: true });
+    // `data.days` is an array of {date, items}. Each section <div> on the
+    // page has data-section="day-N" matching the index. We iterate, replacing
+    // whichever sections we have a match for; missing sections (e.g. day
+    // view only renders 0+1 but a week-shape payload arrived) are skipped.
+    (data.days || []).forEach((d, idx) => {
+      const node = $(`[data-section="day-${idx}"]`);
+      if (!node) return;
+      replaceSection(node, d.items || [], { preview: idx > 0 });
+    });
 
     const carrySection = $(".section-carry");
     if (data.carry_over && data.carry_over.length > 0) {
-      if (!carrySection) { window.location.reload(); }
+      if (!carrySection) { /* no carry section to fill — skip gracefully */ }
       else replaceSection($(".section-carry .agenda-items"), data.carry_over);
     } else if (carrySection) {
       carrySection.remove();
@@ -660,8 +765,17 @@
       const agendaId = agendaPicker?.value() ? parseInt(agendaPicker.value(), 10) : null;
       if (!agendaId) { toast("Pick an agenda", "error"); return; }
 
+      // Get the picked agenda's color/name for the optimistic placeholder.
+      const agendaMeta = (() => {
+        const sel = $(".add-agenda-id", form);
+        if (!sel) return {};
+        // Hidden input — look at the corresponding <li> in the menu for color/name.
+        const li = form.querySelector(`.agenda-pick-menu li[data-id="${agendaId}"]`);
+        return { color: li?.dataset.color, name: li?.dataset.name };
+      })();
+
       if (freq === "never") {
-        ajax("POST", form.dataset.itemUrl, {
+        const itemBody = {
           agenda_item: {
             agenda_id:          agendaId,
             name,
@@ -673,9 +787,38 @@
             notes,
             trigger_expression: triggerExpression,
           },
-        })
-          .then(() => { closeModal(); toast("Added"); })
-          .catch((err) => { console.error(err); toast("Couldn't add — try again", "error"); });
+        };
+
+        // Optimistic placeholder so the user sees the item immediately. WS
+        // broadcast → refreshView → section replace will swap it out for the
+        // real row. If the request fails, the placeholder stays visible
+        // (pending) and the op is queued for replay on reconnect.
+        insertPendingPlaceholder({
+          name,
+          kind:               activeKind,
+          color,
+          start_at:           startAt,
+          end_at:             endAt,
+          location,
+          notes,
+          agenda_id:          agendaId,
+          agenda_color:       agendaMeta.color,
+          agenda_name:        agendaMeta.name,
+        });
+
+        closeModal();
+
+        ajax("POST", form.dataset.itemUrl, itemBody)
+          .then(() => toast("Added"))
+          .catch(() => {
+            enqueue({
+              dedup_key: `create:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+              url:       form.dataset.itemUrl,
+              method:    "POST",
+              body:      itemBody,
+            });
+            toast("Saved offline — will sync when reconnected");
+          });
         return;
       }
 
@@ -686,9 +829,19 @@
       schedulePayload.agenda_id = agendaId;
       schedulePayload.location = location;
       schedulePayload.notes = notes;
-      ajax("POST", form.dataset.scheduleUrl, { agenda_schedule: schedulePayload })
-        .then(() => { closeModal(); toast("Added"); })
-        .catch((err) => { console.error(err); toast("Couldn't add — try again", "error"); });
+      const scheduleBody = { agenda_schedule: schedulePayload };
+      closeModal();
+      ajax("POST", form.dataset.scheduleUrl, scheduleBody)
+        .then(() => toast("Added"))
+        .catch(() => {
+          enqueue({
+            dedup_key: `create-schedule:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+            url:       form.dataset.scheduleUrl,
+            method:    "POST",
+            body:      scheduleBody,
+          });
+          toast("Saved offline — will sync when reconnected");
+        });
     }
 
     syncKind();
@@ -927,18 +1080,24 @@
         payload.agenda_schedule.notes = payload.agenda_item.notes;
       }
 
-      // Mark the targeted item as pending-save so the user sees something is
-      // happening; do NOT change displayed values. The actual update arrives
-      // via the server's WS broadcast — that's the authoritative signal.
+      // Mark pending + close immediately. On failure we keep the .is-pending
+      // class on (the op is queued, so it really IS pending sync) and the
+      // user can move on to the next thing instead of staring at a spinner.
       const itemEl = findItemEl($(".add-item-id", form).value);
       itemEl?.classList.add("is-pending");
+      closeModal();
 
       ajax("PATCH", form.dataset.itemUrl, payload)
-        .then(() => { closeModal(); toast("Saved"); })
-        .catch((err) => {
-          console.error(err);
-          itemEl?.classList.remove("is-pending");
-          toast("Couldn't save — try again", "error");
+        .then(() => toast("Saved"))
+        .catch(() => {
+          enqueue({
+            // Latest edit to a given item wins — dedup by URL.
+            dedup_key: `update:${form.dataset.itemUrl}`,
+            url:       form.dataset.itemUrl,
+            method:    "PATCH",
+            body:      payload,
+          });
+          toast("Saved offline — will sync when reconnected");
         });
     });
 
@@ -947,18 +1106,22 @@
       const label = deleteBtn.textContent;
       if (!window.confirm(`${label} — are you sure?`)) return;
 
-      // Show a "pending delete" visual hint. Don't actually remove the item —
-      // the server's WS broadcast is the source of truth; once it arrives,
-      // refreshView() re-renders and the item disappears (or stays, on error).
+      // Pending-delete visual hint. Stays until WS refresh confirms removal
+      // (or the queue drains and a broadcast arrives).
       const itemEl = findItemEl($(".add-item-id", form).value);
       itemEl?.classList.add("is-pending-delete");
+      const deleteUrl = `${form.dataset.itemUrl}?scope=${scope}`;
+      closeModal();
 
-      ajax("DELETE", `${form.dataset.itemUrl}?scope=${scope}`)
-        .then(() => { closeModal(); toast("Deleted"); })
-        .catch((err) => {
-          console.error(err);
-          itemEl?.classList.remove("is-pending-delete");
-          toast("Couldn't delete — try again", "error");
+      ajax("DELETE", deleteUrl)
+        .then(() => toast("Deleted"))
+        .catch(() => {
+          enqueue({
+            dedup_key: `delete:${form.dataset.itemUrl}`,
+            url:       deleteUrl,
+            method:    "DELETE",
+          });
+          toast("Saved offline — will sync when reconnected");
         });
     });
 
@@ -1140,9 +1303,10 @@
     }
     // Monitor.subscribe() always fires `disconnected` synchronously if the
     // ActionCable socket hasn't opened yet — true on every page load. Delay
-    // showing the banner so the typical sub-second reconnect is swallowed and
-    // we only surface a real outage.
-    const DISCONNECT_GRACE_MS = 1500;
+    // showing the banner so the initial setup is swallowed; 500ms is short
+    // enough to surface real outages quickly but long enough to skip past
+    // the page-load handshake.
+    const DISCONNECT_GRACE_MS = 500;
     let disconnectTimer = null;
 
     window.Monitor.subscribe("agenda", {
@@ -1150,7 +1314,11 @@
         clearTimeout(disconnectTimer);
         disconnectTimer = null;
         $(".agenda-error")?.classList.add("hidden");
+        // Two things on reconnect: drain anything that piled up offline AND
+        // re-sync the view, since we likely missed broadcasts while down.
         processQueue();
+        const r = $(".agenda-page") || $(".agenda-calendar-page");
+        if (r) refreshView(r);
       },
       disconnected: function () {
         clearTimeout(disconnectTimer);
@@ -1173,42 +1341,89 @@
   // regardless of which date or view the user is on. Day view fetches the
   // JSON serialize_for_monitor payload; calendar view reloads (until we have
   // a JSON endpoint for the month grid).
+  // Graceful refresh — fetches the current view's JSON and swaps sections in
+  // place. ALWAYS fails silently: a dropped network just leaves the page as
+  // it was rather than navigating into a broken state. Each refresh is a
+  // best-effort sync; WS broadcasts retry on reconnect and the manual
+  // interactions still queue offline (see `enqueue`).
   function refreshView(root) {
-    if (root.classList.contains("agenda-calendar-page") || root.classList.contains("agenda-week-page")) {
-      // Calendar grids and the 9-section week view aren't worth a custom
-      // JSON endpoint yet — page reload renders the fresh state cleanly.
-      window.location.reload();
+    const date = root.dataset.currentDate;
+    if (root.classList.contains("agenda-calendar-page")) {
+      refreshCalendarGrid(root);
       return;
     }
-    const date = root.dataset.currentDate;
     if (!date) return;
-    fetch(`/agenda.json?date=${encodeURIComponent(date)}`, {
+    const url = root.classList.contains("agenda-week-page")
+      ? `/agenda/week.json?date=${encodeURIComponent(date)}`
+      : `/agenda.json?date=${encodeURIComponent(date)}`;
+    fetch(url, {
       credentials: "same-origin",
       headers:     { "Accept": "application/json" },
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => { if (data) applyMonitorData(data); })
-      .catch((err) => console.error("agenda refresh failed", err));
+      .catch((err) => console.error("agenda refresh failed (will retry on next signal)", err));
   }
 
-  // Day / Week views shown on the plain /agenda (no ?date= override) roll to
-  // the new "today" automatically at 3am local. 3am is a more humane day
-  // boundary than midnight — people stay up past midnight all the time and
-  // don't want their schedule to flip while they're still finishing yesterday.
-  // If the user has pinned a specific date in the URL, leave them on it.
+  // Calendar refresh: fetch the same HTML page and swap the date-bar +
+  // .cal-grid. Avoids a per-cell JSON apply for the month view, never
+  // reloads the page (modals, header, filter panel stay intact), and
+  // correctly handles month-crossing rollover — the server-rendered HTML
+  // brings the new month's label, prev/next links, and grid all in sync.
+  function refreshCalendarGrid(root) {
+    fetch(window.location.href, {
+      credentials: "same-origin",
+      headers:     { "Accept": "text/html", "X-Requested-With": "XMLHttpRequest" },
+    })
+      .then((res) => (res.ok ? res.text() : null))
+      .then((html) => {
+        if (!html) return;
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const freshRoot = doc.querySelector(".agenda-calendar-page");
+        if (!freshRoot) return;
+
+        // Keep root.dataset.currentDate aligned with the displayed month —
+        // applyDateRoll uses this to detect cross-month rolls.
+        if (freshRoot.dataset.currentDate) {
+          root.dataset.currentDate = freshRoot.dataset.currentDate;
+        }
+
+        const swap = (sel) => {
+          const fresh = freshRoot.querySelector(sel);
+          const current = root.querySelector(sel);
+          if (fresh && current) current.replaceWith(fresh);
+        };
+        // Date bar carries the "June 2026" label + prev/next links — must
+        // update alongside the grid for cross-month rolls.
+        swap(".agenda-date-bar");
+        swap(".cal-grid");
+
+        applyAgendaVisibility(); // re-apply the localStorage filter
+      })
+      .catch((err) => console.error("calendar refresh failed", err));
+  }
+
+  // All three views (day/week/calendar) shown on the plain /agenda URLs (no
+  // `?date=` override) roll to the new "today" automatically at 3am local.
+  // 3am is a more humane day boundary than midnight.
+  //
+  // The rollover NEVER hard-reloads — it updates DOM in place and triggers
+  // a graceful JSON re-sync. If the network is dead overnight (laptop
+  // closed, wifi flaky, server hiccup), the page stays exactly as it was;
+  // we never strand the user on a broken reload-mid-network-drop screen.
   function scheduleAutoDateAdvance(root) {
-    if (root.classList.contains("agenda-calendar-page")) return;
     try {
       const url = new URL(window.location.href);
-      if (url.searchParams.has("date")) return;
-    } catch (_) { /* IE / odd URL — skip */ return; }
+      if (url.searchParams.has("date")) return; // pinned date — leave alone
+    } catch (_) { return; }
 
     // "Day key" treats hours 0:00–2:59 as still belonging to the previous
     // calendar day, so the perceived day only ticks over at 3am.
-    function dayKey() {
-      const d = new Date();
-      if (d.getHours() < 3) d.setDate(d.getDate() - 1);
-      return d.toDateString();
+    function dayKey(d = new Date()) {
+      const x = new Date(d);
+      if (x.getHours() < 3) x.setDate(x.getDate() - 1);
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
     }
     function msUntilNext3am() {
       const now = new Date();
@@ -1218,31 +1433,99 @@
       return next - now;
     }
 
-    const loadedDay = dayKey();
+    let loadedDay = dayKey();
     let timer = null;
     function tick() {
-      if (dayKey() !== loadedDay) {
-        window.location.reload();
-      } else {
-        // Edge case: timer fired but we're still in the same perceived day
-        // (e.g., user loaded at 12:30am — the timer fires at 3am but server
-        // already renders today's date). Just reschedule.
-        timer = setTimeout(tick, msUntilNext3am());
+      const today = dayKey();
+      if (today !== loadedDay) {
+        applyDateRoll(root, today);
+        loadedDay = today;
       }
+      timer = setTimeout(tick, msUntilNext3am());
     }
     timer = setTimeout(tick, msUntilNext3am());
 
-    // Catch the device-sleep case: if the laptop slept through 3am and woke
-    // up later, setTimeout may not have fired on time. Re-check on visibility.
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState !== "visible") return;
-      if (dayKey() !== loadedDay) {
-        window.location.reload();
-      } else {
-        clearTimeout(timer);
-        timer = setTimeout(tick, msUntilNext3am());
+    // Returns true if the perceived day changed (so the caller knows
+    // applyDateRoll already kicked off a refresh and skip a duplicate fetch).
+    return function checkRolloverNow() {
+      const today = dayKey();
+      const rolled = today !== loadedDay;
+      if (rolled) {
+        applyDateRoll(root, today);
+        loadedDay = today;
       }
-    });
+      clearTimeout(timer);
+      timer = setTimeout(tick, msUntilNext3am());
+      return rolled;
+    };
+  }
+
+  // In-place rollover. Updates the page chrome (date label, nav, today
+  // highlight) immediately, then kicks off a best-effort JSON re-sync for
+  // views that have data behind their sections.
+  function applyDateRoll(root, newDateIso) {
+    root.dataset.currentDate = newDateIso;
+    const newDate = new Date(newDateIso + "T12:00:00"); // noon → avoids DST edge
+
+    // Date label in the nav bar (matches the ERB strftime "%a, %b %-d, %Y").
+    const label = root.querySelector(".date-label");
+    if (label) {
+      label.textContent = newDate.toLocaleDateString(undefined, {
+        weekday: "short", month: "short", day: "numeric", year: "numeric",
+      });
+    }
+
+    // prev/next nav hrefs — use day_path or week_path depending on view.
+    const basePath = root.classList.contains("agenda-week-page") ? "/agenda/week"
+                   : root.classList.contains("agenda-calendar-page") ? "/agenda/calendar"
+                   : "/agenda";
+    const prevIso = isoOffset(newDateIso, -1);
+    const nextIso = isoOffset(newDateIso, +1);
+    const prevLink = root.querySelector(".date-nav.prev");
+    const nextLink = root.querySelector(".date-nav.next");
+    if (prevLink) prevLink.setAttribute("href", `${basePath}?date=${prevIso}`);
+    if (nextLink) nextLink.setAttribute("href", `${basePath}?date=${nextIso}`);
+
+    // We're back on "today" — hide the "Today" jump-back link if present.
+    root.querySelector(".date-today")?.remove();
+
+    // Calendar: most of the time the rollover stays within the displayed
+    // month — just move the highlight. If the perceived today CROSSES into
+    // a new month (e.g. May 31 → June 1), the new cell isn't in the DOM, so
+    // re-fetch the grid for the new month instead. Skip if the user pinned
+    // a specific month (`?month=YYYY-MM`) — they explicitly chose it.
+    if (root.classList.contains("agenda-calendar-page")) {
+      const displayedMonth = (root.dataset.currentDate || "").slice(0, 7);
+      const newMonth = newDateIso.slice(0, 7);
+      const monthPinned = (() => {
+        try { return new URL(window.location.href).searchParams.has("month"); }
+        catch (_) { return false; }
+      })();
+      if (newMonth !== displayedMonth && !monthPinned) {
+        // Server now returns the new month (perceived_today.beginning_of_month).
+        // refreshCalendarGrid swaps both the grid + the date-bar in place —
+        // no reload, URL bar unchanged.
+        refreshCalendarGrid(root);
+      } else {
+        const old = root.querySelector(".cal-day.is-today");
+        if (old) old.classList.remove("is-today");
+        const fresh = root.querySelector(`.cal-day[data-date="${newDateIso}"]`);
+        if (fresh) fresh.classList.add("is-today");
+      }
+      return;
+    }
+
+    // Day / Week: refetch items for the new date. Section labels are static
+    // in the ERB ("Today" / "Tomorrow" / weekday names) — they're correct
+    // again once we're back on the plain (no-date) URL.
+    refreshView(root);
+  }
+
+  function isoOffset(iso, days) {
+    const d = new Date(iso + "T12:00:00");
+    d.setDate(d.getDate() + days);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -1257,7 +1540,21 @@
     } else {
       initChecks(root);
     }
-    scheduleAutoDateAdvance(root);
+    const checkRollover = scheduleAutoDateAdvance(root);
+
+    // Foreground re-sync. Mobile browsers (especially iOS Safari) suspend the
+    // ActionCable socket while backgrounded — when the tab comes back, the
+    // socket reconnects but we may have missed broadcasts. Always re-fetch
+    // on visibility-visible so the page never stays stale.
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      // checkRollover already fires refreshView via applyDateRoll when the
+      // perceived day shifted — don't double-fetch in that case.
+      const rolled = checkRollover && checkRollover();
+      if (!rolled) refreshView(root);
+      processQueue();
+    });
+
     subscribeMonitor();
     processQueue();
   });

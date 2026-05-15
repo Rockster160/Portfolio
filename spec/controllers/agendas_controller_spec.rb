@@ -19,10 +19,17 @@ RSpec.describe AgendasController, type: :controller do
       expect(response).to be_successful
       body = JSON.parse(response.body)
       expect(body["date"]).to eq(Date.current.to_s)
-      expect(body["today"]).to be_an(Array)
-      expect(body["tomorrow"]).to be_an(Array)
+      expect(body["days"]).to be_an(Array)
+      expect(body["days"].length).to eq(2) # default lookahead = 1
+      expect(body["days"][0]).to include("date", "items")
       expect(body["carry_over"]).to be_an(Array)
       expect(body["agendas"]).to be_an(Array)
+    end
+
+    it "respects ?days=N to extend the JSON lookahead" do
+      get :day, params: { date: Date.current.to_s, days: 7 }, format: :json
+      body = JSON.parse(response.body)
+      expect(body["days"].length).to eq(8)
     end
 
     it "aggregates items across the user's agendas" do
@@ -32,8 +39,8 @@ RSpec.describe AgendasController, type: :controller do
       i2 = create(:agenda_item, agenda: other, kind: :task, start_at: local_today + 10.hours)
       get :day, format: :json
       body = JSON.parse(response.body)
-      ids = body["today"].map { |i| i["id"] }
-      expect(ids).to include(i1.id.to_s, i2.id.to_s)
+      today_ids = body["days"][0]["items"].map { |i| i["id"] }
+      expect(today_ids).to include(i1.id.to_s, i2.id.to_s)
     end
 
     it "includes items from agendas shared with the user" do
@@ -45,9 +52,20 @@ RSpec.describe AgendasController, type: :controller do
         start_at: local_today + 9.hours)
       get :day, format: :json
       body = JSON.parse(response.body)
-      ids = body["today"].map { |i| i["id"] }
-      expect(ids).to include(item.id.to_s)
+      today_ids = body["days"][0]["items"].map { |i| i["id"] }
+      expect(today_ids).to include(item.id.to_s)
       expect(body["agendas"].map { |a| a["id"] }).to include(shared.id)
+    end
+  end
+
+  describe "GET #week (/agenda/week — JSON)" do
+    it "returns 8 days (today + 7 ahead) with shared payload shape" do
+      get :week, format: :json
+      expect(response).to be_successful
+      body = JSON.parse(response.body)
+      expect(body["days"].length).to eq(8)
+      expect(body["days"][0]).to include("date", "items")
+      expect(body["carry_over"]).to be_an(Array)
     end
   end
 
@@ -132,6 +150,18 @@ RSpec.describe AgendasController, type: :controller do
       get :calendar
       expect(response.body).to include("#ff8800")
       expect(response.body).to include("Standup")
+    end
+
+    it "defaults to the perceived_today's month (3am rollover)" do
+      # At 1am on June 1 local, perceived_today is May 31 → @month = May.
+      # Without this rule the calendar would prematurely flip to June at
+      # midnight UTC even though the user still considers it 'May 31 night'.
+      Timecop.freeze(Time.utc(2026, 6, 1, 7, 0)) do # 1am MDT
+        get :calendar
+        expect(response).to be_successful
+        expect(response.body).to include("May 2026")
+        expect(response.body).not_to include("June 2026")
+      end
     end
 
     it "filters to a single agenda when agenda_id query param is given" do

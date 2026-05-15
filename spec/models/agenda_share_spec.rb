@@ -5,6 +5,28 @@ RSpec.describe AgendaShare do
   let(:other) { create(:user, phone: "5559876543") }
   let(:agenda) { create(:agenda, user: owner) }
 
+  describe "User#perceived_today (3am rollover for BE/FE alignment)" do
+    let(:tz_user) { create(:user) } # America/Denver by default
+
+    it "is today's calendar date at 4am local" do
+      Timecop.freeze(Time.utc(2026, 5, 15, 10, 0)) do # 4am MDT
+        expect(tz_user.perceived_today).to eq(Date.new(2026, 5, 15))
+      end
+    end
+
+    it "is yesterday's calendar date at 1am local" do
+      Timecop.freeze(Time.utc(2026, 5, 15, 7, 0)) do # 1am MDT
+        expect(tz_user.perceived_today).to eq(Date.new(2026, 5, 14))
+      end
+    end
+
+    it "rolls at exactly 3am local" do
+      Timecop.freeze(Time.utc(2026, 5, 15, 9, 0)) do # 3am MDT
+        expect(tz_user.perceived_today).to eq(Date.new(2026, 5, 15))
+      end
+    end
+  end
+
   describe "default agenda on user creation" do
     it "auto-creates one named after the user's username for new standard users" do
       u = create(:user, username: "alice", phone: "5551112222")

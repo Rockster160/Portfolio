@@ -48,9 +48,9 @@
     <% primary_label   = is_today ? "Today"    : @date.strftime("%A, %b %-d") %>
     <% secondary_label = is_today ? "Tomorrow" : (@date + 1).strftime("%A, %b %-d") %>
 
-    <section class="agenda-section section-today">
+    <section class="agenda-section section-today" data-section-day="0">
       <header class="section-header"><%= primary_label %></header>
-      <div class="agenda-items" data-section="today">
+      <div class="agenda-items" data-section="day-0">
         <% today_items = current_user.agenda_visible_items_for(@date) %>
         <% if today_items.empty? %>
           <div class="agenda-empty">Nothing scheduled.</div>
@@ -61,9 +61,9 @@
       </div>
     </section>
 
-    <section class="agenda-section section-tomorrow">
+    <section class="agenda-section section-tomorrow" data-section-day="1">
       <header class="section-header"><%= secondary_label %></header>
-      <div class="agenda-items preview" data-section="tomorrow">
+      <div class="agenda-items preview" data-section="day-1">
         <% tomorrow_items = current_user.agenda_visible_items_for(@date + 1) %>
         <% if tomorrow_items.empty? %>
           <div class="agenda-empty muted">Nothing scheduled yet.</div>

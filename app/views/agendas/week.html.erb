@@ -61,7 +61,7 @@
                  else
                    day.strftime("%A, %b %-d")
                  end %>
-      <section class="agenda-section <%= preview ? 'section-tomorrow' : 'section-today' %>">
+      <section class="agenda-section <%= preview ? 'section-tomorrow' : 'section-today' %>" data-section-day="<%= offset %>">
         <header class="section-header"><%= label %></header>
         <div class="agenda-items <%= 'preview' if preview %>" data-section="day-<%= offset %>">
           <% if items_today.empty? %>

@@ -88,6 +88,18 @@ class User < ApplicationRecord
 
   def me? = id == 1
 
+  # "Perceived today" — the date the user mentally still considers as today,
+  # using a 3am rollover instead of midnight. At 1am-2:59am local, this
+  # returns yesterday's calendar date. Both the FE (agenda.js#dayKey) and
+  # the BE consult this for default-date logic so they always agree.
+  def perceived_today
+    zone = ActiveSupport::TimeZone[timezone] || Time.zone
+    now = zone.now
+    date = now.to_date
+    date -= 1 if now.hour < 3
+    date
+  end
+
   # Owned agendas + agendas shared with this user.
   def accessible_agendas
     Agenda.where(user_id: id).or(Agenda.where(id: shared_agendas.select(:id)))
@@ -124,7 +136,11 @@ class User < ApplicationRecord
   end
 
   def agenda_carry_over_items
-    cutoff = Date.current.in_time_zone(timezone).beginning_of_day
+    # Cutoff = perceived-today's local midnight. Tasks scheduled for what
+    # the user still considers "today" (i.e. yesterday's calendar date at
+    # 1am-2:59am) stay in their day section, NOT carry-over.
+    zone = ActiveSupport::TimeZone[timezone] || Time.zone
+    cutoff = zone.local(perceived_today.year, perceived_today.month, perceived_today.day)
     accessible_agenda_items
       .where(kind: :task, completed_at: nil)
       .where(start_at: ...cutoff)
