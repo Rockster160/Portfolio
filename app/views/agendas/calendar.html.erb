@@ -1,4 +1,5 @@
 <%= meta_title @month.strftime("%B %Y"), include_name: false %>
+<% content_for(:favicon) { render "agendas/favicon" } %>
 
 <div class="agenda-calendar-page"
      data-current-date="<%= @month.iso8601 %>">

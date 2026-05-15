@@ -1,0 +1,40 @@
+{
+  "short_name": "Agenda",
+  "name": "Agenda",
+  "icons": [
+    {
+      "src": "/favicon/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "id": "agenda",
+  "start_url": "/agenda?source=pwa",
+  "background_color": "#141a26",
+  "display": "standalone",
+  "scope": "/agenda",
+  "theme_color": "#141a26",
+  "description": "Your daily agenda — tasks, events, and reminders across every agenda you can access.",
+  "shortcuts": [
+    {
+      "name": "Today",
+      "short_name": "Today",
+      "url": "/agenda?source=pwa"
+    },
+    {
+      "name": "Week ahead",
+      "short_name": "Week",
+      "url": "/agenda/week?source=pwa"
+    },
+    {
+      "name": "Month",
+      "short_name": "Month",
+      "url": "/agenda/calendar?source=pwa"
+    }
+  ]
+}
