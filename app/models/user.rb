@@ -305,25 +305,28 @@ class User < ApplicationRecord
     persisted? && !guest?
   end
 
-  private
-
-  def confirm_guest
-    return unless guest?
-
-    update(role: :standard) if username.present?
-  end
-
   # Every real (non-guest) user gets a starter agenda named after their
   # username. Saves the user from staring at an empty "Create your first one."
   # screen on signup, and gives shared/aggregated views something to render
   # immediately. Guests skip this (they're temporary). Existing users with no
   # agendas get one the next time they save (cheap idempotent backfill).
+  #
+  # Public so the AgendasController can call it as a before_action — visiting
+  # /agenda should never make the user click through an empty state.
   def ensure_default_agenda
     return if guest?
     return if username.blank?
     return if agendas.exists?
 
     agendas.create(name: username)
+  end
+
+  private
+
+  def confirm_guest
+    return unless guest?
+
+    update(role: :standard) if username.present?
   end
 
   def proper_fields_present?

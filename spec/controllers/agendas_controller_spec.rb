@@ -58,6 +58,23 @@ RSpec.describe AgendasController, type: :controller do
     end
   end
 
+  describe "auto-default agenda on first visit" do
+    it "creates one for a user with zero agendas when they hit /agenda" do
+      user.agendas.destroy_all
+      expect(user.agendas).to be_empty
+      get :day
+      expect(response).to be_successful
+      expect(user.agendas.reload.pluck(:name)).to eq([user.username])
+    end
+
+    it "also creates one when they hit /agenda/calendar" do
+      user.agendas.destroy_all
+      get :calendar
+      expect(response).to be_successful
+      expect(user.agendas.reload.pluck(:name)).to eq([user.username])
+    end
+  end
+
   describe "POST #create" do
     it "creates a new agenda" do
       expect {

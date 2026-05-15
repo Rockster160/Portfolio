@@ -2,6 +2,11 @@ class AgendasController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
   before_action :set_agenda, only: [:edit, :update, :destroy]
+  # The day + calendar views are the user's primary surface — make sure they
+  # always have something to render. ensure_default_agenda is idempotent and
+  # skips guests / users without a username, so it's safe to call on every
+  # request.
+  before_action :ensure_default_agenda!, only: [:day, :calendar]
 
   # GET /agenda — aggregate day view across every accessible agenda.
   def day
@@ -73,6 +78,10 @@ class AgendasController < ApplicationController
   end
 
   private
+
+  def ensure_default_agenda!
+    current_user&.ensure_default_agenda
+  end
 
   # Edit/destroy only the agendas the user owns. Shared editors don't get to
   # rename or delete someone else's agenda.
