@@ -1,0 +1,26 @@
+<%# Read-only details modal — shown when a viewer (no edit perm on the
+    item's agenda) taps an item. Pure visibility, no form. JS populates the
+    [data-*-target] slots when opened. %>
+<%= render_modal("agenda-item-details", "Details") do %>
+  <div class="agenda-details">
+    <div class="agenda-details-agenda">
+      <span class="agenda-details-dot" data-agenda-color-target aria-hidden="true"></span>
+      <span data-agenda-name-target></span>
+    </div>
+    <h2 class="agenda-details-name" data-name-target></h2>
+    <div class="agenda-details-row" data-when-target></div>
+    <div class="agenda-details-row hidden" data-loc-row>
+      <i class="fa fa-map-marker"></i> <span data-loc-target></span>
+    </div>
+    <div class="agenda-details-row hidden" data-recurring-row>
+      <i class="fa fa-refresh"></i> <span data-recurring-target></span>
+    </div>
+    <div class="agenda-details-notes hidden" data-notes-row>
+      <h4>Notes</h4>
+      <p data-notes-target></p>
+    </div>
+    <div class="agenda-details-foot">
+      <button type="button" class="af-btn af-btn-secondary" data-dismiss="#agenda-item-details">Close</button>
+    </div>
+  </div>
+<% end %>

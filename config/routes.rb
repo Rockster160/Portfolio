@@ -179,8 +179,13 @@ Rails.application.routes.draw do
   end
 
   # What users navigate to. Singular — they're looking at "the agenda" (their
-  # schedule), not browsing a list of agenda entities.
-  get  "/agenda"          => "agendas#day",      as: :agenda
+  # schedule), not browsing a list of agenda entities. Helpers are named after
+  # the view, NOT `:agenda` — that name belongs to `resources :agendas` below
+  # for the member routes (PATCH/DELETE /agendas/:id). When both claimed the
+  # same name, Rails silently dropped the resourceful helper, breaking the
+  # edit form ("Unauthorized" — it was POST-as-PATCH submitting to /agenda).
+  get  "/agenda"          => "agendas#day",      as: :day
+  get  "/agenda/week"     => "agendas#week",     as: :week
   get  "/agenda/calendar" => "agendas#calendar", as: :calendar
 
   # Plural — managing the underlying agenda entities (create / edit / share / delete).

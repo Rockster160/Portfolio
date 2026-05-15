@@ -5,21 +5,23 @@
 
   <header class="agenda-page-header">
     <h1 class="agenda-page-title">Agenda</h1>
+    <%= render "agendas/filter", agendas: @agendas %>
     <button type="button" class="agenda-add-btn" data-modal="#agenda-add-modal" aria-label="Add to agenda"><i class="fa fa-plus"></i></button>
     <a href="<%= agendas_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
   </header>
 
   <nav class="agenda-date-bar">
-    <a class="date-nav prev" href="<%= agenda_path(date: (@date - 1).iso8601) %>" aria-label="Previous day"><i class="fa fa-chevron-left"></i></a>
+    <a class="date-nav prev" href="<%= day_path(date: (@date - 1).iso8601) %>" aria-label="Previous day"><i class="fa fa-chevron-left"></i></a>
     <span class="date-label"><%= @date.strftime("%a, %b %-d, %Y") %></span>
     <% if @date != Date.current %>
-      <a class="date-today" href="<%= agenda_path %>">Today</a>
+      <a class="date-today" href="<%= day_path %>">Today</a>
     <% end %>
-    <a class="date-nav next" href="<%= agenda_path(date: (@date + 1).iso8601) %>" aria-label="Next day"><i class="fa fa-chevron-right"></i></a>
+    <a class="date-nav next" href="<%= day_path(date: (@date + 1).iso8601) %>" aria-label="Next day"><i class="fa fa-chevron-right"></i></a>
   </nav>
 
   <div class="cal-view-toggle">
-    <a href="<%= agenda_path %>" class="cal-toggle-btn active">Day</a>
+    <a href="<%= day_path %>" class="cal-toggle-btn active">Day</a>
+    <a href="<%= week_path %>" class="cal-toggle-btn">Week</a>
     <a href="<%= calendar_path %>" class="cal-toggle-btn">Month</a>
   </div>
 
@@ -74,5 +76,6 @@
 
     <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>
     <%= render "agenda_items/edit_modal", agendas: @agendas %>
+    <%= render "agenda_items/details_modal" %>
   <% end %>
 </div>

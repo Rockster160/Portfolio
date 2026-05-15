@@ -6,7 +6,7 @@ class AgendasController < ApplicationController
   # always have something to render. ensure_default_agenda is idempotent and
   # skips guests / users without a username, so it's safe to call on every
   # request.
-  before_action :ensure_default_agenda!, only: [:day, :calendar]
+  before_action :ensure_default_agenda!, only: [:day, :week, :calendar]
 
   # GET /agenda — aggregate day view across every accessible agenda.
   def day
@@ -24,6 +24,19 @@ class AgendasController < ApplicationController
   # agenda entities, not "the agenda."
   def index
     @agendas = current_user.accessible_agendas.order(:sort_order, :id)
+  end
+
+  # GET /agenda/week — same layout as #day, extended with seven more
+  # preview-styled sections after Tomorrow. An 8-day window (today + 7 ahead)
+  # is fetched in one bulk range query rather than per-day, then grouped in
+  # memory — no N+1 across the lookahead.
+  def week
+    @date = parse_date(params[:date]) || Date.current
+    @agendas = current_user.accessible_agendas.order(:sort_order, :id)
+    items = current_user.agenda_items_for_range(@date, @date + 7.days)
+    zone = current_user.timezone
+    @items_by_date = items.group_by { |i| i.start_at.in_time_zone(zone).to_date }
+    @carry_over = current_user.agenda_carry_over_items.to_a
   end
 
   def new
@@ -66,9 +79,15 @@ class AgendasController < ApplicationController
   def update
     if @agenda.update(agenda_params)
       @agenda.broadcast!
-      render json: { id: @agenda.id, slug: @agenda.parameterized_name }
+      respond_to do |format|
+        format.json { render json: { id: @agenda.id, slug: @agenda.parameterized_name } }
+        format.html { redirect_to agendas_path, notice: "Agenda updated." }
+      end
     else
-      render json: { errors: @agenda.errors.full_messages }, status: :unprocessable_entity
+      respond_to do |format|
+        format.json { render json: { errors: @agenda.errors.full_messages }, status: :unprocessable_entity }
+        format.html { render :edit, status: :unprocessable_entity }
+      end
     end
   end
 
@@ -95,14 +114,18 @@ class AgendasController < ApplicationController
   end
 
   def aggregate_payload(date)
+    editable_ids = current_user.editable_agendas.pluck(:id).to_set
+    serialize_with_perm = ->(items) {
+      items.map { |i| i.serialize.merge(editable: editable_ids.include?(i.agenda_id)) }
+    }
     {
       date:       date.to_s,
       agendas:    current_user.accessible_agendas.order(:sort_order, :id).map { |a|
-        { id: a.id, name: a.name, color: a.color, slug: a.parameterized_name }
+        { id: a.id, name: a.name, color: a.color, slug: a.parameterized_name, editable: editable_ids.include?(a.id) }
       },
-      today:      current_user.agenda_visible_items_for(date).map(&:serialize),
-      tomorrow:   current_user.agenda_visible_items_for(date + 1).map(&:serialize),
-      carry_over: current_user.agenda_carry_over_items.map(&:serialize),
+      today:      serialize_with_perm.call(current_user.agenda_visible_items_for(date)),
+      tomorrow:   serialize_with_perm.call(current_user.agenda_visible_items_for(date + 1)),
+      carry_over: serialize_with_perm.call(current_user.agenda_carry_over_items.to_a),
     }
   end
 

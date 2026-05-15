@@ -111,23 +111,30 @@
       ? `${fmtTime(item.start_at)}<span class="time-sep">–</span>${fmtTime(item.end_at)}`
       : fmtTime(item.start_at);
     const checkboxId = `agenda_item_${item.id}`;
-    const check = preview ? "" : `
+    const editable = !preview && item.editable !== false;
+    const readonly = !preview && !editable;
+    const check = editable ? `
       <input type="checkbox" class="agenda-item-check" id="${checkboxId}"
         ${item.completed_at ? "checked" : ""}
-        data-checked-url="${url}">`;
+        data-checked-url="${url}">` : "";
     const loc = item.location ? `<span class="agenda-item-loc"><i class="fa fa-map-marker"></i> ${escapeHtml(item.location)}</span>` : "";
     const badge = item.recurring ? `<span class="agenda-item-badge"><i class="fa fa-refresh"></i></span>` : "";
-    const editBtn = preview ? "" : `<button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit"><i class="fa fa-pencil"></i></button>`;
+    const editBtn = editable ? `<button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit"><i class="fa fa-pencil"></i></button>` : "";
     const scheduleAttr = item.schedule ? escapeAttr(JSON.stringify(item.schedule)) : "";
     // <label for="..."> when interactive (toggles checkbox on tap); plain div
-    // when preview (no checkbox to link to).
-    const bodyOpen = preview ? `<div class="agenda-item-body">` : `<label for="${checkboxId}" class="agenda-item-body">`;
-    const bodyClose = preview ? `</div>` : `</label>`;
+    // when preview or readonly (no checkbox to link to).
+    const bodyOpen = editable
+      ? `<label for="${checkboxId}" class="agenda-item-body">`
+      : `<div class="agenda-item-body">`;
+    const bodyClose = editable ? `</label>` : `</div>`;
+    const rowReadonlyAttrs = readonly ? "data-edit-item data-readonly" : "";
+    const cls2 = cls + (readonly ? " readonly" : "");
 
     return el(`
-      <div class="${cls}"
+      <div class="${cls2}"
            style="--item-color: ${color}; --agenda-color: ${agendaColor};"
            title="${escapeAttr(item.agenda_name || "")}"
+           ${rowReadonlyAttrs}
            data-item-id="${item.id}"
            data-item-url="${url}"
            data-phantom="${!!item.phantom}"
@@ -148,14 +155,17 @@
         ${bodyOpen}
           <span class="agenda-item-dot" aria-hidden="true"></span>
           <span class="agenda-item-time">${timeStr}</span>
-          <span class="agenda-item-name">${escapeHtml(item.name)}</span>
-          ${loc}
+          <span class="agenda-item-text">
+            <span class="agenda-item-name">${escapeHtml(item.name)}</span>
+            ${loc}
+          </span>
           ${badge}
         ${bodyClose}
         ${editBtn}
       </div>
     `);
   }
+
 
   function replaceSection(container, items, opts = {}) {
     if (!container) return;
@@ -184,6 +194,10 @@
     } else if (carrySection) {
       carrySection.remove();
     }
+
+    // Items just got re-rendered — re-apply the localStorage visibility
+    // filter so user's hidden agendas stay hidden after WS refresh.
+    applyAgendaVisibility();
   }
 
   // ---------- shared agenda picker ----------
@@ -724,10 +738,13 @@
     // is editing a specific item that already has its own color.
     const editAgendaPicker = bindAgendaPicker(form);
 
-    // Only elements explicitly marked data-edit-item open edit. Row body =
-    // <label> toggles the checkbox natively; pencil button = data-edit-item.
-    // Calendar's .cal-item is also marked. Touch scrolling never triggers a
-    // click on either, so scrolling is preserved.
+    // Only elements explicitly marked data-edit-item respond to clicks.
+    // Editable rows: pencil carries data-edit-item → opens edit modal.
+    //   (The <label> body toggles the checkbox natively — never reaches here
+    //    because the label/checkbox interaction doesn't bubble as a click on
+    //    data-edit-item.)
+    // Readonly rows: the whole row carries data-edit-item + data-readonly →
+    //   opens the details modal instead.
     root.addEventListener("click", (e) => {
       const editBtn = e.target.closest("[data-edit-item]");
       if (!editBtn) return;
@@ -735,7 +752,11 @@
       e.stopPropagation();
       const dataEl = editBtn.closest("[data-item-id]");
       if (!dataEl || dataEl.classList.contains("preview")) return;
-      openModal(dataEl);
+      if (dataEl.hasAttribute("data-readonly")) {
+        openDetailsModal(dataEl);
+      } else {
+        openModal(dataEl);
+      }
     });
 
     function openModal(item) {
@@ -889,6 +910,11 @@
       // can change recurrence / days / until / count, not just the per-item
       // fields the controller can derive. Preserve the schedule's original
       // starts_on rather than overwriting it with this occurrence's date.
+      //
+      // location + notes have to be merged in explicitly — buildSchedulePayload
+      // doesn't include them (it's shared with the add modal which appends them
+      // separately). Without these, a series edit silently dropped any
+      // location/notes change.
       if (scope === "series" && currentRecurring) {
         payload.agenda_schedule = sched.buildSchedulePayload({
           name: payload.agenda_item.name,
@@ -897,6 +923,8 @@
           startTime, endTime, date, triggerExpression,
           startsOn: currentScheduleData?.starts_on,
         });
+        payload.agenda_schedule.location = payload.agenda_item.location;
+        payload.agenda_schedule.notes = payload.agenda_item.notes;
       }
 
       // Mark the targeted item as pending-save so the user sees something is
@@ -975,6 +1003,127 @@
     });
   }
 
+  // ---------- agenda visibility filter (localStorage-backed) ----------
+  // Lets the user uncheck individual agendas to hide their items in the
+  // current view. State persists across reloads under "agendaHidden:v1".
+  // Also applies to calendar's `.cal-item` rows since they share the same
+  // data-agenda-id attribute.
+  const AGENDA_HIDDEN_KEY = "agendaHidden:v1";
+
+  function getHiddenAgendas() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(AGENDA_HIDDEN_KEY) || "[]");
+      return Array.isArray(raw) ? raw.map(String) : [];
+    } catch (_) { return []; }
+  }
+  function saveHiddenAgendas(ids) {
+    localStorage.setItem(AGENDA_HIDDEN_KEY, JSON.stringify(ids));
+  }
+  function applyAgendaVisibility() {
+    const hidden = new Set(getHiddenAgendas());
+    document.querySelectorAll("[data-agenda-id]").forEach((el) => {
+      // Only target item rows (.agenda-item) and calendar buttons (.cal-item).
+      // Skip data-edit-item buttons that aren't item rows.
+      if (!el.classList.contains("agenda-item") && !el.classList.contains("cal-item")) return;
+      el.classList.toggle("hidden-by-filter", hidden.has(el.dataset.agendaId));
+    });
+  }
+
+  function initAgendaFilter() {
+    const btn = document.querySelector(".agenda-filter-btn");
+    const panel = document.querySelector(".agenda-filter-panel");
+    if (!btn || !panel) return;
+
+    // Sync each checkbox with the persisted hidden set.
+    const hidden = new Set(getHiddenAgendas());
+    panel.querySelectorAll("input[type=checkbox][data-agenda-id]").forEach((cb) => {
+      cb.checked = !hidden.has(cb.dataset.agendaId);
+    });
+    applyAgendaVisibility();
+
+    function open() {
+      panel.classList.remove("hidden");
+      btn.setAttribute("aria-expanded", "true");
+      setTimeout(() => document.addEventListener("click", outside), 0);
+    }
+    function close() {
+      panel.classList.add("hidden");
+      btn.setAttribute("aria-expanded", "false");
+      document.removeEventListener("click", outside);
+    }
+    function outside(e) {
+      if (panel.contains(e.target) || btn.contains(e.target)) return;
+      close();
+    }
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      panel.classList.contains("hidden") ? open() : close();
+    });
+
+    panel.addEventListener("change", (e) => {
+      const cb = e.target.closest("input[type=checkbox][data-agenda-id]");
+      if (!cb) return;
+      const id = cb.dataset.agendaId;
+      let next = getHiddenAgendas();
+      if (cb.checked) {
+        next = next.filter((x) => x !== id);
+      } else if (!next.includes(id)) {
+        next.push(id);
+      }
+      saveHiddenAgendas(next);
+      applyAgendaVisibility();
+    });
+  }
+
+  // Read-only details modal — opened when a viewer (no edit permission)
+  // taps an item. Populates the static layout from the item's data-* attrs.
+  function openDetailsModal(dataEl) {
+    const modal = document.getElementById("agenda-item-details");
+    if (!modal) return;
+    const d = dataEl.dataset;
+    const set = (sel, val) => {
+      const node = modal.querySelector(sel);
+      if (node) node.textContent = val || "";
+    };
+    const dot = modal.querySelector("[data-agenda-color-target]");
+    if (dot) dot.style.background = d.agendaColor || "";
+    set("[data-agenda-name-target]", d.agendaName);
+    set("[data-name-target]", d.name);
+
+    // Time / date line. Show "Mon, May 14 · 9:00am – 10:00am" for events,
+    // "Mon, May 14 · 9:00am" otherwise.
+    const start = d.startAt ? new Date(d.startAt) : null;
+    const end = d.endAt ? new Date(d.endAt) : null;
+    const dayLabel = start ? start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : "";
+    let timeLabel = start ? fmtTime(d.startAt) : "";
+    if (d.kind === "event" && end) timeLabel += ` – ${fmtTime(d.endAt)}`;
+    set("[data-when-target]", `${dayLabel}${timeLabel ? " · " + timeLabel : ""}`);
+
+    const locRow = modal.querySelector("[data-loc-row]");
+    if (locRow) {
+      const hasLoc = !!(d.location && d.location.length);
+      locRow.classList.toggle("hidden", !hasLoc);
+      set("[data-loc-target]", d.location);
+    }
+
+    const recurringRow = modal.querySelector("[data-recurring-row]");
+    if (recurringRow) {
+      const isRecurring = d.recurring === "true";
+      recurringRow.classList.toggle("hidden", !isRecurring);
+      set("[data-recurring-target]", isRecurring ? "Recurring" : "");
+    }
+
+    const notesRow = modal.querySelector("[data-notes-row]");
+    if (notesRow) {
+      const hasNotes = !!(d.notes && d.notes.length);
+      notesRow.classList.toggle("hidden", !hasNotes);
+      set("[data-notes-target]", d.notes);
+    }
+
+    if (window.showModal) window.showModal("#agenda-item-details");
+  }
+
   function openAddModalForDate(dateStr) {
     const modal = $("#agenda-add-modal");
     if (!modal) return;
@@ -1025,7 +1174,9 @@
   // JSON serialize_for_monitor payload; calendar view reloads (until we have
   // a JSON endpoint for the month grid).
   function refreshView(root) {
-    if (root.classList.contains("agenda-calendar-page")) {
+    if (root.classList.contains("agenda-calendar-page") || root.classList.contains("agenda-week-page")) {
+      // Calendar grids and the 9-section week view aren't worth a custom
+      // JSON endpoint yet — page reload renders the fresh state cleanly.
       window.location.reload();
       return;
     }
@@ -1046,6 +1197,7 @@
     const addModal = $("#agenda-add-modal");
     if (addModal) initAddModal(addModal);
     initEdit(root);
+    initAgendaFilter();
     if (root.classList.contains("agenda-calendar-page")) {
       initCalendarPage(root);
     } else {

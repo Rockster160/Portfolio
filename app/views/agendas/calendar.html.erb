@@ -5,6 +5,7 @@
 
   <header class="agenda-page-header">
     <h1 class="agenda-page-title">Agenda</h1>
+    <%= render "agendas/filter", agendas: @agendas %>
     <button type="button" class="agenda-add-btn" data-modal="#agenda-add-modal" aria-label="Add to agenda"><i class="fa fa-plus"></i></button>
     <a href="<%= agendas_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
   </header>
@@ -21,7 +22,8 @@
   </nav>
 
   <div class="cal-view-toggle">
-    <a href="<%= agenda_path %>" class="cal-toggle-btn">Day</a>
+    <a href="<%= day_path %>" class="cal-toggle-btn">Day</a>
+    <a href="<%= week_path %>" class="cal-toggle-btn">Week</a>
     <a href="<%= calendar_path %>" class="cal-toggle-btn active">Month</a>
   </div>
 
@@ -38,7 +40,7 @@
            data-date="<%= day.iso8601 %>"
            role="button"
            tabindex="0">
-        <a class="cal-day-num" href="<%= agenda_path(date: day.iso8601) %>"><%= day.day %></a>
+        <a class="cal-day-num" href="<%= day_path(date: day.iso8601) %>"><%= day.day %></a>
         <% items.first(4).each do |item| %>
           <button type="button"
                   class="cal-item"
@@ -74,4 +76,5 @@
 
   <%= render "agenda_items/add_modal", agendas: @agendas, date: Date.current %>
   <%= render "agenda_items/edit_modal", agendas: @agendas %>
+  <%= render "agenda_items/details_modal" %>
 </div>

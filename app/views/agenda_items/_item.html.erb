@@ -1,26 +1,29 @@
+<%# Row click priority (in order of frequency the user actually does them):
+      1. Tap body → toggle complete (native <label for> link to checkbox).
+      2. Tap pencil → open edit modal.
+      3. Tap checkbox → toggle complete (state visibility + keyboard a11y).
+
+    Viewer-only items (user has access but not edit perm) are READ-ONLY: no
+    checkbox, no pencil — clicking anywhere in the row opens a details modal
+    so the user can still see the info but can't change anything. %>
 <% preview ||= false %>
 <% local_start = item.start_at.in_time_zone(item.user.timezone) %>
 <% local_end   = item.end_at&.in_time_zone(item.user.timezone) %>
 <% item_url    = agenda_item_path(item.display_id) %>
+<% editable    = !preview && item.agenda.editable_by?(current_user) %>
+<% readonly    = !preview && !editable %>
 <% classes     = ["agenda-item"] %>
 <% classes << "kind-#{item.kind}" %>
 <% classes << "crossed-out" if item.crossed_out? %>
 <% classes << "recurring"   if item.recurring? %>
 <% classes << "phantom"     if item.phantom? %>
 <% classes << "preview"     if preview %>
+<% classes << "readonly"    if readonly %>
 
-<%# Row click priority (in order of frequency the user actually does them):
-      1. Tap the body  → toggle complete (native <label for> link to checkbox).
-         The label stretches to fill the row's full height (CSS) so the entire
-         visible row hits the label — not just the narrow text band.
-      2. Tap the pencil → open edit modal (only the pencil carries data-edit-item).
-      3. Tap the checkbox → toggle complete (it's still there for state +
-         keyboard accessibility).
-      The row container has NO click handler of its own — touch scrolling
-      stays a scroll, never an accidental edit. %>
 <div class="<%= classes.join(" ") %>"
      style="--item-color: <%= item.display_color %>; --agenda-color: <%= item.agenda.color %>;"
      title="<%= item.agenda.name %>"
+     <%= "data-edit-item data-readonly" if readonly %>
      data-item-id="<%= item.display_id %>"
      data-item-url="<%= item_url %>"
      data-phantom="<%= item.phantom? %>"
@@ -38,7 +41,7 @@
      data-trigger-expression="<%= item.trigger_expression %>"
      data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>">
 
-  <% unless preview %>
+  <% if editable %>
     <input type="checkbox"
            class="agenda-item-check"
            id="agenda_item_<%= item.display_id %>"
@@ -46,10 +49,10 @@
            data-checked-url="<%= item_url %>">
   <% end %>
 
-  <% if preview %>
-    <div class="agenda-item-body">
-  <% else %>
+  <% if editable %>
     <label for="agenda_item_<%= item.display_id %>" class="agenda-item-body">
+  <% else %>
+    <div class="agenda-item-body">
   <% end %>
     <span class="agenda-item-dot" aria-hidden="true"></span>
     <span class="agenda-item-time">
@@ -59,20 +62,22 @@
         <%= local_start.strftime("%-l:%M%P") %>
       <% end %>
     </span>
-    <span class="agenda-item-name"><%= item.name %></span>
-    <% if item.location.present? %>
-      <span class="agenda-item-loc"><i class="fa fa-map-marker"></i> <%= item.location %></span>
-    <% end %>
+    <span class="agenda-item-text">
+      <span class="agenda-item-name"><%= item.name %></span>
+      <% if item.location.present? %>
+        <span class="agenda-item-loc"><i class="fa fa-map-marker"></i> <%= item.location %></span>
+      <% end %>
+    </span>
     <% if item.recurring? %>
       <span class="agenda-item-badge" title="Recurring"><i class="fa fa-refresh"></i></span>
     <% end %>
-  <% if preview %>
-    </div>
-  <% else %>
+  <% if editable %>
     </label>
+  <% else %>
+    </div>
   <% end %>
 
-  <% unless preview %>
+  <% if editable %>
     <button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit"><i class="fa fa-pencil"></i></button>
   <% end %>
 </div>

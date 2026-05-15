@@ -6,6 +6,84 @@ RSpec.describe AgendaItemsController, type: :controller do
 
   before { sign_in user }
 
+  describe "PATCH #update with location/notes (regression)" do
+    let!(:item) {
+      create(:agenda_item, agenda: agenda, kind: :task, name: "Task",
+        start_at: Time.current, location: "", notes: "")
+    }
+
+    it "persists location and notes on a non-recurring item" do
+      patch :update, params: {
+        id:          item.id,
+        agenda_item: {
+          agenda_id: agenda.id,
+          name:      "Task",
+          location:  "Living room",
+          notes:     "Bring tools",
+        },
+      }, format: :json
+      item.reload
+      expect(item.location).to eq("Living room")
+      expect(item.notes).to eq("Bring tools")
+    end
+
+    it "persists location and notes when scope=occurrence on a recurring item" do
+      sched = create(:agenda_schedule, agenda: agenda, kind: :task, name: "Daily",
+        start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current)
+      occ = sched.agenda_items.create!(agenda: agenda, kind: :task, name: "Daily",
+        start_at: Time.current, detached_at: Time.current)
+      patch :update, params: {
+        id:          occ.id,
+        scope:       :occurrence,
+        agenda_item: { agenda_id: agenda.id, name: "Daily", location: "Office", notes: "Sync" },
+      }, format: :json
+      occ.reload
+      expect(occ.location).to eq("Office")
+      expect(occ.notes).to eq("Sync")
+    end
+
+    it "persists location and notes when scope=series on a recurring item" do
+      sched = create(:agenda_schedule, agenda: agenda, kind: :task, name: "Daily",
+        start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current)
+      phantom_id = "p-#{sched.id}-#{(Date.current + 5.days).iso8601}"
+      patch :update, params: {
+        id:          phantom_id,
+        scope:       :series,
+        agenda_item: { agenda_id: agenda.id, name: "Daily", location: "HQ", notes: "All-hands" },
+      }, format: :json
+      sched.reload
+      expect(sched.location).to eq("HQ")
+      expect(sched.notes).to eq("All-hands")
+    end
+
+    it "persists location and notes on a series edit when the full agenda_schedule payload is sent" do
+      # Mirrors what the JS sends when editing a recurring item in series mode:
+      # an `agenda_schedule` block including the new location/notes (regression
+      # check for the bug where the JS forgot to merge them into the payload).
+      sched = create(:agenda_schedule, agenda: agenda, kind: :task, name: "Daily",
+        start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current)
+      phantom_id = "p-#{sched.id}-#{(Date.current + 5.days).iso8601}"
+      patch :update, params: {
+        id:               phantom_id,
+        scope:            :series,
+        agenda_item:      { agenda_id: agenda.id, name: "Daily", location: "HQ", notes: "All-hands" },
+        agenda_schedule:  {
+          name:       "Daily",
+          kind:       "task",
+          color:      "#0160ff",
+          start_time: "09:00",
+          starts_on:  Date.current.iso8601,
+          recurrence: { freq: "daily" },
+          location:   "HQ",
+          notes:      "All-hands",
+        },
+      }, format: :json
+      sched.reload
+      expect(sched.location).to eq("HQ")
+      expect(sched.notes).to eq("All-hands")
+    end
+  end
+
   describe "POST #create" do
     it "creates a one-off task and broadcasts" do
       expect(MonitorChannel).to receive(:broadcast_to).with(user, hash_including(id: :agenda))

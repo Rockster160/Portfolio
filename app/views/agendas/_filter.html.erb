@@ -1,0 +1,22 @@
+<%# Agenda visibility filter. Shows every agenda the user can access with a
+    checkbox; unchecking hides that agenda's items in the current view.
+    State is persisted in localStorage (see `agendaHidden:v1` in agenda.js) so
+    it sticks across reloads. %>
+<button type="button" class="agenda-filter-btn" aria-label="Filter agendas" aria-haspopup="true" aria-expanded="false">
+  <i class="fa fa-filter"></i>
+</button>
+
+<div class="agenda-filter-panel hidden" role="dialog" aria-label="Show agendas">
+  <h4>Show agendas</h4>
+  <ul class="agenda-filter-list">
+    <% agendas.each do |a| %>
+      <li class="agenda-filter-row" style="--option-color: <%= a.color %>;">
+        <label>
+          <input type="checkbox" data-agenda-id="<%= a.id %>" checked>
+          <span class="agenda-pick-dot" aria-hidden="true"></span>
+          <span class="agenda-filter-name"><%= a.name %></span>
+        </label>
+      </li>
+    <% end %>
+  </ul>
+</div>
