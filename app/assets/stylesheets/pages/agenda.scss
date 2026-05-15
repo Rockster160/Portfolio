@@ -153,7 +153,6 @@
     margin: 0 8px;
     font-size: 18px;
     font-weight: 600;
-    color: var(--agenda-color);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -169,7 +168,7 @@
     height: 32px;
     min-width: 32px;
     border-radius: 50% !important;
-    background: var(--agenda-color) !important;
+    background: $base-blue !important;
     background-image: none !important;
     color: #fff !important;
     border: 0;
@@ -814,7 +813,7 @@
 
     &:focus {
       outline: none;
-      border-color: var(--agenda-color, #{$base-blue}) !important;
+      border-color: $base-blue !important;
     }
   }
 
@@ -836,7 +835,7 @@
 
     &:focus {
       outline: none;
-      border-color: var(--agenda-color, #{$base-blue}) !important;
+      border-color: $base-blue !important;
     }
   }
 
@@ -890,7 +889,7 @@
     flex: 1 1 auto; // share the toggle width evenly when space is tight
 
     &.active {
-      background: var(--agenda-color, #{$base-blue}) !important;
+      background: $base-blue !important;
       color: #fff !important;
     }
 
@@ -913,8 +912,8 @@
     padding: 0 !important;
 
     &.active {
-      background: var(--agenda-color, #{$base-blue}) !important;
-      border-color: var(--agenda-color, #{$base-blue});
+      background: $base-blue !important;
+      border-color: $base-blue;
       color: #fff !important;
     }
   }
@@ -936,8 +935,8 @@
     font-variant-numeric: tabular-nums;
 
     &.active {
-      background: var(--agenda-color, #{$base-blue}) !important;
-      border-color: var(--agenda-color, #{$base-blue});
+      background: $base-blue !important;
+      border-color: $base-blue;
       color: #fff !important;
     }
 
@@ -1060,7 +1059,6 @@
 
     .month-day-label {
       font-weight: 600;
-      color: var(--agenda-color, #{$base-blue});
     }
   }
 
@@ -1099,7 +1097,7 @@
 }
 
 .af-btn-primary {
-  background: var(--agenda-color, #{$base-blue}) !important;
+  background: $base-blue !important;
   color: #fff !important;
 }
 
@@ -1295,7 +1293,7 @@
   font-weight: 600;
 
   &.active {
-    background: var(--agenda-color);
+    background: $base-blue;
     color: #fff;
     opacity: 1;
   }
@@ -1342,9 +1340,9 @@
   }
 
   &.is-today {
-    border-color: var(--agenda-color);
+    border-color: $base-blue;
     .cal-day-num {
-      background: var(--agenda-color);
+      background: $base-blue;
       color: #fff;
     }
   }
