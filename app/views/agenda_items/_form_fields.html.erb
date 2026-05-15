@@ -73,8 +73,14 @@
   </div>
   <div class="ff">
     <label>Color</label>
+    <%# Custom swatch: a fixed-size styled wrapper carries the visual, the
+        native <input type="color"> sits invisibly on top so clicks open the
+        OS picker. iOS Safari can't be persuaded to render the bare input at
+        a controllable size, so we hide it. %>
     <div class="color-row">
-      <input type="color" class="add-color color-swatch-input" value="<%= default_color %>">
+      <span class="color-swatch" style="background: <%= default_color %>;">
+        <input type="color" class="add-color" value="<%= default_color %>">
+      </span>
       <span class="color-hex color-hex-preview"><%= default_color %></span>
     </div>
   </div>

@@ -1,31 +1,35 @@
 <%= meta_title "Manage agendas", include_name: false %>
 
-<div class="skinny-container agendas-index-container">
-  <div class="btn-container">
-    <a href="<%= agenda_path %>" class="btn">Back to Agenda</a>
-    <a href="<%= new_agenda_path %>" class="btn pull-right">New Agenda +</a>
-  </div>
-  <div class="agendas-title">My Agendas</div>
-  <div class="agendas">
+<div class="agendas-index-container">
+  <header class="agendas-index-header">
+    <a href="<%= agenda_path %>" class="agendas-index-back" aria-label="Back to agenda"><i class="fa fa-chevron-left"></i></a>
+    <h1 class="agendas-index-title">My Agendas</h1>
+    <a href="<%= new_agenda_path %>" class="agendas-index-new" aria-label="New agenda"><i class="fa fa-plus"></i></a>
+  </header>
+
+  <ul class="agendas-list">
     <% @agendas.each do |agenda| %>
       <% mine = (agenda.user_id == current_user.id) %>
-      <div class="agenda-card" style="border-left-color: <%= agenda.color %>;">
-        <span class="agenda-name"><%= agenda.name %></span>
-        <span class="agenda-count">
-          <%= agenda.agenda_items.where(start_at: Date.current.all_day).count %> today
-          <% unless mine %>
-            <span class="agenda-shared-tag" title="Shared by <%= agenda.user.username %>">shared</span>
-          <% end %>
+      <li class="agenda-card" style="--card-color: <%= agenda.color %>;">
+        <span class="agenda-card-swatch" aria-hidden="true"></span>
+        <span class="agenda-card-main">
+          <span class="agenda-card-name"><%= agenda.name %></span>
+          <span class="agenda-card-meta">
+            <%= pluralize(agenda.agenda_items.where(start_at: Date.current.all_day).count, "item") %> today
+            <% unless mine %>
+              · <span class="agenda-card-shared">shared by <%= agenda.user.username %></span>
+            <% end %>
+          </span>
         </span>
         <% if mine %>
-          <a href="<%= edit_agenda_path(agenda) %>" class="agenda-card-link">Edit</a>
+          <a href="<%= edit_agenda_path(agenda) %>" class="agenda-card-edit" aria-label="Edit <%= agenda.name %>"><i class="fa fa-pencil"></i></a>
         <% end %>
-      </div>
+      </li>
     <% end %>
     <% if @agendas.empty? %>
-      <div class="agenda-empty">
+      <li class="agenda-empty">
         No agendas yet. <a href="<%= new_agenda_path %>">Create your first one.</a>
-      </div>
+      </li>
     <% end %>
-  </div>
+  </ul>
 </div>

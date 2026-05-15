@@ -5,36 +5,113 @@
   min-height: 100vh;
   box-sizing: border-box;
 
-  .agendas-title {
-    font-size: 22px;
-    font-weight: 600;
-    margin: 16px 0 12px;
+  .agendas-index-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 18px;
   }
 
-  .agendas {
+  .agendas-index-back,
+  .agendas-index-new {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    color: inherit;
+    background: rgba(255, 255, 255, 0.05);
+    text-decoration: none;
+    transition: background 0.12s ease;
+    flex-shrink: 0;
+
+    &:hover { background: rgba(255, 255, 255, 0.1); }
+  }
+
+  .agendas-index-title {
+    flex: 1;
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+  }
+
+  .agendas-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
   }
 
   .agenda-card {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 12px;
     padding: 12px 14px;
-    border-left: 3px solid $base-blue;
     background: rgba(255, 255, 255, 0.04);
-    border-radius: 4px;
-    text-decoration: none;
+    border-radius: 8px;
     color: inherit;
+    min-width: 0; // allow children to shrink rather than overflow
 
-    &:hover { background: rgba(255, 255, 255, 0.08); }
+    .agenda-card-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--card-color, $base-blue);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+      flex-shrink: 0;
+    }
 
-    .agenda-name { font-size: 16px; font-weight: 500; }
-    .agenda-count { font-size: 12px; opacity: 0.55; }
+    .agenda-card-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .agenda-card-name {
+      font-size: 16px;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .agenda-card-meta {
+      font-size: 12px;
+      opacity: 0.6;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .agenda-card-shared {
+      font-style: italic;
+      opacity: 0.85;
+    }
+
+    .agenda-card-edit {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      color: inherit;
+      text-decoration: none;
+      opacity: 0.45;
+      transition: opacity 0.12s ease, background 0.12s ease;
+
+      &:hover { opacity: 1; background: rgba(255, 255, 255, 0.08); }
+    }
   }
 
   .agenda-empty {
+    list-style: none;
     padding: 24px 16px;
     text-align: center;
     opacity: 0.55;
@@ -339,6 +416,11 @@
 #agenda-item-edit {
   .modal-content {
     width: 460px;
+    // Without this the 460px overflows mobile viewports (it was wider than
+    // the screen, which made every full-width input inside the form render
+    // wider than the visible modal — the cascading "everything overflows"
+    // bug.) Cap at the viewport minus the wrapper's 10px breathing room.
+    max-width: calc(100vw - 20px);
   }
 
   // Replace the gradient blue card with a flat dark surface.
@@ -407,7 +489,9 @@
   .ff-pair {
     display: flex;
     gap: 10px;
-    > .ff { flex: 1; min-width: 130px; }
+    flex-wrap: wrap; // stack vertically on narrow viewports instead of forcing
+                     // the modal to overflow horizontally.
+    > .ff { flex: 1 1 130px; min-width: 0; }
   }
 
   // Compact, custom agenda picker. Looks like a colored pill; clicking
@@ -610,8 +694,9 @@
   }
 
   .kind-btn {
-    padding: 8px 18px !important;
+    padding: 8px 14px !important;
     font-size: 13px;
+    flex: 1 1 auto; // share the toggle width evenly when space is tight
 
     &.active {
       background: var(--agenda-color, #{$base-blue}) !important;
@@ -686,6 +771,43 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: 0; // let the row shrink inside narrow .ff columns instead of
+                  // forcing horizontal overflow of the modal.
+  }
+
+  // The visible swatch is the wrapper; the actual <input type="color"> sits
+  // inside it at opacity 0 so taps still open the native OS color picker.
+  // Bulletproof sizing across browsers (iOS Safari was rendering bare color
+  // inputs at ~80px regardless of CSS — the wrap-and-hide pattern is the
+  // only fully reliable fix).
+  .color-swatch {
+    position: relative;
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.18);
+    box-sizing: border-box;
+    overflow: hidden;
+    cursor: pointer;
+    flex-shrink: 0;
+
+    input[type="color"] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      opacity: 0;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+    }
   }
 
   .ends-row {
@@ -698,24 +820,6 @@
     input  { width: auto !important; flex: 1; min-width: 100px; }
   }
 
-  .color-swatch-input {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 38px !important;
-    height: 38px !important;
-    padding: 0 !important;
-    border: 2px solid rgba(255, 255, 255, 0.15) !important;
-    border-radius: 50% !important;
-    background: transparent !important;
-    cursor: pointer;
-    box-shadow: none !important;
-    flex-shrink: 0;
-    line-height: normal !important;
-
-    &::-webkit-color-swatch-wrapper { padding: 0; }
-    &::-webkit-color-swatch { border: none; border-radius: 50%; }
-    &::-moz-color-swatch { border: none; border-radius: 50%; }
-  }
 
   .color-hex-preview {
     font-family: monospace;

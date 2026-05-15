@@ -541,6 +541,13 @@
     const dateInput = $(".add-date", form);
     const colorInput = $(".add-color", form);
     const colorHexPreview = $(".color-hex-preview", form);
+    const colorSwatch = $(".color-swatch", form);
+
+    function paintColor(c) {
+      if (!c) return;
+      if (colorSwatch) colorSwatch.style.background = c;
+      if (colorHexPreview) colorHexPreview.textContent = c.toUpperCase();
+    }
 
     // When the user picks a different agenda, default the item color to that
     // agenda's color (unless they've manually touched the color picker).
@@ -548,7 +555,7 @@
     const agendaPicker = bindAgendaPicker(form, (id, color) => {
       if (colorTouched || !colorInput || !color) return;
       colorInput.value = color;
-      if (colorHexPreview) colorHexPreview.textContent = color.toUpperCase();
+      paintColor(color);
     });
 
     function syncKind() {
@@ -579,7 +586,7 @@
     if (colorInput) {
       colorInput.addEventListener("input", () => {
         colorTouched = true;
-        if (colorHexPreview) colorHexPreview.textContent = colorInput.value.toUpperCase();
+        paintColor(colorInput.value);
       });
     }
 
@@ -753,10 +760,11 @@
 
       const colorEl = $(".add-color", form);
       const colorHex = $(".color-hex-preview", form);
-      if (colorEl) {
-        colorEl.value = d.color || "#0160FF";
-        if (colorHex) colorHex.textContent = (d.color || "#0160FF").toUpperCase();
-      }
+      const colorSwatchEl = $(".color-swatch", form);
+      const colorValue = d.color || "#0160FF";
+      if (colorEl) colorEl.value = colorValue;
+      if (colorHex) colorHex.textContent = colorValue.toUpperCase();
+      if (colorSwatchEl) colorSwatchEl.style.background = colorValue;
 
       currentRecurring = d.recurring === "true";
       $(".add-scope-field", form).classList.toggle("hidden", !currentRecurring);
@@ -838,8 +846,11 @@
     const colorInput = $(".add-color", form);
     if (colorInput) {
       colorInput.addEventListener("input", () => {
-        const colorHex = $(".color-hex-preview", form);
-        if (colorHex) colorHex.textContent = colorInput.value.toUpperCase();
+        const v = colorInput.value;
+        const hex = $(".color-hex-preview", form);
+        if (hex) hex.textContent = v.toUpperCase();
+        const sw = $(".color-swatch", form);
+        if (sw) sw.style.background = v;
       });
     }
 
