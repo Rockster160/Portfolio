@@ -1191,6 +1191,60 @@
       .catch((err) => console.error("agenda refresh failed", err));
   }
 
+  // Day / Week views shown on the plain /agenda (no ?date= override) roll to
+  // the new "today" automatically at 3am local. 3am is a more humane day
+  // boundary than midnight — people stay up past midnight all the time and
+  // don't want their schedule to flip while they're still finishing yesterday.
+  // If the user has pinned a specific date in the URL, leave them on it.
+  function scheduleAutoDateAdvance(root) {
+    if (root.classList.contains("agenda-calendar-page")) return;
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("date")) return;
+    } catch (_) { /* IE / odd URL — skip */ return; }
+
+    // "Day key" treats hours 0:00–2:59 as still belonging to the previous
+    // calendar day, so the perceived day only ticks over at 3am.
+    function dayKey() {
+      const d = new Date();
+      if (d.getHours() < 3) d.setDate(d.getDate() - 1);
+      return d.toDateString();
+    }
+    function msUntilNext3am() {
+      const now = new Date();
+      const next = new Date(now);
+      next.setHours(3, 0, 0, 0);
+      if (next <= now) next.setDate(next.getDate() + 1);
+      return next - now;
+    }
+
+    const loadedDay = dayKey();
+    let timer = null;
+    function tick() {
+      if (dayKey() !== loadedDay) {
+        window.location.reload();
+      } else {
+        // Edge case: timer fired but we're still in the same perceived day
+        // (e.g., user loaded at 12:30am — the timer fires at 3am but server
+        // already renders today's date). Just reschedule.
+        timer = setTimeout(tick, msUntilNext3am());
+      }
+    }
+    timer = setTimeout(tick, msUntilNext3am());
+
+    // Catch the device-sleep case: if the laptop slept through 3am and woke
+    // up later, setTimeout may not have fired on time. Re-check on visibility.
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      if (dayKey() !== loadedDay) {
+        window.location.reload();
+      } else {
+        clearTimeout(timer);
+        timer = setTimeout(tick, msUntilNext3am());
+      }
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     const root = $(".agenda-page") || $(".agenda-calendar-page");
     if (!root) return;
@@ -1203,6 +1257,7 @@
     } else {
       initChecks(root);
     }
+    scheduleAutoDateAdvance(root);
     subscribeMonitor();
     processQueue();
   });
