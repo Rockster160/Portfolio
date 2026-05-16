@@ -83,11 +83,18 @@
     const pushBtn   = pushPanel?.querySelector(".agenda-push-status-btn");
     const pushTest  = pushPanel?.querySelector(".agenda-push-test-btn");
 
+    // iOS Safari only exposes Notification/PushManager to installed PWAs —
+    // detect the in-browser case so we can prompt the user to install
+    // instead of hiding the panel.
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
+
     function setPushState(state) {
       if (!pushPanel) return;
       pushPanel.dataset.state = state;
       pushPanel.classList.remove("hidden");
       pushTest?.classList.toggle("hidden", state !== "subscribed");
+      pushBtn.classList.remove("hidden");
       switch (state) {
         case "subscribed":
           pushLabel.textContent = "Notifications on";
@@ -105,7 +112,13 @@
           pushBtn.disabled      = true;
           break;
         case "unsupported":
-          pushPanel.classList.add("hidden"); // hide entirely on unsupported browsers
+          if (isIOS && !isStandalone) {
+            pushLabel.textContent = "Tap Share → Add to Home Screen to enable notifications";
+          } else {
+            pushLabel.textContent = "Notifications aren't supported in this browser";
+          }
+          pushBtn.classList.add("hidden");
+          pushBtn.disabled = true;
           break;
         default:
           pushLabel.textContent = "…";
