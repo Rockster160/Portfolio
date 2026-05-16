@@ -45,9 +45,6 @@
     gap: 8px;
   }
 
-  // Compact one-line notification status. Just a small label + button at
-  // the top of the manage page — no banner, no card chrome. Per-agenda
-  // kind/recurrence toggles below carry the rest of the notification UI.
   .agenda-push-status {
     display: flex;
     align-items: center;
@@ -64,8 +61,7 @@
     .agenda-push-status-icon { font-size: 12px; opacity: 0.6; }
     .agenda-push-status-label { flex: 1; opacity: 0.7; }
 
-    // Reset the global gradient button look — these are inline link-buttons,
-    // not affordance-heavy CTAs.
+    // Override the global gradient button styling for an inline-link look.
     .agenda-push-status-btn,
     .agenda-push-test-btn {
       flex-shrink: 0;
@@ -116,8 +112,7 @@
         i { margin-right: 4px; }
       }
 
-      // 3 columns × 4 rows. First column is the kind label, next two are the
-      // one-off and recurring toggles for that kind.
+      // 3 cols × 4 rows: kind label + (one-off, recurring) toggles.
       .agenda-card-notif-grid {
         display: grid;
         grid-template-columns: auto 1fr 1fr;
@@ -222,10 +217,8 @@
   --agenda-color: #{$base-blue};
   margin: 0 auto;
   padding: 12px 16px 80px;
-  // html is `height: 100%` from the inline style in application.html.erb but
-  // body has no min-height — when content is shorter than viewport, body ends
-  // and the html canvas paints below it. Force the container to fill the
-  // viewport so the body always extends to the bottom and there's no seam.
+  // Body's empty-space seam shows the html canvas through; force a
+  // full-viewport min-height to cover it.
   min-height: 100vh;
   box-sizing: border-box;
 
@@ -247,9 +240,6 @@
     &:hover { opacity: 1; background: rgba(255, 255, 255, 0.04); }
   }
 
-  // Pending-ops badge — small refresh-icon + count pill. Only visible when
-  // the offline queue is non-empty; sits next to the title so the user can
-  // glance at it without anything else changing layout.
   .agenda-pending-badge {
     display: inline-flex;
     align-items: center;
@@ -280,8 +270,7 @@
     white-space: nowrap;
   }
 
-  // Aggressive override of the global `button` styles (forms.scss line 180-)
-  // which apply padding: 6px 24px, gradient bg, font-weight: bold to ALL buttons.
+  // Overrides the global `button` rule in forms.scss.
   .agenda-add-btn {
     box-sizing: border-box;
     padding: 0 !important;
@@ -391,22 +380,14 @@
 
   .agenda-item {
     display: flex;
-    align-items: stretch; // children fill the row's full height — keeps the
-                          // <label> click target the same shape as the row.
-    padding: 0 10px;      // vertical padding moves into the label so the
-                          // label's hit-rect covers the row's full height.
-                          // (This was the root cause of the "click only works
-                          // in the very center of the row" bug — the label
-                          // used to be content-height, leaving dead bands of
-                          // row padding that ate clicks.)
+    align-items: stretch; // children fill the row, keeping the label
+                          // click target the same shape as the row
+    padding: 0 10px;      // vertical padding lives on the label
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.025);
     border-left: 3px solid var(--item-color, var(--agenda-color));
     transition: background 0.1s ease, opacity 0.1s ease;
 
-    // Pending-state visuals: shown after the user submits an edit or delete,
-    // cleared when the server's WS broadcast confirms (re-render) or when the
-    // request errors out (handled in JS).
     &.is-pending {
       opacity: 0.6;
       animation: agenda-pulse 1.5s ease-in-out infinite;
@@ -447,27 +428,18 @@
 
     .agenda-item-body {
       display: flex;
-      align-items: flex-start; // top-align so multi-line names sit next to
-                               // the time/dot cleanly instead of pushing the
-                               // time down to a wrapped line's center.
+      align-items: flex-start; // multi-line names sit beside the time/dot
       gap: 10px;
       flex: 1;
       min-width: 0;
-      padding: 10px 0;         // own the row's vertical padding so the
-                               // label's click area = the full row height.
-                               // Plain <div> for preview, <label for="…">
-                               // when interactive (native toggle, preserves
-                               // touch scroll).
+      padding: 10px 0;         // label owns the row's vertical click area
       cursor: pointer;
     }
     &.preview .agenda-item-body { cursor: default; padding: 5px 0; }
 
-    // Time/dot align with the FIRST line of the name (use line-height match).
     .agenda-item-dot { margin-top: 5px; }
     .agenda-item-time { line-height: 18px; }
 
-    // Name + location stack vertically. Name wraps; location sits beneath,
-    // smaller and softer so it doesn't compete with the name for attention.
     .agenda-item-text {
       flex: 1;
       min-width: 0;
@@ -476,9 +448,7 @@
       gap: 2px;
     }
 
-    // Subtle dot showing which agenda an item belongs to. Inherits the agenda
-    // colour via --agenda-color (set per item). Falls back to invisible when
-    // the user only has one agenda — same colour everywhere, low contrast.
+    // Per-item agenda dot — colour comes from --agenda-color (inline).
     .agenda-item-dot {
       display: inline-block;
       width: 6px;
@@ -502,9 +472,8 @@
     .agenda-item-name {
       font-weight: 500;
       line-height: 1.3;
-      // No truncation — long names wrap to as many lines as needed. Break
-      // mid-word as a fallback for the occasional unbroken-string-of-doom
-      // (URLs, etc) so it never pushes the row sideways.
+      // Long names wrap freely; the break-word fallback handles
+      // unbroken strings (URLs etc) without overflowing the row.
       white-space: normal;
       word-wrap: break-word;
       overflow-wrap: anywhere;
@@ -519,9 +488,7 @@
     }
     .agenda-item-badge { font-size: 10px; opacity: 0.4; flex-shrink: 0; margin-top: 4px; }
 
-    // Pencil button — comfortable touch target (≥40×row-height), low-opacity
-    // by default so it doesn't compete with the row content. Brightens on
-    // hover. Override global button chrome (gradient, padding, etc.).
+    // ≥40×row-height touch target; overrides the global gradient button.
     .agenda-item-edit {
       align-self: stretch;            // tall click target = row full height
       display: flex;
@@ -564,10 +531,8 @@
 #agenda-item-details {
   .modal-content {
     width: 460px;
-    // Without this the 460px overflows mobile viewports (it was wider than
-    // the screen, which made every full-width input inside the form render
-    // wider than the visible modal — the cascading "everything overflows"
-    // bug.) Cap at the viewport minus the wrapper's 10px breathing room.
+    // Cap at the viewport (minus the wrapper's 10px) so 460px never
+    // overflows on mobile.
     max-width: calc(100vw - 20px);
   }
 
@@ -668,16 +633,13 @@
   }
 }
 
-// Visual treatment for read-only rows in day/week views — looks the same as
-// editable rows minus the checkbox/pencil affordances, so viewers see what
-// the items are without any false-edit signals.
+// Viewer rows: same chrome minus the edit affordances.
 .agenda-item.readonly {
   cursor: pointer;
   &:hover { background: rgba(255, 255, 255, 0.07); }
 }
 
-// Hidden by the per-agenda visibility filter (localStorage). Applied to both
-// `.agenda-item` (day/week) and `.cal-item` (calendar) rows.
+// Hidden by the per-device visibility filter — applies to both row types.
 .agenda-item.hidden-by-filter,
 .cal-item.hidden-by-filter { display: none !important; }
 
@@ -806,19 +768,15 @@
     > .ff { flex: 1 1 130px; min-width: 0; }
   }
 
-  // Compact, custom agenda picker. Looks like a colored pill; clicking
-  // expands a floating list where every option shows its agenda color via
-  // a dot + tinted row. No label — the color IS the label.
   .ff.agenda-pick {
     flex-direction: row;
     align-items: center;
     align-self: flex-start; // pill width = content, not stretched to row.
     position: relative;     // anchor for absolutely-positioned menu.
 
-    // Shared swatch (used in toggle + each option). Color comes from the
-    // nearest CSS var: --picked-agenda-color on the wrapper for the toggle,
-    // or --option-color on the <li> for each option. Inset ring gives the
-    // swatch shape against very dark/light agenda colors.
+    // Toggle uses --picked-agenda-color (wrapper); each option uses
+    // --option-color (li). Inset ring keeps the shape readable on
+    // very dark or very light colors.
     .agenda-pick-dot {
       display: inline-block;
       width: 12px;
@@ -859,9 +817,8 @@
     }
 
     .agenda-pick-menu {
-      // Fixed positioning so the menu floats above the modal (which has
-      // overflow: hidden on its container). JS sets top/left/min-width based
-      // on the toggle button's bounding rect when opening.
+      // Fixed positioning escapes the modal's overflow: hidden. JS
+      // computes top/left/min-width from the toggle's bounding rect.
       position: fixed;
       max-width: 260px;
       max-height: 240px;
@@ -877,9 +834,8 @@
 
       &.hidden { display: none; }
 
-      // Swatch + name. Text in normal/inherit color (never tinted), so we
-      // never have to worry about contrast against arbitrary agenda colors.
-      // The colored dot communicates the agenda; the name stays readable.
+      // Text stays in the inherited color so contrast holds against
+      // any agenda color — the colored dot carries the agenda identity.
       li {
         display: flex;
         align-items: center;
@@ -908,10 +864,8 @@
     }
   }
 
-  // Shared base for every input/select so date, time, datetime-local and select
-  // all render at the same visible height. Explicit height + line-height avoids
-  // descender clipping on `appearance: none` selects (the y in "Every"/"days"
-  // was being cut because the UA chrome's vertical breathing room is removed).
+  // Shared base for inputs/selects — explicit height + line-height
+  // avoids descender clipping under `appearance: none` selects.
   input[type="text"],
   input[type="number"],
   input[type="date"],

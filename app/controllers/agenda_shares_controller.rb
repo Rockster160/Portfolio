@@ -4,8 +4,8 @@ class AgendaSharesController < ApplicationController
   before_action :set_agenda
   before_action :set_share, only: [:update, :destroy]
 
-  # POST /agendas/:agenda_id/shares — body: { agenda_share: { user_id, permission } }
-  # Accepts user_id (preferred — from the friend picker) or username (fallback).
+  # Body: { agenda_share: { user_id, permission } } — user_id preferred,
+  # username accepted as a fallback (resolved through the friend picker).
   def create
     target_user = resolve_target_user
     return render json: { errors: ["Pick a friend to share with"] }, status: :unprocessable_entity if target_user.blank?
@@ -39,7 +39,7 @@ class AgendaSharesController < ApplicationController
 
   private
 
-  # Only the owner manages shares — not editors-of-shared.
+  # Owner-only — editors-of-shared can't reconfigure who else has access.
   def set_agenda
     @agenda = current_user.agendas.find_by(id: params[:agenda_id]) ||
               current_user.agendas.by_param(params[:agenda_id]).first
@@ -50,9 +50,8 @@ class AgendaSharesController < ApplicationController
     @share = @agenda.agenda_shares.find(params[:id])
   end
 
-  # Friend picker sends user_id directly. Fallback to username (typed) for
-  # the legacy path, resolved through the user's contacts so nicknames like
-  # "Mom" or "Chelsea's place" also work (delegates to Contact.name_find).
+  # Resolves to a friend by user_id first, then fuzzy-matches a typed
+  # username/nickname through the user's contacts (Contact.name_find).
   def resolve_target_user
     user_id = params.dig(:agenda_share, :user_id).presence
     return current_user.friends.find_by(id: user_id) if user_id

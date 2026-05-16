@@ -1,11 +1,8 @@
-<%# Row click priority (in order of frequency the user actually does them):
-      1. Tap body → toggle complete (native <label for> link to checkbox).
-      2. Tap pencil → open edit modal.
-      3. Tap checkbox → toggle complete (state visibility + keyboard a11y).
-
-    Viewer-only items (user has access but not edit perm) are READ-ONLY: no
-    checkbox, no pencil — clicking anywhere in the row opens a details modal
-    so the user can still see the info but can't change anything. %>
+<%# Click priority:
+      body  → toggle complete (native <label for> on the checkbox)
+      pencil → edit modal
+    Viewer-perm rows have no checkbox/pencil; tapping anywhere opens
+    the read-only details modal. %>
 <% preview ||= false %>
 <% local_start = item.start_at.in_time_zone(item.user.timezone) %>
 <% local_end   = item.end_at&.in_time_zone(item.user.timezone) %>

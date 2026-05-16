@@ -1,7 +1,6 @@
-// Agenda Push Notification Module.
-// Mirrors whisper_push.js — registers /agenda_worker.js, subscribes against
-// the existing /push_notification_subscribe endpoint with channel="agenda",
-// auto-recovers from iOS subscription drops, respects explicit user opt-out.
+// Registers /agenda_worker.js and subscribes against
+// /push_notification_subscribe (channel: "agenda"). Auto-recovers from iOS
+// subscription drops, respects the explicit opt-out flag.
 
 const VAPID_PUBLIC_KEY =
   "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
@@ -32,38 +31,42 @@ async function logPushDiagnostic(event, data = {}) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        event:      `agenda:${event}`,
-        permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
-        optedOut:   localStorage.getItem(OPT_OUT_KEY),
-        timestamp:  new Date().toISOString(),
+        event: `agenda:${event}`,
+        permission:
+          typeof Notification !== "undefined"
+            ? Notification.permission
+            : "unsupported",
+        optedOut: localStorage.getItem(OPT_OUT_KEY),
+        timestamp: new Date().toISOString(),
         ...data,
       }),
       credentials: "same-origin",
     });
-  } catch (_e) { /* ignore — diagnostics shouldn't block UX */ }
+  } catch (_e) {
+    /* ignore — diagnostics shouldn't block UX */
+  }
 }
 
-// Soft recovery: register the worker if missing (needed for PWA install
-// regardless of push support), re-subscribe if iOS dropped the subscription
-// (common on iOS Safari when the app is killed from memory), sync the
-// subscription to the server. Idempotent — safe to call on every page load.
+// Idempotent: registers the SW, re-subscribes if iOS dropped the
+// subscription, syncs to the server. Safe to call on every page load.
 export async function ensureAgendaServiceWorker() {
   if (!("serviceWorker" in navigator)) return "unsupported";
 
-  // Always register the SW — it's what makes the page installable as a PWA,
-  // even on browsers/platforms without web-push.
+  // The SW must register even on browsers without PushManager — it's what
+  // makes the page installable as a PWA.
   let registration;
   try {
     registration = await navigator.serviceWorker.getRegistration(WORKER_SCOPE);
     if (!registration) {
-      registration = await navigator.serviceWorker.register(WORKER_URL, { scope: WORKER_SCOPE });
+      registration = await navigator.serviceWorker.register(WORKER_URL, {
+        scope: WORKER_SCOPE,
+      });
     }
   } catch (e) {
     logPushDiagnostic("sw_register_error", { error: e.message });
     return "unsupported";
   }
 
-  // Push subscription is best-effort beyond the SW registration.
   if (!("PushManager" in window) || typeof Notification === "undefined") {
     return "registered_no_push";
   }
@@ -73,13 +76,16 @@ export async function ensureAgendaServiceWorker() {
     let subscription = await registration.pushManager.getSubscription();
     const userOptedOut = localStorage.getItem(OPT_OUT_KEY) === "true";
 
-    // iOS sometimes clears the push subscription after the app is removed
-    // from memory. If permission is still granted and the user didn't
-    // explicitly opt out, silently re-subscribe.
-    if (!subscription && Notification.permission === "granted" && !userOptedOut) {
+    // iOS Safari drops the push subscription when the app is killed —
+    // silently re-subscribe if permission is still granted.
+    if (
+      !subscription &&
+      Notification.permission === "granted" &&
+      !userOptedOut
+    ) {
       try {
         subscription = await registration.pushManager.subscribe({
-          userVisibleOnly:     true,
+          userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
         });
         logPushDiagnostic("auto_recovery_success");
@@ -95,9 +101,9 @@ export async function ensureAgendaServiceWorker() {
     subscriptionData.channel = "agenda";
 
     await fetch("/push_notification_subscribe", {
-      method:  "POST",
+      method: "POST",
       headers: { "Content-Type": "application/json", JarvisPushVersion: "2" },
-      body:    JSON.stringify(subscriptionData),
+      body: JSON.stringify(subscriptionData),
       credentials: "same-origin",
     });
 
@@ -124,8 +130,8 @@ export async function checkAgendaNotificationStatus() {
   }
 }
 
-// Explicit user opt-in. Call this from a UI gesture so the permission prompt
-// is properly attached to a user action.
+// Explicit opt-in — must be called from a user gesture so the browser
+// shows the permission prompt.
 export async function registerAgendaNotifications() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     return { success: false, error: "unsupported" };
@@ -134,7 +140,9 @@ export async function registerAgendaNotifications() {
   try {
     localStorage.removeItem(OPT_OUT_KEY);
 
-    const registration = await navigator.serviceWorker.register(WORKER_URL, { scope: WORKER_SCOPE });
+    const registration = await navigator.serviceWorker.register(WORKER_URL, {
+      scope: WORKER_SCOPE,
+    });
     if (registration.installing || registration.waiting) {
       await new Promise((resolve) => {
         const worker = registration.installing || registration.waiting;
@@ -146,10 +154,11 @@ export async function registerAgendaNotifications() {
     }
 
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") return { success: false, error: "permission_denied" };
+    if (permission !== "granted")
+      return { success: false, error: "permission_denied" };
 
     const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly:     true,
+      userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
 
@@ -157,18 +166,20 @@ export async function registerAgendaNotifications() {
     subscriptionData.channel = "agenda";
 
     const response = await fetch("/push_notification_subscribe", {
-      method:  "POST",
+      method: "POST",
       headers: { "Content-Type": "application/json", JarvisPushVersion: "2" },
-      body:    JSON.stringify(subscriptionData),
+      body: JSON.stringify(subscriptionData),
       credentials: "same-origin",
     });
 
     if (response.ok) return { success: true };
-    // Server failed — roll back browser subscription so states stay aligned.
+    // Roll the browser subscription back when the server rejects it.
     await subscription.unsubscribe();
     return { success: false, error: "server_error" };
   } catch (error) {
-    const sub = await (await getAgendaRegistration())?.pushManager.getSubscription();
+    const sub = await (
+      await getAgendaRegistration()
+    )?.pushManager.getSubscription();
     if (sub) await sub.unsubscribe();
     return { success: false, error: error.message };
   }
@@ -183,9 +194,9 @@ export async function unregisterAgendaNotifications() {
       const subscriptionData = subscription.toJSON();
       subscriptionData.channel = "agenda";
       await fetch("/push_notification_unsubscribe", {
-        method:  "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(subscriptionData),
+        body: JSON.stringify(subscriptionData),
         credentials: "same-origin",
       }).catch(() => {});
       await subscription.unsubscribe();
@@ -196,21 +207,19 @@ export async function unregisterAgendaNotifications() {
   }
 }
 
-// Expose on window so the agenda.js IIFE (and any future settings UI) can
-// call into the explicit opt-in/out helpers without an ES-module import.
+// Exposed on window so settings UI + the agenda.js IIFE can call into
+// these without an ES-module import.
 if (typeof window !== "undefined") {
   window.AgendaPush = {
-    ensure:        ensureAgendaServiceWorker,
-    check:         checkAgendaNotificationStatus,
-    register:      registerAgendaNotifications,
-    unregister:    unregisterAgendaNotifications,
+    ensure: ensureAgendaServiceWorker,
+    check: checkAgendaNotificationStatus,
+    register: registerAgendaNotifications,
+    unregister: unregisterAgendaNotifications,
   };
 }
 
-// Auto-register the worker on any Agenda surface so the PWA install option
-// appears in browsers + push subscriptions stay alive across cold launches.
-// Re-runs on visibility-change for iOS recovery (subscription drops are
-// common when the app is killed from memory).
+// Auto-register on every Agenda surface so the PWA install affordance
+// stays present and iOS-dropped subscriptions self-heal on focus.
 function isOnAgendaSurface() {
   return !!document.querySelector(
     ".agenda-page, .agenda-calendar-page, .agenda-settings-page, .agendas-index-container",

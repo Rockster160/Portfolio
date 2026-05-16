@@ -1,6 +1,3 @@
-# PATCH /agendas/:agenda_id/notification_setting — upserts the current
-# user's notification prefs for the agenda. The user-scoped pref means a
-# shared agenda's viewer can mute themselves without affecting the owner.
 class AgendaNotificationSettingsController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
@@ -18,8 +15,7 @@ class AgendaNotificationSettingsController < ApplicationController
 
   private
 
-  # Pref is per-USER, so any user who can SEE the agenda can configure
-  # their own settings for it — not just owners.
+  # Per-user pref, so anyone with view access can configure their own.
   def set_agenda
     @agenda = current_user.accessible_agendas.find_by(id: params[:agenda_id]) ||
               current_user.accessible_agendas.by_param(params[:agenda_id]).first

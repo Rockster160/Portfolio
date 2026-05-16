@@ -20,9 +20,8 @@ class AgendaNotificationSetting < ApplicationRecord
 
   validates :user_id, uniqueness: { scope: :agenda_id }
 
-  # 2-axis defaults: kind × recurrence. Tasks + events on for both
-  # recurrence types; triggers off (the trigger worker already fires the
-  # underlying Jil/Jarvis action, so push is opt-in).
+  # Triggers default off — the trigger worker already fires its own
+  # Jil/Jarvis action, so a push is opt-in.
   DEFAULTS = {
     task_oneoff:        true,
     task_recurring:     true,
@@ -34,9 +33,8 @@ class AgendaNotificationSetting < ApplicationRecord
 
   PERMITTED_KINDS = %w[task event trigger].freeze
 
-  # Fetch the (user, agenda) row if persisted, otherwise return a
-  # synthetic-defaults instance (NOT saved). Callers can call
-  # `.notify_for?(item)` uniformly without checking presence.
+  # Returns the persisted row or an unsaved defaults instance so callers
+  # can `.notify_for?` uniformly without checking presence.
   def self.for(user, agenda)
     return new(user: user, agenda: agenda) if user.blank? || agenda.blank?
 
@@ -44,8 +42,6 @@ class AgendaNotificationSetting < ApplicationRecord
       new(user: user, agenda: agenda)
   end
 
-  # Pass the full item so we can branch on both kind AND .recurring? — the
-  # user can mute "recurring events" while keeping "one-off events" on.
   def notify_for?(item)
     return false unless PERMITTED_KINDS.include?(item.kind.to_s)
 

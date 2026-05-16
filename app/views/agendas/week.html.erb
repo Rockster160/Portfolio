@@ -1,13 +1,6 @@
 <%= meta_title "Agenda", include_name: false %>
 <% content_for(:favicon) { render "agendas/favicon" } %>
 
-<%# Look-ahead view — visually identical to /agenda (Day) so all JS hooks,
-    modals, click semantics, and broadcast handling work unchanged. The only
-    difference: instead of just Today + Tomorrow, we render Today (interactive)
-    + 8 more days under it (preview-styled, exactly like Tomorrow on Day).
-    `agenda-week-page` class flags this view so the JS refresh logic reloads
-    the page on WS broadcasts (a 9-section payload isn't worth a custom JSON
-    endpoint yet). %>
 <div class="agenda-page agenda-week-page"
      data-current-date="<%= @date.iso8601 %>">
 

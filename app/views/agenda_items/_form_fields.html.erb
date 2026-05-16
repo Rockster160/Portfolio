@@ -1,12 +1,9 @@
-<%# Shared form fields for the add + edit modals. Locals:
-    - agendas       (required) — array of accessible agendas for the picker
-    - default_agenda_id (optional) — preselected in :add mode
-    - mode          :add | :edit
-    - default_date  ISO date string (used as initial Date value in :add mode)
-
-    Both modals render IDENTICAL fields. :edit adds the hidden item-id field
-    and the "Apply changes to" scope radios (shown for recurring items via JS).
-    Action buttons live in the modal wrappers. %>
+<%# Locals:
+    - agendas             (required) array for the picker
+    - default_agenda_id   (optional) preselected in :add mode
+    - mode                :add | :edit
+    - default_date        ISO date string (initial Date input value in :add)
+%>
 
 <% mode ||= :add %>
 <% default_date_value = local_assigns[:default_date].presence || Date.current.iso8601 %>
@@ -17,12 +14,7 @@
   <input type="hidden" class="add-item-id">
 <% end %>
 
-<%# Custom agenda picker — native <option> styling is unreliable across
-    browsers (Safari/macOS ignores it entirely), so we build our own. Toggle
-    looks like a compact colored pill; menu is a floating list where EVERY
-    option shows its agenda color via a dot + tinted row. Hidden input under
-    the hood preserves the existing form submission contract (`.add-agenda-id`
-    still holds the selected id). %>
+<%# Custom dropdown — Safari ignores backgrounds in native <option>s. %>
 <% picked = agendas.find { |a| a.id == default_agenda_id } || agendas.first %>
 <div class="ff agenda-pick" style="--picked-agenda-color: <%= picked&.color || Agenda::DEFAULT_COLOR %>;">
   <button type="button" class="agenda-pick-toggle" aria-haspopup="listbox" aria-expanded="false">
@@ -73,10 +65,8 @@
   </div>
   <div class="ff">
     <label>Color</label>
-    <%# Custom swatch: a fixed-size styled wrapper carries the visual, the
-        native <input type="color"> sits invisibly on top so clicks open the
-        OS picker. iOS Safari can't be persuaded to render the bare input at
-        a controllable size, so we hide it. %>
+    <%# Styled wrapper for the visual; the native input sits invisibly on
+        top so taps still open the OS color picker. %>
     <div class="color-row">
       <span class="color-swatch" style="background: <%= default_color %>;">
         <input type="color" class="add-color" value="<%= default_color %>">

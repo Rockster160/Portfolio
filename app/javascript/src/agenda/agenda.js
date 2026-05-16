@@ -20,9 +20,8 @@
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
   }
 
-  // Match the server-side `strftime("%-l:%M%P")` format exactly so a JS re-render
-  // (via Monitor broadcast) produces the same text as the ERB partial — no
-  // locale-dependent "9:00 AM" vs "9:00am" disparity between renders.
+  // Mirrors the ERB strftime("%-l:%M%P") so JS- and server-rendered items
+  // show the same string after a Monitor refresh.
   function fmtTime(iso) {
     if (!iso) return "";
     const d = new Date(iso);
@@ -82,9 +81,6 @@
     saveQueue(q);
   }
 
-  // Subtle pending-ops badge — shown in the page header whenever the offline
-  // queue has ANY items. Updates after every saveQueue() so the count tracks
-  // enqueues and dequeues in real time. Hidden cleanly when the queue drains.
   function updatePendingBadge() {
     const badge = document.querySelector(".agenda-pending-badge");
     if (!badge) return;
@@ -95,17 +91,8 @@
     if (numEl) numEl.textContent = count > 0 ? ` ${count}` : "";
     badge.classList.toggle("hidden", count === 0);
   }
-  // Drain the offline queue. Critical safety property: each op is only
-  // removed from localStorage AFTER the server responds with `res.ok`.
-  // Previous shape (`saveQueue([])` upfront then re-enqueue on failure) had
-  // a window where a tab close mid-drain could lose unreplayed ops. This
-  // version processes one op at a time, removing the head only when the
-  // server confirms — a tab close or network drop mid-flight leaves the
-  // op queued for the next drain.
-  //
-  // ALL ops POST/PATCH/DELETE over HTTP — the WS channel is read-only for
-  // signaling. Every write gets an HTTP response we can verify, so we
-  // never lose data to a "I sent it but did the server hear me?" gap.
+  // Drains one op at a time, removing the head only after `res.ok` so a
+  // tab close or network drop mid-flight leaves the op queued for retry.
   let _processing = false;
   async function processQueue() {
     if (_processing) return; // single-flight
@@ -161,9 +148,8 @@
   window.addEventListener("online", processQueue);
 
   // ---------- monitor-payload rendering ----------
-  // Mirror the server-side `_item.html.erb` partial — every attribute, class,
-  // and child element here must match the ERB so that a page rendered cold and
-  // a page re-rendered after a Monitor broadcast look + behave identically.
+  // Mirrors _item.html.erb — every attribute, class, and child here must
+  // match the ERB so cold-render and post-broadcast renders are identical.
   function renderItem(item, opts = {}) {
     const preview = opts.preview;
     const cls = [
@@ -238,12 +224,9 @@
   }
 
 
-  // Drops an optimistic .is-pending placeholder into whichever day section
-  // an item belongs to (based on its start_at relative to the page's
-  // currentDate). The placeholder gets swept away the next time a WS
-  // broadcast triggers refreshView (which calls replaceSection on the
-  // day-N divs). If the post fails AND gets queued, the placeholder stays
-  // — accurately reflecting that the item really IS pending sync.
+  // Drops an optimistic .is-pending placeholder into the appropriate
+  // day-N section. The next WS-triggered refreshView replaces it with
+  // the real row; offline-queued ops keep the placeholder visible.
   function insertPendingPlaceholder(data) {
     const root = $(".agenda-page");
     if (!root) return; // calendar view has no day sections
@@ -299,10 +282,9 @@
     if (!root) return;
     if (String(data.date) !== root.dataset.currentDate) return;
 
-    // `data.days` is an array of {date, items}. Each section <div> on the
-    // page has data-section="day-N" matching the index. We iterate, replacing
-    // whichever sections we have a match for; missing sections (e.g. day
-    // view only renders 0+1 but a week-shape payload arrived) are skipped.
+    // data.days is [{date, items}, ...]; each section div uses data-section
+    // ="day-N" matching the index. Missing sections (week payload arriving
+    // on a 2-section day view) are skipped.
     (data.days || []).forEach((d, idx) => {
       const node = $(`[data-section="day-${idx}"]`);
       if (!node) return;
@@ -317,20 +299,18 @@
       carrySection.remove();
     }
 
-    // Items just got re-rendered — re-apply the localStorage visibility
-    // filter so user's hidden agendas stay hidden after WS refresh.
-    applyAgendaVisibility();
+    applyAgendaVisibility(); // hidden agendas stay hidden after the rerender
+
   }
 
   // ---------- shared agenda picker ----------
-  // Custom dropdown for the agenda select. Native <select> can't reliably
-  // style <option>s (Safari ignores backgrounds entirely), so we render a
-  // toggle + floating list where every option carries its agenda color via
-  // a dot + tinted row. The hidden input stores the value so submit code
-  // keeps reading `.add-agenda-id` unchanged.
+  // Custom dropdown — Safari ignores backgrounds inside native <option>s,
+  // so each option lives in a floating list with a colored dot + tinted
+  // row. A hidden input under the hood preserves the `.add-agenda-id`
+  // value the rest of the form code reads.
   //
-  // Returns { value(), setValue(id), close() } for the caller. `onChange` is
-  // invoked as (id, color, name) when the user picks an option.
+  // Returns { value(), setValue(id), close() }. `onChange` fires as
+  // (id, color, name) when the user picks an option.
   function bindAgendaPicker(form, onChange) {
     const pick = $(".agenda-pick", form);
     if (!pick) return null;
@@ -379,9 +359,7 @@
       menu.classList.remove("hidden");
       toggle.setAttribute("aria-expanded", "true");
       positionMenu();
-      // Defer attaching the outside-click listener until after the current
-      // click event finishes bubbling — otherwise the click that opened the
-      // menu would immediately close it.
+      // Defer outside-click until the opening click finishes bubbling.
       setTimeout(() => {
         document.addEventListener("click", onDocClick);
         document.addEventListener("keydown", onDocKey);
@@ -437,9 +415,8 @@
   }
 
   // ---------- shared schedule fields ----------
-  // Encapsulates the recurrence/days/until/count UI used by BOTH the add modal
-  // and the edit modal. Returns an interface for prefilling, building payloads,
-  // and clearing state.
+  // Recurrence/days/until/count UI shared between the add and edit modals.
+  // Returns helpers for prefill, payload build, and clear.
   function bindScheduleFields(form) {
     const weekdaySet = new Set();
     const monthDaySet = new Set();
@@ -503,15 +480,10 @@
       countInput?.classList.toggle("hidden", mode !== "count");
     }
 
-    // Prefill the schedule UI from a serialized hash (typically from the
-    // server's AgendaSchedule#serialize_for_edit).
-    //
-    // IMPORTANT: do NOT write `data.starts_on` into the date input. The
-    // date input is the OCCURRENCE date (in the edit modal) or the new
-    // item's date (in the add modal). The schedule's original starts_on
-    // must stay separate — overwriting it caused occurrence-scope edits
-    // on a future phantom to materialize on the schedule's start date
-    // instead of the occurrence date.
+    // Prefills from AgendaSchedule#serialize_for_edit. Skips writing
+    // starts_on into the date input — that input is the OCCURRENCE date
+    // (edit modal) or the new item's date (add modal); overwriting it
+    // collapses future-phantom edits onto the schedule's start date.
     function applySchedule(data) {
       if (!data || typeof data !== "object") return;
 
@@ -558,11 +530,9 @@
       syncMonthMode();
     }
 
-    // Assemble the full agenda_schedule payload from current form state.
-    // `startsOn` (optional) lets the caller preserve the schedule's original
-    // start date instead of using the form's date input — important for
-    // edit-series flows so editing the rule doesn't shift the schedule's
-    // historical start to the occurrence's date.
+    // Build agenda_schedule payload from form state. `startsOn` preserves
+    // the schedule's original start date during edit-series flows so the
+    // rule edit doesn't shift starts_on onto the occurrence's date.
     function buildSchedulePayload({ name, kind, color, startTime, endTime, date, triggerExpression, startsOn }) {
       const freq = freqSelect.value;
       const recurrence = { freq };
@@ -685,8 +655,8 @@
       if (colorHexPreview) colorHexPreview.textContent = c.toUpperCase();
     }
 
-    // When the user picks a different agenda, default the item color to that
-    // agenda's color (unless they've manually touched the color picker).
+    // Switching agendas defaults the item color to the agenda's color
+    // unless the user has manually changed it.
     let colorTouched = false;
     const agendaPicker = bindAgendaPicker(form, (id, color) => {
       if (colorTouched || !colorInput || !color) return;
@@ -705,9 +675,7 @@
       activeKind = "task";
       sched.resetChips();
       dateInput.value = form.dataset.defaultDate;
-      // Re-sync the agenda picker's visual state with whatever the hidden
-      // input reset to (the server-rendered default), since the picker holds
-      // its own label/dot/selected state outside of native form semantics.
+      // Re-sync the picker's label/dot to the hidden input's reset value.
       const currentId = agendaPicker?.value();
       if (currentId) agendaPicker.setValue(currentId);
       colorTouched = false;
@@ -735,9 +703,8 @@
       });
     }
 
-    // Default the start time to the top of the next hour when the date is
-    // today. For other days, fall back to 09:00. Triggered on every open so
-    // the default reflects the time the user actually opened the modal.
+    // Default start time: next-top-of-the-hour if the date is today,
+    // otherwise 09:00.
     function applyDefaultStartTime() {
       const now = new Date();
       const pad = (n) => String(n).padStart(2, "0");
@@ -782,8 +749,7 @@
       const agendaId = agendaPicker?.value() ? parseInt(agendaPicker.value(), 10) : null;
       if (!agendaId) { toast("Pick an agenda", "error"); return; }
 
-      // Get the picked agenda's color/name for the optimistic placeholder.
-      const agendaMeta = (() => {
+      const agendaMeta = (() => { // for the optimistic placeholder
         const sel = $(".add-agenda-id", form);
         if (!sel) return {};
         // Hidden input — look at the corresponding <li> in the menu for color/name.
@@ -904,17 +870,11 @@
       btn.addEventListener("click", () => { activeKind = btn.dataset.kind; syncKind(); });
     });
 
-    // Wire the custom agenda picker. No item-color cascade here — the user
-    // is editing a specific item that already has its own color.
     const editAgendaPicker = bindAgendaPicker(form);
 
-    // Only elements explicitly marked data-edit-item respond to clicks.
-    // Editable rows: pencil carries data-edit-item → opens edit modal.
-    //   (The <label> body toggles the checkbox natively — never reaches here
-    //    because the label/checkbox interaction doesn't bubble as a click on
-    //    data-edit-item.)
-    // Readonly rows: the whole row carries data-edit-item + data-readonly →
-    //   opens the details modal instead.
+    // Editable rows: pencil carries data-edit-item → edit modal. The
+    // <label> body just toggles the checkbox natively. Readonly rows
+    // carry data-edit-item + data-readonly → details modal instead.
     root.addEventListener("click", (e) => {
       const editBtn = e.target.closest("[data-edit-item]");
       if (!editBtn) return;
@@ -960,8 +920,7 @@
       currentRecurring = d.recurring === "true";
       $(".add-scope-field", form).classList.toggle("hidden", !currentRecurring);
 
-      // Recurring items default to "this and all future" — that's the more
-      // common edit and matches the user's stated preference.
+      // Recurring items default to "this and all future".
       const seriesRadio = form.querySelector("input[name='scope'][value='series']");
       const occRadio = form.querySelector("input[name='scope'][value='occurrence']");
       if (currentRecurring) {
@@ -1076,15 +1035,9 @@
         },
       };
 
-      // When editing the series, send a full schedule payload so the user
-      // can change recurrence / days / until / count, not just the per-item
-      // fields the controller can derive. Preserve the schedule's original
-      // starts_on rather than overwriting it with this occurrence's date.
-      //
-      // location + notes have to be merged in explicitly — buildSchedulePayload
-      // doesn't include them (it's shared with the add modal which appends them
-      // separately). Without these, a series edit silently dropped any
-      // location/notes change.
+      // Series edits send the full schedule payload so recurrence/days/
+      // until/count are all editable. location + notes get merged in
+      // separately — buildSchedulePayload doesn't include them.
       if (scope === "series" && currentRecurring) {
         payload.agenda_schedule = sched.buildSchedulePayload({
           name: payload.agenda_item.name,
@@ -1097,9 +1050,8 @@
         payload.agenda_schedule.notes = payload.agenda_item.notes;
       }
 
-      // Mark pending + close immediately. On failure we keep the .is-pending
-      // class on (the op is queued, so it really IS pending sync) and the
-      // user can move on to the next thing instead of staring at a spinner.
+      // Mark pending and close immediately; .is-pending stays on if the
+      // request fails because the op gets queued for retry.
       const itemEl = findItemEl($(".add-item-id", form).value);
       itemEl?.classList.add("is-pending");
       closeModal();
@@ -1123,8 +1075,6 @@
       const label = deleteBtn.textContent;
       if (!window.confirm(`${label} — are you sure?`)) return;
 
-      // Pending-delete visual hint. Stays until WS refresh confirms removal
-      // (or the queue drains and a broadcast arrives).
       const itemEl = findItemEl($(".add-item-id", form).value);
       itemEl?.classList.add("is-pending-delete");
       const deleteUrl = `${form.dataset.itemUrl}?scope=${scope}`;
@@ -1183,11 +1133,9 @@
     });
   }
 
-  // ---------- agenda visibility filter (localStorage-backed) ----------
-  // Lets the user uncheck individual agendas to hide their items in the
-  // current view. State persists across reloads under "agendaHidden:v1".
-  // Also applies to calendar's `.cal-item` rows since they share the same
-  // data-agenda-id attribute.
+  // ---------- agenda visibility filter ----------
+  // Per-device localStorage filter — applies to both `.agenda-item` and
+  // `.cal-item` rows (they share `data-agenda-id`).
   const AGENDA_HIDDEN_KEY = "agendaHidden:v1";
 
   function getHiddenAgendas() {
@@ -1202,8 +1150,6 @@
   function applyAgendaVisibility() {
     const hidden = new Set(getHiddenAgendas());
     document.querySelectorAll("[data-agenda-id]").forEach((el) => {
-      // Only target item rows (.agenda-item) and calendar buttons (.cal-item).
-      // Skip data-edit-item buttons that aren't item rows.
       if (!el.classList.contains("agenda-item") && !el.classList.contains("cal-item")) return;
       el.classList.toggle("hidden-by-filter", hidden.has(el.dataset.agendaId));
     });
@@ -1214,7 +1160,6 @@
     const panel = document.querySelector(".agenda-filter-panel");
     if (!btn || !panel) return;
 
-    // Sync each checkbox with the persisted hidden set.
     const hidden = new Set(getHiddenAgendas());
     panel.querySelectorAll("input[type=checkbox][data-agenda-id]").forEach((cb) => {
       cb.checked = !hidden.has(cb.dataset.agendaId);
@@ -1256,8 +1201,7 @@
     });
   }
 
-  // Read-only details modal — opened when a viewer (no edit permission)
-  // taps an item. Populates the static layout from the item's data-* attrs.
+  // Read-only details modal for viewer-permission rows.
   function openDetailsModal(dataEl) {
     const modal = document.getElementById("agenda-item-details");
     if (!modal) return;
@@ -1271,8 +1215,6 @@
     set("[data-agenda-name-target]", d.agendaName);
     set("[data-name-target]", d.name);
 
-    // Time / date line. Show "Mon, May 14 · 9:00am – 10:00am" for events,
-    // "Mon, May 14 · 9:00am" otherwise.
     const start = d.startAt ? new Date(d.startAt) : null;
     const end = d.endAt ? new Date(d.endAt) : null;
     const dayLabel = start ? start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : "";
@@ -1318,11 +1260,8 @@
       setTimeout(subscribeMonitor, 100);
       return;
     }
-    // Monitor.subscribe() always fires `disconnected` synchronously if the
-    // ActionCable socket hasn't opened yet — true on every page load. Delay
-    // showing the banner so the initial setup is swallowed; 500ms is short
-    // enough to surface real outages quickly but long enough to skip past
-    // the page-load handshake.
+    // Monitor.subscribe() fires `disconnected` synchronously on subscribe;
+    // 500ms grace prevents the page-load handshake from flashing the banner.
     const DISCONNECT_GRACE_MS = 500;
     let disconnectTimer = null;
 
@@ -1354,15 +1293,10 @@
     });
   }
 
-  // Re-fetches the current view's data so any agenda change shows up
-  // regardless of which date or view the user is on. Day view fetches the
-  // JSON serialize_for_monitor payload; calendar view reloads (until we have
-  // a JSON endpoint for the month grid).
-  // Graceful refresh — fetches the current view's JSON and swaps sections in
-  // place. ALWAYS fails silently: a dropped network just leaves the page as
-  // it was rather than navigating into a broken state. Each refresh is a
-  // best-effort sync; WS broadcasts retry on reconnect and the manual
-  // interactions still queue offline (see `enqueue`).
+  // Best-effort re-sync of the current view. Fetches the per-view JSON
+  // (or HTML for calendar) and swaps sections in place. Always fails
+  // silent — a dropped network leaves the page as it is rather than
+  // navigating into a broken state.
   function refreshView(root) {
     const date = root.dataset.currentDate;
     if (root.classList.contains("agenda-calendar-page")) {
@@ -1382,11 +1316,10 @@
       .catch((err) => console.error("agenda refresh failed (will retry on next signal)", err));
   }
 
-  // Calendar refresh: fetch the same HTML page and swap the date-bar +
-  // .cal-grid. Avoids a per-cell JSON apply for the month view, never
-  // reloads the page (modals, header, filter panel stay intact), and
-  // correctly handles month-crossing rollover — the server-rendered HTML
-  // brings the new month's label, prev/next links, and grid all in sync.
+  // Calendar refresh: fetch the current page's HTML, swap the date-bar
+  // and .cal-grid. Avoids a per-cell JSON apply and survives a month-
+  // crossing rollover (server-rendered HTML brings the new month's
+  // label + prev/next links along with the grid).
   function refreshCalendarGrid(root) {
     fetch(window.location.href, {
       credentials: "same-origin",
@@ -1462,8 +1395,8 @@
     }
     timer = setTimeout(tick, msUntilNext3am());
 
-    // Returns true if the perceived day changed (so the caller knows
-    // applyDateRoll already kicked off a refresh and skip a duplicate fetch).
+    // Returns whether the perceived day changed so the caller can skip
+    // its own refreshView (applyDateRoll has already fired one).
     return function checkRolloverNow() {
       const today = dayKey();
       const rolled = today !== loadedDay;
@@ -1477,14 +1410,11 @@
     };
   }
 
-  // In-place rollover. Updates the page chrome (date label, nav, today
-  // highlight) immediately, then kicks off a best-effort JSON re-sync for
-  // views that have data behind their sections.
   function applyDateRoll(root, newDateIso) {
     root.dataset.currentDate = newDateIso;
     const newDate = new Date(newDateIso + "T12:00:00"); // noon → avoids DST edge
 
-    // Date label in the nav bar (matches the ERB strftime "%a, %b %-d, %Y").
+    // Matches the ERB's strftime("%a, %b %-d, %Y").
     const label = root.querySelector(".date-label");
     if (label) {
       label.textContent = newDate.toLocaleDateString(undefined, {
@@ -1492,7 +1422,6 @@
       });
     }
 
-    // prev/next nav hrefs — use day_path or week_path depending on view.
     const basePath = root.classList.contains("agenda-week-page") ? "/agenda/week"
                    : root.classList.contains("agenda-calendar-page") ? "/agenda/calendar"
                    : "/agenda";
@@ -1503,14 +1432,11 @@
     if (prevLink) prevLink.setAttribute("href", `${basePath}?date=${prevIso}`);
     if (nextLink) nextLink.setAttribute("href", `${basePath}?date=${nextIso}`);
 
-    // We're back on "today" — hide the "Today" jump-back link if present.
     root.querySelector(".date-today")?.remove();
 
-    // Calendar: most of the time the rollover stays within the displayed
-    // month — just move the highlight. If the perceived today CROSSES into
-    // a new month (e.g. May 31 → June 1), the new cell isn't in the DOM, so
-    // re-fetch the grid for the new month instead. Skip if the user pinned
-    // a specific month (`?month=YYYY-MM`) — they explicitly chose it.
+    // Within-month rollover only moves the .is-today highlight; crossing
+    // a month boundary re-fetches the grid. Pinned ?month=YYYY-MM stays
+    // put either way.
     if (root.classList.contains("agenda-calendar-page")) {
       const displayedMonth = (root.dataset.currentDate || "").slice(0, 7);
       const newMonth = newDateIso.slice(0, 7);
@@ -1532,9 +1458,6 @@
       return;
     }
 
-    // Day / Week: refetch items for the new date. Section labels are static
-    // in the ERB ("Today" / "Tomorrow" / weekday names) — they're correct
-    // again once we're back on the plain (no-date) URL.
     refreshView(root);
   }
 
@@ -1560,14 +1483,11 @@
     updatePendingBadge();
     const checkRollover = scheduleAutoDateAdvance(root);
 
-    // Foreground re-sync. Mobile browsers (especially iOS Safari) suspend the
-    // ActionCable socket while backgrounded — when the tab comes back, the
-    // socket reconnects but we may have missed broadcasts. Always re-fetch
-    // on visibility-visible so the page never stays stale.
+    // Foreground re-sync — mobile browsers suspend the ActionCable socket
+    // while backgrounded and may miss broadcasts.
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState !== "visible") return;
-      // checkRollover already fires refreshView via applyDateRoll when the
-      // perceived day shifted — don't double-fetch in that case.
+      // Skip the explicit refreshView when checkRollover already did one.
       const rolled = checkRollover && checkRollover();
       if (!rolled) refreshView(root);
       processQueue();

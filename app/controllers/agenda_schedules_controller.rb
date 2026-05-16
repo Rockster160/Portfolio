@@ -29,8 +29,6 @@ class AgendaSchedulesController < ApplicationController
         if target
           @schedule.update!(agenda_id: target.id)
           @schedule.agenda_items.update_all(agenda_id: target.id)
-          # Single combined broadcast — each recipient only sees the agendas
-          # they have access to. No cross-leak, no duplicate refresh.
           Agenda.broadcast_changes!([old_agenda, target])
         end
       end

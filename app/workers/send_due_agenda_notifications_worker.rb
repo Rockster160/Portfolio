@@ -1,29 +1,19 @@
-# Push-notifies every accessing user (owner + share recipients) about each
-# task/event whose start_at has just passed. Runs every minute via
-# Sidekiq-cron, alongside FireDueAgendaTriggersWorker which handles the
-# kind=:trigger items separately.
-#
-# Dedup is per (item, user) — once we've pushed someone for an item, their
-# user_id lands in `agenda_items.notified_user_ids` and we never retry. This
-# means even a missed run (sidekiq paused, server reboot) catches up cleanly
-# the next time through.
+# Pushes due tasks/events (and opted-in triggers) to every accessing user.
+# Pairs with FireDueAgendaTriggersWorker which fires the trigger Jil/Jarvis
+# actions; this only handles the push side.
 class SendDueAgendaNotificationsWorker
   include Sidekiq::Worker
 
   sidekiq_options retry: false
 
-  # Cap how far back we'll notify. A user who comes online after being
-  # offline for a day shouldn't get a wall of 50 buzzes for events long past.
+  # Cap on how far back we'll fire — prevents a long-offline user from
+  # waking up to a wall of buzzes for events long past.
   CATCHUP_WINDOW = 30.minutes
 
   def perform
     now = Time.current
     cutoff = now - CATCHUP_WINDOW
 
-    # Tasks + events: incomplete-only — a task you've checked off doesn't
-    # need a buzz. `notified_at IS NULL` is the broadcast-attempt guard:
-    # once we've tried this item, we don't try again, even if a user later
-    # toggles notifications on (no retroactive pings for past events).
     AgendaItem
       .where(kind: [:task, :event])
       .incomplete
@@ -31,9 +21,8 @@ class SendDueAgendaNotificationsWorker
       .where(start_at: cutoff..now)
       .find_each { |item| notify_for(item) }
 
-    # Triggers: NOT filtered by incomplete because FireDueAgendaTriggersWorker
-    # auto-marks them completed after firing the Jil/Jarvis action. Same
-    # notified_at guard applies.
+    # Triggers skip `incomplete` because FireDueAgendaTriggersWorker
+    # auto-completes them after firing; `notified_at` is still the dedup.
     AgendaItem
       .trigger
       .where(notified_at: nil)
@@ -45,28 +34,21 @@ class SendDueAgendaNotificationsWorker
 
   def notify_for(item)
     agenda = item.agenda
-    recipients = agenda.access_users.to_a # owner + share users
-    recipients.each do |user|
+    agenda.access_users.find_each do |user|
       setting = AgendaNotificationSetting.for(user, agenda)
       next unless setting.notify_for?(item)
 
       ::WebPushNotifications.send_to(user, build_payload(item, user), channel: :agenda)
     end
-    # Mark notified UNCONDITIONALLY — even if no recipients were eligible.
-    # The user explicitly wants "attempted once, never retried", to avoid
-    # retroactive notifications when settings change later.
     item.mark_notified!
   rescue StandardError => e
     Rails.logger.error("[SendDueAgendaNotificationsWorker] item=#{item.id} #{e.class}: #{e.message}")
     raise unless Rails.env.production?
   end
 
-  # Recurring tasks/events stay phantom until interacted with — there's no
-  # row in agenda_items for an upcoming Tuesday occurrence of a daily task.
-  # When that Tuesday occurrence's start_at just passed, materialize it so
-  # we have a row to (a) attach notified_user_ids to and (b) interact with.
-  # Triggers do NOT need this here — they're materialized 7 days ahead via
-  # AgendaSchedule#materialize_upcoming_triggers!.
+  # Recurring task/event occurrences stay phantom until interacted with,
+  # so the find_each above wouldn't see them — materialize any phantom
+  # whose start_at just landed in the catchup window, then notify.
   def materialize_due_phantoms!(now:, cutoff:)
     AgendaSchedule.where(kind: [:task, :event]).find_each do |schedule|
       agenda = schedule.agenda
@@ -76,9 +58,6 @@ class SendDueAgendaNotificationsWorker
 
         occ_start = schedule.occurrence_start_at(date)
         next if occ_start > now || occ_start < cutoff
-
-        # Existing row for this occurrence? Skip materialization but still
-        # try to notify (the prior find_each loop will have hit it).
         next if schedule.agenda_items.exists?(start_at: agenda.send(:day_range, date))
 
         item = schedule.agenda_items.create!(
@@ -105,7 +84,7 @@ class SendDueAgendaNotificationsWorker
     {
       title: item.name.presence || item.kind.to_s.capitalize,
       body:  body_parts.join(" "),
-      icon:  "/favicon/android-chrome-192x192.png",
+      icon:  "/agenda_favicon/android-chrome-192x192.png",
       tag:   "agenda-item-#{item.id}",
       data:  { url: "/agenda" },
     }

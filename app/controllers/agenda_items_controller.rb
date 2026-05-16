@@ -25,10 +25,9 @@ class AgendaItemsController < ApplicationController
     if completion_only_update?
       materialize_with(completion_attrs)
     elsif scope == :series && @item.recurring?
-      # When the edit form sends an explicit agenda_schedule payload, apply
-      # the full recurrence config (days, freq, until/count, etc.). Otherwise
-      # fall back to deriving schedule attrs from the item params so simple
-      # name/time edits still work.
+      # Use the explicit schedule payload when present (full recurrence
+      # config), otherwise derive from the item params so simple name/time
+      # edits still work.
       schedule_attrs = params[:agenda_schedule].present? ? explicit_schedule_params : schedule_attrs_from_item_params
       @item.agenda_schedule.update!(schedule_attrs)
       @item.agenda_schedule.regenerate_future!
@@ -39,9 +38,9 @@ class AgendaItemsController < ApplicationController
       materialize_with(attrs)
     end
 
-    @item.agenda.broadcast! unless moved # moved items broadcast via the
-    # AgendaItem after_update callback (broadcast_agenda_change!) which hits
-    # both old and new agendas' users.
+    # Moves rely on AgendaItem#broadcast_agenda_change! to fan out to both
+    # old + new agendas; in-place edits broadcast the one agenda here.
+    @item.agenda.broadcast! unless moved
     render json: @item.serialize
   end
 
@@ -72,8 +71,6 @@ class AgendaItemsController < ApplicationController
     raise ActiveRecord::RecordNotFound if @item.blank?
   end
 
-  # Verifies the current_user can mutate this item. Owner always can; shared
-  # editors can; viewers cannot.
   def authorize_item_edit!
     return if @item.agenda.editable_by?(current_user)
 
@@ -87,11 +84,8 @@ class AgendaItemsController < ApplicationController
     scope.find_by(id: agenda_id_or_slug) || scope.by_param(agenda_id_or_slug).first
   end
 
-  # For recurring series updates, agenda moves apply to the schedule + all
-  # future occurrences. We move the schedule + its items in one shot, then
-  # fire ONE combined broadcast covering both agendas. Each recipient sees
-  # only the agendas they can actually access in the payload — no cross-leak,
-  # no duplicate refreshes for users in both.
+  # Series move: shift the schedule + every materialized item to the new
+  # agenda, then broadcast once for both agendas.
   def apply_agenda_move!(new_agenda_id)
     target = resolve_target_agenda(new_agenda_id)
     return unless target

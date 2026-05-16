@@ -56,15 +56,7 @@ class AgendaItem < ApplicationRecord
   validate :end_at_after_start_at
   validate :end_at_required_for_event
 
-  # Moving an item between agendas (e.g. private → shared) needs every viewer
-  # of BOTH agendas to refresh so the item appears in its new home and
-  # disappears from its old one. Single-agenda edits only need to broadcast
-  # the one agenda; that path runs through controller-level broadcasts.
   after_update :broadcast_agenda_change!, if: :saved_change_to_agenda_id?
-
-  # Rescheduling to a future time re-arms the notification — without this,
-  # `notified_at` from the original start_at would block the buzz at the new
-  # time. Backdated edits don't re-arm (don't ping users for past events).
   before_save :clear_notified_at_on_future_reschedule
 
   search_terms(
@@ -86,8 +78,8 @@ class AgendaItem < ApplicationRecord
   scope :completed,  -> { where.not(completed_at: nil) }
   scope :incomplete, -> { where(completed_at: nil) }
   scope :pending,    -> { incomplete } # back-compat alias
-  # Events auto-disappear when their end_at passes — they shouldn't count as
-  # "overdue" even if uncompleted. Overdue applies to tasks and triggers only.
+  # Events auto-disappear once end_at passes — overdue applies to tasks
+  # and triggers only.
   scope :overdue,    -> { where.not(kind: :event).incomplete.where(start_at: ...Time.current) }
   scope :upcoming,   -> { where(start_at: Time.current..) }
   scope :recurring,  -> { where.not(agenda_schedule_id: nil) }
@@ -114,9 +106,9 @@ class AgendaItem < ApplicationRecord
     val.to_s.match?(/\A(t|true|y|yes|1|on)\z/i) || val.to_s.empty?
   end
 
-  # Pre-process bare state tokens (e.g. "incomplete", "overdue", "task") so users
-  # can write `kind:task incomplete overdue` instead of having to spell out
-  # `kind:task incomplete:true overdue:true`. Tokens are listed in BARE_STATE_TOKENS.
+  # Expands bare state tokens (BARE_STATE_TOKENS) so the search syntax
+  # accepts `kind:task incomplete overdue` instead of requiring the long
+  # form `kind:task incomplete:true overdue:true`.
   def self.query(q)
     return all if q.blank?
 
@@ -141,8 +133,9 @@ class AgendaItem < ApplicationRecord
 
   delegate :user, to: :agenda
 
-  # Resolves an id (string of digits) OR a phantom_id ("p-{schedule_id}-{date}")
-  # against an Agenda. Returns a persisted AgendaItem, an unsaved phantom, or nil.
+  # Resolves an id (digits) or a phantom_id ("p-{schedule_id}-{date}")
+  # against an Agenda. Returns a persisted AgendaItem, an unsaved phantom,
+  # or nil.
   def self.locate(id_or_phantom, agenda:)
     str = id_or_phantom.to_s
     if (match = str.match(PHANTOM_ID_RE))
@@ -152,10 +145,8 @@ class AgendaItem < ApplicationRecord
     end
   end
 
-  # Globalised lookup — phantom or real id, resolved against any agenda the
-  # user can access. Returns nil if the id doesn't belong to a reachable
-  # agenda. Used by controllers + Jil now that items are addressed without
-  # an agenda in the URL.
+  # Like .locate but scoped to any agenda the user can access (or only
+  # editable ones, with `editable: true`). Returns nil if unreachable.
   def self.locate_for_user(id_or_phantom, user, editable: false)
     scope = editable ? user.editable_agendas : user.accessible_agendas
     str = id_or_phantom.to_s
@@ -237,11 +228,6 @@ class AgendaItem < ApplicationRecord
     update!(completed_at: nil)
   end
 
-  # Notification-broadcast guard for SendDueAgendaNotificationsWorker.
-  # `notified_at` is a single timestamp: once we've fanned the notification
-  # out to every then-eligible user for this item, we mark and never retry.
-  # If a user turns on notifications AFTER the broadcast attempt, they miss
-  # this item — no retroactive pings for past events.
   def notified?
     notified_at.present?
   end
@@ -377,12 +363,9 @@ class AgendaItem < ApplicationRecord
 
   private
 
-  # Item moved between agendas — fire one combined broadcast that includes
-  # both agendas. Agenda.broadcast_changes! ensures each user only sees the
-  # agendas THEY can access in the payload, so a user in only the old
-  # agenda never learns the item moved to a new (possibly-private-to-them)
-  # agenda, and vice versa. Users with access to both get a single refresh
-  # instead of two.
+  # Fan out a combined broadcast for both the old and new agendas — each
+  # recipient only sees agendas they can access (no cross-leak), users in
+  # both get one refresh instead of two.
   def broadcast_agenda_change!
     old_id = saved_changes[:agenda_id].first
     old_agenda = Agenda.find_by(id: old_id)

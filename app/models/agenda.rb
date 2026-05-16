@@ -36,8 +36,6 @@ class Agenda < ApplicationRecord
 
   scope :by_param, ->(name) { where(parameterized_name: name.to_s.parameterize) }
 
-  # All users with any access — owner first, then shared (viewer + editor).
-  # Used by broadcast! so every connected client refreshes.
   def access_users
     User.where(id: ([user_id] + shared_users.pluck(:id)).uniq)
   end
@@ -62,9 +60,8 @@ class Agenda < ApplicationRecord
     parameterized_name
   end
 
-  # Returns all items (real + phantoms) for a date range. Two SQL queries total
-  # regardless of range size: one for materialized rows, one for active schedules.
-  # Phantom occurrences are built in-memory.
+  # Two SQL queries regardless of range size — one for materialized rows,
+  # one for active schedules. Phantom occurrences are built in-memory.
   def items_for_range(from, to)
     from_date = from.to_date
     to_date = to.to_date
@@ -119,22 +116,13 @@ class Agenda < ApplicationRecord
     }
   end
 
-  # Broadcasts a minimal "this agenda changed" signal so any client viewing
-  # this user's agenda can re-fetch its current view's data. Embedding the
-  # day-view payload here was wrong: a broadcast triggered by an edit to a
-  # date the viewer wasn't currently looking at would be silently dropped
-  # by the client's date-match check. Letting the client re-fetch with its
-  # own view date covers day view (any date), calendar view, etc.
   def broadcast!
     self.class.broadcast_changes!([self])
   end
 
-  # Sends a single change-signal to every user affected by the given agendas.
-  # Each recipient's payload includes ONLY the agendas they can actually
-  # access — never cross-leaks info about an agenda they're not authorised to
-  # see. Replaces calling `.broadcast!` on multiple agendas separately, which
-  # could double-refresh users in the intersection and was harder to reason
-  # about when items moved between agendas.
+  # Fans out a change signal: each recipient's payload includes only the
+  # agendas they can access, so an item move between agendas never leaks
+  # the foreign agenda's metadata to users who can't see it.
   def self.broadcast_changes!(agendas)
     agendas = Array(agendas).compact.uniq
     return if agendas.empty?

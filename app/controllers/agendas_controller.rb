@@ -2,16 +2,10 @@ class AgendasController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
   before_action :set_agenda, only: [:edit, :update, :destroy]
-  # The day + calendar views are the user's primary surface — make sure they
-  # always have something to render. ensure_default_agenda is idempotent and
-  # skips guests / users without a username, so it's safe to call on every
-  # request.
   before_action :ensure_default_agenda!, only: [:day, :week, :calendar]
 
-  # GET /agenda — aggregate day view across every accessible agenda.
-  # JSON accepts `?days=N` to control lookahead (1 = day view default,
-  # 7 = week view). Default date uses perceived_today (3am rollover) so a
-  # 1am reload shows "yesterday" — matching the FE's day-key logic.
+  # JSON accepts `?days=N` (default 1, max 30) to extend the lookahead;
+  # week.json uses the same payload shape with days=7.
   def day
     @date = parse_date(params[:date]) || current_user.perceived_today
     @agendas = current_user.accessible_agendas.order(:sort_order, :id)
@@ -25,18 +19,10 @@ class AgendasController < ApplicationController
     end
   end
 
-  # GET /agendas — the cards/management page (the only place that lists
-  # agendas one-by-one). Pluralization is honest here — this IS the list of
-  # agenda entities, not "the agenda."
   def index
     @agendas = current_user.accessible_agendas.order(:sort_order, :id)
   end
 
-  # GET /agenda/week — same layout as #day, extended with seven more
-  # preview-styled sections after Tomorrow. An 8-day window (today + 7 ahead)
-  # is fetched in one bulk range query rather than per-day, then grouped in
-  # memory — no N+1 across the lookahead. JSON delegates to aggregate_payload
-  # so day + week share the same fetch-and-apply path on the client.
   def week
     @date = parse_date(params[:date]) || current_user.perceived_today
     @agendas = current_user.accessible_agendas.order(:sort_order, :id)
@@ -57,12 +43,8 @@ class AgendasController < ApplicationController
 
   def edit; end
 
-  # Global month view aggregated across accessible agendas. Optional ?agenda_id
-  # query param filters to a single agenda for that view only.
+  # Optional ?agenda_id query param filters the month to a single agenda.
   def calendar
-    # Default month uses perceived_today (3am rollover), matching day/week.
-    # A 1am render on June 1 still treats May 31 as "today," so the calendar
-    # shows May and doesn't prematurely flip to June at midnight.
     @month = parse_month(params[:month]) || current_user.perceived_today.beginning_of_month
     @first_visible = @month.beginning_of_week(:sunday)
     @last_visible = @month.end_of_month.end_of_week(:sunday)
@@ -111,16 +93,13 @@ class AgendasController < ApplicationController
     head :no_content
   end
 
-  # POST /agenda/test_push — fires a single push to the current user's
-  # :agenda subscription so they can verify end-to-end delivery from the
-  # /agenda/manage page's "Send test" button.
   def test_push
     ::WebPushNotifications.send_to(
       current_user,
       {
         title: "Notifications are working!",
         body:  "You'll get a buzz like this when your tasks and events come due.",
-        icon:  "/favicon/android-chrome-192x192.png",
+        icon:  "/agenda_favicon/android-chrome-192x192.png",
         tag:   "agenda-test-push",
         data:  { url: "/agenda" },
       },
@@ -135,8 +114,7 @@ class AgendasController < ApplicationController
     current_user&.ensure_default_agenda
   end
 
-  # Edit/destroy only the agendas the user owns. Shared editors don't get to
-  # rename or delete someone else's agenda.
+  # Owner-scoped — shared editors can't rename or delete someone else's agenda.
   def set_agenda
     @agenda = current_user.agendas.find_by(id: params[:id]) || current_user.agendas.by_param(params[:id]).first
     raise ActionController::RoutingError, "Not Found" if @agenda.blank?
@@ -151,8 +129,6 @@ class AgendasController < ApplicationController
     serialize_with_perm = ->(items) {
       items.map { |i| i.serialize.merge(editable: editable_ids.include?(i.agenda_id)) }
     }
-    # Bulk-fetch the whole range once, group in memory, then filter per day
-    # via visible_on? — same shape day-view and week-view consume.
     range_items = current_user.agenda_items_for_range(date, date + lookahead.days)
     zone = current_user.timezone
     grouped = range_items.group_by { |i| i.start_at.in_time_zone(zone).to_date }
@@ -171,10 +147,8 @@ class AgendasController < ApplicationController
     }
   end
 
-  # Both parsers MUST short-circuit on blank input — Date.parse is famously
-  # lenient (e.g. Date.parse("-01") returns today's first-of-month rather
-  # than raising), which made `parse_month(nil) || perceived_today.bom`
-  # silently use today's calendar month instead of the perceived month.
+  # Blank-input short-circuit is required: Date.parse is lenient and will
+  # interpret an empty/nil string as today rather than raising.
   def parse_date(str)
     return nil if str.blank?
 

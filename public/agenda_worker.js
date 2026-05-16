@@ -3,7 +3,7 @@
 //
 // Push payloads server-side should look like:
 //   { title: "Standup in 5", body: "@ Office", tag: "agenda-item-123",
-//     icon: "/favicon/android-chrome-192x192.png",
+//     icon: "/agenda_favicon/android-chrome-192x192.png",
 //     data: { url: "/agenda", count: 3 } }
 // `count` (optional) drives the app badge.
 
@@ -41,7 +41,7 @@ self.addEventListener("push", (evt) => {
     return;
   }
 
-  data.icon = data.icon || "/favicon/android-chrome-192x192.png";
+  data.icon = data.icon || "/agenda_favicon/android-chrome-192x192.png";
 
   // App badge count (iOS Safari 16.4+, Chrome). Server can include
   // data.data.count for the current outstanding-items count.

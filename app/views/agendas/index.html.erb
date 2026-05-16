@@ -8,10 +8,7 @@
     <a href="<%= new_agenda_path %>" class="agendas-index-new" aria-label="New agenda"><i class="fa fa-plus"></i></a>
   </header>
 
-  <%# Compact one-line push toggle. Per-agenda kind/recurrence toggles on
-      the cards below only matter once notifications are enabled here.
-      Registration MUST happen from this user-gesture handler — the browser
-      ignores Notification.requestPermission() outside of one. %>
+  <%# Browser-level push opt-in — must be triggered from a user gesture. %>
   <div class="agenda-push-status hidden"
        data-state="loading"
        data-test-push-url="<%= test_push_agenda_path %>">
@@ -72,7 +69,10 @@
 
 <% content_for :after_body do %>
 <script type="text/javascript">
-  (function () {
+  // Wrap in DOMContentLoaded so deferred bundles (which set window.AgendaPush)
+  // have executed by the time we run. The inline script itself runs during
+  // parsing, before defers.
+  document.addEventListener("DOMContentLoaded", () => {
     const root = document.querySelector(".agendas-index-container");
     if (!root) return;
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
@@ -136,20 +136,8 @@
       }
     });
 
-    // `application.js` is loaded with `defer`, so its `window.AgendaPush`
-    // export isn't ready when this inline script (which runs during HTML
-    // parsing) first executes. Poll briefly until the bundle has run.
-    async function waitForAgendaPush(maxAttempts = 40) {
-      for (let i = 0; i < maxAttempts; i++) {
-        if (window.AgendaPush) return true;
-        await new Promise((r) => setTimeout(r, 50));
-      }
-      return false;
-    }
-
     async function refreshPushState() {
-      const ready = await waitForAgendaPush();
-      if (!ready) {
+      if (!window.AgendaPush) {
         setPushState("unsupported");
         return;
       }
@@ -207,6 +195,6 @@
         console.error("Couldn't update notification preference:", err);
       }
     });
-  })();
+  });
 </script>
 <% end %>
