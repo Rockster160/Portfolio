@@ -63,6 +63,7 @@ class AgendasController < ApplicationController
   def create
     @agenda = current_user.agendas.new(agenda_params)
     if @agenda.save
+      apply_notification_settings!(@agenda)
       @agenda.broadcast!
       respond_to do |format|
         format.json { render json: { id: @agenda.id, slug: @agenda.parameterized_name } }
@@ -75,6 +76,7 @@ class AgendasController < ApplicationController
 
   def update
     if @agenda.update(agenda_params)
+      apply_notification_settings!(@agenda)
       @agenda.broadcast!
       respond_to do |format|
         format.json { render json: { id: @agenda.id, slug: @agenda.parameterized_name } }
@@ -122,6 +124,26 @@ class AgendasController < ApplicationController
 
   def agenda_params
     params.require(:agenda).permit(:name, :color, :sort_order)
+  end
+
+  def notification_setting_params
+    raw = params.dig(:agenda, :notification_setting)
+    return {} if raw.blank?
+
+    raw.permit(
+      :notify_task_oneoff, :notify_task_recurring,
+      :notify_event_oneoff, :notify_event_recurring,
+      :notify_trigger_oneoff, :notify_trigger_recurring,
+    ).to_h
+  end
+
+  def apply_notification_settings!(agenda)
+    attrs = notification_setting_params
+    return if attrs.empty?
+
+    setting = AgendaNotificationSetting.find_or_initialize_by(user: current_user, agenda: agenda)
+    setting.assign_attributes(attrs)
+    setting.save!
   end
 
   def aggregate_payload(date, lookahead: 1)

@@ -12,12 +12,15 @@
     <a href="<%= manage_agenda_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
   </header>
 
+  <% if @date != Date.current %>
+    <div class="agenda-jump-row">
+      <a class="agenda-jump-today" href="<%= week_path %>">Jump to Today</a>
+    </div>
+  <% end %>
+
   <nav class="agenda-date-bar">
     <a class="date-nav prev" href="<%= week_path(date: (@date - 1).iso8601) %>" aria-label="Previous day"><i class="fa fa-chevron-left"></i></a>
     <span class="date-label"><%= @date.strftime("%a, %b %-d, %Y") %></span>
-    <% if @date != Date.current %>
-      <a class="date-today" href="<%= week_path %>">Today</a>
-    <% end %>
     <a class="date-nav next" href="<%= week_path(date: (@date + 1).iso8601) %>" aria-label="Next day"><i class="fa fa-chevron-right"></i></a>
   </nav>
 

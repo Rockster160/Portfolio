@@ -110,6 +110,27 @@ RSpec.describe AgendasController, type: :controller do
       }.to change(Agenda, :count).by(1)
       expect(response).to be_successful
     end
+
+    it "persists notification toggles on creation" do
+      post :create, params: {
+        agenda: {
+          name: "Work",
+          notification_setting: {
+            notify_task_oneoff:    "0",
+            notify_task_recurring: "1",
+            notify_event_oneoff:   "0",
+            notify_trigger_oneoff: "1",
+          },
+        },
+      }, format: :json
+      created = Agenda.find_by(name: "Work")
+      setting = AgendaNotificationSetting.find_by(user: user, agenda: created)
+      expect(setting).to be_present
+      expect(setting.notify_task_oneoff).to    be false
+      expect(setting.notify_task_recurring).to be true
+      expect(setting.notify_event_oneoff).to   be false
+      expect(setting.notify_trigger_oneoff).to be true
+    end
   end
 
   describe "PATCH #update" do
@@ -117,6 +138,22 @@ RSpec.describe AgendasController, type: :controller do
       expect(MonitorChannel).to receive(:broadcast_to).with(user, hash_including(id: :agenda))
       patch :update, params: { id: agenda.id, agenda: { name: "Renamed" } }, format: :json
       expect(agenda.reload.name).to eq("Renamed")
+    end
+
+    it "upserts notification toggles" do
+      patch :update, params: {
+        id: agenda.id,
+        agenda: {
+          name: agenda.name,
+          notification_setting: {
+            notify_task_oneoff: "0",
+            notify_event_recurring: "0",
+          },
+        },
+      }, format: :json
+      setting = AgendaNotificationSetting.find_by(user: user, agenda: agenda)
+      expect(setting.notify_task_oneoff).to     be false
+      expect(setting.notify_event_recurring).to be false
     end
   end
 

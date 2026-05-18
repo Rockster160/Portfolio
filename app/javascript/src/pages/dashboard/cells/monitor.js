@@ -122,3 +122,21 @@ Monitor.socket = consumer.subscriptions.create(
   },
 );
 window.Monitor = Monitor;
+
+// ActionCable's built-in ConnectionMonitor only reopens after its 12s
+// stale threshold elapses — that's a 5–10s "Disconnected" banner on a
+// PWA that just came back from a long background. Force an immediate
+// reopen on visibility-return when the page has been hidden long enough
+// that the underlying socket has likely been killed by the OS.
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    hiddenAt = Date.now();
+    return;
+  }
+  if (!hiddenAt) return;
+  const hiddenFor = Date.now() - hiddenAt;
+  hiddenAt = 0;
+  if (hiddenFor < 2000) return;
+  try { consumer.connection.reopen(); } catch (_) {}
+});

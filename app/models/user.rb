@@ -140,11 +140,14 @@ class User < ApplicationRecord
     # Cutoff = perceived-today's local midnight. Tasks scheduled for what
     # the user still considers "today" (i.e. yesterday's calendar date at
     # 1am-2:59am) stay in their day section, NOT carry-over.
+    # Tasks completed today stay in the section as crossed-out — matches
+    # how today-scheduled items behave when checked off.
     zone = ActiveSupport::TimeZone[timezone] || Time.zone
-    cutoff = zone.local(perceived_today.year, perceived_today.month, perceived_today.day)
+    today_start = zone.local(perceived_today.year, perceived_today.month, perceived_today.day)
     accessible_agenda_items
-      .where(kind: :task, completed_at: nil)
-      .where(start_at: ...cutoff)
+      .where(kind: :task)
+      .where(start_at: ...today_start)
+      .where("completed_at IS NULL OR completed_at >= ?", today_start)
       .order(:start_at)
   end
 

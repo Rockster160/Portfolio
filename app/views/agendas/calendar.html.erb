@@ -12,14 +12,17 @@
     <a href="<%= manage_agenda_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
   </header>
 
+  <% unless @month == Date.current.beginning_of_month %>
+    <div class="agenda-jump-row">
+      <a class="agenda-jump-today" href="<%= calendar_path %>">Jump to This Month</a>
+    </div>
+  <% end %>
+
   <nav class="agenda-date-bar">
     <% prev_month = (@month - 1.month).strftime("%Y-%m") %>
     <% next_month = (@month + 1.month).strftime("%Y-%m") %>
     <a class="date-nav prev" href="<%= calendar_path(month: prev_month) %>" aria-label="Previous month"><i class="fa fa-chevron-left"></i></a>
     <span class="date-label"><%= @month.strftime("%B %Y") %></span>
-    <% unless @month == Date.current.beginning_of_month %>
-      <a class="date-today" href="<%= calendar_path %>">This month</a>
-    <% end %>
     <a class="date-nav next" href="<%= calendar_path(month: next_month) %>" aria-label="Next month"><i class="fa fa-chevron-right"></i></a>
   </nav>
 

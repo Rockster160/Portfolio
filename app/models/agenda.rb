@@ -97,10 +97,11 @@ class Agenda < ApplicationRecord
   end
 
   def carry_over_items
-    cutoff = Date.current.in_time_zone(user.timezone).beginning_of_day
+    today_start = Date.current.in_time_zone(user.timezone).beginning_of_day
     agenda_items
-      .where(kind: :task, completed_at: nil)
-      .where(start_at: ...cutoff)
+      .where(kind: :task)
+      .where(start_at: ...today_start)
+      .where("completed_at IS NULL OR completed_at >= ?", today_start)
       .order(:start_at)
   end
 

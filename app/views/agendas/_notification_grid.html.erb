@@ -1,0 +1,26 @@
+<%# Notification preferences grid — kinds × recurrence.
+    Use either `form:` (fields_for inside a form_with) or omit it for
+    standalone `data-notify-attr` inputs that the index page PATCHes. %>
+<% setting ||= AgendaNotificationSetting.new %>
+<% kinds      = %w[task event trigger] %>
+<% recurrence = %w[oneoff recurring] %>
+
+<div class="agenda-notif-grid">
+  <div class="agenda-notif-axis"></div>
+  <% recurrence.each do |r| %>
+    <div class="agenda-notif-axis"><%= r == "oneoff" ? "One-off" : "Recurring" %></div>
+  <% end %>
+  <% kinds.each do |kind| %>
+    <div class="agenda-notif-kind"><%= kind.capitalize.pluralize %></div>
+    <% recurrence.each do |r| %>
+      <% attr = "notify_#{kind}_#{r}" %>
+      <label class="agenda-notif-toggle">
+        <% if defined?(form) && form %>
+          <%= form.check_box attr, checked: setting.send(attr) %>
+        <% else %>
+          <input type="checkbox" data-notify-attr="<%= attr %>" <%= "checked" if setting.send(attr) %>>
+        <% end %>
+      </label>
+    <% end %>
+  <% end %>
+</div>

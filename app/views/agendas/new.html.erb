@@ -22,6 +22,13 @@
       </div>
     </div>
 
+    <fieldset class="ff agenda-notif-fieldset">
+      <legend>Notify me for</legend>
+      <%= f.fields_for :notification_setting, AgendaNotificationSetting.new do |nf| %>
+        <%= render "agendas/notification_grid", form: nf, setting: nf.object %>
+      <% end %>
+    </fieldset>
+
     <div class="agenda-form-actions">
       <%= f.submit "Create agenda", class: "af-btn af-btn-primary" %>
     </div>

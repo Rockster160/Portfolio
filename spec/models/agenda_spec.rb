@@ -85,5 +85,18 @@ RSpec.describe Agenda do
         expect(agenda.carry_over_items.to_a).to eq([overdue_task])
       end
     end
+
+    it "keeps a carry-over task that was completed today (so it stays crossed-out, not vanishing)" do
+      Timecop.freeze(Time.zone.local(2026, 5, 13, 10, 0)) do
+        completed_today = create(:agenda_item, agenda: agenda, kind: "task",
+          start_at: 2.days.ago, completed_at: Time.current)
+        still_open = create(:agenda_item, agenda: agenda, kind: "task",
+          start_at: 1.day.ago, completed_at: nil)
+        _completed_yesterday = create(:agenda_item, agenda: agenda, kind: "task",
+          start_at: 3.days.ago, completed_at: 1.day.ago)
+
+        expect(agenda.carry_over_items.to_a).to match_array([completed_today, still_open])
+      end
+    end
   end
 end

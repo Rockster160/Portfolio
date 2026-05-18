@@ -1432,8 +1432,6 @@
     if (prevLink) prevLink.setAttribute("href", `${basePath}?date=${prevIso}`);
     if (nextLink) nextLink.setAttribute("href", `${basePath}?date=${nextIso}`);
 
-    root.querySelector(".date-today")?.remove();
-
     // Within-month rollover only moves the .is-today highlight; crossing
     // a month boundary re-fetches the grid. Pinned ?month=YYYY-MM stays
     // put either way.
