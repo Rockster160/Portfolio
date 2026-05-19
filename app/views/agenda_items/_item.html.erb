@@ -16,15 +16,17 @@
 <% classes << "phantom"     if item.phantom? %>
 <% classes << "preview"     if preview %>
 <% classes << "readonly"    if readonly %>
+<% id_title = item.phantom? ? "Agenda ##{item.agenda_id}" : "Item ##{item.id}" %>
 
 <div class="<%= classes.join(" ") %>"
      style="--item-color: <%= item.display_color %>; --agenda-color: <%= item.agenda.color %>;"
-     title="<%= item.agenda.name %>"
+     title="<%= item.agenda.name %> · <%= id_title %>"
      <%= "data-edit-item data-readonly" if readonly %>
-     data-item-id="<%= item.display_id %>"
+     data-item-id="<%= item.display_id %>"Z
      data-item-url="<%= item_url %>"
      data-phantom="<%= item.phantom? %>"
      data-recurring="<%= item.recurring? %>"
+     data-detached="<%= item.detached? %>"
      data-kind="<%= item.kind %>"
      data-color="<%= item.display_color %>"
      data-agenda-id="<%= item.agenda_id %>"
@@ -75,6 +77,6 @@
   <% end %>
 
   <% if editable %>
-    <button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit"><i class="fa fa-pencil"></i></button>
+    <button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit" title="<%= id_title %>"><i class="fa fa-pencil"></i></button>
   <% end %>
 </div>

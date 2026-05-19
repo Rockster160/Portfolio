@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_15_000001) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_19_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -87,6 +87,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000001) do
     t.string "color"
     t.text "trigger_expression"
     t.datetime "notified_at"
+    t.datetime "original_start_at"
     t.index ["agenda_id", "start_at"], name: "index_agenda_items_on_agenda_id_and_start_at"
     t.index ["agenda_id"], name: "index_agenda_items_on_agenda_id"
     t.index ["agenda_schedule_id", "start_at"], name: "index_agenda_items_on_agenda_schedule_id_and_start_at"

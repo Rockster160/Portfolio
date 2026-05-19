@@ -37,7 +37,7 @@
       No agendas yet. <a href="<%= new_agenda_path %>">Create your first one.</a>
     </div>
   <% else %>
-    <% if @carry_over.any? %>
+    <% if @carry_over.any? && (@date..@date + 7.days).cover?(Date.current) %>
       <section class="agenda-section section-carry">
         <header class="section-header">Carry over <span class="section-count"><%= @carry_over.size %></span></header>
         <div class="agenda-items">

@@ -37,16 +37,18 @@
       No agendas yet. <a href="<%= new_agenda_path %>">Create your first one.</a>
     </div>
   <% else %>
-    <% carry_over = current_user.agenda_carry_over_items.to_a %>
-    <% if carry_over.any? %>
-      <section class="agenda-section section-carry">
-        <header class="section-header">Carry over <span class="section-count"><%= carry_over.size %></span></header>
-        <div class="agenda-items">
-          <% carry_over.each do |item| %>
-            <%= render "agenda_items/item", item: item %>
-          <% end %>
-        </div>
-      </section>
+    <% if @date == Date.current %>
+      <% carry_over = current_user.agenda_carry_over_items.to_a %>
+      <% if carry_over.any? %>
+        <section class="agenda-section section-carry">
+          <header class="section-header">Carry over <span class="section-count"><%= carry_over.size %></span></header>
+          <div class="agenda-items">
+            <% carry_over.each do |item| %>
+              <%= render "agenda_items/item", item: item %>
+            <% end %>
+          </div>
+        </section>
+      <% end %>
     <% end %>
 
     <% is_today = (@date == Date.current) %>

@@ -89,14 +89,21 @@ class AgendaSchedule < ApplicationRecord
     (recurrence || {}).with_indifferent_access
   end
 
+  # Not memoized: reload() doesn't clear non-AR ivars, so a stale @set
+  # would survive a refresh-from-DB. The set is small enough that
+  # recomputing on every call is fine.
   def excluded_dates
-    @excluded_dates ||= Array(recurrence_data[:excluded_dates]).filter_map { |d| safe_parse_date(d) }.to_set
+    Array(recurrence_data[:excluded_dates]).filter_map { |d| safe_parse_date(d) }.to_set
   end
 
   def add_excluded_date!(date)
     next_set = excluded_dates + [date.to_date]
     update!(recurrence: recurrence_data.merge(excluded_dates: next_set.map(&:to_s)).to_h)
-    @excluded_dates = nil
+  end
+
+  def remove_excluded_date!(date)
+    next_set = excluded_dates - [date.to_date]
+    update!(recurrence: recurrence_data.merge(excluded_dates: next_set.map(&:to_s)).to_h)
   end
 
   def excluded?(date)

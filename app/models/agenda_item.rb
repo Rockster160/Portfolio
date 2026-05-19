@@ -12,6 +12,7 @@
 #  name               :string           not null
 #  notes              :text
 #  notified_at        :datetime
+#  original_start_at  :datetime
 #  start_at           :datetime         not null
 #  trigger_expression :text
 #  created_at         :datetime         not null
@@ -352,6 +353,7 @@ class AgendaItem < ApplicationRecord
       phantom:            phantom?,
       crossed_out:        crossed_out?,
       recurring:          recurring?,
+      detached:           detached?,
       trigger_expression: trigger_expression,
       schedule:           agenda_schedule&.serialize_for_edit,
     )

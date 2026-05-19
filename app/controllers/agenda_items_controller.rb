@@ -64,6 +64,27 @@ class AgendaItemsController < ApplicationController
     head :no_content
   end
 
+  # Reattaches a detached one-off back into its parent recurrence: removes
+  # the original date from the schedule's excluded_dates so the phantom
+  # regenerates, then destroys the detached row. Keeps the historical link
+  # (agenda_schedule_id) intact up until destruction.
+  def restore
+    @item = AgendaItem.locate_for_user(params[:id], current_user, editable: true)
+    return head :not_found unless @item
+    return head :unprocessable_entity unless @item.detached? && @item.agenda_schedule.present?
+
+    schedule = @item.agenda_schedule
+    if @item.original_start_at.present?
+      original_date = @item.original_start_at.in_time_zone(@item.user.timezone).to_date
+      schedule.remove_excluded_date!(original_date)
+    end
+
+    owning_agenda = @item.agenda
+    @item.destroy
+    owning_agenda.broadcast!
+    head :no_content
+  end
+
   private
 
   def set_item
@@ -98,8 +119,12 @@ class AgendaItemsController < ApplicationController
   end
 
   def materialize_with(attrs)
-    pin_excluded = @item.phantom? && attrs[:detached_at].present?
-    date = @item.occurrence_date
+    original_schedule = @item.agenda_schedule
+    original_date = @item.occurrence_date
+    # We're detaching on this save iff the row is currently attached and
+    # the incoming attrs flip detached_at on. Capture the original date
+    # now so we can exclude it on the parent schedule after the save.
+    newly_detaching = original_schedule.present? && !@item.detached? && attrs[:detached_at].present?
 
     if @item.phantom?
       @item.materialize!(attrs)
@@ -107,12 +132,20 @@ class AgendaItemsController < ApplicationController
       @item.update!(attrs)
     end
 
-    @item.agenda_schedule.add_excluded_date!(date) if pin_excluded && @item.agenda_schedule.present?
+    original_schedule.add_excluded_date!(original_date) if newly_detaching
   end
 
   def occurrence_update_attrs
     attrs = item_params.except(:agenda_id).to_h
-    attrs[:detached_at] = Time.current if @item.recurring? && !@item.detached?
+    # First time we detach an occurrence, stamp detached_at and remember
+    # the original start_at so "Restore to cycle" knows which date to put
+    # the row back on. Keep agenda_schedule_id intact for the historical
+    # link — items_for_range honors detached_at to avoid suppressing the
+    # parent schedule's phantom on the row's current date.
+    if @item.recurring? && !@item.detached?
+      attrs[:detached_at] = Time.current
+      attrs[:original_start_at] = @item.start_at
+    end
     attrs
   end
 

@@ -72,6 +72,11 @@ class Agenda < ApplicationRecord
 
     materialized_keys = real_items.each_with_object(Set.new) { |item, set|
       next if item.agenda_schedule_id.blank?
+      # Detached rows kept their schedule_id for history, but they're
+      # standalone — they must NOT suppress the parent schedule's phantom
+      # on whatever date they currently sit on (e.g. an item moved onto a
+      # day that already has a recurring occurrence).
+      next if item.detached_at.present?
 
       set << [item.agenda_schedule_id, item.occurrence_date]
     }

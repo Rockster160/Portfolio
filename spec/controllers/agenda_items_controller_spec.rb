@@ -178,6 +178,71 @@ RSpec.describe AgendaItemsController, type: :controller do
       expect(sched.reload.excluded?(Date.current + 30.days)).to be true
     end
 
+    it "occurrence-scope edit detaches but KEEPS the historical schedule link" do
+      patch :update, params: {
+        id:          phantom_id,
+        scope:       :occurrence,
+        agenda_item: { name: "One-off Standup" },
+      }, format: :json
+      row = AgendaItem.where(name: "One-off Standup").first
+      expect(row).to be_present
+      expect(row.agenda_schedule_id).to eq(sched.id) # historical link intact
+      expect(row.detached_at).to be_present
+      expect(row.original_start_at).to be_present
+    end
+
+    it "moving an occurrence to a date that already has the recurring event doesn't overwrite the other one" do
+      target_date = Date.current + 30.days
+      origin_date = Date.current + 29.days
+      origin_phantom = "p-#{sched.id}-#{origin_date.iso8601}"
+      origin_zone   = sched.send(:user_zone)
+      target_time   = origin_zone.local(target_date.year, target_date.month, target_date.day, 9, 0)
+
+      patch :update, params: {
+        id:          origin_phantom,
+        scope:       :occurrence,
+        agenda_item: { name: "Moved Standup", start_at: target_time.iso8601 },
+      }, format: :json
+
+      moved = AgendaItem.find_by(name: "Moved Standup")
+      expect(moved).to be_present
+      expect(moved.detached_at).to be_present
+      expect(moved.agenda_schedule_id).to eq(sched.id) # historical link preserved
+      expect(moved.start_at.in_time_zone(origin_zone).to_date).to eq(target_date)
+
+      # Target date: moved row + the schedule's own phantom for that date = 2.
+      items = agenda.items_for(target_date)
+      expect(items.size).to eq(2)
+      phantom_target = items.find(&:phantom?)
+      expect(phantom_target).to be_present
+      expect(phantom_target.agenda_schedule_id).to eq(sched.id)
+
+      # Origin date: phantom suppressed via excluded_dates; no real row here = 0.
+      expect(agenda.items_for(origin_date)).to be_empty
+    end
+
+    it "restore puts a detached row back into the recurring cycle" do
+      origin_date = Date.current + 30.days
+      patch :update, params: {
+        id:          phantom_id,
+        scope:       :occurrence,
+        agenda_item: { name: "Renamed" },
+      }, format: :json
+      row = AgendaItem.where(name: "Renamed").first
+      expect(row).to be_present
+      expect(row.original_start_at).to be_present
+      expect(sched.reload.excluded?(origin_date)).to be true
+
+      post :restore, params: { id: row.id }, format: :json
+      expect(response).to be_successful
+      expect(AgendaItem.find_by(id: row.id)).to be_nil
+      expect(sched.reload.excluded?(origin_date)).to be false
+      phantom = agenda.items_for(origin_date).first
+      expect(phantom).to be_present
+      expect(phantom).to be_phantom
+      expect(phantom.agenda_schedule_id).to eq(sched.id)
+    end
+
     it "series-scope edit updates the schedule directly" do
       patch :update, params: {
         id:          phantom_id,

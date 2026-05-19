@@ -176,7 +176,10 @@
         data-checked-url="${url}">` : "";
     const loc = item.location ? `<span class="agenda-item-loc"><i class="fa fa-map-marker"></i> ${escapeHtml(item.location)}</span>` : "";
     const badge = item.recurring ? `<span class="agenda-item-badge"><i class="fa fa-refresh"></i></span>` : "";
-    const editBtn = editable ? `<button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit"><i class="fa fa-pencil"></i></button>` : "";
+    // Phantoms have no item id of their own; show the parent agenda so you
+    // can still trace where they're coming from.
+    const idTitle = item.phantom ? `Agenda #${item.agenda_id}` : `Item #${item.id}`;
+    const editBtn = editable ? `<button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit" title="${escapeAttr(idTitle)}"><i class="fa fa-pencil"></i></button>` : "";
     const scheduleAttr = item.schedule ? escapeAttr(JSON.stringify(item.schedule)) : "";
     // <label for="..."> when interactive (toggles checkbox on tap); plain div
     // when preview or readonly (no checkbox to link to).
@@ -190,12 +193,13 @@
     return el(`
       <div class="${cls2}"
            style="--item-color: ${color}; --agenda-color: ${agendaColor};"
-           title="${escapeAttr(item.agenda_name || "")}"
+           title="${escapeAttr(`${item.agenda_name || ""} · ${idTitle}`)}"
            ${rowReadonlyAttrs}
            data-item-id="${item.id}"
            data-item-url="${url}"
            data-phantom="${!!item.phantom}"
            data-recurring="${!!item.recurring}"
+           data-detached="${!!item.detached}"
            data-kind="${item.kind}"
            data-color="${color}"
            data-agenda-id="${item.agenda_id}"
@@ -855,6 +859,7 @@
     const sched = bindScheduleFields(form);
     const deleteBtn = $(".add-delete", form);
     const saveBtn = $(".add-save", form);
+    const restoreBtn = $(".add-restore", form);
 
     let activeKind = "task";
     let currentRecurring = false;
@@ -918,15 +923,26 @@
       if (colorSwatchEl) colorSwatchEl.style.background = colorValue;
 
       currentRecurring = d.recurring === "true";
+      const isDetached = d.detached === "true";
       $(".add-scope-field", form).classList.toggle("hidden", !currentRecurring);
 
-      // Recurring items default to "this and all future".
-      const seriesRadio = form.querySelector("input[name='scope'][value='series']");
-      const occRadio = form.querySelector("input[name='scope'][value='occurrence']");
-      if (currentRecurring) {
+      // Series radio + restore button toggle on detachment: an unaltered
+      // recurring item defaults to "this and all future" (the common case
+      // — rename/move a daily standup, propagate to the series). An
+      // already-detached one is a one-off and stays a one-off; instead of
+      // a series radio, surface a "Restore to cycle" button that puts it
+      // back into the recurrence.
+      const seriesRadio  = form.querySelector("input[name='scope'][value='series']");
+      const occRadio     = form.querySelector("input[name='scope'][value='occurrence']");
+      const seriesLabel  = seriesRadio?.closest("label");
+      if (currentRecurring && isDetached) {
+        if (occRadio) occRadio.checked = true;
+        if (seriesLabel) seriesLabel.classList.add("hidden");
+        if (restoreBtn) restoreBtn.classList.remove("hidden");
+      } else {
         if (seriesRadio) seriesRadio.checked = true;
-      } else if (occRadio) {
-        occRadio.checked = true;
+        if (seriesLabel) seriesLabel.classList.remove("hidden");
+        if (restoreBtn) restoreBtn.classList.add("hidden");
       }
 
       // Prefill schedule fields for recurring items from data-schedule JSON.
@@ -1065,6 +1081,29 @@
             url:       form.dataset.itemUrl,
             method:    "PATCH",
             body:      payload,
+          });
+          toast("Saved offline — will sync when reconnected");
+        });
+    });
+
+    restoreBtn?.addEventListener("click", () => {
+      const msg = "Restore this occurrence back to the recurring series?\n\n" +
+                  "All changes you've made to this event — date, time, name, " +
+                  "notes, location, color, etc. — will be lost.";
+      if (!window.confirm(msg)) return;
+
+      const itemEl = findItemEl($(".add-item-id", form).value);
+      itemEl?.classList.add("is-pending-delete");
+      const url = `${form.dataset.itemUrl}/restore`;
+      closeModal();
+
+      ajax("POST", url)
+        .then(() => toast("Restored to cycle"))
+        .catch(() => {
+          enqueue({
+            dedup_key: `restore:${form.dataset.itemUrl}`,
+            url,
+            method: "POST",
           });
           toast("Saved offline — will sync when reconnected");
         });

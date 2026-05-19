@@ -887,6 +887,8 @@ body.ctr-agendas {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0; // let inputs shrink with the column instead of forcing
+    // horizontal overflow on iOS Safari (date inputs have intrinsic min-width).
   }
 
   .ff > label {
@@ -905,6 +907,13 @@ body.ctr-agendas {
     > .ff {
       flex: 1 1 130px;
       min-width: 0;
+    }
+
+    // Force vertical stacking on narrow viewports so the Kind toggle can't
+    // overflow into the Color column.
+    @media (max-width: 480px) {
+      flex-direction: column;
+      > .ff { flex: 1 1 auto; }
     }
   }
 
@@ -1035,6 +1044,9 @@ body.ctr-agendas {
     font-size: 14px !important;
     font-family: inherit !important;
     width: 100%;
+    max-width: 100%; // iOS Safari date/time pickers have an intrinsic min-width
+    // that can shove the input past its container — clamp explicitly.
+    min-width: 0;
     box-sizing: border-box;
     box-shadow: none !important;
     text-shadow: none !important;
@@ -1108,17 +1120,20 @@ body.ctr-agendas {
   }
 
   .kind-toggle {
-    display: inline-flex;
+    display: flex;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 4px;
     overflow: hidden;
-    align-self: flex-start;
+    align-self: stretch;
+    max-width: 100%;
   }
 
   .kind-btn {
-    padding: 8px 14px !important;
+    padding: 8px 10px !important;
     font-size: 13px;
-    flex: 1 1 auto; // share the toggle width evenly when space is tight
+    flex: 1 1 0; // share the toggle width evenly so 3 buttons fit in narrow .ff
+    min-width: 0;
+    text-align: center;
 
     &.active {
       background: $base-blue !important;
