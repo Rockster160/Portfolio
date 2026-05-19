@@ -240,6 +240,91 @@ RSpec.describe Jil::Validator do
     end
   end
 
+  describe "method existence" do
+    it "rejects calling an instance method as a class method" do
+      expect_error(
+        <<~'JIL'.strip,
+          d = Date.now()::Date
+          s = Date.format(d, "%Y-%m-%d")::String
+        JIL
+        /Unable to call .*format.* on .*Date.* class method/,
+      )
+    end
+
+    it "rejects an unknown method on a known class" do
+      expect_error(
+        'x = String.totally_made_up("a")::String',
+        /Unable to call .*totally_made_up.* on .*String/,
+      )
+    end
+
+    it "rejects an unknown instance method on a typed variable" do
+      expect_error(
+        <<~'JIL'.strip,
+          n = Numeric.new(5)::Numeric
+          x = n.nonsense()::Numeric
+        JIL
+        /Unable to call .*nonsense.* on .*Numeric/,
+      )
+    end
+
+    it "rejects calling a class method as an instance method" do
+      expect_error(
+        <<~'JIL'.strip,
+          d = Date.now()::Date
+          d2 = d.ago(1, "days")::Date
+        JIL
+        /Unable to call .*ago.* on .*Date.* instance/,
+      )
+    end
+
+    it "accepts instance methods called on a typed variable" do
+      expect_valid(<<~'JIL'.strip)
+        d = Date.now()::Date
+        s = d.format("%Y-%m-%d")::String
+      JIL
+    end
+
+    it "accepts class methods called on the class" do
+      expect_valid(<<~'JIL'.strip)
+        d = Date.now()::Date
+        a = Date.ago(7, "days")::Date
+      JIL
+    end
+
+    it "allows wildcard classes (Custom, Keyword, Global) without checking methods" do
+      expect_valid(<<~'JIL'.strip)
+        x = Global.print("hi")::String
+        y = Custom.my_unknown_function()::Any
+      JIL
+    end
+  end
+
+  describe "Text argument must be a literal" do
+    it "rejects passing a variable into a Text-typed arg" do
+      expect_error(
+        <<~'JIL'.strip,
+          q = String.new("name::Whisper")::String
+          n = ActionEvent.bulk_destroy(q, 10)::Numeric
+        JIL
+        /is .*Text.*must be a literal string/,
+      )
+    end
+
+    it "accepts a literal string into a Text-typed arg" do
+      expect_valid(<<~'JIL'.strip)
+        n = ActionEvent.bulk_destroy("name::Whisper", 10)::Numeric
+      JIL
+    end
+
+    it "accepts a literal with interpolation into a Text-typed arg" do
+      expect_valid(<<~'JIL'.strip)
+        cutoff = String.new("2026-05-12")::String
+        n = ActionEvent.bulk_destroy("name::Whisper timestamp<'#{cutoff}'", 10)::Numeric
+      JIL
+    end
+  end
+
   describe "validate! raises on errors" do
     it "raises Jil::ExecutionError with all error messages" do
       expect {
