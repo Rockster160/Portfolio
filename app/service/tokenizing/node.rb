@@ -48,7 +48,11 @@
 # BUG: Things like ! and - affect only the next item without the previous one.
 #   They will need special handling. Hacking - for now, but it's not ideal because it breaks dates.
 class Tokenizing::Node
-  KEYWORDS = %w[NOT ! - OR AND].freeze # priority order?
+  # Multi-letter keywords split on word boundaries: NOT, OR, AND
+  WORD_KEYWORDS = %w[NOT OR AND].freeze
+  # Single-char keywords (! and -) only split when used as a negation prefix —
+  # never between two word characters (so dates like `2026-05-12` stay intact).
+  KEYWORDS = (WORD_KEYWORDS + %w[! -]).freeze # priority order?
 
   attr_accessor :field, :operator, :conditions
 
@@ -78,7 +82,9 @@ class Tokenizing::Node
 
     if tokens.is_a?(String)
       tz = Tokenizer.new(tokens)
-      sections = tz.tokenized_text.split(/\s*(\b#{KEYWORDS.join("\\b|\\b")}\b|\B[!-](?:\B|\b))\s*/i)
+      sections = tz.tokenized_text.split(
+        /\s*(\b(?:#{WORD_KEYWORDS.join("|")})\b|\B[!-](?:\B|\b))\s*/i,
+      )
 
       if sections.many?
         return parse_sections(

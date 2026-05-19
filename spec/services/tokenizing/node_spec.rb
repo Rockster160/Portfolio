@@ -90,6 +90,48 @@ RSpec.describe Tokenizing::Node, type: :model do
       })
     end
 
+    it "treats dashes inside words/dates as part of the token, not as NOT" do
+      node = Tokenizing::Node.parse("timestamp<2026-05-12")
+      expect(node.as_json).to eq({
+        field:      "timestamp",
+        operator:   :<,
+        conditions: "2026-05-12",
+      })
+    end
+
+    it "treats hyphenated identifiers as single tokens" do
+      node = Tokenizing::Node.parse("name::Whisper-Bath")
+      expect(node.as_json).to eq({
+        field:      "name",
+        operator:   :"::",
+        conditions: "Whisper-Bath",
+      })
+    end
+
+    it "still treats a standalone `-` as NOT when whitespace-bounded" do
+      node = Tokenizing::Node.parse("Potter - Rowling")
+      expect(node.as_json).to eq({
+        field:      nil,
+        operator:   :AND,
+        conditions: [
+          "Potter",
+          { field: nil, operator: :NOT, conditions: "Rowling" },
+        ],
+      })
+    end
+
+    it "still treats `-` as a negation prefix attached to a token" do
+      node = Tokenizing::Node.parse("price < 20 -Potter")
+      expect(node.as_json).to eq({
+        field:      nil,
+        operator:   :AND,
+        conditions: [
+          { field: "price", operator: :<, conditions: "20" },
+          { field: nil, operator: :NOT, conditions: "Potter" },
+        ],
+      })
+    end
+
     it "parses expressions with nested NOT and OR operators" do
       node = Tokenizing::Node.parse("price < 20 price > 10 -(Potter OR Rowling)")
       expect(node.as_json).to eq({

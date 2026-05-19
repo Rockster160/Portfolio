@@ -1,5 +1,8 @@
 class Tokenizing::Breaker
-  WORD_RX = /[a-z0-9_]+/i
+  # Word chars, optionally joined by single hyphens — so `2026-05-12`, `Whisper-Bath`,
+  # and `multi-part-id` are single tokens. A bare `-` not flanked by word chars stays
+  # a separate non-word token (and may be a NOT operator).
+  WORD_RX = /[a-z0-9_]+(?:-[a-z0-9_]+)*/i
   NON_WORD_RX = /[^\sa-z0-9_]+/i
   BREAKER_RX = /(?:#{WORD_RX}|#{NON_WORD_RX})/i
 
