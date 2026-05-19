@@ -53,7 +53,6 @@
   <% else %>
     <div class="agenda-item-body">
   <% end %>
-    <span class="agenda-item-dot" aria-hidden="true"></span>
     <span class="agenda-item-time">
       <% if item.event? && local_end %>
         <%= local_start.strftime("%-l:%M%P") %><span class="time-sep">–</span><%= local_end.strftime("%-l:%M%P") %>

@@ -463,7 +463,9 @@ body.ctr-agendas {
     padding: 0 10px; // vertical padding lives on the label
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.025);
-    border-left: 3px solid var(--item-color, var(--agenda-color));
+    // Left border = AGENDA color (so it always reads as "this row belongs
+    // to that agenda"). The per-item override only colors the checkbox.
+    border-left: 3px solid var(--agenda-color);
     transition:
       background 0.1s ease,
       opacity 0.1s ease;
@@ -509,11 +511,59 @@ body.ctr-agendas {
       font-style: italic;
     }
 
+    // Custom checkbox: the fill color matches the item, so a glance tells
+    // you which agenda each completed row belongs to. While the change is
+    // in-flight (`.is-pending` on the row), the box renders greyscale so
+    // the user can see at-a-glance that the state isn't yet confirmed.
     .agenda-item-check {
+      appearance: none;
+      -webkit-appearance: none;
       margin: 0 10px 0 0;
-      transform: scale(1.1);
+      width: 18px;
+      height: 18px;
+      min-width: 18px;
+      border-radius: 4px;
+      border: 1.5px solid var(--item-color, var(--agenda-color));
+      background: transparent;
       cursor: pointer;
-      align-self: center; // checkbox stays compact; only the label stretches.
+      align-self: center;
+      position: relative;
+      transition:
+        background 0.1s ease,
+        border-color 0.1s ease,
+        opacity 0.1s ease;
+
+      &:checked {
+        background: var(--item-color, var(--agenda-color));
+        border-color: var(--item-color, var(--agenda-color));
+      }
+
+      &:checked::after {
+        content: "";
+        position: absolute;
+        left: 4px;
+        top: 0px;
+        width: 5px;
+        height: 10px;
+        border: solid #fff;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+      }
+
+      &:disabled {
+        cursor: progress;
+      }
+    }
+
+    // Greyscale the checkbox while the row is pending — same shape and
+    // checked/unchecked appearance, just colorless. Communicates "this
+    // state is not yet truth" without ambiguity.
+    &.is-pending .agenda-item-check {
+      border-color: rgba(255, 255, 255, 0.35);
+      &:checked {
+        background: rgba(255, 255, 255, 0.35);
+        border-color: rgba(255, 255, 255, 0.35);
+      }
     }
 
     .agenda-item-body {
@@ -530,9 +580,6 @@ body.ctr-agendas {
       padding: 5px 0;
     }
 
-    .agenda-item-dot {
-      margin-top: 5px;
-    }
     .agenda-item-time {
       line-height: 18px;
     }
@@ -543,18 +590,6 @@ body.ctr-agendas {
       display: flex;
       flex-direction: column;
       gap: 2px;
-    }
-
-    // Per-item agenda dot — colour comes from --agenda-color (inline).
-    .agenda-item-dot {
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--agenda-color, transparent);
-      flex-shrink: 0;
-      align-self: center;
-      opacity: 0.7;
     }
 
     .agenda-item-time {
@@ -1340,7 +1375,8 @@ body.ctr-agendas {
 
 .agenda-form-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -1372,7 +1408,6 @@ body.ctr-agendas {
 .af-btn-danger {
   background: rgba(190, 30, 30, 0.85) !important;
   color: #FFF !important;
-  margin-right: auto !important;
   &:hover {
     background: rgba(220, 40, 40, 0.95) !important;
   }
@@ -1719,7 +1754,7 @@ body.ctr-agendas {
   background-image: none !important;
   color: inherit !important;
   border: 0 !important;
-  border-left: 2px solid var(--item-color, var(--agenda-color)) !important;
+  border-left: 2px solid var(--agenda-color) !important;
   border-radius: 3px !important;
   box-shadow: none !important;
   text-shadow: none !important;

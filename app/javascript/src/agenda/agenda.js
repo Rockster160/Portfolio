@@ -147,90 +147,10 @@
   }
   window.addEventListener("online", processQueue);
 
-  // ---------- monitor-payload rendering ----------
-  // Mirrors _item.html.erb — every attribute, class, and child here must
-  // match the ERB so cold-render and post-broadcast renders are identical.
-  function renderItem(item, opts = {}) {
-    const preview = opts.preview;
-    const cls = [
-      "agenda-item",
-      `kind-${item.kind}`,
-      item.crossed_out ? "crossed-out" : "",
-      item.recurring ? "recurring" : "",
-      item.phantom ? "phantom" : "",
-      preview ? "preview" : "",
-    ].filter(Boolean).join(" ");
-
-    const url = `/agenda_items/${encodeURIComponent(item.id)}`;
-    const color = item.color || "";
-    const agendaColor = item.agenda_color || "";
-    const timeStr = item.kind === "event" && item.end_at
-      ? `${fmtTime(item.start_at)}<span class="time-sep">–</span>${fmtTime(item.end_at)}`
-      : fmtTime(item.start_at);
-    const checkboxId = `agenda_item_${item.id}`;
-    const editable = !preview && item.editable !== false;
-    const readonly = !preview && !editable;
-    const check = editable ? `
-      <input type="checkbox" class="agenda-item-check" id="${checkboxId}"
-        ${item.completed_at ? "checked" : ""}
-        data-checked-url="${url}">` : "";
-    const loc = item.location ? `<span class="agenda-item-loc"><i class="fa fa-map-marker"></i> ${escapeHtml(item.location)}</span>` : "";
-    const badge = item.recurring ? `<span class="agenda-item-badge"><i class="fa fa-refresh"></i></span>` : "";
-    // Phantoms have no item id of their own; show the parent agenda so you
-    // can still trace where they're coming from.
-    const idTitle = item.phantom ? `Agenda #${item.agenda_id}` : `Item #${item.id}`;
-    const editBtn = editable ? `<button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit" title="${escapeAttr(idTitle)}"><i class="fa fa-pencil"></i></button>` : "";
-    const scheduleAttr = item.schedule ? escapeAttr(JSON.stringify(item.schedule)) : "";
-    // <label for="..."> when interactive (toggles checkbox on tap); plain div
-    // when preview or readonly (no checkbox to link to).
-    const bodyOpen = editable
-      ? `<label for="${checkboxId}" class="agenda-item-body">`
-      : `<div class="agenda-item-body">`;
-    const bodyClose = editable ? `</label>` : `</div>`;
-    const rowReadonlyAttrs = readonly ? "data-edit-item data-readonly" : "";
-    const cls2 = cls + (readonly ? " readonly" : "");
-
-    return el(`
-      <div class="${cls2}"
-           style="--item-color: ${color}; --agenda-color: ${agendaColor};"
-           title="${escapeAttr(`${item.agenda_name || ""} · ${idTitle}`)}"
-           ${rowReadonlyAttrs}
-           data-item-id="${item.id}"
-           data-item-url="${url}"
-           data-phantom="${!!item.phantom}"
-           data-recurring="${!!item.recurring}"
-           data-detached="${!!item.detached}"
-           data-kind="${item.kind}"
-           data-color="${color}"
-           data-agenda-id="${item.agenda_id}"
-           data-agenda-name="${escapeAttr(item.agenda_name || "")}"
-           data-agenda-color="${agendaColor}"
-           data-start-at="${item.start_at}"
-           data-end-at="${item.end_at || ""}"
-           data-name="${escapeAttr(item.name)}"
-           data-notes="${escapeAttr(item.notes || "")}"
-           data-location="${escapeAttr(item.location || "")}"
-           data-trigger-expression="${escapeAttr(item.trigger_expression || "")}"
-           data-schedule="${scheduleAttr}">
-        ${check}
-        ${bodyOpen}
-          <span class="agenda-item-dot" aria-hidden="true"></span>
-          <span class="agenda-item-time">${timeStr}</span>
-          <span class="agenda-item-text">
-            <span class="agenda-item-name">${escapeHtml(item.name)}</span>
-            ${loc}
-          </span>
-          ${badge}
-        ${bodyClose}
-        ${editBtn}
-      </div>
-    `);
-  }
-
-
-  // Drops an optimistic .is-pending placeholder into the appropriate
-  // day-N section. The next WS-triggered refreshView replaces it with
-  // the real row; offline-queued ops keep the placeholder visible.
+  // Lightweight optimistic placeholder for a just-submitted add. Server
+  // re-renders the real row on the post-broadcast HTML refresh. This is
+  // intentionally minimal — no item id, no kind classes, no edit affordance —
+  // because anything more would duplicate _item.html.erb and drift.
   function insertPendingPlaceholder(data) {
     const root = $(".agenda-page");
     if (!root) return; // calendar view has no day sections
@@ -241,70 +161,33 @@
     const offset = Math.round(
       (new Date(itemDate + "T12:00:00") - new Date(currentDate + "T12:00:00")) / 86400000,
     );
-    if (offset < 0) return; // earlier than the visible window
+    if (offset < 0) return;
     const section = $(`[data-section="day-${offset}"]`);
-    if (!section) return; // beyond the visible window
+    if (!section) return;
     section.querySelector(".agenda-empty")?.remove();
 
-    const placeholder = renderItem({
-      ...data,
-      id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      color: data.color || data.agenda_color || "#0160FF",
-      completed_at: null,
-      phantom: false,
-      crossed_out: false,
-      recurring: false,
-      editable: false, // can't be edited until real
-    }, { preview: offset > 0 });
-    placeholder.classList.add("is-pending");
+    const color = data.color || data.agenda_color || "#0160FF";
+    const placeholder = el(`
+      <div class="agenda-item is-pending"
+           style="--item-color: ${color}; --agenda-color: ${data.agenda_color || color};"
+           data-start-at="${data.start_at}">
+        <div class="agenda-item-body">
+          <span class="agenda-item-time">${fmtTime(data.start_at)}</span>
+          <span class="agenda-item-text">
+            <span class="agenda-item-name">${escapeHtml(data.name || "")}</span>
+          </span>
+        </div>
+      </div>
+    `);
 
-    // Time-sorted insert so it appears in the right slot.
     const startTs = new Date(data.start_at).getTime();
     const existing = Array.from(section.querySelectorAll(".agenda-item"));
-    const next = existing.find((el) => {
-      const t = new Date(el.dataset.startAt).getTime();
+    const next = existing.find((node) => {
+      const t = new Date(node.dataset.startAt).getTime();
       return Number.isFinite(t) && t > startTs;
     });
     if (next) section.insertBefore(placeholder, next);
     else section.appendChild(placeholder);
-  }
-
-  function replaceSection(container, items, opts = {}) {
-    if (!container) return;
-    container.innerHTML = "";
-    if (items.length === 0) {
-      const empty = opts.preview ? "Nothing scheduled yet." : "Nothing scheduled.";
-      const muted = opts.preview ? "muted" : "";
-      container.appendChild(el(`<div class="agenda-empty ${muted}">${empty}</div>`));
-      return;
-    }
-    items.forEach((item) => container.appendChild(renderItem(item, opts)));
-  }
-
-  function applyMonitorData(data) {
-    const root = $(".agenda-page");
-    if (!root) return;
-    if (String(data.date) !== root.dataset.currentDate) return;
-
-    // data.days is [{date, items}, ...]; each section div uses data-section
-    // ="day-N" matching the index. Missing sections (week payload arriving
-    // on a 2-section day view) are skipped.
-    (data.days || []).forEach((d, idx) => {
-      const node = $(`[data-section="day-${idx}"]`);
-      if (!node) return;
-      replaceSection(node, d.items || [], { preview: idx > 0 });
-    });
-
-    const carrySection = $(".section-carry");
-    if (data.carry_over && data.carry_over.length > 0) {
-      if (!carrySection) { /* no carry section to fill — skip gracefully */ }
-      else replaceSection($(".section-carry .agenda-items"), data.carry_over);
-    } else if (carrySection) {
-      carrySection.remove();
-    }
-
-    applyAgendaVisibility(); // hidden agendas stay hidden after the rerender
-
   }
 
   // ---------- shared agenda picker ----------
@@ -835,19 +718,40 @@
   }
 
   // ---------- checkbox toggle (with offline queue) ----------
+  // Strictly pending-until-confirmed: the native checked flip is the click
+  // ack (so the user sees their tap register), but we mark the row pending,
+  // disable the input, and let the post-broadcast HTML swap deliver the
+  // canonical truth. On failure we revert the native flip and re-enable.
   function initChecks(root) {
     root.addEventListener("change", (e) => {
       const cb = e.target.closest(".agenda-item-check");
       if (!cb) return;
       const url = cb.dataset.checkedUrl;
+      const row = cb.closest(".agenda-item");
+      const intent = cb.checked;
       const op = {
         dedup_key: `check:${url}`,
         url,
         method:    "PATCH",
-        body:      { agenda_item: { completed_at: cb.checked ? "now" : "" } },
+        body:      { agenda_item: { completed_at: intent ? "now" : "" } },
       };
-      ajax(op.method, op.url, op.body).catch(() => { enqueue(op); toast("Saved offline — will sync", "error"); });
-      cb.closest(".agenda-item")?.classList.toggle("crossed-out", cb.checked);
+
+      row?.classList.add("is-pending");
+      cb.disabled = true;
+
+      ajax(op.method, op.url, op.body)
+        .catch(() => {
+          // Couldn't reach the server — revert the checkbox so the visual
+          // matches the database, queue for retry, and clear pending.
+          cb.checked = !intent;
+          row?.classList.remove("is-pending");
+          cb.disabled = false;
+          enqueue(op);
+          toast("Saved offline — will sync", "error");
+        });
+      // No .then(): on success we wait for the broadcast → HTML swap to
+      // replace this row with the server-rendered truth, which carries
+      // .crossed-out (or not) authoritatively and drops .is-pending.
     });
   }
 
@@ -1343,16 +1247,43 @@
       return;
     }
     if (!date) return;
-    const url = root.classList.contains("agenda-week-page")
-      ? `/agenda/week.json?date=${encodeURIComponent(date)}`
-      : `/agenda.json?date=${encodeURIComponent(date)}`;
+    const basePath = root.classList.contains("agenda-week-page") ? "/agenda/week" : "/agenda";
+    const url = `${basePath}?date=${encodeURIComponent(date)}`;
     fetch(url, {
       credentials: "same-origin",
-      headers:     { "Accept": "application/json" },
+      headers:     { "Accept": "text/html", "X-Requested-With": "XMLHttpRequest" },
     })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => { if (data) applyMonitorData(data); })
+      .then((res) => (res.ok ? res.text() : null))
+      .then((html) => { if (html) swapDaySections(root, html); })
       .catch((err) => console.error("agenda refresh failed (will retry on next signal)", err));
+  }
+
+  // Server renders the canonical HTML; we extract the sections we care
+  // about and swap them in place. Single source of truth — no JS
+  // template literal mirroring _item.html.erb.
+  function swapDaySections(root, html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const freshRoot = doc.querySelector(".agenda-page");
+    if (!freshRoot) return;
+
+    const freshCarry = freshRoot.querySelector(".section-carry");
+    const currentCarry = root.querySelector(".section-carry");
+    if (freshCarry && currentCarry) {
+      currentCarry.replaceWith(freshCarry);
+    } else if (freshCarry) {
+      const firstDay = root.querySelector(".agenda-section[data-section-day]");
+      if (firstDay) firstDay.before(freshCarry);
+    } else if (currentCarry) {
+      currentCarry.remove();
+    }
+
+    freshRoot.querySelectorAll(".agenda-section[data-section-day]").forEach((freshSection) => {
+      const key = freshSection.dataset.sectionDay;
+      const current = root.querySelector(`.agenda-section[data-section-day="${key}"]`);
+      if (current) current.replaceWith(freshSection);
+    });
+
+    applyAgendaVisibility();
   }
 
   // Calendar refresh: fetch the current page's HTML, swap the date-bar
