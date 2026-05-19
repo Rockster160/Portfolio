@@ -56,6 +56,36 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     event
   end
 
+  def bulk_destroy(query, limit=10_000)
+    cap = (limit.presence || 10_000).to_i.clamp(1..100_000)
+    batch_size = 500
+    total = 0
+    loop do
+      remaining = cap - total
+      break if remaining <= 0
+
+      batch = [batch_size, remaining].min
+      ids = events.query(query).where(user: @jil.user).limit(batch).pluck(:id)
+      break if ids.empty?
+
+      deleted = ::ActionEvent.where(user_id: @jil.user.id, id: ids).delete_all
+      total += deleted
+      break if deleted < batch
+    end
+    total
+  end
+
+  def bulk_update(query, limit, details)
+    cap = (limit.presence || 10_000).to_i.clamp(1..100_000)
+    attrs = params(details)
+    return 0 if attrs.blank?
+
+    ids = events.query(query).where(user: @jil.user).limit(cap).pluck(:id)
+    return 0 if ids.empty?
+
+    ::ActionEvent.where(user_id: @jil.user.id, id: ids).update_all(attrs)
+  end
+
   def destroy(event_data)
     event = load_event(event_data)
     event.destroy.tap { |bool|

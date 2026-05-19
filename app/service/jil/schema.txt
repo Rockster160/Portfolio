@@ -260,6 +260,8 @@
   #search(Text "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array
   #create(content(ActionEventData))
   #add(String)
+  #bulk_destroy(Text:"Query" Numeric?(10000):"Limit")::Numeric
+  #bulk_update(Text:"Query" Numeric?(10000):"Limit" content(ActionEventData))::Numeric
   .id::Numeric
   .name::String
   .notes::String

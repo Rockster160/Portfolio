@@ -98,6 +98,83 @@ RSpec.describe Jil::Methods::ActionEvent do
     end
   end
 
+  describe "#bulk_destroy" do
+    let!(:inside_old_1) { user.action_events.create(name: "Whisper", notes: "Inside", timestamp: 8.days.ago) }
+    let!(:inside_old_2) { user.action_events.create(name: "Whisper", notes: "Inside", timestamp: 10.days.ago) }
+    let!(:outside_old) { user.action_events.create(name: "Whisper", notes: "Outside", timestamp: 9.days.ago) }
+    let!(:whisper_recent) { user.action_events.create(name: "Whisper", notes: "Inside", timestamp: 1.day.ago) }
+    let!(:other_event) { user.action_events.create(name: "Food", notes: "Dinner") }
+    let(:cutoff) { 7.days.ago.strftime("%Y-%m-%d") }
+    let(:code) {
+      <<-JIL
+        count = ActionEvent.bulk_destroy("name::Whisper notes::Inside timestamp<'#{cutoff}'", 1000)::Numeric
+      JIL
+    }
+
+    it "deletes matching events and returns the count" do
+      expect_successful_jil
+
+      expect(ctx.dig(:vars, :count, :class)).to eq(:Numeric)
+      expect(ctx.dig(:vars, :count, :value)).to eq(2)
+      expect(::ActionEvent.where(id: [inside_old_1.id, inside_old_2.id])).to be_empty
+      expect(::ActionEvent.where(id: [outside_old.id, whisper_recent.id, other_event.id]).count).to eq(3)
+    end
+
+    it "does not enqueue per-event broadcast workers" do
+      expect {
+        expect_successful_jil
+      }.not_to have_enqueued_job(ActionEventBroadcastWorker)
+    end
+
+    it "does not fire Jil event triggers for each deletion" do
+      expect(::Jil).not_to receive(:trigger).with(anything, :event, anything, any_args)
+      expect_successful_jil
+    end
+
+    context "when limit caps the deletion" do
+      let(:code) { "count = ActionEvent.bulk_destroy(\"name::Whisper notes::Inside timestamp<'#{cutoff}'\", 1)::Numeric" }
+
+      it "deletes only up to limit" do
+        expect_successful_jil
+
+        expect(ctx.dig(:vars, :count, :value)).to eq(1)
+        remaining = ::ActionEvent
+          .where(user: user, name: "Whisper", notes: "Inside")
+          .where("timestamp < ?", 7.days.ago)
+          .count
+        expect(remaining).to eq(1)
+      end
+    end
+  end
+
+  describe "#bulk_update" do
+    let!(:e1) { user.action_events.create(name: "Whisper", notes: "Inside", timestamp: 8.days.ago) }
+    let!(:e2) { user.action_events.create(name: "Whisper", notes: "Inside", timestamp: 9.days.ago) }
+    let!(:other) { user.action_events.create(name: "Food", notes: "Inside") }
+    let(:code) {
+      <<-JIL
+        count = ActionEvent.bulk_update("name::Whisper notes::Inside", 1000, {
+          nd1 = ActionEventData.notes("Archived")::ActionEventData
+        })::Numeric
+      JIL
+    }
+
+    it "updates matching events and returns the count" do
+      expect_successful_jil
+
+      expect(ctx.dig(:vars, :count, :value)).to eq(2)
+      expect(e1.reload.notes).to eq("Archived")
+      expect(e2.reload.notes).to eq("Archived")
+      expect(other.reload.notes).to eq("Inside")
+    end
+
+    it "does not enqueue per-event broadcast workers" do
+      expect {
+        expect_successful_jil
+      }.not_to have_enqueued_job(ActionEventBroadcastWorker)
+    end
+  end
+
   context "parsing" do
     let!(:evt) { ActionEvent.create(user: user, name: "Drink", notes: "Coke") }
     let!(:new_evt) { ActionEvent.create(user: user, name: "Drink", notes: "Coke") }
