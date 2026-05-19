@@ -385,8 +385,12 @@ RSpec.describe Jarvis do
 
     after do
       $ping_calls = nil
-      # Restore original method by reloading the module
+      # Restore the module_function singleton copy that our override shadowed.
+      # Removing only the singleton would also strip the module_function copy,
+      # making WebPushNotifications.respond_to?(:send_to) false and breaking
+      # verify_partial_doubles in any later spec that stubs send_to.
       WebPushNotifications.singleton_class.remove_method(:send_to)
+      WebPushNotifications.send(:module_function, :send_to)
     end
 
     actions = {
