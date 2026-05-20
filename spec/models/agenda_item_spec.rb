@@ -85,4 +85,37 @@ RSpec.describe AgendaItem do
       expect { item.uncomplete! }.to change { item.completed_at }.to(nil)
     end
   end
+
+  describe "Jil trigger lifecycle" do
+    # Capture (scope, action) at call time — with_jil_attrs mutates a single
+    # AgendaItem instance, so checking arg state after-the-fact would always
+    # see the latest action. The block stub snapshots the symbol per call.
+    def trigger_capture
+      triggered = []
+      allow(::Jil).to receive(:trigger) { |_user, scope, data, **|
+        triggered << [scope, data[:action]]
+      }
+      triggered
+    end
+
+    it "fires :agenda_item action=:created on create" do
+      triggered = trigger_capture
+      create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
+      expect(triggered).to include([:agenda_item, :created])
+    end
+
+    it "fires :agenda_item action=:updated on update" do
+      triggered = trigger_capture
+      item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
+      item.update!(name: "Renamed")
+      expect(triggered).to eq([[:agenda_item, :created], [:agenda_item, :updated]])
+    end
+
+    it "fires :agenda_item action=:destroyed on destroy" do
+      triggered = trigger_capture
+      item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
+      item.destroy!
+      expect(triggered).to eq([[:agenda_item, :created], [:agenda_item, :destroyed]])
+    end
+  end
 end

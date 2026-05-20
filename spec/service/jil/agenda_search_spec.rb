@@ -62,4 +62,60 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
     limited = methods.search("kind:task incomplete", 1, "ASC")
     expect(limited.size).to eq(1)
   end
+
+  it "includes future recurring phantoms when the query is upcoming-leaning" do
+    Timecop.freeze(Time.utc(2026, 5, 14, 13, 0)) do
+      schedule = create(:agenda_schedule, agenda: agenda, kind: :event,
+        name: "Daily Standup", start_time: "14:00", duration_minutes: 30,
+        recurrence: { "freq" => "daily" }, starts_on: Date.current)
+
+      results = methods.search("kind:event upcoming", 50, "ASC")
+      hits = results.select { |h| h[:name] == "Daily Standup" }
+      expect(hits.size).to be >= 1
+      expect(hits.first[:phantom]).to eq(true)
+      # No DB row was materialized for the future phantom.
+      expect(schedule.agenda_items.count).to eq(0)
+    end
+  end
+
+  it "pushes the limit into SQL so it never serializes the whole table" do
+    # Create more rows than the requested limit. The SQL LIMIT must cap how
+    # many we pull from the DB — if a future refactor accidentally removes
+    # `.limit(...)` and limits in-Ruby instead, this test fails.
+    20.times do |i|
+      create(:agenda_item, agenda: agenda, kind: :task,
+        start_at: (i + 1).hours.from_now, completed_at: nil, name: "item-#{i}")
+    end
+
+    queries = []
+    callback = ->(_n, _s, _f, _id, payload) {
+      next unless payload[:sql].to_s.include?('FROM "agenda_items"')
+      next if payload[:name] == "SCHEMA"
+
+      queries << payload
+    }
+    ActiveSupport::Notifications.subscribed(callback, "sql.active_record") do
+      methods.search("kind:task incomplete", 5, "ASC")
+    end
+
+    # The main scope's SELECT is the one without an agenda_schedule_id filter
+    # (that's the phantom-materialized-key SQL, which doesn't run here anyway).
+    main = queries.find { |p| p[:sql].include?("ORDER BY") && p[:sql].exclude?("agenda_schedule_id") }
+    expect(main).to be_present, "expected a SELECT against agenda_items"
+    expect(main[:sql]).to include("LIMIT"), "expected SQL LIMIT clause in: #{main[:sql]}"
+    expect(main[:type_casted_binds].last).to eq(5), "expected SQL LIMIT bound to 5"
+  end
+
+  it "does NOT include phantoms when the query has no future-leaning state token" do
+    Timecop.freeze(Time.utc(2026, 5, 14, 13, 0)) do
+      create(:agenda_schedule, agenda: agenda, kind: :task,
+        name: "Phantomable", start_time: "14:00",
+        recurrence: { "freq" => "daily" }, starts_on: Date.current)
+
+      # `kind:task` alone (no upcoming/today/recurring) keeps the old SQL-only
+      # behavior — phantoms remain hidden.
+      results = methods.search("kind:task", 50, "ASC")
+      expect(results.map { |h| h[:name] }).not_to include("Phantomable")
+    end
+  end
 end

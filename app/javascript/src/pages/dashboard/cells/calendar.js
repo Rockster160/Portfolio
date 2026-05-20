@@ -100,9 +100,16 @@ import { dash_colors } from "../vars";
       if (calendar == "Our plans") {
         color = "chelsea";
       }
+      // Agenda events ship their own hex via `event.color` (display_color).
+      // Fall back to the palette lookup when no explicit hex is provided.
+      const explicitHex =
+        event.color && /^#[0-9A-F]{3,8}$/i.test(event.color)
+          ? event.color
+          : null;
+      const resolvedColor = explicitHex || dash_colors[color];
 
       if (isAllDay) {
-        lines.push(Text.color(dash_colors["magenta"], `★ ${name}`));
+        lines.push(Text.color(explicitHex || dash_colors["magenta"], `★ ${name}`));
       } else {
         let timeStr = timeFromDate(time);
         if (end_time) {
@@ -111,7 +118,7 @@ import { dash_colors } from "../vars";
         }
         timeStr = Text.yellow(`• ${timeStr}`);
 
-        const nameLine = Text.color(dash_colors[color], name);
+        const nameLine = Text.color(resolvedColor, name);
 
         lines.push(timeStr);
         lines.push(nameLine);

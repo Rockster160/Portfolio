@@ -68,15 +68,45 @@ class Jil::Methods::Agenda < Jil::Methods::Base
   #   Agenda.search("kind:task incomplete overdue", 50, "ASC")
   #   Agenda.search("recurring upcoming", nil, nil)
   #
-  # Materializes today's past-due phantoms first so recurring occurrences
-  # whose time has passed appear in the result alongside one-off items.
+  # Phantom occurrences (recurring items with no DB row yet) are gathered in
+  # Ruby alongside the SQL results when the query targets the future-leaning
+  # space (`upcoming`, `today`, `recurring`) — so daily/weekly recurring tasks
+  # appear in dashboard cells without first having to be materialized.
+  PHANTOM_QUERY_TRIGGERS = %w[upcoming today recurring].freeze
+  PHANTOM_WINDOW_DAYS = 30
+
+  # SQL applies the limit so we never pull more than `capped` real rows out of
+  # the DB. Phantoms are built in-memory from a small set of schedules over a
+  # bounded window — also capped. The merge+sort+take afterwards picks the
+  # correct top-N across both sources without ever materializing a full table:
+  #
+  #   * ASC limit N: SQL gives us the N earliest real items. Phantoms beyond
+  #     that window can only DISPLACE them, never reveal a hidden one — SQL
+  #     items past position N have start_at >= the Nth, so they can't beat
+  #     a phantom.
+  #   * DESC limit N: SQL gives us the N latest real items, including any
+  #     that are scheduled past PHANTOM_WINDOW_DAYS. Phantoms within the
+  #     window slot in at the correct positions.
   def search(query, limit=nil, order=nil)
     materialize_overdue_phantoms_for_today!
+
+    capped = (limit.presence || 50).to_i.clamp(1..200)
+    order_sym = [:asc, :desc].include?(order.to_s.downcase.to_sym) ? order.to_s.downcase.to_sym : :asc
+
     # `relation.query(...)` uses `search_scope.where(...)` internally and
     # therefore drops any pre-applied scoping (see ApplicationRecord#query).
     # Apply user scoping AFTER the query — mirrors the Email Jil method.
     scope = ::AgendaItem.query(query).where(agenda_id: user_agenda_ids)
-    apply_search_args(scope, limit, order).map(&:serialize)
+    real_items = scope.order(start_at: order_sym).limit(capped).to_a
+
+    phantoms = phantom_results(query, capped: capped)
+    return real_items.map(&:serialize) if phantoms.empty?
+
+    combined = real_items + phantoms
+    sorted = combined.sort_by(&:start_at)
+    sorted = sorted.reverse if order_sym == :desc
+
+    sorted.first(capped).map(&:serialize)
   end
 
   # Same as search but scoped to a single agenda.
@@ -147,6 +177,99 @@ class Jil::Methods::Agenda < Jil::Methods::Base
     capped = (limit.presence || 50).to_i.clamp(1..200)
     order_sym = [:asc, :desc].include?(order.to_s.downcase.to_sym) ? order.to_s.downcase.to_sym : :asc
     scope.order(start_at: order_sym).limit(capped)
+  end
+
+  # Gathers phantom occurrences in the next PHANTOM_WINDOW_DAYS days and
+  # filters them in-memory against the query's recognized state tokens. Only
+  # runs when the query references future-leaning state (upcoming/today/recurring),
+  # since phantoms are by definition future occurrences.
+  #
+  # Two SQL queries total regardless of user size:
+  #   1. Pull this user's active schedules in window (small — schedules are bounded).
+  #   2. Bulk-pluck (schedule_id, start_at) of already-materialized rows so we
+  #      can skip emitting duplicate phantoms — no per-iteration .exists?.
+  # Real items in the window are NOT loaded; the SQL scope above already
+  # surfaces them through the main `search` path.
+  def phantom_results(query, capped:)
+    tokens = query.to_s.downcase.split(/\s+/)
+    return [] unless tokens.any? { |t| PHANTOM_QUERY_TRIGGERS.include?(t) }
+
+    user = @jil.user
+    agenda_ids = user.accessible_agendas.pluck(:id)
+    return [] if agenda_ids.empty?
+
+    from_date = ::Date.current
+    to_date = from_date + PHANTOM_WINDOW_DAYS
+
+    schedules = ::AgendaSchedule
+      .where(agenda_id: agenda_ids)
+      .active_between(from_date, to_date)
+      .includes(:agenda)
+      .to_a
+    return [] if schedules.empty?
+
+    materialized = materialized_phantom_keys(agenda_ids, schedules.map(&:id), user, from_date, to_date)
+
+    phantoms = []
+    schedules.each do |schedule|
+      (from_date..to_date).each do |date|
+        next unless schedule.matches?(date)
+        next if materialized.include?([schedule.id, date])
+
+        candidate = schedule.build_phantom(date)
+        next unless phantom_matches?(candidate, tokens)
+
+        phantoms << candidate
+        # Phantoms in the window are bounded by capped real rows + phantoms,
+        # but cap them too so a runaway daily schedule with 30 occurrences
+        # doesn't dominate. Two windows worth is plenty headroom for the
+        # combined sort downstream.
+        return phantoms if phantoms.size >= capped * 2
+      end
+    end
+    phantoms
+  end
+
+  # Single SQL — pulls only (schedule_id, start_at) for rows already covering
+  # phantom dates, keyed in a Set for O(1) dedupe checks.
+  def materialized_phantom_keys(agenda_ids, schedule_ids, user, from_date, to_date)
+    zone = ::ActiveSupport::TimeZone[user.timezone] || ::Time.zone
+    from_ts = zone.local(from_date.year, from_date.month, from_date.day).beginning_of_day
+    to_ts = zone.local(to_date.year, to_date.month, to_date.day).end_of_day
+
+    rows = ::AgendaItem.where(
+      agenda_id:          agenda_ids,
+      agenda_schedule_id: schedule_ids,
+      detached_at:        nil,
+      start_at:           from_ts..to_ts,
+    ).pluck(:agenda_schedule_id, :start_at)
+
+    rows.each_with_object(::Set.new) { |(sid, ts), set|
+      set << [sid, ts.in_time_zone(user.timezone).to_date]
+    }
+  end
+
+  def phantom_matches?(item, tokens)
+    tokens.all? { |token| phantom_token_matches?(item, token) }
+  end
+
+  def phantom_token_matches?(item, token)
+    return item.kind.to_s == ::Regexp.last_match(1).singularize if token.match(/\Akind:(\w+)\z/)
+    return true unless ::AgendaItem::BARE_STATE_TOKENS.include?(token)
+
+    case token
+    when "task", "tasks"                              then item.task?
+    when "event", "events"                            then item.event?
+    when "trigger", "triggers"                        then item.trigger?
+    when "completed", "complete", "detached"          then false # phantoms never completed/detached
+    when "incomplete", "pending", "phantom"           then true  # phantoms always incomplete + phantom
+    when "upcoming"                                   then item.start_at >= ::Time.current
+    when "past"                                       then item.start_at < ::Time.current
+    when "today"                                      then item.start_at.in_time_zone(@jil.user.timezone).to_date == ::Date.current
+    when "overdue"                                    then !item.event? && item.start_at < ::Time.current
+    when "recurring"                                  then item.recurring?
+    else true
+    end
   end
 
   # Phantoms (recurring occurrences with no DB row yet) can't be found by

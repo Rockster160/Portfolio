@@ -59,6 +59,8 @@ class AgendaItem < ApplicationRecord
 
   after_update :broadcast_agenda_change!, if: :saved_change_to_agenda_id?
   before_save :clear_notified_at_on_future_reschedule
+  after_commit :fire_jil_trigger, on: [:create, :update]
+  after_commit :fire_jil_destroy_trigger, on: :destroy
 
   search_terms(
     :id, :name, :notes, :location,
@@ -364,6 +366,19 @@ class AgendaItem < ApplicationRecord
   end
 
   private
+
+  # Emits a Jil trigger so user tasks listening on `agenda_item` (e.g. the
+  # dashboard re-broadcast trigger) can react to lifecycle changes. Mirrors
+  # the Task / ActionEvent pattern — passes the record with execution attrs
+  # rather than a serialized hash so Ruby's kwargs separation doesn't fire.
+  def fire_jil_trigger
+    action = saved_change_to_id? ? :created : :updated
+    ::Jil.trigger(user, :agenda_item, with_jil_attrs(action: action))
+  end
+
+  def fire_jil_destroy_trigger
+    ::Jil.trigger(user, :agenda_item, with_jil_attrs(action: :destroyed))
+  end
 
   # Fan out a combined broadcast for both the old and new agendas — each
   # recipient only sees agendas they can access (no cross-leak), users in
