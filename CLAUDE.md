@@ -166,13 +166,16 @@ These rules are non-negotiable and apply to ALL Ruby code:
    JIL
    ```
 
-## Jil Code Validation
+## Jil Code Validation & Testing
 
-All Jil code MUST be validated with `Jil::Validator.validate!(code)` before being written to a prodExec script. The validator catches: invalid casts, duplicate variables, undefined references, unknown classes, content-block/positional-arg mismatches (e.g. raw Keyval blocks as Prompt.create data), and bare variables where content blocks are expected.
+All new/modified Jil task code MUST go through both steps before deploy:
 
-**Workflow:** FIRST validate the Jil code in a spec. THEN write the prodExec script containing the validated code. Do NOT write the script first and validate after — validation must pass before the script file is finalized. Do NOT put the validator inside the script as a substitute — the script should never be created until validation has already passed in a spec.
+1. **Validate** — `Jil::Validator.validate!(code)` in a spec. Catches invalid casts, duplicate variables, undefined references, unknown classes, content-block/positional-arg mismatches (e.g. raw Keyval blocks as Prompt.create data), and bare variables where content blocks are expected.
+2. **Test** — a temporary behavioral spec that runs `Jil::Executor.call(user, code, input_data)` with representative inputs and asserts the EXPECTED RESULT: correct branch taken, correct args passed to downstream `Custom.X` calls (stub `Jil::Methods::Custom#execute` to capture them), correct `Jarvis.command(...)` text (stub `::Jarvis.command`), correct side effects on cache/records, both positive and negative cases. Syntactic validation passes code that is logically broken — type coercions can silently produce nil, branches can be silently skipped, content blocks can wrap unexpectedly. The behavioral spec is what catches these.
 
-When presenting a prodExec command to the user, always confirm whether the current iteration of the code in the file has been validated. Example: "Validated ✓ — `prodExec lib/scripts/my_script.rb`"
+**Workflow:** Write the Jil code → validate in a spec → write a behavioral spec → run both → fix any issues → THEN write the prodExec script. Do NOT write the script first. Do NOT put the validator inside the script. Both specs are one-offs — DELETE them as part of pre-deploy cleanup; only specs that test unique behavior of Jil itself should remain in the repo.
+
+When presenting a prodExec command, confirm both steps: `Tested ✓ Validated ✓ — prodExec lib/scripts/my_script.rb`
 
 ## Environment
 
