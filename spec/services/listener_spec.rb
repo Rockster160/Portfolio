@@ -268,6 +268,49 @@ RSpec.describe Task do
     end
   end
 
+  context "Task 346 -  Doorbell Rung" do
+    let(:listener) { "hass-sensor:location:doorbell type:rang rang:true" }
+
+    before do
+      @tasks = Task.create([
+        { user: admin, listener: listener },
+      ])
+    end
+
+    let(:rang_true_payload) {
+      {
+        device_id:   "957c8ec417dc47ce741fd1b5cf6cf4fb",
+        device_name: "Doorbell",
+        pressed_at:  "2026-05-22 15:19:18.151441+00:00",
+        button_id:   "957c8ec417dc47ce741fd1b5cf6cf4fb",
+        entity_id:   "binary_sensor.doorbell_visitor",
+        type:        "rang",
+        subject:     "visitor",
+        rang:        true,
+        location:    "doorbell",
+      }
+    }
+    let(:rang_false_payload) { rang_true_payload.merge(rang: false) }
+
+    it "triggers on the real rang:true payload" do
+      expect_trigger_listeners(admin, :"hass-sensor", rang_true_payload, [listener])
+    end
+
+    it "does NOT trigger on the real rang:false payload" do
+      expect_trigger_listeners(admin, :"hass-sensor", rang_false_payload, [])
+    end
+
+    it "does NOT trigger on a non-doorbell sensor (different location)" do
+      payload = rang_true_payload.merge(location: "garage")
+      expect_trigger_listeners(admin, :"hass-sensor", payload, [])
+    end
+
+    it "does NOT trigger on a doorbell sensor with a different type" do
+      payload = rang_true_payload.merge(type: "motion", rang: true)
+      expect_trigger_listeners(admin, :"hass-sensor", payload, [])
+    end
+  end
+
   context "TriggerData.parse" do
     it "strips surrounding quotes from colon-separated values" do
       result = TriggerData.parse('person:chelsea:"-15.20"')
