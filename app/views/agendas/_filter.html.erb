@@ -1,4 +1,6 @@
-<%# Per-device visibility filter. Persisted under "agendaHidden:v1". %>
+<%# Per-device visibility filter. Agenda visibility persisted under
+    "agendaHidden:v1"; the per-kind completed toggles under
+    "agendaCompletedHidden:v1". %>
 <button type="button" class="agenda-filter-btn" aria-label="Filter agendas" aria-haspopup="true" aria-expanded="false">
   <i class="fa fa-filter"></i>
 </button>
@@ -12,6 +14,20 @@
           <input type="checkbox" data-agenda-id="<%= a.id %>" checked>
           <span class="agenda-pick-dot" aria-hidden="true"></span>
           <span class="agenda-filter-name"><%= a.name %></span>
+        </label>
+      </li>
+    <% end %>
+  </ul>
+
+  <div class="agenda-filter-divider" aria-hidden="true"></div>
+
+  <h4>Hide completed</h4>
+  <ul class="agenda-filter-list agenda-completed-list">
+    <% %i[task event trigger].each do |kind| %>
+      <li class="agenda-filter-row">
+        <label>
+          <input type="checkbox" data-completed-kind="<%= kind %>">
+          <span class="agenda-filter-name"><%= kind.to_s.pluralize.capitalize %></span>
         </label>
       </li>
     <% end %>

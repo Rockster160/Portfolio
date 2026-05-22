@@ -907,6 +907,12 @@ body.ctr-agendas {
       white-space: nowrap;
     }
   }
+
+  .agenda-filter-divider {
+    height: 1px;
+    margin: 10px 4px 6px;
+    background: rgba(255, 255, 255, 0.08);
+  }
 }
 
 .agenda-form {

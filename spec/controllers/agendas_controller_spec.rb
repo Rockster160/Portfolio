@@ -242,4 +242,21 @@ RSpec.describe AgendasController, type: :controller do
       expect(response).to be_successful
     end
   end
+
+  describe "HTML day filter panel" do
+    it "renders a 'Hide completed' section with per-kind checkboxes" do
+      get :day
+      expect(response).to be_successful
+      expect(response.body).to include("Hide completed")
+      expect(response.body).to include('data-completed-kind="task"')
+      expect(response.body).to include('data-completed-kind="event"')
+      expect(response.body).to include('data-completed-kind="trigger"')
+    end
+
+    it "defaults the add modal to the Event kind" do
+      get :day
+      expect(response).to be_successful
+      expect(response.body).to match(/class="kind-btn active"\s+data-kind="event"/)
+    end
+  end
 end

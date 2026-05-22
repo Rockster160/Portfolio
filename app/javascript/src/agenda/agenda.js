@@ -524,7 +524,7 @@
     const form = $(".agenda-add-form", modal);
     if (!form) return;
 
-    let activeKind = "task";
+    let activeKind = "event";
     const sched = bindScheduleFields(form);
 
     const nameInput = $(".add-name", form);
@@ -559,7 +559,7 @@
 
     function resetForm() {
       form.reset();
-      activeKind = "task";
+      activeKind = "event";
       sched.resetChips();
       dateInput.value = form.dataset.defaultDate;
       // Re-sync the picker's label/dot to the hidden input's reset value.
@@ -1080,6 +1080,14 @@
   // Per-device localStorage filter — applies to both `.agenda-item` and
   // `.cal-item` rows (they share `data-agenda-id`).
   const AGENDA_HIDDEN_KEY = "agendaHidden:v1";
+  // Per-kind "hide completed" toggles: { task: bool, event: bool, trigger: bool }
+  const COMPLETED_HIDDEN_KEY = "agendaCompletedHidden:v1";
+  // When a previously-visible row becomes crossed-out and would now be
+  // hidden by the completed filter, we keep it visible for this many ms so
+  // the user gets a beat to see the strikethrough. Subsequent completions
+  // within the window reset the timer so a flurry of checks gets removed
+  // together, not staggered.
+  const COMPLETED_GRACE_MS = 5000;
 
   function getHiddenAgendas() {
     try {
@@ -1090,12 +1098,85 @@
   function saveHiddenAgendas(ids) {
     localStorage.setItem(AGENDA_HIDDEN_KEY, JSON.stringify(ids));
   }
+
+  function getCompletedHidden() {
+    const empty = { task: false, event: false, trigger: false };
+    try {
+      const raw = JSON.parse(localStorage.getItem(COMPLETED_HIDDEN_KEY) || "{}");
+      return {
+        task:    !!raw.task,
+        event:   !!raw.event,
+        trigger: !!raw.trigger,
+      };
+    } catch (_) { return empty; }
+  }
+  function saveCompletedHidden(state) {
+    localStorage.setItem(COMPLETED_HIDDEN_KEY, JSON.stringify(state));
+  }
+
+  // Items currently in their post-completion grace window. Stays visible
+  // even when the completed filter says hide. Cleared together when the
+  // shared timer fires.
+  const gracedItemIds = new Set();
+  let graceTimer = null;
+  function scheduleGraceFlush() {
+    clearTimeout(graceTimer);
+    graceTimer = setTimeout(() => {
+      gracedItemIds.clear();
+      graceTimer = null;
+      applyAgendaVisibility();
+    }, COMPLETED_GRACE_MS);
+  }
+
   function applyAgendaVisibility() {
     const hidden = new Set(getHiddenAgendas());
+    const completedHidden = getCompletedHidden();
     document.querySelectorAll("[data-agenda-id]").forEach((el) => {
       if (!el.classList.contains("agenda-item") && !el.classList.contains("cal-item")) return;
-      el.classList.toggle("hidden-by-filter", hidden.has(el.dataset.agendaId));
+      const hideByAgenda = hidden.has(el.dataset.agendaId);
+      const kind = el.dataset.kind;
+      const isCrossedOut = el.classList.contains("crossed-out");
+      const itemId = el.dataset.itemId;
+      const inGrace = itemId && gracedItemIds.has(itemId);
+      const hideByCompleted = isCrossedOut && !!completedHidden[kind] && !inGrace;
+      el.classList.toggle("hidden-by-filter", hideByAgenda || hideByCompleted);
     });
+  }
+
+  // Pre-swap snapshot of crossed-out state by item id. Used after a DOM
+  // swap to detect newly-completed rows that would now be hidden by the
+  // completed filter — those get a grace window instead of disappearing
+  // instantly.
+  function snapshotItemState(root) {
+    const snap = new Map();
+    const sel = ".agenda-item[data-item-id], .cal-item[data-item-id]";
+    (root || document).querySelectorAll(sel).forEach((el) => {
+      snap.set(el.dataset.itemId, {
+        crossedOut: el.classList.contains("crossed-out"),
+      });
+    });
+    return snap;
+  }
+
+  // After a swap, find rows that flipped to crossed-out AND would be hidden
+  // by the user's completed-kind filter. Add them to the grace set and
+  // (re)arm the shared timer.
+  function graceNewlyCompleted(prevSnap, root) {
+    const completedHidden = getCompletedHidden();
+    if (!completedHidden.task && !completedHidden.event && !completedHidden.trigger) return;
+    let added = false;
+    const sel = ".agenda-item[data-item-id], .cal-item[data-item-id]";
+    (root || document).querySelectorAll(sel).forEach((el) => {
+      if (!el.classList.contains("crossed-out")) return;
+      if (!completedHidden[el.dataset.kind]) return;
+      const prev = prevSnap.get(el.dataset.itemId);
+      // No prev entry → row didn't exist before (e.g. just got created
+      // already completed). Treat as "already hidden" — no grace.
+      if (!prev || prev.crossedOut) return;
+      gracedItemIds.add(el.dataset.itemId);
+      added = true;
+    });
+    if (added) scheduleGraceFlush();
   }
 
   function initAgendaFilter() {
@@ -1106,6 +1187,10 @@
     const hidden = new Set(getHiddenAgendas());
     panel.querySelectorAll("input[type=checkbox][data-agenda-id]").forEach((cb) => {
       cb.checked = !hidden.has(cb.dataset.agendaId);
+    });
+    const completedHidden = getCompletedHidden();
+    panel.querySelectorAll("input[type=checkbox][data-completed-kind]").forEach((cb) => {
+      cb.checked = !!completedHidden[cb.dataset.completedKind];
     });
     applyAgendaVisibility();
 
@@ -1130,17 +1215,29 @@
     });
 
     panel.addEventListener("change", (e) => {
-      const cb = e.target.closest("input[type=checkbox][data-agenda-id]");
-      if (!cb) return;
-      const id = cb.dataset.agendaId;
-      let next = getHiddenAgendas();
-      if (cb.checked) {
-        next = next.filter((x) => x !== id);
-      } else if (!next.includes(id)) {
-        next.push(id);
+      const agendaCb = e.target.closest("input[type=checkbox][data-agenda-id]");
+      if (agendaCb) {
+        const id = agendaCb.dataset.agendaId;
+        let next = getHiddenAgendas();
+        if (agendaCb.checked) {
+          next = next.filter((x) => x !== id);
+        } else if (!next.includes(id)) {
+          next.push(id);
+        }
+        saveHiddenAgendas(next);
+        applyAgendaVisibility();
+        return;
       }
-      saveHiddenAgendas(next);
-      applyAgendaVisibility();
+
+      const completedCb = e.target.closest("input[type=checkbox][data-completed-kind]");
+      if (completedCb) {
+        // Direct filter toggles apply immediately — no grace window. Grace
+        // is only for the transition caused by a completion event.
+        const state = getCompletedHidden();
+        state[completedCb.dataset.completedKind] = completedCb.checked;
+        saveCompletedHidden(state);
+        applyAgendaVisibility();
+      }
     });
   }
 
@@ -1266,6 +1363,8 @@
     const freshRoot = doc.querySelector(".agenda-page");
     if (!freshRoot) return;
 
+    const prevSnap = snapshotItemState(root);
+
     const freshCarry = freshRoot.querySelector(".section-carry");
     const currentCarry = root.querySelector(".section-carry");
     if (freshCarry && currentCarry) {
@@ -1283,6 +1382,7 @@
       if (current) current.replaceWith(freshSection);
     });
 
+    graceNewlyCompleted(prevSnap, root);
     applyAgendaVisibility();
   }
 
@@ -1308,6 +1408,8 @@
           root.dataset.currentDate = freshRoot.dataset.currentDate;
         }
 
+        const prevSnap = snapshotItemState(root);
+
         const swap = (sel) => {
           const fresh = freshRoot.querySelector(sel);
           const current = root.querySelector(sel);
@@ -1318,6 +1420,7 @@
         swap(".agenda-date-bar");
         swap(".cal-grid");
 
+        graceNewlyCompleted(prevSnap, root);
         applyAgendaVisibility(); // re-apply the localStorage filter
       })
       .catch((err) => console.error("calendar refresh failed", err));
