@@ -3,6 +3,7 @@
 # Table name: agenda_items
 #
 #  id                  :bigint           not null, primary key
+#  all_day             :boolean          default(FALSE), not null
 #  color               :string
 #  completed_at        :datetime
 #  detached_at         :datetime

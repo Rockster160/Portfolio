@@ -6,11 +6,13 @@
 #  color              :string
 #  name               :string           not null
 #  parameterized_name :string           not null
+#  reauth_required_at :datetime
 #  sort_order         :integer
 #  source             :integer          default("user"), not null
 #  sync_token         :text
 #  synced_at          :datetime
 #  watch_expires_at   :datetime
+#  watch_failed_at    :datetime
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
 #  external_id        :text

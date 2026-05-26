@@ -3,6 +3,7 @@
 # Table name: agenda_schedules
 #
 #  id                  :bigint           not null, primary key
+#  all_day             :boolean          default(FALSE), not null
 #  color               :string
 #  duration_minutes    :integer
 #  external_etag       :text
