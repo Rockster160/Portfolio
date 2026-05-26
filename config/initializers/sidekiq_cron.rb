@@ -40,6 +40,16 @@ cron_jobs = [
     class: "SendDueAgendaNotificationsWorker",
     cron:  every_minute,
   },
+  {
+    name:  "Google Calendar Sync Fallback",
+    class: "GoogleCalendarSyncWorker",
+    cron:  every_5_minutes,
+  },
+  {
+    name:  "Google Calendar Watch Renewal",
+    class: "GoogleCalendarWatchRenewalWorker",
+    cron:  every_hour,
+  },
 ]
 
 if Rails.env.production?

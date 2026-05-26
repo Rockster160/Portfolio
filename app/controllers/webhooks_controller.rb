@@ -25,6 +25,12 @@ class WebhooksController < ApplicationController
     case params[:service].to_s.to_sym
     when :spotify_api
       ::Oauth::SpotifyApi.from_jwt(params[:state])&.code = params[:code] if params[:code].present?
+    when :google_api
+      api = ::Oauth::GoogleApi.from_jwt(params[:state])
+      if api.present? && params[:code].present?
+        api.code = params[:code]
+        return redirect_to(new_agenda_connection_path(provider: :google))
+      end
     end
 
     render json: params
@@ -109,6 +115,31 @@ class WebhooksController < ApplicationController
     SlackNotifier.notify(params.to_unsafe_h)
 
     head :ok
+  end
+
+  # Receiver for Google Calendar events.watch push notifications.
+  # Google identifies the channel via headers — there's no body to parse:
+  #   X-Goog-Channel-Id        → matches `agendas.watch_channel_id`
+  #   X-Goog-Channel-Token     → must equal our derived HMAC for that agenda
+  #   X-Goog-Resource-State    → "sync" on the initial handshake; otherwise
+  #                              "exists" / "not_exists" for change deliveries
+  # Always replies 200 quickly — the actual sync is enqueued.
+  def google_calendar
+    channel_id = request.headers["X-Goog-Channel-Id"].presence
+    token = request.headers["X-Goog-Channel-Token"].presence
+    resource_state = request.headers["X-Goog-Resource-State"].to_s
+    return head :no_content if channel_id.blank?
+
+    agenda = ::Agenda.google.find_by(watch_channel_id: channel_id)
+    return head :no_content if agenda.nil?
+    return head :forbidden if token != ::GoogleCalendar::WatchManager.token_for(agenda)
+
+    # The "sync" handshake is just Google confirming we're listening — no
+    # change to apply. Enqueue a real sync only for content-state deliveries.
+    return head :no_content if resource_state == "sync"
+
+    ::GoogleCalendarSyncWorker.perform_async(agenda.id)
+    head :no_content
   end
 
   def email

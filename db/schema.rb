@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_19_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_26_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -88,6 +88,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_19_000000) do
     t.text "trigger_expression"
     t.datetime "notified_at"
     t.datetime "original_start_at"
+    t.text "external_uid"
+    t.text "external_etag"
+    t.datetime "external_updated_at"
+    t.boolean "all_day", default: false, null: false
+    t.index ["agenda_id", "external_uid"], name: "index_agenda_items_on_agenda_external_uid", unique: true, where: "(external_uid IS NOT NULL)"
     t.index ["agenda_id", "start_at"], name: "index_agenda_items_on_agenda_id_and_start_at"
     t.index ["agenda_id"], name: "index_agenda_items_on_agenda_id"
     t.index ["agenda_schedule_id", "start_at"], name: "index_agenda_items_on_agenda_schedule_id_and_start_at"
@@ -128,6 +133,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_19_000000) do
     t.string "color"
     t.text "trigger_expression"
     t.integer "occurrence_count"
+    t.text "external_uid"
+    t.text "external_etag"
+    t.datetime "external_updated_at"
+    t.boolean "all_day", default: false, null: false
+    t.index ["agenda_id", "external_uid"], name: "index_agenda_schedules_on_agenda_external_uid", unique: true, where: "(external_uid IS NOT NULL)"
     t.index ["agenda_id"], name: "index_agenda_schedules_on_agenda_id"
   end
 
@@ -150,8 +160,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_19_000000) do
     t.integer "sort_order"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "source", default: 0, null: false
+    t.text "external_id"
+    t.text "sync_token"
+    t.datetime "synced_at"
+    t.text "watch_channel_id"
+    t.text "watch_resource_id"
+    t.datetime "watch_expires_at"
+    t.datetime "watch_failed_at"
+    t.datetime "reauth_required_at"
     t.index ["user_id", "parameterized_name"], name: "index_agendas_on_user_id_and_parameterized_name", unique: true
+    t.index ["user_id", "source", "external_id"], name: "index_agendas_on_user_source_external", unique: true, where: "(source <> 0)"
     t.index ["user_id"], name: "index_agendas_on_user_id"
+    t.index ["watch_channel_id"], name: "index_agendas_on_watch_channel_id", unique: true, where: "(watch_channel_id IS NOT NULL)"
+    t.index ["watch_expires_at"], name: "index_agendas_on_watch_expires_at", where: "(watch_expires_at IS NOT NULL)"
   end
 
   create_table "api_keys", force: :cascade do |t|

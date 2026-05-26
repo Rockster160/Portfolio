@@ -2,23 +2,26 @@
 #
 # Table name: agenda_items
 #
-#  id                 :bigint           not null, primary key
-#  color              :string
-#  completed_at       :datetime
-#  detached_at        :datetime
-#  end_at             :datetime
-#  kind               :integer          not null
-#  location           :string
-#  name               :string           not null
-#  notes              :text
-#  notified_at        :datetime
-#  original_start_at  :datetime
-#  start_at           :datetime         not null
-#  trigger_expression :text
-#  created_at         :datetime         not null
-#  updated_at         :datetime         not null
-#  agenda_id          :bigint           not null
-#  agenda_schedule_id :bigint
+#  id                  :bigint           not null, primary key
+#  color               :string
+#  completed_at        :datetime
+#  detached_at         :datetime
+#  end_at              :datetime
+#  external_etag       :text
+#  external_uid        :text
+#  external_updated_at :datetime
+#  kind                :integer          not null
+#  location            :string
+#  name                :string           not null
+#  notes               :text
+#  notified_at         :datetime
+#  original_start_at   :datetime
+#  start_at            :datetime         not null
+#  trigger_expression  :text
+#  created_at          :datetime         not null
+#  updated_at          :datetime         not null
+#  agenda_id           :bigint           not null
+#  agenda_schedule_id  :bigint
 #
 class AgendaItem < ApplicationRecord
   include Jilable

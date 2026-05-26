@@ -2,22 +2,25 @@
 #
 # Table name: agenda_schedules
 #
-#  id                 :bigint           not null, primary key
-#  color              :string
-#  duration_minutes   :integer
-#  kind               :integer          not null
-#  location           :string
-#  name               :string           not null
-#  notes              :text
-#  occurrence_count   :integer
-#  recurrence         :jsonb            not null
-#  start_time         :time             not null
-#  starts_on          :date             not null
-#  trigger_expression :text
-#  until_on           :date
-#  created_at         :datetime         not null
-#  updated_at         :datetime         not null
-#  agenda_id          :bigint           not null
+#  id                  :bigint           not null, primary key
+#  color               :string
+#  duration_minutes    :integer
+#  external_etag       :text
+#  external_uid        :text
+#  external_updated_at :datetime
+#  kind                :integer          not null
+#  location            :string
+#  name                :string           not null
+#  notes               :text
+#  occurrence_count    :integer
+#  recurrence          :jsonb            not null
+#  start_time          :time             not null
+#  starts_on           :date             not null
+#  trigger_expression  :text
+#  until_on            :date
+#  created_at          :datetime         not null
+#  updated_at          :datetime         not null
+#  agenda_id           :bigint           not null
 #
 class AgendaSchedule < ApplicationRecord
   include Jilable

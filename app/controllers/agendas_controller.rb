@@ -1,7 +1,10 @@
 class AgendasController < ApplicationController
+  include ExternalAgendaGuard
+
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
   before_action :set_agenda, only: [:edit, :update, :destroy]
+  before_action -> { refuse_external_write!(@agenda) }, only: [:update, :destroy]
   before_action :ensure_default_agenda!, only: [:day, :week, :calendar]
 
   # JSON accepts `?days=N` (default 1, max 30) to extend the lookahead;
@@ -133,7 +136,7 @@ class AgendasController < ApplicationController
     raw.permit(
       :notify_task_oneoff, :notify_task_recurring,
       :notify_event_oneoff, :notify_event_recurring,
-      :notify_trigger_oneoff, :notify_trigger_recurring,
+      :notify_trigger_oneoff, :notify_trigger_recurring
     ).to_h
   end
 

@@ -1,12 +1,18 @@
 class AgendaSchedulesController < ApplicationController
+  include ExternalAgendaGuard
+
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
   before_action :set_schedule, only: [:update, :destroy]
   before_action :authorize_schedule_edit!, only: [:update, :destroy]
+  before_action -> { refuse_external_write!(@schedule&.agenda) }, only: [:update, :destroy]
 
   def create
     target = resolve_target_agenda(params.dig(:agenda_schedule, :agenda_id))
     return render json: { errors: ["Agenda not found"] }, status: :not_found if target.blank?
+
+    refuse_external_write!(target)
+    return if performed?
 
     @schedule = target.agenda_schedules.new(schedule_params.except(:agenda_id))
 
@@ -21,6 +27,10 @@ class AgendaSchedulesController < ApplicationController
   def update
     new_agenda_id = schedule_params[:agenda_id]
     moved = new_agenda_id.present? && new_agenda_id.to_i != @schedule.agenda_id
+    if moved
+      refuse_external_write!(resolve_target_agenda(new_agenda_id))
+      return if performed?
+    end
 
     if @schedule.update(schedule_params.except(:agenda_id))
       if moved
@@ -28,7 +38,10 @@ class AgendaSchedulesController < ApplicationController
         target = resolve_target_agenda(new_agenda_id)
         if target
           @schedule.update!(agenda_id: target.id)
-          @schedule.agenda_items.update_all(agenda_id: target.id)
+          # Intentional callback skip: broadcast_agenda_change! would fire
+          # once per item — we fan out a single Agenda.broadcast_changes!
+          # below instead.
+          @schedule.agenda_items.update_all(agenda_id: target.id) # rubocop:disable Rails/SkipsModelValidations
           Agenda.broadcast_changes!([old_agenda, target])
         end
       end

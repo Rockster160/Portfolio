@@ -18,6 +18,20 @@
     <button type="button" class="agenda-push-status-btn"></button>
   </div>
 
+  <% if current_user.agendas.needing_reauth.exists? %>
+    <div class="agenda-reauth-banner" role="alert">
+      <i class="fa fa-warning"></i>
+      <span class="agenda-reauth-msg">Google Calendar access expired — reconnect to resume syncing.</span>
+      <a href="<%= start_google_agenda_connection_path %>" class="agenda-reauth-cta">Reconnect</a>
+    </div>
+  <% end %>
+
+  <div class="agenda-connect-row-top">
+    <a href="<%= new_agenda_connection_path %>" class="agenda-connect-link">
+      <i class="fa fa-google"></i> Connect Google Calendar
+    </a>
+  </div>
+
   <ul class="agendas-list">
     <% @agendas.each do |agenda| %>
       <% mine = (agenda.user_id == current_user.id) %>
@@ -28,7 +42,14 @@
         <div class="agenda-card-row">
           <span class="agenda-card-swatch" aria-hidden="true"></span>
           <span class="agenda-card-main">
-            <span class="agenda-card-name"><%= agenda.name %></span>
+            <span class="agenda-card-name">
+              <%= agenda.name %>
+              <% if agenda.google? %>
+                <span class="agenda-card-synced-badge" title="Synced from Google Calendar">
+                  <i class="fa fa-google"></i> Synced
+                </span>
+              <% end %>
+            </span>
             <span class="agenda-card-meta">
               <%= pluralize(agenda.agenda_items.where(start_at: Date.current.all_day).count, "item") %> today
               <% unless mine %>
@@ -36,7 +57,7 @@
               <% end %>
             </span>
           </span>
-          <% if mine %>
+          <% if mine && !agenda.managed_externally? %>
             <a href="<%= edit_agenda_path(agenda) %>" class="agenda-card-edit" aria-label="Edit <%= agenda.name %>"><i class="fa fa-pencil"></i></a>
           <% end %>
         </div>

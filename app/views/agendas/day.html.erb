@@ -81,8 +81,10 @@
       </div>
     </section>
 
-    <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>
-    <%= render "agenda_items/edit_modal", agendas: @agendas %>
+    <%# Picker shows only user-owned agendas — externals are read-only. %>
+    <% writable_agendas = @agendas.reject(&:managed_externally?) %>
+    <%= render "agenda_items/add_modal", agendas: writable_agendas, date: @date %>
+    <%= render "agenda_items/edit_modal", agendas: writable_agendas %>
     <%= render "agenda_items/details_modal" %>
   <% end %>
 </div>

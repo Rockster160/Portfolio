@@ -7,9 +7,16 @@
 #  name               :string           not null
 #  parameterized_name :string           not null
 #  sort_order         :integer
+#  source             :integer          default("user"), not null
+#  sync_token         :text
+#  synced_at          :datetime
+#  watch_expires_at   :datetime
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
+#  external_id        :text
 #  user_id            :bigint           not null
+#  watch_channel_id   :text
+#  watch_resource_id  :text
 #
 class Agenda < ApplicationRecord
   include Jilable, Orderable
@@ -18,6 +25,17 @@ class Agenda < ApplicationRecord
   orderable_scope(:user_agendas)
 
   DEFAULT_COLOR = "#0160FF".freeze
+
+  # Re-subscribe a Google push channel this many days before it expires.
+  # Google caps channel TTL at ~7 days; we leave a buffer so a worker hiccup
+  # doesn't drop us into webhook-less territory.
+  WATCH_RENEWAL_LEAD = 1.day
+
+  # When Google denies events.watch for an agenda (holiday/shared calendars
+  # that don't support push), back off this long before retrying.
+  WATCH_FAILURE_COOLDOWN = 1.day
+
+  enum :source, { user: 0, google: 1 }, default: :user
 
   belongs_to :user
   has_many :agenda_schedules, dependent: :destroy
@@ -45,6 +63,30 @@ class Agenda < ApplicationRecord
     return true if user_id == other_user.id
 
     agenda_shares.editor.exists?(user_id: other_user.id)
+  end
+
+  # External agendas are owned by an upstream system (Google Calendar). The
+  # controller layer refuses human-driven writes; the sync pipeline writes
+  # through the model directly.
+  def managed_externally?
+    !user?
+  end
+
+  scope :externally_managed, -> { where.not(source: sources[:user]) }
+  scope :due_for_watch_renewal, ->(now: Time.current) {
+    externally_managed
+      .where(watch_expires_at: ..(now + WATCH_RENEWAL_LEAD))
+      .where("watch_failed_at IS NULL OR watch_failed_at < ?", now - WATCH_FAILURE_COOLDOWN)
+  }
+  scope :needing_reauth, -> { externally_managed.where.not(reauth_required_at: nil) }
+
+  # Skip watch attempts if we already have a live channel OR Google recently
+  # told us this calendar doesn't support push.
+  def needs_watch?
+    return false if watch_channel_id.present?
+    return false if watch_failed_at.present? && watch_failed_at > WATCH_FAILURE_COOLDOWN.ago
+
+    true
   end
 
   def visible_to?(other_user)

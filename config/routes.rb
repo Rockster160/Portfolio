@@ -198,6 +198,20 @@ Rails.application.routes.draw do
     resource :notification_setting, only: [:update], controller: :agenda_notification_settings
   end
 
+  # External-source agenda connection flow (currently: Google Calendar).
+  # `start_google` kicks off OAuth, `new` returns the post-OAuth calendar
+  # picker, `create` imports the picked calendars + kicks off initial sync,
+  # `destroy` disconnects (stops watches, revokes token, optionally removes
+  # synced data).
+  resource :agenda_connection, only: [:new, :create, :destroy]
+  get "agenda_connection/start/google" => "agenda_connections#start_google",
+    as: :start_google_agenda_connection
+
+  # Push-notification receiver for events.watch channels. Google POSTs here
+  # whenever a watched calendar changes; the handler enqueues an incremental
+  # sync keyed on the X-Goog-Channel-Id header.
+  post "webhooks/google_calendar" => "webhooks#google_calendar"
+
   # Fetch-only endpoints — never navigated to, so they can sit outside the
   # PWA scope without breaking the installed-app experience.
   resources :agenda_items, only: [:create, :update, :destroy] do

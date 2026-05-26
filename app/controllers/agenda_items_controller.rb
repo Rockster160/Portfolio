@@ -1,12 +1,18 @@
 class AgendaItemsController < ApplicationController
+  include ExternalAgendaGuard
+
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
   before_action :set_item, only: [:update, :destroy]
   before_action :authorize_item_edit!, only: [:update, :destroy]
+  before_action -> { refuse_external_write!(@item&.agenda) }, only: [:update, :destroy]
 
   def create
     target = resolve_target_agenda(params.dig(:agenda_item, :agenda_id))
     return render json: { errors: ["Agenda not found"] }, status: :not_found if target.blank?
+
+    refuse_external_write!(target)
+    return if performed?
 
     @item = target.agenda_items.new(item_params.except(:agenda_id))
 
@@ -21,6 +27,10 @@ class AgendaItemsController < ApplicationController
   def update
     new_agenda_id = item_params[:agenda_id]
     moved = new_agenda_id.present? && new_agenda_id.to_i != @item.agenda_id
+    if moved
+      refuse_external_write!(resolve_target_agenda(new_agenda_id))
+      return if performed?
+    end
 
     if completion_only_update?
       materialize_with(completion_attrs)
@@ -71,6 +81,9 @@ class AgendaItemsController < ApplicationController
   def restore
     @item = AgendaItem.locate_for_user(params[:id], current_user, editable: true)
     return head :not_found unless @item
+
+    refuse_external_write!(@item.agenda)
+    return if performed?
     return head :unprocessable_entity unless @item.detached? && @item.agenda_schedule.present?
 
     schedule = @item.agenda_schedule
@@ -113,7 +126,9 @@ class AgendaItemsController < ApplicationController
 
     old_agenda = @item.agenda_schedule.agenda
     @item.agenda_schedule.update!(agenda_id: target.id)
-    @item.agenda_schedule.agenda_items.update_all(agenda_id: target.id)
+    # Intentional callback skip: broadcast_agenda_change! would fire once per
+    # item — we fan out a single Agenda.broadcast_changes! below instead.
+    @item.agenda_schedule.agenda_items.update_all(agenda_id: target.id) # rubocop:disable Rails/SkipsModelValidations
     @item.reload
     Agenda.broadcast_changes!([old_agenda, target])
   end

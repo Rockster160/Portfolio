@@ -1,0 +1,61 @@
+<%= meta_title "Connect Google Calendar", include_name: false %>
+
+<div class="agenda-connect-container">
+  <header class="agendas-index-header">
+    <a href="<%= manage_agenda_path %>" class="agendas-index-back" aria-label="Back to agenda"><i class="fa fa-chevron-left"></i></a>
+    <h1 class="agendas-index-title">Connect Google Calendar</h1>
+  </header>
+
+  <% if @needs_auth %>
+    <p class="agenda-connect-intro">
+      <%= @error.presence || "Connect a Google account to import its calendars into your agenda." %>
+    </p>
+    <p>
+      <a href="<%= start_google_agenda_connection_path %>" class="agenda-connect-cta">
+        <i class="fa fa-google"></i> Sign in with Google
+      </a>
+    </p>
+    <p class="agenda-connect-note">
+      You'll be sent to Google to grant calendar access. Synced calendars become
+      read-only agendas; edits in Google flow back automatically.
+    </p>
+  <% else %>
+    <%= form_with url: agenda_connection_path, method: :post, local: true,
+        class: "basic agenda-connect-form" do |f| %>
+      <p class="agenda-connect-intro">
+        Pick the calendars you want to bring into your agenda. Each becomes a
+        synced, read-only agenda row.
+      </p>
+
+      <ul class="agenda-connect-list">
+        <% @calendars.each do |cal| %>
+          <% existing = @already_connected[cal[:external_id]] %>
+          <li class="agenda-connect-row" style="--option-color: <%= cal[:color] || Agenda::DEFAULT_COLOR %>;">
+            <label>
+              <input type="checkbox"
+                     name="calendars[<%= cal[:external_id] %>][enabled]"
+                     value="1"
+                     <%= "checked" if cal[:primary] || existing %>>
+              <input type="hidden" name="calendars[<%= cal[:external_id] %>][name]" value="<%= cal[:name] %>">
+              <input type="hidden" name="calendars[<%= cal[:external_id] %>][color]" value="<%= cal[:color] %>">
+              <span class="agenda-pick-dot" aria-hidden="true"></span>
+              <span class="agenda-connect-name">
+                <%= cal[:name].presence || cal[:external_id] %>
+                <% if cal[:primary] %><small class="agenda-connect-tag">primary</small><% end %>
+                <% if existing %><small class="agenda-connect-tag">already connected</small><% end %>
+              </span>
+            </label>
+          </li>
+        <% end %>
+      </ul>
+
+      <div class="agenda-connect-actions">
+        <button type="submit" class="af-btn af-btn-primary">Import selected</button>
+        <%= button_to "Disconnect Google", agenda_connection_path,
+            method: :delete,
+            class:  "af-btn af-btn-danger",
+            data:   { confirm: "Disconnect Google? Your existing synced calendars will stop receiving updates." } %>
+      </div>
+    <% end %>
+  <% end %>
+</div>
