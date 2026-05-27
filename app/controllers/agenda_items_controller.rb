@@ -177,26 +177,89 @@ class AgendaItemsController < ApplicationController
     # then PATCH Google. If Google rejects, raise + the action's
     # `rescue_from` catches and renders. The local update is wrapped in a
     # transaction so a failed Google PATCH rolls it back.
+    occurrence_date = @item.occurrence_date
+    sched = @item.agenda_schedule
     ActiveRecord::Base.transaction do
-      @item.agenda_schedule.update!(schedule_attrs)
-      @item.agenda_schedule.regenerate_future!
+      sched.update!(schedule_attrs)
+      sched.regenerate_future!
       mirror_series_update_to_google!(@item, schedule_attrs) if @item.agenda.managed_externally?
     end
+    # `regenerate_future!` may have destroyed @item itself — re-resolve so
+    # the action's trailing render has a row (real or phantom) to serialize.
+    @item = resolve_item_after_series_update(sched, occurrence_date)
     apply_agenda_move!(target) if moved
   end
 
-  # Series move: shift the schedule + every materialized item to the new
-  # agenda, then broadcast once for both agendas.
+  # Series move within the same source kind:
+  #   * local → local: pure DB re-parent.
+  #   * Google → Google (SAME account): call Google's events.move so the
+  #     upstream master gets re-homed too; then re-parent locally.
+  #   * Google → Google (DIFFERENT account): refuse — Google's move
+  #     endpoint requires both calendars under the same OAuth identity.
+  #     Cross-account would require delete + recreate of the entire
+  #     series, which would lose Google-side instance overrides.
   def apply_agenda_move!(target)
     return unless target
 
-    old_agenda = @item.agenda_schedule.agenda
-    @item.agenda_schedule.update!(agenda_id: target.id)
+    sched = @item.agenda_schedule
+    old_agenda = sched.agenda
+
+    if old_agenda.managed_externally? && target.managed_externally?
+      if old_agenda.google_account_id != target.google_account_id
+        raise GoogleSyncFailed, "Series moves between different Google accounts aren't supported — " \
+                                "move occurrences individually or recreate the series in the target calendar."
+      end
+      mirror_series_move_to_google!(old_agenda, target, sched)
+    end
+
+    occurrence_date = @item.occurrence_date
+    sched.update!(agenda_id: target.id)
     # Intentional callback skip: broadcast_agenda_change! would fire once per
     # item — we fan out a single Agenda.broadcast_changes! below instead.
-    @item.agenda_schedule.agenda_items.update_all(agenda_id: target.id) # rubocop:disable Rails/SkipsModelValidations
-    @item.reload
+    sched.agenda_items.update_all(agenda_id: target.id) # rubocop:disable Rails/SkipsModelValidations
+    # The original @item row may have been destroyed by
+    # `regenerate_future!` during the preceding series update — re-resolve
+    # via the schedule + date so the action's downstream `@item.serialize`
+    # has a row to render (either the re-fetched row, or a fresh phantom
+    # for the same occurrence date).
+    @item = resolve_item_after_series_update(sched, occurrence_date)
     Agenda.broadcast_changes!([old_agenda, target])
+  end
+
+  # After a series edit that destroys/replaces materialized rows, find a
+  # stand-in for the original @item: a live row that occupies the same
+  # date, or a phantom built from the updated schedule.
+  def resolve_item_after_series_update(sched, occurrence_date)
+    sched.reload
+    same_date = sched.agenda_items.where(
+      start_at: sched.agenda.send(:day_range, occurrence_date),
+    ).first
+    return same_date if same_date
+
+    sched.matches?(occurrence_date) ? sched.build_phantom(occurrence_date) : @item
+  end
+
+  # Move the master upstream via Google's events.move endpoint. Captures
+  # the response etag so the next sync skips this row via the etag fast
+  # path. Raises GoogleSyncFailed on rejection so the caller can render a
+  # user-visible error.
+  def mirror_series_move_to_google!(source_agenda, target_agenda, sched)
+    return if sched.external_uid.blank?
+
+    response = source_agenda.google_account.api.move_event(
+      source_agenda.external_id,
+      sched.external_uid,
+      target_agenda.external_id,
+    )
+    return unless response.is_a?(::Hash)
+
+    sched.update!(
+      external_etag:       response[:etag] || sched.external_etag,
+      external_updated_at: response[:updated].present? ? Time.zone.parse(response[:updated].to_s) : sched.external_updated_at,
+    )
+  rescue ::RestClient::Exception => e
+    ::Rails.logger.warn("[GoogleCalendar] series move failed src=#{source_agenda.id} dst=#{target_agenda.id} #{e.class}: #{e.message}")
+    raise GoogleSyncFailed, google_error_message(e, "move the series")
   end
 
   # ---- occurrence update -----------------------------------------------
@@ -273,15 +336,27 @@ class AgendaItemsController < ApplicationController
   # Local → Google. Insert upstream first, then commit the local re-parent
   # + external_* fields. Transactionally so the phantom materialization
   # rolls back if Google rejects the insert.
+  # Tasks and triggers can't live in Google agendas (Google only holds
+  # events), so the row is coerced to :event during the move. The
+  # update-action's kind guard catches the case where the user passed an
+  # explicit `kind` param — this catches the silent path where they only
+  # changed `agenda_id` and the existing kind was task/trigger.
   def cross_source_move_local_to_google!(target:)
     ActiveRecord::Base.transaction do
       @item.materialize!({}) if @item.phantom?
-      _local_attrs, google_attrs = ::GoogleCalendar::EventWriter.translate(@item.attributes.symbolize_keys.slice(
-                                                                             :name, :start_at, :end_at, :all_day, :location, :notes,
-                                                                           ))
+      @item.kind = :event unless @item.event?
+      attrs_for_google = @item.attributes.symbolize_keys.slice(
+        :name, :start_at, :end_at, :all_day, :location, :notes
+      )
+      # Google events require an end_at — local tasks may not have one.
+      # Default to start_at + 30min so the insert always succeeds.
+      attrs_for_google[:end_at] ||= (attrs_for_google[:start_at] + 30.minutes if attrs_for_google[:start_at])
+      _local_attrs, google_attrs = ::GoogleCalendar::EventWriter.translate(attrs_for_google)
       response = google_insert!(target, google_attrs)
       @item.update!(
         agenda_id:           target.id,
+        kind:                :event,
+        end_at:              attrs_for_google[:end_at],
         external_uid:        response[:id],
         external_etag:       response[:etag],
         external_updated_at: ::Time.current,
@@ -380,18 +455,36 @@ class AgendaItemsController < ApplicationController
   # both source + target are Google). Always acquires in id-order to avoid
   # the deadlock window two simultaneous opposite-direction moves would
   # otherwise carve out.
+  #
+  # On timeout (sync genuinely taking longer than 30s) the gem returns a
+  # `WithAdvisoryLock::Result` with `lock_was_acquired? == false`. We
+  # surface a 503 with a retry hint instead of an empty 500.
+  # We use the `_result` variant rather than the bare `with_advisory_lock`
+  # because the latter conflates "block returned falsy" with "timeout."
   def with_agenda_write_lock(*agendas, &block)
     keys = agendas.compact.select(&:managed_externally?).map(&:id).uniq.sort.map { |id| "gcal_sync:agenda:#{id}" }
     return block.call if keys.empty?
 
-    acquire = ->(remaining, blk) {
-      return blk.call if remaining.empty?
+    acquired = acquire_locks(keys, block)
+    return render_lock_timeout! unless acquired
 
-      Agenda.with_advisory_lock(remaining.first, 30) {
-        acquire.call(remaining[1..], blk)
-      }
+    nil
+  end
+
+  def acquire_locks(remaining, blk)
+    return (blk.call || true) if remaining.empty?
+
+    inner_acquired = nil
+    result = Agenda.with_advisory_lock_result(remaining.first, 30) {
+      inner_acquired = acquire_locks(remaining[1..], blk)
     }
-    acquire.call(keys, block)
+    return false unless result.lock_was_acquired?
+
+    inner_acquired
+  end
+
+  def render_lock_timeout!
+    render json: { errors: ["Calendar is busy syncing right now — please retry in a moment."] }, status: :service_unavailable
   end
 
   def google_insert!(target, google_attrs)

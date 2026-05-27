@@ -33,21 +33,25 @@
     return `${h}:${String(m).padStart(2, "0")}${ampm}`;
   }
 
-  // Promise-returning replacement for `window.confirm()`. Renders inside
-  // the shared #agenda-confirm-modal (present on the agenda pages). The
-  // promise resolves to true on Confirm, false on Cancel / dismiss.
-  // Falls back to native confirm if the modal isn't on the page.
+  // Promise-returning replacement for `window.confirm()`. Renders into the
+  // shared #agenda-confirm-modal (rendered by `_confirm_modal.html.erb`
+  // via the render_modal helper, so it uses the standard overlay +
+  // animation infra from app/javascript/src/modals.js).
+  //
+  // Resolves to true on Confirm, false on any other dismissal — including
+  // the modal's built-in outside-click + close-button paths. We listen
+  // for the `modal.hidden` jQuery event (fired by hideModal) as the
+  // canonical "user is done" signal, so we don't have to handle each
+  // dismissal source ourselves.
   function agendaConfirm({ title, body, confirmLabel, danger }) {
     const modal = document.getElementById("agenda-confirm-modal");
-    if (!modal || typeof window.showModal !== "function") {
-      // No modal infra here (e.g. /agenda/manage doesn't render it) — fall back.
+    if (!modal || typeof window.showModal !== "function" || !window.jQuery) {
       return Promise.resolve(window.confirm(`${title}\n\n${body || ""}`));
     }
-    const titleEl  = modal.querySelector(".agenda-confirm-title");
-    const bodyEl   = modal.querySelector(".agenda-confirm-body");
-    const okBtn    = modal.querySelector(".agenda-confirm-ok");
-    const cancelBtn= modal.querySelector(".agenda-confirm-cancel");
-    if (titleEl)  titleEl.textContent = title || "Are you sure?";
+    const titleEl = modal.querySelector(".agenda-confirm-title");
+    const bodyEl  = modal.querySelector(".agenda-confirm-body");
+    const okBtn   = modal.querySelector(".agenda-confirm-ok");
+    if (titleEl) titleEl.textContent = title || "Are you sure?";
     if (bodyEl) {
       bodyEl.textContent = body || "";
       bodyEl.classList.toggle("hidden", !body);
@@ -59,19 +63,16 @@
     }
 
     return new Promise((resolve) => {
-      const cleanup = (result) => {
+      let confirmed = false;
+      const $modal = window.jQuery(modal);
+      const onOk     = () => { confirmed = true; window.hideModal("#agenda-confirm-modal"); };
+      const onHidden = () => {
         okBtn?.removeEventListener("click", onOk);
-        cancelBtn?.removeEventListener("click", onCancel);
-        document.removeEventListener("keydown", onKey);
-        window.hideModal?.("#agenda-confirm-modal");
-        resolve(result);
+        $modal.off("modal.hidden", onHidden);
+        resolve(confirmed);
       };
-      const onOk     = () => cleanup(true);
-      const onCancel = () => cleanup(false);
-      const onKey    = (e) => { if (e.key === "Escape") cleanup(false); };
       okBtn?.addEventListener("click", onOk);
-      cancelBtn?.addEventListener("click", onCancel);
-      document.addEventListener("keydown", onKey);
+      $modal.on("modal.hidden", onHidden);
       window.showModal("#agenda-confirm-modal");
     });
   }

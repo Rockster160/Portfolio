@@ -1,14 +1,14 @@
-<%# Shared confirmation modal. Driven from JS via window.AgendaConfirm —
-    see agenda.js / index.html.erb. Title/body/buttons are populated per
-    use. Replaces window.confirm() so destructive flows feel consistent
-    with the rest of the (modal-based) UI. %>
-<div id="agenda-confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="agenda-confirm-title">
-  <div class="modal-content agenda-confirm-content">
-    <h3 id="agenda-confirm-title" class="agenda-confirm-title"></h3>
-    <p class="agenda-confirm-body"></p>
-    <div class="agenda-confirm-actions">
-      <button type="button" class="af-btn af-btn-secondary agenda-confirm-cancel">Cancel</button>
-      <button type="button" class="af-btn af-btn-danger agenda-confirm-ok">Confirm</button>
-    </div>
+<%# Shared confirmation modal — driven from JS via window.AgendaConfirm.
+    Uses the project's render_modal helper (which pushes into
+    content_for :modals + applies .modal-wrapper styling + the existing
+    showModal/hideModal animation infra). Per-call title text is set in
+    the .agenda-confirm-title span via JS. %>
+<%= render_modal("agenda-confirm-modal",
+                 '<span class="agenda-confirm-title">Are you sure?</span>'.html_safe,
+                 "agenda-confirm-modal") do %>
+  <p class="agenda-confirm-body"></p>
+  <div class="agenda-confirm-actions">
+    <button type="button" class="af-btn af-btn-secondary agenda-confirm-cancel" data-dismiss="#agenda-confirm-modal">Cancel</button>
+    <button type="button" class="af-btn af-btn-danger agenda-confirm-ok">Confirm</button>
   </div>
-</div>
+<% end %>

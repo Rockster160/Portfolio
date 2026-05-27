@@ -271,11 +271,15 @@ class Agenda < ApplicationRecord
   # Cheap pruning — jsonb `@>` lets Postgres find the matching rows via a
   # GIN index if one exists, falls back to a sequential scan otherwise.
   # Single-id arrays are rare enough that the scan cost is negligible.
+  # Broadcasts the new snapshot per affected user so any other open
+  # devices drop the orphan id from their cached filter state instead of
+  # carrying it around indefinitely.
   def prune_from_user_preferences!
     needle = [id].to_json
     AgendaPreference.where("hidden_agenda_ids @> ?::jsonb", needle).find_each do |pref|
       pref.hidden_agenda_ids = pref.hidden_agenda_ids - [id]
       pref.save!
+      pref.broadcast!
     end
   end
 

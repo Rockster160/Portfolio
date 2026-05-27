@@ -208,14 +208,19 @@ class GoogleCalendar::Sync
     end
     return if declined_by_owner?(event)
 
-    if event[:recurrence].present?
-      upsert_schedule(event)
-    elsif event[:recurringEventId].present?
-      upsert_override(event)
-    else
-      upsert_one_off(event)
-    end
-    @applied_count += 1
+    # upsert_* return truthy when they actually persisted a change and
+    # falsy when fast_skip short-circuited. Only the truthy case counts
+    # toward `:agenda_sync`'s applied total.
+    persisted = (
+      if event[:recurrence].present?
+        upsert_schedule(event)
+      elsif event[:recurringEventId].present?
+        upsert_override(event)
+      else
+        upsert_one_off(event)
+      end
+    )
+    @applied_count += 1 if persisted
   end
 
   # Google sets `self: true` on the attendee whose calendar this is. If

@@ -210,6 +210,16 @@ class Oauth::GoogleApi < Oauth::Base
     post("calendars/#{CGI.escape(calendar_id)}/events", body)
   end
 
+  # POST /calendars/{src}/events/{event}/move?destination={dst}
+  # Moves a single event between two calendars on the SAME Google account.
+  # Cross-account moves aren't supported by this endpoint — caller must
+  # do delete + insert (or refuse the move). Returns the moved event hash.
+  def move_event(source_calendar_id, event_id, destination_calendar_id)
+    path = "calendars/#{CGI.escape(source_calendar_id)}/events/#{CGI.escape(event_id)}/move" \
+           "?destination=#{CGI.escape(destination_calendar_id)}"
+    post(path, {})
+  end
+
   def watch_events(calendar_id, channel_id:, address:, token: nil, ttl_seconds: 7.days.to_i)
     body = {
       id:      channel_id,

@@ -14,7 +14,16 @@ class AgendaPreferencesController < ApplicationController
 
   def update
     pref = AgendaPreference.for(current_user)
-    pref.assign_attributes(pref_params)
+    attrs = pref_params
+    # Filter incoming hidden_agenda_ids against agendas the user can
+    # actually access. Prevents a malicious / buggy client from leaving
+    # stale ids in the column that point at other users' agendas or
+    # nonexistent rows.
+    if attrs.key?(:hidden_agenda_ids)
+      allowed = current_user.accessible_agendas.pluck(:id).to_set
+      attrs[:hidden_agenda_ids] = Array(attrs[:hidden_agenda_ids]).map(&:to_i).select { |id| allowed.include?(id) }
+    end
+    pref.assign_attributes(attrs)
     pref.user = current_user if pref.user_id.blank?
     pref.save!
     pref.broadcast!
@@ -28,5 +37,6 @@ class AgendaPreferencesController < ApplicationController
       .fetch(:agenda_preference, {})
       .permit(:hide_tentative, hidden_agenda_ids: [], hide_completed: AgendaPreference::KIND_KEYS)
       .to_h
+      .symbolize_keys
   end
 end

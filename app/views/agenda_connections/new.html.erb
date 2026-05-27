@@ -113,21 +113,13 @@
           data:       { confirm: "Sign out of every Google account + remove all synced calendars?" } %>
     </div>
   <% end %>
-
-  <%# Local copy of the confirm modal — the agenda.js bundle isn't loaded
-      on this page, so we render the modal here and run a tiny inline
-      controller below. Keeps the same look/feel as the in-app confirms. %>
-  <div id="agenda-connect-confirm" class="modal hidden" role="dialog" aria-modal="true">
-    <div class="modal-content agenda-confirm-content">
-      <h3 class="agenda-confirm-title"></h3>
-      <p class="agenda-confirm-body"></p>
-      <div class="agenda-confirm-actions">
-        <button type="button" class="af-btn af-btn-secondary agenda-confirm-cancel">Cancel</button>
-        <button type="button" class="af-btn af-btn-danger agenda-confirm-ok">Disconnect</button>
-      </div>
-    </div>
-  </div>
 </div>
+
+<%# Confirmation modal uses the project's render_modal helper — same
+    overlay + animation as every other modal on the site, no
+    bespoke inline copy. JS below populates the per-call title text
+    in the span and the body paragraph. %>
+<%= render "agenda_items/confirm_modal" %>
 
 <% content_for :after_body do %>
   <script>
@@ -148,41 +140,41 @@
         });
       });
 
-      // Replace Rails UJS native data-confirm with our modal. Intercept the
-      // click before UJS fires its `confirm:` callback; show the modal; on
-      // OK, strip `data-confirm` and re-submit the form.
-      const modal = document.getElementById("agenda-connect-confirm");
+      // Replace Rails UJS native data-confirm with our modal. Capture-phase
+      // intercept so we win over UJS; pop the shared confirm modal; on
+      // confirm, strip data-confirm + re-submit. Uses the global
+      // window.showModal / window.hideModal added by app/javascript/src/modals.js.
+      const modal = document.getElementById("agenda-confirm-modal");
       const titleEl = modal?.querySelector(".agenda-confirm-title");
       const bodyEl  = modal?.querySelector(".agenda-confirm-body");
       const okBtn   = modal?.querySelector(".agenda-confirm-ok");
       const cancelBtn = modal?.querySelector(".agenda-confirm-cancel");
 
       function show(msg, onConfirm) {
-        if (!modal) { if (window.confirm(msg)) onConfirm(); return; }
+        if (!modal || typeof window.showModal !== "function" || !window.jQuery) {
+          if (window.confirm(msg)) onConfirm();
+          return;
+        }
         // Two-line UX: first sentence becomes the title, the rest the body.
         const parts = (msg || "Are you sure?").split(/[.?!]\s+/, 2);
         if (titleEl) titleEl.textContent = (parts[0] || "Are you sure?").replace(/[?]+$/, "?");
         if (bodyEl)  bodyEl.textContent  = parts.slice(1).join(" ");
-        modal.classList.remove("hidden");
-        modal.classList.add("shown");
 
-        const cleanup = (result) => {
+        // Listen on the modal's hide event so cancel button, close-X,
+        // outside-click, and Escape all flow through one teardown path.
+        let confirmed = false;
+        const $modal = window.jQuery(modal);
+        const onOk = () => { confirmed = true; window.hideModal("#agenda-confirm-modal"); };
+        const onHidden = () => {
           okBtn.removeEventListener("click", onOk);
-          cancelBtn.removeEventListener("click", onCancel);
-          document.removeEventListener("keydown", onKey);
-          modal.classList.add("hidden");
-          modal.classList.remove("shown");
-          if (result) onConfirm();
+          $modal.off("modal.hidden", onHidden);
+          if (confirmed) onConfirm();
         };
-        const onOk     = () => cleanup(true);
-        const onCancel = () => cleanup(false);
-        const onKey    = (e) => { if (e.key === "Escape") cleanup(false); };
         okBtn.addEventListener("click", onOk);
-        cancelBtn.addEventListener("click", onCancel);
-        document.addEventListener("keydown", onKey);
+        $modal.on("modal.hidden", onHidden);
+        window.showModal("#agenda-confirm-modal");
       }
 
-      // Capture-phase: run before Rails UJS so we own the prompt.
       document.addEventListener("click", (e) => {
         const trigger = e.target.closest("[data-confirm]");
         if (!trigger) return;
