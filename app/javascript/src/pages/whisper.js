@@ -151,6 +151,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       });
     });
+
+    menu.querySelectorAll("[data-action]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        if (action === "play-wake") playWakeBeeps();
+        menuItems.classList.add("hidden");
+      });
+    });
   }
 
   function playDefaultBeeps() {
