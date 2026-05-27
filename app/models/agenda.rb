@@ -6,7 +6,6 @@
 #  color              :string
 #  name               :string           not null
 #  parameterized_name :string           not null
-#  reauth_required_at :datetime
 #  sort_order         :integer
 #  source             :integer          default("user"), not null
 #  sync_token         :text
@@ -85,9 +84,7 @@ class Agenda < ApplicationRecord
       .where("watch_failed_at IS NULL OR watch_failed_at < ?", now - WATCH_FAILURE_COOLDOWN)
   }
   scope :needing_reauth, -> {
-    externally_managed.left_outer_joins(:google_account).where(
-      "agendas.reauth_required_at IS NOT NULL OR google_accounts.reauth_required_at IS NOT NULL",
-    )
+    externally_managed.joins(:google_account).where.not(google_accounts: { reauth_required_at: nil })
   }
 
   # Skip watch attempts if we already have a live channel OR Google recently

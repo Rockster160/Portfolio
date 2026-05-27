@@ -2,12 +2,18 @@ require "rails_helper"
 
 RSpec.describe GoogleCalendar::WatchManager do
   let(:user) { create(:user) }
+  let(:google_account) {
+    GoogleAccount.create!(user: user, email: "wm@example.com", access_token: "t", refresh_token: "r")
+  }
   let(:agenda) {
-    create(:agenda, user: user, source: :google, external_id: "cal-1")
+    create(
+      :agenda, user: user, source: :google, external_id: "cal-1",
+      google_account: google_account
+    )
   }
   let(:api) { instance_double(Oauth::GoogleApi) }
 
-  before { allow(Oauth::GoogleApi).to receive(:new).with(user).and_return(api) }
+  before { allow(Oauth::GoogleApi).to receive(:for_account).with(google_account).and_return(api) }
 
   describe ".start!" do
     it "registers a watch channel and persists its identity" do

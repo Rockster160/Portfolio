@@ -30,10 +30,32 @@ RSpec.describe Agenda do
       expect(AgendaSchedule.column_names).to include("external_uid", "external_etag", "external_updated_at")
     end
 
-    it "enforces unique (user, source, external_id) for non-user sources" do
-      create(:agenda, user: user, source: :google, external_id: "shared")
-      dup = build(:agenda, user: user, source: :google, external_id: "shared")
-      dup.parameterized_name = "another-slug"
+    it "lets the same external_id appear under different google_accounts (shared calendar)" do
+      account_a = GoogleAccount.create!(user: user, email: "a@x.com")
+      account_b = GoogleAccount.create!(user: user, email: "b@x.com")
+      create(
+        :agenda, user: user, source: :google, external_id: "shared@group",
+        google_account: account_a
+      )
+      dup = build(
+        :agenda, user: user, source: :google, external_id: "shared@group",
+        google_account: account_b
+      )
+      dup.parameterized_name = "shared-group-b"
+      expect { dup.save!(validate: false) }.not_to raise_error
+    end
+
+    it "still blocks duplicates within the same google_account" do
+      account = GoogleAccount.create!(user: user, email: "c@x.com")
+      create(
+        :agenda, user: user, source: :google, external_id: "primary",
+        google_account: account
+      )
+      dup = build(
+        :agenda, user: user, source: :google, external_id: "primary",
+        google_account: account
+      )
+      dup.parameterized_name = "primary-2"
       expect { dup.save!(validate: false) }.to raise_error(ActiveRecord::RecordNotUnique)
     end
   end
@@ -93,12 +115,19 @@ RSpec.describe Agenda do
   end
 
   describe ".needing_reauth" do
-    it "returns externally-managed agendas with reauth_required_at set" do
+    it "returns externally-managed agendas whose GoogleAccount needs reauth" do
+      bad_account = GoogleAccount.create!(
+        user: user, email: "bad@x.com", reauth_required_at: 1.minute.ago,
+      )
+      ok_account = GoogleAccount.create!(user: user, email: "ok@x.com")
       needs = create(
         :agenda, user: user, source: :google, external_id: "needs",
-        reauth_required_at: 1.minute.ago
+        google_account: bad_account
       )
-      _ok = create(:agenda, user: user, source: :google, external_id: "ok")
+      _ok = create(
+        :agenda, user: user, source: :google, external_id: "ok",
+        google_account: ok_account
+      )
       _user_agenda = create(:agenda, user: user, source: :user)
 
       expect(Agenda.needing_reauth).to contain_exactly(needs)

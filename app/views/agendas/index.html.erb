@@ -53,6 +53,16 @@
               <% unless mine %>
                 · <span class="agenda-card-shared">shared by <%= agenda.user.username %></span>
               <% end %>
+              <% if agenda.google? %>
+                <% account = agenda.google_account %>
+                <% if account&.needs_reauth? %>
+                  · <span class="agenda-card-sync-state agenda-card-sync-state-bad">Reconnect needed</span>
+                <% elsif agenda.synced_at.present? %>
+                  · <span class="agenda-card-sync-state">Synced <%= time_ago_in_words(agenda.synced_at) %> ago</span>
+                <% else %>
+                  · <span class="agenda-card-sync-state agenda-card-sync-state-warn">Never synced</span>
+                <% end %>
+              <% end %>
             </span>
           </span>
           <% if mine %>

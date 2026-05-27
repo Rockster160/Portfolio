@@ -2,15 +2,18 @@ require "rails_helper"
 
 RSpec.describe GoogleCalendar::Sync do
   let(:user) { create(:user) }
+  let(:google_account) {
+    GoogleAccount.create!(user: user, email: "a@example.com", access_token: "t", refresh_token: "r")
+  }
   let(:agenda) {
     create(
       :agenda, user: user, source: :google, external_id: "cal-abc",
-      color: "#aabbcc"
+      google_account: google_account, color: "#aabbcc"
     )
   }
   let(:api) { instance_double(Oauth::GoogleApi) }
 
-  before { allow(Oauth::GoogleApi).to receive(:new).with(user).and_return(api) }
+  before { allow(Oauth::GoogleApi).to receive(:for_account).with(google_account).and_return(api) }
 
   def page(items, sync_token: "next-token", next_page: nil)
     {
@@ -394,41 +397,22 @@ RSpec.describe GoogleCalendar::Sync do
   end
 
   describe "OAuth token revoked" do
-    let(:account) {
-      GoogleAccount.create!(user: user, email: "a@example.com", access_token: "t", refresh_token: "r")
-    }
-
-    before do
-      agenda.update!(google_account_id: account.id)
-      # `for_account` is how the Sync constructor builds its API when the
-      # agenda has a GoogleAccount — stub it to return the spec double.
-      allow(Oauth::GoogleApi).to receive(:for_account).with(account).and_return(api)
-    end
-
-    it "marks the GoogleAccount + its agendas for reauth on Unauthorized" do
-      other = create(
-        :agenda, user: user, source: :google, external_id: "cal-other",
-        google_account: account
-      )
+    it "marks the GoogleAccount as needing reauth on Unauthorized" do
       allow(api).to receive(:list_events).and_raise(
         RestClient::Unauthorized.new(instance_double(RestClient::Response, code: 401, body: "")),
       )
 
       result = described_class.new(agenda).run!
       expect(result).to eq(:reauth_required)
-      expect(account.reload.reauth_required_at).to be_present
-      expect(agenda.reload.reauth_required_at).to be_present
-      expect(other.reload.reauth_required_at).to be_present
+      expect(google_account.reload.reauth_required_at).to be_present
     end
 
     it "clears reauth_required_at on a successful sync" do
-      agenda.update!(reauth_required_at: 1.day.ago)
-      account.update!(reauth_required_at: 1.day.ago)
+      google_account.update!(reauth_required_at: 1.day.ago)
       allow(api).to receive(:list_events).and_return(page([]))
 
       described_class.new(agenda).run!
-      expect(agenda.reload.reauth_required_at).to be_nil
-      expect(account.reload.reauth_required_at).to be_nil
+      expect(google_account.reload.reauth_required_at).to be_nil
     end
   end
 end

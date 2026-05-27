@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_27_010000) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_27_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -169,11 +169,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_27_010000) do
     t.text "watch_resource_id"
     t.datetime "watch_expires_at"
     t.datetime "watch_failed_at"
-    t.datetime "reauth_required_at"
     t.bigint "google_account_id"
     t.index ["google_account_id"], name: "index_agendas_on_google_account_id"
     t.index ["user_id", "parameterized_name"], name: "index_agendas_on_user_id_and_parameterized_name", unique: true
-    t.index ["user_id", "source", "external_id"], name: "index_agendas_on_user_source_external", unique: true, where: "(source <> 0)"
+    t.index ["user_id", "source", "google_account_id", "external_id"], name: "index_agendas_on_user_source_account_external", unique: true, where: "(source <> 0)"
     t.index ["user_id"], name: "index_agendas_on_user_id"
     t.index ["watch_channel_id"], name: "index_agendas_on_watch_channel_id", unique: true, where: "(watch_channel_id IS NOT NULL)"
     t.index ["watch_expires_at"], name: "index_agendas_on_watch_expires_at", where: "(watch_expires_at IS NOT NULL)"

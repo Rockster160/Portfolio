@@ -228,6 +228,20 @@
       vertical-align: baseline;
     }
 
+    .agenda-card-sync-state {
+      opacity: 0.75;
+
+      &.agenda-card-sync-state-warn {
+        color: #f9d76b;
+        opacity: 0.95;
+      }
+
+      &.agenda-card-sync-state-bad {
+        color: #ff8b8b;
+        opacity: 0.95;
+      }
+    }
+
     .agenda-card-edit {
       flex-shrink: 0;
       width: 36px;

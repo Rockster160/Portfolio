@@ -10,13 +10,9 @@ class GoogleCalendar::WatchManager
 
   def initialize(agenda)
     @agenda = agenda
-    @api = (
-      if agenda.google_account
-        ::Oauth::GoogleApi.for_account(agenda.google_account)
-      else
-        ::Oauth::GoogleApi.new(agenda.user)
-      end
-    )
+    raise ArgumentError, "Agenda ##{agenda.id} has no google_account" if agenda.google_account.nil?
+
+    @api = ::Oauth::GoogleApi.for_account(agenda.google_account)
   end
 
   def self.start!(agenda)

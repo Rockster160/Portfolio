@@ -13,11 +13,18 @@
 #  updated_at          :datetime         not null
 #  user_id             :bigint           not null
 #
-# A Google account the user has authorized us against. Each row owns its
-# own OAuth credentials (access_token + refresh_token); a user may have
-# many. Each AgendaConnection links an Agenda to one of these so the sync
-# layer knows whose tokens to use.
 class GoogleAccount < ApplicationRecord
+  # Tokens get encrypted at rest once the encryption ENV vars are set —
+  # see config/initializers/active_record_encryption.rb. Until then this
+  # is a no-op (encryption config is nil; values stay plain text).
+  # `support_unencrypted_data = true` in the initializer lets reads work
+  # transparently across both states during the transition.
+  if ENV["PORTFOLIO_AR_ENCRYPTION_PRIMARY_KEY"].present?
+    encrypts :access_token
+    encrypts :refresh_token
+    encrypts :id_token
+  end
+
   belongs_to :user
   has_many :agendas, dependent: :destroy
 
