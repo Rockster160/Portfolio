@@ -14,7 +14,9 @@ class IndexController < ApplicationController
 
       # TODO: If data has anything, interpret that and include with sms
       response, data = Jarvis.command(from_user, body)
-      SmsWorker.perform_async(from_number, response)
+      # Tell tasks that stop_propagation without returning a string mean
+      # "handled silently" — no SMS reply.
+      SmsWorker.perform_async(from_number, response) if response.present?
       Jarvis.say("SMS from #{from_user.username}: #{body}")
     else
       Jarvis.say("SMS from #{from_number}: #{body}")

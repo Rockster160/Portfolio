@@ -365,6 +365,8 @@
   #notifySelf(String:"Title" String?:"Body" String?:"Tag")
   #notifyAll(String:"Title" String?:"Body" String?:"Tag")
   #dismiss(String:"Tag")
+[Sms]
+  #deliver(Text)::Boolean
 [Schedule]
   #find(Numeric)
   #search(Text("*") "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # Using listener syntax trigger:word::data
