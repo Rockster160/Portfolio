@@ -1399,12 +1399,20 @@ body.ctr-agendas {
   background: rgba(0, 0, 0, 0.15);
 }
 
+// The global button cascade in components/forms.scss applies a blue
+// background, blue-tinted box-shadow, and dark text-shadow to every
+// <button>. The af-btn family resets all of those — `box-shadow: none`
+// is the important fix (otherwise danger/secondary buttons keep a faint
+// blue glow on the bottom edge).
 .af-btn {
   padding: 8px 18px !important;
   border-radius: 4px !important;
   font-size: 13px !important;
   font-weight: 600 !important;
   cursor: pointer;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border: 0 !important;
 }
 
 .af-btn-primary {
@@ -1415,6 +1423,7 @@ body.ctr-agendas {
 .af-btn-secondary {
   background: transparent !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #FFF !important;
   &:hover {
     background: rgba(255, 255, 255, 0.05) !important;
   }
@@ -2031,11 +2040,28 @@ body.ctr-agendas {
       margin-bottom: 8px;
     }
 
+    .agenda-connect-account-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      opacity: 0.55;
+      margin-right: 4px;
+    }
+
     .agenda-connect-account-email {
       flex: 1;
       font-weight: 500;
       font-size: 14px;
     }
+  }
+
+  .agenda-connect-calendars-heading {
+    margin: 4px 4px 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.55;
+    font-weight: 600;
   }
 
   .agenda-connect-note-warn {

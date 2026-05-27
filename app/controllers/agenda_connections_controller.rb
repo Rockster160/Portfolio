@@ -1,4 +1,7 @@
 class AgendaConnectionsController < ApplicationController
+  # The agenda controllers all skip CSRF verification — these routes are
+  # only reachable from a signed-in user's own buttons.
+  skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
 
   # GET /agenda_connection/start/google
@@ -28,8 +31,13 @@ class AgendaConnectionsController < ApplicationController
   end
 
   # POST /agenda_connection/calendars/connect
-  # Create an Agenda row for a single calendar under a specific account,
-  # and kick off its initial sync. Idempotent.
+  # Connect a single Google calendar.
+  #
+  # Idempotent: find_or_initialize is scoped by (user, source, external_id)
+  # rather than including google_account_id, so a legacy agenda (created
+  # pre-multi-account) gets *adopted* under the new GoogleAccount instead
+  # of duplicating — the existing parameterized_name uniqueness check
+  # would otherwise block the insert.
   def connect_calendar
     account = find_account
     return redirect_to(new_agenda_connection_path, alert: "Unknown Google account.") unless account
@@ -37,9 +45,8 @@ class AgendaConnectionsController < ApplicationController
     external_id = params[:external_id].to_s.presence
     return redirect_to(new_agenda_connection_path, alert: "Missing calendar id.") if external_id.blank?
 
-    agenda = current_user.agendas.find_or_initialize_by(
-      source: :google, google_account_id: account.id, external_id: external_id,
-    )
+    agenda = current_user.agendas.find_or_initialize_by(source: :google, external_id: external_id)
+    agenda.google_account_id = account.id
     agenda.name = params[:name].to_s.presence || agenda.name.presence || "Google Calendar"
     agenda.color = params[:color].to_s.presence || agenda.color.presence || Agenda::DEFAULT_COLOR
     agenda.save!

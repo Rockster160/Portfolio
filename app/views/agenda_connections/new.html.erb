@@ -29,6 +29,7 @@
       <% account = section[:account] %>
       <section class="agenda-connect-account">
         <header class="agenda-connect-account-head">
+          <span class="agenda-connect-account-label">Google Account</span>
           <span class="agenda-connect-account-email">
             <i class="fa fa-google agenda-connect-source-icon" aria-hidden="true"></i>
             <%= account.email %>
@@ -56,6 +57,7 @@
             </a>
           </div>
         <% else %>
+          <h4 class="agenda-connect-calendars-heading">Available calendars</h4>
           <ul class="agenda-connect-list">
             <% section[:calendars].each do |cal| %>
               <% existing = section[:connected][cal[:external_id]] %>
