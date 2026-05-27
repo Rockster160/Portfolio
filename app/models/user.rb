@@ -122,11 +122,18 @@ class User < ApplicationRecord
     AgendaItem.where(agenda_id: editable_agendas.select(:id))
   end
 
-  # Aggregate items (real + phantoms) across every accessible agenda, sorted
-  # by start_at. Sum of N two-query loads, where N = accessible_agendas.count.
-  # Acceptable for the typical handful of agendas a user has.
+  # Aggregate items (real + phantoms) across every accessible agenda.
+  # Three SQL queries: agendas (with users eager-loaded), items, schedules.
+  # The agendas query feeds preloaded_agendas so phantom-building's
+  # `agenda.user` doesn't fire per-schedule lookups.
   def agenda_items_for_range(from, to)
-    accessible_agendas.find_each.flat_map { |a| a.items_for_range(from, to) }.sort_by(&:start_at)
+    agendas = accessible_agendas.includes(:user).to_a
+    Agenda.items_for_range_in(
+      agendas.map(&:id),
+      from, to,
+      reference_user: self,
+      preloaded_agendas: agendas,
+    )
   end
 
   def agenda_items_for(date)

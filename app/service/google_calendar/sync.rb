@@ -11,6 +11,11 @@ class GoogleCalendar::Sync
   VIDEO_ENTRY_TYPES = %w[video].freeze
   PHONE_ENTRY_TYPES = %w[phone sip].freeze
 
+  # Thread-local key that suppresses AgendaItem#fire_jil_trigger inside a
+  # sync run, AND coalesces per-agenda broadcasts into a single one at the
+  # tail. Read by AgendaItem; toggled here.
+  SUPPRESS_KEY = :gcal_sync_suppress_jil_triggers
+
   attr_reader :agenda, :user, :api
 
   def initialize(agenda)
@@ -34,8 +39,7 @@ class GoogleCalendar::Sync
   # moment both end up here, both reading the same sync_token. With the
   # lock, the second worker waits, then sees the bumped sync_token and
   # short-circuits via etag-skip. Without it, both racewrite the same
-  # rows. `with_advisory_lock` is provided by the existing
-  # `with_advisory_lock!` helper / `with_advisory_lock` gem.
+  # rows.
   def run!(allow_rebootstrap: true, reason: :manual)
     lock_key = "gcal_sync:agenda:#{@agenda.id}"
     Agenda.with_advisory_lock(lock_key, 30) {
@@ -46,21 +50,30 @@ class GoogleCalendar::Sync
   private
 
   def run_synced(allow_rebootstrap:, reason:)
-    @deferred_overrides = [] # buffered across pages — see flush_deferred_overrides
+    @deferred_overrides = []      # buffered across pages — see flush_deferred
+    @deferred_cancellations = []  # ditto for cancellation handle_cancellation
+    ensure_timezone!
     page_token = nil
     sync_token = nil
-    loop do
-      response = fetch_page(page_token: page_token)
-      return :reauth_required if response.nil?
 
-      apply_page(response)
+    # Suppress per-row Jil triggers + per-row Agenda broadcasts for the
+    # duration of the sync. We fan out ONE broadcast + ONE :agenda_sync
+    # trigger at the tail.
+    with_suppression {
+      loop do
+        response = fetch_page(page_token: page_token)
+        return :reauth_required if response.nil?
 
-      sync_token = response[:nextSyncToken].presence || sync_token
-      page_token = response[:nextPageToken].presence
-      break unless page_token
-    end
+        apply_page(response)
 
-    flush_deferred_overrides
+        sync_token = response[:nextSyncToken].presence || sync_token
+        page_token = response[:nextPageToken].presence
+        break unless page_token
+      end
+
+      flush_deferred_cancellations
+      flush_deferred_overrides
+    }
 
     # Persist synced_at on EVERY successful run — even if Google returned
     # no nextSyncToken (rare, e.g. immediately after a full re-sync that
@@ -84,6 +97,25 @@ class GoogleCalendar::Sync
   rescue ::RestClient::Unauthorized
     mark_reauth_required!
     :reauth_required
+  end
+
+  def with_suppression
+    Thread.current[SUPPRESS_KEY] = true
+    yield
+  ensure
+    Thread.current[SUPPRESS_KEY] = nil
+  end
+
+  # Lazily populate the calendar's timezone the first time we sync after a
+  # connect. Used to translate "all-day on May 28" into a concrete instant.
+  def ensure_timezone!
+    return if @agenda.timezone.present?
+
+    response = @api.get_calendar(@agenda.external_id)
+    tz = response.is_a?(::Hash) ? response[:timeZone].to_s.presence : nil
+    @agenda.update!(timezone: tz) if tz
+  rescue ::RestClient::Exception, ::StandardError => e
+    ::Rails.logger.warn("[GoogleCalendar::Sync] timezone fetch failed agenda=#{@agenda.id} #{e.class}: #{e.message}")
   end
 
   def fetch_page(page_token:)
@@ -116,15 +148,16 @@ class GoogleCalendar::Sync
       master = @agenda.agenda_schedules.find_by(external_uid: event[:recurringEventId])
       if master
         apply_event(event)
+      elsif event[:status] == "cancelled"
+        @deferred_cancellations << event
       else
         @deferred_overrides << event
       end
     end
   end
 
-  # Final replay pass — any override whose master arrived on a later page
-  # gets its chance now. Anything still without a master after this is
-  # logged for visibility (would indicate a Google data inconsistency).
+  # Final replay pass — overrides whose master arrived on a later page.
+  # Anything still without a master is logged for visibility.
   def flush_deferred_overrides
     return if @deferred_overrides.blank?
 
@@ -140,6 +173,17 @@ class GoogleCalendar::Sync
       end
     end
     @deferred_overrides = []
+  end
+
+  # Cancellations referencing a master that hadn't been seen yet. Replay
+  # after pagination — the master may have been deleted in the same batch
+  # (status=cancelled on its own row), in which case we still want the
+  # excluded_dates bookkeeping to land.
+  def flush_deferred_cancellations
+    return if @deferred_cancellations.blank?
+
+    @deferred_cancellations.each { |event| handle_cancellation(event) }
+    @deferred_cancellations = []
   end
 
   def apply_event(event)
@@ -197,10 +241,14 @@ class GoogleCalendar::Sync
     # the phantom doesn't regenerate.
     if event[:recurringEventId].present?
       master = @agenda.agenda_schedules.find_by(external_uid: event[:recurringEventId])
-      occurrence_date = parse_time(
-        event.dig(:originalStartTime, :dateTime) || event.dig(:originalStartTime, :date),
-      )&.in_time_zone(user_timezone)&.to_date
-      master&.add_excluded_date!(occurrence_date) if occurrence_date
+      if master.nil?
+        # Master is on a later page; replay after pagination finishes.
+        @deferred_cancellations << event unless @deferred_cancellations.include?(event)
+        return
+      end
+
+      occurrence_date = all_day_event?(event) ? parse_event_date(event.dig(:originalStartTime, :date)) : parse_time(event.dig(:originalStartTime, :dateTime))&.in_time_zone(user_timezone)&.to_date
+      master.add_excluded_date!(occurrence_date) if occurrence_date
     end
 
     item&.destroy
@@ -216,12 +264,20 @@ class GoogleCalendar::Sync
     return if fast_skip?(sched, event)
 
     start_at_local = parse_event_start(event)
-    # Guard: parse_time can return nil for malformed dates. Skip the row
-    # entirely + Slack so we know about it. Without this, the strftime
-    # below NoMethodError's and the entire sync page fails silently.
+    # Guard: parse can return nil for malformed dates. Skip the row entirely
+    # + Slack so we know about it. Without this, the strftime below
+    # NoMethodError's and the entire sync page fails silently.
     return report_malformed_event!(event, "missing start_at") if start_at_local.nil?
 
     all_day = all_day_event?(event)
+    # Merge any locally-recorded excluded_dates back into the new recurrence
+    # so a Google-edit to the master rule doesn't wipe out per-occurrence
+    # cancellations we already know about.
+    merged_recurrence = parsed[:recurrence].dup
+    existing = sched.persisted? ? sched.excluded_dates.map(&:to_s) : []
+    inbound  = Array(merged_recurrence[:excluded_dates]).map(&:to_s)
+    union    = (existing + inbound).uniq
+    merged_recurrence[:excluded_dates] = union if union.any?
 
     sched.assign_attributes(
       name:                event_summary(event),
@@ -234,7 +290,7 @@ class GoogleCalendar::Sync
       starts_on:           start_at_local.to_date,
       until_on:            parsed[:until_on],
       occurrence_count:    parsed[:occurrence_count],
-      recurrence:          parsed[:recurrence],
+      recurrence:          merged_recurrence,
       all_day:             all_day,
       external_etag:       event[:etag],
       external_updated_at: parse_time(event[:updated]),
@@ -249,21 +305,28 @@ class GoogleCalendar::Sync
     start_at = parse_event_start(event)
     end_at = parse_event_end(event)
     all_day = all_day_event?(event)
-    is_event = all_day || end_at.present?
-
-    item.assign_attributes(
+    # Google Calendar items are always events. If the inbound payload is
+    # missing `end` (rare — point-in-time events), default to a 30-min
+    # span so the AgendaItem :end_at_required_for_event validation passes.
+    end_at ||= (start_at + 30.minutes if start_at)
+    attrs = {
       name:                event_summary(event),
-      kind:                is_event ? :event : :task,
+      kind:                :event,
       color:               event_color(event),
       start_at:            start_at,
-      end_at:              is_event ? end_at : nil,
+      end_at:              end_at,
       location:            event_location(event),
       notes:               ::GoogleCalendar::HtmlText.to_plain(event[:description]),
       all_day:             all_day,
       status:              event_status(event),
       external_etag:       event[:etag],
       external_updated_at: parse_time(event[:updated]),
-    )
+    }
+    # Google's update is newer than our local edit — accept the inbound
+    # change AND clear the local-edit flag so future Google pulls aren't
+    # forever blocked by a stale stamp.
+    attrs[:locally_modified_at] = nil if item.persisted? && item.locally_modified_at.present?
+    item.assign_attributes(attrs)
     item.save!
   end
 
@@ -282,11 +345,15 @@ class GoogleCalendar::Sync
     start_at = parse_event_start(event)
     end_at = parse_event_end(event)
     all_day = all_day_event?(event)
-    original_start = parse_time(
-      event.dig(:originalStartTime, :dateTime) || event.dig(:originalStartTime, :date),
+    original_start = (
+      if all_day_event?(event)
+        parse_event_date(event.dig(:originalStartTime, :date))&.then { |d| user_timezone.local(d.year, d.month, d.day) }
+      else
+        parse_time(event.dig(:originalStartTime, :dateTime))
+      end
     )
 
-    item.assign_attributes(
+    attrs = {
       agenda_schedule:     master,
       kind:                :event,
       name:                event_summary(event) || master.name,
@@ -300,18 +367,26 @@ class GoogleCalendar::Sync
       original_start_at:   original_start,
       external_etag:       event[:etag],
       external_updated_at: parse_time(event[:updated]),
-    )
+    }
+    attrs[:locally_modified_at] = nil if item.persisted? && item.locally_modified_at.present?
+    item.assign_attributes(attrs)
     item.save!
   end
 
   # Skip the row entirely when either:
-  #   * The user locally edited it (only AgendaItem has this column) — local
-  #     edits win until the user disconnects + reconnects the calendar.
+  #   * The user locally edited it MORE RECENTLY than Google's reported
+  #     `updated` timestamp — our edit is newer, ignore the stale inbound
+  #     copy until either Google moves forward past us or the user touches
+  #     the row again.
   #   * The etag matches what we last stored — Google is replaying a payload
   #     we already applied.
   def fast_skip?(record, event)
     return false unless record.persisted?
-    return true if record.respond_to?(:locally_modified_at) && record.locally_modified_at.present?
+
+    if record.respond_to?(:locally_modified_at) && record.locally_modified_at.present?
+      remote_updated = parse_time(event[:updated])
+      return true if remote_updated.nil? || remote_updated <= record.locally_modified_at
+    end
 
     record.external_etag.present? && record.external_etag == event[:etag]
   end
@@ -350,24 +425,47 @@ class GoogleCalendar::Sync
     event.dig(:start, :date).present? && event.dig(:start, :dateTime).blank?
   end
 
+  # All-day: parse the date and interpret midnight IN THE USER'S TZ so
+  # `start_at.in_time_zone(user.timezone).to_date` always returns Google's
+  # date — regardless of where the calendar / worker / user live.
+  # Timed: RFC3339 string carries its own offset; Time.zone.parse is faithful.
   def parse_event_start(event)
-    parse_time(event.dig(:start, :dateTime) || event.dig(:start, :date))
+    if all_day_event?(event)
+      d = parse_event_date(event.dig(:start, :date))
+      return nil if d.nil?
+
+      user_timezone.local(d.year, d.month, d.day)
+    else
+      parse_time(event.dig(:start, :dateTime))
+    end
   end
 
   def parse_event_end(event)
-    parse_time(event.dig(:end, :dateTime) || event.dig(:end, :date))
+    if all_day_event?(event)
+      d = parse_event_date(event.dig(:end, :date))
+      return nil if d.nil?
+
+      user_timezone.local(d.year, d.month, d.day)
+    else
+      parse_time(event.dig(:end, :dateTime))
+    end
   end
 
   def event_duration_minutes(event, all_day:)
     s = parse_event_start(event)
     e = parse_event_end(event)
     return 60 unless s && e
-    # All-day events: Google's end.date is exclusive, so the literal
-    # (e - s) gives the true span — including multi-day. A May 27→May 28
-    # all-day is 24h; May 27→May 30 is 72h.
     return ((e - s) / 60).to_i if all_day
 
     [((e - s) / 60).to_i, 15].max
+  end
+
+  def parse_event_date(value)
+    return nil if value.blank?
+
+    ::Date.parse(value.to_s)
+  rescue ::ArgumentError
+    nil
   end
 
   def parse_time(value)

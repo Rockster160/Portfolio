@@ -30,7 +30,12 @@ class AgendaSchedule < ApplicationRecord
   FREQUENCIES = [:daily, :weekdays, :weekly, :monthly, :yearly, :custom].freeze
   WEEKDAY_KEYS = [:sun, :mon, :tue, :wed, :thu, :fri, :sat].freeze
   CUSTOM_UNITS = [:day, :week, :month].freeze
-  TRIGGER_MATERIALIZE_WINDOW = 7.days
+  # Forward-looking window for materializing upcoming triggers into real
+  # rows. Anything further out stays a phantom — the firing worker will
+  # materialize on demand as occurrences come into the window.
+  # Past occurrences keep their materialized row (they're history) — we
+  # never destroy them after the fact.
+  TRIGGER_MATERIALIZE_WINDOW = 10.hours
 
   enum :kind, { task: 0, event: 1, trigger: 2 }
 
@@ -208,29 +213,36 @@ class AgendaSchedule < ApplicationRecord
     occurrence_start_at(date) + duration_minutes.minutes
   end
 
-  # Triggers need real AgendaItem rows for the firing worker to find them at
-  # their scheduled time — phantoms aren't reliable for time-sensitive ops.
-  # Persists a rolling TRIGGER_MATERIALIZE_WINDOW of upcoming occurrences.
+  # Materialize trigger occurrences whose start_at falls inside the next
+  # TRIGGER_MATERIALIZE_WINDOW. Past occurrences are kept as history;
+  # anything further out stays phantom until it comes into the window.
+  # Callers: (1) the after_save hook below, when a schedule's rule/start
+  # changes, (2) the firing worker on its periodic tick.
   def materialize_upcoming_triggers!(through: TRIGGER_MATERIALIZE_WINDOW.from_now)
     return unless trigger?
 
-    from = Date.current
-    to = through.to_date
+    now = Time.current
+    from_date = now.in_time_zone(user.timezone).to_date
+    to_date = through.in_time_zone(user.timezone).to_date
 
-    existing_dates = agenda_items
-      .where(start_at: agenda.send(:day_range, from).begin..agenda.send(:day_range, to).end)
-      .filter_map { |item| item.start_at.in_time_zone(user.timezone).to_date }
+    existing_starts = agenda_items
+      .where(start_at: now..through)
+      .pluck(:start_at)
       .to_set
 
-    (from..to).each do |date|
+    (from_date..to_date).each do |date|
       next unless matches?(date)
-      next if existing_dates.include?(date)
+
+      occurrence_start = occurrence_start_at(date)
+      # Only materialize occurrences inside the forward window.
+      next if occurrence_start < now || occurrence_start > through
+      next if existing_starts.include?(occurrence_start)
 
       agenda_items.create!(
         agenda:             agenda,
         kind:               :trigger,
         name:               name,
-        start_at:           occurrence_start_at(date),
+        start_at:           occurrence_start,
         color:              color,
         notes:              notes,
         location:           location,

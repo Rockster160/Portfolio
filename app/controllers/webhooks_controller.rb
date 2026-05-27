@@ -37,7 +37,12 @@ class WebhooksController < ApplicationController
       elsif params[:code].blank?
         flash[:alert] = "Google didn't return an authorization code — please try again."
       else
-        api.code = params[:code]
+        result = (api.code = params[:code])
+        if result.nil? || api.google_account.blank?
+          flash[:alert] = "Google rejected the connection — please try again."
+        else
+          flash[:notice] = "Connected #{api.google_account.email} — pick which calendars to bring in below."
+        end
       end
       return redirect_to(new_agenda_connection_path)
     end
@@ -120,12 +125,6 @@ class WebhooksController < ApplicationController
     head :ok
   end
 
-  def google_pub_sub
-    SlackNotifier.notify(params.to_unsafe_h)
-
-    head :ok
-  end
-
   # Receiver for Google Calendar events.watch push notifications.
   # Google identifies the channel via headers — there's no body to parse:
   #   X-Goog-Channel-Id        → matches `agendas.watch_channel_id`
@@ -141,7 +140,9 @@ class WebhooksController < ApplicationController
 
     agenda = ::Agenda.google.find_by(watch_channel_id: channel_id)
     return head :no_content if agenda.nil?
-    return head :forbidden if token != ::GoogleCalendar::WatchManager.token_for(agenda)
+
+    expected = ::GoogleCalendar::WatchManager.token_for(agenda)
+    return head :forbidden unless token && expected && ::ActiveSupport::SecurityUtils.secure_compare(token, expected)
 
     # The "sync" handshake is just Google confirming we're listening — no
     # change to apply. Enqueue a real sync only for content-state deliveries.

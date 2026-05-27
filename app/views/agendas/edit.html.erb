@@ -15,6 +15,11 @@
       You're a shared <strong><%= @agenda.agenda_shares.find_by(user_id: current_user.id)&.permission %></strong> on this agenda — only the owner can rename or recolor it.
     </p>
   <% end %>
+  <% if @agenda.managed_externally? && can_own %>
+    <p class="agenda-settings-note muted">
+      Renaming or recoloring also updates your Google calendar — the change shows up wherever you view it.
+    </p>
+  <% end %>
 
   <%= form_with(model: @agenda, url: agenda_path(@agenda), method: :patch, local: true, class: "basic agenda-form agenda-settings-form") do |f| %>
     <div class="ff">

@@ -72,15 +72,27 @@ RSpec.describe "AgendaItem trigger kind" do
   end
 
   describe "AgendaSchedule#materialize_upcoming_triggers!" do
-    it "materializes the next 7 days of trigger occurrences on save" do
+    it "materializes only the occurrences that fall inside the 10-hour forward window" do
       sched = nil
+      start_time = 1.hour.from_now.strftime("%H:%M")
       expect {
         sched = create(:agenda_schedule, agenda: agenda, kind: "trigger",
           name: "Morning ping", trigger_expression: "morning_ping",
+          start_time: start_time,
           recurrence: { "freq" => "daily" }, starts_on: Date.current)
-      }.to change { AgendaItem.where(kind: :trigger).count }.by_at_least(7)
-      expect(sched.agenda_items.where(kind: :trigger).count).to be >= 7
+      }.to change { AgendaItem.where(kind: :trigger).count }.by(1)
+      expect(sched.agenda_items.where(kind: :trigger).count).to eq(1)
       expect(sched.agenda_items.pluck(:trigger_expression).uniq).to eq(["morning_ping"])
+    end
+
+    it "does NOT pre-materialize occurrences beyond the 10-hour window" do
+      far_off = (Time.current + 12.hours).strftime("%H:%M")
+      expect {
+        create(:agenda_schedule, agenda: agenda, kind: "trigger",
+          name: "Late ping", trigger_expression: "late_ping",
+          start_time: far_off,
+          recurrence: { "freq" => "daily" }, starts_on: Date.current)
+      }.not_to change { AgendaItem.where(kind: :trigger).count }
     end
 
     it "non-trigger schedules do NOT auto-materialize" do

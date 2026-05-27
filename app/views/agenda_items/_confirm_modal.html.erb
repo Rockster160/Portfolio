@@ -1,0 +1,14 @@
+<%# Shared confirmation modal. Driven from JS via window.AgendaConfirm —
+    see agenda.js / index.html.erb. Title/body/buttons are populated per
+    use. Replaces window.confirm() so destructive flows feel consistent
+    with the rest of the (modal-based) UI. %>
+<div id="agenda-confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="agenda-confirm-title">
+  <div class="modal-content agenda-confirm-content">
+    <h3 id="agenda-confirm-title" class="agenda-confirm-title"></h3>
+    <p class="agenda-confirm-body"></p>
+    <div class="agenda-confirm-actions">
+      <button type="button" class="af-btn af-btn-secondary agenda-confirm-cancel">Cancel</button>
+      <button type="button" class="af-btn af-btn-danger agenda-confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>

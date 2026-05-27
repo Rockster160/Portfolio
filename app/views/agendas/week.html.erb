@@ -31,6 +31,10 @@
   </div>
 
   <div class="agenda-error hidden">Disconnected — changes will sync when reconnected.</div>
+  <div class="agenda-error agenda-error-dropped hidden" role="alert">
+    Some changes couldn't be saved<span class="agenda-error-dropped-count"></span>.
+    <button type="button" class="agenda-error-dismiss">Dismiss</button>
+  </div>
 
   <% if @agendas.empty? %>
     <div class="agenda-empty">
@@ -75,5 +79,6 @@
     <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>
     <%= render "agenda_items/edit_modal", agendas: @agendas %>
     <%= render "agenda_items/details_modal" %>
+    <%= render "agenda_items/confirm_modal" %>
   <% end %>
 </div>

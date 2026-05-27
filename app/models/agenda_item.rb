@@ -248,9 +248,20 @@ class AgendaItem < ApplicationRecord
     (occurrence_date..end_date).cover?(date)
   end
 
+  # An item is crossed out in the UI when:
+  #   * The user (or sync) marked it completed.
+  #   * It's an event whose end has passed — events are time-bounded; once
+  #     end_at is in the past the box is shown crossed-out (and stays so
+  #     even though `completed_at` is nil).
+  #   * It's a trigger whose firing time has passed — triggers are
+  #     point-in-time. The firing worker may not have stamped `completed_at`
+  #     yet, but the visual treatment shouldn't wait on that.
+  # Used by the renderer to drive `.crossed-out` and by item visibility
+  # filters that say "hide completed events/triggers".
   def crossed_out_at(now: Time.current)
     return completed_at if completed?
     return end_at if event? && end_at.present? && end_at <= now
+    return start_at if trigger? && start_at.present? && start_at <= now
 
     nil
   end
@@ -416,6 +427,10 @@ class AgendaItem < ApplicationRecord
   # second, noisier :agenda_item event for the same row.
   def fire_jil_trigger
     return if trigger?
+    # Suppressed mid-sync: GoogleCalendar::Sync fans out one trigger + one
+    # broadcast at the tail of a sync rather than per-row. Avoids
+    # trigger-storms on initial backfill of a busy calendar.
+    return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
 
     action = saved_change_to_id? ? :created : :updated
     ::Jil.trigger(user, :agenda_item, with_jil_attrs(action: action))
@@ -423,6 +438,7 @@ class AgendaItem < ApplicationRecord
 
   def fire_jil_destroy_trigger
     return if trigger?
+    return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
 
     ::Jil.trigger(user, :agenda_item, with_jil_attrs(action: :destroyed))
   end

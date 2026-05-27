@@ -73,8 +73,11 @@ class AgendasController < ApplicationController
   def create
     @agenda = current_user.agendas.new(agenda_params)
     if @agenda.save
-      apply_notification_settings!(@agenda)
-      @agenda.broadcast!
+      notif_changed = apply_notification_settings!(@agenda)
+      # Notification settings are personal — they have no visible effect
+      # on rendered agenda payloads, so we don't broadcast when only those
+      # changed. Avoids a refresh-storm for every checkbox toggle.
+      @agenda.broadcast! unless notif_changed && !@agenda.previously_new_record?
       respond_to do |format|
         format.json { render json: { id: @agenda.id, slug: @agenda.parameterized_name } }
         format.html { redirect_to manage_agenda_path }
@@ -85,9 +88,16 @@ class AgendasController < ApplicationController
   end
 
   def update
+    return refuse_source_change! if attempt_to_change_source?
+
+    apply_google_rename_color! if @agenda.managed_externally?
+
     if @agenda.update(agenda_params)
-      apply_notification_settings!(@agenda)
-      @agenda.broadcast!
+      notif_changed = apply_notification_settings!(@agenda)
+      agenda_changed = @agenda.previous_changes.keys.any? { |k| %w[name color sort_order].include?(k) }
+      # Only broadcast when the rendered agenda actually changed; pure
+      # notification-setting toggles stay quiet.
+      @agenda.broadcast! if agenda_changed || !notif_changed
       respond_to do |format|
         format.json { render json: { id: @agenda.id, slug: @agenda.parameterized_name } }
         format.html { redirect_to manage_agenda_path, notice: "Agenda updated." }
@@ -103,6 +113,20 @@ class AgendasController < ApplicationController
   def destroy
     @agenda.destroy
     head :no_content
+  end
+
+  # Manually enqueue a sync for one Google-synced agenda. Used by the
+  # "Retry now" button next to a "Push channel unavailable" badge so the
+  # user doesn't have to wait out the 1-day watch-failure cooldown.
+  def resync
+    @agenda = current_user.agendas.find_by(id: params[:id]) || current_user.agendas.by_param(params[:id]).first
+    raise ActionController::RoutingError, "Not Found" if @agenda.blank?
+    return head :unprocessable_entity unless @agenda.managed_externally?
+
+    # Reset the failure cooldown so ensure_watch! actually retries.
+    @agenda.update!(watch_failed_at: nil)
+    ::GoogleCalendarSyncWorker.perform_async(@agenda.id, "manual")
+    head :accepted
   end
 
   def test_push
@@ -142,6 +166,50 @@ class AgendasController < ApplicationController
     params.require(:agenda).permit(:name, :color, :sort_order)
   end
 
+  # Source-flipping (user → google or vice versa) is never legitimate via
+  # the UI — the FE locks it; this is the BE backstop. An agenda's source
+  # is set at create time and stays put for its lifetime.
+  def attempt_to_change_source?
+    raw = params.dig(:agenda, :source)
+    return false if raw.blank?
+
+    raw.to_s != @agenda.source.to_s
+  end
+
+  def refuse_source_change!
+    respond_to do |format|
+      format.json {
+        render json: { errors: ["An agenda's source can't be changed after creation."] }, status: :unprocessable_entity
+      }
+      format.html {
+        flash[:alert] = "An agenda's source can't be changed after creation."
+        redirect_to(edit_agenda_path(@agenda))
+      }
+    end
+  end
+
+  # Renaming / recoloring a Google-synced agenda used to be a local-only
+  # change — diverged silently from Google's view. Now we PATCH the
+  # calendar metadata upstream too so the two stay aligned. On API
+  # failure we still let the local update proceed and surface a warning
+  # in the flash; manual override is sometimes deliberate.
+  def apply_google_rename_color!
+    return unless @agenda.google_account
+
+    desired_name  = params.dig(:agenda, :name).to_s.presence
+    desired_color = params.dig(:agenda, :color).to_s.presence
+    body = {}
+    body[:summary] = desired_name if desired_name && desired_name != @agenda.name
+    body[:backgroundColor] = desired_color if desired_color && desired_color != @agenda.color
+    body[:colorRgbFormat] = true if body[:backgroundColor]
+    return if body.empty?
+
+    @agenda.google_account.api.patch_calendar(@agenda.external_id, body)
+  rescue ::RestClient::Exception => e
+    ::Rails.logger.warn("[GoogleCalendar] calendar PATCH failed agenda=#{@agenda.id} #{e.class}: #{e.message}")
+    flash.now[:alert] = "Saved locally, but couldn't update Google's copy — check that you own this calendar."
+  end
+
   def notification_setting_params
     raw = params.dig(:agenda, :notification_setting)
     return {} if raw.blank?
@@ -155,11 +223,12 @@ class AgendasController < ApplicationController
 
   def apply_notification_settings!(agenda)
     attrs = notification_setting_params
-    return if attrs.empty?
+    return false if attrs.empty?
 
     setting = AgendaNotificationSetting.find_or_initialize_by(user: current_user, agenda: agenda)
     setting.assign_attributes(attrs)
     setting.save!
+    true
   end
 
   def aggregate_payload(date, lookahead: 1)

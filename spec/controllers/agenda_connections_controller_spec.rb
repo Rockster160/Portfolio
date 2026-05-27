@@ -119,25 +119,6 @@ RSpec.describe AgendaConnectionsController, type: :controller do
       expect(account.agendas.find_by(external_id: "primary").id).to eq(first_id)
     end
 
-    it "adopts a legacy unadopted agenda (google_account_id: nil) instead of failing on parameterized_name uniqueness" do
-      legacy = user.agendas.create!(
-        source: :google, external_id: "primary", name: "rocco11nicholls@gmail.com",
-        google_account_id: nil
-      )
-      allow(GoogleCalendarSyncWorker).to receive(:perform_async)
-
-      expect {
-        post :connect_calendar, params: {
-          google_account_id: account.id,
-          external_id:       "primary",
-          name:              "rocco11nicholls@gmail.com",
-          color:             "#ff0000",
-        }
-      }.not_to change(Agenda, :count)
-      expect(legacy.reload.google_account_id).to eq(account.id)
-      expect(GoogleCalendarSyncWorker).to have_received(:perform_async).with(legacy.id)
-    end
-
     it "alerts when the account is unknown" do
       post :connect_calendar, params: { google_account_id: 999_999, external_id: "primary" }
       expect(response).to redirect_to(new_agenda_connection_path)

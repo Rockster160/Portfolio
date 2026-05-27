@@ -73,7 +73,9 @@
       <span class="color-swatch" style="background: <%= default_color %>;">
         <input type="color" class="add-color" value="<%= default_color %>">
       </span>
-      <span class="color-hex color-hex-preview"><%= default_color %></span>
+      <%# Normalise to uppercase so the visible hex matches the JS .toUpperCase()
+          updates after the user picks a different color. %>
+      <span class="color-hex color-hex-preview"><%= default_color&.upcase %></span>
     </div>
   </div>
 </div>
@@ -119,11 +121,14 @@
 </div>
 
 <% if mode == :edit %>
+  <%# Default to "this occurrence" — the cautious choice. Renaming one
+      day's standup shouldn't accidentally rename every future one too;
+      users who want the series edit toggle to series explicitly. %>
   <div class="ff add-scope-field hidden">
     <label>Apply changes to</label>
     <div class="scope-radios">
-      <label><input type="radio" name="scope" value="occurrence"> This occurrence</label>
-      <label><input type="radio" name="scope" value="series" checked> This and all future</label>
+      <label><input type="radio" name="scope" value="occurrence" checked> This occurrence</label>
+      <label><input type="radio" name="scope" value="series"> This and all future</label>
     </div>
   </div>
 <% end %>

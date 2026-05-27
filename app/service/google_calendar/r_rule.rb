@@ -126,6 +126,79 @@ class GoogleCalendar::RRule
     end
   end
 
+  # Build an array of RRULE/EXDATE lines for an AgendaSchedule — the inverse
+  # of `translate`. Used when our UI's "delete all future" needs to push a
+  # truncated rule back to Google's master event.
+  # Returns [] when the schedule has no representable rule (one-off, etc.).
+  def self.serialize(schedule, until_on: nil)
+    rec = (schedule.recurrence || {}).with_indifferent_access
+    freq = rec[:freq].to_s
+    return [] if freq.blank?
+
+    lines = []
+    rrule_parts = []
+
+    case freq
+    when "daily"
+      rrule_parts << "FREQ=DAILY"
+    when "weekdays"
+      rrule_parts << "FREQ=WEEKLY"
+      rrule_parts << "BYDAY=MO,TU,WE,TH,FR"
+    when "weekly"
+      rrule_parts << "FREQ=WEEKLY"
+      days = Array(rec[:by_day]).map { |d| WEEKDAY_MAP.invert[d.to_sym] }.compact
+      rrule_parts << "BYDAY=#{days.join(",")}" if days.any?
+    when "monthly"
+      rrule_parts << "FREQ=MONTHLY"
+      if rec[:by_set_pos].present? && Array(rec[:by_day]).any?
+        rrule_parts << "BYSETPOS=#{rec[:by_set_pos]}"
+        day = WEEKDAY_MAP.invert[rec[:by_day].first.to_sym]
+        rrule_parts << "BYDAY=#{day}" if day
+      elsif Array(rec[:by_month_day]).any?
+        rrule_parts << "BYMONTHDAY=#{rec[:by_month_day].join(",")}"
+      end
+    when "yearly"
+      rrule_parts << "FREQ=YEARLY"
+    when "custom"
+      unit = (rec[:unit].to_s.presence || "day").upcase
+      unit = "DAY" if unit == "DAYS"
+      rrule_parts << "FREQ=#{unit_to_freq(unit)}"
+      interval = rec[:interval].to_i
+      rrule_parts << "INTERVAL=#{interval}" if interval > 1
+    else
+      return []
+    end
+
+    truncate_to = until_on || schedule.until_on
+    rrule_parts << "UNTIL=#{truncate_to.strftime("%Y%m%d")}" if truncate_to
+    rrule_parts << "COUNT=#{schedule.occurrence_count}" if schedule.occurrence_count.present? && truncate_to.nil?
+
+    lines << "RRULE:#{rrule_parts.join(";")}"
+
+    excluded = Array(rec[:excluded_dates]).filter_map { |d| parse_date_str(d) }
+    if excluded.any?
+      lines << "EXDATE:#{excluded.map { |d| d.strftime("%Y%m%d") }.join(",")}"
+    end
+
+    lines
+  end
+
+  def self.unit_to_freq(unit)
+    case unit
+    when "WEEK"  then "WEEKLY"
+    when "MONTH" then "MONTHLY"
+    else "DAILY"
+    end
+  end
+
+  def self.parse_date_str(value)
+    return value if value.is_a?(::Date)
+
+    ::Date.parse(value.to_s)
+  rescue ::ArgumentError
+    nil
+  end
+
   # Google date forms: `YYYYMMDD`, `YYYYMMDDTHHMMSSZ`, or `YYYYMMDDTHHMMSS`.
   # We only need the calendar date — time-of-day comes from the event's
   # start.dateTime which is captured separately.

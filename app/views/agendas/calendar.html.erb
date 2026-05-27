@@ -59,6 +59,9 @@
                   data-agenda-id="<%= item.agenda_id %>"
                   data-agenda-name="<%= item.agenda.name %>"
                   data-agenda-color="<%= item.agenda.color %>"
+                  data-agenda-source="<%= item.agenda.source %>"
+                  data-all-day="<%= item.all_day? %>"
+                  data-end-date="<%= item.end_date&.iso8601 %>"
                   data-start-at="<%= item.start_at.iso8601 %>"
                   data-end-at="<%= item.end_at&.iso8601 %>"
                   data-name="<%= item.name %>"
@@ -82,4 +85,5 @@
   <%= render "agenda_items/add_modal", agendas: @agendas, date: Date.current %>
   <%= render "agenda_items/edit_modal", agendas: @agendas %>
   <%= render "agenda_items/details_modal" %>
+  <%= render "agenda_items/confirm_modal" %>
 </div>

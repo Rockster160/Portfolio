@@ -122,6 +122,10 @@ class Oauth::GoogleApi < Oauth::Base
       id_token:            response[:id_token].presence || account.id_token,
       tokens_refreshed_at: ::Time.current,
       reauth_required_at:  nil,
+      # Clear the soft-disconnect tombstone — a successful reauth means the
+      # picker should treat this account as live again, not stuck showing a
+      # "reconnect" prompt forever.
+      disconnected_at:     nil,
     )
     @google_account = account
     response
@@ -135,6 +139,24 @@ class Oauth::GoogleApi < Oauth::Base
 
   def list_calendars
     get("users/me/calendarList", { maxResults: 250 })
+  end
+
+  # Single-calendar metadata fetch. Used by the sync service to lazily
+  # populate `agendas.timezone` after a connect — without this, all-day
+  # event parsing has no idea what wall-clock zone "May 28" lives in.
+  def get_calendar(calendar_id)
+    get("calendars/#{CGI.escape(calendar_id)}")
+  end
+
+  # PATCH the calendar metadata. Lets owners rename or recolor a Google
+  # calendar from our UI and have the change propagate upstream rather
+  # than silently diverging. Only the calendar's owner can patch.
+  def patch_calendar(calendar_id, body)
+    request(
+      url("calendars/#{CGI.escape(calendar_id)}"),
+      :patch,
+      body,
+    )
   end
 
   def list_events(calendar_id, sync_token: nil, time_min: nil, page_token: nil)

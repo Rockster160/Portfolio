@@ -33,6 +33,50 @@
     return `${h}:${String(m).padStart(2, "0")}${ampm}`;
   }
 
+  // Promise-returning replacement for `window.confirm()`. Renders inside
+  // the shared #agenda-confirm-modal (present on the agenda pages). The
+  // promise resolves to true on Confirm, false on Cancel / dismiss.
+  // Falls back to native confirm if the modal isn't on the page.
+  function agendaConfirm({ title, body, confirmLabel, danger }) {
+    const modal = document.getElementById("agenda-confirm-modal");
+    if (!modal || typeof window.showModal !== "function") {
+      // No modal infra here (e.g. /agenda/manage doesn't render it) — fall back.
+      return Promise.resolve(window.confirm(`${title}\n\n${body || ""}`));
+    }
+    const titleEl  = modal.querySelector(".agenda-confirm-title");
+    const bodyEl   = modal.querySelector(".agenda-confirm-body");
+    const okBtn    = modal.querySelector(".agenda-confirm-ok");
+    const cancelBtn= modal.querySelector(".agenda-confirm-cancel");
+    if (titleEl)  titleEl.textContent = title || "Are you sure?";
+    if (bodyEl) {
+      bodyEl.textContent = body || "";
+      bodyEl.classList.toggle("hidden", !body);
+    }
+    if (okBtn) {
+      okBtn.textContent = confirmLabel || "Confirm";
+      okBtn.classList.toggle("af-btn-danger", danger !== false);
+      okBtn.classList.toggle("af-btn-primary", danger === false);
+    }
+
+    return new Promise((resolve) => {
+      const cleanup = (result) => {
+        okBtn?.removeEventListener("click", onOk);
+        cancelBtn?.removeEventListener("click", onCancel);
+        document.removeEventListener("keydown", onKey);
+        window.hideModal?.("#agenda-confirm-modal");
+        resolve(result);
+      };
+      const onOk     = () => cleanup(true);
+      const onCancel = () => cleanup(false);
+      const onKey    = (e) => { if (e.key === "Escape") cleanup(false); };
+      okBtn?.addEventListener("click", onOk);
+      cancelBtn?.addEventListener("click", onCancel);
+      document.addEventListener("keydown", onKey);
+      window.showModal("#agenda-confirm-modal");
+    });
+  }
+  window.AgendaConfirm = agendaConfirm;
+
   function toast(msg, kind) {
     const cls = kind === "error" ? "agenda-toast error" : "agenda-toast";
     let node = $(".agenda-toast");
@@ -91,16 +135,51 @@
     if (numEl) numEl.textContent = count > 0 ? ` ${count}` : "";
     badge.classList.toggle("hidden", count === 0);
   }
+  // Persistent banner + queue of permanently-failed ops so the user
+  // knows which changes were dropped server-side and can dismiss when
+  // they've understood. Bumping the version key (DROPPED_KEY) drops
+  // anything left from a stale session.
+  const DROPPED_KEY = "agendaDroppedOps:v1";
+  function getDropped() {
+    try { return JSON.parse(localStorage.getItem(DROPPED_KEY) || "[]"); }
+    catch (_) { return []; }
+  }
+  function saveDropped(list) {
+    localStorage.setItem(DROPPED_KEY, JSON.stringify(list));
+    updateDroppedBanner();
+  }
+  function recordDropped(op, status) {
+    const list = getDropped();
+    list.push({ url: op.url, method: op.method, status, at: new Date().toISOString() });
+    saveDropped(list);
+  }
+  function updateDroppedBanner() {
+    const banner = document.querySelector(".agenda-error-dropped");
+    if (!banner) return;
+    const list = getDropped();
+    banner.classList.toggle("hidden", list.length === 0);
+    const count = banner.querySelector(".agenda-error-dropped-count");
+    if (count) count.textContent = list.length > 1 ? ` (${list.length})` : "";
+  }
+
   // Drains one op at a time, removing the head only after `res.ok` so a
   // tab close or network drop mid-flight leaves the op queued for retry.
+  // Five consecutive 5xx attempts surface the disconnect banner so the
+  // user sees that something is wrong even though the WS may still be up.
   let _processing = false;
+  let _consecutive5xx = 0;
   async function processQueue() {
     if (_processing) return; // single-flight
     _processing = true;
     try {
       while (true) {
         const q = getQueue();
-        if (q.length === 0) return;
+        if (q.length === 0) {
+          _consecutive5xx = 0;
+          // Clear the banner if it was up only because of 5xx retries.
+          clearApiErrorBanner();
+          return;
+        }
         const op = q[0];
         let res;
         try {
@@ -117,22 +196,31 @@
           });
         } catch (_e) {
           // Network drop — leave op queued, retry on next online / WS connect.
+          showApiErrorBanner();
           return;
         }
         if (!res.ok) {
           if (res.status >= 400 && res.status < 500) {
-            // 4xx is permanent — dropping prevents infinite loop. Log loudly.
+            // 4xx is permanent. Drop the op so we don't loop, but record
+            // it so the user gets a persistent indicator they can read
+            // and dismiss — silent drops were leaving changes lost
+            // without any explanation.
             const dropped = getQueue();
             if (dropped[0] && dropped[0].dedup_key === op.dedup_key) {
               dropped.shift();
               saveQueue(dropped);
             }
+            recordDropped(op, res.status);
             console.error(`Dropped queued op (server ${res.status}):`, op);
             continue;
           }
-          // 5xx — transient. Leave it for retry, stop draining now.
+          // 5xx — transient. Leave queued; surface a banner if it keeps
+          // happening so the user sees that retries are stalling.
+          _consecutive5xx += 1;
+          if (_consecutive5xx >= 5) showApiErrorBanner();
           return;
         }
+        _consecutive5xx = 0;
         // Server ack'd. Pop the head off persistent storage. Re-read first
         // in case another op was enqueued concurrently.
         const after = getQueue();
@@ -145,6 +233,18 @@
       _processing = false;
     }
   }
+
+  // Reuses the existing .agenda-error "Disconnected" banner copy — the
+  // user-facing message is the same either way ("changes aren't reaching
+  // the server"). The Monitor connect handler also clears it.
+  function showApiErrorBanner() { $(".agenda-error")?.classList.remove("hidden"); }
+  function clearApiErrorBanner() {
+    // Don't clear if Monitor is currently disconnected — that handler owns
+    // the banner too.
+    if (window.__agendaMonitorDisconnected) return;
+    $(".agenda-error")?.classList.add("hidden");
+  }
+
   window.addEventListener("online", processQueue);
 
   // Lightweight optimistic placeholder for a just-submitted add. Server
@@ -762,10 +862,13 @@
   }
 
   // ---------- checkbox toggle (with offline queue) ----------
-  // Strictly pending-until-confirmed: the native checked flip is the click
-  // ack (so the user sees their tap register), but we mark the row pending,
-  // disable the input, and let the post-broadcast HTML swap deliver the
-  // canonical truth. On failure we revert the native flip and re-enable.
+  // The native checked flip is the click ack — the box stays in the user's
+  // intended state. We mark the row pending and let the post-broadcast
+  // HTML swap deliver the canonical truth. On any kind of failure we
+  // KEEP the box in its new state (matches user intent), queue the op for
+  // retry, and surface a pending indicator. Reverting the box on failure
+  // would contradict what the user just clicked — the queue + persistent
+  // error banner handle the rest.
   function initChecks(root) {
     root.addEventListener("change", (e) => {
       const cb = e.target.closest(".agenda-item-check");
@@ -781,17 +884,14 @@
       };
 
       row?.classList.add("is-pending");
-      cb.disabled = true;
 
       ajax(op.method, op.url, op.body)
         .catch(() => {
-          // Couldn't reach the server — revert the checkbox so the visual
-          // matches the database, queue for retry, and clear pending.
-          cb.checked = !intent;
-          row?.classList.remove("is-pending");
-          cb.disabled = false;
+          // Queue + keep the box checked. The processor will keep
+          // retrying on reconnect / next visibility tick; the persistent
+          // error banner surfaces if it lands in the 4xx-dropped state.
           enqueue(op);
-          toast("Saved offline — will sync", "error");
+          toast("Saved offline — will sync");
         });
       // No .then(): on success we wait for the broadcast → HTML swap to
       // replace this row with the server-rendered truth, which carries
@@ -808,22 +908,57 @@
     const deleteBtn = $(".add-delete", form);
     const saveBtn = $(".add-save", form);
     const restoreBtn = $(".add-restore", form);
+    const alldayField    = $(".add-allday-field", form);
+    const alldayInput    = $(".add-allday-input", form);
+    const alldayEndField = $(".add-allday-end-field", form);
+    const alldayEndInput = $(".add-allday-end", form);
+    const timeFields     = $(".add-time-fields", form);
 
     let activeKind = "task";
     let currentRecurring = false;
     let currentScheduleData = null;
+    let currentItemSource = null;
 
     function syncKind() {
       $$(".kind-btn", form).forEach((b) => b.classList.toggle("active", b.dataset.kind === activeKind));
       $(".add-end-field", form).classList.toggle("hidden", activeKind !== "event");
       $(".add-trigger-field", form)?.classList.toggle("hidden", activeKind !== "trigger");
+      // All-day toggle only applies to events. Hide for non-events but
+      // don't reset its value — the user may toggle kind back and we want
+      // to preserve what they were composing.
+      alldayField?.classList.toggle("hidden", activeKind !== "event");
+      if (activeKind !== "event" && alldayInput) alldayInput.checked = false;
+      syncAllDay();
     }
+
+    function syncAllDay() {
+      const isAllDay = !!alldayInput?.checked;
+      timeFields?.classList.toggle("hidden", isAllDay);
+      alldayEndField?.classList.toggle("hidden", !isAllDay);
+    }
+
+    alldayInput?.addEventListener("change", syncAllDay);
 
     $$(".kind-btn", form).forEach((btn) => {
       btn.addEventListener("click", () => { activeKind = btn.dataset.kind; syncKind(); });
     });
 
-    const editAgendaPicker = bindAgendaPicker(form);
+    // Mirror the add-modal behavior: picking a Google agenda forces kind
+    // to event and disables Task / Trigger buttons (Google calendars only
+    // hold events). On switch back to a local agenda we re-enable.
+    const editAgendaPicker = bindAgendaPicker(form, (_id, _color, _name, source) => {
+      const isGoogle = source === "google";
+      if (isGoogle && activeKind !== "event") {
+        activeKind = "event";
+        syncKind();
+      }
+      $$(".kind-btn", form).forEach((b) => {
+        const lock = isGoogle && b.dataset.kind !== "event";
+        b.disabled = lock;
+        b.classList.toggle("locked", lock);
+        b.title = lock ? "Only events can be added to a Google calendar" : "";
+      });
+    });
 
     // Click model on each agenda-item row:
     //   .agenda-item-check-zone (label wrapping the checkbox) → native
@@ -853,8 +988,14 @@
       $(".add-item-id", form).value = d.itemId;
       $(".add-name", form).value = d.name;
       if (d.agendaId) editAgendaPicker?.setValue(d.agendaId);
+      currentItemSource = d.agendaSource || null;
 
       activeKind = d.kind || "task";
+
+      // All-day state must be applied BEFORE syncKind so the hide/show
+      // logic of time vs date-range fields lands correctly.
+      const isAllDay = d.allDay === "true";
+      if (alldayInput) alldayInput.checked = isAllDay;
       syncKind();
 
       // Item's start_at is a UTC ISO; split into local date + time-of-day.
@@ -863,6 +1004,12 @@
       $(".add-date", form).value = startDate;
       $(".add-start", form).value = startTime || "09:00";
       $(".add-end", form).value = endTime || "10:00";
+      // For all-day, populate the end-date field with the item's inclusive
+      // end_date (server emits via data-end-date so we don't recompute the
+      // exclusive→inclusive conversion in JS).
+      if (alldayEndInput) {
+        alldayEndInput.value = (isAllDay ? (d.endDate || startDate) : startDate);
+      }
 
       $(".add-location", form).value = d.location || "";
       $(".add-notes", form).value = d.notes || "";
@@ -980,8 +1127,20 @@
       const date = $(".add-date", form).value;
       const startTime = $(".add-start", form).value || "09:00";
       const endTime = $(".add-end", form).value || "10:00";
-      const startAt = `${date}T${startTime}`;
-      const endAt = activeKind === "event" ? `${date}T${endTime}` : null;
+      const isAllDay = activeKind === "event" && !!alldayInput?.checked;
+      const allDayEnd = alldayEndInput?.value || date;
+      const startAt = isAllDay ? `${date}T00:00` : `${date}T${startTime}`;
+      // For all-day we mirror Google's convention (exclusive end-date): a
+      // one-day all-day from May 27 ends at May 28T00:00. Multi-day adds
+      // one day to the picked end-date.
+      const endAt = (() => {
+        if (activeKind !== "event") return null;
+        if (!isAllDay) return `${date}T${endTime}`;
+        const next = new Date(`${allDayEnd}T00:00`);
+        next.setDate(next.getDate() + 1);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T00:00`;
+      })();
       const triggerExpression = activeKind === "trigger"
         ? ($(".add-trigger-expression", form).value || null)
         : null;
@@ -999,6 +1158,7 @@
           color:              color,
           start_at:           startAt,
           end_at:             endAt,
+          all_day:            isAllDay,
           location:           $(".add-location", form).value,
           notes:              $(".add-notes", form).value,
           trigger_expression: triggerExpression,
@@ -1040,11 +1200,14 @@
         });
     });
 
-    restoreBtn?.addEventListener("click", () => {
-      const msg = "Restore this occurrence back to the recurring series?\n\n" +
-                  "All changes you've made to this event — date, time, name, " +
-                  "notes, location, color, etc. — will be lost.";
-      if (!window.confirm(msg)) return;
+    restoreBtn?.addEventListener("click", async () => {
+      const ok = await agendaConfirm({
+        title:        "Restore to the recurring series?",
+        body:         "This will discard the edits you've made to this one occurrence and use the series defaults instead.",
+        confirmLabel: "Restore",
+        danger:       true,
+      });
+      if (!ok) return;
 
       const itemEl = findItemEl($(".add-item-id", form).value);
       itemEl?.classList.add("is-pending-delete");
@@ -1063,10 +1226,22 @@
         });
     });
 
-    deleteBtn.addEventListener("click", () => {
+    deleteBtn.addEventListener("click", async () => {
       const scope = currentScope();
-      const label = deleteBtn.textContent;
-      if (!window.confirm(`${label} — are you sure?`)) return;
+      const isSeries = currentRecurring && scope === "series";
+      const title = isSeries ? "Delete this and all future occurrences?"
+        : (currentRecurring ? "Delete just this occurrence?" : "Delete this item?");
+      const body = isSeries
+        ? "All upcoming items in this series will be removed. History stays intact."
+        : null;
+
+      const ok = await agendaConfirm({
+        title,
+        body,
+        confirmLabel: isSeries ? "Delete all" : "Delete",
+        danger:       true,
+      });
+      if (!ok) return;
 
       const itemEl = findItemEl($(".add-item-id", form).value);
       itemEl?.classList.add("is-pending-delete");
@@ -1127,41 +1302,58 @@
   }
 
   // ---------- agenda visibility filter ----------
-  // Per-device localStorage filter — applies to both `.agenda-item` and
-  // `.cal-item` rows (they share `data-agenda-id`).
-  const AGENDA_HIDDEN_KEY = "agendaHidden:v1";
-  // Per-kind "hide completed" toggles: { task: bool, event: bool, trigger: bool }
-  const COMPLETED_HIDDEN_KEY = "agendaCompletedHidden:v1";
-  // When a previously-visible row becomes crossed-out and would now be
-  // hidden by the completed filter, we keep it visible for this many ms so
-  // the user gets a beat to see the strikethrough. Subsequent completions
-  // within the window reset the timer so a flurry of checks gets removed
-  // together, not staggered.
+  // Filter state lives on the SERVER (AgendaPreference) so a toggle on
+  // one device propagates to every other. The first paint uses a
+  // localStorage cache (for instant render before the server fetch
+  // returns) and we PATCH any change back, which fans out a Monitor
+  // broadcast — see subscribeMonitor's `received` handler.
+  const PREFS_CACHE_KEY = "agendaPreferencesCache:v1";
   const COMPLETED_GRACE_MS = 5000;
 
-  function getHiddenAgendas() {
+  function defaultPrefs() {
+    return { hidden_agenda_ids: [], hide_completed: { task: false, event: false, trigger: false }, hide_tentative: false };
+  }
+  let currentPrefs = (() => {
     try {
-      const raw = JSON.parse(localStorage.getItem(AGENDA_HIDDEN_KEY) || "[]");
-      return Array.isArray(raw) ? raw.map(String) : [];
-    } catch (_) { return []; }
-  }
-  function saveHiddenAgendas(ids) {
-    localStorage.setItem(AGENDA_HIDDEN_KEY, JSON.stringify(ids));
-  }
+      const cached = JSON.parse(localStorage.getItem(PREFS_CACHE_KEY) || "null");
+      return cached && typeof cached === "object" ? Object.assign(defaultPrefs(), cached) : defaultPrefs();
+    } catch (_) { return defaultPrefs(); }
+  })();
 
-  function getCompletedHidden() {
-    const empty = { task: false, event: false, trigger: false };
-    try {
-      const raw = JSON.parse(localStorage.getItem(COMPLETED_HIDDEN_KEY) || "{}");
-      return {
-        task:    !!raw.task,
-        event:   !!raw.event,
-        trigger: !!raw.trigger,
-      };
-    } catch (_) { return empty; }
+  function persistPrefsCache() {
+    localStorage.setItem(PREFS_CACHE_KEY, JSON.stringify(currentPrefs));
   }
-  function saveCompletedHidden(state) {
-    localStorage.setItem(COMPLETED_HIDDEN_KEY, JSON.stringify(state));
+  function applyPreferenceSnapshot(prefs) {
+    if (!prefs || typeof prefs !== "object") return;
+    currentPrefs = {
+      hidden_agenda_ids: Array.isArray(prefs.hidden_agenda_ids) ? prefs.hidden_agenda_ids.map(String) : [],
+      hide_completed:    Object.assign({ task: false, event: false, trigger: false }, prefs.hide_completed || {}),
+      hide_tentative:    !!prefs.hide_tentative,
+    };
+    persistPrefsCache();
+    syncFilterPanelToPrefs();
+    applyAgendaVisibility();
+  }
+  function pushPrefsToServer() {
+    persistPrefsCache();
+    return ajax("PATCH", "/agenda_preference", {
+      agenda_preference: {
+        hidden_agenda_ids: currentPrefs.hidden_agenda_ids,
+        hide_completed:    currentPrefs.hide_completed,
+        hide_tentative:    currentPrefs.hide_tentative,
+      },
+    }).catch(() => {
+      // Network drop — keep the local cache; reconnect will fetch authoritative.
+    });
+  }
+  function fetchPrefsFromServer() {
+    return fetch("/agenda_preference", {
+      credentials: "same-origin",
+      headers:     { "Accept": "application/json", "X-Requested-With": "XMLHttpRequest" },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => { if (json) applyPreferenceSnapshot(json); })
+      .catch(() => { /* fall back to cache */ });
   }
 
   // Items currently in their post-completion grace window. Stays visible
@@ -1178,19 +1370,10 @@
     }, COMPLETED_GRACE_MS);
   }
 
-  const TENTATIVE_HIDDEN_KEY = "agendaTentativeHidden:v1";
-  function getTentativeHidden() {
-    return localStorage.getItem(TENTATIVE_HIDDEN_KEY) === "1";
-  }
-  function saveTentativeHidden(flag) {
-    if (flag) localStorage.setItem(TENTATIVE_HIDDEN_KEY, "1");
-    else localStorage.removeItem(TENTATIVE_HIDDEN_KEY);
-  }
-
   function applyAgendaVisibility() {
-    const hidden = new Set(getHiddenAgendas());
-    const completedHidden = getCompletedHidden();
-    const tentativeHidden = getTentativeHidden();
+    const hidden = new Set(currentPrefs.hidden_agenda_ids.map(String));
+    const completedHidden = currentPrefs.hide_completed;
+    const tentativeHidden = currentPrefs.hide_tentative;
     document.querySelectorAll("[data-agenda-id]").forEach((el) => {
       if (!el.classList.contains("agenda-item") && !el.classList.contains("cal-item")) return;
       const hideByAgenda = hidden.has(el.dataset.agendaId);
@@ -1202,6 +1385,23 @@
       const hideByTentative = tentativeHidden && el.classList.contains("tentative");
       el.classList.toggle("hidden-by-filter", hideByAgenda || hideByCompleted || hideByTentative);
     });
+  }
+
+  // Reflects the current prefs snapshot into the filter panel checkboxes.
+  // Used both on initial hydrate and after a Monitor broadcast updates
+  // prefs from another device.
+  function syncFilterPanelToPrefs() {
+    const panel = document.querySelector(".agenda-filter-panel");
+    if (!panel) return;
+    const hiddenSet = new Set(currentPrefs.hidden_agenda_ids.map(String));
+    panel.querySelectorAll("input[type=checkbox][data-agenda-id]").forEach((cb) => {
+      cb.checked = !hiddenSet.has(cb.dataset.agendaId);
+    });
+    panel.querySelectorAll("input[type=checkbox][data-completed-kind]").forEach((cb) => {
+      cb.checked = !!currentPrefs.hide_completed[cb.dataset.completedKind];
+    });
+    const tentCb = panel.querySelector("input[type=checkbox][data-hide-tentative]");
+    if (tentCb) tentCb.checked = currentPrefs.hide_tentative;
   }
 
   // Pre-swap snapshot of crossed-out state by item id. Used after a DOM
@@ -1245,17 +1445,10 @@
     const panel = document.querySelector(".agenda-filter-panel");
     if (!btn || !panel) return;
 
-    const hidden = new Set(getHiddenAgendas());
-    panel.querySelectorAll("input[type=checkbox][data-agenda-id]").forEach((cb) => {
-      cb.checked = !hidden.has(cb.dataset.agendaId);
-    });
-    const completedHidden = getCompletedHidden();
-    panel.querySelectorAll("input[type=checkbox][data-completed-kind]").forEach((cb) => {
-      cb.checked = !!completedHidden[cb.dataset.completedKind];
-    });
-    const tentCheckbox = panel.querySelector("input[type=checkbox][data-hide-tentative]");
-    if (tentCheckbox) tentCheckbox.checked = getTentativeHidden();
+    // Initial paint from local cache while the server fetch is in flight.
+    syncFilterPanelToPrefs();
     applyAgendaVisibility();
+    fetchPrefsFromServer();
 
     function open() {
       panel.classList.remove("hidden");
@@ -1280,15 +1473,12 @@
     panel.addEventListener("change", (e) => {
       const agendaCb = e.target.closest("input[type=checkbox][data-agenda-id]");
       if (agendaCb) {
-        const id = agendaCb.dataset.agendaId;
-        let next = getHiddenAgendas();
-        if (agendaCb.checked) {
-          next = next.filter((x) => x !== id);
-        } else if (!next.includes(id)) {
-          next.push(id);
-        }
-        saveHiddenAgendas(next);
+        const id = String(agendaCb.dataset.agendaId);
+        const ids = new Set(currentPrefs.hidden_agenda_ids.map(String));
+        if (agendaCb.checked) ids.delete(id); else ids.add(id);
+        currentPrefs.hidden_agenda_ids = Array.from(ids);
         applyAgendaVisibility();
+        pushPrefsToServer();
         return;
       }
 
@@ -1296,17 +1486,19 @@
       if (completedCb) {
         // Direct filter toggles apply immediately — no grace window. Grace
         // is only for the transition caused by a completion event.
-        const state = getCompletedHidden();
-        state[completedCb.dataset.completedKind] = completedCb.checked;
-        saveCompletedHidden(state);
+        currentPrefs.hide_completed = Object.assign({}, currentPrefs.hide_completed, {
+          [completedCb.dataset.completedKind]: completedCb.checked,
+        });
         applyAgendaVisibility();
+        pushPrefsToServer();
         return;
       }
 
       const tentCb = e.target.closest("input[type=checkbox][data-hide-tentative]");
       if (tentCb) {
-        saveTentativeHidden(tentCb.checked);
+        currentPrefs.hide_tentative = tentCb.checked;
         applyAgendaVisibility();
+        pushPrefsToServer();
       }
     });
   }
@@ -1379,6 +1571,7 @@
       connected: function () {
         clearTimeout(disconnectTimer);
         disconnectTimer = null;
+        window.__agendaMonitorDisconnected = false;
         $(".agenda-error")?.classList.add("hidden");
         // Two things on reconnect: drain anything that piled up offline AND
         // re-sync the view, since we likely missed broadcasts while down.
@@ -1387,12 +1580,18 @@
         if (r) refreshView(r);
       },
       disconnected: function () {
+        window.__agendaMonitorDisconnected = true;
         clearTimeout(disconnectTimer);
         disconnectTimer = setTimeout(() => {
           $(".agenda-error")?.classList.remove("hidden");
         }, DISCONNECT_GRACE_MS);
       },
-      received: function (_data) {
+      received: function (data) {
+        // Filter prefs broadcast — apply locally without a server refetch.
+        if (data && data.preferences) {
+          applyPreferenceSnapshot(data.preferences);
+          return;
+        }
         // Broadcasts go out for every agenda the user has access to. The
         // global views render whatever the current user can see, so any
         // accessible-agenda change is a refresh signal — no filtering by id.
@@ -1519,11 +1718,20 @@
       return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
     }
     function msUntilNext3am() {
+      // setHours(3, 0, 0, 0) on a spring-forward day lands on 04:00 (03:00
+      // doesn't exist), making us fire an hour late. Clamp to a minute
+      // past 03:00 if the result overshoots — we still want a 3am-ish
+      // rollover and the small drift is acceptable.
       const now = new Date();
       const next = new Date(now);
       next.setHours(3, 0, 0, 0);
-      if (next <= now) next.setDate(next.getDate() + 1);
-      return next - now;
+      if (next.getHours() === 4) next.setHours(3, 1, 0, 0); // DST skip — clamp
+      if (next <= now) {
+        next.setDate(next.getDate() + 1);
+        next.setHours(3, 0, 0, 0);
+        if (next.getHours() === 4) next.setHours(3, 1, 0, 0);
+      }
+      return Math.max(next - now, 60_000);
     }
 
     let loadedDay = dayKey();
@@ -1621,6 +1829,11 @@
     } else {
       initChecks(root);
     }
+    // Wire the dismiss button on the permanent-failure banner.
+    document.querySelector(".agenda-error-dropped .agenda-error-dismiss")?.addEventListener("click", () => {
+      saveDropped([]);
+    });
+    updateDroppedBanner();
     updatePendingBadge();
     const checkRollover = scheduleAutoDateAdvance(root);
 

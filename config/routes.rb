@@ -103,7 +103,6 @@ Rails.application.routes.draw do
   post "webhooks/local_ping" => "webhooks#local_ping"
   post "webhooks/jenkins" => "webhooks#jenkins"
   post "webhooks/post" => "webhooks#post"
-  post "webhooks/google_pub_sub" => "webhooks#google_pub_sub"
   post "webhooks/email" => "webhooks#email"
   post "webhooks/speak" => "webhooks#speak"
 
@@ -189,6 +188,7 @@ Rails.application.routes.draw do
   get "/agenda/calendar" => "agendas#calendar", as: :calendar
   get "/agenda/manage"   => "agendas#index",    as: :manage_agenda
   post "/agenda/test_push" => "agendas#test_push", as: :test_push_agenda
+  post "/agenda/:id/resync" => "agendas#resync", as: :resync_agenda
 
   # Resourceful CRUD remapped onto /agenda/* (was /agendas/*). `except: :index`
   # because /agenda/manage above is the index. `except: :show` because there
@@ -197,6 +197,11 @@ Rails.application.routes.draw do
     resources :shares, only: [:create, :update, :destroy], controller: :agenda_shares
     resource :notification_setting, only: [:update], controller: :agenda_notification_settings
   end
+
+  # Per-user filter state (hidden agendas, hide-completed, hide-tentative).
+  # GET for initial hydrate; PATCH broadcasts the new snapshot to every
+  # device the user has open.
+  resource :agenda_preference, only: [:show, :update]
 
   # External-source agenda connection flow (currently: Google Calendar).
   #   `start_google`         — OAuth round-trip kickoff

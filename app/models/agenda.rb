@@ -11,6 +11,7 @@
 #  sync_reason        :string
 #  sync_token         :text
 #  synced_at          :datetime
+#  timezone           :string
 #  watch_expires_at   :datetime
 #  watch_failed_at    :datetime
 #  created_at         :datetime         not null
@@ -98,6 +99,16 @@ class Agenda < ApplicationRecord
   scope :needing_reauth, -> {
     externally_managed.joins(:google_account).where.not(google_accounts: { reauth_required_at: nil })
   }
+  # Either: the account was soft-disconnected (tokens cleared, picker needs
+  # a reauth click) OR Google has flagged the tokens dead. Either way the
+  # /agenda/manage banner needs to surface a reconnect CTA — the bare
+  # `needing_reauth` scope missed the soft-disconnected case and stranded
+  # users with no visible explanation.
+  scope :needing_attention, -> {
+    externally_managed.joins(:google_account).where(
+      "google_accounts.reauth_required_at IS NOT NULL OR google_accounts.disconnected_at IS NOT NULL",
+    )
+  }
 
   # Skip watch attempts if we already have a live channel OR Google recently
   # told us this calendar doesn't support push.
@@ -129,16 +140,45 @@ class Agenda < ApplicationRecord
   # lets multi-day all-day events appear on each day they cover, not just
   # the start date.
   def items_for_range(from, to)
+    self.class.items_for_range_in([id], from, to, reference_user: user, preloaded_agendas: [self])
+  end
+
+  # Bulk variant — collects items + phantoms across many agendas in a
+  # constant number of queries regardless of how many agendas are passed.
+  # Called by User#agenda_items_for_range so the aggregated agenda views
+  # (day / week / calendar) don't iterate per-agenda.
+  #
+  # `preloaded_agendas` lets the caller hand in agenda objects (with
+  # `.user` already loaded) so the phantom-building loop's `user_zone`
+  # call doesn't fire `schedule.agenda → agenda.user` per row.
+  def self.items_for_range_in(agenda_ids, from, to, reference_user:, preloaded_agendas: nil)
+    ids = Array(agenda_ids).compact
+    return [] if ids.empty?
+
     from_date = from.to_date
     to_date = to.to_date
+    zone = ::ActiveSupport::TimeZone[reference_user.timezone] || ::Time.zone
+    range_start = zone.local(from_date.year, from_date.month, from_date.day).beginning_of_day
+    range_end   = zone.local(to_date.year,   to_date.month,   to_date.day).end_of_day
 
-    range = range_for_dates(from_date, to_date)
-    real_items = agenda_items
+    real_items = AgendaItem
+      .where(agenda_id: ids)
       .not_cancelled
-      .where("start_at <= ? AND COALESCE(end_at, start_at) >= ?", range.end, range.begin)
+      .where("start_at <= ? AND COALESCE(end_at, start_at) >= ?", range_end, range_start)
       .order(:start_at)
       .to_a
-    schedules = agenda_schedules.active_between(from_date, to_date).to_a
+    schedules = AgendaSchedule
+      .where(agenda_id: ids)
+      .active_between(from_date, to_date)
+      .to_a
+
+    # Wire the parent agenda back onto every fetched item + schedule so
+    # consumers iterating `.agenda` / `.user` don't N+1.
+    if preloaded_agendas.present?
+      by_id = preloaded_agendas.index_by(&:id)
+      real_items.each { |i| i.association(:agenda).target = by_id[i.agenda_id] if by_id.key?(i.agenda_id) }
+      schedules.each  { |s| s.association(:agenda).target = by_id[s.agenda_id] if by_id.key?(s.agenda_id) }
+    end
 
     materialized_keys = real_items.each_with_object(Set.new) { |item, set|
       next if item.agenda_schedule_id.blank?

@@ -18,11 +18,14 @@
     <button type="button" class="agenda-push-status-btn"></button>
   </div>
 
-  <% if current_user.agendas.needing_reauth.exists? %>
+  <%# Covers BOTH "Google revoked our tokens" and "user soft-disconnected
+      this account but didn't follow through with reconnect." Both leave
+      the user with calendars that won't sync; both want the same CTA. %>
+  <% if current_user.agendas.needing_attention.exists? %>
     <div class="agenda-reauth-banner" role="alert">
       <i class="fa fa-warning"></i>
-      <span class="agenda-reauth-msg">Google Calendar access expired — reconnect to resume syncing.</span>
-      <a href="<%= start_google_agenda_connection_path %>" class="agenda-reauth-cta">Reconnect</a>
+      <span class="agenda-reauth-msg">Google Calendar isn't connected — reconnect to resume syncing.</span>
+      <a href="<%= new_agenda_connection_path %>" class="agenda-reauth-cta">Reconnect</a>
     </div>
   <% end %>
 
@@ -84,6 +87,13 @@
                   <span class="agenda-card-meta-cell agenda-card-sync-state agenda-card-sync-state-warn"
                         title="Real-time push channel failed to register — falling back to periodic polling.">
                     Push channel unavailable
+                    <%# Bypasses the 1-day cooldown so the user doesn't have to
+                        wait if Google's transient failure has cleared. %>
+                    <button type="button"
+                            class="agenda-card-retry"
+                            data-resync-url="<%= resync_agenda_path(agenda) %>">
+                      Retry now
+                    </button>
                   </span>
                 <% end %>
               <% end %>
@@ -232,6 +242,28 @@
     });
 
     refreshPushState();
+
+    // "Retry now" on a Push channel unavailable badge: kicks the server
+    // to enqueue a sync (which also re-attempts the watch registration).
+    root.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".agenda-card-retry[data-resync-url]");
+      if (!btn) return;
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = "Retrying…";
+      try {
+        const res = await fetch(btn.dataset.resyncUrl, {
+          method:      "POST",
+          credentials: "same-origin",
+          headers:     { "X-CSRF-Token": csrf, "X-Requested-With": "XMLHttpRequest" },
+        });
+        btn.textContent = res.ok ? "Queued" : "Failed";
+      } catch (_e) {
+        btn.textContent = "Failed";
+      } finally {
+        setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 2000);
+      }
+    });
 
     root.addEventListener("change", async (e) => {
       const cb = e.target.closest("input[data-notify-attr]");

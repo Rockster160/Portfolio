@@ -13,7 +13,10 @@
 <% local_start = item.start_at.in_time_zone(item.user.timezone) %>
 <% local_end   = item.end_at&.in_time_zone(item.user.timezone) %>
 <% item_url    = agenda_item_path(item.display_id) %>
-<% editable    = !preview && item.agenda.editable_by?(current_user) && !item.agenda.managed_externally? %>
+<%# Google items ARE editable now — edits mirror to Google. An editor can
+    rename/move/cancel a Google event through the pencil; the controller
+    syncs the change upstream via events.patch / events.delete. %>
+<% editable    = !preview && item.agenda.editable_by?(current_user) %>
 <% readonly    = !preview && !editable %>
 <% classes     = ["agenda-item"] %>
 <% classes << "kind-#{item.kind}" %>
@@ -59,9 +62,11 @@
      data-agenda-id="<%= item.agenda_id %>"
      data-agenda-name="<%= item.agenda.name %>"
      data-agenda-color="<%= item.agenda.color %>"
+     data-agenda-source="<%= item.agenda.source %>"
      data-start-at="<%= item.start_at.iso8601 %>"
      data-end-at="<%= item.end_at&.iso8601 %>"
      data-all-day="<%= item.all_day? %>"
+     data-end-date="<%= item.end_date&.iso8601 %>"
      data-name="<%= item.name %>"
      data-notes="<%= item.notes %>"
      data-location="<%= item.location %>"

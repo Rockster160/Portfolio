@@ -117,26 +117,33 @@ RSpec.describe "ExternalAgendaGuard", type: :controller do
       expect(item.reload.locally_modified_at).to be_nil
     end
 
-    it "refuses direct destroy of items on gcal agendas" do
+    it "allows direct destroy of items on gcal agendas AND mirrors the deletion to Google" do
       item = gcal_agenda.agenda_items.create!(
         kind: :event, name: "From sync", start_at: Time.current,
         end_at: 1.hour.from_now, external_uid: "uid-1d"
       )
+      api = instance_double(Oauth::GoogleApi)
+      allow(Oauth::GoogleApi).to receive(:for_account).and_return(api)
+      expect(api).to receive(:delete_event).with(gcal_agenda.external_id, "uid-1d")
       delete :destroy, params: { id: item.id }, format: :json
-      expect(response).to have_http_status(:forbidden)
-      expect(AgendaItem.exists?(item.id)).to be(true)
+      expect(response).to have_http_status(:no_content)
+      expect(AgendaItem.exists?(item.id)).to be(false)
     end
 
-    it "refuses moving an item INTO a gcal agenda" do
+    it "allows moving an item INTO a gcal agenda by inserting it on Google + clearing local externalness on the source side" do
       item = user_agenda.agenda_items.create!(
-        kind: :task, name: "Mine", start_at: Time.current,
+        kind: :event, name: "Mine", start_at: Time.current, end_at: 1.hour.from_now,
       )
+      api = instance_double(Oauth::GoogleApi)
+      allow(Oauth::GoogleApi).to receive(:for_account).and_return(api)
+      allow(api).to receive(:insert_event).and_return({ id: "new-gcal-uid", etag: %("e1") })
       patch :update, params: {
         id:          item.id,
         agenda_item: { agenda_id: gcal_agenda.id, name: "Mine" },
       }, format: :json
-      expect(response).to have_http_status(:forbidden)
-      expect(item.reload.agenda_id).to eq(user_agenda.id)
+      expect(response).to be_successful
+      expect(item.reload.agenda_id).to eq(gcal_agenda.id)
+      expect(item.external_uid).to eq("new-gcal-uid")
     end
   end
 

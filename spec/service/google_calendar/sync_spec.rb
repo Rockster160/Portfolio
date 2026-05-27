@@ -13,7 +13,12 @@ RSpec.describe GoogleCalendar::Sync do
   }
   let(:api) { instance_double(Oauth::GoogleApi) }
 
-  before { allow(Oauth::GoogleApi).to receive(:for_account).with(google_account).and_return(api) }
+  before do
+    allow(Oauth::GoogleApi).to receive(:for_account).with(google_account).and_return(api)
+    # ensure_timezone! pings calendarList lazily — stub it so tests don't
+    # need to mock it individually. Returns nil = no-op.
+    allow(api).to receive(:get_calendar).and_return(nil)
+  end
 
   def page(items, sync_token: "next-token", next_page: nil)
     {

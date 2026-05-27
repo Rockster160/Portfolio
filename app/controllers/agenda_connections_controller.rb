@@ -31,13 +31,10 @@ class AgendaConnectionsController < ApplicationController
   end
 
   # POST /agenda_connection/calendars/connect
-  # Connect a single Google calendar.
-  #
-  # Idempotent: find_or_initialize is scoped by (user, source, external_id)
-  # rather than including google_account_id, so a legacy agenda (created
-  # pre-multi-account) gets *adopted* under the new GoogleAccount instead
-  # of duplicating — the existing parameterized_name uniqueness check
-  # would otherwise block the insert.
+  # Connect a single Google calendar. Scoped by (user, google_account_id,
+  # external_id) — a row is identified by which account it came in
+  # through, so the same Google calendar surfaced under two different
+  # accounts gets two distinct Agendas (matches the user's mental model).
   def connect_calendar
     account = find_account
     return redirect_to(new_agenda_connection_path, alert: "Unknown Google account.") unless account
@@ -45,8 +42,11 @@ class AgendaConnectionsController < ApplicationController
     external_id = params[:external_id].to_s.presence
     return redirect_to(new_agenda_connection_path, alert: "Missing calendar id.") if external_id.blank?
 
-    agenda = current_user.agendas.find_or_initialize_by(source: :google, external_id: external_id)
-    agenda.google_account_id = account.id
+    agenda = current_user.agendas.find_or_initialize_by(
+      source:            :google,
+      google_account_id: account.id,
+      external_id:       external_id,
+    )
     agenda.name = params[:name].to_s.presence || agenda.name.presence || "Google Calendar"
     agenda.color = params[:color].to_s.presence || agenda.color.presence || Agenda::DEFAULT_COLOR
     agenda.save!
@@ -79,39 +79,47 @@ class AgendaConnectionsController < ApplicationController
   end
 
   # DELETE /agenda_connection
-  # Disconnect an entire GoogleAccount: stop every watch on its agendas,
-  # revoke the OAuth token, destroy the account (cascades the agendas).
-  # With no params, disconnects EVERY account on this user.
+  # Disconnect modes:
+  #   * `google_account_id=N` → soft-disconnect that one account: stop
+  #     watches, drop agendas, revoke token, mark `disconnected_at`. The
+  #     row stays so the picker can re-list it as a Reconnect option.
+  #   * no params (Disconnect everything) → full removal: stop watches,
+  #     revoke tokens, destroy every GoogleAccount row (cascading agendas).
+  #     The user is back to the bare "Sign in with Google" state.
   def destroy
-    accounts = (
-      if params[:google_account_id].present?
-        current_user.google_accounts.where(id: params[:google_account_id])
-      else
-        current_user.google_accounts
-      end
-    )
-
-    # Soft-disconnect: clear tokens, drop the watch + agendas, but keep
-    # the GoogleAccount row so the picker can re-list it as a
-    # reconnectable option (instead of looking like it never existed).
-    accounts.find_each do |account|
-      account.agendas.find_each do |agenda|
-        ::GoogleCalendar::WatchManager.stop!(agenda) if agenda.watch_channel_id.present?
-      end
-      account.agendas.destroy_all
-      account.api.revoke! rescue nil # best-effort — Google may already have invalidated
-      account.update!(
-        access_token:    nil,
-        refresh_token:   nil,
-        id_token:        nil,
-        disconnected_at: ::Time.current,
-      )
+    if params[:google_account_id].present?
+      account = current_user.google_accounts.find_by(id: params[:google_account_id])
+      soft_disconnect!(account) if account
+      return redirect_to(manage_agenda_path, notice: "Google account disconnected.")
     end
 
+    current_user.google_accounts.find_each { |account| purge_account!(account) }
     redirect_to(manage_agenda_path, notice: "Google Calendar disconnected.")
   end
 
   private
+
+  def soft_disconnect!(account)
+    account.agendas.find_each do |agenda|
+      ::GoogleCalendar::WatchManager.stop!(agenda) if agenda.watch_channel_id.present?
+    end
+    account.agendas.destroy_all
+    account.api.revoke! rescue nil # best-effort — Google may already have invalidated
+    account.update!(
+      access_token:    nil,
+      refresh_token:   nil,
+      id_token:        nil,
+      disconnected_at: ::Time.current,
+    )
+  end
+
+  def purge_account!(account)
+    account.agendas.find_each do |agenda|
+      ::GoogleCalendar::WatchManager.stop!(agenda) if agenda.watch_channel_id.present?
+    end
+    account.api.revoke! rescue nil
+    account.destroy
+  end
 
   def find_account
     id = params[:google_account_id]
