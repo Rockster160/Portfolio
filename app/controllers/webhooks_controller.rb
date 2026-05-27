@@ -26,11 +26,20 @@ class WebhooksController < ApplicationController
     when :spotify_api
       ::Oauth::SpotifyApi.from_jwt(params[:state])&.code = params[:code] if params[:code].present?
     when :google_api
+      # Google bounces the user back here after consent. Always end on the
+      # connect page — either ready to pick calendars (happy path) or with
+      # a clear error flash so the user knows to retry.
       api = ::Oauth::GoogleApi.from_jwt(params[:state])
-      if api.present? && params[:code].present?
+      if params[:error].present?
+        flash[:alert] = "Google connection cancelled: #{params[:error]}"
+      elsif api.blank?
+        flash[:alert] = "Google connection failed — please try again."
+      elsif params[:code].blank?
+        flash[:alert] = "Google didn't return an authorization code — please try again."
+      else
         api.code = params[:code]
-        return redirect_to(new_agenda_connection_path(provider: :google))
       end
+      return redirect_to(new_agenda_connection_path)
     end
 
     render json: params
