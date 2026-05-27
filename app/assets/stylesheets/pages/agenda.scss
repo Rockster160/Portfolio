@@ -1947,6 +1947,26 @@ body.ctr-agendas {
     gap: 2px;
   }
 
+  .agenda-connect-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px;
+  }
+
+  // Each `button_to` wraps its button in a <form>; without this the form's
+  // default block layout pushes the button to its own row and the global
+  // button styles stretch it to fill. Inline-flex keeps it tight + sized
+  // to the button's natural width.
+  .agenda-connect-row-form {
+    display: inline-flex;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
   .agenda-connect-row label {
     display: flex;
     align-items: center;
@@ -1995,5 +2015,31 @@ body.ctr-agendas {
     margin-top: 16px;
     display: flex;
     gap: 10px;
+    align-items: center;
+  }
+
+  .agenda-connect-account {
+    margin-top: 20px;
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+
+    .agenda-connect-account-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .agenda-connect-account-email {
+      flex: 1;
+      font-weight: 500;
+      font-size: 14px;
+    }
+  }
+
+  .agenda-connect-note-warn {
+    color: #f9d76b;
+    opacity: 0.85;
   }
 }

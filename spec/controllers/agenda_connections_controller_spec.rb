@@ -3,15 +3,26 @@ require "rails_helper"
 RSpec.describe AgendaConnectionsController, type: :controller do
   let(:user) { create(:user) }
   let(:api) { instance_double(Oauth::GoogleApi) }
+  let(:account) {
+    GoogleAccount.create!(
+      user: user, email: "alice@example.com",
+      access_token: "tok", refresh_token: "ref"
+    )
+  }
+  let(:other_account) {
+    GoogleAccount.create!(
+      user: user, email: "bob@example.com",
+      access_token: "tok2", refresh_token: "ref2"
+    )
+  }
 
-  before do
-    sign_in user
-    allow(Oauth::GoogleApi).to receive(:new).with(user).and_return(api)
-  end
+  before { sign_in user }
 
   describe "GET #start_google" do
     it "redirects to the Google OAuth URL" do
+      allow(Oauth::GoogleApi).to receive(:new).with(user).and_return(api)
       allow(api).to receive(:auth_url).and_return("https://accounts.google.com/...")
+
       get :start_google
       expect(response).to redirect_to("https://accounts.google.com/...")
     end
@@ -20,73 +31,88 @@ RSpec.describe AgendaConnectionsController, type: :controller do
   describe "GET #new" do
     render_views
 
-    it "shows the connect CTA when no token is cached" do
-      allow(api).to receive(:access_token).and_return(nil)
+    it "shows the connect CTA when no accounts are connected" do
       get :new
       expect(response).to be_successful
       expect(response.body).to include("Sign in with Google")
     end
 
-    it "renders the picker with each calendar's connection state" do
-      _existing = create(
-        :agenda, user: user, source: :google, external_id: "primary",
-        name: "Personal", color: "#ff0000"
-      )
-      allow(api).to receive_messages(access_token: "tok", list_calendars: {
-        items: [
-          { id: "primary",   summary: "Personal", backgroundColor: "#ff0000", primary: true },
-          { id: "work@grp",  summary: "Work",     backgroundColor: "#00ff00" },
-        ],
+    it "renders one section per connected account with their calendars" do
+      account # force-eval
+      other_account
+      api_a = instance_double(Oauth::GoogleApi, list_calendars: {
+        items: [{ id: "primary", summary: "Alice Personal", backgroundColor: "#ff0000", primary: true }],
       })
+      api_b = instance_double(Oauth::GoogleApi, list_calendars: {
+        items: [{ id: "work@bob", summary: "Bob Work", backgroundColor: "#00ff00" }],
+      })
+      allow(Oauth::GoogleApi).to receive(:for_account).with(account).and_return(api_a)
+      allow(Oauth::GoogleApi).to receive(:for_account).with(other_account).and_return(api_b)
 
       get :new
       expect(response).to be_successful
-      expect(response.body).to include("Personal")
-      expect(response.body).to include("Work")
-      expect(response.body).to match(/connected/i) # the success badge on the existing row
-      expect(response.body).to include("Connect")  # the action button on the other row
-      expect(response.body).to include("Disconnect") # the action button on the connected row
+      expect(response.body).to include("alice@example.com")
+      expect(response.body).to include("bob@example.com")
+      expect(response.body).to include("Alice Personal")
+      expect(response.body).to include("Bob Work")
+      expect(response.body).to include("Connect another account")
     end
 
-    it "redirects with an alert when list_calendars returns blank" do
-      allow(api).to receive_messages(access_token: "tok", list_calendars: nil)
+    it "marks rows whose calendar already has an Agenda as Connected" do
+      account
+      account.agendas.create!(
+        user: user, source: :google, external_id: "primary",
+        name: "Personal", color: "#ff0000"
+      )
+      api_a = instance_double(Oauth::GoogleApi, list_calendars: {
+        items: [{ id: "primary", summary: "Personal", backgroundColor: "#ff0000" }],
+      })
+      allow(Oauth::GoogleApi).to receive(:for_account).with(account).and_return(api_a)
 
       get :new
-      expect(response).to redirect_to(manage_agenda_path)
-      expect(flash[:alert]).to match(/Could not load/i)
+      expect(response.body).to match(/connected/i)
+      expect(response.body).to include("Disconnect")
     end
   end
 
   describe "POST #connect_calendar" do
-    it "creates an Agenda for the given external_id + enqueues a sync" do
+    it "creates an Agenda under the specified account + enqueues a sync" do
       allow(GoogleCalendarSyncWorker).to receive(:perform_async)
 
       post :connect_calendar, params: {
-        external_id: "primary",
-        name:        "Personal",
-        color:       "#ff0000",
+        google_account_id: account.id,
+        external_id:       "primary",
+        name:              "Personal",
+        color:             "#ff0000",
       }
 
-      agenda = user.agendas.google.find_by(external_id: "primary")
+      agenda = account.agendas.find_by(external_id: "primary")
       expect(agenda).to be_present
+      expect(agenda.user_id).to eq(user.id)
+      expect(agenda.google_account_id).to eq(account.id)
       expect(agenda.name).to eq("Personal")
       expect(agenda.color).to eq("#ff0000")
       expect(response).to redirect_to(manage_agenda_path)
-      expect(flash[:notice]).to match(/Connected "Personal"/)
       expect(GoogleCalendarSyncWorker).to have_received(:perform_async).with(agenda.id)
     end
 
-    it "is idempotent — re-connecting an already-connected calendar keeps the id" do
+    it "is idempotent — re-connecting keeps the same id" do
       allow(GoogleCalendarSyncWorker).to receive(:perform_async)
 
-      post :connect_calendar, params: { external_id: "primary", name: "Personal" }
-      first_id = user.agendas.google.find_by(external_id: "primary").id
-      post :connect_calendar, params: { external_id: "primary", name: "Personal" }
-      expect(user.agendas.google.find_by(external_id: "primary").id).to eq(first_id)
+      post :connect_calendar, params: { google_account_id: account.id, external_id: "primary", name: "P" }
+      first_id = account.agendas.find_by(external_id: "primary").id
+      post :connect_calendar, params: { google_account_id: account.id, external_id: "primary", name: "P" }
+      expect(account.agendas.find_by(external_id: "primary").id).to eq(first_id)
     end
 
-    it "redirects with an alert when external_id is missing" do
-      post :connect_calendar, params: { name: "Personal" }
+    it "alerts when the account is unknown" do
+      post :connect_calendar, params: { google_account_id: 999_999, external_id: "primary" }
+      expect(response).to redirect_to(new_agenda_connection_path)
+      expect(flash[:alert]).to match(/Unknown Google account/i)
+    end
+
+    it "alerts when external_id is missing" do
+      post :connect_calendar, params: { google_account_id: account.id }
       expect(response).to redirect_to(new_agenda_connection_path)
       expect(flash[:alert]).to match(/Missing calendar id/i)
     end
@@ -94,8 +120,8 @@ RSpec.describe AgendaConnectionsController, type: :controller do
 
   describe "DELETE #disconnect_calendar" do
     let!(:gcal_agenda) {
-      create(
-        :agenda, user: user, source: :google, external_id: "primary",
+      account.agendas.create!(
+        user: user, source: :google, external_id: "primary",
         name: "Personal",
         watch_channel_id: "ch", watch_resource_id: "res"
       )
@@ -104,44 +130,54 @@ RSpec.describe AgendaConnectionsController, type: :controller do
     it "destroys the Agenda + stops its watch channel" do
       allow(::GoogleCalendar::WatchManager).to receive(:stop!)
 
-      delete :disconnect_calendar, params: { external_id: "primary" }
+      delete :disconnect_calendar, params: { google_account_id: account.id, external_id: "primary" }
       expect(::GoogleCalendar::WatchManager).to have_received(:stop!).with(gcal_agenda)
       expect(Agenda.exists?(gcal_agenda.id)).to be(false)
-      expect(response).to redirect_to(manage_agenda_path)
+      expect(GoogleAccount.exists?(account.id)).to be(true) # account itself preserved
       expect(flash[:notice]).to match(/Disconnected "Personal"/)
     end
 
-    it "redirects with an alert when the calendar isn't connected" do
-      delete :disconnect_calendar, params: { external_id: "nope" }
-      expect(response).to redirect_to(manage_agenda_path)
+    it "alerts when the calendar isn't connected under that account" do
+      delete :disconnect_calendar, params: { google_account_id: account.id, external_id: "nope" }
       expect(flash[:alert]).to match(/not connected/i)
     end
   end
 
   describe "DELETE #destroy" do
-    let!(:gcal_agenda) {
-      create(
-        :agenda, user: user, source: :google, external_id: "primary",
-        watch_channel_id: "ch", watch_resource_id: "res"
+    let!(:agenda_a) {
+      account.agendas.create!(
+        user: user, source: :google, external_id: "alice-cal",
+        name: "Alice Cal",
+        watch_channel_id: "ch-a"
+      )
+    }
+    let!(:agenda_b) {
+      other_account.agendas.create!(
+        user: user, source: :google, external_id: "bob-cal",
+        name: "Bob Cal",
+        watch_channel_id: "ch-b"
       )
     }
 
-    it "stops watch channels + revokes the token" do
+    it "disconnects a single account when google_account_id is supplied" do
       allow(::GoogleCalendar::WatchManager).to receive(:stop!)
-      allow(api).to receive(:revoke!)
+      allow_any_instance_of(Oauth::GoogleApi).to receive(:revoke!)
 
-      delete :destroy
-      expect(::GoogleCalendar::WatchManager).to have_received(:stop!).with(gcal_agenda)
-      expect(api).to have_received(:revoke!)
-      expect(Agenda.exists?(gcal_agenda.id)).to be(true) # data kept unless delete_data=1
+      delete :destroy, params: { google_account_id: account.id }
+      expect(GoogleAccount.exists?(account.id)).to be(false)
+      expect(Agenda.exists?(agenda_a.id)).to be(false)
+      # The other account is untouched
+      expect(GoogleAccount.exists?(other_account.id)).to be(true)
+      expect(Agenda.exists?(agenda_b.id)).to be(true)
     end
 
-    it "destroys synced data when delete_data=1" do
+    it "disconnects every account when no params are given" do
       allow(::GoogleCalendar::WatchManager).to receive(:stop!)
-      allow(api).to receive(:revoke!)
+      allow_any_instance_of(Oauth::GoogleApi).to receive(:revoke!)
 
-      delete :destroy, params: { delete_data: "1" }
-      expect(Agenda.exists?(gcal_agenda.id)).to be(false)
+      delete :destroy
+      expect(user.google_accounts.count).to eq(0)
+      expect(user.agendas.google.count).to eq(0)
     end
   end
 end

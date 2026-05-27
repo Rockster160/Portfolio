@@ -2,56 +2,43 @@ class AgendaConnectionsController < ApplicationController
   before_action :authorize_user_or_guest
 
   # GET /agenda_connection/start/google
-  # Kicks off the OAuth round-trip. The callback at /webhooks/oauth/google_api
-  # exchanges the code and redirects back to #new — at which point we have
-  # a cached token and can render the calendar picker.
+  # Kicks off OAuth. Same path for "first account" and "another account" —
+  # Google's prompt=select_account on our auth_url lets the user pick.
+  # The callback at /webhooks/oauth/google_api exchanges the code, decodes
+  # the id_token email, and creates a GoogleAccount row before redirecting
+  # back to #new.
   def start_google
-    redirect_to(google.auth_url, allow_other_host: true)
+    redirect_to(::Oauth::GoogleApi.new(current_user).auth_url, allow_other_host: true)
   end
 
   # GET /agenda_connection/new
-  #   * Not authed → render the "Sign in with Google" CTA.
-  #   * Authed → render the picker: every calendar from the user's
-  #     CalendarList, marked as Connected (Agenda already exists) or
-  #     "Connect" button (not yet imported). One click per row, no bulk
-  #     form submit.
+  #   * No GoogleAccount rows yet → render the "Sign in with Google" CTA.
+  #   * One or more → render a section per account showing every calendar
+  #     from `users/me/calendarList`, each row marked Connected (Agenda
+  #     exists) or with a Connect button. Plus a "Connect another account"
+  #     CTA.
   def new
-    unless google_authenticated?
+    @accounts = current_user.google_accounts.order(:email)
+    if @accounts.empty?
       @needs_auth = true
       return
     end
 
-    list = google.list_calendars
-    if list.blank? || Array(list[:items]).empty?
-      flash[:alert] = "Could not load your Google Calendars. Try reconnecting."
-      redirect_to(manage_agenda_path)
-      return
-    end
-
-    @calendars = Array(list[:items]).map { |c|
-      {
-        external_id: c[:id],
-        name:        c[:summary],
-        time_zone:   c[:timeZone],
-        color:       c[:backgroundColor],
-        primary:     c[:primary] == true,
-      }
-    }
-    @connected_by_external_id = current_user.agendas.google
-      .where(external_id: @calendars.pluck(:external_id))
-      .index_by(&:external_id)
+    @account_sections = @accounts.map { |account| build_section(account) }
   end
 
   # POST /agenda_connection/calendars/connect
-  # Connect a single Google calendar: create an Agenda row and kick off
-  # an initial sync. Idempotent — re-connecting an already-connected
-  # calendar is a no-op + a re-sync.
+  # Create an Agenda row for a single calendar under a specific account,
+  # and kick off its initial sync. Idempotent.
   def connect_calendar
+    account = find_account
+    return redirect_to(new_agenda_connection_path, alert: "Unknown Google account.") unless account
+
     external_id = params[:external_id].to_s.presence
     return redirect_to(new_agenda_connection_path, alert: "Missing calendar id.") if external_id.blank?
 
     agenda = current_user.agendas.find_or_initialize_by(
-      source: :google, external_id: external_id,
+      source: :google, google_account_id: account.id, external_id: external_id,
     )
     agenda.name = params[:name].to_s.presence || agenda.name.presence || "Google Calendar"
     agenda.color = params[:color].to_s.presence || agenda.color.presence || Agenda::DEFAULT_COLOR
@@ -65,12 +52,16 @@ class AgendaConnectionsController < ApplicationController
   end
 
   # DELETE /agenda_connection/calendars/disconnect
-  # Disconnect a single Google calendar: stop its watch channel and
-  # destroy the Agenda (cascading items/schedules via dependent: :destroy).
-  # OAuth token stays intact so other calendars keep syncing.
+  # Destroy a single Agenda (cascading items/schedules) + stop its watch.
+  # Tokens stay intact so the rest of the account's calendars keep syncing.
   def disconnect_calendar
+    account = find_account
     external_id = params[:external_id].to_s.presence
-    agenda = current_user.agendas.google.find_by(external_id: external_id) if external_id.present?
+    agenda = (
+      if account && external_id
+        account.agendas.find_by(external_id: external_id)
+      end
+    )
     return redirect_to(manage_agenda_path, alert: "Calendar not connected.") if agenda.blank?
 
     name = agenda.name
@@ -81,25 +72,57 @@ class AgendaConnectionsController < ApplicationController
   end
 
   # DELETE /agenda_connection
-  # Disconnect EVERY Google calendar: stops every watch, revokes the OAuth
-  # token. `?delete_data=1` also destroys all synced Agenda rows.
+  # Disconnect an entire GoogleAccount: stop every watch on its agendas,
+  # revoke the OAuth token, destroy the account (cascades the agendas).
+  # With no params, disconnects EVERY account on this user.
   def destroy
-    current_user.agendas.google.find_each do |agenda|
-      ::GoogleCalendar::WatchManager.stop!(agenda) if agenda.watch_channel_id.present?
+    accounts = (
+      if params[:google_account_id].present?
+        current_user.google_accounts.where(id: params[:google_account_id])
+      else
+        current_user.google_accounts
+      end
+    )
+
+    accounts.find_each do |account|
+      account.agendas.find_each do |agenda|
+        ::GoogleCalendar::WatchManager.stop!(agenda) if agenda.watch_channel_id.present?
+      end
+      account.api.revoke! rescue nil # best-effort — Google may already have invalidated
+      account.destroy
     end
-    google.revoke!
-    current_user.agendas.google.destroy_all if params[:delete_data].to_s == "1"
 
     redirect_to(manage_agenda_path, notice: "Google Calendar disconnected.")
   end
 
   private
 
-  def google
-    @google ||= ::Oauth::GoogleApi.new(current_user)
+  def find_account
+    id = params[:google_account_id]
+    return nil if id.blank?
+
+    current_user.google_accounts.find_by(id: id)
   end
 
-  def google_authenticated?
-    google.access_token.present?
+  # For each account, fetch its CalendarList and join with already-connected
+  # Agendas so the view can render Connect/Disconnect per row.
+  def build_section(account)
+    list = account.api.list_calendars
+    calendars = Array(list&.[](:items)).map { |c|
+      {
+        external_id: c[:id],
+        name:        c[:summary],
+        color:       c[:backgroundColor],
+        primary:     c[:primary] == true,
+      }
+    }
+    connected = account.agendas.where(external_id: calendars.pluck(:external_id)).index_by(&:external_id)
+    {
+      account:      account,
+      calendars:    calendars,
+      connected:    connected,
+      load_error:   list.blank?,
+      needs_reauth: account.needs_reauth?,
+    }
   end
 end

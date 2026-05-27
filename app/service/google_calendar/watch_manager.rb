@@ -10,7 +10,13 @@ class GoogleCalendar::WatchManager
 
   def initialize(agenda)
     @agenda = agenda
-    @api = ::Oauth::GoogleApi.new(agenda.user)
+    @api = (
+      if agenda.google_account
+        ::Oauth::GoogleApi.for_account(agenda.google_account)
+      else
+        ::Oauth::GoogleApi.new(agenda.user)
+      end
+    )
   end
 
   def self.start!(agenda)

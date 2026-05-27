@@ -16,6 +16,7 @@
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
 #  external_id        :text
+#  google_account_id  :bigint
 #  user_id            :bigint           not null
 #  watch_channel_id   :text
 #  watch_resource_id  :text
@@ -40,6 +41,9 @@ class Agenda < ApplicationRecord
   enum :source, { user: 0, google: 1 }, default: :user
 
   belongs_to :user
+  # External-source agendas point at the GoogleAccount that owns the
+  # upstream calendar. User-source agendas leave it nil.
+  belongs_to :google_account, optional: true
   has_many :agenda_schedules, dependent: :destroy
   has_many :agenda_items, dependent: :destroy
   has_many :agenda_shares, dependent: :destroy
@@ -80,7 +84,11 @@ class Agenda < ApplicationRecord
       .where(watch_expires_at: ..(now + WATCH_RENEWAL_LEAD))
       .where("watch_failed_at IS NULL OR watch_failed_at < ?", now - WATCH_FAILURE_COOLDOWN)
   }
-  scope :needing_reauth, -> { externally_managed.where.not(reauth_required_at: nil) }
+  scope :needing_reauth, -> {
+    externally_managed.left_outer_joins(:google_account).where(
+      "agendas.reauth_required_at IS NOT NULL OR google_accounts.reauth_required_at IS NOT NULL",
+    )
+  }
 
   # Skip watch attempts if we already have a live channel OR Google recently
   # told us this calendar doesn't support push.

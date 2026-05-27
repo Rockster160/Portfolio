@@ -11,7 +11,17 @@ class GoogleCalendar::Sync
   def initialize(agenda)
     @agenda = agenda
     @user = agenda.user
-    @api = ::Oauth::GoogleApi.new(@user)
+    # GCal-synced agendas are scoped to a GoogleAccount that owns the
+    # OAuth tokens. Pre-multi-account legacy rows may have no account
+    # attached — fall back to the user-scoped API in that case (the
+    # token-migration script moves them off the legacy slot).
+    @api = (
+      if agenda.google_account
+        ::Oauth::GoogleApi.for_account(agenda.google_account)
+      else
+        ::Oauth::GoogleApi.new(@user)
+      end
+    )
   end
 
   # Runs an incremental sync if we have a syncToken, otherwise a full sync.
@@ -33,6 +43,7 @@ class GoogleCalendar::Sync
 
     @agenda.update!(sync_token: sync_token, synced_at: ::Time.current) if sync_token.present?
     @agenda.update!(reauth_required_at: nil) if @agenda.reauth_required_at.present?
+    @agenda.google_account&.clear_reauth_required!
     @agenda.broadcast!
     :ok
   rescue ::RestClient::Gone
@@ -272,7 +283,11 @@ class GoogleCalendar::Sync
   end
 
   def mark_reauth_required!
+    # Mark the GoogleAccount as needing reauth — every agenda under that
+    # account is implicitly stale until the user reconnects. Fall back to
+    # legacy per-agenda flag for un-migrated rows.
+    @agenda.google_account&.mark_reauth_required!
     # Intentional bulk timestamp set — no model validations to skip.
-    @user.agendas.google.update_all(reauth_required_at: ::Time.current) # rubocop:disable Rails/SkipsModelValidations
+    @agenda.google_account&.agendas&.update_all(reauth_required_at: ::Time.current) # rubocop:disable Rails/SkipsModelValidations
   end
 end

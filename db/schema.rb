@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_27_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_27_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -170,6 +170,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_27_000000) do
     t.datetime "watch_expires_at"
     t.datetime "watch_failed_at"
     t.datetime "reauth_required_at"
+    t.bigint "google_account_id"
+    t.index ["google_account_id"], name: "index_agendas_on_google_account_id"
     t.index ["user_id", "parameterized_name"], name: "index_agendas_on_user_id_and_parameterized_name", unique: true
     t.index ["user_id", "source", "external_id"], name: "index_agendas_on_user_source_external", unique: true, where: "(source <> 0)"
     t.index ["user_id"], name: "index_agendas_on_user_id"
@@ -496,6 +498,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_27_000000) do
     t.text "results"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
+  end
+
+  create_table "google_accounts", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "email", null: false
+    t.text "access_token"
+    t.text "refresh_token"
+    t.text "id_token"
+    t.datetime "tokens_refreshed_at"
+    t.datetime "reauth_required_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "email"], name: "index_google_accounts_on_user_id_and_email", unique: true
+    t.index ["user_id"], name: "index_google_accounts_on_user_id"
   end
 
   create_table "lines", id: :serial, force: :cascade do |t|
@@ -982,9 +998,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_27_000000) do
   add_foreign_key "agenda_schedules", "agendas"
   add_foreign_key "agenda_shares", "agendas"
   add_foreign_key "agenda_shares", "users"
+  add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
   add_foreign_key "boxes", "users"
   add_foreign_key "emails", "users"
+  add_foreign_key "google_accounts", "users"
   add_foreign_key "list_builders", "lists"
   add_foreign_key "list_builders", "users"
   add_foreign_key "list_items", "sections"

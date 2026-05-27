@@ -8,8 +8,8 @@
 
   <% if @needs_auth %>
     <p class="agenda-connect-intro">
-      Connect a Google account to bring its calendars into your agenda. You'll
-      pick which calendars to include on the next step.
+      Connect a Google account to bring its calendars into your agenda. You
+      can connect multiple Google accounts.
     </p>
     <p>
       <a href="<%= start_google_agenda_connection_path %>" class="agenda-connect-cta">
@@ -23,48 +23,84 @@
     <p class="agenda-connect-intro">
       Each Google calendar can be connected as its own agenda. Connected
       agendas appear on /agenda/manage with their notification settings.
-      Disconnect to remove the agenda + its synced items.
     </p>
 
-    <ul class="agenda-connect-list">
-      <% @calendars.each do |cal| %>
-        <% existing = @connected_by_external_id[cal[:external_id]] %>
-        <li class="agenda-connect-row" style="--option-color: <%= cal[:color] || Agenda::DEFAULT_COLOR %>;">
-          <span class="agenda-pick-dot" aria-hidden="true"></span>
-          <span class="agenda-connect-name">
+    <% @account_sections.each do |section| %>
+      <% account = section[:account] %>
+      <section class="agenda-connect-account">
+        <header class="agenda-connect-account-head">
+          <span class="agenda-connect-account-email">
             <i class="fa fa-google agenda-connect-source-icon" aria-hidden="true"></i>
-            <%= cal[:name].presence || cal[:external_id] %>
-            <% if cal[:primary] %><small class="agenda-connect-tag">primary</small><% end %>
-            <% if existing %><small class="agenda-connect-tag agenda-connect-tag-success">connected</small><% end %>
+            <%= account.email %>
           </span>
-          <% if existing %>
-            <%= button_to "Disconnect",
-                disconnect_agenda_connection_calendar_path,
-                method: :delete,
-                params: { external_id: cal[:external_id] },
-                class:  "af-btn af-btn-danger",
-                data:   { confirm: "Disconnect this calendar? Its synced items will be removed." } %>
-          <% else %>
-            <%= button_to "Connect",
-                connect_agenda_connection_calendar_path,
-                method: :post,
-                params: {
-                  external_id: cal[:external_id],
-                  name:        cal[:name],
-                  color:       cal[:color],
-                },
-                class: "af-btn af-btn-primary" %>
-          <% end %>
-        </li>
-      <% end %>
-    </ul>
+          <%= button_to "Disconnect account",
+              agenda_connection_path,
+              method:     :delete,
+              params:     { google_account_id: account.id },
+              form_class: "basic agenda-connect-row-form",
+              class:      "af-btn af-btn-secondary",
+              data:       { confirm: "Disconnect this Google account? All its synced calendars will be removed." } %>
+        </header>
+
+        <% if section[:needs_reauth] %>
+          <p class="agenda-connect-note agenda-connect-note-warn">
+            This account needs to be reconnected. Click "Sign in with Google" below.
+          </p>
+        <% end %>
+
+        <% if section[:load_error] %>
+          <p class="agenda-connect-note agenda-connect-note-warn">
+            Couldn't load this account's calendars. Try reconnecting.
+          </p>
+        <% else %>
+          <ul class="agenda-connect-list">
+            <% section[:calendars].each do |cal| %>
+              <% existing = section[:connected][cal[:external_id]] %>
+              <li class="agenda-connect-row" style="--option-color: <%= cal[:color] || Agenda::DEFAULT_COLOR %>;">
+                <span class="agenda-pick-dot" aria-hidden="true"></span>
+                <span class="agenda-connect-name">
+                  <%= cal[:name].presence || cal[:external_id] %>
+                  <% if cal[:primary] %><small class="agenda-connect-tag">primary</small><% end %>
+                  <% if existing %><small class="agenda-connect-tag agenda-connect-tag-success">connected</small><% end %>
+                </span>
+                <% if existing %>
+                  <%= button_to "Disconnect",
+                      disconnect_agenda_connection_calendar_path,
+                      method:     :delete,
+                      params:     { google_account_id: account.id, external_id: cal[:external_id] },
+                      form_class: "basic agenda-connect-row-form",
+                      class:      "af-btn af-btn-danger",
+                      data:       { confirm: "Disconnect this calendar? Its synced items will be removed." } %>
+                <% else %>
+                  <%= button_to "Connect",
+                      connect_agenda_connection_calendar_path,
+                      method:     :post,
+                      params:     {
+                        google_account_id: account.id,
+                        external_id:       cal[:external_id],
+                        name:              cal[:name],
+                        color:             cal[:color],
+                      },
+                      form_class: "basic agenda-connect-row-form",
+                      class:      "af-btn af-btn-primary" %>
+                <% end %>
+              </li>
+            <% end %>
+          </ul>
+        <% end %>
+      </section>
+    <% end %>
 
     <div class="agenda-connect-actions">
-      <%= button_to "Disconnect Google entirely",
+      <a href="<%= start_google_agenda_connection_path %>" class="agenda-connect-cta">
+        <i class="fa fa-google"></i> Connect another account
+      </a>
+      <%= button_to "Disconnect everything",
           agenda_connection_path,
-          method: :delete,
-          class:  "af-btn af-btn-danger",
-          data:   { confirm: "Sign out of Google + remove all synced calendars?" } %>
+          method:     :delete,
+          form_class: "basic",
+          class:      "af-btn af-btn-danger",
+          data:       { confirm: "Sign out of every Google account + remove all synced calendars?" } %>
     </div>
   <% end %>
 </div>
