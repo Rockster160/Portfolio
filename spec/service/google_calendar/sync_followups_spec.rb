@@ -178,7 +178,7 @@ RSpec.describe GoogleCalendar::Sync do
   end
 
   describe "trigger suppression during sync" do
-    it "doesn't fire per-row Jil :agenda_item triggers" do
+    it "doesn't fire per-row Jil :agenda_item triggers (but DOES fire one :agenda_sync at the tail)" do
       event = {
         id:      "evt-bulk-1",
         status:  "confirmed",
@@ -189,9 +189,16 @@ RSpec.describe GoogleCalendar::Sync do
         updated: "2026-05-22T08:00:00Z",
       }
       allow(api).to receive(:list_events).and_return(page([event]))
-      expect(::Jil).not_to receive(:trigger).with(anything, :agenda_item, anything)
+      triggered_scopes = []
+      # rspec-mocks' verify_partial_doubles trips on Ruby 3 kwargs
+      # separation when the method signature mixes positional + keyword
+      # args. Patch the underlying executor instead — same observation,
+      # without the verifier's strict-kwargs intercept.
+      allow(::Jil::Executor).to receive(:trigger) { |_u, scope, _d, **_kw| triggered_scopes << scope }
 
       described_class.new(agenda).run!
+      expect(triggered_scopes).not_to include(:agenda_item)
+      expect(triggered_scopes).to include(:agenda_sync)
     end
   end
 end

@@ -113,6 +113,20 @@
           data:       { confirm: "Sign out of every Google account + remove all synced calendars?" } %>
     </div>
   <% end %>
+
+  <%# Local copy of the confirm modal — the agenda.js bundle isn't loaded
+      on this page, so we render the modal here and run a tiny inline
+      controller below. Keeps the same look/feel as the in-app confirms. %>
+  <div id="agenda-connect-confirm" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content agenda-confirm-content">
+      <h3 class="agenda-confirm-title"></h3>
+      <p class="agenda-confirm-body"></p>
+      <div class="agenda-confirm-actions">
+        <button type="button" class="af-btn af-btn-secondary agenda-confirm-cancel">Cancel</button>
+        <button type="button" class="af-btn af-btn-danger agenda-confirm-ok">Disconnect</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <% content_for :after_body do %>
@@ -123,7 +137,7 @@
       //   * Swap label for "Connecting…" + spinner so the slow happy-path
       //     doesn't look frozen (Connect kicks off a sync; Google calendarList
       //     can take a second).
-      document.querySelectorAll(".agenda-connect-row-form").forEach((form) => {
+      document.querySelectorAll(".agenda-connect-row-form, form").forEach((form) => {
         form.addEventListener("submit", () => {
           const btn = form.querySelector("button, input[type=submit]");
           if (!btn || btn.disabled) return;
@@ -133,6 +147,55 @@
           btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> ' + (isConnect ? "Connecting…" : "Working…");
         });
       });
+
+      // Replace Rails UJS native data-confirm with our modal. Intercept the
+      // click before UJS fires its `confirm:` callback; show the modal; on
+      // OK, strip `data-confirm` and re-submit the form.
+      const modal = document.getElementById("agenda-connect-confirm");
+      const titleEl = modal?.querySelector(".agenda-confirm-title");
+      const bodyEl  = modal?.querySelector(".agenda-confirm-body");
+      const okBtn   = modal?.querySelector(".agenda-confirm-ok");
+      const cancelBtn = modal?.querySelector(".agenda-confirm-cancel");
+
+      function show(msg, onConfirm) {
+        if (!modal) { if (window.confirm(msg)) onConfirm(); return; }
+        // Two-line UX: first sentence becomes the title, the rest the body.
+        const parts = (msg || "Are you sure?").split(/[.?!]\s+/, 2);
+        if (titleEl) titleEl.textContent = (parts[0] || "Are you sure?").replace(/[?]+$/, "?");
+        if (bodyEl)  bodyEl.textContent  = parts.slice(1).join(" ");
+        modal.classList.remove("hidden");
+        modal.classList.add("shown");
+
+        const cleanup = (result) => {
+          okBtn.removeEventListener("click", onOk);
+          cancelBtn.removeEventListener("click", onCancel);
+          document.removeEventListener("keydown", onKey);
+          modal.classList.add("hidden");
+          modal.classList.remove("shown");
+          if (result) onConfirm();
+        };
+        const onOk     = () => cleanup(true);
+        const onCancel = () => cleanup(false);
+        const onKey    = (e) => { if (e.key === "Escape") cleanup(false); };
+        okBtn.addEventListener("click", onOk);
+        cancelBtn.addEventListener("click", onCancel);
+        document.addEventListener("keydown", onKey);
+      }
+
+      // Capture-phase: run before Rails UJS so we own the prompt.
+      document.addEventListener("click", (e) => {
+        const trigger = e.target.closest("[data-confirm]");
+        if (!trigger) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const msg = trigger.getAttribute("data-confirm");
+        show(msg, () => {
+          // Re-submit without re-prompting: clear the attribute first.
+          trigger.removeAttribute("data-confirm");
+          if (trigger.form) trigger.form.requestSubmit(trigger);
+          else trigger.click();
+        });
+      }, true);
     })();
   </script>
 <% end %>

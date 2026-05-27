@@ -1,8 +1,17 @@
 class AgendaItemsController < ApplicationController
+  # Raised by any mirror-to-Google helper that fails in a way the user
+  # needs to know about (PATCH/INSERT/DELETE rejected, instance not
+  # resolvable, etc.). Caught at the top of every action; the local row
+  # is left untouched and the user sees the message instead of a silent
+  # divergence between our view and Google's.
+  class GoogleSyncFailed < StandardError; end
+
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
   before_action :set_item, only: [:update, :destroy]
   before_action :authorize_item_edit!, only: [:update, :destroy]
+
+  rescue_from GoogleSyncFailed, with: :render_google_sync_failed
 
   def create
     target = resolve_target_agenda(params.dig(:agenda_item, :agenda_id))
@@ -13,28 +22,29 @@ class AgendaItemsController < ApplicationController
     end
 
     base_attrs = item_params.except(:agenda_id)
-    if target.managed_externally?
-      # Mirror the new event to Google first. On success Google returns
-      # the created event id + etag; we store those so future syncs'
-      # etag fast-skip recognizes it and no double-write happens.
-      _local_attrs, google_attrs = ::GoogleCalendar::EventWriter.translate(base_attrs)
-      response = target.google_account.api.insert_event(target.external_id, google_attrs)
-      external_attrs = {
-        external_uid:        response[:id],
-        external_etag:       response[:etag],
-        external_updated_at: ::Time.current,
-      }
-      @item = target.agenda_items.new(base_attrs.merge(external_attrs))
-    else
-      @item = target.agenda_items.new(base_attrs)
-    end
+    with_agenda_write_lock(target) {
+      if target.managed_externally?
+        # Mirror to Google FIRST. If it fails, we never touch the local
+        # table — the user sees the error and nothing has diverged.
+        _local_attrs, google_attrs = ::GoogleCalendar::EventWriter.translate(base_attrs)
+        response = google_insert!(target, google_attrs)
+        external_attrs = {
+          external_uid:        response[:id],
+          external_etag:       response[:etag],
+          external_updated_at: ::Time.current,
+        }
+        @item = target.agenda_items.new(base_attrs.merge(external_attrs))
+      else
+        @item = target.agenda_items.new(base_attrs)
+      end
 
-    if @item.save
-      target.broadcast!
-      render json: @item.serialize
-    else
-      render json: { errors: @item.errors.full_messages }, status: :unprocessable_entity
-    end
+      if @item.save
+        target.broadcast!
+        render json: @item.serialize
+      else
+        render json: { errors: @item.errors.full_messages }, status: :unprocessable_entity
+      end
+    }
   end
 
   def update
@@ -43,42 +53,59 @@ class AgendaItemsController < ApplicationController
     target_agenda = moved ? resolve_target_agenda(new_agenda_id) : nil
     return render json: { errors: ["Agenda not found"] }, status: :not_found if moved && target_agenda.nil?
 
-    if completion_only_update?
-      # Completion is intentionally local-only — Google has no "completed"
-      # state. Materializes phantom occurrences as needed.
-      materialize_with(completion_attrs)
-    elsif scope == :series && @item.recurring?
-      apply_series_update!(moved: moved, target: target_agenda)
-    else
-      apply_occurrence_update!(moved: moved, target: target_agenda)
+    landing_agenda = target_agenda || @item.agenda
+    # Mirrors the create-time guard: Google calendars only hold events,
+    # so refuse any update that would leave the row in a Google agenda
+    # with a non-event kind (whether via in-place edit or cross-source move).
+    if landing_agenda.managed_externally? && item_params[:kind].present? && item_params[:kind].to_s != "event"
+      return render json: { errors: ["Only events can be added to a Google calendar."] }, status: :unprocessable_entity
     end
 
-    # Moves rely on AgendaItem#broadcast_agenda_change! to fan out to both
-    # old + new agendas; in-place edits broadcast the one agenda here.
-    @item.agenda.broadcast! unless moved
-    render json: @item.serialize
+    with_agenda_write_lock(@item.agenda, target_agenda) {
+      if completion_only_update?
+        # Completion is intentionally local-only — Google has no "completed"
+        # state. Materializes phantom occurrences as needed.
+        materialize_with(completion_attrs)
+      elsif scope == :series && @item.recurring?
+        apply_series_update!(moved: moved, target: target_agenda)
+      else
+        apply_occurrence_update!(moved: moved, target: target_agenda)
+      end
+      # `apply_series_update!` may have rendered a 422 for an unsupported
+      # cross-source series move. Skip the trailing broadcast + render in
+      # that case so we don't hit AbstractController::DoubleRenderError.
+      next if performed?
+
+      # Moves rely on AgendaItem#broadcast_agenda_change! to fan out to both
+      # old + new agendas; in-place edits broadcast the one agenda here.
+      @item.agenda.broadcast! unless moved
+      render json: @item.serialize
+    }
   end
 
   def destroy
     owning_agenda = @item.agenda
-    if scope == :series && @item.recurring?
-      destroy_series!(owning_agenda)
-    elsif @item.phantom?
-      @item.agenda_schedule.add_excluded_date!(@item.occurrence_date)
-      mirror_occurrence_cancel_to_google!(@item) if owning_agenda.managed_externally?
-    elsif @item.recurring?
-      mirror_occurrence_cancel_to_google!(@item) if owning_agenda.managed_externally?
-      @item.cancel_occurrence!
-    else
-      # Non-recurring: full destroy + propagate the deletion upstream
-      # for Google items so Google's view doesn't keep showing a row
-      # we've already removed locally.
-      mirror_destroy_to_google!(@item) if owning_agenda.managed_externally? && @item.external_uid.present?
-      @item.destroy
-    end
+    with_agenda_write_lock(owning_agenda) {
+      if scope == :series && @item.recurring?
+        destroy_series!(owning_agenda)
+      elsif @item.phantom?
+        # Cancel upstream FIRST so a Google rejection doesn't leave the
+        # local excluded_dates ahead of Google.
+        mirror_occurrence_cancel_to_google!(@item) if owning_agenda.managed_externally?
+        @item.agenda_schedule.add_excluded_date!(@item.occurrence_date)
+      elsif @item.recurring?
+        mirror_occurrence_cancel_to_google!(@item) if owning_agenda.managed_externally?
+        @item.cancel_occurrence!
+      else
+        # Non-recurring: propagate the deletion upstream first, then
+        # destroy locally so a Google failure leaves the row intact.
+        mirror_destroy_to_google!(@item) if owning_agenda.managed_externally? && @item.external_uid.present?
+        @item.destroy
+      end
 
-    owning_agenda.broadcast!
-    head :no_content
+      owning_agenda.broadcast!
+      head :no_content
+    }
   end
 
   # Reattaches a detached one-off back into its parent recurrence: removes
@@ -146,9 +173,15 @@ class AgendaItemsController < ApplicationController
     end
 
     schedule_attrs = params[:agenda_schedule].present? ? explicit_schedule_params : schedule_attrs_from_item_params
-    @item.agenda_schedule.update!(schedule_attrs)
-    @item.agenda_schedule.regenerate_future!
-    mirror_series_update_to_google!(@item, schedule_attrs) if @item.agenda.managed_externally?
+    # Apply locally first (the RRULE serializer reads from `sched.recurrence`),
+    # then PATCH Google. If Google rejects, raise + the action's
+    # `rescue_from` catches and renders. The local update is wrapped in a
+    # transaction so a failed Google PATCH rolls it back.
+    ActiveRecord::Base.transaction do
+      @item.agenda_schedule.update!(schedule_attrs)
+      @item.agenda_schedule.regenerate_future!
+      mirror_series_update_to_google!(@item, schedule_attrs) if @item.agenda.managed_externally?
+    end
     apply_agenda_move!(target) if moved
   end
 
@@ -188,11 +221,44 @@ class AgendaItemsController < ApplicationController
 
   def apply_cross_source_occurrence_move!(target:)
     source = @item.agenda
-    # Materialize the phantom first so we have a real row to re-parent.
-    @item.materialize!({}) if @item.phantom?
 
     if source.managed_externally? && !target.managed_externally?
-      # Google → local. Drop the upstream copy + strip the external bookkeeping.
+      cross_source_move_google_to_local!(target: target)
+    elsif !source.managed_externally? && target.managed_externally?
+      cross_source_move_local_to_google!(target: target)
+    end
+  end
+
+  # Google → local. Cancel the specific occurrence upstream (so Google
+  # stops showing it) AND add the date to the source schedule's local
+  # excluded_dates (otherwise the source agenda renders a ghost phantom
+  # until the next sync re-confirms the cancellation). Decouple the row
+  # from the source schedule + clear external bookkeeping. For a one-off
+  # we delete the event outright.
+  #
+  # Local mutations are wrapped in a transaction so a DB failure rolls
+  # back the materialization. Google's cancellation isn't rolled back on
+  # local failure — eventual consistency takes over.
+  def cross_source_move_google_to_local!(target:)
+    if @item.recurring?
+      source_schedule = @item.agenda_schedule
+      occurrence_date = @item.occurrence_date
+      mirror_occurrence_cancel_to_google!(@item)
+      ActiveRecord::Base.transaction do
+        source_schedule&.add_excluded_date!(occurrence_date)
+        @item.materialize!({}) if @item.phantom?
+        @item.update!(
+          agenda_id:           target.id,
+          agenda_schedule_id:  nil,
+          detached_at:         nil,
+          original_start_at:   nil,
+          external_uid:        nil,
+          external_etag:       nil,
+          external_updated_at: nil,
+          locally_modified_at: nil,
+        )
+      end
+    else
       mirror_destroy_to_google!(@item) if @item.external_uid.present?
       @item.update!(
         agenda_id:           target.id,
@@ -201,12 +267,19 @@ class AgendaItemsController < ApplicationController
         external_updated_at: nil,
         locally_modified_at: nil,
       )
-    elsif !source.managed_externally? && target.managed_externally?
-      # Local → Google. Insert upstream so future pulls round-trip.
+    end
+  end
+
+  # Local → Google. Insert upstream first, then commit the local re-parent
+  # + external_* fields. Transactionally so the phantom materialization
+  # rolls back if Google rejects the insert.
+  def cross_source_move_local_to_google!(target:)
+    ActiveRecord::Base.transaction do
+      @item.materialize!({}) if @item.phantom?
       _local_attrs, google_attrs = ::GoogleCalendar::EventWriter.translate(@item.attributes.symbolize_keys.slice(
-                                                                             :name, :start_at, :end_at, :all_day, :location, :notes
-      ))
-      response = target.google_account.api.insert_event(target.external_id, google_attrs)
+                                                                             :name, :start_at, :end_at, :all_day, :location, :notes,
+                                                                           ))
+      response = google_insert!(target, google_attrs)
       @item.update!(
         agenda_id:           target.id,
         external_uid:        response[:id],
@@ -284,10 +357,9 @@ class AgendaItemsController < ApplicationController
     cutoff_time = @item.start_at
 
     if owning_agenda.managed_externally? && sched.external_uid.present?
-      # Truncate the upstream series so the master remains for history but
-      # stops generating future instances after cutoff. Google's RRULE
-      # `UNTIL` is exclusive — we send the cutoff day's start as the
-      # boundary so today's already-fired occurrence survives.
+      # Truncate the upstream series FIRST so a Google rejection doesn't
+      # leave our copy already truncated while Google still generates the
+      # series forever. RRULE `UNTIL` is exclusive — we send cutoff-1.
       mirror_series_truncate_to_google!(owning_agenda, sched, cutoff_date)
     end
 
@@ -300,32 +372,80 @@ class AgendaItemsController < ApplicationController
     )
   end
 
+  # Wraps the controller mutation path in the same advisory lock that
+  # GoogleCalendar::Sync uses, serializing user-driven writes against an
+  # in-flight sync of the same Google agenda. For local-only agendas the
+  # lock is a no-op (we just yield).
+  # Handles up to two distinct Google agendas (e.g. cross-source move where
+  # both source + target are Google). Always acquires in id-order to avoid
+  # the deadlock window two simultaneous opposite-direction moves would
+  # otherwise carve out.
+  def with_agenda_write_lock(*agendas, &block)
+    keys = agendas.compact.select(&:managed_externally?).map(&:id).uniq.sort.map { |id| "gcal_sync:agenda:#{id}" }
+    return block.call if keys.empty?
+
+    acquire = ->(remaining, blk) {
+      return blk.call if remaining.empty?
+
+      Agenda.with_advisory_lock(remaining.first, 30) {
+        acquire.call(remaining[1..], blk)
+      }
+    }
+    acquire.call(keys, block)
+  end
+
+  def google_insert!(target, google_attrs)
+    target.google_account.api.insert_event(target.external_id, google_attrs)
+  rescue ::RestClient::Exception => e
+    ::Rails.logger.warn("[GoogleCalendar] insert failed agenda=#{target.id} #{e.class}: #{e.message}")
+    raise GoogleSyncFailed, google_error_message(e, "create the event")
+  end
+
   def mirror_to_google!(google_attrs)
     @item.agenda.google_account.api.patch_event(
       @item.agenda.external_id,
       @item.external_uid,
       google_attrs,
     )
+  rescue ::RestClient::Exception => e
+    ::Rails.logger.warn("[GoogleCalendar] patch failed agenda=#{@item.agenda.id} uid=#{@item.external_uid} #{e.class}: #{e.message}")
+    raise GoogleSyncFailed, google_error_message(e, "save your changes")
   end
 
   def mirror_destroy_to_google!(item)
     item.agenda.google_account.api.delete_event(item.agenda.external_id, item.external_uid)
   rescue ::RestClient::NotFound, ::RestClient::Gone
-    # Already gone upstream — nothing to undo.
+    # Already gone upstream — treat as success.
   rescue ::RestClient::Exception => e
     ::Rails.logger.warn("[GoogleCalendar] delete failed agenda=#{item.agenda.id} uid=#{item.external_uid} #{e.class}: #{e.message}")
+    raise GoogleSyncFailed, google_error_message(e, "delete the event")
+  end
+
+  # Synthesize a user-friendly error from Google's 4xx body when possible,
+  # falling back to a class-name hint. Avoids leaking the full stack trace
+  # while still pointing at the cause (most often "you don't own this
+  # calendar so we can't write it").
+  def google_error_message(error, verb)
+    code = error.respond_to?(:http_code) ? error.http_code : nil
+    case code
+    when 403 then "Google refused to #{verb} — you may not have permission on this calendar."
+    when 404 then "Google couldn't find the event — it may have been deleted upstream."
+    when 410 then "This event is gone from Google. Refresh to see the latest."
+    when 429 then "Google rate-limited the request — please try again in a moment."
+    else "Couldn't #{verb} on Google (#{error.class.name.demodulize})."
+    end
+  end
+
+  def render_google_sync_failed(exception)
+    render json: { errors: [exception.message] }, status: :bad_gateway
   end
 
   def mirror_occurrence_cancel_to_google!(item)
     sched = item.agenda_schedule
     return if sched&.external_uid.blank?
 
-    # Sending status: cancelled on a synthetic instance id tells Google "this
-    # one occurrence is removed." For a phantom we don't have an instance id
-    # yet — derive it from the master + occurrence date in the format Google
-    # expects (`{eventId}_{YYYYMMDD or UTC}`).
-    instance_id = item.external_uid.presence || derived_instance_id(sched.external_uid, item.occurrence_date, item.all_day?)
-    return if instance_id.blank?
+    instance_id = item.external_uid.presence || resolve_google_instance_id(item, sched)
+    raise GoogleSyncFailed, "Couldn't find the matching occurrence on Google Calendar." if instance_id.blank?
 
     item.agenda.google_account.api.patch_event(
       item.agenda.external_id,
@@ -333,26 +453,49 @@ class AgendaItemsController < ApplicationController
       { status: "cancelled" },
     )
   rescue ::RestClient::NotFound, ::RestClient::Gone
-    # Already absent upstream.
+    # Already absent upstream — treat as success.
   rescue ::RestClient::Exception => e
     ::Rails.logger.warn("[GoogleCalendar] occurrence-cancel failed agenda=#{item.agenda.id} #{e.class}: #{e.message}")
+    raise GoogleSyncFailed, "Google rejected the occurrence cancellation: #{e.class}."
   end
 
-  # Google instance id convention: `{masterEventId}_{YYYYMMDD}` for all-day,
-  # `{masterEventId}_{YYYYMMDDTHHMMSSZ}` for timed. We always know the date;
-  # for timed we don't always know the start time precisely (phantoms don't
-  # round-trip), so fall back to the master id + date — Google accepts the
-  # date form for timed series occurrences too in most cases. Bare-master
-  # form is a safety net the patch will reject if Google can't resolve it,
-  # at which point we'll just log.
-  def derived_instance_id(master_uid, date, all_day)
-    return nil if date.blank?
+  # Ask Google directly which instance id corresponds to the occurrence
+  # we're cancelling. We query a narrow window around the occurrence (one
+  # full day in the user's tz) and pick the instance whose
+  # `originalStartTime` lands on our date. Falls back to nil on any error
+  # — caller raises a user-visible failure when that happens.
+  def resolve_google_instance_id(item, sched)
+    user_tz = ::ActiveSupport::TimeZone[item.user.timezone] || ::Time.zone
+    date = item.occurrence_date
+    window_start = user_tz.local(date.year, date.month, date.day).beginning_of_day
+    window_end   = window_start.end_of_day
 
-    suffix = date.strftime("%Y%m%d")
-    suffix += "T000000Z" unless all_day
-    "#{master_uid}_#{suffix}"
+    response = item.agenda.google_account.api.list_event_instances(
+      item.agenda.external_id,
+      sched.external_uid,
+      time_min: window_start,
+      time_max: window_end,
+    )
+    return nil unless response.is_a?(::Hash)
+
+    instances = Array(response[:items])
+    # Prefer an exact match on originalStartTime; fall back to whatever
+    # single instance the window returned.
+    match = instances.find { |inst|
+      stamp = inst.dig(:originalStartTime, :date) || inst.dig(:originalStartTime, :dateTime)
+      stamp.present? && Time.zone.parse(stamp.to_s).in_time_zone(item.user.timezone).to_date == date
+    }
+    (match || instances.first)&.[](:id)
+  rescue ::RestClient::Exception => e
+    ::Rails.logger.warn("[GoogleCalendar] instance lookup failed agenda=#{item.agenda.id} #{e.class}: #{e.message}")
+    nil
   end
 
+  # PATCH the Google master event with everything we can map from the
+  # local schedule: summary / location / description / start+end / RRULE.
+  # Called when the user edits a series ("this and all future"); raises
+  # GoogleSyncFailed on a Google rejection so the local update can be
+  # skipped at the call site.
   def mirror_series_update_to_google!(item, schedule_attrs)
     sched = item.agenda_schedule
     return if sched.external_uid.blank?
@@ -369,10 +512,13 @@ class AgendaItemsController < ApplicationController
       body[:start] = { dateTime: start_at.iso8601 }
       body[:end]   = { dateTime: end_at.iso8601 }
     end
-    # RRULE round-trip lives in GoogleCalendar::RRule; series-rule editing
-    # to Google is a follow-up — for now we PATCH the metadata Google
-    # accepts trivially and leave recurrence to the next user-initiated
-    # rule change (which the UI will land via the next sync round-trip).
+    # Push RRULE too whenever the explicit schedule payload is present —
+    # otherwise a user-driven recurrence change would land locally and
+    # get clobbered by the next sync pull.
+    if schedule_attrs[:recurrence].present? || schedule_attrs[:until_on].present? || schedule_attrs[:occurrence_count].present?
+      rrule_lines = ::GoogleCalendar::RRule.serialize(sched)
+      body[:recurrence] = rrule_lines if rrule_lines.present?
+    end
     return if body.empty?
 
     response = item.agenda.google_account.api.patch_event(
@@ -386,8 +532,10 @@ class AgendaItemsController < ApplicationController
         external_updated_at: response[:updated].present? ? Time.zone.parse(response[:updated].to_s) : sched.external_updated_at,
       )
     end
+    response
   rescue ::RestClient::Exception => e
     ::Rails.logger.warn("[GoogleCalendar] series PATCH failed agenda=#{item.agenda.id} #{e.class}: #{e.message}")
+    raise GoogleSyncFailed, google_error_message(e, "save the series")
   end
 
   def mirror_series_truncate_to_google!(agenda, sched, cutoff_date)
@@ -405,6 +553,7 @@ class AgendaItemsController < ApplicationController
     )
   rescue ::RestClient::Exception => e
     ::Rails.logger.warn("[GoogleCalendar] series truncate failed agenda=#{agenda.id} #{e.class}: #{e.message}")
+    raise GoogleSyncFailed, google_error_message(e, "truncate the series")
   end
 
   def item_params

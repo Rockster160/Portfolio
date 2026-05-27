@@ -14,8 +14,13 @@ class FireDueAgendaTriggersWorker
     cutoff = now - CATCHUP_WINDOW
     materialize_due_trigger_phantoms!(now: now, cutoff: cutoff)
 
+    # Dedup on `fired_at`, NOT on `completed_at` — completion is a manual
+    # user action and must never be set automatically. A user who marks a
+    # trigger complete before its start_at still skips firing because we
+    # also exclude `incomplete=false` items below.
     AgendaItem.trigger
       .incomplete
+      .where(fired_at: nil)
       .where(start_at: cutoff..now)
       .find_each do |item|
         fire(item)
@@ -58,7 +63,9 @@ class FireDueAgendaTriggersWorker
   def fire(item)
     scope, data = item.parsed_trigger
     if scope.blank?
-      item.update(completed_at: Time.current)
+      # No-op trigger expression — mark fired so we don't keep retrying,
+      # but never touch completed_at (that's the user's column).
+      item.update(fired_at: Time.current)
       return
     end
 
@@ -73,7 +80,7 @@ class FireDueAgendaTriggersWorker
       ::Jil.trigger(item.user, scope, data, auth: :agenda, auth_id: item.id)
     end
 
-    item.update(completed_at: Time.current)
+    item.update(fired_at: Time.current)
   rescue StandardError => e
     Rails.logger.error("[FireDueAgendaTriggersWorker] item=#{item.id} #{e.class}: #{e.message}")
     raise unless Rails.env.production?

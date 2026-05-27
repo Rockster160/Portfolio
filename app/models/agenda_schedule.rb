@@ -64,12 +64,17 @@ class AgendaSchedule < ApplicationRecord
     color.presence || agenda.color.presence || Agenda::DEFAULT_COLOR
   end
 
-  # Serialized snapshot of the recurrence config for prefilling the edit modal.
-  # Emitted as `data-schedule` on rendered items so the JS can hydrate without
-  # an extra round-trip.
+  # Serialized snapshot of EVERYTHING the edit modal needs to prefill the
+  # series view of an item — recurrence rule, start/duration/all-day,
+  # content fields, and identity. Emitted as `data-schedule` on rendered
+  # items so the JS can hydrate without an extra round-trip. Stays in
+  # sync with what `agenda_items_controller#explicit_schedule_params`
+  # accepts, so the edit-modal payload round-trips cleanly.
   def serialize_for_edit
     {
       id:                 id,
+      kind:               kind,
+      name:               name,
       freq:               freq,
       by_day:             Array(recurrence_data[:by_day]),
       by_month_day:       Array(recurrence_data[:by_month_day]).map(&:to_i),
@@ -79,7 +84,12 @@ class AgendaSchedule < ApplicationRecord
       starts_on:          starts_on&.iso8601,
       until_on:           until_on&.iso8601,
       occurrence_count:   occurrence_count,
+      start_time:         start_time&.strftime("%H:%M"),
+      duration_minutes:   duration_minutes,
+      all_day:            all_day,
       color:              color,
+      location:           location,
+      notes:              notes,
       trigger_expression: trigger_expression,
     }.compact
   end
@@ -133,6 +143,9 @@ class AgendaSchedule < ApplicationRecord
   # Build an in-memory phantom AgendaItem for the given date. Caller is responsible
   # for confirming `matches?(date)` and that no real row already covers that date —
   # see Agenda#items_for_range for the bulk-safe usage.
+  # Carries the schedule's `all_day` flag onto the phantom so the renderer
+  # (and the edit modal's data attributes) treat it the same as a
+  # materialized all-day row.
   def build_phantom(date)
     AgendaItem.new(
       agenda:             agenda,
@@ -140,6 +153,7 @@ class AgendaSchedule < ApplicationRecord
       kind:               kind,
       start_at:           occurrence_start_at(date),
       end_at:             occurrence_end_at(date),
+      all_day:            all_day,
       name:               name,
       notes:              notes,
       location:           location,

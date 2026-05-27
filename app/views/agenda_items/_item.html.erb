@@ -30,18 +30,17 @@
 <% id_title = item.phantom? ? "Agenda ##{item.agenda_id}" : "Item ##{item.id}" %>
 
 <%# Completion model:
-      tasks always completable.
-      events: completable as a local UI bookkeeping action (Google has no
-      "completed" — local-only field, never written back).
-      triggers: completed when fired, not by the user — checkbox shows
-      the fired state but is disabled.
+      All kinds are completable by the user. The checkbox is NEVER
+      checked or unchecked automatically — it reflects an explicit user
+      action via `completed_at`. The visual strikethrough (`.crossed-out`)
+      can apply independently for time-passed events / triggers.
+      A user marking a trigger complete BEFORE its start_at skips the
+      firing entirely (FireDueAgendaTriggersWorker filters `.incomplete`).
 %>
-<% can_check = item.task? || item.event? %>
-<% check_disabled = !can_check || preview || !item.agenda.editable_by?(current_user) %>
+<% can_check = true %>
+<% check_disabled = preview || !item.agenda.editable_by?(current_user) %>
 <% check_reason = (
-  if item.trigger?
-    "Triggers are marked complete automatically when they fire."
-  elsif preview
+  if preview
     "Tap forward to today to check this off."
   elsif !item.agenda.editable_by?(current_user)
     "Read-only — only editors can change this."
@@ -78,10 +77,13 @@
       state on the input communicates non-markable; tooltip explains. %>
   <label class="agenda-item-check-zone"
          <%= check_reason && "title=\"#{check_reason}\"".html_safe %>>
+    <%# `checked` reflects explicit user action only — `completed?`. The
+        `.crossed-out` class on the wrapping row covers the visual
+        strike-through for events / triggers whose time has passed. %>
     <input type="checkbox"
            class="agenda-item-check"
            id="agenda_item_<%= item.display_id %>"
-           <%= "checked"  if item.crossed_out? %>
+           <%= "checked"  if item.completed? %>
            <%= "disabled" if check_disabled %>
            <%= check_disabled ? nil : "data-checked-url=\"#{item_url}\"".html_safe %>>
   </label>

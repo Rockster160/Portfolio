@@ -52,6 +52,7 @@ class GoogleCalendar::Sync
   def run_synced(allow_rebootstrap:, reason:)
     @deferred_overrides = []      # buffered across pages — see flush_deferred
     @deferred_cancellations = []  # ditto for cancellation handle_cancellation
+    @applied_count = 0            # counted across apply_event for the tail trigger
     ensure_timezone!
     page_token = nil
     sync_token = nil
@@ -86,6 +87,15 @@ class GoogleCalendar::Sync
     )
     @account.clear_reauth_required!
     @agenda.broadcast!
+    # Single :agenda_sync trigger at the tail (per-row :agenda_item
+    # triggers were suppressed above). Lets Jil tasks react to "the
+    # calendar just refreshed" without firing once per imported event.
+    # Skipped on no-op syncs — Google's webhook + 15-min poll cron
+    # generate plenty of empty deltas, no reason to spam listeners.
+    if @applied_count.positive?
+      sync_data = { agenda_id: @agenda.id, agenda_name: @agenda.name, reason: reason.to_s, applied: @applied_count }
+      ::Jil.trigger(@user, :agenda_sync, sync_data)
+    end
     :ok
   rescue ::RestClient::Gone
     # syncToken expired or invalid → bootstrap a full sync exactly once.
@@ -108,13 +118,16 @@ class GoogleCalendar::Sync
 
   # Lazily populate the calendar's timezone the first time we sync after a
   # connect. Used to translate "all-day on May 28" into a concrete instant.
+  # Network / API failure logs + carries on (tz fetch is best-effort —
+  # all-day handling falls back to user.timezone). Programmer errors
+  # propagate so they don't get masked.
   def ensure_timezone!
     return if @agenda.timezone.present?
 
     response = @api.get_calendar(@agenda.external_id)
     tz = response.is_a?(::Hash) ? response[:timeZone].to_s.presence : nil
     @agenda.update!(timezone: tz) if tz
-  rescue ::RestClient::Exception, ::StandardError => e
+  rescue ::RestClient::Exception => e
     ::Rails.logger.warn("[GoogleCalendar::Sync] timezone fetch failed agenda=#{@agenda.id} #{e.class}: #{e.message}")
   end
 
@@ -188,7 +201,11 @@ class GoogleCalendar::Sync
 
   def apply_event(event)
     return if event[:id].blank?
-    return handle_cancellation(event) if event[:status] == "cancelled"
+    if event[:status] == "cancelled"
+      handle_cancellation(event)
+      @applied_count += 1
+      return
+    end
     return if declined_by_owner?(event)
 
     if event[:recurrence].present?
@@ -198,6 +215,7 @@ class GoogleCalendar::Sync
     else
       upsert_one_off(event)
     end
+    @applied_count += 1
   end
 
   # Google sets `self: true` on the attendee whose calendar this is. If

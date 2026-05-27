@@ -12,6 +12,7 @@
 #  external_etag       :text
 #  external_uid        :text
 #  external_updated_at :datetime
+#  fired_at            :datetime
 #  kind                :integer          not null
 #  local_color         :string
 #  locally_modified_at :datetime
@@ -249,15 +250,15 @@ class AgendaItem < ApplicationRecord
   end
 
   # An item is crossed out in the UI when:
-  #   * The user (or sync) marked it completed.
-  #   * It's an event whose end has passed — events are time-bounded; once
-  #     end_at is in the past the box is shown crossed-out (and stays so
-  #     even though `completed_at` is nil).
-  #   * It's a trigger whose firing time has passed — triggers are
-  #     point-in-time. The firing worker may not have stamped `completed_at`
-  #     yet, but the visual treatment shouldn't wait on that.
-  # Used by the renderer to drive `.crossed-out` and by item visibility
-  # filters that say "hide completed events/triggers".
+  #   * The user marked it completed.
+  #   * It's an event whose end has passed — events are time-bounded.
+  #   * It's a trigger whose firing time has passed.
+  # Drives the `.crossed-out` CSS class and the hide-completed filter.
+  #
+  # Crossed-out ≠ checked. The checkbox renders based on `completed?` only
+  # (manual user action); time-passed events / triggers strike through
+  # visually but the checkbox stays unchecked until the user clicks it.
+  # Tasks NEVER auto-cross-out — they wait on the checkbox.
   def crossed_out_at(now: Time.current)
     return completed_at if completed?
     return end_at if event? && end_at.present? && end_at <= now
@@ -268,6 +269,15 @@ class AgendaItem < ApplicationRecord
 
   def crossed_out?(now: Time.current)
     crossed_out_at(now: now).present?
+  end
+
+  # Distinct from `completed?` — `fired?` means the firing worker ran the
+  # trigger, but the user-facing checkbox stays unchecked. The user can
+  # still mark complete (post-fire personal tracking) or pre-mark complete
+  # to skip the firing entirely. Stored on AgendaItem because phantoms
+  # don't need it (phantoms haven't been materialized yet).
+  def fired?
+    fired_at.present?
   end
 
   def complete!(at: Time.current)

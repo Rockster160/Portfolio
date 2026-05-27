@@ -58,6 +58,9 @@ class Agenda < ApplicationRecord
 
   before_validation :set_parameterized_name
   before_validation :set_color, on: :create
+  # Prune our id out of every user's hidden_agenda_ids preference so the
+  # column doesn't grow stale dangling references to deleted agendas.
+  after_destroy :prune_from_user_preferences!
 
   scope :by_param, ->(name) { where(parameterized_name: name.to_s.parameterize) }
 
@@ -83,9 +86,12 @@ class Agenda < ApplicationRecord
     agenda_shares.exists?(user_id: other_user.id, permission: :owner)
   end
 
-  # External agendas are owned by an upstream system (Google Calendar). The
-  # controller layer refuses human-driven writes; the sync pipeline writes
-  # through the model directly.
+  # External agendas are owned by an upstream system (Google Calendar).
+  # User edits to items in these agendas mirror upstream via the controller
+  # (events.patch / events.delete / events.insert) — the sync pipeline pulls
+  # changes in the other direction. The agenda's own `source` cannot be
+  # flipped after creation, and the agenda itself is destroyed only via the
+  # Disconnect flow (not the agenda#destroy endpoint).
   def managed_externally?
     !user?
   end
@@ -261,6 +267,17 @@ class Agenda < ApplicationRecord
   end
 
   private
+
+  # Cheap pruning — jsonb `@>` lets Postgres find the matching rows via a
+  # GIN index if one exists, falls back to a sequential scan otherwise.
+  # Single-id arrays are rare enough that the scan cost is negligible.
+  def prune_from_user_preferences!
+    needle = [id].to_json
+    AgendaPreference.where("hidden_agenda_ids @> ?::jsonb", needle).find_each do |pref|
+      pref.hidden_agenda_ids = pref.hidden_agenda_ids - [id]
+      pref.save!
+    end
+  end
 
   def set_parameterized_name
     self.parameterized_name = name.to_s.parameterize if name.present?

@@ -171,6 +171,23 @@ class Oauth::GoogleApi < Oauth::Base
     get("calendars/#{CGI.escape(calendar_id)}/events", params)
   end
 
+  # Resolve the authoritative instance id for a single occurrence of a
+  # recurring event. Google's id format varies by event type / source TZ
+  # (`{master}_YYYYMMDD` for all-day, `{master}_YYYYMMDDTHHMMSSZ` for
+  # timed, sometimes with non-UTC offsets) — synthesizing it client-side
+  # is fragile. This endpoint returns the real ids in the requested window.
+  def list_event_instances(calendar_id, event_id, time_min:, time_max:)
+    get(
+      "calendars/#{CGI.escape(calendar_id)}/events/#{CGI.escape(event_id)}/instances",
+      {
+        timeMin:     time_min.iso8601,
+        timeMax:     time_max.iso8601,
+        maxResults:  10,
+        showDeleted: false,
+      },
+    )
+  end
+
   # ---- Event write-back ----
   # PATCH/DELETE/POST so user edits in our UI propagate to Google.
 

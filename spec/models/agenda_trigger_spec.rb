@@ -104,14 +104,23 @@ RSpec.describe "AgendaItem trigger kind" do
   end
 
   describe "FireDueAgendaTriggersWorker" do
-    it "fires due trigger items and marks them completed" do
+    it "fires due trigger items and stamps fired_at WITHOUT touching completed_at" do
       item = create(:agenda_item, agenda: agenda, kind: "trigger",
         name: "Ping reminder", trigger_expression: "ping",
         start_at: 5.minutes.ago, completed_at: nil)
       expect(::Jil).to receive(:trigger).with(user, "ping", hash_including(agenda_item: include(id: item.id)),
         auth: :agenda, auth_id: item.id)
       FireDueAgendaTriggersWorker.new.perform
-      expect(item.reload.completed_at).to be_present
+      expect(item.reload.fired_at).to be_present
+      expect(item.completed_at).to be_nil
+    end
+
+    it "doesn't refire a trigger that already has fired_at set" do
+      item = create(:agenda_item, agenda: agenda, kind: "trigger",
+        name: "Ping", trigger_expression: "ping",
+        start_at: 5.minutes.ago, fired_at: 4.minutes.ago)
+      expect(::Jil).not_to receive(:trigger)
+      FireDueAgendaTriggersWorker.new.perform
     end
 
     it "ignores triggers in the future" do
@@ -139,7 +148,8 @@ RSpec.describe "AgendaItem trigger kind" do
       expect(::Jarvis).to receive(:command).with(user, "Remind me to wash dishes")
       expect(::Jil).not_to receive(:trigger)
       FireDueAgendaTriggersWorker.new.perform
-      expect(item.reload.completed_at).to be_present
+      expect(item.reload.fired_at).to be_present
+      expect(item.completed_at).to be_nil
     end
 
     it "handles `command:words` without quotes when there are no extra colons" do

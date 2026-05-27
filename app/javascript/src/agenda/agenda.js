@@ -917,7 +917,6 @@
     let activeKind = "task";
     let currentRecurring = false;
     let currentScheduleData = null;
-    let currentItemSource = null;
 
     function syncKind() {
       $$(".kind-btn", form).forEach((b) => b.classList.toggle("active", b.dataset.kind === activeKind));
@@ -988,7 +987,6 @@
       $(".add-item-id", form).value = d.itemId;
       $(".add-name", form).value = d.name;
       if (d.agendaId) editAgendaPicker?.setValue(d.agendaId);
-      currentItemSource = d.agendaSource || null;
 
       activeKind = d.kind || "task";
 
