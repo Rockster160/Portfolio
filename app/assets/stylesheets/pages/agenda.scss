@@ -2042,4 +2042,11 @@ body.ctr-agendas {
     color: #f9d76b;
     opacity: 0.85;
   }
+
+  .agenda-connect-reauth {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
 }

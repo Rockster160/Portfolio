@@ -42,16 +42,19 @@
               data:       { confirm: "Disconnect this Google account? All its synced calendars will be removed." } %>
         </header>
 
-        <% if section[:needs_reauth] %>
-          <p class="agenda-connect-note agenda-connect-note-warn">
-            This account needs to be reconnected. Click "Sign in with Google" below.
-          </p>
-        <% end %>
-
-        <% if section[:load_error] %>
-          <p class="agenda-connect-note agenda-connect-note-warn">
-            Couldn't load this account's calendars. Try reconnecting.
-          </p>
+        <% if section[:needs_reauth] || section[:load_error] %>
+          <div class="agenda-connect-reauth">
+            <p class="agenda-connect-note agenda-connect-note-warn">
+              <% if section[:load_error] %>
+                Couldn't load <strong><%= account.email %></strong>'s calendars — the OAuth tokens have expired or been revoked.
+              <% else %>
+                <strong><%= account.email %></strong> needs to be reconnected.
+              <% end %>
+            </p>
+            <a href="<%= start_google_agenda_connection_path %>" class="agenda-connect-cta">
+              <i class="fa fa-google"></i> Reconnect <%= account.email %>
+            </a>
+          </div>
         <% else %>
           <ul class="agenda-connect-list">
             <% section[:calendars].each do |cal| %>

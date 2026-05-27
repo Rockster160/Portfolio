@@ -84,15 +84,21 @@ class Oauth::GoogleApi < Oauth::Base
     end
   end
 
-  # ---- OAuth exchange (initial token grant) ----
-  # After the base exchange, decode the id_token to pin this connection to
-  # a specific Google account. If no GoogleAccount yet exists for that
-  # email under this user, materialize one and move the freshly-stored
-  # tokens out of the Cache slot into the account's columns.
+  # ---- OAuth exchange (initial token grant + refreshes) ----
+  #
+  # When @google_account is already set (we're refreshing an existing
+  # connection), we make the token-endpoint POST ourselves and write the
+  # response back to the account's columns. Otherwise Oauth::Base#auth
+  # would write the new tokens to the legacy UserCache slot — and our
+  # access_token override would keep reading the stale value from the
+  # GoogleAccount, looping 401→refresh→401 until quota burns.
+  #
+  # On 400 invalid_grant (refresh_token revoked/expired), mark the bound
+  # account `reauth_required` and return nil rather than bubbling 400.
   def auth(params={})
-    response = super
-    return response if @google_account # subsequent refresh — already bound
+    return refresh_bound_account!(params) if @google_account
 
+    response = super
     email = email_from_id_token(response&.dig(:id_token) || response&.dig("id_token"))
     return response if email.blank?
 
@@ -104,12 +110,13 @@ class Oauth::GoogleApi < Oauth::Base
     account.reauth_required_at = nil
     account.save!
     @google_account = account
-
-    # Clear the legacy Cache slot — we don't want stale tokens shadowing
-    # the per-account ones if anyone falls back to the unbound path.
     clear_legacy_cache_tokens!
 
     response
+  rescue ::RestClient::BadRequest => e
+    @google_account&.mark_reauth_required!
+    ::Rails.logger.warn("[Oauth::GoogleApi] auth failed account=#{@google_account&.id} #{e.class}: #{e.message}")
+    nil
   end
 
   # ---- API surface ----
@@ -164,6 +171,34 @@ class Oauth::GoogleApi < Oauth::Base
   end
 
   private
+
+  # Bound-refresh: POST to the token endpoint ourselves so we can write the
+  # response directly into the GoogleAccount columns. Bypasses Oauth::Base's
+  # cache writes which would otherwise leave stale tokens shadowing the
+  # account's row.
+  def refresh_bound_account!(params)
+    response = ::Api.post(
+      params.delete(:exchange_url) || exchange_url,
+      {
+        client_id:     client_id,
+        client_secret: client_secret,
+        redirect_uri:  redirect_uri,
+        scope:         scopes,
+      }.merge(params),
+      { user_agent: USER_AGENT },
+    )
+    return nil if response.nil?
+
+    @google_account.update!({
+      access_token:        response[:access_token].presence || @google_account.access_token,
+      # Google typically omits refresh_token on a refresh — keep the old one.
+      refresh_token:       response[:refresh_token].presence || @google_account.refresh_token,
+      id_token:            response[:id_token].presence || @google_account.id_token,
+      tokens_refreshed_at: ::Time.current,
+      reauth_required_at:  nil,
+    })
+    response
+  end
 
   # Google's id_token is a signed JWT; we trust it because Google signed the
   # exchange response over TLS to our redirect URI. Decode without

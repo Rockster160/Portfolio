@@ -73,6 +73,20 @@ RSpec.describe AgendaConnectionsController, type: :controller do
       expect(response.body).to match(/connected/i)
       expect(response.body).to include("Disconnect")
     end
+
+    it "renders a Reconnect CTA when list_calendars raises a RestClient error" do
+      account
+      api_a = instance_double(Oauth::GoogleApi)
+      allow(api_a).to receive(:list_calendars).and_raise(
+        RestClient::BadRequest.new(instance_double(RestClient::Response, code: 400, body: "")),
+      )
+      allow(Oauth::GoogleApi).to receive(:for_account).with(account).and_return(api_a)
+
+      get :new
+      expect(response).to be_successful
+      expect(response.body).to include("Reconnect alice@example.com")
+      expect(account.reload).to be_needs_reauth
+    end
   end
 
   describe "POST #connect_calendar" do

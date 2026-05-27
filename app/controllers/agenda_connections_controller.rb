@@ -105,7 +105,10 @@ class AgendaConnectionsController < ApplicationController
   end
 
   # For each account, fetch its CalendarList and join with already-connected
-  # Agendas so the view can render Connect/Disconnect per row.
+  # Agendas so the view can render Connect/Disconnect per row. If the
+  # CalendarList call raises (e.g. the refresh_token has been revoked and
+  # the refresh attempt 400s), fall back to an empty section flagged with
+  # `needs_reauth` so the picker renders a "Reconnect" CTA instead of 500ing.
   def build_section(account)
     list = account.api.list_calendars
     calendars = Array(list&.[](:items)).map { |c|
@@ -122,7 +125,17 @@ class AgendaConnectionsController < ApplicationController
       calendars:    calendars,
       connected:    connected,
       load_error:   list.blank?,
-      needs_reauth: account.needs_reauth?,
+      needs_reauth: account.reload.needs_reauth?,
+    }
+  rescue ::RestClient::Exception, ::SocketError => e
+    ::Rails.logger.warn("[AgendaConnectionsController] account=#{account.id} #{e.class}: #{e.message}")
+    account.mark_reauth_required! unless account.needs_reauth?
+    {
+      account:      account,
+      calendars:    [],
+      connected:    {},
+      load_error:   true,
+      needs_reauth: true,
     }
   end
 end
