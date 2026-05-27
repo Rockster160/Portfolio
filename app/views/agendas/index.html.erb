@@ -49,18 +49,42 @@
               <%= agenda.name %>
             </span>
             <span class="agenda-card-meta">
-              <%= pluralize(agenda.agenda_items.where(start_at: Date.current.all_day).count, "item") %> today
+              <%# Count visible items for today — include phantoms (recurring
+                  occurrences not yet materialized) so the number matches what
+                  the user actually sees on /agenda. %>
+              <span class="agenda-card-meta-cell">
+                <%= pluralize(agenda.visible_items_for(Date.current).size, "item") %> today
+              </span>
               <% unless mine %>
-                · <span class="agenda-card-shared">shared by <%= agenda.user.username %></span>
+                <span class="agenda-card-meta-cell agenda-card-shared">shared by <%= agenda.user.username %></span>
               <% end %>
               <% if agenda.google? %>
                 <% account = agenda.google_account %>
                 <% if account&.needs_reauth? %>
-                  · <span class="agenda-card-sync-state agenda-card-sync-state-bad">Reconnect needed</span>
+                  <span class="agenda-card-meta-cell agenda-card-sync-state agenda-card-sync-state-bad">Reconnect needed</span>
                 <% elsif agenda.synced_at.present? %>
-                  · <span class="agenda-card-sync-state">Synced <%= time_ago_in_words(agenda.synced_at) %> ago</span>
+                  <%
+                    stale = agenda.synced_at < 1.hour.ago
+                    reason_label = (
+                      case agenda.sync_reason
+                      when "webhook" then "live"
+                      when "poll"    then "polled"
+                      when "manual"  then "manual"
+                      end
+                    )
+                  %>
+                  <span class="agenda-card-meta-cell agenda-card-sync-state <%= "agenda-card-sync-state-warn" if stale %>"
+                        title="Last sync source: <%= agenda.sync_reason.presence || "unknown" %>">
+                    Synced <%= time_ago_in_words(agenda.synced_at) %> ago<% if reason_label %> <small class="agenda-card-sync-reason">(<%= reason_label %>)</small><% end %>
+                  </span>
                 <% else %>
-                  · <span class="agenda-card-sync-state agenda-card-sync-state-warn">Never synced</span>
+                  <span class="agenda-card-meta-cell agenda-card-sync-state agenda-card-sync-state-warn">Never synced</span>
+                <% end %>
+                <% if agenda.watch_failed_at.present? && agenda.watch_channel_id.blank? %>
+                  <span class="agenda-card-meta-cell agenda-card-sync-state agenda-card-sync-state-warn"
+                        title="Real-time push channel failed to register — falling back to periodic polling.">
+                    Push channel unavailable
+                  </span>
                 <% end %>
               <% end %>
             </span>
@@ -75,7 +99,10 @@
             <div class="agenda-card-notif-axis"></div>
             <div class="agenda-card-notif-axis">One-off</div>
             <div class="agenda-card-notif-axis">Recurring</div>
-            <% %w[task event trigger].each do |kind| %>
+            <%# Google agendas only contain events; tasks/triggers never apply.
+                Hide those rows so the user isn't toggling dead controls. %>
+            <% visible_kinds = agenda.google? ? %w[event] : %w[task event trigger] %>
+            <% visible_kinds.each do |kind| %>
               <div class="agenda-card-notif-kind"><%= kind.capitalize %>s</div>
               <% %w[oneoff recurring].each do |recurrence| %>
                 <% attr = "notify_#{kind}_#{recurrence}" %>

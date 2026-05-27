@@ -212,6 +212,7 @@
       const id = li.dataset.id;
       const color = li.dataset.color;
       const name = li.dataset.name;
+      const source = li.dataset.source;
       hidden.value = id;
       pick.style.setProperty("--picked-agenda-color", color);
       if (label) label.textContent = name;
@@ -221,7 +222,7 @@
         if (sel) other.setAttribute("aria-selected", "true");
         else other.removeAttribute("aria-selected");
       });
-      if (fireChange && typeof onChange === "function") onChange(id, color, name);
+      if (fireChange && typeof onChange === "function") onChange(id, color, name, source);
     }
 
     function positionMenu() {
@@ -543,18 +544,46 @@
     }
 
     // Switching agendas defaults the item color to the agenda's color
-    // unless the user has manually changed it.
+    // unless the user has manually changed it. Picking a Google agenda
+    // also locks the kind to "event" — Google calendars only contain
+    // events, not tasks/triggers.
     let colorTouched = false;
-    const agendaPicker = bindAgendaPicker(form, (id, color) => {
-      if (colorTouched || !colorInput || !color) return;
-      colorInput.value = color;
-      paintColor(color);
+    const agendaPicker = bindAgendaPicker(form, (id, color, _name, source) => {
+      if (!colorTouched && colorInput && color) {
+        colorInput.value = color;
+        paintColor(color);
+      }
+      if (source === "google" && activeKind !== "event") {
+        activeKind = "event";
+        syncKind();
+      }
+      $$(".kind-btn", form).forEach((b) => {
+        const lock = source === "google" && b.dataset.kind !== "event";
+        b.disabled = lock;
+        b.classList.toggle("locked", lock);
+        b.title = lock ? "Only events can be added to a Google calendar" : "";
+      });
     });
+
+    const alldayField    = $(".add-allday-field", form);
+    const alldayInput    = $(".add-allday-input", form);
+    const alldayEndField = $(".add-allday-end-field", form);
+    const timeFields     = $(".add-time-fields", form);
 
     function syncKind() {
       $$(".kind-btn", form).forEach((b) => b.classList.toggle("active", b.dataset.kind === activeKind));
       endField.classList.toggle("hidden", activeKind !== "event");
       $(".add-trigger-field", form)?.classList.toggle("hidden", activeKind !== "trigger");
+      // All-day only applies to events.
+      alldayField?.classList.toggle("hidden", activeKind !== "event");
+      if (activeKind !== "event" && alldayInput) alldayInput.checked = false;
+      syncAllDay();
+    }
+
+    function syncAllDay() {
+      const isAllDay = !!alldayInput?.checked;
+      timeFields?.classList.toggle("hidden", isAllDay);
+      alldayEndField?.classList.toggle("hidden", !isAllDay);
     }
 
     function resetForm() {
@@ -573,6 +602,7 @@
     $$(".kind-btn", form).forEach((btn) => {
       btn.addEventListener("click", () => { activeKind = btn.dataset.kind; syncKind(); });
     });
+    alldayInput?.addEventListener("change", syncAllDay);
 
     if (colorInput) {
       colorInput.addEventListener("input", () => {
@@ -617,8 +647,21 @@
       const date = dateInput.value || form.dataset.defaultDate;
       const startTime = startInput.value || "09:00";
       const endTime = endInput.value || "10:00";
-      const startAt = `${date}T${startTime}`;
-      const endAt = activeKind === "event" ? `${date}T${endTime}` : null;
+      const isAllDay = activeKind === "event" && !!alldayInput?.checked;
+      // All-day: start at 00:00 on `date`, end exclusive on next day (or
+      // user-specified end-date+1). Matches the Google convention so the
+      // overlap query + duration math agree across both write paths.
+      const allDayEnd = $(".add-allday-end", form)?.value || date;
+      const startAt = isAllDay ? `${date}T00:00` : `${date}T${startTime}`;
+
+      const endAt = (() => {
+        if (activeKind !== "event") return null;
+        if (!isAllDay) return `${date}T${endTime}`;
+        const next = new Date(`${allDayEnd}T00:00`);
+        next.setDate(next.getDate() + 1);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T00:00`;
+      })();
       const freq = $(".add-freq", form).value;
       const color = colorInput?.value || null;
       const triggerExpression = activeKind === "trigger"
@@ -652,6 +695,7 @@
             kind:               activeKind,
             start_at:           startAt,
             end_at:             endAt,
+            all_day:            isAllDay,
             color:              color,
             location,
             notes,
@@ -781,20 +825,26 @@
 
     const editAgendaPicker = bindAgendaPicker(form);
 
-    // Editable rows: pencil carries data-edit-item → edit modal. The
-    // <label> body just toggles the checkbox natively. Readonly rows
-    // carry data-edit-item + data-readonly → details modal instead.
+    // Click model on each agenda-item row:
+    //   .agenda-item-check-zone (label wrapping the checkbox) → native
+    //     <label for> toggles the checkbox; we don't intercept.
+    //   [data-open-details] (the body button)         → details modal
+    //   [data-edit-item]   (the pencil)               → edit modal
+    //   .preview rows are non-interactive (next-day stub).
     root.addEventListener("click", (e) => {
-      const editBtn = e.target.closest("[data-edit-item]");
-      if (!editBtn) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const dataEl = editBtn.closest("[data-item-id]");
+      const dataEl = e.target.closest("[data-item-id]");
       if (!dataEl || dataEl.classList.contains("preview")) return;
-      if (dataEl.hasAttribute("data-readonly")) {
-        openDetailsModal(dataEl);
-      } else {
+
+      if (e.target.closest("[data-edit-item]")) {
+        e.preventDefault();
+        e.stopPropagation();
         openModal(dataEl);
+        return;
+      }
+      if (e.target.closest("[data-open-details]")) {
+        e.preventDefault();
+        e.stopPropagation();
+        openDetailsModal(dataEl);
       }
     });
 
@@ -1128,9 +1178,19 @@
     }, COMPLETED_GRACE_MS);
   }
 
+  const TENTATIVE_HIDDEN_KEY = "agendaTentativeHidden:v1";
+  function getTentativeHidden() {
+    return localStorage.getItem(TENTATIVE_HIDDEN_KEY) === "1";
+  }
+  function saveTentativeHidden(flag) {
+    if (flag) localStorage.setItem(TENTATIVE_HIDDEN_KEY, "1");
+    else localStorage.removeItem(TENTATIVE_HIDDEN_KEY);
+  }
+
   function applyAgendaVisibility() {
     const hidden = new Set(getHiddenAgendas());
     const completedHidden = getCompletedHidden();
+    const tentativeHidden = getTentativeHidden();
     document.querySelectorAll("[data-agenda-id]").forEach((el) => {
       if (!el.classList.contains("agenda-item") && !el.classList.contains("cal-item")) return;
       const hideByAgenda = hidden.has(el.dataset.agendaId);
@@ -1139,7 +1199,8 @@
       const itemId = el.dataset.itemId;
       const inGrace = itemId && gracedItemIds.has(itemId);
       const hideByCompleted = isCrossedOut && !!completedHidden[kind] && !inGrace;
-      el.classList.toggle("hidden-by-filter", hideByAgenda || hideByCompleted);
+      const hideByTentative = tentativeHidden && el.classList.contains("tentative");
+      el.classList.toggle("hidden-by-filter", hideByAgenda || hideByCompleted || hideByTentative);
     });
   }
 
@@ -1192,6 +1253,8 @@
     panel.querySelectorAll("input[type=checkbox][data-completed-kind]").forEach((cb) => {
       cb.checked = !!completedHidden[cb.dataset.completedKind];
     });
+    const tentCheckbox = panel.querySelector("input[type=checkbox][data-hide-tentative]");
+    if (tentCheckbox) tentCheckbox.checked = getTentativeHidden();
     applyAgendaVisibility();
 
     function open() {
@@ -1236,6 +1299,13 @@
         const state = getCompletedHidden();
         state[completedCb.dataset.completedKind] = completedCb.checked;
         saveCompletedHidden(state);
+        applyAgendaVisibility();
+        return;
+      }
+
+      const tentCb = e.target.closest("input[type=checkbox][data-hide-tentative]");
+      if (tentCb) {
+        saveTentativeHidden(tentCb.checked);
         applyAgendaVisibility();
       }
     });

@@ -4,6 +4,7 @@
 #
 #  id                  :bigint           not null, primary key
 #  access_token        :text
+#  disconnected_at     :datetime
 #  email               :string           not null
 #  id_token            :text
 #  reauth_required_at  :datetime

@@ -4,9 +4,13 @@ class AgendasController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
   before_action :set_agenda, only: [:edit, :update, :destroy]
-  # Externally-managed agendas (Google) are still user-controllable for
-  # name/color/sort_order — only destroy is gated (you disconnect via the
-  # /agenda_connection path, which also stops the watch + cleans up).
+  # Renaming/recoloring/destroying an agenda — including a Google-synced
+  # one — requires the :owner role. Editors can manage items inside the
+  # agenda but can't change its identity.
+  before_action :require_ownership!, only: [:update, :destroy]
+  # Externally-managed agendas (Google) can be renamed/recolored by the
+  # owner — only destroy is gated (you disconnect via /agenda_connection
+  # which also stops the watch + cleans up).
   before_action -> { refuse_external_write!(@agenda) }, only: [:destroy]
   before_action :ensure_default_agenda!, only: [:day, :week, :calendar]
 
@@ -120,6 +124,12 @@ class AgendasController < ApplicationController
 
   def ensure_default_agenda!
     current_user&.ensure_default_agenda
+  end
+
+  def require_ownership!
+    return if @agenda&.owned_by?(current_user)
+
+    head :forbidden
   end
 
   # Owner-scoped — shared editors can't rename or delete someone else's agenda.

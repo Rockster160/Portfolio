@@ -13,7 +13,13 @@ class AgendaShare < ApplicationRecord
   belongs_to :agenda
   belongs_to :user
 
-  enum :permission, { viewer: 0, editor: 1 }, default: :editor
+  # Role hierarchy (each level includes the lower ones):
+  #   viewer  — can see items, nothing else
+  #   editor  — can add/edit/complete items + schedules
+  #   owner   — can rename/recolor the Agenda + manage sharing + destroy it
+  # The Agenda's user_id is always implicitly an owner; this enum is for
+  # additional shared users.
+  enum :permission, { viewer: 0, editor: 1, owner: 2 }, default: :editor
 
   validates :user_id, uniqueness: { scope: :agenda_id }
   validate :not_owner

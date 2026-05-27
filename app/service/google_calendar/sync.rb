@@ -6,6 +6,11 @@
 # Google returns 410 Gone when a syncToken expires (~30d of inactivity);
 # we catch that and re-bootstrap with a single full sync (no recursive loop).
 class GoogleCalendar::Sync
+  # conferenceData entry types. Prefer video — that's what users click to
+  # join. Phone-only is a fallback for calendars without a video entry.
+  VIDEO_ENTRY_TYPES = %w[video].freeze
+  PHONE_ENTRY_TYPES = %w[phone sip].freeze
+
   attr_reader :agenda, :user, :api
 
   def initialize(agenda)
@@ -20,7 +25,28 @@ class GoogleCalendar::Sync
   # Runs an incremental sync if we have a syncToken, otherwise a full sync.
   # Persists the new syncToken on success. Returns a symbol describing the
   # outcome (:ok, :reauth_required, :rebootstrapped).
-  def run!(allow_rebootstrap: true)
+  # `reason` is recorded on the agenda so the manage page can label a
+  # sync as "via webhook" vs "via poll" — useful for debugging at a
+  # glance. Defaults to :manual when invoked from the console.
+  #
+  # The advisory lock dedupes concurrent runs against the same agenda:
+  # a webhook delivery and the 15-minute poll cron firing at the same
+  # moment both end up here, both reading the same sync_token. With the
+  # lock, the second worker waits, then sees the bumped sync_token and
+  # short-circuits via etag-skip. Without it, both racewrite the same
+  # rows. `with_advisory_lock` is provided by the existing
+  # `with_advisory_lock!` helper / `with_advisory_lock` gem.
+  def run!(allow_rebootstrap: true, reason: :manual)
+    lock_key = "gcal_sync:agenda:#{@agenda.id}"
+    Agenda.with_advisory_lock(lock_key, 30) {
+      run_synced(allow_rebootstrap: allow_rebootstrap, reason: reason)
+    }
+  end
+
+  private
+
+  def run_synced(allow_rebootstrap:, reason:)
+    @deferred_overrides = [] # buffered across pages — see flush_deferred_overrides
     page_token = nil
     sync_token = nil
     loop do
@@ -34,7 +60,17 @@ class GoogleCalendar::Sync
       break unless page_token
     end
 
-    @agenda.update!(sync_token: sync_token, synced_at: ::Time.current) if sync_token.present?
+    flush_deferred_overrides
+
+    # Persist synced_at on EVERY successful run — even if Google returned
+    # no nextSyncToken (rare, e.g. immediately after a full re-sync that
+    # paginated to exactly the end). The UI's "Synced X ago" depends on
+    # this; don't gate it on sync_token presence.
+    @agenda.update!(
+      sync_token:  sync_token.presence || @agenda.sync_token,
+      synced_at:   ::Time.current,
+      sync_reason: reason.to_s,
+    )
     @account.clear_reauth_required!
     @agenda.broadcast!
     :ok
@@ -43,14 +79,12 @@ class GoogleCalendar::Sync
     return :gone_loop unless allow_rebootstrap
 
     @agenda.update!(sync_token: nil)
-    run!(allow_rebootstrap: false)
+    run!(allow_rebootstrap: false, reason: reason)
     :rebootstrapped
   rescue ::RestClient::Unauthorized
     mark_reauth_required!
     :reauth_required
   end
-
-  private
 
   def fetch_page(page_token:)
     if @agenda.sync_token.present?
@@ -68,16 +102,44 @@ class GoogleCalendar::Sync
     end
   end
 
-  # Two-pass per page: process everything that DOESN'T depend on a master
-  # first (cancellations, recurring masters, one-offs), then overrides. An
-  # override (`recurringEventId` present) needs its parent schedule to exist;
-  # without this ordering the override silently no-ops on the first sync.
+  # Two-pass per page: process events that DON'T depend on a master first,
+  # then overrides for masters we've already seen. If an override's master
+  # is on a LATER page, buffer the override into @deferred_overrides; we
+  # replay them after pagination finishes, by which point every master
+  # has been written.
   def apply_page(payload)
     events = Array(payload[:items])
     primary, overrides = events.partition { |e| e[:recurringEventId].blank? }
 
     primary.each { |event| apply_event(event) }
-    overrides.each { |event| apply_event(event) }
+    overrides.each do |event|
+      master = @agenda.agenda_schedules.find_by(external_uid: event[:recurringEventId])
+      if master
+        apply_event(event)
+      else
+        @deferred_overrides << event
+      end
+    end
+  end
+
+  # Final replay pass — any override whose master arrived on a later page
+  # gets its chance now. Anything still without a master after this is
+  # logged for visibility (would indicate a Google data inconsistency).
+  def flush_deferred_overrides
+    return if @deferred_overrides.blank?
+
+    @deferred_overrides.each do |event|
+      master = @agenda.agenda_schedules.find_by(external_uid: event[:recurringEventId])
+      if master
+        apply_event(event)
+      else
+        ::Rails.logger.warn(
+          "[GoogleCalendar::Sync] override without master agenda=#{@agenda.id} " \
+          "override=#{event[:id]} master=#{event[:recurringEventId]}",
+        )
+      end
+    end
+    @deferred_overrides = []
   end
 
   def apply_event(event)
@@ -101,12 +163,46 @@ class GoogleCalendar::Sync
     Array(event[:attendees]).any? { |a| a[:self] == true && a[:responseStatus] == "declined" }
   end
 
+  # Maps a Google event to its AgendaItem status enum.
+  #   * Google flags it `tentative` directly → :tentative.
+  #   * Connected user hasn't fully accepted (needsAction/tentative) → :tentative.
+  #   * Otherwise → :confirmed.
+  # `cancelled` is handled separately by handle_cancellation — by the time
+  # we reach this writer the event is confirmed-or-tentative.
+  def event_status(event)
+    return :tentative if event[:status] == "tentative"
+
+    self_attendee = Array(event[:attendees]).find { |a| a[:self] == true }
+    return :confirmed if self_attendee.nil?
+
+    %w[needsAction tentative].include?(self_attendee[:responseStatus]) ? :tentative : :confirmed
+  end
+
+  # `status: cancelled` arrives in three shapes:
+  #   1. A recurring master is deleted entirely. → destroy the schedule
+  #      (cascades override items via dependent: :destroy).
+  #   2. A one-off event is deleted. → destroy the item.
+  #   3. A single instance of a recurring series is deleted (`recurringEventId`
+  #      present, no item materialized). → add the date to the master's
+  #      excluded_dates so the phantom no longer regenerates. If we DID
+  #      materialize an override row, destroy it too.
   def handle_cancellation(event)
     uid = event[:id]
     sched = @agenda.agenda_schedules.find_by(external_uid: uid)
     return sched.destroy if sched
 
     item = @agenda.agenda_items.find_by(external_uid: uid)
+
+    # Single-occurrence cancellation — exclude its date on the master so
+    # the phantom doesn't regenerate.
+    if event[:recurringEventId].present?
+      master = @agenda.agenda_schedules.find_by(external_uid: event[:recurringEventId])
+      occurrence_date = parse_time(
+        event.dig(:originalStartTime, :dateTime) || event.dig(:originalStartTime, :date),
+      )&.in_time_zone(user_timezone)&.to_date
+      master&.add_excluded_date!(occurrence_date) if occurrence_date
+    end
+
     item&.destroy
   end
 
@@ -120,6 +216,11 @@ class GoogleCalendar::Sync
     return if fast_skip?(sched, event)
 
     start_at_local = parse_event_start(event)
+    # Guard: parse_time can return nil for malformed dates. Skip the row
+    # entirely + Slack so we know about it. Without this, the strftime
+    # below NoMethodError's and the entire sync page fails silently.
+    return report_malformed_event!(event, "missing start_at") if start_at_local.nil?
+
     all_day = all_day_event?(event)
 
     sched.assign_attributes(
@@ -159,6 +260,7 @@ class GoogleCalendar::Sync
       location:            event_location(event),
       notes:               ::GoogleCalendar::HtmlText.to_plain(event[:description]),
       all_day:             all_day,
+      status:              event_status(event),
       external_etag:       event[:etag],
       external_updated_at: parse_time(event[:updated]),
     )
@@ -225,18 +327,21 @@ class GoogleCalendar::Sync
   end
 
   # Merge Google Meet / video conference link into the location field when
-  # there's no explicit address. Meet links live in `conferenceData`.
+  # there's no explicit address. See VIDEO_ENTRY_TYPES / PHONE_ENTRY_TYPES
+  # at the top of the class for ordering rationale.
   def event_location(event)
     explicit = event[:location].presence
     return explicit if explicit
 
-    Array(event.dig(:conferenceData, :entryPoints)).each do |entry|
-      uri = entry[:uri]
-      next if uri.blank?
+    entries = Array(event.dig(:conferenceData, :entryPoints))
+    video = entries.find { |e| VIDEO_ENTRY_TYPES.include?(e[:entryPointType].to_s) && e[:uri].present? }
+    return video[:uri] if video
 
-      return uri
-    end
-    nil
+    phone = entries.find { |e| PHONE_ENTRY_TYPES.include?(e[:entryPointType].to_s) && e[:uri].present? }
+    return phone[:uri] if phone
+
+    # No typed entry but something has a uri — last-resort fallback.
+    entries.find { |e| e[:uri].present? }&.[](:uri)
   end
 
   # All-day events arrive with `start.date` (YYYY-MM-DD) instead of
@@ -256,8 +361,11 @@ class GoogleCalendar::Sync
   def event_duration_minutes(event, all_day:)
     s = parse_event_start(event)
     e = parse_event_end(event)
-    return 24 * 60 if all_day && s && e # multi-day all-day events keep their span
     return 60 unless s && e
+    # All-day events: Google's end.date is exclusive, so the literal
+    # (e - s) gives the true span — including multi-day. A May 27→May 28
+    # all-day is 24h; May 27→May 30 is 72h.
+    return ((e - s) / 60).to_i if all_day
 
     [((e - s) / 60).to_i, 15].max
   end
@@ -276,5 +384,22 @@ class GoogleCalendar::Sync
 
   def mark_reauth_required!
     @account.mark_reauth_required!
+  end
+
+  # Skip + log + Slack-notify a single event we can't parse cleanly.
+  # Continuing the sync past one bad event is intentional — we don't want
+  # one malformed Google payload to wedge the entire calendar.
+  def report_malformed_event!(event, reason)
+    ::Rails.logger.warn(
+      "[GoogleCalendar::Sync] skipping malformed event agenda=#{@agenda.id} " \
+      "event=#{event[:id]} reason=#{reason}",
+    )
+    return unless ::Rails.env.production?
+
+    ::SlackNotifier.notify(
+      "GoogleCalendar::Sync skipped event for agenda=#{@agenda.id} " \
+      "event=#{event[:id]} reason=#{reason}",
+    ) rescue nil
+    nil
   end
 end

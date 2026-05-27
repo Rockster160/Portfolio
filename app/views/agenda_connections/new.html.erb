@@ -27,26 +27,31 @@
 
     <% @account_sections.each do |section| %>
       <% account = section[:account] %>
-      <section class="agenda-connect-account">
+      <section class="agenda-connect-account <%= "is-disconnected" if section[:disconnected] %>">
         <header class="agenda-connect-account-head">
           <span class="agenda-connect-account-label">Google Account</span>
           <span class="agenda-connect-account-email">
             <i class="fa fa-google agenda-connect-source-icon" aria-hidden="true"></i>
             <%= account.email %>
+            <% if section[:disconnected] %><small class="agenda-connect-tag agenda-connect-tag-warn">disconnected</small><% end %>
           </span>
-          <%= button_to "Disconnect account",
-              agenda_connection_path,
-              method:     :delete,
-              params:     { google_account_id: account.id },
-              form_class: "basic agenda-connect-row-form",
-              class:      "af-btn af-btn-secondary",
-              data:       { confirm: "Disconnect this Google account? All its synced calendars will be removed." } %>
+          <% unless section[:disconnected] %>
+            <%= button_to "Disconnect account",
+                agenda_connection_path,
+                method:     :delete,
+                params:     { google_account_id: account.id },
+                form_class: "basic agenda-connect-row-form",
+                class:      "af-btn af-btn-secondary",
+                data:       { confirm: "Disconnect this Google account? All its synced calendars will be removed." } %>
+          <% end %>
         </header>
 
         <% if section[:needs_reauth] || section[:load_error] %>
           <div class="agenda-connect-reauth">
             <p class="agenda-connect-note agenda-connect-note-warn">
-              <% if section[:load_error] %>
+              <% if section[:disconnected] %>
+                <strong><%= account.email %></strong> was disconnected. Reconnect to re-add its calendars.
+              <% elsif section[:load_error] %>
                 Couldn't load <strong><%= account.email %></strong>'s calendars — the OAuth tokens have expired or been revoked.
               <% else %>
                 <strong><%= account.email %></strong> needs to be reconnected.
@@ -109,3 +114,25 @@
     </div>
   <% end %>
 </div>
+
+<% content_for :after_body do %>
+  <script>
+    (function () {
+      // Connect / Disconnect buttons are `button_to` <form>s. On submit:
+      //   * Disable the button (double-click + accidental double-submit guard)
+      //   * Swap label for "Connecting…" + spinner so the slow happy-path
+      //     doesn't look frozen (Connect kicks off a sync; Google calendarList
+      //     can take a second).
+      document.querySelectorAll(".agenda-connect-row-form").forEach((form) => {
+        form.addEventListener("submit", () => {
+          const btn = form.querySelector("button, input[type=submit]");
+          if (!btn || btn.disabled) return;
+          btn.disabled = true;
+          btn.dataset.originalLabel = btn.textContent;
+          const isConnect = btn.classList.contains("af-btn-primary");
+          btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> ' + (isConnect ? "Connecting…" : "Working…");
+        });
+      });
+    })();
+  </script>
+<% end %>

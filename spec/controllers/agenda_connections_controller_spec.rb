@@ -193,14 +193,19 @@ RSpec.describe AgendaConnectionsController, type: :controller do
     }
 
     it "disconnects a single account when google_account_id is supplied" do
+      # Soft-disconnect: the GoogleAccount row stays (so the picker can
+      # re-list it for reconnect) but tokens are cleared, agendas removed,
+      # and disconnected_at is stamped.
       allow(::GoogleCalendar::WatchManager).to receive(:stop!)
       allow_any_instance_of(Oauth::GoogleApi).to receive(:revoke!)
 
       delete :destroy, params: { google_account_id: account.id }
-      expect(GoogleAccount.exists?(account.id)).to be(false)
+      account.reload
+      expect(account.disconnected_at).to be_present
+      expect(account.access_token).to be_blank
       expect(Agenda.exists?(agenda_a.id)).to be(false)
       # The other account is untouched
-      expect(GoogleAccount.exists?(other_account.id)).to be(true)
+      expect(other_account.reload.disconnected_at).to be_nil
       expect(Agenda.exists?(agenda_b.id)).to be(true)
     end
 
@@ -209,7 +214,8 @@ RSpec.describe AgendaConnectionsController, type: :controller do
       allow_any_instance_of(Oauth::GoogleApi).to receive(:revoke!)
 
       delete :destroy
-      expect(user.google_accounts.count).to eq(0)
+      user.reload
+      expect(user.google_accounts.where(disconnected_at: nil).count).to eq(0)
       expect(user.agendas.google.count).to eq(0)
     end
   end

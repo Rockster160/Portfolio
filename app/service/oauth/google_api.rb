@@ -149,6 +149,28 @@ class Oauth::GoogleApi < Oauth::Base
     get("calendars/#{CGI.escape(calendar_id)}/events", params)
   end
 
+  # ---- Event write-back ----
+  # PATCH/DELETE/POST so user edits in our UI propagate to Google.
+
+  def patch_event(calendar_id, event_id, body)
+    request(
+      url("calendars/#{CGI.escape(calendar_id)}/events/#{CGI.escape(event_id)}"),
+      :patch,
+      body,
+    )
+  end
+
+  def delete_event(calendar_id, event_id)
+    request(
+      url("calendars/#{CGI.escape(calendar_id)}/events/#{CGI.escape(event_id)}"),
+      :delete,
+    )
+  end
+
+  def insert_event(calendar_id, body)
+    post("calendars/#{CGI.escape(calendar_id)}/events", body)
+  end
+
   def watch_events(calendar_id, channel_id:, address:, token: nil, ttl_seconds: 7.days.to_i)
     body = {
       id:      channel_id,

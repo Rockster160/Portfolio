@@ -8,8 +8,10 @@ RSpec.describe AgendaItemsController, type: :controller do
 
   describe "PATCH #update with location/notes (regression)" do
     let!(:item) {
-      create(:agenda_item, agenda: agenda, kind: :task, name: "Task",
-        start_at: Time.current, location: "", notes: "")
+      create(
+        :agenda_item, agenda: agenda, kind: :task, name: "Task",
+        start_at: Time.current, location: "", notes: ""
+      )
     }
 
     it "persists location and notes on a non-recurring item" do
@@ -28,10 +30,14 @@ RSpec.describe AgendaItemsController, type: :controller do
     end
 
     it "persists location and notes when scope=occurrence on a recurring item" do
-      sched = create(:agenda_schedule, agenda: agenda, kind: :task, name: "Daily",
-        start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current)
-      occ = sched.agenda_items.create!(agenda: agenda, kind: :task, name: "Daily",
-        start_at: Time.current, detached_at: Time.current)
+      sched = create(
+        :agenda_schedule, agenda: agenda, kind: :task, name: "Daily",
+        start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current
+      )
+      occ = sched.agenda_items.create!(
+        agenda: agenda, kind: :task, name: "Daily",
+        start_at: Time.current, detached_at: Time.current
+      )
       patch :update, params: {
         id:          occ.id,
         scope:       :occurrence,
@@ -43,8 +49,10 @@ RSpec.describe AgendaItemsController, type: :controller do
     end
 
     it "persists location and notes when scope=series on a recurring item" do
-      sched = create(:agenda_schedule, agenda: agenda, kind: :task, name: "Daily",
-        start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current)
+      sched = create(
+        :agenda_schedule, agenda: agenda, kind: :task, name: "Daily",
+        start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current
+      )
       phantom_id = "p-#{sched.id}-#{(Date.current + 5.days).iso8601}"
       patch :update, params: {
         id:          phantom_id,
@@ -60,14 +68,16 @@ RSpec.describe AgendaItemsController, type: :controller do
       # Mirrors what the JS sends when editing a recurring item in series mode:
       # an `agenda_schedule` block including the new location/notes (regression
       # check for the bug where the JS forgot to merge them into the payload).
-      sched = create(:agenda_schedule, agenda: agenda, kind: :task, name: "Daily",
-        start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current)
+      sched = create(
+        :agenda_schedule, agenda: agenda, kind: :task, name: "Daily",
+        start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current
+      )
       phantom_id = "p-#{sched.id}-#{(Date.current + 5.days).iso8601}"
       patch :update, params: {
-        id:               phantom_id,
-        scope:            :series,
-        agenda_item:      { agenda_id: agenda.id, name: "Daily", location: "HQ", notes: "All-hands" },
-        agenda_schedule:  {
+        id:              phantom_id,
+        scope:           :series,
+        agenda_item:     { agenda_id: agenda.id, name: "Daily", location: "HQ", notes: "All-hands" },
+        agenda_schedule: {
           name:       "Daily",
           kind:       "task",
           color:      "#0160ff",
@@ -141,15 +151,17 @@ RSpec.describe AgendaItemsController, type: :controller do
 
       move_payload = payloads.find { |p| p.dig(:data, :changed)&.size == 2 }
       expect(move_payload).not_to be_nil
-      ids = move_payload[:data][:changed].map { |c| c[:agenda_id] }
+      ids = move_payload[:data][:changed].pluck(:agenda_id)
       expect(ids).to contain_exactly(agenda.id, other.id)
     end
   end
 
   describe "phantom interactions" do
     let(:sched) {
-      create(:agenda_schedule, agenda: agenda, name: "Standup", kind: "task",
-        start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current)
+      create(
+        :agenda_schedule, agenda: agenda, name: "Standup", kind: "task",
+        start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current
+      )
     }
     let(:phantom_id) { "p-#{sched.id}-#{(Date.current + 30.days).iso8601}" }
 
@@ -259,10 +271,16 @@ RSpec.describe AgendaItemsController, type: :controller do
       expect(sched.reload.excluded?(Date.current + 30.days)).to be true
     end
 
-    it "occurrence-scope delete on a DETACHED recurring item actually destroys the row" do
-      sched = create(:agenda_schedule, agenda: agenda, kind: :task,
+    it "occurrence-scope delete on a DETACHED recurring item soft-cancels + excludes date" do
+      # Detached items used to be destroyed; we now soft-cancel (cancelled_at)
+      # to match the "deleting an occurrence shouldn't destroy" rule. The
+      # excluded_dates push still happens so the schedule rebuilds the
+      # phantom only outside the cancelled date.
+      sched = create(
+        :agenda_schedule, agenda: agenda, kind: :task,
         name: "Garbage Cans In", recurrence: { "freq" => "daily" },
-        starts_on: Date.current - 1)
+        starts_on: Date.current - 1
+      )
       item = sched.agenda_items.create!(
         agenda:      agenda,
         kind:        :task,
@@ -274,14 +292,18 @@ RSpec.describe AgendaItemsController, type: :controller do
       delete :destroy, params: { id: item.id, scope: :occurrence }
 
       expect(response).to be_successful
-      expect(AgendaItem.find_by(id: item.id)).to be_nil
+      item.reload
+      expect(item.cancelled?).to be(true)
+      expect(item.cancelled_at).to be_present
       expect(sched.reload.excluded?(item.occurrence_date)).to be true
     end
 
-    it "series-scope delete on a detached recurring item actually destroys + ends schedule" do
-      sched = create(:agenda_schedule, agenda: agenda, kind: :task,
+    it "series-scope delete on a detached recurring item soft-cancels + ends schedule" do
+      sched = create(
+        :agenda_schedule, agenda: agenda, kind: :task,
         name: "Garbage Cans In", recurrence: { "freq" => "daily" },
-        starts_on: Date.current - 1)
+        starts_on: Date.current - 1
+      )
       item = sched.agenda_items.create!(
         agenda:      agenda,
         kind:        :task,
@@ -293,7 +315,9 @@ RSpec.describe AgendaItemsController, type: :controller do
       delete :destroy, params: { id: item.id, scope: :series }
 
       expect(response).to be_successful
-      expect(AgendaItem.find_by(id: item.id)).to be_nil
+      item.reload
+      expect(item.cancelled?).to be(true)
+      expect(item.cancelled_at).to be_present
       expect(sched.reload.until_on).to be <= Date.current
     end
 

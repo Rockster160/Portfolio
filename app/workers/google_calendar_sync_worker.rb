@@ -8,16 +8,15 @@ class GoogleCalendarSyncWorker
   # double-sync when push notifications are healthy.
   STALE_THRESHOLD = 15.minutes
 
-  # `agenda_id` form: sync just that calendar.
-  # No args: sync every connected calendar whose synced_at is stale (used by
-  # the poll-fallback cron).
-  def perform(agenda_id=nil)
+  # `agenda_id, reason` form: sync just that calendar with a recorded
+  # reason (webhook, poll, manual). No args: sync every stale calendar.
+  def perform(agenda_id=nil, reason="manual")
     return sync_all_stale if agenda_id.nil?
 
     agenda = ::Agenda.google.find_by(id: agenda_id)
     return unless agenda
 
-    ::GoogleCalendar::Sync.new(agenda).run!
+    ::GoogleCalendar::Sync.new(agenda).run!(reason: reason.to_sym)
     ensure_watch!(agenda.reload)
   end
 
@@ -27,7 +26,7 @@ class GoogleCalendarSyncWorker
     ::Agenda.google
       .where("synced_at IS NULL OR synced_at < ?", STALE_THRESHOLD.ago)
       .find_each do |agenda|
-        ::GoogleCalendar::Sync.new(agenda).run!
+        ::GoogleCalendar::Sync.new(agenda).run!(reason: :poll)
         ensure_watch!(agenda.reload)
       rescue StandardError => e
         ::Rails.logger.warn("[GoogleCalendarSyncWorker] agenda=#{agenda.id} error=#{e.class}: #{e.message}")

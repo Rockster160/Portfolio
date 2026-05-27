@@ -209,9 +209,46 @@
     .agenda-card-meta {
       font-size: 12px;
       opacity: 0.6;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0 0;
+
+      // Each meta cell carries its own dot separator on the left so the
+      // line wraps cleanly: when cells stack on narrow screens the dots
+      // disappear (no awkward leading "·" on a new row). On wide screens
+      // they reappear inline. Padding-left holds the dot so the cell text
+      // itself never sits flush against the previous cell.
+      .agenda-card-meta-cell {
+        padding-left: 8px;
+        position: relative;
+
+        & + .agenda-card-meta-cell::before {
+          content: "·";
+          position: absolute;
+          left: 0;
+          opacity: 0.6;
+        }
+      }
+
+      @media (max-width: 540px) {
+        flex-direction: column;
+        gap: 2px 0;
+
+        .agenda-card-meta-cell {
+          padding-left: 0;
+
+          & + .agenda-card-meta-cell::before {
+            content: none;
+          }
+        }
+      }
+    }
+
+    .agenda-card-sync-reason {
+      font-size: 10px;
+      opacity: 0.75;
+      margin-left: 2px;
     }
 
     .agenda-card-shared {
@@ -534,14 +571,45 @@ body.ctr-agendas {
       font-style: italic;
     }
 
+    // Tentative: connected user hasn't accepted yet (needsAction /
+    // tentative) OR the event's overall status is tentative. Visually
+    // faded + italicized so the user can tell at a glance.
+    &.tentative {
+      .agenda-item-name,
+      .agenda-item-time {
+        font-style: italic;
+        opacity: 0.7;
+      }
+    }
+
     // Custom checkbox: the fill color matches the item, so a glance tells
     // you which agenda each completed row belongs to. While the change is
     // in-flight (`.is-pending` on the row), the box renders greyscale so
     // the user can see at-a-glance that the state isn't yet confirmed.
+    // The check-zone is the full-height strip on the left of the row.
+    // Anywhere inside it forwards a click to the native checkbox (it's
+    // a <label>). The checkbox itself sits top-aligned next to the
+    // first line of the time/name (which is also top-aligned).
+    .agenda-item-check-zone {
+      display: flex;
+      align-items: flex-start;
+      padding: 10px 10px 10px 0;
+      margin-right: -4px;
+      cursor: pointer;
+      flex-shrink: 0;
+
+      &:has(input:disabled) {
+        cursor: not-allowed;
+      }
+    }
+    &.preview .agenda-item-check-zone {
+      padding: 5px 10px 5px 0;
+    }
+
     .agenda-item-check {
       appearance: none;
       -webkit-appearance: none;
-      margin: 0 10px 0 0;
+      margin: 2px 0 0 0; // tiny nudge to align top edges with the time text
       width: 18px;
       height: 18px;
       min-width: 18px;
@@ -549,7 +617,6 @@ body.ctr-agendas {
       border: 1.5px solid var(--item-color, var(--agenda-color));
       background: transparent;
       cursor: pointer;
-      align-self: center;
       position: relative;
       transition:
         background 0.1s ease,
@@ -573,8 +640,10 @@ body.ctr-agendas {
         transform: rotate(45deg);
       }
 
+      // Pending state (sync in-flight): same shape, no color.
       &:disabled {
-        cursor: progress;
+        cursor: not-allowed;
+        opacity: 0.45;
       }
     }
 
@@ -589,18 +658,32 @@ body.ctr-agendas {
       }
     }
 
+    // <button> element — reset every global button cascade we don't want
+    // (forms.scss gives every <button> a blue gradient + shadow + padding).
     .agenda-item-body {
       display: flex;
-      align-items: flex-start; // multi-line names sit beside the time/dot
+      align-items: flex-start;
       gap: 10px;
       flex: 1;
       min-width: 0;
-      padding: 10px 0; // label owns the row's vertical click area
+      padding: 10px 0;
       cursor: pointer;
+      // Cascade resets:
+      background: transparent !important;
+      background-image: none !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+      color: inherit !important;
+      font: inherit !important;
+      font-weight: normal !important;
+      text-align: left !important;
+      margin: 0 !important;
+      border-radius: 0 !important;
     }
     &.preview .agenda-item-body {
       cursor: default;
-      padding: 5px 0;
+      padding: 5px 0 !important;
     }
 
     .agenda-item-time {
@@ -2026,6 +2109,15 @@ body.ctr-agendas {
       background: rgba(81, 183, 73, 0.18);
       opacity: 0.95;
     }
+
+    &.agenda-connect-tag-warn {
+      background: rgba(232, 162, 56, 0.22);
+      opacity: 0.95;
+    }
+  }
+
+  .agenda-connect-account.is-disconnected {
+    opacity: 0.85;
   }
 
   .agenda-connect-source-icon {

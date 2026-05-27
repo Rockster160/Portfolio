@@ -8,6 +8,7 @@
 #  parameterized_name :string           not null
 #  sort_order         :integer
 #  source             :integer          default("user"), not null
+#  sync_reason        :string
 #  sync_token         :text
 #  synced_at          :datetime
 #  watch_expires_at   :datetime
@@ -63,11 +64,22 @@ class Agenda < ApplicationRecord
     User.where(id: ([user_id] + shared_users.pluck(:id)).uniq)
   end
 
+  # Can add/edit/complete items + schedules. Owners are implicitly editors.
   def editable_by?(other_user)
+    return false if other_user.blank?
+    return true if owned_by?(other_user)
+
+    agenda_shares.exists?(user_id: other_user.id, permission: [:editor, :owner])
+  end
+
+  # Can rename/recolor the agenda itself, manage shares, destroy. The
+  # primary user_id is always an owner; additional shared users with the
+  # :owner permission qualify too.
+  def owned_by?(other_user)
     return false if other_user.blank?
     return true if user_id == other_user.id
 
-    agenda_shares.editor.exists?(user_id: other_user.id)
+    agenda_shares.exists?(user_id: other_user.id, permission: :owner)
   end
 
   # External agendas are owned by an upstream system (Google Calendar). The
@@ -111,12 +123,21 @@ class Agenda < ApplicationRecord
 
   # Two SQL queries regardless of range size — one for materialized rows,
   # one for active schedules. Phantom occurrences are built in-memory.
+  #
+  # The materialized-item query matches on *overlap*: an item is in-window
+  # if its (start_at..end_at) range intersects (from..to). This is what
+  # lets multi-day all-day events appear on each day they cover, not just
+  # the start date.
   def items_for_range(from, to)
     from_date = from.to_date
     to_date = to.to_date
 
     range = range_for_dates(from_date, to_date)
-    real_items = agenda_items.where(start_at: range).order(:start_at).to_a
+    real_items = agenda_items
+      .not_cancelled
+      .where("start_at <= ? AND COALESCE(end_at, start_at) >= ?", range.end, range.begin)
+      .order(:start_at)
+      .to_a
     schedules = agenda_schedules.active_between(from_date, to_date).to_a
 
     materialized_keys = real_items.each_with_object(Set.new) { |item, set|

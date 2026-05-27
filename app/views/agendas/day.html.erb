@@ -81,10 +81,10 @@
       </div>
     </section>
 
-    <%# Picker shows only user-owned agendas — externals are read-only. %>
-    <% writable_agendas = @agendas.reject(&:managed_externally?) %>
-    <%= render "agenda_items/add_modal", agendas: writable_agendas, date: @date %>
-    <%= render "agenda_items/edit_modal", agendas: writable_agendas %>
+    <%# Picker includes Google agendas — new items mirror to Google via
+        events.insert, but kind is locked to Event in the form. %>
+    <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>
+    <%= render "agenda_items/edit_modal", agendas: @agendas %>
     <%= render "agenda_items/details_modal" %>
   <% end %>
 </div>

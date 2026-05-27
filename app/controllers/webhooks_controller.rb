@@ -147,7 +147,7 @@ class WebhooksController < ApplicationController
     # change to apply. Enqueue a real sync only for content-state deliveries.
     return head :no_content if resource_state == "sync"
 
-    ::GoogleCalendarSyncWorker.perform_async(agenda.id)
+    ::GoogleCalendarSyncWorker.perform_async(agenda.id, "webhook")
     head :no_content
   end
 

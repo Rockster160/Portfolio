@@ -91,12 +91,21 @@ class AgendaConnectionsController < ApplicationController
       end
     )
 
+    # Soft-disconnect: clear tokens, drop the watch + agendas, but keep
+    # the GoogleAccount row so the picker can re-list it as a
+    # reconnectable option (instead of looking like it never existed).
     accounts.find_each do |account|
       account.agendas.find_each do |agenda|
         ::GoogleCalendar::WatchManager.stop!(agenda) if agenda.watch_channel_id.present?
       end
+      account.agendas.destroy_all
       account.api.revoke! rescue nil # best-effort — Google may already have invalidated
-      account.destroy
+      account.update!(
+        access_token:    nil,
+        refresh_token:   nil,
+        id_token:        nil,
+        disconnected_at: ::Time.current,
+      )
     end
 
     redirect_to(manage_agenda_path, notice: "Google Calendar disconnected.")
@@ -112,11 +121,23 @@ class AgendaConnectionsController < ApplicationController
   end
 
   # For each account, fetch its CalendarList and join with already-connected
-  # Agendas so the view can render Connect/Disconnect per row. If the
-  # CalendarList call raises (e.g. the refresh_token has been revoked and
-  # the refresh attempt 400s), fall back to an empty section flagged with
-  # `needs_reauth` so the picker renders a "Reconnect" CTA instead of 500ing.
+  # Agendas so the view can render Connect/Disconnect per row.
+  #   * Soft-disconnected account (no tokens) → return a "reconnect this
+  #     account" stub so the picker still lists it.
+  #   * Token still alive but Google rejects → flag needs_reauth.
+  #   * Otherwise → list every available calendar.
   def build_section(account)
+    if account.disconnected_at.present? || account.access_token.blank?
+      return {
+        account:      account,
+        calendars:    [],
+        connected:    {},
+        load_error:   false,
+        needs_reauth: true,
+        disconnected: true,
+      }
+    end
+
     list = account.api.list_calendars
     calendars = Array(list&.[](:items)).map { |c|
       {
@@ -133,6 +154,7 @@ class AgendaConnectionsController < ApplicationController
       connected:    connected,
       load_error:   list.blank?,
       needs_reauth: account.reload.needs_reauth?,
+      disconnected: false,
     }
   rescue ::RestClient::Exception, ::SocketError => e
     ::Rails.logger.warn("[AgendaConnectionsController] account=#{account.id} #{e.class}: #{e.message}")
@@ -143,6 +165,7 @@ class AgendaConnectionsController < ApplicationController
       connected:    {},
       load_error:   true,
       needs_reauth: true,
+      disconnected: false,
     }
   end
 end

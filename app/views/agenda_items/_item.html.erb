@@ -1,8 +1,14 @@
-<%# Click priority:
-      body  → toggle complete (native <label for> on the checkbox)
-      pencil → edit modal
-    Viewer-perm rows have no checkbox/pencil; tapping anywhere opens
-    the read-only details modal. %>
+<%# Interaction model:
+      .agenda-item-check-zone (full vertical strip on the left)
+        → checkbox click area. Visually contains just the checkbox at top.
+        Disabled when the item kind / state cannot be completed; tooltip
+        explains why.
+      .agenda-item-body (name + time + location)
+        → opens the read-only details modal on click (NOT edit).
+      .agenda-item-edit pencil (rightmost)
+        → opens the full edit modal.
+    Preview / readonly rows hide the checkbox + pencil.
+%>
 <% preview ||= false %>
 <% local_start = item.start_at.in_time_zone(item.user.timezone) %>
 <% local_end   = item.end_at&.in_time_zone(item.user.timezone) %>
@@ -11,6 +17,8 @@
 <% readonly    = !preview && !editable %>
 <% classes     = ["agenda-item"] %>
 <% classes << "kind-#{item.kind}" %>
+<% classes << "all-day"     if item.all_day? %>
+<% classes << item.status if item.tentative? || item.cancelled? %>
 <% classes << "crossed-out" if item.crossed_out? %>
 <% classes << "recurring"   if item.recurring? %>
 <% classes << "phantom"     if item.phantom? %>
@@ -18,11 +26,30 @@
 <% classes << "readonly"    if readonly %>
 <% id_title = item.phantom? ? "Agenda ##{item.agenda_id}" : "Item ##{item.id}" %>
 
+<%# Completion model:
+      tasks always completable.
+      events: completable as a local UI bookkeeping action (Google has no
+      "completed" — local-only field, never written back).
+      triggers: completed when fired, not by the user — checkbox shows
+      the fired state but is disabled.
+%>
+<% can_check = item.task? || item.event? %>
+<% check_disabled = !can_check || preview || !item.agenda.editable_by?(current_user) %>
+<% check_reason = (
+  if item.trigger?
+    "Triggers are marked complete automatically when they fire."
+  elsif preview
+    "Tap forward to today to check this off."
+  elsif !item.agenda.editable_by?(current_user)
+    "Read-only — only editors can change this."
+  end
+) %>
+
 <div class="<%= classes.join(" ") %>"
      style="--item-color: <%= item.display_color %>; --agenda-color: <%= item.agenda.color %>;"
      title="<%= item.agenda.name %> · <%= id_title %>"
-     <%= "data-edit-item data-readonly" if readonly %>
-     data-item-id="<%= item.display_id %>"Z
+     <%= "data-readonly" if readonly %>
+     data-item-id="<%= item.display_id %>"
      data-item-url="<%= item_url %>"
      data-phantom="<%= item.phantom? %>"
      data-recurring="<%= item.recurring? %>"
@@ -34,27 +61,31 @@
      data-agenda-color="<%= item.agenda.color %>"
      data-start-at="<%= item.start_at.iso8601 %>"
      data-end-at="<%= item.end_at&.iso8601 %>"
+     data-all-day="<%= item.all_day? %>"
      data-name="<%= item.name %>"
      data-notes="<%= item.notes %>"
      data-location="<%= item.location %>"
      data-trigger-expression="<%= item.trigger_expression %>"
      data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>">
 
-  <% if editable %>
+  <%# Full-strip checkbox click zone — always rendered so every item has
+      a consistent visual + the right-of-it body always aligns. Disabled
+      state on the input communicates non-markable; tooltip explains. %>
+  <label class="agenda-item-check-zone"
+         <%= check_reason && "title=\"#{check_reason}\"".html_safe %>>
     <input type="checkbox"
            class="agenda-item-check"
            id="agenda_item_<%= item.display_id %>"
-           <%= "checked" if item.completed? %>
-           data-checked-url="<%= item_url %>">
-  <% end %>
+           <%= "checked"  if item.crossed_out? %>
+           <%= "disabled" if check_disabled %>
+           <%= check_disabled ? nil : "data-checked-url=\"#{item_url}\"".html_safe %>>
+  </label>
 
-  <% if editable %>
-    <label for="agenda_item_<%= item.display_id %>" class="agenda-item-body">
-  <% else %>
-    <div class="agenda-item-body">
-  <% end %>
+  <button type="button" class="agenda-item-body" data-open-details>
     <span class="agenda-item-time">
-      <% if item.event? && local_end %>
+      <% if item.all_day? %>
+        <%= item.start_at.in_time_zone(item.user.timezone).strftime("%b %-d") %><% if item.end_date != item.occurrence_date %><span class="time-sep">–</span><%= item.end_date.strftime("%b %-d") %><% end %>
+      <% elsif item.event? && local_end %>
         <%= local_start.strftime("%-l:%M%P") %><span class="time-sep">–</span><%= local_end.strftime("%-l:%M%P") %>
       <% else %>
         <%= local_start.strftime("%-l:%M%P") %>
@@ -69,11 +100,7 @@
     <% if item.recurring? %>
       <span class="agenda-item-badge" title="Recurring"><i class="fa fa-refresh"></i></span>
     <% end %>
-  <% if editable %>
-    </label>
-  <% else %>
-    </div>
-  <% end %>
+  </button>
 
   <% if editable %>
     <button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit" title="<%= id_title %>"><i class="fa fa-pencil"></i></button>

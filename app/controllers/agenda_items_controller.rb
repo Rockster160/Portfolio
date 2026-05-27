@@ -15,10 +15,25 @@ class AgendaItemsController < ApplicationController
     target = resolve_target_agenda(params.dig(:agenda_item, :agenda_id))
     return render json: { errors: ["Agenda not found"] }, status: :not_found if target.blank?
 
-    refuse_external_write!(target)
-    return if performed?
+    if target.managed_externally? && item_params[:kind].to_s != "event"
+      return render json: { errors: ["Only events can be added to a Google calendar."] }, status: :unprocessable_entity
+    end
 
-    @item = target.agenda_items.new(item_params.except(:agenda_id))
+    if target.managed_externally?
+      # Mirror the new event to Google first. On success Google returns
+      # the created event id + etag; we store those so the next sync's
+      # etag fast-skip recognizes it (no double-write).
+      _local_attrs, google_attrs = ::GoogleCalendar::EventWriter.translate(item_params.to_h.merge(skip_color: true))
+      response = target.google_account.api.insert_event(target.external_id, google_attrs)
+      external_attrs = {
+        external_uid:        response[:id],
+        external_etag:       response[:etag],
+        external_updated_at: ::Time.current,
+      }
+      @item = target.agenda_items.new(item_params.except(:agenda_id).merge(external_attrs))
+    else
+      @item = target.agenda_items.new(item_params.except(:agenda_id))
+    end
 
     if @item.save
       target.broadcast!
@@ -65,12 +80,20 @@ class AgendaItemsController < ApplicationController
       cutoff_date = @item.occurrence_date
       cutoff_time = @item.start_at
       sched.update!(occurrence_count: nil, until_on: cutoff_date - 1)
-      sched.agenda_items.where(start_at: cutoff_time..).destroy_all
+      # Cascade-cancel future materialized rows instead of destroying —
+      # keeps history; views filter via `not_cancelled`.
+      sched.agenda_items.where(start_at: cutoff_time..).update_all( # rubocop:disable Rails/SkipsModelValidations
+        status:       AgendaItem.statuses[:cancelled],
+        cancelled_at: Time.current,
+      )
     elsif @item.phantom?
       @item.agenda_schedule.add_excluded_date!(@item.occurrence_date)
     elsif @item.recurring?
       @item.cancel_occurrence!
     else
+      # Non-recurring: full destroy is fine — there's no series to keep
+      # in sync with. Caller's external_agenda_guard already blocks this
+      # path for Google-synced items.
       @item.destroy
     end
 
@@ -165,19 +188,41 @@ class AgendaItemsController < ApplicationController
       attrs[:detached_at] = Time.current
       attrs[:original_start_at] = @item.start_at
     end
-    # Externally-synced item edited by the user — stamp locally_modified_at
-    # so GoogleCalendar::Sync stops overwriting it on the next pull. Local
-    # edits win over Google until the user disconnects + reconnects.
-    if @item.agenda.managed_externally? && @item.locally_modified_at.blank?
-      attrs[:locally_modified_at] = Time.current
+
+    # Externally-synced item: send name/time/location/etc to Google via
+    # patch_event AND apply them locally so the UI reflects the change
+    # immediately. The next sync will overwrite with Google's authoritative
+    # copy (which should match what we just sent — but if Google rejects
+    # or alters something, the sync re-reconciles).
+    #
+    # Color is the one exception: it's a local-only override stored in
+    # `local_color`. We translate `color` → `local_color` and drop the
+    # original key so we don't try to overwrite Google's colorId.
+    if @item.agenda.managed_externally?
+      local_attrs, google_attrs = ::GoogleCalendar::EventWriter.translate(attrs)
+      mirror_to_google!(google_attrs) if google_attrs.any?
+      attrs = attrs.except(:color).merge(local_attrs)
+      # Stamp the local-edit time so the sync skips overwriting this row
+      # for a short grace period — protects against the race where the
+      # user's PATCH hasn't propagated to Google yet but a sync pulls the
+      # pre-edit version back down. See google_calendar/sync.rb:312.
+      attrs[:locally_modified_at] = ::Time.current
     end
     attrs
   end
 
+  def mirror_to_google!(google_attrs)
+    @item.agenda.google_account.api.patch_event(
+      @item.agenda.external_id,
+      @item.external_uid,
+      google_attrs,
+    )
+  end
+
   def item_params
     params.require(:agenda_item).permit(
-      :agenda_id, :name, :kind, :color, :start_at, :end_at, :notes, :location,
-      :completed_at, :trigger_expression
+      :agenda_id, :name, :kind, :color, :local_color, :start_at, :end_at, :all_day,
+      :notes, :location, :completed_at, :trigger_expression
     )
   end
 

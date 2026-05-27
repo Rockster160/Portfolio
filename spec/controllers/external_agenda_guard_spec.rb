@@ -11,12 +11,26 @@ require "rails_helper"
 #   * Schedule update remains blocked: the recurrence rule is sync-owned.
 RSpec.describe "ExternalAgendaGuard", type: :controller do
   let(:user) { create(:user) }
+  let!(:google_account) {
+    user.google_accounts.create!(email: "test@example.com", access_token: "tok", refresh_token: "rt")
+  }
   let!(:gcal_agenda) {
-    create(:agenda, user: user, source: :google, external_id: "cal-1")
+    create(
+      :agenda, user: user, source: :google, external_id: "cal-1",
+      google_account: google_account
+    )
   }
   let!(:user_agenda) { create(:agenda, user: user) }
 
-  before { sign_in user }
+  before do
+    # Every test that exercises a write path against a gcal agenda would
+    # otherwise hit the real Google API. Stub the three mutation endpoints
+    # so tests stay hermetic.
+    allow_any_instance_of(::Oauth::GoogleApi).to receive(:insert_event).and_return({ id: "new-uid", etag: "etag1" })
+    allow_any_instance_of(::Oauth::GoogleApi).to receive(:patch_event).and_return({ id: "uid-1", etag: "etag2" })
+    allow_any_instance_of(::Oauth::GoogleApi).to receive(:delete_event).and_return(true)
+    sign_in user
+  end
 
   describe AgendasController do
     it "allows rename/recolor on gcal-synced agendas" do
@@ -43,7 +57,10 @@ RSpec.describe "ExternalAgendaGuard", type: :controller do
   end
 
   describe AgendaItemsController do
-    it "refuses item creation on gcal agendas" do
+    # Google calendars only contain events — task / trigger kinds are
+    # rejected at the controller (422). Events ARE allowed and mirror
+    # straight to Google via insert_event.
+    it "refuses NON-event item creation on gcal agendas" do
       post :create, params: {
         agenda_item: {
           agenda_id: gcal_agenda.id,
@@ -52,8 +69,24 @@ RSpec.describe "ExternalAgendaGuard", type: :controller do
           start_at:  Time.current,
         },
       }, format: :json
-      expect(response).to have_http_status(:forbidden)
+      expect(response).to have_http_status(:unprocessable_entity)
       expect(gcal_agenda.agenda_items.count).to eq(0)
+    end
+
+    it "allows event creation on gcal agendas, mirroring to Google" do
+      post :create, params: {
+        agenda_item: {
+          agenda_id: gcal_agenda.id,
+          name:      "Meeting",
+          kind:      :event,
+          start_at:  1.hour.from_now,
+          end_at:    2.hours.from_now,
+        },
+      }, format: :json
+      expect(response).to be_successful
+      created = gcal_agenda.agenda_items.last
+      expect(created.external_uid).to eq("new-uid")
+      expect(created.external_etag).to eq("etag1")
     end
 
     it "allows updates to items on gcal agendas and stamps locally_modified_at" do

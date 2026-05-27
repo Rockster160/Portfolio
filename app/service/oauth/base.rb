@@ -50,6 +50,11 @@ class Oauth::Base
   # if the token is missing, malformed, expired, or for a different service.
   # Callers (e.g. webhooks#auth, anywhere using `from_jwt(...)&.code = ...`)
   # rely on this returning nil rather than raising on bad input.
+  # State JWT lifetime. Google's docs don't impose a server-side TTL on
+  # the `state` param — it's ours to validate. 10 minutes was too short
+  # for users who walk away mid-consent or hit a "choose account" page.
+  STATE_JWT_TTL = 1.hour
+
   def self.from_jwt(token)
     return nil if token.blank?
 
@@ -57,7 +62,7 @@ class Oauth::Base
     return unless decoded.is_a?(Array) && decoded.first.is_a?(Hash)
 
     json = decoded.first.deep_symbolize_keys
-    return unless json[:timestamp].to_i > 10.minutes.ago.to_i
+    return unless json[:timestamp].to_i > STATE_JWT_TTL.ago.to_i
     return unless json[:service].to_s == default_service_name
 
     user = json[:user_id].presence&.then { |id| User.find_by(id: id) }

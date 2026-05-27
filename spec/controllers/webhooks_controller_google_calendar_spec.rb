@@ -20,7 +20,7 @@ RSpec.describe WebhooksController, type: :controller do
 
       post :google_calendar
       expect(response).to have_http_status(:no_content)
-      expect(GoogleCalendarSyncWorker).to have_received(:perform_async).with(agenda.id)
+      expect(GoogleCalendarSyncWorker).to have_received(:perform_async).with(agenda.id, "webhook")
     end
 
     it "ignores the initial 'sync' handshake" do

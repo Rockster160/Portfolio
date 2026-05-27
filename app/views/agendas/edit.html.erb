@@ -1,6 +1,8 @@
 <%= meta_title "Edit #{@agenda.name}", include_name: false %>
 <% content_for(:favicon) { render "agendas/favicon" } %>
 
+<% can_own = @agenda.owned_by?(current_user) %>
+
 <div class="agenda-settings-page">
   <header class="agenda-settings-header">
     <a href="<%= manage_agenda_path %>" class="agenda-settings-back"><i class="fa fa-chevron-left"></i> Manage agendas</a>
@@ -8,16 +10,22 @@
 
   <h1 class="agenda-settings-title">Edit agenda</h1>
 
+  <% unless can_own %>
+    <p class="agenda-settings-note muted">
+      You're a shared <strong><%= @agenda.agenda_shares.find_by(user_id: current_user.id)&.permission %></strong> on this agenda — only the owner can rename or recolor it.
+    </p>
+  <% end %>
+
   <%= form_with(model: @agenda, url: agenda_path(@agenda), method: :patch, local: true, class: "basic agenda-form agenda-settings-form") do |f| %>
     <div class="ff">
       <label>Name</label>
-      <%= f.text_field :name, required: true %>
+      <%= f.text_field :name, required: true, disabled: !can_own %>
     </div>
 
     <div class="ff">
       <label>Color</label>
       <div class="color-row">
-        <%= f.color_field :color, class: "agenda-color-input" %>
+        <%= f.color_field :color, class: "agenda-color-input", disabled: !can_own %>
         <span class="color-hex"><%= @agenda.color %></span>
       </div>
     </div>
@@ -45,7 +53,8 @@
           <span class="share-username">
             <%= current_user.contacts.find_by(friend_id: share.user_id)&.nickname.presence || share.user.username %>
           </span>
-          <select class="share-permission-select">
+          <select class="share-permission-select" <%= "disabled" unless can_own %>>
+            <option value="owner"  <%= "selected" if share.owner? %>>Owner</option>
             <option value="editor" <%= "selected" if share.editor? %>>Editor</option>
             <option value="viewer" <%= "selected" if share.viewer? %>>Viewer</option>
           </select>
@@ -64,6 +73,7 @@
           <% end %>
         </select>
         <select class="permission-picker">
+          <option value="owner">Owner</option>
           <option value="editor" selected>Editor</option>
           <option value="viewer">Viewer</option>
         </select>
@@ -78,11 +88,28 @@
 
   <section class="agenda-danger">
     <h3>Danger zone</h3>
-    <%= button_to "Delete agenda", agenda_path(@agenda),
-        method:        :delete,
-        form:          { class: "basic agenda-danger-form" },
-        class:         "af-btn af-btn-danger",
-        data:          { confirm: "Delete this agenda and all its items? This cannot be undone." } %>
+    <% if @agenda.managed_externally? %>
+      <p class="agenda-danger-note muted">
+        This agenda is synced from Google Calendar. To remove it, disconnect
+        the calendar from
+        <%= link_to "Connect Google Calendar", new_agenda_connection_path %>.
+      </p>
+      <button type="button" class="af-btn af-btn-danger" disabled
+        title="Synced agendas disconnect from /agenda_connection"
+        style="opacity: 0.5; cursor: not-allowed;">
+        Delete agenda
+      </button>
+    <% elsif !can_own %>
+      <p class="agenda-danger-note muted">
+        Only the owner can delete this agenda.
+      </p>
+    <% else %>
+      <%= button_to "Delete agenda", agenda_path(@agenda),
+          method:        :delete,
+          form:          { class: "basic agenda-danger-form" },
+          class:         "af-btn af-btn-danger",
+          data:          { confirm: "Delete this agenda and all its items? This cannot be undone." } %>
+    <% end %>
   </section>
 </div>
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_27_110000) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_27_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -93,13 +93,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_27_110000) do
     t.datetime "external_updated_at"
     t.boolean "all_day", default: false, null: false
     t.datetime "locally_modified_at"
+    t.string "local_color"
+    t.datetime "cancelled_at"
+    t.integer "status", default: 0, null: false
     t.index ["agenda_id", "external_uid"], name: "index_agenda_items_on_agenda_external_uid", unique: true, where: "(external_uid IS NOT NULL)"
     t.index ["agenda_id", "start_at"], name: "index_agenda_items_on_agenda_id_and_start_at"
     t.index ["agenda_id"], name: "index_agenda_items_on_agenda_id"
     t.index ["agenda_schedule_id", "start_at"], name: "index_agenda_items_on_agenda_schedule_id_and_start_at"
     t.index ["agenda_schedule_id"], name: "index_agenda_items_on_agenda_schedule_id"
+    t.index ["cancelled_at"], name: "index_agenda_items_on_cancelled_at", where: "(cancelled_at IS NOT NULL)"
     t.index ["completed_at"], name: "index_agenda_items_on_completed_at"
     t.index ["notified_at"], name: "index_agenda_items_on_notified_at"
+    t.index ["status"], name: "index_agenda_items_on_status"
   end
 
   create_table "agenda_notification_settings", force: :cascade do |t|
@@ -170,6 +175,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_27_110000) do
     t.datetime "watch_expires_at"
     t.datetime "watch_failed_at"
     t.bigint "google_account_id"
+    t.string "sync_reason"
     t.index ["google_account_id"], name: "index_agendas_on_google_account_id"
     t.index ["user_id", "parameterized_name"], name: "index_agendas_on_user_id_and_parameterized_name", unique: true
     t.index ["user_id", "source", "google_account_id", "external_id"], name: "index_agendas_on_user_source_account_external", unique: true, where: "(source <> 0)"
@@ -509,6 +515,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_27_110000) do
     t.datetime "reauth_required_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "disconnected_at"
     t.index ["user_id", "email"], name: "index_google_accounts_on_user_id_and_email", unique: true
     t.index ["user_id"], name: "index_google_accounts_on_user_id"
   end

@@ -4,6 +4,7 @@
 #
 #  id                  :bigint           not null, primary key
 #  all_day             :boolean          default(FALSE), not null
+#  cancelled_at        :datetime
 #  color               :string
 #  completed_at        :datetime
 #  detached_at         :datetime
@@ -12,6 +13,7 @@
 #  external_uid        :text
 #  external_updated_at :datetime
 #  kind                :integer          not null
+#  local_color         :string
 #  locally_modified_at :datetime
 #  location            :string
 #  name                :string           not null
@@ -19,6 +21,7 @@
 #  notified_at         :datetime
 #  original_start_at   :datetime
 #  start_at            :datetime         not null
+#  status              :integer          default("confirmed"), not null
 #  trigger_expression  :text
 #  created_at          :datetime         not null
 #  updated_at          :datetime         not null
@@ -53,6 +56,11 @@ class AgendaItem < ApplicationRecord
   attr_accessor :phantom
 
   enum :kind, { task: 0, event: 1, trigger: 2 }
+  # Mirrors Google's event status vocabulary. `confirmed` is the default
+  # everywhere; `tentative` surfaces visually + filters; `cancelled` hides
+  # the row from item queries (kept as a soft-delete tombstone so a sync
+  # can restore the occurrence if the user un-cancels in Google).
+  enum :status, { confirmed: 0, tentative: 1, cancelled: 2 }, default: :confirmed
 
   belongs_to :agenda
   belongs_to :agenda_schedule, optional: true
@@ -62,8 +70,8 @@ class AgendaItem < ApplicationRecord
   validate :end_at_after_start_at
   validate :end_at_required_for_event
 
-  after_update :broadcast_agenda_change!, if: :saved_change_to_agenda_id?
   before_save :clear_notified_at_on_future_reschedule
+  after_update :broadcast_agenda_change!, if: :saved_change_to_agenda_id?
   after_commit :fire_jil_trigger, on: [:create, :update]
   after_commit :fire_jil_destroy_trigger, on: :destroy
 
@@ -83,9 +91,10 @@ class AgendaItem < ApplicationRecord
     detached:   :detached_search
   )
 
-  scope :completed,  -> { where.not(completed_at: nil) }
-  scope :incomplete, -> { where(completed_at: nil) }
-  scope :pending,    -> { incomplete } # back-compat alias
+  scope :completed,     -> { where.not(completed_at: nil) }
+  scope :incomplete,    -> { where(completed_at: nil) }
+  scope :pending,       -> { incomplete } # back-compat alias
+  scope :not_cancelled, -> { where.not(status: :cancelled) }
   # Events auto-disappear once end_at passes — overdue applies to tasks
   # and triggers only.
   scope :overdue,    -> { where.not(kind: :event).incomplete.where(start_at: ...Time.current) }
@@ -201,9 +210,17 @@ class AgendaItem < ApplicationRecord
     phantom? ? "p-#{agenda_schedule_id}-#{occurrence_date.iso8601}" : id.to_s
   end
 
-  # Effective color: item override → schedule color → agenda color → default.
+  # Effective color resolution, highest priority first:
+  #   1. local_color — user's color override (stays local; never sent to
+  #      Google on a synced item)
+  #   2. color       — for Google items: Google's per-event colorId hex.
+  #                    For user items: the user's per-item choice.
+  #   3. schedule    — recurring item inherits from its master
+  #   4. agenda      — the agenda's color
+  #   5. default     — global blue
   def display_color
-    color.presence ||
+    local_color.presence ||
+      color.presence ||
       agenda_schedule&.display_color ||
       agenda.color.presence ||
       Agenda::DEFAULT_COLOR
@@ -213,8 +230,22 @@ class AgendaItem < ApplicationRecord
     start_at.in_time_zone(user.timezone).to_date
   end
 
+  # End date of the visible span. For all-day events, Google's `end.date`
+  # is exclusive (May 27→May 28 = single day) — we mirror that here by
+  # subtracting one second when the row is marked all_day, so
+  # `start_date..end_date` is the inclusive range the UI shows on.
+  def end_date
+    finish = (end_at || start_at).in_time_zone(user.timezone)
+    finish -= 1.second if all_day? && end_at.present? && end_at > start_at
+    finish.to_date
+  end
+
+  # True if this item should render on `date`. Single-day events match the
+  # start; multi-day all-day events show on every day they span.
   def visible_on?(date)
-    occurrence_date == date
+    return occurrence_date == date unless all_day?
+
+    (occurrence_date..end_date).cover?(date)
   end
 
   def crossed_out_at(now: Time.current)
@@ -246,12 +277,14 @@ class AgendaItem < ApplicationRecord
     update!(notified_at: Time.current)
   end
 
-  # Cancels a single materialized occurrence of a recurring item: adds its
-  # date to the schedule's excluded_dates so it won't regenerate as a phantom,
-  # then destroys this row.
+  # Cancels a single materialized occurrence of a recurring item: adds
+  # its date to the schedule's excluded_dates so it won't regenerate as
+  # a phantom, then marks the row cancelled (NOT destroyed) so the
+  # historical record + audit trail survives. Views filter cancelled
+  # rows out via the `not_cancelled` scope.
   def cancel_occurrence!
     agenda_schedule&.add_excluded_date!(occurrence_date)
-    destroy
+    update!(status: :cancelled, cancelled_at: Time.current)
   end
 
   # Parses the trigger expression on a kind=trigger item. The expression is
@@ -376,12 +409,21 @@ class AgendaItem < ApplicationRecord
   # dashboard re-broadcast trigger) can react to lifecycle changes. Mirrors
   # the Task / ActionEvent pattern — passes the record with execution attrs
   # rather than a serialized hash so Ruby's kwargs separation doesn't fire.
+  #
+  # Trigger-kind items are skipped: they fire their OWN scope via
+  # FireDueAgendaTriggersWorker (or Jarvis for `command:` form), and the
+  # auto-complete stamp that follows that fire would otherwise emit a
+  # second, noisier :agenda_item event for the same row.
   def fire_jil_trigger
+    return if trigger?
+
     action = saved_change_to_id? ? :created : :updated
     ::Jil.trigger(user, :agenda_item, with_jil_attrs(action: action))
   end
 
   def fire_jil_destroy_trigger
+    return if trigger?
+
     ::Jil.trigger(user, :agenda_item, with_jil_attrs(action: :destroyed))
   end
 
