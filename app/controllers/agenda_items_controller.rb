@@ -5,7 +5,11 @@ class AgendaItemsController < ApplicationController
   before_action :authorize_user_or_guest
   before_action :set_item, only: [:update, :destroy]
   before_action :authorize_item_edit!, only: [:update, :destroy]
-  before_action -> { refuse_external_write!(@item&.agenda) }, only: [:update, :destroy]
+  # Externally-managed items allow `update` (with auto-detach below) and
+  # `restore`, but not direct `destroy`/`create` — those would diverge from
+  # the upstream Google calendar without a corresponding Google-side
+  # operation. Users disconnect via /agenda_connection to drop synced items.
+  before_action -> { refuse_external_write!(@item&.agenda) }, only: [:destroy]
 
   def create
     target = resolve_target_agenda(params.dig(:agenda_item, :agenda_id))
@@ -160,6 +164,12 @@ class AgendaItemsController < ApplicationController
     if @item.recurring? && !@item.detached?
       attrs[:detached_at] = Time.current
       attrs[:original_start_at] = @item.start_at
+    end
+    # Externally-synced item edited by the user — stamp locally_modified_at
+    # so GoogleCalendar::Sync stops overwriting it on the next pull. Local
+    # edits win over Google until the user disconnects + reconnects.
+    if @item.agenda.managed_externally? && @item.locally_modified_at.blank?
+      attrs[:locally_modified_at] = Time.current
     end
     attrs
   end

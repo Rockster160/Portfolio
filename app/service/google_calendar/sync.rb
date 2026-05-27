@@ -199,10 +199,16 @@ class GoogleCalendar::Sync
     item.save!
   end
 
-  # Etag skip avoids re-writing the row when Google replays a payload we've
-  # already applied — bulk of writes on incremental polls.
+  # Skip the row entirely when either:
+  #   * The user locally edited it (only AgendaItem has this column) — local
+  #     edits win until the user disconnects + reconnects the calendar.
+  #   * The etag matches what we last stored — Google is replaying a payload
+  #     we already applied.
   def fast_skip?(record, event)
-    record.persisted? && record.external_etag.present? && record.external_etag == event[:etag]
+    return false unless record.persisted?
+    return true if record.respond_to?(:locally_modified_at) && record.locally_modified_at.present?
+
+    record.external_etag.present? && record.external_etag == event[:etag]
   end
 
   # ---- field extractors ----

@@ -135,6 +135,28 @@ RSpec.describe GoogleCalendar::Sync do
       expect(AgendaItem.exists?(item.id)).to be(false)
     end
 
+    it "skips an item the user has locally edited (locally_modified_at present)" do
+      item = agenda.agenda_items.create!(
+        name: "User's name", kind: :event, start_at: 1.day.from_now,
+        end_at: 1.day.from_now + 1.hour,
+        external_uid: "evt-locked-1", external_etag: %("etag-old"),
+        locally_modified_at: 1.minute.ago
+      )
+      event = {
+        id:      "evt-locked-1",
+        status:  "confirmed",
+        summary: "Google's new name",
+        start:   { dateTime: "2026-05-25T09:00:00-04:00" },
+        end:     { dateTime: "2026-05-25T10:00:00-04:00" },
+        etag:    %("etag-new"),
+        updated: "2026-05-22T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([event]))
+
+      described_class.new(agenda).run!
+      expect(item.reload.name).to eq("User's name")
+    end
+
     it "fast-skips an unchanged event (same etag)" do
       etag = %("etag-stable")
       item = agenda.agenda_items.create!(

@@ -199,13 +199,19 @@ Rails.application.routes.draw do
   end
 
   # External-source agenda connection flow (currently: Google Calendar).
-  # `start_google` kicks off OAuth, `new` returns the post-OAuth calendar
-  # picker, `create` imports the picked calendars + kicks off initial sync,
-  # `destroy` disconnects (stops watches, revokes token, optionally removes
-  # synced data).
-  resource :agenda_connection, only: [:new, :create, :destroy]
-  get "agenda_connection/start/google" => "agenda_connections#start_google",
-    as: :start_google_agenda_connection
+  #   `start_google`         — OAuth round-trip kickoff
+  #   `new`                  — picker page (CTA if not authed, list of
+  #                            calendars with per-row connect/disconnect
+  #                            if authed)
+  #   `connect_calendar`     — POST: create Agenda for one calendar
+  #   `disconnect_calendar`  — DELETE: destroy Agenda + stop watch
+  #   `destroy`              — disconnect everything (revoke token + wipe)
+  resource :agenda_connection, only: [:new, :destroy]
+  scope "agenda_connection", controller: :agenda_connections do
+    get    "start/google"         => :start_google,        as: :start_google_agenda_connection
+    post   "calendars/connect"    => :connect_calendar,    as: :connect_agenda_connection_calendar
+    delete "calendars/disconnect" => :disconnect_calendar, as: :disconnect_agenda_connection_calendar
+  end
 
   # Push-notification receiver for events.watch channels. Google POSTs here
   # whenever a watched calendar changes; the handler enqueues an incremental

@@ -43,12 +43,10 @@
           <span class="agenda-card-swatch" aria-hidden="true"></span>
           <span class="agenda-card-main">
             <span class="agenda-card-name">
-              <%= agenda.name %>
               <% if agenda.google? %>
-                <span class="agenda-card-synced-badge" title="Synced from Google Calendar">
-                  <i class="fa fa-google"></i> Synced
-                </span>
+                <i class="fa fa-google agenda-card-source-icon" title="Synced from Google Calendar" aria-hidden="true"></i>
               <% end %>
+              <%= agenda.name %>
             </span>
             <span class="agenda-card-meta">
               <%= pluralize(agenda.agenda_items.where(start_at: Date.current.all_day).count, "item") %> today
@@ -57,7 +55,7 @@
               <% end %>
             </span>
           </span>
-          <% if mine && !agenda.managed_externally? %>
+          <% if mine %>
             <a href="<%= edit_agenda_path(agenda) %>" class="agenda-card-edit" aria-label="Edit <%= agenda.name %>"><i class="fa fa-pencil"></i></a>
           <% end %>
         </div>

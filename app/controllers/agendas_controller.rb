@@ -4,7 +4,10 @@ class AgendasController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest
   before_action :set_agenda, only: [:edit, :update, :destroy]
-  before_action -> { refuse_external_write!(@agenda) }, only: [:update, :destroy]
+  # Externally-managed agendas (Google) are still user-controllable for
+  # name/color/sort_order — only destroy is gated (you disconnect via the
+  # /agenda_connection path, which also stops the watch + cleans up).
+  before_action -> { refuse_external_write!(@agenda) }, only: [:destroy]
   before_action :ensure_default_agenda!, only: [:day, :week, :calendar]
 
   # JSON accepts `?days=N` (default 1, max 30) to extend the lookahead;

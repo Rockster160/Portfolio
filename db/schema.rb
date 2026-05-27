@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_26_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_27_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -92,6 +92,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_26_000000) do
     t.text "external_etag"
     t.datetime "external_updated_at"
     t.boolean "all_day", default: false, null: false
+    t.datetime "locally_modified_at"
     t.index ["agenda_id", "external_uid"], name: "index_agenda_items_on_agenda_external_uid", unique: true, where: "(external_uid IS NOT NULL)"
     t.index ["agenda_id", "start_at"], name: "index_agenda_items_on_agenda_id_and_start_at"
     t.index ["agenda_id"], name: "index_agenda_items_on_agenda_id"

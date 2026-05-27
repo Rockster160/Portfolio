@@ -12,6 +12,7 @@
 #  external_uid        :text
 #  external_updated_at :datetime
 #  kind                :integer          not null
+#  locally_modified_at :datetime
 #  location            :string
 #  name                :string           not null
 #  notes               :text

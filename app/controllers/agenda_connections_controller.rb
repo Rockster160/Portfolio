@@ -3,16 +3,18 @@ class AgendaConnectionsController < ApplicationController
 
   # GET /agenda_connection/start/google
   # Kicks off the OAuth round-trip. The callback at /webhooks/oauth/google_api
-  # exchanges the code and redirects back to #new, which then has a token
-  # cached and can fetch the user's calendar list.
+  # exchanges the code and redirects back to #new — at which point we have
+  # a cached token and can render the calendar picker.
   def start_google
     redirect_to(google.auth_url, allow_other_host: true)
   end
 
   # GET /agenda_connection/new
-  # Post-OAuth picker: lists the user's Google calendars with checkboxes for
-  # which ones to import. Externally-managed agendas already present are
-  # surfaced as pre-selected (re-pick is a no-op).
+  #   * Not authed → render the "Sign in with Google" CTA.
+  #   * Authed → render the picker: every calendar from the user's
+  #     CalendarList, marked as Connected (Agenda already exists) or
+  #     "Connect" button (not yet imported). One click per row, no bulk
+  #     form submit.
   def new
     unless google_authenticated?
       @needs_auth = true
@@ -20,9 +22,9 @@ class AgendaConnectionsController < ApplicationController
     end
 
     list = google.list_calendars
-    if list.blank?
-      @error = "Could not load your Google Calendars. Try reconnecting."
-      @needs_auth = true
+    if list.blank? || Array(list[:items]).empty?
+      flash[:alert] = "Could not load your Google Calendars. Try reconnecting."
+      redirect_to(manage_agenda_path)
       return
     end
 
@@ -30,52 +32,63 @@ class AgendaConnectionsController < ApplicationController
       {
         external_id: c[:id],
         name:        c[:summary],
-        description: c[:description],
         time_zone:   c[:timeZone],
         color:       c[:backgroundColor],
         primary:     c[:primary] == true,
       }
     }
-    already = current_user.agendas.google.where(external_id: @calendars.pluck(:external_id))
-    @already_connected = already.index_by(&:external_id)
+    @connected_by_external_id = current_user.agendas.google
+      .where(external_id: @calendars.pluck(:external_id))
+      .index_by(&:external_id)
   end
 
-  # POST /agenda_connection
-  # Imports each selected calendar as an Agenda + enqueues an initial sync.
-  def create
-    raw = params.fetch(:calendars, {}).respond_to?(:to_unsafe_h) ? params[:calendars].to_unsafe_h : params[:calendars]
-    selected = (raw || {}).select { |_id, attrs| attrs.is_a?(Hash) && attrs[:enabled].to_s == "1" }
-    if selected.empty?
-      redirect_to(new_agenda_connection_path, alert: "Pick at least one calendar to import.")
-      return
-    end
+  # POST /agenda_connection/calendars/connect
+  # Connect a single Google calendar: create an Agenda row and kick off
+  # an initial sync. Idempotent — re-connecting an already-connected
+  # calendar is a no-op + a re-sync.
+  def connect_calendar
+    external_id = params[:external_id].to_s.presence
+    return redirect_to(new_agenda_connection_path, alert: "Missing calendar id.") if external_id.blank?
 
-    imported = selected.map { |external_id, attrs|
-      agenda = current_user.agendas.find_or_initialize_by(
-        source: :google, external_id: external_id,
-      )
-      agenda.name ||= attrs[:name].presence || "Google Calendar"
-      agenda.color ||= attrs[:color].presence || Agenda::DEFAULT_COLOR
-      agenda.save!
-      ::GoogleCalendarSyncWorker.perform_async(agenda.id)
-      agenda
-    }
+    agenda = current_user.agendas.find_or_initialize_by(
+      source: :google, external_id: external_id,
+    )
+    agenda.name = params[:name].to_s.presence || agenda.name.presence || "Google Calendar"
+    agenda.color = params[:color].to_s.presence || agenda.color.presence || Agenda::DEFAULT_COLOR
+    agenda.save!
+    ::GoogleCalendarSyncWorker.perform_async(agenda.id)
 
-    redirect_to(manage_agenda_path, notice: "Importing #{imported.size} #{"calendar".pluralize(imported.size)}…")
+    redirect_to(
+      manage_agenda_path,
+      notice: "Connected \"#{agenda.name}\". Events will populate within a minute.",
+    )
+  end
+
+  # DELETE /agenda_connection/calendars/disconnect
+  # Disconnect a single Google calendar: stop its watch channel and
+  # destroy the Agenda (cascading items/schedules via dependent: :destroy).
+  # OAuth token stays intact so other calendars keep syncing.
+  def disconnect_calendar
+    external_id = params[:external_id].to_s.presence
+    agenda = current_user.agendas.google.find_by(external_id: external_id) if external_id.present?
+    return redirect_to(manage_agenda_path, alert: "Calendar not connected.") if agenda.blank?
+
+    name = agenda.name
+    ::GoogleCalendar::WatchManager.stop!(agenda) if agenda.watch_channel_id.present?
+    agenda.destroy
+
+    redirect_to(manage_agenda_path, notice: "Disconnected \"#{name}\".")
   end
 
   # DELETE /agenda_connection
-  # Disconnect: stops every active watch channel, revokes the OAuth token,
-  # and (when ?delete_data=1) destroys the synced agendas + their items.
+  # Disconnect EVERY Google calendar: stops every watch, revokes the OAuth
+  # token. `?delete_data=1` also destroys all synced Agenda rows.
   def destroy
     current_user.agendas.google.find_each do |agenda|
       ::GoogleCalendar::WatchManager.stop!(agenda) if agenda.watch_channel_id.present?
     end
     google.revoke!
-
-    if params[:delete_data].to_s == "1"
-      current_user.agendas.google.destroy_all
-    end
+    current_user.agendas.google.destroy_all if params[:delete_data].to_s == "1"
 
     redirect_to(manage_agenda_path, notice: "Google Calendar disconnected.")
   end
