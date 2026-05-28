@@ -1,0 +1,1233 @@
+// Chores pages — list-builder style grid, checkbox/circle style today view,
+// and the balance page. All three lean on a small, isolated set of class
+// names prefixed `chores-` so they don't collide with global cascades.
+
+// Hard reset for the chores feature — the app-wide forms.scss applies a
+// gradient-blue button style + a blue-card form background to ANY
+// <button> or <form>. Forms can opt out via `class="basic"` (added);
+// buttons need a per-component override. We scope this reset to the
+// chores wrapper AND the modal backdrop (which is rendered outside the
+// page wrapper as a fixed overlay).
+.chores-page,
+.chores-modal-backdrop {
+  button,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"] {
+    background: transparent;
+    background-color: transparent;
+    color: inherit !important;
+    text-shadow: none;
+    box-shadow: none;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    border-radius: 6px;
+    padding: 6px 12px;
+    margin: 0;
+    border: 1px solid transparent;
+  }
+}
+
+.chores-page {
+  --chores-bg: #00102B;
+  --chores-card-bg: #001A40;
+  --chores-card-border: #1F2A44;
+  --chores-text: #ECF0F1;
+  --chores-muted: #94A3B8;
+  --chores-hot: #F97316;
+  --chores-done: #16A34A;
+  --chores-accent: #2563EB;
+
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px 20px 60px;
+  color: var(--chores-text);
+
+  // 3-row header: title | balance (centered) | nav (right).
+  // The status (conn-dot + pending-badge) tucks into the balance column
+  // because it's also a small status-y element. Action buttons live in
+  // the toolbar row below — right-aligned — so the page header stays
+  // consistent across Grid / Today / Balance / History.
+  .chores-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .chores-header > :first-child {
+    justify-self: start;
+  }
+  .chores-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chores-header .chores-header-center {
+    justify-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chores-header .chores-nav {
+    justify-self: end;
+  }
+  .chores-nav {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 600px) {
+    .chores-header {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+    }
+    .chores-header > :first-child {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .chores-header .chores-header-center {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      justify-self: center;
+    }
+    .chores-header .chores-nav {
+      grid-column: 2;
+      grid-row: 1;
+      justify-self: end;
+    }
+  }
+  .chores-nav a {
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: #1F2A44;
+    color: var(--chores-text);
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .chores-nav a.active {
+    background: var(--chores-accent);
+  }
+
+  .balance-pill {
+    background: linear-gradient(135deg, #2563EB, #1E40AF);
+    color: #FFF;
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+
+  // Toolbar: search fills the available space; action buttons cluster
+  // on the right via margin-left:auto on the first button.
+  .chores-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .chores-toolbar input[type="search"] {
+    flex: 1;
+    min-width: 200px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #00102B;
+    color: #ECF0F1;
+  }
+  .chores-toolbar input[type="search"] + .btn {
+    margin-left: auto;
+  }
+  .chores-toolbar .toolbar-actions {
+    display: inline-flex;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .chores-toolbar .btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: none;
+    background: var(--chores-accent);
+    color: #FFF !important;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .chores-toolbar .btn.ghost {
+    background: #1F2A44;
+  }
+  .chores-toolbar .btn.icon-only {
+    padding: 8px 10px;
+    min-width: 36px;
+  }
+
+  .chores-section-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--chores-muted);
+    margin: 8px 0;
+  }
+
+  .hot-strip {
+    background: linear-gradient(135deg, #F97316 0%, #DB2777 100%);
+    padding: 8px 12px;
+    border-radius: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .hot-strip .hot-label {
+    font-weight: 700;
+    color: #FFF;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .hot-strip .hot-chip {
+    background: #00000066;
+    color: #FFF;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .hot-strip .hot-chip .hot-mult {
+    font-weight: 700;
+    color: #FBBF24;
+  }
+
+  // Grid (list-builder style)
+  .chores-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+  }
+  .chore-card {
+    position: relative;
+    border: 1px solid var(--chores-card-border);
+    border-radius: 12px;
+    padding: 8px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    background: var(--chores-card-bg);
+    cursor: pointer;
+    transition:
+      transform 0.08s ease,
+      box-shadow 0.08s ease;
+    user-select: none;
+  }
+  .chore-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 10px #0006;
+  }
+  // Icon box: flex-center so the glyph is centered. The countdown pill
+  // and reward tag are absolutely positioned children — they sit ON
+  // TOP of the icon without affecting its center alignment.
+  .chore-card .icon {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1/1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0F1B33;
+    border-radius: 10px;
+    line-height: 1;
+    overflow: hidden;
+  }
+  .chore-card .icon .icon-glyph {
+    font-size: 48px;
+    line-height: 1;
+  }
+  // Reward — small subtle muted tag, bottom-LEFT of the icon box.
+  .chore-card .card-reward {
+    position: absolute;
+    bottom: 4px;
+    left: 6px;
+    z-index: 2;
+    font-size: 11px !important;
+    font-weight: 600;
+    color: var(--chores-muted);
+    line-height: 1;
+    pointer-events: none;
+  }
+  // Cooldown countdown — ORANGE pill at top-center of the icon box.
+  .chore-card .icon .circle-countdown {
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #00102B;
+    color: var(--chores-hot);
+    font-size: 9px !important;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--chores-hot);
+    font-weight: 700;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 3;
+  }
+  .chore-card .icon .circle-countdown.elapsed {
+    display: none;
+  }
+  .chore-card .title {
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.2;
+    color: var(--chores-text);
+  }
+  // "Ago" timestamp — replaces the old "5p" reward row below the icon.
+  // Subtle muted text, same restraint as the original .reward row.
+  .chore-card .ago-row {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--chores-muted);
+    min-height: 14px;
+    line-height: 1.2;
+  }
+  .chore-card .reward {
+    font-size: 11px;
+    color: var(--chores-muted);
+    font-weight: 600;
+  }
+  .chore-card.done-today {
+    box-shadow: inset 0 0 0 2px var(--chores-done);
+  }
+  .chore-card.hot {
+    box-shadow: inset 0 0 0 2px var(--chores-hot);
+  }
+  .chore-card.hot.done-today {
+    box-shadow:
+      inset 0 0 0 2px var(--chores-done),
+      inset 0 0 0 4px var(--chores-hot);
+  }
+  // Count slot — INSIDE the icon at bottom-center (mirrors Today).
+  .chore-card .card-count-slot {
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .chore-card .count-badge {
+    background: var(--chores-done);
+    color: #FFF !important;
+    font-size: 10px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .chore-card .hot-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    background: var(--chores-hot);
+    color: #FFF;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  // (.cooldown-badge removed — replaced by .circle-countdown pill inside .icon)
+  // Edit Mode (toggled from the toolbar) recolors the Grid: every card
+  // becomes accent-tinted with a small pencil chip in the corner so
+  // it's clear what tapping does. Drag-handle cursor on the body so
+  // users discover reordering too.
+  &.edit-mode .chore-card {
+    background: #11264F;
+    border-color: var(--chores-accent);
+    box-shadow:
+      0 0 0 1px var(--chores-accent),
+      0 0 12px #2563eb55;
+    cursor: grab;
+  }
+  &.edit-mode .chore-card:active {
+    cursor: grabbing;
+  }
+  &.edit-mode .chore-card::after {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--chores-accent);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='white' d='M11.013 1.427a1.45 1.45 0 0 1 2.05 0l1.51 1.51a1.45 1.45 0 0 1 0 2.05L4.953 15.077l-3.927.5.5-3.927L11.013 1.427z'/></svg>");
+    background-size: 11px;
+    background-position: center;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    z-index: 3;
+  }
+  // Edit pencil overlaps hot-badge spot — hide hot-badge while editing.
+  &.edit-mode .chore-card .hot-badge {
+    display: none;
+  }
+  // SortableJS classes during drag
+  .chore-card.sortable-ghost {
+    opacity: 0.35;
+    background: #1F2A44;
+  }
+  .chore-card.sortable-chosen {
+    transform: scale(1.04);
+  }
+}
+
+// .sortable-drag is the FLOATING CLONE that follows the cursor. It's
+// appended to <body> by SortableJS (fallbackOnBody: true) so it lives
+// OUTSIDE .chores-page — these rules must be top-level.
+.sortable-drag {
+  opacity: 0.95 !important;
+  background: #001A40;
+  border: 1px solid #2563EB;
+  box-shadow:
+    0 10px 30px #000a,
+    0 0 0 1px #2563EB;
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: 9999;
+}
+.sortable-drag * {
+  pointer-events: none;
+}
+.chores-page {
+  // Today: tight checkbox / circle grid (Animal Crossing Travel Guide style).
+  // Constrained to 800px on desktop because a wide row of small circles
+  // looks bad. CSS grid keeps cells uniformly sized regardless of label
+  // length.
+  .chores-circles-wrap {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  .chores-circles {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px 8px;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .chore-circle {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    background: transparent;
+  }
+  // Click target is ONLY the round disc. Title + reward sit beneath
+  // (informational, non-interactive). This prevents accidental taps
+  // from hitting the row outside the visible button.
+  .chore-circle .circle-inner {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .chore-circle .title,
+  .chore-circle .reward {
+    pointer-events: none;
+  }
+  .chore-circle .circle-inner {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: #0F1B33;
+    display: grid;
+    place-items: center;
+    border: 1px solid transparent;
+    transition: transform 0.08s ease;
+  }
+  .chore-circle .icon {
+    font-size: 32px;
+    line-height: 1;
+    z-index: 1;
+  }
+  .chore-circle .title {
+    font-size: 11px;
+    line-height: 1.15;
+    margin-top: 6px;
+    color: var(--chores-text);
+    min-height: 26px; // 2 lines reserved so labels align
+    word-break: break-word;
+  }
+  .chore-circle .reward {
+    font-size: 10px;
+    color: var(--chores-muted);
+    font-weight: 600;
+  }
+  .chore-circle .actor-tag {
+    color: #93C5FD;
+    font-weight: 500;
+    font-size: 9px;
+  }
+  .chore-circle.done .circle-inner {
+    background: #0F1F12;
+    border-color: var(--chores-done);
+  }
+  .chore-circle.done .icon {
+    opacity: 0.9;
+  }
+  .chore-circle.hot .circle-inner {
+    border-color: var(--chores-hot);
+  }
+  .chore-circle.pending .circle-inner {
+    opacity: 0.55;
+  }
+
+  // Progress ring + tiny countdown — copied pattern from Whisper PWA
+  // but the countdown is a subtle pill at the top of the ring instead
+  // of front and center.
+  .chore-circle .circle-ring {
+    position: absolute;
+    inset: -2px;
+    width: calc(100% + 4px);
+    height: calc(100% + 4px);
+    transform: rotate(-90deg);
+    pointer-events: none;
+  }
+  .chore-circle .ring-bg {
+    fill: none;
+    stroke: #1F2A44;
+    stroke-width: 2;
+  }
+  .chore-circle .ring-progress {
+    fill: none;
+    stroke: var(--chores-hot);
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.25s linear;
+  }
+  .chore-circle .ring-progress.elapsed {
+    stroke: #1F2A44; // when cooldown done, ring fades into bg
+  }
+  // Countdown — ORANGE pill near the top of the disc.
+  .chore-circle .circle-countdown {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #00102B;
+    color: var(--chores-hot);
+    font-size: 8px !important;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--chores-hot);
+    font-weight: 700;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 3;
+  }
+  .chore-circle .circle-countdown.elapsed {
+    display: none;
+  }
+  // Reward + multiplier stacked at the bottom-center of the disc.
+  // Reward is SUBTLE (muted gray) and sits immediately above the count
+  // badge with tight spacing.
+  .chore-circle .circle-reward {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px !important;
+    line-height: 1;
+    color: var(--chores-muted);
+    font-weight: 600;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 2;
+  }
+  .chore-circle .count-slot {
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 16px;
+    min-width: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .chore-circle .count-badge {
+    background: var(--chores-done);
+    color: #FFF !important;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 8px;
+    border-radius: 999px;
+    line-height: 1;
+  }
+  .chore-circle .hot-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    z-index: 2;
+    background: var(--chores-hot);
+    color: #FFF;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  // Multiplier toolbar button — bright when active
+  .chores-toolbar .btn.active {
+    background: var(--chores-hot);
+  }
+
+  // Connection / pending indicators
+  .chores-status {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 11px;
+    color: var(--chores-muted);
+  }
+  .chores-status .conn-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--chores-done);
+  }
+  .chores-status .conn-dot.offline {
+    background: #DC2626;
+  }
+  .chores-status .conn-dot.syncing {
+    background: #FBBF24;
+    animation: chore-pulse 1s infinite;
+  }
+  .chores-status .pending-badge {
+    background: #FBBF24;
+    color: #00102B;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 999px;
+  }
+  .chores-status .pending-badge.blocked {
+    background: #DC2626;
+    color: #FFF;
+  }
+  @keyframes chore-pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  // Balance
+  .balance-card {
+    background: linear-gradient(135deg, #1E3A8A, #0F172A);
+    border: 1px solid #1F2A44;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .balance-card .balance-amount {
+    font-size: 36px;
+    font-weight: 700;
+    color: #FBBF24;
+  }
+  .balance-card .balance-label {
+    color: var(--chores-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .goal-row {
+    background: var(--chores-card-bg);
+    border: 1px solid var(--chores-card-border);
+    border-radius: 10px;
+    padding: 12px;
+    display: grid;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .goal-row .progress-track {
+    height: 10px;
+    background: #0F1B33;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .goal-row .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2563EB, #FBBF24);
+  }
+  .goal-row .row-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .goal-row a.goal-link {
+    color: #93C5FD;
+    text-decoration: none;
+  }
+
+  .achievement-card {
+    background: var(--chores-card-bg);
+    border-radius: 10px;
+    padding: 10px;
+    border: 1px solid var(--chores-card-border);
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .achievement-card.earned {
+    border-color: var(--chores-done);
+  }
+
+  // History page chrome — search row, summary, pager.
+  .history-search {
+    max-width: 800px;
+    margin: 0 auto 12px;
+    display: flex;
+    gap: 8px;
+  }
+  .history-search input[type="text"] {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #00102B;
+    color: #ECF0F1;
+  }
+  .history-summary {
+    max-width: 800px;
+    margin: 0 auto 8px;
+    font-size: 12px;
+    color: var(--chores-muted);
+    text-align: center;
+  }
+  .history-summary strong {
+    color: var(--chores-text);
+    font-weight: 700;
+  }
+  .history-summary .dim {
+    opacity: 0.6;
+    margin-left: 6px;
+  }
+  .history-pager {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+    margin: 16px auto 0;
+    max-width: 800px;
+  }
+  .history-pager .btn {
+    padding: 6px 12px;
+  }
+  .history-pager .btn.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  .history-pager-pos {
+    font-size: 12px;
+    color: var(--chores-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 0 8px;
+  }
+
+  // History — condensed rows, mirrors the Balance page's "Recent
+  // completions" look. Pencil button opens an edit modal.
+  .history-list {
+    display: grid;
+    gap: 2px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  .history-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px dashed #1F2A44;
+    font-size: 14px;
+  }
+  .history-when-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .history-when {
+    font-size: 11px;
+    color: var(--chores-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .history-icon {
+    font-size: 16px;
+  }
+  .history-name {
+    color: var(--chores-text);
+    font-weight: 600;
+  }
+  .history-tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-weight: 700;
+  }
+  .history-tag.hot {
+    background: var(--chores-hot);
+    color: #FFF;
+  }
+  .history-tag.skipped {
+    background: #1F2A44;
+    color: #9CA3AF;
+  }
+  .history-amount-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .history-amount {
+    font-weight: 700;
+  }
+  .history-edit {
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    background: #1F2A44 !important;
+    color: var(--chores-muted) !important;
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 0 !important;
+  }
+  .history-edit:hover {
+    color: var(--chores-text) !important;
+  }
+
+  // Completion edit modal — small key/value layout
+  .completion-details .detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    gap: 8px;
+  }
+  .completion-details .detail-label {
+    color: var(--chores-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .modal-input {
+    background: #00102B;
+    color: #ECF0F1;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  textarea.modal-input {
+    width: 100%;
+    resize: vertical;
+  }
+  .history-row .history-note {
+    color: var(--chores-muted);
+    font-size: 12px;
+  }
+
+  .withdraw-row,
+  .history-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px dashed #1F2A44;
+    color: var(--chores-text);
+    font-size: 14px;
+  }
+
+  // ----- Chore Edit Modal — gamified layout (not data entry) -----
+  .chore-edit-modal {
+    width: 100%;
+    max-width: 480px;
+  }
+  .modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .modal-head h3 {
+    margin: 0;
+    font-size: 18px;
+  }
+  .modal-close {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: #1F2A44 !important;
+    color: var(--chores-text) !important;
+    font-size: 18px !important;
+    line-height: 1;
+    padding: 0 !important;
+  }
+  .modal-close:hover {
+    background: #334155 !important;
+  }
+
+  .chore-form {
+    display: grid;
+    gap: 14px;
+  }
+  .chore-form .field-label {
+    font-size: 11px;
+    color: var(--chores-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .chore-form .field-hint {
+    font-size: 11px;
+    color: var(--chores-muted);
+  }
+  .chore-form input[type="text"],
+  .chore-form input[type="url"],
+  .chore-form input[type="number"],
+  .chore-form textarea,
+  .chore-form select {
+    width: 100%;
+    padding: 9px 11px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #00102B;
+    color: #ECF0F1;
+    font-size: 14px;
+  }
+  .chore-form input:focus,
+  .chore-form select:focus,
+  .chore-form textarea:focus {
+    outline: none;
+    border-color: var(--chores-accent);
+    box-shadow: 0 0 0 2px #2563eb44;
+  }
+
+  // Identity row: big emoji input + name fields side by side.
+  .chore-form .identity-row {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .chore-form .icon-input {
+    text-align: center;
+    font-size: 38px !important;
+    line-height: 1;
+    padding: 0 !important;
+    aspect-ratio: 1/1;
+    height: auto;
+    background: #0F1B33;
+    border-color: #1F2A44;
+  }
+  .chore-form .identity-names {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .chore-form .identity-names .field-label {
+    margin-bottom: 0;
+  }
+
+  // Pill toggle group — replaces dropdowns. Active pill is accent-blue.
+  .pill-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .pill-group .pill {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid #334155 !important;
+    background: #1F2A44 !important;
+    color: var(--chores-text) !important;
+    font-weight: 600 !important;
+    font-size: 13px;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      transform 0.08s;
+  }
+  .pill-group .pill:hover {
+    background: #2A3A5C !important;
+  }
+  .pill-group .pill.active {
+    background: var(--chores-accent) !important;
+    border-color: var(--chores-accent) !important;
+    transform: translateY(-1px);
+  }
+  .pill-group .pill.chip-day {
+    min-width: 30px;
+    padding: 6px 8px;
+  }
+
+  .chore-form .reward-custom {
+    margin-top: 8px;
+  }
+
+  // Conditional rows under Repeats / Sharing / Cooldown.
+  // All children sit on one inline row — no wrap by default so the
+  // `[Every] [N] [unit]` pattern reads naturally.
+  .chore-form .repeat-detail,
+  .chore-form .assignee-row,
+  .chore-form .cooldown-custom-row {
+    display: flex; align-items: center; gap: 8px; margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .chore-form .repeat-detail .pill-group { flex: 1; }
+
+  // The attribute-selector rule `.chore-form input[type="number"]` has
+  // specificity (0,2,1) and was beating my (0,2,0) class rule, so
+  // these inputs need !important — or a higher-specificity rule. Going
+  // !important here keeps the CSS short.
+  .chore-form .interval-input,
+  .chore-form .cooldown-amount {
+    width: 80px !important; text-align: center;
+    padding: 8px 10px !important;
+  }
+  // Every select inside the form gets a consistent 40px height,
+  // line-height that leaves room for descenders, and right-padding
+  // so the native arrow doesn't overlap the option text.
+  .chore-form select {
+    box-sizing: border-box;
+    height: 40px !important;
+    line-height: 1.4 !important;
+    padding: 6px 30px 6px 10px !important;
+    font-size: 14px;
+  }
+  .chore-form .unit-select,
+  .chore-form .cooldown-unit {
+    width: auto !important; min-width: 110px;
+  }
+  .chore-form .assignee-row select {
+    flex: 1; min-width: 0;
+  }
+
+  // Monthly: segmented mode picker + chip grid + nth-weekday row.
+  .chore-form .month-mode-tabs {
+    display: flex; gap: 6px; width: 100%; margin-bottom: 4px;
+  }
+  .chore-form .month-mode-tabs .pill { flex: 1; text-align: center; }
+  .chore-form .month-day-chips {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px; width: 100%;
+  }
+  .chore-form .month-day-chips .md-chip {
+    padding: 6px 0; border-radius: 6px;
+    border: 1px solid #334155 !important;
+    background: #1F2A44 !important;
+    color: var(--chores-text) !important;
+    font-weight: 600 !important; font-size: 13px;
+    cursor: pointer;
+    text-align: center;
+  }
+  .chore-form .month-day-chips .md-chip.active {
+    background: var(--chores-accent) !important;
+    border-color: var(--chores-accent) !important;
+  }
+  .chore-form .month-day-chips .md-chip-last { grid-column: span 4; }
+  .chore-form .nth-weekday-row {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    width: 100%;
+  }
+  .chore-form .nth-weekday-row select {
+    width: auto !important; min-width: 110px;
+  }
+
+  // Slide toggle (replaces yes/no dropdown for one-off)
+  .chore-form .toggle-row {
+    display: flex;
+    align-items: center;
+  }
+  .chore-form .toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .chore-form .toggle input {
+    display: none;
+  }
+  .chore-form .toggle-slider {
+    display: inline-block;
+    width: 38px;
+    height: 22px;
+    background: #1F2A44;
+    border-radius: 999px;
+    position: relative;
+    transition: background 0.15s;
+  }
+  .chore-form .toggle-slider::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #FFF;
+    transition: transform 0.15s;
+  }
+  .chore-form .toggle input:checked + .toggle-slider {
+    background: var(--chores-accent);
+  }
+  .chore-form .toggle input:checked + .toggle-slider::after {
+    transform: translateX(16px);
+  }
+
+  // Form actions row — destructive (danger) buttons get pushed to the
+  // far left so they're physically separated from the regular submit
+  // buttons on the right. `margin-right: auto` does the work.
+  .chore-form .form-actions,
+  .form-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
+  }
+  .form-actions .danger {
+    margin-right: auto;
+  }
+  .form-actions button {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .form-actions .primary {
+    background: var(--chores-accent);
+    color: #FFF !important;
+  }
+  .form-actions .danger {
+    background: #DC2626;
+    color: #FFF !important;
+  }
+  .form-actions .ghost {
+    background: #1F2A44;
+    color: #FFF !important;
+  }
+
+  // Lookahead day strip
+  .lookahead-day {
+    border: 1px solid #1F2A44;
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 6px;
+    background: var(--chores-card-bg);
+  }
+  .lookahead-day .day-label {
+    font-size: 12px;
+    color: var(--chores-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .lookahead-day .day-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .lookahead-day .day-chip {
+    background: #0F1B33;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+  }
+
+  @media (max-width: 600px) {
+    .chores-grid {
+      grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    }
+    .chores-circles {
+      gap: 12px 6px;
+    }
+    .chore-circle .icon {
+      font-size: 26px;
+    }
+  }
+  @media (max-width: 380px) {
+    .chores-circles {
+      grid-template-columns: repeat(4, 1fr);
+    }
+    .chore-circle .icon {
+      font-size: 22px;
+    }
+  }
+}
+
+.chores-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #0008;
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
+.chores-modal-backdrop.hidden {
+  display: none;
+}
+.chores-modal {
+  width: 92%;
+  max-width: 560px;
+  // Cap height so the modal fits the viewport on phones/small windows
+  // and scroll the body inside the modal — keeps Save/Cancel reachable.
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #00102B;
+  color: #ECF0F1;
+  border: 1px solid #1F2A44;
+  border-radius: 12px;
+  padding: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chores-flash {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #16A34A;
+  color: #FFF;
+  padding: 8px 14px;
+  border-radius: 999px;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.chores-flash.show {
+  opacity: 1;
+}
+.chores-flash.error {
+  background: #DC2626;
+}
+.chores-flash.warn {
+  background: #F59E0B;
+}

@@ -1,0 +1,253 @@
+<% content_for :title, "Chores · History" %>
+
+<div class="chores-page" data-chores-root data-mode="history">
+  <%= render "header", balance: @balance, scope: :total %>
+
+  <%= form_with url: chores_history_path, method: :get, local: true, class: "history-search" do |f| %>
+    <%= text_field_tag :q, @q, placeholder: "Filter… e.g. notes:test, time>2026-05-01, Cat",
+        autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" %>
+    <% if @q.present? %>
+      <%= link_to "Clear", chores_history_path, class: "btn ghost" %>
+    <% end %>
+  <% end %>
+
+  <div class="history-summary">
+    <% if @total_count.zero? %>
+      <span>No matching history.</span>
+    <% else %>
+      <% from = (@page - 1) * @per + 1 %>
+      <% to   = [@page * @per, @total_count].min %>
+      Showing <%= from %>–<%= to %> of <strong><%= @total_count %></strong>
+      &middot; Page <strong><%= @page %></strong> of <strong><%= @total_pages %></strong>
+      <span class="dim">(<%= @completion_count %> completions, <%= @withdrawal_count %> withdrawals)</span>
+    <% end %>
+  </div>
+
+  <div class="history-list" data-history-list>
+    <% @entries.each do |entry|
+         if entry.is_a?(ChoreCompletion) %>
+          <div class="history-row"
+               data-kind="completion"
+               data-completion-id="<%= entry.id %>"
+               data-chore-name="<%= entry.chore.display_short_name %>"
+               data-chore-icon="<%= entry.chore.icon %>"
+               data-paid="<%= entry.paid_pebbles %>"
+               data-base="<%= entry.base_pebbles %>"
+               data-completed-at="<%= entry.completed_at.iso8601 %>"
+               data-note="<%= entry.note %>"
+               data-hot="<%= entry.metadata['hot_pick'] || false %>"
+               data-skipped="<%= entry.payout_skipped %>"
+               data-skipped-reason="<%= entry.skipped_reason %>"
+               data-multiplier="<%= entry.total_multiplier %>">
+            <span class="history-when-name">
+              <span class="history-when"><%= entry.completed_at.strftime("%b %-d %l:%M%P") %></span>
+              ·
+              <span class="history-icon"><%= entry.chore.icon.presence || "🧹" %></span>
+              <span class="history-name"><%= entry.chore.display_short_name %></span>
+              <% if entry.metadata["hot_pick"] %><span class="history-tag hot">hot</span><% end %>
+              <% if entry.note.present? %><span class="history-note">— <%= entry.note.truncate(40) %></span><% end %>
+            </span>
+            <span class="history-amount-cell">
+              <span class="history-amount" style="color:<%= entry.payout_skipped ? '#9CA3AF' : '#34D399' %>;">
+                <%= entry.payout_skipped ? "(skipped)" : "+#{entry.paid_pebbles}p" %>
+              </span>
+              <button type="button" class="history-edit" data-edit-completion title="Edit">
+                <i class="fa fa-pencil" aria-hidden="true"></i>
+              </button>
+            </span>
+          </div>
+        <% else %>
+          <div class="history-row"
+               data-kind="withdrawal"
+               data-withdrawal-id="<%= entry.id %>">
+            <span class="history-when-name">
+              <span class="history-when"><%= entry.created_at.strftime("%b %-d %l:%M%P") %></span>
+              ·
+              <span class="history-icon">🪙</span>
+              <span class="history-name">Withdraw</span>
+              <% if entry.note.present? %><span class="history-note">— <%= entry.note.truncate(40) %></span><% end %>
+            </span>
+            <span class="history-amount-cell">
+              <span class="history-amount" style="color:#FCA5A5;">−<%= entry.amount_pebbles %>p</span>
+              <button type="button" class="history-edit" data-delete-withdrawal title="Delete">
+                <i class="fa fa-times" aria-hidden="true"></i>
+              </button>
+            </span>
+          </div>
+        <% end %>
+    <% end %>
+  </div>
+
+  <% if @total_pages > 1 %>
+    <% page_params = ->(p) { { page: p, q: @q.presence }.compact } %>
+    <nav class="history-pager">
+      <%= link_to "« First", chores_history_path(page_params.call(1)), class: "btn ghost #{'disabled' if @page == 1}" %>
+      <%= link_to "‹ Prev",  chores_history_path(page_params.call([@page - 1, 1].max)), class: "btn ghost #{'disabled' if @page == 1}" %>
+      <span class="history-pager-pos">Page <%= @page %> / <%= @total_pages %></span>
+      <%= link_to "Next ›",  chores_history_path(page_params.call([@page + 1, @total_pages].min)), class: "btn ghost #{'disabled' if @page == @total_pages}" %>
+      <%= link_to "Last »",  chores_history_path(page_params.call(@total_pages)), class: "btn ghost #{'disabled' if @page == @total_pages}" %>
+    </nav>
+  <% end %>
+
+  <div id="completion-edit-modal" class="chores-modal-backdrop hidden" data-completion-modal>
+    <div class="chores-modal">
+      <div class="modal-head">
+        <h3 style="margin:0;">Edit Completion</h3>
+        <button type="button" class="modal-close" data-modal-cancel aria-label="Close">×</button>
+      </div>
+      <div class="completion-details">
+        <div class="detail-row">
+          <span class="detail-label">Chore</span>
+          <span><span data-modal-icon></span> <span data-modal-name></span></span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Base reward</span>
+          <span><span data-modal-base>0</span>p</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Multiplier</span>
+          <span><span data-modal-mult>1.0</span>×</span>
+        </div>
+        <div class="detail-row" data-modal-skipped-row hidden>
+          <span class="detail-label">Skipped</span>
+          <span data-modal-skipped-reason></span>
+        </div>
+        <hr style="border:0;border-top:1px solid #1F2A44;margin:8px 0;">
+        <div class="detail-row">
+          <span class="detail-label">When</span>
+          <input type="datetime-local" data-modal-completed-at class="modal-input">
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Paid pebbles</span>
+          <input type="number" min="0" data-modal-amount class="modal-input" style="max-width:80px;text-align:right;">
+        </div>
+        <div class="detail-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+          <span class="detail-label">Note</span>
+          <textarea data-modal-note rows="2" class="modal-input" placeholder="(optional)"></textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="danger" data-modal-delete>Delete</button>
+        <button type="button" class="ghost" data-modal-cancel>Cancel</button>
+        <button type="button" class="primary" data-modal-save>Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<% content_for :after_body do %>
+  <script type="module">
+    const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || "";
+    async function api(url, method, body) {
+      const res = await fetch(url, {
+        method,
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": CSRF },
+        body: body ? JSON.stringify(body) : undefined
+      });
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+      return res.status === 204 ? null : res.json();
+    }
+    function flash(msg, type = "ok") {
+      const el = document.createElement("div");
+      el.className = "chores-flash " + (type === "error" ? "error" : (type === "warn" ? "warn" : ""));
+      el.textContent = msg;
+      document.body.appendChild(el);
+      requestAnimationFrame(() => el.classList.add("show"));
+      setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 250); }, 2400);
+    }
+
+    const modal = document.querySelector('[data-completion-modal]');
+    let currentRow = null;
+
+    function toLocalInputValue(isoString) {
+      if (!isoString) return "";
+      const d = new Date(isoString);
+      const pad = n => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function openModal(row) {
+      currentRow = row;
+      const ds = row.dataset;
+      modal.querySelector('[data-modal-icon]').textContent = ds.choreIcon || "🧹";
+      modal.querySelector('[data-modal-name]').textContent = ds.choreName;
+      modal.querySelector('[data-modal-base]').textContent = ds.base || "0";
+      modal.querySelector('[data-modal-mult]').textContent = parseFloat(ds.multiplier || "1").toFixed(2);
+      modal.querySelector('[data-modal-completed-at]').value = toLocalInputValue(ds.completedAt);
+      modal.querySelector('[data-modal-amount]').value = ds.paid || "0";
+      modal.querySelector('[data-modal-note]').value = ds.note || "";
+      const skippedRow = modal.querySelector('[data-modal-skipped-row]');
+      if (ds.skipped === "true") {
+        skippedRow.removeAttribute("hidden");
+        modal.querySelector('[data-modal-skipped-reason]').textContent = ds.skippedReason || "Cooldown";
+      } else {
+        skippedRow.setAttribute("hidden", "");
+      }
+      modal.classList.remove("hidden");
+    }
+    function closeModal() { modal.classList.add("hidden"); currentRow = null; }
+
+    document.querySelectorAll('[data-edit-completion]').forEach(btn => {
+      btn.addEventListener("click", () => openModal(btn.closest('[data-completion-id]')));
+    });
+    document.querySelectorAll('[data-delete-withdrawal]').forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this withdrawal? Balance will be recomputed.")) return;
+        const row = btn.closest('[data-withdrawal-id]');
+        try {
+          const data = await api(`/chores/withdrawals/${row.dataset.withdrawalId}`, "DELETE");
+          if (data?.balance != null) document.querySelector('[data-balance]').textContent = data.balance;
+          row.remove();
+          flash("Removed", "warn");
+        } catch (e) { flash("Delete failed: " + e.message, "error"); }
+      });
+    });
+    modal.querySelectorAll('[data-modal-cancel]').forEach(el => el.addEventListener("click", closeModal));
+    modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
+
+    modal.querySelector('[data-modal-save]').addEventListener("click", async () => {
+      if (!currentRow) return;
+      const amount = parseInt(modal.querySelector('[data-modal-amount]').value, 10);
+      const note = modal.querySelector('[data-modal-note]').value;
+      const completedLocal = modal.querySelector('[data-modal-completed-at]').value;
+      if (Number.isNaN(amount) || amount < 0) { flash("Bad amount", "error"); return; }
+      const payload = { chore_completion: { paid_pebbles: amount, note: note } };
+      if (completedLocal) payload.chore_completion.completed_at = new Date(completedLocal).toISOString();
+      try {
+        const data = await api(`/chores/completions/${currentRow.dataset.completionId}`, "PATCH", payload);
+        document.querySelector('[data-balance]').textContent = data.balance;
+        currentRow.dataset.paid = amount;
+        currentRow.dataset.note = note;
+        if (completedLocal) currentRow.dataset.completedAt = new Date(completedLocal).toISOString();
+        // Display the newly-saved amount. If user set it to >0, the
+        // row should no longer read "(skipped)" — show the new value.
+        const amtEl = currentRow.querySelector(".history-amount");
+        if (amtEl) {
+          if (amount > 0) {
+            amtEl.textContent = `+${amount}p`;
+            amtEl.style.color = "#34D399";
+            currentRow.dataset.skipped = "false";
+          } else {
+            amtEl.textContent = "(skipped)";
+            amtEl.style.color = "#9CA3AF";
+          }
+        }
+        flash("Saved");
+        closeModal();
+      } catch (e) { flash("Save failed: " + e.message, "error"); }
+    });
+
+    modal.querySelector('[data-modal-delete]').addEventListener("click", async () => {
+      if (!currentRow) return;
+      if (!confirm("Delete this completion? Balance will be recomputed.")) return;
+      try {
+        const data = await api(`/chores/completions/${currentRow.dataset.completionId}`, "DELETE");
+        if (data?.balance != null) document.querySelector('[data-balance]').textContent = data.balance;
+        currentRow.remove();
+        flash("Removed", "warn");
+        closeModal();
+      } catch (e) { flash("Delete failed: " + e.message, "error"); }
+    });
+  </script>
+<% end %>

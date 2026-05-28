@@ -1,0 +1,25 @@
+{
+  "short_name": "Chores",
+  "name": "Pebbles — Chores",
+  "id": "chores",
+  "start_url": "/chores/today?source=pwa",
+  "scope": "/chores",
+  "display": "standalone",
+  "background_color": "#00102B",
+  "theme_color": "#00102B",
+  "description": "Family chores with pebbles + streaks",
+  "icons": [
+    {
+      "src": "/whisper_favicon/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/whisper_favicon/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

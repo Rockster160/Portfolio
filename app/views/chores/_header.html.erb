@@ -1,0 +1,13 @@
+<%# Locals: balance (Integer), scope (Symbol — :today or :total). %>
+<div class="chores-header">
+  <div class="chores-header-left">
+    <span class="conn-dot" data-conn-dot title="Online"></span>
+    <span class="pending-badge hidden" data-pending-badge>0 pending</span>
+  </div>
+  <div class="chores-header-center">
+    <div class="balance-pill" title="<%= scope == :today ? "Today's earnings" : "Balance" %>">
+      <span data-balance data-balance-scope="<%= scope == :today ? "today" : "total" %>"><%= balance %></span>p
+    </div>
+  </div>
+  <%= render "nav" %>
+</div>

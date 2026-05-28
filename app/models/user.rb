@@ -64,6 +64,20 @@ class User < ApplicationRecord
   has_many :caches, class_name: "UserCache"
   has_many :google_accounts, dependent: :destroy
 
+  has_many :chores, foreign_key: :created_by_user_id, dependent: :destroy
+  has_many :chore_completions, dependent: :destroy
+  has_many :chore_shares_as_owner, class_name: "ChoreShare", foreign_key: :user_id, dependent: :destroy
+  has_many :chore_shares_as_member,
+    class_name: "ChoreShare",
+    foreign_key: :shared_with_user_id,
+    dependent: :destroy
+  has_many :chore_goals, dependent: :destroy
+  has_many :chore_withdrawals, dependent: :destroy
+  has_many :chore_multipliers, dependent: :destroy
+  has_many :chore_streaks, dependent: :destroy
+  has_many :user_chore_achievements, dependent: :destroy
+  has_many :chore_user_orders, dependent: :delete_all
+
   has_many :access_grants, class_name: "Doorkeeper::AccessGrant", foreign_key: :resource_owner_id, dependent: :delete_all
   has_many :access_tokens, class_name: "Doorkeeper::AccessToken", foreign_key: :resource_owner_id, dependent: :delete_all
 
@@ -100,6 +114,47 @@ class User < ApplicationRecord
     date = now.to_date
     date -= 1 if now.hour < 3
     date
+  end
+
+  # Every user this user can act as a chore-owner for: themselves, plus
+  # every owner who has shared their chore list with this user. The IDs
+  # here are the User IDs whose `chores` should be visible/editable.
+  def chore_owner_user_ids
+    base = [id]
+    base.concat(chore_shares_as_member.pluck(:user_id))
+    base.uniq
+  end
+
+  def accessible_chores
+    Chore.where(created_by_user_id: chore_owner_user_ids).active.visible_to_user(id)
+  end
+
+  # Current balance — paid pebbles + earned achievement bonuses, less
+  # all withdrawals. Reads from indexed columns; safe to call per-render.
+  def chore_balance
+    chore_balance_breakdown[:balance]
+  end
+
+  # Single-pass aggregate for the balance header — earned/bonuses/
+  # withdrawn fetched in 3 sum-queries against indexed (user_id, *)
+  # columns, then assembled. Also returns today's earnings cheaply so
+  # the Today header doesn't need an extra round-trip.
+  def chore_balance_breakdown(day = nil)
+    day ||= ChoreDay.current(self)
+    today_sum_sql = ActiveRecord::Base.sanitize_sql_array([
+      "COALESCE(SUM(CASE WHEN day_key = ? THEN paid_pebbles ELSE 0 END), 0)",
+      day,
+    ])
+    earned, today_earnings = chore_completions.pick(
+      Arel.sql("COALESCE(SUM(paid_pebbles), 0)"),
+      Arel.sql(today_sum_sql),
+    ) || [0, 0]
+    bonuses   = user_chore_achievements.sum(:awarded_pebbles)
+    withdrawn = chore_withdrawals.sum(:amount_pebbles)
+    {
+      balance: earned.to_i + bonuses.to_i - withdrawn.to_i,
+      today_earnings: today_earnings.to_i,
+    }
   end
 
   # Owned agendas + agendas shared with this user.

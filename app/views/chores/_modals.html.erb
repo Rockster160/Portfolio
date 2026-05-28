@@ -1,0 +1,258 @@
+<div id="chore-edit-modal" class="chores-modal-backdrop hidden" data-chore-modal>
+  <div class="chores-modal chore-edit-modal">
+    <div class="modal-head">
+      <h3 data-modal-title>Add Chore</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+
+    <%# Password manager bypass: every input carries the well-known
+      ignore attributes. %>
+    <form class="chore-form basic" data-chores-form autocomplete="off" novalidate data-form-type="other">
+
+      <%# ----- Identity: icon + names ----- %>
+      <div class="form-section identity-row">
+        <input type="text" data-field="icon" class="icon-input" maxlength="8" placeholder="🧹"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+        <div class="identity-names">
+          <label class="field-label">Name</label>
+          <input type="text" data-field="name" placeholder="Brush Teeth" required
+                 autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
+                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+          <input type="text" data-field="short_name" placeholder="Short label (Brush)"
+                 autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
+                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+        </div>
+      </div>
+
+      <div class="form-section">
+        <label class="field-label">Aliases</label>
+        <input type="text" data-field="aliases_csv" placeholder="floss, toothpaste"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+      </div>
+
+      <%# ----- Pebbles ----- %>
+      <div class="form-section">
+        <label class="field-label">Pebbles</label>
+        <div class="pill-group reward-quicks" data-reward-quicks>
+          <% [1, 2, 3, 5, 10, 15].each_with_index do |amount, i| %>
+            <button type="button" class="pill <%= "active" if i == 0 %>" data-reward="<%= amount %>"><%= amount %>p</button>
+          <% end %>
+          <button type="button" class="pill" data-reward="custom">?</button>
+        </div>
+        <input type="number" data-field="reward_pebbles" min="0" value="1" class="hidden reward-custom"
+               autocomplete="off" placeholder="Custom amount"
+               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+      </div>
+
+      <%# ----- Sharing (default Household) ----- %>
+      <div class="form-section">
+        <label class="field-label">Sharing</label>
+        <div class="pill-group" data-pill-group="sharing_mode">
+          <button type="button" class="pill" data-value="personal">Personal</button>
+          <button type="button" class="pill active" data-value="household">Household</button>
+          <button type="button" class="pill" data-value="assigned">Assigned</button>
+        </div>
+        <input type="hidden" data-field="sharing_mode" value="household">
+        <div data-assignee-wrap class="hidden assignee-row">
+          <span class="field-hint">To:</span>
+          <select data-field="assigned_to_user_id" data-1p-ignore="true" data-lpignore="true">
+            <% (defined?(assignable_users) ? assignable_users : [current_user]).each do |u| %>
+              <option value="<%= u.id %>" <%= "selected" if u.id == current_user.id %>>
+                <%= u.username %><%= " (me)" if u.id == current_user.id %>
+              </option>
+            <% end %>
+          </select>
+        </div>
+      </div>
+
+      <%# ----- Show on Today View (button order per spec) ----- %>
+      <div class="form-section">
+        <label class="field-label">Show on Today View</label>
+        <div class="pill-group" data-pill-group="show_on_daily_view">
+          <button type="button" class="pill" data-value="always">Always</button>
+          <button type="button" class="pill" data-value="when_scheduled_and_available">Scheduled or Available</button>
+          <button type="button" class="pill active" data-value="when_scheduled">When Scheduled</button>
+          <button type="button" class="pill" data-value="when_available">When Available</button>
+          <button type="button" class="pill" data-value="never">Hidden</button>
+        </div>
+        <input type="hidden" data-field="show_on_daily_view" value="when_scheduled">
+      </div>
+
+      <%# ----- Single Task toggle (default off). When ON the schedule
+        block collapses to just Due Date. ----- %>
+      <div class="form-section toggle-row">
+        <label class="toggle">
+          <input type="checkbox" data-field="one_off">
+          <span class="toggle-slider"></span>
+          <span>
+            <strong>Single Task?</strong>
+            <span class="field-hint"> — auto-removed at the next day reset (4am) AFTER it's completed</span>
+          </span>
+        </label>
+      </div>
+
+      <%# ----- Due Date (starts_on) — base for schedules + first
+        appearance for single tasks. ----- %>
+      <div class="form-section">
+        <label class="field-label">Due Date</label>
+        <input type="date" data-field="starts_on" class="add-date"
+               autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+      </div>
+
+      <%# ----- Cooldown ----- %>
+      <div class="form-section" data-recurring-only>
+        <label class="field-label">Cooldown</label>
+        <div class="pill-group" data-pill-group="threshold_preset">
+          <button type="button" class="pill active" data-value="">None</button>
+          <button type="button" class="pill" data-value="3600">1h</button>
+          <button type="button" class="pill" data-value="10800">3h</button>
+          <button type="button" class="pill" data-value="21600">6h</button>
+          <button type="button" class="pill" data-value="43200">12h</button>
+          <button type="button" class="pill" data-value="86400">1d</button>
+          <button type="button" class="pill" data-value="172800">2d</button>
+          <button type="button" class="pill" data-value="604800">1w</button>
+          <button type="button" class="pill" data-value="custom">Custom…</button>
+        </div>
+        <input type="hidden" data-field="threshold_preset" value="">
+        <div data-cooldown-custom-row class="cooldown-custom-row hidden">
+          <span class="field-hint">Every</span>
+          <input type="number" min="1" value="1" data-cooldown-amount class="cooldown-amount"
+                 autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+          <select data-cooldown-unit class="cooldown-unit">
+            <option value="second">seconds</option>
+            <option value="minute">minutes</option>
+            <option value="hour">hours</option>
+            <option value="day" selected>days</option>
+            <option value="week">weeks</option>
+          </select>
+        </div>
+        <input type="hidden" data-field="threshold_seconds" value="">
+      </div>
+
+      <%# ----- Repeats ----- %>
+      <div class="form-section" data-recurring-only>
+        <label class="field-label">Repeats</label>
+        <div class="pill-group" data-pill-group="freq">
+          <button type="button" class="pill active" data-value="never">Never</button>
+          <button type="button" class="pill" data-value="daily">Daily</button>
+          <button type="button" class="pill" data-value="weekdays">Weekdays</button>
+          <button type="button" class="pill" data-value="weekly">Weekly</button>
+          <button type="button" class="pill" data-value="monthly">Monthly</button>
+          <button type="button" class="pill" data-value="yearly">Yearly</button>
+          <button type="button" class="pill" data-value="custom">Every X (from start date)</button>
+          <button type="button" class="pill" data-value="relative">Every X (from last done)</button>
+        </div>
+        <input type="hidden" data-field="freq" value="never">
+
+        <%# Weekly chips %>
+        <div data-weekly-wrap class="repeat-detail hidden">
+          <span class="field-hint">On:</span>
+          <div data-weekday-chips class="pill-group">
+            <% [[:sun,"S"],[:mon,"M"],[:tue,"T"],[:wed,"W"],[:thu,"T"],[:fri,"F"],[:sat,"S"]].each do |k, l| %>
+              <button type="button" class="pill chip-day" data-day="<%= k %>"><%= l %></button>
+            <% end %>
+          </div>
+        </div>
+
+        <%# Monthly: chip grid OR nth-weekday %>
+        <div data-monthly-wrap class="repeat-detail hidden">
+          <div class="month-mode-tabs pill-group" data-month-mode-tabs>
+            <button type="button" class="pill active" data-month-mode="day-of-month">Days of month</button>
+            <button type="button" class="pill" data-month-mode="nth-weekday">Nth weekday</button>
+          </div>
+          <div data-month-day-pane class="month-day-chips">
+            <% (1..31).each do |day| %>
+              <button type="button" class="md-chip" data-day="<%= day %>"><%= day %></button>
+            <% end %>
+            <button type="button" class="md-chip md-chip-last" data-day="-1">Last</button>
+          </div>
+          <div data-month-nth-pane class="nth-weekday-row hidden">
+            <span class="field-hint">The</span>
+            <select data-month-set-pos>
+              <option value="1">first</option>
+              <option value="2">second</option>
+              <option value="3">third</option>
+              <option value="4">fourth</option>
+              <option value="-1">last</option>
+            </select>
+            <select data-month-wday>
+              <option value="mon">Monday</option>
+              <option value="tue">Tuesday</option>
+              <option value="wed">Wednesday</option>
+              <option value="thu">Thursday</option>
+              <option value="fri">Friday</option>
+              <option value="sat">Saturday</option>
+              <option value="sun">Sunday</option>
+            </select>
+            <span class="field-hint">of the month</span>
+          </div>
+        </div>
+
+        <%# Custom / Relative — interval + unit %>
+        <div data-interval-wrap class="repeat-detail hidden">
+          <span class="field-hint">Every</span>
+          <input type="number" min="1" value="1" data-interval class="interval-input"
+                 autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+          <select data-unit class="unit-select">
+            <option value="day">days</option>
+            <option value="week">weeks</option>
+            <option value="month">months</option>
+          </select>
+        </div>
+
+        <%# Yearly hint %>
+        <div data-yearly-wrap class="repeat-detail hidden">
+          <span class="field-hint">Every year on <strong data-yearly-label>—</strong></span>
+        </div>
+
+        <%# Daily / Weekdays — no extra fields beyond the helper note %>
+        <div data-weekdays-wrap class="repeat-detail hidden">
+          <span class="field-hint">Mon–Fri only.</span>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="danger hidden" data-action="archive">Archive</button>
+        <button type="button" class="ghost" data-action="cancel">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="chore-goal-modal" class="chores-modal-backdrop hidden" data-goal-modal>
+  <div class="chores-modal">
+    <div class="modal-head">
+      <h3>Add Goal</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <form class="chore-form basic" data-goal-form autocomplete="off" data-form-type="other">
+      <div class="form-section">
+        <label class="field-label">Name</label>
+        <input type="text" name="name" required autocomplete="off" autocapitalize="words"
+               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+      </div>
+      <div class="form-section">
+        <label class="field-label">Cost (Pebbles)</label>
+        <input type="number" name="cost_pebbles" min="1" value="100" required autocomplete="off"
+               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+      </div>
+      <div class="form-section">
+        <label class="field-label">Image URL (optional)</label>
+        <input type="url" name="image_url" autocomplete="off"
+               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+      </div>
+      <div class="form-section">
+        <label class="field-label">Link URL (optional)</label>
+        <input type="url" name="link_url" autocomplete="off"
+               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="ghost" data-action="cancel">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>

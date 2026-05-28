@@ -5,7 +5,7 @@ FactoryBot.define do
     password { "password123" }
     password_confirmation { "password123" }
     role { :standard }
-    phone { "5551234567" }
+    sequence(:phone) { |n| "555%07d" % n }
     dark_mode { false }
   end
 end

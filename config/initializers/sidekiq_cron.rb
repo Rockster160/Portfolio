@@ -50,6 +50,11 @@ cron_jobs = [
     class: "GoogleCalendarWatchRenewalWorker",
     cron:  every_hour,
   },
+  {
+    name:  "Chores Daily Reset",
+    class: "ChoreDailyResetWorker",
+    cron:  daily_4am,
+  },
 ]
 
 if Rails.env.production?

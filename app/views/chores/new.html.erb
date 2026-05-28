@@ -1,0 +1,12 @@
+<% content_for :title, "New Chore" %>
+
+<div class="chores-page">
+  <div class="chores-header">
+    <h1 style="margin:0;">New <%= "One-Off" if @chore.one_off %> Chore</h1>
+    <%= render "nav" %>
+  </div>
+
+  <p style="color:var(--chores-muted);">Most users add chores from the grid view — use the + Add button there to use the inline modal. This page is a fallback form.</p>
+
+  <%= render "chore_form", chore: @chore, submit_url: "/chores/items", method: :post %>
+</div>

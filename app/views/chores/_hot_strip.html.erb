@@ -1,0 +1,14 @@
+<%# Locals: hot_picks (Hash chore_id => multiplier), chores (Array<Chore>) %>
+<% hot_chores = chores.select { |c| hot_picks.key?(c.id) } %>
+<% if hot_chores.any? %>
+  <div class="hot-strip" data-chores-hot-strip="true">
+    <div class="hot-label"><i class="fa fa-fire" aria-hidden="true"></i> Hot Today</div>
+    <% hot_chores.sort_by { |c| -hot_picks[c.id] }.each do |c| %>
+      <div class="hot-chip">
+        <span><%= c.icon.presence || "🧹" %></span>
+        <span><%= c.display_short_name %></span>
+        <span class="hot-mult"><%= hot_picks[c.id] %>×</span>
+      </div>
+    <% end %>
+  </div>
+<% end %>

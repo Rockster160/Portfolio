@@ -1,0 +1,122 @@
+<% content_for :title, "Chores · Balance" %>
+
+<div class="chores-page" data-chores-root data-mode="balance">
+  <%= render "header", balance: @balance, scope: :total %>
+
+  <div class="balance-card">
+    <div class="balance-label">Pebbles available</div>
+    <div class="balance-amount"><span data-balance><%= @balance %></span>p</div>
+  </div>
+
+  <h3>Goals</h3>
+  <button class="btn" data-add-goal>+ Add Goal</button>
+  <div data-goals-list style="margin-top:8px;">
+    <% @goals.each do |goal|
+         pct = goal.cost_pebbles.zero? ? 100 : ([@balance * 100 / goal.cost_pebbles, 100].min) %>
+      <div class="goal-row" data-goal-id="<%= goal.id %>">
+        <div class="row-flex">
+          <strong><%= goal.name %></strong>
+          <span><%= @balance %>p / <%= goal.cost_pebbles %>p</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" style="width: <%= pct %>%;"></div></div>
+        <div class="row-flex">
+          <% if goal.link_url.present? %>
+            <a class="goal-link" href="<%= goal.link_url %>" target="_blank" rel="noopener"><%= goal.link_url.truncate(40) %></a>
+          <% else %>
+            <span></span>
+          <% end %>
+          <button class="btn ghost" data-delete-goal="<%= goal.id %>">Remove</button>
+        </div>
+      </div>
+    <% end %>
+  </div>
+
+  <h3 style="margin-top:24px;">Achievements</h3>
+  <% if @achievements.empty? %>
+    <p style="color:var(--chores-muted);">No achievements defined yet.</p>
+  <% end %>
+  <% @achievements.each do |ach| %>
+    <div class="achievement-card <%= "earned" if @earned_ids.include?(ach.id) %>">
+      <div>
+        <strong><%= ach.name %></strong>
+        <% if ach.description.present? %><div style="font-size:12px;color:var(--chores-muted);"><%= ach.description %></div><% end %>
+      </div>
+      <div>
+        <% if @earned_ids.include?(ach.id) %>
+          <span style="color:var(--chores-done);font-weight:600;">Earned</span>
+        <% elsif ach.reward_pebbles > 0 %>
+          <span><%= ach.reward_pebbles %>p</span>
+        <% elsif ach.reward_link.present? %>
+          <a class="goal-link" href="<%= ach.reward_link %>" target="_blank" rel="noopener">Reward</a>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <h3 style="margin-top:24px;">Multipliers</h3>
+  <% if @multipliers.empty? %>
+    <p style="color:var(--chores-muted);">No multipliers configured yet.</p>
+  <% end %>
+  <% @multipliers.each do |m| %>
+    <div class="achievement-card">
+      <div>
+        <strong><%= m.name %></strong>
+        <div style="font-size:12px;color:var(--chores-muted);"><%= m.kind.humanize %></div>
+      </div>
+      <div>
+        <% Array(m.config["levels"]).sort_by { |l| l["threshold"].to_i }.each do |lvl| %>
+          <span style="margin-left:6px;"><%= lvl["threshold"] %>+ → <%= lvl["multiplier"] %>×</span>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <h3 style="margin-top:24px;">Withdraw</h3>
+  <form class="basic" data-withdraw-form>
+    <fieldset data-withdraw-fieldset style="border:0;padding:0;margin:0;display:flex;gap:8px;align-items:center;" <%= "disabled" if @balance.to_i <= 0 %>>
+      <input type="number" name="amount_pebbles" placeholder="Amount" min="1" max="<%= [@balance.to_i, 1].max %>" autocomplete="off" style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#00102B;color:#ECF0F1;">
+      <input type="text" name="note" placeholder="Note (optional)" autocomplete="off" style="flex:2;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#00102B;color:#ECF0F1;">
+      <button class="btn" type="submit">Withdraw</button>
+    </fieldset>
+  </form>
+
+  <h3 style="margin-top:24px;">Recent History</h3>
+  <% mixed = (@recent_completions.to_a + @withdrawals.to_a).sort_by { |e|
+       ts = e.is_a?(ChoreCompletion) ? e.completed_at : e.created_at
+       -ts.to_f
+     }.first(10) %>
+  <% mixed.each do |entry|
+       if entry.is_a?(ChoreCompletion) %>
+        <div class="history-row">
+          <span>
+            <%= entry.completed_at.strftime("%b %-d %l:%M%P") %> ·
+            <%= entry.chore.icon.presence || "🧹" %>
+            <strong><%= entry.chore.display_short_name %></strong>
+            <% if entry.note.present? %><span class="history-note">— <%= entry.note.truncate(40) %></span><% end %>
+          </span>
+          <span style="color:<%= entry.payout_skipped ? '#9CA3AF' : '#34D399' %>;">
+            <%= entry.payout_skipped ? "(skipped)" : "+#{entry.paid_pebbles}p" %>
+          </span>
+        </div>
+      <% else %>
+        <div class="history-row">
+          <span>
+            <%= entry.created_at.strftime("%b %-d %l:%M%P") %> ·
+            🪙 <strong>Withdraw</strong>
+            <% if entry.note.present? %><span class="history-note">— <%= entry.note.truncate(40) %></span><% end %>
+          </span>
+          <span style="color:#FCA5A5;">−<%= entry.amount_pebbles %>p</span>
+        </div>
+      <% end %>
+  <% end %>
+  <% if mixed.any? %>
+    <div style="text-align:center;margin-top:8px;">
+      <%= link_to "Full history →", chores_history_path, class: "btn ghost" %>
+    </div>
+  <% end %>
+  <%= render "modals" %>
+</div>
+
+<% content_for :after_body do %>
+  <%= render "page_script", mode: "balance" %>
+<% end %>

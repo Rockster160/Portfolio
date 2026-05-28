@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_28_100000) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_28_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -355,6 +355,152 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_28_100000) do
     t.index ["param_key"], name: "index_boxes_on_param_key", unique: true
     t.index ["parent_key"], name: "index_boxes_on_parent_key"
     t.index ["user_id"], name: "index_boxes_on_user_id"
+  end
+
+  create_table "chore_achievements", force: :cascade do |t|
+    t.string "name", null: false
+    t.text "description"
+    t.integer "kind", default: 0, null: false
+    t.jsonb "config", default: {}, null: false
+    t.integer "reward_pebbles", default: 0, null: false
+    t.text "reward_link"
+    t.text "image_url"
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "chore_completions", force: :cascade do |t|
+    t.bigint "chore_id", null: false
+    t.bigint "user_id", null: false
+    t.datetime "completed_at", null: false
+    t.date "day_key", null: false
+    t.integer "paid_pebbles", default: 0, null: false
+    t.integer "base_pebbles", default: 0, null: false
+    t.float "hot_multiplier", default: 1.0, null: false
+    t.float "total_multiplier", default: 1.0, null: false
+    t.integer "achievement_bonus_pebbles", default: 0, null: false
+    t.boolean "payout_skipped", default: false, null: false
+    t.text "skipped_reason"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.text "note"
+    t.index ["chore_id", "user_id", "day_key"], name: "index_chore_completions_on_chore_id_and_user_id_and_day_key"
+    t.index ["chore_id"], name: "index_chore_completions_on_chore_id"
+    t.index ["user_id", "completed_at"], name: "index_chore_completions_on_user_id_and_completed_at"
+    t.index ["user_id", "day_key"], name: "index_chore_completions_on_user_id_and_day_key"
+    t.index ["user_id"], name: "index_chore_completions_on_user_id"
+  end
+
+  create_table "chore_goals", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "name", null: false
+    t.text "image_url"
+    t.text "link_url"
+    t.integer "cost_pebbles", default: 0, null: false
+    t.datetime "achieved_at"
+    t.datetime "archived_at"
+    t.integer "sort_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "archived_at"], name: "index_chore_goals_on_user_id_and_archived_at"
+    t.index ["user_id"], name: "index_chore_goals_on_user_id"
+  end
+
+  create_table "chore_hot_picks", force: :cascade do |t|
+    t.date "day_key", null: false
+    t.bigint "chore_id", null: false
+    t.float "multiplier", default: 2.0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chore_id"], name: "index_chore_hot_picks_on_chore_id"
+    t.index ["day_key", "chore_id"], name: "index_chore_hot_picks_on_day_key_and_chore_id", unique: true
+  end
+
+  create_table "chore_multipliers", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "name", null: false
+    t.integer "kind", default: 0, null: false
+    t.jsonb "config", default: {}, null: false
+    t.boolean "active", default: true, null: false
+    t.integer "sort_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_chore_multipliers_on_user_id"
+  end
+
+  create_table "chore_shares", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "shared_with_user_id", null: false
+    t.integer "permission", default: 1, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["shared_with_user_id"], name: "index_chore_shares_on_shared_with_user_id"
+    t.index ["user_id", "shared_with_user_id"], name: "index_chore_shares_pair", unique: true
+    t.index ["user_id"], name: "index_chore_shares_on_user_id"
+  end
+
+  create_table "chore_streaks", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "chore_id", null: false
+    t.integer "current_streak", default: 0, null: false
+    t.integer "longest_streak", default: 0, null: false
+    t.date "last_completed_day"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chore_id"], name: "index_chore_streaks_on_chore_id"
+    t.index ["user_id", "chore_id"], name: "index_chore_streaks_on_user_id_and_chore_id", unique: true
+    t.index ["user_id"], name: "index_chore_streaks_on_user_id"
+  end
+
+  create_table "chore_user_orders", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "chore_id", null: false
+    t.integer "sort_order", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chore_id"], name: "index_chore_user_orders_on_chore_id"
+    t.index ["user_id", "chore_id"], name: "index_chore_user_orders_pair", unique: true
+    t.index ["user_id", "sort_order"], name: "index_chore_user_orders_on_user_id_and_sort_order"
+    t.index ["user_id"], name: "index_chore_user_orders_on_user_id"
+  end
+
+  create_table "chore_withdrawals", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.integer "amount_pebbles", null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "created_at"], name: "index_chore_withdrawals_on_user_id_and_created_at"
+    t.index ["user_id"], name: "index_chore_withdrawals_on_user_id"
+  end
+
+  create_table "chores", force: :cascade do |t|
+    t.bigint "created_by_user_id", null: false
+    t.text "name", null: false
+    t.text "short_name"
+    t.text "icon"
+    t.jsonb "aliases", default: [], null: false
+    t.integer "reward_pebbles", default: 0, null: false
+    t.integer "threshold_seconds"
+    t.jsonb "recurrence"
+    t.date "starts_on"
+    t.boolean "one_off", default: false, null: false
+    t.datetime "archived_at"
+    t.integer "sort_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.integer "show_on_daily_view", default: 1, null: false
+    t.integer "sharing_mode", default: 0, null: false
+    t.bigint "assigned_to_user_id"
+    t.index ["archived_at"], name: "index_chores_on_archived_at"
+    t.index ["assigned_to_user_id"], name: "index_chores_on_assigned_to_user_id"
+    t.index ["created_by_user_id"], name: "index_chores_on_created_by_user_id"
+    t.index ["one_off"], name: "index_chores_on_one_off"
+    t.index ["reward_pebbles"], name: "index_chores_on_reward_pebbles"
+    t.index ["sharing_mode"], name: "index_chores_on_sharing_mode"
+    t.index ["show_on_daily_view"], name: "index_chores_on_show_on_daily_view"
   end
 
   create_table "climbs", force: :cascade do |t|
@@ -942,6 +1088,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_28_100000) do
     t.index ["user_id"], name: "index_user_caches_on_user_id"
   end
 
+  create_table "user_chore_achievements", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "chore_achievement_id", null: false
+    t.datetime "earned_at", null: false
+    t.integer "awarded_pebbles", default: 0, null: false
+    t.bigint "chore_completion_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chore_achievement_id"], name: "index_user_chore_achievements_on_chore_achievement_id"
+    t.index ["chore_completion_id"], name: "index_user_chore_achievements_on_chore_completion_id"
+    t.index ["user_id", "chore_achievement_id"], name: "index_user_chore_achievements_pair", unique: true
+    t.index ["user_id"], name: "index_user_chore_achievements_on_user_id"
+  end
+
   create_table "user_dashboards", force: :cascade do |t|
     t.bigint "user_id"
     t.jsonb "blocks"
@@ -1021,6 +1181,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_28_100000) do
   add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
   add_foreign_key "boxes", "users"
+  add_foreign_key "chore_completions", "chores"
+  add_foreign_key "chore_completions", "users"
+  add_foreign_key "chore_goals", "users"
+  add_foreign_key "chore_hot_picks", "chores"
+  add_foreign_key "chore_multipliers", "users"
+  add_foreign_key "chore_shares", "users"
+  add_foreign_key "chore_shares", "users", column: "shared_with_user_id"
+  add_foreign_key "chore_streaks", "chores"
+  add_foreign_key "chore_streaks", "users"
+  add_foreign_key "chore_user_orders", "chores"
+  add_foreign_key "chore_user_orders", "users"
+  add_foreign_key "chore_withdrawals", "users"
+  add_foreign_key "chores", "users", column: "assigned_to_user_id"
+  add_foreign_key "chores", "users", column: "created_by_user_id"
   add_foreign_key "emails", "users"
   add_foreign_key "google_accounts", "users"
   add_foreign_key "list_builders", "lists"
@@ -1042,4 +1216,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_28_100000) do
   add_foreign_key "task_folders", "task_folders", column: "parent_id"
   add_foreign_key "task_folders", "users"
   add_foreign_key "tasks", "task_folders"
+  add_foreign_key "user_chore_achievements", "chore_achievements"
+  add_foreign_key "user_chore_achievements", "chore_completions"
+  add_foreign_key "user_chore_achievements", "users"
 end

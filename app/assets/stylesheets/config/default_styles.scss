@@ -14,7 +14,10 @@ html.dark-mode {
   &,
   body {
     color: $grey-light;
-    background: darken($blue-d5, 5%);
+    // Match the card/panel background ($blue-d5) so full-bleed pages
+    // don't show a 5% darker seam between body and content. Pages that
+    // want the old contrast can re-darken their own wrappers.
+    background: $blue-d5;
   }
 }
 

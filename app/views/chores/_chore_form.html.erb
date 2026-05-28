@@ -1,0 +1,93 @@
+<%# Locals: chore (Chore), submit_url, method %>
+<form class="chore-form basic" data-chores-form action="<%= submit_url %>" data-method="<%= method %>">
+  <div class="row-pair">
+    <div>
+      <label>Icon</label>
+      <input type="text" name="chore[icon]" value="<%= chore.icon %>" placeholder="🧹" maxlength="8" data-icon-input>
+    </div>
+    <div>
+      <label>Short name</label>
+      <input type="text" name="chore[short_name]" value="<%= chore.short_name %>" placeholder="Brush">
+    </div>
+  </div>
+
+  <div>
+    <label>Full name</label>
+    <input type="text" name="chore[name]" value="<%= chore.name %>" placeholder="Brush Teeth" required>
+  </div>
+
+  <div>
+    <label>Aliases (comma separated)</label>
+    <input type="text" name="chore[aliases_csv]" value="<%= chore.aliases_array.join(", ") %>" placeholder="floss, toothpaste">
+  </div>
+
+  <div>
+    <label>Reward (Pebbles)</label>
+    <div class="reward-quicks" data-reward-quicks>
+      <% [1, 2, 3, 5, 10, 15].each do |amount| %>
+        <button type="button" data-reward="<%= amount %>"><%= amount %>p</button>
+      <% end %>
+      <button type="button" data-reward="custom">?</button>
+    </div>
+    <input type="number" name="chore[reward_pebbles]" value="<%= chore.reward_pebbles %>" min="0" data-reward-input>
+  </div>
+
+  <div class="row-pair">
+    <div>
+      <label>Cooldown</label>
+      <select name="chore[threshold_hours]" data-threshold-select>
+        <option value="">None</option>
+        <option value="1">1 hour</option>
+        <option value="3">3 hours</option>
+        <option value="6">6 hours</option>
+        <option value="12">12 hours</option>
+        <option value="24">1 day</option>
+        <option value="48">2 days</option>
+        <option value="168">1 week</option>
+      </select>
+    </div>
+    <div>
+      <label>One-off?</label>
+      <select name="chore[one_off]">
+        <option value="false" <%= "selected" unless chore.one_off %>>No (persistent)</option>
+        <option value="true" <%= "selected" if chore.one_off %>>Yes (delete after completion)</option>
+      </select>
+    </div>
+  </div>
+
+  <div>
+    <label>Repeats</label>
+    <select name="chore[recurrence][freq]" data-freq-select>
+      <% Chore::FREQUENCIES.each do |f| %>
+        <option value="<%= f %>" <%= "selected" if chore.freq == f %>><%= f.to_s.titleize %></option>
+      <% end %>
+    </select>
+  </div>
+
+  <div data-weekly-row class="hidden">
+    <label>Days</label>
+    <div class="weekly-chips">
+      <% [[:mon, "M"], [:tue, "T"], [:wed, "W"], [:thu, "T"], [:fri, "F"], [:sat, "S"], [:sun, "S"]].each do |key, label| %>
+        <button type="button" class="wd-chip" data-day="<%= key %>"
+          data-active="<%= chore.recurrence_data[:by_day]&.include?(key.to_s) %>"><%= label %></button>
+      <% end %>
+    </div>
+    <input type="hidden" name="chore[recurrence][by_day_csv]" value="<%= Array(chore.recurrence_data[:by_day]).join(',') %>" data-by-day-input>
+  </div>
+
+  <div data-starts-row class="hidden">
+    <label>Starts on</label>
+    <input type="date" name="chore[starts_on]" value="<%= chore.starts_on %>">
+  </div>
+
+  <input type="hidden" name="chore[threshold_seconds]" value="<%= chore.threshold_seconds %>" data-threshold-seconds>
+  <input type="hidden" name="chore[aliases_array]" data-aliases-array>
+
+  <div class="form-actions">
+    <% if chore.persisted? %>
+      <button type="button" class="danger" data-archive-chore="<%= chore.id %>">Archive</button>
+    <% end %>
+    <button type="button" class="ghost" data-form-cancel>Cancel</button>
+    <button type="submit" class="primary">Save</button>
+  </div>
+</form>

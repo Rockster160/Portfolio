@@ -1,0 +1,6 @@
+<div class="chores-nav">
+  <%= link_to "Grid",     chores_path,         class: ("active" if current_page?(chores_path)) %>
+  <%= link_to "Today",    chores_today_path,   class: ("active" if current_page?(chores_today_path)) %>
+  <%= link_to "Balance",  chores_balance_path, class: ("active" if current_page?(chores_balance_path)) %>
+  <%= link_to "History",  chores_history_path, class: ("active" if current_page?(chores_history_path)) %>
+</div>

@@ -1,0 +1,63 @@
+<% content_for :title, "Chores" %>
+<% content_for :head do %>
+  <link rel="manifest" href="/chores.webmanifest">
+  <meta name="theme-color" content="#00102B">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <script src="/chores_sortable.js" defer></script>
+<% end %>
+
+<div class="chores-page" data-chores-root data-mode="grid">
+  <%= render "header", balance: @balance, scope: :total %>
+
+  <%= render "hot_strip", hot_picks: @hot_picks, chores: @chores %>
+
+  <%= render "toolbar", search_placeholder: "Search chores..." %>
+
+  <div class="chores-grid" data-chores-grid>
+    <% @chores.each do |chore|
+         done_count = @completions_today[chore.id].to_i
+         last_completion = @last_completions[chore.id]
+         hot = @hot_picks[chore.id]
+         in_cooldown = chore.threshold_seconds.to_i > 0 &&
+                       last_completion.present? && !last_completion.payout_skipped &&
+                       (last_completion.completed_at + chore.threshold_seconds.seconds) > Time.current %>
+      <div class="chore-card <%= "done-today" if done_count > 0 %> <%= "hot" if hot %>"
+           data-chore-id="<%= chore.id %>"
+           data-chore-name="<%= chore.name %>"
+           data-chore-short="<%= chore.display_short_name %>"
+           data-chore-aliases="<%= chore.aliases_array.join("|") %>"
+           data-chore-reward="<%= chore.reward_pebbles %>"
+           data-chore-one-off="<%= chore.one_off %>"
+           data-chore-icon="<%= chore.icon %>"
+           data-chore-cooldown="<%= chore.threshold_seconds %>"
+           data-chore-threshold="<%= chore.threshold_seconds %>"
+           data-chore-recurrence='<%= chore.recurrence.to_json.html_safe %>'
+           data-chore-show-on-daily-view="<%= chore.show_on_daily_view %>"
+           data-chore-sharing-mode="<%= chore.sharing_mode %>"
+           data-chore-assigned-to-user-id="<%= chore.assigned_to_user_id %>"
+           data-chore-starts-on="<%= chore.starts_on %>"
+           data-done-count="<%= done_count %>"
+           data-last-completed-at="<%= last_completion&.completed_at&.iso8601 %>">
+        <% if hot %><div class="hot-badge"><%= hot %>×</div><% end %>
+        <div class="icon" data-icon>
+          <% if chore.threshold_seconds.to_i > 0 %>
+            <span class="circle-countdown" data-circle-countdown></span>
+          <% end %>
+          <span class="icon-glyph"><%= chore.icon.presence || "🧹" %></span>
+          <span class="card-reward"><%= chore.reward_label %></span>
+          <span class="card-count-slot" data-count-slot>
+            <% if done_count > 1 %><span class="count-badge" data-count-badge>×<%= done_count %></span><% end %>
+          </span>
+        </div>
+        <div class="title"><%= chore.display_short_name %></div>
+        <div class="ago-row" data-ago-row></div>
+      </div>
+    <% end %>
+  </div>
+  <%= render "modals" %>
+</div>
+
+<% content_for :after_body do %>
+  <%= render "page_script", mode: "grid" %>
+<% end %>

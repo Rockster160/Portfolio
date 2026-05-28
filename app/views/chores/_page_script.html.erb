@@ -1,0 +1,1444 @@
+<%# Locals: mode (string) %>
+<script>
+  window.__currentUserId = <%= current_user.id.to_json.html_safe %>;
+</script>
+<script type="module">
+  const MODE = "<%= mode %>";
+  const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || "";
+  const root = document.querySelector('[data-chores-root]');
+  const DAY_KEY = root?.dataset.dayKey || "";
+  const CUTOFF_HOUR = parseInt(root?.dataset.cutoffHour || "4", 10);
+
+  // Edit mode (Grid view): when active, tapping a card opens the edit
+  // modal instead of completing the chore. Persists across multiple
+  // edits — toggle off when done.
+  let editModeActive = false;
+
+  // Per-tab id used to suppress our own broadcasts when reordering —
+  // the receiving tab only re-applies an order_changed event if it
+  // wasn't the originator. crypto.randomUUID is widely supported now.
+  const TAB_ID = (window.crypto?.randomUUID?.() || String(Date.now() + Math.random()));
+
+  // Per-chore last-local-click epoch ms. Used to discard server data
+  // that was captured BEFORE our most recent local action — protects
+  // against spam-click race conditions where a stale broadcast or
+  // out-of-order POST response would otherwise step on optimistic state.
+  const localClickTs = new Map();
+  // Per-chore "post in flight" flag. While set, broadcasts for this
+  // chore are deferred (the imminent POST response will reconcile).
+  const inFlight = new Set();
+
+  // ---------- tiny utilities ----------
+  function flash(msg, type = "ok") {
+    const el = document.createElement("div");
+    el.className = "chores-flash " + (type === "error" ? "error" : (type === "warn" ? "warn" : ""));
+    el.textContent = msg;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add("show"));
+    setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 250); }, 2400);
+  }
+  async function api(url, method, body) {
+    const res = await fetch(url, {
+      method,
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": CSRF },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`${res.status}: ${text}`);
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  // ---------- fuzzy search ----------
+  function score(needle, name, aliases) {
+    if (!needle) return 1;
+    const n = needle.toLowerCase();
+    const fields = [
+      { text: (name || "").toLowerCase(), weight: 1.0 },
+      ...((aliases || []).map(a => ({ text: a.toLowerCase(), weight: 0.5 })))
+    ];
+    let best = 0;
+    for (const { text, weight } of fields) {
+      if (!text) continue;
+      const idx = text.indexOf(n);
+      let local = 0;
+      if (idx === 0) local = 1.0;
+      else if (idx > 0) local = 0.7 - Math.min(idx, 10) * 0.02;
+      else if (fuzzyMatch(n, text)) local = 0.3;
+      else continue;
+      best = Math.max(best, local * weight);
+    }
+    return best;
+  }
+  function fuzzyMatch(needle, hay) {
+    let i = 0, j = 0;
+    while (i < needle.length && j < hay.length) {
+      if (needle[i] === hay[j]) i++;
+      j++;
+    }
+    return i === needle.length;
+  }
+  function applySearch(query) {
+    const sel = MODE === "today" ? "[data-chores-circles]" : "[data-chores-grid]";
+    const container = document.querySelector(sel);
+    if (!container) return;
+    const cards = Array.from(container.children);
+    const scored = cards.map(c => ({
+      el: c,
+      score: score(query, c.dataset.choreShort || c.dataset.choreName, (c.dataset.choreAliases || "").split("|").filter(Boolean))
+    }));
+    if (!query) { cards.forEach(c => c.style.display = ""); return; }
+    scored.sort((a, b) => b.score - a.score);
+    scored.forEach(({ el, score }) => { el.style.display = score > 0 ? "" : "none"; });
+    scored.forEach(({ el }) => container.appendChild(el));
+  }
+  document.querySelector('[data-chores-search]')?.addEventListener("input", e => applySearch(e.target.value.trim()));
+
+  // ---------- countdown formatting ----------
+  // < 1m: ":48s" — < 5m: "4:32" — < 50m: "23m" — < 16h: "9h" — < 4w: "13d" — < 23M: "8M" — else: "Ny"
+  // Always rounds UP.
+  function formatRemaining(seconds) {
+    if (seconds <= 0) return "";
+    const s = Math.ceil(seconds);
+    if (s < 60) return ":" + String(s).padStart(2, "0") + "s";
+    const m = Math.ceil(s / 60);
+    if (s < 5 * 60) {
+      const mins = Math.floor(s / 60);
+      const secs = Math.ceil(s % 60);
+      return secs === 60 ? `${mins + 1}:00` : `${mins}:${String(secs).padStart(2, "0")}`;
+    }
+    if (s < 50 * 60) return Math.ceil(s / 60) + "m";
+    if (s < 16 * 60 * 60) return Math.ceil(s / 3600) + "h";
+    if (s < 28 * 86400) return Math.ceil(s / 86400) + "d";
+    if (s < 23 * 30 * 86400) return Math.ceil(s / (30 * 86400)) + "M";
+    return Math.ceil(s / (365 * 86400)) + "y";
+  }
+
+  // ---------- progress ring + countdown + ago ticker ----------
+  const RING_CIRC = 2 * Math.PI * 46; // r=46 in viewBox 100x100
+  function updateRings(now) {
+    document.querySelectorAll('[data-chore-id][data-chore-cooldown]').forEach(card => {
+      const cooldown = parseInt(card.dataset.choreCooldown, 10);
+      if (!cooldown) return;
+      const last = card.dataset.lastCompletedAt;
+      const ring = card.querySelector('[data-ring-progress]');
+      const label = card.querySelector('[data-circle-countdown]');
+      if (ring) ring.setAttribute("stroke-dasharray", RING_CIRC);
+
+      if (!last) {
+        if (ring) { ring.setAttribute("stroke-dashoffset", RING_CIRC); ring.classList.add("elapsed"); }
+        if (label) { label.classList.add("elapsed"); label.textContent = ""; }
+        return;
+      }
+      const lastMs = new Date(last).getTime();
+      const remainSec = Math.max(0, Math.ceil((lastMs + cooldown * 1000 - now) / 1000));
+      if (ring) {
+        const progress = remainSec === 0 ? 0 : remainSec / cooldown;
+        ring.setAttribute("stroke-dashoffset", RING_CIRC * (1 - progress));
+        ring.classList.toggle("elapsed", remainSec === 0);
+      }
+      if (label) {
+        label.classList.toggle("elapsed", remainSec === 0);
+        label.textContent = remainSec === 0 ? "" : formatRemaining(remainSec);
+      }
+    });
+  }
+
+  // ---------- "ago" formatter ----------
+  // <1m → "<1m ago"
+  // <60m → "Nm ago"
+  // <24h → "Hh Mm ago" (two largest units, never seconds)
+  // Yesterday (calendar-day before today): "Yesterday"
+  // 2-6 days ago: weekday name
+  // 7+ days: "Jan 14, '26"
+  function formatAgo(isoString, now = Date.now()) {
+    if (!isoString) return "";
+    const t = new Date(isoString).getTime();
+    if (Number.isNaN(t)) return "";
+    const sec = Math.max(0, Math.floor((now - t) / 1000));
+    if (sec < 60) return "<1m ago";
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      return m > 0 ? `${h}h ${m}m ago` : `${h}h ago`;
+    }
+    // Day-based labels
+    const d = new Date(t);
+    const today = new Date(now);
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const dayDiff = Math.floor((startOfToday - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000);
+    if (dayDiff === 1) return "Yesterday";
+    if (dayDiff >= 2 && dayDiff <= 6) {
+      return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d.getDay()];
+    }
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${months[d.getMonth()]} ${d.getDate()}, '${String(d.getFullYear() % 100).padStart(2, "0")}`;
+  }
+
+  function updateAgoRows(now) {
+    document.querySelectorAll("[data-ago-row]").forEach(row => {
+      const card = row.closest("[data-chore-id]");
+      if (!card) return;
+      const iso = card.dataset.lastCompletedAt;
+      row.textContent = iso ? formatAgo(iso, now) : "";
+    });
+  }
+
+  function startRingTicker() {
+    const tick = () => {
+      const now = Date.now();
+      updateRings(now);
+      updateAgoRows(now);
+    };
+    tick();
+    // Ring is per-second; ago rows naturally re-tick every second too
+    // but their string only changes once per minute. Cheap either way.
+    setInterval(tick, 1000);
+  }
+
+  // ---------- day-rollover detection ----------
+  // Calculate the chore-day for "now" using the same 4am cutoff the server
+  // uses. If it ever changes vs. the page's DAY_KEY, refetch the page.
+  function currentChoreDayIso() {
+    const now = new Date();
+    const shifted = new Date(now.getTime() - CUTOFF_HOUR * 3600 * 1000);
+    const y = shifted.getFullYear();
+    const m = String(shifted.getMonth() + 1).padStart(2, "0");
+    const d = String(shifted.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  function startDayWatcher() {
+    setInterval(() => {
+      if (DAY_KEY && currentChoreDayIso() !== DAY_KEY && navigator.onLine) {
+        flash("New day — refreshing", "warn");
+        setTimeout(() => location.reload(), 600);
+      }
+    }, 30 * 1000);
+    // Also check on visibility change (tab brought back to foreground)
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && DAY_KEY && currentChoreDayIso() !== DAY_KEY) {
+        if (navigator.onLine) location.reload();
+      }
+    });
+  }
+
+  // ---------- connection + offline queue ----------
+  // Durability contract: items in this queue NEVER get dropped because
+  // of a server response. Network errors, 5xx, 4xx (including 401/403/
+  // 419/422), and 3xx-to-login all keep the item right where it is. The
+  // queue only shrinks when an item gets a real 2xx. If the server is
+  // refusing because the session/CSRF aged out, the queue marks itself
+  // "blocked", surfaces that to the user, and waits — re-auth in any
+  // browser tab will let the next flush attempt succeed.
+  const QUEUE_KEY = "chores:offline_queue:v2";
+  let queueCsrf = CSRF; // refreshed on demand
+  let queueBlockedReason = null;
+
+  function loadQueue() {
+    try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); } catch (e) { return []; }
+  }
+  function saveQueue(q) { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
+  function enqueue(item) {
+    const q = loadQueue();
+    item.queued_at = item.queued_at || new Date().toISOString();
+    q.push(item);
+    saveQueue(q);
+    updatePendingBadge(q.length);
+  }
+  function updatePendingBadge(n) {
+    const el = document.querySelector("[data-pending-badge]");
+    if (!el) return;
+    if (n > 0) {
+      el.textContent = queueBlockedReason ? `${n} pending · ${queueBlockedReason}` : `${n} pending`;
+      el.classList.remove("hidden");
+      el.classList.toggle("blocked", !!queueBlockedReason);
+    } else {
+      el.classList.add("hidden");
+      el.classList.remove("blocked");
+    }
+  }
+  function setConnDot(state) {
+    const dot = document.querySelector("[data-conn-dot]");
+    if (!dot) return;
+    dot.classList.remove("offline", "syncing");
+    if (state === "offline") dot.classList.add("offline");
+    if (state === "syncing") dot.classList.add("syncing");
+    dot.title = state === "offline" ? "Offline" : state === "syncing" ? "Syncing..." : "Online";
+  }
+
+  async function refreshCsrf() {
+    try {
+      const res = await fetch("/chores/csrf", {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+        redirect: "manual"
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data?.token) {
+        queueCsrf = data.token;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = data.token;
+        return data.token;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  async function postQueueItem(item, csrf) {
+    const res = await fetch(item.url, {
+      method: item.method,
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": csrf },
+      body: item.body ? JSON.stringify(item.body) : undefined,
+      // Spot login redirects so we can treat them as auth-needed.
+      redirect: "manual"
+    });
+    return res;
+  }
+
+  // Classification — what should we do with this response?
+  //   :ok           → drop the item, all good
+  //   :csrf_stale   → CSRF likely expired; refresh and retry once
+  //   :auth_needed  → session/auth issue; keep item, halt flush, mark blocked
+  //   :keep         → some other failure (5xx, transient, 404 from a race);
+  //                   keep in queue, continue flushing other items
+  function classify(res) {
+    if (!res) return "keep";
+    if (res.ok) return "ok";
+    if (res.type === "opaqueredirect" || res.status === 0) return "auth_needed";
+    if (res.status === 401 || res.status === 403) return "auth_needed";
+    if (res.status === 422) return "csrf_stale";
+    return "keep";
+  }
+
+  async function flushQueue() {
+    let q = loadQueue();
+    if (!q.length) { queueBlockedReason = null; setConnDot("online"); updatePendingBadge(0); return; }
+    if (!navigator.onLine) { setConnDot("offline"); return; }
+
+    setConnDot("syncing");
+    queueBlockedReason = null;
+
+    let csrf = queueCsrf;
+    let csrfRefreshedThisFlush = false;
+    const remaining = [];
+    let halted = false;
+
+    for (let i = 0; i < q.length; i++) {
+      const item = q[i];
+
+      if (halted) { remaining.push(item); continue; }
+
+      let res;
+      try {
+        res = await postQueueItem(item, csrf);
+      } catch (e) {
+        // Network died mid-flush — stop, keep this and all subsequent.
+        remaining.push(...q.slice(i));
+        halted = true;
+        setConnDot("offline");
+        break;
+      }
+
+      let action = classify(res);
+
+      if (action === "csrf_stale" && !csrfRefreshedThisFlush) {
+        const fresh = await refreshCsrf();
+        csrfRefreshedThisFlush = true;
+        if (fresh) {
+          csrf = fresh;
+          // Retry once with the new token.
+          try {
+            res = await postQueueItem(item, csrf);
+            action = classify(res);
+          } catch (e) {
+            remaining.push(...q.slice(i));
+            halted = true;
+            setConnDot("offline");
+            break;
+          }
+        } else {
+          // /chores/csrf itself was unreachable or 401 → treat as auth.
+          action = "auth_needed";
+        }
+      }
+
+      if (action === "ok") {
+        // Success — try to keep the page's balance/count in sync.
+        try {
+          const data = await res.json();
+          const balanceEl = document.querySelector("[data-balance]");
+          if (balanceEl && data?.balance != null) balanceEl.textContent = data.balance;
+        } catch (e) {}
+        continue;
+      }
+
+      if (action === "auth_needed") {
+        // Stop here — pile this and everything after back into the queue.
+        remaining.push(...q.slice(i));
+        queueBlockedReason = "needs re-auth";
+        halted = true;
+        flash("Sign-in expired — your changes are saved and will sync after you sign back in.", "warn");
+        break;
+      }
+
+      // action === "keep": some other failure (5xx, transient 404, etc.)
+      remaining.push(item);
+    }
+
+    saveQueue(remaining);
+    updatePendingBadge(remaining.length);
+    if (remaining.length === 0) {
+      queueBlockedReason = null;
+      setConnDot("online");
+    } else {
+      setConnDot(queueBlockedReason ? "offline" : "syncing");
+    }
+  }
+
+  window.addEventListener("online", () => { setConnDot("syncing"); flushQueue(); });
+  window.addEventListener("offline", () => setConnDot("offline"));
+  updatePendingBadge(loadQueue().length);
+  if (!navigator.onLine) setConnDot("offline");
+
+  // ---------- multiplier toggle ----------
+  let multiplierActive = false;
+  const multiplierBtn = document.querySelector('[data-multiplier-toggle]');
+  const multiplierModal = document.querySelector('[data-multiplier-modal]');
+  let multiplierTargetCard = null;
+  multiplierBtn?.addEventListener("click", () => {
+    multiplierActive = !multiplierActive;
+    multiplierBtn.classList.toggle("active", multiplierActive);
+  });
+  function openMultiplierModal(card) {
+    multiplierTargetCard = card;
+    multiplierModal.querySelector('[data-multiplier-label]').textContent = card.dataset.choreShort || card.dataset.choreName;
+    multiplierModal.querySelector('[data-multiplier-input]').value = 2;
+    multiplierModal.classList.remove("hidden");
+  }
+  function closeMultiplierModal() {
+    multiplierModal?.classList.add("hidden");
+    multiplierTargetCard = null;
+    // Multiplier toggle uncheckes as soon as a chore was tapped — whether
+    // or not the user submits or cancels the modal.
+    multiplierActive = false;
+    multiplierBtn?.classList.remove("active");
+  }
+  multiplierModal?.querySelector('[data-action="cancel"]')?.addEventListener("click", closeMultiplierModal);
+  multiplierModal?.addEventListener("click", e => { if (e.target === multiplierModal) closeMultiplierModal(); });
+  multiplierModal?.querySelectorAll('[data-mult]').forEach(btn => {
+    btn.addEventListener("click", () => { multiplierModal.querySelector('[data-multiplier-input]').value = btn.dataset.mult; });
+  });
+  multiplierModal?.querySelector('[data-multiplier-submit]')?.addEventListener("click", async () => {
+    const n = Math.max(1, Math.min(50, parseInt(multiplierModal.querySelector('[data-multiplier-input]').value, 10) || 1));
+    const card = multiplierTargetCard;
+    closeMultiplierModal();
+    if (!card) return;
+    for (let i = 0; i < n; i++) await completeChore(card.dataset.choreId, card, { silent: i < n - 1 });
+  });
+
+  // ---------- card reconciliation (targeted DOM updates) ----------
+  // Single source of truth for "apply this server state to the card."
+  // Discards stale payloads where the captured-at timestamp predates
+  // our most recent local click on the same chore — that means the
+  // server hasn't seen our click yet and we'd be overwriting the
+  // optimistic state with stale data.
+  function applyServerState(id, data) {
+    const card = document.querySelector(`[data-chore-id="${id}"]`);
+    if (!card) return; // Item is not on this page
+    const serverMs = data.server_ts ? new Date(data.server_ts).getTime() : 0;
+    const localMs = localClickTs.get(String(id)) || 0;
+    if (localMs && serverMs && localMs > serverMs) {
+      // We clicked AFTER this server snapshot — ignore. Our pending POST
+      // will arrive shortly with a server_ts >= our click and apply.
+      return;
+    }
+    // If our chore was archived (e.g. one-off archived after daily reset
+    // OR reassigned to another user), keep the card on-screen for the
+    // rest of today (frozen layout), but mark as locked.
+    if (data.archived) card.classList.add("archived");
+
+    bumpCount(card, data.completions_today);
+    if (data.last_completed_at) card.dataset.lastCompletedAt = data.last_completed_at;
+    if (data.actor_username != null) card.dataset.actorUsername = data.actor_username;
+    // Update the visible "by alice" tag for household items.
+    const tag = card.querySelector(".actor-tag");
+    if (tag) tag.textContent = data.actor_username ? `by ${data.actor_username}` : "";
+    // Update reward display if the chore's pebble amount changed.
+    if (data.reward_pebbles != null) {
+      card.querySelectorAll(".circle-reward, .card-reward, .reward").forEach(rewardEl => {
+        rewardEl.textContent = `${data.reward_pebbles}p`;
+      });
+    }
+  }
+
+  // Balance pill content depends on its scope:
+  //   data-balance-scope="today"  → today's earnings only (no withdrawals)
+  //   data-balance-scope="total"  → lifetime balance (default for Grid/Balance)
+  function applyBalance(data) {
+    if (data == null) return;
+    const total = (typeof data === "object") ? data.balance : data;
+    const today = (typeof data === "object") ? data.today_earnings : null;
+    const el = document.querySelector("[data-balance]");
+    if (el) {
+      const scope = el.dataset.balanceScope || "total";
+      const value = (scope === "today" && today != null) ? today : total;
+      if (value != null) el.textContent = value;
+    }
+    const fieldset = document.querySelector("[data-withdraw-fieldset]");
+    const input = document.querySelector('[data-withdraw-form] [name="amount_pebbles"]');
+    if (fieldset && total != null) fieldset.disabled = total <= 0;
+    if (input && total != null) input.max = Math.max(1, total);
+  }
+
+  async function refreshChoreFromServer(id) {
+    // If we're mid-POST for this chore, the imminent POST response will
+    // reconcile — no need to fire a redundant GET.
+    if (inFlight.has(String(id))) return;
+    try {
+      const data = await api(`/chores/items/${id}/state`, "GET");
+      applyServerState(id, data);
+      applyBalance(data);
+    } catch (e) {
+      // 404 (chore was deleted) — leave the card alone, keep frozen layout
+      // until the user reloads (they can clean it up via /chores/history).
+    }
+  }
+
+  // ---------- complete on click + long-press to undo ----------
+  async function completeChore(id, card, opts = {}) {
+    const sid = String(id);
+    if (inFlight.has(sid) && !opts.allowConcurrent) {
+      // Mark the new click time so the in-flight POST's response is still
+      // accepted (its server_ts will be >= localClickTs), then return.
+    }
+    const clickMs = Date.now();
+    localClickTs.set(sid, clickMs);
+
+    // Optimistic local state — increment count immediately. Don't add a
+    // "pending" class that dims the card; the user spam-clicked and
+    // wants instant feedback per click.
+    const optimisticCount = (parseInt(card.dataset.doneCount, 10) || 0) + 1;
+    bumpCount(card, optimisticCount);
+    card.dataset.lastCompletedAt = new Date(clickMs).toISOString();
+
+    if (!navigator.onLine) {
+      enqueue({
+        url: `/chores/items/${id}/completion`,
+        method: "POST",
+        body: { client_completed_at: new Date(clickMs).toISOString(), tab_id: TAB_ID }
+      });
+      return;
+    }
+
+    inFlight.add(sid);
+    try {
+      const data = await api(`/chores/items/${id}/completion`, "POST",
+        { client_completed_at: new Date(clickMs).toISOString(), tab_id: TAB_ID });
+      applyServerState(id, data);
+      applyBalance(data);
+      if (!opts.silent) {
+        if (data.skipped) flash(data.skipped_reason || "Cooldown — no payout", "warn");
+        else if (data.paid) flash(`+${data.paid}p`);
+        (data.awarded_achievements || []).forEach(a => flash(`🏆 ${a.name} +${a.pebbles}p`, "ok"));
+      }
+    } catch (err) {
+      if (!navigator.onLine || /Failed to fetch|NetworkError/i.test(err.message)) {
+        enqueue({
+          url: `/chores/items/${id}/completion`,
+          method: "POST",
+          body: { client_completed_at: new Date(clickMs).toISOString(), tab_id: TAB_ID }
+        });
+        setConnDot("offline");
+      } else if (!opts.silent) {
+        flash("Couldn't complete: " + err.message, "error");
+      }
+    } finally {
+      inFlight.delete(sid);
+    }
+  }
+
+  async function undoLastCompletion(card) {
+    const id = card.dataset.choreId;
+    const sid = String(id);
+    // Optimistic decrement
+    const newCount = Math.max(0, (parseInt(card.dataset.doneCount, 10) || 0) - 1);
+    bumpCount(card, newCount);
+    localClickTs.set(sid, Date.now());
+    inFlight.add(sid);
+    try {
+      const data = await api(`/chores/items/${id}/completion`, "DELETE");
+      applyServerState(id, data);
+      applyBalance(data);
+      flash("Undone", "warn");
+    } catch (err) {
+      flash("Nothing to undo", "warn");
+    } finally {
+      inFlight.delete(sid);
+    }
+  }
+
+  function bumpCount(card, count) {
+    card.dataset.doneCount = count;
+    card.classList.toggle(MODE === "today" ? "done" : "done-today", count > 0);
+    const slot = card.querySelector("[data-count-slot]");
+    if (!slot) {
+      // grid view fallback to top-right pill
+      let badge = card.querySelector("[data-count-badge]");
+      if (count > 1) {
+        if (!badge) {
+          badge = document.createElement("div");
+          badge.className = "count-badge"; badge.setAttribute("data-count-badge", "");
+          card.appendChild(badge);
+        }
+        badge.textContent = "×" + count;
+      } else badge?.remove();
+      return;
+    }
+    slot.innerHTML = count > 1 ? `<span class="count-badge" data-count-badge>×${count}</span>` : "";
+  }
+
+  function bindCardClicks() {
+    const sel = MODE === "today" ? "[data-chores-circles]" : "[data-chores-grid]";
+    const container = document.querySelector(sel);
+    if (!container) return;
+
+    // Scroll-safe tap detection (mobile-first):
+    //   * Track ONLY one active pointer per gesture.
+    //   * A finger that moves >8px is a scroll, not a tap — suppress
+    //     the synthetic click that follows.
+    //   * Pointer held >550ms with minimal movement → long-press undo.
+    //   * Pointer released within 550ms and <8px movement → tap →
+    //     complete. We fire it from pointerup ourselves and call
+    //     preventDefault on the synthetic click so we never get a
+    //     double-fire.
+    const MOVE_THRESHOLD = 8;
+    const LONG_MS = 550;
+    const state = {
+      pointerId: null,
+      card: null,
+      startX: 0, startY: 0, startedAt: 0,
+      moved: false,
+      longPressFired: false,
+      timer: null,
+    };
+
+    function reset() {
+      if (state.timer) clearTimeout(state.timer);
+      state.pointerId = null;
+      state.card = null;
+      state.startX = 0; state.startY = 0; state.startedAt = 0;
+      state.moved = false;
+      state.longPressFired = false;
+      state.timer = null;
+    }
+
+    container.addEventListener("pointerdown", e => {
+      if (state.pointerId !== null) return; // ignore second finger
+      const card = e.target.closest("[data-chore-id]");
+      if (!card) return;
+      // Edit mode short-circuits gesture handling — clicks open the
+      // edit modal directly, no pointer state machine needed.
+      if (editModeActive) return;
+      // Today restricts the tap target to the round disc.
+      // Grid uses the whole card.
+      if (MODE === "today" && !e.target.closest(".circle-inner")) return;
+
+      state.pointerId = e.pointerId;
+      state.card = card;
+      state.startX = e.clientX;
+      state.startY = e.clientY;
+      state.startedAt = performance.now();
+      state.moved = false;
+      state.longPressFired = false;
+      state.timer = setTimeout(() => {
+        if (state.card && !state.moved) {
+          state.longPressFired = true;
+          undoLastCompletion(state.card);
+        }
+      }, LONG_MS);
+    });
+
+    container.addEventListener("pointermove", e => {
+      if (state.pointerId !== e.pointerId) return;
+      if (Math.hypot(e.clientX - state.startX, e.clientY - state.startY) > MOVE_THRESHOLD) {
+        state.moved = true;
+        if (state.timer) { clearTimeout(state.timer); state.timer = null; }
+      }
+    });
+
+    container.addEventListener("pointerup", e => {
+      if (state.pointerId !== e.pointerId) return;
+      const card = state.card;
+      const isShortTap = !state.moved && !state.longPressFired &&
+                         (performance.now() - state.startedAt) < LONG_MS;
+      reset();
+      if (!card) return;
+      if (!isShortTap) {
+        // Scroll, long-press, or aborted — block the synthetic click.
+        card.dataset.suppressClick = "1";
+        return;
+      }
+      if (multiplierActive) { openMultiplierModal(card); return; }
+      if (e.shiftKey) { openEditModal(card); return; }
+      completeChore(card.dataset.choreId, card);
+    });
+
+    ["pointercancel", "pointerleave"].forEach(evt =>
+      container.addEventListener(evt, e => { if (state.pointerId === e.pointerId) reset(); })
+    );
+
+    container.addEventListener("click", e => {
+      const card = e.target.closest("[data-chore-id]");
+      if (!card) return;
+      // Edit mode: tap = open edit modal.
+      if (editModeActive) {
+        e.preventDefault();
+        e.stopPropagation();
+        openEditModal(card);
+        return;
+      }
+      if (card.dataset.suppressClick === "1") {
+        delete card.dataset.suppressClick;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      // Otherwise the pointerup handler already fired completeChore;
+      // we let this click bubble silently.
+    }, true);
+
+    container.addEventListener("contextmenu", e => {
+      const card = e.target.closest("[data-chore-id]");
+      if (!card) return;
+      e.preventDefault();
+      openEditModal(card);
+    });
+  }
+
+  // ---------- form modal ----------
+  const editModal = document.querySelector("[data-chore-modal]");
+  const editForm  = editModal?.querySelector('[data-chores-form]');
+  function setField(name, value) {
+    const el = editForm?.querySelector(`[data-field="${name}"]`);
+    if (el == null) return;
+    el.value = value ?? "";
+  }
+  function getField(name) { return editForm?.querySelector(`[data-field="${name}"]`)?.value; }
+
+  let currentChoreId = null;
+  const WDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+  // Pill-group sync: clicking a pill sets the hidden input value and
+  // marks itself active. Used for cooldown preset, repeats, show-on-daily,
+  // sharing.
+  function setPillValue(groupKey, value) {
+    const group = editForm.querySelector(`[data-pill-group="${groupKey}"]`);
+    if (!group) return;
+    group.querySelectorAll(".pill").forEach(p => {
+      p.classList.toggle("active", String(p.dataset.value) === String(value ?? ""));
+    });
+    const input = editForm.querySelector(`[data-field="${groupKey}"]`);
+    if (input) input.value = value ?? "";
+  }
+  function bindPillGroups() {
+    editForm.querySelectorAll(".pill-group[data-pill-group]").forEach(group => {
+      const key = group.dataset.pillGroup;
+      group.addEventListener("click", e => {
+        const pill = e.target.closest(".pill");
+        if (!pill || pill.classList.contains("chip-day")) return;
+        e.preventDefault();
+        if (key === "freq") {
+          // Weekdays is a helper — internally selects Weekly + M-F.
+          if (pill.dataset.value === "weekdays") {
+            setPillValue("freq", "weekly");
+            syncWeekdayChips(["mon", "tue", "wed", "thu", "fri"]);
+            syncFreqRow();
+            return;
+          }
+          setPillValue("freq", pill.dataset.value);
+          syncFreqRow();
+          return;
+        }
+        if (key === "threshold_preset") {
+          setPillValue("threshold_preset", pill.dataset.value);
+          syncCooldownRow();
+          return;
+        }
+        setPillValue(key, pill.dataset.value);
+        if (key === "sharing_mode") syncAssigneeRow();
+      });
+    });
+
+    // Reward quicks
+    editForm.querySelector('[data-reward-quicks]')?.addEventListener("click", e => {
+      const pill = e.target.closest("[data-reward]");
+      if (!pill) return;
+      e.preventDefault();
+      const v = pill.dataset.reward;
+      editForm.querySelectorAll('[data-reward-quicks] .pill').forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+      const custom = editForm.querySelector('.reward-custom');
+      if (v === "custom") {
+        custom?.classList.remove("hidden");
+        custom?.focus();
+      } else {
+        custom?.classList.add("hidden");
+        if (custom) custom.value = v;
+      }
+    });
+
+    // Weekday chips toggle independently (multi-select)
+    editForm.querySelector('[data-weekday-chips]')?.addEventListener("click", e => {
+      const btn = e.target.closest('[data-day]');
+      if (!btn) return;
+      e.preventDefault();
+      btn.classList.toggle("active");
+      syncWeekdaysHelperHighlight();
+    });
+
+    // Monthly day-of-month chips (multi-select)
+    editForm.querySelector('[data-month-day-pane]')?.addEventListener("click", e => {
+      const btn = e.target.closest('[data-day]');
+      if (!btn) return;
+      e.preventDefault();
+      btn.classList.toggle("active");
+    });
+    // Monthly mode tabs
+    editForm.querySelector('[data-month-mode-tabs]')?.addEventListener("click", e => {
+      const btn = e.target.closest('[data-month-mode]');
+      if (!btn) return;
+      e.preventDefault();
+      const mode = btn.dataset.monthMode;
+      editForm.querySelectorAll('[data-month-mode-tabs] .pill').forEach(p =>
+        p.classList.toggle("active", p.dataset.monthMode === mode));
+      editForm.querySelector('[data-month-day-pane]')?.classList.toggle("hidden", mode !== "day-of-month");
+      editForm.querySelector('[data-month-nth-pane]')?.classList.toggle("hidden", mode !== "nth-weekday");
+    });
+
+    // Cooldown custom amount/unit → write threshold_seconds.
+    const cdAmt = editForm.querySelector('[data-cooldown-amount]');
+    const cdUnit = editForm.querySelector('[data-cooldown-unit]');
+    cdAmt?.addEventListener("input", syncCustomCooldown);
+    cdUnit?.addEventListener("change", syncCustomCooldown);
+
+    // Single Task toggle: collapses everything except Due Date.
+    editForm.querySelector('[data-field="one_off"]')?.addEventListener("change", syncSingleTask);
+
+    // Due date change → update monthly + yearly labels.
+    editForm.querySelector('[data-field="starts_on"]')?.addEventListener("change", syncStartsOnDependents);
+
+    // Monthly mode radio + selects
+    editForm.querySelectorAll('[data-month-mode], [data-month-set-pos], [data-month-wday]').forEach(el => {
+      el.addEventListener("change", () => {});
+    });
+  }
+
+  // ---------- Single Task / Recurring visibility ----------
+  function isSingleTask() {
+    return editForm.querySelector('[data-field="one_off"]')?.checked === true;
+  }
+  function syncSingleTask() {
+    const on = isSingleTask();
+    editForm.querySelectorAll('[data-recurring-only]').forEach(el => {
+      el.classList.toggle("hidden", on);
+    });
+  }
+
+  // ---------- Cooldown ----------
+  function syncCooldownRow() {
+    const preset = editForm.querySelector('[data-field="threshold_preset"]')?.value || "";
+    const customRow = editForm.querySelector('[data-cooldown-custom-row]');
+    const hidden = editForm.querySelector('[data-field="threshold_seconds"]');
+    if (preset === "custom") {
+      customRow?.classList.remove("hidden");
+      syncCustomCooldown();
+    } else {
+      customRow?.classList.add("hidden");
+      hidden.value = preset || "";
+    }
+  }
+  function syncCustomCooldown() {
+    const amt = parseInt(editForm.querySelector('[data-cooldown-amount]')?.value, 10) || 0;
+    const unit = editForm.querySelector('[data-cooldown-unit]')?.value || "second";
+    const factor = { second: 1, minute: 60, hour: 3600, day: 86400, week: 604800 }[unit] || 1;
+    const seconds = Math.max(0, amt) * factor;
+    const hidden = editForm.querySelector('[data-field="threshold_seconds"]');
+    if (hidden) hidden.value = String(seconds);
+  }
+  function setCooldownSeconds(seconds) {
+    const presets = [0, 3600, 10800, 21600, 43200, 86400, 172800, 604800];
+    if (presets.includes(seconds)) {
+      setPillValue("threshold_preset", seconds === 0 ? "" : String(seconds));
+      syncCooldownRow();
+    } else {
+      setPillValue("threshold_preset", "custom");
+      const { amount, unit } = bestCooldownDecomposition(seconds);
+      const amtEl = editForm.querySelector('[data-cooldown-amount]');
+      const unitEl = editForm.querySelector('[data-cooldown-unit]');
+      if (amtEl) amtEl.value = amount;
+      if (unitEl) unitEl.value = unit;
+      syncCooldownRow();
+    }
+  }
+  function bestCooldownDecomposition(seconds) {
+    if (seconds % 604800 === 0) return { amount: seconds / 604800, unit: "week" };
+    if (seconds % 86400 === 0)  return { amount: seconds / 86400,  unit: "day" };
+    if (seconds % 3600 === 0)   return { amount: seconds / 3600,   unit: "hour" };
+    if (seconds % 60 === 0)     return { amount: seconds / 60,     unit: "minute" };
+    return { amount: seconds, unit: "second" };
+  }
+
+  // ---------- Repeats ----------
+  function syncFreqRow() {
+    const freq = getField("freq") || "never";
+    editForm.querySelector('[data-weekly-wrap]')?.classList.toggle("hidden", freq !== "weekly");
+    editForm.querySelector('[data-monthly-wrap]')?.classList.toggle("hidden", freq !== "monthly");
+    editForm.querySelector('[data-yearly-wrap]')?.classList.toggle("hidden", freq !== "yearly");
+    editForm.querySelector('[data-interval-wrap]')?.classList.toggle("hidden",
+      freq !== "custom" && freq !== "relative");
+    editForm.querySelector('[data-weekdays-wrap]')?.classList.add("hidden");
+    if (freq === "weekly") {
+      const chips = Array.from(editForm.querySelectorAll('[data-weekday-chips] .chip-day.active'));
+      if (chips.length === 0) {
+        const d = parseStartsOn();
+        if (d) syncWeekdayChips([WDAY_KEYS[d.getDay()]]);
+      }
+    }
+    if (freq === "monthly") {
+      // Preselect the day-of-month chip matching starts_on if no chip
+      // is active and the day-of-month tab is the chosen mode.
+      const anyActive = editForm.querySelector('[data-month-day-pane] .md-chip.active');
+      if (!anyActive) {
+        const d = parseStartsOn();
+        if (d) {
+          const chip = editForm.querySelector(`[data-month-day-pane] [data-day="${d.getDate()}"]`);
+          if (chip) chip.classList.add("active");
+        }
+      }
+    }
+    syncStartsOnDependents();
+    syncWeekdaysHelperHighlight();
+  }
+
+  // The "Weekdays" pill is a helper. It shows as active when the
+  // effective rule is "Weekly on Mon-Fri" so users see at a glance
+  // that the simpler label still applies after they made the change.
+  function syncWeekdaysHelperHighlight() {
+    const weekdaysPill = editForm.querySelector('[data-pill-group="freq"] [data-value="weekdays"]');
+    if (!weekdaysPill) return;
+    const freq = getField("freq");
+    const sel = collectWeekdays();
+    const WEEKDAYS_SET = ["mon", "tue", "wed", "thu", "fri"];
+    const matches = freq === "weekly" &&
+                    sel.length === 5 &&
+                    WEEKDAYS_SET.every(d => sel.includes(d));
+    weekdaysPill.classList.toggle("active", matches);
+  }
+  function syncStartsOnDependents() {
+    const d = parseStartsOn();
+    if (!d) return;
+    const monthLabel = editForm.querySelector('[data-month-day-label]');
+    if (monthLabel) monthLabel.textContent = d.getDate();
+    const setPos = editForm.querySelector('[data-month-set-pos]');
+    if (setPos && !setPos.dataset.userTouched) setPos.value = String(Math.floor((d.getDate() - 1) / 7) + 1);
+    const wday = editForm.querySelector('[data-month-wday]');
+    if (wday && !wday.dataset.userTouched) wday.value = WDAY_KEYS[d.getDay()];
+    const yearlyLabel = editForm.querySelector('[data-yearly-label]');
+    if (yearlyLabel) {
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      yearlyLabel.textContent = `${months[d.getMonth()]} ${d.getDate()}`;
+    }
+  }
+  function parseStartsOn() {
+    const v = editForm.querySelector('[data-field="starts_on"]')?.value;
+    if (!v) return null;
+    const parts = v.split("-").map(Number);
+    if (parts.length !== 3) return null;
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+
+  function syncAssigneeRow() {
+    const mode = getField("sharing_mode");
+    editForm.querySelector('[data-assignee-wrap]')?.classList.toggle("hidden", mode !== "assigned");
+  }
+  function syncWeekdayChips(days) {
+    const wrap = editForm.querySelector('[data-weekday-chips]');
+    if (!wrap) return;
+    Array.from(wrap.children).forEach(btn => {
+      btn.classList.toggle("active", days.includes(btn.dataset.day));
+    });
+  }
+  function collectWeekdays() {
+    const wrap = editForm.querySelector('[data-weekday-chips]');
+    return Array.from(wrap?.querySelectorAll('[data-day].active') || []).map(b => b.dataset.day);
+  }
+
+  function selectRewardPill(amount) {
+    const pills = editForm.querySelectorAll('[data-reward-quicks] .pill');
+    pills.forEach(p => p.classList.remove("active"));
+    const exact = editForm.querySelector(`[data-reward-quicks] [data-reward="${amount}"]`);
+    if (exact) {
+      exact.classList.add("active");
+      editForm.querySelector('.reward-custom')?.classList.add("hidden");
+    } else {
+      // Custom (non-preset) amount
+      editForm.querySelector('[data-reward-quicks] [data-reward="custom"]')?.classList.add("active");
+      const custom = editForm.querySelector('.reward-custom');
+      if (custom) { custom.classList.remove("hidden"); custom.value = amount; }
+    }
+    const customInput = editForm.querySelector('.reward-custom');
+    if (customInput && !customInput.classList.contains("hidden") === false) customInput.value = amount;
+  }
+
+  function todayIso() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  function openCreateModal(opts = {}) {
+    if (!editModal) return;
+    currentChoreId = null;
+    editModal.querySelector('[data-modal-title]').textContent = "Add Chore";
+    editForm.reset();
+    setField("icon", "");
+    if (opts.prefillName) setField("name", opts.prefillName);
+    selectRewardPill(1);
+    setField("reward_pebbles", 1);
+    setField("starts_on", todayIso());
+    setCooldownSeconds(0);
+    setPillValue("freq", "never");
+    setPillValue("show_on_daily_view", "when_scheduled");
+    setPillValue("sharing_mode", "household"); // default per spec
+    const oneOffCb = editForm.querySelector('[data-field="one_off"]');
+    if (oneOffCb) oneOffCb.checked = !!opts.oneOff;
+    syncSingleTask();
+    editForm.querySelectorAll('[data-month-day-pane] .md-chip').forEach(c => c.classList.remove("active"));
+    editForm.querySelector('[data-month-mode-tabs] [data-month-mode="day-of-month"]')?.click();
+    syncFreqRow();
+    syncAssigneeRow();
+    syncWeekdayChips([]);
+    syncWeekdaysHelperHighlight();
+    editForm.querySelector('[data-action="archive"]')?.classList.add("hidden");
+    editModal.classList.remove("hidden");
+    const nameField = editForm.querySelector('[data-field="name"]');
+    if (nameField) { nameField.focus(); nameField.select?.(); }
+  }
+
+  function openEditModal(card) {
+    if (!editModal) return;
+    currentChoreId = card.dataset.choreId;
+    editModal.querySelector('[data-modal-title]').textContent = "Edit Chore";
+    editForm.reset();
+    setField("name", card.dataset.choreName);
+    setField("short_name", card.dataset.choreShort);
+    setField("icon", card.dataset.choreIcon || "");
+    setField("aliases_csv", (card.dataset.choreAliases || "").split("|").filter(Boolean).join(", "));
+    const reward = parseInt(card.dataset.choreReward, 10) || 0;
+    selectRewardPill(reward);
+    setField("reward_pebbles", reward);
+    const oneOffCb = editForm.querySelector('[data-field="one_off"]');
+    if (oneOffCb) oneOffCb.checked = card.dataset.choreOneOff === "true";
+    setPillValue("sharing_mode", card.dataset.choreSharingMode || "household");
+    setField("assigned_to_user_id", card.dataset.choreAssignedToUserId || "");
+    setPillValue("show_on_daily_view", card.dataset.choreShowOnDailyView || "when_scheduled");
+    const sec = parseInt(card.dataset.choreCooldown || card.dataset.choreThreshold, 10) || 0;
+    setCooldownSeconds(sec);
+    setField("starts_on", card.dataset.choreStartsOn || todayIso());
+    let rec = {};
+    try { rec = JSON.parse(card.dataset.choreRecurrence || "null") || {}; } catch (e) {}
+    setPillValue("freq", rec.freq || "never");
+    syncSingleTask();
+    syncFreqRow();
+    syncAssigneeRow();
+    syncWeekdayChips(rec.by_day || []);
+    // Monthly mode prefill: pick the right tab + chips/selects.
+    editForm.querySelectorAll('[data-month-day-pane] .md-chip').forEach(c => c.classList.remove("active"));
+    if (rec.freq === "monthly") {
+      if (rec.by_set_pos != null) {
+        editForm.querySelector('[data-month-mode-tabs] [data-month-mode="nth-weekday"]')?.click();
+        const setPos = editForm.querySelector('[data-month-set-pos]');
+        if (setPos) { setPos.value = String(rec.by_set_pos); setPos.dataset.userTouched = "1"; }
+        const wday = editForm.querySelector('[data-month-wday]');
+        if (wday && rec.by_day?.[0]) { wday.value = rec.by_day[0]; wday.dataset.userTouched = "1"; }
+      } else {
+        editForm.querySelector('[data-month-mode-tabs] [data-month-mode="day-of-month"]')?.click();
+        Array.isArray(rec.by_month_day) && rec.by_month_day.forEach(d => {
+          editForm.querySelector(`[data-month-day-pane] [data-day="${d}"]`)?.classList.add("active");
+        });
+      }
+    }
+    if (rec.interval) editForm.querySelector('[data-interval]').value = rec.interval;
+    if (rec.unit) editForm.querySelector('[data-unit]').value = rec.unit;
+    syncStartsOnDependents();
+    editForm.querySelector('[data-action="archive"]')?.classList.remove("hidden");
+    editModal.classList.remove("hidden");
+  }
+  function closeEditModal() { editModal?.classList.add("hidden"); }
+
+  document.querySelector('[data-add-chore]')?.addEventListener("click", () => {
+    // Prefill the new chore's name with whatever's in the search box —
+    // user typed "Hang shelves" then realized it didn't exist and tapped +.
+    const search = document.querySelector("[data-chores-search]");
+    const prefill = search?.value?.trim() || "";
+    openCreateModal({ prefillName: prefill });
+    if (search) search.value = "";
+    applySearch("");
+  });
+
+  // Edit mode toggle (Grid view). Entering edit mode also wires up
+  // SortableJS for drag-to-reorder; leaving it tears the instance down.
+  const editModeBtn = document.querySelector('[data-edit-mode-toggle]');
+  let sortableInstance = null;
+  function enterEditMode() {
+    editModeActive = true;
+    editModeBtn.classList.add("active");
+    root?.classList.add("edit-mode");
+    if (typeof window.Sortable === "undefined") return;
+    const grid = document.querySelector("[data-chores-grid]");
+    if (!grid) return;
+    sortableInstance = window.Sortable.create(grid, {
+      animation: 150,
+      ghostClass: "sortable-ghost",
+      chosenClass: "sortable-chosen",
+      dragClass: "sortable-drag",
+      forceFallback: true,        // memory: required for reliable flex/grid behavior
+      fallbackOnBody: true,       // append the clone to <body> so it tracks the cursor
+      fallbackTolerance: 0,       // start dragging immediately on move
+      // SortableJS default centers the clone under the cursor; explicit
+      // for clarity. With fallbackOnBody and no positional offset, the
+      // ghost stays glued to the pointer.
+      delay: 150,                 // small hold so a tap can still open the edit modal
+      delayOnTouchOnly: true,
+      touchStartThreshold: 4,
+      onEnd: persistOrder,
+    });
+  }
+  function exitEditMode() {
+    editModeActive = false;
+    editModeBtn.classList.remove("active");
+    root?.classList.remove("edit-mode");
+    if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
+  }
+  async function persistOrder() {
+    const ids = Array.from(document.querySelectorAll("[data-chores-grid] [data-chore-id]"))
+      .map(c => parseInt(c.dataset.choreId, 10)).filter(Boolean);
+    try {
+      await api("/chores/order", "PATCH", { ids, tab_id: TAB_ID });
+    } catch (e) {
+      flash("Couldn't save order: " + e.message, "error");
+    }
+  }
+
+  // Apply a server-pushed order_changed payload to the DOM in place,
+  // without reloading. We re-append cards in the new order — the
+  // browser preserves their state (incl. pending counts, ring SVGs,
+  // sortable instance bindings).
+  function applyOrderToDom(ids) {
+    const grid = document.querySelector("[data-chores-grid]") ||
+                 document.querySelector("[data-chores-circles]");
+    if (!grid) return;
+    const byId = new Map();
+    grid.querySelectorAll("[data-chore-id]").forEach(c => byId.set(parseInt(c.dataset.choreId, 10), c));
+    const frag = document.createDocumentFragment();
+    ids.forEach(id => { const card = byId.get(id); if (card) { frag.appendChild(card); byId.delete(id); } });
+    // Append remaining (unsorted) cards at the tail in their existing order.
+    byId.forEach(c => frag.appendChild(c));
+    grid.appendChild(frag);
+  }
+  editModeBtn?.addEventListener("click", () => {
+    if (editModeActive) exitEditMode(); else enterEditMode();
+  });
+  if (editForm) bindPillGroups();
+  editForm?.querySelectorAll('[data-action="cancel"]').forEach(el =>
+    el.addEventListener("click", closeEditModal));
+  editModal?.addEventListener("click", e => { if (e.target === editModal) closeEditModal(); });
+
+  editForm?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const oneOff = isSingleTask();
+    const sharingMode = getField("sharing_mode") || "household";
+    const activeReward = editForm.querySelector('[data-reward-quicks] .pill.active');
+    const rewardVal = activeReward?.dataset.reward;
+    const customInput = editForm.querySelector('.reward-custom');
+    const reward = (rewardVal && rewardVal !== "custom")
+      ? parseInt(rewardVal, 10)
+      : (parseInt(customInput?.value, 10) || 0);
+
+    let recurrence = {};
+    let thresholdSeconds = null;
+    if (!oneOff) {
+      const freq = getField("freq") || "never";
+      thresholdSeconds = parseInt(editForm.querySelector('[data-field="threshold_seconds"]')?.value, 10);
+      thresholdSeconds = thresholdSeconds > 0 ? thresholdSeconds : null;
+
+      if (freq !== "never") {
+        recurrence.freq = freq;
+        if (freq === "weekly") recurrence.by_day = collectWeekdays();
+        if (freq === "monthly") {
+          const mode = editForm.querySelector('[data-month-mode-tabs] .pill.active')?.dataset.monthMode || "day-of-month";
+          if (mode === "nth-weekday") {
+            recurrence.by_set_pos = parseInt(editForm.querySelector('[data-month-set-pos]').value, 10);
+            recurrence.by_day = [editForm.querySelector('[data-month-wday]').value];
+          } else {
+            const chips = Array.from(editForm.querySelectorAll('[data-month-day-pane] .md-chip.active'));
+            const days = chips.map(c => parseInt(c.dataset.day, 10)).filter(n => !Number.isNaN(n));
+            if (days.length) recurrence.by_month_day = days;
+            else if (parseStartsOn()) recurrence.by_month_day = [parseStartsOn().getDate()];
+          }
+        }
+        if (freq === "custom" || freq === "relative") {
+          recurrence.interval = parseInt(editForm.querySelector('[data-interval]')?.value, 10) || 1;
+          recurrence.unit = editForm.querySelector('[data-unit]')?.value || "day";
+        }
+      }
+    }
+
+    const payload = {
+      chore: {
+        name: getField("name"),
+        short_name: getField("short_name"),
+        icon: getField("icon"),
+        reward_pebbles: reward,
+        threshold_seconds: thresholdSeconds,
+        one_off: oneOff,
+        starts_on: getField("starts_on") || null,
+        show_on_daily_view: getField("show_on_daily_view") || "when_scheduled",
+        sharing_mode: sharingMode,
+        assigned_to_user_id: sharingMode === "assigned" ? (getField("assigned_to_user_id") || null) : null,
+        aliases: (getField("aliases_csv") || "").split(",").map(s => s.trim()).filter(Boolean),
+        recurrence: recurrence,
+      }
+    };
+    try {
+      const isUpdate = !!currentChoreId;
+      const url = isUpdate ? `/chores/items/${currentChoreId}` : "/chores/items";
+      const method = isUpdate ? "PATCH" : "POST";
+      const data = await api(url, method, payload);
+      closeEditModal();
+      flash("Saved");
+      if (isUpdate) {
+        // In-place card update — edit mode stays on so the user can
+        // tap another card right away without losing context.
+        applyChoreFormDataToCard(currentChoreId, payload.chore, data);
+      } else {
+        // Brand new chore — easiest to just reload so the new card
+        // shows up in the right ordering position. Add-flow is rarer
+        // than edit-flow, so the reload cost is acceptable.
+        setTimeout(() => location.reload(), 250);
+      }
+    } catch (err) {
+      flash("Save failed: " + err.message, "error");
+    }
+  });
+
+  // Apply user-edited fields back to the card so the visible state
+  // matches the just-saved server state. Avoids a full reload.
+  function applyChoreFormDataToCard(choreId, choreParams, response) {
+    const card = document.querySelector(`[data-chore-id="${choreId}"]`);
+    if (!card) return;
+    if (choreParams.name != null) {
+      card.dataset.choreName = choreParams.name;
+    }
+    if (choreParams.short_name != null) {
+      card.dataset.choreShort = choreParams.short_name;
+      const title = card.querySelector(".title");
+      if (title) title.textContent = choreParams.short_name || choreParams.name;
+    }
+    if (choreParams.icon != null) {
+      card.dataset.choreIcon = choreParams.icon;
+      const iconEl = card.querySelector(".icon");
+      if (iconEl) iconEl.textContent = choreParams.icon || "🧹";
+    }
+    if (choreParams.reward_pebbles != null) {
+      card.dataset.choreReward = choreParams.reward_pebbles;
+      card.querySelectorAll(".circle-reward, .card-reward, .reward").forEach(rewardEl => {
+        rewardEl.textContent = `${choreParams.reward_pebbles}p`;
+      });
+    }
+    if (choreParams.threshold_seconds !== undefined) {
+      card.dataset.choreCooldown = choreParams.threshold_seconds || "0";
+      card.dataset.choreThreshold = choreParams.threshold_seconds || "0";
+    }
+    if (choreParams.sharing_mode) card.dataset.choreSharingMode = choreParams.sharing_mode;
+    if (choreParams.show_on_daily_view) card.dataset.choreShowOnDailyView = choreParams.show_on_daily_view;
+    if (choreParams.assigned_to_user_id !== undefined)
+      card.dataset.choreAssignedToUserId = choreParams.assigned_to_user_id || "";
+    if (choreParams.aliases)
+      card.dataset.choreAliases = (choreParams.aliases || []).join("|");
+    if (choreParams.recurrence != null)
+      card.dataset.choreRecurrence = JSON.stringify(choreParams.recurrence || {});
+    if (choreParams.one_off !== undefined)
+      card.dataset.choreOneOff = String(!!choreParams.one_off);
+  }
+
+  editForm?.querySelector('[data-action="archive"]')?.addEventListener("click", async () => {
+    if (!currentChoreId || !confirm("Archive this chore?")) return;
+    const id = currentChoreId;
+    try {
+      await api(`/chores/items/${id}`, "DELETE");
+      closeEditModal();
+      flash("Archived");
+      // Remove the card in place — edit mode stays on.
+      document.querySelector(`[data-chore-id="${id}"]`)?.remove();
+    } catch (err) {
+      flash("Couldn't archive: " + err.message, "error");
+    }
+  });
+
+  // ---------- goal + withdraw forms (balance page) ----------
+  const goalModal = document.querySelector('[data-goal-modal]');
+  document.querySelector('[data-add-goal]')?.addEventListener("click", () => goalModal?.classList.remove("hidden"));
+  goalModal?.querySelector('[data-action="cancel"]')?.addEventListener("click", () => goalModal.classList.add("hidden"));
+  goalModal?.addEventListener("click", e => { if (e.target === goalModal) goalModal.classList.add("hidden"); });
+  goalModal?.querySelector('[data-goal-form]')?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      await api("/chores/goals", "POST", { chore_goal: Object.fromEntries(fd.entries()) });
+      goalModal.classList.add("hidden");
+      flash("Goal added");
+      setTimeout(() => location.reload(), 250);
+    } catch (err) { flash("Couldn't add goal: " + err.message, "error"); }
+  });
+  document.querySelectorAll('[data-delete-goal]').forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Remove this goal?")) return;
+      try {
+        await api(`/chores/goals/${btn.dataset.deleteGoal}`, "DELETE");
+        btn.closest("[data-goal-id]")?.remove();
+        flash("Goal removed");
+      } catch (err) { flash("Couldn't remove: " + err.message, "error"); }
+    });
+  });
+  document.querySelector("[data-withdraw-form]")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const entries = Object.fromEntries(fd.entries());
+    const amount = parseInt(entries.amount_pebbles, 10);
+    if (Number.isNaN(amount) || amount <= 0) { flash("Enter a positive amount", "warn"); return; }
+    try {
+      const data = await api("/chores/withdrawals", "POST", { chore_withdrawal: entries });
+      flash(`Withdrew ${data.amount_pebbles}p`);
+      setTimeout(() => location.reload(), 250);
+    } catch (err) { flash("Withdraw failed: " + err.message, "error"); }
+  });
+
+  // Ask the SW to background-refresh ALL shell paths so the cache
+  // mirrors the change everyone just got via broadcast — even the
+  // /chores/balance and /chores/history paths the user isn't on right
+  // now. Next time they navigate (online OR offline) they get fresh
+  // markup.
+  function pingSwRefresh() {
+    if (!navigator.onLine) return;
+    navigator.serviceWorker?.controller?.postMessage({ action: "refresh_shells" });
+  }
+
+  // ---------- Monitor sync ----------
+  function subscribeMonitor() {
+    if (typeof window.Monitor === "undefined") { setTimeout(subscribeMonitor, 200); return; }
+    window.Monitor.subscribe("chores", {
+      connected() { setConnDot("online"); flushQueue(); pingSwRefresh(); },
+      disconnected() { setConnDot("offline"); },
+      received(data) {
+        pingSwRefresh();
+
+        const payload = data?.data || {};
+        const actorId = payload.actor_user_id;
+        const actorTab = payload.actor_tab_id;
+
+        // order_changed is per-user (sortation is per-user). Apply it
+        // on every OTHER tab of the same user — skip ourselves by
+        // tab_id comparison, NOT user_id (that would block sibling
+        // tabs).
+        if (payload.reason === "order_changed") {
+          if (actorTab && String(actorTab) === TAB_ID) return;
+          if (Array.isArray(payload.ids)) applyOrderToDom(payload.ids);
+          return;
+        }
+
+        // Skip only when the broadcast is OURS (same tab). Sibling
+        // tabs of the same user are different tab_ids and should
+        // update so a phone + laptop stay in sync.
+        if (actorTab && String(actorTab) === TAB_ID) return;
+
+        const choreId = payload.chore_id;
+        if (choreId) refreshChoreFromServer(choreId);
+        if (!choreId) refreshBalanceOnly();
+      }
+    });
+  }
+
+  async function refreshBalanceOnly() {
+    try {
+      const data = await api("/chores/csrf", "GET");
+      applyBalance(data);
+    } catch (e) {}
+  }
+
+  // Bring tab to foreground → also refresh shell caches in the
+  // background. This covers the case where Monitor missed a beat (e.g.
+  // device was asleep) and the user is now eyeballing the page.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pingSwRefresh();
+  });
+
+  // ---------- service worker registration ----------
+  // Cache-first shell: page boots INSTANTLY from cache (no network round
+  // trip), then a "syncing" badge stays visible while the SW does a
+  // background revalidate. When the SW finishes, it postMessages
+  // "shell_synced" and we clear the badge + warm the chore data so any
+  // card whose state changed gets quietly updated.
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .register("/chores_worker.js", { scope: "/chores", updateViaCache: "none" })
+      .then(reg => reg.update())
+      .catch(e => console.warn("Chores SW register failed:", e));
+
+    let didReload = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (didReload) return;
+      didReload = true;
+      location.reload();
+    });
+
+    navigator.serviceWorker.addEventListener("message", evt => {
+      if (evt.data?.kind === "shell_synced") onShellSynced();
+      if (evt.data?.kind === "shell_sync_failed") setSyncBadge(false, true);
+    });
+  }
+
+  // We start with the sync badge ON — the SW's revalidate is in flight.
+  setSyncBadge(true);
+
+  function setSyncBadge(syncing, failed = false) {
+    const dot = document.querySelector("[data-conn-dot]");
+    if (!dot) return;
+    dot.classList.remove("syncing", "offline");
+    if (syncing) dot.classList.add("syncing");
+    if (failed) dot.classList.add("offline");
+    dot.title = syncing ? "Syncing..." : failed ? "Offline — using cached data" : "Up to date";
+  }
+
+  async function onShellSynced() {
+    setSyncBadge(false);
+    // Only refresh the balance pill on shell_synced — the fresh shell
+    // HTML in the SW cache will already carry up-to-date card data on
+    // the NEXT navigation. Firing one GET per card here (70+ at once)
+    // was the main cause of the slow page load + query spam.
+    refreshBalanceOnly();
+  }
+
+  bindCardClicks();
+  startRingTicker();
+  startDayWatcher();
+  subscribeMonitor();
+  flushQueue();
+  // Immediate balance refresh — cached HTML often shows a stale value
+  // from the SW shell. Don't wait for shell_synced, kick it now too.
+  refreshBalanceOnly();
+</script>

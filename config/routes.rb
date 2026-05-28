@@ -91,6 +91,31 @@ Rails.application.routes.draw do
 
   resource :money_buckets, path: "/bucket"
 
+  # Chores / Pebbles gamification.
+  #   /chores         — list-builder style grid (all chores, search, tap to complete)
+  #   /chores/today   — checkbox/circle style (today's scheduled chores + carryovers)
+  #   /chores/balance — balance, goals, multipliers, achievements, withdrawals
+  get  "/chores"         => "chores#index",   as: :chores
+  get  "/chores/today"   => "chores#today",   as: :chores_today
+  get  "/chores/balance" => "chores#balance", as: :chores_balance
+  get  "/chores/history" => "chores#history", as: :chores_history
+  get  "/chores/csrf"    => "chores#csrf",    as: :chores_csrf
+  scope path: "chores", as: :chore_routes do
+    get  "/new"          => "chores#new",            as: :new
+    get  "/items/:id/edit" => "chores#edit",         as: :edit
+    post "/items"        => "chores#create",         as: :items
+    patch  "/items/:id"  => "chores#update",         as: :item
+    put    "/items/:id"  => "chores#update"
+    delete "/items/:id"  => "chores#destroy"
+    post   "/items/:chore_id/completion" => "chore_completions#create", as: :complete_item
+    delete "/items/:chore_id/completion" => "chore_completions#destroy"
+    get    "/items/:id/state"            => "chores#state",              as: :item_state
+    patch  "/order"                      => "chores#reorder",            as: :reorder
+    resources :completions, controller: :chore_completions, only: [:update, :destroy]
+    resources :goals,       controller: :chore_goals,       only: [:create, :update, :destroy], as: :goals
+    resources :withdrawals, controller: :chore_withdrawals, only: [:create, :destroy], as: :withdrawals
+  end
+
   post "webhooks/tesla_telemetry" => "webhooks#tesla_telemetry"
   post "webhooks/tesla_local" => "webhooks#tesla_local"
   post "jil/trigger/:trigger" => "webhooks#jil"
