@@ -198,7 +198,13 @@ class GoogleCalendar::Sync
   def flush_deferred_cancellations
     return if @deferred_cancellations.blank?
 
-    @deferred_cancellations.each { |event| handle_cancellation(event) }
+    @deferred_cancellations.each do |event|
+      handle_cancellation(event)
+    rescue ::StandardError => e
+      # Same isolation principle as apply_event: one bad cancellation
+      # shouldn't sink the rest of the flush, or the synced_at update.
+      report_malformed_event!(event, "cancellation #{e.class}: #{e.message}")
+    end
     @deferred_cancellations = []
   end
 
@@ -224,12 +230,13 @@ class GoogleCalendar::Sync
       end
     )
     @applied_count += 1 if persisted
-  rescue ::ActiveRecord::RecordInvalid, ::ActiveRecord::StatementInvalid => e
-    # One bad event (Google sent a zero-duration row, a unique-index
-    # collision, a missing required field, etc.) must NOT wedge the whole
-    # calendar's sync. Log + Slack + carry on so the rest of the events
-    # still import. Without this, a single problematic row in a 500-event
-    # calendar would leave `synced_at` nil forever.
+  rescue ::StandardError => e
+    # One bad event must NEVER wedge the whole calendar's sync. Any
+    # exception class — RecordInvalid, StatementInvalid, NoMethodError
+    # from a malformed payload, ArgumentError from a parse, anything —
+    # gets logged + Slack-notified and the loop continues. The
+    # alternative (a narrow rescue) means a 500-event calendar can be
+    # held hostage by one weird row forever; we just lived that.
     report_malformed_event!(event, "#{e.class}: #{e.message}")
   end
 
