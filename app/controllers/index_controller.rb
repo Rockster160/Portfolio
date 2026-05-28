@@ -9,8 +9,10 @@ class IndexController < ApplicationController
     from_user = User.find_by(phone: squish_number)
 
     if from_user.present?
-      ::Jil.trigger(from_user, :sms, { from: from_number, to: params["To"], body: body })
       return head :ok if opening_garage?(from_user, body)
+
+      tasks = ::Jil.trigger(from_user, :sms, { from: from_number, to: params["To"], body: body })
+      return head :ok if tasks.any?(&:stop_propagation?)
 
       # TODO: If data has anything, interpret that and include with sms
       response, data = Jarvis.command(from_user, body)
