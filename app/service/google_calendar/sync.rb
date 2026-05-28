@@ -471,7 +471,13 @@ class GoogleCalendar::Sync
   # All-day: parse the date and interpret midnight IN THE USER'S TZ so
   # `start_at.in_time_zone(user.timezone).to_date` always returns Google's
   # date — regardless of where the calendar / worker / user live.
-  # Timed: RFC3339 string carries its own offset; Time.zone.parse is faithful.
+  # Timed: dateTime MAY or may not include a UTC offset (per RFC3339 +
+  # Google's API: "A time zone offset is required unless a time zone is
+  # explicitly specified in timeZone."). Parse via the event's timeZone
+  # field when the offset is absent, falling back to the agenda's tz,
+  # then the user's. Bare `Time.zone.parse` would treat a no-offset
+  # value as UTC under a Sidekiq worker (Time.zone defaults to UTC),
+  # shifting 3pm Denver into 3pm UTC → 9am Denver on render.
   def parse_event_start(event)
     if all_day_event?(event)
       d = parse_event_date(event.dig(:start, :date))
@@ -479,7 +485,7 @@ class GoogleCalendar::Sync
 
       user_timezone.local(d.year, d.month, d.day)
     else
-      parse_time(event.dig(:start, :dateTime))
+      parse_event_dateTime(event[:start])
     end
   end
 
@@ -490,8 +496,22 @@ class GoogleCalendar::Sync
 
       user_timezone.local(d.year, d.month, d.day)
     else
-      parse_time(event.dig(:end, :dateTime))
+      parse_event_dateTime(event[:end])
     end
+  end
+
+  def parse_event_dateTime(time_block)
+    return nil if time_block.blank?
+
+    raw = time_block[:dateTime].to_s
+    return nil if raw.blank?
+
+    zone = ::ActiveSupport::TimeZone[time_block[:timeZone].to_s] ||
+           ::ActiveSupport::TimeZone[@agenda.timezone.to_s] ||
+           user_timezone
+    zone.parse(raw)
+  rescue ::ArgumentError
+    nil
   end
 
   # Guarantee end_at is strictly after start_at — otherwise the

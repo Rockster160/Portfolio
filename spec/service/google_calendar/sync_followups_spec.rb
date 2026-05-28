@@ -32,6 +32,52 @@ RSpec.describe GoogleCalendar::Sync do
     { items: items, nextSyncToken: sync_token, nextPageToken: next_page }.compact
   end
 
+  describe "timed event with no offset in dateTime + explicit timeZone field" do
+    it "interprets the dateTime in the event's timeZone field (NOT as UTC)" do
+      # Google may omit the UTC offset from `dateTime` when an explicit
+      # `timeZone` is set. Bare Time.zone.parse in a Sidekiq worker
+      # (Time.zone = UTC) would mis-interpret this as UTC → 9am Denver
+      # display for an intended 3pm Denver event.
+      event = {
+        id:      "evt-tz-explicit",
+        status:  "confirmed",
+        summary: "3pm meeting",
+        start:   { dateTime: "2026-05-28T15:00:00", timeZone: "America/Denver" },
+        end:     { dateTime: "2026-05-28T15:30:00", timeZone: "America/Denver" },
+        etag:    %("tz1"),
+        updated: "2026-05-22T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([event]))
+
+      described_class.new(agenda).run!
+      item = agenda.agenda_items.find_by(external_uid: "evt-tz-explicit")
+      expect(item).to be_present
+      # 15:00 Denver MDT = 21:00 UTC, and the test user is in
+      # America/Los_Angeles (UTC-7 in May), so the rendered hour is 14:00.
+      # The crucial assertion: it's the SAME instant as "3pm Denver",
+      # not 9am Denver (which is what bare Time.zone.parse would yield).
+      expect(item.start_at.in_time_zone("America/Denver").strftime("%H:%M")).to eq("15:00")
+      expect(item.end_at.in_time_zone("America/Denver").strftime("%H:%M")).to eq("15:30")
+    end
+
+    it "still honors an explicit offset in dateTime when one is present" do
+      event = {
+        id:      "evt-tz-offset",
+        status:  "confirmed",
+        summary: "3pm meeting w/ offset",
+        start:   { dateTime: "2026-05-28T15:00:00-06:00" },
+        end:     { dateTime: "2026-05-28T15:30:00-06:00" },
+        etag:    %("tz2"),
+        updated: "2026-05-22T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([event]))
+
+      described_class.new(agenda).run!
+      item = agenda.agenda_items.find_by(external_uid: "evt-tz-offset")
+      expect(item.start_at.in_time_zone("America/Denver").strftime("%H:%M")).to eq("15:00")
+    end
+  end
+
   describe "all-day TZ interpretation" do
     it "stores start_at as midnight in the user's timezone (PST)" do
       event = {
