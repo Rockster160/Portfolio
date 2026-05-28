@@ -117,17 +117,20 @@ class GoogleCalendar::Sync
   end
 
   # Lazily populate the calendar's timezone the first time we sync after a
-  # connect. Used to translate "all-day on May 28" into a concrete instant.
-  # Network / API failure logs + carries on (tz fetch is best-effort —
-  # all-day handling falls back to user.timezone). Programmer errors
-  # propagate so they don't get masked.
+  # connect. The column itself is optional — we fall back to the user's
+  # timezone for all-day parsing whether or not it's set. This must NEVER
+  # raise out of the sync run: if the migration that adds the column
+  # hasn't been applied, if Google rejects the get_calendar call, if
+  # anything else goes wrong — log + carry on so the actual events sync
+  # is unaffected.
   def ensure_timezone!
+    return unless @agenda.has_attribute?(:timezone)
     return if @agenda.timezone.present?
 
     response = @api.get_calendar(@agenda.external_id)
     tz = response.is_a?(::Hash) ? response[:timeZone].to_s.presence : nil
     @agenda.update!(timezone: tz) if tz
-  rescue ::RestClient::Exception => e
+  rescue ::StandardError => e
     ::Rails.logger.warn("[GoogleCalendar::Sync] timezone fetch failed agenda=#{@agenda.id} #{e.class}: #{e.message}")
   end
 
@@ -221,6 +224,13 @@ class GoogleCalendar::Sync
       end
     )
     @applied_count += 1 if persisted
+  rescue ::ActiveRecord::RecordInvalid, ::ActiveRecord::StatementInvalid => e
+    # One bad event (Google sent a zero-duration row, a unique-index
+    # collision, a missing required field, etc.) must NOT wedge the whole
+    # calendar's sync. Log + Slack + carry on so the rest of the events
+    # still import. Without this, a single problematic row in a 500-event
+    # calendar would leave `synced_at` nil forever.
+    report_malformed_event!(event, "#{e.class}: #{e.message}")
   end
 
   # Google sets `self: true` on the attendee whose calendar this is. If
@@ -326,12 +336,8 @@ class GoogleCalendar::Sync
     return if fast_skip?(item, event)
 
     start_at = parse_event_start(event)
-    end_at = parse_event_end(event)
+    end_at = coerce_end_at(start_at, parse_event_end(event), all_day: all_day_event?(event))
     all_day = all_day_event?(event)
-    # Google Calendar items are always events. If the inbound payload is
-    # missing `end` (rare — point-in-time events), default to a 30-min
-    # span so the AgendaItem :end_at_required_for_event validation passes.
-    end_at ||= (start_at + 30.minutes if start_at)
     attrs = {
       name:                event_summary(event),
       kind:                :event,
@@ -366,7 +372,7 @@ class GoogleCalendar::Sync
     return if fast_skip?(item, event)
 
     start_at = parse_event_start(event)
-    end_at = parse_event_end(event)
+    end_at = coerce_end_at(start_at, parse_event_end(event), all_day: all_day_event?(event))
     all_day = all_day_event?(event)
     original_start = (
       if all_day_event?(event)
@@ -472,6 +478,21 @@ class GoogleCalendar::Sync
     else
       parse_time(event.dig(:end, :dateTime))
     end
+  end
+
+  # Guarantee end_at is strictly after start_at — otherwise the
+  # AgendaItem validation `end_at_after_start_at` raises and the whole
+  # sync wedges on the first bad event. Google legitimately sends:
+  #   * `end` missing entirely (point-in-time events)
+  #   * `end.dateTime` equal to `start.dateTime` (zero-duration)
+  #   * `end.date` equal to `start.date` for all-day (zero-day spans)
+  # In every degenerate case we pad: 1 day for all-day, 30 min for timed.
+  def coerce_end_at(start_at, end_at, all_day:)
+    return nil if start_at.nil?
+    return end_at if end_at.present? && end_at > start_at
+
+    pad = all_day ? 1.day : 30.minutes
+    start_at + pad
   end
 
   def event_duration_minutes(event, all_day:)

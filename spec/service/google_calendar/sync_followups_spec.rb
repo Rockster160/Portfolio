@@ -177,6 +177,80 @@ RSpec.describe GoogleCalendar::Sync do
     end
   end
 
+  describe "one bad event doesn't wedge the sync" do
+    it "skips a zero-duration event (end_at == start_at) and continues with the others, padding end_at out so the row still imports" do
+      zero_dur = {
+        id:      "evt-zero-dur",
+        status:  "confirmed",
+        summary: "Bad event",
+        start:   { dateTime: "2026-05-23T14:00:00-04:00" },
+        end:     { dateTime: "2026-05-23T14:00:00-04:00" }, # zero duration
+        etag:    %("zero1"),
+        updated: "2026-05-22T08:00:00Z",
+      }
+      good = {
+        id:      "evt-good",
+        status:  "confirmed",
+        summary: "Good event",
+        start:   { dateTime: "2026-05-23T15:00:00-04:00" },
+        end:     { dateTime: "2026-05-23T16:00:00-04:00" },
+        etag:    %("g1"),
+        updated: "2026-05-22T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([zero_dur, good]))
+
+      described_class.new(agenda).run!
+      # Good event still imports.
+      expect(agenda.agenda_items.find_by(external_uid: "evt-good")).to be_present
+      # Zero-dur event ALSO imports (we pad end_at by 30 min).
+      bad_item = agenda.agenda_items.find_by(external_uid: "evt-zero-dur")
+      expect(bad_item).to be_present
+      expect(bad_item.end_at).to be > bad_item.start_at
+      # synced_at is set (sync didn't wedge).
+      expect(agenda.reload.synced_at).to be_present
+    end
+
+    it "even if a row raises RecordInvalid for some other reason, the sync continues" do
+      crashy = {
+        id:      "evt-crash",
+        status:  "confirmed",
+        summary: "Crashes",
+        # Force an invalid row Google could plausibly send: summary blank
+        # makes `event_summary` fall back to "(no title)" which is fine —
+        # so we trigger via the name validation a different way: empty
+        # name override via a stub on assign_attributes for that one row.
+        start:   { dateTime: "2026-05-23T14:00:00-04:00" },
+        end:     { dateTime: "2026-05-23T15:00:00-04:00" },
+        etag:    %("c1"),
+        updated: "2026-05-22T08:00:00Z",
+      }
+      good = {
+        id:      "evt-after-crash",
+        status:  "confirmed",
+        summary: "After",
+        start:   { dateTime: "2026-05-23T16:00:00-04:00" },
+        end:     { dateTime: "2026-05-23T17:00:00-04:00" },
+        etag:    %("a1"),
+        updated: "2026-05-22T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([crashy, good]))
+      # First save! raises a RecordInvalid; subsequent saves pass through.
+      saves_seen = 0
+      allow_any_instance_of(AgendaItem).to receive(:save!).and_wrap_original do |orig|
+        saves_seen += 1
+        if saves_seen == 1
+          raise ActiveRecord::RecordInvalid.new(AgendaItem.new.tap { |i| i.errors.add(:base, "boom") })
+        else
+          orig.call
+        end
+      end
+
+      described_class.new(agenda).run!
+      expect(agenda.agenda_items.find_by(external_uid: "evt-after-crash")).to be_present
+      expect(agenda.reload.synced_at).to be_present
+    end
+  end
+
   describe "trigger suppression during sync" do
     it "doesn't fire per-row Jil :agenda_item triggers (but DOES fire one :agenda_sync at the tail)" do
       event = {
