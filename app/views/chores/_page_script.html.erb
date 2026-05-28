@@ -457,9 +457,20 @@
       // will arrive shortly with a server_ts >= our click and apply.
       return;
     }
-    // If our chore was archived (e.g. one-off archived after daily reset
-    // OR reassigned to another user), keep the card on-screen for the
-    // rest of today (frozen layout), but mark as locked.
+    // Full HTML swap when the server includes a freshly rendered card —
+    // single source of truth so renames / icon swaps / cooldown changes
+    // propagate identically to the initial render. Completion endpoints
+    // don't return html (count-only payload), so we fall through to the
+    // targeted updates below.
+    if (data.html) {
+      replaceCardHTML(id, data.html);
+      if (data.archived) {
+        const fresh = document.querySelector(`[data-chore-id="${id}"]`);
+        if (fresh) fresh.classList.add("archived");
+      }
+      return;
+    }
+
     if (data.archived) card.classList.add("archived");
 
     bumpCount(card, data.completions_today);
@@ -500,7 +511,12 @@
     // reconcile — no need to fire a redundant GET.
     if (inFlight.has(String(id))) return;
     try {
-      const data = await api(`/chores/items/${id}/state`, "GET");
+      // Pass `view` so the server renders the right card partial
+      // (circle for Today, grid card everywhere else). The HTML in
+      // the response is the single source of truth for the card's
+      // visible state — name, icon, reward, cooldown — so renames
+      // broadcast from another tab end up reflected here.
+      const data = await api(`/chores/items/${id}/state?view=${MODE}`, "GET");
       applyServerState(id, data);
       applyBalance(data);
     } catch (e) {
@@ -1236,6 +1252,13 @@
         // broadcast refresh.
         insertNewCardHTML(data.html, data.id);
       }
+      // Refresh the SW's cached shells for the OTHER chores pages
+      // (Today, Balance, History) so navigating to them right after
+      // the save shows the new name / icon / reward instead of the
+      // pre-edit cached HTML. Broadcast handler skips own-tab so we
+      // wouldn't otherwise hit this code path on the local tab.
+      setSyncBadge(true);
+      pingSwRefresh();
     } catch (err) {
       flash("Save failed: " + err.message, "error");
     }

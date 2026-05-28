@@ -131,6 +131,20 @@ class ChoresController < ApplicationController
       .where(chore_id: chore.id, user_id: user_ids, day_key: day).count
     today_earnings = current_user.chore_completions.where(day_key: day).sum(:paid_pebbles)
 
+    # `view` lets the JS ask for the right card partial to splice in
+    # (Today renders a circle, everywhere else renders a grid card).
+    # If the requester didn't specify, we default to grid so the JSON is
+    # still useful for non-card consumers.
+    last_completion_for_card = (last && last.user_id == current_user.id) ? last : nil
+    actor_label = (chore.share_household? && actor && last && last.user_id != current_user.id) ? actor : nil
+    card_html = rendered_card_html(
+      chore,
+      params[:view],
+      done_count: completions_today,
+      last_completion: last_completion_for_card,
+      actor_label: actor_label,
+    )
+
     render json: {
       chore_id: chore.id,
       balance: current_user.chore_balance,
@@ -139,6 +153,7 @@ class ChoresController < ApplicationController
       last_completed_at: last&.completed_at&.iso8601(3),
       actor_username: actor,
       archived: chore.archived?,
+      html: card_html,
       server_ts: Time.current.iso8601(3),
     }
   end
@@ -397,15 +412,13 @@ class ChoresController < ApplicationController
 
   # Render the right card partial for the page the user is currently on
   # (the JS submits the active mode as `view` so the server doesn't have
-  # to guess). Today gets the circle; everything else gets the grid card.
-  # Fresh-state defaults: zero completions, no last completion, no hot
-  # pick, no actor — exactly what a brand-new chore looks like. The same
-  # call serves "update" because the only mutable fields the card cares
-  # about come from `chore` itself.
-  def rendered_card_html(chore, view)
+  # to guess). Today gets the circle; everywhere else gets the grid card.
+  # Optional locals let `state` pass through real done_count / last
+  # completion / actor; create+update default them to fresh-state.
+  def rendered_card_html(chore, view, done_count: 0, last_completion: nil, actor_label: nil, hot: nil)
     partial = view.to_s == "today" ? "circle_card" : "grid_card"
-    locals = { chore: chore, done_count: 0, last_completion: nil, hot: nil }
-    locals[:actor_label] = nil if partial == "circle_card"
+    locals = { chore: chore, done_count: done_count, last_completion: last_completion, hot: hot }
+    locals[:actor_label] = actor_label if partial == "circle_card"
     render_to_string(partial: partial, locals: locals, formats: [:html])
   end
 
