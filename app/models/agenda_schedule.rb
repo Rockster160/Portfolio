@@ -26,6 +26,14 @@
 class AgendaSchedule < ApplicationRecord
   include Jilable
 
+  # The `start_time` column is a wall-clock time-of-day, NOT a UTC
+  # instant. Opt out of AR's `time_zone_aware_attributes` for it —
+  # otherwise AR converts "15:00" → UTC using the current Time.zone
+  # (with summer DST applied for write) and back via Jan 1, 2000 (always
+  # MST for Denver, no DST) → 1-hour shift on every read during DST.
+  # Whatever the writer puts in is what the reader gets out, period.
+  self.skip_time_zone_conversion_for_attributes = [:start_time]
+
   KINDS = [:task, :event, :trigger].freeze
   FREQUENCIES = [:daily, :weekdays, :weekly, :monthly, :yearly, :custom].freeze
   WEEKDAY_KEYS = [:sun, :mon, :tue, :wed, :thu, :fri, :sat].freeze
