@@ -60,7 +60,15 @@ class Api
   end
 
   def self.request(url:, **opts)
-    return get(url, opts.delete(:params), opts.delete(:headers), opts) if opts[:method] == :get
+    if opts[:method] == :get
+      # Callers (Oauth::Base#request in particular) pack query params
+      # under :payload (a name borrowed from non-GET requests). Honor
+      # both keys so GETs actually carry query strings — otherwise we
+      # blow past timeMin/syncToken/pageToken and Google enters an
+      # infinite-pagination loop on the same first page forever.
+      query_params = opts.delete(:params) || opts.delete(:payload)
+      return get(url, query_params, opts.delete(:headers), opts)
+    end
 
     return_full_response = opts.delete(:return_full_response)
     method = opts[:method] || :get

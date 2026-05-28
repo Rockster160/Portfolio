@@ -42,9 +42,16 @@ class GoogleCalendar::Sync
   # rows.
   def run!(allow_rebootstrap: true, reason: :manual)
     lock_key = "gcal_sync:agenda:#{@agenda.id}"
-    Agenda.with_advisory_lock(lock_key, 30) {
+    # Use `with_advisory_lock_result` so we can tell "block returned
+    # falsy" apart from "we never got the lock." The bare
+    # `with_advisory_lock` returns false in both cases, which silently
+    # hides "another sync was already running for 30+ seconds."
+    result = Agenda.with_advisory_lock_result(lock_key, 30) {
       run_synced(allow_rebootstrap: allow_rebootstrap, reason: reason)
     }
+    return :lock_timeout unless result.lock_was_acquired?
+
+    result.result
   end
 
   private
