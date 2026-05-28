@@ -42,7 +42,8 @@ class IndexController < ApplicationController
 
     direction = :open if body.match?(/\b(open)\b/)
     direction = :close if body.match?(/\b(close|shut)\b/)
-    direction ||= :toggle
+    direction ||= :toggle if body.match?(/\b(toggle|garage)\b/)
+    return false unless direction
 
     Jarvis.command(User.me, "#{direction} the garage")
     Jarvis.log("#{user.username} SMS: '#{body}' | #{direction} the garage")
