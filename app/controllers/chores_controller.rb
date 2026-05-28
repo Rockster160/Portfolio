@@ -207,7 +207,7 @@ class ChoresController < ApplicationController
       ChoreBroadcaster.broadcast_changes!(current_user, @chore)
       respond_to do |format|
         format.html { redirect_to action: (@chore.one_off ? :today : :index) }
-        format.json { render json: serialize(@chore), status: :created }
+        format.json { render json: serialize(@chore).merge(html: rendered_card_html(@chore, params[:view])), status: :created }
       end
     else
       respond_to do |format|
@@ -222,7 +222,7 @@ class ChoresController < ApplicationController
       ChoreBroadcaster.broadcast_changes!(current_user, @chore)
       respond_to do |format|
         format.html { redirect_to chores_path }
-        format.json { render json: serialize(@chore) }
+        format.json { render json: serialize(@chore).merge(html: rendered_card_html(@chore, params[:view])) }
       end
     else
       respond_to do |format|
@@ -272,26 +272,17 @@ class ChoresController < ApplicationController
     scope
   end
 
-  # Every user the current user could plausibly assign a chore to:
-  #   * themselves (always)
-  #   * users they've shared their chores with (chore_shares_as_owner)
-  #   * users who've shared chores with them (chore_owner_user_ids)
-  # Returns User records ordered by username for the <select>.
+  # Every user in the current user's household — themselves + everyone
+  # on the other side of any ChoreShare row (symmetric). Returns User
+  # records ordered by username for the <select>.
   def assignable_users
     return @assignable_users if defined?(@assignable_users)
 
-    ids = [current_user.id]
-    ids += current_user.chore_shares_as_owner.pluck(:shared_with_user_id)
-    ids += current_user.chore_owner_user_ids
-    @assignable_users = User.where(id: ids.uniq).order(:username).to_a
+    @assignable_users = User.where(id: current_user.chore_owner_user_ids).order(:username).to_a
   end
 
   def household_user_ids_for_share_group
-    return @household_user_ids if defined?(@household_user_ids)
-
-    owners = current_user.chore_owner_user_ids
-    shared = ChoreShare.where(user_id: owners).pluck(:shared_with_user_id)
-    @household_user_ids = (owners + shared).uniq
+    @household_user_ids ||= current_user.chore_owner_user_ids
   end
 
   def bulk_last_completion(chore_ids, user_ids)
@@ -402,6 +393,20 @@ class ChoresController < ApplicationController
     end
 
     permitted
+  end
+
+  # Render the right card partial for the page the user is currently on
+  # (the JS submits the active mode as `view` so the server doesn't have
+  # to guess). Today gets the circle; everything else gets the grid card.
+  # Fresh-state defaults: zero completions, no last completion, no hot
+  # pick, no actor — exactly what a brand-new chore looks like. The same
+  # call serves "update" because the only mutable fields the card cares
+  # about come from `chore` itself.
+  def rendered_card_html(chore, view)
+    partial = view.to_s == "today" ? "circle_card" : "grid_card"
+    locals = { chore: chore, done_count: 0, last_completion: nil, hot: nil }
+    locals[:actor_label] = nil if partial == "circle_card"
+    render_to_string(partial: partial, locals: locals, formats: [:html])
   end
 
   def serialize(chore)

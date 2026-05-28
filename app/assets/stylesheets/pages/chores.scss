@@ -76,9 +76,16 @@
   .chores-nav {
     display: flex;
     gap: 4px;
-    flex-wrap: wrap;
+    // Tabs MUST stay on one row. When there's not enough horizontal
+    // room to fit status + balance + nav inline, the balance drops to
+    // its own row via the media query below — tabs never wrap.
+    flex-wrap: nowrap;
+    white-space: nowrap;
   }
-  @media (max-width: 600px) {
+  // Lifted from 600px to 820px so the 4-tab nav (~340px) + balance
+  // pill + status dot can't get squeezed into a stacking situation
+  // when the viewport drops below tablet width.
+  @media (max-width: 820px) {
     .chores-header {
       grid-template-columns: 1fr 1fr;
       grid-template-rows: auto auto;
@@ -592,35 +599,41 @@
     background: var(--chores-hot);
   }
 
-  // Connection / pending indicators
-  .chores-status {
+  // Connection / pending indicators — live in `.chores-header-left`
+  // (top-left of every chores page), aligned with the balance + nav row.
+  .chores-status,
+  .chores-header-left {
     display: inline-flex;
     gap: 6px;
     align-items: center;
     font-size: 11px;
     color: var(--chores-muted);
   }
-  .chores-status .conn-dot {
-    width: 8px;
-    height: 8px;
+  .conn-dot {
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: var(--chores-done);
+    display: inline-block;
+    flex-shrink: 0;
   }
-  .chores-status .conn-dot.offline {
+  .conn-dot.offline {
     background: #DC2626;
   }
-  .chores-status .conn-dot.syncing {
+  .conn-dot.syncing {
     background: #FBBF24;
     animation: chore-pulse 1s infinite;
   }
-  .chores-status .pending-badge {
+  .pending-badge {
     background: #FBBF24;
     color: #00102B;
     font-weight: 700;
-    padding: 2px 6px;
+    font-size: 11px;
+    padding: 2px 8px;
     border-radius: 999px;
+    display: inline-block;
   }
-  .chores-status .pending-badge.blocked {
+  .pending-badge.blocked {
     background: #DC2626;
     color: #FFF;
   }

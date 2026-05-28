@@ -82,13 +82,31 @@ class Chore < ApplicationRecord
 
   # For shared chores (household/personal/assigned), the "effective"
   # user the cooldown + last-completion checks should look at.
-  #   :household — every user in the share group (returns the owner's
-  #                share group), so a single bulk query covers all
+  #   :household — every user in the creator's household closure (both
+  #                directions of ChoreShare) so a single bulk query
+  #                covers everyone who can see this chore
   #   :personal/:assigned — just the viewing user
   def cooldown_scope_user_ids(viewer)
     return [viewer.id] unless share_household?
 
-    [created_by_user_id] + ChoreShare.where(user_id: created_by_user_id).pluck(:shared_with_user_id)
+    self.class.household_user_ids_for(created_by_user_id)
+  end
+
+  # Transitive household closure: every user reachable from `user_id`
+  # by walking ChoreShare rows in either direction. A↔B + B↔C means A,
+  # B, C are all one household — a user only ever belongs to one. BFS
+  # by frontier so we issue one query per hop (typically 1-2 total).
+  def self.household_user_ids_for(user_id)
+    visited = Set.new
+    frontier = Set[user_id]
+    until frontier.empty?
+      visited.merge(frontier)
+      pairs = ChoreShare
+        .where("user_id IN (:f) OR shared_with_user_id IN (:f)", f: frontier.to_a)
+        .pluck(:user_id, :shared_with_user_id)
+      frontier = Set.new(pairs.flatten) - visited
+    end
+    visited.to_a
   end
 
   scope :active, -> { where(archived_at: nil) }

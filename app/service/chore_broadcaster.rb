@@ -5,22 +5,24 @@ class ChoreBroadcaster
   def self.broadcast_changes!(user, chore = nil, **opts)
     return if user.blank?
 
-    recipients = [user]
-    recipients.concat(ChoreShare.where(user_id: user.id).includes(:shared_with_user).map(&:shared_with_user))
+    # Default fanout: actor + everyone in their household (symmetric on
+    # ChoreShare, so one row reaches both sides).
+    recipient_ids = Chore.household_user_ids_for(user.id)
+
     if chore
       # `:assigned` chores: only the assignee + creator should hear about
       # changes — nobody else in the share group can see the chore.
       if chore.respond_to?(:share_assigned?) && chore.share_assigned?
-        recipients = [User.find_by(id: chore.assigned_to_user_id)].compact
-        recipients << User.find_by(id: chore.created_by_user_id) if chore.created_by_user_id != chore.assigned_to_user_id
+        recipient_ids = [chore.assigned_to_user_id, chore.created_by_user_id].compact.uniq
       else
-        owner_user = User.find_by(id: chore.created_by_user_id)
-        recipients << owner_user if owner_user
-        ChoreShare.where(user_id: chore.created_by_user_id).each do |share|
-          recipients << share.shared_with_user
-        end
+        # Anyone in the chore-creator's household can see this chore, so
+        # signal all of them (not just the actor's household — the creator
+        # may belong to a different pair than the actor).
+        recipient_ids = Chore.household_user_ids_for(chore.created_by_user_id)
       end
     end
+
+    recipients = User.where(id: recipient_ids).to_a
 
     payload = {
       id: :chores,
@@ -34,7 +36,7 @@ class ChoreBroadcaster
       },
     }
 
-    recipients.compact.uniq.each do |r|
+    recipients.each do |r|
       MonitorChannel.broadcast_to(r, payload)
     end
   end

@@ -1,0 +1,42 @@
+<%# Locals: chore (Chore), done_count (Integer), last_completion (ChoreCompletion?), hot (Integer?), actor_label (String?). %>
+<%
+  hot ||= nil
+  done_count ||= 0
+  last_completion ||= nil
+  actor_label ||= nil
+  cooldown = chore.threshold_seconds.to_i
+%>
+<div class="chore-circle <%= "done" if done_count > 0 %> <%= "hot" if hot %>"
+     data-chore-id="<%= chore.id %>"
+     data-chore-name="<%= chore.name %>"
+     data-chore-short="<%= chore.display_short_name %>"
+     data-chore-aliases="<%= chore.aliases_array.join("|") %>"
+     data-chore-reward="<%= chore.reward_pebbles %>"
+     data-chore-icon="<%= chore.icon %>"
+     data-chore-cooldown="<%= cooldown %>"
+     data-chore-sharing-mode="<%= chore.sharing_mode %>"
+     data-chore-assigned-to-user-id="<%= chore.assigned_to_user_id %>"
+     data-chore-show-on-daily-view="<%= chore.show_on_daily_view %>"
+     data-chore-recurrence='<%= chore.recurrence.to_json.html_safe %>'
+     data-chore-starts-on="<%= chore.starts_on %>"
+     data-last-completed-at="<%= last_completion&.completed_at&.iso8601 %>"
+     data-done-count="<%= done_count %>"
+     data-chore-one-off="<%= chore.one_off %>">
+  <% if hot %><div class="hot-badge"><%= hot %>×</div><% end %>
+  <div class="circle-inner">
+    <% if cooldown > 0 %>
+      <svg class="circle-ring" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="ring-bg" cx="50" cy="50" r="46" />
+        <circle class="ring-progress" cx="50" cy="50" r="46" data-ring-progress />
+      </svg>
+      <span class="circle-countdown" data-circle-countdown></span>
+    <% end %>
+    <div class="icon" data-icon><%= chore.icon.presence || (chore.one_off ? "📝" : "🧹") %></div>
+    <span class="circle-reward"><%= chore.reward_label %></span>
+    <div class="count-slot" data-count-slot>
+      <% if done_count > 1 %><span class="count-badge" data-count-badge>×<%= done_count %></span><% end %>
+    </div>
+  </div>
+  <div class="title"><%= chore.display_short_name %></div>
+  <% if actor_label %><div class="reward"><span class="actor-tag">by <%= actor_label %></span></div><% end %>
+</div>

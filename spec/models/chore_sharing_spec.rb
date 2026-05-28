@@ -81,4 +81,40 @@ RSpec.describe "Chore sharing modes" do
       expect(bob.reload.chore_balance).to eq(5)
     end
   end
+
+  describe "symmetric household — one ChoreShare row covers both directions" do
+    it "chores bob creates are visible to alice via the same single share row" do
+      bob_chore = create(:chore, created_by_user: bob, sharing_mode: :personal)
+      expect(alice.accessible_chores).to include(bob_chore)
+      expect(bob.accessible_chores).to include(bob_chore)
+      # carl has no share row — still invisible
+      expect(carl.accessible_chores).not_to include(bob_chore)
+    end
+
+    it "household cooldown applies regardless of which side created the chore" do
+      bob_chore = create(:chore, created_by_user: bob,
+        sharing_mode: :household, reward_pebbles: 5, threshold_seconds: 6 * 3600)
+      base = Time.current
+      travel_to(base) { ChoreCompleter.new(bob_chore, alice).call }
+      travel_to(base + 1.hour) {
+        result = ChoreCompleter.new(bob_chore, bob).call
+        expect(result).to be_skipped
+      }
+    end
+
+    it "Chore.household_user_ids_for is symmetric" do
+      expect(Chore.household_user_ids_for(alice.id)).to contain_exactly(alice.id, bob.id)
+      expect(Chore.household_user_ids_for(bob.id)).to contain_exactly(alice.id, bob.id)
+      expect(Chore.household_user_ids_for(carl.id)).to contain_exactly(carl.id)
+    end
+
+    it "is transitive — adding carl via bob folds carl into the household" do
+      create(:chore_share, user: bob, shared_with_user: carl)
+      [alice, bob, carl].each do |u|
+        expect(Chore.household_user_ids_for(u.id)).to contain_exactly(alice.id, bob.id, carl.id)
+      end
+      carl_chore = create(:chore, created_by_user: carl, sharing_mode: :personal)
+      expect(alice.accessible_chores).to include(carl_chore)
+    end
+  end
 end

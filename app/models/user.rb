@@ -116,13 +116,10 @@ class User < ApplicationRecord
     date
   end
 
-  # Every user this user can act as a chore-owner for: themselves, plus
-  # every owner who has shared their chore list with this user. The IDs
-  # here are the User IDs whose `chores` should be visible/editable.
+  # Every user in this user's chore household (transitive closure of
+  # the ChoreShare graph in either direction). One household per user.
   def chore_owner_user_ids
-    base = [id]
-    base.concat(chore_shares_as_member.pluck(:user_id))
-    base.uniq
+    Chore.household_user_ids_for(id)
   end
 
   def accessible_chores

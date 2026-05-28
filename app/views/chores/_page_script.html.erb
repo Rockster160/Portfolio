@@ -1218,62 +1218,55 @@
       const isUpdate = !!currentChoreId;
       const url = isUpdate ? `/chores/items/${currentChoreId}` : "/chores/items";
       const method = isUpdate ? "PATCH" : "POST";
+      // Tell the server which view we're on so it can render the right
+      // card partial (circle for Today, grid card everywhere else).
+      payload.view = MODE;
       const data = await api(url, method, payload);
       closeEditModal();
       flash("Saved");
       if (isUpdate) {
-        // In-place card update — edit mode stays on so the user can
-        // tap another card right away without losing context.
-        applyChoreFormDataToCard(currentChoreId, payload.chore, data);
+        // In-place swap with the SERVER-RENDERED card HTML — same
+        // source of truth as a broadcast refresh, so the icon /
+        // reward / cooldown ring / count-slot rebuild identically.
+        replaceCardHTML(currentChoreId, data.html);
       } else {
-        // Brand new chore — easiest to just reload so the new card
-        // shows up in the right ordering position. Add-flow is rarer
-        // than edit-flow, so the reload cost is acceptable.
-        setTimeout(() => location.reload(), 250);
+        // Splice the new card in WITHOUT reloading the page. Adds to
+        // the end of the visible container; subsequent reorder will
+        // settle final position when the user drags or after a
+        // broadcast refresh.
+        insertNewCardHTML(data.html, data.id);
       }
     } catch (err) {
       flash("Save failed: " + err.message, "error");
     }
   });
 
-  // Apply user-edited fields back to the card so the visible state
-  // matches the just-saved server state. Avoids a full reload.
-  function applyChoreFormDataToCard(choreId, choreParams, response) {
+  function htmlToElement(html) {
+    const tmpl = document.createElement("template");
+    tmpl.innerHTML = (html || "").trim();
+    return tmpl.content.firstElementChild;
+  }
+
+  function replaceCardHTML(choreId, html) {
+    if (!html) return;
     const card = document.querySelector(`[data-chore-id="${choreId}"]`);
-    if (!card) return;
-    if (choreParams.name != null) {
-      card.dataset.choreName = choreParams.name;
-    }
-    if (choreParams.short_name != null) {
-      card.dataset.choreShort = choreParams.short_name;
-      const title = card.querySelector(".title");
-      if (title) title.textContent = choreParams.short_name || choreParams.name;
-    }
-    if (choreParams.icon != null) {
-      card.dataset.choreIcon = choreParams.icon;
-      const iconEl = card.querySelector(".icon");
-      if (iconEl) iconEl.textContent = choreParams.icon || "🧹";
-    }
-    if (choreParams.reward_pebbles != null) {
-      card.dataset.choreReward = choreParams.reward_pebbles;
-      card.querySelectorAll(".circle-reward, .card-reward, .reward").forEach(rewardEl => {
-        rewardEl.textContent = `${choreParams.reward_pebbles}p`;
-      });
-    }
-    if (choreParams.threshold_seconds !== undefined) {
-      card.dataset.choreCooldown = choreParams.threshold_seconds || "0";
-      card.dataset.choreThreshold = choreParams.threshold_seconds || "0";
-    }
-    if (choreParams.sharing_mode) card.dataset.choreSharingMode = choreParams.sharing_mode;
-    if (choreParams.show_on_daily_view) card.dataset.choreShowOnDailyView = choreParams.show_on_daily_view;
-    if (choreParams.assigned_to_user_id !== undefined)
-      card.dataset.choreAssignedToUserId = choreParams.assigned_to_user_id || "";
-    if (choreParams.aliases)
-      card.dataset.choreAliases = (choreParams.aliases || []).join("|");
-    if (choreParams.recurrence != null)
-      card.dataset.choreRecurrence = JSON.stringify(choreParams.recurrence || {});
-    if (choreParams.one_off !== undefined)
-      card.dataset.choreOneOff = String(!!choreParams.one_off);
+    const fresh = htmlToElement(html);
+    if (!fresh) return;
+    if (card) card.replaceWith(fresh);
+    // If the card wasn't on this view (e.g. archived off Today), nothing
+    // to do — next page render will catch it up.
+  }
+
+  function insertNewCardHTML(html, choreId) {
+    if (!html) return;
+    // Avoid double-insert if a broadcast beat us to it.
+    if (choreId && document.querySelector(`[data-chore-id="${choreId}"]`)) return;
+    const container = document.querySelector(
+      MODE === "today" ? "[data-chores-circles]" : "[data-chores-grid]"
+    );
+    const fresh = htmlToElement(html);
+    if (!container || !fresh) return;
+    container.appendChild(fresh);
   }
 
   editForm?.querySelector('[data-action="archive"]')?.addEventListener("click", async () => {

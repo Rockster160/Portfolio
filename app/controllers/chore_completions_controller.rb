@@ -157,7 +157,6 @@ class ChoreCompletionsController < ApplicationController
   end
 
   def household_user_ids_for_chore(chore)
-    owner_id = chore.created_by_user_id
-    [owner_id] + ChoreShare.where(user_id: owner_id).pluck(:shared_with_user_id)
+    Chore.household_user_ids_for(chore.created_by_user_id)
   end
 end

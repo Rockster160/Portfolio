@@ -1,0 +1,37 @@
+<%# Locals: chore (Chore), done_count (Integer), last_completion (ChoreCompletion?), hot (Integer?). %>
+<%
+  hot ||= nil
+  done_count ||= 0
+  last_completion ||= nil
+%>
+<div class="chore-card <%= "done-today" if done_count > 0 %> <%= "hot" if hot %>"
+     data-chore-id="<%= chore.id %>"
+     data-chore-name="<%= chore.name %>"
+     data-chore-short="<%= chore.short_name %>"
+     data-chore-aliases="<%= chore.aliases_array.join("|") %>"
+     data-chore-reward="<%= chore.reward_pebbles %>"
+     data-chore-one-off="<%= chore.one_off %>"
+     data-chore-icon="<%= chore.icon %>"
+     data-chore-cooldown="<%= chore.threshold_seconds %>"
+     data-chore-threshold="<%= chore.threshold_seconds %>"
+     data-chore-recurrence='<%= chore.recurrence.to_json.html_safe %>'
+     data-chore-show-on-daily-view="<%= chore.show_on_daily_view %>"
+     data-chore-sharing-mode="<%= chore.sharing_mode %>"
+     data-chore-assigned-to-user-id="<%= chore.assigned_to_user_id %>"
+     data-chore-starts-on="<%= chore.starts_on %>"
+     data-done-count="<%= done_count %>"
+     data-last-completed-at="<%= last_completion&.completed_at&.iso8601 %>">
+  <% if hot %><div class="hot-badge"><%= hot %>×</div><% end %>
+  <div class="icon" data-icon>
+    <% if chore.threshold_seconds.to_i > 0 %>
+      <span class="circle-countdown" data-circle-countdown></span>
+    <% end %>
+    <span class="icon-glyph"><%= chore.icon.presence || "🧹" %></span>
+    <span class="card-reward"><%= chore.reward_label %></span>
+    <span class="card-count-slot" data-count-slot>
+      <% if done_count > 1 %><span class="count-badge" data-count-badge>×<%= done_count %></span><% end %>
+    </span>
+  </div>
+  <div class="title"><%= chore.display_short_name %></div>
+  <div class="ago-row" data-ago-row></div>
+</div>
