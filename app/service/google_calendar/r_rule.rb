@@ -169,9 +169,27 @@ class GoogleCalendar::RRule
       return []
     end
 
-    truncate_to = until_on || schedule.until_on
-    rrule_parts << "UNTIL=#{truncate_to.strftime("%Y%m%d")}" if truncate_to
-    rrule_parts << "COUNT=#{schedule.occurrence_count}" if schedule.occurrence_count.present? && truncate_to.nil?
+    # RFC 5545 forbids UNTIL + COUNT together — only one wins.
+    # Priority:
+    #   1. Explicit `until_on:` arg → caller is forcing a cutoff
+    #      (e.g. destroy_series! truncating "this and future"); UNTIL.
+    #   2. occurrence_count set on the schedule → preserves the user's
+    #      original COUNT intent. `AgendaSchedule#sync_until_on_from_occurrence_count`
+    #      maintains schedule.until_on as a cheap derived cache for range
+    #      queries, but that cache must NOT leak back out to Google as
+    #      UNTIL — that would silently convert "repeat 7 times" into
+    #      "repeat until ...".
+    #   3. schedule.until_on set with no count → user-authored UNTIL.
+    if until_on
+      rrule_parts << "UNTIL=#{until_on.strftime('%Y%m%d')}"
+    elsif schedule.occurrence_count.to_i.positive?
+      # `.present?` would be true for 0, which is invalid per RFC 5545
+      # (COUNT must be a positive integer). Guard against ever emitting
+      # COUNT=0 — Google would reject the PATCH outright.
+      rrule_parts << "COUNT=#{schedule.occurrence_count}"
+    elsif schedule.until_on.present?
+      rrule_parts << "UNTIL=#{schedule.until_on.strftime('%Y%m%d')}"
+    end
 
     lines << "RRULE:#{rrule_parts.join(";")}"
 
