@@ -134,29 +134,20 @@ class ChoreCompletionsController < ApplicationController
     )
   end
 
+  # Unified payload — every mutation returns the canonical Chore JSON
+  # (the same shape used by /sync, /state, page bootstrap). The client
+  # `ChoreStore` upserts directly from `chore`, so views re-render with
+  # zero divergence between mutation paths.
   def response_payload(chore, completion)
     day = ChoreDay.current(current_user)
-    user_ids = chore.share_household? ? household_user_ids_for_chore(chore) : [current_user.id]
-    last = ChoreCompletion
-      .where(chore_id: chore.id, user_id: user_ids)
-      .order(completed_at: :desc).first
-    completions_today = ChoreCompletion
-      .where(chore_id: chore.id, user_id: user_ids, day_key: day).count
     today_earnings = current_user.chore_completions.where(day_key: day).sum(:paid_pebbles)
 
     {
-      chore_id: chore.id,
+      chore: ChoreSerializer.new(chore, viewer: current_user, day: day).as_json,
       balance: current_user.chore_balance,
       today_earnings: today_earnings,
-      completions_today: completions_today,
-      last_completion: last&.completed_at&.iso8601(3),
-      last_completed_at: last&.completed_at&.iso8601(3),
       paid: completion&.paid_pebbles,
       server_ts: Time.current.iso8601(3),
     }
-  end
-
-  def household_user_ids_for_chore(chore)
-    Chore.household_user_ids_for(chore.created_by_user_id)
   end
 end

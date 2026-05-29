@@ -20,8 +20,16 @@
 #  user_id                   :bigint           not null
 #
 class ChoreCompletion < ApplicationRecord
+  include Jilable
+
   belongs_to :chore
   belongs_to :user
+
+  # Fan out lifecycle as Jil triggers so users can wire automations
+  # against chore completion + undo (e.g. log an ActionEvent, post to
+  # SMS, etc.). Pattern mirrors AgendaItem / Task / ActionEvent.
+  after_create_commit  :fire_jil_create_trigger
+  after_destroy_commit :fire_jil_destroy_trigger
 
   # History search via the app-wide `.query(q)` scope.
   #   notes:test            → notes ILIKE %test%
@@ -35,4 +43,32 @@ class ChoreCompletion < ApplicationRecord
 
   scope :for_day, ->(day) { where(day_key: day) }
   scope :paid, -> { where(payout_skipped: false) }
+
+  # Snapshot of the fields a Jil task is most likely to want to read
+  # off `chore_completion.*` — the chore name + paid amount + day key
+  # + skipped reason. Keeps the trigger payload self-contained so
+  # listeners don't have to round-trip to the DB for common fields.
+  def jil_attrs(action:)
+    {
+      id: id,
+      action: action,
+      chore_id: chore_id,
+      chore_name: chore&.name,
+      paid_pebbles: paid_pebbles,
+      payout_skipped: payout_skipped,
+      skipped_reason: skipped_reason,
+      day_key: day_key&.iso8601,
+      completed_at: completed_at&.iso8601(3),
+    }
+  end
+
+  private
+
+  def fire_jil_create_trigger
+    ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :completed)))
+  end
+
+  def fire_jil_destroy_trigger
+    ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :uncompleted)))
+  end
 end

@@ -421,14 +421,10 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
   .chore-card.done-today {
     box-shadow: inset 0 0 0 2px var(--chores-done);
   }
-  .chore-card.hot {
-    box-shadow: inset 0 0 0 2px var(--chores-hot);
-  }
-  .chore-card.hot.done-today {
-    box-shadow:
-      inset 0 0 0 2px var(--chores-done),
-      inset 0 0 0 4px var(--chores-hot);
-  }
+  // Hot status is signaled by the .hot-badge pill ONLY — no border /
+  // outline / box-shadow on the card. Earlier purple rings clashed
+  // with the green "done" ring and made hot strips look noisy
+  // (purple ring + purple badge + purple pill all at once).
   // Count slot — top-RIGHT (paired with hot-badge top-LEFT). z-index
   // above the reward (top-center) so multi-occurrence badges still
   // read in front of the icon background.
@@ -689,9 +685,8 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
   .chore-circle.done .icon {
     opacity: 0.95;
   }
-  .chore-circle.hot .circle-inner {
-    border-color: var(--chores-hot);
-  }
+  // Hot status is the badge / pill ONLY (no ring). The done-state
+  // green ring above remains the only `.circle-inner` border treatment.
   .chore-circle.pending .circle-inner {
     opacity: 0.55;
   }
@@ -783,10 +778,13 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     border-radius: 999px;
     line-height: 1;
   }
+  // Multiplier pill — top-LEFT to match Grid's `.chore-card .hot-badge`
+  // placement. Consistency across views means users always look in the
+  // same corner for "this chore pays extra today".
   .chore-circle .hot-badge {
     position: absolute;
     top: -6px;
-    right: -6px;
+    left: -6px;
     z-index: 2;
     background: var(--chores-hot);
     color: #FFF;
@@ -1521,6 +1519,10 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
   // and scroll the body inside the modal — keeps Save/Cancel reachable.
   max-height: 90vh;
   overflow-y: auto;
+  // Horizontal scroll was leaking when a long monthly chip row or a
+  // wide pill group overflowed its row. The form is column-flex so any
+  // overflow is a layout bug, not a needed feature — clip it.
+  overflow-x: hidden;
   background: #00102B;
   color: #ECF0F1;
   border: 1px solid #1F2A44;
@@ -1531,6 +1533,43 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
   // to the top/bottom, the page behind doesn't pick up the wheel /
   // touch momentum and start scrolling itself.
   overscroll-behavior: contain;
+}
+.chores-modal .pill-group,
+.chores-modal .reward-quicks {
+  // Pills can wrap freely but never bleed past the modal width.
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.chores-modal .month-day-chips {
+  // The 1..31 + Last grid should wrap, not scroll horizontally.
+  max-width: 100%;
+}
+
+// Loading button — used while the form is mid-submit. Text fades to
+// transparent and a spinner sits where it was.
+.chores-modal button.loading,
+.chores-page button.loading {
+  position: relative;
+  pointer-events: none;
+  color: transparent !important;
+  text-shadow: none !important;
+}
+.chores-modal button.loading::after,
+.chores-page button.loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  border: 2px solid #FFF;
+  border-top-color: transparent;
+  animation: chores-spin 0.6s linear infinite;
+}
+@keyframes chores-spin {
+  to { transform: rotate(360deg); }
 }
 
 // Lock the page behind ANY open chores modal: backdrop is shown

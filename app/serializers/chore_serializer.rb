@@ -1,0 +1,162 @@
+# Canonical chore JSON shape — the single payload that powers every
+# client view (Grid, Today, Hot strip), every endpoint that touches a
+# chore (sync, state, create, update, complete), and any external
+# consumer (Jil, API).
+#
+# Server is responsible for the read-derived fields (`done_count_today`,
+# `last_completed_at`, `today_visible`, `hot_multiplier`, ...). The
+# client templates are pure functions of this payload — no extra
+# round-trips, no second-guessing visibility rules.
+#
+# Build pattern is "lazy single instance" — instantiate once with
+# preloaded context (day, household ids, hot picks lookup), then call
+# `.as_json` to emit. For bulk page rendering, build a
+# ChoreSerializerContext once and reuse it across N serializers.
+class ChoreSerializer
+  attr_reader :chore, :viewer, :day, :ctx
+
+  def initialize(chore, viewer:, ctx: nil, day: nil)
+    @chore = chore
+    @viewer = viewer
+    @day = day || (ctx&.day) || ChoreDay.current(viewer)
+    @ctx = ctx
+  end
+
+  def as_json(*)
+    {
+      id: chore.id,
+      name: chore.name,
+      short_name: chore.short_name.presence || chore.name,
+      icon: chore.icon,
+      icon_kind: icon_kind, # "emoji" | "image" | "svg" | "empty"
+      aliases: chore.aliases_array,
+      reward_pebbles: chore.reward_pebbles,
+      reward_label: chore.reward_label,
+      threshold_seconds: chore.threshold_seconds,
+      cooldown_kind: cooldown_kind, # "none" | "fixed" | "day_reset"
+      one_off: chore.one_off,
+      sharing_mode: chore.sharing_mode,
+      assigned_to_user_id: chore.assigned_to_user_id,
+      show_on_daily_view: chore.show_on_daily_view,
+      starts_on: chore.starts_on&.iso8601,
+      recurrence: chore.recurrence || {},
+      sort_order: chore.sort_order,
+      archived: chore.archived?,
+      updated_at: chore.updated_at.iso8601(3),
+      # Per-viewer derived fields
+      done_count_today: done_count_today,
+      last_completed_at: last_completion&.completed_at&.iso8601(3),
+      actor_username: actor_username,
+      hot_multiplier: hot_multiplier,
+      today_visible: today_visible?,
+    }
+  end
+
+  private
+
+  def icon_kind
+    return :empty if chore.icon.blank?
+
+    v = chore.icon.to_s.strip
+    return :image if v.start_with?("data:image/", "http://", "https://")
+    return :svg   if v.start_with?("<svg")
+
+    :emoji
+  end
+
+  def cooldown_kind
+    return :day_reset if chore.threshold_seconds == Chore::THRESHOLD_DAY_RESET
+    return :fixed     if chore.threshold_seconds.to_i.positive?
+
+    :none
+  end
+
+  def cooldown_scope_user_ids
+    chore.share_household? ? household_user_ids : [viewer.id]
+  end
+
+  def household_user_ids
+    return @household_user_ids ||= ctx.household_user_ids if ctx
+
+    @household_user_ids ||= Chore.household_user_ids_for(viewer.id)
+  end
+
+  def done_count_today
+    return ctx.completions_today.fetch(chore.id, 0) if ctx
+
+    @done_count_today ||= ChoreCompletion
+      .where(chore_id: chore.id, user_id: cooldown_scope_user_ids, day_key: day)
+      .count
+  end
+
+  def last_completion
+    return ctx.last_completion_by_chore[chore.id] if ctx
+
+    @last_completion ||= ChoreCompletion
+      .where(chore_id: chore.id, user_id: cooldown_scope_user_ids)
+      .order(completed_at: :desc).first
+  end
+
+  def actor_username
+    return nil unless chore.share_household?
+
+    actor = ctx&.completion_actor_by_chore&.[](chore.id)
+    return actor.username if actor && actor.id != viewer.id
+    return nil if actor
+
+    # Fallback when no preloaded context — single lookup.
+    last = last_completion
+    return nil if last.nil? || last.user_id == viewer.id
+
+    User.where(id: last.user_id).pick(:username)
+  end
+
+  def hot_multiplier
+    return ctx.hot_picks[chore.id] if ctx
+
+    @hot_multiplier ||= ChoreHotPick.lookup_for(day)[chore.id]
+  end
+
+  def today_visible?
+    return false if chore.archived?
+    return true  if chore.one_off
+    return true  if chore.daily_always?
+    return false if chore.show_on_daily_view.to_sym == :never
+
+    # Frozen layout: any completion in today's day-key keeps the card
+    # on Today regardless of schedule / cooldown.
+    return true if done_count_today.positive?
+
+    last = last_completion
+    scheduled = scheduled_or_carried?(last&.day_key)
+    available = chore.cooldown_elapsed?(viewer, last_completion: last)
+
+    case chore.show_on_daily_view.to_sym
+    when :always                       then true
+    when :when_scheduled               then scheduled
+    when :when_available               then available
+    when :when_scheduled_and_available then scheduled || available
+    else false
+    end
+  end
+
+  def scheduled_or_carried?(last_completed_day)
+    return false unless chore.scheduled?
+    return true  if chore.matches_day?(day, viewer, last_completed_day: last_completed_day)
+    return false if chore.relative?
+
+    last_scheduled_day = (day - 14..day - 1).reverse_each.find { |d|
+      chore.matches_day?(d, viewer, last_completed_day: last_completed_day)
+    }
+    return false if last_scheduled_day.blank?
+
+    if ctx&.completion_days_by_chore
+      done_set = ctx.completion_days_by_chore.fetch(chore.id, Set.new)
+      !done_set.any? { |d| d >= last_scheduled_day && d <= day }
+    else
+      ChoreCompletion
+        .where(user_id: viewer.id, chore_id: chore.id, day_key: last_scheduled_day..day)
+        .none?
+    end
+  end
+end

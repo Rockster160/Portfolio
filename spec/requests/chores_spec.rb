@@ -41,7 +41,9 @@ RSpec.describe "Chores", type: :request do
     }.to change(ChoreCompletion, :count).by(1)
     body = JSON.parse(response.body)
     expect(body["balance"]).to eq(5)
-    expect(body["completions_today"]).to eq(1)
+    # Canonical chore JSON in response — ChoreStore upserts directly from this.
+    expect(body["chore"]["done_count_today"]).to eq(1)
+    expect(body["chore"]["last_completed_at"]).to be_present
   end
 
   it "DELETE completion removes the most recent and updates balance" do
@@ -168,24 +170,20 @@ RSpec.describe "Chores", type: :request do
     expect(body["balance"]).to eq(7)
   end
 
-  it "GET /chores/items/:id/state returns per-chore live data + server_ts" do
+  it "GET /chores/items/:id/state returns canonical chore JSON + server_ts" do
     chore = create(:chore, created_by_user: user, reward_pebbles: 4)
     create(:chore_completion, chore: chore, user: user, paid_pebbles: 4)
     get "/chores/items/#{chore.id}/state", headers: { "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
     body = JSON.parse(response.body)
-    expect(body["chore_id"]).to eq(chore.id)
-    expect(body["completions_today"]).to eq(1)
-    expect(body["balance"]).to eq(4)
+    expect(body["chore"]["id"]).to eq(chore.id)
+    expect(body["chore"]["done_count_today"]).to eq(1)
+    expect(body["chore"]["last_completed_at"]).to be_present
+    expect(body["chore"]["today_visible"]).to be(true).or be(false)
     expect(body["server_ts"]).to be_present
-    expect(body["last_completed_at"]).to be_present
-    # New dual-html shape used by the unified-page diff applier.
-    expect(body["html_grid"]).to be_present
-    expect(body["html_today"]).to be_present
-    expect(body["today_visible"]).to be(true).or be(false)
   end
 
-  it "GET /chores/sync returns diff payload for both views" do
+  it "GET /chores/sync returns canonical chore JSON for changed chores" do
     keeper = create(:chore, created_by_user: user, name: "Vacuum")
     archived = create(:chore, created_by_user: user, name: "Old", archived_at: 1.hour.ago)
     create(:chore_completion, chore: keeper, user: user, paid_pebbles: 3)
@@ -199,7 +197,8 @@ RSpec.describe "Chores", type: :request do
     expect(ids).to include(keeper.id)
     expect(body["archived_chore_ids"]).to include(archived.id)
     keeper_payload = body["chores"].find { |c| c["id"] == keeper.id }
-    expect(keeper_payload["html_grid"]).to include("Vacuum")
+    expect(keeper_payload["name"]).to eq("Vacuum")
+    expect(keeper_payload["icon_kind"]).to be_present
   end
 
   it "POST /chores/items accepts day-reset cooldown sentinel (-1)" do
@@ -213,17 +212,32 @@ RSpec.describe "Chores", type: :request do
   end
 
   it "day-reset cooldown blocks a second payout the same chore-day, allows after day flip" do
-    chore = create(:chore, created_by_user: user, reward_pebbles: 5, threshold_seconds: -1)
-    first  = ChoreCompleter.new(chore, user, at: Time.current).call
-    expect(first.completion.payout_skipped).to be(false)
-    second = ChoreCompleter.new(chore, user, at: Time.current + 5.hours).call
-    expect(second.completion.payout_skipped).to be(true)
-    # Different chore-day → cooldown elapsed.
-    expect(chore.cooldown_elapsed?(user, last_completion: second.completion,
-                                   now: Time.current + 26.hours)).to be(true)
+    # Pin time mid-morning so +5h doesn't cross the 4am cutoff and
+    # split the test's "same chore-day" assumption.
+    travel_to Time.zone.local(2026, 4, 15, 10, 0, 0) do
+      chore = create(:chore, created_by_user: user, reward_pebbles: 5, threshold_seconds: -1)
+      first  = ChoreCompleter.new(chore, user, at: Time.current).call
+      expect(first.completion.payout_skipped).to be(false)
+      second = ChoreCompleter.new(chore, user, at: Time.current + 5.hours).call
+      expect(second.completion.payout_skipped).to be(true)
+      # Different chore-day → cooldown elapsed.
+      expect(chore.cooldown_elapsed?(user, last_completion: second.completion,
+                                     now: Time.current + 26.hours)).to be(true)
+    end
   end
 
-  it "PATCH /chores/order saves per-user ordering and Grid honors it" do
+  # The unified page is now JSON-bootstrap-driven (no server-rendered
+  # cards). Ordering / visibility are asserted against the bootstrap
+  # JSON inlined in the page, which is the same payload the client
+  # `ChoreStore` reads on load.
+  def bootstrap_json
+    md = response.body.match(%r{<script type="application/json" id="chores-bootstrap">\s*(.+?)\s*</script>}m)
+    raise "no bootstrap script in response" unless md
+
+    JSON.parse(md[1])
+  end
+
+  it "PATCH /chores/order saves per-user ordering and bootstrap JSON honors it" do
     a = create(:chore, created_by_user: user, name: "Alpha")
     b = create(:chore, created_by_user: user, name: "Bravo")
     c = create(:chore, created_by_user: user, name: "Charlie")
@@ -234,9 +248,9 @@ RSpec.describe "Chores", type: :request do
     expect(response).to have_http_status(:ok)
 
     get chores_path
-    pos = ->(name) { response.body.index(%(data-chore-name="#{name}")) }
-    expect(pos["Charlie"]).to be < pos["Alpha"]
-    expect(pos["Alpha"]).to be < pos["Bravo"]
+    names = bootstrap_json["chores"].map { |c| c["name"] }
+    expect(names.index("Charlie")).to be < names.index("Alpha")
+    expect(names.index("Alpha")).to be < names.index("Bravo")
   end
 
   it "New chores appear at the end of the per-user ordering" do
@@ -245,17 +259,18 @@ RSpec.describe "Chores", type: :request do
     patch "/chores/order",
       params: { ids: [b.id, a.id] }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
-    later = create(:chore, created_by_user: user, name: "Zulu")
+    create(:chore, created_by_user: user, name: "Zulu")
     get chores_path
-    pos = ->(name) { response.body.index(%(data-chore-name="#{name}")) }
-    expect(pos["Bravo"]).to be < pos["Alpha"]
-    expect(pos["Alpha"]).to be < pos["Zulu"]
+    names = bootstrap_json["chores"].map { |c| c["name"] }
+    expect(names.index("Bravo")).to be < names.index("Alpha")
+    expect(names.index("Alpha")).to be < names.index("Zulu")
   end
 
   it "Today view keeps an item visible after completion even when the enum would hide it" do
     # `:when_available` would hide after a payout (cooldown not elapsed),
     # but the frozen-layout rule wins: any chore with completions today
-    # stays on the list.
+    # stays on the list. Verified through the bootstrap JSON's
+    # `today_visible` flag.
     chore = create(:chore, created_by_user: user,
       reward_pebbles: 3, threshold_seconds: 6 * 3600,
       show_on_daily_view: :when_available,
@@ -263,6 +278,8 @@ RSpec.describe "Chores", type: :request do
     ChoreCompleter.new(chore, user).call
     get chores_today_path
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include(%(data-chore-id="#{chore.id}"))
+    payload = bootstrap_json["chores"].find { |c| c["id"] == chore.id }
+    expect(payload).to be_present
+    expect(payload["today_visible"]).to be(true)
   end
 end

@@ -10,23 +10,48 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <% end %>
 
-<%# Both Grid + Today render together. JS toggles `data-active-view`
-  on this root to swap which one is visible without a page navigation.
-  Header / toolbar / hot strip / modals are shared between the two. %>
+<%# The page is intentionally lightweight: empty containers + a
+  bootstrap <script type="application/json"> that the JS picks up on
+  load. ALL card rendering happens client-side from the JSON store +
+  template literals — there is no server-side card HTML anywhere.
+  This is the single source of truth that fixed the cache/sync drift
+  that the previous HTML-shipping architecture kept introducing. %>
 <div class="chores-page" data-chores-root
      data-active-view="<%= @active_view %>"
      data-day-key="<%= @day.iso8601 %>"
-     data-cutoff-hour="<%= ChoreDay::CUTOFF_HOURS %>"
+     data-cutoff-hour="<%= @cutoff_hour %>"
      data-balance-total="<%= @balance_total %>"
      data-balance-today="<%= @balance_today %>">
   <%= render "header", balance: @balance, scope: :today %>
-  <%= render "hot_strip", hot_picks: @hot_picks, chores: @chores %>
+  <div class="hot-strip" data-chores-hot-strip hidden></div>
   <%= render "toolbar" %>
 
-  <%= render "view_grid",  chores: @chores %>
-  <%= render "view_today", chores: @scheduled_today, lookahead: @lookahead %>
+  <div class="chores-view view-grid" data-view="grid">
+    <div class="chores-grid" data-chores-grid></div>
+  </div>
+
+  <div class="chores-view view-today" data-view="today">
+    <p class="empty-today-note" data-empty-today hidden style="color:var(--chores-muted);">
+      Nothing scheduled for today. Nice.
+    </p>
+    <div class="chores-circles-wrap">
+      <div class="chores-circles" data-chores-circles></div>
+    </div>
+    <div class="chores-lookahead" data-chores-lookahead></div>
+  </div>
 
   <%= render "modals" %>
+
+  <script type="application/json" id="chores-bootstrap">
+    <%== {
+      chores: @chores_json,
+      lookahead: @lookahead_json,
+      server_ts: Time.current.iso8601(3),
+      day_key: @day.iso8601,
+      balance: @balance_total,
+      today_earnings: @balance_today,
+    }.to_json %>
+  </script>
 </div>
 
 <% content_for :after_body do %>

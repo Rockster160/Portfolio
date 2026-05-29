@@ -15,7 +15,7 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v18";
+const CACHE = "chores-v22";
 const SHELL_PATHS = ["/chores", "/chores/today", "/chores/balance", "/chores/history"];
 
 // Background shell refresh — fired by the page-script when a Monitor

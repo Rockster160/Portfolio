@@ -8,11 +8,6 @@
 #  shared_with_user_id :bigint           not null
 #  user_id             :bigint           not null
 #
-# A ChoreShare row joins two users into the same chore household. The
-# bond is bidirectional (one row covers both directions) and transitive
-# (A↔B + B↔C ⇒ A, B, C all share one household). A user only ever sees
-# one household — there is no permission tier; every member is a full
-# editor of every chore in the household.
 class ChoreShare < ApplicationRecord
   belongs_to :user
   belongs_to :shared_with_user, class_name: "User"

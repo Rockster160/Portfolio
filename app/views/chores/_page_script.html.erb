@@ -1,63 +1,84 @@
-<%# Unified page script — drives BOTH Grid and Today on the same DOM. %>
+<%# Unified chores page script — JSON-store-driven, no server HTML.
+   Architecture:
+     * ChoreStore (Map<id, ChoreData>) is the single source of truth.
+     * Templates are pure (data → DOM) functions.
+     * Views subscribe to store changes and re-render affected cards.
+     * Mutations apply optimistic patches, then reconcile with server JSON.
+%>
 <script>
   window.__currentUserId = <%= current_user.id.to_json.html_safe %>;
 </script>
 <script type="module">
+  // ============================================================
+  // bootstrap + constants
+  // ============================================================
   const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || "";
   const root = document.querySelector('[data-chores-root]');
   const DAY_KEY = root?.dataset.dayKey || "";
   const CUTOFF_HOUR = parseInt(root?.dataset.cutoffHour || "4", 10);
-
-  // MODE is a *live* value of the active view. The page renders BOTH
-  // views' markup; CSS toggles which is visible via root[data-active-view].
-  // Nav link clicks call `setActiveView(...)`, which updates this and
-  // history without a page navigation — the user perceives instant
-  // page-swap but the DOM (and SortableJS, broadcasts, etc.) stays put.
-  let MODE = root?.dataset.activeView || "grid";
-
-  // Stable identity for the sync diff payload — the server returns only
-  // chores changed since this stamp. Bumped to the server's `server_ts`
-  // after every successful sync so the next call is incremental.
-  const SYNC_TS_KEY = "chores:lastSyncTs:v1";
-  function loadLastSyncTs() { return localStorage.getItem(SYNC_TS_KEY) || ""; }
-  function saveLastSyncTs(ts) { if (ts) localStorage.setItem(SYNC_TS_KEY, ts); }
-
-  function viewContainers() {
-    return {
-      grid:  document.querySelector("[data-chores-grid]"),
-      today: document.querySelector("[data-chores-circles]"),
-      // Hot strip is a mini Today view — same chore-circle markup,
-      // same click + long-press semantics. Including it here means
-      // diff applies (swap on rename, remove on archive) and click
-      // bindings cover the strip uniformly with the main views.
-      hot:   document.querySelector("[data-chores-hot-strip]"),
-    };
-  }
-  function visibleContainer() {
-    const c = viewContainers();
-    return MODE === "today" ? c.today : c.grid;
-  }
-
-  // Edit mode (Grid view): when active, tapping a card opens the edit
-  // modal instead of completing the chore. Persists across multiple
-  // edits — toggle off when done.
-  let editModeActive = false;
-
-  // Per-tab id used to suppress our own broadcasts when reordering —
-  // the receiving tab only re-applies an order_changed event if it
-  // wasn't the originator. crypto.randomUUID is widely supported now.
   const TAB_ID = (window.crypto?.randomUUID?.() || String(Date.now() + Math.random()));
 
-  // Per-chore last-local-click epoch ms. Used to discard server data
-  // that was captured BEFORE our most recent local action — protects
-  // against spam-click race conditions where a stale broadcast or
-  // out-of-order POST response would otherwise step on optimistic state.
+  // Active view — `data-active-view` only exists on the unified Grid/
+  // Today page. Balance and History also include this script for the
+  // SW/offline-queue/modal infrastructure but skip view + store logic.
+  let MODE = root?.dataset.activeView || "grid";
+  const unifiedPage = !!(root && root.dataset.activeView);
+
+  // Bootstrap JSON inline-shipped by the page — instant first paint
+  // without a network round-trip.
+  let bootstrap = { chores: [], lookahead: {}, server_ts: null };
+  const bootstrapEl = document.getElementById("chores-bootstrap");
+  if (bootstrapEl) {
+    try { bootstrap = JSON.parse(bootstrapEl.textContent || "{}"); }
+    catch (e) { console.warn("Chores bootstrap JSON parse failed:", e); }
+  }
+
+  // localClickTs: per-chore most-recent local click epoch ms. Used to
+  // discard server payloads captured before that click — protects
+  // optimistic state from being clobbered by a race-stale broadcast or
+  // out-of-order POST response.
   const localClickTs = new Map();
-  // Per-chore "post in flight" flag. While set, broadcasts for this
-  // chore are deferred (the imminent POST response will reconcile).
   const inFlight = new Set();
 
-  // ---------- tiny utilities ----------
+  // ============================================================
+  // helpers
+  // ============================================================
+  function esc(s) {
+    if (s == null) return "";
+    return String(s).replace(/[&<>"']/g, c => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
+  }
+  function formatMultiplier(n) {
+    if (n == null) return "";
+    const f = Number(n);
+    return f === Math.floor(f) ? String(Math.floor(f)) : String(f);
+  }
+  async function api(url, method, body) {
+    const res = await fetch(url, {
+      method,
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": CSRF },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      const err = new Error(`${res.status}: ${text}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.status === 204 ? null : res.json();
+  }
+  // Anything we should retry rather than surface as a "failed" flash:
+  // network errors, 429 (rate-limit), 502/503/504 (upstream). The
+  // offline-queue's `classify` already keeps these — this is the
+  // direct-mutation path's mirror.
+  function isTransientError(err) {
+    if (!navigator.onLine) return true;
+    if (/Failed to fetch|NetworkError/i.test(err.message || "")) return true;
+    const s = err.status || parseInt(String(err.message).split(":")[0], 10);
+    return s === 429 || s === 502 || s === 503 || s === 504;
+  }
   function flash(msg, type = "ok") {
     const el = document.createElement("div");
     el.className = "chores-flash " + (type === "error" ? "error" : (type === "warn" ? "warn" : ""));
@@ -66,80 +87,320 @@
     requestAnimationFrame(() => el.classList.add("show"));
     setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 250); }, 2400);
   }
-  async function api(url, method, body) {
-    const res = await fetch(url, {
-      method,
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": CSRF },
-      body: body ? JSON.stringify(body) : undefined
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`${res.status}: ${text}`);
+
+  // ============================================================
+  // ChoreStore — the data model. Every read derives from here.
+  // ============================================================
+  const ChoreStore = (() => {
+    const map = new Map();
+    let lookahead = {};
+    const subs = new Set();
+    function notify(kind, id) { subs.forEach(fn => { try { fn(kind, id); } catch (e) { console.error(e); } }); }
+    return {
+      bootstrap(items, look) {
+        map.clear();
+        (items || []).forEach(c => map.set(c.id, c));
+        lookahead = look || {};
+        notify("bootstrap");
+      },
+      upsert(c, { optimistic = false } = {}) {
+        if (!c || !c.id) return false;
+        const existing = map.get(c.id);
+        if (!optimistic && existing?.updated_at && c.updated_at && existing.updated_at > c.updated_at) {
+          // Newer local copy wins; don't overwrite.
+          return false;
+        }
+        map.set(c.id, { ...existing, ...c });
+        notify("upsert", c.id);
+        return true;
+      },
+      patch(id, fields) {
+        const existing = map.get(id);
+        if (!existing) return;
+        map.set(id, { ...existing, ...fields });
+        notify("upsert", id);
+      },
+      remove(id) {
+        if (!map.has(id)) return;
+        map.delete(id);
+        notify("remove", id);
+      },
+      get(id) { return map.get(id); },
+      all() { return Array.from(map.values()); },
+      visibleOnToday() { return this.all().filter(c => c.today_visible && !c.archived); },
+      activeForGrid() { return this.all().filter(c => !c.archived); },
+      hotPicks() {
+        return this.all()
+          .filter(c => c.hot_multiplier != null && !c.archived)
+          .sort((a, b) => (b.hot_multiplier - a.hot_multiplier));
+      },
+      lookahead() { return lookahead; },
+      setLookahead(l) { lookahead = l || {}; notify("lookahead"); },
+      subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
+    };
+  })();
+
+  // ============================================================
+  // Templates — pure HTML strings (sensitive fields escaped via esc()).
+  // ============================================================
+
+  // Determine which way the icon should render. Mirrors the server's
+  // `icon_kind` so future divergence stays minimal.
+  function iconHTML(c, { large = false } = {}) {
+    const placeholderFallback = c.one_off ? "📝" : "🧹";
+    const v = (c.icon || "").trim();
+    if (!v) {
+      return `<span class="icon-placeholder">${esc(placeholderFallback)}</span>`;
     }
-    return res.status === 204 ? null : res.json();
+    if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
+      return `<img class="icon-img" src="${esc(v)}" alt="" loading="lazy" draggable="false">`;
+    }
+    if (v.startsWith("<svg")) {
+      // Safe-ish: we only allow inline SVG that the user explicitly
+      // pasted as their own icon. Browser will sanitize at parse.
+      return v;
+    }
+    return `<span class="icon-glyph">${esc(v)}</span>`;
   }
 
-  // ---------- fuzzy search ----------
-  function score(needle, name, aliases) {
-    if (!needle) return 1;
-    const n = needle.toLowerCase();
-    const fields = [
-      { text: (name || "").toLowerCase(), weight: 1.0 },
-      ...((aliases || []).map(a => ({ text: a.toLowerCase(), weight: 0.5 })))
-    ];
-    let best = 0;
-    for (const { text, weight } of fields) {
-      if (!text) continue;
-      const idx = text.indexOf(n);
-      let local = 0;
-      if (idx === 0) local = 1.0;
-      else if (idx > 0) local = 0.7 - Math.min(idx, 10) * 0.02;
-      else if (fuzzyMatch(n, text)) local = 0.3;
-      else continue;
-      best = Math.max(best, local * weight);
-    }
-    return best;
+  function hasCooldown(c) { return c.cooldown_kind === "fixed" || c.cooldown_kind === "day_reset"; }
+
+  function gridCardHTML(c) {
+    const doneClass = (c.done_count_today > 0) ? " done-today" : "";
+    const hotClass  = (c.hot_multiplier != null) ? " hot" : "";
+    const hot = (c.hot_multiplier != null) ?
+      `<div class="hot-badge">${esc(formatMultiplier(c.hot_multiplier))}×</div>` : "";
+    const countBadge = (c.done_count_today > 1) ?
+      `<span class="count-badge" data-count-badge>×${c.done_count_today}</span>` : "";
+    const cd = hasCooldown(c) ?
+      `<span class="circle-countdown" data-circle-countdown data-cooldown-end="${c.cooldown_kind === "day_reset" ? "day-end" : ""}"></span>` : "";
+    return `
+      <div class="chore-card${doneClass}${hotClass}" data-chore-id="${c.id}">
+        ${hot}
+        <div class="icon" data-icon>
+          <span class="card-reward">${esc(c.reward_label)}</span>
+          ${iconHTML(c)}
+          ${cd}
+          <span class="card-count-slot" data-count-slot>${countBadge}</span>
+        </div>
+        <div class="title">${esc(c.name)}</div>
+        <div class="ago-row" data-ago-row></div>
+      </div>
+    `;
   }
-  function fuzzyMatch(needle, hay) {
-    let i = 0, j = 0;
-    while (i < needle.length && j < hay.length) {
-      if (needle[i] === hay[j]) i++;
-      j++;
-    }
-    return i === needle.length;
+
+  function circleCardHTML(c, { hideHotBadge = false } = {}) {
+    const doneClass = (c.done_count_today > 0) ? " done" : "";
+    const hotClass  = (c.hot_multiplier != null) ? " hot" : "";
+    // When this card is rendered INSIDE a `.hot-strip-cell`, the cell's
+    // centered pill is the multiplier indicator — suppress this inner
+    // badge so we don't end up with two `2×` marks on the same chore.
+    const hot = (!hideHotBadge && c.hot_multiplier != null) ?
+      `<div class="hot-badge">${esc(formatMultiplier(c.hot_multiplier))}×</div>` : "";
+    const countBadge = (c.done_count_today > 1) ?
+      `<span class="count-badge" data-count-badge>×${c.done_count_today}</span>` : "";
+    const ring = (c.cooldown_kind === "fixed") ? `
+      <svg class="circle-ring" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="ring-bg" cx="50" cy="50" r="46" />
+        <circle class="ring-progress" cx="50" cy="50" r="46" data-ring-progress />
+      </svg>
+    ` : "";
+    const cd = hasCooldown(c) ?
+      `<span class="circle-countdown" data-circle-countdown data-cooldown-end="${c.cooldown_kind === "day_reset" ? "day-end" : ""}"></span>` : "";
+    return `
+      <div class="chore-circle${doneClass}${hotClass}" data-chore-id="${c.id}">
+        ${hot}
+        <div class="circle-inner">
+          ${ring}
+          <span class="circle-reward">${esc(c.reward_label)}</span>
+          <div class="icon" data-icon>${iconHTML(c)}</div>
+          ${cd}
+          <div class="count-slot" data-count-slot>${countBadge}</div>
+        </div>
+        <div class="title">${esc(c.short_name)}</div>
+      </div>
+    `;
   }
-  // Apply search to BOTH containers. The hidden view is also filtered
-  // so switching views mid-search shows the same matches. Each container
-  // is sorted independently (Grid by score, Today preserves layout order
-  // since the user just wants the matching ones surfaced).
-  function applySearch(query) {
-    Object.values(viewContainers()).forEach(container => {
-      if (!container) return;
-      const cards = Array.from(container.children);
-      if (!query) { cards.forEach(c => c.style.display = ""); return; }
-      const scored = cards.map(c => ({
-        el: c,
-        score: score(query, c.dataset.choreShort || c.dataset.choreName, (c.dataset.choreAliases || "").split("|").filter(Boolean))
-      }));
-      scored.forEach(({ el, score }) => { el.style.display = score > 0 ? "" : "none"; });
-      if (container.matches?.("[data-chores-grid]")) {
-        // Grid reorders by score (best match first).
-        scored.sort((a, b) => b.score - a.score);
-        scored.forEach(({ el }) => container.appendChild(el));
+
+  function hotCellHTML(c) {
+    // Wrap a circle card with a centered multiplier pill above. The
+    // inner card is identical to Today's markup so gestures + ticker
+    // Just Work; `hideHotBadge` prevents the inner top-right badge
+    // from duplicating the centered pill.
+    return `
+      <div class="hot-strip-cell">
+        <div class="hot-mult">${esc(formatMultiplier(c.hot_multiplier))}×</div>
+        ${circleCardHTML(c, { hideHotBadge: true })}
+      </div>
+    `;
+  }
+
+  function nodeFrom(html) {
+    const t = document.createElement("template");
+    t.innerHTML = (html || "").trim();
+    return t.content.firstElementChild;
+  }
+
+  // ============================================================
+  // Per-chore data attribute hydration — JS reads these for cooldowns
+  // + last_completed_at without re-reading the store on every tick.
+  // We set them in addition to the visible HTML so existing ticker
+  // code stays cheap.
+  // ============================================================
+  function hydrateDataAttrs(el, c) {
+    el.dataset.choreCooldown = c.threshold_seconds || 0;
+    el.dataset.choreOneOff = String(!!c.one_off);
+    el.dataset.lastCompletedAt = c.last_completed_at || "";
+    el.dataset.doneCount = c.done_count_today || 0;
+    el.dataset.choreName = c.name || "";
+    el.dataset.choreShort = c.short_name || "";
+    el.dataset.choreIcon = c.icon || "";
+    el.dataset.choreReward = c.reward_pebbles || 0;
+    el.dataset.choreShowOnDailyView = c.show_on_daily_view || "when_scheduled";
+    el.dataset.choreSharingMode = c.sharing_mode || "personal";
+    el.dataset.choreAssignedToUserId = c.assigned_to_user_id || "";
+    el.dataset.choreStartsOn = c.starts_on || "";
+    el.dataset.choreRecurrence = JSON.stringify(c.recurrence || {});
+    el.dataset.choreAliases = (c.aliases || []).join("|");
+  }
+
+  function renderGridCard(c)   { const el = nodeFrom(gridCardHTML(c));   hydrateDataAttrs(el, c); return el; }
+  function renderCircleCard(c) { const el = nodeFrom(circleCardHTML(c)); hydrateDataAttrs(el, c); return el; }
+  function renderHotCell(c)    {
+    const wrap = nodeFrom(hotCellHTML(c));
+    const card = wrap.querySelector("[data-chore-id]");
+    if (card) hydrateDataAttrs(card, c);
+    return wrap;
+  }
+
+  // ============================================================
+  // Views — render from store. Subscribers handle granular updates.
+  // ============================================================
+  const Views = (() => {
+    const grid    = () => document.querySelector("[data-chores-grid]");
+    const today   = () => document.querySelector("[data-chores-circles]");
+    const hot     = () => document.querySelector("[data-chores-hot-strip]");
+    const empty   = () => document.querySelector("[data-empty-today]");
+    const lookCt  = () => document.querySelector("[data-chores-lookahead]");
+
+    function clear(el) { if (el) el.innerHTML = ""; }
+    function appendTo(el, node) { if (el && node) el.appendChild(node); }
+
+    function renderGrid() {
+      const c = grid();
+      if (!c) return;
+      clear(c);
+      ChoreStore.activeForGrid().forEach(item => appendTo(c, renderGridCard(item)));
+    }
+    function renderToday() {
+      const c = today();
+      if (!c) return;
+      clear(c);
+      const items = ChoreStore.visibleOnToday();
+      items.forEach(item => appendTo(c, renderCircleCard(item)));
+      if (empty()) empty().hidden = items.length > 0;
+    }
+    function renderHot() {
+      const c = hot();
+      if (!c) return;
+      clear(c);
+      const picks = ChoreStore.hotPicks();
+      if (!picks.length) { c.hidden = true; return; }
+      c.hidden = false;
+      picks.forEach(item => appendTo(c, renderHotCell(item)));
+    }
+    function renderLookahead() {
+      const c = lookCt();
+      if (!c) return;
+      const data = ChoreStore.lookahead() || {};
+      const keys = Object.keys(data).sort();
+      if (!keys.length) { c.innerHTML = ""; c.hidden = true; return; }
+      c.hidden = false;
+      const parts = [`<h3 class="lookahead-heading">Upcoming</h3>`];
+      keys.forEach(day => {
+        const ids = data[day] || [];
+        if (!ids.length) return;
+        const dayObj = new Date(day + "T00:00:00");
+        const dayLabel = dayObj.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+        const chips = ids.map(id => {
+          const c = ChoreStore.get(id);
+          if (!c) return "";
+          return `<span class="day-chip">${iconHTML(c)} ${esc(c.short_name)} <strong>${esc(c.reward_label)}</strong></span>`;
+        }).join("");
+        parts.push(`<div class="lookahead-day"><div class="day-label">${esc(dayLabel)}</div><div class="day-items">${chips}</div></div>`);
+      });
+      c.innerHTML = parts.join("");
+    }
+
+    function upsertOne(c) {
+      // Each container holds at most one element per chore id. Swap
+      // when present; append otherwise. Removal handled separately.
+      const g = grid()?.querySelector(`[data-chore-id="${c.id}"]`);
+      if (g) g.replaceWith(renderGridCard(c));
+      else appendTo(grid(), renderGridCard(c));
+
+      const t = today()?.querySelector(`[data-chore-id="${c.id}"]`);
+      if (c.today_visible && !c.archived) {
+        if (t) t.replaceWith(renderCircleCard(c));
+        else appendTo(today(), renderCircleCard(c));
+        if (empty()) empty().hidden = (today()?.children.length || 0) > 0;
+      } else if (t) {
+        t.remove();
+        if (empty()) empty().hidden = (today()?.children.length || 0) > 0;
       }
-    });
-  }
-  document.querySelector('[data-chores-search]')?.addEventListener("input", e => applySearch(e.target.value.trim()));
 
-  // ---------- countdown formatting ----------
-  // < 1m: ":48s" — < 5m: "4:32" — < 50m: "23m" — < 16h: "9h" — < 4w: "13d" — < 23M: "8M" — else: "Ny"
-  // Always rounds UP.
+      // Hot strip — only refresh existing cells (membership is set
+      // once per day on the server side).
+      const hotCell = hot()?.querySelector(`[data-chore-id="${c.id}"]`)?.closest(".hot-strip-cell");
+      if (hotCell) {
+        const fresh = renderHotCell(c);
+        hotCell.replaceWith(fresh);
+      }
+    }
+    function removeOne(id) {
+      document.querySelectorAll(`[data-chore-id="${id}"]`).forEach(el => {
+        const cell = el.closest(".hot-strip-cell");
+        (cell || el).remove();
+      });
+      if (empty()) empty().hidden = (today()?.children.length || 0) > 0;
+    }
+    function renderAll() {
+      renderGrid();
+      renderToday();
+      renderHot();
+      renderLookahead();
+    }
+    return { renderAll, renderGrid, renderToday, renderHot, renderLookahead, upsertOne, removeOne };
+  })();
+
+  ChoreStore.subscribe((kind, id) => {
+    if (kind === "bootstrap") Views.renderAll();
+    else if (kind === "lookahead") Views.renderLookahead();
+    else if (kind === "remove") Views.removeOne(id);
+    else if (kind === "upsert") {
+      const c = ChoreStore.get(id);
+      if (!c) return;
+      Views.upsertOne(c);
+    }
+  });
+
+  // ============================================================
+  // ticker — countdown + ago row driven by data attributes
+  // ============================================================
+  const RING_CIRC = 2 * Math.PI * 46;
+
+  function secondsUntilNextChoreDay(now) {
+    const d = new Date(now);
+    const next = new Date(d);
+    next.setHours(CUTOFF_HOUR, 0, 0, 0);
+    if (next.getTime() <= d.getTime()) next.setDate(next.getDate() + 1);
+    return Math.max(0, Math.floor((next.getTime() - d.getTime()) / 1000));
+  }
+
   function formatRemaining(seconds) {
     if (seconds <= 0) return "";
     const s = Math.ceil(seconds);
     if (s < 60) return ":" + String(s).padStart(2, "0") + "s";
-    const m = Math.ceil(s / 60);
     if (s < 5 * 60) {
       const mins = Math.floor(s / 60);
       const secs = Math.ceil(s % 60);
@@ -152,18 +413,28 @@
     return Math.ceil(s / (365 * 86400)) + "y";
   }
 
-  // ---------- progress ring + countdown + ago ticker ----------
-  const RING_CIRC = 2 * Math.PI * 46; // r=46 in viewBox 100x100
-
-  // Seconds until the next ChoreDay boundary (default 4am). Used by
-  // day-end (`-1`) cooldowns so the countdown shows "until 4am" rather
-  // than a fixed elapsed-time window.
-  function secondsUntilNextChoreDay(now) {
-    const d = new Date(now);
-    const next = new Date(d);
-    next.setHours(CUTOFF_HOUR, 0, 0, 0);
-    if (next.getTime() <= d.getTime()) next.setDate(next.getDate() + 1);
-    return Math.max(0, Math.floor((next.getTime() - d.getTime()) / 1000));
+  function formatAgo(isoString, now = Date.now()) {
+    if (!isoString) return "";
+    const t = new Date(isoString).getTime();
+    if (Number.isNaN(t)) return "";
+    const sec = Math.max(0, Math.floor((now - t) / 1000));
+    if (sec < 60) return "<1m ago";
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      return m > 0 ? `${h}h ${m}m ago` : `${h}h ago`;
+    }
+    const d = new Date(t);
+    const today = new Date(now);
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const dayDiff = Math.floor((startOfToday - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000);
+    if (dayDiff === 1) return "Yesterday";
+    if (dayDiff >= 2 && dayDiff <= 6) {
+      return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d.getDay()];
+    }
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${months[d.getMonth()]} ${d.getDate()}, '${String(d.getFullYear() % 100).padStart(2, "0")}`;
   }
 
   function updateRings(now) {
@@ -176,9 +447,6 @@
       if (!label && !ring) return;
       if (ring) ring.setAttribute("stroke-dasharray", RING_CIRC);
 
-      // Day-end cooldown: server-rendered label is shown ONLY when the
-      // user completed today; once we cross the chore-day boundary the
-      // label disappears entirely. JS just keeps it ticking until 4am.
       if (cooldown === -1) {
         if (!label) return;
         if (!last) { label.textContent = ""; label.classList.add("elapsed"); return; }
@@ -206,39 +474,6 @@
       }
     });
   }
-
-  // ---------- "ago" formatter ----------
-  // <1m → "<1m ago"
-  // <60m → "Nm ago"
-  // <24h → "Hh Mm ago" (two largest units, never seconds)
-  // Yesterday (calendar-day before today): "Yesterday"
-  // 2-6 days ago: weekday name
-  // 7+ days: "Jan 14, '26"
-  function formatAgo(isoString, now = Date.now()) {
-    if (!isoString) return "";
-    const t = new Date(isoString).getTime();
-    if (Number.isNaN(t)) return "";
-    const sec = Math.max(0, Math.floor((now - t) / 1000));
-    if (sec < 60) return "<1m ago";
-    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-    if (sec < 86400) {
-      const h = Math.floor(sec / 3600);
-      const m = Math.floor((sec % 3600) / 60);
-      return m > 0 ? `${h}h ${m}m ago` : `${h}h ago`;
-    }
-    // Day-based labels
-    const d = new Date(t);
-    const today = new Date(now);
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const dayDiff = Math.floor((startOfToday - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000);
-    if (dayDiff === 1) return "Yesterday";
-    if (dayDiff >= 2 && dayDiff <= 6) {
-      return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d.getDay()];
-    }
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return `${months[d.getMonth()]} ${d.getDate()}, '${String(d.getFullYear() % 100).padStart(2, "0")}`;
-  }
-
   function updateAgoRows(now) {
     document.querySelectorAll("[data-ago-row]").forEach(row => {
       const card = row.closest("[data-chore-id]");
@@ -247,60 +482,927 @@
       row.textContent = iso ? formatAgo(iso, now) : "";
     });
   }
-
-  function startRingTicker() {
+  function startTicker() {
     const tick = () => {
       const now = Date.now();
       updateRings(now);
       updateAgoRows(now);
     };
     tick();
-    // Ring is per-second; ago rows naturally re-tick every second too
-    // but their string only changes once per minute. Cheap either way.
     setInterval(tick, 1000);
   }
 
-  // ---------- day-rollover detection ----------
-  // Calculate the chore-day for "now" using the same 4am cutoff the server
-  // uses. If it ever changes vs. the page's DAY_KEY, refetch the page.
-  function currentChoreDayIso() {
-    const now = new Date();
-    const shifted = new Date(now.getTime() - CUTOFF_HOUR * 3600 * 1000);
-    const y = shifted.getFullYear();
-    const m = String(shifted.getMonth() + 1).padStart(2, "0");
-    const d = String(shifted.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
+  // ============================================================
+  // gestures — tap to complete, long-press to undo, edit-mode tap to edit
+  // ============================================================
+  let editModeActive = false;
+
+  function bindCardClicks() {
+    [
+      document.querySelector("[data-chores-grid]"),
+      document.querySelector("[data-chores-circles]"),
+      document.querySelector("[data-chores-hot-strip]"),
+    ].filter(Boolean).forEach(bindOne);
   }
-  function startDayWatcher() {
-    setInterval(() => {
-      if (DAY_KEY && currentChoreDayIso() !== DAY_KEY && navigator.onLine) {
-        flash("New day — refreshing", "warn");
-        setTimeout(() => location.reload(), 600);
+  function bindOne(container) {
+    const MOVE_THRESHOLD = 8, LONG_MS = 550;
+    const s = { pointerId: null, card: null, startX: 0, startY: 0, startedAt: 0, moved: false, longPressFired: false, timer: null };
+    function reset() {
+      if (s.timer) clearTimeout(s.timer);
+      s.pointerId = null; s.card = null; s.startX = 0; s.startY = 0; s.startedAt = 0;
+      s.moved = false; s.longPressFired = false; s.timer = null;
+    }
+    container.addEventListener("pointerdown", e => {
+      if (s.pointerId !== null) return;
+      const card = e.target.closest("[data-chore-id]");
+      if (!card) return;
+      if (editModeActive) return;
+      const usesCircleHitbox = container.matches("[data-chores-circles], [data-chores-hot-strip]");
+      if (usesCircleHitbox && !e.target.closest(".circle-inner")) return;
+
+      s.pointerId = e.pointerId; s.card = card; s.startX = e.clientX; s.startY = e.clientY;
+      s.startedAt = performance.now(); s.moved = false; s.longPressFired = false;
+      s.timer = setTimeout(() => {
+        if (s.card && !s.moved) { s.longPressFired = true; undoLastCompletion(s.card.dataset.choreId); }
+      }, LONG_MS);
+    });
+    container.addEventListener("pointermove", e => {
+      if (s.pointerId !== e.pointerId) return;
+      if (Math.hypot(e.clientX - s.startX, e.clientY - s.startY) > MOVE_THRESHOLD) {
+        s.moved = true;
+        if (s.timer) { clearTimeout(s.timer); s.timer = null; }
       }
-    }, 30 * 1000);
-    // Also check on visibility change (tab brought back to foreground)
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && DAY_KEY && currentChoreDayIso() !== DAY_KEY) {
-        if (navigator.onLine) location.reload();
-      }
+    });
+    container.addEventListener("pointerup", e => {
+      if (s.pointerId !== e.pointerId) return;
+      const card = s.card;
+      const isShortTap = !s.moved && !s.longPressFired && (performance.now() - s.startedAt) < LONG_MS;
+      reset();
+      if (!card) return;
+      if (!isShortTap) { card.dataset.suppressClick = "1"; return; }
+      if (multiplierActive) { openMultiplierModal(card); return; }
+      if (e.shiftKey) { openEditModal(card); return; }
+      completeChore(card.dataset.choreId);
+    });
+    ["pointercancel", "pointerleave"].forEach(evt =>
+      container.addEventListener(evt, e => { if (s.pointerId === e.pointerId) reset(); }));
+    container.addEventListener("click", e => {
+      const card = e.target.closest("[data-chore-id]");
+      if (!card) return;
+      if (editModeActive) { e.preventDefault(); e.stopPropagation(); openEditModal(card); return; }
+      if (card.dataset.suppressClick === "1") { delete card.dataset.suppressClick; e.preventDefault(); e.stopPropagation(); }
+    }, true);
+    container.addEventListener("contextmenu", e => {
+      const card = e.target.closest("[data-chore-id]");
+      if (!card) return;
+      e.preventDefault();
+      openEditModal(card);
     });
   }
 
-  // ---------- connection + offline queue ----------
-  // Durability contract: items in this queue NEVER get dropped because
-  // of a server response. Network errors, 5xx, 4xx (including 401/403/
-  // 419/422), and 3xx-to-login all keep the item right where it is. The
-  // queue only shrinks when an item gets a real 2xx. If the server is
-  // refusing because the session/CSRF aged out, the queue marks itself
-  // "blocked", surfaces that to the user, and waits — re-auth in any
-  // browser tab will let the next flush attempt succeed.
-  const QUEUE_KEY = "chores:offline_queue:v2";
-  let queueCsrf = CSRF; // refreshed on demand
-  let queueBlockedReason = null;
+  // ============================================================
+  // mutations — go through the store
+  // ============================================================
+  async function completeChore(id) {
+    const c = ChoreStore.get(parseInt(id, 10));
+    if (!c) return;
+    const sid = String(id);
+    const clickAt = new Date().toISOString();
+    localClickTs.set(sid, Date.now());
 
-  function loadQueue() {
-    try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); } catch (e) { return []; }
+    ChoreStore.patch(c.id, {
+      done_count_today: (c.done_count_today || 0) + 1,
+      last_completed_at: clickAt,
+    });
+
+    if (!navigator.onLine) {
+      enqueue({ url: `/chores/items/${c.id}/completion`, method: "POST",
+                body: { client_completed_at: clickAt, tab_id: TAB_ID } });
+      return;
+    }
+
+    inFlight.add(sid);
+    try {
+      const data = await api(`/chores/items/${c.id}/completion`, "POST",
+        { client_completed_at: clickAt, tab_id: TAB_ID });
+      reconcile(data);
+      if (data.skipped) flash(data.skipped_reason || "Cooldown — no payout", "warn");
+      else if (data.paid) flash(`+${data.paid}p`);
+      (data.awarded_achievements || []).forEach(a => flash(`🏆 ${a.name} +${a.pebbles}p`, "ok"));
+    } catch (err) {
+      if (isTransientError(err)) {
+        // Network / rate-limit / upstream-503: queue so the next flush
+        // (online event, Monitor reconnect, scheduled retry) sends it.
+        // User never sees an "Error" flash — their tap was accepted
+        // locally and will sync.
+        enqueue({ url: `/chores/items/${c.id}/completion`, method: "POST",
+                  body: { client_completed_at: clickAt, tab_id: TAB_ID } });
+        setConnDot("syncing");
+        scheduleQueueRetry();
+      } else {
+        flash("Couldn't complete: " + err.message, "error");
+      }
+    } finally { inFlight.delete(sid); }
   }
+
+  // Back-off retry for the offline queue when we hit a soft failure
+  // (429 / 5xx). We don't burn the CPU polling; one timer per active
+  // back-off, with growing intervals capped at 60s.
+  let queueRetryTimer = null;
+  let queueRetryDelay = 2000;
+  function scheduleQueueRetry() {
+    if (queueRetryTimer) return;
+    queueRetryTimer = setTimeout(async () => {
+      queueRetryTimer = null;
+      await flushQueue();
+      if (loadQueue().length === 0) {
+        queueRetryDelay = 2000;
+      } else {
+        queueRetryDelay = Math.min(queueRetryDelay * 2, 60000);
+        scheduleQueueRetry();
+      }
+    }, queueRetryDelay);
+  }
+
+  async function undoLastCompletion(id) {
+    const c = ChoreStore.get(parseInt(id, 10));
+    if (!c) return;
+    const sid = String(id);
+    ChoreStore.patch(c.id, {
+      done_count_today: Math.max(0, (c.done_count_today || 0) - 1),
+    });
+    localClickTs.set(sid, Date.now());
+    inFlight.add(sid);
+    try {
+      const data = await api(`/chores/items/${c.id}/completion`, "DELETE");
+      reconcile(data);
+      flash("Undone", "warn");
+    } catch (err) {
+      if (isTransientError(err)) {
+        enqueue({ url: `/chores/items/${c.id}/completion`, method: "DELETE" });
+        setConnDot("syncing");
+        scheduleQueueRetry();
+      } else {
+        flash("Nothing to undo", "warn");
+      }
+    } finally { inFlight.delete(sid); }
+  }
+
+  // Apply a server payload to the store. Two shapes:
+  //   * { chore: {...}, ... } — full chore JSON (mutation responses).
+  //   * { chores: [...], archived_chore_ids: [...], lookahead: {...} } — sync.
+  function reconcile(data) {
+    if (!data) return;
+    if (data.chore) {
+      const id = data.chore.id;
+      const localMs = localClickTs.get(String(id)) || 0;
+      const serverMs = data.server_ts ? new Date(data.server_ts).getTime() : Date.now();
+      if (!localMs || serverMs >= localMs) ChoreStore.upsert(data.chore);
+    }
+    if (Array.isArray(data.chores)) {
+      data.chores.forEach(c => {
+        const localMs = localClickTs.get(String(c.id)) || 0;
+        const serverMs = data.server_ts ? new Date(data.server_ts).getTime() :
+                         c.updated_at ? new Date(c.updated_at).getTime() : Date.now();
+        if (!localMs || serverMs >= localMs) ChoreStore.upsert(c);
+      });
+    }
+    if (Array.isArray(data.archived_chore_ids)) {
+      data.archived_chore_ids.forEach(id => ChoreStore.remove(id));
+    }
+    if (data.lookahead) ChoreStore.setLookahead(data.lookahead);
+    if (data.archived_chore_id) ChoreStore.remove(data.archived_chore_id);
+
+    if (data.today_earnings != null && root) {
+      root.dataset.balanceToday = data.today_earnings;
+      updateBalancePill();
+    }
+    if (data.balance != null && root) root.dataset.balanceTotal = data.balance;
+  }
+
+  function updateBalancePill() {
+    const el = document.querySelector("[data-balance]");
+    if (!el) return;
+    const v = root?.dataset.balanceToday;
+    if (v != null) el.textContent = v;
+  }
+
+  // ============================================================
+  // sync — diff endpoint, cold boot + reconnect
+  // ============================================================
+  const SYNC_TS_KEY = "chores:lastSyncTs:v1";
+  let syncInFlight = false;
+  async function fullSync() {
+    if (syncInFlight || !navigator.onLine) return;
+    syncInFlight = true;
+    setSyncBadge(true);
+    try {
+      const since = localStorage.getItem(SYNC_TS_KEY) || "";
+      const url = since ? `/chores/sync?since=${encodeURIComponent(since)}` : "/chores/sync";
+      const data = await api(url, "GET");
+      reconcile(data);
+      if (data.server_ts) localStorage.setItem(SYNC_TS_KEY, data.server_ts);
+      setSyncBadge(false);
+    } catch (e) { setSyncBadge(false, true); }
+    finally { syncInFlight = false; }
+  }
+
+  // ============================================================
+  // search — works against the store, both views
+  // ============================================================
+  function score(needle, name, aliases) {
+    if (!needle) return 1;
+    const n = needle.toLowerCase();
+    const fields = [
+      { text: (name || "").toLowerCase(), weight: 1.0 },
+      ...((aliases || []).map(a => ({ text: a.toLowerCase(), weight: 0.5 }))),
+    ];
+    let best = 0;
+    for (const { text, weight } of fields) {
+      if (!text) continue;
+      const idx = text.indexOf(n);
+      let local = 0;
+      if (idx === 0) local = 1.0;
+      else if (idx > 0) local = 0.7 - Math.min(idx, 10) * 0.02;
+      else if (fuzzyMatch(n, text)) local = 0.3;
+      else continue;
+      best = Math.max(best, local * weight);
+    }
+    return best;
+  }
+  function fuzzyMatch(needle, hay) {
+    let i = 0, j = 0;
+    while (i < needle.length && j < hay.length) {
+      if (needle[i] === hay[j]) i++;
+      j++;
+    }
+    return i === needle.length;
+  }
+  function applySearch(q) {
+    [
+      document.querySelector("[data-chores-grid]"),
+      document.querySelector("[data-chores-circles]"),
+    ].filter(Boolean).forEach(container => {
+      const cards = Array.from(container.children);
+      if (!q) { cards.forEach(c => c.style.display = ""); return; }
+      cards.forEach(card => {
+        const c = ChoreStore.get(parseInt(card.dataset.choreId, 10));
+        if (!c) return;
+        const s = score(q, c.short_name || c.name, c.aliases || []);
+        card.style.display = s > 0 ? "" : "none";
+      });
+    });
+  }
+  document.querySelector('[data-chores-search]')?.addEventListener("input",
+    e => applySearch(e.target.value.trim()));
+
+  // ============================================================
+  // multiplier toggle + modal
+  // ============================================================
+  let multiplierActive = false;
+  let multiplierTargetCard = null;
+  const multiplierBtn = document.querySelector('[data-multiplier-toggle]');
+  const multiplierModal = document.querySelector('[data-multiplier-modal]');
+  multiplierBtn?.addEventListener("click", () => {
+    multiplierActive = !multiplierActive;
+    multiplierBtn.classList.toggle("active", multiplierActive);
+  });
+  function openMultiplierModal(card) {
+    if (!multiplierModal) return;
+    multiplierTargetCard = card;
+    multiplierModal.querySelector('[data-multiplier-label]').textContent =
+      card.dataset.choreShort || card.dataset.choreName;
+    multiplierModal.querySelector('[data-multiplier-input]').value = 2;
+    multiplierModal.classList.remove("hidden");
+  }
+  function closeMultiplierModal() {
+    multiplierModal?.classList.add("hidden");
+    multiplierTargetCard = null;
+    multiplierActive = false;
+    multiplierBtn?.classList.remove("active");
+  }
+  multiplierModal?.querySelectorAll('[data-action="cancel"]').forEach(el =>
+    el.addEventListener("click", closeMultiplierModal));
+  multiplierModal?.addEventListener("click", e => { if (e.target === multiplierModal) closeMultiplierModal(); });
+  multiplierModal?.querySelectorAll('[data-mult]').forEach(btn =>
+    btn.addEventListener("click", () => { multiplierModal.querySelector('[data-multiplier-input]').value = btn.dataset.mult; }));
+  multiplierModal?.querySelector('[data-multiplier-submit]')?.addEventListener("click", async () => {
+    const n = Math.max(1, Math.min(50, parseInt(multiplierModal.querySelector('[data-multiplier-input]').value, 10) || 1));
+    const card = multiplierTargetCard;
+    closeMultiplierModal();
+    if (!card) return;
+    for (let i = 0; i < n; i++) await completeChore(card.dataset.choreId);
+  });
+
+  // ============================================================
+  // edit modal
+  // ============================================================
+  const editModal = document.querySelector("[data-chore-modal]");
+  const editForm  = editModal?.querySelector('[data-chores-form]');
+  function setField(name, value) {
+    const el = editForm?.querySelector(`[data-field="${name}"]`);
+    if (el == null) return;
+    el.value = value ?? "";
+  }
+  function getField(name) { return editForm?.querySelector(`[data-field="${name}"]`)?.value; }
+
+  let currentChoreId = null;
+  let modalLockedFor = null;
+  const WDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+  function setPillValue(groupKey, value) {
+    const group = editForm.querySelector(`[data-pill-group="${groupKey}"]`);
+    if (!group) return;
+    group.querySelectorAll(".pill").forEach(p => {
+      p.classList.toggle("active", String(p.dataset.value) === String(value ?? ""));
+    });
+    const input = editForm.querySelector(`[data-field="${groupKey}"]`);
+    if (input) input.value = value ?? "";
+  }
+  function bindPillGroups() {
+    editForm.querySelectorAll(".pill-group[data-pill-group]").forEach(group => {
+      const key = group.dataset.pillGroup;
+      group.addEventListener("click", e => {
+        const pill = e.target.closest(".pill");
+        if (!pill || pill.classList.contains("chip-day")) return;
+        e.preventDefault();
+        if (key === "freq") {
+          if (pill.dataset.value === "weekdays") {
+            setPillValue("freq", "weekly");
+            syncWeekdayChips(["mon", "tue", "wed", "thu", "fri"]);
+            syncFreqRow();
+            return;
+          }
+          setPillValue("freq", pill.dataset.value);
+          syncFreqRow();
+          return;
+        }
+        if (key === "threshold_preset") {
+          setPillValue("threshold_preset", pill.dataset.value);
+          syncCooldownRow();
+          return;
+        }
+        setPillValue(key, pill.dataset.value);
+        if (key === "sharing_mode") syncAssigneeRow();
+      });
+    });
+    editForm.querySelector('[data-reward-quicks]')?.addEventListener("click", e => {
+      const pill = e.target.closest("[data-reward]");
+      if (!pill) return;
+      e.preventDefault();
+      const v = pill.dataset.reward;
+      editForm.querySelectorAll('[data-reward-quicks] .pill').forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+      const custom = editForm.querySelector('.reward-custom');
+      if (v === "custom") { custom?.classList.remove("hidden"); custom?.focus(); }
+      else { custom?.classList.add("hidden"); if (custom) custom.value = v; }
+    });
+    editForm.querySelector('[data-weekday-chips]')?.addEventListener("click", e => {
+      const btn = e.target.closest('[data-day]');
+      if (!btn) return;
+      e.preventDefault();
+      btn.classList.toggle("active");
+      syncWeekdaysHelperHighlight();
+    });
+    editForm.querySelector('[data-month-day-pane]')?.addEventListener("click", e => {
+      const btn = e.target.closest('[data-day]');
+      if (!btn) return;
+      e.preventDefault();
+      btn.classList.toggle("active");
+    });
+    editForm.querySelector('[data-month-mode-tabs]')?.addEventListener("click", e => {
+      const btn = e.target.closest('[data-month-mode]');
+      if (!btn) return;
+      e.preventDefault();
+      const mode = btn.dataset.monthMode;
+      editForm.querySelectorAll('[data-month-mode-tabs] .pill').forEach(p =>
+        p.classList.toggle("active", p.dataset.monthMode === mode));
+      editForm.querySelector('[data-month-day-pane]')?.classList.toggle("hidden", mode !== "day-of-month");
+      editForm.querySelector('[data-month-nth-pane]')?.classList.toggle("hidden", mode !== "nth-weekday");
+    });
+    editForm.querySelector('[data-cooldown-amount]')?.addEventListener("input", syncCustomCooldown);
+    editForm.querySelector('[data-cooldown-unit]')?.addEventListener("change", syncCustomCooldown);
+    editForm.querySelector('[data-field="one_off"]')?.addEventListener("change", syncSingleTask);
+    editForm.querySelector('[data-field="starts_on"]')?.addEventListener("change", syncStartsOnDependents);
+  }
+  function isSingleTask() { return editForm.querySelector('[data-field="one_off"]')?.checked === true; }
+  function syncSingleTask() {
+    const on = isSingleTask();
+    editForm.querySelectorAll('[data-recurring-only]').forEach(el => el.classList.toggle("hidden", on));
+    if (on) ensureStartsOnSet();
+  }
+  // Fill starts_on with today's date IFF it's currently blank. Called
+  // whenever the user opts into something date-bearing — a recurrence
+  // freq or Single Task — so the field isn't silently empty.
+  function ensureStartsOnSet() {
+    const startsField = editForm.querySelector('[data-field="starts_on"]');
+    if (startsField && !startsField.value) startsField.value = todayIso();
+  }
+  function syncCooldownRow() {
+    const preset = editForm.querySelector('[data-field="threshold_preset"]')?.value || "";
+    const customRow = editForm.querySelector('[data-cooldown-custom-row]');
+    const hidden = editForm.querySelector('[data-field="threshold_seconds"]');
+    if (preset === "custom") { customRow?.classList.remove("hidden"); syncCustomCooldown(); }
+    else if (preset === "day-end") { customRow?.classList.add("hidden"); hidden.value = "-1"; }
+    else { customRow?.classList.add("hidden"); hidden.value = preset || ""; }
+  }
+  function syncCustomCooldown() {
+    const amt = parseInt(editForm.querySelector('[data-cooldown-amount]')?.value, 10) || 0;
+    const unit = editForm.querySelector('[data-cooldown-unit]')?.value || "second";
+    const factor = { second: 1, minute: 60, hour: 3600, day: 86400, week: 604800 }[unit] || 1;
+    const seconds = Math.max(0, amt) * factor;
+    const hidden = editForm.querySelector('[data-field="threshold_seconds"]');
+    if (hidden) hidden.value = String(seconds);
+  }
+  function setCooldownSeconds(seconds) {
+    if (seconds === -1) { setPillValue("threshold_preset", "day-end"); syncCooldownRow(); return; }
+    const presets = [0, 3600, 10800, 21600, 43200, 86400, 172800, 604800];
+    if (presets.includes(seconds)) {
+      setPillValue("threshold_preset", seconds === 0 ? "" : String(seconds));
+      syncCooldownRow();
+    } else {
+      setPillValue("threshold_preset", "custom");
+      const { amount, unit } = bestCooldownDecomposition(seconds);
+      const amtEl = editForm.querySelector('[data-cooldown-amount]');
+      const unitEl = editForm.querySelector('[data-cooldown-unit]');
+      if (amtEl) amtEl.value = amount;
+      if (unitEl) unitEl.value = unit;
+      syncCooldownRow();
+    }
+  }
+  function bestCooldownDecomposition(seconds) {
+    if (seconds % 604800 === 0) return { amount: seconds / 604800, unit: "week" };
+    if (seconds % 86400 === 0)  return { amount: seconds / 86400,  unit: "day" };
+    if (seconds % 3600 === 0)   return { amount: seconds / 3600,   unit: "hour" };
+    if (seconds % 60 === 0)     return { amount: seconds / 60,     unit: "minute" };
+    return { amount: seconds, unit: "second" };
+  }
+  function syncFreqRow() {
+    const freq = getField("freq") || "never";
+    // Picking ANY recurrence auto-fills starts_on with today (only
+    // when blank — never overwrites a user-chosen date).
+    if (freq !== "never") ensureStartsOnSet();
+    editForm.querySelector('[data-weekly-wrap]')?.classList.toggle("hidden", freq !== "weekly");
+    editForm.querySelector('[data-monthly-wrap]')?.classList.toggle("hidden", freq !== "monthly");
+    editForm.querySelector('[data-yearly-wrap]')?.classList.toggle("hidden", freq !== "yearly");
+    editForm.querySelector('[data-interval-wrap]')?.classList.toggle("hidden",
+      freq !== "custom" && freq !== "relative");
+    editForm.querySelector('[data-weekdays-wrap]')?.classList.add("hidden");
+    if (freq === "weekly") {
+      const chips = Array.from(editForm.querySelectorAll('[data-weekday-chips] .chip-day.active'));
+      if (chips.length === 0) {
+        const d = parseStartsOn();
+        if (d) syncWeekdayChips([WDAY_KEYS[d.getDay()]]);
+      }
+    }
+    if (freq === "monthly") {
+      const anyActive = editForm.querySelector('[data-month-day-pane] .md-chip.active');
+      if (!anyActive) {
+        const d = parseStartsOn();
+        if (d) editForm.querySelector(`[data-month-day-pane] [data-day="${d.getDate()}"]`)?.classList.add("active");
+      }
+    }
+    syncStartsOnDependents();
+    syncWeekdaysHelperHighlight();
+  }
+  function syncWeekdaysHelperHighlight() {
+    const weekdaysPill = editForm.querySelector('[data-pill-group="freq"] [data-value="weekdays"]');
+    if (!weekdaysPill) return;
+    const freq = getField("freq");
+    const sel = collectWeekdays();
+    const SET = ["mon", "tue", "wed", "thu", "fri"];
+    weekdaysPill.classList.toggle("active",
+      freq === "weekly" && sel.length === 5 && SET.every(d => sel.includes(d)));
+  }
+  function syncStartsOnDependents() {
+    const d = parseStartsOn();
+    if (!d) return;
+    const monthLabel = editForm.querySelector('[data-month-day-label]');
+    if (monthLabel) monthLabel.textContent = d.getDate();
+    const setPos = editForm.querySelector('[data-month-set-pos]');
+    if (setPos && !setPos.dataset.userTouched) setPos.value = String(Math.floor((d.getDate() - 1) / 7) + 1);
+    const wday = editForm.querySelector('[data-month-wday]');
+    if (wday && !wday.dataset.userTouched) wday.value = WDAY_KEYS[d.getDay()];
+    const yearlyLabel = editForm.querySelector('[data-yearly-label]');
+    if (yearlyLabel) {
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      yearlyLabel.textContent = `${months[d.getMonth()]} ${d.getDate()}`;
+    }
+  }
+  function parseStartsOn() {
+    const v = editForm.querySelector('[data-field="starts_on"]')?.value;
+    if (!v) return null;
+    const parts = v.split("-").map(Number);
+    if (parts.length !== 3) return null;
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  function syncAssigneeRow() {
+    const mode = getField("sharing_mode");
+    editForm.querySelector('[data-assignee-wrap]')?.classList.toggle("hidden", mode !== "assigned");
+  }
+  function syncWeekdayChips(days) {
+    const wrap = editForm.querySelector('[data-weekday-chips]');
+    if (!wrap) return;
+    Array.from(wrap.children).forEach(btn => btn.classList.toggle("active", days.includes(btn.dataset.day)));
+  }
+  function collectWeekdays() {
+    const wrap = editForm.querySelector('[data-weekday-chips]');
+    return Array.from(wrap?.querySelectorAll('[data-day].active') || []).map(b => b.dataset.day);
+  }
+  function selectRewardPill(amount) {
+    editForm.querySelectorAll('[data-reward-quicks] .pill').forEach(p => p.classList.remove("active"));
+    const exact = editForm.querySelector(`[data-reward-quicks] [data-reward="${amount}"]`);
+    if (exact) {
+      exact.classList.add("active");
+      editForm.querySelector('.reward-custom')?.classList.add("hidden");
+    } else {
+      editForm.querySelector('[data-reward-quicks] [data-reward="custom"]')?.classList.add("active");
+      const custom = editForm.querySelector('.reward-custom');
+      if (custom) { custom.classList.remove("hidden"); custom.value = amount; }
+    }
+  }
+  function todayIso() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  function scrollModalToTop(modal) {
+    if (!modal) return;
+    modal.scrollTop = 0;
+    modal.querySelector(".chores-modal")?.scrollTo?.(0, 0);
+  }
+
+  // Icon picker — single contenteditable block + corner upload.
+  function bindIconUploader() {
+    const stack = editForm.querySelector("[data-icon-stack]");
+    if (!stack) return;
+    const preview   = stack.querySelector("[data-icon-preview]");
+    const uploadBtn = stack.querySelector("[data-icon-upload]");
+    const fileInput = stack.querySelector("[data-icon-file]");
+    const hidden    = stack.querySelector('[data-field="icon"]');
+    function setIconValue(v, { renderFromValue = true } = {}) {
+      if (hidden) hidden.value = v || "";
+      if (!renderFromValue || !preview) return;
+      if (!v) { preview.innerHTML = ""; return; }
+      if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
+        preview.innerHTML = `<img src="${esc(v)}" alt="" loading="lazy" draggable="false">`;
+      } else if (v.startsWith("<svg")) {
+        preview.innerHTML = v;
+      } else {
+        preview.textContent = v;
+      }
+    }
+    stack.__setIconValue = setIconValue;
+    preview?.addEventListener("input", () => {
+      const text = (preview.textContent || "").trim();
+      setIconValue(text, { renderFromValue: false });
+    });
+    preview?.addEventListener("paste", async e => {
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageItem = items.find(it => it.type.startsWith("image/"));
+      if (imageItem) {
+        e.preventDefault();
+        const file = imageItem.getAsFile();
+        if (file) { const v = await readFileAsValue(file); if (v) setIconValue(v); }
+        return;
+      }
+      const text = (e.clipboardData?.getData?.("text/plain") || "").trim();
+      if (!text) return;
+      if (text.startsWith("<svg") || text.startsWith("http://") || text.startsWith("https://") || text.startsWith("data:image/")) {
+        e.preventDefault();
+        setIconValue(text);
+      }
+    });
+    ["dragover", "drop"].forEach(evt => preview?.addEventListener(evt, async e => {
+      e.preventDefault();
+      if (evt !== "drop") return;
+      const file = Array.from(e.dataTransfer?.files || []).find(f => f.type.startsWith("image/"));
+      if (file) { const v = await readFileAsValue(file); if (v) setIconValue(v); }
+    }));
+    uploadBtn?.addEventListener("click", e => { e.preventDefault(); fileInput?.click(); });
+    fileInput?.addEventListener("change", async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      const v = await readFileAsValue(file);
+      if (v) setIconValue(v);
+      fileInput.value = "";
+    });
+  }
+  function readFileAsValue(file) {
+    return new Promise(resolve => {
+      if (!file || !file.type.startsWith("image/")) return resolve(null);
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result || null);
+      reader.onerror = () => resolve(null);
+      if (file.type === "image/svg+xml") reader.readAsText(file);
+      else reader.readAsDataURL(file);
+    });
+  }
+  function setIconField(v) {
+    const stack = editForm?.querySelector("[data-icon-stack]");
+    if (stack?.__setIconValue) stack.__setIconValue(v || "");
+  }
+
+  function openCreateModal(opts = {}) {
+    if (!editModal) return;
+    if (modalLockedFor !== "__create__") {
+      currentChoreId = null;
+      editForm.reset();
+      setIconField("");
+      if (opts.prefillName) setField("name", opts.prefillName);
+      selectRewardPill(1);
+      setField("reward_pebbles", 1);
+      // Intentionally leave starts_on blank — it auto-fills with today
+      // when the user picks a recurrence freq OR toggles Single Task on
+      // (see ensureStartsOnSet). New chores with no schedule get no
+      // implicit date attached.
+      setField("starts_on", "");
+      setCooldownSeconds(0);
+      setPillValue("freq", "never");
+      setPillValue("show_on_daily_view", "when_scheduled");
+      setPillValue("sharing_mode", "household");
+      const oneOffCb = editForm.querySelector('[data-field="one_off"]');
+      if (oneOffCb) oneOffCb.checked = !!opts.oneOff;
+      syncSingleTask();
+      editForm.querySelectorAll('[data-month-day-pane] .md-chip').forEach(c => c.classList.remove("active"));
+      editForm.querySelector('[data-month-mode-tabs] [data-month-mode="day-of-month"]')?.click();
+      syncFreqRow();
+      syncAssigneeRow();
+      syncWeekdayChips([]);
+      syncWeekdaysHelperHighlight();
+      modalLockedFor = "__create__";
+    }
+    editModal.querySelector('[data-modal-title]').textContent = "Add Chore";
+    editForm.querySelector('[data-action="archive"]')?.classList.add("hidden");
+    editModal.classList.remove("hidden");
+    scrollModalToTop(editModal);
+    const nameField = editForm.querySelector('[data-field="name"]');
+    if (nameField && !nameField.value) { nameField.focus(); nameField.select?.(); }
+  }
+  function openEditModal(card) {
+    if (!editModal) return;
+    const id = card.dataset.choreId;
+    if (modalLockedFor === id) {
+      currentChoreId = id;
+      editModal.classList.remove("hidden");
+      scrollModalToTop(editModal);
+      return;
+    }
+    const c = ChoreStore.get(parseInt(id, 10));
+    if (!c) return;
+    currentChoreId = id;
+    modalLockedFor = id;
+    editModal.querySelector('[data-modal-title]').textContent = "Edit Chore";
+    editForm.reset();
+    setField("name", c.name);
+    setField("short_name", c.short_name === c.name ? "" : c.short_name);
+    setIconField(c.icon || "");
+    setField("aliases_csv", (c.aliases || []).join(", "));
+    const reward = c.reward_pebbles || 0;
+    selectRewardPill(reward);
+    setField("reward_pebbles", reward);
+    const oneOffCb = editForm.querySelector('[data-field="one_off"]');
+    if (oneOffCb) oneOffCb.checked = !!c.one_off;
+    setPillValue("sharing_mode", c.sharing_mode || "household");
+    setField("assigned_to_user_id", c.assigned_to_user_id || "");
+    setPillValue("show_on_daily_view", c.show_on_daily_view || "when_scheduled");
+    setCooldownSeconds(c.threshold_seconds || 0);
+    setField("starts_on", c.starts_on || "");
+    const rec = c.recurrence || {};
+    setPillValue("freq", rec.freq || "never");
+    syncSingleTask();
+    syncFreqRow();
+    syncAssigneeRow();
+    syncWeekdayChips(rec.by_day || []);
+    editForm.querySelectorAll('[data-month-day-pane] .md-chip').forEach(c => c.classList.remove("active"));
+    if (rec.freq === "monthly") {
+      if (rec.by_set_pos != null) {
+        editForm.querySelector('[data-month-mode-tabs] [data-month-mode="nth-weekday"]')?.click();
+        const setPos = editForm.querySelector('[data-month-set-pos]');
+        if (setPos) { setPos.value = String(rec.by_set_pos); setPos.dataset.userTouched = "1"; }
+        const wday = editForm.querySelector('[data-month-wday]');
+        if (wday && rec.by_day?.[0]) { wday.value = rec.by_day[0]; wday.dataset.userTouched = "1"; }
+      } else {
+        editForm.querySelector('[data-month-mode-tabs] [data-month-mode="day-of-month"]')?.click();
+        Array.isArray(rec.by_month_day) && rec.by_month_day.forEach(d => {
+          editForm.querySelector(`[data-month-day-pane] [data-day="${d}"]`)?.classList.add("active");
+        });
+      }
+    }
+    if (rec.interval) editForm.querySelector('[data-interval]').value = rec.interval;
+    if (rec.unit) editForm.querySelector('[data-unit]').value = rec.unit;
+    syncStartsOnDependents();
+    editForm.querySelector('[data-action="archive"]')?.classList.remove("hidden");
+    editModal.classList.remove("hidden");
+    scrollModalToTop(editModal);
+  }
+  function dismissEditModalAccidental() { editModal?.classList.add("hidden"); }
+  function dismissEditModalExplicit() {
+    editModal?.classList.add("hidden");
+    modalLockedFor = null;
+    currentChoreId = null;
+    editForm?.reset();
+    setIconField("");
+  }
+
+  document.querySelector('[data-add-chore]')?.addEventListener("click", () => {
+    const search = document.querySelector("[data-chores-search]");
+    const prefill = search?.value?.trim() || "";
+    openCreateModal({ prefillName: prefill });
+    if (search) search.value = "";
+    applySearch("");
+  });
+
+  // Edit mode + SortableJS
+  const editModeBtn = document.querySelector('[data-edit-mode-toggle]');
+  let sortableInstance = null;
+  function enterEditMode() {
+    editModeActive = true;
+    editModeBtn.classList.add("active");
+    root?.classList.add("edit-mode");
+    if (typeof window.Sortable === "undefined") return;
+    const grid = document.querySelector("[data-chores-grid]");
+    if (!grid) return;
+    sortableInstance = window.Sortable.create(grid, {
+      animation: 150, ghostClass: "sortable-ghost", chosenClass: "sortable-chosen", dragClass: "sortable-drag",
+      forceFallback: true, fallbackOnBody: true, fallbackTolerance: 0,
+      delay: 150, delayOnTouchOnly: true, touchStartThreshold: 4,
+      onEnd: persistOrder,
+    });
+  }
+  function exitEditMode() {
+    editModeActive = false;
+    editModeBtn.classList.remove("active");
+    root?.classList.remove("edit-mode");
+    if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
+  }
+  async function persistOrder() {
+    const ids = Array.from(document.querySelectorAll("[data-chores-grid] [data-chore-id]"))
+      .map(c => parseInt(c.dataset.choreId, 10)).filter(Boolean);
+    try { await api("/chores/order", "PATCH", { ids, tab_id: TAB_ID }); }
+    catch (e) { flash("Couldn't save order: " + e.message, "error"); }
+  }
+  function applyOrderToDom(ids) {
+    const grid = document.querySelector("[data-chores-grid]");
+    if (!grid) return;
+    const byId = new Map();
+    grid.querySelectorAll("[data-chore-id]").forEach(c => byId.set(parseInt(c.dataset.choreId, 10), c));
+    const frag = document.createDocumentFragment();
+    ids.forEach(id => { const card = byId.get(id); if (card) { frag.appendChild(card); byId.delete(id); } });
+    byId.forEach(c => frag.appendChild(c));
+    grid.appendChild(frag);
+  }
+  editModeBtn?.addEventListener("click", () => { if (editModeActive) exitEditMode(); else enterEditMode(); });
+
+  // Form submit
+  if (editForm) { bindPillGroups(); bindIconUploader(); }
+  editModal?.querySelectorAll('[data-action="cancel"]').forEach(el =>
+    el.addEventListener("click", dismissEditModalExplicit));
+  editModal?.addEventListener("click", e => { if (e.target === editModal) dismissEditModalAccidental(); });
+
+  editForm?.addEventListener("submit", async e => {
+    e.preventDefault();
+    // Guard against double-tap on Save: while the request is in
+    // flight, disable the button and swap its label for a spinner.
+    const submitBtn = editForm.querySelector('button[type="submit"]');
+    if (submitBtn?.dataset.busy === "1") return;
+    if (submitBtn) {
+      submitBtn.dataset.busy = "1";
+      submitBtn.disabled = true;
+      submitBtn.classList.add("loading");
+    }
+    const oneOff = isSingleTask();
+    const sharingMode = getField("sharing_mode") || "household";
+    const activeReward = editForm.querySelector('[data-reward-quicks] .pill.active');
+    const rewardVal = activeReward?.dataset.reward;
+    const customInput = editForm.querySelector('.reward-custom');
+    const reward = (rewardVal && rewardVal !== "custom")
+      ? parseInt(rewardVal, 10)
+      : (parseInt(customInput?.value, 10) || 0);
+
+    let recurrence = {};
+    let thresholdSeconds = null;
+    if (!oneOff) {
+      const freq = getField("freq") || "never";
+      thresholdSeconds = parseInt(editForm.querySelector('[data-field="threshold_seconds"]')?.value, 10);
+      if (!Number.isFinite(thresholdSeconds) || thresholdSeconds === 0) thresholdSeconds = null;
+      if (freq !== "never") {
+        recurrence.freq = freq;
+        if (freq === "weekly") recurrence.by_day = collectWeekdays();
+        if (freq === "monthly") {
+          const mode = editForm.querySelector('[data-month-mode-tabs] .pill.active')?.dataset.monthMode || "day-of-month";
+          if (mode === "nth-weekday") {
+            recurrence.by_set_pos = parseInt(editForm.querySelector('[data-month-set-pos]').value, 10);
+            recurrence.by_day = [editForm.querySelector('[data-month-wday]').value];
+          } else {
+            const chips = Array.from(editForm.querySelectorAll('[data-month-day-pane] .md-chip.active'));
+            const days = chips.map(c => parseInt(c.dataset.day, 10)).filter(n => !Number.isNaN(n));
+            if (days.length) recurrence.by_month_day = days;
+            else if (parseStartsOn()) recurrence.by_month_day = [parseStartsOn().getDate()];
+          }
+        }
+        if (freq === "custom" || freq === "relative") {
+          recurrence.interval = parseInt(editForm.querySelector('[data-interval]')?.value, 10) || 1;
+          recurrence.unit = editForm.querySelector('[data-unit]')?.value || "day";
+        }
+      }
+    }
+    const payload = {
+      chore: {
+        name: getField("name"),
+        short_name: getField("short_name"),
+        icon: getField("icon"),
+        reward_pebbles: reward,
+        threshold_seconds: thresholdSeconds,
+        one_off: oneOff,
+        starts_on: getField("starts_on") || null,
+        show_on_daily_view: getField("show_on_daily_view") || "when_scheduled",
+        sharing_mode: sharingMode,
+        assigned_to_user_id: sharingMode === "assigned" ? (getField("assigned_to_user_id") || null) : null,
+        aliases: (getField("aliases_csv") || "").split(",").map(s => s.trim()).filter(Boolean),
+        recurrence: recurrence,
+      },
+    };
+    try {
+      const isUpdate = !!currentChoreId;
+      const url = isUpdate ? `/chores/items/${currentChoreId}` : "/chores/items";
+      const data = await api(url, isUpdate ? "PATCH" : "POST", payload);
+      reconcile(data);
+      dismissEditModalExplicit();
+      flash("Saved");
+      pingSwRefresh();
+    } catch (err) {
+      if (isTransientError(err)) {
+        flash("Server busy — try again in a moment", "warn");
+      } else {
+        flash("Save failed: " + err.message, "error");
+      }
+    } finally {
+      if (submitBtn) {
+        delete submitBtn.dataset.busy;
+        submitBtn.disabled = false;
+        submitBtn.classList.remove("loading");
+      }
+    }
+  });
+
+  editForm?.querySelector('[data-action="archive"]')?.addEventListener("click", async () => {
+    if (!currentChoreId || !confirm("Archive this chore?")) return;
+    const id = currentChoreId;
+    try {
+      const data = await api(`/chores/items/${id}`, "DELETE");
+      reconcile(data);
+      dismissEditModalExplicit();
+      flash("Archived");
+    } catch (err) { flash("Couldn't archive: " + err.message, "error"); }
+  });
+
+  // ============================================================
+  // goal + withdraw forms (Balance page)
+  // ============================================================
+  const goalModal = document.querySelector('[data-goal-modal]');
+  document.querySelector('[data-add-goal]')?.addEventListener("click", () => goalModal?.classList.remove("hidden"));
+  goalModal?.querySelector('[data-action="cancel"]')?.addEventListener("click", () => goalModal.classList.add("hidden"));
+  goalModal?.addEventListener("click", e => { if (e.target === goalModal) goalModal.classList.add("hidden"); });
+  goalModal?.querySelector('[data-goal-form]')?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      await api("/chores/goals", "POST", { chore_goal: Object.fromEntries(fd.entries()) });
+      goalModal.classList.add("hidden");
+      flash("Goal added");
+      setTimeout(() => location.reload(), 250);
+    } catch (err) { flash("Couldn't add goal: " + err.message, "error"); }
+  });
+  document.querySelectorAll('[data-delete-goal]').forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Delete goal?")) return;
+      try {
+        await api(`/chores/goals/${btn.dataset.deleteGoal}`, "DELETE");
+        setTimeout(() => location.reload(), 250);
+      } catch (e) { flash("Couldn't delete: " + e.message, "error"); }
+    });
+  });
+  document.querySelector("[data-withdraw-form]")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const entries = Object.fromEntries(fd.entries());
+    const amount = parseInt(entries.amount_pebbles, 10);
+    if (Number.isNaN(amount) || amount <= 0) { flash("Enter a positive amount", "warn"); return; }
+    try {
+      const data = await api("/chores/withdrawals", "POST", { chore_withdrawal: entries });
+      flash(`Withdrew ${data.amount_pebbles}p`);
+      setTimeout(() => location.reload(), 250);
+    } catch (err) { flash("Withdraw failed: " + err.message, "error"); }
+  });
+
+  // ============================================================
+  // connection + offline queue
+  // ============================================================
+  const QUEUE_KEY = "chores:offline_queue:v2";
+  let queueCsrf = CSRF;
+  let queueBlockedReason = null;
+  function loadQueue() { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); } catch (e) { return []; } }
   function saveQueue(q) { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
   function enqueue(item) {
     const q = loadQueue();
@@ -329,14 +1431,9 @@
     if (state === "syncing") dot.classList.add("syncing");
     dot.title = state === "offline" ? "Offline" : state === "syncing" ? "Syncing..." : "Online";
   }
-
   async function refreshCsrf() {
     try {
-      const res = await fetch("/chores/csrf", {
-        credentials: "same-origin",
-        headers: { Accept: "application/json" },
-        redirect: "manual"
-      });
+      const res = await fetch("/chores/csrf", { credentials: "same-origin", headers: { Accept: "application/json" }, redirect: "manual" });
       if (!res.ok) return null;
       const data = await res.json();
       if (data?.token) {
@@ -348,1398 +1445,134 @@
     } catch (e) {}
     return null;
   }
-
   async function postQueueItem(item, csrf) {
-    const res = await fetch(item.url, {
-      method: item.method,
-      credentials: "same-origin",
+    return fetch(item.url, {
+      method: item.method, credentials: "same-origin",
       headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": csrf },
       body: item.body ? JSON.stringify(item.body) : undefined,
-      // Spot login redirects so we can treat them as auth-needed.
-      redirect: "manual"
+      redirect: "manual",
     });
-    return res;
   }
-
-  // Classification — what should we do with this response?
-  //   :ok           → drop the item, all good
-  //   :csrf_stale   → CSRF likely expired; refresh and retry once
-  //   :auth_needed  → session/auth issue; keep item, halt flush, mark blocked
-  //   :keep         → some other failure (5xx, transient, 404 from a race);
-  //                   keep in queue, continue flushing other items
   function classify(res) {
     if (!res) return "keep";
     if (res.ok) return "ok";
     if (res.type === "opaqueredirect" || res.status === 0) return "auth_needed";
     if (res.status === 401 || res.status === 403) return "auth_needed";
     if (res.status === 422) return "csrf_stale";
+    // 429 (rate-limit) and 5xx — keep + back off. Source of 429 is
+    // unclear (not our Rails app — likely a CDN/proxy), but the
+    // contract is the same: try later, don't drop the user's tap.
+    if (res.status === 429 || (res.status >= 500 && res.status <= 599)) return "keep";
     return "keep";
   }
-
   async function flushQueue() {
     let q = loadQueue();
     if (!q.length) { queueBlockedReason = null; setConnDot("online"); updatePendingBadge(0); return; }
     if (!navigator.onLine) { setConnDot("offline"); return; }
-
     setConnDot("syncing");
     queueBlockedReason = null;
-
     let csrf = queueCsrf;
     let csrfRefreshedThisFlush = false;
     const remaining = [];
     let halted = false;
-
     for (let i = 0; i < q.length; i++) {
       const item = q[i];
-
       if (halted) { remaining.push(item); continue; }
-
       let res;
-      try {
-        res = await postQueueItem(item, csrf);
-      } catch (e) {
-        // Network died mid-flush — stop, keep this and all subsequent.
-        remaining.push(...q.slice(i));
-        halted = true;
-        setConnDot("offline");
-        break;
-      }
-
+      try { res = await postQueueItem(item, csrf); }
+      catch (e) { remaining.push(...q.slice(i)); halted = true; setConnDot("offline"); break; }
       let action = classify(res);
-
       if (action === "csrf_stale" && !csrfRefreshedThisFlush) {
         const fresh = await refreshCsrf();
         csrfRefreshedThisFlush = true;
         if (fresh) {
           csrf = fresh;
-          // Retry once with the new token.
-          try {
-            res = await postQueueItem(item, csrf);
-            action = classify(res);
-          } catch (e) {
-            remaining.push(...q.slice(i));
-            halted = true;
-            setConnDot("offline");
-            break;
-          }
-        } else {
-          // /chores/csrf itself was unreachable or 401 → treat as auth.
-          action = "auth_needed";
-        }
+          try { res = await postQueueItem(item, csrf); action = classify(res); }
+          catch (e) { remaining.push(...q.slice(i)); halted = true; setConnDot("offline"); break; }
+        } else { action = "auth_needed"; }
       }
-
       if (action === "ok") {
-        // Success — try to keep the page's balance/count in sync.
         try {
           const data = await res.json();
-          const balanceEl = document.querySelector("[data-balance]");
-          // Pill is "today's earnings" everywhere — prefer
-          // today_earnings, fall back to balance only if the response
-          // omits it (very old clients in the offline queue).
-          const v = (data?.today_earnings != null) ? data.today_earnings : data?.balance;
-          if (balanceEl && v != null) balanceEl.textContent = v;
+          if (data) reconcile(data);
         } catch (e) {}
         continue;
       }
-
       if (action === "auth_needed") {
-        // Stop here — pile this and everything after back into the queue.
         remaining.push(...q.slice(i));
         queueBlockedReason = "needs re-auth";
         halted = true;
         flash("Sign-in expired — your changes are saved and will sync after you sign back in.", "warn");
         break;
       }
-
-      // action === "keep": some other failure (5xx, transient 404, etc.)
       remaining.push(item);
     }
-
     saveQueue(remaining);
     updatePendingBadge(remaining.length);
-    if (remaining.length === 0) {
-      queueBlockedReason = null;
-      setConnDot("online");
-    } else {
-      setConnDot(queueBlockedReason ? "offline" : "syncing");
-    }
+    setConnDot(remaining.length === 0 ? "online" : (queueBlockedReason ? "offline" : "syncing"));
+    if (remaining.length === 0) queueBlockedReason = null;
+    // Any leftover items (transient errors, not auth-blocked) get a
+    // back-off retry — covers the 429 case where the rate-limiter
+    // needs a moment.
+    if (remaining.length > 0 && !queueBlockedReason) scheduleQueueRetry();
   }
-
   window.addEventListener("online", () => { setConnDot("syncing"); flushQueue(); });
   window.addEventListener("offline", () => setConnDot("offline"));
   updatePendingBadge(loadQueue().length);
   if (!navigator.onLine) setConnDot("offline");
 
-  // ---------- multiplier toggle ----------
-  let multiplierActive = false;
-  const multiplierBtn = document.querySelector('[data-multiplier-toggle]');
-  const multiplierModal = document.querySelector('[data-multiplier-modal]');
-  let multiplierTargetCard = null;
-  multiplierBtn?.addEventListener("click", () => {
-    multiplierActive = !multiplierActive;
-    multiplierBtn.classList.toggle("active", multiplierActive);
-  });
-  function openMultiplierModal(card) {
-    multiplierTargetCard = card;
-    multiplierModal.querySelector('[data-multiplier-label]').textContent = card.dataset.choreShort || card.dataset.choreName;
-    multiplierModal.querySelector('[data-multiplier-input]').value = 2;
-    multiplierModal.classList.remove("hidden");
-  }
-  function closeMultiplierModal() {
-    multiplierModal?.classList.add("hidden");
-    multiplierTargetCard = null;
-    // Multiplier toggle uncheckes as soon as a chore was tapped — whether
-    // or not the user submits or cancels the modal.
-    multiplierActive = false;
-    multiplierBtn?.classList.remove("active");
-  }
-  multiplierModal?.querySelector('[data-action="cancel"]')?.addEventListener("click", closeMultiplierModal);
-  multiplierModal?.addEventListener("click", e => { if (e.target === multiplierModal) closeMultiplierModal(); });
-  multiplierModal?.querySelectorAll('[data-mult]').forEach(btn => {
-    btn.addEventListener("click", () => { multiplierModal.querySelector('[data-multiplier-input]').value = btn.dataset.mult; });
-  });
-  multiplierModal?.querySelector('[data-multiplier-submit]')?.addEventListener("click", async () => {
-    const n = Math.max(1, Math.min(50, parseInt(multiplierModal.querySelector('[data-multiplier-input]').value, 10) || 1));
-    const card = multiplierTargetCard;
-    closeMultiplierModal();
-    if (!card) return;
-    for (let i = 0; i < n; i++) await completeChore(card.dataset.choreId, card, { silent: i < n - 1 });
-  });
-
-  // ---------- card reconciliation (targeted DOM updates) ----------
-  // Single source of truth for "apply this server state to the card."
-  // Discards stale payloads where the captured-at timestamp predates
-  // our most recent local click on the same chore — that means the
-  // server hasn't seen our click yet and we'd be overwriting the
-  // optimistic state with stale data.
-  // Applies a server payload to the cards. Two payload shapes:
-  //   * Dual HTML (`html_grid` + `html_today`): full card swap in BOTH
-  //     view containers. Used by /state, /sync, save responses,
-  //     broadcasts. Optimistic-click gate applies.
-  //   * Count-only (completion / undo POST responses): targeted
-  //     count + last_completed_at update on whatever cards exist with
-  //     this id, in either container.
-  function applyServerState(id, data) {
-    const serverMs = data.server_ts ? new Date(data.server_ts).getTime() : 0;
-    const localMs  = localClickTs.get(String(id)) || 0;
-    if (localMs && serverMs && localMs > serverMs) return;
-
-    if (data.html_grid || data.html_today) {
-      applyChorePayload({ ...data, id });
-      return;
-    }
-
-    // Count-only: mutate per-container without re-rendering. Used after
-    // POST /completion / DELETE /completion since those don't need to
-    // touch the visible name / icon / cooldown.
-    document.querySelectorAll(`[data-chore-id="${id}"]`).forEach(card => {
-      if (data.archived) card.classList.add("archived");
-      bumpCount(card, data.completions_today);
-      // Clear EXPLICITLY when the server reports no last completion —
-      // an undo that removed the only completion needs to wipe the
-      // optimistic timestamp the click handler stamped, otherwise the
-      // cooldown badge keeps ticking against a phantom timestamp.
-      if (Object.prototype.hasOwnProperty.call(data, "last_completed_at")) {
-        card.dataset.lastCompletedAt = data.last_completed_at || "";
-      }
-    });
-  }
-
-  // Balance pill ALWAYS shows today's earnings — single canonical
-  // number across Grid / Today / Balance / History. Lifetime balance
-  // is shown only on the dedicated Balance card (and gates the
-  // withdraw form below).
-  function applyBalance(data) {
-    if (data == null) return;
-    const total = (typeof data === "object") ? data.balance : data;
-    const today = (typeof data === "object") ? data.today_earnings : null;
-    const el = document.querySelector("[data-balance]");
-    if (el) {
-      const value = (today != null) ? today : total;
-      if (value != null) el.textContent = value;
-    }
-    const fieldset = document.querySelector("[data-withdraw-fieldset]");
-    const input = document.querySelector('[data-withdraw-form] [name="amount_pebbles"]');
-    if (fieldset && total != null) fieldset.disabled = total <= 0;
-    if (input && total != null) input.max = Math.max(1, total);
-  }
-
-  async function refreshChoreFromServer(id) {
-    // If we're mid-POST for this chore, the imminent POST response will
-    // reconcile — no need to fire a redundant GET.
-    if (inFlight.has(String(id))) return;
-    try {
-      // Pass `view` so the server renders the right card partial
-      // (circle for Today, grid card everywhere else). The HTML in
-      // the response is the single source of truth for the card's
-      // visible state — name, icon, reward, cooldown — so renames
-      // broadcast from another tab end up reflected here.
-      const data = await api(`/chores/items/${id}/state?view=${MODE}`, "GET");
-      applyServerState(id, data);
-      applyBalance(data);
-    } catch (e) {
-      // 404 (chore was deleted) — leave the card alone, keep frozen layout
-      // until the user reloads (they can clean it up via /chores/history).
-    }
-  }
-
-  // ---------- complete on click + long-press to undo ----------
-  async function completeChore(id, card, opts = {}) {
-    const sid = String(id);
-    if (inFlight.has(sid) && !opts.allowConcurrent) {
-      // Mark the new click time so the in-flight POST's response is still
-      // accepted (its server_ts will be >= localClickTs), then return.
-    }
-    const clickMs = Date.now();
-    localClickTs.set(sid, clickMs);
-
-    // Optimistic local state — increment count immediately. Don't add a
-    // "pending" class that dims the card; the user spam-clicked and
-    // wants instant feedback per click.
-    const optimisticCount = (parseInt(card.dataset.doneCount, 10) || 0) + 1;
-    bumpCount(card, optimisticCount);
-    card.dataset.lastCompletedAt = new Date(clickMs).toISOString();
-
-    if (!navigator.onLine) {
-      enqueue({
-        url: `/chores/items/${id}/completion`,
-        method: "POST",
-        body: { client_completed_at: new Date(clickMs).toISOString(), tab_id: TAB_ID }
-      });
-      return;
-    }
-
-    inFlight.add(sid);
-    try {
-      const data = await api(`/chores/items/${id}/completion`, "POST",
-        { client_completed_at: new Date(clickMs).toISOString(), tab_id: TAB_ID });
-      applyServerState(id, data);
-      applyBalance(data);
-      if (!opts.silent) {
-        if (data.skipped) flash(data.skipped_reason || "Cooldown — no payout", "warn");
-        else if (data.paid) flash(`+${data.paid}p`);
-        (data.awarded_achievements || []).forEach(a => flash(`🏆 ${a.name} +${a.pebbles}p`, "ok"));
-      }
-    } catch (err) {
-      if (!navigator.onLine || /Failed to fetch|NetworkError/i.test(err.message)) {
-        enqueue({
-          url: `/chores/items/${id}/completion`,
-          method: "POST",
-          body: { client_completed_at: new Date(clickMs).toISOString(), tab_id: TAB_ID }
-        });
-        setConnDot("offline");
-      } else if (!opts.silent) {
-        flash("Couldn't complete: " + err.message, "error");
-      }
-    } finally {
-      inFlight.delete(sid);
-    }
-  }
-
-  async function undoLastCompletion(card) {
-    const id = card.dataset.choreId;
-    const sid = String(id);
-    // Optimistic decrement
-    const newCount = Math.max(0, (parseInt(card.dataset.doneCount, 10) || 0) - 1);
-    bumpCount(card, newCount);
-    localClickTs.set(sid, Date.now());
-    inFlight.add(sid);
-    try {
-      const data = await api(`/chores/items/${id}/completion`, "DELETE");
-      applyServerState(id, data);
-      applyBalance(data);
-      flash("Undone", "warn");
-    } catch (err) {
-      flash("Nothing to undo", "warn");
-    } finally {
-      inFlight.delete(sid);
-    }
-  }
-
-  function bumpCount(card, count) {
-    card.dataset.doneCount = count;
-    // Each container's card uses its own class (.done for the circle,
-    // .done-today for the grid card) so we set BOTH and let CSS pick
-    // the one that applies to that container's markup.
-    card.classList.toggle("done", count > 0);
-    card.classList.toggle("done-today", count > 0);
-    const slot = card.querySelector("[data-count-slot]");
-    if (!slot) {
-      // grid view fallback to top-right pill
-      let badge = card.querySelector("[data-count-badge]");
-      if (count > 1) {
-        if (!badge) {
-          badge = document.createElement("div");
-          badge.className = "count-badge"; badge.setAttribute("data-count-badge", "");
-          card.appendChild(badge);
-        }
-        badge.textContent = "×" + count;
-      } else badge?.remove();
-      return;
-    }
-    slot.innerHTML = count > 1 ? `<span class="count-badge" data-count-badge>×${count}</span>` : "";
-  }
-
-  function bindCardClicks() {
-    // Both containers always live in the DOM (unified page). Wire each
-    // one — the hidden container can't receive pointer events anyway, so
-    // there's no risk of double-firing across views.
-    Object.values(viewContainers()).forEach(container => {
-      if (container) bindOneContainerClicks(container);
-    });
-  }
-  function bindOneContainerClicks(container) {
-
-    // Scroll-safe tap detection (mobile-first):
-    //   * Track ONLY one active pointer per gesture.
-    //   * A finger that moves >8px is a scroll, not a tap — suppress
-    //     the synthetic click that follows.
-    //   * Pointer held >550ms with minimal movement → long-press undo.
-    //   * Pointer released within 550ms and <8px movement → tap →
-    //     complete. We fire it from pointerup ourselves and call
-    //     preventDefault on the synthetic click so we never get a
-    //     double-fire.
-    const MOVE_THRESHOLD = 8;
-    const LONG_MS = 550;
-    const state = {
-      pointerId: null,
-      card: null,
-      startX: 0, startY: 0, startedAt: 0,
-      moved: false,
-      longPressFired: false,
-      timer: null,
-    };
-
-    function reset() {
-      if (state.timer) clearTimeout(state.timer);
-      state.pointerId = null;
-      state.card = null;
-      state.startX = 0; state.startY = 0; state.startedAt = 0;
-      state.moved = false;
-      state.longPressFired = false;
-      state.timer = null;
-    }
-
-    container.addEventListener("pointerdown", e => {
-      if (state.pointerId !== null) return; // ignore second finger
-      const card = e.target.closest("[data-chore-id]");
-      if (!card) return;
-      // Edit mode short-circuits gesture handling — clicks open the
-      // edit modal directly, no pointer state machine needed.
-      if (editModeActive) return;
-      // Today + Hot-strip restrict the tap target to the round disc
-      // (so titles + multiplier badges underneath aren't tap targets).
-      // Grid uses the whole card. The container itself tells us which
-      // view we're in — no need to read MODE which could be mid-flip
-      // during a view swap.
-      const usesCircleHitbox = container.matches("[data-chores-circles], [data-chores-hot-strip]");
-      if (usesCircleHitbox && !e.target.closest(".circle-inner")) return;
-
-      state.pointerId = e.pointerId;
-      state.card = card;
-      state.startX = e.clientX;
-      state.startY = e.clientY;
-      state.startedAt = performance.now();
-      state.moved = false;
-      state.longPressFired = false;
-      state.timer = setTimeout(() => {
-        if (state.card && !state.moved) {
-          state.longPressFired = true;
-          undoLastCompletion(state.card);
-        }
-      }, LONG_MS);
-    });
-
-    container.addEventListener("pointermove", e => {
-      if (state.pointerId !== e.pointerId) return;
-      if (Math.hypot(e.clientX - state.startX, e.clientY - state.startY) > MOVE_THRESHOLD) {
-        state.moved = true;
-        if (state.timer) { clearTimeout(state.timer); state.timer = null; }
-      }
-    });
-
-    container.addEventListener("pointerup", e => {
-      if (state.pointerId !== e.pointerId) return;
-      const card = state.card;
-      const isShortTap = !state.moved && !state.longPressFired &&
-                         (performance.now() - state.startedAt) < LONG_MS;
-      reset();
-      if (!card) return;
-      if (!isShortTap) {
-        // Scroll, long-press, or aborted — block the synthetic click.
-        card.dataset.suppressClick = "1";
-        return;
-      }
-      if (multiplierActive) { openMultiplierModal(card); return; }
-      if (e.shiftKey) { openEditModal(card); return; }
-      completeChore(card.dataset.choreId, card);
-    });
-
-    ["pointercancel", "pointerleave"].forEach(evt =>
-      container.addEventListener(evt, e => { if (state.pointerId === e.pointerId) reset(); })
-    );
-
-    container.addEventListener("click", e => {
-      const card = e.target.closest("[data-chore-id]");
-      if (!card) return;
-      // Edit mode: tap = open edit modal.
-      if (editModeActive) {
-        e.preventDefault();
-        e.stopPropagation();
-        openEditModal(card);
-        return;
-      }
-      if (card.dataset.suppressClick === "1") {
-        delete card.dataset.suppressClick;
-        e.preventDefault();
-        e.stopPropagation();
-      }
-      // Otherwise the pointerup handler already fired completeChore;
-      // we let this click bubble silently.
-    }, true);
-
-    container.addEventListener("contextmenu", e => {
-      const card = e.target.closest("[data-chore-id]");
-      if (!card) return;
-      e.preventDefault();
-      openEditModal(card);
-    });
-  }
-
-  // ---------- form modal ----------
-  const editModal = document.querySelector("[data-chore-modal]");
-  const editForm  = editModal?.querySelector('[data-chores-form]');
-  function setField(name, value) {
-    const el = editForm?.querySelector(`[data-field="${name}"]`);
-    if (el == null) return;
-    el.value = value ?? "";
-  }
-  function getField(name) { return editForm?.querySelector(`[data-field="${name}"]`)?.value; }
-
-  let currentChoreId = null;
-  // What the edit form is currently populated for. `null` means cleared;
-  // chore id (string) means "edit form holds the in-progress state for
-  // that chore"; `"__create__"` means "fresh-chore create form is in
-  // progress". Cleared by explicit cancel / X / successful save — NOT by
-  // an accidental backdrop click, so reopening the same chore right
-  // after an accidental dismiss preserves what the user had typed.
-  let modalLockedFor = null;
-  const WDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-
-  // Pill-group sync: clicking a pill sets the hidden input value and
-  // marks itself active. Used for cooldown preset, repeats, show-on-daily,
-  // sharing.
-  function setPillValue(groupKey, value) {
-    const group = editForm.querySelector(`[data-pill-group="${groupKey}"]`);
-    if (!group) return;
-    group.querySelectorAll(".pill").forEach(p => {
-      p.classList.toggle("active", String(p.dataset.value) === String(value ?? ""));
-    });
-    const input = editForm.querySelector(`[data-field="${groupKey}"]`);
-    if (input) input.value = value ?? "";
-  }
-  function bindPillGroups() {
-    editForm.querySelectorAll(".pill-group[data-pill-group]").forEach(group => {
-      const key = group.dataset.pillGroup;
-      group.addEventListener("click", e => {
-        const pill = e.target.closest(".pill");
-        if (!pill || pill.classList.contains("chip-day")) return;
-        e.preventDefault();
-        if (key === "freq") {
-          // Weekdays is a helper — internally selects Weekly + M-F.
-          if (pill.dataset.value === "weekdays") {
-            setPillValue("freq", "weekly");
-            syncWeekdayChips(["mon", "tue", "wed", "thu", "fri"]);
-            syncFreqRow();
-            return;
-          }
-          setPillValue("freq", pill.dataset.value);
-          syncFreqRow();
-          return;
-        }
-        if (key === "threshold_preset") {
-          setPillValue("threshold_preset", pill.dataset.value);
-          syncCooldownRow();
-          return;
-        }
-        setPillValue(key, pill.dataset.value);
-        if (key === "sharing_mode") syncAssigneeRow();
-      });
-    });
-
-    // Reward quicks
-    editForm.querySelector('[data-reward-quicks]')?.addEventListener("click", e => {
-      const pill = e.target.closest("[data-reward]");
-      if (!pill) return;
-      e.preventDefault();
-      const v = pill.dataset.reward;
-      editForm.querySelectorAll('[data-reward-quicks] .pill').forEach(p => p.classList.remove("active"));
-      pill.classList.add("active");
-      const custom = editForm.querySelector('.reward-custom');
-      if (v === "custom") {
-        custom?.classList.remove("hidden");
-        custom?.focus();
-      } else {
-        custom?.classList.add("hidden");
-        if (custom) custom.value = v;
-      }
-    });
-
-    // Weekday chips toggle independently (multi-select)
-    editForm.querySelector('[data-weekday-chips]')?.addEventListener("click", e => {
-      const btn = e.target.closest('[data-day]');
-      if (!btn) return;
-      e.preventDefault();
-      btn.classList.toggle("active");
-      syncWeekdaysHelperHighlight();
-    });
-
-    // Monthly day-of-month chips (multi-select)
-    editForm.querySelector('[data-month-day-pane]')?.addEventListener("click", e => {
-      const btn = e.target.closest('[data-day]');
-      if (!btn) return;
-      e.preventDefault();
-      btn.classList.toggle("active");
-    });
-    // Monthly mode tabs
-    editForm.querySelector('[data-month-mode-tabs]')?.addEventListener("click", e => {
-      const btn = e.target.closest('[data-month-mode]');
-      if (!btn) return;
-      e.preventDefault();
-      const mode = btn.dataset.monthMode;
-      editForm.querySelectorAll('[data-month-mode-tabs] .pill').forEach(p =>
-        p.classList.toggle("active", p.dataset.monthMode === mode));
-      editForm.querySelector('[data-month-day-pane]')?.classList.toggle("hidden", mode !== "day-of-month");
-      editForm.querySelector('[data-month-nth-pane]')?.classList.toggle("hidden", mode !== "nth-weekday");
-    });
-
-    // Cooldown custom amount/unit → write threshold_seconds.
-    const cdAmt = editForm.querySelector('[data-cooldown-amount]');
-    const cdUnit = editForm.querySelector('[data-cooldown-unit]');
-    cdAmt?.addEventListener("input", syncCustomCooldown);
-    cdUnit?.addEventListener("change", syncCustomCooldown);
-
-    // Single Task toggle: collapses everything except Due Date.
-    editForm.querySelector('[data-field="one_off"]')?.addEventListener("change", syncSingleTask);
-
-    // Due date change → update monthly + yearly labels.
-    editForm.querySelector('[data-field="starts_on"]')?.addEventListener("change", syncStartsOnDependents);
-
-    // Monthly mode radio + selects
-    editForm.querySelectorAll('[data-month-mode], [data-month-set-pos], [data-month-wday]').forEach(el => {
-      el.addEventListener("change", () => {});
-    });
-  }
-
-  // ---------- Single Task / Recurring visibility ----------
-  function isSingleTask() {
-    return editForm.querySelector('[data-field="one_off"]')?.checked === true;
-  }
-  function syncSingleTask() {
-    const on = isSingleTask();
-    editForm.querySelectorAll('[data-recurring-only]').forEach(el => {
-      el.classList.toggle("hidden", on);
-    });
-  }
-
-  // ---------- Cooldown ----------
-  // The hidden `threshold_seconds` carries the canonical value the form
-  // submits. Presets:
-  //   ""        → no cooldown
-  //   "<n>"     → n seconds (1h, 3h, 6h, ...)
-  //   "custom"  → user-typed amount + unit
-  //   "day-end" → sentinel `-1` (Chore::THRESHOLD_DAY_RESET); cooldown
-  //               clears at the next 4am ChoreDay boundary instead of
-  //               after a fixed elapsed-time window.
-  function syncCooldownRow() {
-    const preset = editForm.querySelector('[data-field="threshold_preset"]')?.value || "";
-    const customRow = editForm.querySelector('[data-cooldown-custom-row]');
-    const hidden = editForm.querySelector('[data-field="threshold_seconds"]');
-    if (preset === "custom") {
-      customRow?.classList.remove("hidden");
-      syncCustomCooldown();
-    } else if (preset === "day-end") {
-      customRow?.classList.add("hidden");
-      hidden.value = "-1";
-    } else {
-      customRow?.classList.add("hidden");
-      hidden.value = preset || "";
-    }
-  }
-  function syncCustomCooldown() {
-    const amt = parseInt(editForm.querySelector('[data-cooldown-amount]')?.value, 10) || 0;
-    const unit = editForm.querySelector('[data-cooldown-unit]')?.value || "second";
-    const factor = { second: 1, minute: 60, hour: 3600, day: 86400, week: 604800 }[unit] || 1;
-    const seconds = Math.max(0, amt) * factor;
-    const hidden = editForm.querySelector('[data-field="threshold_seconds"]');
-    if (hidden) hidden.value = String(seconds);
-  }
-  function setCooldownSeconds(seconds) {
-    if (seconds === -1) {
-      setPillValue("threshold_preset", "day-end");
-      syncCooldownRow();
-      return;
-    }
-    const presets = [0, 3600, 10800, 21600, 43200, 86400, 172800, 604800];
-    if (presets.includes(seconds)) {
-      setPillValue("threshold_preset", seconds === 0 ? "" : String(seconds));
-      syncCooldownRow();
-    } else {
-      setPillValue("threshold_preset", "custom");
-      const { amount, unit } = bestCooldownDecomposition(seconds);
-      const amtEl = editForm.querySelector('[data-cooldown-amount]');
-      const unitEl = editForm.querySelector('[data-cooldown-unit]');
-      if (amtEl) amtEl.value = amount;
-      if (unitEl) unitEl.value = unit;
-      syncCooldownRow();
-    }
-  }
-  function bestCooldownDecomposition(seconds) {
-    if (seconds % 604800 === 0) return { amount: seconds / 604800, unit: "week" };
-    if (seconds % 86400 === 0)  return { amount: seconds / 86400,  unit: "day" };
-    if (seconds % 3600 === 0)   return { amount: seconds / 3600,   unit: "hour" };
-    if (seconds % 60 === 0)     return { amount: seconds / 60,     unit: "minute" };
-    return { amount: seconds, unit: "second" };
-  }
-
-  // ---------- Repeats ----------
-  function syncFreqRow() {
-    const freq = getField("freq") || "never";
-    editForm.querySelector('[data-weekly-wrap]')?.classList.toggle("hidden", freq !== "weekly");
-    editForm.querySelector('[data-monthly-wrap]')?.classList.toggle("hidden", freq !== "monthly");
-    editForm.querySelector('[data-yearly-wrap]')?.classList.toggle("hidden", freq !== "yearly");
-    editForm.querySelector('[data-interval-wrap]')?.classList.toggle("hidden",
-      freq !== "custom" && freq !== "relative");
-    editForm.querySelector('[data-weekdays-wrap]')?.classList.add("hidden");
-    if (freq === "weekly") {
-      const chips = Array.from(editForm.querySelectorAll('[data-weekday-chips] .chip-day.active'));
-      if (chips.length === 0) {
-        const d = parseStartsOn();
-        if (d) syncWeekdayChips([WDAY_KEYS[d.getDay()]]);
-      }
-    }
-    if (freq === "monthly") {
-      // Preselect the day-of-month chip matching starts_on if no chip
-      // is active and the day-of-month tab is the chosen mode.
-      const anyActive = editForm.querySelector('[data-month-day-pane] .md-chip.active');
-      if (!anyActive) {
-        const d = parseStartsOn();
-        if (d) {
-          const chip = editForm.querySelector(`[data-month-day-pane] [data-day="${d.getDate()}"]`);
-          if (chip) chip.classList.add("active");
-        }
-      }
-    }
-    syncStartsOnDependents();
-    syncWeekdaysHelperHighlight();
-  }
-
-  // The "Weekdays" pill is a helper. It shows as active when the
-  // effective rule is "Weekly on Mon-Fri" so users see at a glance
-  // that the simpler label still applies after they made the change.
-  function syncWeekdaysHelperHighlight() {
-    const weekdaysPill = editForm.querySelector('[data-pill-group="freq"] [data-value="weekdays"]');
-    if (!weekdaysPill) return;
-    const freq = getField("freq");
-    const sel = collectWeekdays();
-    const WEEKDAYS_SET = ["mon", "tue", "wed", "thu", "fri"];
-    const matches = freq === "weekly" &&
-                    sel.length === 5 &&
-                    WEEKDAYS_SET.every(d => sel.includes(d));
-    weekdaysPill.classList.toggle("active", matches);
-  }
-  function syncStartsOnDependents() {
-    const d = parseStartsOn();
-    if (!d) return;
-    const monthLabel = editForm.querySelector('[data-month-day-label]');
-    if (monthLabel) monthLabel.textContent = d.getDate();
-    const setPos = editForm.querySelector('[data-month-set-pos]');
-    if (setPos && !setPos.dataset.userTouched) setPos.value = String(Math.floor((d.getDate() - 1) / 7) + 1);
-    const wday = editForm.querySelector('[data-month-wday]');
-    if (wday && !wday.dataset.userTouched) wday.value = WDAY_KEYS[d.getDay()];
-    const yearlyLabel = editForm.querySelector('[data-yearly-label]');
-    if (yearlyLabel) {
-      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      yearlyLabel.textContent = `${months[d.getMonth()]} ${d.getDate()}`;
-    }
-  }
-  function parseStartsOn() {
-    const v = editForm.querySelector('[data-field="starts_on"]')?.value;
-    if (!v) return null;
-    const parts = v.split("-").map(Number);
-    if (parts.length !== 3) return null;
-    return new Date(parts[0], parts[1] - 1, parts[2]);
-  }
-
-  function syncAssigneeRow() {
-    const mode = getField("sharing_mode");
-    editForm.querySelector('[data-assignee-wrap]')?.classList.toggle("hidden", mode !== "assigned");
-  }
-  function syncWeekdayChips(days) {
-    const wrap = editForm.querySelector('[data-weekday-chips]');
-    if (!wrap) return;
-    Array.from(wrap.children).forEach(btn => {
-      btn.classList.toggle("active", days.includes(btn.dataset.day));
-    });
-  }
-  function collectWeekdays() {
-    const wrap = editForm.querySelector('[data-weekday-chips]');
-    return Array.from(wrap?.querySelectorAll('[data-day].active') || []).map(b => b.dataset.day);
-  }
-
-  function selectRewardPill(amount) {
-    const pills = editForm.querySelectorAll('[data-reward-quicks] .pill');
-    pills.forEach(p => p.classList.remove("active"));
-    const exact = editForm.querySelector(`[data-reward-quicks] [data-reward="${amount}"]`);
-    if (exact) {
-      exact.classList.add("active");
-      editForm.querySelector('.reward-custom')?.classList.add("hidden");
-    } else {
-      // Custom (non-preset) amount
-      editForm.querySelector('[data-reward-quicks] [data-reward="custom"]')?.classList.add("active");
-      const custom = editForm.querySelector('.reward-custom');
-      if (custom) { custom.classList.remove("hidden"); custom.value = amount; }
-    }
-    const customInput = editForm.querySelector('.reward-custom');
-    if (customInput && !customInput.classList.contains("hidden") === false) customInput.value = amount;
-  }
-
-  function todayIso() {
-    const d = new Date();
-    const pad = n => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  }
-
-  function openCreateModal(opts = {}) {
-    if (!editModal) return;
-    // Preserve in-progress create state across accidental dismiss —
-    // if the form is still locked for "__create__", just show it again
-    // without resetting fields. Cancel/X clears it explicitly.
-    if (modalLockedFor !== "__create__") {
-      currentChoreId = null;
-      editForm.reset();
-      setIconField("");
-      if (opts.prefillName) setField("name", opts.prefillName);
-      selectRewardPill(1);
-      setField("reward_pebbles", 1);
-      setField("starts_on", todayIso());
-      setCooldownSeconds(0);
-      setPillValue("freq", "never");
-      setPillValue("show_on_daily_view", "when_scheduled");
-      setPillValue("sharing_mode", "household"); // default per spec
-      const oneOffCb = editForm.querySelector('[data-field="one_off"]');
-      if (oneOffCb) oneOffCb.checked = !!opts.oneOff;
-      syncSingleTask();
-      editForm.querySelectorAll('[data-month-day-pane] .md-chip').forEach(c => c.classList.remove("active"));
-      editForm.querySelector('[data-month-mode-tabs] [data-month-mode="day-of-month"]')?.click();
-      syncFreqRow();
-      syncAssigneeRow();
-      syncWeekdayChips([]);
-      syncWeekdaysHelperHighlight();
-      modalLockedFor = "__create__";
-    }
-    editModal.querySelector('[data-modal-title]').textContent = "Add Chore";
-    editForm.querySelector('[data-action="archive"]')?.classList.add("hidden");
-    editModal.classList.remove("hidden");
-    scrollModalToTop(editModal);
-    const nameField = editForm.querySelector('[data-field="name"]');
-    if (nameField && !nameField.value) { nameField.focus(); nameField.select?.(); }
-  }
-
-  function openEditModal(card) {
-    if (!editModal) return;
-    const id = card.dataset.choreId;
-    // If the user accidentally backdrop-dismissed THIS chore's edit
-    // form, the lock matches and we preserve their in-progress edits.
-    // Switching to a different chore (or fresh from cleared state)
-    // populates from card data.
-    if (modalLockedFor === id) {
-      currentChoreId = id;
-      editModal.classList.remove("hidden");
-      scrollModalToTop(editModal);
-      return;
-    }
-    currentChoreId = id;
-    modalLockedFor = id;
-    editModal.querySelector('[data-modal-title]').textContent = "Edit Chore";
-    editForm.reset();
-    setField("name", card.dataset.choreName);
-    setField("short_name", card.dataset.choreShort);
-    setIconField(card.dataset.choreIcon || "");
-    setField("aliases_csv", (card.dataset.choreAliases || "").split("|").filter(Boolean).join(", "));
-    const reward = parseInt(card.dataset.choreReward, 10) || 0;
-    selectRewardPill(reward);
-    setField("reward_pebbles", reward);
-    const oneOffCb = editForm.querySelector('[data-field="one_off"]');
-    if (oneOffCb) oneOffCb.checked = card.dataset.choreOneOff === "true";
-    setPillValue("sharing_mode", card.dataset.choreSharingMode || "household");
-    setField("assigned_to_user_id", card.dataset.choreAssignedToUserId || "");
-    setPillValue("show_on_daily_view", card.dataset.choreShowOnDailyView || "when_scheduled");
-    const sec = parseInt(card.dataset.choreCooldown || card.dataset.choreThreshold, 10) || 0;
-    setCooldownSeconds(sec);
-    // Critical: do NOT default starts_on to today on edit. A chore
-    // that originally had no starts_on (so matches_day? has no lower
-    // bound) would get its starts_on stamped to today on every save,
-    // which breaks `matches_day?` for any past date — the carryover
-    // check then can't find a prior scheduled day, and the chore
-    // disappears from Today. Leave the field blank when the chore
-    // didn't have one.
-    setField("starts_on", card.dataset.choreStartsOn || "");
-    let rec = {};
-    try { rec = JSON.parse(card.dataset.choreRecurrence || "null") || {}; } catch (e) {}
-    setPillValue("freq", rec.freq || "never");
-    syncSingleTask();
-    syncFreqRow();
-    syncAssigneeRow();
-    syncWeekdayChips(rec.by_day || []);
-    // Monthly mode prefill: pick the right tab + chips/selects.
-    editForm.querySelectorAll('[data-month-day-pane] .md-chip').forEach(c => c.classList.remove("active"));
-    if (rec.freq === "monthly") {
-      if (rec.by_set_pos != null) {
-        editForm.querySelector('[data-month-mode-tabs] [data-month-mode="nth-weekday"]')?.click();
-        const setPos = editForm.querySelector('[data-month-set-pos]');
-        if (setPos) { setPos.value = String(rec.by_set_pos); setPos.dataset.userTouched = "1"; }
-        const wday = editForm.querySelector('[data-month-wday]');
-        if (wday && rec.by_day?.[0]) { wday.value = rec.by_day[0]; wday.dataset.userTouched = "1"; }
-      } else {
-        editForm.querySelector('[data-month-mode-tabs] [data-month-mode="day-of-month"]')?.click();
-        Array.isArray(rec.by_month_day) && rec.by_month_day.forEach(d => {
-          editForm.querySelector(`[data-month-day-pane] [data-day="${d}"]`)?.classList.add("active");
-        });
-      }
-    }
-    if (rec.interval) editForm.querySelector('[data-interval]').value = rec.interval;
-    if (rec.unit) editForm.querySelector('[data-unit]').value = rec.unit;
-    syncStartsOnDependents();
-    editForm.querySelector('[data-action="archive"]')?.classList.remove("hidden");
-    editModal.classList.remove("hidden");
-    scrollModalToTop(editModal);
-  }
-  // Two kinds of dismiss: accidental (backdrop click) PRESERVES the
-  // form so reopening the same chore picks up where the user left
-  // off; explicit (X / Cancel) CLEARS the form so the next open
-  // starts fresh.
-  function dismissEditModalAccidental() { editModal?.classList.add("hidden"); }
-  function dismissEditModalExplicit() {
-    editModal?.classList.add("hidden");
-    modalLockedFor = null;
-    currentChoreId = null;
-    editForm?.reset();
-    setIconField("");
-  }
-  // Legacy alias — successful saves should clear too (no preserved
-  // edits after a server-confirmed write).
-  function closeEditModal() { dismissEditModalExplicit(); }
-  function scrollModalToTop(modal) {
-    if (!modal) return;
-    modal.scrollTop = 0;
-    modal.querySelector(".chores-modal")?.scrollTo?.(0, 0);
-  }
-
-  // ---------- icon picker ----------
-  // Three input modes (any one wins):
-  //   * Text input: short emoji string, including iOS Genmoji unicode.
-  //   * File picker: image/svg uploaded → stored as data URL inline.
-  //   * Paste: image data on the clipboard (drag-drop too) stored as
-  //     data URL.
-  // The hidden `data-field="icon"` carries the canonical value passed
-  // to the server. The visible `.icon-preview` shows whichever form is
-  // currently selected; the text input + clear `×` button let the user
-  // remove an uploaded image.
-  function bindIconUploader() {
-    // SINGLE block UI:
-    //   * The contenteditable `.icon-preview` IS the input. Users type
-    //     emoji directly (Genmoji works because contenteditable accepts
-    //     clipboard image insertion), or paste a URL / SVG / image.
-    //   * A small upload chip in the corner triggers the native file
-    //     picker for traditional uploads.
-    //   * The hidden `data-field="icon"` carries the canonical value.
-    const stack = editForm.querySelector("[data-icon-stack]");
-    if (!stack) return;
-    const preview     = stack.querySelector("[data-icon-preview]");
-    const uploadBtn   = stack.querySelector("[data-icon-upload]");
-    const fileInput   = stack.querySelector("[data-icon-file]");
-    const hidden      = stack.querySelector('[data-field="icon"]');
-
-    // Two write paths:
-    //   * `renderFromValue: true` — programmatic set (file picker /
-    //     paste / openEditModal). Wipes the preview's HTML and renders
-    //     the canonical form (text / <img> / inline SVG).
-    //   * `renderFromValue: false` — user typed into the preview, just
-    //     mirror what's there into the hidden field. Avoids stomping
-    //     on the user's caret position mid-edit.
-    function setIconValue(v, { renderFromValue = true } = {}) {
-      if (hidden) hidden.value = v || "";
-      if (!renderFromValue || !preview) return;
-      if (!v) {
-        preview.innerHTML = ""; // :empty::before shows greyed broom
-        return;
-      }
-      if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
-        preview.innerHTML = `<img src="${v}" alt="" loading="lazy" draggable="false">`;
-      } else if (v.startsWith("<svg")) {
-        preview.innerHTML = v;
-      } else {
-        preview.textContent = v;
-      }
-    }
-    stack.__setIconValue = setIconValue;
-
-    // ---- Typing (emoji direct entry) ----
-    preview?.addEventListener("input", () => {
-      // Strip wrapping HTML — only the leaf text is the icon value.
-      // If user typed text alongside an existing image, this drops the
-      // image silently in favor of the text.
-      const text = (preview.textContent || "").trim();
-      setIconValue(text, { renderFromValue: false });
-    });
-
-    // ---- Paste: prefer image data, then SVG / URL text ----
-    preview?.addEventListener("paste", async e => {
-      const items = Array.from(e.clipboardData?.items || []);
-      const imageItem = items.find(it => it.type.startsWith("image/"));
-      if (imageItem) {
-        e.preventDefault();
-        const file = imageItem.getAsFile();
-        if (file) {
-          const v = await readFileAsValue(file);
-          if (v) setIconValue(v);
-        }
-        return;
-      }
-      const text = (e.clipboardData?.getData?.("text/plain") || "").trim();
-      if (!text) return;
-      if (text.startsWith("<svg") ||
-          text.startsWith("http://") || text.startsWith("https://") ||
-          text.startsWith("data:image/")) {
-        e.preventDefault();
-        setIconValue(text);
-      }
-      // Plain text (emoji) — let contenteditable handle naturally;
-      // the input event above will pick it up.
-    });
-
-    // ---- Drag-drop image ----
-    ["dragover", "drop"].forEach(evt => preview?.addEventListener(evt, async e => {
-      e.preventDefault();
-      if (evt !== "drop") return;
-      const file = Array.from(e.dataTransfer?.files || []).find(f => f.type.startsWith("image/"));
-      if (file) {
-        const v = await readFileAsValue(file);
-        if (v) setIconValue(v);
-      }
-    }));
-
-    // ---- File picker (corner upload chip) ----
-    uploadBtn?.addEventListener("click", e => {
-      e.preventDefault();
-      fileInput?.click();
-    });
-    fileInput?.addEventListener("change", async () => {
-      const file = fileInput.files?.[0];
-      if (!file) { return; }
-      const v = await readFileAsValue(file);
-      if (v) setIconValue(v);
-      fileInput.value = ""; // allow re-picking the same file later
-    });
-  }
-  function readFileAsValue(file) {
-    return new Promise(resolve => {
-      if (!file || !file.type.startsWith("image/")) return resolve(null);
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result || null);
-      reader.onerror = () => resolve(null);
-      // SVG → store as text (smaller, allows CSS coloring); other images
-      // → data URL.
-      if (file.type === "image/svg+xml") reader.readAsText(file);
-      else reader.readAsDataURL(file);
-    });
-  }
-  function setIconField(value) {
-    const stack = editForm?.querySelector("[data-icon-stack]");
-    if (stack?.__setIconValue) stack.__setIconValue(value || "");
-  }
-
-  document.querySelector('[data-add-chore]')?.addEventListener("click", () => {
-    // Prefill the new chore's name with whatever's in the search box —
-    // user typed "Hang shelves" then realized it didn't exist and tapped +.
-    const search = document.querySelector("[data-chores-search]");
-    const prefill = search?.value?.trim() || "";
-    openCreateModal({ prefillName: prefill });
-    if (search) search.value = "";
-    applySearch("");
-  });
-
-  // Edit mode toggle (Grid view). Entering edit mode also wires up
-  // SortableJS for drag-to-reorder; leaving it tears the instance down.
-  const editModeBtn = document.querySelector('[data-edit-mode-toggle]');
-  let sortableInstance = null;
-  function enterEditMode() {
-    editModeActive = true;
-    editModeBtn.classList.add("active");
-    root?.classList.add("edit-mode");
-    if (typeof window.Sortable === "undefined") return;
-    const grid = document.querySelector("[data-chores-grid]");
-    if (!grid) return;
-    sortableInstance = window.Sortable.create(grid, {
-      animation: 150,
-      ghostClass: "sortable-ghost",
-      chosenClass: "sortable-chosen",
-      dragClass: "sortable-drag",
-      forceFallback: true,        // memory: required for reliable flex/grid behavior
-      fallbackOnBody: true,       // append the clone to <body> so it tracks the cursor
-      fallbackTolerance: 0,       // start dragging immediately on move
-      // SortableJS default centers the clone under the cursor; explicit
-      // for clarity. With fallbackOnBody and no positional offset, the
-      // ghost stays glued to the pointer.
-      delay: 150,                 // small hold so a tap can still open the edit modal
-      delayOnTouchOnly: true,
-      touchStartThreshold: 4,
-      onEnd: persistOrder,
-    });
-  }
-  function exitEditMode() {
-    editModeActive = false;
-    editModeBtn.classList.remove("active");
-    root?.classList.remove("edit-mode");
-    if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
-  }
-  async function persistOrder() {
-    const ids = Array.from(document.querySelectorAll("[data-chores-grid] [data-chore-id]"))
-      .map(c => parseInt(c.dataset.choreId, 10)).filter(Boolean);
-    try {
-      await api("/chores/order", "PATCH", { ids, tab_id: TAB_ID });
-    } catch (e) {
-      flash("Couldn't save order: " + e.message, "error");
-    }
-  }
-
-  // Apply a server-pushed order_changed payload to the DOM in place,
-  // without reloading. We re-append cards in the new order — the
-  // browser preserves their state (incl. pending counts, ring SVGs,
-  // sortable instance bindings).
-  function applyOrderToDom(ids) {
-    const grid = document.querySelector("[data-chores-grid]") ||
-                 document.querySelector("[data-chores-circles]");
-    if (!grid) return;
-    const byId = new Map();
-    grid.querySelectorAll("[data-chore-id]").forEach(c => byId.set(parseInt(c.dataset.choreId, 10), c));
-    const frag = document.createDocumentFragment();
-    ids.forEach(id => { const card = byId.get(id); if (card) { frag.appendChild(card); byId.delete(id); } });
-    // Append remaining (unsorted) cards at the tail in their existing order.
-    byId.forEach(c => frag.appendChild(c));
-    grid.appendChild(frag);
-  }
-  editModeBtn?.addEventListener("click", () => {
-    if (editModeActive) exitEditMode(); else enterEditMode();
-  });
-  if (editForm) bindPillGroups();
-  if (editForm) bindIconUploader();
-  // Cancel + X = EXPLICIT dismiss (clears form). Backdrop click =
-  // accidental dismiss (preserves form so reopening picks up in
-  // progress edits). The X button lives in `.modal-head` which is a
-  // sibling of the form, so the binding has to come from the modal,
-  // not the form.
-  editModal?.querySelectorAll('[data-action="cancel"]').forEach(el =>
-    el.addEventListener("click", dismissEditModalExplicit));
-  editModal?.addEventListener("click", e => {
-    if (e.target === editModal) dismissEditModalAccidental();
-  });
-
-  editForm?.addEventListener("submit", async e => {
-    e.preventDefault();
-    const oneOff = isSingleTask();
-    const sharingMode = getField("sharing_mode") || "household";
-    const activeReward = editForm.querySelector('[data-reward-quicks] .pill.active');
-    const rewardVal = activeReward?.dataset.reward;
-    const customInput = editForm.querySelector('.reward-custom');
-    const reward = (rewardVal && rewardVal !== "custom")
-      ? parseInt(rewardVal, 10)
-      : (parseInt(customInput?.value, 10) || 0);
-
-    let recurrence = {};
-    let thresholdSeconds = null;
-    if (!oneOff) {
-      const freq = getField("freq") || "never";
-      thresholdSeconds = parseInt(editForm.querySelector('[data-field="threshold_seconds"]')?.value, 10);
-      // -1 (Chore::THRESHOLD_DAY_RESET) is a meaningful value, not "none";
-      // only treat NaN / 0 as "no cooldown".
-      if (!Number.isFinite(thresholdSeconds) || thresholdSeconds === 0) thresholdSeconds = null;
-
-      if (freq !== "never") {
-        recurrence.freq = freq;
-        if (freq === "weekly") recurrence.by_day = collectWeekdays();
-        if (freq === "monthly") {
-          const mode = editForm.querySelector('[data-month-mode-tabs] .pill.active')?.dataset.monthMode || "day-of-month";
-          if (mode === "nth-weekday") {
-            recurrence.by_set_pos = parseInt(editForm.querySelector('[data-month-set-pos]').value, 10);
-            recurrence.by_day = [editForm.querySelector('[data-month-wday]').value];
-          } else {
-            const chips = Array.from(editForm.querySelectorAll('[data-month-day-pane] .md-chip.active'));
-            const days = chips.map(c => parseInt(c.dataset.day, 10)).filter(n => !Number.isNaN(n));
-            if (days.length) recurrence.by_month_day = days;
-            else if (parseStartsOn()) recurrence.by_month_day = [parseStartsOn().getDate()];
-          }
-        }
-        if (freq === "custom" || freq === "relative") {
-          recurrence.interval = parseInt(editForm.querySelector('[data-interval]')?.value, 10) || 1;
-          recurrence.unit = editForm.querySelector('[data-unit]')?.value || "day";
-        }
-      }
-    }
-
-    const payload = {
-      chore: {
-        name: getField("name"),
-        short_name: getField("short_name"),
-        icon: getField("icon"),
-        reward_pebbles: reward,
-        threshold_seconds: thresholdSeconds,
-        one_off: oneOff,
-        starts_on: getField("starts_on") || null,
-        show_on_daily_view: getField("show_on_daily_view") || "when_scheduled",
-        sharing_mode: sharingMode,
-        assigned_to_user_id: sharingMode === "assigned" ? (getField("assigned_to_user_id") || null) : null,
-        aliases: (getField("aliases_csv") || "").split(",").map(s => s.trim()).filter(Boolean),
-        recurrence: recurrence,
-      }
-    };
-    try {
-      const isUpdate = !!currentChoreId;
-      const url = isUpdate ? `/chores/items/${currentChoreId}` : "/chores/items";
-      const method = isUpdate ? "PATCH" : "POST";
-      const data = await api(url, method, payload);
-      closeEditModal();
-      flash("Saved");
-      // Both views update from a single payload — `html_grid` +
-      // `html_today` ensure Grid and Today stay in lockstep regardless
-      // of which view the user was on when they saved.
-      applyChorePayload(data);
-      // Local-tab broadcasts are suppressed (actor_tab_id matches), so
-      // the SW shell cache won't refresh from the broadcast handler.
-      // Trigger it explicitly so the cached HTML for /chores +
-      // /chores/today + /chores/balance + /chores/history is up to date
-      // before the user navigates.
-      setSyncBadge(true);
-      pingSwRefresh();
-    } catch (err) {
-      flash("Save failed: " + err.message, "error");
-    }
-  });
-
-  function htmlToElement(html) {
-    if (!html) return null;
-    const tmpl = document.createElement("template");
-    tmpl.innerHTML = String(html).trim();
-    return tmpl.content.firstElementChild;
-  }
-
-  // Apply a server payload `{ id, html_grid, html_today, today_visible,
-  // updated_at }` to BOTH view containers. This is the single source of
-  // truth that every server-driven update funnels through: save,
-  // broadcast-driven refresh, sync diff.
-  //
-  // Optimistic-state guard: if a local click landed AFTER this payload
-  // was captured (timestamps in ms), skip the swap entirely — the
-  // pending POST will arrive with a newer payload that wins.
-  function applyChorePayload(p) {
-    if (!p || !p.id) return;
-    const localMs  = localClickTs.get(String(p.id)) || 0;
-    const serverMs = p.server_ts ? new Date(p.server_ts).getTime() :
-                     p.updated_at ? new Date(p.updated_at).getTime() : Date.now();
-    if (localMs && serverMs && localMs > serverMs) return;
-
-    const containers = viewContainers();
-    swapOrInsert(containers.grid,  p.html_grid,  p.id);
-    if (p.today_visible) {
-      swapOrInsert(containers.today, p.html_today, p.id);
-    } else {
-      // Chore shouldn't appear on Today right now (filtered out by
-      // show_on_daily_view + cooldown rules) — remove if present.
-      containers.today?.querySelector(`[data-chore-id="${p.id}"]`)?.remove();
-    }
-    // Hot strip: REPLACE in-place when the chore is in the strip.
-    // Membership is set once per day by ChoreHotPick.lookup_for — sync
-    // never adds or removes chips, just refreshes them when icon /
-    // name / reward / cooldown changes.
-    const hotExisting = containers.hot?.querySelector(`[data-chore-id="${p.id}"]`);
-    if (hotExisting && p.html_today) {
-      const fresh = htmlToElement(p.html_today);
-      if (fresh) hotExisting.replaceWith(fresh);
-    }
-  }
-
-  function swapOrInsert(container, html, id) {
-    if (!container || !html) return;
-    const existing = container.querySelector(`[data-chore-id="${id}"]`);
-    const fresh = htmlToElement(html);
-    if (!fresh) return;
-    if (existing) existing.replaceWith(fresh);
-    else container.appendChild(fresh);
-  }
-
-  function removeChoreEverywhere(id) {
-    document.querySelectorAll(`[data-chore-id="${id}"]`).forEach(el => el.remove());
-  }
-
-  // Legacy single-view path — preserved for the few callers (state
-  // endpoint response, in-place reward update) that don't yet pass the
-  // dual-html payload. Now mirrors to BOTH containers when the same id
-  // is present in either, so swaps from Grid propagate to Today.
-  function replaceCardHTML(choreId, html) {
-    if (!html) return;
-    Object.values(viewContainers()).forEach(container => {
-      if (!container) return;
-      const card = container.querySelector(`[data-chore-id="${choreId}"]`);
-      const fresh = htmlToElement(html);
-      if (card && fresh) card.replaceWith(fresh);
-    });
-  }
-
-  editForm?.querySelector('[data-action="archive"]')?.addEventListener("click", async () => {
-    if (!currentChoreId || !confirm("Archive this chore?")) return;
-    const id = currentChoreId;
-    try {
-      await api(`/chores/items/${id}`, "DELETE");
-      closeEditModal();
-      flash("Archived");
-      // Remove the card from BOTH view containers — edit mode stays on.
-      removeChoreEverywhere(id);
-    } catch (err) {
-      flash("Couldn't archive: " + err.message, "error");
-    }
-  });
-
-  // ---------- goal + withdraw forms (balance page) ----------
-  const goalModal = document.querySelector('[data-goal-modal]');
-  document.querySelector('[data-add-goal]')?.addEventListener("click", () => goalModal?.classList.remove("hidden"));
-  goalModal?.querySelector('[data-action="cancel"]')?.addEventListener("click", () => goalModal.classList.add("hidden"));
-  goalModal?.addEventListener("click", e => { if (e.target === goalModal) goalModal.classList.add("hidden"); });
-  goalModal?.querySelector('[data-goal-form]')?.addEventListener("submit", async e => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    try {
-      await api("/chores/goals", "POST", { chore_goal: Object.fromEntries(fd.entries()) });
-      goalModal.classList.add("hidden");
-      flash("Goal added");
-      setTimeout(() => location.reload(), 250);
-    } catch (err) { flash("Couldn't add goal: " + err.message, "error"); }
-  });
-  document.querySelectorAll('[data-delete-goal]').forEach(btn => {
-    btn.addEventListener("click", async () => {
-      if (!confirm("Remove this goal?")) return;
-      try {
-        await api(`/chores/goals/${btn.dataset.deleteGoal}`, "DELETE");
-        btn.closest("[data-goal-id]")?.remove();
-        flash("Goal removed");
-      } catch (err) { flash("Couldn't remove: " + err.message, "error"); }
-    });
-  });
-  document.querySelector("[data-withdraw-form]")?.addEventListener("submit", async e => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const entries = Object.fromEntries(fd.entries());
-    const amount = parseInt(entries.amount_pebbles, 10);
-    if (Number.isNaN(amount) || amount <= 0) { flash("Enter a positive amount", "warn"); return; }
-    try {
-      const data = await api("/chores/withdrawals", "POST", { chore_withdrawal: entries });
-      flash(`Withdrew ${data.amount_pebbles}p`);
-      setTimeout(() => location.reload(), 250);
-    } catch (err) { flash("Withdraw failed: " + err.message, "error"); }
-  });
-
-  // Ask the SW to background-refresh ALL shell paths so the cache
-  // mirrors the change everyone just got via broadcast — even the
-  // /chores/balance and /chores/history paths the user isn't on right
-  // now. Next time they navigate (online OR offline) they get fresh
-  // markup.
+  // ============================================================
+  // sw + monitor
+  // ============================================================
   function pingSwRefresh() {
     if (!navigator.onLine) return;
     navigator.serviceWorker?.controller?.postMessage({ action: "refresh_shells" });
   }
-
-  // ---------- Monitor sync ----------
   function subscribeMonitor() {
     if (typeof window.Monitor === "undefined") { setTimeout(subscribeMonitor, 200); return; }
     window.Monitor.subscribe("chores", {
-      connected() {
-        setConnDot("online"); flushQueue(); pingSwRefresh();
-        // Reconnect — verify the page matches server reality. Cheap
-        // when nothing changed (server returns 0 chores in the diff).
-        fullSync();
-      },
+      connected() { setConnDot("online"); flushQueue(); pingSwRefresh(); fullSync(); },
       disconnected() { setConnDot("offline"); },
       received(data) {
         pingSwRefresh();
-
         const payload = data?.data || {};
-        const actorId = payload.actor_user_id;
         const actorTab = payload.actor_tab_id;
-
-        // order_changed is per-user (sortation is per-user). Apply it
-        // on every OTHER tab of the same user — skip ourselves by
-        // tab_id comparison, NOT user_id (that would block sibling
-        // tabs).
         if (payload.reason === "order_changed") {
           if (actorTab && String(actorTab) === TAB_ID) return;
           if (Array.isArray(payload.ids)) applyOrderToDom(payload.ids);
           return;
         }
-
-        // Skip only when the broadcast is OURS (same tab). Sibling
-        // tabs of the same user are different tab_ids and should
-        // update so a phone + laptop stay in sync.
         if (actorTab && String(actorTab) === TAB_ID) return;
-
+        // Cheap: just re-fetch the chore that changed.
         const choreId = payload.chore_id;
-        if (choreId) refreshChoreFromServer(choreId);
-        if (!choreId) refreshBalanceOnly();
-      }
+        if (choreId) {
+          api(`/chores/items/${choreId}/state`, "GET").then(reconcile).catch(() => {});
+        } else {
+          fullSync();
+        }
+      },
     });
   }
-
-  async function refreshBalanceOnly() {
-    try {
-      const data = await api("/chores/csrf", "GET");
-      applyBalance(data);
-    } catch (e) {}
-  }
-
-  // Bring tab to foreground → also refresh shell caches in the
-  // background. This covers the case where Monitor missed a beat (e.g.
-  // device was asleep) and the user is now eyeballing the page.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") pingSwRefresh();
+    if (document.visibilityState === "visible") { pingSwRefresh(); if (unifiedPage) fullSync(); }
   });
-
-  // ---------- service worker registration ----------
-  // Cache-first shell: page boots INSTANTLY from cache (no network round
-  // trip), then a "syncing" badge stays visible while the SW does a
-  // background revalidate. When the SW finishes, it postMessages
-  // "shell_synced" and we clear the badge + warm the chore data so any
-  // card whose state changed gets quietly updated.
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker
       .register("/chores_worker.js", { scope: "/chores", updateViaCache: "none" })
       .then(reg => reg.update())
       .catch(e => console.warn("Chores SW register failed:", e));
-
     let didReload = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (didReload) return;
       didReload = true;
       location.reload();
     });
-
     navigator.serviceWorker.addEventListener("message", evt => {
-      if (evt.data?.kind === "shell_synced") onShellSynced();
+      if (evt.data?.kind === "shell_synced") setSyncBadge(false);
       if (evt.data?.kind === "shell_sync_failed") setSyncBadge(false, true);
     });
   }
-
-  // We start with the sync badge ON — the SW's revalidate is in flight.
   setSyncBadge(true);
-
   function setSyncBadge(syncing, failed = false) {
     const dot = document.querySelector("[data-conn-dot]");
     if (!dot) return;
@@ -1749,44 +1582,15 @@
     dot.title = syncing ? "Syncing..." : failed ? "Offline — using cached data" : "Up to date";
   }
 
-  async function onShellSynced() {
-    setSyncBadge(false);
-    // Only refresh the balance pill on shell_synced — the fresh shell
-    // HTML in the SW cache will already carry up-to-date card data on
-    // the NEXT navigation. Firing one GET per card here (70+ at once)
-    // was the main cause of the slow page load + query spam.
-    refreshBalanceOnly();
-  }
-
-  // ---------- view toggle (Grid / Today) ----------
-  // The page renders BOTH views' markup; CSS shows the active one.
-  // Nav-tab clicks intercept normal link navigation and call
-  // `setActiveView`, which:
-  //   * Updates root[data-active-view] so CSS swaps the visible view.
-  //   * Updates MODE so any new gestures / saves see the new view.
-  //   * Updates the balance pill (Today shows today_earnings, Grid
-  //     shows lifetime balance).
-  //   * Pushes URL state so back/forward + bookmarks Just Work.
-  //
-  // Edit mode and search are preserved across the swap — they apply to
-  // both containers concurrently, so the user toggling views doesn't
-  // lose context.
-  // The view-toggle layer ONLY runs on the unified Grid/Today page,
-  // identified by the presence of `data-active-view` on the root.
-  // Balance and History pages ALSO carry `data-chores-root` (for
-  // sortable / modal / offline-queue features) but do NOT have a
-  // `data-active-view` — there's no Grid/Today container to toggle
-  // and their nav must fall through to real link navigation, or
-  // clicking Grid would just spin without ever leaving Balance.
-  const unifiedPage = !!(root && root.dataset.activeView);
-
+  // ============================================================
+  // view toggle (Grid ↔ Today) — pushState, no navigation
+  // ============================================================
   function setActiveView(view, { push = true } = {}) {
     if (!unifiedPage) return;
     if (!["grid", "today"].includes(view)) view = "grid";
     if (MODE === view && root.dataset.activeView === view) return;
     MODE = view;
     root.dataset.activeView = view;
-    updateBalancePillForView();
     if (push) {
       const url = view === "today" ? "/chores/today" : "/chores";
       if (location.pathname !== url) history.pushState({ view }, "", url);
@@ -1794,20 +1598,10 @@
     document.title = view === "today" ? "Chores · Today" : "Chores";
     document.querySelectorAll(".chores-nav a").forEach(a => {
       const href = a.getAttribute("href");
-      // Only re-stamp the Grid/Today links — Balance/History keep their
-      // server-rendered active class on /chores/balance + /chores/history.
       if (href === "/chores" || href === "/chores/today") {
         a.classList.toggle("active", href === (view === "today" ? "/chores/today" : "/chores"));
       }
     });
-  }
-  function updateBalancePillForView() {
-    if (!unifiedPage) return;
-    const el = document.querySelector("[data-balance]");
-    if (!el) return;
-    const today = root.dataset.balanceToday;
-    // Pill is "today's earnings" regardless of which view is active.
-    if (today != null) el.textContent = today;
   }
   if (unifiedPage) {
     document.querySelectorAll(".chores-nav a").forEach(link => {
@@ -1822,66 +1616,20 @@
     });
   }
 
-  // ---------- sync diff applier ----------
-  // The single endpoint that catches the page up to server reality:
-  // returns per-chore dual HTML + archived ids since `lastSyncTs`. Used
-  // on cold boot (force-quit + reopen), reconnect, and tab-foreground.
-  //
-  // The diff is applied to BOTH view containers so Grid and Today stay
-  // in lockstep. If the chore no longer belongs on Today (cooldown made
-  // it visible earlier, or the user changed `show_on_daily_view`), the
-  // payload's `today_visible: false` removes it from the Today
-  // container only.
-  let syncInFlight = false;
-  async function fullSync({ force = false } = {}) {
-    if (syncInFlight) return;
-    if (!navigator.onLine) return;
-    syncInFlight = true;
-    setSyncBadge(true);
-    try {
-      const since = force ? "" : (loadLastSyncTs() || "");
-      const url = since ? `/chores/sync?since=${encodeURIComponent(since)}` : "/chores/sync";
-      const data = await api(url, "GET");
-      applySyncDiff(data);
-      saveLastSyncTs(data.server_ts);
-      setSyncBadge(false);
-    } catch (e) {
-      setSyncBadge(false, true);
-    } finally {
-      syncInFlight = false;
-    }
+  // ============================================================
+  // boot
+  // ============================================================
+  if (unifiedPage) {
+    ChoreStore.bootstrap(bootstrap.chores, bootstrap.lookahead);
+    if (bootstrap.server_ts) localStorage.setItem(SYNC_TS_KEY, bootstrap.server_ts);
   }
-  function applySyncDiff(data) {
-    if (!data) return;
-    (data.archived_chore_ids || []).forEach(id => removeChoreEverywhere(id));
-    (data.chores || []).forEach(p => applyChorePayload(p));
-    // Balance pill reflects server reality; update both stored
-    // attributes so view-switching shows the right scope.
-    if (root) {
-      if (data.balance != null) root.dataset.balanceTotal = data.balance;
-      if (data.today_earnings != null) root.dataset.balanceToday = data.today_earnings;
-      updateBalancePillForView();
-    }
-  }
-
   bindCardClicks();
-  startRingTicker();
-  startDayWatcher();
+  startTicker();
   subscribeMonitor();
   flushQueue();
-  // Immediate balance refresh — cached HTML often shows a stale value
-  // from the SW shell. Don't wait for shell_synced, kick it now too.
-  refreshBalanceOnly();
-
-  // The /sync diff applier + view-toggle init are ONLY valid on the
-  // unified Grid/Today page — Balance and History don't have chore
-  // containers to update or a `data-active-view` to set.
   if (unifiedPage) {
     setActiveView(MODE, { push: false });
     fullSync();
-    window.addEventListener("online", () => fullSync({ force: false }));
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") fullSync({ force: false });
-    });
+    window.addEventListener("online", () => fullSync());
   }
 </script>

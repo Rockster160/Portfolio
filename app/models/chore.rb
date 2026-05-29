@@ -23,9 +23,21 @@
 #
 class Chore < ApplicationRecord
   include Orderable
+  include Jilable
 
   orderable_by(sort_order: :asc)
   orderable_scope ->(chore) { Chore.where(created_by_user_id: chore.created_by_user_id) }
+
+  # Lifecycle triggers — fan out to Jil so user-written tasks can react
+  # to chore creation, edits, and archival. Listeners use the standard
+  # SearchBreakMatcher syntax against the trigger data, e.g.
+  #   `chore action:archived name:Vitamins`.
+  # ChoreCompletion fires its own `chore_completion` triggers separately
+  # (one per tap / undo) so completion-focused tasks don't have to wade
+  # through every chore edit.
+  after_create_commit  :fire_jil_create_trigger
+  after_update_commit  :fire_jil_update_trigger
+  after_destroy_commit :fire_jil_destroy_trigger
 
   WEEKDAY_KEYS = AgendaSchedule::WEEKDAY_KEYS
   FREQUENCIES = [:never, :daily, :weekdays, :weekly, :monthly, :yearly, :custom, :relative].freeze
@@ -229,7 +241,44 @@ class Chore < ApplicationRecord
     (last.completed_at + threshold_seconds.seconds) <= now
   end
 
+  # The chore's "what would a Jil listener want?" payload. Mirrors
+  # AgendaItem / ActionEvent / Task — a single hash flattening the
+  # common fields plus an `action` discriminator the listener can
+  # filter on (`chore action:archived`, `chore action:created`).
+  def jil_attrs(action:)
+    {
+      id: id,
+      action: action,
+      name: name,
+      short_name: display_short_name,
+      icon: icon,
+      reward_pebbles: reward_pebbles,
+      threshold_seconds: threshold_seconds,
+      sharing_mode: sharing_mode,
+      one_off: one_off,
+      archived: archived?,
+      created_by_user_id: created_by_user_id,
+      assigned_to_user_id: assigned_to_user_id,
+    }
+  end
+
   private
+
+  def fire_jil_create_trigger
+    ::Jil.trigger(created_by_user, :chore, with_jil_attrs(jil_attrs(action: :created)))
+  end
+
+  def fire_jil_update_trigger
+    # Archive (soft delete) is signalled by `archived_at` flipping from
+    # nil → set. Surface it as a distinct action so listeners can react
+    # to archive separately from any other update.
+    action = saved_change_to_archived_at? && archived_at.present? ? :archived : :updated
+    ::Jil.trigger(created_by_user, :chore, with_jil_attrs(jil_attrs(action: action)))
+  end
+
+  def fire_jil_destroy_trigger
+    ::Jil.trigger(created_by_user, :chore, with_jil_attrs(jil_attrs(action: :destroyed)))
+  end
 
   def threshold_seconds_is_valid_sentinel_or_positive
     return if threshold_seconds.nil? || threshold_seconds == THRESHOLD_DAY_RESET
