@@ -90,7 +90,7 @@
         <div class="history-row">
           <span>
             <%= entry.completed_at.strftime("%b %-d %l:%M%P") %> ·
-            <%= entry.chore.icon.presence || "🧹" %>
+            <span class="history-icon"><%= chore_icon_inline(entry.chore, fallback: true) %></span>
             <strong><%= entry.chore.display_short_name %></strong>
             <% if entry.note.present? %><span class="history-note">— <%= entry.note.truncate(40) %></span><% end %>
           </span>

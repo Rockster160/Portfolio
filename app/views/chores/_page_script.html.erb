@@ -459,7 +459,21 @@
 
       if (cooldown === -1) {
         if (!label) return;
-        if (!last) { label.textContent = ""; label.classList.add("elapsed"); return; }
+        // Day-reset cooldown is only ACTIVE when the most recent
+        // completion is in TODAY's chore-day. Completions from any
+        // prior day have already crossed the 4am boundary, so the
+        // cooldown has elapsed — the ticker must leave the label
+        // empty (CSS `:empty` then hides the pill entirely). Without
+        // this guard, a chore completed at 5pm yesterday would tick
+        // down to tomorrow's 4am and render a phantom "1d" cooldown.
+        const lastMs = last ? new Date(last).getTime() : 0;
+        const stillInCooldown = lastMs &&
+          currentChoreDayIso(lastMs) === currentChoreDayIso(now);
+        if (!stillInCooldown) {
+          label.textContent = "";
+          label.classList.add("elapsed");
+          return;
+        }
         const remainSec = secondsUntilNextChoreDay(now);
         label.classList.toggle("elapsed", remainSec === 0);
         label.textContent = remainSec === 0 ? "" : formatRemaining(remainSec);

@@ -29,8 +29,8 @@
           <div class="history-row"
                data-kind="completion"
                data-completion-id="<%= entry.id %>"
+               data-chore-id="<%= entry.chore.id %>"
                data-chore-name="<%= entry.chore.display_short_name %>"
-               data-chore-icon="<%= entry.chore.icon %>"
                data-paid="<%= entry.paid_pebbles %>"
                data-base="<%= entry.base_pebbles %>"
                data-completed-at="<%= entry.completed_at.iso8601 %>"
@@ -42,7 +42,7 @@
             <span class="history-when-name">
               <span class="history-when"><%= entry.completed_at.strftime("%b %-d %l:%M%P") %></span>
               ·
-              <span class="history-icon"><%= entry.chore.icon.presence || "🧹" %></span>
+              <span class="history-icon"><%= chore_icon_inline(entry.chore, fallback: true) %></span>
               <span class="history-name"><%= entry.chore.display_short_name %></span>
               <% if entry.metadata["hot_pick"] %><span class="history-tag hot">hot</span><% end %>
               <% if entry.note.present? %><span class="history-note">— <%= entry.note.truncate(40) %></span><% end %>
@@ -170,7 +170,14 @@
     function openModal(row) {
       currentRow = row;
       const ds = row.dataset;
-      modal.querySelector('[data-modal-icon]').textContent = ds.choreIcon || "🧹";
+      // The row's `.history-icon` already renders the canonical icon
+      // (emoji / <img> / inline SVG / placeholder) via the server
+      // helper. Clone its HTML into the modal so we don't have to
+      // re-implement icon-shape detection in JS (and so a giant
+      // data:image URL never ends up as raw textContent).
+      const sourceIcon = row.querySelector(".history-icon");
+      const modalIcon = modal.querySelector('[data-modal-icon]');
+      if (modalIcon) modalIcon.innerHTML = sourceIcon ? sourceIcon.innerHTML : "🧹";
       modal.querySelector('[data-modal-name]').textContent = ds.choreName;
       modal.querySelector('[data-modal-base]').textContent = ds.base || "0";
       modal.querySelector('[data-modal-mult]').textContent = parseFloat(ds.multiplier || "1").toFixed(2);

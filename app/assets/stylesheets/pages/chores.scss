@@ -990,7 +990,23 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
   }
   .history-icon {
     font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
   }
+  // Bound uploaded image / SVG icons to the same visual size as an
+  // emoji glyph. Without this an unconstrained `<img>` from a chore's
+  // data: URL would render at its natural pixel size, blowing the
+  // history row out and forcing the whole page to scroll horizontally.
+  .history-icon .icon-img,
+  .history-icon > svg {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    vertical-align: middle;
+  }
+  .history-icon .icon-placeholder { opacity: 0.5; }
   .history-name {
     color: var(--chores-text);
     font-weight: 600;
