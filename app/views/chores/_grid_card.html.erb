@@ -4,12 +4,12 @@
   done_count ||= 0
   last_completion ||= nil
   cooldown_seconds = chore.threshold_seconds.to_i
-  cooldown_active = last_completion.present? && !last_completion.payout_skipped &&
-                    cooldown_seconds.positive? && cooldown_seconds != Chore::THRESHOLD_DAY_RESET &&
-                    (last_completion.completed_at + cooldown_seconds.seconds) > Time.current
-  cooldown_until_day_end = cooldown_seconds == Chore::THRESHOLD_DAY_RESET &&
-                           last_completion.present? && !last_completion.payout_skipped &&
-                           last_completion.day_key == ChoreDay.current(current_user)
+  # See `_circle_card.html.erb` for why we render the countdown
+  # element whenever cooldown is configured (not just when the timer is
+  # currently running): lets a tap-on-the-card immediately surface the
+  # cooldown via JS without waiting for a server re-render.
+  has_day_reset_cooldown = cooldown_seconds == Chore::THRESHOLD_DAY_RESET
+  has_any_cooldown       = cooldown_seconds.positive? || has_day_reset_cooldown
 %>
 <div class="chore-card <%= "done-today" if done_count > 0 %> <%= "hot" if hot %>"
      data-chore-id="<%= chore.id %>"
@@ -29,18 +29,19 @@
      data-chore-updated-at="<%= chore.updated_at.iso8601(3) %>"
      data-done-count="<%= done_count %>"
      data-last-completed-at="<%= last_completion&.completed_at&.iso8601 %>">
-  <% if hot %><div class="hot-badge"><%= hot %>×</div><% end %>
+  <% if hot %><div class="hot-badge"><%= format_multiplier(hot) %>×</div><% end %>
   <div class="icon" data-icon>
     <span class="card-reward"><%= chore.reward_label %></span>
     <%= chore_icon_inline(chore, fallback: chore.one_off ? "📝" : true) %>
-    <% if cooldown_active || cooldown_until_day_end %>
+    <% if has_any_cooldown %>
       <span class="circle-countdown" data-circle-countdown
-            data-cooldown-end="<%= cooldown_until_day_end ? "day-end" : "" %>"></span>
+            data-cooldown-end="<%= has_day_reset_cooldown ? "day-end" : "" %>"></span>
     <% end %>
     <span class="card-count-slot" data-count-slot>
       <% if done_count > 1 %><span class="count-badge" data-count-badge>×<%= done_count %></span><% end %>
     </span>
   </div>
-  <div class="title"><%= chore.display_short_name %></div>
+  <%# Grid shows the FULL name (Today + Hot Strip use the short label). %>
+  <div class="title"><%= chore.name %></div>
   <div class="ago-row" data-ago-row></div>
 </div>

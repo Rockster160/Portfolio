@@ -19,11 +19,9 @@
      data-cutoff-hour="<%= ChoreDay::CUTOFF_HOURS %>"
      data-balance-total="<%= @balance_total %>"
      data-balance-today="<%= @balance_today %>">
-  <div class="chores-sticky-top">
-    <%= render "header", balance: @balance, scope: @active_view == :today ? :today : :total %>
-    <%= render "hot_strip", hot_picks: @hot_picks, chores: @chores %>
-    <%= render "toolbar" %>
-  </div>
+  <%= render "header", balance: @balance, scope: :today %>
+  <%= render "hot_strip", hot_picks: @hot_picks, chores: @chores %>
+  <%= render "toolbar" %>
 
   <%= render "view_grid",  chores: @chores %>
   <%= render "view_today", chores: @scheduled_today, lookahead: @lookahead %>

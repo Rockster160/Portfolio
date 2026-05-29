@@ -1,4 +1,26 @@
 module ChoresHelper
+  # Drops trailing ".0" on whole-number multipliers — "2×" not "2.0×",
+  # "1.5×" still renders as "1.5×". Applies to both the hot-strip and
+  # the on-card hot-badge.
+  def format_multiplier(value)
+    return "" if value.nil?
+
+    f = value.to_f
+    f == f.to_i ? f.to_i.to_s : ("%g" % f)
+  end
+
+  # The balance pill at the top of every chores page shows today's
+  # earnings. Lazily compute it so the helper works on whatever page
+  # renders the header — Grid / Today already loaded the breakdown
+  # (`@balance_today`); Balance / History haven't, so fall through to
+  # the model.
+  def today_earnings_for_header
+    return @balance_today if defined?(@balance_today) && @balance_today
+
+    day = (defined?(@day) && @day) || ChoreDay.current(current_user)
+    current_user.chore_balance_breakdown(day)[:today_earnings]
+  end
+
   # An icon may be:
   #   * a plain emoji string (most chores)
   #   * a data URL (`data:image/png;base64,...`) — uploaded image

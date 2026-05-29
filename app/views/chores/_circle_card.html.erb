@@ -4,13 +4,16 @@
   done_count ||= 0
   last_completion ||= nil
   cooldown_seconds = chore.threshold_seconds.to_i
-  cooldown_active = last_completion.present? && !last_completion.payout_skipped &&
-                    cooldown_seconds.positive? && cooldown_seconds != Chore::THRESHOLD_DAY_RESET &&
-                    (last_completion.completed_at + cooldown_seconds.seconds) > Time.current
-  cooldown_until_day_end = cooldown_seconds == Chore::THRESHOLD_DAY_RESET &&
-                           last_completion.present? && !last_completion.payout_skipped &&
-                           last_completion.day_key == ChoreDay.current(current_user)
-  show_ring = cooldown_active # only fixed-duration cooldowns get a ring
+  # Render the cooldown elements whenever the chore HAS a cooldown
+  # configured, regardless of whether the timer is currently running.
+  # JS fills the countdown text + ring offset based on
+  # `data-last-completed-at`; CSS `:empty` hides the badge when there's
+  # no active cooldown. This way tapping a chore can immediately show
+  # the cooldown without waiting for a server round-trip to re-render
+  # the partial.
+  has_fixed_cooldown    = cooldown_seconds.positive? && cooldown_seconds != Chore::THRESHOLD_DAY_RESET
+  has_day_reset_cooldown = cooldown_seconds == Chore::THRESHOLD_DAY_RESET
+  has_any_cooldown      = has_fixed_cooldown || has_day_reset_cooldown
 %>
 <div class="chore-circle <%= "done" if done_count > 0 %> <%= "hot" if hot %>"
      data-chore-id="<%= chore.id %>"
@@ -29,9 +32,9 @@
      data-last-completed-at="<%= last_completion&.completed_at&.iso8601 %>"
      data-done-count="<%= done_count %>"
      data-chore-one-off="<%= chore.one_off %>">
-  <% if hot %><div class="hot-badge"><%= hot %>×</div><% end %>
+  <% if hot %><div class="hot-badge"><%= format_multiplier(hot) %>×</div><% end %>
   <div class="circle-inner">
-    <% if show_ring %>
+    <% if has_fixed_cooldown %>
       <svg class="circle-ring" viewBox="0 0 100 100" aria-hidden="true">
         <circle class="ring-bg" cx="50" cy="50" r="46" />
         <circle class="ring-progress" cx="50" cy="50" r="46" data-ring-progress />
@@ -39,9 +42,9 @@
     <% end %>
     <span class="circle-reward"><%= chore.reward_label %></span>
     <div class="icon" data-icon><%= chore_icon_inline(chore, fallback: chore.one_off ? "📝" : true) %></div>
-    <% if cooldown_active || cooldown_until_day_end %>
+    <% if has_any_cooldown %>
       <span class="circle-countdown" data-circle-countdown
-            data-cooldown-end="<%= cooldown_until_day_end ? "day-end" : "" %>"></span>
+            data-cooldown-end="<%= has_day_reset_cooldown ? "day-end" : "" %>"></span>
     <% end %>
     <div class="count-slot" data-count-slot>
       <% if done_count > 1 %><span class="count-badge" data-count-badge>×<%= done_count %></span><% end %>

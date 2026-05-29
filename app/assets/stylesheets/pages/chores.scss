@@ -35,7 +35,11 @@
   --chores-card-border: #1F2A44;
   --chores-text: #ECF0F1;
   --chores-muted: #94A3B8;
-  --chores-hot: #F97316;
+  // Purple instead of the previous orange — "hot" reads as a more
+  // distinct accent vs. the green "done" state and the slate-grey
+  // cooldown, and matches the Animal-Crossing-style violet user
+  // wanted.
+  --chores-hot: #A855F7;
   --chores-done: #16A34A;
   --chores-accent: #2563EB;
   // Cooldown badges + rings used to inherit --chores-hot which made
@@ -52,19 +56,21 @@
   > .chores-view { display: none; }
   &[data-active-view="grid"]  > .chores-view.view-grid  { display: block; }
   &[data-active-view="today"] > .chores-view.view-today { display: block; }
-  &[data-active-view="grid"]  .chores-sticky-top > .chores-toolbar input[type="search"] { /* same toolbar — no-op anchor */ }
 
-  // Sticky top: header + hot strip + toolbar travel together so search /
-  // edit / add are always reachable while scrolling.
-  .chores-sticky-top {
+  // Sticky toolbar only — search / edit / add stay reachable while
+  // scrolling, but the tabs / status / balance / hot strip scroll out
+  // of the way so the chore grid gets real estate. Sits flush with the
+  // viewport top; when the env-banner is shown, slide down 10px to
+  // clear it.
+  .chores-toolbar {
     position: sticky;
-    top: 10px; // env-banner is 10px tall + body margin-top: 10px; sit just below it
+    top: 0;
     z-index: 50;
     background: var(--chores-bg);
-    margin: -16px -20px 12px;
-    padding: 12px 20px 8px;
-    box-shadow: 0 8px 16px -12px #0007;
   }
+}
+body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
+.chores-page {
 
   max-width: 1200px;
   margin: 0 auto;
@@ -204,37 +210,74 @@
     margin: 8px 0;
   }
 
+  // Hot strip — small mirror of Today's circles. Each cell IS a real
+  // chore-circle (same partial) so taps, long-press undo, multiplier
+  // mode, edit mode all work identically. The multiplier badge floats
+  // ABOVE the cell so it's never clipped by the scrolling row.
   .hot-strip {
-    background: linear-gradient(135deg, #F97316 0%, #DB2777 100%);
-    padding: 8px 12px;
-    border-radius: 10px;
     display: flex;
-    gap: 10px;
-    align-items: center;
-    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px;
     margin-bottom: 12px;
+    // Extra top padding so the floating multiplier badge has room and
+    // doesn't get clipped at the top of mobile viewports.
+    padding: 14px 4px 6px;
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
   }
-  .hot-strip .hot-label {
-    font-weight: 700;
-    color: #FFF;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+  .hot-strip .hot-strip-cell {
+    position: relative;
+    flex-shrink: 0;
+    // Width matches the small chore-circle below so the badge centers
+    // cleanly over the disc.
+    width: 64px;
+    padding-top: 6px;
   }
-  .hot-strip .hot-chip {
-    background: #00000066;
+  .hot-strip .hot-mult {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--chores-hot);
     color: #FFF;
-    padding: 4px 10px;
     border-radius: 999px;
-    font-size: 13px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .hot-strip .hot-chip .hot-mult {
+    padding: 2px 8px;
+    font-size: 10px;
     font-weight: 700;
-    color: #FBBF24;
+    line-height: 1.2;
+    z-index: 6;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 2px 6px #0006;
+  }
+  // Smaller circles for the hot strip — Today's full-size circles
+  // would dominate the page header.
+  .hot-strip .chore-circle .circle-inner {
+    border-width: 2px;
+  }
+  .hot-strip .chore-circle .title {
+    font-size: 10px;
+    min-height: 13px;
+    margin-top: 4px;
+    -webkit-line-clamp: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hot-strip .chore-circle .icon {
+    font-size: 22px;
+    width: 62%;
+  }
+  .hot-strip .chore-circle .circle-reward {
+    top: 10%;
+    font-size: 9px !important;
+  }
+  .hot-strip .chore-circle .circle-countdown {
+    bottom: 8%;
+    font-size: 8px !important;
+    padding: 1px 4px;
   }
 
   // Grid (list-builder style)
@@ -252,6 +295,10 @@
     flex-direction: column;
     gap: 4px;
     align-items: center;
+    // Stretch to the grid row's full height so `margin-top: auto` on
+    // `.ago-row` actually has room to push the timestamp to the
+    // bottom regardless of how many lines the title wraps to.
+    height: 100%;
     background: var(--chores-card-bg);
     cursor: pointer;
     transition:
@@ -296,13 +343,13 @@
     opacity: 0.22; // Greyed-out so the broom reads as "empty slot", not chore icon.
     filter: grayscale(0.6);
   }
-  // Reward — top-LEFT of the icon box (was bottom-LEFT). Positioned in
-  // percentages so it scales down on mobile-sized cards rather than
-  // squishing the central glyph.
+  // Reward — top-CENTER of the icon box. Centered to match Today's
+  // circle-reward placement so the two views feel consistent.
   .chore-card .card-reward {
     position: absolute;
     top: 4%;
-    left: 5%;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 2;
     font-size: 11px !important;
     font-weight: 600;
@@ -310,14 +357,13 @@
     line-height: 1;
     pointer-events: none;
   }
-  // Cooldown countdown — GREY pill at bottom-RIGHT of the icon box
-  // (was top-center, orange/hot). Bottom-right keeps it from competing
-  // with the reward (top-left) or the count-slot (bottom-center).
-  // Percent positioning so it scales with the card on small screens.
+  // Cooldown countdown — GREY pill at bottom-CENTER of the icon box.
+  // Centered to mirror Today's circle-countdown placement.
   .chore-card .icon .circle-countdown {
     position: absolute;
     bottom: 4%;
-    right: 5%;
+    left: 50%;
+    transform: translateX(-50%);
     background: var(--chores-cooldown-bg);
     color: var(--chores-cooldown);
     font-size: 9px !important;
@@ -343,9 +389,21 @@
     font-size: 13px;
     line-height: 1.2;
     color: var(--chores-text);
+    // Cap full names at two lines so a single 4-word chore doesn't
+    // bloat the whole row's card height. -webkit-line-clamp is the
+    // de-facto cross-browser way to do this; the fallback (no clamp)
+    // is wrapping freely, which still degrades acceptably.
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
   }
-  // "Ago" timestamp — replaces the old "5p" reward row below the icon.
-  // Subtle muted text, same restraint as the original .reward row.
+  // "Ago" timestamp — pinned to the bottom of the card so single-line
+  // titles and two-line titles in the same row still line their
+  // timestamps up at the same baseline. The card is `display: flex`
+  // column; `margin-top: auto` pushes this to the bottom regardless of
+  // intermediate content height.
   .chore-card .ago-row {
     text-align: center;
     font-size: 11px;
@@ -353,6 +411,7 @@
     color: var(--chores-muted);
     min-height: 14px;
     line-height: 1.2;
+    margin-top: auto;
   }
   .chore-card .reward {
     font-size: 11px;
@@ -370,15 +429,15 @@
       inset 0 0 0 2px var(--chores-done),
       inset 0 0 0 4px var(--chores-hot);
   }
-  // Count slot — INSIDE the icon at top-RIGHT (was bottom-center).
-  // Swap pushes the count out of the cooldown zone and into the
-  // previously-empty top-right corner.
+  // Count slot — top-RIGHT (paired with hot-badge top-LEFT). z-index
+  // above the reward (top-center) so multi-occurrence badges still
+  // read in front of the icon background.
   .chore-card .card-count-slot {
     position: absolute;
     top: 4%;
     right: 5%;
     pointer-events: none;
-    z-index: 2;
+    z-index: 4;
   }
   .chore-card .count-badge {
     background: var(--chores-done);
@@ -390,16 +449,23 @@
     line-height: 1;
     white-space: nowrap;
   }
+  // Hot multiplier badge — top-LEFT, ABOVE everything else (reward,
+  // count, even the icon glyph). It signals "this chore is paying
+  // extra today" and was previously rendering UNDER the reward badge
+  // because both lived at z-index < 4.
   .chore-card .hot-badge {
     position: absolute;
-    top: 6px;
-    left: 6px;
+    top: 4%;
+    left: 5%;
     background: var(--chores-hot);
     color: #FFF;
     padding: 1px 6px;
     border-radius: 999px;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
+    line-height: 1.2;
+    z-index: 5;
+    pointer-events: none;
   }
   // (.cooldown-badge removed — replaced by .circle-countdown pill inside .icon)
   // Edit Mode (toggled from the toolbar) recolors the Grid: every card
@@ -1077,21 +1143,15 @@
   }
 
   // Identity row: big emoji input + name fields side by side.
+  // Icon-cell wider than the old 80px because the picker needs room
+  // for the preview, emoji/paste input, and clear button stacked
+  // vertically. 110px keeps the name column dominant while giving the
+  // stack breathing room.
   .chore-form .identity-row {
     display: grid;
-    grid-template-columns: 80px 1fr;
-    gap: 10px;
-    align-items: stretch;
-  }
-  .chore-form .icon-input {
-    text-align: center;
-    font-size: 38px !important;
-    line-height: 1;
-    padding: 0 !important;
-    aspect-ratio: 1/1;
-    height: auto;
-    background: #0F1B33;
-    border-color: #1F2A44;
+    grid-template-columns: 110px 1fr;
+    gap: 12px;
+    align-items: start;
   }
   .chore-form .identity-names {
     display: flex;
@@ -1331,48 +1391,71 @@
   }
 
   // ---- Icon picker (edit modal) ----
-  .icon-input-stack {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  // Single block: a contenteditable preview that users type emoji
+  // into, paste images / URLs / SVG / Genmoji into, or drop image
+  // files onto. A small camera chip pinned top-left opens the native
+  // file picker for traditional uploads.
+  .chore-form .icon-cell {
+    position: relative;
   }
-  .icon-input-stack .icon-preview {
-    width: 56px;
-    height: 56px;
+  .chore-form .icon-cell .icon-preview {
+    width: 100%;
+    aspect-ratio: 1/1;
     border-radius: 12px;
     background: #0F1B33;
+    border: 1px solid #334155;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    font-size: 48px;
+    line-height: 1;
+    overflow: hidden;
+    cursor: text;
+    // Suppress the default contenteditable focus outline in favor of
+    // a softer accent.
+    outline: none;
+  }
+  .chore-form .icon-cell .icon-preview:focus {
+    border-color: var(--chores-accent);
+  }
+  .chore-form .icon-cell .icon-preview:empty::before {
+    content: "🧹";
+    font-size: 48px;
+    opacity: 0.22;
+    filter: grayscale(0.6);
+    pointer-events: none;
+  }
+  .chore-form .icon-cell .icon-preview img,
+  .chore-form .icon-cell .icon-preview > svg {
+    width: 76%;
+    height: 76%;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+  }
+  // Upload chip — small, top-left of the preview block. Semi-transparent
+  // so it doesn't compete visually with the icon itself.
+  .chore-form .icon-cell .icon-upload-btn {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 24px;
+    height: 24px;
+    padding: 0 !important;
+    border-radius: 6px;
+    background: rgba(15, 27, 51, 0.85) !important;
+    color: var(--chores-muted) !important;
     border: 1px solid #334155 !important;
     display: grid;
     place-items: center;
-    cursor: pointer;
-    flex-shrink: 0;
-    padding: 0 !important;
-  }
-  .icon-input-stack .icon-preview .icon-preview-text {
-    font-size: 30px;
+    font-size: 12px;
     line-height: 1;
-    pointer-events: none;
+    cursor: pointer;
+    z-index: 2;
   }
-  .icon-input-stack .icon-preview img,
-  .icon-input-stack .icon-preview svg {
-    width: 36px;
-    height: 36px;
-    object-fit: contain;
-    pointer-events: none;
-  }
-  .icon-input-stack .icon-preview.placeholder .icon-preview-text {
-    opacity: 0.25;
-    filter: grayscale(0.6);
-  }
-  .icon-input-stack .icon-input {
-    flex: 1;
-    min-width: 0;
-  }
-  .icon-input-stack .icon-clear {
-    background: #1F2A44 !important;
-    color: var(--chores-muted) !important;
-    padding: 6px 10px !important;
-    border-radius: 6px;
+  .chore-form .icon-cell .icon-upload-btn:hover {
+    color: var(--chores-text) !important;
+    border-color: var(--chores-accent) !important;
   }
 
   // ---- Multiplier modal (now shared between Grid + Today) ----
@@ -1444,6 +1527,18 @@
   border-radius: 12px;
   padding: 16px;
   -webkit-overflow-scrolling: touch;
+  // `contain` stops scroll chaining: when the user scrolls the modal
+  // to the top/bottom, the page behind doesn't pick up the wheel /
+  // touch momentum and start scrolling itself.
+  overscroll-behavior: contain;
+}
+
+// Lock the page behind ANY open chores modal: backdrop is shown
+// (not `.hidden`) → body can't scroll. Pure CSS so no JS lifecycle
+// hooks needed. `:has` is supported across the project's modern
+// browser baseline (Safari 15.4+, Chrome 105+).
+body:has(.chores-modal-backdrop:not(.hidden)) {
+  overflow: hidden;
 }
 
 .chores-flash {

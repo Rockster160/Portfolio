@@ -10,19 +10,20 @@
     <form class="chore-form basic" data-chores-form autocomplete="off" novalidate data-form-type="other">
 
       <%# ----- Identity: icon + names -----
-        Icon supports plain emoji text, pasted/uploaded images, and SVG.
-        The visible preview swaps between a text input (emoji) and an
-        <img> tag (uploaded). The hidden `data-field="icon"` carries the
-        canonical value: emoji string OR a data URL / external URL. %>
+        The preview block is the SINGLE affordance:
+          * Type emoji directly into it (contenteditable).
+          * Paste an image / image URL / SVG / Genmoji.
+          * Tap the small upload chip in the corner for the file
+            picker (or drag-drop an image onto the block).
+        Hidden `data-field="icon"` carries the canonical value:
+        emoji string, data URL, external URL, or inline SVG. %>
       <div class="form-section identity-row">
-        <div class="icon-input-stack" data-icon-stack>
-          <button type="button" class="icon-preview" data-icon-preview title="Upload image">
-            <span class="icon-preview-text">🧹</span>
+        <div class="icon-cell" data-icon-stack>
+          <button type="button" class="icon-upload-btn" data-icon-upload title="Upload image">
+            <i class="fa fa-camera" aria-hidden="true"></i>
           </button>
-          <input type="text" data-icon-text class="icon-input" maxlength="64" placeholder="🧹"
-                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
-          <button type="button" class="icon-clear" data-icon-clear title="Clear icon">×</button>
+          <div class="icon-preview" data-icon-preview contenteditable="true" spellcheck="false"
+               role="textbox" aria-label="Icon — type emoji, paste image, or tap upload"></div>
           <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
                  data-icon-file hidden>
           <input type="hidden" data-field="icon" value="">

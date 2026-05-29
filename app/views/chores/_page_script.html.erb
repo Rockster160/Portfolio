@@ -26,6 +26,11 @@
     return {
       grid:  document.querySelector("[data-chores-grid]"),
       today: document.querySelector("[data-chores-circles]"),
+      // Hot strip is a mini Today view — same chore-circle markup,
+      // same click + long-press semantics. Including it here means
+      // diff applies (swap on rename, remove on archive) and click
+      // bindings cover the strip uniformly with the main views.
+      hot:   document.querySelector("[data-chores-hot-strip]"),
     };
   }
   function visibleContainer() {
@@ -428,7 +433,11 @@
         try {
           const data = await res.json();
           const balanceEl = document.querySelector("[data-balance]");
-          if (balanceEl && data?.balance != null) balanceEl.textContent = data.balance;
+          // Pill is "today's earnings" everywhere — prefer
+          // today_earnings, fall back to balance only if the response
+          // omits it (very old clients in the offline queue).
+          const v = (data?.today_earnings != null) ? data.today_earnings : data?.balance;
+          if (balanceEl && v != null) balanceEl.textContent = v;
         } catch (e) {}
         continue;
       }
@@ -526,21 +535,27 @@
     document.querySelectorAll(`[data-chore-id="${id}"]`).forEach(card => {
       if (data.archived) card.classList.add("archived");
       bumpCount(card, data.completions_today);
-      if (data.last_completed_at) card.dataset.lastCompletedAt = data.last_completed_at;
+      // Clear EXPLICITLY when the server reports no last completion —
+      // an undo that removed the only completion needs to wipe the
+      // optimistic timestamp the click handler stamped, otherwise the
+      // cooldown badge keeps ticking against a phantom timestamp.
+      if (Object.prototype.hasOwnProperty.call(data, "last_completed_at")) {
+        card.dataset.lastCompletedAt = data.last_completed_at || "";
+      }
     });
   }
 
-  // Balance pill content depends on its scope:
-  //   data-balance-scope="today"  → today's earnings only (no withdrawals)
-  //   data-balance-scope="total"  → lifetime balance (default for Grid/Balance)
+  // Balance pill ALWAYS shows today's earnings — single canonical
+  // number across Grid / Today / Balance / History. Lifetime balance
+  // is shown only on the dedicated Balance card (and gates the
+  // withdraw form below).
   function applyBalance(data) {
     if (data == null) return;
     const total = (typeof data === "object") ? data.balance : data;
     const today = (typeof data === "object") ? data.today_earnings : null;
     const el = document.querySelector("[data-balance]");
     if (el) {
-      const scope = el.dataset.balanceScope || "total";
-      const value = (scope === "today" && today != null) ? today : total;
+      const value = (today != null) ? today : total;
       if (value != null) el.textContent = value;
     }
     const fieldset = document.querySelector("[data-withdraw-fieldset]");
@@ -712,12 +727,13 @@
       // Edit mode short-circuits gesture handling — clicks open the
       // edit modal directly, no pointer state machine needed.
       if (editModeActive) return;
-      // Today restricts the tap target to the round disc (so the title
-      // beneath isn't a tap target). Grid uses the whole card. The
-      // container itself tells us which view we're in — no need to read
-      // MODE which could be mid-flip during a view swap.
-      const isTodayContainer = container.matches("[data-chores-circles]");
-      if (isTodayContainer && !e.target.closest(".circle-inner")) return;
+      // Today + Hot-strip restrict the tap target to the round disc
+      // (so titles + multiplier badges underneath aren't tap targets).
+      // Grid uses the whole card. The container itself tells us which
+      // view we're in — no need to read MODE which could be mid-flip
+      // during a view swap.
+      const usesCircleHitbox = container.matches("[data-chores-circles], [data-chores-hot-strip]");
+      if (usesCircleHitbox && !e.target.closest(".circle-inner")) return;
 
       state.pointerId = e.pointerId;
       state.card = card;
@@ -801,6 +817,13 @@
   function getField(name) { return editForm?.querySelector(`[data-field="${name}"]`)?.value; }
 
   let currentChoreId = null;
+  // What the edit form is currently populated for. `null` means cleared;
+  // chore id (string) means "edit form holds the in-progress state for
+  // that chore"; `"__create__"` means "fresh-chore create form is in
+  // progress". Cleared by explicit cancel / X / successful save — NOT by
+  // an accidental backdrop click, so reopening the same chore right
+  // after an accidental dismiss preserves what the user had typed.
+  let modalLockedFor = null;
   const WDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
   // Pill-group sync: clicking a pill sets the hidden input value and
@@ -1089,37 +1112,55 @@
 
   function openCreateModal(opts = {}) {
     if (!editModal) return;
-    currentChoreId = null;
+    // Preserve in-progress create state across accidental dismiss —
+    // if the form is still locked for "__create__", just show it again
+    // without resetting fields. Cancel/X clears it explicitly.
+    if (modalLockedFor !== "__create__") {
+      currentChoreId = null;
+      editForm.reset();
+      setIconField("");
+      if (opts.prefillName) setField("name", opts.prefillName);
+      selectRewardPill(1);
+      setField("reward_pebbles", 1);
+      setField("starts_on", todayIso());
+      setCooldownSeconds(0);
+      setPillValue("freq", "never");
+      setPillValue("show_on_daily_view", "when_scheduled");
+      setPillValue("sharing_mode", "household"); // default per spec
+      const oneOffCb = editForm.querySelector('[data-field="one_off"]');
+      if (oneOffCb) oneOffCb.checked = !!opts.oneOff;
+      syncSingleTask();
+      editForm.querySelectorAll('[data-month-day-pane] .md-chip').forEach(c => c.classList.remove("active"));
+      editForm.querySelector('[data-month-mode-tabs] [data-month-mode="day-of-month"]')?.click();
+      syncFreqRow();
+      syncAssigneeRow();
+      syncWeekdayChips([]);
+      syncWeekdaysHelperHighlight();
+      modalLockedFor = "__create__";
+    }
     editModal.querySelector('[data-modal-title]').textContent = "Add Chore";
-    editForm.reset();
-    setIconField("");
-    if (opts.prefillName) setField("name", opts.prefillName);
-    selectRewardPill(1);
-    setField("reward_pebbles", 1);
-    setField("starts_on", todayIso());
-    setCooldownSeconds(0);
-    setPillValue("freq", "never");
-    setPillValue("show_on_daily_view", "when_scheduled");
-    setPillValue("sharing_mode", "household"); // default per spec
-    const oneOffCb = editForm.querySelector('[data-field="one_off"]');
-    if (oneOffCb) oneOffCb.checked = !!opts.oneOff;
-    syncSingleTask();
-    editForm.querySelectorAll('[data-month-day-pane] .md-chip').forEach(c => c.classList.remove("active"));
-    editForm.querySelector('[data-month-mode-tabs] [data-month-mode="day-of-month"]')?.click();
-    syncFreqRow();
-    syncAssigneeRow();
-    syncWeekdayChips([]);
-    syncWeekdaysHelperHighlight();
     editForm.querySelector('[data-action="archive"]')?.classList.add("hidden");
     editModal.classList.remove("hidden");
     scrollModalToTop(editModal);
     const nameField = editForm.querySelector('[data-field="name"]');
-    if (nameField) { nameField.focus(); nameField.select?.(); }
+    if (nameField && !nameField.value) { nameField.focus(); nameField.select?.(); }
   }
 
   function openEditModal(card) {
     if (!editModal) return;
-    currentChoreId = card.dataset.choreId;
+    const id = card.dataset.choreId;
+    // If the user accidentally backdrop-dismissed THIS chore's edit
+    // form, the lock matches and we preserve their in-progress edits.
+    // Switching to a different chore (or fresh from cleared state)
+    // populates from card data.
+    if (modalLockedFor === id) {
+      currentChoreId = id;
+      editModal.classList.remove("hidden");
+      scrollModalToTop(editModal);
+      return;
+    }
+    currentChoreId = id;
+    modalLockedFor = id;
     editModal.querySelector('[data-modal-title]').textContent = "Edit Chore";
     editForm.reset();
     setField("name", card.dataset.choreName);
@@ -1136,7 +1177,14 @@
     setPillValue("show_on_daily_view", card.dataset.choreShowOnDailyView || "when_scheduled");
     const sec = parseInt(card.dataset.choreCooldown || card.dataset.choreThreshold, 10) || 0;
     setCooldownSeconds(sec);
-    setField("starts_on", card.dataset.choreStartsOn || todayIso());
+    // Critical: do NOT default starts_on to today on edit. A chore
+    // that originally had no starts_on (so matches_day? has no lower
+    // bound) would get its starts_on stamped to today on every save,
+    // which breaks `matches_day?` for any past date — the carryover
+    // check then can't find a prior scheduled day, and the chore
+    // disappears from Today. Leave the field blank when the chore
+    // didn't have one.
+    setField("starts_on", card.dataset.choreStartsOn || "");
     let rec = {};
     try { rec = JSON.parse(card.dataset.choreRecurrence || "null") || {}; } catch (e) {}
     setPillValue("freq", rec.freq || "never");
@@ -1167,11 +1215,21 @@
     editModal.classList.remove("hidden");
     scrollModalToTop(editModal);
   }
-  function closeEditModal() { editModal?.classList.add("hidden"); }
-  // The modal's inner panel scrolls when its content exceeds viewport
-  // height. On second / third open the scroll was preserved from the
-  // previous edit — looked broken. Reset both the panel scroll AND the
-  // modal backdrop scroll on every open so the title is always visible.
+  // Two kinds of dismiss: accidental (backdrop click) PRESERVES the
+  // form so reopening the same chore picks up where the user left
+  // off; explicit (X / Cancel) CLEARS the form so the next open
+  // starts fresh.
+  function dismissEditModalAccidental() { editModal?.classList.add("hidden"); }
+  function dismissEditModalExplicit() {
+    editModal?.classList.add("hidden");
+    modalLockedFor = null;
+    currentChoreId = null;
+    editForm?.reset();
+    setIconField("");
+  }
+  // Legacy alias — successful saves should clear too (no preserved
+  // edits after a server-confirmed write).
+  function closeEditModal() { dismissEditModalExplicit(); }
   function scrollModalToTop(modal) {
     if (!modal) return;
     modal.scrollTop = 0;
@@ -1189,80 +1247,101 @@
   // currently selected; the text input + clear `×` button let the user
   // remove an uploaded image.
   function bindIconUploader() {
+    // SINGLE block UI:
+    //   * The contenteditable `.icon-preview` IS the input. Users type
+    //     emoji directly (Genmoji works because contenteditable accepts
+    //     clipboard image insertion), or paste a URL / SVG / image.
+    //   * A small upload chip in the corner triggers the native file
+    //     picker for traditional uploads.
+    //   * The hidden `data-field="icon"` carries the canonical value.
     const stack = editForm.querySelector("[data-icon-stack]");
     if (!stack) return;
-    const previewBtn   = stack.querySelector("[data-icon-preview]");
-    const previewText  = stack.querySelector(".icon-preview-text");
-    const textInput    = stack.querySelector("[data-icon-text]");
-    const clearBtn     = stack.querySelector("[data-icon-clear]");
-    const fileInput    = stack.querySelector("[data-icon-file]");
-    const hidden       = stack.querySelector('[data-field="icon"]');
+    const preview     = stack.querySelector("[data-icon-preview]");
+    const uploadBtn   = stack.querySelector("[data-icon-upload]");
+    const fileInput   = stack.querySelector("[data-icon-file]");
+    const hidden      = stack.querySelector('[data-field="icon"]');
 
-    function setIconValue(v) {
-      hidden.value = v || "";
-      // Visible preview reflects whatever's stored.
+    // Two write paths:
+    //   * `renderFromValue: true` — programmatic set (file picker /
+    //     paste / openEditModal). Wipes the preview's HTML and renders
+    //     the canonical form (text / <img> / inline SVG).
+    //   * `renderFromValue: false` — user typed into the preview, just
+    //     mirror what's there into the hidden field. Avoids stomping
+    //     on the user's caret position mid-edit.
+    function setIconValue(v, { renderFromValue = true } = {}) {
+      if (hidden) hidden.value = v || "";
+      if (!renderFromValue || !preview) return;
       if (!v) {
-        textInput.value = "";
-        renderPreview("🧹", true);
+        preview.innerHTML = ""; // :empty::before shows greyed broom
         return;
       }
       if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
-        textInput.value = "";
-        renderPreview(`<img src="${v}" alt="" loading="lazy">`, false);
+        preview.innerHTML = `<img src="${v}" alt="" loading="lazy" draggable="false">`;
       } else if (v.startsWith("<svg")) {
-        textInput.value = "";
-        renderPreview(v, false);
+        preview.innerHTML = v;
       } else {
-        textInput.value = v;
-        renderPreview(v, false);
+        preview.textContent = v;
       }
     }
-    function renderPreview(html, isPlaceholder) {
-      previewText.innerHTML = html;
-      previewBtn.classList.toggle("placeholder", !!isPlaceholder);
-    }
-
-    // Expose for openCreateModal / openEditModal so they can prime the
-    // preview from card data.
     stack.__setIconValue = setIconValue;
 
-    previewBtn.addEventListener("click", () => fileInput.click());
-    clearBtn.addEventListener("click", () => setIconValue(""));
-    textInput.addEventListener("input", () => setIconValue(textInput.value.trim()));
-    fileInput.addEventListener("change", () => {
-      const file = fileInput.files?.[0];
-      if (!file) return;
-      readFileAsValue(file).then(v => v && setIconValue(v));
-      fileInput.value = ""; // allow re-uploading the same file later
+    // ---- Typing (emoji direct entry) ----
+    preview?.addEventListener("input", () => {
+      // Strip wrapping HTML — only the leaf text is the icon value.
+      // If user typed text alongside an existing image, this drops the
+      // image silently in favor of the text.
+      const text = (preview.textContent || "").trim();
+      setIconValue(text, { renderFromValue: false });
     });
 
-    // Paste image / SVG directly into the preview button area.
-    [previewBtn, textInput].forEach(el => {
-      el.addEventListener("paste", async e => {
-        const item = Array.from(e.clipboardData?.items || []).find(it => it.type.startsWith("image/"));
-        if (item) {
-          e.preventDefault();
-          const file = item.getAsFile();
-          if (file) {
-            const v = await readFileAsValue(file);
-            if (v) setIconValue(v);
-          }
-          return;
+    // ---- Paste: prefer image data, then SVG / URL text ----
+    preview?.addEventListener("paste", async e => {
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageItem = items.find(it => it.type.startsWith("image/"));
+      if (imageItem) {
+        e.preventDefault();
+        const file = imageItem.getAsFile();
+        if (file) {
+          const v = await readFileAsValue(file);
+          if (v) setIconValue(v);
         }
-        const text = e.clipboardData?.getData?.("text/plain") || "";
-        if (text.trim().startsWith("<svg")) {
-          e.preventDefault();
-          setIconValue(text.trim());
-        }
-      });
+        return;
+      }
+      const text = (e.clipboardData?.getData?.("text/plain") || "").trim();
+      if (!text) return;
+      if (text.startsWith("<svg") ||
+          text.startsWith("http://") || text.startsWith("https://") ||
+          text.startsWith("data:image/")) {
+        e.preventDefault();
+        setIconValue(text);
+      }
+      // Plain text (emoji) — let contenteditable handle naturally;
+      // the input event above will pick it up.
     });
-    // Drag-drop image onto the preview button.
-    ["dragover", "drop"].forEach(evt => previewBtn.addEventListener(evt, e => {
+
+    // ---- Drag-drop image ----
+    ["dragover", "drop"].forEach(evt => preview?.addEventListener(evt, async e => {
       e.preventDefault();
       if (evt !== "drop") return;
       const file = Array.from(e.dataTransfer?.files || []).find(f => f.type.startsWith("image/"));
-      if (file) readFileAsValue(file).then(v => v && setIconValue(v));
+      if (file) {
+        const v = await readFileAsValue(file);
+        if (v) setIconValue(v);
+      }
     }));
+
+    // ---- File picker (corner upload chip) ----
+    uploadBtn?.addEventListener("click", e => {
+      e.preventDefault();
+      fileInput?.click();
+    });
+    fileInput?.addEventListener("change", async () => {
+      const file = fileInput.files?.[0];
+      if (!file) { return; }
+      const v = await readFileAsValue(file);
+      if (v) setIconValue(v);
+      fileInput.value = ""; // allow re-picking the same file later
+    });
   }
   function readFileAsValue(file) {
     return new Promise(resolve => {
@@ -1356,12 +1435,16 @@
   });
   if (editForm) bindPillGroups();
   if (editForm) bindIconUploader();
-  // Bind cancel/X close on the MODAL (not just the form) — the X button
-  // lives in `.modal-head` which is a sibling of the form, so it
-  // was previously unreachable from a form-scoped querySelectorAll.
+  // Cancel + X = EXPLICIT dismiss (clears form). Backdrop click =
+  // accidental dismiss (preserves form so reopening picks up in
+  // progress edits). The X button lives in `.modal-head` which is a
+  // sibling of the form, so the binding has to come from the modal,
+  // not the form.
   editModal?.querySelectorAll('[data-action="cancel"]').forEach(el =>
-    el.addEventListener("click", closeEditModal));
-  editModal?.addEventListener("click", e => { if (e.target === editModal) closeEditModal(); });
+    el.addEventListener("click", dismissEditModalExplicit));
+  editModal?.addEventListener("click", e => {
+    if (e.target === editModal) dismissEditModalAccidental();
+  });
 
   editForm?.addEventListener("submit", async e => {
     e.preventDefault();
@@ -1474,6 +1557,15 @@
       // Chore shouldn't appear on Today right now (filtered out by
       // show_on_daily_view + cooldown rules) — remove if present.
       containers.today?.querySelector(`[data-chore-id="${p.id}"]`)?.remove();
+    }
+    // Hot strip: REPLACE in-place when the chore is in the strip.
+    // Membership is set once per day by ChoreHotPick.lookup_for — sync
+    // never adds or removes chips, just refreshes them when icon /
+    // name / reward / cooldown changes.
+    const hotExisting = containers.hot?.querySelector(`[data-chore-id="${p.id}"]`);
+    if (hotExisting && p.html_today) {
+      const fresh = htmlToElement(p.html_today);
+      if (fresh) hotExisting.replaceWith(fresh);
     }
   }
 
@@ -1679,11 +1771,21 @@
   // Edit mode and search are preserved across the swap — they apply to
   // both containers concurrently, so the user toggling views doesn't
   // lose context.
+  // The view-toggle layer ONLY runs on the unified Grid/Today page,
+  // identified by the presence of `data-active-view` on the root.
+  // Balance and History pages ALSO carry `data-chores-root` (for
+  // sortable / modal / offline-queue features) but do NOT have a
+  // `data-active-view` — there's no Grid/Today container to toggle
+  // and their nav must fall through to real link navigation, or
+  // clicking Grid would just spin without ever leaving Balance.
+  const unifiedPage = !!(root && root.dataset.activeView);
+
   function setActiveView(view, { push = true } = {}) {
+    if (!unifiedPage) return;
     if (!["grid", "today"].includes(view)) view = "grid";
-    if (MODE === view && root?.dataset.activeView === view) return;
+    if (MODE === view && root.dataset.activeView === view) return;
     MODE = view;
-    if (root) root.dataset.activeView = view;
+    root.dataset.activeView = view;
     updateBalancePillForView();
     if (push) {
       const url = view === "today" ? "/chores/today" : "/chores";
@@ -1691,29 +1793,34 @@
     }
     document.title = view === "today" ? "Chores · Today" : "Chores";
     document.querySelectorAll(".chores-nav a").forEach(a => {
-      a.classList.toggle("active", a.getAttribute("href") === (view === "today" ? "/chores/today" : "/chores"));
+      const href = a.getAttribute("href");
+      // Only re-stamp the Grid/Today links — Balance/History keep their
+      // server-rendered active class on /chores/balance + /chores/history.
+      if (href === "/chores" || href === "/chores/today") {
+        a.classList.toggle("active", href === (view === "today" ? "/chores/today" : "/chores"));
+      }
     });
   }
   function updateBalancePillForView() {
+    if (!unifiedPage) return;
     const el = document.querySelector("[data-balance]");
-    if (!el || !root) return;
-    const total = root.dataset.balanceTotal;
+    if (!el) return;
     const today = root.dataset.balanceToday;
-    const scope = MODE === "today" ? "today" : "total";
-    el.dataset.balanceScope = scope;
-    const value = scope === "today" ? today : total;
-    if (value != null) el.textContent = value;
+    // Pill is "today's earnings" regardless of which view is active.
+    if (today != null) el.textContent = today;
   }
-  document.querySelectorAll(".chores-nav a").forEach(link => {
-    const href = link.getAttribute("href");
-    if (href === "/chores")      link.addEventListener("click", e => { e.preventDefault(); setActiveView("grid"); });
-    else if (href === "/chores/today") link.addEventListener("click", e => { e.preventDefault(); setActiveView("today"); });
-  });
-  window.addEventListener("popstate", () => {
-    const path = location.pathname;
-    if (path === "/chores")      setActiveView("grid",  { push: false });
-    else if (path === "/chores/today") setActiveView("today", { push: false });
-  });
+  if (unifiedPage) {
+    document.querySelectorAll(".chores-nav a").forEach(link => {
+      const href = link.getAttribute("href");
+      if (href === "/chores")            link.addEventListener("click", e => { e.preventDefault(); setActiveView("grid"); });
+      else if (href === "/chores/today") link.addEventListener("click", e => { e.preventDefault(); setActiveView("today"); });
+    });
+    window.addEventListener("popstate", () => {
+      const path = location.pathname;
+      if (path === "/chores")            setActiveView("grid",  { push: false });
+      else if (path === "/chores/today") setActiveView("today", { push: false });
+    });
+  }
 
   // ---------- sync diff applier ----------
   // The single endpoint that catches the page up to server reality:
@@ -1762,17 +1869,19 @@
   startDayWatcher();
   subscribeMonitor();
   flushQueue();
-  // Make sure the URL / nav highlight matches the rendered view.
-  setActiveView(MODE, { push: false });
   // Immediate balance refresh — cached HTML often shows a stale value
   // from the SW shell. Don't wait for shell_synced, kick it now too.
   refreshBalanceOnly();
-  // Cold-boot sync — catches force-quit + reopen scenarios where the
-  // cached shell is days out of date. Fires once on load; broadcasts
-  // and Monitor.connected() handle the steady-state.
-  fullSync();
-  window.addEventListener("online", () => fullSync({ force: false }));
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") fullSync({ force: false });
-  });
+
+  // The /sync diff applier + view-toggle init are ONLY valid on the
+  // unified Grid/Today page — Balance and History don't have chore
+  // containers to update or a `data-active-view` to set.
+  if (unifiedPage) {
+    setActiveView(MODE, { push: false });
+    fullSync();
+    window.addEventListener("online", () => fullSync({ force: false }));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") fullSync({ force: false });
+    });
+  }
 </script>

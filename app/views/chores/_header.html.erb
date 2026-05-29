@@ -1,12 +1,16 @@
-<%# Locals: balance (Integer), scope (Symbol — :today or :total). %>
+<%# Locals: balance (ignored — kept for backwards-compat callers).
+   The pill ALWAYS shows today's earnings on every chores page so users
+   see a consistent "earned today" number whether they're on Grid,
+   Today, Balance, or History. Lifetime balance is shown elsewhere
+   (Balance page's pebble card). %>
 <div class="chores-header">
   <div class="chores-header-left">
     <span class="conn-dot" data-conn-dot title="Online"></span>
     <span class="pending-badge hidden" data-pending-badge>0 pending</span>
   </div>
   <div class="chores-header-center">
-    <div class="balance-pill" title="<%= scope == :today ? "Today's earnings" : "Balance" %>">
-      <span data-balance data-balance-scope="<%= scope == :today ? "today" : "total" %>"><%= balance %></span>p
+    <div class="balance-pill" title="Earned today">
+      <span data-balance data-balance-scope="today"><%= today_earnings_for_header %></span>p
     </div>
   </div>
   <%= render "nav" %>

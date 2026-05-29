@@ -480,11 +480,17 @@ class ChoresController < ApplicationController
   # partials rendered server-side, plus `today_visible` so the client
   # knows whether to insert/replace or remove from the Today container.
   def dual_card_payload(chore)
-    last_completion = chore.last_completion_for(current_user)
+    day = ChoreDay.current(current_user)
+    # Household scope for shared chores so an edit by user A doesn't
+    # blank out cooldown / "ago" timestamps that came from user B's
+    # earlier completion. Mirrors the bulk-loaded scope used by `today`.
+    cooldown_user_ids = chore.share_household? ? household_user_ids_for_share_group : [current_user.id]
+    last_completion = ChoreCompletion
+      .where(chore_id: chore.id, user_id: cooldown_user_ids)
+      .order(completed_at: :desc).first
     done_count = ChoreCompletion
-      .where(chore_id: chore.id, user_id: current_user.id, day_key: ChoreDay.current(current_user))
-      .count
-    hot = ChoreHotPick.lookup_for(ChoreDay.current(current_user))[chore.id]
+      .where(chore_id: chore.id, user_id: cooldown_user_ids, day_key: day).count
+    hot = ChoreHotPick.lookup_for(day)[chore.id]
     locals = { chore: chore, done_count: done_count, last_completion: last_completion, hot: hot }
 
     {
@@ -515,6 +521,16 @@ class ChoresController < ApplicationController
 
     day = ChoreDay.current(current_user)
     user_ids = chore.share_household? ? household_user_ids_for_share_group : [current_user.id]
+
+    # Frozen-layout rule (mirrors today action's `visible_on_daily?`): if
+    # someone in the share group has already completed this chore today,
+    # the card stays visible for the rest of the chore-day regardless
+    # of schedule / cooldown rules. Without this, a card the user just
+    # edited could disappear from Today even though they completed it
+    # earlier in the same day.
+    return true if ChoreCompletion
+      .where(chore_id: chore.id, user_id: user_ids, day_key: day).exists?
+
     last_completion = ChoreCompletion
       .where(chore_id: chore.id, user_id: user_ids)
       .order(completed_at: :desc).first
