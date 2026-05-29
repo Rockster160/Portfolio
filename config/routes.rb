@@ -100,6 +100,7 @@ Rails.application.routes.draw do
   get  "/chores/balance" => "chores#balance", as: :chores_balance
   get  "/chores/history" => "chores#history", as: :chores_history
   get  "/chores/csrf"    => "chores#csrf",    as: :chores_csrf
+  get  "/chores/sync"    => "chores#sync",    as: :chores_sync
   scope path: "chores", as: :chore_routes do
     get  "/new"          => "chores#new",            as: :new
     get  "/items/:id/edit" => "chores#edit",         as: :edit

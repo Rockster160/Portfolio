@@ -1,13 +1,37 @@
-<%# Locals: mode (string) %>
+<%# Unified page script — drives BOTH Grid and Today on the same DOM. %>
 <script>
   window.__currentUserId = <%= current_user.id.to_json.html_safe %>;
 </script>
 <script type="module">
-  const MODE = "<%= mode %>";
   const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || "";
   const root = document.querySelector('[data-chores-root]');
   const DAY_KEY = root?.dataset.dayKey || "";
   const CUTOFF_HOUR = parseInt(root?.dataset.cutoffHour || "4", 10);
+
+  // MODE is a *live* value of the active view. The page renders BOTH
+  // views' markup; CSS toggles which is visible via root[data-active-view].
+  // Nav link clicks call `setActiveView(...)`, which updates this and
+  // history without a page navigation — the user perceives instant
+  // page-swap but the DOM (and SortableJS, broadcasts, etc.) stays put.
+  let MODE = root?.dataset.activeView || "grid";
+
+  // Stable identity for the sync diff payload — the server returns only
+  // chores changed since this stamp. Bumped to the server's `server_ts`
+  // after every successful sync so the next call is incremental.
+  const SYNC_TS_KEY = "chores:lastSyncTs:v1";
+  function loadLastSyncTs() { return localStorage.getItem(SYNC_TS_KEY) || ""; }
+  function saveLastSyncTs(ts) { if (ts) localStorage.setItem(SYNC_TS_KEY, ts); }
+
+  function viewContainers() {
+    return {
+      grid:  document.querySelector("[data-chores-grid]"),
+      today: document.querySelector("[data-chores-circles]"),
+    };
+  }
+  function visibleContainer() {
+    const c = viewContainers();
+    return MODE === "today" ? c.today : c.grid;
+  }
 
   // Edit mode (Grid view): when active, tapping a card opens the edit
   // modal instead of completing the chore. Persists across multiple
@@ -80,19 +104,26 @@
     }
     return i === needle.length;
   }
+  // Apply search to BOTH containers. The hidden view is also filtered
+  // so switching views mid-search shows the same matches. Each container
+  // is sorted independently (Grid by score, Today preserves layout order
+  // since the user just wants the matching ones surfaced).
   function applySearch(query) {
-    const sel = MODE === "today" ? "[data-chores-circles]" : "[data-chores-grid]";
-    const container = document.querySelector(sel);
-    if (!container) return;
-    const cards = Array.from(container.children);
-    const scored = cards.map(c => ({
-      el: c,
-      score: score(query, c.dataset.choreShort || c.dataset.choreName, (c.dataset.choreAliases || "").split("|").filter(Boolean))
-    }));
-    if (!query) { cards.forEach(c => c.style.display = ""); return; }
-    scored.sort((a, b) => b.score - a.score);
-    scored.forEach(({ el, score }) => { el.style.display = score > 0 ? "" : "none"; });
-    scored.forEach(({ el }) => container.appendChild(el));
+    Object.values(viewContainers()).forEach(container => {
+      if (!container) return;
+      const cards = Array.from(container.children);
+      if (!query) { cards.forEach(c => c.style.display = ""); return; }
+      const scored = cards.map(c => ({
+        el: c,
+        score: score(query, c.dataset.choreShort || c.dataset.choreName, (c.dataset.choreAliases || "").split("|").filter(Boolean))
+      }));
+      scored.forEach(({ el, score }) => { el.style.display = score > 0 ? "" : "none"; });
+      if (container.matches?.("[data-chores-grid]")) {
+        // Grid reorders by score (best match first).
+        scored.sort((a, b) => b.score - a.score);
+        scored.forEach(({ el }) => container.appendChild(el));
+      }
+    });
   }
   document.querySelector('[data-chores-search]')?.addEventListener("input", e => applySearch(e.target.value.trim()));
 
@@ -118,6 +149,18 @@
 
   // ---------- progress ring + countdown + ago ticker ----------
   const RING_CIRC = 2 * Math.PI * 46; // r=46 in viewBox 100x100
+
+  // Seconds until the next ChoreDay boundary (default 4am). Used by
+  // day-end (`-1`) cooldowns so the countdown shows "until 4am" rather
+  // than a fixed elapsed-time window.
+  function secondsUntilNextChoreDay(now) {
+    const d = new Date(now);
+    const next = new Date(d);
+    next.setHours(CUTOFF_HOUR, 0, 0, 0);
+    if (next.getTime() <= d.getTime()) next.setDate(next.getDate() + 1);
+    return Math.max(0, Math.floor((next.getTime() - d.getTime()) / 1000));
+  }
+
   function updateRings(now) {
     document.querySelectorAll('[data-chore-id][data-chore-cooldown]').forEach(card => {
       const cooldown = parseInt(card.dataset.choreCooldown, 10);
@@ -125,7 +168,20 @@
       const last = card.dataset.lastCompletedAt;
       const ring = card.querySelector('[data-ring-progress]');
       const label = card.querySelector('[data-circle-countdown]');
+      if (!label && !ring) return;
       if (ring) ring.setAttribute("stroke-dasharray", RING_CIRC);
+
+      // Day-end cooldown: server-rendered label is shown ONLY when the
+      // user completed today; once we cross the chore-day boundary the
+      // label disappears entirely. JS just keeps it ticking until 4am.
+      if (cooldown === -1) {
+        if (!label) return;
+        if (!last) { label.textContent = ""; label.classList.add("elapsed"); return; }
+        const remainSec = secondsUntilNextChoreDay(now);
+        label.classList.toggle("elapsed", remainSec === 0);
+        label.textContent = remainSec === 0 ? "" : formatRemaining(remainSec);
+        return;
+      }
 
       if (!last) {
         if (ring) { ring.setAttribute("stroke-dashoffset", RING_CIRC); ring.classList.add("elapsed"); }
@@ -447,44 +503,31 @@
   // our most recent local click on the same chore — that means the
   // server hasn't seen our click yet and we'd be overwriting the
   // optimistic state with stale data.
+  // Applies a server payload to the cards. Two payload shapes:
+  //   * Dual HTML (`html_grid` + `html_today`): full card swap in BOTH
+  //     view containers. Used by /state, /sync, save responses,
+  //     broadcasts. Optimistic-click gate applies.
+  //   * Count-only (completion / undo POST responses): targeted
+  //     count + last_completed_at update on whatever cards exist with
+  //     this id, in either container.
   function applyServerState(id, data) {
-    const card = document.querySelector(`[data-chore-id="${id}"]`);
-    if (!card) return; // Item is not on this page
     const serverMs = data.server_ts ? new Date(data.server_ts).getTime() : 0;
-    const localMs = localClickTs.get(String(id)) || 0;
-    if (localMs && serverMs && localMs > serverMs) {
-      // We clicked AFTER this server snapshot — ignore. Our pending POST
-      // will arrive shortly with a server_ts >= our click and apply.
-      return;
-    }
-    // Full HTML swap when the server includes a freshly rendered card —
-    // single source of truth so renames / icon swaps / cooldown changes
-    // propagate identically to the initial render. Completion endpoints
-    // don't return html (count-only payload), so we fall through to the
-    // targeted updates below.
-    if (data.html) {
-      replaceCardHTML(id, data.html);
-      if (data.archived) {
-        const fresh = document.querySelector(`[data-chore-id="${id}"]`);
-        if (fresh) fresh.classList.add("archived");
-      }
+    const localMs  = localClickTs.get(String(id)) || 0;
+    if (localMs && serverMs && localMs > serverMs) return;
+
+    if (data.html_grid || data.html_today) {
+      applyChorePayload({ ...data, id });
       return;
     }
 
-    if (data.archived) card.classList.add("archived");
-
-    bumpCount(card, data.completions_today);
-    if (data.last_completed_at) card.dataset.lastCompletedAt = data.last_completed_at;
-    if (data.actor_username != null) card.dataset.actorUsername = data.actor_username;
-    // Update the visible "by alice" tag for household items.
-    const tag = card.querySelector(".actor-tag");
-    if (tag) tag.textContent = data.actor_username ? `by ${data.actor_username}` : "";
-    // Update reward display if the chore's pebble amount changed.
-    if (data.reward_pebbles != null) {
-      card.querySelectorAll(".circle-reward, .card-reward, .reward").forEach(rewardEl => {
-        rewardEl.textContent = `${data.reward_pebbles}p`;
-      });
-    }
+    // Count-only: mutate per-container without re-rendering. Used after
+    // POST /completion / DELETE /completion since those don't need to
+    // touch the visible name / icon / cooldown.
+    document.querySelectorAll(`[data-chore-id="${id}"]`).forEach(card => {
+      if (data.archived) card.classList.add("archived");
+      bumpCount(card, data.completions_today);
+      if (data.last_completed_at) card.dataset.lastCompletedAt = data.last_completed_at;
+    });
   }
 
   // Balance pill content depends on its scope:
@@ -600,7 +643,11 @@
 
   function bumpCount(card, count) {
     card.dataset.doneCount = count;
-    card.classList.toggle(MODE === "today" ? "done" : "done-today", count > 0);
+    // Each container's card uses its own class (.done for the circle,
+    // .done-today for the grid card) so we set BOTH and let CSS pick
+    // the one that applies to that container's markup.
+    card.classList.toggle("done", count > 0);
+    card.classList.toggle("done-today", count > 0);
     const slot = card.querySelector("[data-count-slot]");
     if (!slot) {
       // grid view fallback to top-right pill
@@ -619,9 +666,14 @@
   }
 
   function bindCardClicks() {
-    const sel = MODE === "today" ? "[data-chores-circles]" : "[data-chores-grid]";
-    const container = document.querySelector(sel);
-    if (!container) return;
+    // Both containers always live in the DOM (unified page). Wire each
+    // one — the hidden container can't receive pointer events anyway, so
+    // there's no risk of double-firing across views.
+    Object.values(viewContainers()).forEach(container => {
+      if (container) bindOneContainerClicks(container);
+    });
+  }
+  function bindOneContainerClicks(container) {
 
     // Scroll-safe tap detection (mobile-first):
     //   * Track ONLY one active pointer per gesture.
@@ -660,9 +712,12 @@
       // Edit mode short-circuits gesture handling — clicks open the
       // edit modal directly, no pointer state machine needed.
       if (editModeActive) return;
-      // Today restricts the tap target to the round disc.
-      // Grid uses the whole card.
-      if (MODE === "today" && !e.target.closest(".circle-inner")) return;
+      // Today restricts the tap target to the round disc (so the title
+      // beneath isn't a tap target). Grid uses the whole card. The
+      // container itself tells us which view we're in — no need to read
+      // MODE which could be mid-flip during a view swap.
+      const isTodayContainer = container.matches("[data-chores-circles]");
+      if (isTodayContainer && !e.target.closest(".circle-inner")) return;
 
       state.pointerId = e.pointerId;
       state.card = card;
@@ -865,6 +920,14 @@
   }
 
   // ---------- Cooldown ----------
+  // The hidden `threshold_seconds` carries the canonical value the form
+  // submits. Presets:
+  //   ""        → no cooldown
+  //   "<n>"     → n seconds (1h, 3h, 6h, ...)
+  //   "custom"  → user-typed amount + unit
+  //   "day-end" → sentinel `-1` (Chore::THRESHOLD_DAY_RESET); cooldown
+  //               clears at the next 4am ChoreDay boundary instead of
+  //               after a fixed elapsed-time window.
   function syncCooldownRow() {
     const preset = editForm.querySelector('[data-field="threshold_preset"]')?.value || "";
     const customRow = editForm.querySelector('[data-cooldown-custom-row]');
@@ -872,6 +935,9 @@
     if (preset === "custom") {
       customRow?.classList.remove("hidden");
       syncCustomCooldown();
+    } else if (preset === "day-end") {
+      customRow?.classList.add("hidden");
+      hidden.value = "-1";
     } else {
       customRow?.classList.add("hidden");
       hidden.value = preset || "";
@@ -886,6 +952,11 @@
     if (hidden) hidden.value = String(seconds);
   }
   function setCooldownSeconds(seconds) {
+    if (seconds === -1) {
+      setPillValue("threshold_preset", "day-end");
+      syncCooldownRow();
+      return;
+    }
     const presets = [0, 3600, 10800, 21600, 43200, 86400, 172800, 604800];
     if (presets.includes(seconds)) {
       setPillValue("threshold_preset", seconds === 0 ? "" : String(seconds));
@@ -1021,7 +1092,7 @@
     currentChoreId = null;
     editModal.querySelector('[data-modal-title]').textContent = "Add Chore";
     editForm.reset();
-    setField("icon", "");
+    setIconField("");
     if (opts.prefillName) setField("name", opts.prefillName);
     selectRewardPill(1);
     setField("reward_pebbles", 1);
@@ -1041,6 +1112,7 @@
     syncWeekdaysHelperHighlight();
     editForm.querySelector('[data-action="archive"]')?.classList.add("hidden");
     editModal.classList.remove("hidden");
+    scrollModalToTop(editModal);
     const nameField = editForm.querySelector('[data-field="name"]');
     if (nameField) { nameField.focus(); nameField.select?.(); }
   }
@@ -1052,7 +1124,7 @@
     editForm.reset();
     setField("name", card.dataset.choreName);
     setField("short_name", card.dataset.choreShort);
-    setField("icon", card.dataset.choreIcon || "");
+    setIconField(card.dataset.choreIcon || "");
     setField("aliases_csv", (card.dataset.choreAliases || "").split("|").filter(Boolean).join(", "));
     const reward = parseInt(card.dataset.choreReward, 10) || 0;
     selectRewardPill(reward);
@@ -1093,8 +1165,121 @@
     syncStartsOnDependents();
     editForm.querySelector('[data-action="archive"]')?.classList.remove("hidden");
     editModal.classList.remove("hidden");
+    scrollModalToTop(editModal);
   }
   function closeEditModal() { editModal?.classList.add("hidden"); }
+  // The modal's inner panel scrolls when its content exceeds viewport
+  // height. On second / third open the scroll was preserved from the
+  // previous edit — looked broken. Reset both the panel scroll AND the
+  // modal backdrop scroll on every open so the title is always visible.
+  function scrollModalToTop(modal) {
+    if (!modal) return;
+    modal.scrollTop = 0;
+    modal.querySelector(".chores-modal")?.scrollTo?.(0, 0);
+  }
+
+  // ---------- icon picker ----------
+  // Three input modes (any one wins):
+  //   * Text input: short emoji string, including iOS Genmoji unicode.
+  //   * File picker: image/svg uploaded → stored as data URL inline.
+  //   * Paste: image data on the clipboard (drag-drop too) stored as
+  //     data URL.
+  // The hidden `data-field="icon"` carries the canonical value passed
+  // to the server. The visible `.icon-preview` shows whichever form is
+  // currently selected; the text input + clear `×` button let the user
+  // remove an uploaded image.
+  function bindIconUploader() {
+    const stack = editForm.querySelector("[data-icon-stack]");
+    if (!stack) return;
+    const previewBtn   = stack.querySelector("[data-icon-preview]");
+    const previewText  = stack.querySelector(".icon-preview-text");
+    const textInput    = stack.querySelector("[data-icon-text]");
+    const clearBtn     = stack.querySelector("[data-icon-clear]");
+    const fileInput    = stack.querySelector("[data-icon-file]");
+    const hidden       = stack.querySelector('[data-field="icon"]');
+
+    function setIconValue(v) {
+      hidden.value = v || "";
+      // Visible preview reflects whatever's stored.
+      if (!v) {
+        textInput.value = "";
+        renderPreview("🧹", true);
+        return;
+      }
+      if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
+        textInput.value = "";
+        renderPreview(`<img src="${v}" alt="" loading="lazy">`, false);
+      } else if (v.startsWith("<svg")) {
+        textInput.value = "";
+        renderPreview(v, false);
+      } else {
+        textInput.value = v;
+        renderPreview(v, false);
+      }
+    }
+    function renderPreview(html, isPlaceholder) {
+      previewText.innerHTML = html;
+      previewBtn.classList.toggle("placeholder", !!isPlaceholder);
+    }
+
+    // Expose for openCreateModal / openEditModal so they can prime the
+    // preview from card data.
+    stack.__setIconValue = setIconValue;
+
+    previewBtn.addEventListener("click", () => fileInput.click());
+    clearBtn.addEventListener("click", () => setIconValue(""));
+    textInput.addEventListener("input", () => setIconValue(textInput.value.trim()));
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      readFileAsValue(file).then(v => v && setIconValue(v));
+      fileInput.value = ""; // allow re-uploading the same file later
+    });
+
+    // Paste image / SVG directly into the preview button area.
+    [previewBtn, textInput].forEach(el => {
+      el.addEventListener("paste", async e => {
+        const item = Array.from(e.clipboardData?.items || []).find(it => it.type.startsWith("image/"));
+        if (item) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            const v = await readFileAsValue(file);
+            if (v) setIconValue(v);
+          }
+          return;
+        }
+        const text = e.clipboardData?.getData?.("text/plain") || "";
+        if (text.trim().startsWith("<svg")) {
+          e.preventDefault();
+          setIconValue(text.trim());
+        }
+      });
+    });
+    // Drag-drop image onto the preview button.
+    ["dragover", "drop"].forEach(evt => previewBtn.addEventListener(evt, e => {
+      e.preventDefault();
+      if (evt !== "drop") return;
+      const file = Array.from(e.dataTransfer?.files || []).find(f => f.type.startsWith("image/"));
+      if (file) readFileAsValue(file).then(v => v && setIconValue(v));
+    }));
+  }
+  function readFileAsValue(file) {
+    return new Promise(resolve => {
+      if (!file || !file.type.startsWith("image/")) return resolve(null);
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result || null);
+      reader.onerror = () => resolve(null);
+      // SVG → store as text (smaller, allows CSS coloring); other images
+      // → data URL.
+      if (file.type === "image/svg+xml") reader.readAsText(file);
+      else reader.readAsDataURL(file);
+    });
+  }
+  function setIconField(value) {
+    const stack = editForm?.querySelector("[data-icon-stack]");
+    if (stack?.__setIconValue) stack.__setIconValue(value || "");
+  }
 
   document.querySelector('[data-add-chore]')?.addEventListener("click", () => {
     // Prefill the new chore's name with whatever's in the search box —
@@ -1170,7 +1355,11 @@
     if (editModeActive) exitEditMode(); else enterEditMode();
   });
   if (editForm) bindPillGroups();
-  editForm?.querySelectorAll('[data-action="cancel"]').forEach(el =>
+  if (editForm) bindIconUploader();
+  // Bind cancel/X close on the MODAL (not just the form) — the X button
+  // lives in `.modal-head` which is a sibling of the form, so it
+  // was previously unreachable from a form-scoped querySelectorAll.
+  editModal?.querySelectorAll('[data-action="cancel"]').forEach(el =>
     el.addEventListener("click", closeEditModal));
   editModal?.addEventListener("click", e => { if (e.target === editModal) closeEditModal(); });
 
@@ -1190,7 +1379,9 @@
     if (!oneOff) {
       const freq = getField("freq") || "never";
       thresholdSeconds = parseInt(editForm.querySelector('[data-field="threshold_seconds"]')?.value, 10);
-      thresholdSeconds = thresholdSeconds > 0 ? thresholdSeconds : null;
+      // -1 (Chore::THRESHOLD_DAY_RESET) is a meaningful value, not "none";
+      // only treat NaN / 0 as "no cooldown".
+      if (!Number.isFinite(thresholdSeconds) || thresholdSeconds === 0) thresholdSeconds = null;
 
       if (freq !== "never") {
         recurrence.freq = freq;
@@ -1234,29 +1425,18 @@
       const isUpdate = !!currentChoreId;
       const url = isUpdate ? `/chores/items/${currentChoreId}` : "/chores/items";
       const method = isUpdate ? "PATCH" : "POST";
-      // Tell the server which view we're on so it can render the right
-      // card partial (circle for Today, grid card everywhere else).
-      payload.view = MODE;
       const data = await api(url, method, payload);
       closeEditModal();
       flash("Saved");
-      if (isUpdate) {
-        // In-place swap with the SERVER-RENDERED card HTML — same
-        // source of truth as a broadcast refresh, so the icon /
-        // reward / cooldown ring / count-slot rebuild identically.
-        replaceCardHTML(currentChoreId, data.html);
-      } else {
-        // Splice the new card in WITHOUT reloading the page. Adds to
-        // the end of the visible container; subsequent reorder will
-        // settle final position when the user drags or after a
-        // broadcast refresh.
-        insertNewCardHTML(data.html, data.id);
-      }
-      // Refresh the SW's cached shells for the OTHER chores pages
-      // (Today, Balance, History) so navigating to them right after
-      // the save shows the new name / icon / reward instead of the
-      // pre-edit cached HTML. Broadcast handler skips own-tab so we
-      // wouldn't otherwise hit this code path on the local tab.
+      // Both views update from a single payload — `html_grid` +
+      // `html_today` ensure Grid and Today stay in lockstep regardless
+      // of which view the user was on when they saved.
+      applyChorePayload(data);
+      // Local-tab broadcasts are suppressed (actor_tab_id matches), so
+      // the SW shell cache won't refresh from the broadcast handler.
+      // Trigger it explicitly so the cached HTML for /chores +
+      // /chores/today + /chores/balance + /chores/history is up to date
+      // before the user navigates.
       setSyncBadge(true);
       pingSwRefresh();
     } catch (err) {
@@ -1265,31 +1445,63 @@
   });
 
   function htmlToElement(html) {
+    if (!html) return null;
     const tmpl = document.createElement("template");
-    tmpl.innerHTML = (html || "").trim();
+    tmpl.innerHTML = String(html).trim();
     return tmpl.content.firstElementChild;
   }
 
-  function replaceCardHTML(choreId, html) {
-    if (!html) return;
-    const card = document.querySelector(`[data-chore-id="${choreId}"]`);
-    const fresh = htmlToElement(html);
-    if (!fresh) return;
-    if (card) card.replaceWith(fresh);
-    // If the card wasn't on this view (e.g. archived off Today), nothing
-    // to do — next page render will catch it up.
+  // Apply a server payload `{ id, html_grid, html_today, today_visible,
+  // updated_at }` to BOTH view containers. This is the single source of
+  // truth that every server-driven update funnels through: save,
+  // broadcast-driven refresh, sync diff.
+  //
+  // Optimistic-state guard: if a local click landed AFTER this payload
+  // was captured (timestamps in ms), skip the swap entirely — the
+  // pending POST will arrive with a newer payload that wins.
+  function applyChorePayload(p) {
+    if (!p || !p.id) return;
+    const localMs  = localClickTs.get(String(p.id)) || 0;
+    const serverMs = p.server_ts ? new Date(p.server_ts).getTime() :
+                     p.updated_at ? new Date(p.updated_at).getTime() : Date.now();
+    if (localMs && serverMs && localMs > serverMs) return;
+
+    const containers = viewContainers();
+    swapOrInsert(containers.grid,  p.html_grid,  p.id);
+    if (p.today_visible) {
+      swapOrInsert(containers.today, p.html_today, p.id);
+    } else {
+      // Chore shouldn't appear on Today right now (filtered out by
+      // show_on_daily_view + cooldown rules) — remove if present.
+      containers.today?.querySelector(`[data-chore-id="${p.id}"]`)?.remove();
+    }
   }
 
-  function insertNewCardHTML(html, choreId) {
-    if (!html) return;
-    // Avoid double-insert if a broadcast beat us to it.
-    if (choreId && document.querySelector(`[data-chore-id="${choreId}"]`)) return;
-    const container = document.querySelector(
-      MODE === "today" ? "[data-chores-circles]" : "[data-chores-grid]"
-    );
+  function swapOrInsert(container, html, id) {
+    if (!container || !html) return;
+    const existing = container.querySelector(`[data-chore-id="${id}"]`);
     const fresh = htmlToElement(html);
-    if (!container || !fresh) return;
-    container.appendChild(fresh);
+    if (!fresh) return;
+    if (existing) existing.replaceWith(fresh);
+    else container.appendChild(fresh);
+  }
+
+  function removeChoreEverywhere(id) {
+    document.querySelectorAll(`[data-chore-id="${id}"]`).forEach(el => el.remove());
+  }
+
+  // Legacy single-view path — preserved for the few callers (state
+  // endpoint response, in-place reward update) that don't yet pass the
+  // dual-html payload. Now mirrors to BOTH containers when the same id
+  // is present in either, so swaps from Grid propagate to Today.
+  function replaceCardHTML(choreId, html) {
+    if (!html) return;
+    Object.values(viewContainers()).forEach(container => {
+      if (!container) return;
+      const card = container.querySelector(`[data-chore-id="${choreId}"]`);
+      const fresh = htmlToElement(html);
+      if (card && fresh) card.replaceWith(fresh);
+    });
   }
 
   editForm?.querySelector('[data-action="archive"]')?.addEventListener("click", async () => {
@@ -1299,8 +1511,8 @@
       await api(`/chores/items/${id}`, "DELETE");
       closeEditModal();
       flash("Archived");
-      // Remove the card in place — edit mode stays on.
-      document.querySelector(`[data-chore-id="${id}"]`)?.remove();
+      // Remove the card from BOTH view containers — edit mode stays on.
+      removeChoreEverywhere(id);
     } catch (err) {
       flash("Couldn't archive: " + err.message, "error");
     }
@@ -1358,7 +1570,12 @@
   function subscribeMonitor() {
     if (typeof window.Monitor === "undefined") { setTimeout(subscribeMonitor, 200); return; }
     window.Monitor.subscribe("chores", {
-      connected() { setConnDot("online"); flushQueue(); pingSwRefresh(); },
+      connected() {
+        setConnDot("online"); flushQueue(); pingSwRefresh();
+        // Reconnect — verify the page matches server reality. Cheap
+        // when nothing changed (server returns 0 chores in the diff).
+        fullSync();
+      },
       disconnected() { setConnDot("offline"); },
       received(data) {
         pingSwRefresh();
@@ -1449,12 +1666,113 @@
     refreshBalanceOnly();
   }
 
+  // ---------- view toggle (Grid / Today) ----------
+  // The page renders BOTH views' markup; CSS shows the active one.
+  // Nav-tab clicks intercept normal link navigation and call
+  // `setActiveView`, which:
+  //   * Updates root[data-active-view] so CSS swaps the visible view.
+  //   * Updates MODE so any new gestures / saves see the new view.
+  //   * Updates the balance pill (Today shows today_earnings, Grid
+  //     shows lifetime balance).
+  //   * Pushes URL state so back/forward + bookmarks Just Work.
+  //
+  // Edit mode and search are preserved across the swap — they apply to
+  // both containers concurrently, so the user toggling views doesn't
+  // lose context.
+  function setActiveView(view, { push = true } = {}) {
+    if (!["grid", "today"].includes(view)) view = "grid";
+    if (MODE === view && root?.dataset.activeView === view) return;
+    MODE = view;
+    if (root) root.dataset.activeView = view;
+    updateBalancePillForView();
+    if (push) {
+      const url = view === "today" ? "/chores/today" : "/chores";
+      if (location.pathname !== url) history.pushState({ view }, "", url);
+    }
+    document.title = view === "today" ? "Chores · Today" : "Chores";
+    document.querySelectorAll(".chores-nav a").forEach(a => {
+      a.classList.toggle("active", a.getAttribute("href") === (view === "today" ? "/chores/today" : "/chores"));
+    });
+  }
+  function updateBalancePillForView() {
+    const el = document.querySelector("[data-balance]");
+    if (!el || !root) return;
+    const total = root.dataset.balanceTotal;
+    const today = root.dataset.balanceToday;
+    const scope = MODE === "today" ? "today" : "total";
+    el.dataset.balanceScope = scope;
+    const value = scope === "today" ? today : total;
+    if (value != null) el.textContent = value;
+  }
+  document.querySelectorAll(".chores-nav a").forEach(link => {
+    const href = link.getAttribute("href");
+    if (href === "/chores")      link.addEventListener("click", e => { e.preventDefault(); setActiveView("grid"); });
+    else if (href === "/chores/today") link.addEventListener("click", e => { e.preventDefault(); setActiveView("today"); });
+  });
+  window.addEventListener("popstate", () => {
+    const path = location.pathname;
+    if (path === "/chores")      setActiveView("grid",  { push: false });
+    else if (path === "/chores/today") setActiveView("today", { push: false });
+  });
+
+  // ---------- sync diff applier ----------
+  // The single endpoint that catches the page up to server reality:
+  // returns per-chore dual HTML + archived ids since `lastSyncTs`. Used
+  // on cold boot (force-quit + reopen), reconnect, and tab-foreground.
+  //
+  // The diff is applied to BOTH view containers so Grid and Today stay
+  // in lockstep. If the chore no longer belongs on Today (cooldown made
+  // it visible earlier, or the user changed `show_on_daily_view`), the
+  // payload's `today_visible: false` removes it from the Today
+  // container only.
+  let syncInFlight = false;
+  async function fullSync({ force = false } = {}) {
+    if (syncInFlight) return;
+    if (!navigator.onLine) return;
+    syncInFlight = true;
+    setSyncBadge(true);
+    try {
+      const since = force ? "" : (loadLastSyncTs() || "");
+      const url = since ? `/chores/sync?since=${encodeURIComponent(since)}` : "/chores/sync";
+      const data = await api(url, "GET");
+      applySyncDiff(data);
+      saveLastSyncTs(data.server_ts);
+      setSyncBadge(false);
+    } catch (e) {
+      setSyncBadge(false, true);
+    } finally {
+      syncInFlight = false;
+    }
+  }
+  function applySyncDiff(data) {
+    if (!data) return;
+    (data.archived_chore_ids || []).forEach(id => removeChoreEverywhere(id));
+    (data.chores || []).forEach(p => applyChorePayload(p));
+    // Balance pill reflects server reality; update both stored
+    // attributes so view-switching shows the right scope.
+    if (root) {
+      if (data.balance != null) root.dataset.balanceTotal = data.balance;
+      if (data.today_earnings != null) root.dataset.balanceToday = data.today_earnings;
+      updateBalancePillForView();
+    }
+  }
+
   bindCardClicks();
   startRingTicker();
   startDayWatcher();
   subscribeMonitor();
   flushQueue();
+  // Make sure the URL / nav highlight matches the rendered view.
+  setActiveView(MODE, { push: false });
   // Immediate balance refresh — cached HTML often shows a stale value
   // from the SW shell. Don't wait for shell_synced, kick it now too.
   refreshBalanceOnly();
+  // Cold-boot sync — catches force-quit + reopen scenarios where the
+  // cached shell is days out of date. Fires once on load; broadcasts
+  // and Monitor.connected() handle the steady-state.
+  fullSync();
+  window.addEventListener("online", () => fullSync({ force: false }));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") fullSync({ force: false });
+  });
 </script>

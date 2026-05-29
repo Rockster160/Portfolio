@@ -15,7 +15,7 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v14";
+const CACHE = "chores-v15";
 const SHELL_PATHS = ["/chores", "/chores/today", "/chores/balance", "/chores/history"];
 
 // Background shell refresh — fired by the page-script when a Monitor
@@ -25,13 +25,23 @@ const SHELL_PATHS = ["/chores", "/chores/today", "/chores/balance", "/chores/his
 // our SW cache with it.
 async function refreshAllShells() {
   const cache = await caches.open(CACHE);
+  // Per-path success/failure tracked so the page's syncing badge can
+  // turn off as soon as ANY path lands. The fetch-intercept path
+  // already broadcasts `shell_synced` per path; the explicit-message
+  // path used to swallow the signal, which left the badge stuck
+  // forever after a local save.
   await Promise.all(SHELL_PATHS.map(async p => {
     try {
       const r = await fetch(p, { credentials: "same-origin", redirect: "manual", cache: "no-store" });
       if (r && r.ok && r.type !== "opaqueredirect") {
         await cache.put(p, r.clone());
+        await broadcastToClients({ kind: "shell_synced", path: p });
+      } else {
+        await broadcastToClients({ kind: "shell_sync_failed", path: p });
       }
-    } catch (e) { /* offline / network died — keep whatever we had */ }
+    } catch (e) {
+      await broadcastToClients({ kind: "shell_sync_failed", path: p });
+    }
   }));
 }
 

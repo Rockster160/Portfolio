@@ -3,6 +3,13 @@
   hot ||= nil
   done_count ||= 0
   last_completion ||= nil
+  cooldown_seconds = chore.threshold_seconds.to_i
+  cooldown_active = last_completion.present? && !last_completion.payout_skipped &&
+                    cooldown_seconds.positive? && cooldown_seconds != Chore::THRESHOLD_DAY_RESET &&
+                    (last_completion.completed_at + cooldown_seconds.seconds) > Time.current
+  cooldown_until_day_end = cooldown_seconds == Chore::THRESHOLD_DAY_RESET &&
+                           last_completion.present? && !last_completion.payout_skipped &&
+                           last_completion.day_key == ChoreDay.current(current_user)
 %>
 <div class="chore-card <%= "done-today" if done_count > 0 %> <%= "hot" if hot %>"
      data-chore-id="<%= chore.id %>"
@@ -19,15 +26,17 @@
      data-chore-sharing-mode="<%= chore.sharing_mode %>"
      data-chore-assigned-to-user-id="<%= chore.assigned_to_user_id %>"
      data-chore-starts-on="<%= chore.starts_on %>"
+     data-chore-updated-at="<%= chore.updated_at.iso8601(3) %>"
      data-done-count="<%= done_count %>"
      data-last-completed-at="<%= last_completion&.completed_at&.iso8601 %>">
   <% if hot %><div class="hot-badge"><%= hot %>×</div><% end %>
   <div class="icon" data-icon>
-    <% if chore.threshold_seconds.to_i > 0 %>
-      <span class="circle-countdown" data-circle-countdown></span>
-    <% end %>
-    <span class="icon-glyph"><%= chore.icon.presence || "🧹" %></span>
     <span class="card-reward"><%= chore.reward_label %></span>
+    <%= chore_icon_inline(chore, fallback: chore.one_off ? "📝" : true) %>
+    <% if cooldown_active || cooldown_until_day_end %>
+      <span class="circle-countdown" data-circle-countdown
+            data-cooldown-end="<%= cooldown_until_day_end ? "day-end" : "" %>"></span>
+    <% end %>
     <span class="card-count-slot" data-count-slot>
       <% if done_count > 1 %><span class="count-badge" data-count-badge>×<%= done_count %></span><% end %>
     </span>

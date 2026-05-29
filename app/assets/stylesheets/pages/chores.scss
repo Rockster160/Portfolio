@@ -38,6 +38,33 @@
   --chores-hot: #F97316;
   --chores-done: #16A34A;
   --chores-accent: #2563EB;
+  // Cooldown badges + rings used to inherit --chores-hot which made
+  // them look like "this chore is hot" — confusing. Distinct grey
+  // signals "waiting / on cooldown" without competing with the hot
+  // accent color or the done-green.
+  --chores-cooldown: #64748B;
+  --chores-cooldown-bg: #1F2937;
+
+  // Unified page: BOTH `.view-grid` and `.view-today` render together;
+  // CSS hides the inactive one. Eliminates the entire class of "make a
+  // change on Grid, click Today, see stale data" bugs since both
+  // containers update from a single source.
+  > .chores-view { display: none; }
+  &[data-active-view="grid"]  > .chores-view.view-grid  { display: block; }
+  &[data-active-view="today"] > .chores-view.view-today { display: block; }
+  &[data-active-view="grid"]  .chores-sticky-top > .chores-toolbar input[type="search"] { /* same toolbar — no-op anchor */ }
+
+  // Sticky top: header + hot strip + toolbar travel together so search /
+  // edit / add are always reachable while scrolling.
+  .chores-sticky-top {
+    position: sticky;
+    top: 10px; // env-banner is 10px tall + body margin-top: 10px; sit just below it
+    z-index: 50;
+    background: var(--chores-bg);
+    margin: -16px -20px 12px;
+    padding: 12px 20px 8px;
+    box-shadow: 0 8px 16px -12px #0007;
+  }
 
   max-width: 1200px;
   margin: 0 auto;
@@ -255,11 +282,27 @@
     font-size: 48px;
     line-height: 1;
   }
-  // Reward — small subtle muted tag, bottom-LEFT of the icon box.
+  // Uploaded image / inline SVG fills the icon box like the emoji glyph.
+  .chore-card .icon .icon-img,
+  .chore-card .icon > svg {
+    width: 70%;
+    height: 70%;
+    object-fit: contain;
+    pointer-events: none;
+  }
+  .chore-card .icon .icon-placeholder {
+    font-size: 48px;
+    line-height: 1;
+    opacity: 0.22; // Greyed-out so the broom reads as "empty slot", not chore icon.
+    filter: grayscale(0.6);
+  }
+  // Reward — top-LEFT of the icon box (was bottom-LEFT). Positioned in
+  // percentages so it scales down on mobile-sized cards rather than
+  // squishing the central glyph.
   .chore-card .card-reward {
     position: absolute;
-    bottom: 4px;
-    left: 6px;
+    top: 4%;
+    left: 5%;
     z-index: 2;
     font-size: 11px !important;
     font-weight: 600;
@@ -267,24 +310,31 @@
     line-height: 1;
     pointer-events: none;
   }
-  // Cooldown countdown — ORANGE pill at top-center of the icon box.
+  // Cooldown countdown — GREY pill at bottom-RIGHT of the icon box
+  // (was top-center, orange/hot). Bottom-right keeps it from competing
+  // with the reward (top-left) or the count-slot (bottom-center).
+  // Percent positioning so it scales with the card on small screens.
   .chore-card .icon .circle-countdown {
     position: absolute;
-    top: 4px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #00102B;
-    color: var(--chores-hot);
+    bottom: 4%;
+    right: 5%;
+    background: var(--chores-cooldown-bg);
+    color: var(--chores-cooldown);
     font-size: 9px !important;
     line-height: 1;
     padding: 2px 6px;
     border-radius: 999px;
-    border: 1px solid var(--chores-hot);
+    border: 1px solid var(--chores-cooldown);
     font-weight: 700;
     pointer-events: none;
     white-space: nowrap;
     z-index: 3;
   }
+  // The badge only renders when the chore is actively in cooldown; the
+  // ticker also strips its text content as soon as the cooldown expires
+  // — `:empty` hides the now-bare border so nothing shows when a
+  // cooldown is over and we haven't replaced the card yet.
+  .chore-card .icon .circle-countdown:empty,
   .chore-card .icon .circle-countdown.elapsed {
     display: none;
   }
@@ -320,12 +370,13 @@
       inset 0 0 0 2px var(--chores-done),
       inset 0 0 0 4px var(--chores-hot);
   }
-  // Count slot — INSIDE the icon at bottom-center (mirrors Today).
+  // Count slot — INSIDE the icon at top-RIGHT (was bottom-center).
+  // Swap pushes the count out of the cooldown zone and into the
+  // previously-empty top-right corner.
   .chore-card .card-count-slot {
     position: absolute;
-    bottom: 4px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 4%;
+    right: 5%;
     pointer-events: none;
     z-index: 2;
   }
@@ -386,6 +437,38 @@
   &.edit-mode .chore-card .hot-badge {
     display: none;
   }
+  // Today view edit-mode: same accent treatment as Grid so it's
+  // obvious the user can tap a circle to edit. The pencil chip is
+  // anchored to the disc (.circle-inner) rather than the .chore-circle
+  // wrapper because the wrapper extends below the disc to fit the
+  // title.
+  &.edit-mode .chore-circle .circle-inner {
+    background: #11264F;
+    border-color: var(--chores-accent);
+    box-shadow:
+      0 0 0 1px var(--chores-accent),
+      0 0 12px #2563eb55;
+    cursor: pointer;
+  }
+  &.edit-mode .chore-circle .circle-inner::after {
+    content: "";
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--chores-accent);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='white' d='M11.013 1.427a1.45 1.45 0 0 1 2.05 0l1.51 1.51a1.45 1.45 0 0 1 0 2.05L4.953 15.077l-3.927.5.5-3.927L11.013 1.427z'/></svg>");
+    background-size: 11px;
+    background-position: center;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    z-index: 4;
+  }
+  &.edit-mode .chore-circle .hot-badge {
+    display: none;
+  }
   // SortableJS classes during drag
   .chore-card.sortable-ghost {
     opacity: 0.35;
@@ -425,7 +508,9 @@
   .chores-circles {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 14px 8px;
+    // Reduced vertical gap, increased horizontal gap per UX feedback —
+    // circles felt cramped horizontally and over-spaced vertically.
+    gap: 8px 16px;
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
@@ -457,13 +542,64 @@
     background: #0F1B33;
     display: grid;
     place-items: center;
-    border: 1px solid transparent;
-    transition: transform 0.08s ease;
+    // 2px border (was 1px) so the green "done" ring reads instantly
+    // without leaning on the inner-color change for the entire signal.
+    border: 2px solid transparent;
+    transition:
+      transform 0.08s ease,
+      background-color 0.3s ease,
+      border-color 0.3s ease;
   }
+  // Animate the checked/unchecked transition with a single radial-gradient
+  // fill that grows from the center. CSS animations only — no JS clock
+  // needed.
+  .chore-circle .circle-inner::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--chores-done) 0%, var(--chores-done) 100%);
+    opacity: 0;
+    transform: scale(0);
+    transform-origin: center;
+    transition:
+      transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 0.25s ease;
+    pointer-events: none;
+    z-index: 0;
+    mix-blend-mode: multiply;
+  }
+  .chore-circle.done .circle-inner::before {
+    transform: scale(1);
+    opacity: 0.18;
+  }
+  // Inner content sits above the animating fill so it never gets covered.
+  .chore-circle .circle-inner > * {
+    position: relative;
+    z-index: 1;
+  }
+  // Fixed icon box so uploaded images / SVGs have a parent dimension
+  // to size themselves against. Emoji rely on font-size; the parent
+  // dimension just bounds them.
   .chore-circle .icon {
+    width: 56%;
+    aspect-ratio: 1/1;
     font-size: 32px;
     line-height: 1;
-    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .chore-circle .icon .icon-img,
+  .chore-circle .icon > svg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+  }
+  .chore-circle .icon .icon-placeholder {
+    opacity: 0.22;
+    filter: grayscale(0.6);
   }
   .chore-circle .title {
     font-size: 11px;
@@ -478,17 +614,14 @@
     color: var(--chores-muted);
     font-weight: 600;
   }
-  .chore-circle .actor-tag {
-    color: #93C5FD;
-    font-weight: 500;
-    font-size: 9px;
-  }
+  // .actor-tag intentionally absent — the household actor name is no
+  // longer rendered. Done state is signal enough.
   .chore-circle.done .circle-inner {
     background: #0F1F12;
     border-color: var(--chores-done);
   }
   .chore-circle.done .icon {
-    opacity: 0.9;
+    opacity: 0.95;
   }
   .chore-circle.hot .circle-inner {
     border-color: var(--chores-hot);
@@ -515,7 +648,7 @@
   }
   .chore-circle .ring-progress {
     fill: none;
-    stroke: var(--chores-hot);
+    stroke: var(--chores-cooldown);
     stroke-width: 2;
     stroke-linecap: round;
     transition: stroke-dashoffset 0.25s linear;
@@ -523,33 +656,35 @@
   .chore-circle .ring-progress.elapsed {
     stroke: #1F2A44; // when cooldown done, ring fades into bg
   }
-  // Countdown — ORANGE pill near the top of the disc.
+  // Cooldown countdown — GREY pill at the bottom of the disc
+  // (was orange + top). Bottom puts it under the icon, leaving the
+  // top free for the reward.
   .chore-circle .circle-countdown {
     position: absolute;
-    top: 14px;
+    bottom: 12%;
     left: 50%;
     transform: translateX(-50%);
-    background: #00102B;
-    color: var(--chores-hot);
+    background: var(--chores-cooldown-bg);
+    color: var(--chores-cooldown);
     font-size: 8px !important;
     line-height: 1;
     padding: 2px 6px;
     border-radius: 999px;
-    border: 1px solid var(--chores-hot);
+    border: 1px solid var(--chores-cooldown);
     font-weight: 700;
     pointer-events: none;
     white-space: nowrap;
     z-index: 3;
   }
+  .chore-circle .circle-countdown:empty,
   .chore-circle .circle-countdown.elapsed {
     display: none;
   }
-  // Reward + multiplier stacked at the bottom-center of the disc.
-  // Reward is SUBTLE (muted gray) and sits immediately above the count
-  // badge with tight spacing.
+  // Reward — TOP of the disc (was bottom). Percentage-positioned so
+  // mobile-sized circles don't squish the central glyph.
   .chore-circle .circle-reward {
     position: absolute;
-    bottom: 10px;
+    top: 12%;
     left: 50%;
     transform: translateX(-50%);
     font-size: 10px !important;
@@ -1148,16 +1283,27 @@
     color: #FFF !important;
   }
 
-  // Lookahead day strip
+  // Lookahead "Upcoming" — compact, restrained. Per the focused-filter
+  // change in the controller this now shows only items the user hasn't
+  // already seen today or earlier in the window, so the section is
+  // intentionally tight.
+  .lookahead-heading {
+    margin: 20px 0 6px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--chores-muted);
+    font-weight: 600;
+  }
   .lookahead-day {
     border: 1px solid #1F2A44;
     border-radius: 8px;
-    padding: 8px;
-    margin-bottom: 6px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
     background: var(--chores-card-bg);
   }
   .lookahead-day .day-label {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--chores-muted);
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -1166,13 +1312,91 @@
   .lookahead-day .day-items {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
   }
   .lookahead-day .day-chip {
     background: #0F1B33;
-    padding: 4px 10px;
+    padding: 3px 8px;
     border-radius: 999px;
     font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .lookahead-day .day-chip .icon-img,
+  .lookahead-day .day-chip svg {
+    width: 14px;
+    height: 14px;
+    object-fit: contain;
+  }
+
+  // ---- Icon picker (edit modal) ----
+  .icon-input-stack {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .icon-input-stack .icon-preview {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    background: #0F1B33;
+    border: 1px solid #334155 !important;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0 !important;
+  }
+  .icon-input-stack .icon-preview .icon-preview-text {
+    font-size: 30px;
+    line-height: 1;
+    pointer-events: none;
+  }
+  .icon-input-stack .icon-preview img,
+  .icon-input-stack .icon-preview svg {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    pointer-events: none;
+  }
+  .icon-input-stack .icon-preview.placeholder .icon-preview-text {
+    opacity: 0.25;
+    filter: grayscale(0.6);
+  }
+  .icon-input-stack .icon-input {
+    flex: 1;
+    min-width: 0;
+  }
+  .icon-input-stack .icon-clear {
+    background: #1F2A44 !important;
+    color: var(--chores-muted) !important;
+    padding: 6px 10px !important;
+    border-radius: 6px;
+  }
+
+  // ---- Multiplier modal (now shared between Grid + Today) ----
+  .chore-multiplier-modal {
+    text-align: center;
+  }
+  .chore-multiplier-modal .multiplier-target {
+    color: var(--chores-muted);
+    margin: 4px 0 12px;
+  }
+  .chore-multiplier-modal .multiplier-quicks {
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+  .chore-multiplier-modal .multiplier-input {
+    width: 100px;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: #00102B;
+    color: #ECF0F1;
+    text-align: center;
+    margin: 0 auto 12px;
+    display: block;
   }
 
   @media (max-width: 600px) {
@@ -1180,7 +1404,7 @@
       grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
     }
     .chores-circles {
-      gap: 12px 6px;
+      gap: 6px 10px;
     }
     .chore-circle .icon {
       font-size: 26px;

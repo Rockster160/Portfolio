@@ -9,11 +9,24 @@
       ignore attributes. %>
     <form class="chore-form basic" data-chores-form autocomplete="off" novalidate data-form-type="other">
 
-      <%# ----- Identity: icon + names ----- %>
+      <%# ----- Identity: icon + names -----
+        Icon supports plain emoji text, pasted/uploaded images, and SVG.
+        The visible preview swaps between a text input (emoji) and an
+        <img> tag (uploaded). The hidden `data-field="icon"` carries the
+        canonical value: emoji string OR a data URL / external URL. %>
       <div class="form-section identity-row">
-        <input type="text" data-field="icon" class="icon-input" maxlength="8" placeholder="🧹"
-               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+        <div class="icon-input-stack" data-icon-stack>
+          <button type="button" class="icon-preview" data-icon-preview title="Upload image">
+            <span class="icon-preview-text">🧹</span>
+          </button>
+          <input type="text" data-icon-text class="icon-input" maxlength="64" placeholder="🧹"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+          <button type="button" class="icon-clear" data-icon-clear title="Clear icon">×</button>
+          <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
+                 data-icon-file hidden>
+          <input type="hidden" data-field="icon" value="">
+        </div>
         <div class="identity-names">
           <label class="field-label">Name</label>
           <input type="text" data-field="name" placeholder="Brush Teeth" required
@@ -112,6 +125,7 @@
           <button type="button" class="pill" data-value="86400">1d</button>
           <button type="button" class="pill" data-value="172800">2d</button>
           <button type="button" class="pill" data-value="604800">1w</button>
+          <button type="button" class="pill" data-value="day-end">End of day</button>
           <button type="button" class="pill" data-value="custom">Custom…</button>
         </div>
         <input type="hidden" data-field="threshold_preset" value="">
@@ -253,5 +267,27 @@
         <button type="submit" class="primary">Save</button>
       </div>
     </form>
+  </div>
+</div>
+
+<%# Multiplier modal — shared so Grid + Today both open the multi-tap
+  flow from the same `×` toolbar button. %>
+<div id="chore-multiplier-modal" class="chores-modal-backdrop hidden" data-multiplier-modal>
+  <div class="chores-modal chore-multiplier-modal">
+    <div class="modal-head">
+      <h3>How many?</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <p class="multiplier-target" data-multiplier-label></p>
+    <div class="multiplier-quicks pill-group" data-multiplier-quicks>
+      <% [2, 3, 4, 5, 10].each do |n| %>
+        <button type="button" class="pill" data-mult="<%= n %>"><%= n %>×</button>
+      <% end %>
+    </div>
+    <input type="number" min="1" value="2" data-multiplier-input class="multiplier-input">
+    <div class="form-actions">
+      <button type="button" class="ghost" data-action="cancel">Cancel</button>
+      <button type="button" class="primary" data-multiplier-submit>OK</button>
+    </div>
   </div>
 </div>

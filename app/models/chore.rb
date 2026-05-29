@@ -32,6 +32,15 @@ class Chore < ApplicationRecord
   CUSTOM_UNITS = [:day, :week, :month].freeze
   RELATIVE_UNITS = CUSTOM_UNITS
 
+  # Sentinel values for `threshold_seconds`:
+  #   nil / 0           — no cooldown
+  #   > 0               — fixed-duration cooldown in seconds
+  #   THRESHOLD_DAY_RESET (-1) — cooldown clears at the next ChoreDay
+  #                              boundary (4am). Designed to be expandable:
+  #                              add new sentinels below 0 if more "calendar"
+  #                              cooldowns are needed (week-reset, month-reset).
+  THRESHOLD_DAY_RESET = -1
+
   # show_on_daily_view enum — controls when an item appears on Today.
   #   :always                       — always shown (even without a schedule)
   #   :when_scheduled (default)     — only on scheduled days (carryover allowed)
@@ -64,7 +73,8 @@ class Chore < ApplicationRecord
 
   validates :name, presence: true
   validates :reward_pebbles, numericality: { greater_than_or_equal_to: 0 }
-  validates :threshold_seconds, numericality: { greater_than: 0 }, allow_nil: true
+  validates :threshold_seconds, numericality: { only_integer: true }, allow_nil: true
+  validate :threshold_seconds_is_valid_sentinel_or_positive
   validates :assigned_to_user_id, presence: true, if: :share_assigned?
   before_validation :clear_assignment_unless_assigned
 
@@ -196,6 +206,10 @@ class Chore < ApplicationRecord
     Array(recurrence_data[:excluded_dates]).filter_map { |d| safe_date(d) }.to_set
   end
 
+  def cooldown_until_day_reset?
+    threshold_seconds == THRESHOLD_DAY_RESET
+  end
+
   # Has the cooldown for `user` elapsed (i.e. the next tap would pay)?
   # `last_completion` is accepted as an arg to avoid per-row queries
   # when iterating many chores — the today controller bulk-loads them.
@@ -205,10 +219,24 @@ class Chore < ApplicationRecord
     last = last_completion == :unset ? last_completion_for(user) : last_completion
     return true if last.blank? || last.payout_skipped
 
+    if cooldown_until_day_reset?
+      # Elapsed once we've crossed the ChoreDay boundary (4am).
+      # Comparing day_keys is exact, so users see the cooldown end
+      # at the same moment the Today view rolls over.
+      return last.day_key != ChoreDay.current(user)
+    end
+
     (last.completed_at + threshold_seconds.seconds) <= now
   end
 
   private
+
+  def threshold_seconds_is_valid_sentinel_or_positive
+    return if threshold_seconds.nil? || threshold_seconds == THRESHOLD_DAY_RESET
+    return if threshold_seconds.positive?
+
+    errors.add(:threshold_seconds, "must be positive or the day-reset sentinel (-1)")
+  end
 
   def clear_assignment_unless_assigned
     self.assigned_to_user_id = nil unless share_assigned?

@@ -72,12 +72,23 @@ class ChoreCompleter
       .order(completed_at: :desc).first
     return if last_paid.blank?
 
-    window_end = last_paid.completed_at + chore.threshold_seconds.seconds
-    if at < window_end
+    if chore.cooldown_until_day_reset?
+      # Day-reset cooldown: blocked only if a paid completion already
+      # exists in the same ChoreDay window. Once we cross 4am (or
+      # whatever ChoreDay::CUTOFF_HOURS is), the cooldown is gone.
+      return unless last_paid.day_key == day
+
       record.payout_skipped = true
-      remaining = (window_end - at).to_i
-      record.skipped_reason = "Cooldown — next payout in #{format_seconds(remaining)}"
+      record.skipped_reason = "Cooldown — resets at end of day"
+      return
     end
+
+    window_end = last_paid.completed_at + chore.threshold_seconds.seconds
+    return unless at < window_end
+
+    record.payout_skipped = true
+    remaining = (window_end - at).to_i
+    record.skipped_reason = "Cooldown — next payout in #{format_seconds(remaining)}"
   end
 
   def apply_payout!(record)

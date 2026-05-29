@@ -5,19 +5,9 @@ class ChoresController < ApplicationController
   helper_method :assignable_users
 
   def index
-    @chores = ordered_for_current_user(current_user.accessible_chores).to_a
-    @day = ChoreDay.current(current_user)
-    @now = Time.current
-    @hot_picks = ChoreHotPick.lookup_for(@day)
-    @completions_today = ChoreCompletion
-      .where(user_id: current_user.id, day_key: @day)
-      .group(:chore_id).count
-    @last_completions = ChoreCompletion
-      .where(user_id: current_user.id, chore_id: @chores.map(&:id))
-      .select("DISTINCT ON (chore_id) chore_id, completed_at, payout_skipped, paid_pebbles, day_key")
-      .order(:chore_id, completed_at: :desc)
-      .index_by(&:chore_id)
-    @balance = current_user.chore_balance
+    @active_view = :grid
+    load_chore_page_data
+    render :page
   end
 
   # PATCH /chores/order — body { ids: [3, 7, 1, ...] }
@@ -53,52 +43,9 @@ class ChoresController < ApplicationController
   end
 
   def today
-    @day = ChoreDay.current(current_user)
-    @now = Time.current
-    breakdown = current_user.chore_balance_breakdown(@day)
-    @balance = breakdown[:today_earnings] # Today header shows today's earnings
-    @total_balance = breakdown[:balance]
-    @hot_picks = ChoreHotPick.lookup_for(@day)
-
-    # Stable order — sort_order, then id. The Today layout is frozen
-    # within a day, so items must never re-arrange on re-renders.
-    chores = ordered_for_current_user(
-      current_user.accessible_chores.where.not(show_on_daily_view: Chore.show_on_daily_views[:never])
-    ).to_a
-    chore_ids = chores.map(&:id)
-
-    # Per the sharing-mode spec: personal/assigned tasks show this user's
-    # data only; household tasks roll up ALL share-group members so
-    # everyone sees the same completion state.
-    household_ids = chores.select(&:share_household?).map(&:id)
-    personal_ids  = chore_ids - household_ids
-    share_group_ids = household_ids.empty? ? [] : household_user_ids_for_share_group
-
-    @last_completion_by_chore = bulk_last_completion(personal_ids, [current_user.id])
-      .merge(bulk_last_completion(household_ids, share_group_ids))
-
-    @completion_actor_by_chore = bulk_last_actor(household_ids, share_group_ids)
-
-    @completions_today = ChoreCompletion
-      .where(day_key: @day, chore_id: personal_ids, user_id: current_user.id)
-      .group(:chore_id).count
-      .merge(
-        ChoreCompletion
-          .where(day_key: @day, chore_id: household_ids, user_id: share_group_ids)
-          .group(:chore_id).count
-      )
-
-    # ONE query for all completion-days in the carryover window across
-    # all visible chores — kills the N+1 EXISTS check that fired once
-    # per chore inside scheduled_today_or_carried_over?.
-    @completion_days_by_chore = ChoreCompletion
-      .where(user_id: current_user.id, chore_id: chore_ids, day_key: (@day - 14)..@day)
-      .distinct.pluck(:chore_id, :day_key)
-      .group_by(&:first)
-      .transform_values { |entries| entries.map(&:last).to_set }
-
-    @scheduled_today = chores.select { |c| visible_on_daily?(c, @day) || c.one_off }
-    @lookahead = lookahead(chores.reject(&:one_off), @day)
+    @active_view = :today
+    load_chore_page_data
+    render :page
   end
 
   # Lightweight endpoint for the offline queue flusher to pick up a
@@ -119,43 +66,7 @@ class ChoresController < ApplicationController
   # responses vs. a local optimistic click.
   def state
     chore = current_user.accessible_chores.unscope(where: :archived_at).find(params[:id])
-    day = ChoreDay.current(current_user)
-    user_ids = chore.share_household? ? household_user_ids_for_share_group : [current_user.id]
-
-    last = ChoreCompletion
-      .where(chore_id: chore.id, user_id: user_ids)
-      .order(completed_at: :desc).first
-    actor = (chore.share_household? && last && last.user_id != current_user.id) ?
-      User.where(id: last.user_id).pluck(:username).first : nil
-    completions_today = ChoreCompletion
-      .where(chore_id: chore.id, user_id: user_ids, day_key: day).count
-    today_earnings = current_user.chore_completions.where(day_key: day).sum(:paid_pebbles)
-
-    # `view` lets the JS ask for the right card partial to splice in
-    # (Today renders a circle, everywhere else renders a grid card).
-    # If the requester didn't specify, we default to grid so the JSON is
-    # still useful for non-card consumers.
-    last_completion_for_card = (last && last.user_id == current_user.id) ? last : nil
-    actor_label = (chore.share_household? && actor && last && last.user_id != current_user.id) ? actor : nil
-    card_html = rendered_card_html(
-      chore,
-      params[:view],
-      done_count: completions_today,
-      last_completion: last_completion_for_card,
-      actor_label: actor_label,
-    )
-
-    render json: {
-      chore_id: chore.id,
-      balance: current_user.chore_balance,
-      today_earnings: today_earnings,
-      completions_today: completions_today,
-      last_completed_at: last&.completed_at&.iso8601(3),
-      actor_username: actor,
-      archived: chore.archived?,
-      html: card_html,
-      server_ts: Time.current.iso8601(3),
-    }
+    render json: dual_card_payload(chore)
   end
 
   def history
@@ -222,7 +133,7 @@ class ChoresController < ApplicationController
       ChoreBroadcaster.broadcast_changes!(current_user, @chore)
       respond_to do |format|
         format.html { redirect_to action: (@chore.one_off ? :today : :index) }
-        format.json { render json: serialize(@chore).merge(html: rendered_card_html(@chore, params[:view])), status: :created }
+        format.json { render json: dual_card_payload(@chore), status: :created }
       end
     else
       respond_to do |format|
@@ -237,7 +148,7 @@ class ChoresController < ApplicationController
       ChoreBroadcaster.broadcast_changes!(current_user, @chore)
       respond_to do |format|
         format.html { redirect_to chores_path }
-        format.json { render json: serialize(@chore).merge(html: rendered_card_html(@chore, params[:view])) }
+        format.json { render json: dual_card_payload(@chore) }
       end
     else
       respond_to do |format|
@@ -256,7 +167,148 @@ class ChoresController < ApplicationController
     end
   end
 
+  # GET /chores/sync?since=<iso8601>
+  #
+  # Diff endpoint used by:
+  #   * Cold boot — every page load fires this with `localStorage.lastSyncTs`
+  #     so a force-quit + reopen catches up renames / archives / new chores
+  #     without a full page reload.
+  #   * Reconnect — `window online` event + `MonitorChannel connected`.
+  #
+  # Returns archived ids + per-chore rendered HTML for BOTH the grid and
+  # circle partials so the same payload feeds both views simultaneously
+  # (no need to fire two endpoints when the user is mid-toggling between
+  # them).
+  def sync
+    load_chore_page_data
+    since_ts = parse_iso(params[:since])
+
+    chore_payloads = sync_chore_payloads(since_ts)
+    archived_ids = sync_archived_ids(since_ts)
+    breakdown = current_user.chore_balance_breakdown(@day)
+
+    render json: {
+      server_ts: Time.current.iso8601(3),
+      balance: breakdown[:balance],
+      today_earnings: breakdown[:today_earnings],
+      chores: chore_payloads,
+      archived_chore_ids: archived_ids,
+    }
+  end
+
   private
+
+  # The single source of truth for "render the chores page" — both
+  # `index` and `today` call this, plus `sync` which only uses the
+  # collections (no template). Loads:
+  #   * @chores               — all accessible chores in user-order
+  #   * @completions_today    — count per chore (household-merged)
+  #   * @last_completion_by_chore (today view + cooldown lookups)
+  #   * @last_completions     — alias for legacy grid_card partial
+  #   * @completion_actor_by_chore — household actor for "by alice" tag
+  #   * @hot_picks
+  #   * @completion_days_by_chore — carryover window set
+  #   * @scheduled_today      — chores visible on Today
+  #   * @lookahead            — upcoming-only items (dedupe filter)
+  #   * @balance              — view-appropriate scalar
+  #   * @balance_total / @balance_today — both scopes for the JS swap
+  def load_chore_page_data
+    @day = ChoreDay.current(current_user)
+    @now = Time.current
+    @hot_picks = ChoreHotPick.lookup_for(@day)
+
+    @chores = ordered_for_current_user(current_user.accessible_chores).to_a
+    chore_ids = @chores.map(&:id)
+
+    household_ids = @chores.select(&:share_household?).map(&:id)
+    personal_ids  = chore_ids - household_ids
+    share_group_ids = household_ids.empty? ? [] : household_user_ids_for_share_group
+
+    @last_completion_by_chore = bulk_last_completion(personal_ids, [current_user.id])
+      .merge(bulk_last_completion(household_ids, share_group_ids))
+    # Grid view's existing partial reads `@last_completions` — alias.
+    @last_completions = @last_completion_by_chore
+    @completion_actor_by_chore = bulk_last_actor(household_ids, share_group_ids)
+
+    @completions_today = ChoreCompletion
+      .where(day_key: @day, chore_id: personal_ids, user_id: current_user.id)
+      .group(:chore_id).count
+      .merge(
+        ChoreCompletion
+          .where(day_key: @day, chore_id: household_ids, user_id: share_group_ids)
+          .group(:chore_id).count
+      )
+
+    @completion_days_by_chore = ChoreCompletion
+      .where(user_id: current_user.id, chore_id: chore_ids, day_key: (@day - 14)..@day)
+      .distinct.pluck(:chore_id, :day_key)
+      .group_by(&:first)
+      .transform_values { |entries| entries.map(&:last).to_set }
+
+    daily_visible_chores = @chores.reject { |c| c.show_on_daily_view.to_sym == :never }
+    @scheduled_today = daily_visible_chores.select { |c| visible_on_daily?(c, @day) || c.one_off }
+    @lookahead = focused_lookahead(daily_visible_chores.reject(&:one_off), @day, @scheduled_today)
+
+    breakdown = current_user.chore_balance_breakdown(@day)
+    @balance_total = breakdown[:balance]
+    @balance_today = breakdown[:today_earnings]
+    @balance = @active_view == :today ? @balance_today : @balance_total
+  end
+
+  # Per-chore payload for the sync endpoint. When `since` is provided,
+  # only chores updated since OR with a completion since are returned.
+  def sync_chore_payloads(since_ts)
+    accessible = @chores
+    chosen = if since_ts
+               touched_ids = ChoreCompletion
+                 .where(user_id: current_user.id, completed_at: since_ts..)
+                 .distinct.pluck(:chore_id)
+               accessible.select { |c| c.updated_at > since_ts || touched_ids.include?(c.id) }
+             else
+               accessible
+             end
+
+    today_set = @scheduled_today.index_by(&:id)
+    chosen.map do |chore|
+      done_count = @completions_today[chore.id].to_i
+      last_completion = @last_completion_by_chore[chore.id]
+      hot = @hot_picks[chore.id]
+      today_visible = today_set.key?(chore.id)
+
+      {
+        id: chore.id,
+        updated_at: chore.updated_at.iso8601(3),
+        today_visible: today_visible,
+        html_grid: render_to_string(
+          partial: "grid_card",
+          locals: { chore: chore, done_count: done_count, last_completion: last_completion, hot: hot },
+          formats: [:html],
+        ),
+        html_today: today_visible ?
+          render_to_string(
+            partial: "circle_card",
+            locals: { chore: chore, done_count: done_count, last_completion: last_completion, hot: hot },
+            formats: [:html],
+          ) : nil,
+      }
+    end
+  end
+
+  # Chores archived since `since_ts` so the client can remove them from
+  # both view containers. Unarchived chores re-appear via `sync_chore_payloads`.
+  def sync_archived_ids(since_ts)
+    scope = current_user.accessible_chores.unscope(where: :archived_at).where.not(archived_at: nil)
+    scope = scope.where(archived_at: since_ts..) if since_ts
+    scope.pluck(:id)
+  end
+
+  def parse_iso(value)
+    return nil if value.blank?
+
+    Time.iso8601(value.to_s)
+  rescue ArgumentError
+    nil
+  end
 
   # Apply the current user's saved chore ordering as a single SQL JOIN.
   # Items without an explicit order row sort to the end (NULLS LAST),
@@ -371,14 +423,28 @@ class ChoresController < ApplicationController
     !completed_days.any? { |d| d >= last_scheduled_day && d <= day }
   end
 
-  def lookahead(chores, day, days: 7)
+  # Focused upcoming list — only items that are not on Today AND have
+  # not appeared on a prior day in the window. Goal: "what's new to
+  # think about", not a wall of every repeat that's already known.
+  #
+  # First-occurrence-only dedupe: as we scan day by day, each chore is
+  # added on the EARLIEST upcoming day it appears, then skipped on
+  # subsequent days within the window. Anything that's also on Today's
+  # circle list is excluded entirely.
+  def focused_lookahead(chores, day, todays_chores, days: 7)
+    today_ids = Set.new(Array(todays_chores).map(&:id))
+    seen_ids = Set.new
     upcoming = Hash.new { |h, k| h[k] = [] }
-    chores.each do |c|
-      next unless c.scheduled?
+    ((day + 1)..(day + days)).each do |d|
+      chores.each do |c|
+        next unless c.scheduled?
+        next if today_ids.include?(c.id) || seen_ids.include?(c.id)
 
-      last_day = @last_completion_by_chore[c.id]&.day_key
-      ((day + 1)..(day + days)).each do |d|
-        upcoming[d] << c if c.matches_day?(d, current_user, last_completed_day: last_day)
+        last_day = @last_completion_by_chore[c.id]&.day_key
+        next unless c.matches_day?(d, current_user, last_completed_day: last_day)
+
+        upcoming[d] << c
+        seen_ids << c.id
       end
     end
     upcoming
@@ -410,16 +476,74 @@ class ChoresController < ApplicationController
     permitted
   end
 
-  # Render the right card partial for the page the user is currently on
-  # (the JS submits the active mode as `view` so the server doesn't have
-  # to guess). Today gets the circle; everywhere else gets the grid card.
-  # Optional locals let `state` pass through real done_count / last
-  # completion / actor; create+update default them to fresh-state.
-  def rendered_card_html(chore, view, done_count: 0, last_completion: nil, actor_label: nil, hot: nil)
-    partial = view.to_s == "today" ? "circle_card" : "grid_card"
+  # Single source of truth for the dual-view payload — both card
+  # partials rendered server-side, plus `today_visible` so the client
+  # knows whether to insert/replace or remove from the Today container.
+  def dual_card_payload(chore)
+    last_completion = chore.last_completion_for(current_user)
+    done_count = ChoreCompletion
+      .where(chore_id: chore.id, user_id: current_user.id, day_key: ChoreDay.current(current_user))
+      .count
+    hot = ChoreHotPick.lookup_for(ChoreDay.current(current_user))[chore.id]
     locals = { chore: chore, done_count: done_count, last_completion: last_completion, hot: hot }
-    locals[:actor_label] = actor_label if partial == "circle_card"
-    render_to_string(partial: partial, locals: locals, formats: [:html])
+
+    {
+      id: chore.id,
+      # Legacy fields preserved for clients that read the count-only
+      # shape (offline-queue replay, /state's original API contract).
+      chore_id: chore.id,
+      completions_today: done_count,
+      last_completed_at: last_completion&.completed_at&.iso8601(3),
+      updated_at: chore.updated_at.iso8601(3),
+      server_ts: Time.current.iso8601(3),
+      today_visible: chore_visible_on_today?(chore),
+      html_grid:  render_to_string(partial: "grid_card",   locals: locals, formats: [:html]),
+      html_today: render_to_string(partial: "circle_card", locals: locals, formats: [:html]),
+      balance: current_user.chore_balance,
+      today_earnings: current_user.chore_balance_breakdown(ChoreDay.current(current_user))[:today_earnings],
+      archived: chore.archived?,
+    }
+  end
+
+  # Light wrapper around `visible_on_daily?` for one-off creates / updates
+  # where the controller doesn't have @completions_today / @last_completion_by_chore
+  # preloaded. Lazy-loads the minimum required state.
+  def chore_visible_on_today?(chore)
+    return false if chore.archived?
+    return true if chore.daily_always?
+    return true if chore.one_off
+
+    day = ChoreDay.current(current_user)
+    user_ids = chore.share_household? ? household_user_ids_for_share_group : [current_user.id]
+    last_completion = ChoreCompletion
+      .where(chore_id: chore.id, user_id: user_ids)
+      .order(completed_at: :desc).first
+
+    case chore.show_on_daily_view.to_sym
+    when :never                        then false
+    when :always                       then true
+    when :when_scheduled               then scheduled_or_carried?(chore, day, last_completion&.day_key)
+    when :when_available               then chore.cooldown_elapsed?(current_user, last_completion: last_completion)
+    when :when_scheduled_and_available then scheduled_or_carried?(chore, day, last_completion&.day_key) ||
+                                            chore.cooldown_elapsed?(current_user, last_completion: last_completion)
+    else false
+    end
+  end
+
+  def scheduled_or_carried?(chore, day, last_completed_day)
+    return false unless chore.scheduled?
+    return true if chore.matches_day?(day, current_user, last_completed_day: last_completed_day)
+    return false if chore.relative?
+
+    last_scheduled_day = (day - 14..day - 1).reverse_each.find { |d|
+      chore.matches_day?(d, current_user, last_completed_day: last_completed_day)
+    }
+    return false if last_scheduled_day.blank?
+
+    done_days = ChoreCompletion
+      .where(user_id: current_user.id, chore_id: chore.id, day_key: last_scheduled_day..day)
+      .distinct.pluck(:day_key)
+    done_days.empty?
   end
 
   def serialize(chore)

@@ -179,6 +179,48 @@ RSpec.describe "Chores", type: :request do
     expect(body["balance"]).to eq(4)
     expect(body["server_ts"]).to be_present
     expect(body["last_completed_at"]).to be_present
+    # New dual-html shape used by the unified-page diff applier.
+    expect(body["html_grid"]).to be_present
+    expect(body["html_today"]).to be_present
+    expect(body["today_visible"]).to be(true).or be(false)
+  end
+
+  it "GET /chores/sync returns diff payload for both views" do
+    keeper = create(:chore, created_by_user: user, name: "Vacuum")
+    archived = create(:chore, created_by_user: user, name: "Old", archived_at: 1.hour.ago)
+    create(:chore_completion, chore: keeper, user: user, paid_pebbles: 3)
+
+    get "/chores/sync", headers: { "Accept" => "application/json" }
+    expect(response).to have_http_status(:ok)
+    body = JSON.parse(response.body)
+    expect(body["server_ts"]).to be_present
+    expect(body["balance"]).to be_a(Integer)
+    ids = body["chores"].map { |c| c["id"] }
+    expect(ids).to include(keeper.id)
+    expect(body["archived_chore_ids"]).to include(archived.id)
+    keeper_payload = body["chores"].find { |c| c["id"] == keeper.id }
+    expect(keeper_payload["html_grid"]).to include("Vacuum")
+  end
+
+  it "POST /chores/items accepts day-reset cooldown sentinel (-1)" do
+    post "/chores/items",
+      params: { chore: { name: "Brush", reward_pebbles: 1, threshold_seconds: -1 } }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+    expect(response).to have_http_status(:created)
+    chore = Chore.order(:id).last
+    expect(chore.threshold_seconds).to eq(-1)
+    expect(chore.cooldown_until_day_reset?).to be(true)
+  end
+
+  it "day-reset cooldown blocks a second payout the same chore-day, allows after day flip" do
+    chore = create(:chore, created_by_user: user, reward_pebbles: 5, threshold_seconds: -1)
+    first  = ChoreCompleter.new(chore, user, at: Time.current).call
+    expect(first.completion.payout_skipped).to be(false)
+    second = ChoreCompleter.new(chore, user, at: Time.current + 5.hours).call
+    expect(second.completion.payout_skipped).to be(true)
+    # Different chore-day → cooldown elapsed.
+    expect(chore.cooldown_elapsed?(user, last_completion: second.completion,
+                                   now: Time.current + 26.hours)).to be(true)
   end
 
   it "PATCH /chores/order saves per-user ordering and Grid honors it" do
