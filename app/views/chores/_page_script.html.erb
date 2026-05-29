@@ -396,6 +396,16 @@
     if (next.getTime() <= d.getTime()) next.setDate(next.getDate() + 1);
     return Math.max(0, Math.floor((next.getTime() - d.getTime()) / 1000));
   }
+  // Local chore-day in iso format. Mirrors `ChoreDay.current` on the
+  // server (shift by CUTOFF_HOUR, then take the date). Used to spot
+  // SW-cached bootstrap that was generated before the 4am rollover.
+  function currentChoreDayIso(now = Date.now()) {
+    const shifted = new Date(now - CUTOFF_HOUR * 3600 * 1000);
+    const y = shifted.getFullYear();
+    const m = String(shifted.getMonth() + 1).padStart(2, "0");
+    const d = String(shifted.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
 
   function formatRemaining(seconds) {
     if (seconds <= 0) return "";
@@ -691,17 +701,27 @@
   // sync — diff endpoint, cold boot + reconnect
   // ============================================================
   const SYNC_TS_KEY = "chores:lastSyncTs:v1";
+  const SYNC_DAY_KEY = "chores:lastSyncDay:v1";
   let syncInFlight = false;
-  async function fullSync() {
+  async function fullSync({ force = false } = {}) {
     if (syncInFlight || !navigator.onLine) return;
     syncInFlight = true;
     setSyncBadge(true);
     try {
-      const since = localStorage.getItem(SYNC_TS_KEY) || "";
-      const url = since ? `/chores/sync?since=${encodeURIComponent(since)}` : "/chores/sync";
+      const since = !force ? (localStorage.getItem(SYNC_TS_KEY) || "") : "";
+      const lastDay = localStorage.getItem(SYNC_DAY_KEY);
+      const localDay = currentChoreDayIso();
+      // If the last successful sync was on a prior chore-day, skip
+      // `since` so the server returns the full set (hot picks,
+      // today_visible, done_count_today all need a clean slate).
+      // The server has the same defense, but doing it client-side
+      // shaves a round-trip's worth of stale-render flicker.
+      const useSince = since && lastDay === localDay;
+      const url = useSince ? `/chores/sync?since=${encodeURIComponent(since)}` : "/chores/sync";
       const data = await api(url, "GET");
       reconcile(data);
       if (data.server_ts) localStorage.setItem(SYNC_TS_KEY, data.server_ts);
+      if (data.day_key) localStorage.setItem(SYNC_DAY_KEY, data.day_key);
       setSyncBadge(false);
     } catch (e) { setSyncBadge(false, true); }
     finally { syncInFlight = false; }
@@ -1620,11 +1640,35 @@
   // boot
   // ============================================================
   if (unifiedPage) {
-    ChoreStore.bootstrap(bootstrap.chores, bootstrap.lookahead);
-    if (bootstrap.server_ts) localStorage.setItem(SYNC_TS_KEY, bootstrap.server_ts);
+    // Only seed the store from bootstrap when the cached HTML is
+    // current. After the 4am rollover, SW-cached HTML still carries
+    // yesterday's hot picks / today_visible / lookahead — painting
+    // that briefly would surface exactly the stale-hot-strip bug the
+    // user reported. Empty containers + an immediate fullSync are a
+    // cleaner UX than flashing yesterday's data.
+    const cachedDay = bootstrap.day_key;
+    const localDay  = currentChoreDayIso();
+    if (cachedDay && cachedDay === localDay) {
+      ChoreStore.bootstrap(bootstrap.chores, bootstrap.lookahead);
+      if (bootstrap.server_ts) localStorage.setItem(SYNC_TS_KEY, bootstrap.server_ts);
+      localStorage.setItem(SYNC_DAY_KEY, cachedDay);
+    }
   }
   bindCardClicks();
   startTicker();
+  // Day rollover watcher: a tab left open across 4am needs a fresh
+  // sync to pick up new hot picks, today_visible flips, and the
+  // done_count reset. Cheap (one Date compare per minute); fires a
+  // forced fullSync exactly once when the boundary crosses.
+  let watchedDay = currentChoreDayIso();
+  setInterval(() => {
+    if (!unifiedPage) return;
+    const now = currentChoreDayIso();
+    if (now !== watchedDay) {
+      watchedDay = now;
+      fullSync({ force: true });
+    }
+  }, 60 * 1000);
   subscribeMonitor();
   flushQueue();
   if (unifiedPage) {

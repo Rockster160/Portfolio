@@ -183,6 +183,23 @@ RSpec.describe "Chores", type: :request do
     expect(body["server_ts"]).to be_present
   end
 
+  it "GET /chores/sync ignores a `since` from a prior chore-day and returns the full set" do
+    # Cross-day rollover: hot picks rotate, today_visible flips,
+    # done_count_today resets. A naïve `since`-filtered diff would
+    # leave yesterday's hot-strip lingering on the client.
+    untouched_yesterday = create(:chore, created_by_user: user, name: "Untouched")
+
+    travel_to Time.zone.local(2026, 4, 15, 12, 0, 0) do
+      get "/chores/sync?since=#{(Time.current - 1.day).iso8601}",
+          headers: { "Accept" => "application/json" }
+      body = JSON.parse(response.body)
+      ids = body["chores"].map { |c| c["id"] }
+      # Without the cross-day fix, the untouched chore would be
+      # filtered out (no updated_at change, no completions in window).
+      expect(ids).to include(untouched_yesterday.id)
+    end
+  end
+
   it "GET /chores/sync returns canonical chore JSON for changed chores" do
     keeper = create(:chore, created_by_user: user, name: "Vacuum")
     archived = create(:chore, created_by_user: user, name: "Old", archived_at: 1.hour.ago)

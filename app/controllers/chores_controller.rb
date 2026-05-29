@@ -82,6 +82,18 @@ class ChoresController < ApplicationController
     load_chore_page_data
     since_ts = parse_iso(params[:since])
 
+    # Cross-day sync: the incremental delta below only returns chores
+    # the user TOUCHED since `since_ts`. After the 4am ChoreDay
+    # boundary that's not enough — hot picks rotate, today's
+    # done_count_today resets to 0 for everything, today_visible
+    # flips for cooldown/scheduled chores, lookahead shifts a day.
+    # When the supplied timestamp lives in a prior chore-day, ignore
+    # it so the full set comes through. Cheap (one Date compare) and
+    # the chore-day boundary only crosses once per day.
+    if since_ts && ChoreDay.current(current_user, at: since_ts) != @day
+      since_ts = nil
+    end
+
     chosen = if since_ts
                touched_ids = ChoreCompletion
                  .where(user_id: current_user.id, completed_at: since_ts..)
