@@ -75,6 +75,35 @@ RSpec.describe "Chores", type: :request do
     expect(completion.reload.paid_pebbles).to eq(8)
   end
 
+  it "PATCH /chores/completions/:id stores hot_multiplier, total_multiplier, and hot_pick flag verbatim" do
+    chore = create(:chore, created_by_user: user, reward_pebbles: 5)
+    completion = create(:chore_completion, chore: chore, user: user,
+      paid_pebbles: 5, hot_multiplier: 1.0, total_multiplier: 1.0, metadata: {})
+    patch "/chores/completions/#{completion.id}",
+      params: { chore_completion: { hot_multiplier: 2.0, total_multiplier: 2.5, hot_pick: true } }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+    expect(response).to have_http_status(:ok)
+    completion.reload
+    # Multipliers are stored as historical record — not auto-applied
+    # to paid_pebbles (which stays at its prior 5).
+    expect(completion.hot_multiplier).to eq(2.0)
+    expect(completion.total_multiplier).to eq(2.5)
+    expect(completion.metadata["hot_pick"]).to be(true)
+    expect(completion.paid_pebbles).to eq(5)
+  end
+
+  it "PATCH preserves existing metadata keys when toggling hot_pick" do
+    chore = create(:chore, created_by_user: user)
+    completion = create(:chore_completion, chore: chore, user: user,
+      metadata: { "chore_name" => "Walk", "short_name" => "W" })
+    patch "/chores/completions/#{completion.id}",
+      params: { chore_completion: { hot_pick: true } }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+    completion.reload
+    expect(completion.metadata["hot_pick"]).to be(true)
+    expect(completion.metadata["chore_name"]).to eq("Walk")
+  end
+
   it "PATCH /chores/completions/:id can change timestamp + note, day_key recomputes" do
     chore = create(:chore, created_by_user: user, reward_pebbles: 5)
     completion = create(:chore_completion, chore: chore, user: user, paid_pebbles: 5)
@@ -108,7 +137,7 @@ RSpec.describe "Chores", type: :request do
     expect(response.body).not_to include("Brush kitty")
   end
 
-  it "GET /chores/history reports total count + page metadata" do
+  it "GET /chores/history summary shows per-page counts (left), page (center), window/total (right)" do
     chore = create(:chore, created_by_user: user, name: "Walk")
     60.times { |i|
       create(:chore_completion, chore: chore, user: user,
@@ -116,9 +145,22 @@ RSpec.describe "Chores", type: :request do
     }
     get chores_history_path
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include("of <strong>60</strong>")
+    # Center: page navigation focal point.
     expect(response.body).to include("Page <strong>1</strong>")
     expect(response.body).to include("of <strong>2</strong>")
+    # Left: per-page pluralized counts (50 of this page's 50 entries).
+    expect(response.body).to include("50 completions")
+    # Right: absolute window over total.
+    expect(response.body).to include("1&ndash;50 / 60")
+  end
+
+  it "history summary pluralizes singular counts correctly" do
+    chore = create(:chore, created_by_user: user, name: "Walk")
+    create(:chore_completion, chore: chore, user: user)
+    create(:chore_withdrawal, user: user)
+    get chores_history_path
+    expect(response.body).to include("1 completion,")
+    expect(response.body).to include("1 withdrawal")
   end
 
   it "GET /chores/history mixes completions + withdrawals newest first" do
@@ -181,6 +223,49 @@ RSpec.describe "Chores", type: :request do
     expect(body["chore"]["last_completed_at"]).to be_present
     expect(body["chore"]["today_visible"]).to be(true).or be(false)
     expect(body["server_ts"]).to be_present
+  end
+
+  it "editing a completion today → yesterday recomputes cooldown, today_visible, streak, sync visibility" do
+    chore = create(:chore, created_by_user: user, name: "Spray", reward_pebbles: 3,
+                           threshold_seconds: 6 * 3600,
+                           show_on_daily_view: :when_available,
+                           recurrence: { freq: :never })
+    travel_to Time.zone.local(2026, 4, 15, 14, 0, 0) do
+      result = ChoreCompleter.new(chore, user).call
+      completion = result.completion
+      # Before the edit: completed today → today_visible via frozen
+      # layout, cooldown still ticking.
+      pre = ChoreSerializer.new(chore, viewer: user).as_json
+      expect(pre[:done_count_today]).to eq(1)
+      expect(pre[:today_visible]).to be(true)
+
+      since_ts = Time.current
+      travel 30.minutes
+      yesterday = Time.current - 1.day
+
+      patch "/chores/completions/#{completion.id}",
+        params: { chore_completion: { completed_at: yesterday.iso8601 } }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+      expect(response).to have_http_status(:ok)
+
+      # Response payload's canonical chore JSON reflects the edit.
+      body = JSON.parse(response.body)
+      expect(body["chore"]["done_count_today"]).to eq(0)
+      # Cooldown elapsed (yesterday 2pm + 6h was long ago) — for
+      # `when_available` the card stays today_visible: true.
+      expect(body["chore"]["today_visible"]).to be(true)
+
+      # Streak rebuilt: day_key moved to yesterday's chore-day.
+      streak = ChoreStreak.find_by(user_id: user.id, chore_id: chore.id)
+      expect(streak.last_completed_day).to eq(ChoreDay.current(user, at: yesterday))
+
+      # Sync's incremental filter catches the backwards-moved edit
+      # via updated_at, not just completed_at.
+      get "/chores/sync?since=#{since_ts.iso8601}",
+        headers: { "Accept" => "application/json" }
+      sync = JSON.parse(response.body)
+      expect(sync["chores"].map { |c| c["id"] }).to include(chore.id)
+    end
   end
 
   it "GET /chores/sync ignores a `since` from a prior chore-day and returns the full set" do

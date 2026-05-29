@@ -54,6 +54,16 @@
     const f = Number(n);
     return f === Math.floor(f) ? String(Math.floor(f)) : String(f);
   }
+  // Thousands delimiter for any visible count (balance pill, etc.).
+  // Mirrors Rails `number_with_delimiter` in the views so the JS-
+  // updated balance never desynces visually from a server-rendered
+  // page (1,234p in HTML, 1,234p after applyBalance).
+  function formatCount(n) {
+    if (n == null) return "";
+    const f = Number(n);
+    if (!Number.isFinite(f)) return "";
+    return f.toLocaleString();
+  }
   async function api(url, method, body) {
     const res = await fetch(url, {
       method,
@@ -611,8 +621,8 @@
         { client_completed_at: clickAt, tab_id: TAB_ID });
       reconcile(data);
       if (data.skipped) flash(data.skipped_reason || "Cooldown — no payout", "warn");
-      else if (data.paid) flash(`+${data.paid}p`);
-      (data.awarded_achievements || []).forEach(a => flash(`🏆 ${a.name} +${a.pebbles}p`, "ok"));
+      else if (data.paid) flash(`+${formatCount(data.paid)}p`);
+      (data.awarded_achievements || []).forEach(a => flash(`🏆 ${a.name} +${formatCount(a.pebbles)}p`, "ok"));
     } catch (err) {
       if (isTransientError(err)) {
         // Network / rate-limit / upstream-503: queue so the next flush
@@ -708,7 +718,7 @@
     const el = document.querySelector("[data-balance]");
     if (!el) return;
     const v = root?.dataset.balanceToday;
-    if (v != null) el.textContent = v;
+    if (v != null) el.textContent = formatCount(v);
   }
 
   // ============================================================
@@ -1425,7 +1435,7 @@
     if (Number.isNaN(amount) || amount <= 0) { flash("Enter a positive amount", "warn"); return; }
     try {
       const data = await api("/chores/withdrawals", "POST", { chore_withdrawal: entries });
-      flash(`Withdrew ${data.amount_pebbles}p`);
+      flash(`Withdrew ${formatCount(data.amount_pebbles)}p`);
       setTimeout(() => location.reload(), 250);
     } catch (err) { flash("Withdraw failed: " + err.message, "error"); }
   });

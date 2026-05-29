@@ -15,11 +15,20 @@
     <% if @total_count.zero? %>
       <span>No matching history.</span>
     <% else %>
+      <% page_completions = @entries.count { |e| e.is_a?(ChoreCompletion) } %>
+      <% page_withdrawals = @entries.size - page_completions %>
       <% from = (@page - 1) * @per + 1 %>
       <% to   = [@page * @per, @total_count].min %>
-      Showing <%= from %>–<%= to %> of <strong><%= @total_count %></strong>
-      &middot; Page <strong><%= @page %></strong> of <strong><%= @total_pages %></strong>
-      <span class="dim">(<%= @completion_count %> completions, <%= @withdrawal_count %> withdrawals)</span>
+      <span class="history-summary-left dim">
+        Showing <%= pluralize(page_completions, "completion") %>,
+        <%= pluralize(page_withdrawals, "withdrawal") %>
+      </span>
+      <span class="history-summary-mid">
+        Page <strong><%= @page %></strong> of <strong><%= @total_pages %></strong>
+      </span>
+      <span class="history-summary-right dim">
+        <%= format_count(from) %>&ndash;<%= format_count(to) %> / <%= format_count(@total_count) %>
+      </span>
     <% end %>
   </div>
 
@@ -36,9 +45,10 @@
                data-completed-at="<%= entry.completed_at.iso8601 %>"
                data-note="<%= entry.note %>"
                data-hot="<%= entry.metadata['hot_pick'] || false %>"
+               data-hot-multiplier="<%= entry.hot_multiplier %>"
+               data-total-multiplier="<%= entry.total_multiplier %>"
                data-skipped="<%= entry.payout_skipped %>"
-               data-skipped-reason="<%= entry.skipped_reason %>"
-               data-multiplier="<%= entry.total_multiplier %>">
+               data-skipped-reason="<%= entry.skipped_reason %>">
             <span class="history-when-name">
               <span class="history-when"><%= entry.completed_at.strftime("%b %-d %l:%M%P") %></span>
               ·
@@ -49,7 +59,7 @@
             </span>
             <span class="history-amount-cell">
               <span class="history-amount" style="color:<%= entry.payout_skipped ? '#9CA3AF' : '#34D399' %>;">
-                <%= entry.payout_skipped ? "(skipped)" : "+#{entry.paid_pebbles}p" %>
+                <%= entry.payout_skipped ? "(skipped)" : format_pebbles(entry.paid_pebbles, sign: :explicit) %>
               </span>
               <button type="button" class="history-edit" data-edit-completion title="Edit">
                 <i class="fa fa-pencil" aria-hidden="true"></i>
@@ -68,7 +78,7 @@
               <% if entry.note.present? %><span class="history-note">— <%= entry.note.truncate(40) %></span><% end %>
             </span>
             <span class="history-amount-cell">
-              <span class="history-amount" style="color:#FCA5A5;">−<%= entry.amount_pebbles %>p</span>
+              <span class="history-amount" style="color:#FCA5A5;"><%= format_pebbles(-entry.amount_pebbles, sign: :explicit) %></span>
               <button type="button" class="history-edit" data-delete-withdrawal title="Delete">
                 <i class="fa fa-times" aria-hidden="true"></i>
               </button>
@@ -104,9 +114,26 @@
           <span class="detail-label">Base reward</span>
           <span><span data-modal-base>0</span>p</span>
         </div>
+        <%# Multipliers — pills above the divider, single row. Hot /
+          Total are click-to-edit (prompt for a new value); Hot pick
+          is a click-to-toggle. These fields are historical record
+          only, never applied to paid_pebbles. %>
         <div class="detail-row">
-          <span class="detail-label">Multiplier</span>
-          <span><span data-modal-mult>1.0</span>×</span>
+          <span class="detail-label">Multipliers</span>
+          <div class="mult-pills">
+            <button type="button" class="mult-pill" data-mult-edit="hot" title="Tap to set hot multiplier">
+              Hot <strong data-mult-display-hot>1</strong>×
+            </button>
+            <button type="button" class="mult-pill" data-mult-edit="total" title="Tap to set total multiplier">
+              Total <strong data-mult-display-total>1</strong>×
+            </button>
+            <button type="button" class="mult-pill mult-pill-toggle" data-modal-hot-pick-toggle aria-pressed="false">
+              <i class="fa fa-fire" aria-hidden="true"></i> Hot pick
+            </button>
+            <input type="hidden" data-modal-hot-mult value="1">
+            <input type="hidden" data-modal-total-mult value="1">
+            <input type="hidden" data-modal-hot-pick value="false">
+          </div>
         </div>
         <div class="detail-row" data-modal-skipped-row hidden>
           <span class="detail-label">Skipped</span>
@@ -138,6 +165,13 @@
 <% content_for :after_body do %>
   <script type="module">
     const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || "";
+    // Mirror Rails `number_with_delimiter` so JS updates to
+    // `[data-balance]` stay consistent with the server-rendered
+    // "1,234p" formatting after a withdrawal delete / completion edit.
+    function formatCount(n) {
+      const f = Number(n);
+      return Number.isFinite(f) ? f.toLocaleString() : "";
+    }
     async function api(url, method, body) {
       const res = await fetch(url, {
         method,
@@ -167,6 +201,43 @@
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
+    // Drop trailing ".0" — keep "2.5×" but render "2×" for whole numbers.
+    function formatMult(v) {
+      const f = Number(v);
+      if (!Number.isFinite(f)) return "1";
+      return f === Math.floor(f) ? String(Math.floor(f)) : String(f);
+    }
+    function setMultPill(kind, value) {
+      const v = Number.isFinite(value) ? value : 1;
+      modal.querySelector(`[data-modal-${kind === "hot" ? "hot" : "total"}-mult]`).value = v;
+      modal.querySelector(`[data-mult-display-${kind}]`).textContent = formatMult(v);
+    }
+    function setHotPick(on) {
+      modal.querySelector('[data-modal-hot-pick]').value = on ? "true" : "false";
+      const btn = modal.querySelector('[data-modal-hot-pick-toggle]');
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.classList.toggle("active", !!on);
+    }
+    // Click-to-edit on the Hot / Total pills via prompt. Cheap UX
+    // pattern that keeps the row compact — these fields are edited
+    // very rarely and dedicating an inline input each would make the
+    // modal tall again.
+    modal.querySelectorAll('[data-mult-edit]').forEach(btn => {
+      btn.addEventListener("click", () => {
+        const kind = btn.dataset.multEdit; // "hot" | "total"
+        const current = modal.querySelector(`[data-modal-${kind === "hot" ? "hot" : "total"}-mult]`).value;
+        const raw = prompt(`${kind === "hot" ? "Hot" : "Total"} multiplier:`, current);
+        if (raw == null) return;
+        const next = parseFloat(raw);
+        if (!Number.isFinite(next) || next < 0) { flash("Bad multiplier", "error"); return; }
+        setMultPill(kind, next);
+      });
+    });
+    modal.querySelector('[data-modal-hot-pick-toggle]').addEventListener("click", () => {
+      const current = modal.querySelector('[data-modal-hot-pick]').value === "true";
+      setHotPick(!current);
+    });
+
     function openModal(row) {
       currentRow = row;
       const ds = row.dataset;
@@ -180,9 +251,11 @@
       if (modalIcon) modalIcon.innerHTML = sourceIcon ? sourceIcon.innerHTML : "🧹";
       modal.querySelector('[data-modal-name]').textContent = ds.choreName;
       modal.querySelector('[data-modal-base]').textContent = ds.base || "0";
-      modal.querySelector('[data-modal-mult]').textContent = parseFloat(ds.multiplier || "1").toFixed(2);
       modal.querySelector('[data-modal-completed-at]').value = toLocalInputValue(ds.completedAt);
       modal.querySelector('[data-modal-amount]').value = ds.paid || "0";
+      setMultPill("hot",   parseFloat(ds.hotMultiplier   || "1"));
+      setMultPill("total", parseFloat(ds.totalMultiplier || "1"));
+      setHotPick(ds.hot === "true");
       modal.querySelector('[data-modal-note]').value = ds.note || "";
       const skippedRow = modal.querySelector('[data-modal-skipped-row]');
       if (ds.skipped === "true") {
@@ -204,7 +277,7 @@
         const row = btn.closest('[data-withdrawal-id]');
         try {
           const data = await api(`/chores/withdrawals/${row.dataset.withdrawalId}`, "DELETE");
-          if (data?.balance != null) document.querySelector('[data-balance]').textContent = data.balance;
+          if (data?.balance != null) document.querySelector('[data-balance]').textContent = formatCount(data.balance);
           row.remove();
           flash("Removed", "warn");
         } catch (e) { flash("Delete failed: " + e.message, "error"); }
@@ -219,20 +292,77 @@
       const note = modal.querySelector('[data-modal-note]').value;
       const completedLocal = modal.querySelector('[data-modal-completed-at]').value;
       if (Number.isNaN(amount) || amount < 0) { flash("Bad amount", "error"); return; }
-      const payload = { chore_completion: { paid_pebbles: amount, note: note } };
+      const hotMult   = parseFloat(modal.querySelector('[data-modal-hot-mult]').value);
+      const totalMult = parseFloat(modal.querySelector('[data-modal-total-mult]').value);
+      const hotPick   = modal.querySelector('[data-modal-hot-pick]').value === "true";
+      const payload = {
+        chore_completion: {
+          paid_pebbles: amount,
+          note: note,
+          hot_multiplier: Number.isFinite(hotMult) ? hotMult : 1,
+          total_multiplier: Number.isFinite(totalMult) ? totalMult : 1,
+          hot_pick: hotPick,
+        },
+      };
       if (completedLocal) payload.chore_completion.completed_at = new Date(completedLocal).toISOString();
       try {
         const data = await api(`/chores/completions/${currentRow.dataset.completionId}`, "PATCH", payload);
-        document.querySelector('[data-balance]').textContent = data.balance;
+        document.querySelector('[data-balance]').textContent = formatCount(data.today_earnings ?? data.balance);
         currentRow.dataset.paid = amount;
         currentRow.dataset.note = note;
-        if (completedLocal) currentRow.dataset.completedAt = new Date(completedLocal).toISOString();
+        currentRow.dataset.hotMultiplier = String(payload.chore_completion.hot_multiplier);
+        currentRow.dataset.totalMultiplier = String(payload.chore_completion.total_multiplier);
+        currentRow.dataset.hot = String(hotPick);
+        // Note text: create / update / remove the visible note span to
+        // match the new value. The server template only emits the span
+        // when a note exists, so we have to build or strip it here.
+        const whenNameEl = currentRow.querySelector(".history-when-name");
+        let noteEl = currentRow.querySelector(".history-note");
+        if (note && note.trim()) {
+          if (!noteEl) {
+            noteEl = document.createElement("span");
+            noteEl.className = "history-note";
+            whenNameEl?.appendChild(noteEl);
+          }
+          // Match the server's `.truncate(40)` for visual parity.
+          const truncated = note.length > 40 ? note.slice(0, 37) + "..." : note;
+          noteEl.textContent = "— " + truncated;
+        } else if (noteEl) {
+          noteEl.remove();
+        }
+        // Hot tag: mirror the toggle into the visible `.history-tag.hot`.
+        let hotTagEl = currentRow.querySelector(".history-tag.hot");
+        if (hotPick) {
+          if (!hotTagEl) {
+            hotTagEl = document.createElement("span");
+            hotTagEl.className = "history-tag hot";
+            hotTagEl.textContent = "hot";
+            whenNameEl?.insertBefore(hotTagEl, noteEl || null);
+          }
+        } else if (hotTagEl) {
+          hotTagEl.remove();
+        }
+        if (completedLocal) {
+          const iso = new Date(completedLocal).toISOString();
+          currentRow.dataset.completedAt = iso;
+          // Visible timestamp didn't update without this — user would
+          // see the old time until reload.
+          const whenEl = currentRow.querySelector(".history-when");
+          if (whenEl) {
+            const d = new Date(iso);
+            const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            let h = d.getHours(), ampm = h >= 12 ? "pm" : "am";
+            h = h % 12; if (h === 0) h = 12;
+            const m = String(d.getMinutes()).padStart(2, "0");
+            whenEl.textContent = `${months[d.getMonth()]} ${d.getDate()} ${h}:${m}${ampm}`;
+          }
+        }
         // Display the newly-saved amount. If user set it to >0, the
         // row should no longer read "(skipped)" — show the new value.
         const amtEl = currentRow.querySelector(".history-amount");
         if (amtEl) {
           if (amount > 0) {
-            amtEl.textContent = `+${amount}p`;
+            amtEl.textContent = `+${formatCount(amount)}p`;
             amtEl.style.color = "#34D399";
             currentRow.dataset.skipped = "false";
           } else {

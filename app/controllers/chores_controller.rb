@@ -95,8 +95,16 @@ class ChoresController < ApplicationController
     end
 
     chosen = if since_ts
+               # Include completions whose record was TOUCHED since
+               # since_ts (updated_at) in addition to those whose
+               # completed_at landed since then. Edits that move a
+               # completion BACKWARDS in time (today → yesterday on
+               # History) leave completed_at < since_ts but bump
+               # updated_at — without the OR they'd be invisible to
+               # an offline tab catching up later.
                touched_ids = ChoreCompletion
-                 .where(user_id: current_user.id, completed_at: since_ts..)
+                 .where(user_id: current_user.id)
+                 .where("completed_at >= :ts OR updated_at >= :ts", ts: since_ts)
                  .distinct.pluck(:chore_id).to_set
                @chores.select { |c| c.updated_at > since_ts || touched_ids.include?(c.id) }
              else

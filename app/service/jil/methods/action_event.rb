@@ -38,15 +38,27 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   def execute(line)
     method_sym = line.methodname.to_s.underscore.gsub(/[^\w]/, "").to_sym
     case method_sym
-    when :id, *PERMIT_ATTRS
+    when :id, :action, *PERMIT_ATTRS
       case token_class(line.objname)
       when :ActionEvent
         token_val(line.objname)[method_sym]
       when :ActionEventData
         send(method_sym, *evalargs(line.args))
       end
+    when :matches
+      matches_query?(token_val(line.objname), evalarg(line.args.first))
     else fallback(line)
     end
+  end
+
+  # Evaluate a Tokenizing search query (e.g. "name::Whisper notes::Up")
+  # against the given event using the same parser the .query() scope
+  # uses for AR searches. Blank query returns true.
+  def matches_query?(event, query)
+    return false if event.nil?
+    return true if query.to_s.blank?
+
+    @jil.user.action_events.query(query.to_s).where(id: event.id).exists?
   end
 
   def update!(event_data, details)

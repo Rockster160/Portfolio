@@ -5,7 +5,7 @@
 
   <div class="balance-card">
     <div class="balance-label">Pebbles available</div>
-    <div class="balance-amount"><span data-balance><%= @balance %></span>p</div>
+    <div class="balance-amount"><span data-balance><%= format_count(@balance) %></span>p</div>
   </div>
 
   <h3>Goals</h3>
@@ -16,7 +16,7 @@
       <div class="goal-row" data-goal-id="<%= goal.id %>">
         <div class="row-flex">
           <strong><%= goal.name %></strong>
-          <span><%= @balance %>p / <%= goal.cost_pebbles %>p</span>
+          <span><%= format_pebbles(@balance) %> / <%= format_pebbles(goal.cost_pebbles) %></span>
         </div>
         <div class="progress-track"><div class="progress-fill" style="width: <%= pct %>%;"></div></div>
         <div class="row-flex">
@@ -45,7 +45,7 @@
         <% if @earned_ids.include?(ach.id) %>
           <span style="color:var(--chores-done);font-weight:600;">Earned</span>
         <% elsif ach.reward_pebbles > 0 %>
-          <span><%= ach.reward_pebbles %>p</span>
+          <span><%= format_pebbles(ach.reward_pebbles) %></span>
         <% elsif ach.reward_link.present? %>
           <a class="goal-link" href="<%= ach.reward_link %>" target="_blank" rel="noopener">Reward</a>
         <% end %>
@@ -95,7 +95,7 @@
             <% if entry.note.present? %><span class="history-note">— <%= entry.note.truncate(40) %></span><% end %>
           </span>
           <span style="color:<%= entry.payout_skipped ? '#9CA3AF' : '#34D399' %>;">
-            <%= entry.payout_skipped ? "(skipped)" : "+#{entry.paid_pebbles}p" %>
+            <%= entry.payout_skipped ? "(skipped)" : format_pebbles(entry.paid_pebbles, sign: :explicit) %>
           </span>
         </div>
       <% else %>
@@ -105,7 +105,7 @@
             🪙 <strong>Withdraw</strong>
             <% if entry.note.present? %><span class="history-note">— <%= entry.note.truncate(40) %></span><% end %>
           </span>
-          <span style="color:#FCA5A5;">−<%= entry.amount_pebbles %>p</span>
+          <span style="color:#FCA5A5;"><%= format_pebbles(-entry.amount_pebbles, sign: :explicit) %></span>
         </div>
       <% end %>
   <% end %>

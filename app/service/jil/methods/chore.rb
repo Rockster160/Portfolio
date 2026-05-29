@@ -65,6 +65,46 @@ class Jil::Methods::Chore < Jil::Methods::Base
     true
   end
 
+  # Chore.sync_event(name, event[, query]) → mirror an ActionEvent's
+  # lifecycle as a ChoreCompletion. Uses metadata.source = {
+  # type: "action_event", id: <event_id> } as the link so future
+  # change/remove triggers find the right completion.
+  #
+  #   * action :added / :changed — create the linked completion at the
+  #     event's timestamp, or update an existing linked one. If no link
+  #     exists but a same-day completion does, adopt it (no duplicate).
+  #     If the event no longer matches `query`, unlink/destroy the
+  #     previously linked completion (e.g. notes edited to drop the
+  #     training marker).
+  #   * action :removed — destroy the linked completion (if any).
+  #
+  # `query` (optional String) — a Tokenizing search query such as
+  # `"name::Whisper notes::Up"` or `"name::Wordle"`. Evaluated against
+  # the event via the same parser that powers `.query()` on the model,
+  # so it supports AND/OR/NOT/regex/exact/substring operators.
+  # When blank, the chore is synced unconditionally on every event
+  # (only useful if callers pre-filter via the listener).
+  #
+  # Returns true if a change was made.
+  def sync_event(name_or_chore, event, query = nil)
+    ae = load_action_event(event)
+    return false if ae.nil? || ae.id.blank?
+
+    chore = load_chore(name_or_chore)
+    return false if chore.nil?
+
+    action = ae.execution_attrs.is_a?(::Hash) ? ae.execution_attrs[:action] : nil
+    matches = event_matches_query?(ae, query)
+
+    case action&.to_sym
+    when :added, :changed
+      matches ? sync_upsert(chore, ae) : sync_remove(chore, ae)
+    when :removed
+      sync_remove(chore, ae)
+    else false
+    end
+  end
+
   # Chore.balance → lifetime balance (pebbles earned - withdrawn).
   def balance
     @jil.user.chore_balance
@@ -112,6 +152,67 @@ class Jil::Methods::Chore < Jil::Methods::Base
   rescue ArgumentError, TypeError
     nil
   end
+
+  def load_action_event(value)
+    return nil if value.nil?
+    return value if value.is_a?(::ActionEvent)
+    return @jil.user.action_events.find_by(id: value) if value.is_a?(::Numeric)
+
+    id = @jil.cast(value, :Hash)[:id]
+    return nil if id.blank?
+
+    @jil.user.action_events.find_by(id: id)
+  end
+
+  def sync_upsert(chore, ae)
+    at = parse_time(ae.timestamp) || Time.current
+    day = ChoreDay.current(@jil.user, at: at)
+
+    linked = linked_completion(chore, ae)
+    if linked
+      linked.update!(completed_at: at, day_key: day)
+      return true
+    end
+
+    same_day = @jil.user.chore_completions.find_by(chore_id: chore.id, day_key: day)
+    if same_day
+      same_day.update!(metadata: stamp_source(same_day.metadata, ae))
+      return false
+    end
+
+    completion = ::ChoreCompleter.new(chore, @jil.user, at: at).call.completion
+    completion.update!(metadata: stamp_source(completion.metadata, ae))
+    true
+  end
+
+  def sync_remove(chore, ae)
+    linked = linked_completion(chore, ae)
+    return false if linked.nil?
+
+    linked.destroy!
+    true
+  end
+
+  def linked_completion(chore, ae)
+    @jil.user.chore_completions
+      .where(chore_id: chore.id)
+      .where("metadata #>> '{source,type}' = ?", "action_event")
+      .where("(metadata #>> '{source,id}')::bigint = ?", ae.id)
+      .first
+  end
+
+  def stamp_source(existing, ae)
+    (existing || {}).merge(source: { type: "action_event", id: ae.id })
+  end
+
+  def event_matches_query?(ae, query)
+    return true if query.to_s.blank?
+
+    @jil.user.action_events.query(query.to_s).where(id: ae.id).exists?
+  rescue StandardError => e
+    Rails.logger.error("[Chore.sync_event] query failed (#{query.inspect}): #{e.class} #{e.message}")
+    false
+  end
 end
 
 # [Chore]
@@ -121,10 +222,19 @@ end
 #   #complete(String)::ChoreCompletion
 #   #complete(String, String:timestamp)::ChoreCompletion
 #   #uncomplete(String)::Boolean
+#   #sync_event(String:"Chore Name" ActionEvent String?:"Query")::Boolean
 #   #balance::Integer
 #   #today_earnings::Integer
 #
-# Wiring an event → chore mapping is done in Jil itself: write a task
-# with listener `event name:food:vitamins action:added` whose body calls
-# `Chore.complete("Vitamins")`. The Chore model fires `chore` /
-# `chore_completion` triggers on its own lifecycle.
+# Wiring an event → chore mapping is done in Jil itself. Two patterns:
+#
+#   * Targeted task per event: listener
+#     `event name:food:vitamins action:added` calls `Chore.complete(...)`.
+#   * Mapping task: listener `event` with a single hash of
+#     ActionEvent.name → Chore.name. Call
+#     `Chore.sync_event(map.get(event.name), event)` and it idempotently
+#     handles added/changed/removed via the completion's
+#     `metadata.source = { type: "action_event", id: <id> }` link.
+#
+# The Chore model fires `chore` / `chore_completion` triggers on its
+# own lifecycle.

@@ -59,6 +59,27 @@ RSpec.describe Jil::Methods::ActionEvent do
     end
   end
 
+  describe ".action (exposed via Jilable execution_attrs)" do
+    let(:code) {
+      <<~JIL
+        act = Global.input_data()::ActionEvent
+        actStr = act.action()::String
+      JIL
+    }
+
+    it "exposes the trigger action symbol as a String to Jil" do
+      event = user.action_events.create(name: "Wordle").with_jil_attrs(action: :added)
+      ctx = Jil::Executor.call(user, code, event).ctx
+      expect(ctx.dig(:vars, :actStr, :value)).to eq("added")
+    end
+
+    it "returns blank when no action attr was set" do
+      event = user.action_events.create(name: "Bare")
+      ctx = Jil::Executor.call(user, code, event).ctx
+      expect(ctx.dig(:vars, :actStr, :value)).to be_blank
+    end
+  end
+
   describe "#add" do
     let(:code) { "q9693 = ActionEvent.add(\"Thing\")::ActionEvent" }
 

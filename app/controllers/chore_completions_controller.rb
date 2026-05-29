@@ -27,7 +27,27 @@ class ChoreCompletionsController < ApplicationController
 
   def update
     completion = current_user.chore_completions.find(params[:id])
-    if completion.update(completion_params)
+    prev_day_key = completion.day_key
+    prev_payout_skipped = completion.payout_skipped
+    attrs = completion_params
+    # `hot_pick` lives in the jsonb metadata blob — merge rather than
+    # permit metadata wholesale (we don't want the client setting
+    # arbitrary keys). Multipliers are flat columns, already permitted
+    # via `completion_params`; they're stored as historical record and
+    # never auto-applied to paid_pebbles.
+    raw = params.require(:chore_completion)
+    if raw.key?(:hot_pick)
+      flag = ActiveModel::Type::Boolean.new.cast(raw[:hot_pick])
+      attrs[:metadata] = (completion.metadata || {}).merge("hot_pick" => flag)
+    end
+    if completion.update(attrs)
+      # Moving a completion across days (e.g. History edit: today→yesterday)
+      # or flipping payout_skipped invalidates the streak counter — rebuild
+      # from scratch like the destroy paths do. Without this, the streak
+      # could keep counting yesterday's day_key as today's.
+      if completion.day_key != prev_day_key || completion.payout_skipped != prev_payout_skipped
+        rebuild_streak(completion.chore, prev_day_key)
+      end
       ChoreBroadcaster.broadcast_changes!(current_user, completion.chore)
       render json: response_payload(completion.chore, completion).merge(balance: current_user.chore_balance)
     else
@@ -69,7 +89,10 @@ class ChoreCompletionsController < ApplicationController
   end
 
   def completion_params
-    perms = params.require(:chore_completion).permit(:paid_pebbles, :completed_at, :payout_skipped, :note)
+    perms = params.require(:chore_completion).permit(
+      :paid_pebbles, :completed_at, :payout_skipped, :note,
+      :hot_multiplier, :total_multiplier,
+    )
     # If user changed the timestamp, recompute the chore-day key so
     # streaks / hot-pick joins all stay correct.
     if perms[:completed_at].present?

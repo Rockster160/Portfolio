@@ -21,6 +21,25 @@ module ChoresHelper
     current_user.chore_balance_breakdown(day)[:today_earnings]
   end
 
+  # `1,234p` with thousands delimiter. Unit "p" never pluralizes (it's
+  # an abbreviation like "kg"). Pass `sign: :explicit` to surface a
+  # leading "+" / "-" for entry rows.
+  def format_pebbles(value, sign: :default)
+    n = value.to_i
+    formatted = number_with_delimiter(n.abs)
+    prefix = case sign
+             when :explicit then (n.positive? ? "+" : n.negative? ? "−" : "")
+             else (n.negative? ? "−" : "")
+             end
+    "#{prefix}#{formatted}p"
+  end
+
+  # `1,234` with thousands delimiter — bare count, no pebble suffix.
+  # Used for totals (history summary right column, etc.).
+  def format_count(value)
+    number_with_delimiter(value.to_i)
+  end
+
   # An icon may be:
   #   * a plain emoji string (most chores)
   #   * a data URL (`data:image/png;base64,...`) — uploaded image

@@ -268,7 +268,7 @@ RSpec.describe Task do
     end
   end
 
-  context "Task 346 -  Doorbell Rung" do
+  context "Task 346 - Doorbell Rung" do
     let(:listener) { "hass-sensor:location:doorbell type:rang rang:true" }
 
     before do

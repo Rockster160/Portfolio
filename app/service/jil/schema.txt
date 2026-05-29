@@ -267,8 +267,20 @@
   .notes::String
   .data::Hash
   .timestamp::Date
+  .action::String
+  .matches?(String:"Query")::Boolean
   .update!(content(ActionEventData))
   .destroy::Boolean
+[Chore]
+  #find(String:Name)::Chore
+  #scheduled_today::Array
+  #accessible::Array
+  #complete(String:Name)::ChoreCompletion
+  #complete(String:Name Date:Timestamp)::ChoreCompletion
+  #uncomplete(String:Name)::Boolean
+  #sync_event(String:"Chore Name" ActionEvent String?:"Query")::Boolean
+  #balance::Numeric
+  #today_earnings::Numeric
 *[ActionEventData]
   #name(String)
   #notes(String)
