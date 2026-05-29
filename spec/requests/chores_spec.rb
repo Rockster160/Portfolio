@@ -295,6 +295,20 @@ RSpec.describe "Chores", type: :request do
     expect(response.body).not_to match(/balance-amount.*data-balance[^-]/)
   end
 
+  it "GET /chores/sync lookahead emits all 7 days, even when no chores are scheduled" do
+    # No scheduled chores → every day in the 7-day window is still
+    # present as an empty array. Otherwise the client renders the
+    # next non-empty day at the top and the user reads it as
+    # "tomorrow."
+    create(:chore, created_by_user: user, one_off: true, name: "today only")
+    get "/chores/sync", headers: { "Accept" => "application/json" }
+    body = JSON.parse(response.body)
+    today = ChoreDay.current(user)
+    expected_keys = ((today + 1)..(today + 7)).map(&:iso8601)
+    expect(body["lookahead"].keys.sort).to eq(expected_keys.sort)
+    expect(body["lookahead"].values).to all(eq([]))
+  end
+
   it "POST completion accepts overrides from an edited pending push" do
     chore = create(:chore, created_by_user: user, reward_pebbles: 5)
     when_at = Time.current.change(usec: 0) - 30.minutes

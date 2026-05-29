@@ -275,10 +275,10 @@
   #find(String:Name)::Chore
   #scheduled_today::Array
   #accessible::Array
-  #complete(String:Name)::ChoreCompletion
-  #complete(String:Name Date:Timestamp)::ChoreCompletion
+  #complete(String:Name Date?:Timestamp)::ChoreCompletion
   #uncomplete(String:Name)::Boolean
-  #sync_event(String:"Chore Name" ActionEvent String?:"Query")::Boolean
+  #sync_event(String:"Chore Name" ActionEvent Hash?:"Event Attrs")::Boolean
+  #sync_completion(String:"Chore Name" Hash:"Completion" Hash:"Event Attrs")::Boolean
   #balance::Numeric
   #today_earnings::Numeric
 *[ActionEventData]

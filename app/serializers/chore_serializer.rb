@@ -24,31 +24,31 @@ class ChoreSerializer
 
   def as_json(*)
     {
-      id: chore.id,
-      name: chore.name,
-      short_name: chore.short_name.presence || chore.name,
-      icon: chore.icon,
-      icon_kind: icon_kind, # "emoji" | "image" | "svg" | "empty"
-      aliases: chore.aliases_array,
-      reward_pebbles: chore.reward_pebbles,
-      reward_label: chore.reward_label,
-      threshold_seconds: chore.threshold_seconds,
-      cooldown_kind: cooldown_kind, # "none" | "fixed" | "day_reset"
-      one_off: chore.one_off,
-      sharing_mode: chore.sharing_mode,
+      id:                  chore.id,
+      name:                chore.name,
+      short_name:          chore.short_name.presence || chore.name,
+      icon:                chore.icon,
+      icon_kind:           icon_kind, # "emoji" | "image" | "svg" | "empty"
+      aliases:             chore.aliases_array,
+      reward_pebbles:      chore.reward_pebbles,
+      reward_label:        chore.reward_label,
+      threshold_seconds:   chore.threshold_seconds,
+      cooldown_kind:       cooldown_kind, # "none" | "fixed" | "day_reset"
+      one_off:             chore.one_off,
+      sharing_mode:        chore.sharing_mode,
       assigned_to_user_id: chore.assigned_to_user_id,
-      show_on_daily_view: chore.show_on_daily_view,
-      starts_on: chore.starts_on&.iso8601,
-      recurrence: chore.recurrence || {},
-      sort_order: chore.sort_order,
-      archived: chore.archived?,
-      updated_at: chore.updated_at.iso8601(3),
+      show_on_daily_view:  chore.show_on_daily_view,
+      starts_on:           chore.starts_on&.iso8601,
+      recurrence:          chore.recurrence || {},
+      sort_order:          chore.sort_order,
+      archived:            chore.archived?,
+      updated_at:          chore.updated_at.iso8601(3),
       # Per-viewer derived fields
-      done_count_today: done_count_today,
-      last_completed_at: last_completion&.completed_at&.iso8601(3),
-      actor_username: actor_username,
-      hot_multiplier: hot_multiplier,
-      today_visible: today_visible?,
+      done_count_today:    done_count_today,
+      last_completed_at:   last_completion&.completed_at&.iso8601(3),
+      actor_username:      actor_username,
+      hot_multiplier:      hot_multiplier,
+      today_visible:       today_visible?,
     }
   end
 
@@ -97,6 +97,22 @@ class ChoreSerializer
       .order(completed_at: :desc).first
   end
 
+  # State of the world AS-OF the start of `day` — the most recent
+  # completion (paid or skipped) strictly before today. Drives
+  # `today_visible?` so the answer is invariant to anything that
+  # happens during `day`: completing a chore today must not change
+  # whether it's on Today. Payment status is intentionally NOT a
+  # visibility input — a skipped completion and a paid completion
+  # both represent the user acting on the chore.
+  def last_completion_before_today
+    return ctx.last_completion_before_today_by_chore[chore.id] if ctx
+
+    @last_completion_before_today ||= ChoreCompletion
+      .where(chore_id: chore.id, user_id: cooldown_scope_user_ids)
+      .where(day_key: ...day)
+      .order(completed_at: :desc).first
+  end
+
   def actor_username
     return nil unless chore.share_household?
 
@@ -117,19 +133,24 @@ class ChoreSerializer
     @hot_multiplier ||= ChoreHotPick.lookup_for(day)[chore.id]
   end
 
+  # today_visible? answers ONE question: would this chore have been on
+  # Today at the 4am rollover, before any of today's completions
+  # existed? Every input is the day-start state —
+  # `last_completion_before_today` for the cooldown gate and
+  # completion_days strictly before `day` for carryover. Today's own
+  # completions are intentionally not consulted, so completing a
+  # Grid-only chore never adds it to Today and completing a Today
+  # chore never removes it. Carryovers that get checked off today
+  # stay carryovers on Today for the rest of the day.
   def today_visible?
     return false if chore.archived?
     return true  if chore.one_off
     return true  if chore.daily_always?
     return false if chore.show_on_daily_view.to_sym == :never
 
-    # Frozen layout: any completion in today's day-key keeps the card
-    # on Today regardless of schedule / cooldown.
-    return true if done_count_today.positive?
-
-    last = last_completion
-    scheduled = scheduled_or_carried?(last&.day_key)
-    available = chore.cooldown_elapsed?(viewer, last_completion: last)
+    last_before = last_completion_before_today
+    scheduled = scheduled_or_carried?(last_before&.day_key)
+    available = chore.cooldown_elapsed?(viewer, last_completion: last_before)
 
     case chore.show_on_daily_view.to_sym
     when :always                       then true
@@ -145,17 +166,21 @@ class ChoreSerializer
     return true  if chore.matches_day?(day, viewer, last_completed_day: last_completed_day)
     return false if chore.relative?
 
-    last_scheduled_day = (day - 14..day - 1).reverse_each.find { |d|
+    last_scheduled_day = ((day - 14)..(day - 1)).reverse_each.find { |d|
       chore.matches_day?(d, viewer, last_completed_day: last_completed_day)
     }
     return false if last_scheduled_day.blank?
 
-    if ctx&.completion_days_by_chore
-      done_set = ctx.completion_days_by_chore.fetch(chore.id, Set.new)
-      !done_set.any? { |d| d >= last_scheduled_day && d <= day }
+    # Carryover means "scheduled in the past and not completed since"
+    # — and "since" is bounded by yesterday, not today. A completion
+    # made today must not retroactively cancel the chore's place on
+    # Today; that's what made it a carryover in the first place.
+    if ctx&.completion_days_before_today_by_chore
+      done_set = ctx.completion_days_before_today_by_chore.fetch(chore.id, Set.new)
+      done_set.none? { |d| d >= last_scheduled_day && d < day }
     else
       ChoreCompletion
-        .where(user_id: viewer.id, chore_id: chore.id, day_key: last_scheduled_day..day)
+        .where(user_id: viewer.id, chore_id: chore.id, day_key: last_scheduled_day..(day - 1))
         .none?
     end
   end

@@ -65,28 +65,26 @@ class Jil::Methods::Chore < Jil::Methods::Base
     true
   end
 
-  # Chore.sync_event(name, event[, query]) → mirror an ActionEvent's
-  # lifecycle as a ChoreCompletion. Uses metadata.source = {
-  # type: "action_event", id: <event_id> } as the link so future
-  # change/remove triggers find the right completion.
+  # Chore.sync_event(name, event[, event_attrs]) → mirror an
+  # ActionEvent's lifecycle as a ChoreCompletion. Uses metadata.source
+  # = { type: "action_event", id: <event_id> } as the link.
   #
   #   * action :added / :changed — create the linked completion at the
   #     event's timestamp, or update an existing linked one. If no link
   #     exists but a same-day completion does, adopt it (no duplicate).
-  #     If the event no longer matches `query`, unlink/destroy the
-  #     previously linked completion (e.g. notes edited to drop the
-  #     training marker).
+  #     If the event no longer matches `event_attrs`, unlink/destroy
+  #     the previously linked completion (e.g. notes edited).
   #   * action :removed — destroy the linked completion (if any).
   #
-  # `query` (optional String) — a Tokenizing search query such as
-  # `"name::Whisper notes::Up"` or `"name::Wordle"`. Evaluated against
-  # the event via the same parser that powers `.query()` on the model,
-  # so it supports AND/OR/NOT/regex/exact/substring operators.
-  # When blank, the chore is synced unconditionally on every event
-  # (only useful if callers pre-filter via the listener).
+  # `event_attrs` (optional Hash) — same shape used by sync_completion:
+  # `{ name: <event name>, notes?: <event notes> }`. Both fields are
+  # exact case-insensitive matches. Notes is treated as a constraint
+  # only when present (a row that's `{name: "Wordle"}` matches Wordle
+  # events with any notes). This shared shape lets one mapping table
+  # drive both directions of sync.
   #
   # Returns true if a change was made.
-  def sync_event(name_or_chore, event, query = nil)
+  def sync_event(name_or_chore, event, event_attrs = nil)
     ae = load_action_event(event)
     return false if ae.nil? || ae.id.blank?
 
@@ -94,7 +92,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
     return false if chore.nil?
 
     action = ae.execution_attrs.is_a?(::Hash) ? ae.execution_attrs[:action] : nil
-    matches = event_matches_query?(ae, query)
+    matches = event_matches_attrs?(ae, event_attrs)
 
     case action&.to_sym
     when :added, :changed
@@ -102,6 +100,62 @@ class Jil::Methods::Chore < Jil::Methods::Base
     when :removed
       sync_remove(chore, ae)
     else false
+    end
+  end
+
+  # Chore.sync_completion(name, completion, event_attrs) → mirror a
+  # ChoreCompletion's lifecycle as an ActionEvent (the reverse of
+  # sync_event). Signature is parallel to sync_event so the same
+  # mapping table can drive both directions:
+  #
+  #   Chore.sync_event(name, event, event_attrs)
+  #   Chore.sync_completion(name, completion, event_attrs)
+  #
+  # `name` is the chore name being synced (used as a dispatch filter —
+  # we no-op when it doesn't match the completion's chore, so callers
+  # can iterate a mapping table blindly). `completion` can be a
+  # ChoreCompletion record (typical when called from a chore_completion
+  # trigger) or a Hash with at least { id:, action:, completed_at:,
+  # metadata:, chore_name: }. `event_attrs` is a Hash with required
+  # `name` and optional `notes`. Link lives on the event:
+  #   event.data.source = { type: "chore_completion", id: <comp_id> }
+  #
+  # Lifecycle (driven by completion.execution_attrs[:action]):
+  #   :completed — skip if the completion was itself created from an
+  #                event (metadata.source.type == "action_event") to
+  #                avoid duplicating it; otherwise upsert.
+  #   :edited    — find the linked event and upsert (timestamp + notes).
+  #   :uncompleted — destroy the linked event (if any).
+  #
+  # Upsert is fully idempotent: when the existing event already matches
+  # the desired state, no DB write happens. The corresponding `event
+  # :changed` trigger never fires, so the bi-directional sync
+  # self-terminates without explicit provenance flags.
+  def sync_completion(name_or_chore, completion, event_attrs)
+    comp_data = load_completion(completion)
+    return false if comp_data.nil?
+    return false unless completion_matches_chore?(comp_data, name_or_chore)
+
+    action = comp_data[:action]&.to_sym
+    return false if action.blank?
+
+    case action
+    when :uncompleted
+      # Destroy doesn't need event_attrs — the link lives on the event itself.
+      destroy_linked_event(comp_data)
+    when :completed
+      attrs = stringify_event_attrs(event_attrs)
+      return false if attrs.blank? || attrs[:name].blank?
+      return false if completion_from_event?(comp_data)
+
+      upsert_event(comp_data, attrs)
+    when :edited
+      attrs = stringify_event_attrs(event_attrs)
+      return false if attrs.blank? || attrs[:name].blank?
+
+      upsert_event(comp_data, attrs)
+    else
+      false
     end
   end
 
@@ -205,13 +259,122 @@ class Jil::Methods::Chore < Jil::Methods::Base
     (existing || {}).merge(source: { type: "action_event", id: ae.id })
   end
 
-  def event_matches_query?(ae, query)
-    return true if query.to_s.blank?
+  def event_matches_attrs?(ae, event_attrs)
+    return true if event_attrs.blank?
 
-    @jil.user.action_events.query(query.to_s).where(id: ae.id).exists?
-  rescue StandardError => e
-    Rails.logger.error("[Chore.sync_event] query failed (#{query.inspect}): #{e.class} #{e.message}")
-    false
+    attrs = stringify_event_attrs(event_attrs)
+    return true if attrs.blank? || attrs[:name].blank?
+    return false unless ae.name.to_s.casecmp(attrs[:name].to_s).zero?
+    return true if attrs[:notes].blank?
+
+    ae.notes.to_s.casecmp(attrs[:notes].to_s).zero?
+  end
+
+  # --- sync_completion helpers ---
+
+  def load_completion(value)
+    return nil if value.nil?
+
+    if value.is_a?(::ChoreCompletion)
+      attrs = value.execution_attrs.is_a?(::Hash) ? value.execution_attrs : {}
+      return {
+        id:           value.id,
+        action:       attrs[:action],
+        completed_at: value.completed_at,
+        metadata:     value.metadata || {},
+        chore_id:     value.chore_id,
+        chore_name:   value.chore&.name,
+      }
+    end
+
+    hash = @jil.cast(value, :Hash).with_indifferent_access
+    chore_id = hash[:chore_id]
+    chore_name = hash[:chore_name].presence
+    chore_name ||= @jil.user.accessible_chores.find_by(id: chore_id)&.name if chore_id.present?
+
+    {
+      id:           hash[:id],
+      action:       hash[:action]&.to_sym,
+      completed_at: parse_time(hash[:completed_at]),
+      metadata:     hash[:metadata] || {},
+      chore_id:     chore_id,
+      chore_name:   chore_name,
+    }
+  end
+
+  def completion_matches_chore?(comp_data, name_or_chore)
+    return true if name_or_chore.blank?
+
+    expected = name_or_chore.is_a?(::Chore) ? name_or_chore.name : name_or_chore.to_s
+    actual = comp_data[:chore_name].to_s
+    return true if actual.blank? # fall back to no filter when we can't tell
+
+    actual.casecmp(expected).zero?
+  end
+
+  def stringify_event_attrs(value)
+    return {} if value.blank?
+
+    @jil.cast(value, :Hash).with_indifferent_access.then { |h|
+      {
+        name:  h[:name].to_s.presence,
+        notes: h[:notes].presence&.to_s,
+      }
+    }
+  end
+
+  def completion_from_event?(comp_data)
+    comp_data.dig(:metadata, "source", "type").to_s == "action_event" ||
+      comp_data.dig(:metadata, :source, :type).to_s == "action_event"
+  end
+
+  def find_linked_event(comp_id)
+    return nil if comp_id.blank?
+
+    @jil.user.action_events
+      .where("data #>> '{source,type}' = ?", "chore_completion")
+      .where("(data #>> '{source,id}')::bigint = ?", comp_id)
+      .first
+  end
+
+  def upsert_event(comp_data, attrs)
+    completed_at = comp_data[:completed_at]
+    return false if completed_at.blank?
+
+    existing = find_linked_event(comp_data[:id])
+    desired = {
+      name:      attrs[:name],
+      notes:     attrs[:notes],
+      timestamp: completed_at,
+    }
+
+    if existing
+      return false if event_matches_desired?(existing, desired)
+
+      existing.update!(desired.compact)
+      true
+    else
+      data = { source: { type: "chore_completion", id: comp_data[:id] } }
+      @jil.user.action_events.create!(desired.merge(data: data))
+      true
+    end
+  end
+
+  def destroy_linked_event(comp_data)
+    existing = find_linked_event(comp_data[:id])
+    return false if existing.nil?
+
+    existing.destroy!
+    true
+  end
+
+  def event_matches_desired?(event, desired)
+    return false unless event.name.to_s == desired[:name].to_s
+    return false unless event.notes.to_s == desired[:notes].to_s
+    return false unless event.timestamp.present? && desired[:timestamp].present?
+    return false unless (event.timestamp.to_i - desired[:timestamp].to_i).abs < 1
+
+    true
   end
 end
 
@@ -219,10 +382,10 @@ end
 #   #find(String)::Chore
 #   #scheduled_today::Array
 #   #accessible::Array
-#   #complete(String)::ChoreCompletion
-#   #complete(String, String:timestamp)::ChoreCompletion
+#   #complete(String:Name Date?:Timestamp)::ChoreCompletion
 #   #uncomplete(String)::Boolean
-#   #sync_event(String:"Chore Name" ActionEvent String?:"Query")::Boolean
+#   #sync_event(String:"Chore Name" ActionEvent Hash?:"Event Attrs")::Boolean
+#   #sync_completion(String:"Chore Name" Hash|ChoreCompletion Hash:"Event Attrs")::Boolean
 #   #balance::Integer
 #   #today_earnings::Integer
 #

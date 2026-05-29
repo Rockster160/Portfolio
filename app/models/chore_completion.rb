@@ -29,6 +29,7 @@ class ChoreCompletion < ApplicationRecord
   # against chore completion + undo (e.g. log an ActionEvent, post to
   # SMS, etc.). Pattern mirrors AgendaItem / Task / ActionEvent.
   after_create_commit  :fire_jil_create_trigger
+  after_update_commit  :fire_jil_update_trigger
   after_destroy_commit :fire_jil_destroy_trigger
 
   # History search via the app-wide `.query(q)` scope.
@@ -48,8 +49,13 @@ class ChoreCompletion < ApplicationRecord
   # off `chore_completion.*` — the chore name + paid amount + day key
   # + skipped reason. Keeps the trigger payload self-contained so
   # listeners don't have to round-trip to the DB for common fields.
-  def jil_attrs(action:)
-    {
+  #
+  # `changes` (optional) is a saved_changes-style hash of
+  # `{ field => [old, new] }`. Surfaced on :edited so listeners can
+  # tell what actually changed (and skip work when their interest
+  # didn't move) without re-querying the DB.
+  def jil_attrs(action:, changes: nil)
+    base = {
       id: id,
       action: action,
       chore_id: chore_id,
@@ -59,13 +65,25 @@ class ChoreCompletion < ApplicationRecord
       skipped_reason: skipped_reason,
       day_key: day_key&.iso8601,
       completed_at: completed_at&.iso8601(3),
+      metadata: metadata || {},
     }
+    base[:changes] = changes if changes.present?
+    base
   end
 
   private
 
   def fire_jil_create_trigger
     ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :completed)))
+  end
+
+  def fire_jil_update_trigger
+    # No-op when nothing actually changed (Rails can fire after_update_commit
+    # on touch-only saves). The trigger payload exposes saved_changes so
+    # listeners can compare old vs new and short-circuit idempotently.
+    return if saved_changes.blank?
+
+    ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :edited, changes: saved_changes)))
   end
 
   def fire_jil_destroy_trigger

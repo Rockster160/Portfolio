@@ -242,15 +242,20 @@ class ChoresController < ApplicationController
 
   # Focused "Upcoming" list — for each chore, only the EARLIEST future
   # day in the 7-day window. Items already on Today are excluded.
-  # Format: { "2026-05-30" => [chore_id, ...], ... } so the client can
-  # render the strip directly from the store without re-implementing
-  # the recurrence-matching logic.
+  # Format: { "2026-05-30" => [chore_id, ...], ... }
+  #
+  # Every day in the window is emitted, even when no chore matches —
+  # otherwise users read the next non-empty day as "tomorrow" and
+  # plan around the wrong date. The client renders an explicit
+  # "Nothing scheduled" row per empty day.
   def build_lookahead_json
     today_ids = @chores_json.select { |c| c[:today_visible] }.map { |c| c[:id] }.to_set
     seen = Set.new
-    upcoming = Hash.new { |h, k| h[k] = [] }
+    upcoming = {}
     candidates = @chores.reject { |c| c.one_off || c.show_on_daily_view.to_sym == :never }
     ((@day + 1)..(@day + 7)).each do |d|
+      key = d.iso8601
+      upcoming[key] = [] # ensure the day appears even if it stays empty
       candidates.each do |c|
         next unless c.scheduled?
         next if today_ids.include?(c.id) || seen.include?(c.id)
@@ -258,7 +263,7 @@ class ChoresController < ApplicationController
         last_day = @ctx.last_completion_by_chore[c.id]&.day_key
         next unless c.matches_day?(d, current_user, last_completed_day: last_day)
 
-        upcoming[d.iso8601] << c.id
+        upcoming[key] << c.id
         seen << c.id
       end
     end

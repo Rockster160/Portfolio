@@ -159,7 +159,9 @@ class ActionEventsController < ApplicationController
     @event = ActionEvent.find(params[:id])
 
     @event.update(event_params)
-    jil_trigger(:event, @event.with_jil_attrs(action: :changed))
+    attrs = { action: :changed }
+    attrs[:changes] = @event.saved_changes if @event.saved_changes.present?
+    jil_trigger(:event, @event.with_jil_attrs(attrs))
     ::ActionEventBroadcastWorker.perform_async(@event.id, false)
   end
 

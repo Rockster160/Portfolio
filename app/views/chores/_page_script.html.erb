@@ -329,15 +329,19 @@
       const parts = [`<h3 class="lookahead-heading">Upcoming</h3>`];
       keys.forEach(day => {
         const ids = data[day] || [];
-        if (!ids.length) return;
         const dayObj = new Date(day + "T00:00:00");
         const dayLabel = dayObj.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-        const chips = ids.map(id => {
-          const c = ChoreStore.get(id);
-          if (!c) return "";
-          return `<span class="day-chip">${iconHTML(c)} ${esc(c.short_name)} <strong>${esc(c.reward_label)}</strong></span>`;
-        }).join("");
-        parts.push(`<div class="lookahead-day"><div class="day-label">${esc(dayLabel)}</div><div class="day-items">${chips}</div></div>`);
+        // Empty days are rendered with a muted placeholder so the
+        // user can't mistake the next non-empty day for "tomorrow".
+        const body = ids.length
+          ? ids.map(id => {
+              const c = ChoreStore.get(id);
+              if (!c) return "";
+              return `<span class="day-chip">${iconHTML(c)} ${esc(c.short_name)} <strong>${esc(c.reward_label)}</strong></span>`;
+            }).join("")
+          : `<span class="day-chip day-chip-empty">Nothing scheduled</span>`;
+        const emptyClass = ids.length ? "" : " lookahead-day-empty";
+        parts.push(`<div class="lookahead-day${emptyClass}"><div class="day-label">${esc(dayLabel)}</div><div class="day-items">${body}</div></div>`);
       });
       c.innerHTML = parts.join("");
     }
@@ -1548,28 +1552,35 @@
   }
   function truncate(s, n) { return s.length > n ? s.slice(0, n - 3) + "..." : s; }
   if (root?.dataset.mode === "balance") {
+    // Recent History loads ONCE per page navigation, then stays
+    // static. Live-update triggers (Monitor broadcast, focus, online)
+    // were too aggressive: people noticed re-renders happening
+    // mid-keystroke while typing a withdrawal note. The reload
+    // button next to the heading is the explicit refresh path.
     hydrateRecentHistory();
-    // Always dump and re-fetch on WS broadcast, focus, or reconnect.
-    // The page_script visibilitychange + online handlers above run
-    // fullSync; piggyback recent-history hydrate on the same bus so
-    // the rows match the balance pill they're showing.
-    window.addEventListener("chores:remote_change", () => hydrateRecentHistory());
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") hydrateRecentHistory();
-    });
-    window.addEventListener("online", () => hydrateRecentHistory());
+    document.querySelector("[data-recent-history-reload]")
+      ?.addEventListener("click", () => hydrateRecentHistory());
   }
 
   document.querySelector("[data-withdraw-form]")?.addEventListener("submit", async e => {
     e.preventDefault();
-    const fd = new FormData(e.target);
+    const form = e.target;
+    const fd = new FormData(form);
     const entries = Object.fromEntries(fd.entries());
     const amount = parseInt(entries.amount_pebbles, 10);
     if (Number.isNaN(amount) || amount <= 0) { flash("Enter a positive amount", "warn"); return; }
     try {
       const data = await api("/chores/withdrawals", "POST", { chore_withdrawal: entries });
       flash(`Withdrew ${formatCount(data.amount_pebbles)}p`);
-      setTimeout(() => location.reload(), 250);
+      // Apply the server's new totals directly (header pill +
+      // lifetime card) and refresh the Recent History block so the
+      // new row shows up — no full page reload, no auto-refresh.
+      // This is the one trigger besides navigation + the manual
+      // reload button that's allowed to refetch the history.
+      if (data.balance != null) setLifetimeBalance(data.balance);
+      if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
+      form.reset();
+      hydrateRecentHistory();
     } catch (err) { flash("Withdraw failed: " + err.message, "error"); }
   });
 

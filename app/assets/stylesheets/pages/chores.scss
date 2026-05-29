@@ -1060,6 +1060,32 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     background: #F59E0B;
     color: #1F2937;
   }
+  .section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 24px auto 4px;
+    // Match the 800px content rail that history-search /
+    // history-list / history-summary / history-pager all live on,
+    // so the heading + reload button align with the rows below
+    // rather than spilling out to the .chores-page 1200px edges.
+    max-width: 800px;
+  }
+  .section-heading h3 { margin: 0; }
+  .section-reload {
+    width: 28px;
+    height: 28px;
+    padding: 0 !important;
+    display: grid;
+    place-items: center;
+    background: #1F2A44 !important;
+    color: var(--chores-muted) !important;
+    border-radius: 6px;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .section-reload:hover { color: var(--chores-text) !important; }
   .pending-heading {
     display: flex;
     align-items: center;
@@ -1485,6 +1511,13 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     height: 14px;
     object-fit: contain;
   }
+  .lookahead-day-empty .day-chip-empty {
+    background: transparent;
+    color: var(--chores-muted);
+    font-style: italic;
+    padding-left: 0;
+  }
+  .lookahead-day-empty .day-label { opacity: 0.6; }
 
   // ---- Icon picker (edit modal) ----
   // Single block: a contenteditable preview that users type emoji

@@ -139,8 +139,10 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
   private
 
   def event_callbacks(event, action, update_streak=true, &callback)
+    attrs = { action: action }
+    attrs[:changes] = event.saved_changes if action == :changed && event.saved_changes.present?
     ::Jil.trigger(
-      @jil.user, :event, event.with_jil_attrs(action: action),
+      @jil.user, :event, event.with_jil_attrs(attrs),
       auth: :trigger, auth_id: @jil.task&.id
     )
     callback&.call(event)

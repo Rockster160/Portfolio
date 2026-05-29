@@ -20,12 +20,26 @@
       runs while this page is open — the user can curate the queue
       without it racing them. %>
   <div data-pending-section hidden>
-    <h3 class="pending-heading">
-      <i class="fa fa-clock-o" aria-hidden="true"></i>
-      Pending — <span data-pending-count>0</span>
-      <span class="dim" style="font-size:12px;font-weight:normal;">(not sending while you're here)</span>
-    </h3>
+    <div class="section-heading">
+      <h3 class="pending-heading">
+        <i class="fa fa-clock-o" aria-hidden="true"></i>
+        Pending — <span data-pending-count>0</span>
+        <span class="dim" style="font-size:12px;font-weight:normal;">(not sending while you're here)</span>
+      </h3>
+      <button type="button" class="section-reload" data-pending-reload
+              title="Reload pending list" aria-label="Reload pending list">
+        <i class="fa fa-refresh" aria-hidden="true"></i>
+      </button>
+    </div>
     <div class="history-list" data-pending-list></div>
+  </div>
+
+  <div class="section-heading">
+    <h3>History</h3>
+    <button type="button" class="section-reload" data-history-reload
+            title="Reload history" aria-label="Reload history">
+      <i class="fa fa-refresh" aria-hidden="true"></i>
+    </button>
   </div>
 
   <div class="history-summary" data-history-summary hidden>
@@ -670,28 +684,21 @@
       } catch (e) { flash("Delete failed: " + e.message, "error"); }
     });
 
-    // ---------- live updates ----------
-    // page_script's Monitor subscription cleared the cache and fired
-    // this event when a chore/completion/withdrawal broadcast landed.
-    // Refetch the current view so a row added/edited/removed in
-    // another tab (or on another device) shows up here without the
-    // user having to refresh.
-    window.addEventListener("chores:remote_change", () => fetchHistory({ push: false }));
-    // Tab regaining focus: refresh from network so the view is at
-    // most one focus old. The cache still backs an instant first
-    // paint if the fetch hangs/fails.
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") fetchHistory({ push: false });
-    });
-    // Reconnecting after offline: same refresh + re-render pending
-    // (in case anything was added while offline).
-    window.addEventListener("online", () => {
-      renderPending();
-      fetchHistory({ push: false });
-    });
-    // Cross-tab queue edits: a pending push edited/removed in another
-    // tab fires a `storage` event here. Re-render so the row reflects
-    // the change without a reload.
+    // ---------- explicit reload only ----------
+    // History entries load ONCE on page navigation, then stay
+    // exactly as rendered. Auto-refresh (Monitor broadcasts, focus,
+    // online events) was too aggressive — it reloaded mid-edit
+    // while users were typing notes. The reload buttons below are
+    // the only refresh path; navigating away and back is the other.
+    document.querySelector("[data-history-reload]")
+      ?.addEventListener("click", () => fetchHistory({ push: false }));
+    document.querySelector("[data-pending-reload]")
+      ?.addEventListener("click", () => renderPending());
+    // Cross-tab queue edits: a pending push edited/removed in
+    // another tab fires a `storage` event here. Re-render so the
+    // local pending list stays in sync — this is a passive read
+    // from localStorage, not a network call, so it can't disturb
+    // an in-progress edit.
     window.addEventListener("storage", e => {
       if (e.key === QUEUE_KEY) renderPending();
     });
