@@ -1000,6 +1000,13 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     border-bottom: 1px dashed #1F2A44;
     font-size: 14px;
   }
+  .history-row.history-loading {
+    justify-content: center;
+    color: var(--chores-muted);
+    padding: 16px 0;
+    border-bottom: 0;
+  }
+  .history-row .dim { color: var(--chores-muted); }
   .history-when-name {
     display: flex;
     align-items: center;
@@ -1049,6 +1056,21 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     background: #1F2A44;
     color: #9CA3AF;
   }
+  .history-tag.pending {
+    background: #F59E0B;
+    color: #1F2937;
+  }
+  .pending-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 4px;
+    font-size: 14px;
+    color: var(--chores-text);
+  }
+  .pending-heading .dim { color: var(--chores-muted); }
+  .pending-row { background: rgba(245, 158, 11, 0.06); }
+  .pending-row.pending-undo { background: rgba(156, 163, 175, 0.06); }
   .history-amount-cell {
     display: inline-flex;
     align-items: center;

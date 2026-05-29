@@ -5,7 +5,11 @@
 
   <div class="balance-card">
     <div class="balance-label">Pebbles available</div>
-    <div class="balance-amount"><span data-balance><%= format_count(@balance) %></span>p</div>
+    <%# This shows the LIFETIME balance and must NOT share the
+        `data-balance` hook with the header pill — the header pill is
+        always "earned today". Distinct attribute = no JS handler can
+        cross-write them. %>
+    <div class="balance-amount"><span data-lifetime-balance><%= format_count(@balance) %></span>p</div>
   </div>
 
   <h3>Goals</h3>
@@ -81,39 +85,14 @@
   </form>
 
   <h3 style="margin-top:24px;">Recent History</h3>
-  <% mixed = (@recent_completions.to_a + @withdrawals.to_a).sort_by { |e|
-       ts = e.is_a?(ChoreCompletion) ? e.completed_at : e.created_at
-       -ts.to_f
-     }.first(10) %>
-  <% mixed.each do |entry|
-       if entry.is_a?(ChoreCompletion) %>
-        <div class="history-row">
-          <span>
-            <%= entry.completed_at.strftime("%b %-d %l:%M%P") %> ·
-            <span class="history-icon"><%= chore_icon_inline(entry.chore, fallback: true) %></span>
-            <strong><%= entry.chore.display_short_name %></strong>
-            <% if entry.note.present? %><span class="history-note">— <%= entry.note.truncate(40) %></span><% end %>
-          </span>
-          <span style="color:<%= entry.payout_skipped ? '#9CA3AF' : '#34D399' %>;">
-            <%= entry.payout_skipped ? "(skipped)" : format_pebbles(entry.paid_pebbles, sign: :explicit) %>
-          </span>
-        </div>
-      <% else %>
-        <div class="history-row">
-          <span>
-            <%= entry.created_at.strftime("%b %-d %l:%M%P") %> ·
-            🪙 <strong>Withdraw</strong>
-            <% if entry.note.present? %><span class="history-note">— <%= entry.note.truncate(40) %></span><% end %>
-          </span>
-          <span style="color:#FCA5A5;"><%= format_pebbles(-entry.amount_pebbles, sign: :explicit) %></span>
-        </div>
-      <% end %>
-  <% end %>
-  <% if mixed.any? %>
-    <div style="text-align:center;margin-top:8px;">
-      <%= link_to "Full history →", chores_history_path, class: "btn ghost" %>
+  <div data-recent-history>
+    <div class="history-row history-loading" data-recent-loading>
+      <span class="dim">Loading recent history…</span>
     </div>
-  <% end %>
+  </div>
+  <div data-recent-history-cta hidden style="text-align:center;margin-top:8px;">
+    <%= link_to "Full history →", chores_history_path, class: "btn ghost" %>
+  </div>
   <%= render "modals" %>
 </div>
 

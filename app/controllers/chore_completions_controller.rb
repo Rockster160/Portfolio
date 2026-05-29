@@ -7,6 +7,13 @@ class ChoreCompletionsController < ApplicationController
 
     result = ChoreCompleter.new(chore, current_user, at: completed_at).call
 
+    # When a pending push was edited on the History page before being
+    # sent (note, multipliers, hot_pick), the queued POST replays those
+    # overrides here. Apply post-create so paid_pebbles stays driven by
+    # ChoreCompleter — multipliers / hot_pick are historical record
+    # only, mirroring the update path.
+    apply_create_overrides!(result.completion) if result.completion
+
     render json: response_payload(chore, result.completion).merge(
       skipped: result.skipped?,
       skipped_reason: result.skipped_reason,
@@ -85,7 +92,36 @@ class ChoreCompletionsController < ApplicationController
     completion.destroy!
     rebuild_streak(chore, day)
     ChoreBroadcaster.broadcast_changes!(current_user, chore, actor_tab_id: params[:tab_id])
-    render json: { balance: current_user.chore_balance }
+    # today_earnings is the canonical value behind the header pill on
+    # every page. Always emit it — even on deletes where today's
+    # earnings drop if the removed completion was on today's day_key —
+    # so the client never has to guess.
+    today = ChoreDay.current(current_user)
+    today_earnings = current_user.chore_completions.where(day_key: today).sum(:paid_pebbles)
+    render json: {
+      balance: current_user.chore_balance,
+      today_earnings: today_earnings,
+    }
+  end
+
+  # Pending-push overrides accepted on create. Only the keys present
+  # in the body are touched — a vanilla queued POST (no overrides) is
+  # a no-op here.
+  def apply_create_overrides!(completion)
+    raw = params[:chore_completion]
+    return if raw.blank?
+
+    overrides = {}
+    overrides[:note]             = raw[:note].to_s             if raw.key?(:note)
+    overrides[:hot_multiplier]   = raw[:hot_multiplier].to_f   if raw.key?(:hot_multiplier)
+    overrides[:total_multiplier] = raw[:total_multiplier].to_f if raw.key?(:total_multiplier)
+    if raw.key?(:hot_pick)
+      flag = ActiveModel::Type::Boolean.new.cast(raw[:hot_pick])
+      overrides[:metadata] = (completion.metadata || {}).merge("hot_pick" => flag)
+    end
+    return if overrides.empty?
+
+    completion.update!(overrides)
   end
 
   def completion_params

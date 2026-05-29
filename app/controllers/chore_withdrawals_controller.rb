@@ -16,6 +16,7 @@ class ChoreWithdrawalsController < ApplicationController
       note: withdrawal.note,
       created_at: withdrawal.created_at.iso8601,
       balance: current_user.chore_balance,
+      today_earnings: today_earnings,
     }, status: :created
   end
 
@@ -23,6 +24,21 @@ class ChoreWithdrawalsController < ApplicationController
     withdrawal = current_user.chore_withdrawals.find(params[:id])
     withdrawal.destroy!
     ChoreBroadcaster.broadcast_changes!(current_user)
-    render json: { balance: current_user.chore_balance }
+    # `today_earnings` is unaffected by withdrawals (it sums completion
+    # payouts on the current chore-day), but the controller emits it
+    # anyway so the client can keep the header pill stable rather than
+    # having to special-case which endpoints touch it. The pill is
+    # always today_earnings, everywhere.
+    render json: {
+      balance: current_user.chore_balance,
+      today_earnings: today_earnings,
+    }
+  end
+
+  private
+
+  def today_earnings
+    today = ChoreDay.current(current_user)
+    current_user.chore_completions.where(day_key: today).sum(:paid_pebbles)
   end
 end

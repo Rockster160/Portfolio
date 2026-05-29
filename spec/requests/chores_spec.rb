@@ -56,12 +56,36 @@ RSpec.describe "Chores", type: :request do
     expect(user.reload.chore_balance).to eq(0)
   end
 
-  it "GET /chores/history lists completions" do
+  it "GET /chores/history renders the JS shell (no server-rendered entries)" do
     chore = create(:chore, created_by_user: user, name: "Vacuum", reward_pebbles: 5)
     create(:chore_completion, chore: chore, user: user, paid_pebbles: 5)
     get chores_history_path
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include("Vacuum")
+    # Shell contains the loading-state placeholder and the empty
+    # containers JS will hydrate. Entries are NOT in the body — they're
+    # fetched separately via /chores/history.json.
+    expect(response.body).to include("Loading history")
+    expect(response.body).to include("data-history-list")
+    expect(response.body).to include("data-pending-section")
+    expect(response.body).not_to include(">Vacuum<")
+  end
+
+  it "GET /chores/history.json returns entries + pagination shape" do
+    chore = create(:chore, created_by_user: user, name: "Vacuum", reward_pebbles: 5)
+    create(:chore_completion, chore: chore, user: user, paid_pebbles: 5)
+    get "/chores/history.json", headers: { "Accept" => "application/json" }
+    expect(response).to have_http_status(:ok)
+    body = JSON.parse(response.body)
+    expect(body["entries"].size).to eq(1)
+    entry = body["entries"].first
+    expect(entry["kind"]).to eq("completion")
+    expect(entry["chore"]["name"]).to eq("Vacuum")
+    expect(entry["chore"]["icon_kind"]).to be_present
+    expect(entry["when_label"]).to be_present
+    expect(body["total_count"]).to eq(1)
+    expect(body["total_pages"]).to eq(1)
+    expect(body["from"]).to eq(1)
+    expect(body["to"]).to eq(1)
   end
 
   it "PATCH /chores/completions/:id edits the amount and updates balance" do
@@ -118,7 +142,7 @@ RSpec.describe "Chores", type: :request do
     expect(completion.day_key).to eq(ChoreDay.current(user, at: new_time))
   end
 
-  it "GET /chores/history filters with .query (note + chore name + time)" do
+  it "GET /chores/history.json filters with .query (note + chore name + time)" do
     cat = create(:chore, created_by_user: user, name: "Brush kitty")
     dog = create(:chore, created_by_user: user, name: "Feed dog")
     create(:chore_completion, chore: cat, user: user, note: "morning",
@@ -126,53 +150,174 @@ RSpec.describe "Chores", type: :request do
     create(:chore_completion, chore: dog, user: user, note: "evening",
       completed_at: 1.day.ago, day_key: 1.day.ago.to_date)
 
-    # Free keyword falls through to the chore name.
-    get chores_history_path(q: "kitty")
-    expect(response.body).to include("Brush kitty")
-    expect(response.body).not_to include("Feed dog")
+    get "/chores/history.json", params: { q: "kitty" }, headers: { "Accept" => "application/json" }
+    names = JSON.parse(response.body)["entries"].map { |e| e.dig("chore", "name") }
+    expect(names).to include("Brush kitty")
+    expect(names).not_to include("Feed dog")
 
-    # notes alias works.
-    get chores_history_path(q: "notes:evening")
-    expect(response.body).to include("Feed dog")
-    expect(response.body).not_to include("Brush kitty")
+    get "/chores/history.json", params: { q: "notes:evening" }, headers: { "Accept" => "application/json" }
+    names = JSON.parse(response.body)["entries"].map { |e| e.dig("chore", "name") }
+    expect(names).to include("Feed dog")
+    expect(names).not_to include("Brush kitty")
   end
 
-  it "GET /chores/history summary shows per-page counts (left), page (center), window/total (right)" do
+  it "GET /chores/history.json reports per-page counts, page, window, total" do
     chore = create(:chore, created_by_user: user, name: "Walk")
     60.times { |i|
       create(:chore_completion, chore: chore, user: user,
         completed_at: i.hours.ago, day_key: ChoreDay.current(user))
     }
-    get chores_history_path
-    expect(response).to have_http_status(:ok)
-    # Center: page navigation focal point.
-    expect(response.body).to include("Page <strong>1</strong>")
-    expect(response.body).to include("of <strong>2</strong>")
-    # Left: per-page pluralized counts (50 of this page's 50 entries).
-    expect(response.body).to include("50 completions")
-    # Right: absolute window over total.
-    expect(response.body).to include("1&ndash;50 / 60")
+    get "/chores/history.json", headers: { "Accept" => "application/json" }
+    body = JSON.parse(response.body)
+    expect(body["page"]).to eq(1)
+    expect(body["total_pages"]).to eq(2)
+    expect(body["page_completions"]).to eq(50)
+    expect(body["page_withdrawals"]).to eq(0)
+    expect(body["from"]).to eq(1)
+    expect(body["to"]).to eq(50)
+    expect(body["total_count"]).to eq(60)
   end
 
-  it "history summary pluralizes singular counts correctly" do
-    chore = create(:chore, created_by_user: user, name: "Walk")
-    create(:chore_completion, chore: chore, user: user)
-    create(:chore_withdrawal, user: user)
-    get chores_history_path
-    expect(response.body).to include("1 completion,")
-    expect(response.body).to include("1 withdrawal")
-  end
-
-  it "GET /chores/history mixes completions + withdrawals newest first" do
+  it "GET /chores/history.json mixes completions + withdrawals newest first" do
     chore = create(:chore, created_by_user: user, name: "Mix")
     create(:chore_completion, chore: chore, user: user, paid_pebbles: 3,
       completed_at: 2.hours.ago)
     create(:chore_withdrawal, user: user, amount_pebbles: 2, note: "candy")
-    get chores_history_path
+    get "/chores/history.json", headers: { "Accept" => "application/json" }
+    kinds = JSON.parse(response.body)["entries"].map { |e| e["kind"] }
+    expect(kinds).to eq(["withdrawal", "completion"])
+  end
+
+  it "GET /chores/recent_history returns the latest 10 mixed entries" do
+    chore = create(:chore, created_by_user: user, name: "Walk")
+    12.times { |i|
+      create(:chore_completion, chore: chore, user: user, paid_pebbles: 1,
+        completed_at: (i + 1).hours.ago, day_key: ChoreDay.current(user))
+    }
+    create(:chore_withdrawal, user: user, amount_pebbles: 3, note: "snack")
+    get "/chores/recent_history", headers: { "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
-    body = response.body
-    # Withdrawal (newer) appears before completion (2h older)
-    expect(body.index("candy")).to be < body.index("Mix")
+    body = JSON.parse(response.body)
+    expect(body["entries"].size).to eq(10)
+    # Newest = the just-created withdrawal.
+    expect(body["entries"].first["kind"]).to eq("withdrawal")
+    expect(body["entries"].first["note"]).to eq("snack")
+    expect(body["balance"]).to be_a(Integer)
+  end
+
+  # ----------------------------------------------------------------
+  # Header pill contract: `today_earnings` is THE canonical number
+  # behind the balance pill on every chores page. Every endpoint that
+  # could conceivably drive a balance UI update MUST return it, even
+  # when the action itself doesn't move it (withdrawals don't touch
+  # today_earnings, but the client still funnels through the same
+  # writer). These specs lock the contract so the next refactor
+  # can't silently regress the pill back to lifetime balance.
+  # ----------------------------------------------------------------
+
+  describe "today_earnings is always returned" do
+    let(:chore) { create(:chore, created_by_user: user, reward_pebbles: 7) }
+    before do
+      # Two paid completions today + one paid yesterday — today_earnings
+      # should be 14 regardless of lifetime balance.
+      create(:chore_completion, chore: chore, user: user, paid_pebbles: 7, day_key: ChoreDay.current(user))
+      create(:chore_completion, chore: chore, user: user, paid_pebbles: 7, day_key: ChoreDay.current(user))
+      create(:chore_completion, chore: chore, user: user, paid_pebbles: 7, day_key: ChoreDay.current(user) - 1)
+    end
+
+    it "POST /chores/items/:id/completion" do
+      post "/chores/items/#{chore.id}/completion",
+        headers: { "Accept" => "application/json" }
+      body = JSON.parse(response.body)
+      expect(body).to have_key("today_earnings")
+      expect(body["today_earnings"]).to eq(user.reload.chore_completions.where(day_key: ChoreDay.current(user)).sum(:paid_pebbles))
+      expect(body["today_earnings"]).not_to eq(body["balance"])
+    end
+
+    it "PATCH /chores/completions/:id" do
+      completion = user.chore_completions.first
+      patch "/chores/completions/#{completion.id}",
+        params: { chore_completion: { note: "edit" } }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+      body = JSON.parse(response.body)
+      expect(body).to have_key("today_earnings")
+    end
+
+    it "DELETE /chores/completions/:id" do
+      completion = user.chore_completions.where(day_key: ChoreDay.current(user)).first
+      pre = user.chore_completions.where(day_key: ChoreDay.current(user)).sum(:paid_pebbles)
+      delete "/chores/completions/#{completion.id}", headers: { "Accept" => "application/json" }
+      body = JSON.parse(response.body)
+      expect(body).to have_key("today_earnings")
+      # Today's pill drops by exactly the paid amount of the deleted row.
+      expect(body["today_earnings"]).to eq(pre - completion.paid_pebbles)
+    end
+
+    it "POST /chores/withdrawals (lifetime moves, today_earnings does not)" do
+      pre_today = user.chore_completions.where(day_key: ChoreDay.current(user)).sum(:paid_pebbles)
+      post "/chores/withdrawals",
+        params: { chore_withdrawal: { amount_pebbles: 1, note: "snack" } }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+      body = JSON.parse(response.body)
+      expect(body).to have_key("today_earnings")
+      expect(body["today_earnings"]).to eq(pre_today)
+    end
+
+    it "DELETE /chores/withdrawals/:id (lifetime moves, today_earnings does not)" do
+      withdrawal = create(:chore_withdrawal, user: user, amount_pebbles: 5, note: "n")
+      pre_today = user.chore_completions.where(day_key: ChoreDay.current(user)).sum(:paid_pebbles)
+      delete "/chores/withdrawals/#{withdrawal.id}", headers: { "Accept" => "application/json" }
+      body = JSON.parse(response.body)
+      expect(body).to have_key("today_earnings")
+      expect(body["today_earnings"]).to eq(pre_today)
+    end
+
+    it "GET /chores/history.json" do
+      get "/chores/history.json", headers: { "Accept" => "application/json" }
+      body = JSON.parse(response.body)
+      expect(body).to have_key("today_earnings")
+    end
+
+    it "GET /chores/recent_history" do
+      get "/chores/recent_history", headers: { "Accept" => "application/json" }
+      body = JSON.parse(response.body)
+      expect(body).to have_key("today_earnings")
+    end
+  end
+
+  it "Balance page lifetime card uses [data-lifetime-balance], not [data-balance]" do
+    create(:chore_completion, user: user, paid_pebbles: 5, day_key: ChoreDay.current(user))
+    get chores_balance_path
+    expect(response).to have_http_status(:ok)
+    # The header pill (today_earnings) uses [data-balance]; the
+    # in-card "Pebbles available" lifetime number must not.
+    expect(response.body).to include("data-lifetime-balance")
+    expect(response.body).not_to match(/balance-amount.*data-balance[^-]/)
+  end
+
+  it "POST completion accepts overrides from an edited pending push" do
+    chore = create(:chore, created_by_user: user, reward_pebbles: 5)
+    when_at = Time.current.change(usec: 0) - 30.minutes
+    post "/chores/items/#{chore.id}/completion",
+      params: {
+        client_completed_at: when_at.iso8601,
+        chore_completion: {
+          note: "from queue",
+          hot_multiplier: 2.0,
+          total_multiplier: 2.5,
+          hot_pick: true,
+        },
+      }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+    expect(response).to have_http_status(:created)
+    completion = user.chore_completions.last
+    # Multipliers are historical record — paid_pebbles still driven by
+    # the completer (5 base × 1× combined).
+    expect(completion.note).to eq("from queue")
+    expect(completion.hot_multiplier).to eq(2.0)
+    expect(completion.total_multiplier).to eq(2.5)
+    expect(completion.metadata["hot_pick"]).to be(true)
+    expect(completion.paid_pebbles).to eq(5)
   end
 
   it "DELETE /chores/completions/:id removes and updates balance" do

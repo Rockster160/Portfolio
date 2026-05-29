@@ -98,8 +98,9 @@ Rails.application.routes.draw do
   get  "/chores"         => "chores#index",   as: :chores
   get  "/chores/today"   => "chores#today",   as: :chores_today
   get  "/chores/balance" => "chores#balance", as: :chores_balance
-  get  "/chores/history" => "chores#history", as: :chores_history
-  get  "/chores/csrf"    => "chores#csrf",    as: :chores_csrf
+  get  "/chores/history"        => "chores#history",        as: :chores_history
+  get  "/chores/recent_history" => "chores#recent_history", as: :chores_recent_history
+  get  "/chores/csrf"           => "chores#csrf",           as: :chores_csrf
   get  "/chores/sync"    => "chores#sync",    as: :chores_sync
   scope path: "chores", as: :chore_routes do
     get  "/new"          => "chores#new",            as: :new

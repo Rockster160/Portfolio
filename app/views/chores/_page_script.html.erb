@@ -597,6 +597,20 @@
   // ============================================================
   // mutations — go through the store
   // ============================================================
+  // Snapshot of the chore-side fields the History page needs to render
+  // a pending push without a server round-trip. Stored alongside the
+  // queued POST/DELETE in localStorage; never sent to the server.
+  function queueMetaFor(c) {
+    if (!c) return null;
+    return {
+      chore_id: c.id,
+      chore_name: c.short_name || c.name,
+      icon: c.icon || "",
+      icon_kind: c.icon_kind || "empty",
+      one_off: !!c.one_off,
+      base_pebbles: c.reward_pebbles || 0,
+    };
+  }
   async function completeChore(id) {
     const c = ChoreStore.get(parseInt(id, 10));
     if (!c) return;
@@ -611,7 +625,8 @@
 
     if (!navigator.onLine) {
       enqueue({ url: `/chores/items/${c.id}/completion`, method: "POST",
-                body: { client_completed_at: clickAt, tab_id: TAB_ID } });
+                body: { client_completed_at: clickAt, tab_id: TAB_ID },
+                meta: queueMetaFor(c) });
       return;
     }
 
@@ -630,7 +645,8 @@
         // User never sees an "Error" flash — their tap was accepted
         // locally and will sync.
         enqueue({ url: `/chores/items/${c.id}/completion`, method: "POST",
-                  body: { client_completed_at: clickAt, tab_id: TAB_ID } });
+                  body: { client_completed_at: clickAt, tab_id: TAB_ID },
+                  meta: queueMetaFor(c) });
         setConnDot("syncing");
         scheduleQueueRetry();
       } else {
@@ -673,7 +689,8 @@
       flash("Undone", "warn");
     } catch (err) {
       if (isTransientError(err)) {
-        enqueue({ url: `/chores/items/${c.id}/completion`, method: "DELETE" });
+        enqueue({ url: `/chores/items/${c.id}/completion`, method: "DELETE",
+                  meta: queueMetaFor(c) });
         setConnDot("syncing");
         scheduleQueueRetry();
       } else {
@@ -707,11 +724,8 @@
     if (data.lookahead) ChoreStore.setLookahead(data.lookahead);
     if (data.archived_chore_id) ChoreStore.remove(data.archived_chore_id);
 
-    if (data.today_earnings != null && root) {
-      root.dataset.balanceToday = data.today_earnings;
-      updateBalancePill();
-    }
-    if (data.balance != null && root) root.dataset.balanceTotal = data.balance;
+    if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
+    if (data.balance != null) setLifetimeBalance(data.balance);
   }
 
   function updateBalancePill() {
@@ -719,6 +733,24 @@
     if (!el) return;
     const v = root?.dataset.balanceToday;
     if (v != null) el.textContent = formatCount(v);
+  }
+  // Single, intentional writer for the header pill. EVERY page shows
+  // today_earnings here — never lifetime. Any handler that wants to
+  // update the pill must funnel through this so the next refactor
+  // can't accidentally pass lifetime back in.
+  function setTodayEarnings(value) {
+    if (value == null) return;
+    if (root) root.dataset.balanceToday = value;
+    const el = document.querySelector("[data-balance]");
+    if (el) el.textContent = formatCount(value);
+  }
+  // Separate writer for the Balance page's lifetime card. NEVER
+  // touches `[data-balance]`.
+  function setLifetimeBalance(value) {
+    if (value == null) return;
+    if (root) root.dataset.balanceTotal = value;
+    const el = document.querySelector("[data-lifetime-balance]");
+    if (el) el.textContent = formatCount(value);
   }
 
   // ============================================================
@@ -747,6 +779,17 @@
       if (data.server_ts) localStorage.setItem(SYNC_TS_KEY, data.server_ts);
       if (data.day_key) localStorage.setItem(SYNC_DAY_KEY, data.day_key);
       setSyncBadge(false);
+      // Pair every successful sync with a shell refresh: the server
+      // may have changed the underlying HTML (a new chore in the
+      // bootstrap JSON, an asset URL bump, a layout tweak) and we
+      // never want the cached shell lagging behind. Without this the
+      // user could see the live data update but the offline-reopen
+      // experience would still serve yesterday's shell.
+      pingSwRefresh();
+      // Off-screen views may want to re-render after a fresh sync —
+      // mirror the Monitor path's bus event so any mounted view
+      // reacts identically to local resyncs and remote broadcasts.
+      broadcastRemoteChange("full_sync");
     } catch (e) { setSyncBadge(false, true); }
     finally { syncInFlight = false; }
   }
@@ -1427,6 +1470,96 @@
       } catch (e) { flash("Couldn't delete: " + e.message, "error"); }
     });
   });
+  // Hydrate the Balance page's "Recent History" block. Per the
+  // architecture spec: NEVER cached — every visit, every broadcast,
+  // every refocus dumps the current content, shows a spinner, and
+  // fetches fresh. Stale rows are worse here than a brief spinner
+  // because this list is audit-style and people use it to verify
+  // their balance.
+  function renderRecentHistory(data) {
+    const container = document.querySelector("[data-recent-history]");
+    if (!container) return;
+    const cta = document.querySelector("[data-recent-history-cta]");
+    const entries = Array.isArray(data?.entries) ? data.entries : [];
+    if (entries.length === 0) {
+      container.innerHTML = `<div class="history-row"><span class="dim">No recent activity.</span></div>`;
+      if (cta) cta.setAttribute("hidden", "");
+      return;
+    }
+    container.innerHTML = entries.map(recentHistoryRowHTML).join("");
+    if (cta) cta.removeAttribute("hidden");
+    // Header pill is ALWAYS today_earnings — never balance.
+    if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
+    if (data.balance != null) setLifetimeBalance(data.balance);
+  }
+  function showRecentHistorySpinner() {
+    const container = document.querySelector("[data-recent-history]");
+    if (!container) return;
+    container.innerHTML = `<div class="history-row history-loading"><i class="fa fa-spinner fa-pulse"></i> <span class="dim">Loading recent history…</span></div>`;
+  }
+  async function hydrateRecentHistory() {
+    const container = document.querySelector("[data-recent-history]");
+    if (!container) return;
+    showRecentHistorySpinner();
+    try {
+      const data = await api("/chores/recent_history", "GET");
+      renderRecentHistory(data);
+    } catch (e) {
+      container.innerHTML = `<div class="history-row history-loading"><span class="dim">Offline — recent history will load when you're back.</span></div>`;
+    }
+  }
+  function recentHistoryRowHTML(entry) {
+    if (entry.kind === "completion") {
+      const amt = entry.payout_skipped
+        ? `<span style="color:#9CA3AF;">(skipped)</span>`
+        : `<span style="color:#34D399;">+${formatCount(entry.paid_pebbles)}p</span>`;
+      const note = entry.note ?
+        `<span class="history-note">— ${esc(truncate(entry.note, 40))}</span>` : "";
+      return `
+        <div class="history-row">
+          <span>
+            ${esc(entry.when_label)} ·
+            <span class="history-icon">${recentIconHTML(entry.chore)}</span>
+            <strong>${esc(entry.chore.short_name || entry.chore.name)}</strong>
+            ${note}
+          </span>
+          ${amt}
+        </div>`;
+    }
+    const note = entry.note ?
+      `<span class="history-note">— ${esc(truncate(entry.note, 40))}</span>` : "";
+    return `
+      <div class="history-row">
+        <span>
+          ${esc(entry.when_label)} ·
+          🪙 <strong>Withdraw</strong>
+          ${note}
+        </span>
+        <span style="color:#FCA5A5;">−${formatCount(entry.amount_pebbles)}p</span>
+      </div>`;
+  }
+  function recentIconHTML(chore) {
+    const v = (chore.icon || "").trim();
+    const kind = chore.icon_kind;
+    if (!v || kind === "empty") return `<span class="icon-placeholder">🧹</span>`;
+    if (kind === "image") return `<img class="icon-img" src="${esc(v)}" alt="" loading="lazy">`;
+    if (kind === "svg")   return v;
+    return `<span class="icon-glyph">${esc(v)}</span>`;
+  }
+  function truncate(s, n) { return s.length > n ? s.slice(0, n - 3) + "..." : s; }
+  if (root?.dataset.mode === "balance") {
+    hydrateRecentHistory();
+    // Always dump and re-fetch on WS broadcast, focus, or reconnect.
+    // The page_script visibilitychange + online handlers above run
+    // fullSync; piggyback recent-history hydrate on the same bus so
+    // the rows match the balance pill they're showing.
+    window.addEventListener("chores:remote_change", () => hydrateRecentHistory());
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") hydrateRecentHistory();
+    });
+    window.addEventListener("online", () => hydrateRecentHistory());
+  }
+
   document.querySelector("[data-withdraw-form]")?.addEventListener("submit", async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -1513,6 +1646,16 @@
     let q = loadQueue();
     if (!q.length) { queueBlockedReason = null; setConnDot("online"); updatePendingBadge(0); return; }
     if (!navigator.onLine) { setConnDot("offline"); return; }
+    // History view: the user is editing/triaging pending items. Do
+    // NOT send them while they're being curated — they'd race the
+    // user. Monitor still subscribes (so live updates flow into the
+    // store), but outbound flushes are paused until they navigate
+    // away. The next page load (or focus event) will resume.
+    if (root?.dataset.mode === "history") {
+      setConnDot(navigator.onLine ? "online" : "offline");
+      updatePendingBadge(q.length);
+      return;
+    }
     setConnDot("syncing");
     queueBlockedReason = null;
     let csrf = queueCsrf;
@@ -1575,7 +1718,7 @@
   function subscribeMonitor() {
     if (typeof window.Monitor === "undefined") { setTimeout(subscribeMonitor, 200); return; }
     window.Monitor.subscribe("chores", {
-      connected() { setConnDot("online"); flushQueue(); pingSwRefresh(); fullSync(); },
+      connected() { setConnDot("online"); flushQueue(); pingSwRefresh(); fullSync(); broadcastRemoteChange("connected"); },
       disconnected() { setConnDot("offline"); },
       received(data) {
         pingSwRefresh();
@@ -1594,11 +1737,30 @@
         } else {
           fullSync();
         }
+        // Notify off-screen views so the History or Balance content
+        // refetches in place. Per spec: History + Balance recent rows
+        // are NEVER cached client-side — they always reload fresh on
+        // visit and on broadcast. The "data already there" guarantee
+        // applies to chores (ChoreStore / store-driven views), not to
+        // the audit-style history feeds.
+        broadcastRemoteChange("monitor", payload);
       },
     });
   }
+
+  function broadcastRemoteChange(reason, payload) {
+    window.dispatchEvent(new CustomEvent("chores:remote_change", {
+      detail: { reason, payload: payload || null, at: Date.now() },
+    }));
+  }
+  // Resync on every focus regardless of which chores view is mounted.
+  // Closing/reopening the app, alt-tabbing back, returning from a
+  // sleep — each lands on a visible page that needs fresh data.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") { pingSwRefresh(); if (unifiedPage) fullSync(); }
+    if (document.visibilityState === "visible") {
+      pingSwRefresh();
+      fullSync();
+    }
   });
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker
@@ -1681,12 +1843,11 @@
   bindCardClicks();
   startTicker();
   // Day rollover watcher: a tab left open across 4am needs a fresh
-  // sync to pick up new hot picks, today_visible flips, and the
-  // done_count reset. Cheap (one Date compare per minute); fires a
-  // forced fullSync exactly once when the boundary crosses.
+  // sync regardless of which chore view is mounted. The store updates
+  // either way so navigating to Grid/Today post-rollover never paints
+  // yesterday's hot picks. Cheap (one Date compare per minute).
   let watchedDay = currentChoreDayIso();
   setInterval(() => {
-    if (!unifiedPage) return;
     const now = currentChoreDayIso();
     if (now !== watchedDay) {
       watchedDay = now;
@@ -1695,9 +1856,19 @@
   }, 60 * 1000);
   subscribeMonitor();
   flushQueue();
+  // Every chore view boots with a fullSync (chores store is updated
+  // even on Balance/History so when the user navigates to Grid the
+  // data is already there) AND a shell refresh (so the cached HTML
+  // never lags behind the live data).
+  fullSync();
+  pingSwRefresh();
+  // Reconnect after offline: re-sync the chores store, re-ping the
+  // shell cache. Monitor's `connected` callback also fires fullSync
+  // when the WS reattaches; running both is cheap (fullSync no-ops
+  // if one is in flight) and covers the case where the WS lags the
+  // window `online` event.
+  window.addEventListener("online", () => { fullSync(); pingSwRefresh(); });
   if (unifiedPage) {
     setActiveView(MODE, { push: false });
-    fullSync();
-    window.addEventListener("online", () => fullSync());
   }
 </script>

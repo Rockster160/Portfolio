@@ -15,7 +15,13 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v32";
+const CACHE = "chores-v34";
+// Every chore view is a cached shell. Each shell is body-empty for
+// page-specific content — entries on History, recent rows on Balance —
+// because that data is hydrated client-side from JSON (and from a
+// localStorage cache for instant repeat visits). The shell load itself
+// is offline-tolerant; the JSON fetches degrade gracefully when there
+// is no connection.
 const SHELL_PATHS = ["/chores", "/chores/today", "/chores/balance", "/chores/history"];
 
 // Background shell refresh — fired by the page-script when a Monitor
@@ -70,15 +76,12 @@ self.addEventListener("activate", evt => {
 });
 
 function isShellRequest(url) {
-  // The shell cache stores by `url.pathname` only — so
-  // `/chores/history?page=2` would otherwise read + write the same key
-  // as `/chores/history`, serving page 1 forever once it's cached.
-  // Any URL with a `page` parameter (or any query at all on the
-  // history view, which is the only paginated shell) goes through to
-  // the network instead.
-  if (url.pathname === "/chores/history" && url.search) return false;
-  if (url.searchParams.has("page")) return false;
-  return SHELL_PATHS.some(p => url.pathname === p || url.pathname.startsWith(p + "?"));
+  // History is excluded above from SHELL_PATHS entirely. The remaining
+  // shells (Grid / Today / Balance) are not paginated, so an exact
+  // pathname match is enough — any query string falls through to the
+  // network.
+  if (url.search) return false;
+  return SHELL_PATHS.includes(url.pathname);
 }
 
 function isStaticAsset(url) {
