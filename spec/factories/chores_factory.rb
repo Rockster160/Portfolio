@@ -42,6 +42,12 @@ FactoryBot.define do
     user
   end
 
+  factory :chore_transfer do
+    amount_pebbles { 5 }
+    association :from_user, factory: :user
+    association :to_user,   factory: :user
+  end
+
   factory :chore_share do
     user
     association :shared_with_user, factory: :user

@@ -36,9 +36,11 @@ class ChoreCompletion < ApplicationRecord
   #   notes:test            → notes ILIKE %test%
   #   time>2026-05-01       → completed_at > date
   #   name:Cat              → joined chore.name ILIKE %Cat%
+  #   amount>1              → paid_pebbles > 1 (=, !=, <, >, <=, >=)
   #   bare keyword          → matches across notes + chore name
   search_terms :id, :note, :paid_pebbles,
     notes: :note,
+    amount: :paid_pebbles,
     time: :completed_at,
     name: "chores.name"
 

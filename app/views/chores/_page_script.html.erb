@@ -1518,7 +1518,7 @@
         ? `<span style="color:#9CA3AF;">(skipped)</span>`
         : `<span style="color:#34D399;">+${formatCount(entry.paid_pebbles)}p</span>`;
       const note = entry.note ?
-        `<span class="history-note">— ${esc(truncate(entry.note, 40))}</span>` : "";
+        `<span class="history-note">— ${esc(truncate(entry.note, 120))}</span>` : "";
       return `
         <div class="history-row">
           <span>
@@ -1530,8 +1530,30 @@
           ${amt}
         </div>`;
     }
+    if (entry.kind === "transfer") {
+      // Outgoing reads "Sent to <name>" with a red minus; incoming
+      // reads "From <name>" with a green plus. Same icon + colour
+      // palette as withdrawals on the loss side so the at-a-glance
+      // scan stays consistent.
+      const outgoing = entry.direction === "outgoing";
+      const peer = entry.counterparty_username || "someone";
+      const verb = outgoing ? `Sent to ${peer}` : `From ${peer}`;
+      const sign = outgoing ? "−" : "+";
+      const colour = outgoing ? "#FCA5A5" : "#34D399";
+      const note = entry.note ?
+        `<span class="history-note">— ${esc(truncate(entry.note, 120))}</span>` : "";
+      return `
+        <div class="history-row">
+          <span>
+            ${esc(entry.when_label)} ·
+            🤝 <strong>${esc(verb)}</strong>
+            ${note}
+          </span>
+          <span style="color:${colour};">${sign}${formatCount(entry.amount_pebbles)}p</span>
+        </div>`;
+    }
     const note = entry.note ?
-      `<span class="history-note">— ${esc(truncate(entry.note, 40))}</span>` : "";
+      `<span class="history-note">— ${esc(truncate(entry.note, 120))}</span>` : "";
     return `
       <div class="history-row">
         <span>
@@ -1582,6 +1604,28 @@
       form.reset();
       hydrateRecentHistory();
     } catch (err) { flash("Withdraw failed: " + err.message, "error"); }
+  });
+
+  document.querySelector("[data-transfer-form]")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.target;
+    const fd = new FormData(form);
+    const entries = Object.fromEntries(fd.entries());
+    const amount = parseInt(entries.amount_pebbles, 10);
+    if (Number.isNaN(amount) || amount <= 0) { flash("Enter a positive amount", "warn"); return; }
+    if (!entries.to_user_id) { flash("Pick a recipient", "warn"); return; }
+    try {
+      const data = await api("/chores/transfers", "POST", { chore_transfer: entries });
+      const recipientLabel = form.querySelector(`[name="to_user_id"] option[value="${entries.to_user_id}"]`)?.textContent?.trim() || "recipient";
+      flash(`Transferred ${formatCount(data.amount_pebbles)}p to ${recipientLabel}`);
+      if (data.balance != null) setLifetimeBalance(data.balance);
+      if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
+      // Reset amount + note but leave the recipient pinned — the
+      // common pattern is multiple transfers to the same person.
+      form.querySelector('[name="amount_pebbles"]').value = "";
+      form.querySelector('[name="note"]').value = "";
+      hydrateRecentHistory();
+    } catch (err) { flash("Transfer failed: " + err.message, "error"); }
   });
 
   // ============================================================

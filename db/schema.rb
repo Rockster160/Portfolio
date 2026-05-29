@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_28_170000) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_30_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -451,6 +451,19 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_28_170000) do
     t.index ["chore_id"], name: "index_chore_streaks_on_chore_id"
     t.index ["user_id", "chore_id"], name: "index_chore_streaks_on_user_id_and_chore_id", unique: true
     t.index ["user_id"], name: "index_chore_streaks_on_user_id"
+  end
+
+  create_table "chore_transfers", force: :cascade do |t|
+    t.bigint "from_user_id", null: false
+    t.bigint "to_user_id", null: false
+    t.integer "amount_pebbles", null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["from_user_id"], name: "index_chore_transfers_on_from_user_id"
+    t.index ["to_user_id"], name: "index_chore_transfers_on_to_user_id"
+    t.check_constraint "amount_pebbles > 0", name: "chore_transfers_positive_amount"
+    t.check_constraint "from_user_id <> to_user_id", name: "chore_transfers_distinct_endpoints"
   end
 
   create_table "chore_user_orders", force: :cascade do |t|
@@ -1189,6 +1202,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_28_170000) do
   add_foreign_key "chore_shares", "users", column: "shared_with_user_id"
   add_foreign_key "chore_streaks", "chores"
   add_foreign_key "chore_streaks", "users"
+  add_foreign_key "chore_transfers", "users", column: "from_user_id"
+  add_foreign_key "chore_transfers", "users", column: "to_user_id"
   add_foreign_key "chore_user_orders", "chores"
   add_foreign_key "chore_user_orders", "users"
   add_foreign_key "chore_withdrawals", "users"

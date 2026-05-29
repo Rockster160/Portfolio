@@ -281,6 +281,9 @@
   #sync_completion(String:"Chore Name" Hash:"Completion" Hash:"Event Attrs")::Boolean
   #balance::Numeric
   #today_earnings::Numeric
+  #withdraw(Numeric:Amount String?:Note)::ChoreWithdrawal
+  #transfer(Numeric:Amount String:"Recipient Username" String?:Note)::ChoreTransfer
+  #history(String?:Query Numeric?:Limit String?:Order)::Array
 *[ActionEventData]
   #name(String)
   #notes(String)

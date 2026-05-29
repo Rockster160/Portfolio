@@ -159,7 +159,8 @@ class Jil::Methods::Chore < Jil::Methods::Base
     end
   end
 
-  # Chore.balance → lifetime balance (pebbles earned - withdrawn).
+  # Chore.balance → lifetime balance (pebbles earned + received -
+  # withdrawn - sent).
   def balance
     @jil.user.chore_balance
   end
@@ -169,7 +170,145 @@ class Jil::Methods::Chore < Jil::Methods::Base
     @jil.user.chore_balance_breakdown(ChoreDay.current(@jil.user))[:today_earnings]
   end
 
+  # Chore.withdraw(amount[, note]) → record a ChoreWithdrawal. Returns
+  # the new record, or nil if validation failed (amount must be > 0).
+  def withdraw(amount, note = nil)
+    n = amount.to_i
+    return nil if n <= 0
+
+    @jil.user.chore_withdrawals.create(amount_pebbles: n, note: note.to_s.presence)
+      &.then { |w| w.persisted? ? w : nil }
+  end
+
+  # Chore.transfer(amount, recipient[, note]) → record a ChoreTransfer
+  # from the running user to the recipient. `recipient` may be a User,
+  # a numeric user_id, a String username, or a Hash with `id` /
+  # `username`. Returns the new record, or nil if validation failed
+  # (recipient must be in the user's chore household, amount must fit).
+  def transfer(amount, recipient, note = nil)
+    n = amount.to_i
+    return nil if n <= 0
+
+    to_user = load_user(recipient)
+    return nil if to_user.nil?
+
+    record = @jil.user.chore_transfers_sent.create(
+      to_user: to_user, amount_pebbles: n, note: note.to_s.presence,
+    )
+    record.persisted? ? record : nil
+  end
+
+  # Chore.history(q, limit, order) → interleaved completion +
+  # withdrawal + transfer log. Same signature as ActionEvent.search /
+  # Email.search:
+  #   * `q`     — Tokenizing query string. Same syntax the History
+  #               page uses: `notes:foo`, `time>2026-05-01`,
+  #               `amount>1`, `name:Cat`, free keywords. Applied
+  #               independently to each feed via the model's own
+  #               search_terms config; tokens that don't apply to
+  #               one feed (e.g. `name:` doesn't exist on transfers)
+  #               just leave that feed unfiltered.
+  #   * `limit` — defaults to 50, clamped to 1..100 (matching the
+  #               other Jil index endpoints).
+  #   * `order` — `:asc` or `:desc` (default `:desc`).
+  #
+  # Returns an Array of Hashes — each with `:kind`
+  # ("completion" | "withdrawal" | "transfer") plus the same fields
+  # the UI's recent-history feed uses, so the three heterogeneous
+  # feeds can be iterated in one pass.
+  def history(q, limit, order)
+    limit = (limit.presence || 50).to_i.clamp(1..100)
+    direction = [:asc, :desc].include?(order.to_s.downcase.to_sym) ? order.to_s.downcase.to_sym : :desc
+
+    completions = scoped_for(ChoreCompletion, q, limit, :completed_at, direction)
+      .where(user: @jil.user)
+      .includes(:chore)
+    withdrawals = scoped_for(ChoreWithdrawal, q, limit, :created_at, direction)
+      .where(user: @jil.user)
+    transfers   = scoped_for(ChoreTransfer, q, limit, :created_at, direction)
+      .where("from_user_id = :id OR to_user_id = :id", id: @jil.user.id)
+      .includes(:from_user, :to_user)
+
+    sorter = ->(e) { e.is_a?(ChoreCompletion) ? e.completed_at : e.created_at }
+    merged = (completions.to_a + withdrawals.to_a + transfers.to_a).sort_by(&sorter)
+    merged.reverse! if direction == :desc
+    merged.first(limit).map { |e| history_entry_hash(e) }
+  end
+
   private
+
+  def history_entry_hash(entry)
+    case entry
+    when ChoreCompletion
+      {
+        kind:           "completion",
+        id:             entry.id,
+        chore_id:       entry.chore_id,
+        chore_name:     entry.chore&.name,
+        paid_pebbles:   entry.paid_pebbles,
+        base_pebbles:   entry.base_pebbles,
+        note:           entry.note.to_s,
+        completed_at:   entry.completed_at&.iso8601(3),
+        payout_skipped: entry.payout_skipped,
+        skipped_reason: entry.skipped_reason,
+      }
+    when ChoreWithdrawal
+      {
+        kind:           "withdrawal",
+        id:             entry.id,
+        amount_pebbles: entry.amount_pebbles,
+        note:           entry.note.to_s,
+        created_at:     entry.created_at&.iso8601(3),
+      }
+    when ChoreTransfer
+      outgoing = entry.from_user_id == @jil.user.id
+      counterparty = outgoing ? entry.to_user : entry.from_user
+      {
+        kind:                  "transfer",
+        id:                    entry.id,
+        direction:             outgoing ? "outgoing" : "incoming",
+        amount_pebbles:        entry.amount_pebbles,
+        counterparty_username: counterparty&.username,
+        from_user_id:          entry.from_user_id,
+        to_user_id:            entry.to_user_id,
+        note:                  entry.note.to_s,
+        created_at:            entry.created_at&.iso8601(3),
+      }
+    end
+  end
+
+  # Run the `.query` scope (which uses each model's `search_terms`
+  # config) then apply page+limit+order, mirroring the shape of
+  # ActionEvent.search / Email.search but on a model class rather
+  # than a relation. `.query` deliberately clears prior scoping per
+  # ApplicationRecord, so the caller re-applies the user filter on
+  # the returned relation.
+  def scoped_for(klass, q, limit, ts_column, direction)
+    base = q.present? ? klass.query(q) : klass.all
+    base.page(1).per(limit).order(ts_column => direction)
+  rescue StandardError => e
+    Rails.logger.warn("Chore.history query failed for #{klass}: #{e.message}")
+    klass.all.order(ts_column => direction).limit(limit)
+  end
+
+  def load_user(value)
+    return nil if value.nil?
+    return value if value.is_a?(::User)
+    return ::User.find_by(id: value) if value.is_a?(::Numeric)
+
+    if value.is_a?(::String)
+      uname = value.strip
+      return nil if uname.empty?
+
+      return ::User.find_by(username: uname)
+    end
+
+    hash = @jil.cast(value, :Hash)
+    return ::User.find_by(id: hash[:id]) if hash[:id].present?
+    return ::User.find_by(username: hash[:username]) if hash[:username].present?
+
+    nil
+  end
 
   def find_by_id(id)
     @jil.user.accessible_chores.find_by(id: id)
@@ -388,6 +527,20 @@ end
 #   #sync_completion(String:"Chore Name" Hash|ChoreCompletion Hash:"Event Attrs")::Boolean
 #   #balance::Integer
 #   #today_earnings::Integer
+#   #withdraw(Integer:Amount String?:Note)::ChoreWithdrawal
+#   #transfer(Integer:Amount User|String|Integer:Recipient String?:Note)::ChoreTransfer
+#   #history(String?:Query Integer?:Limit String?:Order)::Array
+#     # Same Tokenizing syntax as the History page:
+#     #   amount>1                   numeric comparison
+#     #   notes:foo / time>2026-05   text + date filters
+#     #   name:Cat                   joined chore.name filter
+#     # Order: "asc" | "desc" (default desc), limit capped at 500.
+#
+# Triggers fired by these endpoints (listen for them in Jil tasks):
+#   * `chore_withdrawal action:created|updated|destroyed`
+#   * `chore_transfer  action:created|updated|destroyed direction:outgoing|incoming`
+#     (the transfer trigger fires once for the sender and once for the
+#      recipient — each with their own direction).
 #
 # Wiring an event → chore mapping is done in Jil itself. Two patterns:
 #

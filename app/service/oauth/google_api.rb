@@ -138,7 +138,7 @@ class Oauth::GoogleApi < Oauth::Base
   # ---- API surface ----
 
   def list_calendars
-    get("users/me/calendarList", { maxResults: 250 })
+    get("users/me/calendarList", { maxResults: 250, showHidden: true })
   end
 
   # Single-calendar metadata fetch. Used by the sync service to lazily

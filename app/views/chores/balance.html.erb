@@ -84,6 +84,26 @@
     </fieldset>
   </form>
 
+  <h3 style="margin-top:24px;">Transfer</h3>
+  <% if @transfer_recipients.empty? %>
+    <p style="color:var(--chores-muted);font-size:13px;">
+      No one to transfer to — add someone to your chore household first.
+    </p>
+  <% else %>
+    <form class="basic" data-transfer-form>
+      <fieldset data-transfer-fieldset style="border:0;padding:0;margin:0;display:flex;gap:8px;align-items:center;" <%= "disabled" if @balance.to_i <= 0 %>>
+        <select name="to_user_id" required style="flex:1;height:38px;box-sizing:border-box;padding:0 10px;border-radius:6px;border:1px solid #334155;background:#00102B;color:#ECF0F1;font:inherit;">
+          <% @transfer_recipients.each do |u| %>
+            <option value="<%= u.id %>"><%= u.username %></option>
+          <% end %>
+        </select>
+        <input type="number" name="amount_pebbles" placeholder="Amount" min="1" max="<%= [@balance.to_i, 1].max %>" autocomplete="off" style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#00102B;color:#ECF0F1;">
+        <input type="text" name="note" placeholder="Note (optional)" autocomplete="off" style="flex:2;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#00102B;color:#ECF0F1;">
+        <button class="btn" type="submit">Transfer</button>
+      </fieldset>
+    </form>
+  <% end %>
+
   <div class="section-heading">
     <h3>Recent History</h3>
     <button type="button" class="section-reload" data-recent-history-reload

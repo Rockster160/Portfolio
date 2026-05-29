@@ -131,6 +131,11 @@ class ChoresController < ApplicationController
     @achievements = ChoreAchievement.active.to_a
     @earned_ids = current_user.user_chore_achievements.pluck(:chore_achievement_id).to_set
     @multipliers = current_user.chore_multipliers.order(:sort_order, :id)
+    # Pebble transfer recipients = chore-household users minus self.
+    # If the user has no household peers, the transfer form renders
+    # an empty-state instead of a select.
+    household_ids = current_user.chore_owner_user_ids - [current_user.id]
+    @transfer_recipients = User.where(id: household_ids).order(:username).to_a
   end
 
   def history
@@ -149,7 +154,7 @@ class ChoresController < ApplicationController
     end
   end
 
-  # GET /chores/recent_history — last 10 completions/withdrawals
+  # GET /chores/recent_history — last 10 completions/withdrawals/transfers
   # interleaved, used to hydrate the Balance page's Recent History
   # section. Kept separate from /chores/sync so the Balance shell can
   # render instantly (with a loading state) while this fetch lands.
@@ -159,11 +164,12 @@ class ChoresController < ApplicationController
       .order(completed_at: :desc).limit(10).to_a
     withdrawals = current_user.chore_withdrawals
       .order(created_at: :desc).limit(10).to_a
+    transfers = ChoreTransfer
+      .where("from_user_id = :id OR to_user_id = :id", id: current_user.id)
+      .includes(:from_user, :to_user)
+      .order(created_at: :desc).limit(10).to_a
 
-    entries = (completions + withdrawals).sort_by { |e|
-      ts = e.is_a?(ChoreCompletion) ? e.completed_at : e.created_at
-      -ts.to_f
-    }.first(10)
+    entries = (completions + withdrawals + transfers).sort_by { |e| -entry_ts(e).to_f }.first(10)
 
     today = ChoreDay.current(current_user)
     today_earnings = current_user.chore_completions.where(day_key: today).sum(:paid_pebbles)
@@ -303,38 +309,43 @@ class ChoresController < ApplicationController
 
   # Run the same paginated query the HTML view used to do. Sets
   # @entries / @total_count / @total_pages / @completion_count /
-  # @withdrawal_count so the JSON renderer can emit consistent counts.
+  # @withdrawal_count / @transfer_count so the JSON renderer can
+  # emit consistent counts.
   def load_history_window
     page = @page
     per = @per
 
     base_completions = current_user.chore_completions.includes(:chore).joins(:chore)
     base_withdrawals = current_user.chore_withdrawals
+    base_transfers   = ChoreTransfer
+      .where("from_user_id = :id OR to_user_id = :id", id: current_user.id)
+      .includes(:from_user, :to_user)
 
     if @q.present?
       base_completions = safe_query(base_completions, @q)
       base_withdrawals = safe_query(base_withdrawals, @q)
+      base_transfers   = safe_query(base_transfers,   @q)
     end
 
     @completion_count = base_completions.except(:includes, :order).count
     @withdrawal_count = base_withdrawals.except(:order).count
-    @total_count = @completion_count + @withdrawal_count
+    @transfer_count   = base_transfers.except(:includes, :order).count
+    @total_count = @completion_count + @withdrawal_count + @transfer_count
     @total_pages = [(@total_count.to_f / per).ceil, 1].max
 
     window = page * per
     completions = base_completions.order(completed_at: :desc).limit(window).to_a
     withdrawals = base_withdrawals.order(created_at: :desc).limit(window).to_a
+    transfers   = base_transfers.order(created_at: :desc).limit(window).to_a
 
-    entries = (completions + withdrawals).sort_by { |e|
-      ts = e.is_a?(ChoreCompletion) ? e.completed_at : e.created_at
-      -ts.to_f
-    }
+    entries = (completions + withdrawals + transfers).sort_by { |e| -entry_ts(e).to_f }
     @entries = entries[((page - 1) * per), per] || []
   end
 
   def history_json_payload
     page_completions = @entries.count { |e| e.is_a?(ChoreCompletion) }
-    page_withdrawals = @entries.size - page_completions
+    page_withdrawals = @entries.count { |e| e.is_a?(ChoreWithdrawal) }
+    page_transfers   = @entries.count { |e| e.is_a?(ChoreTransfer) }
     from = ((@page - 1) * @per) + 1
     to   = [@page * @per, @total_count].min
     today = ChoreDay.current(current_user)
@@ -347,8 +358,10 @@ class ChoresController < ApplicationController
       total_count: @total_count,
       completion_count: @completion_count,
       withdrawal_count: @withdrawal_count,
+      transfer_count: @transfer_count,
       page_completions: page_completions,
       page_withdrawals: page_withdrawals,
+      page_transfers: page_transfers,
       from: @total_count.zero? ? 0 : from,
       to: to,
       balance: @balance,
@@ -358,8 +371,13 @@ class ChoresController < ApplicationController
     }
   end
 
+  def entry_ts(entry)
+    entry.is_a?(ChoreCompletion) ? entry.completed_at : entry.created_at
+  end
+
   def history_entry_json(entry)
-    if entry.is_a?(ChoreCompletion)
+    case entry
+    when ChoreCompletion
       {
         kind: :completion,
         id: entry.id,
@@ -375,11 +393,24 @@ class ChoresController < ApplicationController
         payout_skipped: entry.payout_skipped,
         skipped_reason: entry.skipped_reason,
       }
-    else
+    when ChoreWithdrawal
       {
         kind: :withdrawal,
         id: entry.id,
         amount_pebbles: entry.amount_pebbles,
+        note: entry.note.to_s,
+        created_at: entry.created_at.iso8601(3),
+        when_label: entry.created_at.strftime("%b %-d %l:%M%P").squeeze(" "),
+      }
+    when ChoreTransfer
+      direction = entry.from_user_id == current_user.id ? :outgoing : :incoming
+      counterparty = direction == :outgoing ? entry.to_user : entry.from_user
+      {
+        kind: :transfer,
+        id: entry.id,
+        direction: direction,
+        amount_pebbles: entry.amount_pebbles,
+        counterparty_username: counterparty&.username,
         note: entry.note.to_s,
         created_at: entry.created_at.iso8601(3),
         when_label: entry.created_at.strftime("%b %-d %l:%M%P").squeeze(" "),

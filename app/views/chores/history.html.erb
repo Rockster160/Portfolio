@@ -9,7 +9,7 @@
       legacy round-trip. %>
   <form class="history-search" data-history-search action="<%= chores_history_path %>" method="get">
     <input type="text" name="q" value="<%= @q %>" data-history-q
-           placeholder="Filter… e.g. notes:test, time>2026-05-01, Cat"
+           placeholder="Filter… e.g. notes:test, time>2026-05-01, amount>1, Cat"
            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <button type="button" data-history-clear class="btn ghost <%= 'hidden' if @q.blank? %>">Clear</button>
   </form>
@@ -69,15 +69,15 @@
         <button type="button" class="modal-close" data-modal-cancel aria-label="Close">×</button>
       </div>
       <div class="completion-details">
-        <div class="detail-row">
-          <span class="detail-label">Chore</span>
+        <div class="detail-row" data-modal-subject-row>
+          <span class="detail-label" data-modal-subject-label>Chore</span>
           <span><span data-modal-icon></span> <span data-modal-name></span></span>
         </div>
-        <div class="detail-row">
+        <div class="detail-row completion-only">
           <span class="detail-label">Base reward</span>
           <span><span data-modal-base>0</span>p</span>
         </div>
-        <div class="detail-row">
+        <div class="detail-row completion-only">
           <span class="detail-label">Multipliers</span>
           <div class="mult-pills">
             <button type="button" class="mult-pill" data-mult-edit="hot" title="Tap to set hot multiplier">
@@ -94,7 +94,7 @@
             <input type="hidden" data-modal-hot-pick value="false">
           </div>
         </div>
-        <div class="detail-row" data-modal-skipped-row hidden>
+        <div class="detail-row completion-only" data-modal-skipped-row hidden>
           <span class="detail-label">Skipped</span>
           <span data-modal-skipped-reason></span>
         </div>
@@ -104,7 +104,7 @@
           <input type="datetime-local" data-modal-completed-at class="modal-input">
         </div>
         <div class="detail-row" data-modal-amount-row>
-          <span class="detail-label">Paid pebbles</span>
+          <span class="detail-label" data-modal-amount-label>Paid pebbles</span>
           <input type="number" min="0" data-modal-amount class="modal-input" style="max-width:80px;text-align:right;">
         </div>
         <div class="detail-row" data-modal-pending-note hidden>
@@ -187,6 +187,10 @@
       return `${n} ${n === 1 ? single : (plural || single + "s")}`;
     }
     function truncate(s, n) { return s.length > n ? s.slice(0, n - 3) + "..." : s; }
+    // Notes rarely get past 120 chars; clipping at 40 lopped off the
+    // useful half of nearly every realistic note. The row's flex layout
+    // already wraps long text — the truncate is only a hard ceiling.
+    const NOTE_LIMIT = 120;
     function toLocalInputValue(isoString) {
       if (!isoString) return "";
       const d = new Date(isoString);
@@ -239,9 +243,14 @@
     // ---------- templates ----------
     function committedRowHTML(entry) {
       if (entry.kind === "withdrawal") {
-        const note = entry.note ? `<span class="history-note">— ${esc(truncate(entry.note, 40))}</span>` : "";
+        const note = entry.note ? `<span class="history-note">— ${esc(truncate(entry.note, NOTE_LIMIT))}</span>` : "";
         return `
-          <div class="history-row" data-kind="withdrawal" data-withdrawal-id="${entry.id}">
+          <div class="history-row"
+               data-kind="withdrawal"
+               data-withdrawal-id="${entry.id}"
+               data-amount="${entry.amount_pebbles}"
+               data-created-at="${esc(entry.created_at)}"
+               data-note="${esc(entry.note || "")}">
             <span class="history-when-name">
               <span class="history-when">${esc(entry.when_label)}</span> ·
               <span class="history-icon">🪙</span>
@@ -250,13 +259,48 @@
             </span>
             <span class="history-amount-cell">
               <span class="history-amount" style="color:#FCA5A5;">−${formatCount(entry.amount_pebbles)}p</span>
-              <button type="button" class="history-edit" data-delete-withdrawal title="Delete">
-                <i class="fa fa-times" aria-hidden="true"></i>
+              <button type="button" class="history-edit" data-edit-withdrawal title="Edit">
+                <i class="fa fa-pencil" aria-hidden="true"></i>
               </button>
             </span>
           </div>`;
       }
-      const note = entry.note ? `<span class="history-note">— ${esc(truncate(entry.note, 40))}</span>` : "";
+      if (entry.kind === "transfer") {
+        // Outgoing transfers are editable + deletable by the sender;
+        // incoming transfers are read-only here (the recipient never
+        // had agency over creating them).
+        const outgoing = entry.direction === "outgoing";
+        const peer = entry.counterparty_username || "someone";
+        const verb = outgoing ? `Sent to ${peer}` : `From ${peer}`;
+        const sign = outgoing ? "−" : "+";
+        const colour = outgoing ? "#FCA5A5" : "#34D399";
+        const note = entry.note ? `<span class="history-note">— ${esc(truncate(entry.note, NOTE_LIMIT))}</span>` : "";
+        const editBtn = outgoing ? `
+              <button type="button" class="history-edit" data-edit-transfer title="Edit">
+                <i class="fa fa-pencil" aria-hidden="true"></i>
+              </button>` : "";
+        return `
+          <div class="history-row"
+               data-kind="transfer"
+               data-transfer-id="${entry.id}"
+               data-direction="${esc(entry.direction)}"
+               data-peer="${esc(peer)}"
+               data-amount="${entry.amount_pebbles}"
+               data-created-at="${esc(entry.created_at)}"
+               data-note="${esc(entry.note || "")}">
+            <span class="history-when-name">
+              <span class="history-when">${esc(entry.when_label)}</span> ·
+              <span class="history-icon">🤝</span>
+              <span class="history-name">${esc(verb)}</span>
+              ${note}
+            </span>
+            <span class="history-amount-cell">
+              <span class="history-amount" style="color:${colour};">${sign}${formatCount(entry.amount_pebbles)}p</span>
+              ${editBtn}
+            </span>
+          </div>`;
+      }
+      const note = entry.note ? `<span class="history-note">— ${esc(truncate(entry.note, NOTE_LIMIT))}</span>` : "";
       const hotTag = entry.hot_pick ? `<span class="history-tag hot">hot</span>` : "";
       const amt = entry.payout_skipped
         ? `<span class="history-amount" style="color:#9CA3AF;">(skipped)</span>`
@@ -301,7 +345,7 @@
       const chore = { icon: meta.icon, icon_kind: meta.icon_kind };
       const ts = body.client_completed_at || item.queued_at;
       const whenLabel = ts ? formatWhenLabel(ts) : "pending";
-      const note = body.note ? `<span class="history-note">— ${esc(truncate(body.note, 40))}</span>` : "";
+      const note = body.note ? `<span class="history-note">— ${esc(truncate(body.note, NOTE_LIMIT))}</span>` : "";
       const hotTag = body.hot_pick ? `<span class="history-tag hot">hot</span>` : "";
       const actionLabel = item.method === "DELETE" ? "Undo" : "Complete";
       const actionClass = item.method === "DELETE" ? "pending-undo" : "pending-complete";
@@ -347,7 +391,7 @@
 
     function renderHistory(data) {
       const { entries = [], total_count = 0, total_pages = 1,
-              page_completions = 0, page_withdrawals = 0,
+              page_completions = 0, page_withdrawals = 0, page_transfers = 0,
               from = 0, to = 0, page = 1 } = data || {};
       state.total_pages = total_pages;
       state.page = page;
@@ -359,8 +403,16 @@
         summaryEl.querySelector("[data-summary-right]").innerHTML = "";
       } else {
         summaryEl.removeAttribute("hidden");
+        // Transfers join completions + withdrawals in the summary,
+        // shown only when at least one is on this page — keeps the
+        // line short when transfers aren't being used.
+        const parts = [
+          `${pluralize(page_completions, "completion")}`,
+          `${pluralize(page_withdrawals, "withdrawal")}`,
+        ];
+        if (page_transfers > 0) parts.push(`${pluralize(page_transfers, "transfer")}`);
         summaryEl.querySelector("[data-summary-left]").textContent =
-          `Showing ${pluralize(page_completions, "completion")}, ${pluralize(page_withdrawals, "withdrawal")}`;
+          `Showing ${parts.join(", ")}`;
         summaryEl.querySelector("[data-summary-mid]").innerHTML =
           `Page <strong>${page}</strong> of <strong>${total_pages}</strong>`;
         summaryEl.querySelector("[data-summary-right]").innerHTML =
@@ -515,12 +567,15 @@
       currentEditTarget = { kind: "committed", row };
       const ds = row.dataset;
       modal.querySelector('[data-modal-title]').textContent = "Edit Completion";
+      modal.querySelector('[data-modal-subject-label]').textContent = "Chore";
       modal.querySelector('[data-modal-name]').textContent = ds.choreName;
       modal.querySelector('[data-modal-base]').textContent = ds.base || "0";
       modal.querySelector('[data-modal-completed-at]').value = toLocalInputValue(ds.completedAt);
       modal.querySelector('[data-modal-amount]').value = ds.paid || "0";
       modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
+      modal.querySelector('[data-modal-amount-label]').textContent = "Paid pebbles";
       modal.querySelector('[data-modal-pending-note]').setAttribute("hidden", "");
+      setCompletionOnlyVisible(true);
       setMultPill("hot",   parseFloat(ds.hotMultiplier   || "1"));
       setMultPill("total", parseFloat(ds.totalMultiplier || "1"));
       setHotPick(ds.hot === "true");
@@ -540,6 +595,53 @@
       modal.classList.remove("hidden");
     }
 
+    // Hide completion-only rows (base reward, multipliers, skipped)
+    // when editing a withdrawal/transfer — those fields are
+    // chore-specific and have no analogue here.
+    function setCompletionOnlyVisible(visible) {
+      modal.querySelectorAll(".completion-only").forEach(el => {
+        if (visible) el.removeAttribute("hidden");
+        else         el.setAttribute("hidden", "");
+      });
+    }
+
+    function openWithdrawalModal(row) {
+      currentEditTarget = { kind: "withdrawal", row };
+      const ds = row.dataset;
+      modal.querySelector('[data-modal-title]').textContent = "Edit Withdrawal";
+      modal.querySelector('[data-modal-subject-label]').textContent = "Type";
+      const modalIcon = modal.querySelector('[data-modal-icon]');
+      if (modalIcon) modalIcon.textContent = "🪙";
+      modal.querySelector('[data-modal-name]').textContent = "Withdrawal";
+      modal.querySelector('[data-modal-completed-at]').value = toLocalInputValue(ds.createdAt);
+      modal.querySelector('[data-modal-amount]').value = ds.amount || "0";
+      modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
+      modal.querySelector('[data-modal-amount-label]').textContent = "Amount";
+      modal.querySelector('[data-modal-pending-note]').setAttribute("hidden", "");
+      modal.querySelector('[data-modal-note]').value = ds.note || "";
+      setCompletionOnlyVisible(false);
+      modal.classList.remove("hidden");
+    }
+
+    function openTransferModal(row) {
+      currentEditTarget = { kind: "transfer", row };
+      const ds = row.dataset;
+      const outgoing = ds.direction === "outgoing";
+      modal.querySelector('[data-modal-title]').textContent = "Edit Transfer";
+      modal.querySelector('[data-modal-subject-label]').textContent = outgoing ? "Sent to" : "From";
+      const modalIcon = modal.querySelector('[data-modal-icon]');
+      if (modalIcon) modalIcon.textContent = "🤝";
+      modal.querySelector('[data-modal-name]').textContent = ds.peer || "";
+      modal.querySelector('[data-modal-completed-at]').value = toLocalInputValue(ds.createdAt);
+      modal.querySelector('[data-modal-amount]').value = ds.amount || "0";
+      modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
+      modal.querySelector('[data-modal-amount-label]').textContent = "Amount";
+      modal.querySelector('[data-modal-pending-note]').setAttribute("hidden", "");
+      modal.querySelector('[data-modal-note]').value = ds.note || "";
+      setCompletionOnlyVisible(false);
+      modal.classList.remove("hidden");
+    }
+
     function openPendingModal(row) {
       const idx = parseInt(row.dataset.pendingIndex, 10);
       const q = loadQueue();
@@ -549,8 +651,10 @@
       const meta = item.meta || {};
       const body = item.body || {};
       modal.querySelector('[data-modal-title]').textContent = "Edit Pending Push";
+      modal.querySelector('[data-modal-subject-label]').textContent = "Chore";
       modal.querySelector('[data-modal-name]').textContent = meta.chore_name || `Chore #${meta.chore_id ?? "?"}`;
       modal.querySelector('[data-modal-base]').textContent = String(meta.base_pebbles ?? 0);
+      setCompletionOnlyVisible(true);
       modal.querySelector('[data-modal-completed-at]').value =
         toLocalInputValue(body.client_completed_at || item.queued_at);
       // Pending items have no paid_pebbles yet — server computes on send.
@@ -575,10 +679,12 @@
     modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
 
     listEl.addEventListener("click", e => {
-      const editBtn = e.target.closest("[data-edit-completion]");
-      if (editBtn) { openCommittedModal(editBtn.closest("[data-completion-id]")); return; }
-      const delBtn = e.target.closest("[data-delete-withdrawal]");
-      if (delBtn) { deleteWithdrawal(delBtn.closest("[data-withdrawal-id]")); return; }
+      const completionEdit = e.target.closest("[data-edit-completion]");
+      if (completionEdit) { openCommittedModal(completionEdit.closest("[data-completion-id]")); return; }
+      const withdrawalEdit = e.target.closest("[data-edit-withdrawal]");
+      if (withdrawalEdit) { openWithdrawalModal(withdrawalEdit.closest("[data-withdrawal-id]")); return; }
+      const transferEdit = e.target.closest("[data-edit-transfer]");
+      if (transferEdit) { openTransferModal(transferEdit.closest("[data-transfer-id]")); return; }
     });
     pendingList.addEventListener("click", e => {
       const editBtn = e.target.closest("[data-edit-pending]");
@@ -595,19 +701,6 @@
       }
     });
 
-    async function deleteWithdrawal(row) {
-      if (!confirm("Delete this withdrawal? Balance will be recomputed.")) return;
-      try {
-        const data = await api(`/chores/withdrawals/${row.dataset.withdrawalId}`, "DELETE");
-        // Withdrawals don't move today_earnings (the header pill);
-        // they only move lifetime. Server still echoes today_earnings
-        // so the pill stays correct if anything else moved it.
-        if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
-        row.remove();
-        flash("Removed", "warn");
-      } catch (e) { flash("Delete failed: " + e.message, "error"); }
-    }
-
     modal.querySelector('[data-modal-save]').addEventListener("click", async () => {
       if (!currentEditTarget) return;
       const note = modal.querySelector('[data-modal-note]').value;
@@ -616,6 +709,29 @@
       const totalMult = parseFloat(modal.querySelector('[data-modal-total-mult]').value);
       const hotPick   = modal.querySelector('[data-modal-hot-pick]').value === "true";
       const completedIso = completedLocal ? new Date(completedLocal).toISOString() : null;
+
+      // Withdrawal + transfer share the same body shape (amount,
+      // note, created_at). The When field reuses the completed-at
+      // input but is sent as `created_at` since that's what those
+      // models store the timestamp under.
+      if (currentEditTarget.kind === "withdrawal" || currentEditTarget.kind === "transfer") {
+        const row = currentEditTarget.row;
+        const amount = parseInt(modal.querySelector('[data-modal-amount]').value, 10);
+        if (Number.isNaN(amount) || amount <= 0) { flash("Bad amount", "error"); return; }
+        const key = currentEditTarget.kind === "withdrawal" ? "chore_withdrawal" : "chore_transfer";
+        const idField = currentEditTarget.kind === "withdrawal" ? "withdrawalId" : "transferId";
+        const path = currentEditTarget.kind === "withdrawal" ? "withdrawals" : "transfers";
+        const payload = { [key]: { amount_pebbles: amount, note: note } };
+        if (completedIso) payload[key].created_at = completedIso;
+        try {
+          const data = await api(`/chores/${path}/${row.dataset[idField]}`, "PATCH", payload);
+          if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
+          await fetchHistory({ push: false });
+          flash("Saved");
+          closeModal();
+        } catch (e) { flash("Save failed: " + e.message, "error"); }
+        return;
+      }
 
       if (currentEditTarget.kind === "pending") {
         const q = loadQueue();
@@ -671,6 +787,23 @@
         renderPending();
         flash(removed?.method === "DELETE" ? "Cancelled undo" : "Removed pending push", "warn");
         closeModal();
+        return;
+      }
+      if (currentEditTarget.kind === "withdrawal" || currentEditTarget.kind === "transfer") {
+        const row = currentEditTarget.row;
+        const idField = currentEditTarget.kind === "withdrawal" ? "withdrawalId" : "transferId";
+        const path = currentEditTarget.kind === "withdrawal" ? "withdrawals" : "transfers";
+        const prompt = currentEditTarget.kind === "withdrawal"
+          ? "Delete this withdrawal? Balance will be recomputed."
+          : "Delete this transfer? Both balances will be refunded.";
+        if (!confirm(prompt)) return;
+        try {
+          const data = await api(`/chores/${path}/${row.dataset[idField]}`, "DELETE");
+          if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
+          await fetchHistory({ push: false });
+          flash("Removed", "warn");
+          closeModal();
+        } catch (e) { flash("Delete failed: " + e.message, "error"); }
         return;
       }
       const row = currentEditTarget.row;

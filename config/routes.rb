@@ -115,7 +115,8 @@ Rails.application.routes.draw do
     patch  "/order"                      => "chores#reorder",            as: :reorder
     resources :completions, controller: :chore_completions, only: [:update, :destroy]
     resources :goals,       controller: :chore_goals,       only: [:create, :update, :destroy], as: :goals
-    resources :withdrawals, controller: :chore_withdrawals, only: [:create, :destroy], as: :withdrawals
+    resources :withdrawals, controller: :chore_withdrawals, only: [:create, :update, :destroy], as: :withdrawals
+    resources :transfers,   controller: :chore_transfers,   only: [:create, :update, :destroy], as: :transfers
   end
 
   post "webhooks/tesla_telemetry" => "webhooks#tesla_telemetry"

@@ -142,6 +142,20 @@ RSpec.describe "Chores", type: :request do
     expect(completion.day_key).to eq(ChoreDay.current(user, at: new_time))
   end
 
+  it "GET /chores/history.json filters with `amount>N` across all three feeds" do
+    chore_small = create(:chore, created_by_user: user, reward_pebbles: 1)
+    chore_big   = create(:chore, created_by_user: user, reward_pebbles: 10)
+    create(:chore_completion, chore: chore_small, user: user, paid_pebbles: 1, base_pebbles: 1)
+    create(:chore_completion, chore: chore_big,   user: user, paid_pebbles: 10, base_pebbles: 10)
+    create(:chore_withdrawal, user: user, amount_pebbles: 2, note: "small w")
+    create(:chore_withdrawal, user: user, amount_pebbles: 9, note: "big w")
+
+    get "/chores/history.json", params: { q: "amount>5" }, headers: { "Accept" => "application/json" }
+    body = JSON.parse(response.body)
+    amounts = body["entries"].map { |e| e["amount_pebbles"] || e["paid_pebbles"] }.compact.uniq.sort
+    expect(amounts).to eq([9, 10])
+  end
+
   it "GET /chores/history.json filters with .query (note + chore name + time)" do
     cat = create(:chore, created_by_user: user, name: "Brush kitty")
     dog = create(:chore, created_by_user: user, name: "Feed dog")
@@ -307,6 +321,113 @@ RSpec.describe "Chores", type: :request do
     expected_keys = ((today + 1)..(today + 7)).map(&:iso8601)
     expect(body["lookahead"].keys.sort).to eq(expected_keys.sort)
     expect(body["lookahead"].values).to all(eq([]))
+  end
+
+  describe "pebble transfers" do
+    let(:recipient) { create(:user) }
+    before do
+      create(:chore_share, user: user, shared_with_user: recipient)
+      chore = create(:chore, created_by_user: user, reward_pebbles: 40)
+      create(:chore_completion, chore: chore, user: user, paid_pebbles: 40, base_pebbles: 40,
+             payout_skipped: false, day_key: ChoreDay.current(user) - 1)
+    end
+
+    it "POST /chores/transfers creates a transfer and moves balance both sides" do
+      post "/chores/transfers",
+        params: { chore_transfer: { to_user_id: recipient.id, amount_pebbles: 15, note: "lunch" } }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+      expect(response).to have_http_status(:created)
+      body = JSON.parse(response.body)
+      expect(body["amount_pebbles"]).to eq(15)
+      expect(body["balance"]).to eq(25)
+      expect(body).to have_key("today_earnings")
+      expect(user.reload.chore_balance).to eq(25)
+      expect(recipient.reload.chore_balance).to eq(15)
+    end
+
+    it "rejects a transfer exceeding sender balance" do
+      post "/chores/transfers",
+        params: { chore_transfer: { to_user_id: recipient.id, amount_pebbles: 999 } }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["errors"]).to include(/exceeds your available balance/)
+    end
+
+    it "rejects a transfer to a non-household user" do
+      stranger = create(:user)
+      post "/chores/transfers",
+        params: { chore_transfer: { to_user_id: stranger.id, amount_pebbles: 5 } }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it "surfaces transfers in /chores/history.json with direction + counterparty" do
+      create(:chore_transfer, from_user: user, to_user: recipient, amount_pebbles: 7, note: "n")
+      create(:chore_transfer, from_user: recipient, to_user: user, amount_pebbles: 3, note: nil)
+      get "/chores/history.json", headers: { "Accept" => "application/json" }
+      body = JSON.parse(response.body)
+      transfers = body["entries"].select { |e| e["kind"] == "transfer" }
+      expect(transfers.map { |t| t["direction"] }.sort).to eq(%w[incoming outgoing])
+      outgoing = transfers.find { |t| t["direction"] == "outgoing" }
+      expect(outgoing["counterparty_username"]).to eq(recipient.username)
+      expect(outgoing["amount_pebbles"]).to eq(7)
+      expect(body["transfer_count"]).to eq(2)
+      expect(body["page_transfers"]).to eq(2)
+    end
+
+    it "surfaces transfers in /chores/recent_history" do
+      create(:chore_transfer, from_user: user, to_user: recipient, amount_pebbles: 4, note: "tip")
+      get "/chores/recent_history", headers: { "Accept" => "application/json" }
+      body = JSON.parse(response.body)
+      kinds = body["entries"].map { |e| e["kind"] }
+      expect(kinds).to include("transfer")
+    end
+
+    it "PATCH /chores/transfers/:id updates amount + note (sender only)" do
+      transfer = create(:chore_transfer, from_user: user, to_user: recipient, amount_pebbles: 5, note: "old")
+      patch "/chores/transfers/#{transfer.id}",
+        params: { chore_transfer: { amount_pebbles: 8, note: "new" } }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+      expect(response).to have_http_status(:ok)
+      transfer.reload
+      expect(transfer.amount_pebbles).to eq(8)
+      expect(transfer.note).to eq("new")
+    end
+
+    it "DELETE /chores/transfers/:id refunds both balances (sender only)" do
+      transfer = create(:chore_transfer, from_user: user, to_user: recipient, amount_pebbles: 12)
+      pre_sender = user.chore_balance
+      pre_recipient = recipient.chore_balance
+      delete "/chores/transfers/#{transfer.id}", headers: { "Accept" => "application/json" }
+      expect(response).to have_http_status(:ok)
+      expect(user.reload.chore_balance).to eq(pre_sender + 12)
+      expect(recipient.reload.chore_balance).to eq(pre_recipient - 12)
+    end
+
+    it "PATCH/DELETE /chores/transfers/:id is forbidden for non-sender" do
+      # Fund the recipient so they can BE a sender on a transfer back.
+      ch = create(:chore, created_by_user: recipient, reward_pebbles: 10)
+      create(:chore_completion, chore: ch, user: recipient, paid_pebbles: 10, base_pebbles: 10,
+             payout_skipped: false, day_key: ChoreDay.current(recipient) - 1)
+      transfer = create(:chore_transfer, from_user: recipient, to_user: user, amount_pebbles: 3)
+      patch "/chores/transfers/#{transfer.id}",
+        params: { chore_transfer: { amount_pebbles: 99 } }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+      expect(response).to have_http_status(:not_found)
+      delete "/chores/transfers/#{transfer.id}", headers: { "Accept" => "application/json" }
+      expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  it "PATCH /chores/withdrawals/:id updates amount + note" do
+    withdrawal = create(:chore_withdrawal, user: user, amount_pebbles: 5, note: "x")
+    patch "/chores/withdrawals/#{withdrawal.id}",
+      params: { chore_withdrawal: { amount_pebbles: 7, note: "y" } }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+    expect(response).to have_http_status(:ok)
+    withdrawal.reload
+    expect(withdrawal.amount_pebbles).to eq(7)
+    expect(withdrawal.note).to eq("y")
   end
 
   it "POST completion accepts overrides from an edited pending push" do

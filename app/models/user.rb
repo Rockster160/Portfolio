@@ -73,6 +73,8 @@ class User < ApplicationRecord
     dependent: :destroy
   has_many :chore_goals, dependent: :destroy
   has_many :chore_withdrawals, dependent: :destroy
+  has_many :chore_transfers_sent,     class_name: "ChoreTransfer", foreign_key: :from_user_id, dependent: :destroy
+  has_many :chore_transfers_received, class_name: "ChoreTransfer", foreign_key: :to_user_id,   dependent: :destroy
   has_many :chore_multipliers, dependent: :destroy
   has_many :chore_streaks, dependent: :destroy
   has_many :user_chore_achievements, dependent: :destroy
@@ -148,8 +150,10 @@ class User < ApplicationRecord
     ) || [0, 0]
     bonuses   = user_chore_achievements.sum(:awarded_pebbles)
     withdrawn = chore_withdrawals.sum(:amount_pebbles)
+    sent      = chore_transfers_sent.sum(:amount_pebbles)
+    received  = chore_transfers_received.sum(:amount_pebbles)
     {
-      balance: earned.to_i + bonuses.to_i - withdrawn.to_i,
+      balance: earned.to_i + bonuses.to_i + received.to_i - withdrawn.to_i - sent.to_i,
       today_earnings: today_earnings.to_i,
     }
   end

@@ -20,6 +20,23 @@ class ChoreWithdrawalsController < ApplicationController
     }, status: :created
   end
 
+  def update
+    withdrawal = current_user.chore_withdrawals.find(params[:id])
+    if withdrawal.update(withdrawal_update_params)
+      ChoreBroadcaster.broadcast_changes!(current_user)
+      render json: {
+        id: withdrawal.id,
+        amount_pebbles: withdrawal.amount_pebbles,
+        note: withdrawal.note,
+        created_at: withdrawal.created_at.iso8601,
+        balance: current_user.chore_balance,
+        today_earnings: today_earnings,
+      }
+    else
+      render json: { errors: withdrawal.errors.full_messages }, status: :unprocessable_entity
+    end
+  end
+
   def destroy
     withdrawal = current_user.chore_withdrawals.find(params[:id])
     withdrawal.destroy!
@@ -36,6 +53,10 @@ class ChoreWithdrawalsController < ApplicationController
   end
 
   private
+
+  def withdrawal_update_params
+    params.require(:chore_withdrawal).permit(:amount_pebbles, :note, :created_at)
+  end
 
   def today_earnings
     today = ChoreDay.current(current_user)

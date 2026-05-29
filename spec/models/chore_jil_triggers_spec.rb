@@ -52,4 +52,42 @@ RSpec.describe "Chore + ChoreCompletion Jil triggers", type: :model do
     )
     completion.destroy!
   end
+
+  it "creating a withdrawal fires `chore_withdrawal` action: :created" do
+    expect(::Jil).to receive(:trigger).with(
+      user, :chore_withdrawal,
+      satisfy { |a| a[:action] == :created && a[:amount_pebbles] == 5 && a[:note] == "snack" }
+    )
+    create(:chore_withdrawal, user: user, amount_pebbles: 5, note: "snack")
+  end
+
+  it "updating + destroying a withdrawal fires :updated / :destroyed" do
+    withdrawal = create(:chore_withdrawal, user: user, amount_pebbles: 5)
+    expect(::Jil).to receive(:trigger).with(
+      user, :chore_withdrawal, satisfy { |a| a[:action] == :updated }
+    )
+    withdrawal.update!(amount_pebbles: 6)
+    expect(::Jil).to receive(:trigger).with(
+      user, :chore_withdrawal, satisfy { |a| a[:action] == :destroyed }
+    )
+    withdrawal.destroy!
+  end
+
+  it "creating a transfer fires `chore_transfer` for BOTH endpoints with direction set" do
+    sender = create(:user)
+    recipient = create(:user)
+    create(:chore_share, user: sender, shared_with_user: recipient)
+    chore = create(:chore, created_by_user: sender, reward_pebbles: 50)
+    create(:chore_completion, chore: chore, user: sender, paid_pebbles: 50, base_pebbles: 50,
+           payout_skipped: false, day_key: ChoreDay.current(sender) - 1)
+    expect(::Jil).to receive(:trigger).with(
+      sender, :chore_transfer,
+      satisfy { |a| a[:action] == :created && a[:direction] == :outgoing && a[:counterparty_username] == recipient.username }
+    )
+    expect(::Jil).to receive(:trigger).with(
+      recipient, :chore_transfer,
+      satisfy { |a| a[:action] == :created && a[:direction] == :incoming && a[:counterparty_username] == sender.username }
+    )
+    ChoreTransfer.create!(from_user: sender, to_user: recipient, amount_pebbles: 10)
+  end
 end

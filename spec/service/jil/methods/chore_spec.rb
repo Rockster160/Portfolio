@@ -38,4 +38,97 @@ RSpec.describe Jil::Methods::Chore, type: :service do
     expect(methods.balance).to eq(1)
     expect(methods.today_earnings).to eq(1)
   end
+
+  describe "#withdraw" do
+    before { 5.times { ChoreCompleter.new(vitamins, user).call } }
+
+    it "creates a withdrawal and returns it" do
+      record = methods.withdraw(3, "snack")
+      expect(record).to be_a(ChoreWithdrawal)
+      expect(record.amount_pebbles).to eq(3)
+      expect(record.note).to eq("snack")
+      expect(user.reload.chore_balance).to eq(2) # 5 earned - 3 withdrawn
+    end
+
+    it "returns nil for non-positive amounts" do
+      expect(methods.withdraw(0)).to be_nil
+      expect(methods.withdraw(-1)).to be_nil
+    end
+  end
+
+  describe "#transfer" do
+    let(:recipient) { create(:user) }
+    before do
+      create(:chore_share, user: user, shared_with_user: recipient)
+      20.times { ChoreCompleter.new(vitamins, user).call }
+    end
+
+    it "transfers pebbles to a household user resolved by username" do
+      record = methods.transfer(7, recipient.username, "thx")
+      expect(record).to be_a(ChoreTransfer)
+      expect(record.to_user_id).to eq(recipient.id)
+      expect(record.amount_pebbles).to eq(7)
+      expect(user.reload.chore_balance).to eq(13)
+      expect(recipient.reload.chore_balance).to eq(7)
+    end
+
+    it "accepts a numeric recipient id" do
+      record = methods.transfer(2, recipient.id)
+      expect(record&.to_user_id).to eq(recipient.id)
+    end
+
+    it "returns nil for a non-household recipient" do
+      stranger = create(:user)
+      expect(methods.transfer(5, stranger.username)).to be_nil
+    end
+
+    it "returns nil for an unknown user" do
+      expect(methods.transfer(5, "nobody-by-that-name")).to be_nil
+    end
+  end
+
+  describe "#history" do
+    let(:recipient) { create(:user) }
+    before { create(:chore_share, user: user, shared_with_user: recipient) }
+
+    it "returns the user's completions + withdrawals + transfers, newest first" do
+      # Earn enough for both the withdrawal and the transfer.
+      5.times { ChoreCompleter.new(vitamins, user).call }
+      create(:chore_withdrawal, user: user, amount_pebbles: 2, note: "w")
+      create(:chore_transfer, from_user: user, to_user: recipient, amount_pebbles: 1, note: "t")
+      rows = methods.history(nil, nil, :desc)
+      kinds = rows.map { |r| r[:kind] }
+      expect(kinds).to include("completion", "withdrawal", "transfer")
+      transfer = rows.find { |r| r[:kind] == "transfer" }
+      expect(transfer[:direction]).to eq("outgoing")
+      expect(transfer[:counterparty_username]).to eq(recipient.username)
+    end
+
+    it "honours the limit and clamps it to 100" do
+      30.times { create(:chore_withdrawal, user: user, amount_pebbles: 1) }
+      expect(methods.history(nil, 10, :desc).size).to eq(10)
+      expect(methods.history(nil, 10_000, :desc).size).to be <= 100
+    end
+
+    it "filters via tokenized query — `amount>N` works across all three feeds" do
+      # Earn enough that the withdrawal + transfer validations clear.
+      30.times { ChoreCompleter.new(vitamins, user).call }
+      create(:chore_withdrawal, user: user, amount_pebbles: 1, note: "small")
+      create(:chore_withdrawal, user: user, amount_pebbles: 9, note: "big")
+      big_chore = create(:chore, created_by_user: user, name: "Big", reward_pebbles: 10)
+      create(:chore_completion, chore: big_chore, user: user, paid_pebbles: 10, base_pebbles: 10)
+      create(:chore_transfer, from_user: user, to_user: recipient, amount_pebbles: 7, note: "t")
+
+      kept = methods.history("amount>5", nil, :desc)
+      amounts = kept.map { |e| e[:amount_pebbles] || e[:paid_pebbles] }.compact.uniq.sort
+      expect(amounts).to eq([7, 9, 10])
+    end
+
+    it "honours order :asc" do
+      first = create(:chore_withdrawal, user: user, amount_pebbles: 1, created_at: 3.days.ago)
+      last  = create(:chore_withdrawal, user: user, amount_pebbles: 2, created_at: 1.day.ago)
+      asc = methods.history(nil, nil, :asc).map { |r| r[:id] }
+      expect(asc.index(first.id)).to be < asc.index(last.id)
+    end
+  end
 end
