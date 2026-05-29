@@ -10,7 +10,7 @@ class PromptsController < ApplicationController
 
   def show
     # Resolve any gid references in params and trigger prompt:load
-    resolved_params = TriggerData.parse(@prompt.params || {}, as: current_user)
+    resolved_params = ::Tokenizing::TriggerData.parse(@prompt.params || {}, as: current_user)
     jil_trigger(:prompt, @prompt.with_jil_attrs(state: :load, data: resolved_params))
     @prompt.reload
   end

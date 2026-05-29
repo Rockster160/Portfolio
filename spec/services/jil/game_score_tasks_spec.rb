@@ -294,7 +294,7 @@ RSpec.describe "Game Score Tasks" do
           { "type" => "textarea", "question" => "Scores", "default" => "" },
         ],
       )
-      resolved_params = TriggerData.parse(prompt.params, as: user)
+      resolved_params = Tokenizing::TriggerData.parse(prompt.params, as: user)
       run_jil(dynamic_load_task.code, prompt.with_jil_attrs(state: :load, data: resolved_params))
 
       prompt.reload

@@ -30,7 +30,7 @@ class Chore < ApplicationRecord
 
   # Lifecycle triggers — fan out to Jil so user-written tasks can react
   # to chore creation, edits, and archival. Listeners use the standard
-  # SearchBreakMatcher syntax against the trigger data, e.g.
+  # Tokenizing syntax against the trigger data, e.g.
   #   `chore action:archived name:Vitamins`.
   # ChoreCompletion fires its own `chore_completion` triggers separately
   # (one per tap / undo) so completion-focused tasks don't have to wade

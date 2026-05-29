@@ -286,7 +286,7 @@ class Task < ApplicationRecord
 
   def match_run(trigger, trigger_data, force: false, auth: :trigger, auth_id: nil)
     first_match = nil
-    serialized_data = TriggerData.serialize(trigger_data, use_global_id: false)
+    serialized_data = ::Tokenizing::TriggerData.serialize(trigger_data, use_global_id: false)
     did_match = listener_match?(trigger) { |sub_listener|
       next true if sub_listener == trigger
 
@@ -294,7 +294,7 @@ class Task < ApplicationRecord
         next true if sub_listener.match?(/\A\s*monitor::?#{Regexp.escape(trigger_data[:channel].to_s)}\s*\z/)
       end
 
-      matcher = ::SearchBreakMatcher.new(sub_listener, { trigger => serialized_data })
+      matcher = ::Tokenizing::Matcher.new(sub_listener, { trigger => serialized_data })
       matcher.match?.tap { |m| first_match ||= matcher if m }
     }
     return if !did_match && !force
@@ -303,7 +303,7 @@ class Task < ApplicationRecord
 
     # pretty_log(trigger, trigger_data) if Rails.env.development?
     execute(
-      trigger_data.merge(first_match&.regex_match_data || { match_list: [], named_captures: {} }),
+      trigger_data.merge(first_match&.match_data || { match_list: [], named_captures: {} }),
       auth: auth, auth_id: auth_id, trigger_scope: trigger.to_s,
     )
   end

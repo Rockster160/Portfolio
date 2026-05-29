@@ -38,7 +38,7 @@ class ScheduledTrigger < ApplicationRecord
 
     schedules = where(trigger: trigger)
     schedules.select { |schedule|
-      ::SearchBreakMatcher.new(search_string, { trigger => schedule.data }).match?
+      ::Tokenizing::Matcher.new(search_string, { trigger => schedule.data }).match?
     }
   end
 

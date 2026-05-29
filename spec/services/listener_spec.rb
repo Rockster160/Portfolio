@@ -11,8 +11,8 @@ RSpec.describe Task do
 
   def expect_trigger_listeners(user, trigger, trigger_data, expected_listeners)
     @listeners = []
-    trigger_data_parsed = TriggerData.parse(trigger_data, as: user)
-    serialized = TriggerData.serialize(trigger_data_parsed, use_global_id: false)
+    trigger_data_parsed = Tokenizing::TriggerData.parse(trigger_data, as: user)
+    serialized = Tokenizing::TriggerData.serialize(trigger_data_parsed, use_global_id: false)
 
     @tasks.select { |task|
       next false unless task.user_id == user.id
@@ -24,7 +24,7 @@ RSpec.describe Task do
           next true if sub_listener.match?(/\A\s*monitor::?#{Regexp.escape(trigger_data_parsed[:channel].to_s)}\s*\z/)
         end
 
-        ::SearchBreakMatcher.new(sub_listener, { trigger => serialized }).match?
+        ::Tokenizing::Matcher.new(sub_listener, { trigger => serialized }).match?
       }
 
       did_match
@@ -216,10 +216,10 @@ RSpec.describe Task do
       end
 
       it "captures amount" do
-        serialized = TriggerData.serialize(TriggerData.parse("chelsea withdraw 180", as: admin), use_global_id: false)
-        matcher = SearchBreakMatcher.new(fixed_listener, { tell: serialized })
+        serialized = Tokenizing::TriggerData.serialize(Tokenizing::TriggerData.parse("chelsea withdraw 180", as: admin), use_global_id: false)
+        matcher = Tokenizing::Matcher.new(fixed_listener, { tell: serialized })
         expect(matcher.match?).to be true
-        expect(matcher.regex_match_data[:named_captures][:amount]).to eq("180")
+        expect(matcher.match_data[:named_captures][:amount]).to eq("180")
       end
     end
 
@@ -235,10 +235,10 @@ RSpec.describe Task do
       end
 
       def captures_for(input)
-        serialized = TriggerData.serialize(TriggerData.parse(input, as: admin), use_global_id: false)
-        matcher = SearchBreakMatcher.new(note_listener, { tell: serialized })
+        serialized = Tokenizing::TriggerData.serialize(Tokenizing::TriggerData.parse(input, as: admin), use_global_id: false)
+        matcher = Tokenizing::Matcher.new(note_listener, { tell: serialized })
         expect(matcher.match?).to be(true), "Expected listener to match #{input.inspect}"
-        matcher.regex_match_data[:named_captures]
+        matcher.match_data[:named_captures]
       end
 
       it "still triggers on 'chelsea withdraw 180' (no note)" do
@@ -311,9 +311,9 @@ RSpec.describe Task do
     end
   end
 
-  context "TriggerData.parse" do
+  context "Tokenizing::TriggerData.parse" do
     it "strips surrounding quotes from colon-separated values" do
-      result = TriggerData.parse('person:chelsea:"-15.20"')
+      result = Tokenizing::TriggerData.parse('person:chelsea:"-15.20"')
       expect(result).to eq({ person: { chelsea: "-15.20" } })
     end
   end
@@ -338,12 +338,12 @@ RSpec.describe Task do
     }
 
     def matching_listeners(trigger, data)
-      serialized = TriggerData.serialize(data, use_global_id: false)
+      serialized = Tokenizing::TriggerData.serialize(data, use_global_id: false)
       admin.tasks.by_listener(trigger).select { |task|
         task.listener_match?(trigger) { |sub|
           next true if sub == trigger
 
-          SearchBreakMatcher.new(sub, { trigger => serialized }).match?
+          Tokenizing::Matcher.new(sub, { trigger => serialized }).match?
         }
       }.map(&:listener)
     end
@@ -370,9 +370,9 @@ RSpec.describe Task do
     let(:log_listener) { 'tell:/^log(?: log)?(?:\s+(?<title>\w+)(?:-)?)(?:\s+(?<notes>.*?))?(?:\s+\((?<calories>(\d+))\))?(?:\s+\{(?<data>.*?)\})?$/' }
 
     def match_with_captures(listener, trigger, data)
-      serialized = TriggerData.serialize(TriggerData.parse(data, as: admin), use_global_id: false)
-      matcher = SearchBreakMatcher.new(listener, { trigger => serialized })
-      [matcher.match?, matcher.regex_match_data[:named_captures]]
+      serialized = Tokenizing::TriggerData.serialize(Tokenizing::TriggerData.parse(data, as: admin), use_global_id: false)
+      matcher = Tokenizing::Matcher.new(listener, { trigger => serialized })
+      [matcher.match?, matcher.match_data[:named_captures]]
     end
 
     it "captures notes from 'log drink Mtn dew'" do

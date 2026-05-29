@@ -14,7 +14,7 @@ class Jarvis::Trigger < Jarvis::Action
     # "whisper-quiet-mode" → scope="whisper-quiet-mode", data={}
     # "my-trigger:awesome sauce" → scope="my-trigger", data={data: "awesome sauce"}
     scope, raw_data = raw.split(":", 2)
-    data = raw_data.present? ? TriggerData.parse(raw_data, as: @user) : {}
+    data = raw_data.present? ? ::Tokenizing::TriggerData.parse(raw_data, as: @user) : {}
 
     ::Jil.trigger(@user, scope.strip, data, auth: :words)
     "Triggered #{scope.strip}"

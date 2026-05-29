@@ -37,7 +37,7 @@ class Jil::Executor
       PrettyLogger.pretty_message({ trigger => raw_trigger_data }), 1000
     ))
 
-    trigger_data = TriggerData.parse(raw_trigger_data, as: user)
+    trigger_data = ::Tokenizing::TriggerData.parse(raw_trigger_data, as: user)
 
     user_tasks = user.accessible_tasks.active.enabled.ordered
     stopped = false
@@ -91,7 +91,7 @@ class Jil::Executor
     @ctx = { vars: {}, return_val: nil, state: :running, output: [] }
     @input_data = input_data || {}
     payload = ::ExecutionPayload.create(
-      code: code, ctx: @ctx, input_data: TriggerData.serialize(input_data),
+      code: code, ctx: @ctx, input_data: ::Tokenizing::TriggerData.serialize(input_data),
     )
     @execution = ::Execution.create(
       user: user, task: task, payload: payload,

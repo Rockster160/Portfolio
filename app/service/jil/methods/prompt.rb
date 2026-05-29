@@ -33,7 +33,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   def create(title, data, questions, deliver)
     prompts.create(
       question: title,
-      params:   TriggerData.serialize(@jil.cast(data.presence, :Hash).presence),
+      params:   ::Tokenizing::TriggerData.serialize(@jil.cast(data.presence, :Hash).presence),
       options:  Array.wrap(questions).flatten.select { |q| q.is_a?(Hash) },
     ).tap { |prompt|
       ::Jil.trigger(
@@ -66,7 +66,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     prompt = load_prompt(prompt_data)
     attrs = {}
     attrs[:question] = title if title.present?
-    attrs[:params] = TriggerData.serialize(@jil.cast(data, :Hash)) if data.present?
+    attrs[:params] = ::Tokenizing::TriggerData.serialize(@jil.cast(data, :Hash)) if data.present?
     attrs[:options] = Array.wrap(questions).flatten.select { |q| q.is_a?(Hash) } if questions.present?
     prompt.update(attrs)
   end

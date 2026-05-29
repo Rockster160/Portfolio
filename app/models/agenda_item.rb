@@ -314,9 +314,10 @@ class AgendaItem < ApplicationRecord
   #   "notify:tone:soft"                  → ["notify", { tone: "soft", agenda_item: ... }]
   #   'alert:"key with spaces":value'     → ["alert", { :"key with spaces" => "value", agenda_item: ... }]
   # Augments the data with a tie-back so listening tasks can see what fired them.
-  # We do our own segmenting rather than calling TriggerData.parse directly
-  # because TriggerData.parse's gating regex (`\w+(:\w+)+`) rejects quoted
-  # segments containing spaces.
+  # We do our own segmenting here to preserve inner quotes verbatim inside a
+  # segment (so `command:Remind me to "add water to plants"` keeps the nested
+  # quotes for Jarvis to see). Tokenizing::TriggerData.parse handles quoted
+  # segments uniformly but unwraps inner quotes the same as outer.
   def parsed_trigger
     return [nil, {}] unless trigger?
     return [nil, {}] if trigger_expression.blank?

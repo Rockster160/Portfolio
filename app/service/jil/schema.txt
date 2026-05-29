@@ -412,3 +412,8 @@
   !#instanceMethod(String content([functionParams])) # String is schema syntax for defining variables, including Cast optionally
 [Password]::password
   #new(Password)::String
+[Tokenizing]
+  #breakdown(String)::Hash
+  #parse(String)::Hash
+  #match?(String "=~" Hash)::Boolean
+  #matchData(String "=~" Hash)::Hash
