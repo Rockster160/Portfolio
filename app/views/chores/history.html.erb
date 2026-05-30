@@ -107,10 +107,6 @@
           <span class="detail-label" data-modal-amount-label>Paid pebbles</span>
           <input type="number" min="0" data-modal-amount class="modal-input" style="max-width:80px;text-align:right;">
         </div>
-        <div class="detail-row" data-modal-pending-note hidden>
-          <span class="detail-label">Paid pebbles</span>
-          <span class="dim">Computed when this push sends.</span>
-        </div>
         <div class="detail-row" style="flex-direction:column;align-items:stretch;gap:4px;">
           <span class="detail-label">Note</span>
           <textarea data-modal-note rows="2" class="modal-input" placeholder="(optional)"></textarea>
@@ -574,7 +570,6 @@
       modal.querySelector('[data-modal-amount]').value = ds.paid || "0";
       modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
       modal.querySelector('[data-modal-amount-label]').textContent = "Paid pebbles";
-      modal.querySelector('[data-modal-pending-note]').setAttribute("hidden", "");
       setCompletionOnlyVisible(true);
       setMultPill("hot",   parseFloat(ds.hotMultiplier   || "1"));
       setMultPill("total", parseFloat(ds.totalMultiplier || "1"));
@@ -617,7 +612,6 @@
       modal.querySelector('[data-modal-amount]').value = ds.amount || "0";
       modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
       modal.querySelector('[data-modal-amount-label]').textContent = "Amount";
-      modal.querySelector('[data-modal-pending-note]').setAttribute("hidden", "");
       modal.querySelector('[data-modal-note]').value = ds.note || "";
       setCompletionOnlyVisible(false);
       modal.classList.remove("hidden");
@@ -636,7 +630,6 @@
       modal.querySelector('[data-modal-amount]').value = ds.amount || "0";
       modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
       modal.querySelector('[data-modal-amount-label]').textContent = "Amount";
-      modal.querySelector('[data-modal-pending-note]').setAttribute("hidden", "");
       modal.querySelector('[data-modal-note]').value = ds.note || "";
       setCompletionOnlyVisible(false);
       modal.classList.remove("hidden");
@@ -657,11 +650,16 @@
       setCompletionOnlyVisible(true);
       modal.querySelector('[data-modal-completed-at]').value =
         toLocalInputValue(body.client_completed_at || item.queued_at);
-      // Pending items have no paid_pebbles yet — server computes on send.
-      modal.querySelector('[data-modal-amount-row]').setAttribute("hidden", "");
-      modal.querySelector('[data-modal-pending-note]').removeAttribute("hidden");
-      setMultPill("hot",   parseFloat(body.hot_multiplier   ?? "1"));
-      setMultPill("total", parseFloat(body.total_multiplier ?? "1"));
+      const hotMult0   = parseFloat(body.hot_multiplier   ?? "1") || 1;
+      const totalMult0 = parseFloat(body.total_multiplier ?? "1") || 1;
+      const base = parseInt(meta.base_pebbles ?? 0, 10) || 0;
+      const computedPaid = Math.round(base * hotMult0 * totalMult0);
+      modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
+      modal.querySelector('[data-modal-amount-label]').textContent = "Paid pebbles";
+      modal.querySelector('[data-modal-amount]').value =
+        body.paid_pebbles != null ? String(body.paid_pebbles) : String(computedPaid);
+      setMultPill("hot",   hotMult0);
+      setMultPill("total", totalMult0);
       setHotPick(body.hot_pick === true);
       modal.querySelector('[data-modal-note]').value = body.note || "";
       modal.querySelector('[data-modal-skipped-row]').setAttribute("hidden", "");
@@ -737,11 +735,14 @@
         const q = loadQueue();
         const item = q[currentEditTarget.idx];
         if (!item) { closeModal(); renderPending(); return; }
+        const paid = parseInt(modal.querySelector('[data-modal-amount]').value, 10);
+        if (Number.isNaN(paid) || paid < 0) { flash("Bad amount", "error"); return; }
         item.body = item.body || {};
         item.body.note = note;
         item.body.hot_multiplier = Number.isFinite(hotMult) ? hotMult : 1;
         item.body.total_multiplier = Number.isFinite(totalMult) ? totalMult : 1;
         item.body.hot_pick = hotPick;
+        item.body.paid_pebbles = paid;
         if (completedIso) item.body.client_completed_at = completedIso;
         saveQueue(q);
         renderPending();

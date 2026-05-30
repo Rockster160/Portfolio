@@ -337,6 +337,101 @@
     return wrap;
   }
 
+  // Patch-in-place updates. Replacing the DOM on every upsert blinks
+  // the card (and resets the done-ring SVG mid-animation); these
+  // patchers only touch the bits that actually change. If a structural
+  // attribute changes (icon, cooldown threshold), they fall back to a
+  // full re-render — but they preserve the existing done-ring element
+  // so the animation state survives the swap.
+  function structuralChange(el, c) {
+    return el.dataset.choreIcon !== (c.icon || "") ||
+           String(el.dataset.choreCooldown || "0") !== String(c.threshold_seconds || 0);
+  }
+  function preserveDoneRing(oldEl, newEl) {
+    const oldRing = oldEl.querySelector(".done-ring");
+    const newRingWrap = newEl.querySelector(".circle-inner");
+    if (!oldRing || !newRingWrap) return;
+    const newRing = newRingWrap.querySelector(".done-ring");
+    if (newRing) newRing.replaceWith(oldRing);
+  }
+  function patchHotBadge(el, c) {
+    let badge = null;
+    for (const child of el.children) {
+      if (child.classList?.contains("hot-badge")) { badge = child; break; }
+    }
+    if (c.hot_multiplier != null) {
+      const text = `${formatMultiplier(c.hot_multiplier)}×`;
+      if (badge) {
+        if (badge.textContent !== text) badge.textContent = text;
+      } else {
+        el.insertAdjacentHTML("afterbegin", `<div class="hot-badge">${esc(text)}</div>`);
+      }
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+  function patchCountSlot(el, c) {
+    if (!el) return;
+    if ((c.done_count_today || 0) > 1) {
+      const want = `<span class="count-badge" data-count-badge>×${c.done_count_today}</span>`;
+      if (el.innerHTML !== want) el.innerHTML = want;
+    } else if (el.innerHTML !== "") {
+      el.innerHTML = "";
+    }
+  }
+  function patchText(el, text) {
+    if (!el) return;
+    const want = text || "";
+    if (el.textContent !== want) el.textContent = want;
+  }
+  function patchCircleCard(el, c) {
+    if (structuralChange(el, c)) {
+      const fresh = renderCircleCard(c);
+      preserveDoneRing(el, fresh);
+      el.replaceWith(fresh);
+      return;
+    }
+    const wasDone = el.classList.contains("done");
+    const isDone = (c.done_count_today || 0) > 0;
+    if (isDone) {
+      el.classList.add("done");
+      if (wasDone) {
+        el.classList.add("no-animate");
+      } else {
+        const animate = shouldAnimateDone(c);
+        el.classList.toggle("no-animate", !animate);
+        if (animate) noteRingAnimation(c.id);
+      }
+    } else {
+      el.classList.remove("done", "no-animate");
+      shouldAnimateDone(c);
+    }
+    el.classList.toggle("hot", c.hot_multiplier != null);
+    patchHotBadge(el, c);
+    patchText(el.querySelector(".circle-reward"), c.reward_label);
+    patchCountSlot(el.querySelector("[data-count-slot]"), c);
+    patchText(el.querySelector(":scope > .title"), c.short_name);
+    hydrateDataAttrs(el, c);
+  }
+  function patchGridCard(el, c) {
+    if (structuralChange(el, c)) {
+      el.replaceWith(renderGridCard(c));
+      return;
+    }
+    el.classList.toggle("done-today", (c.done_count_today || 0) > 0);
+    el.classList.toggle("hot", c.hot_multiplier != null);
+    patchHotBadge(el, c);
+    patchText(el.querySelector(".card-reward"), c.reward_label);
+    patchCountSlot(el.querySelector("[data-count-slot]"), c);
+    patchText(el.querySelector(":scope > .title"), c.name);
+    hydrateDataAttrs(el, c);
+  }
+  function patchHotCell(cell, c) {
+    patchText(cell.querySelector(".hot-mult"), `${formatMultiplier(c.hot_multiplier)}×`);
+    const inner = cell.querySelector(".chore-circle");
+    if (inner) patchCircleCard(inner, c);
+  }
+
   // ============================================================
   // Views — render from store. Subscribers handle granular updates.
   // ============================================================
@@ -410,15 +505,13 @@
         return;
       }
 
-      // Each container holds at most one element per chore id. Swap
-      // when present; append otherwise. Removal handled separately.
       const g = grid()?.querySelector(`[data-chore-id="${c.id}"]`);
-      if (g) g.replaceWith(renderGridCard(c));
+      if (g) patchGridCard(g, c);
       else appendTo(grid(), renderGridCard(c));
 
       const t = today()?.querySelector(`[data-chore-id="${c.id}"]`);
       if (c.today_visible && !c.archived) {
-        if (t) t.replaceWith(renderCircleCard(c));
+        if (t) patchCircleCard(t, c);
         else appendTo(today(), renderCircleCard(c));
         if (empty()) empty().hidden = (today()?.children.length || 0) > 0;
       } else if (t) {
@@ -433,7 +526,7 @@
       const hotCell = hotEl?.querySelector(`[data-chore-id="${c.id}"]`)?.closest(".hot-strip-cell");
       const shouldBeHot = c.hot_multiplier != null && !c.archived;
       if (hotCell && shouldBeHot) {
-        hotCell.replaceWith(renderHotCell(c));
+        patchHotCell(hotCell, c);
       } else if (hotCell || shouldBeHot) {
         renderHot();
       }

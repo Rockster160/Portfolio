@@ -115,6 +115,11 @@ class ChoreCompletionsController < ApplicationController
     overrides[:note]             = raw[:note].to_s             if raw.key?(:note)
     overrides[:hot_multiplier]   = raw[:hot_multiplier].to_f   if raw.key?(:hot_multiplier)
     overrides[:total_multiplier] = raw[:total_multiplier].to_f if raw.key?(:total_multiplier)
+    if raw.key?(:paid_pebbles)
+      amount = raw[:paid_pebbles].to_i
+      overrides[:paid_pebbles]   = amount
+      overrides[:payout_skipped] = amount.zero?
+    end
     if raw.key?(:hot_pick)
       flag = ActiveModel::Type::Boolean.new.cast(raw[:hot_pick])
       overrides[:metadata] = (completion.metadata || {}).merge("hot_pick" => flag)
