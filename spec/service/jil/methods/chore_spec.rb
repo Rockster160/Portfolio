@@ -132,6 +132,40 @@ RSpec.describe Jil::Methods::Chore, type: :service do
     end
   end
 
+  describe "#complete_for" do
+    let(:other) { create(:user, username: "Alchemibluum") }
+    before { create(:chore_share, user: user, shared_with_user: other) }
+
+    it "credits the chosen user with the completion" do
+      expect { methods.complete_for(vitamins, other.username) }.to change { other.chore_completions.count }.by(1)
+      completion = ChoreCompletion.order(:id).last
+      expect(completion.user_id).to eq(other.id)
+      expect(completion.chore_id).to eq(vitamins.id)
+    end
+
+    it "uses the supplied timestamp" do
+      when_at = Time.zone.local(2026, 4, 1, 7, 30, 0)
+      methods.complete_for(vitamins, other.username, when_at.iso8601)
+      completion = ChoreCompletion.order(:id).last
+      expect(completion.completed_at.to_i).to eq(when_at.to_i)
+    end
+
+    it "stamps metadata.source when source_event_id is provided" do
+      methods.complete_for(vitamins, other.username, nil, 4242)
+      completion = ChoreCompletion.order(:id).last
+      expect(completion.metadata.dig("source", "type")).to eq("action_event")
+      expect(completion.metadata.dig("source", "id")).to eq(4242)
+    end
+
+    it "returns nil for an unknown user" do
+      expect(methods.complete_for(vitamins, "no-such-user")).to be_nil
+    end
+
+    it "returns nil for an unknown chore" do
+      expect(methods.complete_for("nope", other.username)).to be_nil
+    end
+  end
+
   describe "#add" do
     before do
       allow(jil_stub).to receive(:cast) { |val, type|

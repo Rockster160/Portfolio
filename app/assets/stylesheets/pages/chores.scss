@@ -35,11 +35,7 @@
   --chores-card-border: #1F2A44;
   --chores-text: #ECF0F1;
   --chores-muted: #94A3B8;
-  // Purple instead of the previous orange — "hot" reads as a more
-  // distinct accent vs. the green "done" state and the slate-grey
-  // cooldown, and matches the Animal-Crossing-style violet user
-  // wanted.
-  --chores-hot: #A855F7;
+  --chores-hot: #16A34A;
   --chores-done: #16A34A;
   --chores-accent: #2563EB;
   // Cooldown badges + rings used to inherit --chores-hot which made
@@ -48,14 +44,33 @@
   // accent color or the done-green.
   --chores-cooldown: #64748B;
   --chores-cooldown-bg: #1F2937;
+  // Per-actor accent for the "done" state. Every chore card defaults
+  // to the green check color; cards whose last completer is known get
+  // a user-specific hue via the [data-actor="..."] rules a few blocks
+  // down. Using a custom prop here means every done usage (border,
+  // box-shadow, count badge, fill animation) tracks the same value.
+  --actor-color: var(--chores-done);
+
+  [data-actor="Rockster160"] {
+    --actor-color: #0160FF;
+  }
+  [data-actor="Alchemibluum"] {
+    --actor-color: #A082D9;
+  }
 
   // Unified page: BOTH `.view-grid` and `.view-today` render together;
   // CSS hides the inactive one. Eliminates the entire class of "make a
   // change on Grid, click Today, see stale data" bugs since both
   // containers update from a single source.
-  > .chores-view { display: none; }
-  &[data-active-view="grid"]  > .chores-view.view-grid  { display: block; }
-  &[data-active-view="today"] > .chores-view.view-today { display: block; }
+  > .chores-view {
+    display: none;
+  }
+  &[data-active-view="grid"] > .chores-view.view-grid {
+    display: block;
+  }
+  &[data-active-view="today"] > .chores-view.view-today {
+    display: block;
+  }
 
   // Sticky toolbar only — search / edit / add stay reachable while
   // scrolling, but the tabs / status / balance / hot strip scroll out
@@ -69,9 +84,10 @@
     background: var(--chores-bg);
   }
 }
-body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
+body:has(.env-banner) .chores-page .chores-toolbar {
+  top: 10px;
+}
 .chores-page {
-
   max-width: 1200px;
   margin: 0 auto;
   padding: 16px 20px 60px;
@@ -422,7 +438,7 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     font-weight: 600;
   }
   .chore-card.done-today {
-    box-shadow: inset 0 0 0 2px var(--chores-done);
+    box-shadow: inset 0 0 0 2px var(--actor-color);
   }
   // Hot status is signaled by the .hot-badge pill ONLY — no border /
   // outline / box-shadow on the card. Earlier purple rings clashed
@@ -439,7 +455,7 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     z-index: 4;
   }
   .chore-card .count-badge {
-    background: var(--chores-done);
+    background: var(--actor-color);
     color: #FFF !important;
     font-size: 10px;
     padding: 1px 8px;
@@ -607,9 +623,7 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     background: #0F1B33;
     display: grid;
     place-items: center;
-    // 2px border (was 1px) so the green "done" ring reads instantly
-    // without leaning on the inner-color change for the entire signal.
-    border: 2px solid transparent;
+    border: 3px solid transparent;
     transition:
       transform 0.08s ease,
       background-color 0.3s ease,
@@ -623,7 +637,11 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: radial-gradient(circle, var(--chores-done) 0%, var(--chores-done) 100%);
+    background: radial-gradient(
+      circle,
+      var(--actor-color) 0%,
+      var(--actor-color) 100%
+    );
     opacity: 0;
     transform: scale(0);
     transform-origin: center;
@@ -643,13 +661,14 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     position: relative;
     z-index: 1;
   }
-  // Fixed icon box so uploaded images / SVGs have a parent dimension
-  // to size themselves against. Emoji rely on font-size; the parent
-  // dimension just bounds them.
+  // Emoji font-size tracks the icon box width via container queries
+  // so emoji and image glyphs render at the same visual size on every
+  // viewport (a fixed font-size would overflow shrinking boxes).
   .chore-circle .icon {
     width: 56%;
     aspect-ratio: 1/1;
-    font-size: 32px;
+    container-type: inline-size;
+    font-size: clamp(20px, 95cqw, 32px);
     line-height: 1;
     display: flex;
     align-items: center;
@@ -682,8 +701,39 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
   // .actor-tag intentionally absent — the household actor name is no
   // longer rendered. Done state is signal enough.
   .chore-circle.done .circle-inner {
-    background: #0F1F12;
-    border-color: var(--chores-done);
+    background: color-mix(in srgb, var(--actor-color) 18%, #0F1B33);
+  }
+  .chore-circle .done-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+    fill: none;
+    overflow: visible;
+  }
+  .chore-circle .done-ring circle {
+    stroke: var(--actor-color);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+    opacity: 0;
+    transform: rotate(-90deg);
+    transform-origin: center;
+  }
+  .chore-circle.done .done-ring circle {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+  .chore-circle.done:not(.no-animate) .done-ring circle {
+    animation: chore-ring-draw 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+  @keyframes chore-ring-draw {
+    0%   { stroke-dashoffset: 100; opacity: 0; }
+    5%   { opacity: 1; }
+    100% { stroke-dashoffset: 0; opacity: 1; }
   }
   .chore-circle.done .icon {
     opacity: 0.95;
@@ -773,7 +823,7 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     z-index: 2;
   }
   .chore-circle .count-badge {
-    background: var(--chores-done);
+    background: var(--actor-color);
     color: #FFF !important;
     font-size: 10px;
     font-weight: 700;
@@ -938,9 +988,15 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     align-items: center;
     gap: 12px;
   }
-  .history-summary .history-summary-left  { justify-self: start; }
-  .history-summary .history-summary-mid   { justify-self: center; }
-  .history-summary .history-summary-right { justify-self: end; }
+  .history-summary .history-summary-left {
+    justify-self: start;
+  }
+  .history-summary .history-summary-mid {
+    justify-self: center;
+  }
+  .history-summary .history-summary-right {
+    justify-self: end;
+  }
   .history-summary strong {
     color: var(--chores-text);
     font-weight: 700;
@@ -1009,7 +1065,9 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     padding: 16px 0;
     border-bottom: 0;
   }
-  .history-row .dim { color: var(--chores-muted); }
+  .history-row .dim {
+    color: var(--chores-muted);
+  }
   .history-when-name {
     display: flex;
     align-items: center;
@@ -1040,7 +1098,9 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     object-fit: contain;
     vertical-align: middle;
   }
-  .history-icon .icon-placeholder { opacity: 0.5; }
+  .history-icon .icon-placeholder {
+    opacity: 0.5;
+  }
   .history-name {
     color: var(--chores-text);
     font-weight: 600;
@@ -1075,7 +1135,9 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     // rather than spilling out to the .chores-page 1200px edges.
     max-width: 800px;
   }
-  .section-heading h3 { margin: 0; }
+  .section-heading h3 {
+    margin: 0;
+  }
   .section-reload {
     width: 28px;
     height: 28px;
@@ -1088,7 +1150,9 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     font-size: 13px;
     flex-shrink: 0;
   }
-  .section-reload:hover { color: var(--chores-text) !important; }
+  .section-reload:hover {
+    color: var(--chores-text) !important;
+  }
   .pending-heading {
     display: flex;
     align-items: center;
@@ -1097,9 +1161,15 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     font-size: 14px;
     color: var(--chores-text);
   }
-  .pending-heading .dim { color: var(--chores-muted); }
-  .pending-row { background: rgba(245, 158, 11, 0.06); }
-  .pending-row.pending-undo { background: rgba(156, 163, 175, 0.06); }
+  .pending-heading .dim {
+    color: var(--chores-muted);
+  }
+  .pending-row {
+    background: rgba(245, 158, 11, 0.06);
+  }
+  .pending-row.pending-undo {
+    background: rgba(156, 163, 175, 0.06);
+  }
   .history-amount-cell {
     display: inline-flex;
     align-items: center;
@@ -1329,10 +1399,15 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
   .chore-form .repeat-detail,
   .chore-form .assignee-row,
   .chore-form .cooldown-custom-row {
-    display: flex; align-items: center; gap: 8px; margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
     flex-wrap: wrap;
   }
-  .chore-form .repeat-detail .pill-group { flex: 1; }
+  .chore-form .repeat-detail .pill-group {
+    flex: 1;
+  }
 
   // The attribute-selector rule `.chore-form input[type="number"]` has
   // specificity (0,2,1) and was beating my (0,2,0) class rule, so
@@ -1340,7 +1415,8 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
   // !important here keeps the CSS short.
   .chore-form .interval-input,
   .chore-form .cooldown-amount {
-    width: 80px !important; text-align: center;
+    width: 80px !important;
+    text-align: center;
     padding: 8px 10px !important;
   }
   // Every select inside the form gets a consistent 40px height,
@@ -1355,28 +1431,39 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
   }
   .chore-form .unit-select,
   .chore-form .cooldown-unit {
-    width: auto !important; min-width: 110px;
+    width: auto !important;
+    min-width: 110px;
   }
   .chore-form .assignee-row select {
-    flex: 1; min-width: 0;
+    flex: 1;
+    min-width: 0;
   }
 
   // Monthly: segmented mode picker + chip grid + nth-weekday row.
   .chore-form .month-mode-tabs {
-    display: flex; gap: 6px; width: 100%; margin-bottom: 4px;
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    margin-bottom: 4px;
   }
-  .chore-form .month-mode-tabs .pill { flex: 1; text-align: center; }
+  .chore-form .month-mode-tabs .pill {
+    flex: 1;
+    text-align: center;
+  }
   .chore-form .month-day-chips {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px; width: 100%;
+    gap: 4px;
+    width: 100%;
   }
   .chore-form .month-day-chips .md-chip {
-    padding: 6px 0; border-radius: 6px;
+    padding: 6px 0;
+    border-radius: 6px;
     border: 1px solid #334155 !important;
     background: #1F2A44 !important;
     color: var(--chores-text) !important;
-    font-weight: 600 !important; font-size: 13px;
+    font-weight: 600 !important;
+    font-size: 13px;
     cursor: pointer;
     text-align: center;
   }
@@ -1384,13 +1471,19 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     background: var(--chores-accent) !important;
     border-color: var(--chores-accent) !important;
   }
-  .chore-form .month-day-chips .md-chip-last { grid-column: span 4; }
+  .chore-form .month-day-chips .md-chip-last {
+    grid-column: span 4;
+  }
   .chore-form .nth-weekday-row {
-    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
     width: 100%;
   }
   .chore-form .nth-weekday-row select {
-    width: auto !important; min-width: 110px;
+    width: auto !important;
+    min-width: 110px;
   }
 
   // Slide toggle (replaces yes/no dropdown for one-off)
@@ -1520,7 +1613,9 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     font-style: italic;
     padding-left: 0;
   }
-  .lookahead-day-empty .day-label { opacity: 0.6; }
+  .lookahead-day-empty .day-label {
+    opacity: 0.6;
+  }
 
   // ---- Icon picker (edit modal) ----
   // Single block: a contenteditable preview that users type emoji
@@ -1703,7 +1798,9 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
   animation: chores-spin 0.6s linear infinite;
 }
 @keyframes chores-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 // Lock the page behind ANY open chores modal: backdrop is shown

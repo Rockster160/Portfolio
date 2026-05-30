@@ -72,8 +72,9 @@ RSpec.describe ChoreCompleter do
   it "applies daily_pebble_threshold multiplier once threshold passed" do
     chore = create(:chore, created_by_user: user, reward_pebbles: 10)
     create(:chore_multiplier,
-      user: user,
-      kind: :daily_pebble_threshold,
+      user:   user,
+      chore:  chore,
+      kind:   :daily_pebble_threshold,
       config: { "levels" => [{ "threshold" => 5, "multiplier" => 1.5 }] })
     # First call earns 10 — but the multiplier kicks in for "current value",
     # which is computed BEFORE this completion lands, so first call pays
@@ -82,5 +83,51 @@ RSpec.describe ChoreCompleter do
     second = described_class.new(chore, user).call
     expect(first.completion.paid_pebbles).to eq(10)
     expect(second.completion.paid_pebbles).to eq(15)
+  end
+
+  describe "per-chore multiplier scoping" do
+    let(:acnh)  { create(:chore, created_by_user: user, name: "ACNH Chores", reward_pebbles: 1) }
+    let(:other) { create(:chore, created_by_user: user, name: "Vitamins",    reward_pebbles: 1) }
+    before do
+      create(:chore_multiplier,
+        user:   user,
+        chore:  acnh,
+        kind:   :daily_streak,
+        config: { "levels" => [
+          { "threshold" => 1, "multiplier" => 1 },
+          { "threshold" => 2, "multiplier" => 2 },
+          { "threshold" => 3, "multiplier" => 3 },
+          { "threshold" => 4, "multiplier" => 4 },
+          { "threshold" => 5, "multiplier" => 5 },
+        ] })
+    end
+
+    it "applies the multiplier when completing its chore" do
+      result = described_class.new(acnh, user).call
+      # Fresh streak → streak_count 1 → multiplier level threshold:1 → 1x → 1 pebble.
+      expect(result.completion.paid_pebbles).to eq(1)
+    end
+
+    it "does NOT apply the multiplier when completing a different chore" do
+      result = described_class.new(other, user).call
+      expect(result.completion.total_multiplier).to eq(1.0)
+      expect(result.completion.paid_pebbles).to eq(1)
+    end
+
+    it "caps at 5x once the streak hits 5+ consecutive days" do
+      # Seed prior days to make today the 5th in a row.
+      day = ChoreDay.current(user)
+      ChoreStreak.create!(user: user, chore: acnh, current_streak: 4, last_completed_day: day - 1)
+      result = described_class.new(acnh, user).call
+      # streak after this completion = 5 → multiplier 5x → 1 × 5 = 5 pebbles
+      expect(result.completion.paid_pebbles).to eq(5)
+    end
+
+    it "still caps at 5x even at streak 10 (no level above threshold:5)" do
+      day = ChoreDay.current(user)
+      ChoreStreak.create!(user: user, chore: acnh, current_streak: 9, last_completed_day: day - 1)
+      result = described_class.new(acnh, user).call
+      expect(result.completion.paid_pebbles).to eq(5)
+    end
   end
 end

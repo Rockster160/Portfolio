@@ -22,6 +22,9 @@ class ChoreMultiplier < ApplicationRecord
   enum :kind, KINDS, default: :daily_pebble_threshold
 
   belongs_to :user
+  # Multipliers are always per-chore — there's no "applies to every chore"
+  # mode. The multiplier only fires when ITS chore is being completed.
+  belongs_to :chore
 
   validates :name, presence: true
 

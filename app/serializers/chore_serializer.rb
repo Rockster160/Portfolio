@@ -47,6 +47,7 @@ class ChoreSerializer
       done_count_today:    done_count_today,
       last_completed_at:   last_completion&.completed_at&.iso8601(3),
       actor_username:      actor_username,
+      last_actor_username: last_actor_username,
       hot_multiplier:      hot_multiplier,
       today_visible:       today_visible?,
     }
@@ -123,6 +124,21 @@ class ChoreSerializer
     # Fallback when no preloaded context — single lookup.
     last = last_completion
     return nil if last.nil? || last.user_id == viewer.id
+
+    User.where(id: last.user_id).pick(:username)
+  end
+
+  # Username of whoever most recently completed the chore — regardless
+  # of sharing mode. Drives the per-user accent color on Today / Grid
+  # cards so a Rocco-checked chore reads visually different from a
+  # Chelsea-checked one. Returns nil when nobody's completed it yet.
+  def last_actor_username
+    actor = ctx&.completion_actor_by_chore&.[](chore.id)
+    return actor.username if actor
+
+    last = last_completion
+    return nil if last.nil?
+    return viewer.username if last.user_id == viewer.id
 
     User.where(id: last.user_id).pick(:username)
   end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_30_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_30_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -427,6 +427,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_30_000000) do
     t.integer "sort_order"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "chore_id", null: false
+    t.index ["chore_id"], name: "index_chore_multipliers_on_chore_id"
     t.index ["user_id"], name: "index_chore_multipliers_on_user_id"
   end
 
@@ -1197,6 +1199,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_30_000000) do
   add_foreign_key "chore_completions", "users"
   add_foreign_key "chore_goals", "users"
   add_foreign_key "chore_hot_picks", "chores"
+  add_foreign_key "chore_multipliers", "chores"
   add_foreign_key "chore_multipliers", "users"
   add_foreign_key "chore_shares", "users"
   add_foreign_key "chore_shares", "users", column: "shared_with_user_id"

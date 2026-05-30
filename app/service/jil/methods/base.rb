@@ -34,7 +34,15 @@ class Jil::Methods::Base
   end
 
   def evalargs(args)
-    Array.wrap(args).map { |arg| arg.is_a?(::Array) ? evalargs(arg) : evalarg(arg) }
+    Array.wrap(args)
+      .reject { |arg| arg.is_a?(::Jil::Parser) && arg.commented? }
+      .map { |arg|
+        if arg.is_a?(::Array)
+          evalargs(arg)
+        else
+          evalarg(arg)
+        end
+      }
   end
 
   def token_val(token)

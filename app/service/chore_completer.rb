@@ -112,7 +112,7 @@ class ChoreCompleter
   end
 
   def combined_user_multiplier(streak_count)
-    multipliers = user.chore_multipliers.active
+    multipliers = user.chore_multipliers.active.where(chore_id: chore.id)
     return 1.0 if multipliers.empty?
 
     # Multiplicative across active multipliers, capped at 5x to avoid

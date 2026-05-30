@@ -16,6 +16,7 @@
   const root = document.querySelector('[data-chores-root]');
   const DAY_KEY = root?.dataset.dayKey || "";
   const CUTOFF_HOUR = parseInt(root?.dataset.cutoffHour || "4", 10);
+  const VIEWER_USERNAME = root?.dataset.viewerUsername || "";
   const TAB_ID = (window.crypto?.randomUUID?.() || String(Date.now() + Math.random()));
 
   // Active view — `data-active-view` only exists on the unified Grid/
@@ -184,8 +185,9 @@
       `<span class="count-badge" data-count-badge>×${c.done_count_today}</span>` : "";
     const cd = hasCooldown(c) ?
       `<span class="circle-countdown" data-circle-countdown data-cooldown-end="${c.cooldown_kind === "day_reset" ? "day-end" : ""}"></span>` : "";
+    const actorAttr = c.last_actor_username ? ` data-actor="${esc(c.last_actor_username)}"` : "";
     return `
-      <div class="chore-card${doneClass}${hotClass}" data-chore-id="${c.id}">
+      <div class="chore-card${doneClass}${hotClass}" data-chore-id="${c.id}"${actorAttr}>
         ${hot}
         <div class="icon" data-icon>
           <span class="card-reward">${esc(c.reward_label)}</span>
@@ -199,8 +201,9 @@
     `;
   }
 
-  function circleCardHTML(c, { hideHotBadge = false } = {}) {
-    const doneClass = (c.done_count_today > 0) ? " done" : "";
+  function circleCardHTML(c, { hideHotBadge = false, animate = true } = {}) {
+    const isDone = (c.done_count_today || 0) > 0;
+    const doneClass = isDone ? (animate ? " done" : " done no-animate") : "";
     const hotClass  = (c.hot_multiplier != null) ? " hot" : "";
     // When this card is rendered INSIDE a `.hot-strip-cell`, the cell's
     // centered pill is the multiplier indicator — suppress this inner
@@ -217,11 +220,15 @@
     ` : "";
     const cd = hasCooldown(c) ?
       `<span class="circle-countdown" data-circle-countdown data-cooldown-end="${c.cooldown_kind === "day_reset" ? "day-end" : ""}"></span>` : "";
+    const actorAttr = c.last_actor_username ? ` data-actor="${esc(c.last_actor_username)}"` : "";
     return `
-      <div class="chore-circle${doneClass}${hotClass}" data-chore-id="${c.id}">
+      <div class="chore-circle${doneClass}${hotClass}" data-chore-id="${c.id}"${actorAttr}>
         ${hot}
         <div class="circle-inner">
           ${ring}
+          <svg class="done-ring" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="48" pathLength="100" />
+          </svg>
           <span class="circle-reward">${esc(c.reward_label)}</span>
           <div class="icon" data-icon>${iconHTML(c)}</div>
           ${cd}
@@ -232,7 +239,7 @@
     `;
   }
 
-  function hotCellHTML(c) {
+  function hotCellHTML(c, { animate = true } = {}) {
     // Wrap a circle card with a centered multiplier pill above. The
     // inner card is identical to Today's markup so gestures + ticker
     // Just Work; `hideHotBadge` prevents the inner top-right badge
@@ -240,7 +247,7 @@
     return `
       <div class="hot-strip-cell">
         <div class="hot-mult">${esc(formatMultiplier(c.hot_multiplier))}×</div>
-        ${circleCardHTML(c, { hideHotBadge: true })}
+        ${circleCardHTML(c, { hideHotBadge: true, animate })}
       </div>
     `;
   }
@@ -272,14 +279,61 @@
     el.dataset.choreStartsOn = c.starts_on || "";
     el.dataset.choreRecurrence = JSON.stringify(c.recurrence || {});
     el.dataset.choreAliases = (c.aliases || []).join("|");
+    if (c.last_actor_username) el.dataset.actor = c.last_actor_username;
+    else delete el.dataset.actor;
+  }
+
+  // Done-ring animation bookkeeping. The keyframe runs on every fresh
+  // .done element, so:
+  //   * `seenDone` tracks chores we've already shown as done; re-renders
+  //     of those skip the animation via the `no-animate` class so an
+  //     incoming server upsert doesn't restart the draw.
+  //   * `ringAnimating` blocks upsertOne while a draw is in flight so
+  //     the SVG can complete; updates that arrived during the window
+  //     get parked in `ringDeferred` and replayed when it ends.
+  const RING_ANIM_MS = 550;
+  const seenDone = new Set();
+  const ringAnimating = new Set();
+  const ringDeferred = new Map();
+
+  function shouldAnimateDone(c) {
+    const sid = String(c.id);
+    if ((c.done_count_today || 0) === 0) {
+      seenDone.delete(sid);
+      return false;
+    }
+    if (seenDone.has(sid)) return false;
+    seenDone.add(sid);
+    return true;
+  }
+
+  function noteRingAnimation(id) {
+    const sid = String(id);
+    ringAnimating.add(sid);
+    setTimeout(() => {
+      ringAnimating.delete(sid);
+      if (ringDeferred.has(sid)) {
+        const pending = ringDeferred.get(sid);
+        ringDeferred.delete(sid);
+        Views.upsertOne(pending);
+      }
+    }, RING_ANIM_MS);
   }
 
   function renderGridCard(c)   { const el = nodeFrom(gridCardHTML(c));   hydrateDataAttrs(el, c); return el; }
-  function renderCircleCard(c) { const el = nodeFrom(circleCardHTML(c)); hydrateDataAttrs(el, c); return el; }
+  function renderCircleCard(c) {
+    const animate = shouldAnimateDone(c);
+    const el = nodeFrom(circleCardHTML(c, { animate }));
+    hydrateDataAttrs(el, c);
+    if (animate) noteRingAnimation(c.id);
+    return el;
+  }
   function renderHotCell(c)    {
-    const wrap = nodeFrom(hotCellHTML(c));
+    const animate = shouldAnimateDone(c);
+    const wrap = nodeFrom(hotCellHTML(c, { animate }));
     const card = wrap.querySelector("[data-chore-id]");
     if (card) hydrateDataAttrs(card, c);
+    if (animate) noteRingAnimation(c.id);
     return wrap;
   }
 
@@ -347,6 +401,15 @@
     }
 
     function upsertOne(c) {
+      // While the done-ring animation is drawing for this chore, park
+      // the update so the SVG can finish; the animation timer replays
+      // the latest deferred upsert when it fires.
+      const sid = String(c.id);
+      if (ringAnimating.has(sid)) {
+        ringDeferred.set(sid, c);
+        return;
+      }
+
       // Each container holds at most one element per chore id. Swap
       // when present; append otherwise. Removal handled separately.
       const g = grid()?.querySelector(`[data-chore-id="${c.id}"]`);
@@ -363,12 +426,16 @@
         if (empty()) empty().hidden = (today()?.children.length || 0) > 0;
       }
 
-      // Hot strip — only refresh existing cells (membership is set
-      // once per day on the server side).
-      const hotCell = hot()?.querySelector(`[data-chore-id="${c.id}"]`)?.closest(".hot-strip-cell");
-      if (hotCell) {
-        const fresh = renderHotCell(c);
-        hotCell.replaceWith(fresh);
+      // Hot strip — membership rotates at the 4am day boundary, so when
+      // an upsert flips a chore in or out of the hot set, recompute the
+      // whole strip; otherwise just patch the existing cell.
+      const hotEl = hot();
+      const hotCell = hotEl?.querySelector(`[data-chore-id="${c.id}"]`)?.closest(".hot-strip-cell");
+      const shouldBeHot = c.hot_multiplier != null && !c.archived;
+      if (hotCell && shouldBeHot) {
+        hotCell.replaceWith(renderHotCell(c));
+      } else if (hotCell || shouldBeHot) {
+        renderHot();
       }
     }
     function removeOne(id) {
@@ -625,6 +692,7 @@
     ChoreStore.patch(c.id, {
       done_count_today: (c.done_count_today || 0) + 1,
       last_completed_at: clickAt,
+      last_actor_username: VIEWER_USERNAME || c.last_actor_username,
     });
 
     if (!navigator.onLine) {
@@ -682,8 +750,9 @@
     const c = ChoreStore.get(parseInt(id, 10));
     if (!c) return;
     const sid = String(id);
+    const priorDoneCount = c.done_count_today || 0;
     ChoreStore.patch(c.id, {
-      done_count_today: Math.max(0, (c.done_count_today || 0) - 1),
+      done_count_today: Math.max(0, priorDoneCount - 1),
     });
     localClickTs.set(sid, Date.now());
     inFlight.add(sid);
@@ -698,6 +767,7 @@
         setConnDot("syncing");
         scheduleQueueRetry();
       } else {
+        ChoreStore.patch(c.id, { done_count_today: priorDoneCount });
         flash("Nothing to undo", "warn");
       }
     } finally { inFlight.delete(sid); }
@@ -1874,18 +1944,21 @@
   // boot
   // ============================================================
   if (unifiedPage) {
-    // Only seed the store from bootstrap when the cached HTML is
-    // current. After the 4am rollover, SW-cached HTML still carries
-    // yesterday's hot picks / today_visible / lookahead — painting
-    // that briefly would surface exactly the stale-hot-strip bug the
-    // user reported. Empty containers + an immediate fullSync are a
-    // cleaner UX than flashing yesterday's data.
+    // Always seed from the cached bootstrap so the app renders offline
+    // even when the cached HTML is from a prior chore-day. fullSync
+    // below corrects any stale hot-picks / today_visible / counts when
+    // the network returns.
+    ChoreStore.bootstrap(bootstrap.chores, bootstrap.lookahead);
+    if (bootstrap.day_key) localStorage.setItem(SYNC_DAY_KEY, bootstrap.day_key);
+    // Persist server_ts only when the cached HTML is from today;
+    // otherwise the next sync's incremental `since=` would skip the
+    // full reset the day rollover needs.
     const cachedDay = bootstrap.day_key;
     const localDay  = currentChoreDayIso();
-    if (cachedDay && cachedDay === localDay) {
-      ChoreStore.bootstrap(bootstrap.chores, bootstrap.lookahead);
-      if (bootstrap.server_ts) localStorage.setItem(SYNC_TS_KEY, bootstrap.server_ts);
-      localStorage.setItem(SYNC_DAY_KEY, cachedDay);
+    if (bootstrap.server_ts && cachedDay && cachedDay === localDay) {
+      localStorage.setItem(SYNC_TS_KEY, bootstrap.server_ts);
+    } else {
+      localStorage.removeItem(SYNC_TS_KEY);
     }
   }
   bindCardClicks();

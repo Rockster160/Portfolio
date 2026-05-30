@@ -131,6 +131,35 @@ class Jil::Methods::Chore < Jil::Methods::Base
     result.completion
   end
 
+  # Chore.complete_for(name, username[, timestamp[, source_event_id]]) → run a
+  # completion on behalf of another user (resolved via load_user). Mirrors
+  # `#complete` but credits the chosen user with the pebbles. Optional
+  # source_event_id stamps the completion's metadata.source link so the
+  # standard Chore.sync_event flow can find it on later :changed/:removed
+  # triggers. Returns the ChoreCompletion, or nil if the chore or user
+  # couldn't be resolved.
+  def complete_for(name_or_chore, as_user, timestamp = nil, source_event_id = nil)
+    chore = load_chore(name_or_chore)
+    return nil if chore.nil?
+
+    user = load_user(as_user)
+    return nil if user.nil?
+
+    at = parse_time(timestamp) || Time.current
+    completion = ::ChoreCompleter.new(chore, user, at: at).call.completion
+    return nil if completion.nil?
+
+    eid = source_event_id.to_i
+    if eid.positive?
+      completion.update!(
+        metadata: (completion.metadata || {}).merge(
+          source: { type: "action_event", id: eid },
+        ),
+      )
+    end
+    completion
+  end
+
   # Chore.uncomplete("Vitamins") → destroy the most recent completion
   # by the current user for today's chore-day. Returns true if
   # something was destroyed.
@@ -617,6 +646,7 @@ end
 #   #accessible::Array
 #   #add(content(ChoreData))::Chore
 #   #complete(String:Name Date?:Timestamp)::ChoreCompletion
+#   #complete_for(String:Name String:"Username" Date?:Timestamp Numeric?:"Source Event ID")::ChoreCompletion
 #   #uncomplete(String)::Boolean
 #   #sync_event(String:"Chore Name" ActionEvent Hash?:"Event Attrs")::Boolean
 #   #sync_completion(String:"Chore Name" Hash|ChoreCompletion Hash:"Event Attrs")::Boolean

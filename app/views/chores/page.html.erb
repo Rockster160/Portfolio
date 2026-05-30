@@ -21,7 +21,8 @@
      data-day-key="<%= @day.iso8601 %>"
      data-cutoff-hour="<%= @cutoff_hour %>"
      data-balance-total="<%= @balance_total %>"
-     data-balance-today="<%= @balance_today %>">
+     data-balance-today="<%= @balance_today %>"
+     data-viewer-username="<%= current_user.username %>">
   <%= render "header", balance: @balance, scope: :today %>
   <div class="hot-strip" data-chores-hot-strip hidden></div>
   <%= render "toolbar" %>
