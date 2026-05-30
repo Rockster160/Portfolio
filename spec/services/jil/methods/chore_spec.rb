@@ -32,6 +32,28 @@ RSpec.describe Jil::Methods::Chore do
       expect(completion.metadata).to include("source" => { "type" => "action_event", "id" => event.id })
     end
 
+    it "copies the event's notes onto the new completion" do
+      at = Time.zone.local(2026, 5, 28, 14, 0, 0)
+      event = user.action_events.create!(name: "Wordle", notes: "5/6 — guessed FERAL", timestamp: at)
+
+      trigger_event(event, :added)
+
+      completion = chore.chore_completions.find_by(user_id: user.id)
+      expect(completion.note).to eq("5/6 — guessed FERAL")
+    end
+
+    it "mirrors a note edit on :changed" do
+      at = Time.zone.local(2026, 5, 28, 14, 0, 0)
+      event = user.action_events.create!(name: "Wordle", notes: "first", timestamp: at)
+      trigger_event(event, :added)
+
+      event.update!(notes: "edited")
+      trigger_event(event, :changed)
+
+      completion = chore.chore_completions.find_by(user_id: user.id)
+      expect(completion.note).to eq("edited")
+    end
+
     it "adopts an existing same-day completion (no duplicate)" do
       at = Time.zone.local(2026, 5, 28, 14, 0, 0)
       pre = chore.chore_completions.create!(

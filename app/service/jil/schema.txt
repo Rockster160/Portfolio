@@ -275,6 +275,7 @@
   #find(String:Name)::Chore
   #scheduled_today::Array
   #accessible::Array
+  #add(content(ChoreData))::Chore
   #complete(String:Name Date?:Timestamp)::ChoreCompletion
   #uncomplete(String:Name)::Boolean
   #sync_event(String:"Chore Name" ActionEvent Hash?:"Event Attrs")::Boolean
@@ -284,6 +285,16 @@
   #withdraw(Numeric:Amount String?:Note)::ChoreWithdrawal
   #transfer(Numeric:Amount String:"Recipient Username" String?:Note)::ChoreTransfer
   #history(String?:Query Numeric?:Limit String?:Order)::Array
+*[ChoreData]
+  #name(String)
+  #short_name(String)
+  #icon(String)
+  #assigned_to(String:"Username")
+  #sharing_mode(["personal" "household"])
+  #one_off(Boolean)
+  #starts_on(Date)
+  #reward_pebbles(Numeric)
+  #show_on_daily_view(["always" "when_scheduled" "when_available" "when_scheduled_and_available" "never"])
 *[ActionEventData]
   #name(String)
   #notes(String)

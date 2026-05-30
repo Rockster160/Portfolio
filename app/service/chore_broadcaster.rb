@@ -10,14 +10,13 @@ class ChoreBroadcaster
     recipient_ids = Chore.household_user_ids_for(user.id)
 
     if chore
-      # `:assigned` chores: only the assignee + creator should hear about
-      # changes — nobody else in the share group can see the chore.
-      if chore.respond_to?(:share_assigned?) && chore.share_assigned?
+      # Personal + assigned: only the assignee + creator can see the chore,
+      # so nobody else needs the signal. Everything else (personal w/o
+      # assignee, household w/ or w/o assignee) is grid-visible to the
+      # full household and gets the broadcast.
+      if chore.respond_to?(:assigned?) && chore.assigned? && chore.share_personal?
         recipient_ids = [chore.assigned_to_user_id, chore.created_by_user_id].compact.uniq
       else
-        # Anyone in the chore-creator's household can see this chore, so
-        # signal all of them (not just the actor's household — the creator
-        # may belong to a different pair than the actor).
         recipient_ids = Chore.household_user_ids_for(chore.created_by_user_id)
       end
     end

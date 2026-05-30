@@ -934,7 +934,6 @@
           return;
         }
         setPillValue(key, pill.dataset.value);
-        if (key === "sharing_mode") syncAssigneeRow();
       });
     });
     editForm.querySelector('[data-reward-quicks]')?.addEventListener("click", e => {
@@ -1087,10 +1086,6 @@
     if (parts.length !== 3) return null;
     return new Date(parts[0], parts[1] - 1, parts[2]);
   }
-  function syncAssigneeRow() {
-    const mode = getField("sharing_mode");
-    editForm.querySelector('[data-assignee-wrap]')?.classList.toggle("hidden", mode !== "assigned");
-  }
   function syncWeekdayChips(days) {
     const wrap = editForm.querySelector('[data-weekday-chips]');
     if (!wrap) return;
@@ -1218,7 +1213,6 @@
       editForm.querySelectorAll('[data-month-day-pane] .md-chip').forEach(c => c.classList.remove("active"));
       editForm.querySelector('[data-month-mode-tabs] [data-month-mode="day-of-month"]')?.click();
       syncFreqRow();
-      syncAssigneeRow();
       syncWeekdayChips([]);
       syncWeekdaysHelperHighlight();
       modalLockedFor = "__create__";
@@ -1263,7 +1257,6 @@
     setPillValue("freq", rec.freq || "never");
     syncSingleTask();
     syncFreqRow();
-    syncAssigneeRow();
     syncWeekdayChips(rec.by_day || []);
     editForm.querySelectorAll('[data-month-day-pane] .md-chip').forEach(c => c.classList.remove("active"));
     if (rec.freq === "monthly") {
@@ -1409,7 +1402,7 @@
         starts_on: getField("starts_on") || null,
         show_on_daily_view: getField("show_on_daily_view") || "when_scheduled",
         sharing_mode: sharingMode,
-        assigned_to_user_id: sharingMode === "assigned" ? (getField("assigned_to_user_id") || null) : null,
+        assigned_to_user_id: getField("assigned_to_user_id") || null,
         aliases: (getField("aliases_csv") || "").split(",").map(s => s.trim()).filter(Boolean),
         recurrence: recurrence,
       },

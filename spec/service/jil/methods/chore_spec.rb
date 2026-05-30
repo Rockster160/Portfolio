@@ -131,4 +131,58 @@ RSpec.describe Jil::Methods::Chore, type: :service do
       expect(asc.index(first.id)).to be < asc.index(last.id)
     end
   end
+
+  describe "#add" do
+    before do
+      allow(jil_stub).to receive(:cast) { |val, type|
+        case type
+        when :Hash    then val.is_a?(Hash) ? val : {}
+        when :Boolean then ::ActiveModel::Type::Boolean.new.cast(val)
+        when :Numeric then val.to_i
+        else val
+        end
+      }
+    end
+
+    it "creates a chore from a minimal hash" do
+      record = methods.add({ name: "Buy Milk" })
+      expect(record).to be_a(Chore)
+      expect(record.persisted?).to be true
+      expect(record.name).to eq("Buy Milk")
+      expect(record.created_by_user_id).to eq(user.id)
+      expect(record.sharing_mode).to eq("personal")
+    end
+
+    it "returns nil and does not create when name is blank" do
+      expect { methods.add({ name: "" }) }.not_to change(Chore, :count)
+      expect(methods.add({ name: "  " })).to be_nil
+    end
+
+    it "honours sharing_mode :household" do
+      record = methods.add({ name: "Trash", sharing_mode: "household", one_off: true })
+      expect(record).to be_persisted
+      expect(record.sharing_mode).to eq("household")
+      expect(record.one_off).to be true
+    end
+
+    it "resolves assigned_to by username + leaves sharing_mode :personal" do
+      other = create(:user, username: "Alchemibluum")
+      record = methods.add({ name: "Vitamins", assigned_to: other.username })
+      expect(record).to be_persisted
+      expect(record.sharing_mode).to eq("personal")
+      expect(record.assigned_to_user_id).to eq(other.id)
+    end
+
+    it "resolves assigned_to by id" do
+      other = create(:user)
+      record = methods.add({ name: "Vitamins", assigned_to: other.id })
+      expect(record).to be_persisted
+      expect(record.assigned_to_user_id).to eq(other.id)
+    end
+
+    it "sets starts_on from an iso8601 timestamp" do
+      record = methods.add({ name: "Yardwork", starts_on: "2026-07-04T09:00:00-06:00" })
+      expect(record.starts_on).to eq(Date.new(2026, 7, 4))
+    end
+  end
 end

@@ -70,11 +70,9 @@ class Chore < ApplicationRecord
   # Sharing mode — see migration comment for full semantics.
   #   :personal   — every user is independent (default; current behavior)
   #   :household  — one completion satisfies everybody; only the doer is paid
-  #   :assigned   — only the assignee sees / can complete
   enum :sharing_mode, {
     personal:  0,
     household: 1,
-    assigned:  2,
   }, default: :personal, prefix: :share
 
   belongs_to :created_by_user, class_name: "User"
@@ -87,19 +85,20 @@ class Chore < ApplicationRecord
   validates :reward_pebbles, numericality: { greater_than_or_equal_to: 0 }
   validates :threshold_seconds, numericality: { only_integer: true }, allow_nil: true
   validate :threshold_seconds_is_valid_sentinel_or_positive
-  validates :assigned_to_user_id, presence: true, if: :share_assigned?
-  before_validation :clear_assignment_unless_assigned
 
-  # Users who can see + complete this chore, given a "share group"
-  # (typically `user.chore_owner_user_ids` for the viewing user).
-  #   :personal   — every share-group member
-  #   :household  — every share-group member
-  #   :assigned   — only the assignee
+  def assigned? = assigned_to_user_id.present?
+
+  # Grid visibility for a user. Assignment is a separate dimension from
+  # sharing mode:
+  #   personal  + assigned    — only the assignee can see at all
+  #   household + assigned    — everyone can see (on Grid); Today is
+  #                             filtered to the assignee elsewhere
+  #   personal/household + no assignee — everyone in the share group sees it
   def visible_to?(user)
-    return true if share_assigned? && assigned_to_user_id == user.id
-    return false if share_assigned?
+    return true unless assigned?
+    return true if share_household?
 
-    true
+    assigned_to_user_id == user.id
   end
 
   # For shared chores (household/personal/assigned), the "effective"
@@ -135,11 +134,14 @@ class Chore < ApplicationRecord
   scope :recurring, -> { where("recurrence IS NOT NULL AND recurrence != '{}'::jsonb") }
   scope :one_offs, -> { where(one_off: true) }
   scope :persistent, -> { where(one_off: false) }
-  # Visible to a user: everything that isn't `:assigned`, plus chores
-  # specifically assigned to them. Personal vs household are both
-  # visible to all share-group members.
+  # Grid visibility scope. Assignment narrows visibility only when the
+  # chore is personal — household-assigned chores still appear on the
+  # Grid for every share-group member (Today filtering happens elsewhere).
   scope :visible_to_user, ->(user_id) {
-    where("sharing_mode != ? OR assigned_to_user_id = ?", sharing_modes[:assigned], user_id)
+    where(
+      "assigned_to_user_id IS NULL OR sharing_mode = ? OR assigned_to_user_id = ?",
+      sharing_modes[:household], user_id,
+    )
   }
 
   def archived? = archived_at.present?
@@ -285,10 +287,6 @@ class Chore < ApplicationRecord
     return if threshold_seconds.positive?
 
     errors.add(:threshold_seconds, "must be positive or the day-reset sentinel (-1)")
-  end
-
-  def clear_assignment_unless_assigned
-    self.assigned_to_user_id = nil unless share_assigned?
   end
 
   def effective_last_completed_day(user, last_completed_day)

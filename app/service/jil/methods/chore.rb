@@ -2,6 +2,11 @@
 # complete them, look up the user's balance, list today's chores, and
 # wire ActionEvent names to auto-complete a chore (via ChoreEventMapping).
 class Jil::Methods::Chore < Jil::Methods::Base
+  PERMIT_ADD_ATTRS = [
+    :name, :short_name, :icon, :sharing_mode, :one_off,
+    :starts_on, :reward_pebbles, :assigned_to, :show_on_daily_view,
+  ].freeze
+
   def cast(value)
     case value
     when ::Chore                      then value
@@ -13,11 +18,89 @@ class Jil::Methods::Chore < Jil::Methods::Base
     end
   end
 
+  # Routes ChoreData hash-builder calls (used inside content(ChoreData) blocks)
+  # to the builder methods below. Everything else falls through to the default
+  # Ruby-method dispatch.
+  def execute(line)
+    method_sym = line.methodname.to_s.underscore.gsub(/[^\w]/, "").to_sym
+    if token_class(line.objname) == :ChoreData && PERMIT_ADD_ATTRS.include?(method_sym)
+      return send(method_sym, *evalargs(line.args))
+    end
+
+    fallback(line)
+  end
+
   # Chore.find("Vitamins") → first chore whose name contains "Vitamins"
   # (case-insensitive). Scoped to the user's accessible set so household
   # chores resolve too.
   def find(name)
     find_by_name(name)
+  end
+
+  # Chore.add(content(ChoreData)) → create a new Chore owned by the running
+  # user. ChoreData block lines build the attrs hash (`#name`, `#assigned_to`,
+  # `#sharing_mode`, `#one_off`, `#starts_on`, `#reward_pebbles`, etc).
+  # `assigned_to` accepts a User, username, id, or hash. `sharing_mode`
+  # accepts the enum key as String/Symbol. Returns the new Chore record, or
+  # nil if validation failed (e.g. blank name).
+  def add(details)
+    attrs = @jil.cast(details, :Hash).slice(*PERMIT_ADD_ATTRS)
+    return nil if attrs[:name].to_s.strip.empty?
+
+    assigned = load_user(attrs.delete(:assigned_to))
+    sharing_key = attrs.delete(:sharing_mode).to_s.downcase.presence
+    sharing = ::Chore.sharing_modes.key?(sharing_key) ? sharing_key.to_sym : :personal
+    daily_key = attrs.delete(:show_on_daily_view).to_s.downcase.presence
+    daily = ::Chore.show_on_daily_views.key?(daily_key) ? daily_key.to_sym : nil
+    starts_on = parse_date(attrs.delete(:starts_on))
+
+    chore = @jil.user.chores.create(
+      attrs.merge(
+        sharing_mode:        sharing,
+        assigned_to_user_id: assigned&.id,
+        starts_on:           starts_on,
+        show_on_daily_view:  daily,
+      ).compact,
+    )
+    chore.persisted? ? chore : nil
+  end
+
+  # ---- [ChoreData] hash builders (used inside content(ChoreData) blocks) ----
+
+  def name(text)
+    { name: text }
+  end
+
+  def short_name(text)
+    { short_name: text }
+  end
+
+  def icon(text)
+    { icon: text }
+  end
+
+  def assigned_to(value)
+    { assigned_to: value }
+  end
+
+  def sharing_mode(value)
+    { sharing_mode: value }
+  end
+
+  def one_off(value)
+    { one_off: @jil.cast(value, :Boolean) }
+  end
+
+  def starts_on(value)
+    { starts_on: value }
+  end
+
+  def reward_pebbles(value)
+    { reward_pebbles: @jil.cast(value, :Numeric).to_i }
+  end
+
+  def show_on_daily_view(value)
+    { show_on_daily_view: value }
   end
 
   # Chore.scheduled_today → array of Chore records visible on Today.
@@ -346,6 +429,14 @@ class Jil::Methods::Chore < Jil::Methods::Base
     nil
   end
 
+  def parse_date(value)
+    return nil if value.blank?
+    return value if value.is_a?(Date)
+    return value.to_date if value.is_a?(Time) || value.is_a?(DateTime)
+
+    parse_time(value)&.to_date
+  end
+
   def load_action_event(value)
     return nil if value.nil?
     return value if value.is_a?(::ActionEvent)
@@ -360,21 +451,24 @@ class Jil::Methods::Chore < Jil::Methods::Base
   def sync_upsert(chore, ae)
     at = parse_time(ae.timestamp) || Time.current
     day = ChoreDay.current(@jil.user, at: at)
+    note = ae.notes.to_s.presence
 
     linked = linked_completion(chore, ae)
     if linked
-      linked.update!(completed_at: at, day_key: day)
+      linked.update!(completed_at: at, day_key: day, note: note)
       return true
     end
 
     same_day = @jil.user.chore_completions.find_by(chore_id: chore.id, day_key: day)
     if same_day
-      same_day.update!(metadata: stamp_source(same_day.metadata, ae))
+      attrs = { metadata: stamp_source(same_day.metadata, ae) }
+      attrs[:note] = note if same_day.note.blank? && note.present?
+      same_day.update!(attrs)
       return false
     end
 
     completion = ::ChoreCompleter.new(chore, @jil.user, at: at).call.completion
-    completion.update!(metadata: stamp_source(completion.metadata, ae))
+    completion.update!(metadata: stamp_source(completion.metadata, ae), note: note)
     true
   end
 
@@ -521,6 +615,7 @@ end
 #   #find(String)::Chore
 #   #scheduled_today::Array
 #   #accessible::Array
+#   #add(content(ChoreData))::Chore
 #   #complete(String:Name Date?:Timestamp)::ChoreCompletion
 #   #uncomplete(String)::Boolean
 #   #sync_event(String:"Chore Name" ActionEvent Hash?:"Event Attrs")::Boolean
@@ -554,3 +649,14 @@ end
 #
 # The Chore model fires `chore` / `chore_completion` triggers on its
 # own lifecycle.
+#
+# *[ChoreData]
+#   #name(String)
+#   #short_name(String)
+#   #icon(String)
+#   #assigned_to(String|User|Numeric|Hash)
+#   #sharing_mode(["personal" "household"])
+#   #one_off(Boolean)
+#   #starts_on(Date)
+#   #reward_pebbles(Numeric)
+#   #show_on_daily_view(["always" "when_scheduled" "when_available" "when_scheduled_and_available" "never"])

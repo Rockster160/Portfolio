@@ -15,7 +15,7 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v41";
+const CACHE = "chores-v43";
 // Every chore view is a cached shell. Each shell is body-empty for
 // page-specific content — entries on History, recent rows on Balance —
 // because that data is hydrated client-side from JSON (and from a
@@ -23,6 +23,44 @@ const CACHE = "chores-v41";
 // is offline-tolerant; the JSON fetches degrade gracefully when there
 // is no connection.
 const SHELL_PATHS = ["/chores", "/chores/today", "/chores/balance", "/chores/history"];
+
+// Match /assets/, /whisper_favicon/, .webmanifest, and the two
+// non-pipelined chores_*.js files. Anything else (cross-origin, API
+// endpoints, opaque resources) is intentionally skipped.
+function isPrecachableAssetURL(url) {
+  if (url.origin !== location.origin) return false;
+  if (url.pathname.startsWith("/assets/")) return true;
+  if (url.pathname.startsWith("/whisper_favicon/")) return true;
+  if (url.pathname.endsWith(".webmanifest")) return true;
+  if (url.pathname === "/chores_sortable.js") return true;
+  return false;
+}
+
+// Parse a shell HTML body for asset URLs the page needs to render and
+// warm them into the cache. Without this step, a content-hashed CSS/JS
+// the cached HTML references can either 404 after a deploy (old hash
+// purged from the public/ dir) or fail offline — either way the page
+// boots into a black screen because the JS that hydrates it never
+// loads. Warming the assets alongside the shell keeps the cache
+// internally consistent.
+async function warmShellAssets(cache, shellHtml, baseUrl) {
+  const urls = new Set();
+  const re = /\b(?:src|href)=["']([^"']+)["']/g;
+  let m;
+  while ((m = re.exec(shellHtml)) !== null) {
+    let u;
+    try { u = new URL(m[1], baseUrl); } catch (e) { continue; }
+    if (isPrecachableAssetURL(u)) urls.add(u.toString());
+  }
+  await Promise.all(Array.from(urls).map(async u => {
+    try {
+      const existing = await cache.match(u);
+      if (existing) return;
+      const r = await fetch(u, { credentials: "same-origin", cache: "no-store" });
+      if (r && r.ok) await cache.put(u, r.clone());
+    } catch (e) { /* offline; nothing we can do */ }
+  }));
+}
 
 // Background shell refresh — fired by the page-script when a Monitor
 // broadcast lands or the tab regains focus. `cache: "no-store"` is
@@ -40,7 +78,10 @@ async function refreshAllShells() {
     try {
       const r = await fetch(p, { credentials: "same-origin", redirect: "manual", cache: "no-store" });
       if (r && r.ok && r.type !== "opaqueredirect") {
+        const clone = r.clone();
         await cache.put(p, r.clone());
+        const html = await clone.text();
+        await warmShellAssets(cache, html, new URL(p, location.origin).toString());
         await broadcastToClients({ kind: "shell_synced", path: p });
       } else {
         await broadcastToClients({ kind: "shell_sync_failed", path: p });
@@ -116,7 +157,10 @@ self.addEventListener("fetch", evt => {
         try {
           const fresh = await fetch(req, { cache: "no-store" });
           if (fresh && fresh.ok && fresh.type !== "opaqueredirect") {
+            const clone = fresh.clone();
             await cache.put(url.pathname, fresh.clone());
+            const html = await clone.text();
+            await warmShellAssets(cache, html, url.toString());
             await broadcastToClients({ kind: "shell_synced", path: url.pathname });
           }
         } catch (e) {

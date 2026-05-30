@@ -280,6 +280,7 @@ class Jil::Executor
       when :ActionEvent, :ActionEventData then :ActionEvent
       when :Agenda, :AgendaData then :Agenda
       when :AgendaItem, :AgendaItemData then :AgendaItem
+      when :Chore, :ChoreData then :Chore
       when :Monitor, :MonitorData then :Monitor
       when :PushNotification, :PushNotificationData then :PushNotification
       when :Prompt, :PromptQuestion then :Prompt

@@ -66,14 +66,18 @@
         <div class="pill-group" data-pill-group="sharing_mode">
           <button type="button" class="pill" data-value="personal">Personal</button>
           <button type="button" class="pill active" data-value="household">Household</button>
-          <button type="button" class="pill" data-value="assigned">Assigned</button>
         </div>
         <input type="hidden" data-field="sharing_mode" value="household">
-        <div data-assignee-wrap class="hidden assignee-row">
-          <span class="field-hint">To:</span>
+      </div>
+
+      <%# ----- Assignee (independent of sharing mode) ----- %>
+      <div class="form-section">
+        <label class="field-label">Assigned to</label>
+        <div class="assignee-row">
           <select data-field="assigned_to_user_id" data-1p-ignore="true" data-lpignore="true">
+            <option value="">Anyone</option>
             <% (defined?(assignable_users) ? assignable_users : [current_user]).each do |u| %>
-              <option value="<%= u.id %>" <%= "selected" if u.id == current_user.id %>>
+              <option value="<%= u.id %>">
                 <%= u.username %><%= " (me)" if u.id == current_user.id %>
               </option>
             <% end %>

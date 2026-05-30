@@ -8,32 +8,58 @@ RSpec.describe "Chore sharing modes" do
   before { create(:chore_share, user: alice, shared_with_user: bob) }
 
   describe "accessible_chores filtering" do
-    it "personal + household show to both alice and bob; assigned only to assignee" do
-      personal   = create(:chore, created_by_user: alice, sharing_mode: :personal)
-      household  = create(:chore, created_by_user: alice, sharing_mode: :household)
-      to_alice   = create(:chore, created_by_user: alice, sharing_mode: :assigned, assigned_to_user: alice)
-      to_bob     = create(:chore, created_by_user: alice, sharing_mode: :assigned, assigned_to_user: bob)
+    it "personal + household with no assignee are visible to everyone in the household" do
+      personal  = create(:chore, created_by_user: alice, sharing_mode: :personal)
+      household = create(:chore, created_by_user: alice, sharing_mode: :household)
 
-      expect(alice.accessible_chores).to include(personal, household, to_alice)
-      expect(alice.accessible_chores).not_to include(to_bob)
-
-      expect(bob.accessible_chores).to include(personal, household, to_bob)
-      expect(bob.accessible_chores).not_to include(to_alice)
-
-      # carl is not in the share group at all
+      expect(alice.accessible_chores).to include(personal, household)
+      expect(bob.accessible_chores).to include(personal, household)
       expect(carl.accessible_chores).to be_empty
     end
 
-    it ":assigned mode requires assigned_to_user_id" do
-      c = build(:chore, created_by_user: alice, sharing_mode: :assigned, assigned_to_user_id: nil)
-      expect(c).not_to be_valid
-      expect(c.errors[:assigned_to_user_id]).to be_present
+    it "personal + assigned hides the chore from non-assignees entirely" do
+      to_alice = create(:chore, created_by_user: alice, sharing_mode: :personal, assigned_to_user: alice)
+      to_bob   = create(:chore, created_by_user: alice, sharing_mode: :personal, assigned_to_user: bob)
+
+      expect(alice.accessible_chores).to include(to_alice)
+      expect(alice.accessible_chores).not_to include(to_bob)
+      expect(bob.accessible_chores).to include(to_bob)
+      expect(bob.accessible_chores).not_to include(to_alice)
     end
 
-    it "switching away from :assigned clears the assignee" do
-      c = create(:chore, created_by_user: alice, sharing_mode: :assigned, assigned_to_user: bob)
-      c.update!(sharing_mode: :personal)
-      expect(c.reload.assigned_to_user_id).to be_nil
+    it "household + assigned stays grid-visible to everyone in the household" do
+      house_assigned = create(:chore,
+        created_by_user: alice, sharing_mode: :household, assigned_to_user: bob)
+
+      expect(alice.accessible_chores).to include(house_assigned)
+      expect(bob.accessible_chores).to include(house_assigned)
+    end
+
+    it "assigned_to_user_id can be set on either sharing mode without a callback wiping it" do
+      personal_assigned  = create(:chore, created_by_user: alice, sharing_mode: :personal,  assigned_to_user: alice)
+      household_assigned = create(:chore, created_by_user: alice, sharing_mode: :household, assigned_to_user: bob)
+
+      expect(personal_assigned.reload.assigned_to_user_id).to eq(alice.id)
+      expect(household_assigned.reload.assigned_to_user_id).to eq(bob.id)
+    end
+  end
+
+  describe "Today visibility (household + assigned)" do
+    it "today_visible? is true only for the assignee" do
+      chore = create(:chore,
+        created_by_user: alice, sharing_mode: :household,
+        assigned_to_user: bob, show_on_daily_view: :always)
+      alice_view = ChoreSerializer.new(chore, viewer: alice).as_json
+      bob_view   = ChoreSerializer.new(chore, viewer: bob).as_json
+      expect(alice_view[:today_visible]).to be(false)
+      expect(bob_view[:today_visible]).to be(true)
+    end
+
+    it "with no assignee, Today follows normal show_on_daily_view rules for everyone" do
+      chore = create(:chore,
+        created_by_user: alice, sharing_mode: :household, show_on_daily_view: :always)
+      expect(ChoreSerializer.new(chore, viewer: alice).as_json[:today_visible]).to be(true)
+      expect(ChoreSerializer.new(chore, viewer: bob).as_json[:today_visible]).to be(true)
     end
   end
 
@@ -51,7 +77,6 @@ RSpec.describe "Chore sharing modes" do
         expect(result).to be_skipped
         expect(result.completion.paid_pebbles).to eq(0)
       }
-      # Alice was paid, bob wasn't:
       expect(alice.reload.chore_balance).to eq(5)
       expect(bob.reload.chore_balance).to eq(0)
     end
@@ -87,7 +112,6 @@ RSpec.describe "Chore sharing modes" do
       bob_chore = create(:chore, created_by_user: bob, sharing_mode: :personal)
       expect(alice.accessible_chores).to include(bob_chore)
       expect(bob.accessible_chores).to include(bob_chore)
-      # carl has no share row — still invisible
       expect(carl.accessible_chores).not_to include(bob_chore)
     end
 

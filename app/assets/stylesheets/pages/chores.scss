@@ -330,10 +330,13 @@ body:has(.env-banner) .chores-page .chores-toolbar { top: 10px; }
     line-height: 1;
   }
   // Uploaded image / inline SVG fills the icon box like the emoji glyph.
+  // 100% + object-fit:contain lets non-square images use the full square
+  // along their long axis so they read at the same visual weight as the
+  // emoji glyph (which is essentially a centred 48px square).
   .chore-card .icon .icon-img,
   .chore-card .icon > svg {
-    width: 70%;
-    height: 70%;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     pointer-events: none;
   }

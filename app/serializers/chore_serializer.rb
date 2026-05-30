@@ -144,6 +144,10 @@ class ChoreSerializer
   # stay carryovers on Today for the rest of the day.
   def today_visible?
     return false if chore.archived?
+    # An explicit assignee owns Today exclusively — personal+assigned is
+    # already hidden upstream via `visible_to_user`, but household+assigned
+    # is still grid-visible to the household, so the Today gate lives here.
+    return false if chore.assigned? && chore.assigned_to_user_id != viewer.id
     return true  if chore.one_off
     return true  if chore.daily_always?
     return false if chore.show_on_daily_view.to_sym == :never
