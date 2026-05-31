@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_30_140000) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_31_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -368,6 +368,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_30_140000) do
     t.boolean "active", default: true, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "created_by_user_id"
+    t.index ["created_by_user_id"], name: "index_chore_achievements_on_created_by_user_id"
   end
 
   create_table "chore_completions", force: :cascade do |t|
@@ -1195,6 +1197,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_30_140000) do
   add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
   add_foreign_key "boxes", "users"
+  add_foreign_key "chore_achievements", "users", column: "created_by_user_id"
   add_foreign_key "chore_completions", "chores"
   add_foreign_key "chore_completions", "users"
   add_foreign_key "chore_goals", "users"

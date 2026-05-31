@@ -24,11 +24,18 @@ class ChoreAchievement < ApplicationRecord
 
   enum :kind, KINDS, default: :total_completions
 
+  belongs_to :created_by_user, class_name: "User", optional: true
   has_many :user_chore_achievements, dependent: :destroy
 
   validates :name, presence: true
 
   scope :active, -> { where(active: true) }
+  # Achievements with a creator are scoped to the creator's household;
+  # rows with a null creator are legacy/global and remain visible to all.
+  scope :visible_to_user, ->(user_id) {
+    household_ids = Chore.household_user_ids_for(user_id)
+    where("created_by_user_id IS NULL OR created_by_user_id IN (?)", household_ids)
+  }
 
   # Has this user earned the achievement (based on current data)?
   def evaluate(user)

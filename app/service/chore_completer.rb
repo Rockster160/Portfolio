@@ -112,7 +112,8 @@ class ChoreCompleter
   end
 
   def combined_user_multiplier(streak_count)
-    multipliers = user.chore_multipliers.active.where(chore_id: chore.id)
+    household_ids = Chore.household_user_ids_for(user.id)
+    multipliers = ChoreMultiplier.active.where(user_id: household_ids, chore_id: chore.id)
     return 1.0 if multipliers.empty?
 
     # Multiplicative across active multipliers, capped at 5x to avoid
@@ -150,7 +151,7 @@ class ChoreCompleter
     # ids — instead of N+1 EXISTS checks. The per-achievement evaluate
     # still queries its own metric (completions count, streaks, etc.),
     # but that's bounded by the number of UNEARNED active achievements.
-    candidates = ChoreAchievement.active.to_a
+    candidates = ChoreAchievement.active.visible_to_user(user.id).to_a
     earned_ids = UserChoreAchievement
       .where(user_id: user.id, chore_achievement_id: candidates.map(&:id))
       .pluck(:chore_achievement_id).to_set

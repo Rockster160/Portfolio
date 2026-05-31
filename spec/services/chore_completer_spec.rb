@@ -130,4 +130,41 @@ RSpec.describe ChoreCompleter do
       expect(result.completion.paid_pebbles).to eq(5)
     end
   end
+
+  describe "household-scoped multipliers + achievements" do
+    let(:partner) { create(:user) }
+    before { create(:chore_share, user: user, shared_with_user: partner) }
+
+    it "applies a multiplier created by a household partner" do
+      shared_chore = create(:chore, created_by_user: user, reward_pebbles: 10)
+      create(:chore_multiplier,
+        user:   partner,
+        chore:  shared_chore,
+        kind:   :daily_pebble_threshold,
+        config: { "levels" => [{ "threshold" => 0, "multiplier" => 2 }] })
+
+      result = described_class.new(shared_chore, user).call
+      expect(result.completion.paid_pebbles).to eq(20)
+    end
+
+    it "awards a household-scoped achievement to whichever member triggers it" do
+      shared_chore = create(:chore, created_by_user: user, reward_pebbles: 1)
+      ach = create(:chore_achievement,
+        created_by_user: partner,
+        kind: :total_completions, config: { "count" => 1 }, reward_pebbles: 7)
+      result = described_class.new(shared_chore, user).call
+      expect(result.awarded.map(&:chore_achievement_id)).to include(ach.id)
+      expect(UserChoreAchievement.where(user_id: user.id, chore_achievement_id: ach.id)).to exist
+    end
+
+    it "hides an achievement whose creator is outside the household" do
+      outsider = create(:user)
+      hidden = create(:chore_achievement,
+        created_by_user: outsider,
+        kind: :total_completions, config: { "count" => 1 }, reward_pebbles: 7)
+      shared_chore = create(:chore, created_by_user: user, reward_pebbles: 1)
+      result = described_class.new(shared_chore, user).call
+      expect(result.awarded.map(&:chore_achievement_id)).not_to include(hidden.id)
+    end
+  end
 end
