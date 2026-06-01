@@ -4,11 +4,15 @@ class ChoreGoalsController < ApplicationController
 
   def create
     goal = current_user.chore_goals.create!(goal_params)
+    # Catch the edge case where the user's current state already
+    # satisfies the brand-new target.
+    goal.refresh!
     render json: serialize(goal), status: :created
   end
 
   def update
     @goal.update!(goal_params)
+    @goal.refresh!
     render json: serialize(@goal)
   end
 
@@ -24,17 +28,37 @@ class ChoreGoalsController < ApplicationController
   end
 
   def goal_params
-    params.require(:chore_goal).permit(:name, :image_url, :link_url, :cost_pebbles)
+    permitted = params.require(:chore_goal).permit(
+      :name, :description, :image_url, :link_url,
+      :kind, :scope_mode, :tracking_mode,
+      :target_value, :awarded_pebbles, :chore_id,
+    )
+    # chore_id only applies to chore-specific kinds — a kind switch in
+    # the modal could leave a stale value selected. Strip it before
+    # save so the FK reflects the chosen kind.
+    permitted[:chore_id] = nil unless ChoreGoal::CHORE_SPECIFIC_KINDS.include?(permitted[:kind].to_s.to_sym)
+    permitted
   end
 
   def serialize(goal)
     {
-      id: goal.id,
-      name: goal.name,
-      image_url: goal.image_url,
-      link_url: goal.link_url,
-      cost_pebbles: goal.cost_pebbles,
-      achieved_at: goal.achieved_at,
+      id:              goal.id,
+      name:            goal.name,
+      description:     goal.description,
+      kind:            goal.kind,
+      scope_mode:      goal.scope_mode,
+      tracking_mode:   goal.tracking_mode,
+      target_value:    goal.target_value,
+      awarded_pebbles: goal.awarded_pebbles,
+      image_url:       goal.image_url,
+      link_url:        goal.link_url,
+      chore_id:        goal.chore_id,
+      achieved_at:     goal.achieved_at,
+      html: render_to_string(
+        partial: "chores/goal_row",
+        formats: [:html],
+        locals: { goal: goal },
+      ),
     }
   end
 end

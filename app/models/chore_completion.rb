@@ -24,7 +24,6 @@ class ChoreCompletion < ApplicationRecord
 
   belongs_to :chore
   belongs_to :user
-  has_many :user_chore_achievements, dependent: :destroy
 
   # Fan out lifecycle as Jil triggers so users can wire automations
   # against chore completion + undo (e.g. log an ActionEvent, post to

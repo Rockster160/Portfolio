@@ -837,11 +837,8 @@
     }).join("");
     choreHistoryBody.innerHTML = rows;
   }
-  choreHistoryModal?.querySelector('[data-action="cancel"]')
-    ?.addEventListener("click", () => choreHistoryModal.classList.add("hidden"));
-  choreHistoryModal?.addEventListener("click", e => {
-    if (e.target === choreHistoryModal) choreHistoryModal.classList.add("hidden");
-  });
+  // Dismiss wiring (including the drag-from-inside-to-outside fix) is
+  // applied to every `.chores-modal-backdrop` in the Balance section.
 
   // ============================================================
   // mutations — go through the store
@@ -887,7 +884,10 @@
       reconcile(data);
       if (data.skipped) flash(data.skipped_reason || "Cooldown — no payout", "warn");
       else if (data.paid) flash(`+${formatCount(data.paid)}p`);
-      (data.awarded_achievements || []).forEach(a => flash(`🏆 ${a.name} +${formatCount(a.pebbles)}p`, "ok"));
+      (data.achieved_goals || []).forEach(g => {
+        const tail = g.pebbles ? ` +${formatCount(g.pebbles)}p` : "";
+        flash(`🏆 ${g.name}${tail}`, "ok");
+      });
     } catch (err) {
       if (isTransientError(err)) {
         // Network / rate-limit / upstream-503: queue so the next flush
@@ -1140,9 +1140,10 @@
     multiplierActive = false;
     multiplierBtn?.classList.remove("active");
   }
-  multiplierModal?.querySelectorAll('[data-action="cancel"]').forEach(el =>
-    el.addEventListener("click", closeMultiplierModal));
-  multiplierModal?.addEventListener("click", e => { if (e.target === multiplierModal) closeMultiplierModal(); });
+  wireModalDismiss(multiplierModal, {
+    onCancel:   closeMultiplierModal,
+    onBackdrop: closeMultiplierModal,
+  });
   multiplierModal?.querySelectorAll('[data-mult]').forEach(btn =>
     btn.addEventListener("click", () => { multiplierModal.querySelector('[data-multiplier-input]').value = btn.dataset.mult; }));
   multiplierModal?.querySelector('[data-multiplier-submit]')?.addEventListener("click", async () => {
@@ -1387,13 +1388,28 @@
   }
 
   // Icon picker — single contenteditable block + corner upload.
-  function bindIconUploader() {
-    const stack = editForm.querySelector("[data-icon-stack]");
+  // Form-agnostic icon uploader. Reads & writes the canonical icon
+  // value from a hidden `[data-icon-hidden]` (or legacy
+  // `[data-field="icon"]`) inside the stack. The same widget covers:
+  //   * type one emoji directly into the preview
+  //   * paste an image / image URL / SVG XML / data: URL
+  //   * drag-drop an image file
+  //   * tap the upload chip to open the file picker
+  //
+  // Callers wire it once per form via `bindIconUploader(form)`. The
+  // setter is exposed on `stack.__setIconValue` so `fillFromExisting`
+  // logic in each form can hydrate it after `form.reset()`.
+  function bindIconUploader(form) {
+    const stack = form?.querySelector("[data-icon-stack]");
     if (!stack) return;
     const preview   = stack.querySelector("[data-icon-preview]");
     const uploadBtn = stack.querySelector("[data-icon-upload]");
     const fileInput = stack.querySelector("[data-icon-file]");
-    const hidden    = stack.querySelector('[data-field="icon"]');
+    // The chore form uses `data-field="icon"`; the goal form uses
+    // `data-icon-hidden` (it doesn't share the chore form's field
+    // convention). Either is fine.
+    const hidden = stack.querySelector('[data-icon-hidden]')
+                || stack.querySelector('[data-field="icon"]');
     function setIconValue(v, { renderFromValue = true } = {}) {
       if (hidden) hidden.value = v || "";
       if (!renderFromValue || !preview) return;
@@ -1407,9 +1423,41 @@
       }
     }
     stack.__setIconValue = setIconValue;
+
+    // Typed input is constrained to ONE grapheme cluster (one emoji-ish
+    // glyph). Without this, typing letters into the preview showed them
+    // at the preview's font-size — huge scribbles that looked broken.
+    // Image / SVG / URL strings always come in via the paste/drop/file
+    // path, never through typing, so clipping to one glyph is safe.
+    const segmenter = (typeof Intl !== "undefined" && Intl.Segmenter)
+      ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
+    function firstGrapheme(s) {
+      if (!s) return "";
+      if (segmenter) {
+        for (const piece of segmenter.segment(s)) return piece.segment;
+        return "";
+      }
+      return Array.from(s)[0] || "";
+    }
+    function placeCaretAtEnd(el) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
     preview?.addEventListener("input", () => {
-      const text = (preview.textContent || "").trim();
-      setIconValue(text, { renderFromValue: false });
+      const raw = (preview.textContent || "").trim();
+      // Pasted SVG / URL strings are caught by the paste handler with
+      // preventDefault — they never reach `input`. So anything we see
+      // here is intentional keyboard typing of an emoji-or-letter glyph.
+      const glyph = firstGrapheme(raw);
+      if (raw !== glyph) {
+        preview.textContent = glyph;
+        placeCaretAtEnd(preview);
+      }
+      setIconValue(glyph, { renderFromValue: false });
     });
     preview?.addEventListener("paste", async e => {
       const items = Array.from(e.clipboardData?.items || []);
@@ -1618,10 +1666,14 @@
   editModeBtn?.addEventListener("click", () => { if (editModeActive) exitEditMode(); else enterEditMode(); });
 
   // Form submit
-  if (editForm) { bindPillGroups(); bindIconUploader(); }
-  editModal?.querySelectorAll('[data-action="cancel"]').forEach(el =>
-    el.addEventListener("click", dismissEditModalExplicit));
-  editModal?.addEventListener("click", e => { if (e.target === editModal) dismissEditModalAccidental(); });
+  if (editForm) { bindPillGroups(); bindIconUploader(editForm); }
+  // Cancel buttons reset the form; backdrop click is treated as
+  // accidental and only hides (so reopening preserves what was typed).
+  // The drag-from-inside-to-outside text selection no longer dismisses.
+  wireModalDismiss(editModal, {
+    onCancel:   dismissEditModalExplicit,
+    onBackdrop: dismissEditModalAccidental,
+  });
 
   editForm?.addEventListener("submit", async e => {
     e.preventDefault();
@@ -1721,30 +1773,331 @@
   });
 
   // ============================================================
-  // goal + withdraw forms (Balance page)
+  // Modal dismiss helper (Balance + global)
   // ============================================================
-  const goalModal = document.querySelector('[data-goal-modal]');
-  document.querySelector('[data-add-goal]')?.addEventListener("click", () => goalModal?.classList.remove("hidden"));
-  goalModal?.querySelector('[data-action="cancel"]')?.addEventListener("click", () => goalModal.classList.add("hidden"));
-  goalModal?.addEventListener("click", e => { if (e.target === goalModal) goalModal.classList.add("hidden"); });
-  goalModal?.querySelector('[data-goal-form]')?.addEventListener("submit", async e => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    try {
-      await api("/chores/goals", "POST", { chore_goal: Object.fromEntries(fd.entries()) });
-      goalModal.classList.add("hidden");
-      flash("Goal added");
-      setTimeout(() => location.reload(), 250);
-    } catch (err) { flash("Couldn't add goal: " + err.message, "error"); }
+  // closeOnBackdropClick used to fire on any backdrop *click*, but the
+  // click event resolves at the lowest common ancestor of mousedown +
+  // mouseup. A text-selection drag that began inside the modal but
+  // released on the backdrop would therefore fire `click` on the
+  // backdrop and dismiss the modal mid-action. Gate dismissal on both
+  // pointerdown AND pointerup landing on the backdrop itself.
+  function openModal(el) { el?.classList.remove("hidden"); }
+  function closeModal(el) { el?.classList.add("hidden"); }
+  function wireModalDismiss(modal, opts = {}) {
+    if (!modal) return;
+    const onCancel   = opts.onCancel   || (() => closeModal(modal));
+    const onBackdrop = opts.onBackdrop || (() => closeModal(modal));
+    modal.querySelectorAll('[data-action="cancel"]').forEach(b =>
+      b.addEventListener("click", onCancel));
+    // Backdrop dismissal requires BOTH the pointer-down AND the
+    // pointer-up to land on the backdrop itself — anything else (a
+    // drag from inside out, a press on the backdrop that ends inside
+    // the modal, a text-selection that crosses the edge) is rejected.
+    let downOnBackdrop = false;
+    let upOnBackdrop = false;
+    modal.addEventListener("pointerdown", e => { downOnBackdrop = e.target === modal; });
+    modal.addEventListener("pointerup",   e => { upOnBackdrop   = e.target === modal; });
+    modal.addEventListener("click", e => {
+      if (e.target === modal && downOnBackdrop && upOnBackdrop) onBackdrop();
+      downOnBackdrop = false;
+      upOnBackdrop = false;
+    });
+  }
+  // Apply the safe dismiss pattern to every modal on the page. The
+  // edit-chore and quick-multiplier modals need state-reset callbacks
+  // on dismissal — those are bound explicitly below; everything else
+  // gets the default "just hide" behavior here.
+  const SPECIALIZED_MODAL_SELECTORS = ['[data-chore-modal]', '[data-multiplier-modal]'];
+  document.querySelectorAll('.chores-modal-backdrop').forEach(m => {
+    if (SPECIALIZED_MODAL_SELECTORS.some(sel => m.matches(sel))) return;
+
+    wireModalDismiss(m);
   });
-  document.querySelectorAll('[data-delete-goal]').forEach(btn => {
-    btn.addEventListener("click", async () => {
+
+  // ============================================================
+  // Goals + Streak Bonuses management (Balance page)
+  // ============================================================
+  // ---------- Goals (now covers former achievements via kinds) ----------
+  const goalModal     = document.querySelector('[data-goal-modal]');
+  const goalForm      = goalModal?.querySelector('[data-goal-form]');
+  const goalsCards    = document.querySelector('[data-goals-cards]');
+  const goalsEmpty    = document.querySelector('[data-goals-empty]');
+  bindIconUploader(goalForm); // shared widget — emoji / paste / SVG / file / URL
+
+  // Per-kind config inputs that should be visible in the form. The
+  // tracking_mode selector is only meaningful for the pebbles kind.
+  const goalKindFields = {
+    pebbles:           ["tracking_mode"],
+    total_completions: [],
+    chore_completions: ["chore_id"],
+    chore_streak:      ["chore_id"],
+  };
+  const goalKindHints = {
+    pebbles:           "Count of pebbles earned.",
+    total_completions: "Count of all chores completed.",
+    chore_completions: "Count of how many times a specific chore is completed.",
+    chore_streak:      "Count of the current consecutive-day streak for one specific chore.",
+  };
+  const goalTargetLabels = {
+    pebbles:           "Target pebbles",
+    total_completions: "Target completions",
+    chore_completions: "Target completions",
+    chore_streak:      "Target streak (days)",
+  };
+  const goalScopeHints = {
+    relative:   "Starts at 0. Counts progress made after this goal is created.",
+    cumulative: "Counts lifetime progress, including before this goal was created.",
+  };
+  function updateGoalKindUI() {
+    if (!goalForm) return;
+    const k = goalForm.elements["kind"].value;
+    const shown = new Set(goalKindFields[k] || []);
+    goalForm.querySelectorAll('[data-goal-field]').forEach(el => {
+      el.hidden = !shown.has(el.dataset.goalField);
+    });
+    const hint = goalForm.querySelector("[data-goal-kind-hint]");
+    if (hint) hint.textContent = goalKindHints[k] || "";
+    const targetLabel = goalForm.querySelector("[data-goal-target-label]");
+    if (targetLabel) targetLabel.textContent = goalTargetLabels[k] || "Target";
+  }
+  function updateGoalScopeHint() {
+    if (!goalForm) return;
+    const v = goalForm.elements["scope_mode"].value;
+    const hint = goalForm.querySelector("[data-goal-scope-hint]");
+    if (hint) hint.textContent = goalScopeHints[v] || "";
+  }
+  goalForm?.elements["kind"]?.addEventListener("change", updateGoalKindUI);
+  goalForm?.elements["scope_mode"]?.addEventListener("change", updateGoalScopeHint);
+
+  function resetGoalForm() {
+    if (!goalForm) return;
+    goalForm.reset();
+    goalForm.elements["goal_id"].value = "";
+    goalForm.elements["target_value"].value = 100;
+    goalForm.elements["awarded_pebbles"].value = 0;
+    updateGoalKindUI();
+    updateGoalScopeHint();
+  }
+  function fillGoalForm(p) {
+    if (!goalForm) return;
+    goalForm.elements["goal_id"].value         = p.id;
+    goalForm.elements["name"].value            = p.name || "";
+    goalForm.elements["description"].value     = p.description || "";
+    goalForm.elements["kind"].value            = p.kind;
+    goalForm.elements["scope_mode"].value      = p.scope_mode;
+    goalForm.elements["tracking_mode"].value   = p.tracking_mode;
+    goalForm.elements["target_value"].value    = p.target_value ?? 100;
+    goalForm.elements["awarded_pebbles"].value = p.awarded_pebbles ?? 0;
+    goalForm.elements["link_url"].value        = p.link_url || "";
+    // The image input is the shared icon-stack widget — set via the
+    // exposed __setIconValue so the preview re-renders with the right
+    // representation (emoji vs <img> vs inline SVG).
+    const stack = goalForm.querySelector("[data-icon-stack]");
+    stack?.__setIconValue?.(p.image_url || "");
+    const choreSelect = goalForm.elements["chore_id"];
+    if (choreSelect && p.chore_id) choreSelect.value = p.chore_id;
+    updateGoalKindUI();
+    updateGoalScopeHint();
+  }
+
+  document.querySelector('[data-add-goal]')?.addEventListener("click", () => {
+    resetGoalForm();
+    goalModal.querySelector('[data-goal-modal-title]').textContent = "Add Goal";
+    openModal(goalModal);
+  });
+
+  document.querySelector('[data-goals-list]')?.addEventListener("click", async e => {
+    const editBtn = e.target.closest('[data-edit-goal]');
+    const delBtn = e.target.closest('[data-delete-goal]');
+    if (editBtn) {
+      const card = editBtn.closest('[data-goal-id]');
+      const payload = JSON.parse(card.dataset.goalPayload || "{}");
+      fillGoalForm(payload);
+      goalModal.querySelector('[data-goal-modal-title]').textContent = "Edit Goal";
+      openModal(goalModal);
+    }
+    if (delBtn) {
       if (!confirm("Delete goal?")) return;
       try {
-        await api(`/chores/goals/${btn.dataset.deleteGoal}`, "DELETE");
-        setTimeout(() => location.reload(), 250);
-      } catch (e) { flash("Couldn't delete: " + e.message, "error"); }
+        await api(`/chores/goals/${delBtn.dataset.deleteGoal}`, "DELETE");
+        delBtn.closest('[data-goal-id]')?.remove();
+        if (!goalsCards.children.length && goalsEmpty) goalsEmpty.style.display = "";
+      } catch (err) { flash("Couldn't delete: " + err.message, "error"); }
+    }
+  });
+
+  goalForm?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const id = goalForm.elements["goal_id"].value;
+    const fd = new FormData(goalForm);
+    const kind = fd.get("kind");
+    const payload = {
+      chore_goal: {
+        name:            fd.get("name"),
+        description:     fd.get("description"),
+        kind:            kind,
+        scope_mode:      fd.get("scope_mode"),
+        tracking_mode:   fd.get("tracking_mode"),
+        target_value:    fd.get("target_value"),
+        awarded_pebbles: fd.get("awarded_pebbles"),
+        image_url:       fd.get("image_url"),
+        link_url:        fd.get("link_url"),
+        chore_id:        (goalKindFields[kind] || []).includes("chore_id") ? fd.get("chore_id") : null,
+      },
+    };
+    try {
+      const res = id
+        ? await api(`/chores/goals/${id}`, "PATCH", payload)
+        : await api("/chores/goals", "POST", payload);
+      if (goalsCards && res?.html) {
+        const existing = goalsCards.querySelector(`[data-goal-id="${res.id}"]`);
+        if (existing) existing.outerHTML = res.html;
+        else goalsCards.insertAdjacentHTML("beforeend", res.html);
+      }
+      if (goalsEmpty) goalsEmpty.style.display = "none";
+      closeModal(goalModal);
+      flash(id ? "Goal updated" : "Goal added");
+    } catch (err) { flash("Couldn't save: " + err.message, "error"); }
+  });
+
+  // ---------- Streak Bonuses (formerly Multipliers) ----------
+  const streakBonusModal = document.querySelector('[data-streak-bonus-modal]');
+  const streakBonusForm  = streakBonusModal?.querySelector('[data-streak-bonus-form]');
+  const streakBonusCards = document.querySelector('[data-streak-bonuses-cards]');
+  const streakBonusEmpty = document.querySelector('[data-streak-bonuses-empty]');
+  const levelRowTpl      = document.querySelector('[data-level-row-template]');
+
+  const streakBonusKindFields = {
+    chore_streak:   ["chore_id"],
+    daily_pebbles:  [],
+    weekly_pebbles: [],
+  };
+  const streakBonusKindHints = {
+    chore_streak:   "Triggers when this chore has been completed N days in a row.",
+    daily_pebbles:  "Triggers when today's earned pebbles reach N. Applies to all chores. Day starts 4am",
+    weekly_pebbles: "Triggers when this week's earned pebbles reach N. Week starts Sunday.",
+  };
+  const streakBonusThresholdHeaders = {
+    chore_streak:   "Days in a row",
+    daily_pebbles:  "Pebbles today",
+    weekly_pebbles: "Pebbles this week",
+  };
+
+  function addLevelRow(values) {
+    if (!levelRowTpl || !streakBonusForm) return;
+    const node = levelRowTpl.content.firstElementChild.cloneNode(true);
+    if (values) {
+      node.querySelector('[name="config[levels][][threshold]"]').value = values.threshold ?? "";
+      node.querySelector('[name="config[levels][][multiplier]"]').value = values.multiplier ?? 1;
+      node.querySelector('[name="config[levels][][bonus_pebbles]"]').value = values.bonus_pebbles ?? 0;
+    }
+    streakBonusForm.querySelector('[data-level-rows]').appendChild(node);
+  }
+  streakBonusForm?.querySelector('[data-add-level]')?.addEventListener("click", () => addLevelRow());
+  streakBonusForm?.querySelector('[data-level-rows]')?.addEventListener("click", e => {
+    const rm = e.target.closest("[data-remove-level]");
+    if (rm) rm.closest(".multiplier-level-row")?.remove();
+  });
+
+  function updateStreakBonusKindUI() {
+    if (!streakBonusForm) return;
+    const k = streakBonusForm.elements["kind"].value;
+    const shown = new Set(streakBonusKindFields[k] || []);
+    streakBonusForm.querySelectorAll('[data-streak-bonus-field]').forEach(el => {
+      el.hidden = !shown.has(el.dataset.streakBonusField);
     });
+    const hint = streakBonusForm.querySelector('[data-streak-bonus-kind-hint]');
+    if (hint) hint.textContent = streakBonusKindHints[k] || "";
+    const header = streakBonusForm.querySelector('[data-level-threshold-header]');
+    if (header) header.textContent = streakBonusThresholdHeaders[k] || "Threshold";
+  }
+  streakBonusForm?.elements["kind"]?.addEventListener("change", updateStreakBonusKindUI);
+
+  function resetStreakBonusForm() {
+    if (!streakBonusForm) return;
+    streakBonusForm.reset();
+    streakBonusForm.elements["streak_bonus_id"].value = "";
+    streakBonusForm.querySelector('[data-level-rows]').innerHTML = "";
+    addLevelRow();
+    updateStreakBonusKindUI();
+  }
+  function fillStreakBonusForm(p) {
+    if (!streakBonusForm) return;
+    streakBonusForm.elements["streak_bonus_id"].value = p.id;
+    streakBonusForm.elements["name"].value = p.name;
+    streakBonusForm.elements["kind"].value = p.kind;
+    if (p.chore_id && streakBonusForm.elements["chore_id"])
+      streakBonusForm.elements["chore_id"].value = p.chore_id;
+    streakBonusForm.querySelector('[data-level-rows]').innerHTML = "";
+    const levels = Array.isArray(p.config?.levels) ? p.config.levels : [];
+    if (levels.length === 0) addLevelRow();
+    else levels.forEach(l => addLevelRow(l));
+    updateStreakBonusKindUI();
+  }
+
+  document.querySelector('[data-add-streak-bonus]')?.addEventListener("click", () => {
+    resetStreakBonusForm();
+    streakBonusModal.querySelector('[data-streak-bonus-modal-title]').textContent = "Add Streak Bonus";
+    openModal(streakBonusModal);
+  });
+
+  document.querySelector('[data-streak-bonuses-list]')?.addEventListener("click", async e => {
+    const editBtn = e.target.closest('[data-edit-streak-bonus]');
+    const delBtn = e.target.closest('[data-delete-streak-bonus]');
+    if (editBtn) {
+      const card = editBtn.closest('[data-streak-bonus-id]');
+      const payload = JSON.parse(card.dataset.streakBonusPayload || "{}");
+      fillStreakBonusForm(payload);
+      streakBonusModal.querySelector('[data-streak-bonus-modal-title]').textContent = "Edit Streak Bonus";
+      openModal(streakBonusModal);
+    }
+    if (delBtn) {
+      if (!confirm("Delete streak bonus?")) return;
+      try {
+        await api(`/chores/streak_bonuses/${delBtn.dataset.deleteStreakBonus}`, "DELETE");
+        delBtn.closest('[data-streak-bonus-id]')?.remove();
+        if (!streakBonusCards.children.length && streakBonusEmpty) streakBonusEmpty.style.display = "";
+      } catch (err) { flash("Couldn't delete: " + err.message, "error"); }
+    }
+  });
+
+  function readStreakBonusPayload() {
+    const fd = new FormData(streakBonusForm);
+    const levels = [];
+    streakBonusForm.querySelectorAll('.multiplier-level-row').forEach(row => {
+      levels.push({
+        threshold:     row.querySelector('[name="config[levels][][threshold]"]').value,
+        multiplier:    row.querySelector('[name="config[levels][][multiplier]"]').value,
+        bonus_pebbles: row.querySelector('[name="config[levels][][bonus_pebbles]"]').value,
+      });
+    });
+    return {
+      chore_streak_bonus: {
+        name:     fd.get("name"),
+        kind:     fd.get("kind"),
+        chore_id: fd.get("kind") === "chore_streak" ? fd.get("chore_id") : null,
+        config:   { levels: levels },
+      },
+    };
+  }
+
+  streakBonusForm?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const id = streakBonusForm.elements["streak_bonus_id"].value;
+    const payload = readStreakBonusPayload();
+    try {
+      const res = id
+        ? await api(`/chores/streak_bonuses/${id}`, "PATCH", payload)
+        : await api("/chores/streak_bonuses", "POST", payload);
+      if (streakBonusCards && res?.html) {
+        const existing = streakBonusCards.querySelector(`[data-streak-bonus-id="${res.id}"]`);
+        if (existing) existing.outerHTML = res.html;
+        else streakBonusCards.insertAdjacentHTML("beforeend", res.html);
+      }
+      if (streakBonusEmpty) streakBonusEmpty.style.display = "none";
+      closeModal(streakBonusModal);
+      flash(id ? "Streak bonus updated" : "Streak bonus added");
+    } catch (err) { flash("Couldn't save: " + err.message, "error"); }
   });
   // Hydrate the Balance page's "Recent History" block. Per the
   // architecture spec: NEVER cached — every visit, every broadcast,

@@ -19,21 +19,15 @@ FactoryBot.define do
 
   factory :chore_goal do
     sequence(:name) { |n| "Goal #{n}" }
-    cost_pebbles { 100 }
+    kind { :pebbles }
+    target_value { 100 }
     user
   end
 
-  factory :chore_achievement do
-    sequence(:name) { |n| "Achievement #{n}" }
-    kind { :total_completions }
-    config { { "count" => 10 } }
-    reward_pebbles { 20 }
-  end
-
-  factory :chore_multiplier do
-    sequence(:name) { |n| "Multiplier #{n}" }
-    kind { :daily_pebble_threshold }
-    config { { "levels" => [{ "threshold" => 20, "multiplier" => 1.25 }] } }
+  factory :chore_streak_bonus do
+    sequence(:name) { |n| "Bonus #{n}" }
+    kind { :daily_pebbles }
+    config { { "levels" => [{ "threshold" => 20, "multiplier" => 2, "bonus_pebbles" => 0 }] } }
     user
   end
 

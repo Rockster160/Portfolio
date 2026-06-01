@@ -240,32 +240,86 @@
   </div>
 </div>
 
+<%# Add/Edit Goal modal — kind selector unlocks the kind-specific
+  config inputs and updates the target/label as the user types. %>
 <div id="chore-goal-modal" class="chores-modal-backdrop hidden" data-goal-modal>
   <div class="chores-modal">
     <div class="modal-head">
-      <h3>Add Goal</h3>
+      <h3 data-goal-modal-title>Add Goal</h3>
       <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
     </div>
     <form class="chore-form basic" data-goal-form autocomplete="off" data-form-type="other">
+      <input type="hidden" name="goal_id" value="">
+
+      <%# Icon + identity at the top, mirroring the chore form. Hidden
+        `image_url` field travels with the icon-stack; the chore-form
+        layout keeps the icon flush-left and stacks name/description
+        to its right. %>
+      <div class="form-section identity-row">
+        <div class="icon-cell" data-icon-stack>
+          <button type="button" class="icon-upload-btn" data-icon-upload title="Upload image">
+            <i class="fa fa-camera" aria-hidden="true"></i>
+          </button>
+          <div class="icon-preview" data-icon-preview contenteditable="true" spellcheck="false"
+               role="textbox" aria-label="Image — type emoji, paste image or URL, or tap upload"></div>
+          <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
+                 data-icon-file hidden>
+          <input type="hidden" name="image_url" data-icon-hidden value="">
+        </div>
+        <div class="identity-names">
+          <label class="field-label">Name</label>
+          <input type="text" name="name" required autocomplete="off" autocapitalize="words"
+                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true">
+          <input type="text" name="description" placeholder="Description (optional)" autocomplete="off">
+        </div>
+      </div>
+
       <div class="form-section">
-        <label class="field-label">Name</label>
-        <input type="text" name="name" required autocomplete="off" autocapitalize="words"
-               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+        <label class="field-label">Kind</label>
+        <select name="kind">
+          <option value="pebbles">Pebbles</option>
+          <option value="total_completions">Total Chore Completions</option>
+          <option value="chore_completions">Specific Chore Completions</option>
+          <option value="chore_streak">Specific Chore Streak</option>
+        </select>
+        <div class="field-hint" data-goal-kind-hint></div>
+      </div>
+      <div class="form-section" data-goal-field="chore_id" hidden>
+        <label class="field-label">Chore</label>
+        <select name="chore_id">
+          <% (@household_chores || []).each do |c| %>
+            <option value="<%= c.id %>"><%= c.name %></option>
+          <% end %>
+        </select>
       </div>
       <div class="form-section">
-        <label class="field-label">Cost (Pebbles)</label>
-        <input type="number" name="cost_pebbles" min="1" value="100" required autocomplete="off"
-               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+        <label class="field-label" data-goal-target-label>Target</label>
+        <input type="number" name="target_value" min="1" value="100" required autocomplete="off">
+      </div>
+      <div class="form-row">
+        <div class="form-section">
+          <label class="field-label">Scope</label>
+          <select name="scope_mode">
+            <option value="relative">Since goal created</option>
+            <option value="cumulative">Lifetime</option>
+          </select>
+          <div class="field-hint" data-goal-scope-hint></div>
+        </div>
+        <div class="form-section" data-goal-field="tracking_mode" hidden>
+          <label class="field-label">Counts</label>
+          <select name="tracking_mode">
+            <option value="earned">Earned — withdrawals are ignored</option>
+            <option value="saved">Saved — withdrawals subtract</option>
+          </select>
+        </div>
       </div>
       <div class="form-section">
-        <label class="field-label">Image URL (optional)</label>
-        <input type="url" name="image_url" autocomplete="off"
-               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+        <label class="field-label">Reward URL (optional)</label>
+        <input type="url" name="link_url" autocomplete="off">
       </div>
       <div class="form-section">
-        <label class="field-label">Link URL (optional)</label>
-        <input type="url" name="link_url" autocomplete="off"
-               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+        <label class="field-label">Reward Pebbles on Completion (optional)</label>
+        <input type="number" name="awarded_pebbles" min="0" value="0" autocomplete="off">
       </div>
       <div class="form-actions">
         <button type="button" class="ghost" data-action="cancel">Cancel</button>
@@ -308,3 +362,63 @@
     </div>
   </div>
 </div>
+
+<%# Manage Streak Bonus modal — create/edit a ChoreStreakBonus. Kind
+  drives the chore-picker visibility and the levels-table header labels.
+  Multipliers are integers only. %>
+<div id="streak-bonus-modal" class="chores-modal-backdrop hidden" data-streak-bonus-modal>
+  <div class="chores-modal">
+    <div class="modal-head">
+      <h3 data-streak-bonus-modal-title>Add Streak Bonus</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <form class="chore-form basic" data-streak-bonus-form autocomplete="off">
+      <input type="hidden" name="streak_bonus_id" value="">
+      <div class="form-section">
+        <label class="field-label">Name</label>
+        <input type="text" name="name" required>
+      </div>
+      <div class="form-section">
+        <label class="field-label">Kind</label>
+        <select name="kind">
+          <% ChoreStreakBonus::KIND_LABELS.each do |k, label| %>
+            <option value="<%= k %>"><%= label %></option>
+          <% end %>
+        </select>
+        <div class="field-hint" data-streak-bonus-kind-hint></div>
+      </div>
+      <div class="form-section" data-streak-bonus-field="chore_id" hidden>
+        <label class="field-label">Chore</label>
+        <select name="chore_id">
+          <% (@household_chores || []).each do |c| %>
+            <option value="<%= c.id %>"><%= c.name %></option>
+          <% end %>
+        </select>
+      </div>
+      <div class="form-section">
+        <label class="field-label">Levels</label>
+        <div class="multiplier-level-headers">
+          <div data-level-threshold-header>Threshold</div>
+          <div>× Multiplier</div>
+          <div>+ Bonus pebbles</div>
+          <div></div>
+        </div>
+        <div class="multiplier-level-rows" data-level-rows></div>
+        <button type="button" class="btn ghost" data-add-level>+ Add level</button>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="ghost" data-action="cancel">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<template data-level-row-template>
+  <div class="multiplier-level-row">
+    <input type="number" name="config[levels][][threshold]" placeholder="At" min="0" required>
+    <input type="number" name="config[levels][][multiplier]" placeholder="× mult" step="1" min="1" value="1">
+    <input type="number" name="config[levels][][bonus_pebbles]" placeholder="+ bonus" min="0" value="0">
+    <button type="button" class="btn ghost icon" data-remove-level aria-label="Remove"><i class="fa fa-times"></i></button>
+  </div>
+</template>

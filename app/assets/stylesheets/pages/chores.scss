@@ -955,8 +955,43 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     border-radius: 10px;
     padding: 12px;
     display: grid;
-    gap: 6px;
+    grid-template-columns: 64px 1fr;
+    gap: 10px;
     margin-bottom: 8px;
+    align-items: center;
+  }
+  .goal-row .goal-image {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    background: #0F1B33 center/cover no-repeat;
+    border: 1px solid var(--chores-card-border);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--chores-muted);
+    font-size: 22px;
+  }
+  .goal-row .goal-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .goal-row .goal-image > svg {
+    width: 80%;
+    height: 80%;
+    display: block;
+  }
+  .goal-row .goal-image-emoji {
+    font-size: 38px;
+    line-height: 1;
+  }
+  .goal-row .goal-body {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
   }
   .goal-row .progress-track {
     height: 10px;
@@ -966,16 +1001,23 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   }
   .goal-row .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #2563EB, #FBBF24);
+    background: var(--chores-done);
   }
   .goal-row .row-flex {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
+    min-width: 0;
   }
   .goal-row a.goal-link {
     color: #93C5FD;
     text-decoration: none;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
   }
 
   .achievement-card {
@@ -1259,30 +1301,172 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     border-radius: 8px;
     padding: 10px 12px;
   }
-  .multiplier-card-head { margin-bottom: 6px; }
+  .balance-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .balance-section-heading h3 { margin: 0; }
+
+  .multiplier-card-head {
+    margin-bottom: 6px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
   .multiplier-card-head strong { display: block; color: var(--chores-text); }
+  .multiplier-card-actions, .achievement-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .btn.ghost.icon {
+    width: 28px;
+    height: 28px;
+    padding: 0 !important;
+    display: inline-grid;
+    place-items: center;
+    background: #1F2A44 !important;
+    color: var(--chores-muted) !important;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .btn.ghost.icon:hover { color: var(--chores-text) !important; }
+  .multiplier-levels .level-rewards {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .bonus-pill {
+    background: rgba(34, 197, 94, 0.18);
+    color: #4ADE80;
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .multiplier-level-headers {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 32px;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: 11px;
+    color: var(--chores-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .multiplier-level-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 32px;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .multiplier-level-row input { min-width: 0; }
+  .multiplier-level-rows { margin-bottom: 8px; }
+  .multiplier-card table.multiplier-levels {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .multiplier-card table.multiplier-levels th {
+    text-align: left;
+    font-size: 11px;
+    color: var(--chores-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+    padding-bottom: 4px;
+  }
+  .multiplier-card table.multiplier-levels th:nth-child(2),
+  .multiplier-card table.multiplier-levels th:nth-child(3),
+  .multiplier-card table.multiplier-levels td:nth-child(2),
+  .multiplier-card table.multiplier-levels td:nth-child(3) {
+    text-align: center;
+    width: 64px;
+  }
+  .multiplier-card table.multiplier-levels td {
+    padding: 2px 0;
+    font-size: 13px;
+  }
+  .multiplier-card table.multiplier-levels .muted { color: var(--chores-muted); }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .form-row .form-section { min-width: 0; }
+  .chore-form .field-hint {
+    font-size: 11px;
+    color: var(--chores-muted);
+    margin-top: 2px;
+  }
+  .goal-row .goal-title { min-width: 0; flex: 1; }
+  .goal-row .goal-kind {
+    font-size: 11px;
+    color: var(--chores-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+  .goal-row .goal-desc {
+    font-size: 12px;
+    color: var(--chores-muted);
+    margin-top: -2px;
+  }
+  .goal-row .goal-side {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .goal-row .goal-actions {
+    display: flex;
+    gap: 4px;
+  }
+  .goal-row .goal-progress-label {
+    font-size: 12px;
+    color: var(--chores-muted);
+    font-weight: 500;
+  }
+  .goal-row.achieved {
+    border-color: var(--chores-done);
+  }
+  .goal-row.achieved .progress-fill {
+    background: var(--chores-done);
+  }
+  .goal-row .earned-pill i { margin-right: 4px; }
+  .achievement-body { min-width: 0; flex: 1; }
+  .achievement-desc {
+    font-size: 12px;
+    color: var(--chores-muted);
+    margin-top: 2px;
+  }
+  .achievement-kind {
+    font-size: 11px;
+    color: var(--chores-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+  }
+  .achievement-side {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .earned-pill {
+    color: var(--chores-done);
+    font-weight: 600;
+  }
   .multiplier-card .multiplier-kind {
     font-size: 11px;
     color: var(--chores-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
-  .multiplier-levels {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .multiplier-levels li {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: 13px;
-    padding: 2px 0;
-  }
-  .multiplier-levels li .muted { color: var(--chores-muted); }
 
   .chore-history-modal .chore-history-body {
     max-height: 60vh;

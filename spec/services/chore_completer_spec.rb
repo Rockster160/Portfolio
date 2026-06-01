@@ -60,39 +60,46 @@ RSpec.describe ChoreCompleter do
     expect(ChoreStreak.find_by!(user: user, chore: chore).current_streak).to eq(1)
   end
 
-  it "evaluates achievements and awards bonus pebbles" do
+  it "marks an outstanding goal achieved and awards its bonus pebbles" do
     chore = create(:chore, created_by_user: user, reward_pebbles: 1)
-    ach = create(:chore_achievement, kind: :total_completions, config: { "count" => 1 }, reward_pebbles: 20)
+    goal = ChoreGoal.create!(
+      user:            user,
+      name:            "First!",
+      kind:            :total_completions,
+      scope_mode:      :cumulative,
+      target_value:    1,
+      awarded_pebbles: 20,
+    )
     result = described_class.new(chore, user).call
-    expect(result.awarded.size).to eq(1)
-    expect(result.awarded.first.chore_achievement_id).to eq(ach.id)
+    expect(result.achieved_goals.map(&:id)).to eq([goal.id])
+    expect(goal.reload.achieved_at).to be_present
     expect(user.chore_balance).to eq(1 + 20)
   end
 
-  it "applies daily_pebble_threshold multiplier once threshold passed" do
+  it "applies daily_pebbles streak bonus once threshold passed" do
     chore = create(:chore, created_by_user: user, reward_pebbles: 10)
-    create(:chore_multiplier,
+    create(:chore_streak_bonus,
       user:   user,
-      chore:  chore,
-      kind:   :daily_pebble_threshold,
-      config: { "levels" => [{ "threshold" => 5, "multiplier" => 1.5 }] })
-    # First call earns 10 — but the multiplier kicks in for "current value",
-    # which is computed BEFORE this completion lands, so first call pays
-    # straight 10. Second call: prior day total now 10 ≥ 5, so 1.5x → 15.
+      chore:  nil,
+      kind:   :daily_pebbles,
+      config: { "levels" => [{ "threshold" => 5, "multiplier" => 2 }] })
+    # First call earns 10 — the threshold for the bonus reads "pebbles
+    # earned today BEFORE this completion", so the first call pays
+    # straight 10. Second call: today's total now 10 ≥ 5, so 2× → 20.
     first = described_class.new(chore, user).call
     second = described_class.new(chore, user).call
     expect(first.completion.paid_pebbles).to eq(10)
-    expect(second.completion.paid_pebbles).to eq(15)
+    expect(second.completion.paid_pebbles).to eq(20)
   end
 
-  describe "per-chore multiplier scoping" do
+  describe "per-chore streak bonus scoping" do
     let(:acnh)  { create(:chore, created_by_user: user, name: "ACNH Chores", reward_pebbles: 1) }
     let(:other) { create(:chore, created_by_user: user, name: "Vitamins",    reward_pebbles: 1) }
     before do
-      create(:chore_multiplier,
+      create(:chore_streak_bonus,
         user:   user,
         chore:  acnh,
-        kind:   :daily_streak,
+        kind:   :chore_streak,
         config: { "levels" => [
           { "threshold" => 1, "multiplier" => 1 },
           { "threshold" => 2, "multiplier" => 2 },
@@ -102,24 +109,21 @@ RSpec.describe ChoreCompleter do
         ] })
     end
 
-    it "applies the multiplier when completing its chore" do
+    it "applies the bonus when completing its chore" do
       result = described_class.new(acnh, user).call
-      # Fresh streak → streak_count 1 → multiplier level threshold:1 → 1x → 1 pebble.
       expect(result.completion.paid_pebbles).to eq(1)
     end
 
-    it "does NOT apply the multiplier when completing a different chore" do
+    it "does NOT apply the chore-specific bonus when completing a different chore" do
       result = described_class.new(other, user).call
       expect(result.completion.streak_multiplier).to eq(1.0)
       expect(result.completion.paid_pebbles).to eq(1)
     end
 
     it "caps at 5x once the streak hits 5+ consecutive days" do
-      # Seed prior days to make today the 5th in a row.
       day = ChoreDay.current(user)
       ChoreStreak.create!(user: user, chore: acnh, current_streak: 4, last_completed_day: day - 1)
       result = described_class.new(acnh, user).call
-      # streak after this completion = 5 → multiplier 5x → 1 × 5 = 5 pebbles
       expect(result.completion.paid_pebbles).to eq(5)
     end
 
@@ -131,40 +135,96 @@ RSpec.describe ChoreCompleter do
     end
   end
 
-  describe "household-scoped multipliers + achievements" do
+  describe "chore-agnostic pebble-threshold bonuses" do
+    it "applies daily_pebbles bonus to any chore, regardless of which chore is being completed" do
+      water  = create(:chore, created_by_user: user, name: "Water",  reward_pebbles: 10)
+      dishes = create(:chore, created_by_user: user, name: "Dishes", reward_pebbles: 10)
+      # Bonus has no chore_id — pebble-threshold kinds apply on any completion.
+      create(:chore_streak_bonus,
+        user:   user,
+        chore:  nil,
+        kind:   :daily_pebbles,
+        config: { "levels" => [{ "threshold" => 5, "multiplier" => 2 }] })
+      described_class.new(water, user).call # raises today total to 10
+      after = described_class.new(dishes, user).call
+      expect(after.completion.paid_pebbles).to eq(20)
+    end
+  end
+
+  describe "additive streak bonus_pebbles" do
+    it "adds the level's bonus_pebbles on top of the multiplied base" do
+      chore = create(:chore, created_by_user: user, reward_pebbles: 10)
+      create(:chore_streak_bonus,
+        user: user, chore: chore, kind: :chore_streak,
+        config: { "levels" => [{ "threshold" => 1, "multiplier" => 2, "bonus_pebbles" => 3 }] })
+
+      result = described_class.new(chore, user).call
+      expect(result.completion.paid_pebbles).to eq(23) # 10 * 2 + 3
+      expect(result.completion.streak_multiplier).to eq(2.0)
+      expect(result.completion.metadata["streak_bonus_pebbles"]).to eq(3)
+      expect(result.completion.metadata["multipliers"].first).to include("bonus" => 3, "value" => 2)
+    end
+
+    it "treats bonuses additively across multiple active streak bonuses" do
+      chore = create(:chore, created_by_user: user, reward_pebbles: 4)
+      create(:chore_streak_bonus,
+        user: user, chore: chore, kind: :chore_streak,
+        config: { "levels" => [{ "threshold" => 1, "multiplier" => 1, "bonus_pebbles" => 2 }] })
+      create(:chore_streak_bonus,
+        user: user, chore: nil, kind: :daily_pebbles,
+        config: { "levels" => [{ "threshold" => 0, "multiplier" => 1, "bonus_pebbles" => 5 }] })
+
+      result = described_class.new(chore, user).call
+      expect(result.completion.paid_pebbles).to eq(11) # 4 + 2 + 5
+    end
+  end
+
+  describe "household-scoped streak bonuses + goal achievement" do
     let(:partner) { create(:user) }
     before { create(:chore_share, user: user, shared_with_user: partner) }
 
-    it "applies a multiplier created by a household partner" do
+    it "applies a streak bonus created by a household partner" do
       shared_chore = create(:chore, created_by_user: user, reward_pebbles: 10)
-      create(:chore_multiplier,
+      create(:chore_streak_bonus,
         user:   partner,
-        chore:  shared_chore,
-        kind:   :daily_pebble_threshold,
+        chore:  nil,
+        kind:   :daily_pebbles,
         config: { "levels" => [{ "threshold" => 0, "multiplier" => 2 }] })
 
       result = described_class.new(shared_chore, user).call
       expect(result.completion.paid_pebbles).to eq(20)
     end
 
-    it "awards a household-scoped achievement to whichever member triggers it" do
-      shared_chore = create(:chore, created_by_user: user, reward_pebbles: 1)
-      ach = create(:chore_achievement,
-        created_by_user: partner,
-        kind: :total_completions, config: { "count" => 1 }, reward_pebbles: 7)
-      result = described_class.new(shared_chore, user).call
-      expect(result.awarded.map(&:chore_achievement_id)).to include(ach.id)
-      expect(UserChoreAchievement.where(user_id: user.id, chore_achievement_id: ach.id)).to exist
+    it "achieves a total_completions goal the moment the completion crosses the target" do
+      chore = create(:chore, created_by_user: user, reward_pebbles: 1)
+      goal = ChoreGoal.create!(
+        user:         user,
+        name:         "First completion",
+        kind:         :total_completions,
+        scope_mode:   :cumulative,
+        target_value: 1,
+        awarded_pebbles: 7,
+      )
+      result = described_class.new(chore, user).call
+      expect(result.achieved_goals.map(&:id)).to include(goal.id)
+      expect(goal.reload.achieved_at).to be_present
+      expect(user.reload.chore_balance).to eq(1 + 7) # base reward + awarded_pebbles
     end
 
-    it "hides an achievement whose creator is outside the household" do
-      outsider = create(:user)
-      hidden = create(:chore_achievement,
-        created_by_user: outsider,
-        kind: :total_completions, config: { "count" => 1 }, reward_pebbles: 7)
-      shared_chore = create(:chore, created_by_user: user, reward_pebbles: 1)
-      result = described_class.new(shared_chore, user).call
-      expect(result.awarded.map(&:chore_achievement_id)).not_to include(hidden.id)
+    it "does NOT re-fire achievement on subsequent completions once a goal is achieved" do
+      chore = create(:chore, created_by_user: user, reward_pebbles: 1)
+      goal = ChoreGoal.create!(
+        user:         user,
+        name:         "First completion",
+        kind:         :total_completions,
+        scope_mode:   :cumulative,
+        target_value: 1,
+      )
+      described_class.new(chore, user).call
+      original_at = goal.reload.achieved_at
+      second = described_class.new(chore, user).call
+      expect(second.achieved_goals).to be_empty
+      expect(goal.reload.achieved_at).to eq(original_at)
     end
   end
 end

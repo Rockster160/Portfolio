@@ -1,0 +1,63 @@
+<% pct  = goal.progress_percent
+   host = (URI.parse(goal.link_url).host rescue nil) if goal.link_url.present?
+   achieved = goal.achieved_at.present? %>
+<div class="goal-row <%= "achieved" if achieved %>" data-goal-id="<%= goal.id %>"
+     data-goal-payload="<%= {
+       id:              goal.id,
+       name:            goal.name,
+       description:     goal.description,
+       kind:            goal.kind,
+       scope_mode:      goal.scope_mode,
+       tracking_mode:   goal.tracking_mode,
+       target_value:    goal.target_value,
+       awarded_pebbles: goal.awarded_pebbles,
+       image_url:       goal.image_url,
+       link_url:        goal.link_url,
+       chore_id:        goal.chore_id,
+     }.to_json %>">
+  <%# image_url is the canonical "icon" value — same convention as
+    Chore#icon: emoji / inline <svg…> / http(s) URL / data:image URL. %>
+  <% raw_icon = goal.image_url.to_s.strip %>
+  <div class="goal-image">
+    <% if raw_icon.start_with?("http://", "https://", "data:image/") %>
+      <img src="<%= raw_icon %>" alt="" loading="lazy" referrerpolicy="no-referrer">
+    <% elsif raw_icon.start_with?("<svg") %>
+      <%= raw_icon.html_safe %>
+    <% elsif raw_icon.present? %>
+      <span class="goal-image-emoji"><%= raw_icon %></span>
+    <% else %>
+      <i class="fa fa-bullseye" aria-hidden="true"></i>
+    <% end %>
+  </div>
+  <div class="goal-body">
+    <div class="row-flex">
+      <div class="goal-title">
+        <strong><%= goal.name %></strong>
+        <div class="goal-kind"><%= goal.kind_label %><% if goal.scope_mode.to_sym == :cumulative %> · lifetime<% end %></div>
+      </div>
+      <div class="goal-side">
+        <% if achieved %>
+          <span class="earned-pill"><i class="fa fa-check"></i> Completed</span>
+        <% end %>
+        <div class="goal-actions">
+          <button type="button" class="btn ghost icon" data-edit-goal="<%= goal.id %>" aria-label="Edit">
+            <i class="fa fa-pencil"></i>
+          </button>
+          <button type="button" class="btn ghost icon" data-delete-goal="<%= goal.id %>" aria-label="Delete">
+            <i class="fa fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+    <% if goal.description.present? %>
+      <div class="goal-desc"><%= goal.description %></div>
+    <% end %>
+    <div class="progress-track"><div class="progress-fill" style="width: <%= pct %>%;"></div></div>
+    <div class="row-flex">
+      <span class="goal-progress-label"><%= goal.progress_label %></span>
+      <% if goal.link_url.present? %>
+        <a class="goal-link" href="<%= goal.link_url %>" target="_blank" rel="noopener" title="<%= goal.link_url %>"><%= host || goal.link_url %></a>
+      <% end %>
+    </div>
+  </div>
+</div>

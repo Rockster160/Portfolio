@@ -4,6 +4,8 @@ class ChoreTransfersController < ApplicationController
   def create
     transfer = current_user.chore_transfers_sent.new(transfer_params)
     if transfer.save
+      ChoreGoal.refresh_all_for(current_user)
+      ChoreGoal.refresh_all_for(transfer.to_user) if transfer.to_user
       ChoreBroadcaster.broadcast_changes!(current_user)
       ChoreBroadcaster.broadcast_changes!(transfer.to_user) if transfer.to_user
       render json: payload(transfer), status: :created
@@ -17,6 +19,8 @@ class ChoreTransfersController < ApplicationController
     return unless transfer
 
     if transfer.update(transfer_update_params)
+      ChoreGoal.refresh_all_for(current_user)
+      ChoreGoal.refresh_all_for(transfer.to_user) if transfer.to_user
       ChoreBroadcaster.broadcast_changes!(current_user)
       ChoreBroadcaster.broadcast_changes!(transfer.to_user) if transfer.to_user
       render json: payload(transfer)
@@ -31,6 +35,8 @@ class ChoreTransfersController < ApplicationController
 
     recipient = transfer.to_user
     transfer.destroy!
+    ChoreGoal.refresh_all_for(current_user)
+    ChoreGoal.refresh_all_for(recipient) if recipient
     ChoreBroadcaster.broadcast_changes!(current_user)
     ChoreBroadcaster.broadcast_changes!(recipient) if recipient
     render json: {

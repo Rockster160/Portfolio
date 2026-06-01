@@ -75,9 +75,11 @@ class User < ApplicationRecord
   has_many :chore_withdrawals, dependent: :destroy
   has_many :chore_transfers_sent,     class_name: "ChoreTransfer", foreign_key: :from_user_id, dependent: :destroy
   has_many :chore_transfers_received, class_name: "ChoreTransfer", foreign_key: :to_user_id,   dependent: :destroy
-  has_many :chore_multipliers, dependent: :destroy
+  # Singular of "bonuses" inflects to "bonuse" by default, which would
+  # then send Rails looking for a `ChoreStreakBonuse` class — pin both
+  # ends of the association explicitly.
+  has_many :chore_streak_bonuses, class_name: "ChoreStreakBonus", dependent: :destroy
   has_many :chore_streaks, dependent: :destroy
-  has_many :user_chore_achievements, dependent: :destroy
   has_many :chore_user_orders, dependent: :delete_all
 
   has_many :access_grants, class_name: "Doorkeeper::AccessGrant", foreign_key: :resource_owner_id, dependent: :delete_all
@@ -128,14 +130,15 @@ class User < ApplicationRecord
     Chore.where(created_by_user_id: chore_owner_user_ids).active.visible_to_user(id)
   end
 
-  # Current balance — paid pebbles + earned achievement bonuses, less
-  # all withdrawals. Reads from indexed columns; safe to call per-render.
+  # Current balance — paid pebbles + achieved-goal bonuses, less all
+  # withdrawals/sent transfers. Reads from indexed columns; safe to call
+  # per-render.
   def chore_balance
     chore_balance_breakdown[:balance]
   end
 
   # Single-pass aggregate for the balance header — earned/bonuses/
-  # withdrawn fetched in 3 sum-queries against indexed (user_id, *)
+  # withdrawn fetched in sum-queries against indexed (user_id, *)
   # columns, then assembled. Also returns today's earnings cheaply so
   # the Today header doesn't need an extra round-trip.
   def chore_balance_breakdown(day = nil)
@@ -148,7 +151,7 @@ class User < ApplicationRecord
       Arel.sql("COALESCE(SUM(paid_pebbles), 0)"),
       Arel.sql(today_sum_sql),
     ) || [0, 0]
-    bonuses   = user_chore_achievements.sum(:awarded_pebbles)
+    bonuses   = chore_goals.achieved.sum(:awarded_pebbles)
     withdrawn = chore_withdrawals.sum(:amount_pebbles)
     sent      = chore_transfers_sent.sum(:amount_pebbles)
     received  = chore_transfers_received.sum(:amount_pebbles)

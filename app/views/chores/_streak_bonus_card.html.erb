@@ -1,0 +1,54 @@
+<% chore_name = bonus.chore&.name
+   threshold_label = (
+     case bonus.kind.to_sym
+     when :chore_streak   then "Days in a row"
+     when :daily_pebbles  then "Pebbles today"
+     when :weekly_pebbles then "Pebbles this week"
+     end
+   ) %>
+<div class="multiplier-card" data-streak-bonus-id="<%= bonus.id %>"
+     data-streak-bonus-payload="<%= {
+       id:       bonus.id,
+       name:     bonus.name,
+       kind:     bonus.kind,
+       chore_id: bonus.chore_id,
+       active:   bonus.active,
+       config:   bonus.config,
+     }.to_json %>">
+  <div class="multiplier-card-head">
+    <div class="multiplier-card-title">
+      <strong><%= bonus.name %></strong>
+      <div class="multiplier-kind">
+        <%= bonus.kind_label %><% if chore_name %> · <%= chore_name %><% end %>
+      </div>
+    </div>
+    <div class="multiplier-card-actions">
+      <button type="button" class="btn ghost icon" data-edit-streak-bonus="<%= bonus.id %>" aria-label="Edit">
+        <i class="fa fa-pencil"></i>
+      </button>
+      <button type="button" class="btn ghost icon" data-delete-streak-bonus="<%= bonus.id %>" aria-label="Delete">
+        <i class="fa fa-trash"></i>
+      </button>
+    </div>
+  </div>
+  <table class="multiplier-levels">
+    <thead>
+      <tr>
+        <th><%= threshold_label %></th>
+        <th>×</th>
+        <th>+p</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% bonus.sorted_levels.each do |lvl|
+           mult  = lvl["multiplier"].to_i
+           bonus_p = lvl["bonus_pebbles"].to_i %>
+        <tr>
+          <td class="muted"><%= lvl["threshold"] %>+</td>
+          <td><% if mult > 1 %><strong><%= mult %>×</strong><% else %><span class="muted">—</span><% end %></td>
+          <td><% if bonus_p.positive? %><span class="bonus-pill">+<%= bonus_p %>p</span><% else %><span class="muted">—</span><% end %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

@@ -9,6 +9,7 @@ class ChoreWithdrawalsController < ApplicationController
     end
 
     withdrawal = current_user.chore_withdrawals.create!(amount_pebbles: amount, note: note)
+    ChoreGoal.refresh_all_for(current_user)
     ChoreBroadcaster.broadcast_changes!(current_user)
     render json: {
       id: withdrawal.id,
@@ -23,7 +24,8 @@ class ChoreWithdrawalsController < ApplicationController
   def update
     withdrawal = current_user.chore_withdrawals.find(params[:id])
     if withdrawal.update(withdrawal_update_params)
-      ChoreBroadcaster.broadcast_changes!(current_user)
+      ChoreGoal.refresh_all_for(current_user)
+    ChoreBroadcaster.broadcast_changes!(current_user)
       render json: {
         id: withdrawal.id,
         amount_pebbles: withdrawal.amount_pebbles,
@@ -40,6 +42,7 @@ class ChoreWithdrawalsController < ApplicationController
   def destroy
     withdrawal = current_user.chore_withdrawals.find(params[:id])
     withdrawal.destroy!
+    ChoreGoal.refresh_all_for(current_user)
     ChoreBroadcaster.broadcast_changes!(current_user)
     # `today_earnings` is unaffected by withdrawals (it sums completion
     # payouts on the current chore-day), but the controller emits it

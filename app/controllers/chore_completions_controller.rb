@@ -17,7 +17,7 @@ class ChoreCompletionsController < ApplicationController
     render json: response_payload(chore, result.completion).merge(
       skipped: result.skipped?,
       skipped_reason: result.skipped_reason,
-      awarded_achievements: result.awarded.map { |a| { name: a.chore_achievement.name, pebbles: a.awarded_pebbles } },
+      achieved_goals: result.achieved_goals.map { |g| { name: g.name, pebbles: g.awarded_pebbles.to_i } },
     ), status: :created
   end
 

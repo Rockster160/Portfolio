@@ -12,69 +12,30 @@
     <div class="balance-amount"><span data-lifetime-balance><%= format_count(@balance) %></span>p</div>
   </div>
 
-  <h3>Goals</h3>
-  <button class="btn" data-add-goal>+ Add Goal</button>
-  <div data-goals-list style="margin-top:8px;">
-    <% @goals.each do |goal|
-         pct = goal.cost_pebbles.zero? ? 100 : ([@balance * 100 / goal.cost_pebbles, 100].min) %>
-      <div class="goal-row" data-goal-id="<%= goal.id %>">
-        <div class="row-flex">
-          <strong><%= goal.name %></strong>
-          <span><%= format_pebbles(@balance) %> / <%= format_pebbles(goal.cost_pebbles) %></span>
-        </div>
-        <div class="progress-track"><div class="progress-fill" style="width: <%= pct %>%;"></div></div>
-        <div class="row-flex">
-          <% if goal.link_url.present? %>
-            <a class="goal-link" href="<%= goal.link_url %>" target="_blank" rel="noopener"><%= goal.link_url.truncate(40) %></a>
-          <% else %>
-            <span></span>
-          <% end %>
-          <button class="btn ghost" data-delete-goal="<%= goal.id %>">Remove</button>
-        </div>
-      </div>
-    <% end %>
+  <div class="balance-section-heading">
+    <h3>Goals</h3>
+    <button class="btn" data-add-goal>+ Add Goal</button>
+  </div>
+  <div data-goals-list>
+    <p data-goals-empty style="color:var(--chores-muted); <%= "display:none;" if @goals.any? %>">No goals yet.</p>
+    <div data-goals-cards>
+      <% @goals.each do |goal| %>
+        <%= render "goal_row", goal: goal %>
+      <% end %>
+    </div>
   </div>
 
-  <h3 style="margin-top:24px;">Achievements</h3>
-  <% if @achievements.empty? %>
-    <p style="color:var(--chores-muted);">No achievements defined yet.</p>
-  <% end %>
-  <% @achievements.each do |ach| %>
-    <div class="achievement-card <%= "earned" if @earned_ids.include?(ach.id) %>">
-      <div>
-        <strong><%= ach.name %></strong>
-        <% if ach.description.present? %><div style="font-size:12px;color:var(--chores-muted);"><%= ach.description %></div><% end %>
-      </div>
-      <div>
-        <% if @earned_ids.include?(ach.id) %>
-          <span style="color:var(--chores-done);font-weight:600;">Earned</span>
-        <% elsif ach.reward_pebbles > 0 %>
-          <span><%= format_pebbles(ach.reward_pebbles) %></span>
-        <% elsif ach.reward_link.present? %>
-          <a class="goal-link" href="<%= ach.reward_link %>" target="_blank" rel="noopener">Reward</a>
-        <% end %>
-      </div>
+  <div class="balance-section-heading" style="margin-top:24px;">
+    <h3>Streak Bonuses</h3>
+    <button class="btn" data-add-streak-bonus>+ Add</button>
+  </div>
+  <div data-streak-bonuses-list>
+    <p data-streak-bonuses-empty style="color:var(--chores-muted); <%= "display:none;" if @streak_bonuses.any? %>">No streak bonuses configured yet.</p>
+    <div class="multiplier-cards" data-streak-bonuses-cards>
+      <% @streak_bonuses.each do |bonus| %>
+        <%= render "streak_bonus_card", bonus: bonus %>
+      <% end %>
     </div>
-  <% end %>
-
-  <h3 style="margin-top:24px;">Multipliers</h3>
-  <% if @multipliers.empty? %>
-    <p style="color:var(--chores-muted);">No multipliers configured yet.</p>
-  <% end %>
-  <div class="multiplier-cards">
-    <% @multipliers.each do |m| %>
-      <div class="multiplier-card">
-        <div class="multiplier-card-head">
-          <strong><%= m.name %></strong>
-          <div class="multiplier-kind"><%= m.kind.humanize %></div>
-        </div>
-        <ul class="multiplier-levels">
-          <% Array(m.config["levels"]).sort_by { |l| l["threshold"].to_i }.each do |lvl| %>
-            <li><span class="muted"><%= lvl["threshold"] %>+</span> → <strong><%= lvl["multiplier"] %>×</strong></li>
-          <% end %>
-        </ul>
-      </div>
-    <% end %>
   </div>
 
   <h3 style="margin-top:24px;">Withdraw</h3>

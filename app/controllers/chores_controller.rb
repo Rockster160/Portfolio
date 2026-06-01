@@ -129,9 +129,8 @@ class ChoresController < ApplicationController
     @balance = current_user.chore_balance
     @goals = current_user.chore_goals.active.ordered.to_a
     household_ids = current_user.chore_owner_user_ids
-    @achievements = ChoreAchievement.active.visible_to_user(current_user.id).to_a
-    @earned_ids = current_user.user_chore_achievements.pluck(:chore_achievement_id).to_set
-    @multipliers = ChoreMultiplier.where(user_id: household_ids).order(:sort_order, :id)
+    @streak_bonuses = ChoreStreakBonus.where(user_id: household_ids).includes(:chore).order(:sort_order, :id)
+    @household_chores = current_user.accessible_chores.order(:name).to_a
     # Pebble transfer recipients = chore-household users minus self.
     # If the user has no household peers, the transfer form renders
     # an empty-state instead of a select.

@@ -2,12 +2,12 @@
 #   * checks the per-user threshold window (skipped completions are
 #     recorded but pay nothing and do NOT reset the timer)
 #   * applies hot-pick multiplier
-#   * applies user multipliers (daily/weekly/streak)
+#   * applies ChoreStreakBonus levels (chore streak / daily / weekly pebble thresholds)
 #   * updates the ChoreStreak row
-#   * evaluates achievements
+#   * refreshes user goals (marks any newly reached as achieved)
 #   * broadcasts a Monitor update so other devices refresh
 class ChoreCompleter
-  Result = Struct.new(:completion, :awarded, :skipped_reason, keyword_init: true) {
+  Result = Struct.new(:completion, :achieved_goals, :skipped_reason, keyword_init: true) {
     def skipped? = !!skipped_reason
   }
 
@@ -28,11 +28,11 @@ class ChoreCompleter
       record
     end
 
-    awards = evaluate_achievements(completion)
+    achieved_goals = ChoreGoal.refresh_all_for(user)
     broadcast!
     Result.new(
       completion:     completion,
-      awarded:        awards,
+      achieved_goals: achieved_goals,
       skipped_reason: completion.skipped_reason,
     )
   end
@@ -95,40 +95,47 @@ class ChoreCompleter
     hot_multiplier = hot&.multiplier || 1.0
 
     streak_count = current_streak_count + 1 # this completion advances it
-    streak_multiplier, breakdown = combined_streak_multiplier(streak_count)
+    streak_multiplier, bonus_pebbles, breakdown = combined_streak_payout(streak_count)
     base = chore.reward_pebbles
-    paid = (base * hot_multiplier * streak_multiplier).round
+    paid = (base * hot_multiplier * streak_multiplier).round + bonus_pebbles
 
     record.hot_multiplier = hot_multiplier
     record.streak_multiplier = streak_multiplier.round(3)
     record.paid_pebbles = paid
     record.metadata = record.metadata.merge(
-      multipliers:        breakdown,
-      streak_count_after: streak_count,
-      hot_pick:           hot.present?,
+      multipliers:         breakdown,
+      streak_count_after:  streak_count,
+      streak_bonus_pebbles: bonus_pebbles,
+      hot_pick:            hot.present?,
     )
   end
 
-  # Returns [combined_multiplier, breakdown] where breakdown is an
-  # array of `{ id:, name:, kind:, value: }` hashes — one per active
-  # ChoreMultiplier that contributed. Stored on `metadata.multipliers`
+  # Returns [combined_multiplier, total_bonus, breakdown]. Breakdown is
+  # an array of `{ id:, name:, kind:, value:, bonus: }` — one per active
+  # ChoreStreakBonus that contributed. Stored on `metadata.multipliers`
   # so the completion record carries the full reasoning of how the
-  # streak side of paid_pebbles was computed.
-  def combined_streak_multiplier(streak_count)
+  # streak side of paid_pebbles was computed. Multipliers are
+  # multiplicative integers (capped at 5x); bonuses are additive (uncapped).
+  # Pebble-threshold kinds use chore_id IS NULL — they apply to any chore.
+  def combined_streak_payout(streak_count)
     household_ids = Chore.household_user_ids_for(user.id)
-    multipliers = ChoreMultiplier.active.where(user_id: household_ids, chore_id: chore.id)
-    return [1.0, []] if multipliers.empty?
+    bonuses = ChoreStreakBonus.active
+      .where(user_id: household_ids)
+      .applicable_to(chore.id)
+    return [1, 0, []] if bonuses.empty?
 
-    breakdown = multipliers.map { |mx|
+    breakdown = bonuses.map { |b|
       {
-        id:    mx.id,
-        name:  mx.name,
-        kind:  mx.kind,
-        value: mx.current_multiplier(user, for_streak: streak_count),
+        id:    b.id,
+        name:  b.name,
+        kind:  b.kind,
+        value: b.current_multiplier(user, for_streak: streak_count),
+        bonus: b.current_bonus(user, for_streak: streak_count),
       }
     }
-    combined = breakdown.inject(1.0) { |m, b| m * b[:value] }
-    [[combined, 5.0].min, breakdown]
+    combined = breakdown.inject(1) { |m, b| m * b[:value].to_i }
+    bonus_total = breakdown.sum { |b| b[:bonus].to_i }
+    [[combined, 5].min, bonus_total, breakdown]
   end
 
   def current_streak_count
@@ -151,32 +158,6 @@ class ChoreCompleter
     streak.longest_streak = [streak.longest_streak.to_i, streak.current_streak].max
     streak.last_completed_day = day
     streak.save!
-  end
-
-  def evaluate_achievements(completion)
-    # One query for all active achievements, one for previously-earned
-    # ids — instead of N+1 EXISTS checks. The per-achievement evaluate
-    # still queries its own metric (completions count, streaks, etc.),
-    # but that's bounded by the number of UNEARNED active achievements.
-    candidates = ChoreAchievement.active.visible_to_user(user.id).to_a
-    earned_ids = UserChoreAchievement
-      .where(user_id: user.id, chore_achievement_id: candidates.map(&:id))
-      .pluck(:chore_achievement_id).to_set
-    earned = []
-    candidates.each do |achievement|
-      next if earned_ids.include?(achievement.id)
-      next unless achievement.evaluate(user)
-
-      award = UserChoreAchievement.create!(
-        user:              user,
-        chore_achievement: achievement,
-        earned_at:         Time.current,
-        awarded_pebbles:   achievement.reward_pebbles,
-        chore_completion:  completion,
-      )
-      earned << award
-    end
-    earned
   end
 
   def broadcast!

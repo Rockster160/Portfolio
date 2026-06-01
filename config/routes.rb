@@ -115,9 +115,10 @@ Rails.application.routes.draw do
     get    "/items/:id/history"          => "chores#chore_history",      as: :item_history
     patch  "/order"                      => "chores#reorder",            as: :reorder
     resources :completions, controller: :chore_completions, only: [:update, :destroy]
-    resources :goals,       controller: :chore_goals,       only: [:create, :update, :destroy], as: :goals
-    resources :withdrawals, controller: :chore_withdrawals, only: [:create, :update, :destroy], as: :withdrawals
-    resources :transfers,   controller: :chore_transfers,   only: [:create, :update, :destroy], as: :transfers
+    resources :goals,         controller: :chore_goals,          only: [:create, :update, :destroy], as: :goals
+    resources :streak_bonuses, controller: :chore_streak_bonuses, only: [:create, :update, :destroy], as: :streak_bonuses
+    resources :withdrawals,   controller: :chore_withdrawals,    only: [:create, :update, :destroy], as: :withdrawals
+    resources :transfers,     controller: :chore_transfers,      only: [:create, :update, :destroy], as: :transfers
   end
 
   post "webhooks/tesla_telemetry" => "webhooks#tesla_telemetry"

@@ -18,10 +18,143 @@ RSpec.describe "Chores", type: :request do
   end
 
   it "GET /chores/balance renders balance + goals" do
-    create(:chore_goal, user: user, name: "Lego Set", cost_pebbles: 500)
+    create(:chore_goal, user: user, name: "Lego Set", target_value: 500)
     get chores_balance_path
     expect(response).to have_http_status(:ok)
     expect(response.body).to include("Lego Set")
+  end
+
+  describe "streak bonuses CRUD" do
+    let(:chore) { create(:chore, created_by_user: user, name: "Brush", reward_pebbles: 1) }
+
+    it "POST creates a streak bonus with normalized integer levels and returns html" do
+      post "/chores/streak_bonuses",
+        params: {
+          chore_streak_bonus: {
+            name:     "Streak Master",
+            chore_id: chore.id,
+            kind:     "chore_streak",
+            config:   {
+              levels: [
+                { threshold: "3", multiplier: "2", bonus_pebbles: "1" },
+                # Fractional input is floored to integer per the
+                # "multipliers are always integers" rule.
+                { threshold: "7", multiplier: "1.9", bonus_pebbles: "0" },
+                { threshold: "", multiplier: "", bonus_pebbles: "" }, # empty row dropped
+              ],
+            },
+          },
+        }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
+      expect(response).to have_http_status(:created)
+      body = JSON.parse(response.body)
+      expect(body["html"]).to include("Streak Master")
+      bonus = ChoreStreakBonus.find(body["id"])
+      expect(bonus.config["levels"]).to eq([
+        { "threshold" => 3, "multiplier" => 2, "bonus_pebbles" => 1 },
+        { "threshold" => 7, "multiplier" => 1, "bonus_pebbles" => 0 },
+      ])
+    end
+
+    it "POST drops chore_id when kind is a pebble-threshold (chore-agnostic)" do
+      post "/chores/streak_bonuses",
+        params: {
+          chore_streak_bonus: {
+            name:     "Daily 50",
+            chore_id: chore.id, # client may post it; controller should ignore
+            kind:     "daily_pebbles",
+            config:   { levels: [{ threshold: "50", multiplier: "2", bonus_pebbles: "0" }] },
+          },
+        }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
+      expect(response).to have_http_status(:created)
+      bonus = ChoreStreakBonus.find(JSON.parse(response.body)["id"])
+      expect(bonus.chore_id).to be_nil
+    end
+
+    it "DELETE removes the streak bonus" do
+      b = create(:chore_streak_bonus, user: user, chore: chore, kind: :chore_streak)
+      delete "/chores/streak_bonuses/#{b.id}"
+      expect(response).to have_http_status(:no_content)
+      expect(ChoreStreakBonus.where(id: b.id)).to be_empty
+    end
+  end
+
+  describe "goals CRUD (merged with former achievements)" do
+    let(:chore) { create(:chore, created_by_user: user, name: "Water", reward_pebbles: 1) }
+
+    it "POST creates a pebbles goal that defaults to relative-earned" do
+      post "/chores/goals",
+        params: {
+          chore_goal: { name: "Lego Set", kind: "pebbles", target_value: 500 },
+        }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
+      expect(response).to have_http_status(:created)
+      goal = ChoreGoal.find(JSON.parse(response.body)["id"])
+      expect(goal.scope_mode).to eq("relative")
+      expect(goal.tracking_mode).to eq("earned")
+      expect(goal.target_value).to eq(500)
+    end
+
+    it "POST creates a chore-streak goal with chore_id on the FK column" do
+      post "/chores/goals",
+        params: {
+          chore_goal: {
+            name:         "7-day Water",
+            kind:         "chore_streak",
+            target_value: 7,
+            chore_id:     chore.id,
+          },
+        }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
+      expect(response).to have_http_status(:created)
+      goal = ChoreGoal.find(JSON.parse(response.body)["id"])
+      expect(goal.kind).to eq("chore_streak")
+      expect(goal.chore_id).to eq(chore.id)
+    end
+
+    it "POST nulls chore_id when kind doesn't use it (stale form value defense)" do
+      post "/chores/goals",
+        params: {
+          chore_goal: {
+            name:         "Test",
+            kind:         "total_completions",
+            target_value: 5,
+            chore_id:     chore.id, # stale from a prior kind selection
+          },
+        }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
+      expect(response).to have_http_status(:created)
+      goal = ChoreGoal.find(JSON.parse(response.body)["id"])
+      expect(goal.chore_id).to be_nil
+    end
+
+    it "POST relative chore_completions goal starts at 0/target even with prior completions" do
+      create(:chore_completion, user: user, chore: chore)
+      create(:chore_completion, user: user, chore: chore)
+      post "/chores/goals",
+        params: {
+          chore_goal: {
+            name:         "100 waters",
+            kind:         "chore_completions",
+            scope_mode:   "relative",
+            target_value: 100,
+            chore_id:     chore.id,
+          },
+        }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
+      expect(response).to have_http_status(:created)
+      goal = ChoreGoal.find(JSON.parse(response.body)["id"])
+      expect(goal.baseline_value).to eq(2)
+      expect(goal.current_value).to eq(0)
+    end
+
+    it "DELETE archives the goal" do
+      goal = create(:chore_goal, user: user, target_value: 50)
+      delete "/chores/goals/#{goal.id}"
+      expect(response).to have_http_status(:no_content)
+      expect(goal.reload.archived_at).to be_present
+    end
   end
 
   it "POST /chores/items creates a chore" do
