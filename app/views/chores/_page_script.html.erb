@@ -136,6 +136,20 @@
         map.delete(id);
         notify("remove", id);
       },
+      // Rebuild the map in the supplied id order so any view that reads
+      // chores in iteration order (Grid, Today) reflects the new sort.
+      // Unknown ids are skipped; chores not in `ids` are appended in
+      // their current order so they don't vanish from the views.
+      reorder(ids) {
+        const next = new Map();
+        ids.forEach(id => {
+          const key = parseInt(id, 10);
+          if (map.has(key)) { next.set(key, map.get(key)); map.delete(key); }
+        });
+        map.forEach((v, k) => next.set(k, v));
+        map.clear();
+        next.forEach((v, k) => map.set(k, v));
+      },
       get(id) { return map.get(id); },
       all() { return Array.from(map.values()); },
       visibleOnToday() { return this.all().filter(c => c.today_visible && !c.archived); },
@@ -1486,18 +1500,29 @@
   async function persistOrder() {
     const ids = Array.from(document.querySelectorAll("[data-chores-grid] [data-chore-id]"))
       .map(c => parseInt(c.dataset.choreId, 10)).filter(Boolean);
+    ChoreStore.reorder(ids);
+    reorderContainer("[data-chores-circles]", ids);
     try { await api("/chores/order", "PATCH", { ids, tab_id: TAB_ID }); }
     catch (e) { flash("Couldn't save order: " + e.message, "error"); }
   }
-  function applyOrderToDom(ids) {
-    const grid = document.querySelector("[data-chores-grid]");
-    if (!grid) return;
+  function reorderContainer(selector, ids) {
+    const el = document.querySelector(selector);
+    if (!el) return;
     const byId = new Map();
-    grid.querySelectorAll("[data-chore-id]").forEach(c => byId.set(parseInt(c.dataset.choreId, 10), c));
+    Array.from(el.children).forEach(child => {
+      const idEl = child.matches("[data-chore-id]") ? child : child.querySelector("[data-chore-id]");
+      if (!idEl) return;
+      byId.set(parseInt(idEl.dataset.choreId, 10), child);
+    });
     const frag = document.createDocumentFragment();
-    ids.forEach(id => { const card = byId.get(id); if (card) { frag.appendChild(card); byId.delete(id); } });
+    ids.forEach(id => { const node = byId.get(id); if (node) { frag.appendChild(node); byId.delete(id); } });
     byId.forEach(c => frag.appendChild(c));
-    grid.appendChild(frag);
+    el.appendChild(frag);
+  }
+  function applyOrderToDom(ids) {
+    ChoreStore.reorder(ids);
+    reorderContainer("[data-chores-grid]", ids);
+    reorderContainer("[data-chores-circles]", ids);
   }
   editModeBtn?.addEventListener("click", () => { if (editModeActive) exitEditMode(); else enterEditMode(); });
 
