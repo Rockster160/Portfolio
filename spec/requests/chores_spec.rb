@@ -119,13 +119,13 @@ RSpec.describe "Chores", type: :request do
   it "PATCH preserves existing metadata keys when toggling hot_pick" do
     chore = create(:chore, created_by_user: user)
     completion = create(:chore_completion, chore: chore, user: user,
-      metadata: { "chore_name" => "Walk", "short_name" => "W" })
+      metadata: { "imported_from" => "csv" })
     patch "/chores/completions/#{completion.id}",
       params: { chore_completion: { hot_pick: true } }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     completion.reload
     expect(completion.metadata["hot_pick"]).to be(true)
-    expect(completion.metadata["chore_name"]).to eq("Walk")
+    expect(completion.metadata["imported_from"]).to eq("csv")
   end
 
   it "PATCH /chores/completions/:id can change timestamp + note, day_key recomputes" do

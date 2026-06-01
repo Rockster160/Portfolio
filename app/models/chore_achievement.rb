@@ -2,17 +2,18 @@
 #
 # Table name: chore_achievements
 #
-#  id             :bigint           not null, primary key
-#  active         :boolean          default(TRUE), not null
-#  config         :jsonb            not null
-#  description    :text
-#  image_url      :text
-#  kind           :integer          default("total_completions"), not null
-#  name           :string           not null
-#  reward_link    :text
-#  reward_pebbles :integer          default(0), not null
-#  created_at     :datetime         not null
-#  updated_at     :datetime         not null
+#  id                 :bigint           not null, primary key
+#  active             :boolean          default(TRUE), not null
+#  config             :jsonb            not null
+#  description        :text
+#  image_url          :text
+#  kind               :integer          default("total_completions"), not null
+#  name               :string           not null
+#  reward_link        :text
+#  reward_pebbles     :integer          default(0), not null
+#  created_at         :datetime         not null
+#  updated_at         :datetime         not null
+#  created_by_user_id :bigint
 #
 class ChoreAchievement < ApplicationRecord
   KINDS = {

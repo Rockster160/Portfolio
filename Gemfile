@@ -98,4 +98,5 @@ group :development, :test do
   gem "spring", "4.0.0"
   gem "spring-commands-rspec", "1.0.4"
   gem "timecop", "0.9.5"
+  gem "webmock", "3.23.1", require: false
 end

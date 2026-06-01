@@ -29,6 +29,7 @@ RSpec.describe "ExternalAgendaGuard", type: :controller do
     allow_any_instance_of(::Oauth::GoogleApi).to receive(:insert_event).and_return({ id: "new-uid", etag: "etag1" })
     allow_any_instance_of(::Oauth::GoogleApi).to receive(:patch_event).and_return({ id: "uid-1", etag: "etag2" })
     allow_any_instance_of(::Oauth::GoogleApi).to receive(:delete_event).and_return(true)
+    allow_any_instance_of(::Oauth::GoogleApi).to receive(:patch_calendar).and_return({ id: "cal-1" })
     sign_in user
   end
 

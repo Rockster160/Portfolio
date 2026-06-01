@@ -5,6 +5,16 @@ require File.expand_path("../config/environment", __dir__)
 # Prevent database truncation if the environment is production
 abort("The Rails environment is running in production mode!") if Rails.env.production?
 require "rspec/rails"
+
+# Block ALL outbound HTTP during specs. Any test that needs to interact with
+# an external API must stub at the boundary (Api.post / Api.request / etc.)
+# or stub_request the URL explicitly — a real request will raise loudly via
+# WebMock::NetConnectNotAllowedError instead of silently hitting prod traffic.
+# `allow_localhost: true` keeps Capybara / Selenium working against the local
+# test server.
+require "webmock/rspec"
+WebMock.disable_net_connect!(allow_localhost: true)
+
 # Add additional requires below this line. Rails is not loaded until this point!
 
 # Requires supporting ruby files with custom matchers and macros, etc, in

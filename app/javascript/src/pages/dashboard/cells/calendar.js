@@ -87,29 +87,18 @@ import { dash_colors } from "../vars";
         lines.push(lastDateLine);
       }
 
-      let color = "lblue";
-      if (calendar == "rocco@oneclaimsolution.com") {
-        color = "blue";
-      }
-      if (calendar == "Workout") {
-        color = "orange";
-      }
-      if (calendar == "Chelsea" || calendar == "Chelsea’s Calendar") {
-        color = "green";
-      }
-      if (calendar == "Our plans") {
-        color = "chelsea";
-      }
       // Agenda events ship their own hex via `event.color` (display_color).
-      // Fall back to the palette lookup when no explicit hex is provided.
+      // Fall back to a default palette color when no explicit hex is provided.
       const explicitHex =
         event.color && /^#[0-9A-F]{3,8}$/i.test(event.color)
           ? event.color
           : null;
-      const resolvedColor = explicitHex || dash_colors[color];
+      const resolvedColor = explicitHex || dash_colors["lblue"];
 
       if (isAllDay) {
-        lines.push(Text.color(explicitHex || dash_colors["magenta"], `★ ${name}`));
+        lines.push(
+          Text.color(explicitHex || dash_colors["magenta"], `★ ${name}`),
+        );
       } else {
         let timeStr = timeFromDate(time);
         if (end_time) {
@@ -137,8 +126,7 @@ import { dash_colors } from "../vars";
           lines.push(Text.grey(cleanLocation));
         }
 
-        const isWorkCalendar = calendar == "rocco@oneclaimsolution.com";
-        if (notes && !isWorkCalendar) {
+        if (notes) {
           notes
             .split("\n")
             .map((line) => line.trim())
@@ -179,51 +167,3 @@ import { dash_colors } from "../vars";
     },
   });
 })();
-
-// CALENDAR_COLORS = {
-//   grey:     "#42464A",
-//   yellow:   "#CBCB4D",
-//   paleblue: "#9FE1E7",
-//   lblue:    "#3D94F6",
-//   magenta:  "#B55088",
-//   pink:     "#EE9BB5",
-//   green:    "#65DB39",
-//   pine:     "#3E8948",
-//   orange:   "#FF9500",
-//   brown:    "#A2845D",
-//   red:      "#FF0000",
-// }
-
-// today_str = Time.current.in_time_zone("Mountain Time (US & Canada)").strftime("%b %-d, %Y:")
-// # calendar_data = LocalDataCalendarParser.call
-//
-// mapped_colors = {
-//   "rocco11nicholls@gmail.com"   => :lblue,
-//   "rocco.nicholls@workwave.com" => :orange,
-//   "rocco@oneclaimsolution.com"  => :pine,
-//   "Workout"                     => :brown,
-// }
-//
-// calendar_data.map { |date_str, events|
-//   lines = [date_str, "[hr]"]
-//   events.sort_by { |evt| evt[:start_time] || Time.current.beginning_of_day }.each do |event|
-//     next if event[:name].in?(ignore_list)
-//     if event[:time_str].present?
-//       name = event[:name] || event[:uid]
-//       color = mapped_colors[event[:calendar]]
-//       name = colorize(name, color) if color.present?
-//       lines.push("• #{name}")
-//       lines.push("    #{colorize(event[:time_str], :yellow)}")
-//     else
-//       lines.push("• #{colorize(event[:name] || event[:uid], :magenta)}")
-//     end
-//     next if event[:location].blank?
-//     next if event[:location].include?("zoom.us")
-//     next if event[:location].include?("meet.google")
-//     next if event[:location].match?(/webinar/i) # GoToWebinar
-//
-//     lines.push("    #{colorize(event[:location].strip, :grey)}")
-//   end
-//   lines.push("") # Empty line between days
-// }.flatten
-// end

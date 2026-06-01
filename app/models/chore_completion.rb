@@ -24,6 +24,7 @@ class ChoreCompletion < ApplicationRecord
 
   belongs_to :chore
   belongs_to :user
+  has_many :user_chore_achievements, dependent: :destroy
 
   # Fan out lifecycle as Jil triggers so users can wire automations
   # against chore completion + undo (e.g. log an ActionEvent, post to
@@ -39,10 +40,10 @@ class ChoreCompletion < ApplicationRecord
   #   amount>1              → paid_pebbles > 1 (=, !=, <, >, <=, >=)
   #   bare keyword          → matches across notes + chore name
   search_terms :id, :note, :paid_pebbles,
-    notes: :note,
+    notes:  :note,
     amount: :paid_pebbles,
-    time: :completed_at,
-    name: "chores.name"
+    time:   :completed_at,
+    name:   "chores.name"
 
   scope :for_day, ->(day) { where(day_key: day) }
   scope :paid, -> { where(payout_skipped: false) }
@@ -58,16 +59,16 @@ class ChoreCompletion < ApplicationRecord
   # didn't move) without re-querying the DB.
   def jil_attrs(action:, changes: nil)
     base = {
-      id: id,
-      action: action,
-      chore_id: chore_id,
-      chore_name: chore&.name,
-      paid_pebbles: paid_pebbles,
+      id:             id,
+      action:         action,
+      chore_id:       chore_id,
+      chore_name:     chore&.name,
+      paid_pebbles:   paid_pebbles,
       payout_skipped: payout_skipped,
       skipped_reason: skipped_reason,
-      day_key: day_key&.iso8601,
-      completed_at: completed_at&.iso8601(3),
-      metadata: metadata || {},
+      day_key:        day_key&.iso8601,
+      completed_at:   completed_at&.iso8601(3),
+      metadata:       metadata || {},
     }
     base[:changes] = changes if changes.present?
     base

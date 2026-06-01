@@ -9,6 +9,7 @@
 #  completed_at        :datetime
 #  detached_at         :datetime
 #  end_at              :datetime
+#  ended_fired_at      :datetime
 #  external_etag       :text
 #  external_uid        :text
 #  external_updated_at :datetime
@@ -34,25 +35,6 @@ class AgendaItem < ApplicationRecord
 
   KINDS = AgendaSchedule::KINDS
   PHANTOM_ID_RE = /\Ap-(\d+)-(\d{4}-\d{2}-\d{2})\z/
-  BARE_STATE_TOKENS = %w[
-    incomplete
-    complete
-    completed
-    pending
-    overdue
-    upcoming
-    past
-    today
-    recurring
-    detached
-    phantom
-    task
-    event
-    trigger
-    tasks
-    events
-    triggers
-  ].freeze
 
   attr_accessor :phantom
 
@@ -76,20 +58,17 @@ class AgendaItem < ApplicationRecord
   after_commit :fire_jil_trigger, on: [:create, :update]
   after_commit :fire_jil_destroy_trigger, on: :destroy
 
+  # State filters are mandatory `is:<state>` markers (or the `kind:` filter for
+  # type). Bare words like "upcoming" or "today" are treated as ordinary text
+  # search across the indexed columns so they don't silently hijack a user's
+  # search for an item whose name happens to contain one of those words.
   search_terms(
     :id, :name, :notes, :location,
-    kind:       :kind_search,
-    timestamp:  :start_at,
-    start_at:   :start_at,
-    end_at:     :end_at,
-    completed:  :completed_search,
-    incomplete: :incomplete_search,
-    overdue:    :overdue_search,
-    upcoming:   :upcoming_search,
-    past:       :past_search,
-    today:      :today_search,
-    recurring:  :recurring_search,
-    detached:   :detached_search
+    kind:      :kind_search,
+    is:        :is_search,
+    timestamp: :start_at,
+    start_at:  :start_at,
+    end_at:    :end_at
   )
 
   scope :completed,     -> { where.not(completed_at: nil) }
@@ -100,6 +79,8 @@ class AgendaItem < ApplicationRecord
   # and triggers only.
   scope :overdue,    -> { where.not(kind: :event).incomplete.where(start_at: ...Time.current) }
   scope :upcoming,   -> { where(start_at: Time.current..) }
+  scope :past,       -> { where(start_at: ...Time.current) }
+  scope :today,      -> { where(start_at: Time.current.all_day) }
   scope :recurring,  -> { where.not(agenda_schedule_id: nil) }
   scope :detached,   -> { where.not(detached_at: nil) }
 
@@ -108,46 +89,26 @@ class AgendaItem < ApplicationRecord
     enum_value = kinds[val.to_s.downcase] || kinds[val.to_s.downcase.singularize]
     enum_value.present? ? where(kind: enum_value) : none
   }
-  scope :completed_search,  ->(val) { truthy_query?(val) ? completed : incomplete }
-  scope :incomplete_search, ->(val) { truthy_query?(val) ? incomplete : completed }
-  scope :overdue_search,    ->(val) { truthy_query?(val) ? overdue : where("start_at >= ? OR completed_at IS NOT NULL", Time.current) }
-  scope :upcoming_search,   ->(val) { truthy_query?(val) ? upcoming : where(start_at: ...Time.current) }
-  scope :past_search,       ->(val) { truthy_query?(val) ? where(start_at: ...Time.current) : where(start_at: Time.current..) }
-  scope :today_search,      ->(val) {
-    range = Time.current.all_day
-    truthy_query?(val) ? where(start_at: range) : where.not(start_at: range)
+  # `is:<state>` — single dispatch for all state filters. `is:phantom` returns
+  # none because phantoms aren't persisted; Agenda#search inspects the query
+  # for `is:phantom` separately to include phantom recurring occurrences.
+  scope :is_search, ->(val) {
+    case val.to_s.downcase
+    when "upcoming"              then upcoming
+    when "past"                  then past
+    when "today"                 then today
+    when "recurring"             then recurring
+    when "completed", "complete" then completed
+    when "incomplete", "pending" then incomplete
+    when "overdue"               then overdue
+    when "detached"              then detached
+    when "phantom"               then none
+    when "task", "tasks"         then where(kind: :task)
+    when "event", "events"       then where(kind: :event)
+    when "trigger", "triggers"   then where(kind: :trigger)
+    else none
+    end
   }
-  scope :recurring_search,  ->(val) { truthy_query?(val) ? recurring : where(agenda_schedule_id: nil) }
-  scope :detached_search,   ->(val) { truthy_query?(val) ? detached : where(detached_at: nil) }
-
-  def self.truthy_query?(val)
-    val.to_s.match?(/\A(t|true|y|yes|1|on)\z/i) || val.to_s.empty?
-  end
-
-  # Expands bare state tokens (BARE_STATE_TOKENS) so the search syntax
-  # accepts `kind:task incomplete overdue` instead of requiring the long
-  # form `kind:task incomplete:true overdue:true`.
-  def self.query(q)
-    return all if q.blank?
-
-    expanded = q.split(/\s+/).map { |token|
-      next token if token.include?(":") || token.match?(/\A[!-]/)
-
-      stripped = token.downcase
-      if BARE_STATE_TOKENS.include?(stripped)
-        case stripped
-        when "task", "tasks"       then "kind:task"
-        when "event", "events"     then "kind:event"
-        when "trigger", "triggers" then "kind:trigger"
-        else "#{stripped}:true"
-        end
-      else
-        token
-      end
-    }.join(" ")
-
-    super(expanded)
-  end
 
   delegate :user, to: :agenda
 
@@ -403,6 +364,7 @@ class AgendaItem < ApplicationRecord
         :location,
         :start_at,
         :end_at,
+        :all_day,
         :completed_at,
         :detached_at,
       ],

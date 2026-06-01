@@ -166,6 +166,104 @@ RSpec.describe SendDueAgendaNotificationsWorker do
     end
   end
 
+  describe ":agenda_event start / end Jil firing" do
+    let(:workout_agenda) {
+      create(:agenda, user: owner, name: "Workout")
+    }
+
+    before { stub_push }
+
+    it "fires :agenda_event action::started for an event at start_at + includes agenda_name" do
+      item = create(:agenda_item, agenda: workout_agenda, kind: :event,
+        name: "Squats", start_at: 1.minute.ago, end_at: 1.hour.from_now)
+      allow(::Jil).to receive(:trigger)
+
+      described_class.new.perform
+
+      expect(::Jil).to have_received(:trigger).with(
+        owner, :agenda_event,
+        satisfy { |payload|
+          payload.is_a?(AgendaItem) &&
+            payload.id == item.id &&
+            payload[:action] == :started &&
+            payload[:agenda_name] == "Workout"
+        }
+      )
+    end
+
+    it "does NOT fire :agenda_event for a task at start_at (events only)" do
+      create(:agenda_item, agenda: workout_agenda, kind: :task,
+        name: "Stretch", start_at: 1.minute.ago)
+      allow(::Jil).to receive(:trigger)
+
+      described_class.new.perform
+
+      expect(::Jil).not_to have_received(:trigger).with(owner, :agenda_event, anything)
+    end
+
+    it "fires :agenda_event action::ended at end_at and stamps ended_fired_at" do
+      item = create(:agenda_item, agenda: workout_agenda, kind: :event,
+        name: "Squats", start_at: 1.hour.ago, end_at: 1.minute.ago,
+        notified_at: 1.hour.ago) # already started, only end fires now
+      allow(::Jil).to receive(:trigger)
+
+      described_class.new.perform
+
+      expect(::Jil).to have_received(:trigger).with(
+        owner, :agenda_event,
+        satisfy { |payload|
+          payload.is_a?(AgendaItem) &&
+            payload.id == item.id &&
+            payload[:action] == :ended &&
+            payload[:agenda_name] == "Workout"
+        }
+      )
+      expect(item.reload.ended_fired_at).to be_present
+    end
+
+    it "doesn't re-fire :ended on subsequent ticks (ended_fired_at dedup)" do
+      item = create(:agenda_item, agenda: workout_agenda, kind: :event,
+        name: "Squats", start_at: 1.hour.ago, end_at: 1.minute.ago,
+        notified_at: 1.hour.ago, ended_fired_at: 30.seconds.ago)
+      allow(::Jil).to receive(:trigger)
+
+      described_class.new.perform
+
+      expect(::Jil).not_to have_received(:trigger).with(
+        owner, :agenda_event,
+        satisfy { |payload| payload.is_a?(AgendaItem) && payload.id == item.id }
+      )
+    end
+
+    it "fires both :started AND :ended across two ticks for a short event" do
+      Timecop.freeze(Time.utc(2026, 5, 15, 12, 0)) do
+        create(:agenda_item, agenda: workout_agenda, kind: :event,
+          name: "Quick set", start_at: 30.seconds.ago, end_at: 1.minute.from_now)
+        allow(::Jil).to receive(:trigger)
+
+        described_class.new.perform # tick 1: started only
+
+        expect(::Jil).to have_received(:trigger).with(
+          owner, :agenda_event,
+          satisfy { |p| p[:action] == :started }
+        ).once
+        expect(::Jil).not_to have_received(:trigger).with(
+          owner, :agenda_event,
+          satisfy { |p| p[:action] == :ended }
+        )
+      end
+
+      Timecop.freeze(Time.utc(2026, 5, 15, 12, 5)) do
+        described_class.new.perform # tick 2: ended
+
+        expect(::Jil).to have_received(:trigger).with(
+          owner, :agenda_event,
+          satisfy { |p| p[:action] == :ended }
+        ).once
+      end
+    end
+  end
+
   describe "phantom materialization" do
     it "materializes today's just-due phantom of a recurring task and notifies" do
       stub_push

@@ -3,7 +3,7 @@ require "rails_helper"
 RSpec.describe "Jil Agenda schema entries" do
   it "validates a class-level search call with limit + order" do
     code = <<~'JIL'
-      items = Agenda.search("kind:task incomplete overdue" 25 "ASC")::Array
+      items = Agenda.search("kind:task is:incomplete is:overdue" 25 "ASC")::Array
     JIL
     expect { ::Jil::Validator.validate!(code) }.not_to raise_error
   end
@@ -33,7 +33,7 @@ RSpec.describe "Jil Agenda schema entries" do
 
   it "validates AgendaItem#complete called on a hash item" do
     code = <<~'JIL'
-      items = Agenda.search("kind:task incomplete" 50 "ASC")::Array
+      items = Agenda.search("kind:task is:incomplete" 50 "ASC")::Array
       first = items.first()::AgendaItem
       done = first.complete()::Boolean
     JIL
@@ -77,7 +77,7 @@ RSpec.describe "Jil Agenda schema entries" do
 
     it "updates an AgendaItem via the content block syntax" do
       code = <<~JIL
-        items = Agenda.search("kind:task incomplete" 50 "ASC")::Array
+        items = Agenda.search("kind:task is:incomplete" 50 "ASC")::Array
         target = items.first()::AgendaItem
         updated = target.update!({
           upd_name = AgendaItemData.name("Renamed")::AgendaItemData

@@ -31,8 +31,8 @@ class ChoreCompleter
     awards = evaluate_achievements(completion)
     broadcast!
     Result.new(
-      completion: completion,
-      awarded: awards,
+      completion:     completion,
+      awarded:        awards,
       skipped_reason: completion.skipped_reason,
     )
   end
@@ -43,15 +43,14 @@ class ChoreCompleter
 
   def build_completion
     ChoreCompletion.new(
-      chore: chore,
-      user: user,
-      completed_at: at,
-      day_key: day,
-      base_pebbles: chore.reward_pebbles,
-      hot_multiplier: 1.0,
+      chore:            chore,
+      user:             user,
+      completed_at:     at,
+      day_key:          day,
+      base_pebbles:     chore.reward_pebbles,
+      hot_multiplier:   1.0,
       total_multiplier: 1.0,
-      paid_pebbles: 0,
-      metadata: { chore_name: chore.name, short_name: chore.display_short_name },
+      paid_pebbles:     0,
     )
   end
 
@@ -105,9 +104,9 @@ class ChoreCompleter
     record.total_multiplier = total
     record.paid_pebbles = paid
     record.metadata = record.metadata.merge(
-      user_multiplier: user_multiplier,
+      user_multiplier:    user_multiplier,
       streak_count_after: streak_count,
-      hot_pick: hot.present?,
+      hot_pick:           hot.present?,
     )
   end
 
@@ -161,11 +160,11 @@ class ChoreCompleter
       next unless achievement.evaluate(user)
 
       award = UserChoreAchievement.create!(
-        user: user,
+        user:              user,
         chore_achievement: achievement,
-        earned_at: Time.current,
-        awarded_pebbles: achievement.reward_pebbles,
-        chore_completion: completion,
+        earned_at:         Time.current,
+        awarded_pebbles:   achievement.reward_pebbles,
+        chore_completion:  completion,
       )
       earned << award
     end
@@ -189,12 +188,12 @@ class ChoreCompleter
     hours = (s % 86_400) / 3600
     mins  = (s % 3600)   / 60
     parts = []
-    if days > 0
+    if days.positive?
       parts << "#{days}d"
-      parts << "#{hours}h" if hours > 0
-    elsif hours > 0
+      parts << "#{hours}h" if hours.positive?
+    elsif hours.positive?
       parts << "#{hours}h"
-      parts << "#{mins}m" if mins > 0
+      parts << "#{mins}m" if mins.positive?
     else
       parts << "#{mins}m"
     end

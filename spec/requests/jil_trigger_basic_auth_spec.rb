@@ -13,23 +13,23 @@ RSpec.describe "POST /jil/trigger/:trigger with HTTP Basic auth", type: :request
 
   it "fires the task that matches the trigger scope" do
     user.tasks.create!(
-      name:     "Local Data Listener",
-      listener: "local_data",
+      name:     "Basic Auth Listener",
+      listener: "basic_auth_demo",
       enabled:  true,
-      code:     <<~'JIL'.strip,
+      code:     <<~JIL.strip,
         ok = Global.print("ran")::String
       JIL
     )
 
     expect {
-      post "/jil/trigger/local_data",
-        params: { local_data: { calendar: { foo: "bar" } } },
+      post "/jil/trigger/basic_auth_demo",
+        params: { payload: { foo: "bar" } },
         headers: auth_headers, as: :json
     }.to change { user.executions.count }.by(1)
 
     expect(response).to have_http_status(:ok)
     execution = user.executions.last
-    expect(execution.trigger_scope).to eq("local_data")
+    expect(execution.trigger_scope).to eq("basic_auth_demo")
     expect(execution.auth_type).to eq("userpass")
     expect(execution.auth_type_id).to eq(user.id)
   end

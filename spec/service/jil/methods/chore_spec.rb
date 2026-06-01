@@ -150,13 +150,6 @@ RSpec.describe Jil::Methods::Chore, type: :service do
       expect(completion.completed_at.to_i).to eq(when_at.to_i)
     end
 
-    it "stamps metadata.source when source_event_id is provided" do
-      methods.complete_for(vitamins, other.username, nil, 4242)
-      completion = ChoreCompletion.order(:id).last
-      expect(completion.metadata.dig("source", "type")).to eq("action_event")
-      expect(completion.metadata.dig("source", "id")).to eq(4242)
-    end
-
     it "returns nil for an unknown user" do
       expect(methods.complete_for(vitamins, "no-such-user")).to be_nil
     end

@@ -483,6 +483,7 @@ RSpec.describe "Jil Edge Cases" do
     end
 
     it "catches errors and runs catch block" do
+      stub_request(:get, "http://not-a-real-host.invalid/").to_raise(SocketError.new("boom"))
       exe = jil(<<-'JIL')
         result = Global.try({
           bad = Global.request("GET", "http://not-a-real-host.invalid", "", "")::Hash
@@ -495,6 +496,7 @@ RSpec.describe "Jil Edge Cases" do
     end
 
     it "sets error variable in catch block" do
+      stub_request(:get, "http://not-a-real-host.invalid/").to_raise(SocketError.new("boom"))
       exe = jil(<<-'JIL')
         result = Global.try({
           bad = Global.request("GET", "http://not-a-real-host.invalid", "", "")::Hash

@@ -27,9 +27,9 @@ RSpec.describe Oauth::Base do
       expect(Oauth::GoogleApi.from_jwt(foreign)).to be_nil
     end
 
-    it "returns nil for a JWT older than 10 minutes" do
+    it "returns nil for a JWT older than STATE_JWT_TTL" do
       stale = JWT.encode(
-        { user_id: user.id, service: "google_api", timestamp: 11.minutes.ago.to_i },
+        { user_id: user.id, service: "google_api", timestamp: (Oauth::Base::STATE_JWT_TTL + 1.minute).ago.to_i },
         Rails.application.secret_key_base,
         "HS256",
       )

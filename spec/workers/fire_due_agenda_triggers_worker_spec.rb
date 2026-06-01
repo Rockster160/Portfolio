@@ -5,7 +5,7 @@ RSpec.describe FireDueAgendaTriggersWorker do
   let(:agenda) { create(:agenda, user: owner) }
 
   describe "#perform" do
-    it "fires a past-due trigger and marks it completed" do
+    it "fires a past-due trigger and stamps fired_at (completed_at is user-only)" do
       item = create(:agenda_item, agenda: agenda, kind: :trigger,
         start_at: 1.minute.ago, trigger_expression: "morningRoutine")
       expect(::Jil).to receive(:trigger).with(
@@ -13,7 +13,9 @@ RSpec.describe FireDueAgendaTriggersWorker do
         hash_including(auth: :agenda),
       )
       described_class.new.perform
-      expect(item.reload.completed_at).to be_present
+      item.reload
+      expect(item.fired_at).to be_present
+      expect(item.completed_at).to be_nil
     end
 
     it "skips a trigger whose start_at is still in the future" do
@@ -35,23 +37,22 @@ RSpec.describe FireDueAgendaTriggersWorker do
   describe "rolling materialization of missed recurring triggers" do
     let(:user_zone) { ActiveSupport::TimeZone[owner.timezone] }
 
-    it "materializes today's row when the schedule's 7-day window has elapsed, then fires it" do
+    it "materializes today's row when the schedule's save-time window has elapsed, then fires it" do
       schedule = nil
-      # Save the schedule "8 days ago" in the user's zone — its 7-day
-      # materialization window stops at May 18 in the user's zone, so without
-      # the backfill, May 19's occurrence has no row and never fires.
+      # Save the schedule on May 11 9am — TRIGGER_MATERIALIZE_WINDOW (10 hours)
+      # has long expired by May 19, so the May 19 occurrence has no row from
+      # the after_save hook and would never fire without the worker's backfill.
       Timecop.freeze(user_zone.local(2026, 5, 11, 9, 0, 0)) do
         schedule = create(:agenda_schedule, agenda: agenda, kind: :trigger,
           name: "Focus reminder", start_time: "07:00",
           recurrence: { "freq" => "daily" }, starts_on: Date.current,
           trigger_expression: "focusMode")
-        expect(schedule.agenda_items.maximum(:start_at).in_time_zone(owner.timezone).to_date)
-          .to be < Date.new(2026, 5, 19)
+        # No row for May 19 exists yet — that's the gap the worker must close.
+        expect(schedule.agenda_items.where(start_at: user_zone.local(2026, 5, 19).all_day))
+          .to be_empty
       end
 
       Timecop.freeze(user_zone.local(2026, 5, 19, 7, 0, 30)) do
-        # Schedule also pre-materialized May 11..May 18 on save — they'll all
-        # fire here too. We only care that the May 19 row gets created + fired.
         allow(::Jil).to receive(:trigger)
 
         described_class.new.perform
@@ -59,7 +60,8 @@ RSpec.describe FireDueAgendaTriggersWorker do
         today_row = schedule.agenda_items
           .where(start_at: user_zone.local(2026, 5, 19, 7, 0, 0)).first
         expect(today_row).to be_present
-        expect(today_row.completed_at).to be_present
+        expect(today_row.fired_at).to be_present
+        expect(today_row.completed_at).to be_nil
         expect(::Jil).to have_received(:trigger).with(
           owner, "focusMode", anything, hash_including(auth: :agenda),
         ).at_least(:once)

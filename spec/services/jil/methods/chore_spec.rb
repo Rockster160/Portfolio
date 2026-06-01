@@ -2,9 +2,9 @@ RSpec.describe Jil::Methods::Chore do
   let(:user) { User.me }
   let!(:chore) {
     Chore.create!(
-      name: "Wordle",
+      name:               "Wordle",
       created_by_user_id: user.id,
-      reward_pebbles: 5,
+      reward_pebbles:     5,
     )
   }
 
@@ -20,7 +20,7 @@ RSpec.describe Jil::Methods::Chore do
       Jil::Executor.call(user, code, event.with_jil_attrs(action: action))
     end
 
-    it "creates a linked completion on :added" do
+    it "creates a partner completion on :added" do
       at = Time.zone.local(2026, 5, 28, 14, 0, 0)
       event = user.action_events.create!(name: "Wordle", timestamp: at)
 
@@ -29,7 +29,7 @@ RSpec.describe Jil::Methods::Chore do
       completion = chore.chore_completions.find_by(user_id: user.id)
       expect(completion).to be_present
       expect(completion.completed_at).to be_within(1.second).of(at)
-      expect(completion.metadata).to include("source" => { "type" => "action_event", "id" => event.id })
+      expect(completion.metadata).not_to have_key("source")
     end
 
     it "copies the event's notes onto the new completion" do
@@ -54,12 +54,11 @@ RSpec.describe Jil::Methods::Chore do
       expect(completion.note).to eq("edited")
     end
 
-    it "adopts an existing same-day completion (no duplicate)" do
+    it "adopts an existing completion at the same time (no duplicate)" do
       at = Time.zone.local(2026, 5, 28, 14, 0, 0)
       pre = chore.chore_completions.create!(
-        user: user, completed_at: at - 1.hour,
-        day_key: ChoreDay.current(user, at: at),
-        metadata: { chore_name: chore.name },
+        user: user, completed_at: at,
+        day_key: ChoreDay.current(user, at: at)
       )
       event = user.action_events.create!(name: "Wordle", timestamp: at)
 
@@ -67,19 +66,23 @@ RSpec.describe Jil::Methods::Chore do
 
       expect(chore.chore_completions.count).to eq(1)
       pre.reload
-      expect(pre.metadata).to include("source" => { "type" => "action_event", "id" => event.id })
+      expect(pre.metadata).not_to have_key("source")
     end
 
-    it "updates the linked completion's completed_at on :changed" do
+    it "moves the partner completion when timestamp changes (uses saved_changes old time)" do
       at = Time.zone.local(2026, 5, 28, 14, 0, 0)
       event = user.action_events.create!(name: "Wordle", timestamp: at)
       trigger_event(event, :added)
 
       new_at = Time.zone.local(2026, 5, 27, 12, 0, 0)
       event.update!(timestamp: new_at)
-      trigger_event(event, :changed)
+      Jil::Executor.call(
+        user, code,
+        event.with_jil_attrs(action: :changed, changes: { "timestamp" => [at, new_at] })
+      )
 
       completion = chore.chore_completions.find_by(user_id: user.id)
+      expect(chore.chore_completions.count).to eq(1)
       expect(completion.completed_at).to be_within(1.second).of(new_at)
       expect(completion.day_key).to eq(ChoreDay.current(user, at: new_at))
     end
@@ -146,7 +149,8 @@ RSpec.describe Jil::Methods::Chore do
       e2 = user.action_events.create!(name: "Whisper", notes: "Down", timestamp: 1.minute.ago)
       call("Whisper training", { name: "Whisper" }, e1.with_jil_attrs(action: :added))
       call("Whisper training", { name: "Whisper" }, e2.with_jil_attrs(action: :added))
-      expect(training_chore.chore_completions.count).to eq(1) # same-day adoption
+      # Two events at distinct timestamps → one completion per event (no fingerprint adoption).
+      expect(training_chore.chore_completions.count).to eq(2)
     end
 
     it "match is case-insensitive on both name and notes" do
@@ -155,14 +159,16 @@ RSpec.describe Jil::Methods::Chore do
       expect(training_chore.chore_completions.count).to eq(1)
     end
 
-    it "unlinks the linked completion when notes are edited to no longer match" do
+    it "removes the partner completion when notes are edited to no longer match" do
       ev = user.action_events.create!(name: "Whisper", notes: "Training", timestamp: Time.current)
       call("Whisper training", { name: "Whisper", notes: "Training" }, ev.with_jil_attrs(action: :added))
       expect(training_chore.chore_completions.count).to eq(1)
 
+      old_ts = ev.timestamp
       ev.update!(notes: "Nap")
-      call("Whisper training", { name: "Whisper", notes: "Training" }, ev.with_jil_attrs(action: :changed))
+      call("Whisper training", { name: "Whisper", notes: "Training" }, ev.with_jil_attrs(action: :changed, changes: { "notes" => ["Training", "Nap"] }))
       expect(training_chore.chore_completions.count).to eq(0)
+      _ = old_ts
     end
 
     it "still removes the linked completion on :removed regardless of attrs match" do
@@ -193,21 +199,19 @@ RSpec.describe Jil::Methods::Chore do
     end
 
     context ":completed action" do
-      it "creates a linked event with the desired attrs and chore_completion source" do
+      it "creates a partner event with the desired attrs (and no source fingerprint on data)" do
+        at = Time.zone.local(2026, 5, 28, 14, 0, 0)
         comp = wordle.chore_completions.create!(
-          user: user, completed_at: Time.zone.local(2026, 5, 28, 14, 0, 0),
-          day_key: ChoreDay.current(user, at: Time.zone.local(2026, 5, 28, 14, 0, 0)),
+          user: user, completed_at: at, day_key: ChoreDay.current(user, at: at),
         )
         comp.with_jil_attrs(action: :completed)
 
         call_sync("Wordle", comp, name: "Wordle")
 
-        event = user.action_events.where("data #>> '{source,type}' = 'chore_completion'").first
+        event = user.action_events.find_by(name: "Wordle")
         expect(event).to be_present
-        expect(event.name).to eq("Wordle")
-        expect(event.notes).to be_blank
         expect(event.timestamp).to be_within(1.second).of(comp.completed_at)
-        expect(event.data.dig("source", "id")).to eq(comp.id)
+        expect(event.data || {}).not_to have_key("source")
       end
 
       it "creates with notes when event_attrs includes notes" do
@@ -218,23 +222,28 @@ RSpec.describe Jil::Methods::Chore do
 
         call_sync("Puppy Up", comp, name: "Whisper", notes: "Up")
 
-        event = user.action_events.where("data #>> '{source,type}' = 'chore_completion'").first
-        expect(event.name).to eq("Whisper")
+        event = user.action_events.find_by(name: "Whisper")
         expect(event.notes).to eq("Up")
+        expect(event.data || {}).not_to have_key("source")
       end
 
-      it "SKIPS when the completion was itself created from an event (loop prevention)" do
-        ev = user.action_events.create!(name: "Wordle", timestamp: Time.current)
+      it "does NOT double-create when a matching event already exists at the same time" do
+        at = Time.current
+        # Pre-existing manually created event at the exact same time.
+        pre = user.action_events.create!(name: "Wordle", notes: "4", timestamp: at)
+
         comp = wordle.chore_completions.create!(
-          user: user, completed_at: Time.current, day_key: ChoreDay.current(user),
-          metadata: { source: { type: "action_event", id: ev.id } },
+          user: user, completed_at: at, day_key: ChoreDay.current(user, at: at),
         )
         comp.with_jil_attrs(action: :completed)
 
         call_sync("Wordle", comp, name: "Wordle")
 
-        # Only the original event exists; no new event was created.
-        expect(user.action_events.where("data #>> '{source,type}' = 'chore_completion'").count).to eq(0)
+        events = user.action_events.where(name: "Wordle")
+        expect(events.count).to eq(1)
+        expect(events.first.id).to eq(pre.id)
+        # mapping had no `notes:` so the manual note should be preserved
+        expect(pre.reload.notes).to eq("4")
       end
     end
 
@@ -245,60 +254,57 @@ RSpec.describe Jil::Methods::Chore do
           user: user, completed_at: at, day_key: ChoreDay.current(user, at: at),
         )
       }
-      let!(:linked_event) {
-        user.action_events.create!(
-          name: "Wordle", timestamp: at,
-          data: { source: { type: "chore_completion", id: comp.id } },
-        )
+      let!(:partner_event) {
+        user.action_events.create!(name: "Wordle", timestamp: at)
       }
 
       it "no-ops (no DB write) when event already matches desired state" do
         comp.with_jil_attrs(action: :edited)
         expect_any_instance_of(ActionEvent).not_to receive(:update!)
         result = call_sync("Wordle", comp, name: "Wordle")
-        expect(result.ctx.dig(:vars, :result, :value)).to eq(false)
+        expect(result.ctx.dig(:vars, :result, :value)).to be(false)
       end
 
-      it "updates the event timestamp when completed_at changed" do
+      it "uses saved_changes[:completed_at] to locate the partner, then moves it" do
         new_at = at + 1.hour
         comp.update!(completed_at: new_at, day_key: ChoreDay.current(user, at: new_at))
-        comp.with_jil_attrs(action: :edited)
+        comp.with_jil_attrs(action: :edited, changes: { "completed_at" => [at, new_at] })
 
         call_sync("Wordle", comp, name: "Wordle")
-        linked_event.reload
-        expect(linked_event.timestamp).to be_within(1.second).of(new_at)
+        partner_event.reload
+        expect(partner_event.timestamp).to be_within(1.second).of(new_at)
+        expect(user.action_events.count).to eq(1)
       end
 
-      it "creates an event if none was linked yet (e.g. edit happened before any completed sync)" do
+      it "creates an event if none exists at the prev or current time" do
         orphan_comp = wordle.chore_completions.create!(
-          user: user, completed_at: Time.current, day_key: ChoreDay.current(user),
+          user: user, completed_at: Time.zone.local(2026, 5, 25, 9, 0, 0),
+          day_key: ChoreDay.current(user, at: Time.zone.local(2026, 5, 25, 9, 0, 0))
         )
         orphan_comp.with_jil_attrs(action: :edited)
         call_sync("Wordle", orphan_comp, name: "Wordle")
 
-        events = user.action_events.where("data #>> '{source,id}' = ?", orphan_comp.id.to_s)
+        events = user.action_events.where(name: "Wordle", timestamp: orphan_comp.completed_at)
         expect(events.count).to eq(1)
+        expect(events.first.data || {}).not_to have_key("source")
       end
     end
 
     context ":uncompleted action" do
-      it "destroys the linked event" do
+      it "destroys the partner event at the completion's completed_at" do
+        at = Time.current
         comp_id = wordle.chore_completions.create!(
-          user: user, completed_at: Time.current, day_key: ChoreDay.current(user),
+          user: user, completed_at: at, day_key: ChoreDay.current(user, at: at),
         ).id
-        user.action_events.create!(
-          name: "Wordle", timestamp: Time.current,
-          data: { source: { type: "chore_completion", id: comp_id } },
-        )
+        user.action_events.create!(name: "Wordle", timestamp: at)
 
-        # Build a hash payload mimicking the destroyed-record trigger
-        fake_destroyed = { id: comp_id, action: :uncompleted, completed_at: Time.current, metadata: {}, chore_name: "Wordle" }
+        fake_destroyed = { id: comp_id, action: :uncompleted, completed_at: at, metadata: {}, chore_name: "Wordle" }
         call_sync("Wordle", fake_destroyed, name: "Wordle")
 
-        expect(user.action_events.where("data #>> '{source,id}' = ?", comp_id.to_s).count).to eq(0)
+        expect(user.action_events.where(name: "Wordle").count).to eq(0)
       end
 
-      it "no-ops when there's no linked event" do
+      it "no-ops when there's no partner event" do
         fake_destroyed = { id: 999_999, action: :uncompleted, completed_at: Time.current, metadata: {}, chore_name: "Wordle" }
         expect { call_sync("Wordle", fake_destroyed, name: "Wordle") }.not_to raise_error
       end
@@ -330,13 +336,13 @@ RSpec.describe Jil::Methods::Chore do
     it "returns true for a matching event" do
       ev = user.action_events.create!(name: "Whisper", notes: "Up", timestamp: Time.current)
       ctx = Jil::Executor.call(user, code, ev).ctx
-      expect(ctx.dig(:vars, :result, :value)).to eq(true)
+      expect(ctx.dig(:vars, :result, :value)).to be(true)
     end
 
     it "returns false for a non-matching event" do
       ev = user.action_events.create!(name: "Whisper", notes: "Down", timestamp: Time.current)
       ctx = Jil::Executor.call(user, code, ev).ctx
-      expect(ctx.dig(:vars, :result, :value)).to eq(false)
+      expect(ctx.dig(:vars, :result, :value)).to be(false)
     end
 
     it "blank query returns true" do
@@ -346,7 +352,7 @@ RSpec.describe Jil::Methods::Chore do
         "event = Global.input_data()::ActionEvent\nresult = event.matches?(\"\")::Boolean",
         ev,
       ).ctx
-      expect(ctx.dig(:vars, :result, :value)).to eq(true)
+      expect(ctx.dig(:vars, :result, :value)).to be(true)
     end
   end
 end

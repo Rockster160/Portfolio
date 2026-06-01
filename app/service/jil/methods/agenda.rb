@@ -65,14 +65,14 @@ class Jil::Methods::Agenda < Jil::Methods::Base
   # Matches the ActionEvent.search signature — limit + order are explicit so
   # the FE editor can offer the same controls.
   # Examples:
-  #   Agenda.search("kind:task incomplete overdue", 50, "ASC")
-  #   Agenda.search("recurring upcoming", nil, nil)
+  #   Agenda.search("kind:task is:incomplete is:overdue", 50, "ASC")
+  #   Agenda.search("is:recurring is:upcoming", nil, nil)
   #
   # Phantom occurrences (recurring items with no DB row yet) are gathered in
   # Ruby alongside the SQL results when the query targets the future-leaning
-  # space (`upcoming`, `today`, `recurring`) — so daily/weekly recurring tasks
-  # appear in dashboard cells without first having to be materialized.
-  PHANTOM_QUERY_TRIGGERS = %w[upcoming today recurring].freeze
+  # space (`is:upcoming`, `is:today`, `is:recurring`, `is:phantom`) — so daily/weekly
+  # recurring tasks appear in dashboard cells without first having to be materialized.
+  PHANTOM_QUERY_TRIGGERS = %w[is:upcoming is:today is:recurring is:phantom].freeze
   PHANTOM_WINDOW_DAYS = 30
 
   # SQL applies the limit so we never pull more than `capped` real rows out of
@@ -255,19 +255,23 @@ class Jil::Methods::Agenda < Jil::Methods::Base
 
   def phantom_token_matches?(item, token)
     return item.kind.to_s == ::Regexp.last_match(1).singularize if token.match(/\Akind:(\w+)\z/)
-    return true unless ::AgendaItem::BARE_STATE_TOKENS.include?(token)
+    return phantom_is_match?(item, ::Regexp.last_match(1)) if token.match(/\Ais:(\w+)\z/)
 
-    case token
-    when "task", "tasks"                              then item.task?
-    when "event", "events"                            then item.event?
-    when "trigger", "triggers"                        then item.trigger?
-    when "completed", "complete", "detached"          then false # phantoms never completed/detached
-    when "incomplete", "pending", "phantom"           then true  # phantoms always incomplete + phantom
-    when "upcoming"                                   then item.start_at >= ::Time.current
-    when "past"                                       then item.start_at < ::Time.current
-    when "today"                                      then item.start_at.in_time_zone(@jil.user.timezone).to_date == ::Date.current
-    when "overdue"                                    then !item.event? && item.start_at < ::Time.current
-    when "recurring"                                  then item.recurring?
+    true
+  end
+
+  def phantom_is_match?(item, state)
+    case state.downcase
+    when "task", "tasks"                     then item.task?
+    when "event", "events"                   then item.event?
+    when "trigger", "triggers"               then item.trigger?
+    when "completed", "complete", "detached" then false # phantoms never completed/detached
+    when "incomplete", "pending", "phantom"  then true  # phantoms always incomplete + phantom
+    when "upcoming"                          then item.start_at >= ::Time.current
+    when "past"                              then item.start_at < ::Time.current
+    when "today"                             then item.start_at.in_time_zone(@jil.user.timezone).to_date == ::Date.current
+    when "overdue"                           then !item.event? && item.start_at < ::Time.current
+    when "recurring"                         then item.recurring?
     else true
     end
   end
