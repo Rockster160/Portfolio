@@ -105,12 +105,12 @@ import { dash_colors } from "../vars";
           const endTime = new Date(end_time);
           timeStr = `${timeStr}-${timeFromDate(endTime)}`;
         }
-        timeStr = Text.yellow(`• ${timeStr}`);
+        timeStr = Text.yellow(timeStr);
 
         const nameLine = Text.color(resolvedColor, name);
 
-        lines.push(timeStr);
         lines.push(nameLine);
+        lines.push(timeStr);
 
         if (location && !location.match(/zoom\.us|meet\.google|webinar/i)) {
           const cleanLocation = location
