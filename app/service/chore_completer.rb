@@ -95,31 +95,40 @@ class ChoreCompleter
     hot_multiplier = hot&.multiplier || 1.0
 
     streak_count = current_streak_count + 1 # this completion advances it
-    user_multiplier = combined_user_multiplier(streak_count)
+    streak_multiplier, breakdown = combined_streak_multiplier(streak_count)
     base = chore.reward_pebbles
-    paid = (base * hot_multiplier * user_multiplier).round
+    paid = (base * hot_multiplier * streak_multiplier).round
 
     record.hot_multiplier = hot_multiplier
-    record.streak_multiplier = user_multiplier.round(3)
+    record.streak_multiplier = streak_multiplier.round(3)
     record.paid_pebbles = paid
     record.metadata = record.metadata.merge(
-      user_multiplier:    user_multiplier,
+      multipliers:        breakdown,
       streak_count_after: streak_count,
       hot_pick:           hot.present?,
     )
   end
 
-  def combined_user_multiplier(streak_count)
+  # Returns [combined_multiplier, breakdown] where breakdown is an
+  # array of `{ id:, name:, kind:, value: }` hashes — one per active
+  # ChoreMultiplier that contributed. Stored on `metadata.multipliers`
+  # so the completion record carries the full reasoning of how the
+  # streak side of paid_pebbles was computed.
+  def combined_streak_multiplier(streak_count)
     household_ids = Chore.household_user_ids_for(user.id)
     multipliers = ChoreMultiplier.active.where(user_id: household_ids, chore_id: chore.id)
-    return 1.0 if multipliers.empty?
+    return [1.0, []] if multipliers.empty?
 
-    # Multiplicative across active multipliers, capped at 5x to avoid
-    # runaway combos.
-    combined = multipliers.inject(1.0) { |m, mx|
-      m * mx.current_multiplier(user, for_streak: streak_count)
+    breakdown = multipliers.map { |mx|
+      {
+        id:    mx.id,
+        name:  mx.name,
+        kind:  mx.kind,
+        value: mx.current_multiplier(user, for_streak: streak_count),
+      }
     }
-    [combined, 5.0].min
+    combined = breakdown.inject(1.0) { |m, b| m * b[:value] }
+    [[combined, 5.0].min, breakdown]
   end
 
   def current_streak_count

@@ -2,7 +2,7 @@
 # refresh. We don't pack the full state here — clients re-fetch from
 # their endpoint when they see the signal land.
 class ChoreBroadcaster
-  def self.broadcast_changes!(user, chore = nil, **opts)
+  def self.broadcast_changes!(user, chore=nil, **opts)
     return if user.blank?
 
     # Default fanout: actor + everyone in their household (symmetric on
@@ -24,14 +24,14 @@ class ChoreBroadcaster
     recipients = User.where(id: recipient_ids).to_a
 
     payload = {
-      id: :chores,
-      channel: :chores,
+      id:        :chores,
+      channel:   :chores,
       timestamp: Time.current.to_i,
-      data: {
-        chore_id: chore&.id,
+      data:      {
+        chore_id:      chore&.id,
         actor_user_id: user.id,
-        actor_tab_id: opts[:actor_tab_id],
-        server_ts: Time.current.iso8601(3),
+        actor_tab_id:  opts[:actor_tab_id],
+        server_ts:     Time.current.iso8601(3),
       },
     }
 

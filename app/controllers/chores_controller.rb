@@ -227,7 +227,6 @@ class ChoresController < ApplicationController
   def create
     @chore = current_user.chores.new(chore_params)
     if @chore.save
-      ChoreBroadcaster.broadcast_changes!(current_user, @chore)
       respond_to do |format|
         format.html { redirect_to action: (@chore.one_off ? :today : :index) }
         format.json { render json: chore_response_payload(@chore), status: :created }
@@ -242,7 +241,6 @@ class ChoresController < ApplicationController
 
   def update
     if @chore.update(chore_params)
-      ChoreBroadcaster.broadcast_changes!(current_user, @chore)
       respond_to do |format|
         format.html { redirect_to chores_path }
         format.json { render json: chore_response_payload(@chore) }
@@ -257,7 +255,6 @@ class ChoresController < ApplicationController
 
   def destroy
     @chore.update!(archived_at: Time.current)
-    ChoreBroadcaster.broadcast_changes!(current_user, @chore)
     respond_to do |format|
       format.html { redirect_to chores_path }
       format.json { render json: { archived_chore_id: @chore.id, server_ts: Time.current.iso8601(3) } }

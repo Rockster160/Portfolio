@@ -22,8 +22,7 @@
 #  created_by_user_id  :bigint           not null
 #
 class Chore < ApplicationRecord
-  include Orderable
-  include Jilable
+  include Jilable, Orderable
 
   orderable_by(sort_order: :asc)
   orderable_scope ->(chore) { Chore.where(created_by_user_id: chore.created_by_user_id) }
@@ -38,6 +37,11 @@ class Chore < ApplicationRecord
   after_create_commit  :fire_jil_create_trigger
   after_update_commit  :fire_jil_update_trigger
   after_destroy_commit :fire_jil_destroy_trigger
+  # Every persisted change fans out a Monitor broadcast so every open
+  # client refreshes — Jil-created chores, console scripts, and the
+  # controller path all reach the same fanout without each call site
+  # having to remember it.
+  after_commit :broadcast_chore_change, on: [:create, :update, :destroy]
 
   WEEKDAY_KEYS = AgendaSchedule::WEEKDAY_KEYS
   FREQUENCIES = [:never, :daily, :weekdays, :weekly, :monthly, :yearly, :custom, :relative].freeze
@@ -140,7 +144,7 @@ class Chore < ApplicationRecord
   scope :visible_to_user, ->(user_id) {
     where(
       "assigned_to_user_id IS NULL OR sharing_mode = ? OR assigned_to_user_id = ?",
-      sharing_modes[:household], user_id,
+      sharing_modes[:household], user_id
     )
   }
 
@@ -249,17 +253,17 @@ class Chore < ApplicationRecord
   # filter on (`chore action:archived`, `chore action:created`).
   def jil_attrs(action:)
     {
-      id: id,
-      action: action,
-      name: name,
-      short_name: display_short_name,
-      icon: icon,
-      reward_pebbles: reward_pebbles,
-      threshold_seconds: threshold_seconds,
-      sharing_mode: sharing_mode,
-      one_off: one_off,
-      archived: archived?,
-      created_by_user_id: created_by_user_id,
+      id:                  id,
+      action:              action,
+      name:                name,
+      short_name:          display_short_name,
+      icon:                icon,
+      reward_pebbles:      reward_pebbles,
+      threshold_seconds:   threshold_seconds,
+      sharing_mode:        sharing_mode,
+      one_off:             one_off,
+      archived:            archived?,
+      created_by_user_id:  created_by_user_id,
       assigned_to_user_id: assigned_to_user_id,
     }
   end
@@ -280,6 +284,10 @@ class Chore < ApplicationRecord
 
   def fire_jil_destroy_trigger
     ::Jil.trigger(created_by_user, :chore, with_jil_attrs(jil_attrs(action: :destroyed)))
+  end
+
+  def broadcast_chore_change
+    ChoreBroadcaster.broadcast_changes!(created_by_user, self)
   end
 
   def threshold_seconds_is_valid_sentinel_or_positive

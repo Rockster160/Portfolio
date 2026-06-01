@@ -7,6 +7,20 @@ RSpec.describe "Chore sharing modes" do
 
   before { create(:chore_share, user: alice, shared_with_user: bob) }
 
+  describe "broadcasts on persistence" do
+    it "fans out a ChoreBroadcaster call when a chore is created via the model" do
+      expect(ChoreBroadcaster).to receive(:broadcast_changes!).with(alice, kind_of(Chore))
+      Chore.create!(name: "Surprise", created_by_user: alice, reward_pebbles: 1)
+    end
+
+    it "fires the same broadcast on archival / destroy" do
+      chore = create(:chore, created_by_user: alice, name: "X", reward_pebbles: 1)
+      expect(ChoreBroadcaster).to receive(:broadcast_changes!).with(alice, chore).twice
+      chore.update!(archived_at: Time.current)
+      chore.destroy!
+    end
+  end
+
   describe "accessible_chores filtering" do
     it "personal + household with no assignee are visible to everyone in the household" do
       personal  = create(:chore, created_by_user: alice, sharing_mode: :personal)
