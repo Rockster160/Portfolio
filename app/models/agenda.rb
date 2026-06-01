@@ -11,7 +11,6 @@
 #  sync_reason        :string
 #  sync_token         :text
 #  synced_at          :datetime
-#  timezone           :string
 #  watch_expires_at   :datetime
 #  watch_failed_at    :datetime
 #  created_at         :datetime         not null

@@ -112,6 +112,7 @@ Rails.application.routes.draw do
     post   "/items/:chore_id/completion" => "chore_completions#create", as: :complete_item
     delete "/items/:chore_id/completion" => "chore_completions#destroy"
     get    "/items/:id/state"            => "chores#state",              as: :item_state
+    get    "/items/:id/history"          => "chores#chore_history",      as: :item_history
     patch  "/order"                      => "chores#reorder",            as: :reorder
     resources :completions, controller: :chore_completions, only: [:update, :destroy]
     resources :goals,       controller: :chore_goals,       only: [:create, :update, :destroy], as: :goals

@@ -61,19 +61,21 @@
   <% if @multipliers.empty? %>
     <p style="color:var(--chores-muted);">No multipliers configured yet.</p>
   <% end %>
-  <% @multipliers.each do |m| %>
-    <div class="achievement-card">
-      <div>
-        <strong><%= m.name %></strong>
-        <div style="font-size:12px;color:var(--chores-muted);"><%= m.kind.humanize %></div>
+  <div class="multiplier-cards">
+    <% @multipliers.each do |m| %>
+      <div class="multiplier-card">
+        <div class="multiplier-card-head">
+          <strong><%= m.name %></strong>
+          <div class="multiplier-kind"><%= m.kind.humanize %></div>
+        </div>
+        <ul class="multiplier-levels">
+          <% Array(m.config["levels"]).sort_by { |l| l["threshold"].to_i }.each do |lvl| %>
+            <li><span class="muted"><%= lvl["threshold"] %>+</span> → <strong><%= lvl["multiplier"] %>×</strong></li>
+          <% end %>
+        </ul>
       </div>
-      <div>
-        <% Array(m.config["levels"]).sort_by { |l| l["threshold"].to_i }.each do |lvl| %>
-          <span style="margin-left:6px;"><%= lvl["threshold"] %>+ → <%= lvl["multiplier"] %>×</span>
-        <% end %>
-      </div>
-    </div>
-  <% end %>
+    <% end %>
+  </div>
 
   <h3 style="margin-top:24px;">Withdraw</h3>
   <form class="basic" data-withdraw-form>

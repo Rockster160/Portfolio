@@ -15,9 +15,9 @@
 #
 class ChoreMultiplier < ApplicationRecord
   KINDS = {
-    daily_pebble_threshold: 0,
+    daily_pebble_threshold:  0,
     weekly_pebble_threshold: 1,
-    daily_streak: 2,
+    daily_streak:            2,
   }.freeze
 
   enum :kind, KINDS, default: :daily_pebble_threshold

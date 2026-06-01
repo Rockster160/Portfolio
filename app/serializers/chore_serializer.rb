@@ -49,6 +49,7 @@ class ChoreSerializer
       actor_username:      actor_username,
       last_actor_username: last_actor_username,
       hot_multiplier:      hot_multiplier,
+      streak_multiplier:   streak_multiplier,
       today_visible:       today_visible?,
     }
   end
@@ -147,6 +148,26 @@ class ChoreSerializer
     return ctx.hot_picks[chore.id] if ctx
 
     @hot_multiplier ||= ChoreHotPick.lookup_for(day)[chore.id]
+  end
+
+  # Forecast of the user-side multiplier this viewer would receive on
+  # their NEXT completion of this chore — captures active daily/weekly/
+  # streak multipliers configured anywhere in the household for this
+  # chore. Returns 1.0 when no multipliers apply. Capped at 5x to
+  # mirror ChoreCompleter#combined_user_multiplier.
+  def streak_multiplier
+    return @streak_multiplier if defined?(@streak_multiplier)
+
+    household_ids = ctx&.household_user_ids || Chore.household_user_ids_for(viewer.id)
+    multipliers = ChoreMultiplier.active.where(user_id: household_ids, chore_id: chore.id)
+    return @streak_multiplier = 1.0 if multipliers.empty?
+
+    streak = ChoreStreak.find_by(user_id: viewer.id, chore_id: chore.id)
+    current = (streak&.last_completed_day.present? && streak.last_completed_day >= day - 1) ?
+                streak.current_streak.to_i : 0
+    next_streak = current + 1
+    combined = multipliers.inject(1.0) { |m, mx| m * mx.current_multiplier(viewer, for_streak: next_streak) }
+    @streak_multiplier = [combined, 5.0].min
   end
 
   # today_visible? answers ONE question: would this chore have been on

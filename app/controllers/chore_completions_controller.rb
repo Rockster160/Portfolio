@@ -114,7 +114,11 @@ class ChoreCompletionsController < ApplicationController
     overrides = {}
     overrides[:note]             = raw[:note].to_s             if raw.key?(:note)
     overrides[:hot_multiplier]   = raw[:hot_multiplier].to_f   if raw.key?(:hot_multiplier)
-    overrides[:total_multiplier] = raw[:total_multiplier].to_f if raw.key?(:total_multiplier)
+    overrides[:streak_multiplier] = raw[:streak_multiplier].to_f if raw.key?(:streak_multiplier)
+    # Legacy clients (or queued requests written before the column
+    # rename) may still ship total_multiplier; treat it as the streak
+    # signal so the override path keeps working.
+    overrides[:streak_multiplier] = raw[:total_multiplier].to_f if !overrides.key?(:streak_multiplier) && raw.key?(:total_multiplier)
     if raw.key?(:paid_pebbles)
       amount = raw[:paid_pebbles].to_i
       overrides[:paid_pebbles]   = amount
@@ -132,8 +136,16 @@ class ChoreCompletionsController < ApplicationController
   def completion_params
     perms = params.require(:chore_completion).permit(
       :paid_pebbles, :completed_at, :payout_skipped, :note,
-      :hot_multiplier, :total_multiplier,
+      :hot_multiplier, :streak_multiplier, :total_multiplier,
     )
+    # Legacy `total_multiplier` is the same signal as streak_multiplier
+    # after the rename; route it through so older queued requests keep
+    # working.
+    if perms.key?(:total_multiplier) && !perms.key?(:streak_multiplier)
+      perms[:streak_multiplier] = perms.delete(:total_multiplier)
+    else
+      perms.delete(:total_multiplier)
+    end
     # If user changed the timestamp, recompute the chore-day key so
     # streaks / hot-pick joins all stay correct.
     if perms[:completed_at].present?

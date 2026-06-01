@@ -8,10 +8,12 @@
       still has a real action so a no-JS environment falls back to the
       legacy round-trip. %>
   <form class="history-search" data-history-search action="<%= chores_history_path %>" method="get">
-    <input type="text" name="q" value="<%= @q %>" data-history-q
-           placeholder="Filter… e.g. notes:test, time>2026-05-01, amount>1, Cat"
-           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-    <button type="button" data-history-clear class="btn ghost <%= 'hidden' if @q.blank? %>">Clear</button>
+    <div class="search-wrap" style="flex:1;">
+      <input type="text" name="q" value="<%= @q %>" data-history-q
+             placeholder="Filter… e.g. notes:test, time>2026-05-01, amount>1, Cat"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <button type="button" class="search-clear" data-search-clear aria-label="Clear" <%= 'hidden' if @q.blank? %>>×</button>
+    </div>
   </form>
 
   <%# Pending pushes — queued completions/undos that haven't synced.
@@ -83,15 +85,11 @@
             <button type="button" class="mult-pill" data-mult-edit="hot" title="Tap to set hot multiplier">
               Hot <strong data-mult-display-hot>1</strong>×
             </button>
-            <button type="button" class="mult-pill" data-mult-edit="total" title="Tap to set total multiplier">
-              Total <strong data-mult-display-total>1</strong>×
-            </button>
-            <button type="button" class="mult-pill mult-pill-toggle" data-modal-hot-pick-toggle aria-pressed="false">
-              <i class="fa fa-fire" aria-hidden="true"></i> Hot pick
+            <button type="button" class="mult-pill" data-mult-edit="streak" title="Tap to set streak multiplier">
+              Streak <strong data-mult-display-streak>1</strong>×
             </button>
             <input type="hidden" data-modal-hot-mult value="1">
-            <input type="hidden" data-modal-total-mult value="1">
-            <input type="hidden" data-modal-hot-pick value="false">
+            <input type="hidden" data-modal-streak-mult value="1">
           </div>
         </div>
         <div class="detail-row completion-only" data-modal-skipped-row hidden>
@@ -158,7 +156,7 @@
     const pendingCount = document.querySelector("[data-pending-count]");
     const searchForm = document.querySelector("[data-history-search]");
     const qInput = document.querySelector("[data-history-q]");
-    const clearBtn = document.querySelector("[data-history-clear]");
+    const clearBtn = qInput?.parentElement?.querySelector("[data-search-clear]");
     const modal = document.querySelector('[data-completion-modal]');
 
     let state = { page: 1, q: "", total_pages: 1 };
@@ -297,7 +295,10 @@
           </div>`;
       }
       const note = entry.note ? `<span class="history-note">— ${esc(truncate(entry.note, NOTE_LIMIT))}</span>` : "";
-      const hotTag = entry.hot_pick ? `<span class="history-tag hot">hot</span>` : "";
+      const hotPill = (entry.hot_multiplier > 1)
+        ? `<span class="history-mult hot">Hot ${esc(formatMult(entry.hot_multiplier))}×</span>` : "";
+      const streakPill = (entry.streak_multiplier > 1)
+        ? `<span class="history-mult streak">Streak ${esc(formatMult(entry.streak_multiplier))}×</span>` : "";
       const amt = entry.payout_skipped
         ? `<span class="history-amount" style="color:#9CA3AF;">(skipped)</span>`
         : `<span class="history-amount" style="color:#34D399;">+${formatCount(entry.paid_pebbles)}p</span>`;
@@ -313,7 +314,7 @@
              data-note="${esc(entry.note || "")}"
              data-hot="${entry.hot_pick ? "true" : "false"}"
              data-hot-multiplier="${entry.hot_multiplier}"
-             data-total-multiplier="${entry.total_multiplier}"
+             data-streak-multiplier="${entry.streak_multiplier}"
              data-skipped="${entry.payout_skipped ? "true" : "false"}"
              data-skipped-reason="${esc(entry.skipped_reason || "")}"
              data-chore-icon="${esc(entry.chore.icon || "")}"
@@ -322,12 +323,13 @@
             <span class="history-when">${esc(entry.when_label)}</span> ·
             <span class="history-icon">${iconHTML(entry.chore)}</span>
             <span class="history-name">${esc(entry.chore.short_name || entry.chore.name)}</span>
-            ${hotTag}
+            ${hotPill}
+            ${streakPill}
             ${note}
           </span>
           <span class="history-amount-cell">
             ${amt}
-            <button type="button" class="history-edit" data-edit-completion title="Edit">
+            <button type="button" class="history-edit" data-edit-completion title="Edit completion #${entry.id}">
               <i class="fa fa-pencil" aria-hidden="true"></i>
             </button>
           </span>
@@ -342,7 +344,10 @@
       const ts = body.client_completed_at || item.queued_at;
       const whenLabel = ts ? formatWhenLabel(ts) : "pending";
       const note = body.note ? `<span class="history-note">— ${esc(truncate(body.note, NOTE_LIMIT))}</span>` : "";
-      const hotTag = body.hot_pick ? `<span class="history-tag hot">hot</span>` : "";
+      const hotMultVal    = parseFloat(body.hot_multiplier ?? 1) || 1;
+      const streakMultVal = parseFloat(body.streak_multiplier ?? body.total_multiplier ?? 1) || 1;
+      const hotPill    = hotMultVal    > 1 ? `<span class="history-mult hot">Hot ${esc(formatMult(hotMultVal))}×</span>` : "";
+      const streakPill = streakMultVal > 1 ? `<span class="history-mult streak">Streak ${esc(formatMult(streakMultVal))}×</span>` : "";
       const actionLabel = item.method === "DELETE" ? "Undo" : "Complete";
       const actionClass = item.method === "DELETE" ? "pending-undo" : "pending-complete";
       const amt = item.method === "DELETE"
@@ -359,7 +364,8 @@
             <span class="history-icon">${iconHTML(chore)}</span>
             <span class="history-name">${esc(choreName)}</span>
             <span class="history-tag pending">${actionLabel}</span>
-            ${hotTag}
+            ${hotPill}
+            ${streakPill}
             ${note}
           </span>
           <span class="history-amount-cell">
@@ -512,14 +518,14 @@
       e.preventDefault();
       state.q = qInput.value.trim();
       state.page = 1;
-      clearBtn.classList.toggle("hidden", !state.q);
+      if (clearBtn) clearBtn.hidden = !state.q;
       fetchHistory();
     });
-    clearBtn.addEventListener("click", () => {
+    clearBtn?.addEventListener("click", () => {
       qInput.value = "";
       state.q = "";
       state.page = 1;
-      clearBtn.classList.add("hidden");
+      clearBtn.hidden = true;
       fetchHistory();
     });
     window.addEventListener("popstate", e => {
@@ -527,7 +533,7 @@
       state.q = url.searchParams.get("q") || "";
       state.page = parseInt(url.searchParams.get("page") || "1", 10) || 1;
       qInput.value = state.q;
-      clearBtn.classList.toggle("hidden", !state.q);
+      if (clearBtn) clearBtn.hidden = !state.q;
       fetchHistory({ push: false });
     });
 
@@ -536,27 +542,24 @@
       const v = Number.isFinite(value) ? value : 1;
       modal.querySelector(`[data-modal-${kind}-mult]`).value = v;
       modal.querySelector(`[data-mult-display-${kind}]`).textContent = formatMult(v);
-    }
-    function setHotPick(on) {
-      modal.querySelector('[data-modal-hot-pick]').value = on ? "true" : "false";
-      const btn = modal.querySelector('[data-modal-hot-pick-toggle]');
-      btn.setAttribute("aria-pressed", on ? "true" : "false");
-      btn.classList.toggle("active", !!on);
+      // Hot pill > 1 reads as the "active hot pick" — green tint to
+      // match the chore-card hot-badge styling. Total pill stays neutral.
+      if (kind === "hot") {
+        const btn = modal.querySelector('[data-mult-edit="hot"]');
+        if (btn) btn.classList.toggle("active", v > 1);
+      }
     }
     modal.querySelectorAll('[data-mult-edit]').forEach(btn => {
       btn.addEventListener("click", () => {
         const kind = btn.dataset.multEdit;
         const current = modal.querySelector(`[data-modal-${kind}-mult]`).value;
-        const raw = prompt(`${kind === "hot" ? "Hot" : "Total"} multiplier:`, current);
+        const label = kind === "hot" ? "Hot" : "Streak";
+        const raw = prompt(`${label} multiplier:`, current);
         if (raw == null) return;
         const next = parseFloat(raw);
         if (!Number.isFinite(next) || next < 0) { flash("Bad multiplier", "error"); return; }
         setMultPill(kind, next);
       });
-    });
-    modal.querySelector('[data-modal-hot-pick-toggle]').addEventListener("click", () => {
-      const cur = modal.querySelector('[data-modal-hot-pick]').value === "true";
-      setHotPick(!cur);
     });
 
     function openCommittedModal(row) {
@@ -571,9 +574,8 @@
       modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
       modal.querySelector('[data-modal-amount-label]').textContent = "Paid pebbles";
       setCompletionOnlyVisible(true);
-      setMultPill("hot",   parseFloat(ds.hotMultiplier   || "1"));
-      setMultPill("total", parseFloat(ds.totalMultiplier || "1"));
-      setHotPick(ds.hot === "true");
+      setMultPill("hot",    parseFloat(ds.hotMultiplier    || "1"));
+      setMultPill("streak", parseFloat(ds.streakMultiplier || "1"));
       modal.querySelector('[data-modal-note]').value = ds.note || "";
       const skippedRow = modal.querySelector('[data-modal-skipped-row]');
       if (ds.skipped === "true") {
@@ -650,17 +652,16 @@
       setCompletionOnlyVisible(true);
       modal.querySelector('[data-modal-completed-at]').value =
         toLocalInputValue(body.client_completed_at || item.queued_at);
-      const hotMult0   = parseFloat(body.hot_multiplier   ?? "1") || 1;
-      const totalMult0 = parseFloat(body.total_multiplier ?? "1") || 1;
+      const hotMult0    = parseFloat(body.hot_multiplier    ?? "1") || 1;
+      const streakMult0 = parseFloat(body.streak_multiplier ?? body.total_multiplier ?? "1") || 1;
       const base = parseInt(meta.base_pebbles ?? 0, 10) || 0;
-      const computedPaid = Math.round(base * hotMult0 * totalMult0);
+      const computedPaid = Math.round(base * hotMult0 * streakMult0);
       modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
       modal.querySelector('[data-modal-amount-label]').textContent = "Paid pebbles";
       modal.querySelector('[data-modal-amount]').value =
         body.paid_pebbles != null ? String(body.paid_pebbles) : String(computedPaid);
-      setMultPill("hot",   hotMult0);
-      setMultPill("total", totalMult0);
-      setHotPick(body.hot_pick === true);
+      setMultPill("hot",    hotMult0);
+      setMultPill("streak", streakMult0);
       modal.querySelector('[data-modal-note]').value = body.note || "";
       modal.querySelector('[data-modal-skipped-row]').setAttribute("hidden", "");
       const sourceIcon = row.querySelector(".history-icon");
@@ -703,9 +704,8 @@
       if (!currentEditTarget) return;
       const note = modal.querySelector('[data-modal-note]').value;
       const completedLocal = modal.querySelector('[data-modal-completed-at]').value;
-      const hotMult   = parseFloat(modal.querySelector('[data-modal-hot-mult]').value);
-      const totalMult = parseFloat(modal.querySelector('[data-modal-total-mult]').value);
-      const hotPick   = modal.querySelector('[data-modal-hot-pick]').value === "true";
+      const hotMult    = parseFloat(modal.querySelector('[data-modal-hot-mult]').value);
+      const streakMult = parseFloat(modal.querySelector('[data-modal-streak-mult]').value);
       const completedIso = completedLocal ? new Date(completedLocal).toISOString() : null;
 
       // Withdrawal + transfer share the same body shape (amount,
@@ -740,8 +740,7 @@
         item.body = item.body || {};
         item.body.note = note;
         item.body.hot_multiplier = Number.isFinite(hotMult) ? hotMult : 1;
-        item.body.total_multiplier = Number.isFinite(totalMult) ? totalMult : 1;
-        item.body.hot_pick = hotPick;
+        item.body.streak_multiplier = Number.isFinite(streakMult) ? streakMult : 1;
         item.body.paid_pebbles = paid;
         if (completedIso) item.body.client_completed_at = completedIso;
         saveQueue(q);
@@ -760,8 +759,7 @@
           paid_pebbles: amount,
           note: note,
           hot_multiplier: Number.isFinite(hotMult) ? hotMult : 1,
-          total_multiplier: Number.isFinite(totalMult) ? totalMult : 1,
-          hot_pick: hotPick,
+          streak_multiplier: Number.isFinite(streakMult) ? streakMult : 1,
         },
       };
       if (completedIso) payload.chore_completion.completed_at = completedIso;
@@ -842,7 +840,7 @@
     state.q = initUrl.searchParams.get("q") || "";
     state.page = parseInt(initUrl.searchParams.get("page") || "1", 10) || 1;
     qInput.value = state.q;
-    clearBtn.classList.toggle("hidden", !state.q);
+    if (clearBtn) clearBtn.hidden = !state.q;
     renderPending();
     fetchHistory({ push: false });
   </script>

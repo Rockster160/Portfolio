@@ -60,7 +60,11 @@ class GoogleCalendar::Sync
     @deferred_overrides = []      # buffered across pages — see flush_deferred
     @deferred_cancellations = []  # ditto for cancellation handle_cancellation
     @applied_count = 0            # counted across apply_event for the tail trigger
-    ensure_timezone!
+    # Timezone is per-user, never per-agenda. Storage is UTC truth; display
+    # is always in the viewing user's timezone, so the calendar's own
+    # timezone is not needed and was a footgun (Google returns the
+    # owner-account default, which often disagrees with the calendar's
+    # display intent).
     page_token = nil
     sync_token = nil
 
@@ -121,24 +125,6 @@ class GoogleCalendar::Sync
     yield
   ensure
     Thread.current[SUPPRESS_KEY] = nil
-  end
-
-  # Lazily populate the calendar's timezone the first time we sync after a
-  # connect. The column itself is optional — we fall back to the user's
-  # timezone for all-day parsing whether or not it's set. This must NEVER
-  # raise out of the sync run: if the migration that adds the column
-  # hasn't been applied, if Google rejects the get_calendar call, if
-  # anything else goes wrong — log + carry on so the actual events sync
-  # is unaffected.
-  def ensure_timezone!
-    return unless @agenda.has_attribute?(:timezone)
-    return if @agenda.timezone.present?
-
-    response = @api.get_calendar(@agenda.external_id)
-    tz = response.is_a?(::Hash) ? response[:timeZone].to_s.presence : nil
-    @agenda.update!(timezone: tz) if tz
-  rescue ::StandardError => e
-    ::Rails.logger.warn("[GoogleCalendar::Sync] timezone fetch failed agenda=#{@agenda.id} #{e.class}: #{e.message}")
   end
 
   def fetch_page(page_token:)
@@ -473,11 +459,12 @@ class GoogleCalendar::Sync
   # date — regardless of where the calendar / worker / user live.
   # Timed: dateTime MAY or may not include a UTC offset (per RFC3339 +
   # Google's API: "A time zone offset is required unless a time zone is
-  # explicitly specified in timeZone."). Parse via the event's timeZone
-  # field when the offset is absent, falling back to the agenda's tz,
-  # then the user's. Bare `Time.zone.parse` would treat a no-offset
-  # value as UTC under a Sidekiq worker (Time.zone defaults to UTC),
-  # shifting 3pm Denver into 3pm UTC → 9am Denver on render.
+  # explicitly specified in timeZone."). Parse via the event's per-event
+  # `timeZone` field when present, falling back to the user's timezone.
+  # We deliberately do NOT consult any per-agenda timezone column —
+  # Google's owner-account default frequently disagrees with the
+  # calendar's display intent and silently broke parsing for shared /
+  # cross-tz calendars.
   def parse_event_start(event)
     if all_day_event?(event)
       d = parse_event_date(event.dig(:start, :date))
@@ -506,9 +493,7 @@ class GoogleCalendar::Sync
     raw = time_block[:dateTime].to_s
     return nil if raw.blank?
 
-    zone = ::ActiveSupport::TimeZone[time_block[:timeZone].to_s] ||
-           ::ActiveSupport::TimeZone[@agenda.timezone.to_s] ||
-           user_timezone
+    zone = ::ActiveSupport::TimeZone[time_block[:timeZone].to_s] || user_timezone
     zone.parse(raw)
   rescue ::ArgumentError
     nil

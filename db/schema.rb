@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_01_180000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_01_210000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -189,7 +189,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_01_180000) do
     t.datetime "watch_failed_at"
     t.bigint "google_account_id"
     t.string "sync_reason"
-    t.string "timezone"
     t.index ["google_account_id"], name: "index_agendas_on_google_account_id"
     t.index ["user_id", "parameterized_name"], name: "index_agendas_on_user_id_and_parameterized_name", unique: true
     t.index ["user_id", "source", "google_account_id", "external_id"], name: "index_agendas_on_user_source_account_external", unique: true, where: "(source <> 0)"
@@ -381,7 +380,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_01_180000) do
     t.integer "paid_pebbles", default: 0, null: false
     t.integer "base_pebbles", default: 0, null: false
     t.float "hot_multiplier", default: 1.0, null: false
-    t.float "total_multiplier", default: 1.0, null: false
     t.integer "achievement_bonus_pebbles", default: 0, null: false
     t.boolean "payout_skipped", default: false, null: false
     t.text "skipped_reason"
@@ -389,6 +387,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_01_180000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.text "note"
+    t.float "streak_multiplier", default: 1.0, null: false
     t.index ["chore_id", "user_id", "day_key"], name: "index_chore_completions_on_chore_id_and_user_id_and_day_key"
     t.index ["chore_id"], name: "index_chore_completions_on_chore_id"
     t.index ["user_id", "completed_at"], name: "index_chore_completions_on_user_id_and_completed_at"

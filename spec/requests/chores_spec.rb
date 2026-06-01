@@ -99,19 +99,19 @@ RSpec.describe "Chores", type: :request do
     expect(completion.reload.paid_pebbles).to eq(8)
   end
 
-  it "PATCH /chores/completions/:id stores hot_multiplier, total_multiplier, and hot_pick flag verbatim" do
+  it "PATCH /chores/completions/:id stores hot_multiplier, streak_multiplier, and hot_pick flag verbatim" do
     chore = create(:chore, created_by_user: user, reward_pebbles: 5)
     completion = create(:chore_completion, chore: chore, user: user,
-      paid_pebbles: 5, hot_multiplier: 1.0, total_multiplier: 1.0, metadata: {})
+      paid_pebbles: 5, hot_multiplier: 1.0, streak_multiplier: 1.0, metadata: {})
     patch "/chores/completions/#{completion.id}",
-      params: { chore_completion: { hot_multiplier: 2.0, total_multiplier: 2.5, hot_pick: true } }.to_json,
+      params: { chore_completion: { hot_multiplier: 2.0, streak_multiplier: 2.5, hot_pick: true } }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
     completion.reload
     # Multipliers are stored as historical record — not auto-applied
     # to paid_pebbles (which stays at its prior 5).
     expect(completion.hot_multiplier).to eq(2.0)
-    expect(completion.total_multiplier).to eq(2.5)
+    expect(completion.streak_multiplier).to eq(2.5)
     expect(completion.metadata["hot_pick"]).to be(true)
     expect(completion.paid_pebbles).to eq(5)
   end
@@ -439,7 +439,7 @@ RSpec.describe "Chores", type: :request do
         chore_completion: {
           note: "from queue",
           hot_multiplier: 2.0,
-          total_multiplier: 2.5,
+          streak_multiplier: 2.5,
           hot_pick: true,
         },
       }.to_json,
@@ -450,7 +450,7 @@ RSpec.describe "Chores", type: :request do
     # the completer (5 base × 1× combined).
     expect(completion.note).to eq("from queue")
     expect(completion.hot_multiplier).to eq(2.0)
-    expect(completion.total_multiplier).to eq(2.5)
+    expect(completion.streak_multiplier).to eq(2.5)
     expect(completion.metadata["hot_pick"]).to be(true)
     expect(completion.paid_pebbles).to eq(5)
   end

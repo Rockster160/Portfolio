@@ -110,7 +110,7 @@ RSpec.describe ChoreCompleter do
 
     it "does NOT apply the multiplier when completing a different chore" do
       result = described_class.new(other, user).call
-      expect(result.completion.total_multiplier).to eq(1.0)
+      expect(result.completion.streak_multiplier).to eq(1.0)
       expect(result.completion.paid_pebbles).to eq(1)
     end
 

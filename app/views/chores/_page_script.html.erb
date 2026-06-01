@@ -195,6 +195,8 @@
     const hotClass  = (c.hot_multiplier != null) ? " hot" : "";
     const hot = (c.hot_multiplier != null) ?
       `<div class="hot-badge">${esc(formatMultiplier(c.hot_multiplier))}×</div>` : "";
+    const streak = (c.streak_multiplier != null && c.streak_multiplier > 1) ?
+      `<div class="streak-badge">${esc(formatMultiplier(c.streak_multiplier))}×</div>` : "";
     const countBadge = (c.done_count_today > 1) ?
       `<span class="count-badge" data-count-badge>×${c.done_count_today}</span>` : "";
     const cd = hasCooldown(c) ?
@@ -203,6 +205,7 @@
     return `
       <div class="chore-card${doneClass}${hotClass}" data-chore-id="${c.id}"${actorAttr}>
         ${hot}
+        ${streak}
         <div class="icon" data-icon>
           <span class="card-reward">${esc(c.reward_label)}</span>
           ${iconHTML(c)}
@@ -215,15 +218,14 @@
     `;
   }
 
-  function circleCardHTML(c, { hideHotBadge = false, animate = true } = {}) {
+  function circleCardHTML(c, { animate = true } = {}) {
     const isDone = (c.done_count_today || 0) > 0;
     const doneClass = isDone ? (animate ? " done" : " done no-animate") : "";
     const hotClass  = (c.hot_multiplier != null) ? " hot" : "";
-    // When this card is rendered INSIDE a `.hot-strip-cell`, the cell's
-    // centered pill is the multiplier indicator — suppress this inner
-    // badge so we don't end up with two `2×` marks on the same chore.
-    const hot = (!hideHotBadge && c.hot_multiplier != null) ?
+    const hot = (c.hot_multiplier != null) ?
       `<div class="hot-badge">${esc(formatMultiplier(c.hot_multiplier))}×</div>` : "";
+    const streak = (c.streak_multiplier != null && c.streak_multiplier > 1) ?
+      `<div class="streak-badge">${esc(formatMultiplier(c.streak_multiplier))}×</div>` : "";
     const countBadge = (c.done_count_today > 1) ?
       `<span class="count-badge" data-count-badge>×${c.done_count_today}</span>` : "";
     const ring = (c.cooldown_kind === "fixed") ? `
@@ -238,6 +240,7 @@
     return `
       <div class="chore-circle${doneClass}${hotClass}" data-chore-id="${c.id}"${actorAttr}>
         ${hot}
+        ${streak}
         <div class="circle-inner">
           ${ring}
           <svg class="done-ring" viewBox="0 0 100 100" aria-hidden="true">
@@ -254,16 +257,7 @@
   }
 
   function hotCellHTML(c, { animate = true } = {}) {
-    // Wrap a circle card with a centered multiplier pill above. The
-    // inner card is identical to Today's markup so gestures + ticker
-    // Just Work; `hideHotBadge` prevents the inner top-right badge
-    // from duplicating the centered pill.
-    return `
-      <div class="hot-strip-cell">
-        <div class="hot-mult">${esc(formatMultiplier(c.hot_multiplier))}×</div>
-        ${circleCardHTML(c, { hideHotBadge: true, animate })}
-      </div>
-    `;
+    return `<div class="hot-strip-cell">${circleCardHTML(c, { animate })}</div>`;
   }
 
   function nodeFrom(html) {
@@ -368,22 +362,25 @@
     const newRing = newRingWrap.querySelector(".done-ring");
     if (newRing) newRing.replaceWith(oldRing);
   }
-  function patchHotBadge(el, c) {
+  function patchCornerBadge(el, c, { className, value }) {
     let badge = null;
     for (const child of el.children) {
-      if (child.classList?.contains("hot-badge")) { badge = child; break; }
+      if (child.classList?.contains(className)) { badge = child; break; }
     }
-    if (c.hot_multiplier != null) {
-      const text = `${formatMultiplier(c.hot_multiplier)}×`;
+    const visible = value != null && (className === "hot-badge" || value > 1);
+    if (visible) {
+      const text = `${formatMultiplier(value)}×`;
       if (badge) {
         if (badge.textContent !== text) badge.textContent = text;
       } else {
-        el.insertAdjacentHTML("afterbegin", `<div class="hot-badge">${esc(text)}</div>`);
+        el.insertAdjacentHTML("afterbegin", `<div class="${className}">${esc(text)}</div>`);
       }
     } else if (badge) {
       badge.remove();
     }
   }
+  function patchHotBadge(el, c)    { patchCornerBadge(el, c, { className: "hot-badge",    value: c.hot_multiplier }); }
+  function patchStreakBadge(el, c) { patchCornerBadge(el, c, { className: "streak-badge", value: c.streak_multiplier }); }
   function patchCountSlot(el, c) {
     if (!el) return;
     if ((c.done_count_today || 0) > 1) {
@@ -422,6 +419,7 @@
     }
     el.classList.toggle("hot", c.hot_multiplier != null);
     patchHotBadge(el, c);
+    patchStreakBadge(el, c);
     patchText(el.querySelector(".circle-reward"), c.reward_label);
     patchCountSlot(el.querySelector("[data-count-slot]"), c);
     patchText(el.querySelector(":scope > .title"), c.short_name);
@@ -435,13 +433,13 @@
     el.classList.toggle("done-today", (c.done_count_today || 0) > 0);
     el.classList.toggle("hot", c.hot_multiplier != null);
     patchHotBadge(el, c);
+    patchStreakBadge(el, c);
     patchText(el.querySelector(".card-reward"), c.reward_label);
     patchCountSlot(el.querySelector("[data-count-slot]"), c);
     patchText(el.querySelector(":scope > .title"), c.name);
     hydrateDataAttrs(el, c);
   }
   function patchHotCell(cell, c) {
-    patchText(cell.querySelector(".hot-mult"), `${formatMultiplier(c.hot_multiplier)}×`);
     const inner = cell.querySelector(".chore-circle");
     if (inner) patchCircleCard(inner, c);
   }
@@ -728,14 +726,19 @@
       if (s.pointerId !== null) return;
       const card = e.target.closest("[data-chore-id]");
       if (!card) return;
-      if (editModeActive) return;
-      const usesCircleHitbox = container.matches("[data-chores-circles], [data-chores-hot-strip]");
-      if (usesCircleHitbox && !e.target.closest(".circle-inner")) return;
+      const inEditMode = editModeActive;
+      if (!inEditMode) {
+        const usesCircleHitbox = container.matches("[data-chores-circles], [data-chores-hot-strip]");
+        if (usesCircleHitbox && !e.target.closest(".circle-inner")) return;
+      }
 
       s.pointerId = e.pointerId; s.card = card; s.startX = e.clientX; s.startY = e.clientY;
       s.startedAt = performance.now(); s.moved = false; s.longPressFired = false;
       s.timer = setTimeout(() => {
-        if (s.card && !s.moved) { s.longPressFired = true; undoLastCompletion(s.card.dataset.choreId); }
+        if (!s.card || s.moved) return;
+        s.longPressFired = true;
+        if (inEditMode) openChoreHistoryModal(s.card.dataset.choreId);
+        else undoLastCompletion(s.card.dataset.choreId);
       }, LONG_MS);
     });
     container.addEventListener("pointermove", e => {
@@ -752,6 +755,9 @@
       reset();
       if (!card) return;
       if (!isShortTap) { card.dataset.suppressClick = "1"; return; }
+      // In edit mode every short tap means "edit"; the click handler
+      // opens the edit modal. Never auto-complete from edit mode.
+      if (editModeActive) return;
       if (multiplierActive) { openMultiplierModal(card); return; }
       if (e.shiftKey) { openEditModal(card); return; }
       completeChore(card.dataset.choreId);
@@ -761,8 +767,15 @@
     container.addEventListener("click", e => {
       const card = e.target.closest("[data-chore-id]");
       if (!card) return;
+      // A long-press already opened a modal (history in edit mode, undo
+      // otherwise) — swallow the trailing click so the edit modal doesn't
+      // also pop open behind it.
+      if (card.dataset.suppressClick === "1") {
+        delete card.dataset.suppressClick;
+        e.preventDefault(); e.stopPropagation();
+        return;
+      }
       if (editModeActive) { e.preventDefault(); e.stopPropagation(); openEditModal(card); return; }
-      if (card.dataset.suppressClick === "1") { delete card.dataset.suppressClick; e.preventDefault(); e.stopPropagation(); }
     }, true);
     container.addEventListener("contextmenu", e => {
       const card = e.target.closest("[data-chore-id]");
@@ -771,6 +784,64 @@
       openEditModal(card);
     });
   }
+
+  // ============================================================
+  // Chore history modal — opened by long-press in edit mode. Reads
+  // the per-chore /chores/items/:id/history endpoint, which scopes
+  // household-shared chores to the whole household.
+  // ============================================================
+  const choreHistoryModal = document.querySelector('[data-chore-history-modal]');
+  const choreHistoryBody  = document.querySelector('[data-chore-history-body]');
+  const choreHistoryTitle = document.querySelector('[data-chore-history-title]');
+  async function openChoreHistoryModal(id) {
+    if (!choreHistoryModal) return;
+    const c = ChoreStore.get(parseInt(id, 10));
+    if (choreHistoryTitle) choreHistoryTitle.textContent = c ? c.name : "Chore History";
+    if (choreHistoryBody) choreHistoryBody.innerHTML = '<p style="color:var(--chores-muted);">Loading…</p>';
+    choreHistoryModal.classList.remove("hidden");
+    try {
+      const data = await api(`/chores/items/${parseInt(id, 10)}/history`, "GET");
+      renderChoreHistory(data);
+    } catch (e) {
+      if (choreHistoryBody) choreHistoryBody.innerHTML = `<p style="color:#DC2626;">${esc(e.message || "Failed to load")}</p>`;
+    }
+  }
+  function renderChoreHistory(data) {
+    if (!choreHistoryBody) return;
+    const entries = data?.entries || [];
+    if (entries.length === 0) {
+      choreHistoryBody.innerHTML = '<p style="color:var(--chores-muted);">No history yet.</p>';
+      return;
+    }
+    const rows = entries.map(e => {
+      const actor = e.actor_username ? `<span class="chore-history-actor">${esc(e.actor_username)}</span>` : "";
+      const skipped = e.payout_skipped ? ' <span class="history-tag skipped">skipped</span>' : "";
+      const mults = [];
+      if (e.hot_multiplier != null && e.hot_multiplier > 1) {
+        mults.push(`<span class="history-mult hot">Hot ${esc(formatMultiplier(e.hot_multiplier))}×</span>`);
+      }
+      if (e.streak_multiplier != null && e.streak_multiplier > 1) {
+        mults.push(`<span class="history-mult streak">Streak ${esc(formatMultiplier(e.streak_multiplier))}×</span>`);
+      }
+      const multBlock = mults.length ? `<div class="chore-history-mults">${mults.join("")}</div>` : "";
+      const note = e.note ? `<div class="chore-history-note">${esc(e.note)}</div>` : "";
+      return `
+        <div class="chore-history-row" data-actor="${esc(e.actor_username || '')}">
+          <div class="chore-history-when">${esc(e.when_label)}${skipped}</div>
+          <div class="chore-history-paid">${esc(formatCount(e.paid_pebbles))}p</div>
+          ${actor}
+          ${multBlock}
+          ${note}
+        </div>
+      `;
+    }).join("");
+    choreHistoryBody.innerHTML = rows;
+  }
+  choreHistoryModal?.querySelector('[data-action="cancel"]')
+    ?.addEventListener("click", () => choreHistoryModal.classList.add("hidden"));
+  choreHistoryModal?.addEventListener("click", e => {
+    if (e.target === choreHistoryModal) choreHistoryModal.classList.add("hidden");
+  });
 
   // ============================================================
   // mutations — go through the store
@@ -1023,6 +1094,26 @@
   }
   document.querySelector('[data-chores-search]')?.addEventListener("input",
     e => applySearch(e.target.value.trim()));
+  // Wire any input that has a sibling `[data-search-clear]` button: show
+  // the × while the field has text, clear + refocus on click. Used by
+  // the toolbar search and the History filter.
+  function wireSearchClear(scope = document) {
+    scope.querySelectorAll("[data-search-clear]").forEach(btn => {
+      const wrap = btn.parentElement;
+      const input = wrap?.querySelector("input");
+      if (!input) return;
+      const sync = () => { btn.hidden = !input.value; };
+      sync();
+      input.addEventListener("input", sync);
+      btn.addEventListener("click", () => {
+        input.value = "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.focus();
+        sync();
+      });
+    });
+  }
+  wireSearchClear();
 
   // ============================================================
   // multiplier toggle + modal
@@ -1700,12 +1791,18 @@
         : `<span style="color:#34D399;">+${formatCount(entry.paid_pebbles)}p</span>`;
       const note = entry.note ?
         `<span class="history-note">— ${esc(truncate(entry.note, 120))}</span>` : "";
+      const hotPill = (entry.hot_multiplier > 1) ?
+        `<span class="history-mult hot">Hot ${esc(formatMultiplier(entry.hot_multiplier))}×</span>` : "";
+      const streakPill = (entry.streak_multiplier > 1) ?
+        `<span class="history-mult streak">Streak ${esc(formatMultiplier(entry.streak_multiplier))}×</span>` : "";
       return `
         <div class="history-row">
           <span>
             ${esc(entry.when_label)} ·
             <span class="history-icon">${recentIconHTML(entry.chore)}</span>
             <strong>${esc(entry.chore.short_name || entry.chore.name)}</strong>
+            ${hotPill}
+            ${streakPill}
             ${note}
           </span>
           ${amt}

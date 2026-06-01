@@ -277,6 +277,18 @@
 
 <%# Multiplier modal — shared so Grid + Today both open the multi-tap
   flow from the same `×` toolbar button. %>
+<div id="chore-history-modal" class="chores-modal-backdrop hidden" data-chore-history-modal>
+  <div class="chores-modal chore-history-modal">
+    <div class="modal-head">
+      <h3 style="margin:0;" data-chore-history-title>Chore History</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <div class="chore-history-body" data-chore-history-body>
+      <p style="color:var(--chores-muted);">Loading…</p>
+    </div>
+  </div>
+</div>
+
 <div id="chore-multiplier-modal" class="chores-modal-backdrop hidden" data-multiplier-modal>
   <div class="chores-modal chore-multiplier-modal">
     <div class="modal-head">

@@ -13,7 +13,7 @@
 #  paid_pebbles              :integer          default(0), not null
 #  payout_skipped            :boolean          default(FALSE), not null
 #  skipped_reason            :text
-#  total_multiplier          :float            default(1.0), not null
+#  streak_multiplier         :float            default(1.0), not null
 #  created_at                :datetime         not null
 #  updated_at                :datetime         not null
 #  chore_id                  :bigint           not null

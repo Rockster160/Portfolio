@@ -182,6 +182,42 @@ class ChoresController < ApplicationController
     }
   end
 
+  # GET /chores/items/:id/history — chore-specific completion log used
+  # by the edit-mode long-press modal. Household-shared chores include
+  # every household member's completion; personal/assigned chores stay
+  # scoped to the viewer.
+  def chore_history
+    chore = current_user.accessible_chores.unscope(where: :archived_at).find(params[:id])
+    scope_user_ids = chore.share_household? ?
+      Chore.household_user_ids_for(current_user.id) :
+      [current_user.id]
+    completions = ChoreCompletion
+      .where(chore_id: chore.id, user_id: scope_user_ids)
+      .includes(:user)
+      .order(completed_at: :desc)
+      .limit(50)
+    actors_by_id = User.where(id: completions.map(&:user_id).uniq).index_by(&:id)
+    render json: {
+      chore: history_chore_json(chore),
+      entries: completions.map { |c|
+        actor = actors_by_id[c.user_id]
+        {
+          id:               c.id,
+          user_id:          c.user_id,
+          actor_username:   actor&.username,
+          paid_pebbles:     c.paid_pebbles,
+          base_pebbles:     c.base_pebbles,
+          hot_multiplier:    c.hot_multiplier.to_f,
+          streak_multiplier: c.streak_multiplier.to_f,
+          note:              c.note.to_s,
+          payout_skipped:    c.payout_skipped,
+          completed_at:      c.completed_at.iso8601(3),
+          when_label:        c.completed_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
+        }
+      },
+    }
+  end
+
   def new
     @chore = current_user.chores.new(one_off: ActiveModel::Type::Boolean.new.cast(params[:one_off]))
   end
@@ -387,10 +423,10 @@ class ChoresController < ApplicationController
         base_pebbles: entry.base_pebbles,
         hot_pick: !!entry.metadata["hot_pick"],
         hot_multiplier: entry.hot_multiplier.to_f,
-        total_multiplier: entry.total_multiplier.to_f,
+        streak_multiplier: entry.streak_multiplier.to_f,
         note: entry.note.to_s,
         completed_at: entry.completed_at.iso8601(3),
-        when_label: entry.completed_at.strftime("%b %-d %l:%M%P").squeeze(" "),
+        when_label: entry.completed_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
         payout_skipped: entry.payout_skipped,
         skipped_reason: entry.skipped_reason,
       }
@@ -401,7 +437,7 @@ class ChoresController < ApplicationController
         amount_pebbles: entry.amount_pebbles,
         note: entry.note.to_s,
         created_at: entry.created_at.iso8601(3),
-        when_label: entry.created_at.strftime("%b %-d %l:%M%P").squeeze(" "),
+        when_label: entry.created_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
       }
     when ChoreTransfer
       direction = entry.from_user_id == current_user.id ? :outgoing : :incoming
@@ -414,7 +450,7 @@ class ChoresController < ApplicationController
         counterparty_username: counterparty&.username,
         note: entry.note.to_s,
         created_at: entry.created_at.iso8601(3),
-        when_label: entry.created_at.strftime("%b %-d %l:%M%P").squeeze(" "),
+        when_label: entry.created_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
       }
     end
   end

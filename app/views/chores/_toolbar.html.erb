@@ -1,9 +1,12 @@
-<%# Identical on Today + Grid: edit | search | × | + %>
+<%# Toolbar layout: × | edit | search (with inline clear) | + %>
 <div class="chores-toolbar">
+  <button class="btn ghost icon-only" data-multiplier-toggle title="Multi-mode — next tap asks for count">×N</button>
   <button class="btn ghost icon-only" data-edit-mode-toggle title="Edit mode — tap a chore to edit; drag to reorder">
     <i class="fa fa-pencil" aria-hidden="true"></i>
   </button>
-  <input type="search" placeholder="<%= local_assigns[:search_placeholder] || "Search chores..." %>" data-chores-search autocomplete="off">
-  <button class="btn ghost icon-only" data-multiplier-toggle title="Multi-mode — next tap asks for count">×</button>
+  <div class="search-wrap">
+    <input type="search" placeholder="<%= local_assigns[:search_placeholder] || "Search chores..." %>" data-chores-search autocomplete="off">
+    <button type="button" class="search-clear" data-search-clear aria-label="Clear" hidden>×</button>
+  </div>
   <button class="btn icon-only" data-add-chore title="Add chore">+</button>
 </div>

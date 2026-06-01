@@ -43,14 +43,14 @@ class ChoreCompleter
 
   def build_completion
     ChoreCompletion.new(
-      chore:            chore,
-      user:             user,
-      completed_at:     at,
-      day_key:          day,
-      base_pebbles:     chore.reward_pebbles,
-      hot_multiplier:   1.0,
-      total_multiplier: 1.0,
-      paid_pebbles:     0,
+      chore:             chore,
+      user:              user,
+      completed_at:      at,
+      day_key:           day,
+      base_pebbles:      chore.reward_pebbles,
+      hot_multiplier:    1.0,
+      streak_multiplier: 1.0,
+      paid_pebbles:      0,
     )
   end
 
@@ -96,12 +96,11 @@ class ChoreCompleter
 
     streak_count = current_streak_count + 1 # this completion advances it
     user_multiplier = combined_user_multiplier(streak_count)
-    total = (hot_multiplier * user_multiplier).round(3)
     base = chore.reward_pebbles
-    paid = (base * total).round
+    paid = (base * hot_multiplier * user_multiplier).round
 
     record.hot_multiplier = hot_multiplier
-    record.total_multiplier = total
+    record.streak_multiplier = user_multiplier.round(3)
     record.paid_pebbles = paid
     record.metadata = record.metadata.merge(
       user_multiplier:    user_multiplier,

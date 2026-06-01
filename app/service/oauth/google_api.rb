@@ -141,9 +141,10 @@ class Oauth::GoogleApi < Oauth::Base
     get("users/me/calendarList", { maxResults: 250, showHidden: true })
   end
 
-  # Single-calendar metadata fetch. Used by the sync service to lazily
-  # populate `agendas.timezone` after a connect — without this, all-day
-  # event parsing has no idea what wall-clock zone "May 28" lives in.
+  # Single-calendar metadata fetch. Currently unused on the sync path —
+  # we no longer auto-populate any per-agenda timezone (per-event
+  # `timeZone` + user.timezone are sufficient). Kept here for ad-hoc
+  # introspection / future use.
   def get_calendar(calendar_id)
     get("calendars/#{CGI.escape(calendar_id)}")
   end
