@@ -1,5 +1,6 @@
 class ChoreCompletionsController < ApplicationController
   before_action :authorize_user_or_guest
+  before_action :require_chore_manager!, only: [:update]
 
   def create
     chore = current_user.accessible_chores.find(params[:chore_id])
@@ -23,11 +24,14 @@ class ChoreCompletionsController < ApplicationController
 
   # Two destroy paths share this action: the per-chore undo (last
   # completion today, via /chores/items/:chore_id/completion) and the
-  # history-page row delete (via /chores/completions/:id).
+  # history-page row delete (via /chores/completions/:id). The latter
+  # is manager-only — members can't rewrite history.
   def destroy
     if params[:chore_id]
       destroy_last_today
     else
+      return render(json: { error: "Only household managers can edit history." }, status: :forbidden) unless current_user.can_manage_chores?
+
       destroy_by_id
     end
   end
@@ -63,6 +67,12 @@ class ChoreCompletionsController < ApplicationController
   end
 
   private
+
+  def require_chore_manager!
+    return if current_user.can_manage_chores?
+
+    render json: { error: "Only household managers can edit history." }, status: :forbidden
+  end
 
   def destroy_last_today
     chore = current_user.accessible_chores.unscope(where: :archived_at).find(params[:chore_id])

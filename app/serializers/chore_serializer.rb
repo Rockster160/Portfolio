@@ -81,7 +81,7 @@ class ChoreSerializer
   def household_user_ids
     return @household_user_ids ||= ctx.household_user_ids if ctx
 
-    @household_user_ids ||= Chore.household_user_ids_for(viewer.id)
+    @household_user_ids ||= viewer.chore_household_user_ids
   end
 
   def done_count_today
@@ -159,8 +159,10 @@ class ChoreSerializer
   def streak_multiplier
     return @streak_multiplier if defined?(@streak_multiplier)
 
-    household_ids = ctx&.household_user_ids || Chore.household_user_ids_for(viewer.id)
-    bonuses = ChoreStreakBonus.active.where(user_id: household_ids).applicable_to(chore.id)
+    household_id = viewer.chore_household_id
+    return @streak_multiplier = 1 if household_id.nil?
+
+    bonuses = ChoreStreakBonus.active.where(chore_household_id: household_id).applicable_to(chore.id)
     return @streak_multiplier = 1 if bonuses.empty?
 
     streak = ChoreStreak.find_by(user_id: viewer.id, chore_id: chore.id)

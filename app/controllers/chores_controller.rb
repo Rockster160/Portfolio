@@ -1,6 +1,8 @@
 class ChoresController < ApplicationController
   before_action :authorize_user_or_guest
+  before_action :ensure_chore_household!, only: [:new, :create]
   before_action :set_chore, only: [:show, :edit, :update, :destroy]
+  before_action :require_chore_manager!, only: [:create, :update, :destroy]
   before_action :assignable_users, only: [:index, :today, :balance, :history, :new]
   helper_method :assignable_users
 
@@ -24,19 +26,24 @@ class ChoresController < ApplicationController
   end
 
   # PATCH /chores/order — body { ids: [3, 7, 1, ...] }
-  # Upsert sort_order per (current_user, chore_id) in a single bulk query.
   def reorder
+    return render(json: { error: "forbidden" }, status: :forbidden) unless current_user.can_manage_chores?
+
     ids = Array(params[:ids]).map(&:to_i).reject(&:zero?)
     return render json: { ok: true } if ids.empty?
 
-    accessible_ids = current_user.accessible_chores.where(id: ids).pluck(:id).to_set
-    rows = ids.each_with_index.filter_map { |chore_id, idx|
-      next unless accessible_ids.include?(chore_id)
+    positions = ids.each_with_index.to_h
+    accessible_ids = current_user.accessible_chores.where(id: ids).pluck(:id)
+    return render(json: { ok: true, count: 0 }) if accessible_ids.empty?
 
-      { user_id: current_user.id, chore_id: chore_id, sort_order: idx,
-        created_at: Time.current, updated_at: Time.current }
-    }
-    ChoreUserOrder.upsert_all(rows, unique_by: :index_chore_user_orders_pair) if rows.any?
+    # cid + position pulled from server-trusted sources (DB pluck, array
+    # index) — both Integers, safe to inline. Single bulk UPDATE rather
+    # than N round-trips.
+    case_sql = accessible_ids.map { |cid| "WHEN #{cid.to_i} THEN #{positions[cid].to_i}" }.join(" ")
+    Chore.where(id: accessible_ids).update_all(
+      "sort_order = CASE id #{case_sql} END, updated_at = NOW()",
+    )
+
     MonitorChannel.broadcast_to(current_user, {
       id: :chores,
       channel: :chores,
@@ -49,7 +56,7 @@ class ChoresController < ApplicationController
         server_ts: Time.current.iso8601(3),
       },
     })
-    render json: { ok: true, count: rows.size }
+    render json: { ok: true, count: accessible_ids.size }
   end
 
   # Lightweight: balance + fresh CSRF token so the offline-queue can
@@ -134,14 +141,15 @@ class ChoresController < ApplicationController
   def balance
     @balance = current_user.chore_balance
     @goals = current_user.chore_goals.active.ordered.to_a
-    household_ids = current_user.chore_owner_user_ids
-    @streak_bonuses = ChoreStreakBonus.where(user_id: household_ids).includes(:chore).order(:sort_order, :id)
+    household_id = current_user.chore_household_id
+    @streak_bonuses = household_id ?
+      ChoreStreakBonus.where(chore_household_id: household_id).includes(:chore).order(:sort_order, :id) :
+      ChoreStreakBonus.none
     @household_chores = current_user.accessible_chores.order(:name).to_a
-    # Pebble transfer recipients = chore-household users minus self.
-    # If the user has no household peers, the transfer form renders
-    # an empty-state instead of a select.
-    household_ids = current_user.chore_owner_user_ids - [current_user.id]
-    @transfer_recipients = User.where(id: household_ids).order(:username).to_a
+    @transfer_recipients = household_id ?
+      User.where(chore_household_id: household_id).where.not(id: current_user.id).order(:username).to_a :
+      []
+    @can_manage_chores = current_user.can_manage_chores?
   end
 
   def history
@@ -189,13 +197,13 @@ class ChoresController < ApplicationController
   end
 
   # GET /chores/items/:id/history — chore-specific completion log used
-  # by the edit-mode long-press modal. Household-shared chores include
-  # every household member's completion; personal/assigned chores stay
-  # scoped to the viewer.
+  # by the edit-mode long-press modal. Household-cooldown chores
+  # include every household member's completion; personal-cooldown
+  # chores stay scoped to the viewer.
   def chore_history
     chore = current_user.accessible_chores.unscope(where: :archived_at).find(params[:id])
     scope_user_ids = chore.share_household? ?
-      Chore.household_user_ids_for(current_user.id) :
+      current_user.chore_household_user_ids :
       [current_user.id]
     completions = ChoreCompletion
       .where(chore_id: chore.id, user_id: scope_user_ids)
@@ -223,13 +231,18 @@ class ChoresController < ApplicationController
   end
 
   def new
-    @chore = current_user.chores.new(one_off: ActiveModel::Type::Boolean.new.cast(params[:one_off]))
+    @chore = current_user.chore_household.chores.new(
+      created_by_user: current_user,
+      one_off: ActiveModel::Type::Boolean.new.cast(params[:one_off]),
+    )
   end
 
   def edit; end
 
   def create
-    @chore = current_user.chores.new(chore_params)
+    @chore = current_user.chore_household.chores.new(
+      chore_params.merge(created_by_user: current_user),
+    )
     if @chore.save
       respond_to do |format|
         format.html { redirect_to action: (@chore.one_off ? :today : :index) }
@@ -272,11 +285,14 @@ class ChoresController < ApplicationController
   # round-trip and without server-side card rendering.
   def load_chore_page_data
     @day = ChoreDay.current(current_user)
-    @chores = ordered_for_current_user(current_user.accessible_chores).to_a
+    @chores = current_user.accessible_chores
+      .order(Arel.sql("sort_order ASC NULLS LAST, id ASC"))
+      .to_a
     @ctx = ChoreSerializerContext.for_user(current_user, day: @day)
     @chores_json = @ctx.serialize_all(@chores)
     @lookahead_json = build_lookahead_json
     @cutoff_hour = ChoreDay::CUTOFF_HOURS
+    @can_manage_chores = current_user.can_manage_chores?
 
     breakdown = current_user.chore_balance_breakdown(@day)
     @balance_total = breakdown[:balance]
@@ -337,12 +353,29 @@ class ChoresController < ApplicationController
     nil
   end
 
-  def ordered_for_current_user(scope)
-    join_sql = ActiveRecord::Base.sanitize_sql_array([
-      "LEFT JOIN chore_user_orders ON chore_user_orders.chore_id = chores.id AND chore_user_orders.user_id = ?",
-      current_user.id,
-    ])
-    scope.joins(join_sql).order(Arel.sql("chore_user_orders.sort_order ASC NULLS LAST, chores.id ASC"))
+  # Lazily create a solo household so first-time users land in a valid
+  # state when they hit New Chore. The household's after_create stamps
+  # the owner membership which sync-writes users.chore_household_id.
+  def ensure_chore_household!
+    if ChoreHouseholdMembership.where(user_id: current_user.id).exists?
+      current_user.reload if current_user.chore_household_id.nil?
+      return
+    end
+
+    ChoreHousehold.create!(
+      owner_user: current_user,
+      name: "#{current_user.display_name}'s Household",
+    )
+    current_user.reload
+  end
+
+  def require_chore_manager!
+    return if current_user.can_manage_chores?
+
+    respond_to do |format|
+      format.html { redirect_to chores_path, alert: "Only household managers can do that." }
+      format.json { render json: { error: "Only household managers can do that." }, status: :forbidden }
+    end
   end
 
   # Run the same paginated query the HTML view used to do. Sets
@@ -489,7 +522,9 @@ class ChoresController < ApplicationController
   def assignable_users
     return @assignable_users if defined?(@assignable_users)
 
-    @assignable_users = User.where(id: current_user.chore_owner_user_ids).order(:username).to_a
+    @assignable_users = current_user.chore_household_id ?
+      User.where(chore_household_id: current_user.chore_household_id).order(:username).to_a :
+      [current_user]
   end
 
   def set_chore

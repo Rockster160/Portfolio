@@ -25,21 +25,29 @@ RSpec.describe "Chore models smoke", type: :model do
     expect(user.chore_balance).to eq(10)
   end
 
-  it "ChoreShare prevents self-share + duplicate pairs" do
+  it "Household membership is unique per user" do
+    household_a = create(:chore_household, owner_user: user)
     other = create(:user)
-    create(:chore_share, user: user, shared_with_user: other)
-    dup = ChoreShare.new(user: user, shared_with_user: other)
-    expect(dup).not_to be_valid
+    create(:chore_household_membership, chore_household: household_a, user: other, role: :member)
 
-    self_share = ChoreShare.new(user: user, shared_with_user: user)
-    expect(self_share).not_to be_valid
+    household_b = create(:chore_household, owner_user: create(:user))
+    dup = ChoreHouseholdMembership.new(chore_household: household_b, user: other, role: :member)
+    expect(dup).not_to be_valid
   end
 
-  it "accessible_chores includes own + shared-with-me" do
+  it "Owner gets an implicit manager membership" do
+    household = create(:chore_household, owner_user: user)
+    membership = household.memberships.find_by(user_id: user.id)
+    expect(membership).to be_present
+    expect(membership.role.to_sym).to eq(:manager)
+  end
+
+  it "accessible_chores includes all chores in the household" do
     owner = create(:user)
     member = create(:user)
-    create(:chore_share, user: owner, shared_with_user: member)
-    own = create(:chore, created_by_user: owner)
-    expect(member.accessible_chores).to include(own)
+    household = create(:chore_household, owner_user: owner)
+    create(:chore_household_membership, chore_household: household, user: member, role: :member)
+    chore = create(:chore, created_by_user: owner, chore_household: household)
+    expect(member.reload.accessible_chores).to include(chore)
   end
 end

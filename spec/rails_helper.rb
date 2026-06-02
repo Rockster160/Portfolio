@@ -74,9 +74,11 @@ RSpec.configure do |config|
   # arbitrary gems may also be filtered via:
   # config.filter_gems_from_backtrace("gem name")
   config.before(:suite) do
-    User.find_or_create_by!(username: :rocco, role: :admin) { |u|
+    rocco = User.find_or_create_by!(username: :rocco, role: :admin) { |u|
       u.password = :password
       u.password_confirmation = :password
     }
+    rocco.chore_household ||
+      ChoreHousehold.create!(owner_user: rocco, name: "#{rocco.username}'s Household").tap { rocco.reload }
   end
 end

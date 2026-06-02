@@ -1,9 +1,10 @@
 class ChoreStreakBonusesController < ApplicationController
   before_action :authorize_user_or_guest
+  before_action :require_chore_manager!
   before_action :set_bonus, only: [:update, :destroy]
 
   def create
-    bonus = current_user.chore_streak_bonuses.create!(bonus_params)
+    bonus = current_user.chore_household.chore_streak_bonuses.create!(bonus_params)
     render json: serialize(bonus), status: :created
   end
 
@@ -19,9 +20,14 @@ class ChoreStreakBonusesController < ApplicationController
 
   private
 
+  def require_chore_manager!
+    return if current_user.can_manage_chores?
+
+    render json: { error: "Only household managers can edit streak bonuses." }, status: :forbidden
+  end
+
   def set_bonus
-    household_ids = current_user.chore_owner_user_ids
-    @bonus = ChoreStreakBonus.where(user_id: household_ids).find(params[:id])
+    @bonus = ChoreStreakBonus.where(chore_household_id: current_user.chore_household_id).find(params[:id])
   end
 
   def bonus_params

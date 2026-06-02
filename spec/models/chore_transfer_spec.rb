@@ -3,7 +3,7 @@ require "rails_helper"
 RSpec.describe ChoreTransfer, type: :model do
   let(:sender)    { create(:user) }
   let(:recipient) { create(:user) }
-  let!(:share)    { create(:chore_share, user: sender, shared_with_user: recipient) }
+  let!(:household) { share_chore_household!(sender, recipient) }
 
   def fund!(user, amount)
     chore = create(:chore, created_by_user: user, reward_pebbles: amount)

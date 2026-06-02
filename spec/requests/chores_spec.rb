@@ -490,7 +490,7 @@ RSpec.describe "Chores", type: :request do
   describe "pebble transfers" do
     let(:recipient) { create(:user) }
     before do
-      create(:chore_share, user: user, shared_with_user: recipient)
+      share_chore_household!(user, recipient)
       chore = create(:chore, created_by_user: user, reward_pebbles: 40)
       create(:chore_completion, chore: chore, user: user, paid_pebbles: 40, base_pebbles: 40,
              payout_skipped: false, day_key: ChoreDay.current(user) - 1)

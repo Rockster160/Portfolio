@@ -31,12 +31,14 @@ class ChoreGoalsController < ApplicationController
     permitted = params.require(:chore_goal).permit(
       :name, :description, :image_url, :link_url,
       :kind, :scope_mode, :tracking_mode,
-      :target_value, :awarded_pebbles, :chore_id,
+      :target_value, :awarded_pebbles, :chore_id
     )
     # chore_id only applies to chore-specific kinds — a kind switch in
     # the modal could leave a stale value selected. Strip it before
     # save so the FK reflects the chosen kind.
     permitted[:chore_id] = nil unless ChoreGoal::CHORE_SPECIFIC_KINDS.include?(permitted[:kind].to_s.to_sym)
+    # awarded_pebbles is the household's payout — only managers can set.
+    permitted.delete(:awarded_pebbles) unless current_user.can_manage_chores?
     permitted
   end
 
@@ -54,10 +56,10 @@ class ChoreGoalsController < ApplicationController
       link_url:        goal.link_url,
       chore_id:        goal.chore_id,
       achieved_at:     goal.achieved_at,
-      html: render_to_string(
+      html:            render_to_string(
         partial: "chores/goal_row",
         formats: [:html],
-        locals: { goal: goal },
+        locals:  { goal: goal },
       ),
     }
   end

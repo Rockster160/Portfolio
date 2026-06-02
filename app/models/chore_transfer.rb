@@ -81,9 +81,8 @@ class ChoreTransfer < ApplicationRecord
 
   def recipient_is_in_household
     return if from_user.blank? || to_user.blank?
-
-    household = from_user.chore_owner_user_ids
-    return if household.include?(to_user_id)
+    return if from_user.chore_household_id.present? &&
+              from_user.chore_household_id == to_user.chore_household_id
 
     errors.add(:to_user_id, "must be in your chore household")
   end

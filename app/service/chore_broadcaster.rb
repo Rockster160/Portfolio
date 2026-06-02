@@ -5,23 +5,8 @@ class ChoreBroadcaster
   def self.broadcast_changes!(user, chore=nil, **opts)
     return if user.blank?
 
-    # Default fanout: actor + everyone in their household (symmetric on
-    # ChoreShare, so one row reaches both sides).
-    recipient_ids = Chore.household_user_ids_for(user.id)
-
-    if chore
-      # Personal + assigned: only the assignee + creator can see the chore,
-      # so nobody else needs the signal. Everything else (personal w/o
-      # assignee, household w/ or w/o assignee) is grid-visible to the
-      # full household and gets the broadcast.
-      if chore.respond_to?(:assigned?) && chore.assigned? && chore.share_personal?
-        recipient_ids = [chore.assigned_to_user_id, chore.created_by_user_id].compact.uniq
-      else
-        recipient_ids = Chore.household_user_ids_for(chore.created_by_user_id)
-      end
-    end
-
-    recipients = User.where(id: recipient_ids).to_a
+    recipient_ids = recipients_for(user, chore)
+    return if recipient_ids.empty?
 
     payload = {
       id:        :chores,
@@ -35,8 +20,22 @@ class ChoreBroadcaster
       },
     }
 
-    recipients.each do |r|
+    User.where(id: recipient_ids).find_each do |r|
       MonitorChannel.broadcast_to(r, payload)
     end
+  end
+
+  # Personal-cooldown + assigned narrows visibility to the assignee
+  # alone, so the fan-out skips everyone else. Every other shape stays
+  # grid-visible to the household.
+  def self.recipients_for(user, chore)
+    if chore && chore.assigned? && chore.share_personal?
+      return [chore.assigned_to_user_id].compact
+    end
+
+    household_id = chore&.chore_household_id || user.chore_household_id
+    return [user.id] if household_id.nil?
+
+    User.where(chore_household_id: household_id).pluck(:id)
   end
 end

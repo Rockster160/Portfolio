@@ -19,7 +19,7 @@ class ChoreSerializerContext
   def initialize(viewer:, day:)
     @viewer = viewer
     @day = day
-    @household_user_ids = Chore.household_user_ids_for(viewer.id)
+    @household_user_ids = viewer.chore_household_user_ids
     chores = viewer.accessible_chores.to_a
     @chore_ids = chores.map(&:id)
     @household_chore_ids = chores.select(&:share_household?).map(&:id)

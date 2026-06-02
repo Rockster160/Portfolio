@@ -59,7 +59,7 @@ RSpec.describe Jil::Methods::Chore, type: :service do
   describe "#transfer" do
     let(:recipient) { create(:user) }
     before do
-      create(:chore_share, user: user, shared_with_user: recipient)
+      share_chore_household!(user, recipient)
       20.times { ChoreCompleter.new(vitamins, user).call }
     end
 
@@ -89,7 +89,7 @@ RSpec.describe Jil::Methods::Chore, type: :service do
 
   describe "#history" do
     let(:recipient) { create(:user) }
-    before { create(:chore_share, user: user, shared_with_user: recipient) }
+    before { share_chore_household!(user, recipient) }
 
     it "returns the user's completions + withdrawals + transfers, newest first" do
       # Earn enough for both the withdrawal and the transfer.
@@ -134,7 +134,7 @@ RSpec.describe Jil::Methods::Chore, type: :service do
 
   describe "#complete_for" do
     let(:other) { create(:user, username: "Alchemibluum") }
-    before { create(:chore_share, user: user, shared_with_user: other) }
+    before { share_chore_household!(user, other) }
 
     it "credits the chosen user with the completion" do
       expect { methods.complete_for(vitamins, other.username) }.to change { other.chore_completions.count }.by(1)

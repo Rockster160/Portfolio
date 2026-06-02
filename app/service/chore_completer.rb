@@ -118,9 +118,9 @@ class ChoreCompleter
   # multiplicative integers (capped at 5x); bonuses are additive (uncapped).
   # Pebble-threshold kinds use chore_id IS NULL — they apply to any chore.
   def combined_streak_payout(streak_count)
-    household_ids = Chore.household_user_ids_for(user.id)
+    household_id = user.chore_household_id || chore.chore_household_id
     bonuses = ChoreStreakBonus.active
-      .where(user_id: household_ids)
+      .where(chore_household_id: household_id)
       .applicable_to(chore.id)
     return [1, 0, []] if bonuses.empty?
 

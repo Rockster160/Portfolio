@@ -181,15 +181,15 @@ RSpec.describe ChoreCompleter do
 
   describe "household-scoped streak bonuses + goal achievement" do
     let(:partner) { create(:user) }
-    before { create(:chore_share, user: user, shared_with_user: partner) }
+    let!(:household) { share_chore_household!(user, partner) }
 
-    it "applies a streak bonus created by a household partner" do
-      shared_chore = create(:chore, created_by_user: user, reward_pebbles: 10)
+    it "applies a streak bonus configured at the household level" do
+      shared_chore = create(:chore, created_by_user: user, chore_household: household, reward_pebbles: 10)
       create(:chore_streak_bonus,
-        user:   partner,
-        chore:  nil,
-        kind:   :daily_pebbles,
-        config: { "levels" => [{ "threshold" => 0, "multiplier" => 2 }] })
+        chore_household: household,
+        chore:           nil,
+        kind:            :daily_pebbles,
+        config:          { "levels" => [{ "threshold" => 0, "multiplier" => 2 }] })
 
       result = described_class.new(shared_chore, user).call
       expect(result.completion.paid_pebbles).to eq(20)

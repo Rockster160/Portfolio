@@ -1,4 +1,15 @@
 FactoryBot.define do
+  factory :chore_household do
+    name { "Household" }
+    association :owner_user, factory: :user
+  end
+
+  factory :chore_household_membership do
+    chore_household
+    user
+    role { :manager }
+  end
+
   factory :chore do
     sequence(:name) { |n| "Chore #{n}" }
     short_name { name }
@@ -6,6 +17,14 @@ FactoryBot.define do
     aliases { [] }
     reward_pebbles { 5 }
     association :created_by_user, factory: :user
+    chore_household {
+      ChoreHouseholdMembership.where(user_id: created_by_user.id).first&.chore_household ||
+        association(:chore_household, owner_user: created_by_user)
+    }
+
+    after(:create) do |chore, _|
+      chore.created_by_user.reload if chore.created_by_user.chore_household_id.nil?
+    end
   end
 
   factory :chore_completion do
@@ -25,10 +44,20 @@ FactoryBot.define do
   end
 
   factory :chore_streak_bonus do
+    transient do
+      user { nil }
+    end
     sequence(:name) { |n| "Bonus #{n}" }
     kind { :daily_pebbles }
     config { { "levels" => [{ "threshold" => 20, "multiplier" => 2, "bonus_pebbles" => 0 }] } }
-    user
+    chore_household {
+      if user
+        ChoreHouseholdMembership.where(user_id: user.id).first&.chore_household ||
+          association(:chore_household, owner_user: user)
+      else
+        association(:chore_household)
+      end
+    }
   end
 
   factory :chore_withdrawal do
@@ -40,11 +69,6 @@ FactoryBot.define do
     amount_pebbles { 5 }
     association :from_user, factory: :user
     association :to_user,   factory: :user
-  end
-
-  factory :chore_share do
-    user
-    association :shared_with_user, factory: :user
   end
 
   factory :chore_hot_pick do

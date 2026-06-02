@@ -54,6 +54,9 @@ class Jil::Methods::Chore < Jil::Methods::Base
     attrs = @jil.cast(details, :Hash).slice(*PERMIT_ADD_ATTRS)
     return nil if attrs[:name].to_s.strip.empty?
 
+    household = ensure_household
+    return nil if household.nil?
+
     assigned = load_user(attrs.delete(:assigned_to))
     sharing_key = attrs.delete(:sharing_mode).to_s.downcase.presence
     sharing = ::Chore.sharing_modes.key?(sharing_key) ? sharing_key.to_sym : :personal
@@ -61,8 +64,9 @@ class Jil::Methods::Chore < Jil::Methods::Base
     daily = ::Chore.show_on_daily_views.key?(daily_key) ? daily_key.to_sym : nil
     starts_on = parse_date(attrs.delete(:starts_on))
 
-    chore = @jil.user.chores.create(
+    chore = household.chores.create(
       attrs.merge(
+        created_by_user_id:  @jil.user.id,
         sharing_mode:        sharing,
         assigned_to_user_id: assigned&.id,
         starts_on:           starts_on,
@@ -70,6 +74,21 @@ class Jil::Methods::Chore < Jil::Methods::Base
       ).compact,
     )
     chore.persisted? ? chore : nil
+  end
+
+  def ensure_household
+    existing = ::ChoreHouseholdMembership.where(user_id: @jil.user.id).first
+    if existing
+      @jil.user.reload if @jil.user.chore_household_id.nil?
+      return existing.chore_household
+    end
+
+    household = ::ChoreHousehold.create!(
+      owner_user: @jil.user,
+      name: "#{@jil.user.display_name}'s Household",
+    )
+    @jil.user.reload
+    household
   end
 
   # ---- [ChoreData] hash builders (used inside content(ChoreData) blocks) ----

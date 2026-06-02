@@ -68,8 +68,8 @@ RSpec.describe Chore, "visibility + relative scheduling" do
 
     it "is per-user — sharer's completion doesn't shift my schedule" do
       other = create(:user)
-      create(:chore_share, user: other, shared_with_user: user)
-      shared = create(:chore, created_by_user: other,
+      household = share_chore_household!(other, user)
+      shared = create(:chore, created_by_user: other, chore_household: household,
         starts_on: today,
         recurrence: { freq: :relative, interval: 5, unit: :day })
       create(:chore_completion, chore: shared, user: other, completed_at: today.to_time, day_key: today)

@@ -2,16 +2,17 @@
 #
 # Table name: users
 #
-#  id               :integer          not null, primary key
-#  dark_mode        :boolean
-#  email            :string
-#  invitation_token :string
-#  password_digest  :string
-#  phone            :string
-#  role             :integer          default("standard")
-#  username         :string
-#  created_at       :datetime         not null
-#  updated_at       :datetime         not null
+#  id                 :integer          not null, primary key
+#  dark_mode          :boolean
+#  email              :string
+#  invitation_token   :string
+#  password_digest    :string
+#  phone              :string
+#  role               :integer          default("standard")
+#  username           :string
+#  created_at         :datetime         not null
+#  updated_at         :datetime         not null
+#  chore_household_id :bigint
 #
 
 # Should have `invited_at` and `invited_by`
@@ -66,21 +67,16 @@ class User < ApplicationRecord
 
   has_many :chores, foreign_key: :created_by_user_id, dependent: :destroy
   has_many :chore_completions, dependent: :destroy
-  has_many :chore_shares_as_owner, class_name: "ChoreShare", foreign_key: :user_id, dependent: :destroy
-  has_many :chore_shares_as_member,
-    class_name: "ChoreShare",
-    foreign_key: :shared_with_user_id,
-    dependent: :destroy
   has_many :chore_goals, dependent: :destroy
   has_many :chore_withdrawals, dependent: :destroy
   has_many :chore_transfers_sent,     class_name: "ChoreTransfer", foreign_key: :from_user_id, dependent: :destroy
   has_many :chore_transfers_received, class_name: "ChoreTransfer", foreign_key: :to_user_id,   dependent: :destroy
-  # Singular of "bonuses" inflects to "bonuse" by default, which would
-  # then send Rails looking for a `ChoreStreakBonuse` class — pin both
-  # ends of the association explicitly.
-  has_many :chore_streak_bonuses, class_name: "ChoreStreakBonus", dependent: :destroy
   has_many :chore_streaks, dependent: :destroy
-  has_many :chore_user_orders, dependent: :delete_all
+  has_one :chore_household_membership, dependent: :destroy
+  # chore_household_id is a denormalized cache of the membership FK so
+  # chore endpoints can read the household without a join. Kept in
+  # sync by ChoreHouseholdMembership commit callbacks.
+  belongs_to :chore_household, optional: true
 
   has_many :access_grants, class_name: "Doorkeeper::AccessGrant", foreign_key: :resource_owner_id, dependent: :delete_all
   has_many :access_tokens, class_name: "Doorkeeper::AccessToken", foreign_key: :resource_owner_id, dependent: :delete_all
@@ -120,14 +116,22 @@ class User < ApplicationRecord
     date
   end
 
-  # Every user in this user's chore household (transitive closure of
-  # the ChoreShare graph in either direction). One household per user.
-  def chore_owner_user_ids
-    Chore.household_user_ids_for(id)
+  # Returns `[id]` (self only) when the user has no household so callers
+  # don't have to branch on it.
+  def chore_household_user_ids
+    return [id] if chore_household_id.nil?
+
+    User.where(chore_household_id: chore_household_id).pluck(:id)
   end
 
   def accessible_chores
-    Chore.where(created_by_user_id: chore_owner_user_ids).active.visible_to_user(id)
+    return Chore.none if chore_household_id.nil?
+
+    Chore.where(chore_household_id: chore_household_id).active.visible_to_user(id)
+  end
+
+  def can_manage_chores?
+    chore_household&.manager?(self) || false
   end
 
   # Current balance — paid pebbles + achieved-goal bonuses, less all

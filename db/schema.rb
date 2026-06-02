@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_02_100000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_03_100002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -414,18 +414,27 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_02_100000) do
     t.index ["day_key", "chore_id"], name: "index_chore_hot_picks_on_day_key_and_chore_id", unique: true
   end
 
-  create_table "chore_shares", force: :cascade do |t|
+  create_table "chore_household_memberships", force: :cascade do |t|
+    t.bigint "chore_household_id", null: false
     t.bigint "user_id", null: false
-    t.bigint "shared_with_user_id", null: false
+    t.integer "role", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["shared_with_user_id"], name: "index_chore_shares_on_shared_with_user_id"
-    t.index ["user_id", "shared_with_user_id"], name: "index_chore_shares_pair", unique: true
-    t.index ["user_id"], name: "index_chore_shares_on_user_id"
+    t.index ["chore_household_id", "user_id"], name: "index_chore_household_memberships_pair", unique: true
+    t.index ["chore_household_id"], name: "index_chore_household_memberships_on_chore_household_id"
+    t.index ["user_id"], name: "index_chore_household_memberships_on_user_id"
+    t.index ["user_id"], name: "index_chore_household_memberships_unique_user", unique: true
+  end
+
+  create_table "chore_households", force: :cascade do |t|
+    t.bigint "owner_user_id", null: false
+    t.text "name", default: "", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["owner_user_id"], name: "index_chore_households_on_owner_user_id"
   end
 
   create_table "chore_streak_bonuses", force: :cascade do |t|
-    t.bigint "user_id", null: false
     t.string "name", null: false
     t.integer "kind", default: 0, null: false
     t.jsonb "config", default: {}, null: false
@@ -434,8 +443,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_02_100000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "chore_id"
+    t.bigint "chore_household_id", null: false
+    t.index ["chore_household_id", "active"], name: "index_chore_streak_bonuses_on_chore_household_id_and_active"
     t.index ["chore_id"], name: "index_chore_streak_bonuses_on_chore_id"
-    t.index ["user_id"], name: "index_chore_streak_bonuses_on_user_id"
   end
 
   create_table "chore_streaks", force: :cascade do |t|
@@ -462,18 +472,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_02_100000) do
     t.index ["to_user_id"], name: "index_chore_transfers_on_to_user_id"
     t.check_constraint "amount_pebbles > 0", name: "chore_transfers_positive_amount"
     t.check_constraint "from_user_id <> to_user_id", name: "chore_transfers_distinct_endpoints"
-  end
-
-  create_table "chore_user_orders", force: :cascade do |t|
-    t.bigint "user_id", null: false
-    t.bigint "chore_id", null: false
-    t.integer "sort_order", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["chore_id"], name: "index_chore_user_orders_on_chore_id"
-    t.index ["user_id", "chore_id"], name: "index_chore_user_orders_pair", unique: true
-    t.index ["user_id", "sort_order"], name: "index_chore_user_orders_on_user_id_and_sort_order"
-    t.index ["user_id"], name: "index_chore_user_orders_on_user_id"
   end
 
   create_table "chore_withdrawals", force: :cascade do |t|
@@ -505,12 +503,13 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_02_100000) do
     t.integer "sharing_mode", default: 0, null: false
     t.bigint "assigned_to_user_id"
     t.text "notes_template"
+    t.bigint "chore_household_id", null: false
     t.index ["archived_at"], name: "index_chores_on_archived_at"
     t.index ["assigned_to_user_id"], name: "index_chores_on_assigned_to_user_id"
-    t.index ["created_by_user_id"], name: "index_chores_on_created_by_user_id"
+    t.index ["chore_household_id", "archived_at"], name: "index_chores_on_chore_household_id_and_archived_at"
+    t.index ["chore_household_id", "sort_order"], name: "index_chores_on_chore_household_id_and_sort_order"
     t.index ["one_off"], name: "index_chores_on_one_off"
     t.index ["reward_pebbles"], name: "index_chores_on_reward_pebbles"
-    t.index ["sharing_mode"], name: "index_chores_on_sharing_mode"
     t.index ["show_on_daily_view"], name: "index_chores_on_show_on_daily_view"
   end
 
@@ -1163,6 +1162,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_02_100000) do
     t.integer "role", default: 0
     t.boolean "dark_mode"
     t.string "email"
+    t.bigint "chore_household_id"
+    t.index ["chore_household_id"], name: "index_users_on_chore_household_id"
   end
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
@@ -1183,17 +1184,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_02_100000) do
   add_foreign_key "chore_goals", "chores"
   add_foreign_key "chore_goals", "users"
   add_foreign_key "chore_hot_picks", "chores"
-  add_foreign_key "chore_shares", "users"
-  add_foreign_key "chore_shares", "users", column: "shared_with_user_id"
+  add_foreign_key "chore_household_memberships", "chore_households", on_delete: :cascade
+  add_foreign_key "chore_household_memberships", "users"
+  add_foreign_key "chore_households", "users", column: "owner_user_id"
+  add_foreign_key "chore_streak_bonuses", "chore_households"
   add_foreign_key "chore_streak_bonuses", "chores"
-  add_foreign_key "chore_streak_bonuses", "users"
   add_foreign_key "chore_streaks", "chores"
   add_foreign_key "chore_streaks", "users"
   add_foreign_key "chore_transfers", "users", column: "from_user_id"
   add_foreign_key "chore_transfers", "users", column: "to_user_id"
-  add_foreign_key "chore_user_orders", "chores"
-  add_foreign_key "chore_user_orders", "users"
   add_foreign_key "chore_withdrawals", "users"
+  add_foreign_key "chores", "chore_households"
   add_foreign_key "chores", "users", column: "assigned_to_user_id"
   add_foreign_key "chores", "users", column: "created_by_user_id"
   add_foreign_key "emails", "users"
@@ -1217,4 +1218,5 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_02_100000) do
   add_foreign_key "task_folders", "task_folders", column: "parent_id"
   add_foreign_key "task_folders", "users"
   add_foreign_key "tasks", "task_folders"
+  add_foreign_key "users", "chore_households"
 end

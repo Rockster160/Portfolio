@@ -2,16 +2,16 @@
 #
 # Table name: chore_streak_bonuses
 #
-#  id         :bigint           not null, primary key
-#  active     :boolean          default(TRUE), not null
-#  config     :jsonb            not null
-#  kind       :integer          default("chore_streak"), not null
-#  name       :string           not null
-#  sort_order :integer
-#  created_at :datetime         not null
-#  updated_at :datetime         not null
-#  chore_id   :bigint
-#  user_id    :bigint           not null
+#  id                 :bigint           not null, primary key
+#  active             :boolean          default(TRUE), not null
+#  config             :jsonb            not null
+#  kind               :integer          default("chore_streak"), not null
+#  name               :string           not null
+#  sort_order         :integer
+#  created_at         :datetime         not null
+#  updated_at         :datetime         not null
+#  chore_household_id :bigint           not null
+#  chore_id           :bigint
 #
 class ChoreStreakBonus < ApplicationRecord
   # Rails' default inflector pluralizes "bonus" → "bonus" (treats it as
@@ -40,7 +40,7 @@ class ChoreStreakBonus < ApplicationRecord
     KIND_LABELS[kind.to_sym] || kind.to_s.humanize
   end
 
-  belongs_to :user
+  belongs_to :chore_household
   belongs_to :chore, optional: true
 
   validates :name, presence: true

@@ -1,20 +1,24 @@
 require "rails_helper"
 
-RSpec.describe "Chore sharing modes" do
+RSpec.describe "Chore household visibility + cooldown" do
   let(:alice) { create(:user) }
   let(:bob)   { create(:user) }
   let(:carl)  { create(:user) }
+  let!(:household) { create(:chore_household, owner_user: alice) }
 
-  before { create(:chore_share, user: alice, shared_with_user: bob) }
+  before do
+    create(:chore_household_membership, chore_household: household, user: bob, role: :manager)
+    [alice, bob].each(&:reload)
+  end
 
   describe "broadcasts on persistence" do
     it "fans out a ChoreBroadcaster call when a chore is created via the model" do
       expect(ChoreBroadcaster).to receive(:broadcast_changes!).with(alice, kind_of(Chore))
-      Chore.create!(name: "Surprise", created_by_user: alice, reward_pebbles: 1)
+      Chore.create!(name: "Surprise", created_by_user: alice, chore_household: household, reward_pebbles: 1)
     end
 
     it "fires the same broadcast on archival / destroy" do
-      chore = create(:chore, created_by_user: alice, name: "X", reward_pebbles: 1)
+      chore = create(:chore, created_by_user: alice, chore_household: household, name: "X", reward_pebbles: 1)
       expect(ChoreBroadcaster).to receive(:broadcast_changes!).with(alice, chore).twice
       chore.update!(archived_at: Time.current)
       chore.destroy!
@@ -23,17 +27,17 @@ RSpec.describe "Chore sharing modes" do
 
   describe "accessible_chores filtering" do
     it "personal + household with no assignee are visible to everyone in the household" do
-      personal  = create(:chore, created_by_user: alice, sharing_mode: :personal)
-      household = create(:chore, created_by_user: alice, sharing_mode: :household)
+      personal  = create(:chore, created_by_user: alice, chore_household: household, sharing_mode: :personal)
+      household_chore = create(:chore, created_by_user: alice, chore_household: household, sharing_mode: :household)
 
-      expect(alice.accessible_chores).to include(personal, household)
-      expect(bob.accessible_chores).to include(personal, household)
+      expect(alice.accessible_chores).to include(personal, household_chore)
+      expect(bob.accessible_chores).to include(personal, household_chore)
       expect(carl.accessible_chores).to be_empty
     end
 
     it "personal + assigned hides the chore from non-assignees entirely" do
-      to_alice = create(:chore, created_by_user: alice, sharing_mode: :personal, assigned_to_user: alice)
-      to_bob   = create(:chore, created_by_user: alice, sharing_mode: :personal, assigned_to_user: bob)
+      to_alice = create(:chore, created_by_user: alice, chore_household: household, sharing_mode: :personal, assigned_to_user: alice)
+      to_bob   = create(:chore, created_by_user: alice, chore_household: household, sharing_mode: :personal, assigned_to_user: bob)
 
       expect(alice.accessible_chores).to include(to_alice)
       expect(alice.accessible_chores).not_to include(to_bob)
@@ -43,25 +47,25 @@ RSpec.describe "Chore sharing modes" do
 
     it "household + assigned stays grid-visible to everyone in the household" do
       house_assigned = create(:chore,
-        created_by_user: alice, sharing_mode: :household, assigned_to_user: bob)
+        created_by_user: alice, chore_household: household,
+        sharing_mode: :household, assigned_to_user: bob)
 
       expect(alice.accessible_chores).to include(house_assigned)
       expect(bob.accessible_chores).to include(house_assigned)
     end
 
-    it "assigned_to_user_id can be set on either sharing mode without a callback wiping it" do
-      personal_assigned  = create(:chore, created_by_user: alice, sharing_mode: :personal,  assigned_to_user: alice)
-      household_assigned = create(:chore, created_by_user: alice, sharing_mode: :household, assigned_to_user: bob)
-
-      expect(personal_assigned.reload.assigned_to_user_id).to eq(alice.id)
-      expect(household_assigned.reload.assigned_to_user_id).to eq(bob.id)
+    it "users without a household see nothing" do
+      create(:chore, created_by_user: alice, chore_household: household)
+      expect(carl.accessible_chores).to be_empty
+      expect(carl.chore_household_user_ids).to eq([carl.id])
     end
   end
 
   describe "Today visibility (household + assigned)" do
     it "today_visible? is true only for the assignee" do
       chore = create(:chore,
-        created_by_user: alice, sharing_mode: :household,
+        created_by_user: alice, chore_household: household,
+        sharing_mode: :household,
         assigned_to_user: bob, show_on_daily_view: :always)
       alice_view = ChoreSerializer.new(chore, viewer: alice).as_json
       bob_view   = ChoreSerializer.new(chore, viewer: bob).as_json
@@ -71,7 +75,8 @@ RSpec.describe "Chore sharing modes" do
 
     it "with no assignee, Today follows normal show_on_daily_view rules for everyone" do
       chore = create(:chore,
-        created_by_user: alice, sharing_mode: :household, show_on_daily_view: :always)
+        created_by_user: alice, chore_household: household,
+        sharing_mode: :household, show_on_daily_view: :always)
       expect(ChoreSerializer.new(chore, viewer: alice).as_json[:today_visible]).to be(true)
       expect(ChoreSerializer.new(chore, viewer: bob).as_json[:today_visible]).to be(true)
     end
@@ -79,7 +84,7 @@ RSpec.describe "Chore sharing modes" do
 
   describe "cooldown — household shares the timer across the group" do
     let(:chore) {
-      create(:chore, created_by_user: alice,
+      create(:chore, created_by_user: alice, chore_household: household,
         sharing_mode: :household, reward_pebbles: 5, threshold_seconds: 6 * 3600)
     }
 
@@ -108,7 +113,7 @@ RSpec.describe "Chore sharing modes" do
 
   describe "cooldown — personal is independent per user" do
     let(:chore) {
-      create(:chore, created_by_user: alice,
+      create(:chore, created_by_user: alice, chore_household: household,
         sharing_mode: :personal, reward_pebbles: 5, threshold_seconds: 6 * 3600)
     }
 
@@ -121,38 +126,27 @@ RSpec.describe "Chore sharing modes" do
     end
   end
 
-  describe "symmetric household — one ChoreShare row covers both directions" do
-    it "chores bob creates are visible to alice via the same single share row" do
-      bob_chore = create(:chore, created_by_user: bob, sharing_mode: :personal)
-      expect(alice.accessible_chores).to include(bob_chore)
-      expect(bob.accessible_chores).to include(bob_chore)
-      expect(carl.accessible_chores).not_to include(bob_chore)
+  describe "ChoreHousehold roles" do
+    let(:member) { create(:user) }
+    before { create(:chore_household_membership, chore_household: household, user: member, role: :member) }
+
+    it "owner is implicitly a manager" do
+      expect(household.manager?(alice)).to be(true)
     end
 
-    it "household cooldown applies regardless of which side created the chore" do
-      bob_chore = create(:chore, created_by_user: bob,
-        sharing_mode: :household, reward_pebbles: 5, threshold_seconds: 6 * 3600)
-      base = Time.current
-      travel_to(base) { ChoreCompleter.new(bob_chore, alice).call }
-      travel_to(base + 1.hour) {
-        result = ChoreCompleter.new(bob_chore, bob).call
-        expect(result).to be_skipped
-      }
+    it "managers can manage chores; members cannot" do
+      expect(bob.reload.can_manage_chores?).to be(true)
+      expect(member.reload.can_manage_chores?).to be(false)
     end
 
-    it "Chore.household_user_ids_for is symmetric" do
-      expect(Chore.household_user_ids_for(alice.id)).to contain_exactly(alice.id, bob.id)
-      expect(Chore.household_user_ids_for(bob.id)).to contain_exactly(alice.id, bob.id)
-      expect(Chore.household_user_ids_for(carl.id)).to contain_exactly(carl.id)
-    end
-
-    it "is transitive — adding carl via bob folds carl into the household" do
-      create(:chore_share, user: bob, shared_with_user: carl)
-      [alice, bob, carl].each do |u|
-        expect(Chore.household_user_ids_for(u.id)).to contain_exactly(alice.id, bob.id, carl.id)
-      end
-      carl_chore = create(:chore, created_by_user: carl, sharing_mode: :personal)
-      expect(alice.accessible_chores).to include(carl_chore)
+    it "transfers are restricted to household peers" do
+      outsider = create(:user)
+      create(:chore_completion, user: bob, paid_pebbles: 10, base_pebbles: 10, payout_skipped: false)
+      ok = ChoreTransfer.new(from_user: bob, to_user: alice, amount_pebbles: 1)
+      bad = ChoreTransfer.new(from_user: bob, to_user: outsider, amount_pebbles: 1)
+      expect(ok).to be_valid
+      expect(bad).not_to be_valid
+      expect(bad.errors[:to_user_id]).to include("must be in your chore household")
     end
   end
 end

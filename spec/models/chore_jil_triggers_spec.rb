@@ -76,7 +76,7 @@ RSpec.describe "Chore + ChoreCompletion Jil triggers", type: :model do
   it "creating a transfer fires `chore_transfer` for BOTH endpoints with direction set" do
     sender = create(:user)
     recipient = create(:user)
-    create(:chore_share, user: sender, shared_with_user: recipient)
+    share_chore_household!(sender, recipient)
     chore = create(:chore, created_by_user: sender, reward_pebbles: 50)
     create(:chore_completion, chore: chore, user: sender, paid_pebbles: 50, base_pebbles: 50,
            payout_skipped: false, day_key: ChoreDay.current(sender) - 1)

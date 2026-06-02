@@ -20,13 +20,14 @@
 #  created_at          :datetime         not null
 #  updated_at          :datetime         not null
 #  assigned_to_user_id :bigint
+#  chore_household_id  :bigint           not null
 #  created_by_user_id  :bigint           not null
 #
 class Chore < ApplicationRecord
   include Jilable, Orderable
 
   orderable_by(sort_order: :asc)
-  orderable_scope ->(chore) { Chore.where(created_by_user_id: chore.created_by_user_id) }
+  orderable_scope ->(chore) { Chore.where(chore_household_id: chore.chore_household_id) }
 
   # Lifecycle triggers — fan out to Jil so user-written tasks can react
   # to chore creation, edits, and archival. Listeners use the standard
@@ -72,19 +73,22 @@ class Chore < ApplicationRecord
     never:                        4,
   }, default: :when_scheduled, prefix: :daily
 
-  # Sharing mode — see migration comment for full semantics.
-  #   :personal   — every user is independent (default; current behavior)
-  #   :household  — one completion satisfies everybody; only the doer is paid
+  # Cooldown scope:
+  #   :personal   — every user's cooldown is their own
+  #   :household  — one paid tap puts the whole household on cooldown
   enum :sharing_mode, {
     personal:  0,
     household: 1,
   }, default: :personal, prefix: :share
 
+  belongs_to :chore_household
   belongs_to :created_by_user, class_name: "User"
   belongs_to :assigned_to_user, class_name: "User", optional: true
   has_many :chore_completions, dependent: :destroy
   has_many :chore_hot_picks, dependent: :destroy
   has_many :chore_streaks, dependent: :destroy
+
+  before_validation :default_chore_household_from_creator, on: :create
 
   validates :name, presence: true
   validates :reward_pebbles, numericality: { greater_than_or_equal_to: 0 }
@@ -106,42 +110,22 @@ class Chore < ApplicationRecord
     assigned_to_user_id == user.id
   end
 
-  # For shared chores (household/personal/assigned), the "effective"
-  # user the cooldown + last-completion checks should look at.
-  #   :household — every user in the creator's household closure (both
-  #                directions of ChoreShare) so a single bulk query
-  #                covers everyone who can see this chore
+  # Whose cooldown timer fires for this chore:
+  #   :household — every user in the chore's household
   #   :personal/:assigned — just the viewing user
   def cooldown_scope_user_ids(viewer)
     return [viewer.id] unless share_household?
 
-    self.class.household_user_ids_for(created_by_user_id)
-  end
-
-  # Transitive household closure: every user reachable from `user_id`
-  # by walking ChoreShare rows in either direction. A↔B + B↔C means A,
-  # B, C are all one household — a user only ever belongs to one. BFS
-  # by frontier so we issue one query per hop (typically 1-2 total).
-  def self.household_user_ids_for(user_id)
-    visited = Set.new
-    frontier = Set[user_id]
-    until frontier.empty?
-      visited.merge(frontier)
-      pairs = ChoreShare
-        .where("user_id IN (:f) OR shared_with_user_id IN (:f)", f: frontier.to_a)
-        .pluck(:user_id, :shared_with_user_id)
-      frontier = Set.new(pairs.flatten) - visited
-    end
-    visited.to_a
+    User.where(chore_household_id: chore_household_id).pluck(:id)
   end
 
   scope :active, -> { where(archived_at: nil) }
   scope :recurring, -> { where("recurrence IS NOT NULL AND recurrence != '{}'::jsonb") }
   scope :one_offs, -> { where(one_off: true) }
   scope :persistent, -> { where(one_off: false) }
-  # Grid visibility scope. Assignment narrows visibility only when the
-  # chore is personal — household-assigned chores still appear on the
-  # Grid for every share-group member (Today filtering happens elsewhere).
+  # Assignment narrows visibility only when the chore's cooldown is
+  # personal. household-cooldown chores stay grid-visible to every
+  # household member; the Today gate runs in the serializer.
   scope :visible_to_user, ->(user_id) {
     where(
       "assigned_to_user_id IS NULL OR sharing_mode = ? OR assigned_to_user_id = ?",
@@ -270,6 +254,17 @@ class Chore < ApplicationRecord
   end
 
   private
+
+  def default_chore_household_from_creator
+    return if chore_household_id.present?
+    return if created_by_user.nil?
+
+    # Fall back to a direct membership lookup when the cached
+    # users.chore_household_id is stale (e.g. mid-test after a
+    # membership row was created on this same user object).
+    self.chore_household_id = created_by_user.chore_household_id ||
+      ChoreHouseholdMembership.where(user_id: created_by_user_id).pick(:chore_household_id)
+  end
 
   def fire_jil_create_trigger
     ::Jil.trigger(created_by_user, :chore, with_jil_attrs(jil_attrs(action: :created)))
