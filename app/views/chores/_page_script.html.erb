@@ -3004,6 +3004,8 @@
   // means the running JS is now behind what's cached.
   const wasControlledAtLoad = !!navigator.serviceWorker?.controller;
   let reloadPending = false;
+  let verificationInFlight = false;
+  let verificationRetryArmed = false;
   let reloadIdleTimer = null;
   const RELOAD_IDLE_MS = 30000;
   function performReload() {
@@ -3014,6 +3016,39 @@
     if (!reloadPending) return;
     if (reloadIdleTimer) clearTimeout(reloadIdleTimer);
     reloadIdleTimer = setTimeout(performReload, RELOAD_IDLE_MS);
+  }
+  function requestReloadVerification() {
+    if (reloadPending || verificationInFlight) return;
+    const ctrl = navigator.serviceWorker?.controller;
+    if (!ctrl) { armVerificationRetry(); return; }
+    verificationInFlight = true;
+    const channel = new MessageChannel();
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      verificationInFlight = false;
+      try { channel.port1.close(); } catch (e) {}
+      if (ok) showReloadPending();
+      else armVerificationRetry();
+    };
+    channel.port1.onmessage = (evt) => finish(!!evt.data?.ok);
+    // Belt-and-suspenders: if the SW never responds (uncaught throw,
+    // gone), don't deadlock the verification flag — retry on next focus.
+    setTimeout(() => finish(false), 10000);
+    try { ctrl.postMessage({ action: "verify_ready" }, [channel.port2]); }
+    catch (e) { finish(false); }
+  }
+  function armVerificationRetry() {
+    if (verificationRetryArmed || reloadPending) return;
+    verificationRetryArmed = true;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      document.removeEventListener("visibilitychange", onVisible);
+      verificationRetryArmed = false;
+      requestReloadVerification();
+    };
+    document.addEventListener("visibilitychange", onVisible);
   }
   function showReloadPending() {
     if (reloadPending) return;
@@ -3042,12 +3077,15 @@
       .catch(e => console.warn("Chores SW register failed:", e));
     // A new SW claiming control mid-session means a deploy shipped:
     // the cached shell + assets are now ahead of what this tab is
-    // running. Surface a "tap to reload" indicator and pause all
-    // outbound syncs; auto-reload after 30s of idle if the user
-    // doesn't tap. First-time install (was uncontrolled → controlled)
-    // is excluded — nothing is stale yet.
+    // running. Don't show the indicator yet — ask the new SW to
+    // verify EVERY shell + EVERY referenced asset is present in the
+    // cache first. Only on a clean verification do we expose the
+    // reload button. This guarantees the user can never tap reload
+    // and land on a half-cached deploy (missing CSS/JS → black
+    // screen). First-time install (uncontrolled → controlled) is
+    // excluded — nothing is stale yet.
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (wasControlledAtLoad) showReloadPending();
+      if (wasControlledAtLoad) requestReloadVerification();
     });
     navigator.serviceWorker.addEventListener("message", evt => {
       if (evt.data?.kind === "shell_synced") setSyncBadge(false);

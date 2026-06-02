@@ -15,7 +15,7 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v68";
+const CACHE = "chores-v69";
 // Every chore view is a cached shell. Each shell is body-empty for
 // page-specific content — entries on History, recent rows on Balance —
 // because that data is hydrated client-side from JSON (and from a
@@ -92,9 +92,54 @@ async function refreshAllShells() {
   }));
 }
 
+// Hard verification that EVERY shell path + every asset URL referenced
+// inside those shells is sitting in the current cache. The page-script
+// uses this to decide whether it's safe to expose a "tap to reload"
+// indicator: only when this returns ok can the user reload without
+// risk of landing on a half-cached deploy (missing CSS/JS → black
+// screen, broken offline boot). Returns { ok: true } or
+// { ok: false, reason }.
+async function verifyShellReady() {
+  const cache = await caches.open(CACHE);
+  for (const p of SHELL_PATHS) {
+    const shellResp = await cache.match(p);
+    if (!shellResp) return { ok: false, reason: `missing shell ${p}` };
+    const html = await shellResp.clone().text();
+    const re = /\b(?:src|href)=["']([^"']+)["']/g;
+    let m;
+    while ((m = re.exec(html)) !== null) {
+      let u;
+      try { u = new URL(m[1], new URL(p, location.origin)); } catch (e) { continue; }
+      if (!isPrecachableAssetURL(u)) continue;
+      const hit = await cache.match(u.toString());
+      if (!hit) return { ok: false, reason: `missing asset ${u.pathname}` };
+    }
+  }
+  return { ok: true };
+}
+
 self.addEventListener("message", evt => {
   if (evt.data?.action === "refresh_shells") {
     evt.waitUntil(refreshAllShells());
+  }
+  if (evt.data?.action === "verify_ready") {
+    const port = evt.ports?.[0];
+    evt.waitUntil((async () => {
+      let result;
+      try {
+        result = await verifyShellReady();
+        if (!result.ok) {
+          // One retry: maybe the install raced and missed something.
+          // Force a clean refresh, then re-verify. If still not ok,
+          // the page-script will retry on the next visibility change.
+          await refreshAllShells();
+          result = await verifyShellReady();
+        }
+      } catch (e) {
+        result = { ok: false, reason: `verify threw: ${e?.message || e}` };
+      }
+      port?.postMessage(result);
+    })());
   }
 });
 
