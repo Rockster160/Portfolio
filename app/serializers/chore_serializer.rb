@@ -52,7 +52,17 @@ class ChoreSerializer
       hot_multiplier:      hot_multiplier,
       streak_multiplier:   streak_multiplier,
       today_visible:       today_visible?,
+      on_dailies:          on_dailies?,
     }
+  end
+
+  # Whether the viewer has pinned this chore to their personal Dailies
+  # section on Today. Independent of `today_visible?` — a chore stays
+  # in the user's Dailies regardless of show_on_daily_view / schedule.
+  def on_dailies?
+    return ctx.daily_chore_ids.include?(chore.id) if ctx
+
+    ChoreDaily.exists?(user_id: viewer.id, chore_id: chore.id)
   end
 
   private
@@ -166,8 +176,11 @@ class ChoreSerializer
     return @streak_multiplier = 1 if bonuses.empty?
 
     streak = ChoreStreak.find_by(user_id: viewer.id, chore_id: chore.id)
-    current = (streak&.last_completed_day.present? && streak.last_completed_day >= day - 1) ?
-                streak.current_streak.to_i : 0
+    current = if streak&.last_completed_day.present? && streak.last_completed_day >= day - 1
+      streak.current_streak.to_i
+    else
+      0
+    end
     next_streak = current + 1
     combined = bonuses.inject(1) { |m, b| m * b.current_multiplier(viewer, for_streak: next_streak).to_i }
     @streak_multiplier = [combined, 5].min

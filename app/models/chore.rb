@@ -87,6 +87,7 @@ class Chore < ApplicationRecord
   has_many :chore_completions, dependent: :destroy
   has_many :chore_hot_picks, dependent: :destroy
   has_many :chore_streaks, dependent: :destroy
+  has_many :chore_dailies, dependent: :destroy
 
   before_validation :default_chore_household_from_creator, on: :create
 

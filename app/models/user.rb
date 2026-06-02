@@ -72,6 +72,7 @@ class User < ApplicationRecord
   has_many :chore_transfers_sent,     class_name: "ChoreTransfer", foreign_key: :from_user_id, dependent: :destroy
   has_many :chore_transfers_received, class_name: "ChoreTransfer", foreign_key: :to_user_id,   dependent: :destroy
   has_many :chore_streaks, dependent: :destroy
+  has_many :chore_dailies, dependent: :destroy
   has_one :chore_household_membership, dependent: :destroy
   # chore_household_id is a denormalized cache of the membership FK so
   # chore endpoints can read the household without a join. Kept in

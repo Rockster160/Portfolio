@@ -114,6 +114,9 @@ Rails.application.routes.draw do
     get    "/items/:id/state"            => "chores#state",              as: :item_state
     get    "/items/:id/history"          => "chores#chore_history",      as: :item_history
     patch  "/order"                      => "chores#reorder",            as: :reorder
+    post   "/items/:id/dailies"          => "chores#pin_daily",          as: :pin_daily
+    delete "/items/:id/dailies"          => "chores#unpin_daily",        as: :unpin_daily
+    patch  "/dailies/order"              => "chores#reorder_dailies",    as: :reorder_dailies
     resources :completions, controller: :chore_completions, only: [:update, :destroy]
     resources :goals,         controller: :chore_goals,          only: [:create, :update, :destroy], as: :goals
     resources :streak_bonuses, controller: :chore_streak_bonuses, only: [:create, :update, :destroy], as: :streak_bonuses

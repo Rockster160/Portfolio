@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_03_100002) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_03_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -378,6 +378,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_03_100002) do
     t.index ["user_id", "completed_at"], name: "index_chore_completions_on_user_id_and_completed_at"
     t.index ["user_id", "day_key"], name: "index_chore_completions_on_user_id_and_day_key"
     t.index ["user_id"], name: "index_chore_completions_on_user_id"
+  end
+
+  create_table "chore_dailies", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "chore_id", null: false
+    t.integer "sort_order", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chore_id"], name: "index_chore_dailies_on_chore_id"
+    t.index ["user_id", "chore_id"], name: "index_chore_dailies_on_user_id_and_chore_id", unique: true
+    t.index ["user_id", "sort_order"], name: "index_chore_dailies_on_user_id_and_sort_order"
+    t.index ["user_id"], name: "index_chore_dailies_on_user_id"
   end
 
   create_table "chore_goals", force: :cascade do |t|
@@ -1181,6 +1193,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_03_100002) do
   add_foreign_key "boxes", "users"
   add_foreign_key "chore_completions", "chores"
   add_foreign_key "chore_completions", "users"
+  add_foreign_key "chore_dailies", "chores", on_delete: :cascade
+  add_foreign_key "chore_dailies", "users", on_delete: :cascade
   add_foreign_key "chore_goals", "chores"
   add_foreign_key "chore_goals", "users"
   add_foreign_key "chore_hot_picks", "chores"

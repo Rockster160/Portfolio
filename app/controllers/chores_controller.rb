@@ -45,18 +45,58 @@ class ChoresController < ApplicationController
     )
 
     MonitorChannel.broadcast_to(current_user, {
-      id: :chores,
-      channel: :chores,
+      id:        :chores,
+      channel:   :chores,
       timestamp: Time.current.to_i,
-      data: {
-        reason: :order_changed,
+      data:      {
+        reason:        :order_changed,
         actor_user_id: current_user.id,
-        actor_tab_id: params[:tab_id],
-        ids: ids,
-        server_ts: Time.current.iso8601(3),
+        actor_tab_id:  params[:tab_id],
+        ids:           ids,
+        server_ts:     Time.current.iso8601(3),
       },
     })
     render json: { ok: true, count: accessible_ids.size }
+  end
+
+  # POST /chores/items/:id/dailies — pin a chore to the viewer's
+  # personal Dailies section on Today. Idempotent; if already pinned,
+  # the existing row is returned. New pins land at the end.
+  def pin_daily
+    chore = current_user.accessible_chores.find(params[:id])
+    daily = ChoreDaily.find_or_initialize_by(user: current_user, chore: chore)
+    if daily.new_record?
+      next_order = (current_user.chore_dailies.maximum(:sort_order) || -1) + 1
+      daily.sort_order = next_order
+      daily.save!
+    end
+    broadcast_dailies_changed(reason: :pinned, chore_id: chore.id)
+    render json: dailies_payload
+  end
+
+  # DELETE /chores/items/:id/dailies — unpin from Dailies.
+  def unpin_daily
+    daily = current_user.chore_dailies.find_by(chore_id: params[:id])
+    daily&.destroy
+    broadcast_dailies_changed(reason: :unpinned, chore_id: params[:id].to_i)
+    render json: dailies_payload
+  end
+
+  # PATCH /chores/dailies/order — body { ids: [3, 7, 1, ...] }
+  # Bulk reorder the viewer's Dailies. Ids not owned by the viewer are
+  # ignored; ids absent from the payload keep their existing position.
+  def reorder_dailies
+    ids = Array(params[:ids]).map(&:to_i).reject(&:zero?)
+    owned_ids = current_user.chore_dailies.where(chore_id: ids).pluck(:chore_id)
+    if owned_ids.any?
+      positions = ids.each_with_index.to_h
+      case_sql = owned_ids.map { |cid| "WHEN #{cid.to_i} THEN #{positions[cid].to_i}" }.join(" ")
+      current_user.chore_dailies.where(chore_id: owned_ids).update_all(
+        "sort_order = CASE chore_id #{case_sql} END, updated_at = NOW()",
+      )
+    end
+    broadcast_dailies_changed(reason: :reordered)
+    render json: dailies_payload
   end
 
   # Lightweight: balance + fresh CSRF token so the offline-queue can
@@ -64,8 +104,8 @@ class ChoresController < ApplicationController
   def csrf
     breakdown = current_user.chore_balance_breakdown
     render json: {
-      token: form_authenticity_token,
-      balance: breakdown[:balance],
+      token:          form_authenticity_token,
+      balance:        breakdown[:balance],
       today_earnings: breakdown[:today_earnings],
     }
   end
@@ -76,7 +116,7 @@ class ChoresController < ApplicationController
   def state
     chore = current_user.accessible_chores.unscope(where: :archived_at).find(params[:id])
     render json: {
-      chore: ChoreSerializer.new(chore, viewer: current_user).as_json,
+      chore:     ChoreSerializer.new(chore, viewer: current_user).as_json,
       server_ts: Time.current.iso8601(3),
     }
   end
@@ -102,35 +142,36 @@ class ChoresController < ApplicationController
     end
 
     chosen = if since_ts
-               # Include completions whose record was TOUCHED since
-               # since_ts (updated_at) in addition to those whose
-               # completed_at landed since then. Edits that move a
-               # completion BACKWARDS in time (today → yesterday on
-               # History) leave completed_at < since_ts but bump
-               # updated_at — without the OR they'd be invisible to
-               # an offline tab catching up later.
-               touched_ids = ChoreCompletion
-                 .where(user_id: current_user.id)
-                 .where("completed_at >= :ts OR updated_at >= :ts", ts: since_ts)
-                 .distinct.pluck(:chore_id).to_set
-               # Hot-pick rotation and streak resets don't touch
-               # chore.updated_at, so the basic diff above would miss
-               # chores whose hot_multiplier/streak_multiplier just
-               # changed. Pull their ids in explicitly.
-               touched_ids.merge(ChoreHotPick.where(day_key: @day).where("created_at >= ?", since_ts).pluck(:chore_id))
-               touched_ids.merge(ChoreStreak.where(user_id: current_user.id).where("updated_at >= ?", since_ts).pluck(:chore_id))
-               @chores.select { |c| c.updated_at > since_ts || touched_ids.include?(c.id) }
-             else
-               @chores
-             end
+      # Include completions whose record was TOUCHED since
+      # since_ts (updated_at) in addition to those whose
+      # completed_at landed since then. Edits that move a
+      # completion BACKWARDS in time (today → yesterday on
+      # History) leave completed_at < since_ts but bump
+      # updated_at — without the OR they'd be invisible to
+      # an offline tab catching up later.
+      touched_ids = ChoreCompletion
+        .where(user_id: current_user.id)
+        .where("completed_at >= :ts OR updated_at >= :ts", ts: since_ts)
+        .distinct.pluck(:chore_id).to_set
+      # Hot-pick rotation and streak resets don't touch
+      # chore.updated_at, so the basic diff above would miss
+      # chores whose hot_multiplier/streak_multiplier just
+      # changed. Pull their ids in explicitly.
+      touched_ids.merge(ChoreHotPick.where(day_key: @day).where(created_at: since_ts..).pluck(:chore_id))
+      touched_ids.merge(ChoreStreak.where(user_id: current_user.id).where(updated_at: since_ts..).pluck(:chore_id))
+      @chores.select { |c| c.updated_at > since_ts || touched_ids.include?(c.id) }
+    else
+      @chores
+    end
 
     render json: {
-      server_ts: Time.current.iso8601(3),
-      day_key: @day.iso8601,
-      balance: @balance_total,
-      today_earnings: @balance_today,
-      chores: @ctx.serialize_all(chosen),
-      lookahead: @lookahead_json,
+      server_ts:          Time.current.iso8601(3),
+      day_key:            @day.iso8601,
+      balance:            @balance_total,
+      today_earnings:     @balance_today,
+      chores:             @ctx.serialize_all(chosen),
+      lookahead:          @lookahead_json,
+      daily_ids:          @daily_ids,
       archived_chore_ids: sync_archived_ids(since_ts),
     }
   end
@@ -142,13 +183,17 @@ class ChoresController < ApplicationController
     @balance = current_user.chore_balance
     @goals = current_user.chore_goals.active.ordered.to_a
     household_id = current_user.chore_household_id
-    @streak_bonuses = household_id ?
-      ChoreStreakBonus.where(chore_household_id: household_id).includes(:chore).order(:sort_order, :id) :
+    @streak_bonuses = if household_id
+      ChoreStreakBonus.where(chore_household_id: household_id).includes(:chore).order(:sort_order, :id)
+    else
       ChoreStreakBonus.none
+    end
     @household_chores = current_user.accessible_chores.order(:name).to_a
-    @transfer_recipients = household_id ?
-      User.where(chore_household_id: household_id).where.not(id: current_user.id).order(:username).to_a :
+    @transfer_recipients = if household_id
+      User.where(chore_household_id: household_id).where.not(id: current_user.id).order(:username).to_a
+    else
       []
+    end
     @can_manage_chores = current_user.can_manage_chores?
   end
 
@@ -189,10 +234,10 @@ class ChoresController < ApplicationController
     today = ChoreDay.current(current_user)
     today_earnings = current_user.chore_completions.where(day_key: today).sum(:paid_pebbles)
     render json: {
-      entries: entries.map { |e| history_entry_json(e) },
-      balance: current_user.chore_balance,
+      entries:        entries.map { |e| history_entry_json(e) },
+      balance:        current_user.chore_balance,
       today_earnings: today_earnings,
-      server_ts: Time.current.iso8601(3),
+      server_ts:      Time.current.iso8601(3),
     }
   end
 
@@ -202,23 +247,25 @@ class ChoresController < ApplicationController
   # chores stay scoped to the viewer.
   def chore_history
     chore = current_user.accessible_chores.unscope(where: :archived_at).find(params[:id])
-    scope_user_ids = chore.share_household? ?
-      current_user.chore_household_user_ids :
+    scope_user_ids = if chore.share_household?
+      current_user.chore_household_user_ids
+    else
       [current_user.id]
+    end
     completions = ChoreCompletion
       .where(chore_id: chore.id, user_id: scope_user_ids)
       .includes(:user)
       .order(completed_at: :desc)
       .limit(50)
     render json: {
-      chore: history_chore_json(chore),
+      chore:   history_chore_json(chore),
       entries: completions.map { |c|
         {
-          id:               c.id,
-          user_id:          c.user_id,
-          actor_username:   c.user&.username,
-          paid_pebbles:     c.paid_pebbles,
-          base_pebbles:     c.base_pebbles,
+          id:                c.id,
+          user_id:           c.user_id,
+          actor_username:    c.user&.username,
+          paid_pebbles:      c.paid_pebbles,
+          base_pebbles:      c.base_pebbles,
           hot_multiplier:    c.hot_multiplier.to_f,
           streak_multiplier: c.streak_multiplier.to_f,
           note:              c.note.to_s,
@@ -233,7 +280,7 @@ class ChoresController < ApplicationController
   def new
     @chore = current_user.chore_household.chores.new(
       created_by_user: current_user,
-      one_off: ActiveModel::Type::Boolean.new.cast(params[:one_off]),
+      one_off:         ActiveModel::Type::Boolean.new.cast(params[:one_off]),
     )
   end
 
@@ -290,6 +337,7 @@ class ChoresController < ApplicationController
       .to_a
     @ctx = ChoreSerializerContext.for_user(current_user, day: @day)
     @chores_json = @ctx.serialize_all(@chores)
+    @daily_ids = ChoreDaily.for_user(current_user).pluck(:chore_id)
     @lookahead_json = build_lookahead_json
     @cutoff_hour = ChoreDay::CUTOFF_HOURS
     @can_manage_chores = current_user.can_manage_chores?
@@ -309,7 +357,7 @@ class ChoresController < ApplicationController
   # plan around the wrong date. The client renders an explicit
   # "Nothing scheduled" row per empty day.
   def build_lookahead_json
-    today_ids = @chores_json.select { |c| c[:today_visible] }.map { |c| c[:id] }.to_set
+    today_ids = @chores_json.select { |c| c[:today_visible] }.to_set { |c| c[:id] }
     seen = Set.new
     upcoming = {}
     candidates = @chores.reject { |c| c.one_off || c.show_on_daily_view.to_sym == :never }
@@ -332,11 +380,38 @@ class ChoresController < ApplicationController
 
   def chore_response_payload(chore)
     {
-      chore: ChoreSerializer.new(chore, viewer: current_user).as_json,
-      server_ts: Time.current.iso8601(3),
-      balance: current_user.chore_balance,
+      chore:          ChoreSerializer.new(chore, viewer: current_user).as_json,
+      server_ts:      Time.current.iso8601(3),
+      balance:        current_user.chore_balance,
       today_earnings: current_user.chore_balance_breakdown(ChoreDay.current(current_user))[:today_earnings],
     }
+  end
+
+  def dailies_payload
+    {
+      daily_ids: current_user.chore_dailies.order(:sort_order, :id).pluck(:chore_id),
+      server_ts: Time.current.iso8601(3),
+    }
+  end
+
+  # Dailies are personal — only the viewer's other tabs care. Reuses the
+  # MonitorChannel "chores" envelope so the existing client subscriber
+  # can fan out to its dailies handler off the same connection.
+  def broadcast_dailies_changed(reason:, chore_id: nil)
+    MonitorChannel.broadcast_to(current_user, {
+      id:        :chores,
+      channel:   :chores,
+      timestamp: Time.current.to_i,
+      data:      {
+        reason:         :dailies_changed,
+        dailies_reason: reason,
+        chore_id:       chore_id,
+        actor_user_id:  current_user.id,
+        actor_tab_id:   params[:tab_id],
+        daily_ids:      current_user.chore_dailies.order(:sort_order, :id).pluck(:chore_id),
+        server_ts:      Time.current.iso8601(3),
+      },
+    })
   end
 
   def sync_archived_ids(since_ts)
@@ -357,14 +432,14 @@ class ChoresController < ApplicationController
   # state when they hit New Chore. The household's after_create stamps
   # the owner membership which sync-writes users.chore_household_id.
   def ensure_chore_household!
-    if ChoreHouseholdMembership.where(user_id: current_user.id).exists?
+    if ChoreHouseholdMembership.exists?(user_id: current_user.id)
       current_user.reload if current_user.chore_household_id.nil?
       return
     end
 
     ChoreHousehold.create!(
       owner_user: current_user,
-      name: "#{current_user.display_name}'s Household",
+      name:       "#{current_user.display_name}'s Household",
     )
     current_user.reload
   end
@@ -429,22 +504,22 @@ class ChoresController < ApplicationController
     today_earnings = @breakdown[:today_earnings]
 
     {
-      page: @page,
-      per: @per,
-      total_pages: @total_pages,
-      total_count: @total_count,
+      page:             @page,
+      per:              @per,
+      total_pages:      @total_pages,
+      total_count:      @total_count,
       completion_count: @completion_count,
       withdrawal_count: @withdrawal_count,
-      transfer_count: @transfer_count,
+      transfer_count:   @transfer_count,
       page_completions: page_completions,
       page_withdrawals: page_withdrawals,
-      page_transfers: page_transfers,
-      from: @total_count.zero? ? 0 : from,
-      to: to,
-      balance: @balance,
-      today_earnings: today_earnings,
-      entries: @entries.map { |e| history_entry_json(e) },
-      server_ts: Time.current.iso8601(3),
+      page_transfers:   page_transfers,
+      from:             @total_count.zero? ? 0 : from,
+      to:               to,
+      balance:          @balance,
+      today_earnings:   today_earnings,
+      entries:          @entries.map { |e| history_entry_json(e) },
+      server_ts:        Time.current.iso8601(3),
     }
   end
 
@@ -456,53 +531,53 @@ class ChoresController < ApplicationController
     case entry
     when ChoreCompletion
       {
-        kind: :completion,
-        id: entry.id,
-        chore: history_chore_json(entry.chore),
-        paid_pebbles: entry.paid_pebbles,
-        base_pebbles: entry.base_pebbles,
-        hot_pick: !!entry.metadata["hot_pick"],
-        hot_multiplier: entry.hot_multiplier.to_f,
+        kind:              :completion,
+        id:                entry.id,
+        chore:             history_chore_json(entry.chore),
+        paid_pebbles:      entry.paid_pebbles,
+        base_pebbles:      entry.base_pebbles,
+        hot_pick:          !!entry.metadata["hot_pick"],
+        hot_multiplier:    entry.hot_multiplier.to_f,
         streak_multiplier: entry.streak_multiplier.to_f,
-        note: entry.note.to_s,
-        completed_at: entry.completed_at.iso8601(3),
-        when_label: entry.completed_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
-        payout_skipped: entry.payout_skipped,
-        skipped_reason: entry.skipped_reason,
+        note:              entry.note.to_s,
+        completed_at:      entry.completed_at.iso8601(3),
+        when_label:        entry.completed_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
+        payout_skipped:    entry.payout_skipped,
+        skipped_reason:    entry.skipped_reason,
       }
     when ChoreWithdrawal
       {
-        kind: :withdrawal,
-        id: entry.id,
+        kind:           :withdrawal,
+        id:             entry.id,
         amount_pebbles: entry.amount_pebbles,
-        note: entry.note.to_s,
-        created_at: entry.created_at.iso8601(3),
-        when_label: entry.created_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
+        note:           entry.note.to_s,
+        created_at:     entry.created_at.iso8601(3),
+        when_label:     entry.created_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
       }
     when ChoreTransfer
       direction = entry.from_user_id == current_user.id ? :outgoing : :incoming
       counterparty = direction == :outgoing ? entry.to_user : entry.from_user
       {
-        kind: :transfer,
-        id: entry.id,
-        direction: direction,
-        amount_pebbles: entry.amount_pebbles,
+        kind:                  :transfer,
+        id:                    entry.id,
+        direction:             direction,
+        amount_pebbles:        entry.amount_pebbles,
         counterparty_username: counterparty&.username,
-        note: entry.note.to_s,
-        created_at: entry.created_at.iso8601(3),
-        when_label: entry.created_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
+        note:                  entry.note.to_s,
+        created_at:            entry.created_at.iso8601(3),
+        when_label:            entry.created_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
       }
     end
   end
 
   def history_chore_json(chore)
     {
-      id: chore.id,
-      name: chore.name,
+      id:         chore.id,
+      name:       chore.name,
       short_name: chore.display_short_name,
-      icon: chore.icon.to_s,
-      icon_kind: ChoreSerializer.new(chore, viewer: current_user).send(:icon_kind),
-      one_off: chore.one_off,
+      icon:       chore.icon.to_s,
+      icon_kind:  ChoreSerializer.new(chore, viewer: current_user).send(:icon_kind),
+      one_off:    chore.one_off,
     }
   end
 
@@ -522,9 +597,11 @@ class ChoresController < ApplicationController
   def assignable_users
     return @assignable_users if defined?(@assignable_users)
 
-    @assignable_users = current_user.chore_household_id ?
-      User.where(chore_household_id: current_user.chore_household_id).order(:username).to_a :
+    @assignable_users = if current_user.chore_household_id
+      User.where(chore_household_id: current_user.chore_household_id).order(:username).to_a
+    else
       [current_user]
+    end
   end
 
   def set_chore
@@ -536,12 +613,12 @@ class ChoresController < ApplicationController
       :name, :short_name, :icon, :reward_pebbles, :threshold_seconds,
       :one_off, :starts_on, :show_on_daily_view,
       :sharing_mode, :assigned_to_user_id, :notes_template,
-      aliases: [],
-      recurrence: {},
+      aliases:    [],
+      recurrence: {}
     )
 
     if (csv = params.dig(:chore, :aliases_csv))
-      permitted[:aliases] = csv.to_s.split(",").map(&:strip).reject(&:blank?)
+      permitted[:aliases] = csv.to_s.split(",").map(&:strip).compact_blank
     end
 
     if (hours = params.dig(:chore, :threshold_hours)).present?

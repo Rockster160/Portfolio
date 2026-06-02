@@ -27,7 +27,7 @@
 
   // Bootstrap JSON inline-shipped by the page — instant first paint
   // without a network round-trip.
-  let bootstrap = { chores: [], lookahead: {}, server_ts: null };
+  let bootstrap = { chores: [], lookahead: {}, daily_ids: [], server_ts: null };
   const bootstrapEl = document.getElementById("chores-bootstrap");
   if (bootstrapEl) {
     try { bootstrap = JSON.parse(bootstrapEl.textContent || "{}"); }
@@ -118,15 +118,58 @@
   const ChoreStore = (() => {
     const map = new Map();
     let lookahead = {};
+    // Ordered list of chore ids the viewer has pinned to their Dailies
+    // section on Today. Independent of `today_visible` — items here are
+    // purely user-curated, not derived from show_on_daily_view.
+    let dailyIds = [];
+    let dailyIdSet = new Set();
     const subs = new Set();
     function notify(kind, id) { subs.forEach(fn => { try { fn(kind, id); } catch (e) { console.error(e); } }); }
+    function rebuildDailySet() { dailyIdSet = new Set(dailyIds.map(n => parseInt(n, 10))); }
     return {
-      bootstrap(items, look) {
+      bootstrap(items, look, dailies) {
         map.clear();
         (items || []).forEach(c => map.set(c.id, c));
         lookahead = look || {};
+        dailyIds = (dailies || []).map(n => parseInt(n, 10)).filter(Boolean);
+        rebuildDailySet();
         notify("bootstrap");
       },
+      setDailyIds(ids) {
+        dailyIds = (ids || []).map(n => parseInt(n, 10)).filter(Boolean);
+        rebuildDailySet();
+        notify("dailies");
+      },
+      pinDaily(id) {
+        const n = parseInt(id, 10);
+        if (!n || dailyIdSet.has(n)) return;
+        dailyIds.push(n);
+        dailyIdSet.add(n);
+        notify("dailies");
+      },
+      unpinDaily(id) {
+        const n = parseInt(id, 10);
+        if (!dailyIdSet.has(n)) return;
+        dailyIds = dailyIds.filter(x => x !== n);
+        dailyIdSet.delete(n);
+        notify("dailies");
+      },
+      reorderDailies(ids) {
+        const allowed = new Set(dailyIds);
+        const next = [];
+        (ids || []).forEach(id => {
+          const n = parseInt(id, 10);
+          if (allowed.has(n) && !next.includes(n)) next.push(n);
+        });
+        // Preserve any pin not present in the supplied order so we
+        // don't silently drop dailies a stale client didn't know about.
+        dailyIds.forEach(id => { if (!next.includes(id)) next.push(id); });
+        dailyIds = next;
+        rebuildDailySet();
+        notify("dailies");
+      },
+      isDaily(id) { return dailyIdSet.has(parseInt(id, 10)); },
+      dailyIds() { return dailyIds.slice(); },
       upsert(c, { optimistic = false } = {}) {
         if (!c || !c.id) return false;
         const existing = map.get(c.id);
@@ -147,6 +190,11 @@
       remove(id) {
         if (!map.has(id)) return;
         map.delete(id);
+        const n = parseInt(id, 10);
+        if (dailyIdSet.has(n)) {
+          dailyIds = dailyIds.filter(x => x !== n);
+          dailyIdSet.delete(n);
+        }
         notify("remove", id);
       },
       // Rebuild the map in the supplied id order so any view that reads
@@ -165,7 +213,24 @@
       },
       get(id) { return map.get(id); },
       all() { return Array.from(map.values()); },
-      visibleOnToday() { return this.all().filter(c => c.today_visible && !c.archived); },
+      // Items pinned to Dailies, in the user's curated order. A pinned
+      // chore stays here regardless of today_visible — only archival
+      // hides it.
+      dailiesList() {
+        const out = [];
+        dailyIds.forEach(id => {
+          const c = map.get(id);
+          if (c && !c.archived) out.push(c);
+        });
+        return out;
+      },
+      // Items that today_visible filtering would have put on the old
+      // Today screen, minus anything the user has already pinned to
+      // Dailies. Same semantics as the previous Today view, sourced
+      // from the same `today_visible` server field.
+      overdueList() {
+        return this.all().filter(c => c.today_visible && !c.archived && !dailyIdSet.has(c.id));
+      },
       activeForGrid() { return this.all().filter(c => !c.archived); },
       hotPicks() {
         return this.all()
@@ -461,11 +526,13 @@
   // Views — render from store. Subscribers handle granular updates.
   // ============================================================
   const Views = (() => {
-    const grid    = () => document.querySelector("[data-chores-grid]");
-    const today   = () => document.querySelector("[data-chores-circles]");
-    const hot     = () => document.querySelector("[data-chores-hot-strip]");
-    const empty   = () => document.querySelector("[data-empty-today]");
-    const lookCt  = () => document.querySelector("[data-chores-lookahead]");
+    const grid       = () => document.querySelector("[data-chores-grid]");
+    const dailies    = () => document.querySelector("[data-chores-dailies]");
+    const overdue    = () => document.querySelector("[data-chores-overdue]");
+    const hot        = () => document.querySelector("[data-chores-hot-strip]");
+    const emptyDay   = () => document.querySelector("[data-empty-dailies]");
+    const emptyOver  = () => document.querySelector("[data-empty-overdue]");
+    const lookCt     = () => document.querySelector("[data-chores-lookahead]");
 
     function clear(el) { if (el) el.innerHTML = ""; }
     function appendTo(el, node) { if (el && node) el.appendChild(node); }
@@ -476,13 +543,21 @@
       clear(c);
       ChoreStore.activeForGrid().forEach(item => appendTo(c, renderGridCard(item)));
     }
-    function renderToday() {
-      const c = today();
+    function renderDailies() {
+      const c = dailies();
       if (!c) return;
       clear(c);
-      const items = ChoreStore.visibleOnToday();
+      const items = ChoreStore.dailiesList();
       items.forEach(item => appendTo(c, renderCircleCard(item)));
-      if (empty()) empty().hidden = items.length > 0;
+      if (emptyDay()) emptyDay().hidden = items.length > 0;
+    }
+    function renderOverdue() {
+      const c = overdue();
+      if (!c) return;
+      clear(c);
+      const items = ChoreStore.overdueList();
+      items.forEach(item => appendTo(c, renderCircleCard(item)));
+      if (emptyOver()) emptyOver().hidden = items.length > 0;
     }
     function renderHot() {
       const c = hot();
@@ -534,15 +609,16 @@
       if (g) patchGridCard(g, c);
       else appendTo(grid(), renderGridCard(c));
 
-      const t = today()?.querySelector(`[data-chore-id="${c.id}"]`);
-      if (c.today_visible && !c.archived) {
-        if (t) patchCircleCard(t, c);
-        else appendTo(today(), renderCircleCard(c));
-        if (empty()) empty().hidden = (today()?.children.length || 0) > 0;
-      } else if (t) {
-        t.remove();
-        if (empty()) empty().hidden = (today()?.children.length || 0) > 0;
-      }
+      // The chore belongs to exactly ONE of the two Today sections:
+      //   * Dailies if the viewer has pinned it (regardless of today_visible)
+      //   * Overdue if it's today_visible AND not pinned
+      // Anything else gets removed from both sections so a flipped
+      // today_visible doesn't leave a stale card behind.
+      const isDaily = ChoreStore.isDaily(c.id) && !c.archived;
+      const isOverdue = c.today_visible && !c.archived && !isDaily;
+      placeInSection(c, dailies(), isDaily);
+      placeInSection(c, overdue(), isOverdue);
+      refreshTodayEmptyStates();
 
       // Hot strip — membership rotates at the 4am day boundary, so when
       // an upsert flips a chore in or out of the hot set, recompute the
@@ -561,20 +637,43 @@
         const cell = el.closest(".hot-strip-cell");
         (cell || el).remove();
       });
-      if (empty()) empty().hidden = (today()?.children.length || 0) > 0;
+      refreshTodayEmptyStates();
+    }
+    function placeInSection(c, container, shouldBeIn) {
+      if (!container) return;
+      const existing = container.querySelector(`:scope > [data-chore-id="${c.id}"]`);
+      if (shouldBeIn) {
+        if (existing) patchCircleCard(existing, c);
+        else appendTo(container, renderCircleCard(c));
+      } else if (existing) {
+        existing.remove();
+      }
+    }
+    function refreshTodayEmptyStates() {
+      if (emptyDay())  emptyDay().hidden  = (dailies()?.children.length || 0) > 0;
+      if (emptyOver()) emptyOver().hidden = (overdue()?.children.length || 0) > 0;
     }
     function renderAll() {
       renderGrid();
-      renderToday();
+      renderDailies();
+      renderOverdue();
       renderHot();
       renderLookahead();
     }
-    return { renderAll, renderGrid, renderToday, renderHot, renderLookahead, upsertOne, removeOne };
+    return {
+      renderAll, renderGrid, renderDailies, renderOverdue, renderHot, renderLookahead,
+      upsertOne, removeOne, refreshTodayEmptyStates,
+    };
   })();
 
   ChoreStore.subscribe((kind, id) => {
     if (kind === "bootstrap") Views.renderAll();
     else if (kind === "lookahead") Views.renderLookahead();
+    else if (kind === "dailies") {
+      Views.renderDailies();
+      Views.renderOverdue();
+      refreshEditModalPin();
+    }
     else if (kind === "remove") Views.removeOne(id);
     else if (kind === "upsert") {
       const c = ChoreStore.get(id);
@@ -723,7 +822,8 @@
   function bindCardClicks() {
     [
       document.querySelector("[data-chores-grid]"),
-      document.querySelector("[data-chores-circles]"),
+      document.querySelector("[data-chores-dailies]"),
+      document.querySelector("[data-chores-overdue]"),
       document.querySelector("[data-chores-hot-strip]"),
     ].filter(Boolean).forEach(bindOne);
   }
@@ -741,7 +841,7 @@
       if (!card) return;
       const inEditMode = editModeActive;
       if (!inEditMode) {
-        const usesCircleHitbox = container.matches("[data-chores-circles], [data-chores-hot-strip]");
+        const usesCircleHitbox = container.matches("[data-chores-dailies], [data-chores-overdue], [data-chores-hot-strip]");
         if (usesCircleHitbox && !e.target.closest(".circle-inner")) return;
       }
 
@@ -796,6 +896,111 @@
       e.preventDefault();
       openEditModal(card);
     });
+  }
+
+  // ============================================================
+  // Dailies — pin toggle (on the edit modal) + per-section drag reorder
+  // ============================================================
+  // The pin button lives in the edit modal head (left of the title), so
+  // users can pin/unpin from anywhere the modal opens (Today, Grid,
+  // search, history). `bindEditModalPin` wires a single listener that
+  // operates on whichever chore the modal is currently editing.
+  function bindEditModalPin() {
+    const btn = document.querySelector("[data-edit-pin-toggle]");
+    if (!btn) return;
+    btn.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = parseInt(currentChoreId, 10);
+      if (!id || btn.dataset.busy === "1") return;
+      togglePinDaily(id, btn);
+    });
+  }
+
+  // Sync the modal pin button to the chore the modal is currently
+  // editing. Called from openEditModal and from the `dailies` store
+  // notify path so a broadcast that lands while the modal is open
+  // keeps the button in sync.
+  function refreshEditModalPin() {
+    const btn = document.querySelector("[data-edit-pin-toggle]");
+    if (!btn) return;
+    const id = parseInt(currentChoreId, 10);
+    if (!id) { btn.hidden = true; return; }
+    btn.hidden = false;
+    const pinned = ChoreStore.isDaily(id);
+    btn.classList.toggle("pinned", pinned);
+    const label = pinned ? "Remove from Dailies" : "Pin to Dailies";
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
+  }
+
+  async function togglePinDaily(id, btn) {
+    const wasPinned = ChoreStore.isDaily(id);
+    btn.dataset.busy = "1";
+    // Optimistic — flip the store immediately so the card moves to the
+    // right section as soon as the user dismisses the modal. We don't
+    // roll back on transient error; the queue + sync will reconcile.
+    if (wasPinned) ChoreStore.unpinDaily(id);
+    else           ChoreStore.pinDaily(id);
+    refreshEditModalPin();
+    const url = `/chores/items/${id}/dailies`;
+    const method = wasPinned ? "DELETE" : "POST";
+    try {
+      const data = await api(url, method, { tab_id: TAB_ID });
+      if (data && Array.isArray(data.daily_ids)) ChoreStore.setDailyIds(data.daily_ids);
+    } catch (err) {
+      if (isTransientError(err)) {
+        flash("Saved locally — will sync", "warn");
+      } else {
+        // Hard error: revert the optimistic flip.
+        if (wasPinned) ChoreStore.pinDaily(id);
+        else           ChoreStore.unpinDaily(id);
+        refreshEditModalPin();
+        flash("Couldn't update Dailies: " + err.message, "error");
+      }
+    } finally {
+      delete btn.dataset.busy;
+    }
+  }
+
+  let dailiesSortable = null;
+  function bindDailiesSortable() {
+    if (typeof window.Sortable === "undefined") {
+      setTimeout(bindDailiesSortable, 200);
+      return;
+    }
+    const container = document.querySelector("[data-chores-dailies]");
+    if (!container || dailiesSortable) return;
+    dailiesSortable = window.Sortable.create(container, {
+      animation: 150,
+      ghostClass: "sortable-ghost",
+      chosenClass: "sortable-chosen",
+      dragClass: "sortable-drag",
+      forceFallback: true,
+      fallbackOnBody: true,
+      fallbackTolerance: 0,
+      delay: 250,
+      delayOnTouchOnly: true,
+      touchStartThreshold: 6,
+      onEnd: persistDailiesOrder,
+    });
+  }
+
+  async function persistDailiesOrder() {
+    const container = document.querySelector("[data-chores-dailies]");
+    if (!container) return;
+    const ids = Array.from(container.children)
+      .map(el => parseInt(el.dataset.choreId, 10))
+      .filter(Boolean);
+    // Local store keeps the user-visible order in sync with the DOM
+    // immediately. Server confirms via the response below.
+    ChoreStore.reorderDailies(ids);
+    try {
+      const data = await api("/chores/dailies/order", "PATCH", { ids, tab_id: TAB_ID });
+      if (data && Array.isArray(data.daily_ids)) ChoreStore.setDailyIds(data.daily_ids);
+    } catch (err) {
+      flash("Couldn't save Dailies order: " + err.message, "error");
+    }
   }
 
   // ============================================================
@@ -1141,6 +1346,7 @@
       data.archived_chore_ids.forEach(id => ChoreStore.remove(id));
     }
     if (data.lookahead) ChoreStore.setLookahead(data.lookahead);
+    if (Array.isArray(data.daily_ids)) ChoreStore.setDailyIds(data.daily_ids);
     if (data.archived_chore_id) ChoreStore.remove(data.archived_chore_id);
 
     if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
@@ -1701,6 +1907,9 @@
       modalLockedFor = "__create__";
     }
     editModal.querySelector('[data-modal-title]').textContent = "Add Chore";
+    // No chore exists yet — nothing to pin to Dailies.
+    const createPin = editModal.querySelector('[data-edit-pin-toggle]');
+    if (createPin) createPin.hidden = true;
     editForm.querySelector('[data-action="archive"]')?.classList.add("hidden");
     editModal.classList.remove("hidden");
     scrollModalToTop(editModal);
@@ -1721,6 +1930,7 @@
     currentChoreId = id;
     modalLockedFor = id;
     editModal.querySelector('[data-modal-title]').textContent = "Edit Chore";
+    refreshEditModalPin();
     editForm.reset();
     setField("name", c.name);
     setField("short_name", c.short_name === c.name ? "" : c.short_name);
@@ -1808,7 +2018,9 @@
     const ids = Array.from(document.querySelectorAll("[data-chores-grid] [data-chore-id]"))
       .map(c => parseInt(c.dataset.choreId, 10)).filter(Boolean);
     ChoreStore.reorder(ids);
-    reorderContainer("[data-chores-circles]", ids);
+    // Today's Overdue mirrors the global chore sort; Dailies has its
+    // own user-curated order and isn't touched by a grid reorder.
+    reorderContainer("[data-chores-overdue]", ids);
     try { await api("/chores/order", "PATCH", { ids, tab_id: TAB_ID }); }
     catch (e) { flash("Couldn't save order: " + e.message, "error"); }
   }
@@ -1829,7 +2041,7 @@
   function applyOrderToDom(ids) {
     ChoreStore.reorder(ids);
     reorderContainer("[data-chores-grid]", ids);
-    reorderContainer("[data-chores-circles]", ids);
+    reorderContainer("[data-chores-overdue]", ids);
   }
   editModeBtn?.addEventListener("click", () => { if (editModeActive) exitEditMode(); else enterEditMode(); });
 
@@ -2596,6 +2808,14 @@
           if (Array.isArray(payload.ids)) applyOrderToDom(payload.ids);
           return;
         }
+        if (payload.reason === "dailies_changed") {
+          // Personal broadcast: only this user's other tabs care. Apply
+          // the new ordered set; renderDailies/renderOverdue refresh
+          // both sections in place.
+          if (actorTab && String(actorTab) === TAB_ID) return;
+          if (Array.isArray(payload.daily_ids)) ChoreStore.setDailyIds(payload.daily_ids);
+          return;
+        }
         if (actorTab && String(actorTab) === TAB_ID) return;
         // Hot picks rotation creates chore_hot_picks rows but doesn't
         // bump chore.updated_at or completion timestamps, so a diff
@@ -2709,7 +2929,7 @@
     // even when the cached HTML is from a prior chore-day. fullSync
     // below corrects any stale hot-picks / today_visible / counts when
     // the network returns.
-    ChoreStore.bootstrap(bootstrap.chores, bootstrap.lookahead);
+    ChoreStore.bootstrap(bootstrap.chores, bootstrap.lookahead, bootstrap.daily_ids);
     if (bootstrap.day_key) localStorage.setItem(SYNC_DAY_KEY, bootstrap.day_key);
     // Persist server_ts only when the cached HTML is from today;
     // otherwise the next sync's incremental `since=` would skip the
@@ -2723,6 +2943,8 @@
     }
   }
   bindCardClicks();
+  bindEditModalPin();
+  bindDailiesSortable();
   startTicker();
   // Day rollover watcher: a tab left open across 4am needs a fresh
   // sync regardless of which chore view is mounted. The store updates

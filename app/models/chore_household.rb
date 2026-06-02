@@ -8,12 +8,6 @@
 #  updated_at    :datetime         not null
 #  owner_user_id :bigint           not null
 #
-# Permissions:
-#   * owner   — household-level admin (transfer ownership, delete).
-#               Always counts as :manager for chore-edit checks.
-#   * manager — full read+write on chores, streak bonuses, history.
-#   * member  — read+complete only. Can create personal goals but
-#               cannot set `awarded_pebbles` (that's a manager call).
 class ChoreHousehold < ApplicationRecord
   belongs_to :owner_user, class_name: "User"
 

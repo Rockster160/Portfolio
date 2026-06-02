@@ -50,6 +50,24 @@ RSpec.describe ChoreSerializer, type: :serializer do
     expect(via_ctx[:last_completed_at]).to eq(via_lone[:last_completed_at])
   end
 
+  describe "on_dailies" do
+    it "is false when the viewer has not pinned the chore" do
+      json = described_class.new(chore, viewer: user).as_json
+      expect(json[:on_dailies]).to eq(false)
+    end
+
+    it "is true when the viewer has pinned the chore — bulk path" do
+      ChoreDaily.create!(user: user, chore: chore, sort_order: 0)
+      ctx = ChoreSerializerContext.for_user(user)
+      expect(described_class.new(chore, viewer: user, ctx: ctx).as_json[:on_dailies]).to eq(true)
+    end
+
+    it "is true when the viewer has pinned the chore — lone path" do
+      ChoreDaily.create!(user: user, chore: chore, sort_order: 0)
+      expect(described_class.new(chore, viewer: user).as_json[:on_dailies]).to eq(true)
+    end
+  end
+
   # ----------------------------------------------------------------
   # today_visible lock-in contract — the chore's membership on Today
   # is decided AS-OF day start, then frozen for the rest of the day.
