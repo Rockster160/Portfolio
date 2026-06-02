@@ -1378,7 +1378,7 @@
     if (noteValues && Object.keys(noteValues).length > 0) overrides.note_values = noteValues;
     if (Object.keys(overrides).length > 0) body.chore_completion = overrides;
 
-    if (!navigator.onLine) {
+    if (!navigator.onLine || reloadPending) {
       enqueue({ url: `/chores/items/${c.id}/completion`, method: "POST",
                 body: body, meta: queueMetaFor(c) });
       return;
@@ -1417,6 +1417,7 @@
   let queueRetryDelay = 2000;
   function scheduleQueueRetry() {
     if (queueRetryTimer) return;
+    if (reloadPending) return;
     queueRetryTimer = setTimeout(async () => {
       queueRetryTimer = null;
       await flushQueue();
@@ -1438,6 +1439,11 @@
       done_count_today: Math.max(0, priorDoneCount - 1),
     });
     localClickTs.set(sid, Date.now());
+    if (!navigator.onLine || reloadPending) {
+      enqueue({ url: `/chores/items/${c.id}/completion`, method: "DELETE",
+                meta: queueMetaFor(c) });
+      return;
+    }
     inFlight.add(sid);
     try {
       const data = await api(`/chores/items/${c.id}/completion`, "DELETE");
@@ -1518,7 +1524,7 @@
   const SYNC_DAY_KEY = "chores:lastSyncDay:v1";
   let syncInFlight = false;
   async function fullSync({ force = false } = {}) {
-    if (syncInFlight || !navigator.onLine) return;
+    if (syncInFlight || !navigator.onLine || reloadPending) return;
     syncInFlight = true;
     setSyncBadge(true);
     try {
@@ -2858,6 +2864,7 @@
     let q = loadQueue();
     if (!q.length) { queueBlockedReason = null; setConnDot("online"); updatePendingBadge(0); return; }
     if (!navigator.onLine) { setConnDot("offline"); return; }
+    if (reloadPending) { updatePendingBadge(q.length); return; }
     // History view: the user is editing/triaging pending items. Do
     // NOT send them while they're being curated — they'd race the
     // user. Monitor still subscribes (so live updates flow into the
@@ -2924,7 +2931,7 @@
   // sw + monitor
   // ============================================================
   function pingSwRefresh() {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || reloadPending) return;
     navigator.serviceWorker?.controller?.postMessage({ action: "refresh_shells" });
   }
   function subscribeMonitor() {
@@ -2991,19 +2998,56 @@
       if (unifiedPage) fullSync();
     }
   });
+  // Tracked at boot so a controllerchange can be classified as
+  // "deploy update" (was-controlled → now-controlled-by-new-SW) vs
+  // "first install" (uncontrolled → controlled). Only the former
+  // means the running JS is now behind what's cached.
+  const wasControlledAtLoad = !!navigator.serviceWorker?.controller;
+  let reloadPending = false;
+  let reloadIdleTimer = null;
+  const RELOAD_IDLE_MS = 30000;
+  function performReload() {
+    if (reloadIdleTimer) { clearTimeout(reloadIdleTimer); reloadIdleTimer = null; }
+    location.reload();
+  }
+  function bumpReloadIdle() {
+    if (!reloadPending) return;
+    if (reloadIdleTimer) clearTimeout(reloadIdleTimer);
+    reloadIdleTimer = setTimeout(performReload, RELOAD_IDLE_MS);
+  }
+  function showReloadPending() {
+    if (reloadPending) return;
+    reloadPending = true;
+    const btn = document.querySelector("[data-reload-pending]");
+    if (btn) {
+      btn.classList.remove("hidden");
+      btn.addEventListener("click", performReload);
+    }
+    // Drop the live status — the page is frozen against a stale shell.
+    setSyncBadge(false);
+    setConnDot("online");
+    // Cancel any in-flight back-off so a queued retry doesn't fire
+    // during the wait. Pending writes survive in localStorage and flush
+    // on the next boot under the new SW.
+    if (queueRetryTimer) { clearTimeout(queueRetryTimer); queueRetryTimer = null; }
+    bumpReloadIdle();
+    ["pointerdown", "keydown", "touchstart"].forEach(evt => {
+      document.addEventListener(evt, bumpReloadIdle, { passive: true });
+    });
+  }
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker
       .register("/chores_worker.js", { scope: "/chores", updateViaCache: "none" })
       .then(reg => reg.update())
       .catch(e => console.warn("Chores SW register failed:", e));
-    // controllerchange fires when a new SW (from a deploy) takes
-    // control via clients.claim(). Reloading immediately would yank
-    // the user out of any open modal, scroll position, or unsaved
-    // input — every deploy turned into a mid-task flicker. Skip the
-    // reload: the next natural navigation will boot under the new SW
-    // with the freshly cached shell, no disruption.
+    // A new SW claiming control mid-session means a deploy shipped:
+    // the cached shell + assets are now ahead of what this tab is
+    // running. Surface a "tap to reload" indicator and pause all
+    // outbound syncs; auto-reload after 30s of idle if the user
+    // doesn't tap. First-time install (was uncontrolled → controlled)
+    // is excluded — nothing is stale yet.
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      // Intentionally a no-op.
+      if (wasControlledAtLoad) showReloadPending();
     });
     navigator.serviceWorker.addEventListener("message", evt => {
       if (evt.data?.kind === "shell_synced") setSyncBadge(false);

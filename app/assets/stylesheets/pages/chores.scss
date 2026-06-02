@@ -1079,6 +1079,32 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     background: #DC2626;
     color: #FFF;
   }
+  // Reset the global button cascade (forms.scss): no gradient, no padding,
+  // no white-bold. The indicator is a status pill, not a primary CTA.
+  .reload-pending {
+    background: #DC2626;
+    color: #FFF;
+    border: none;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    line-height: 1.2;
+    animation: chore-pulse 1.4s infinite;
+  }
+  .reload-pending:hover { background: #B91C1C; }
+  .reload-pending-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #FFF;
+    display: inline-block;
+    flex-shrink: 0;
+  }
   @keyframes chore-pulse {
     50% {
       opacity: 0.35;
